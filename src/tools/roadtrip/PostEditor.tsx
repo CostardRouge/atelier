@@ -19,7 +19,6 @@ import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { normaliseFraming, type Framing } from '../../shared/media/framing';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
@@ -84,8 +83,11 @@ import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
 import { usePostExports } from './use-post-exports';
+import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
+import { frameSize } from '../../shared/roadtrip/badge-render';
+import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import useRailThumbs from './use-rail-thumbs';
-import { useExposureLine } from './use-exposure-line';
+import { useExposureLine } from '../../shared/exif/use-effective-exif';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
@@ -505,6 +507,13 @@ export default function PostEditor({
   );
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
+  // The closing card's code, memoised: it is a paint dependency of the
+  // stage, and a fresh object per render repainted the card on every
+  // unrelated re-render — sixty a second while the deck played.
+  const ctaQr = useMemo(
+    () => (isCta && cta.qr ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background } : null),
+    [isCta, cta.qr, trip.cta.ink, trip.cta.background],
+  );
 
   const hookElements = useMemo(
     () =>
@@ -1003,6 +1012,7 @@ export default function PostEditor({
   // the STORED develop even while the sheet is open — the sheet's draft rides
   // `stack.composed`, which only the sheet itself paints from.
   const lutFor = grade.lutFor;
+  const filmFor = grade.filmFor;
   const lut = isCta ? null : lutFor(slide);
   // Each cell's cube: the slide's grade baked with THAT cell's develop, the
   // lead first — the same call the rail and the PNG deck make per cell.
@@ -1030,6 +1040,19 @@ export default function PostEditor({
     exposure,
   });
 
+  // What the OPEN picture would deliver into the deck's own 1920 frame —
+  // measured only while the Export tab is up, because measuring means
+  // decoding and a 48-megapixel decode is not worth a sentence on every
+  // slide stepped past. A collage says nothing: each cell is drawn into a
+  // fraction of the frame, so the whole frame's answer would be wrong for it.
+  // There is no choice beside it any more (R5, `docs/capture-renditions.md`
+  // §13.2): a still takes its original only where the proxy would upscale.
+  const delivery = useDeliveryRow(
+    tab === 'export' && !collage ? cellFile : null,
+    cellFraming,
+    frameSize(aspect, DECK_LONG_EDGE),
+  );
+
   const exports = usePostExports({
     trip,
     post,
@@ -1053,6 +1076,7 @@ export default function PostEditor({
     block,
     hookLength,
     lutFor,
+    filmFor,
     // The outcome is reported on the Export tab, so that is where to be.
     onStart: () => setTab('export'),
   });
@@ -1310,6 +1334,28 @@ export default function PostEditor({
     </button>
   );
 
+  // The piece's name, editable in place (see the header below), and the
+  // facts under it — or beside it, on a phone.
+  const nameField = (
+    <input
+      value={post.title}
+      onChange={(e) => onChangePost({ ...post, title: e.target.value })}
+      placeholder="Untitled piece"
+      aria-label="What this piece shows"
+      className={`min-w-0 leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic font-serif ${
+        // Every pixel this takes is one the picture does not get, and on a
+        // phone the picture is the whole screen's job — 16px, which is also
+        // what keeps iOS from zooming on focus.
+        compact ? 'flex-1 text-base' : 'w-full text-xl'
+      }`}
+    />
+  );
+  const facts = (
+    <p className={`m-0 px-1 font-mono text-2xs text-muted ${compact ? 'shrink-0' : ''}`}>
+      {formatIsoDate(post.date)} · {post.kind}
+    </p>
+  );
+
   return (
     // Wide: a two-column grid — the stage spans both rows on the left and
     // takes the section's whole height, the piece's header sits atop the
@@ -1325,13 +1371,16 @@ export default function PostEditor({
     // `@min-[860px]:grid` on the container element itself never apply.
     <section className="@container flex-1 min-h-0 flex flex-col" aria-label="Hook">
     <div
-      className={`flex-1 min-h-0 flex flex-col gap-4 ${
+      className={`flex-1 min-h-0 flex flex-col ${
         // Stacked on a TABLET the inspector is still in this column, so the
         // column scrolls. Stacked on a phone it is a sheet, nothing here
         // outgrows the screen, and the stage flexes into whatever the docked
         // library leaves — a scroll container would hand it an indefinite
-        // height again, which is the trap `frontend.md` names.
-        compact ? '' : 'overflow-auto'
+        // height again, which is the trap `frontend.md` names. The phone's
+        // rhythm is 12px throughout (the bar's own `mt-3`, this gap, the
+        // column's clearance above the bottom bar): every pixel between the
+        // head and the picture is one the picture does not get.
+        compact ? 'gap-3' : 'gap-4 overflow-auto'
       } @min-[860px]:grid @min-[860px]:grid-cols-[minmax(0,1fr)_22rem] @min-[860px]:grid-rows-[auto_minmax(0,1fr)] @min-[860px]:gap-x-5 @min-[860px]:gap-y-3 @min-[860px]:overflow-hidden`}
     >
       <div className="flex flex-col gap-1 min-w-0 @min-[860px]:col-start-2 @min-[860px]:row-start-1">
@@ -1369,24 +1418,20 @@ export default function PostEditor({
             found again by what it is called, and having to go back to the
             day panel to rename it is the kind of friction that stops you
             naming things at all. */}
-        <input
-          value={post.title}
-          onChange={(e) => onChangePost({ ...post, title: e.target.value })}
-          placeholder="Untitled piece"
-          aria-label="What this piece shows"
-          className={`w-full leading-tight bg-transparent border-0 border-b border-transparent focus:border-line-strong focus:outline-none text-ink px-1 py-0.5 placeholder:text-faint placeholder:italic ${
-            // Every pixel this takes is one the picture does not get, and on a
-            // phone the picture is the whole screen's job.
-            compact ? 'font-serif text-base' : 'font-serif text-xl'
-          }`}
-        />
-        <p
-          className={`m-0 px-1 font-mono text-muted ${
-            compact ? 'text-2xs -mt-0.5' : 'text-2xs'
-          }`}
-        >
-          {formatIsoDate(post.date)} · {post.kind}
-        </p>
+        {compact ? (
+          // On a phone the name and the day share ONE line — the day is a
+          // caption, and a line of its own under the name cost the picture
+          // 17px on every screen for a fact that fits beside it.
+          <div className="flex items-baseline gap-2 min-w-0">
+            {nameField}
+            {facts}
+          </div>
+        ) : (
+          <>
+            {nameField}
+            {facts}
+          </>
+        )}
       </div>
 
       {/* The picture and, under it, the piece as ONE band (`DeckStrip`): the
@@ -1394,10 +1439,18 @@ export default function PostEditor({
           maintainer's pick (2026-09-14) over a rail beside the picture, a
           transport and a timeline stacked under it. On a compact shell this
           column FLEXES, so the stage fills a screen whose height is fixed and
-          the band keeps its own; stacked on a tablet the column scrolls. */}
+          the band keeps its own; stacked on a tablet the column scrolls.
+
+          The compact column also CLEARS the shell's bottom bar (`pb-3`).
+          Whenever the picture is height-bound — a 9:16 reel on any phone, any
+          piece once Safari's bars are up — the aspect box shrinks to fit and
+          the band, last in the column, landed flush on the bar's top border:
+          two controls reading as one surface. This is a flex sibling above
+          the bar, not paper inside a scroller, so the clearance is padding on
+          the column and not the gutter `frontend.md` warns about. */}
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
-          compact ? 'flex-1 min-h-0' : ''
+          compact ? 'flex-1 min-h-0 pb-3' : ''
         }`}
       >
         <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
@@ -1412,6 +1465,7 @@ export default function PostEditor({
           >
           <BadgeStage
             file={slideFile}
+            taskScope={`piece:${post.id}`}
             videoTimeSeconds={isClipSlide ? playhead : slide.videoTimeSeconds}
             playback={
               isClipSlide
@@ -1438,12 +1492,9 @@ export default function PostEditor({
             hook={isHook ? hook : null}
             elementsAt={isHook ? hookElementsAt : null}
             background={isCta ? trip.cta.background : undefined}
-            qr={
-              isCta && cta.qr
-                ? { ...cta.qr, dark: trip.cta.ink, light: trip.cta.background }
-                : null
-            }
+            qr={ctaQr}
             lut={lut}
+            film={isCta ? null : filmFor(slide)}
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}
@@ -1613,6 +1664,7 @@ export default function PostEditor({
               onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
               onExportDeck={() => void exports.exportDeck()}
               onExportHookClip={() => void exports.exportHookClip()}
+              delivery={delivery}
               onChangePost={onChangePost}
               grade={grade.hookGrade}
               gradeScope={grade.hookScope}
@@ -1628,8 +1680,6 @@ export default function PostEditor({
         file={cellFile}
         videoTimeSeconds={cellIndex === 0 ? slide.videoTimeSeconds : 0}
         title={cellFile?.name ?? 'this slide'}
-        fidelity={pictureFidelity(cellFile).chip}
-        note={pictureFidelity(cellFile).note}
         emptyText="This slide has no picture yet — tick one in the Library."
         stack={grade.stack}
         value={cellDevelop}

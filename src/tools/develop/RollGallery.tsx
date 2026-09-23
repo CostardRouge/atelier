@@ -37,6 +37,7 @@ import { pickFile } from '../../shared/sources/file-sources';
 import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
 import { DEFAULT_SOURCE_ID, sourceById, type SourceInfo } from '../../shared/sources/source';
 import { sourceLabel } from '../../shared/sources/document-gallery';
+import AbsentSourceNotes from '../../shared/sources/AbsentSourceNotes';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
@@ -168,7 +169,7 @@ function RollCard({
           if (busy === null) onOpen();
         }
       }}
-      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
+      className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
       } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >
@@ -287,8 +288,19 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     mirror: mirrorRoll,
     move: moveRoll,
   });
-  const { docs: rolls, documentSources, refresh, groups, nothingAnywhere, allListed, busy, notice, setNotice, createOn } =
-    gallery;
+  const {
+    docs: rolls,
+    documentSources,
+    refresh,
+    groups,
+    absent,
+    nothingAnywhere,
+    allListed,
+    busy,
+    notice,
+    setNotice,
+    createOn,
+  } = gallery;
 
   const selectedPhotos = useMemo(
     () =>
@@ -423,6 +435,8 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
           {notice}
         </p>
       )}
+
+      <AbsentSourceNotes absent={absent} />
 
       {rolls === null ? (
         <LoadingState label="Loading rolls…" />

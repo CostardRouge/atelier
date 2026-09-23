@@ -6,7 +6,7 @@ import {
   tripFromTimeline,
   type TimelineChapter,
 } from './timeline-import';
-import { stageLabel, stageRegionLabel } from './trip-places';
+import { stageLabel, stageRegionLabel, tripRouteLabel } from './trip-places';
 import { stageAt } from './trip-coverage';
 import {
   createTripDoc,
@@ -232,7 +232,8 @@ describe('tripFromTimeline', () => {
   it('creates a trip with the span and the stages, and no post at all', () => {
     const trip = tripFromTimeline('Australie', importTimeline(australia(), options))!;
     expect(trip.name).toBe('Australie');
-    expect(trip.destination).toBe('Perth → Uluru');
+    // The route is not stored on the trip: it derives from the legs.
+    expect(tripRouteLabel(trip)).toBe('Perth → Uluru');
     expect(trip.startDate).toBe('2025-11-02');
     expect(trip.endDate).toBe('2025-11-15');
     expect(trip.stages).toHaveLength(3);
@@ -241,7 +242,7 @@ describe('tripFromTimeline', () => {
 
   it('starts with the factory voice — a source has no opinion about how a trip is told', () => {
     const trip = tripFromTimeline('A', importTimeline(australia(), options))!;
-    const fresh = createTripDoc('A', '', '2025-11-02', '2025-11-15');
+    const fresh = createTripDoc('A', '2025-11-02', '2025-11-15');
     expect(trip.badgeWords).toEqual(fresh.badgeWords);
     expect(trip.theme).toEqual(fresh.theme);
     expect(trip.cta).toEqual(fresh.cta);
@@ -328,7 +329,7 @@ describe('diffTimeline — re-running an import is a proposal', () => {
   });
 
   it('meets a hand-drawn stage by its span when ids are useless', () => {
-    const trip = createTripDoc('Australie', '', '2025-11-01', '2025-11-30');
+    const trip = createTripDoc('Australie', '2025-11-01', '2025-11-30');
     trip.stages = [createTripStage('', '', '2025-11-05', '2025-11-08', [createTripPlace('Kalbarri')])];
     const entries = diffTimeline(trip, importTimeline(australia(), options), SOURCE);
     const met = entries.find((e) => e.incoming?.origin?.chapterId === '2')!;
@@ -428,7 +429,7 @@ describe('applyTimelineDiff — only what was accepted, and nothing else', () =>
   });
 
   it('stamps the origin onto a hand-made stage it met, when that is accepted', () => {
-    const trip = createTripDoc('Australie', '', '2025-11-01', '2025-11-30');
+    const trip = createTripDoc('Australie', '2025-11-01', '2025-11-30');
     trip.stages = [createTripStage('', '', '2025-11-05', '2025-11-08', [createTripPlace('Kalbarri')])];
     const entries = diffTimeline(trip, importTimeline(australia(), options), SOURCE);
     const met = entries.find((e) => e.matchedBy === 'span')!;

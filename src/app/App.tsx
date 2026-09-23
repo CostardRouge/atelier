@@ -1,5 +1,6 @@
-import { useEffect, useState } from 'react';
+import { Suspense, useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
+import LoadingState from '../shared/ui/LoadingState';
 import SourcesScreen from './SourcesScreen';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
@@ -7,6 +8,7 @@ import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import SourcePill from './SourcePill';
+import TaskPill from '../shared/ui/TaskPill';
 import { useHashRoute } from './use-hash-route';
 import BottomSheet from '../shared/ui/BottomSheet';
 import SectionRail from '../shared/ui/SectionRail';
@@ -14,6 +16,7 @@ import { DEFAULT_SNAPS } from '../shared/ui/sheet-snap';
 import { useSectionBar } from '../shared/ui/section-rail';
 import { useAppHeight } from '../shared/ui/use-app-height';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
+import { useLocalFlag } from '../shared/ui/use-local-flag';
 import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
 import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import ThemeToggle from './ThemeToggle';
@@ -56,12 +59,22 @@ export default function App() {
   // The active view, guarded so a single tool's crash shows a recoverable
   // panel instead of blanking the suite. Keyed by route, so navigating to
   // another tool clears a prior error and mounts the next one fresh.
+  //
+  // A tool is a chunk of its own (`tools.tsx`), so its first opening waits on
+  // a download: the `Suspense` draws that wait in the tool's own frame, and a
+  // chunk that fails to load lands in the same boundary as a crash would.
   const activeContent = (
     <ErrorBoundary resetKey={path}>
       {sourcesPath ? (
         <SourcesScreen query={path.slice(sourcesPath.length + 1)} />
       ) : (
-        <Active />
+        <Suspense
+          fallback={
+            tool ? <LoadingState label={`Opening ${tool.label}…`} className="flex-1" /> : null
+          }
+        >
+          <Active />
+        </Suspense>
       )}
     </ErrorBoundary>
   );
@@ -87,14 +100,14 @@ export default function App() {
   // full panel would cost the editor its shape; widening it there is one
   // click, and stacking the editor is then a choice made in the moment.
   const railByDefault = mode === 'medium';
-  const [collapsedWide, setCollapsedWide] = useState<boolean>(
-    () => localStorage.getItem(COLLAPSE_KEY) === '1',
-  );
-  const [collapsedMedium, setCollapsedMedium] = useState<boolean>(
-    // Absent means collapsed here, unlike the desktop key: the default IS the
-    // rail, so only an explicit '0' opens it.
-    () => localStorage.getItem(COLLAPSE_KEY_MEDIUM) !== '0',
-  );
+  // Both through `useLocalFlag`: a browser that refuses storage (site data
+  // blocked, some private windows) throws on the very first read, and this
+  // component sits outside every error boundary — a bare `localStorage` here
+  // was a blank page rather than a forgotten preference.
+  const [collapsedWide, setCollapsedWide] = useLocalFlag(COLLAPSE_KEY, false);
+  // Absent means collapsed here, unlike the desktop key: the default IS the
+  // rail, so only an explicit '0' opens it.
+  const [collapsedMedium, setCollapsedMedium] = useLocalFlag(COLLAPSE_KEY_MEDIUM, true);
   // **An empty library starts as the rail.** With nothing in it and no
   // instance connected, the 288px column was a drop zone, one sentence and
   // "0 selected" — a fifth of the screen for a fact the rail's "0" already
@@ -119,15 +132,9 @@ export default function App() {
       else setCollapsedWide(false);
       return;
     }
-    if (railByDefault) setCollapsedMedium((c) => !c);
-    else setCollapsedWide((c) => !c);
+    if (railByDefault) setCollapsedMedium(!collapsedMedium);
+    else setCollapsedWide(!collapsedWide);
   };
-  useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY, collapsedWide ? '1' : '0');
-  }, [collapsedWide]);
-  useEffect(() => {
-    localStorage.setItem(COLLAPSE_KEY_MEDIUM, collapsedMedium ? '1' : '0');
-  }, [collapsedMedium]);
 
   // How tall the screen really is, measured once for the whole app and
   // published as `--app-h` (`shared/ui/app-height.ts`). Everything below that
@@ -237,6 +244,9 @@ export default function App() {
           {/* The most visible corner of a tool screen used to carry the
               tool's tagline ("Unified editor"). It says an action or a state
               now: where the documents live, and the way to `#/sources`. */}
+          {/* What is running, at every width — the masthead is the one row
+              every screen keeps. Nothing to say, nothing drawn. */}
+          <TaskPill compact={compact} />
           {tool && !compact && <SourcePill />}
           <ThemeToggle />
           <a

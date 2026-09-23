@@ -1,7 +1,11 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import useDialogKeys from './use-dialog-keys';
 import StageZoomControl from './StageZoomControl';
+import TaskEdge from './TaskEdge';
+import { cancelTask } from '../tasks/tasks';
+import { useTasks } from '../tasks/use-tasks';
 import { DECK_GAP, DECK_SETTLE_MS, useMediaViewer, type MediaViewer } from './use-media-viewer';
+import { describeZoomKey, zoomKeyAction } from './zoom-keys';
 
 /**
  * One media to look at, whatever holds it.
@@ -56,18 +60,100 @@ export interface LightboxItem {
   uncounted?: boolean;
 }
 
+/**
+ * One FILE of the capture the open item is (R6 of
+ * `docs/capture-renditions.md`): the proxy, the camera's own JPEG, the render
+ * inside its RAW. Chips under the facts switch between them — view state
+ * only, dropped with the sheet, writing nothing anywhere. The words are the
+ * fidelity chip's (`develop/capture-view.ts`), so a person reads one
+ * vocabulary from the sheet to the workbench.
+ */
+export interface LightboxFile {
+  /** The rendition's id (`media/renditions.ts`), what a verb carries away. */
+  id: string;
+  /** The chip's word: `Proxy`, else the file's name. */
+  label: string;
+  /** What it is, its pixels, its weight. */
+  facts: string;
+  /** The URL to draw, once the bytes are in hand. */
+  src: string | null;
+  natural?: { width: number; height: number } | null;
+  /** Why it cannot be shown here, or null. */
+  unavailable?: string | null;
+  /** Bring the bytes in — fetched, or sliced out of a RAW — and resolve with the URL to draw. */
+  load?: () => Promise<string>;
+  /** True when choosing it will fetch from an instance — said on the chip before the click. */
+  fetches?: boolean;
+}
+
+/** What the middle slot draws in place of its item while another file of the capture is viewed. */
+interface SlotOverride {
+  src: string | null;
+  natural: { width: number; height: number } | null;
+  unavailable: string | null;
+  /** The bytes are on their way: keep the bar up rather than saying "nothing to show". */
+  pending: boolean;
+}
+
 interface MediaLightboxProps {
   items: readonly LightboxItem[];
   /** Which one is open, an index into `items`. */
   index: number;
   onIndex: (index: number) => void;
   onClose: () => void;
+  /**
+   * The capture's files behind the OPEN item, first the one the item already
+   * draws. Absent or shorter than two draws no chips at all.
+   */
+  files?: readonly LightboxFile[];
+  /** Which of them is on screen — null for the first. Owned by the caller, so a verb can read it. */
+  viewing?: string | null;
+  onViewing?: (id: string | null) => void;
+  /**
+   * The open capture's TASK scope (`tasks.md`): a fetch its chips started
+   * draws on the deck's edge with a cancel beside the chips — the masthead's
+   * pill is behind this sheet, so the sheet must carry its own.
+   */
+  taskScope?: string | null;
   /** What the sheet is, for a screen reader: "…, from winnow.example". */
   from: string;
   /** The row under the deck — the one thing each caller does differently. */
   footer?: ReactNode;
   /** What Enter does, when the caller has one obvious action. */
   onConfirm?: (() => void) | null;
+  /**
+   * Ask the browser for one of these URLs again, past its cache, after it
+   * would not load — and say whether the entry now holds something worth
+   * drawing. Only a caller whose URLs are fetched over the network passes
+   * one: an instance's proxies can be answered from a cache entry this origin
+   * is not allowed to read, which no reload cures (`winnow/cache-heal.ts`).
+   * A `blob:` off a local file never needs it.
+   */
+  heal?: (url: string) => Promise<boolean>;
+}
+
+/**
+ * A media URL that is asked for once more, past the cache, if it will not
+ * load — and then left alone. One heal per URL per slot: past that the picture
+ * is genuinely not coming, and the still underneath is what the sheet shows.
+ */
+function useHealingSrc(url: string | null, heal?: (url: string) => Promise<boolean>) {
+  const [round, setRound] = useState(0);
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    setRound(0);
+    return () => {
+      alive.current = false;
+    };
+  }, [url]);
+  const onError = () => {
+    if (!url || !heal || round > 0) return;
+    void heal(url).then((healed) => {
+      if (healed && alive.current) setRound(1);
+    });
+  };
+  return { round, onError };
 }
 
 /**
@@ -88,8 +174,54 @@ export default function MediaLightbox({
   from,
   footer,
   onConfirm,
+  heal,
+  files,
+  viewing = null,
+  onViewing,
+  taskScope = null,
 }: MediaLightboxProps) {
   const item = items[index] ?? null;
+  const running = useTasks(taskScope);
+  const cancellable = running.find((t) => t.cancel) ?? null;
+
+  // The file of the capture on screen: the one asked for, else the first —
+  // which is the item itself unless the item cannot be drawn as it is (a
+  // lone RAW, whose first file is the render inside it, brought in below).
+  const shownFile = files && files.length ? (files.find((f) => f.id === viewing) ?? files[0]) : null;
+  const [loading, setLoading] = useState<string | null>(null);
+  const [failed, setFailed] = useState<ReadonlyMap<string, string>>(() => new Map());
+  useEffect(() => setFailed((cur) => (cur.size ? new Map() : cur)), [item?.id]);
+  const shownId = shownFile?.id ?? null;
+  const shownSrc = shownFile?.src ?? null;
+  const shownLoad = shownFile?.load;
+  const shownBlocked = shownFile?.unavailable ?? null;
+  useEffect(() => {
+    if (!shownId || shownSrc || shownBlocked || !shownLoad || failed.has(shownId)) return;
+    let alive = true;
+    setLoading(shownId);
+    shownLoad().then(
+      () => {
+        if (alive) setLoading(null);
+      },
+      (err: unknown) => {
+        if (!alive) return;
+        setLoading(null);
+        setFailed((cur) => new Map(cur).set(shownId, err instanceof Error ? err.message : String(err)));
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [shownId, shownSrc, shownBlocked, shownLoad, failed]);
+  const override: SlotOverride | null =
+    shownFile && item && shownFile.src !== item.src
+      ? {
+          src: shownFile.src,
+          natural: shownFile.natural ?? item.natural,
+          unavailable: shownFile.unavailable ?? failed.get(shownFile.id) ?? null,
+          pending: loading === shownFile.id,
+        }
+      : null;
 
   // The caller usually knows the size already (an instance's row, the
   // library's measured meta), so the pan limits are right before a single
@@ -98,13 +230,25 @@ export default function MediaLightbox({
     count: items.length,
     index,
     onIndex,
-    natural: item?.natural ?? null,
+    natural: override?.natural ?? item?.natural ?? null,
   });
 
+  // The keys the grammar gives every Looking surface (`zoom-keys.ts`): `Z`
+  // toggles the view, the arrows pan it once zoomed — and at the fit, where a
+  // pan means nothing, the arrows keep paging the deck.
+  const keys = useRef({ viewer });
+  keys.current = { viewer };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'ArrowLeft') viewer.pageBy(-1);
-      else if (e.key === 'ArrowRight') viewer.pageBy(1);
+      const v = keys.current.viewer;
+      const action = zoomKeyAction(describeZoomKey(e), v.zoomed);
+      if (action?.kind === 'toggle') {
+        if (v.zoomed) v.zoom.reset();
+        else v.zoom.zoomIn();
+      } else if (action?.kind === 'pan') {
+        v.pan(action.dx, action.dy);
+      } else if (!v.zoomed && e.key === 'ArrowLeft') v.pageBy(-1);
+      else if (!v.zoomed && e.key === 'ArrowRight') v.pageBy(1);
       else return;
       e.preventDefault();
     };
@@ -116,7 +260,7 @@ export default function MediaLightbox({
       window.removeEventListener('keydown', onKey);
       document.body.style.overflow = bodyOverflow;
     };
-  }, [viewer.pageBy]);
+  }, []);
 
   // Whether the media in the middle slot has its full bytes. Reported by that
   // slot rather than tracked here: a picture that already loaded as a
@@ -202,7 +346,7 @@ export default function MediaLightbox({
               pinch is the gesture there, as the swipe is for the pager. */}
           <StageZoomControl
             zoom={viewer.zoom}
-            hint="wheel, or pinch"
+            hint="wheel, pinch, or Z"
             className="flex-none max-[820px]:hidden"
           />
           <button
@@ -221,6 +365,59 @@ export default function MediaLightbox({
         <p className="m-0 font-mono text-2xs text-muted truncate" title={named.facts}>
           {named.facts}
         </p>
+        {/* The capture's files, as chips. A look here writes nothing: the
+            choice lives in the caller's state for as long as the sheet is on
+            this picture, and the verb under it is what carries it anywhere. */}
+        {files && files.length > 1 && shownAt === index && (
+          <div className="flex items-center gap-1.5 flex-wrap -mt-1 min-w-0" role="group" aria-label="The capture’s files">
+            {files.map((f, at) => {
+              const on = f.id === shownFile?.id;
+              return (
+                <button
+                  key={f.id}
+                  type="button"
+                  onClick={() => {
+                    // A chip clicked again after a failure (a cancelled fetch)
+                    // is asked again: the failure is what a retry clears.
+                    setFailed((cur) => {
+                      if (!cur.has(f.id)) return cur;
+                      const next = new Map(cur);
+                      next.delete(f.id);
+                      return next;
+                    });
+                    onViewing?.(at === 0 ? null : f.id);
+                  }}
+                  disabled={!!f.unavailable}
+                  aria-pressed={on}
+                  title={f.unavailable ?? f.facts}
+                  className={`font-mono text-3xs tracking-[0.1em] uppercase px-2.5 py-1 rounded-full border transition-colors cursor-pointer disabled:opacity-50 disabled:cursor-not-allowed ${
+                    on
+                      ? 'bg-ink text-paper border-ink'
+                      : 'bg-paper text-ink-soft border-line hover:border-line-strong hover:text-accent'
+                  }`}
+                >
+                  {f.label}
+                  {loading === f.id ? '…' : f.fetches && !on ? ' ↓' : ''}
+                </button>
+              );
+            })}
+            {shownFile && (
+              <span className="text-2xs text-muted min-w-0 truncate" title={shownFile.facts}>
+                {failed.get(shownFile.id) ?? shownFile.facts}
+              </span>
+            )}
+            {cancellable && (
+              <button
+                type="button"
+                onClick={() => cancelTask(cancellable.id)}
+                className="p-0 border-0 bg-transparent font-mono text-2xs text-accent-ink underline underline-offset-[3px] cursor-pointer shrink-0"
+                title={`Stop: ${cancellable.label}`}
+              >
+                cancel
+              </button>
+            )}
+          </div>
+        )}
         {exposureLine && (
           <p
             className={`m-0 -mt-2 min-h-[1lh] font-mono text-2xs text-faint truncate ${
@@ -280,6 +477,8 @@ export default function MediaLightbox({
                     active={slot === 0}
                     viewer={viewer}
                     onReady={setReady}
+                    heal={heal}
+                    override={slot === 0 ? override : null}
                   />
                 </div>
               ))}
@@ -297,6 +496,9 @@ export default function MediaLightbox({
                 <div className="h-full w-1/4 bg-accent animate-deck-load" />
               </div>
             )}
+            {/* The capture's own tasks — a chip's fetch — on the deck's bottom
+                edge, the bytes moving where the picture will appear. */}
+            {taskScope && <TaskEdge scope={taskScope} className="z-10" />}
           </div>
           {/* Outside the viewport, never inside it: that element answers every
               pointer event itself, in the capture phase. A single media draws
@@ -336,15 +538,28 @@ function DeckSlide({
   active,
   viewer,
   onReady,
+  heal,
+  override = null,
 }: {
   item: LightboxItem;
   active: boolean;
   viewer: MediaViewer;
   /** Only the middle slot reports, and it reports whenever it becomes it. */
   onReady: (ready: boolean) => void;
+  heal?: (url: string) => Promise<boolean>;
+  /** Another file of the same capture, drawn in this slot instead of the item's own. */
+  override?: SlotOverride | null;
 }) {
   const [loaded, setLoaded] = useState(false);
-  useEffect(() => setLoaded(false), [item.id, item.src]);
+  // What this slot draws: the item, or the capture's other file over it.
+  const src = override ? override.src : item.src;
+  const unavailable = override ? override.unavailable : item.unavailable;
+  const pending = override?.pending ?? false;
+  // The full rendition and the still underneath are two URLs and two entries:
+  // the grid has usually healed the still already, the proxy nothing has.
+  const full = useHealingSrc(src, heal);
+  const still = useHealingSrc(item.still, heal);
+  useEffect(() => setLoaded(false), [item.id, src]);
   // A clip that leaves the middle stops, and lets go of its stream: removing
   // `src` alone keeps the download going, `load()` is what ends it.
   const videoRef = useRef<HTMLVideoElement>(null);
@@ -356,8 +571,8 @@ function DeckSlide({
     setLoaded(false);
   }, [active]);
   useEffect(() => {
-    if (active) onReady(loaded || !item.src);
-  }, [active, loaded, item.src, onReady]);
+    if (active) onReady(loaded || (!src && !pending));
+  }, [active, loaded, src, pending, onReady]);
 
   const framed = {
     transform: active ? viewer.transform : undefined,
@@ -368,10 +583,10 @@ function DeckSlide({
   const fill = 'absolute inset-0 w-full h-full object-contain block';
   const cors = item.credentialed ? 'use-credentials' : undefined;
 
-  if (item.unavailable || (!item.src && !item.still)) {
+  if (unavailable || (!src && !item.still && !pending)) {
     return (
       <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-muted">
-        {item.unavailable ?? 'nothing to show'}
+        {unavailable ?? 'nothing to show'}
       </span>
     );
   }
@@ -380,17 +595,21 @@ function DeckSlide({
   // the layer above, and a screen reader should hear about it once.
   const under = item.still ? (
     <img
+      // A new element per round, or the browser may ignore the same `src`
+      // being set again on the one that just failed.
+      key={`still:${still.round}`}
       src={item.still}
       alt=""
       aria-hidden="true"
       crossOrigin={cors}
       draggable={false}
+      onError={still.onError}
       style={framed}
       className={fill}
     />
   ) : null;
 
-  if (item.kind === 'video' && item.src) {
+  if (item.kind === 'video' && src) {
     return (
       <>
         {under}
@@ -400,10 +619,11 @@ function DeckSlide({
             sweep aimed at a node that left the DOM goes nowhere. */}
         <video
           ref={videoRef}
-          key={item.id}
-          src={active ? item.src : undefined}
+          key={`${item.id}:${full.round}`}
+          src={active ? src : undefined}
           poster={item.still ?? undefined}
           crossOrigin={cors}
+          onError={full.onError}
           controls={active}
           // Metadata only: opening a day should not stream every clip.
           preload="metadata"
@@ -429,14 +649,15 @@ function DeckSlide({
   return (
     <>
       {under}
-      {item.src && (
+      {src && (
         <img
-          key={item.id}
-          src={item.src}
+          key={`${item.id}:${src}:${full.round}`}
+          src={src}
           alt={item.title}
           crossOrigin={cors}
           draggable={false}
           style={framed}
+          onError={full.onError}
           onLoad={(e) => {
             setLoaded(true);
             if (active) {

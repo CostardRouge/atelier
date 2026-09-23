@@ -10,14 +10,22 @@
 import { useCallback, useDeferredValue, useMemo, useState } from 'react';
 import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
 import type { FilmSettings } from '../film/emulsion';
+import type { FilmTexture } from '../film/film-texture';
 import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer';
-import type { FilmStockId } from '../film/stocks';
-import { parseCube, type CubeLut } from '../lib/cube-parser';
+import { textureOf, type FilmStockId } from '../film/stocks';
+import type { CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
 import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
-import { composeLutStack, identityCube, reorderLayer, type LutLayer } from './lut-stack';
+import {
+  MAX_LAYER_INTENSITY,
+  composeLutStack,
+  identityCube,
+  reorderLayer,
+  type LutLayer,
+} from './lut-stack';
 import { missingLookReason, packLookName, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut, restoreLayers } from './restore-grade';
+import { uploadLookIntoVault } from './upload-pack';
 import type { OutputTransform } from './transfer';
 import type { Interpolation } from './interpolate';
 import { useLutInterpolation } from './use-lut-interpolation';
@@ -28,8 +36,13 @@ export interface SavedLutLayer {
   source: string;
   name: string;
   /**
-   * Raw `.cube` text for an uploaded look, a film stock's settings as JSON
-   * (`shared/film/film-layer.ts`); null for built-ins.
+   * A film stock's settings as JSON (`shared/film/film-layer.ts`), or a pack
+   * reference — including an UPLOADED look's, since 2026-09-20 (`upload-pack.ts`);
+   * null for built-ins.
+   *
+   * Raw `.cube` text still READS here, and must keep doing so: a document
+   * written before uploads went into the vault holds a whole inlined lattice
+   * (`restore-grade.ts`'s `source: 'custom'` branch). Nothing WRITES it any more.
    */
   customText: string | null;
   intensity: number;
@@ -77,16 +90,26 @@ export interface LutStack {
   /** True while a built-in is being fetched. */
   busy: boolean;
   error: string | null;
-  addBuiltin: (builtinId: string) => Promise<void>;
+  /**
+   * A built-in look as a new layer. `intensity` is how strongly it lands —
+   * the gallery's scene passes what the author judged it at, everything else
+   * takes the authored 1.
+   */
+  addBuiltin: (builtinId: string, intensity?: number) => Promise<void>;
+  /**
+   * Upload a `.cube` from disk. It lands in the VAULT as a look of the
+   * personal pack and the layer stores a reference — an upload has not
+   * inlined a lattice into the document since 2026-09-20 (`upload-pack.ts`).
+   */
   addCustom: () => Promise<void>;
   /** A film stock as a new layer at the end of the stack — generated, nothing to fetch. */
-  addFilm: (stockId: FilmStockId) => void;
+  addFilm: (stockId: FilmStockId, intensity?: number) => void;
   /**
    * A purchased look from the vault (`pack-vault.ts`). The layer stores the
    * REFERENCE, never the lattice, and is added even when this device does not
    * hold the bytes — it then says so rather than grading.
    */
-  addPackLook: (ref: PackRef, name?: string) => Promise<void>;
+  addPackLook: (ref: PackRef, name?: string, intensity?: number) => Promise<void>;
   /** Re-dial a film layer: its cube is regenerated (cached by settings), its name says where it stands. */
   setFilm: (id: string, settings: FilmSettings) => void;
   remove: (id: string) => void;
@@ -98,15 +121,30 @@ export interface LutStack {
   /** Replace the correction; `null` is "as shot". */
   setDevelop: (develop: DevelopSettings | null) => void;
   /**
-   * The uploaded cubes' own text, keyed by layer id — what `toSaved` writes so
-   * a custom look survives a reload. Exposed for a host that holds the LIVE
-   * stack as a value (an undo history), which has to put this back with it.
+   * The film TEXTURE this grade carries — grain and halation — or null for
+   * none. NOT baked into `composed`: it is spatial, and it is drawn by one
+   * node of the render graph after the cube (`render-film.md`), so it travels
+   * beside the cube to whoever builds a grader.
+   */
+  film: FilmTexture | null;
+  /**
+   * Replace it. Named apart from `setFilm`, which re-dials a film LAYER's
+   * emulsion: one writes a lattice, the other writes what the node draws over
+   * it, and confusing them would bake grain into a cube.
+   */
+  setTexture: (film: FilmTexture | null) => void;
+  /**
+   * Each layer's stored text, keyed by layer id — a film stock's settings, a
+   * pack reference (an uploaded look's included) — what `toSaved` writes so a
+   * look survives a reload. Exposed for a host that holds the LIVE stack as a
+   * value (an undo history), which has to put this back with it.
    */
   customText: Record<string, string>;
   /** Rebuild the stack from a saved document. */
   restore: (
     saved: readonly SavedLutLayer[],
     output?: OutputTransform,
+    film?: FilmTexture | null,
   ) => Promise<void>;
   /**
    * Put a LIVE stack back, synchronously: the layers exactly as they were,
@@ -114,9 +152,25 @@ export interface LutStack {
    * `restore` re-fetches and re-parses, which is right when a document opens
    * and wrong for a ⌘Z, where the await would land as a second, phantom step.
    */
-  revert: (layers: LutLayer[], output: OutputTransform, customText: Record<string, string>) => void;
+  revert: (
+    layers: LutLayer[],
+    output: OutputTransform,
+    customText: Record<string, string>,
+    film?: FilmTexture | null,
+  ) => void;
   /** The persistable shape of the current stack. */
   toSaved: () => SavedLutLayer[];
+}
+
+/**
+ * A strength a caller asked for, held inside what a layer may carry. Every
+ * `add*` takes one, and the number comes from a slider a host owns — which is
+ * exactly the kind of number that reaches a document, so it is clamped where
+ * the layer is made rather than trusted per caller.
+ */
+function layerIntensity(value: number): number {
+  if (!Number.isFinite(value)) return 1;
+  return Math.min(MAX_LAYER_INTENSITY, Math.max(0, value));
 }
 
 function uid(): string {
@@ -128,11 +182,13 @@ function uid(): string {
 export function useLutStack(): LutStack {
   const [layers, setLayers] = useState<LutLayer[]>([]);
   const [output, setOutput] = useState<OutputTransform>('none');
+  const [film, setTexture] = useState<FilmTexture | null>(null);
   const [develop, setDevelopState] = useState<DevelopSettings>(DEFAULT_DEVELOP);
   const { interpolation, setInterpolation } = useLutInterpolation();
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
-  // Uploaded cubes keep their source text so a project can restore them.
+  // Film settings and pack references, by layer id, so a project can restore
+  // them. An OLD document's inlined `.cube` text lands here too, on restore.
   const [customText, setCustomText] = useState<Record<string, string>>({});
 
   // Baking walks a lattice, and `setIntensity` maps to a NEW layers array, so
@@ -191,7 +247,7 @@ export function useLutStack(): LutStack {
     setDevelopState(next ?? DEFAULT_DEVELOP);
   }, []);
 
-  const addBuiltin = useCallback(async (builtinId: string) => {
+  const addBuiltin = useCallback(async (builtinId: string, intensity = 1) => {
     setError(null);
     setBusy(true);
     try {
@@ -203,7 +259,7 @@ export function useLutStack(): LutStack {
           source: `builtin:${builtinId}`,
           name,
           lut,
-          intensity: 1,
+          intensity: layerIntensity(intensity),
           enabled: true,
         },
       ]);
@@ -214,32 +270,47 @@ export function useLutStack(): LutStack {
     }
   }, []);
 
+  /**
+   * An uploaded `.cube` goes into the VAULT and the layer stores a reference
+   * — never the lattice (`upload-pack.ts`, `docs/lut-packs.md` §3.1). That is
+   * what stops an upload riding every export file and every document sync.
+   * The layer that comes out is an ordinary pack layer, so everything
+   * downstream — `toSaved`, `gradeKey`, `restoreLayers`, the missing-look
+   * state — already knows what to do with it.
+   */
   const addCustom = useCallback(async () => {
     const file = await pickFile(CUBE_ACCEPT);
     if (!file) return;
     setError(null);
-    const text = await file.text();
-    const parsed = parseCube(text);
-    if (!parsed) {
-      setError(`${file.name} isn't a supported 3D .cube LUT (1D LUTs aren't).`);
-      return;
+    setBusy(true);
+    try {
+      const { ref, name, lut } = await uploadLookIntoVault(file);
+      const id = uid();
+      setCustomText((prev) => ({ ...prev, [id]: writePackRef(ref) }));
+      setLayers((prev) => [
+        ...prev,
+        { id, source: PACK_SOURCE, name, lut, intensity: 1, enabled: true },
+      ]);
+    } catch (e) {
+      setError((e as Error).message || 'Could not read that .cube file.');
+    } finally {
+      setBusy(false);
     }
-    const id = uid();
-    setCustomText((prev) => ({ ...prev, [id]: text }));
-    setLayers((prev) => [
-      ...prev,
-      { id, source: 'custom', name: file.name, lut: parsed, intensity: 1, enabled: true },
-    ]);
   }, []);
 
-  const addFilm = useCallback((stockId: FilmStockId) => {
+  const addFilm = useCallback((stockId: FilmStockId, intensity = 1) => {
     setError(null);
     const { layer, text } = newFilmLayer(uid(), stockId);
     setCustomText((prev) => ({ ...prev, [layer.id]: text }));
-    setLayers((prev) => [...prev, layer]);
+    setLayers((prev) => [...prev, { ...layer, intensity: layerIntensity(intensity) }]);
+    // A stock brings its own grain and halation — half of what a stock IS, and
+    // the half the cube cannot carry. Only where the grade carries none yet:
+    // a texture the author already dialled is theirs, and a second stock must
+    // not overwrite it.
+    setTexture((prev) => prev ?? textureOf(stockId));
   }, []);
 
-  const addPackLook = useCallback(async (ref: PackRef, name?: string) => {
+  const addPackLook = useCallback(async (ref: PackRef, name?: string, intensity = 1) => {
     setError(null);
     setBusy(true);
     try {
@@ -255,7 +326,7 @@ export function useLutStack(): LutStack {
           source: PACK_SOURCE,
           name: label,
           lut: lut ?? identityCube(),
-          intensity: 1,
+          intensity: layerIntensity(intensity),
           enabled: true,
           ...(lut ? {} : { missing: missingLookReason(ref) }),
         },
@@ -297,8 +368,13 @@ export function useLutStack(): LutStack {
   const restore = useCallback(async (
     saved: readonly SavedLutLayer[],
     savedOutput: OutputTransform = 'none',
+    savedFilm: FilmTexture | null = null,
   ) => {
     setOutput(savedOutput);
+    // Set before the early return below, and before the await: a grade with no
+    // layers can still carry a texture, and a restore that left the last
+    // document's grain on would be the same fault as one that left its looks.
+    setTexture(savedFilm);
     if (saved.length === 0) {
       // An empty grade is a real one — the picture that wears no look while
       // the trip wears one — so the stack has to EMPTY, not stay on whatever
@@ -319,7 +395,12 @@ export function useLutStack(): LutStack {
   }, []);
 
   const revert = useCallback(
-    (next: LutLayer[], nextOutput: OutputTransform, nextText: Record<string, string>) => {
+    (
+      next: LutLayer[],
+      nextOutput: OutputTransform,
+      nextText: Record<string, string>,
+      nextFilm: FilmTexture | null = null,
+    ) => {
       // The arrays go back BY REFERENCE, never copied: a caller holding a
       // history compares what it gets back against what it put in, and a copy
       // — equal in every value — reads as a fresh edit and costs it the step
@@ -327,6 +408,7 @@ export function useLutStack(): LutStack {
       setLayers(next);
       setOutput(nextOutput);
       setCustomText(nextText);
+      setTexture(nextFilm);
     },
     [],
   );
@@ -369,6 +451,8 @@ export function useLutStack(): LutStack {
     setOutput,
     setInterpolation,
     setDevelop,
+    film,
+    setTexture,
     customText,
     restore,
     revert,

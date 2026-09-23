@@ -95,15 +95,6 @@ export async function listRolls(): Promise<RollDoc[]> {
   }
 }
 
-export async function getRoll(id: string): Promise<RollDoc | null> {
-  try {
-    const doc = await withStore(ROLLS, 'readonly', (s) => s.get(id) as IDBRequest<RollDoc | undefined>);
-    return doc ? migrateRollDoc(doc) : null;
-  } catch {
-    return null;
-  }
-}
-
 /** Returns false when the write failed (quota, eviction, private window). */
 export async function putRoll(doc: RollDoc): Promise<boolean> {
   try {

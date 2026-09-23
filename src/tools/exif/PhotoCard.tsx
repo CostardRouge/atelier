@@ -35,7 +35,7 @@ export default function PhotoCard({ photo, index, onOpen }: PhotoCardProps) {
   return (
     <div
       ref={ref}
-      className="flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper-soft transition-[transform,box-shadow,border-color] duration-300 ease-paper hover:-translate-y-1 hover:shadow-paper hover:border-line-strong"
+      className="flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper hover:border-line-strong"
     >
       <div className="relative bg-frame leading-[0]">
         {index != null && (

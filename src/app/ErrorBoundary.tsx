@@ -70,7 +70,7 @@ export default class ErrorBoundary extends Component<Props, State> {
             <button
               type="button"
               onClick={() => this.setState({ error: null })}
-              className="inline-flex items-center px-4 py-2 rounded-paper border border-line-strong bg-surface text-sm font-semibold text-ink transition-[border-color,transform] duration-200 ease-paper hover:border-accent hover:-translate-y-px"
+              className="inline-flex items-center px-4 py-2 rounded-paper border border-line-strong bg-surface text-sm font-semibold text-ink transition-[border-color] duration-200 ease-paper hover:border-accent"
             >
               Try again
             </button>

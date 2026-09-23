@@ -5,7 +5,7 @@ import {
   useState,
   type ReactNode,
 } from 'react';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import {
@@ -49,6 +49,9 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { trackedFetch } from '../../shared/tasks/tracked';
+import { fileIdentity } from '../../shared/library/assets';
+import { startTask } from '../../shared/tasks/tasks';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
@@ -82,7 +85,7 @@ import {
   type ExportVariant,
   type VariantResolution,
 } from '../../shared/projects/export-variants';
-import { ensureOverlayFonts } from '../../shared/overlay/fonts';
+import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import { settleForStill } from '../../shared/overlay/still-frame';
 import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
 import OutroPanel from './OutroPanel';
@@ -103,7 +106,6 @@ import GradePanel from '../../shared/lut/GradePanel';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
 import StylePanel from '../../shared/overlay/StylePanel';
@@ -138,6 +140,8 @@ import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
 import { useSurface } from '../../shared/ui/use-surface';
 import { FieldRow, InspectorSection, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import { deliveryFor } from '../../shared/develop/delivery-source';
+import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 
@@ -519,6 +523,20 @@ export default function StudioEditor({
       : null;
   /** True when the export will go and get the capture first. */
   const willFetchOriginal = !!proxyWithOriginal && !renderFromProxy;
+  // A PHOTO's own source. Until now `origin` was read off the clip alone and
+  // the note said "photos never take this path — a photo's original is often
+  // a RAW no browser decodes". O2 of `docs/develop-originals.md` reverses
+  // that for the originals a browser DOES decode, and `delivery-source.ts`
+  // keeps the RAW rule: a RAW is reached only through the render inside it,
+  // measured, never on the assumption that it is full-size.
+  const photoOrigin = mediaOrigin(activeImage);
+  // Which pixels a still leaves from is not a choice here since R5 of
+  // `docs/capture-renditions.md` (2026-09-21): its original is fetched only
+  // where the proxy could not fill the frame the variants ask for, and the
+  // *Delivers* row says so. A clip keeps `renderFromProxy` — its proxy is
+  // always the wrong thing to deliver, a still's often is not.
+  const photoProxy =
+    photoOrigin?.fidelity === 'proxy' && typeof photoOrigin.fetchOriginal === 'function' ? photoOrigin : null;
   // Where the finals of the active media would go home to — a clip or a
   // still, whichever is open — and the identity the source vouched for it.
   const finalsMedia = activeVideo ?? activeImage ?? null;
@@ -551,7 +569,7 @@ export default function StudioEditor({
     if (restoredRef.current) return;
     restoredRef.current = true;
     void lutStack
-      .restore(project.lutStack, project.outputTransform)
+      .restore(project.lutStack, project.outputTransform, project.lutFilm)
       .finally(() => setRestoreDone(true));
     if (project.media.activeId && clips.some((c) => c.id === project.media.activeId)) {
       lib.setActive(project.media.activeId);
@@ -703,16 +721,20 @@ export default function StudioEditor({
   const trimmed = isTrimmed(range, duration);
 
   // Load the brand fonts any element uses, then force a repaint so canvas text
-  // measures and renders correctly.
+  // measures and renders correctly. Keyed on the FACES in use, not on the
+  // elements: keyed on the elements it ran on every drag step and keystroke,
+  // and `document.fonts.ready` always resolves, so every edit rendered the
+  // editor a second time for fonts that had not changed.
+  const fontFaces = useMemo(() => overlayFontFaces(elements, theme).join('|'), [elements, theme]);
   useEffect(() => {
     let cancelled = false;
-    ensureOverlayFonts(elements, theme).then(() => {
+    ensureFontFaces(fontFaces ? fontFaces.split('|') : []).then(() => {
       if (!cancelled) setFontTick((t) => t + 1);
     });
     return () => {
       cancelled = true;
     };
-  }, [elements, theme]);
+  }, [fontFaces]);
 
   // --- element editing ----------------------------------------------------
 
@@ -954,6 +976,7 @@ export default function StudioEditor({
       lutLayers: lutStack.layers,
       lutOutput: lutStack.output,
       lutText: lutStack.customText,
+      lutFilm: lutStack.film,
     }),
     [
       elements,
@@ -972,6 +995,7 @@ export default function StudioEditor({
       lutStack.layers,
       lutStack.output,
       lutStack.customText,
+      lutStack.film,
     ],
   );
 
@@ -1002,7 +1026,7 @@ export default function StudioEditor({
       setVariants(step.variants);
       // The live stack, not the saved one: `restore` re-fetches every built-in
       // cube, and the await would land as a second, phantom step.
-      lutStack.revert(step.lutLayers, step.lutOutput, step.lutText);
+      lutStack.revert(step.lutLayers, step.lutOutput, step.lutText, step.lutFilm);
       // The selection is not part of a step, so an element that is no longer
       // on the frame simply cannot stay selected.
       setSelectedElementId((id) => (id && step.elements.some((el) => el.id === id) ? id : null));
@@ -1030,9 +1054,43 @@ export default function StudioEditor({
   // touching the media. Failures flip the badge to "storage-error" — editing
   // continues in memory.
   const docRef = useRef(project);
+  // The shell can change the document WITHOUT remounting the editor — the
+  // media folder re-pointed, missing files forgotten — and every save below
+  // spreads from this ref. It must follow the prop, or the next autosave
+  // writes the old folder handle back over the one just picked.
+  useEffect(() => {
+    docRef.current = project;
+  }, [project]);
   const durationRef = useRef<number>(project.durationSeconds ?? 0);
   const saveTimer = useRef<ReturnType<typeof setTimeout> | null>(null);
   const firstRun = useRef(true);
+  /** The save the timer is waiting to run, and whether one is owed. */
+  const pendingSave = useRef<(() => Promise<void>) | null>(null);
+  const saveOwed = useRef(false);
+
+  // **A save that is owed is written before the editor goes**, and when the
+  // tab is hidden or the page unloads. The debounce below restarts on every
+  // edit through its cleanup — and that same cleanup used to run on unmount,
+  // cancelling the pending save with nothing to write it: "Projects", a tool
+  // switch or a remount lost the last 800 ms of edits every time.
+  useEffect(() => {
+    const flush = () => {
+      if (!saveOwed.current) return;
+      if (saveTimer.current) clearTimeout(saveTimer.current);
+      saveTimer.current = null;
+      void pendingSave.current?.();
+    };
+    const onVisibility = () => {
+      if (document.visibilityState === 'hidden') flush();
+    };
+    document.addEventListener('visibilitychange', onVisibility);
+    window.addEventListener('pagehide', flush);
+    return () => {
+      document.removeEventListener('visibilitychange', onVisibility);
+      window.removeEventListener('pagehide', flush);
+      flush();
+    };
+  }, []);
 
   useEffect(() => {
     if (duration > 0) durationRef.current = duration;
@@ -1060,49 +1118,57 @@ export default function StudioEditor({
     }
     setSaveState('unsaved');
     if (saveTimer.current) clearTimeout(saveTimer.current);
+    const save = async () => {
+      saveOwed.current = false;
+      setSaveState('saving');
+      // Hashing is memoised per file, so only the first save of a folder
+      // pays for it; every later autosave is a cache hit.
+      const mediaFiles = await hashedMediaRefs(
+        clips.flatMap((c) =>
+          [c.parts.video, c.parts.srt, c.parts.image].filter((f): f is File => !!f),
+        ),
+      );
+      const doc: ProjectDoc = {
+        ...docRef.current,
+        name: projectName.trim() || docRef.current.name,
+        updatedAt: Date.now(),
+        settings: { ...docRef.current.settings, aspectId, timeShift, timeScale },
+        elements,
+        guides,
+        lutStack: lutStack.toSaved(),
+        outputTransform: lutStack.output,
+        lutFilm: lutStack.film,
+        theme,
+        scenes,
+        outro,
+        exportPrefs: {
+          fileName: exportFileName.trim() || null,
+          variants,
+        },
+        media: {
+          ...docRef.current.media,
+          files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
+          activeId,
+          trims,
+          develops,
+        },
+        thumbnail: await bakeThumbnail(),
+        durationSeconds: durationRef.current || docRef.current.durationSeconds,
+      };
+      docRef.current = doc;
+      const ok = await putProject(doc);
+      onDocSaved(doc);
+      setSaveState(ok ? 'saved' : 'storage-error');
+    };
+    pendingSave.current = save;
+    saveOwed.current = true;
     saveTimer.current = setTimeout(() => {
-      void (async () => {
-        setSaveState('saving');
-        // Hashing is memoised per file, so only the first save of a folder
-        // pays for it; every later autosave is a cache hit.
-        const mediaFiles = await hashedMediaRefs(
-          clips.flatMap((c) =>
-            [c.parts.video, c.parts.srt, c.parts.image].filter((f): f is File => !!f),
-          ),
-        );
-        const doc: ProjectDoc = {
-          ...docRef.current,
-          name: projectName.trim() || docRef.current.name,
-          updatedAt: Date.now(),
-          settings: { ...docRef.current.settings, aspectId, timeShift, timeScale },
-          elements,
-          guides,
-          lutStack: lutStack.toSaved(),
-          outputTransform: lutStack.output,
-          theme,
-          scenes,
-          outro,
-          exportPrefs: {
-            fileName: exportFileName.trim() || null,
-            variants,
-          },
-          media: {
-            ...docRef.current.media,
-            files: mediaFiles.length ? mediaFiles : docRef.current.media.files,
-            activeId,
-            trims,
-            develops,
-          },
-          thumbnail: await bakeThumbnail(),
-          durationSeconds: durationRef.current || docRef.current.durationSeconds,
-        };
-        docRef.current = doc;
-        const ok = await putProject(doc);
-        onDocSaved(doc);
-        setSaveState(ok ? 'saved' : 'storage-error');
-      })();
+      saveTimer.current = null;
+      void save();
     }, 800);
     return () => {
+      // Restarting the debounce only: what is owed is written by the
+      // unmount flush above, never dropped here.
       if (saveTimer.current) clearTimeout(saveTimer.current);
     };
     // Autosave is driven by the edited state, not by callback identities.
@@ -1123,6 +1189,10 @@ export default function StudioEditor({
     develops,
     lutStack.layers,
     lutStack.output,
+    // The texture is written (`lutFilm`) and undone like the layers, so it
+    // is a trigger like them: a grain or halation change alone used to wait
+    // for some other edit before it reached the store.
+    lutStack.film,
     clips,
   ]);
 
@@ -1142,6 +1212,7 @@ export default function StudioEditor({
       guides,
       lutStack: lutStack.toSaved(),
       outputTransform: lutStack.output,
+      lutFilm: lutStack.film,
       theme,
       scenes,
       outro,
@@ -1168,7 +1239,7 @@ export default function StudioEditor({
     setOutro(structuredClone(file.outro ?? null));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
-    void lutStack.restore(file.lutStack, file.outputTransform);
+    void lutStack.restore(file.lutStack, file.outputTransform, file.lutFilm);
     // The incoming deck has different ids — whatever was selected is gone.
     setSelectedElementId(null);
     setShowSettings(false);
@@ -1189,6 +1260,7 @@ export default function StudioEditor({
       cue: cues[0] ?? null,
       lut,
       intensity: 1,
+      film: lutStack.film,
       theme,
       timeShift,
     });
@@ -1211,6 +1283,8 @@ export default function StudioEditor({
       cues,
       lut,
       intensity: 1,
+      // A clip takes the film node too: `SOURCE → CUBE → [FILM] → OUTPUT`.
+      film: lutStack.film,
       theme,
       timeShift,
       scenes,
@@ -1261,7 +1335,7 @@ export default function StudioEditor({
   async function handleExport() {
     if (!active || exporting || variants.length === 0) return;
     if (!activeVideo && !photo) return;
-    const meta = lib.meta.get(active.id);
+    const meta = lib.getMeta(active.id);
     let srcWidth = photo?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
     let srcHeight = photo?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
     if (!srcWidth || !srcHeight) {
@@ -1292,7 +1366,36 @@ export default function StudioEditor({
     // decode it directly, where the HEVC original would fail.
     let source = activeTranscode.transcoded ?? activeVideo;
     const base = exportFileName.trim() || active.baseName;
+    // The run as a TASK too (`tasks.md`, T4): the panel's own bar and Cancel
+    // stay, and the masthead's pill says the same wherever the person walks.
+    const exportTask = startTask({
+      label: `Exporting ${base}`,
+      scope: finalsMedia ? (knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)) : null,
+      progress: 0,
+      detail: `${variants.length} variant${variants.length === 1 ? '' : 's'}`,
+      cancel: () => controller.abort(),
+    });
+    // A still delivered from its source's ORIGINAL when the frame is worth it
+    // (O2 of `docs/develop-originals.md`). Decoded here and closed with the
+    // run: the stage keeps its own bitmap, and a full-size original is tens
+    // of megabytes of it.
+    let still = photo;
+    let fetchedStill: ImageBitmap | null = null;
     try {
+      if (photo && activeImage && photoProxy && stillFrame) {
+        const chosen = await deliveryFor(activeImage, null, stillFrame);
+        if (chosen.file !== activeImage) {
+          setFetchingOriginal(true);
+          try {
+            fetchedStill = await decodePhoto(chosen.file);
+            still = fetchedStill;
+            srcWidth = fetchedStill.width;
+            srcHeight = fetchedStill.height;
+          } finally {
+            setFetchingOriginal(false);
+          }
+        }
+      }
       // Editing happened on the source's proxy; delivering should not. Fetch
       // the capture once, before the first variant, and encode every variant
       // from it — at ITS dimensions, which is what makes a 1080 variant
@@ -1301,7 +1404,17 @@ export default function StudioEditor({
       if (proxyWithOriginal?.fetchOriginal && !renderFromProxy) {
         setFetchingOriginal(true);
         try {
-          source = await proxyWithOriginal.fetchOriginal();
+          // A task of its own — the capture's name and weight, on its edge,
+          // cancellable from the pill — beside the export's own Cancel.
+          const fetchOriginal = proxyWithOriginal.fetchOriginal;
+          source = await trackedFetch(
+            {
+              label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
+              scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
+              bytes: proxyWithOriginal.bytes ?? null,
+            },
+            (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
+          );
           srcWidth = proxyWithOriginal.width ?? srcWidth;
           srcHeight = proxyWithOriginal.height ?? srcHeight;
         } finally {
@@ -1317,15 +1430,26 @@ export default function StudioEditor({
         const variant = variants[i];
         setExportStep({ index: i + 1, total: variants.length });
         setExportRatio(0);
+        exportTask.update({ progress: i / variants.length, detail: `${i + 1} of ${variants.length} · ${variant.id}` });
         // Time the whole variant, delivery included: writing a 400 MB file to
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
         setLiveExport({ id: variant.id, startedAt });
+        // The exporter reports once per decoded frame, and each report used
+        // to re-render this whole editor and notify every task subscriber —
+        // on the same thread that is decoding and encoding. Half a percent
+        // is finer than any bar draws.
+        let reported = -1;
         const onProgress = (p: { phase: string; ratio: number | null }) => {
-          if (p.phase === 'encoding' && p.ratio != null) setExportRatio(p.ratio);
+          if (p.phase === 'encoding' && p.ratio != null) {
+            if (p.ratio < 1 && p.ratio - reported < 0.005) return;
+            reported = p.ratio;
+            setExportRatio(p.ratio);
+            exportTask.update({ progress: (i + p.ratio) / variants.length });
+          }
         };
-        const blob = photo
-          ? await renderStillVariant(photo, variant)
+        const blob = still
+          ? await renderStillVariant(still, variant)
           : await renderClipVariant(source, variant, srcWidth, srcHeight, onProgress, controller);
         const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
         const file = new File([blob], name, { type: blob.type });
@@ -1352,6 +1476,8 @@ export default function StudioEditor({
         setExportError((err as Error).message || 'Export failed');
       }
     } finally {
+      exportTask.done();
+      fetchedStill?.close();
       setExporting(false);
       setExportStep(null);
       setLiveExport(null);
@@ -1439,7 +1565,7 @@ export default function StudioEditor({
 
   // --- derived ------------------------------------------------------------
 
-  const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
+  const activeMeta = useAssetMeta(activeId);
   // A decoded still knows its own size exactly (and upright); the library's
   // metadata is the fallback, and the only source for a RAW nothing can decode.
   // What is ON THE STAGE — a remote source's proxy, when that is what was
@@ -1451,8 +1577,32 @@ export default function StudioEditor({
   // What the EXPORT will encode, which is a different file when it fetches the
   // capture first. Only the variant maths uses this: a variant measured
   // against the proxy would promise 1080 from a file it is not going to use.
-  const exportW = willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
-  const exportH = willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
+  // A still's own best source: its original's pixels where it has one. The
+  // variant maths reads this, so a variant never promises a frame the file
+  // it will really encode cannot give.
+  const bestStillW = photoProxy ? (photoProxy.width ?? srcW) : srcW;
+  const bestStillH = photoProxy ? (photoProxy.height ?? srcH) : srcH;
+  const exportW = isPhoto ? bestStillW : willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
+  const exportH = isPhoto ? bestStillH : willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
+  /**
+   * The biggest frame the variants will write, from that best source — the
+   * frame the *Delivers* row asks its question against. A Studio variant
+   * never upscales (`variantOutputSize` caps at the source's short side), so
+   * the question is the roll's: can the file in hand fill the frame the
+   * ORIGINAL could give?
+   */
+  const stillFrame = useMemo(() => {
+    if (!isPhoto || !bestStillW || !bestStillH) return null;
+    let best: { w: number; h: number } | null = null;
+    for (const v of variants) {
+      const o = variantOutputSize(v, bestStillW, bestStillH);
+      if (!best || o.w * o.h > best.w * best.h) best = o;
+    }
+    return best;
+  }, [isPhoto, bestStillW, bestStillH, variants]);
+  // Measured only while the Export tab is up: measuring decodes, and a
+  // 48-megapixel decode is not worth a sentence nobody is looking at.
+  const stillDelivery = useDeliveryRow(isPhoto && tab === 'export' ? activeImage : null, null, stillFrame);
   const activeRes = srcW && srcH ? `${srcW}×${srcH}` : null;
   // The stage draws at source resolution, so the guides' notion of "this
   // frame" is the media's own aspect — undefined until the probe lands.
@@ -1591,8 +1741,6 @@ export default function StudioEditor({
           file={activeFile}
           videoTimeSeconds={developAt}
           title={activeFile.name}
-          fidelity={pictureFidelity(activeFile).chip}
-          note={pictureFidelity(activeFile).note}
           stack={lutStack}
           value={activeDevelop}
           onDone={(next) => {
@@ -1638,6 +1786,7 @@ export default function StudioEditor({
                   guides,
                   lutStack: lutStack.toSaved(),
                   outputTransform: lutStack.output,
+                  lutFilm: lutStack.film,
                   theme,
                   scenes,
                   outro,
@@ -2207,7 +2356,12 @@ export default function StudioEditor({
                     onReset={() => setActiveDevelop(null)}
                   />
                   <InspectorSection id="studio.grade" title="Grade">
-                    <GradePanel stack={lutStack} previewImage={photo} />
+                    <GradePanel
+                      stack={lutStack}
+                      previewImage={photo}
+                      previewLabel={activeImage?.name ?? null}
+                      previewDraws={false}
+                    />
                   </InspectorSection>
                 </>
               )}
@@ -2268,6 +2422,19 @@ export default function StudioEditor({
                         <Readout muted>Downloads</Readout>
                       )}
                     </FieldRow>
+                    {photoProxy && (
+                      <FieldRow
+                        label="Delivers"
+                        align="start"
+                        hint={`${stillDelivery?.reason ? `${stillDelivery.reason}. ` : stillDelivery ? '' : 'Measured once the picture is decoded. '}You are editing on ${photoProxy.sourceId}’s proxy: the full-size original is fetched only where the proxy could not fill the frame your variants ask for, and kept for this session. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself.`}
+                      >
+                        <span
+                          className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
+                        >
+                          {stillDelivery ? stillDelivery.line : '—'}
+                        </span>
+                      </FieldRow>
+                    )}
                     {proxyWithOriginal && (
                       <FieldRow
                         label="From proxy"

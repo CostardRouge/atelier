@@ -1,4 +1,4 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Tool } from './tools';
 import DayPicker from './DayPicker';
 import WinnowBrowser from './WinnowBrowser';
@@ -15,10 +15,7 @@ import { useMediaActions, useMediaScope } from '../shared/sources/media-scope';
 import { overrideTo, viewedSpan, type DayOverride } from '../shared/sources/scope-override';
 import MediaActionRow from '../shared/ui/MediaActionRow';
 import { shortHost } from '../shared/sources/source-ledger';
-import {
-  useAssetLibrary,
-  type MediaMeta,
-} from '../shared/library/AssetLibraryContext';
+import { useAssetLibrary, type MediaMeta, useAssetMeta, useAssetMetaVersion } from '../shared/library/AssetLibraryContext';
 import { isRawImage, type Asset, type AssetKind } from '../shared/library/assets';
 import type { AssetDragItem } from '../shared/library/asset-drag';
 import { useAssetDragSource } from '../shared/library/use-asset-drag';
@@ -40,6 +37,13 @@ import { useInViewport } from '../shared/lib/use-in-viewport';
 import { useObjectUrls } from '../shared/lib/use-object-urls';
 import { readEffectiveExif, vouchedExif } from '../shared/exif/read-exif';
 import { exposureSummary } from '../shared/exif/exif-summary';
+import { captureInput } from '../shared/develop/capture-files';
+import { useCaptureView } from '../shared/develop/use-capture-view';
+import { useSiblingFacts } from '../shared/develop/use-sibling-facts';
+import { renditionsOf, type Rendition } from '../shared/media/renditions';
+import { fileIdentity } from '../shared/library/assets';
+import { knownIdentity, mediaOrigin } from '../shared/projects/media-identity';
+import { heldOriginal, heldVersion, subscribeHeld } from '../shared/sources/original-cache';
 import {
   filesFromDataTransfer,
   pickDirectory,
@@ -49,6 +53,8 @@ import EmptyState from '../shared/ui/EmptyState';
 import { Icons } from '../shared/ui/icons';
 import IconButton from '../shared/ui/IconButton';
 import OverflowMenu, { type OverflowItem } from '../shared/ui/OverflowMenu';
+
+const NO_FILES: readonly File[] = [];
 
 /** Short, human label for a kind chip. */
 function kindLabel(kind: AssetKind): string {
@@ -322,9 +328,13 @@ export default function AssetSidebar({
     return files;
   }, [viewable, viewing]);
   const viewUrls = useObjectUrls(viewWindow);
+  // Only while the deck is open: subscribed at rest, the whole list
+  // re-rendered once per cover that landed.
+  const metaVersion = useAssetMetaVersion(viewing !== null);
   const viewItems = useMemo(
-    () => viewable.map((a) => lightboxItem(a, lib.meta.get(a.id), viewUrls.get(a.id) ?? null)),
-    [viewable, lib.meta, viewUrls],
+    () => viewable.map((a) => lightboxItem(a, lib.getMeta(a.id), viewUrls.get(a.id) ?? null)),
+    // The covers land one by one; the version is what says the deck's facts moved.
+    [viewable, lib.getMeta, metaVersion, viewUrls],
   );
   /**
    * How the pictures in the deck were taken: the head of the file for a
@@ -382,6 +392,58 @@ export default function AssetSidebar({
     const at = viewable.findIndex((a) => a.id === id);
     if (at >= 0) setViewing(at);
   };
+  /**
+   * The capture's OTHER files behind the open picture, as chips in the sheet
+   * (R6 of `docs/capture-renditions.md`): a folder's DNG beside its JPEG,
+   * a Winnow proxy's own original and its companion. View state only; the
+   * `Develop` verb under the picture is what carries the one on screen.
+   */
+  const viewedAsset = viewing !== null ? (viewable[viewing] ?? null) : null;
+  const viewedImage = viewedAsset?.parts.image ?? null;
+  const viewedSiblings = useMemo(() => viewedAsset?.parts.siblings ?? NO_FILES, [viewedAsset]);
+  const siblingFacts = useSiblingFacts(viewedSiblings);
+  const viewedMeta = useAssetMeta(viewedAsset?.id);
+  // The session cache's version: a chip that fetched must read as in hand.
+  const held = useSyncExternalStore(subscribeHeld, heldVersion);
+  const viewRows = useMemo<Rendition[]>(() => {
+    if (!viewedImage) return [];
+    const origin = mediaOrigin(viewedImage);
+    const assetId = knownIdentity(viewedImage)?.assetId ?? null;
+    const companion = origin?.companion ?? null;
+    return renditionsOf(
+      captureInput({
+        file: viewedImage,
+        origin,
+        measured: viewedMeta?.width && viewedMeta.height ? { width: viewedMeta.width, height: viewedMeta.height } : null,
+        sensor: null,
+        original: { assetId, held: assetId ? heldOriginal(assetId) !== null : false },
+        companion: companion ? { held: heldOriginal(companion.assetId) !== null } : undefined,
+        siblings: viewedSiblings.flatMap((s) => {
+          const facts = siblingFacts.get(fileIdentity(s));
+          return facts ? [{ file: s, facts }] : [];
+        }),
+      }),
+    );
+  }, [viewedImage, viewedMeta, viewedSiblings, siblingFacts, held]);
+  const captureView = useCaptureView({
+    key: viewedAsset?.id ?? null,
+    rows: viewRows,
+    openSrc: viewedAsset ? (viewUrls.get(viewedAsset.id) ?? null) : null,
+    fileFor: (row) => {
+      if (!viewedImage) return null;
+      const named = (f: File) => f.name.toLowerCase() === row.name.toLowerCase();
+      if (row.role === 'proxy' || (named(viewedImage) && !mediaOrigin(viewedImage))) return viewedImage;
+      return viewedSiblings.find(named) ?? null;
+    },
+    fetchFor: (row) => {
+      const origin = viewedImage ? mediaOrigin(viewedImage) : null;
+      if (!origin) return null;
+      const lower = row.name.toLowerCase();
+      if (origin.companion && origin.companion.name.toLowerCase() === lower) return origin.companion.fetchFile;
+      if (origin.name?.toLowerCase() === lower && origin.fetchOriginal) return origin.fetchOriginal;
+      return null;
+    },
+  });
 
   async function run(pick: () => Promise<File[]>) {
     setBusy(true);
@@ -768,6 +830,10 @@ export default function AssetSidebar({
           onIndex={setViewing}
           onClose={() => setViewing(null)}
           from="in your library"
+          files={captureView.files}
+          viewing={captureView.viewing}
+          onViewing={captureView.setViewing}
+          taskScope={viewedAsset?.id ?? null}
           footer={
             <>
               <div className="flex items-center gap-3 flex-wrap">
@@ -786,13 +852,14 @@ export default function AssetSidebar({
                 </span>
               </div>
               {/* The picture is already here: making it active is all a verb
-                  needs, and it is what carries it onto the new piece. */}
+                  needs, and it is what carries it onto the new piece — with
+                  the file of the capture that was on screen. */}
               <MediaActionRow
                 offer={offer}
                 onRun={(action) => {
                   activate(viewable[viewing].id);
                   setViewing(null);
-                  action.run();
+                  action.run(captureView.view);
                 }}
               />
             </>
@@ -911,7 +978,6 @@ export default function AssetSidebar({
                 <AssetTile
                   key={a.id}
                   asset={a}
-                  meta={lib.meta.get(a.id)}
                   active={lib.activeId === a.id}
                   usable={assetUsableBy(accepts, a)}
                   onEnsure={() => lib.ensureMeta(a.id)}
@@ -923,7 +989,6 @@ export default function AssetSidebar({
                 <AssetRow
                   key={a.id}
                   asset={a}
-                  meta={lib.meta.get(a.id)}
                   selected={lib.selection.has(a.id)}
                   active={lib.activeId === a.id}
                   usable={assetUsableBy(accepts, a)}
@@ -1136,7 +1201,6 @@ const LIFTED = 'opacity-40 outline-dashed outline-[1.5px] outline-offset-[-1.5px
 
 interface AssetRowProps {
   asset: Asset;
-  meta: MediaMeta | undefined;
   selected: boolean;
   active: boolean;
   usable: boolean;
@@ -1150,7 +1214,6 @@ interface AssetRowProps {
 
 function AssetRow({
   asset,
-  meta,
   selected,
   active,
   usable,
@@ -1160,6 +1223,9 @@ function AssetRow({
   onPreview,
   onRemove,
 }: AssetRowProps) {
+  // The row reads its own cover, so the one whose cover lands is the one
+  // that re-renders — not the list, and not the tool beside it.
+  const meta = useAssetMeta(asset.id);
   // Build the cover lazily — only when the row scrolls into view, so a library
   // of thousands of files doesn't decode them all up front.
   const [ref, inView] = useInViewport<HTMLDivElement>();
@@ -1285,7 +1351,6 @@ function AssetRow({
  */
 function AssetTile({
   asset,
-  meta,
   active,
   usable,
   onEnsure,
@@ -1294,7 +1359,6 @@ function AssetTile({
   className,
 }: {
   asset: Asset;
-  meta: MediaMeta | undefined;
   active: boolean;
   usable: boolean;
   onEnsure: () => void;
@@ -1302,6 +1366,7 @@ function AssetTile({
   onPreview: (() => void) | null;
   className: string;
 }) {
+  const meta = useAssetMeta(asset.id);
   // The cover is built only when the tile scrolls into view, like a row's —
   // a pool of thousands must not decode itself to be listed.
   const [ref, inView] = useInViewport<HTMLDivElement>();

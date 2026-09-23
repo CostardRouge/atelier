@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
+import { useAssetLibrary, useAssetMeta } from '../../shared/library/AssetLibraryContext';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useVideoTransport } from '../../shared/media/use-video-transport';
 import { selectedUsableAssets } from '../../shared/library/capabilities';
@@ -14,7 +14,7 @@ import { findCue } from '../../shared/telemetry/find-cue';
 import ElementList from '../../shared/overlay/ElementList';
 import ElementPanel from '../../shared/overlay/ElementPanel';
 import { exportOverlay } from '../../shared/overlay/export-overlay';
-import { ensureOverlayFonts } from '../../shared/overlay/fonts';
+import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import {
   createFrameCornersElement,
   createHeadingArrowElement,
@@ -188,9 +188,11 @@ export default function OverlayStudio() {
 
   // Load the brand fonts any element uses, then force a repaint so canvas text
   // measures and renders correctly.
+  // Keyed on the faces in use, not the elements — see the Studio's twin.
+  const fontFaces = useMemo(() => overlayFontFaces(elements).join('|'), [elements]);
   useEffect(() => {
     let cancelled = false;
-    ensureOverlayFonts(elements).then(() => {
+    ensureFontFaces(fontFaces ? fontFaces.split('|') : []).then(() => {
       if (!cancelled) setFontTick((t) => t + 1);
     });
     return () => {
@@ -296,7 +298,7 @@ export default function OverlayStudio() {
     setExportDone(false);
     const controller = new AbortController();
     exportAbort.current = controller;
-    const meta = lib.meta.get(activeClip.id);
+    const meta = lib.getMeta(activeClip.id);
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
     // decode it directly, where the HEVC original would fall back or fail.
     const transcoded = activeTranscode.transcoded;
@@ -336,7 +338,7 @@ export default function OverlayStudio() {
 
   // --- derived ------------------------------------------------------------
 
-  const activeMeta = activeId ? lib.meta.get(activeId) : undefined;
+  const activeMeta = useAssetMeta(activeId);
   const activeRes =
     activeMeta?.width && activeMeta?.height
       ? `${activeMeta.width}×${activeMeta.height}`

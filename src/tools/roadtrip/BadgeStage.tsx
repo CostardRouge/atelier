@@ -1,13 +1,14 @@
 import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { filmTextureKey, isSilentTexture, type FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
 import { stageFrameSize } from '../../shared/overlay/stage-size';
 import {
   DEFAULT_FRAMING,
-  MAX_FRAMING_SCALE,
   canPan,
   panBy,
+  zoomFramingAbout,
   type Framing,
 } from '../../shared/media/framing';
 import { cellAt, type CellRect } from '../../shared/media/media-layout';
@@ -48,6 +49,8 @@ import type { FrameRect, ResolvedHook } from '../../shared/roadtrip/hooks/hook-v
 import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { clampPlaybackRate } from '../../shared/media/use-video-transport';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { useZoomGestures } from '../../shared/ui/use-zoom-gestures';
+import TaskEdge from '../../shared/ui/TaskEdge';
 
 /**
  * Playing the open clip on the stage. The stage owns the `<video>` behind the
@@ -83,6 +86,28 @@ export interface StagePlayback {
  */
 export const HOOK_ID = 'hook';
 
+/**
+ * How long a REPLACED source is kept before its bitmap is closed.
+ *
+ * A paint already in flight still holds it — `renderBadge` awaits the fonts
+ * and the grade before it draws anything — so closing it where the next one is
+ * decoded leaves that paint drawing a detached `ImageBitmap`, which throws out
+ * of `drawFramed` and takes the rest of the frame with it. Measured the moment
+ * undo started putting a previous picture back (`library-sync.ts`): two throws
+ * per step, on a stage that only looked right because the paint after them
+ * redrew it.
+ *
+ * It is the rule `use-hook-pictures.ts` already states as "the stage's own",
+ * and shorter than its 4 s because these sources are bounded to the stage's
+ * pixel budget and never feed an export.
+ */
+const RELEASE_AFTER_MS = 2000;
+
+/** Let go of a replaced source once no paint can still be holding it. */
+function releaseLater(source: { release: () => void } | null | undefined): void {
+  if (source) window.setTimeout(() => source.release(), RELEASE_AFTER_MS);
+}
+
 /** Whether a point in the canvas's own pixels is inside a reported rect. */
 function inRect(rect: FrameRect | null | undefined, px: number, py: number): boolean {
   if (!rect) return false;
@@ -91,6 +116,8 @@ function inRect(rect: FrameRect | null | undefined, px: number, py: number): boo
 
 interface BadgeStageProps {
   file: File | null;
+  /** What this stage's TASKS are scoped to — the piece — for the hairline on its bottom edge (`tasks.md`). */
+  taskScope?: string | null;
   /**
    * Frame of a clip to sit on — the playhead, in source seconds; ignored for
    * photos. While `playback.playing` the element advances on its own and this
@@ -122,6 +149,13 @@ interface BadgeStageProps {
   qr?: QrDraw | null;
   /** The composed grade the picture goes through, or null for the picture as shot. */
   lut?: CubeLut | null;
+  /**
+   * The grade's film TEXTURE — grain and halation — drawn by ONE node after
+   * the look. The stage is where a piece's grain is SEEN; a cell finer than
+   * the stage can resolve fades out rather than aliasing, and the panel says
+   * so (`render-film.md`).
+   */
+  film?: FilmTexture | null;
   /** How the picture sits in the frame. */
   framing?: Framing | null;
   /**
@@ -226,6 +260,7 @@ interface BadgeStageProps {
  */
 export default function BadgeStage({
   file,
+  taskScope = null,
   videoTimeSeconds,
   playback = null,
   aspect,
@@ -239,6 +274,7 @@ export default function BadgeStage({
   background,
   qr,
   lut = null,
+  film = null,
   framing = null,
   onFraming,
   selectedId = null,
@@ -281,7 +317,7 @@ export default function BadgeStage({
   // hook frame stutter and flash "decoding…" the whole way across.
   useEffect(() => {
     let cancelled = false;
-    sourceRef.current?.release();
+    releaseLater(sourceRef.current);
     sourceRef.current = null;
     setError(null);
 
@@ -348,7 +384,7 @@ export default function BadgeStage({
       if (i > 0 && f && previousFiles[i] === f && previous[i]) next[i] = previous[i];
     });
     previous.forEach((src, i) => {
-      if (src && next[i] !== src) src.release();
+      if (src && next[i] !== src) releaseLater(src);
     });
     cellSourcesRef.current = next;
     previousFilesRef.current = files.slice();
@@ -388,7 +424,8 @@ export default function BadgeStage({
   const previousFilesRef = useRef<readonly (File | null)[]>([]);
   useEffect(
     () => () => {
-      for (const src of cellSourcesRef.current) src?.release();
+      // Late here too: a paint started on the last commit outlives the unmount.
+      for (const src of cellSourcesRef.current) releaseLater(src);
       cellSourcesRef.current = [];
     },
     [],
@@ -590,25 +627,40 @@ export default function BadgeStage({
   // picture under it has not changed, so it is graded once and drawn many
   // times (`held-grader.ts`). A clip over the pixel budget is graded into a
   // budget-sized canvas — its element cannot be resampled ahead of the GPU.
-  const graderRef = useRef<{ lut: CubeLut; w: number; h: number; grader: HeldGrader } | null>(
-    null,
-  );
+  const graderRef = useRef<{
+    lut: CubeLut | null;
+    film: string;
+    w: number;
+    h: number;
+    grader: HeldGrader;
+  } | null>(null);
+  const filmKey = filmTextureKey(film);
   const graderFor = useCallback((source: BadgeSource | null): HeldGrader | null => {
     const cur = graderRef.current;
-    if (!lut || !source || source.width <= 0) {
+    // A texture with no look is still a render: the node is the only thing
+    // that draws it.
+    if ((!lut && isSilentTexture(film)) || !source || source.width <= 0) {
       cur?.grader.dispose();
       graderRef.current = null;
       return null;
     }
     if (cur && cur.lut === lut && cur.w === source.width && cur.h === source.height) {
-      return cur.grader;
+      // The texture alone moved: SWAP it rather than rebuilding, or the grain
+      // slider is a new WebGL2 context per step (`render-core.md`).
+      if (cur.film !== filmKey && cur.grader.setFilm) {
+        cur.grader.setFilm(film);
+        cur.film = filmKey;
+      }
+      if (cur.film === filmKey) return cur.grader;
     }
     cur?.grader.dispose();
     const size = stageFrameSize(source.width, source.height);
-    const grader = holdGrades(makeFrameGrader(lut, size.w, size.h));
-    graderRef.current = { lut, w: source.width, h: source.height, grader };
+    const grader = holdGrades(
+      makeFrameGrader(lut as CubeLut, size.w, size.h, 1, [], [], film),
+    );
+    graderRef.current = { lut, film: filmKey, w: source.width, h: source.height, grader };
     return grader;
-  }, [lut]);
+  }, [lut, film, filmKey]);
   // One held grader per collage cell, keyed on its cube and its source size —
   // the lead's is `graderFor` above. Disposed with the stage.
   const cellGradersRef = useRef<Map<number, { lut: CubeLut; w: number; h: number; grader: HeldGrader }>>(
@@ -695,12 +747,22 @@ export default function BadgeStage({
   }, [aspect]);
 
   // Paint. Runs on every change of anything drawn, including after a decode.
+  // Each paint takes a number; a paint the next one overtook while it waited
+  // for the fonts draws nothing and captures nothing (`live`, and the check
+  // below), so the thumbnail and the hit boxes are always the latest frame's.
+  const paintSeq = useRef(0);
   useEffect(() => {
     const canvas = canvasRef.current;
     if (!canvas) return;
+    const seq = ++paintSeq.current;
     const { w, h } = frameSize(aspect, longEdge);
-    canvas.width = w;
-    canvas.height = h;
+    // Only when it changed: assigning a canvas's size clears it and
+    // reallocates its backing store — 1600 px on the long edge, sixty
+    // times a second while the deck played — even to the same value.
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
     const grader = graderFor(sourceRef.current);
     if (grader && gradedSeqRef.current !== frameSeq) {
       grader.invalidate();
@@ -729,6 +791,7 @@ export default function BadgeStage({
       cellRectsRef.current = [];
     }
     const opts: RenderBadgeOptions = {
+      live: () => seq === paintSeq.current,
       source: sourceRef.current,
       elements,
       theme,
@@ -745,6 +808,7 @@ export default function BadgeStage({
       ghostId: selectedId,
     };
     void renderBadge(canvas, opts).then(() => {
+      if (seq !== paintSeq.current) return;
       // The thumbnail is taken from the paint alone — the outline lives on
       // the other canvas, so the order here is not what keeps it out.
       onRenderedRef.current?.(canvas);
@@ -782,10 +846,11 @@ export default function BadgeStage({
     cellGraderFor,
     cellSeq,
     lut,
+    filmKey,
     selectedCell,
   ]);
 
-  useEffect(() => () => sourceRef.current?.release(), []);
+  useEffect(() => () => releaseLater(sourceRef.current), []);
 
   // --- pointing at the badge -------------------------------------------------
   const [hovering, setHovering] = useState(false);
@@ -804,50 +869,6 @@ export default function BadgeStage({
     return c.cells[i - 1]?.framing ?? DEFAULT_FRAMING;
   }, []);
 
-  /**
-   * Zooming the picture INSIDE its frame with the wheel. Attached natively and
-   * NOT passively: React's own wheel handler is passive, so `preventDefault`
-   * there is ignored and the page scrolls away under the picture you are
-   * trying to frame.
-   *
-   * A ctrl/⌘-wheel — which is also what a trackpad pinch sends — frames the
-   * picture too. The stage has no view zoom to hand it to: the preview simply
-   * fills the room it is given, so every zoom gesture over it means the one
-   * thing the document remembers.
-   */
-  useEffect(() => {
-    const canvas = canvasRef.current;
-    if (!canvas || !onFraming) return;
-    const onWheel = (e: WheelEvent) => {
-      const c = collageRef.current;
-      if (c && onCellFramingRef.current) {
-        const rect = canvas.getBoundingClientRect();
-        const px = (e.clientX - rect.left) * (canvas.width / rect.width);
-        const py = (e.clientY - rect.top) * (canvas.height / rect.height);
-        const i = cellAt(cellRectsRef.current, px, py);
-        if (i < 0) return;
-        const src = i === 0 ? sourceRef.current : cellSourcesRef.current[i];
-        if (!src) return;
-        e.preventDefault();
-        const cf = cellFramingAt(i);
-        const scale = Math.min(MAX_FRAMING_SCALE, Math.max(1, cf.scale * Math.exp(-e.deltaY / 400)));
-        if (scale !== cf.scale) onCellFramingRef.current(i, { ...cf, scale });
-        return;
-      }
-      const source = sourceRef.current;
-      if (!source) return;
-      e.preventDefault();
-      const f = framingRef.current ?? DEFAULT_FRAMING;
-      const scale = Math.min(
-        MAX_FRAMING_SCALE,
-        Math.max(1, f.scale * Math.exp(-e.deltaY / 400)),
-      );
-      if (scale === f.scale) return;
-      onFramingRef.current?.({ ...f, scale });
-    };
-    canvas.addEventListener('wheel', onWheel, { passive: false });
-    return () => canvas.removeEventListener('wheel', onWheel);
-  }, [onFraming, cellFramingAt]);
   // Where a press landed, in CSS pixels, and on what — so a release can tell
   // a tap from a drag.
   const press = useRef<{ id: string; x: number; y: number } | null>(null);
@@ -902,9 +923,145 @@ export default function BadgeStage({
     };
   }, []);
 
+  /** A swap is under way: the cursor says so. */
+  const [swapping, setSwapping] = useState(false);
+
+  /**
+   * Zooming and moving the picture INSIDE its frame — the *Placing* half of
+   * the suite's one zoom grammar (`shared/ui/zoom-gestures.ts`). The wheel,
+   * a trackpad pinch (a ⌘-wheel) and two fingers all mean the one thing the
+   * document remembers, the framing: there is no view zoom to hand them to,
+   * the preview simply fills the room it is given. A zoom keeps the point
+   * under the pointer or the fingers' centre still (`zoomFramingAbout`), so
+   * what is aimed at stays aimed at; a sideways wheel and a pinch's drift
+   * pan while the framing has slack. Per CELL on a collage: the cell under
+   * the hand is the one reframed, at its own size, as the drag already does.
+   *
+   * Heard on the BOX the canvas fills, natively and non-passively (React's
+   * wheel handler is passive), with the browser's own pinch refused there.
+   * A single pointer is never the machine's here — the badge's own handlers
+   * below read it — but its second finger is: the machine tells them to let
+   * go (`onTakeover`) and they stand down while two fingers are on.
+   */
+  const pinching = useRef(false);
+  /** A client point as canvas px, with the canvas's current mapping. */
+  const canvasPoint = useCallback((clientX: number, clientY: number) => {
+    const canvas = canvasRef.current;
+    if (!canvas) return null;
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0 || rect.height === 0) return null;
+    const k = canvas.width / rect.width;
+    return { canvas, k, px: (clientX - rect.left) * k, py: (clientY - rect.top) * k };
+  }, []);
+  /**
+   * The framing as THIS hand last wrote it, for the moment the document lags
+   * behind: a pinch pans then zooms in the same event, and a wheel burst
+   * lands several notches before React renders once. Each of those would
+   * otherwise read the framing the document still shows and overwrite the
+   * write before it — measured as a pinch whose drift was lost. Held only
+   * briefly, so an undo or another surface's write is not shadowed for long.
+   */
+  const written = useRef<{ i: number; framing: Framing; t: number } | null>(null);
+  /**
+   * The cell under a canvas point, its picture and its framing — cell 0 the
+   * whole frame when there is no collage. Null where nothing can be reframed.
+   */
+  const reframableAt = useCallback(
+    (px: number, py: number) => {
+      const canvas = canvasRef.current;
+      if (!canvas) return null;
+      const framingOf = (i: number, stored: Framing) => {
+        const w = written.current;
+        return w && w.i === i && performance.now() - w.t < 300 ? w.framing : stored;
+      };
+      const writer = (i: number, write: (f: Framing) => void) => (f: Framing) => {
+        written.current = { i, framing: f, t: performance.now() };
+        write(f);
+      };
+      const c = collageRef.current;
+      if (c && onCellFramingRef.current) {
+        const i = cellAt(cellRectsRef.current, px, py);
+        if (i < 0) return null;
+        const src = i === 0 ? sourceRef.current : cellSourcesRef.current[i];
+        const rect = cellRectsRef.current[i];
+        if (!src || !rect) return null;
+        return {
+          i,
+          src,
+          rect,
+          framing: framingOf(i, cellFramingAt(i)),
+          write: writer(i, (f) => onCellFramingRef.current?.(i, f)),
+        };
+      }
+      const src = sourceRef.current;
+      if (!src || !onFramingRef.current) return null;
+      return {
+        i: 0,
+        src,
+        rect: { x: 0, y: 0, w: canvas.width, h: canvas.height, rotation: 0 },
+        framing: framingOf(0, framingRef.current ?? DEFAULT_FRAMING),
+        write: writer(0, (f) => onFramingRef.current?.(f)),
+      };
+    },
+    [cellFramingAt],
+  );
+  useZoomGestures({
+    ref: boxRef,
+    enabled: Boolean(onFraming),
+    target: {
+      scaleAt: (at) => {
+        const p = canvasPoint(at.x, at.y);
+        return (p && reframableAt(p.px, p.py)?.framing.scale) ?? 1;
+      },
+      zoomTo: (scale, anchor) => {
+        const p = canvasPoint(anchor.x, anchor.y);
+        const cell = p && reframableAt(p.px, p.py);
+        if (!cell) return;
+        // The anchor in the cell's own frame: a print may be turned.
+        const a = (-cell.rect.rotation * Math.PI) / 180;
+        const dx = p.px - (cell.rect.x + cell.rect.w / 2);
+        const dy = p.py - (cell.rect.y + cell.rect.h / 2);
+        const local = {
+          x: dx * Math.cos(a) - dy * Math.sin(a) + cell.rect.w / 2,
+          y: dx * Math.sin(a) + dy * Math.cos(a) + cell.rect.h / 2,
+        };
+        const next = zoomFramingAbout(cell.framing, scale, local, cell.src.width, cell.src.height, cell.rect.w, cell.rect.h);
+        if (next.scale !== cell.framing.scale || next.x !== cell.framing.x || next.y !== cell.framing.y) cell.write(next);
+      },
+      panBy: (dx, dy, at) => {
+        const p = canvasPoint(at.x, at.y);
+        const cell = p && reframableAt(p.px, p.py);
+        if (!cell) return;
+        // Client px → canvas px → the cell's own axes, as the drag does.
+        const a = (-cell.rect.rotation * Math.PI) / 180;
+        const mx = dx * p.k;
+        const my = dy * p.k;
+        const lx = mx * Math.cos(a) - my * Math.sin(a);
+        const ly = mx * Math.sin(a) + my * Math.cos(a);
+        cell.write(panBy(cell.framing, cell.src.width, cell.src.height, cell.rect.w, cell.rect.h, lx, ly));
+      },
+      drag: () => null,
+      onTakeover: () => {
+        // The second finger: whatever the first began — a picture pan, a
+        // cell's hold-to-swap, an element's move — stops where it is.
+        const d = drag.current;
+        if (d?.kind === 'cell') {
+          window.clearTimeout(d.timer);
+          setSwapping(false);
+        }
+        drag.current = null;
+        press.current = null;
+      },
+      onPinch: (on) => {
+        pinching.current = on;
+      },
+    },
+  });
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       if (!onSelect || e.button !== 0) return;
+      // Two fingers are the machine's pinch; the one left after it starts nothing.
+      if (pinching.current) return;
       const pt = toPixels(e);
       if (!pt) return;
       // Cancelling the pointerdown cancels the mousedown behind it, whose
@@ -980,9 +1137,6 @@ export default function BadgeStage({
     },
     [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels, onSelectCell, onSwapCells],
   );
-  /** A swap is under way: the cursor says so. */
-  const [swapping, setSwapping] = useState(false);
-
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
       const canvas = canvasRef.current;
@@ -1271,6 +1425,8 @@ export default function BadgeStage({
               : 'border-line-strong'
           }`}
         >
+          {/* The piece's tasks — an export running — as a hairline on the stage's bottom edge. */}
+          {taskScope && <TaskEdge scope={taskScope} className="z-20" />}
           <canvas
             ref={canvasRef}
             onPointerDown={onPointerDown}

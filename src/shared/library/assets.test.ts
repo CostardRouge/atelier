@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { buildAssets } from './assets';
+import { assetFiles, buildAssets } from './assets';
 import {
   assetUsableBy,
   selectedUsableAssets,
@@ -26,16 +26,50 @@ describe('buildAssets', () => {
     expect(byId).toEqual({ a: 'video', b: 'telemetry', c: 'photo' });
   });
 
-  it('groups a RAW and its JPEG into one photo asset, keeping the decodable half', () => {
+  it('groups a RAW and its JPEG into one photo asset, showing the decodable half and keeping the RAW', () => {
     const assets = buildAssets([f('IMG_8801.RAF'), f('IMG_8801.JPG')]);
     expect(assets).toHaveLength(1);
     expect(assets[0].kind).toBe('photo');
     expect(assets[0].parts.image?.name).toBe('IMG_8801.JPG');
+    expect(assets[0].parts.siblings?.map((s) => s.name)).toEqual(['IMG_8801.RAF']);
   });
 
   it('does not let the listing order decide which half of a pair is shown', () => {
     const jpegFirst = buildAssets([f('IMG_8801.JPG'), f('IMG_8801.RAF')]);
     expect(jpegFirst[0].parts.image?.name).toBe('IMG_8801.JPG');
+    expect(jpegFirst[0].parts.siblings?.map((s) => s.name)).toEqual(['IMG_8801.RAF']);
+  });
+
+  it('shows the RAW of a Sony pair, since only WebKit draws the HEIF beside it', () => {
+    const assets = buildAssets([f('DSC00123.ARW'), f('DSC00123.HIF')]);
+    expect(assets).toHaveLength(1);
+    expect(assets[0].kind).toBe('photo');
+    expect(assets[0].parts.image?.name).toBe('DSC00123.ARW');
+    expect(assets[0].parts.siblings?.map((s) => s.name)).toEqual(['DSC00123.HIF']);
+    // And the other way round in the listing, which must decide nothing.
+    const other = buildAssets([f('DSC00123.HIF'), f('DSC00123.ARW')])[0];
+    expect(other.parts.image?.name).toBe('DSC00123.ARW');
+    expect(other.parts.siblings?.map((s) => s.name)).toEqual(['DSC00123.HIF']);
+  });
+
+  it('keeps every image file of a three-file capture, and its size counts them all', () => {
+    const assets = buildAssets([f('DJI_0001.DNG', 60), f('DJI_0001.JPG', 8), f('DJI_0001.HIF', 12)]);
+    expect(assets).toHaveLength(1);
+    expect(assets[0].parts.image?.name).toBe('DJI_0001.JPG');
+    expect(assets[0].parts.siblings?.map((s) => s.name)).toEqual(['DJI_0001.DNG', 'DJI_0001.HIF']);
+    expect(assets[0].size).toBe(80);
+    expect(assetFiles(assets[0].parts).map((x) => x.name)).toEqual(['DJI_0001.JPG', 'DJI_0001.DNG', 'DJI_0001.HIF']);
+  });
+
+  it('has no siblings on a lone picture', () => {
+    expect(buildAssets([f('c.jpg')])[0].parts.siblings).toBeUndefined();
+  });
+
+  it('takes a lone HEIF as a photo all the same', () => {
+    const assets = buildAssets([f('DSC00124.HIF')]);
+    expect(assets).toHaveLength(1);
+    expect(assets[0].kind).toBe('photo');
+    expect(assets[0].parts.image?.name).toBe('DSC00124.HIF');
   });
 
   it('keeps a RAW as the image when it is the only one', () => {

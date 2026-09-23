@@ -246,17 +246,69 @@ this". Rules:
   and letting it pass for the file's own pixels is the fabrication this rule
   exists to stop.
 
-**What the spike still cannot answer**: decode time, heap and the JPEG XL
-question are the maintainer's own files' to settle (`docs/photo-editor.md` P3).
-`libraw-wasm` 1.6.0 is reachable from this container, so the measurement is one
-`npm i` away once a real DNG, ProRAW and ARW are in the scratchpad — never in
-the repo. `describeRaw` prints exactly what that spike needs to report
-(`8064×6048 · sensor JPEG XL · preview 4032×3024 · 2 opcode lists`).
+**The spike is ANSWERED for a DJI DNG** (2026-09-20, two of the maintainer's
+own files): an uncompressed 16-bit sensor plane, a **960×540** embedded render
+against 8064×4536, GainMap + WarpRectilinear opcodes LibRaw ignores, and the
+decode timings — all of it in `raw.md`, «What a DJI DNG actually holds». The
+`8064×6048 · sensor JPEG XL · preview 4032×3024` line once written here was a
+format EXAMPLE and never a measurement; the real files say something else, and
+this is why a DNG looks pixelated beside macOS. ProRAW JPEG XL and ARW still
+need his files (`docs/photo-editor.md` P3).
 
 Verified in the pane on a synthetic DNG built around a real canvas JPEG: the
 probe read `4000×3000 · sensor JPEG · preview 640×480 · 1 opcode list`, the
 stage drew the embedded gradient, the chip read `RAW · CAMERA RENDER`, and the
 filmstrip cell showed it.
+
+## A picture says its PIXELS, not only its bits (2026-09-20)
+
+**Why.** `pictureFidelity` named the material and never the size, so a DJI
+`dji_fly_*.DNG` read `RAW · camera render` — true, and useless against the
+report it caused (*"sharp in macOS Preview, pixelated in Atelier"*). The
+render inside that file is **960 × 540** against an 8064 × 4536 sensor plane:
+0.5 of 36.6 megapixels, 8.4× short on the long edge. The number IS the answer,
+and nothing on screen was saying it. `DecodedPhoto.viaRawPreview` had been
+returned by `photo-frame.ts` and read by nobody since P3.
+
+**What it is now.** `pictureFidelity(file, base, pixels)` — the chip carries
+`· 960 × 540`, the note the megapixels and, when the file's own pixels are
+known, the shortfall (`8.4× short on the long edge of its 8064 × 4536`).
+`megapixels`, `pixelsLabel` and `shortfallLabel` are pure and tested beside it.
+Rules a later agent must keep:
+
+- **Nothing is claimed that was not measured.** With no `pixels` every
+  sentence is exactly what it was before; `shortfallLabel` returns null inside
+  2 % of the file's own long edge, so rounding is never dressed up as a loss.
+- **`usePicturePixels` measures only where the size SURPRISES and the decode
+  is cheap** — a source's proxy (2048 px at most) and a RAW (its render is
+  small by definition). An ordinary original is NEVER decoded a second time to
+  caption it: a 48-megapixel decode is 194 MB, which is the whole reason the
+  stage works to a pixel budget. A host that already measured passes `shown`.
+- **The file's own pixels come free**: `MediaOrigin.width/height` behind a
+  proxy, `rawSizes()` (a megabyte of the head, no decoder) for a RAW's sensor
+  plane. `rawSizesFrom` is its pure twin, for a head already fetched.
+- **`rawSizes()` reports the pixels as they are SHOWN** (2026-09-22): both
+  sizes are transposed where the capture was held on its side, so the chip and
+  the *sensor* rendition row stop printing transposes of each other for one
+  photograph, and the delivery headroom is measured on the right axis.
+  `RawIfd.width/height`, `sensorIfd()` and `describeRaw()` stay the file's own
+  UNROTATED statement — the two views are deliberate, do not unify them
+  (`media-pipeline.md`, `raw.md`).
+- **The sheet says it, not its hosts.** `DevelopSheet` computes the fidelity
+  from the file it was given; Trips and the Studio passed two strings each and
+  now pass none, so the three Develop screens cannot drift apart. The props
+  survive as overrides that nobody uses.
+- **`measurePicture` goes through `decodePhotoSource`**, so a RAW is measured
+  at all: a bare `createImageBitmap` refuses a DNG, which left the *Delivers*
+  row saying `—` for every RAW on a disk while the run cheerfully delivered
+  its embedded render.
+
+Verified in the pane on a synthetic DJI-shaped DNG (an 8064 × 4536 CFA SubIFD
+and a real 960 × 540 canvas JPEG as the render — the recipe is in
+`testing.md`): the chip read `RAW · camera render · 960 × 540`, `I` drew
+*"960 × 540 · 0.5 MP, 8.4× short on the long edge of its 8064 × 4536"*, and
+the Export tab's row read `Camera render 960 px → 960 · exact` where it used
+to read `—`. An ordinary JPEG beside it read `JPEG · 8-bit · 1600 × 1200`.
 
 ## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
 
@@ -275,3 +327,29 @@ eleven sliders at a glance. **Verified**: `RangeSlider` mounted directly
 against the real dev server (it takes plain props, so no fixture picture is
 needed) and screenshotted at 4×, to check the glyph is the shared
 `Icons.reset` and not a hand-drawn one.
+
+## A replaced source is released one commit later (2026-09-21)
+
+`useDevelopPicture` used to release the previous `BadgeSource` in the decode
+effect's own cleanup. That is one commit too early whenever another paint
+input moves WITH the file — the stage's scale when the delivered file changes
+under it (R3a) — because the paint effect then runs once more, in the same
+commit, with the state's still-old source and draws a closed bitmap:
+`InvalidStateError: The image source is detached`, and the tool's boundary.
+The rule the Studio already keeps (`studio.md`) now holds here: a replaced
+source is RETIRED and released when `source` next changes, or on unmount.
+One subtlety measured against a stub instance: the source the state now holds
+can itself be on the retired list — a proxy whose decode landed in the same
+commit as the RAW arrived was retired by that commit's cleanup — so the
+release skips whatever `source` currently is, and that one waits its turn.
+Otherwise the next paint draws a bitmap of width 0 and the cube pass logs
+`GL error 0x501` on its first draw.
+
+## A picture is read by its NAME before its type (2026-09-21)
+
+`pictureFidelity` asked `file.type` before anything else, and a JPEG fetched
+from an instance carries NO type (`materialize` hands an original over with
+`''`), so a delivered original on the stage was captioned `clip · 8-bit`. The
+name decides first (`classifyPart`); the type is consulted only where the
+name says nothing. The same trap already bit `loadBadgeSource`, which tests
+the extension beside the type — keep every "is this a clip?" test on both.

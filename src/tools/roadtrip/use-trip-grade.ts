@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef } from 'react';
+import type { FilmTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { gradeKey } from '../../shared/lut/saved-grade';
 import { useGradeCubes } from '../../shared/lut/use-grade-cubes';
@@ -38,6 +39,14 @@ export interface TripGradeBinding {
    * its deferred bake; a picture that departed reads its own stored grade.
    */
   lutFor: (picture: GradedPicture) => CubeLut | null;
+  /**
+   * The film TEXTURE one picture of the deck is rendered through — the twin of
+   * `lutFor`, down to the rung: the texture cascades with the look because it
+   * belongs to the stock (`render-film.md`). The open picture reads the LIVE
+   * stack, so the grain slider moves what is on screen; a picture that
+   * departed reads its own stored grade.
+   */
+  filmFor: (picture: GradedPicture) => FilmTexture | null;
   /** The grade the HOOK wears, and its rung — what the Studio bridge sends over. */
   hookGrade: TripGrade;
   hookScope: GradeScope;
@@ -45,7 +54,7 @@ export interface TripGradeBinding {
 
 /** The stored shape, in one field order, so two equal grades stringify equal. */
 function savedOf(stack: LutStack): TripGrade {
-  return { layers: stack.toSaved(), output: stack.output };
+  return { layers: stack.toSaved(), output: stack.output, film: stack.film };
 }
 
 /**
@@ -75,7 +84,11 @@ export function useTripGrade(
   const stack = useLutStack();
   const scope = gradeScopeOf(post, picture);
   const source = gradeShownBy(trip, post, picture);
-  const sourceKey = JSON.stringify(source);
+  // Memoised on the grade's identity: the editor renders on every frame of
+  // the deck's clock, and a stored grade is stringified once per render
+  // otherwise — with a legacy upload's whole `.cube` inlined in it, once a
+  // frame was the drag.
+  const sourceKey = useMemo(() => JSON.stringify(source), [source]);
 
   // What the stack last agreed with, as stored text.
   const agreed = useRef<string | null>(null);
@@ -96,7 +109,7 @@ export function useTripGrade(
     if (agreed.current === sourceKey) return;
     agreed.current = sourceKey;
     restoring.current += 1;
-    void stack.restore(source.layers, source.output).finally(() => {
+    void stack.restore(source.layers, source.output, source.film).finally(() => {
       restoring.current -= 1;
     });
     // `source` is what `sourceKey` stringifies; `stack.restore` is stable.
@@ -115,7 +128,7 @@ export function useTripGrade(
     const next = writeGrade(cur.trip, cur.post, cur.picture, cur.scope, saved);
     if (next.post) cur.onChangePost(next.post);
     else if (next.trip) cur.onChangeTrip(next.trip);
-  }, [stack.layers, stack.output, stack.busy]);
+  }, [stack.layers, stack.output, stack.film, stack.busy]);
 
   const setScope = (next: GradeScope) => {
     if (next === scope) return;
@@ -142,6 +155,17 @@ export function useTripGrade(
     [trip, post, picture, stack.composeWith, cubeFor],
   );
 
+  const filmFor = useCallback(
+    (target: GradedPicture): FilmTexture | null => {
+      // The closing card is drawn, not photographed: there is nothing to grain.
+      if (target.kind === 'cta') return null;
+      const key = pictureKeyOf(target);
+      if (sameGradeRung(post, key, picture)) return stack.film;
+      return gradeShownBy(trip, post, key).film ?? null;
+    },
+    [trip, post, picture, stack.film],
+  );
+
   return {
     stack,
     scope,
@@ -149,6 +173,7 @@ export function useTripGrade(
     canDepart: picture !== null,
     saved: savedOf(stack),
     lutFor,
+    filmFor,
     hookGrade: gradeShownBy(trip, post, HOOK_PICTURE),
     hookScope: gradeScopeOf(post, HOOK_PICTURE),
   };

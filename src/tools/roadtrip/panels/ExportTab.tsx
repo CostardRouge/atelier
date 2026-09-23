@@ -11,6 +11,7 @@ import type { GradeScope } from '../use-trip-grade';
 import { reasonSentence } from './SlideDelivery';
 import { note } from './ui';
 import Button from '../../../shared/ui/Button';
+import type { DeliverySummary } from '../../../shared/develop/roll-export';
 import { FieldRow, InspectorSection, ToggleField } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
 
@@ -37,6 +38,14 @@ interface ExportTabProps {
   onExportPiece: (imagesOnly: boolean) => void;
   onExportDeck: () => void;
   onExportHookClip: () => void;
+  /**
+   * What the OPEN picture would deliver into the deck's frame, or null when
+   * nothing is measured. Said, never chosen: a picture from an instance
+   * leaves from its full-size original only where its proxy could not fill
+   * the frame (R5 of `docs/capture-renditions.md`), and there is no door
+   * here to force or refuse that.
+   */
+  delivery: DeliverySummary | null;
   onChangePost: (post: TripPost) => void;
   /**
    * The grade the HOOK wears here, and whose it is — the bridge says which
@@ -79,6 +88,7 @@ export default function ExportTab({
   onExportPiece,
   onExportDeck,
   onExportHookClip,
+  delivery,
   onChangePost,
   grade,
   gradeScope,
@@ -113,11 +123,19 @@ export default function ExportTab({
         title="What goes out"
         badge={describePlan(plan)}
         info={
-          <p>
-            Each slide leaves in the format it IS — decided on the Content tab, not here.
-            Files are numbered in swipe order, so a deck mixing a clip and two photographs
-            still uploads in the right one.
-          </p>
+          <>
+            <p>
+              Each slide leaves in the format it IS — decided on the Content tab, not here.
+              Files are numbered in swipe order, so a deck mixing a clip and two photographs
+              still uploads in the right one.
+            </p>
+            <p>
+              A picture from your Winnow leaves from its full-size original only where the
+              proxy in the Library could not fill the frame — a landscape proxy cropped to
+              4:5 already falls short, at ×1.25. Fetched originals are kept for this session
+              only. <em>Delivers</em> says what the open picture will really give.
+            </p>
+          </>
         }
       >
         {exportNote && <p className={note}>{exportNote}</p>}
@@ -167,6 +185,16 @@ export default function ExportTab({
             {b}
           </p>
         ))}
+
+        <FieldRow
+          label="Delivers"
+          align="start"
+          hint={delivery?.reason ?? (delivery ? undefined : 'measured for the picture on screen, once it is in the Library')}
+        >
+          <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
+            {delivery ? delivery.line : '—'}
+          </span>
+        </FieldRow>
 
         <FieldRow label="As images">
           <ToggleField label="Everything as images" checked={imagesOnly} onChange={setImagesOnly}>

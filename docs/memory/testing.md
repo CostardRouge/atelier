@@ -18,6 +18,30 @@ Read before writing tests, or before deciding where a piece of new logic should 
 
 **Recipe that works in this container**, so it is not re-derived: `npm run dev -- --host 127.0.0.1 --port 5173` (base is `/atelier/`), `playwright-core` installed in the SCRATCHPAD (never the repo), launched with `executablePath: /opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell` — the full `chrome` binary refuses Playwright's old headless mode and exits. Seed a connection with `page.addInitScript` writing `atelier.sources.winnow.v1` (capabilities included, `media.timeline: true` for the timeline screens), stub the instance with `page.route('https://winnow.example/**')` answering JSON **with** `access-control-allow-origin: http://127.0.0.1:5173` and `access-control-allow-credentials: true` (the client sends `credentials: 'include'`, so a stub without them is a CORS failure that looks like "unreachable"), and assert on roles and visible text. `Failed to load resource` for Google Fonts is this container's network, not the app.
 
+## A RAW can be FAKED well enough to drive the UI (2026-09-20)
+
+**Recipe, on top of the Playwright one above.** The RAW paths — the probe, the
+embedded-render decode, the fidelity chip, the *Delivers* row — need no file of
+the maintainer's: a RAW is a TIFF, and `probeRaw` reads IFDs, not pixels. Build
+one in the page: little-endian header, IFD0 carrying only SubIFDs (tag 330) to
+two offsets, a **sensor** SubIFD stating width/height plus compression 1 and
+photometric **32803** (nothing has to be there — no pixel of it is ever read),
+a **render** SubIFD stating its own width/height, compression 7, photometric 6
+and `StripOffsets`/`StripByteCounts` pointing at a real canvas JPEG appended to
+the buffer. `new File([buf], 'DJI_0101.DNG', { type: '' })` — the empty type is
+what a RAW off a disk really has, and it is the case `pictureFidelity` tests
+for. Stating an 8064 × 4536 sensor and a 960 × 540 render reproduces the
+maintainer's own DJI measurement exactly, at 16 KB.
+
+**Getting it in**: the library rail is COLLAPSED on a tool's gallery — click
+`Expand asset library` (its `aria-label`) before looking for *Add files*, or
+the locator simply times out. `page.addInitScript` takes a STRING as script
+CONTENT, so a patch written as `() => {…}` is evaluated and never runs: wrap it
+`(() => {…})()`. A synthetic `DragEvent` drop is NOT a substitute — the drop
+path reads `webkitGetAsEntry`, which a hand-built `DataTransfer` does not
+have; patch `HTMLInputElement.prototype.click` instead. Inside the editor, →
+steps to the next picture once the rail is out of the way.
+
 ## The deployed pair is NOT required: two localhosts are same-site (2026-09-07)
 
 **Fact, measured.** `docs/roadtrip-persistence.md` §10 and several memory entries said the remote-document flow could only be exercised on `atelier.steeve.website` ↔ `winnow.steeve.website`, because `localhost` is cross-site to the deployed Winnow. True of THAT pair, and it hid the obvious: run **both** locally and the problem disappears. A cookie is scoped to a HOST, not an origin, so `127.0.0.1:5199` → `127.0.0.1:3000` is cross-origin but same-site, and Winnow's session cookie travels. Verified: `POST /api/auth/login` from the Atelier page, then `credentials: 'include'` on every bucket call, all the way to a 201.
@@ -28,6 +52,10 @@ Read before writing tests, or before deciding where a piece of new logic should 
 ## A touch gesture is driven, not guessed (2026-09-16)
 
 **Recipe that works in this container**, on top of the scratchpad Playwright above. A context with `hasTouch: true, isMobile: true, viewport: 390×844`, then `context.newCDPSession(page)` and `Input.dispatchTouchEvent` (`touchStart` / `touchMove` × n with a few ms between them / `touchEnd`, whose `touchPoints` is empty) — Playwright's own `touchscreen` only taps. Add a **vertical drift** to every swipe: a perfectly horizontal finger is the one case a broken pan survives, and reading `event.cancelable` inside a `touchmove` listener tells you whether the browser has taken the gesture (it flips to `false` on the move it claims). `reducedMotion: 'reduce'` on the context is how a throw's absence is checked. **Seed a document without the UI**: `await import('/atelier/src/shared/roadtrip/trip-store.ts')` and its `trip-types.ts` in `page.evaluate`, `putTrip(createTripDoc(…))`, then set `location.hash` — a fresh context has an empty IndexedDB, so this is also how a second context gets the same fixture. Everything is in the scratchpad, nothing in the repo.
+
+## The anchor probe: a picture that says where it is (2026-09-22)
+
+**Recipe, measured in the desktop Browser pane.** To prove a zoom keeps the point under the hand still, use a picture whose pixels ENCODE their position: a 2000×1500 PNG drawn in-page (`R = x / w`, `G = y / h`, `B = 128`), wrapped as a `File` and dropped on the Library's dashed zone through a synthetic `DragEvent` with a `DataTransfer` (the Library's own input is transient, so a drop is the automatable door; the page reloads on some HMR edits and the Library empties — re-drop). Then, on a surface that draws through a 2D canvas (the crop stage, Trips' badge stage), `getImageData` at the probe point gives the source fraction to 1/255 directly, veil and shades aside (`B` says whether a shade tints the sample); on a surface that transforms an element (the viewport's canvas, the lightbox's `<img>`), `getBoundingClientRect()` of the transformed element plus its `object-contain` letterbox gives it to four decimals. Dispatch `WheelEvent`s (with `ctrlKey` for a trackpad pinch) and `PointerEvent`s with `pointerType: 'touch'` on the box the machine listens on — two ids for a pinch, moved in lockstep — and read the fraction before and after every step: it must not move once both axes have slack, and the FIRST step from the fit may move the letterbox axis. Counting undo steps after a burst (click the `(⌘Z)` button until it disables) is how coalescing is checked. What it found and how it reads is in `frontend.md`, «Two uses, one hand».
 
 ## Test fixtures can be hand-built binaries (2026-08-20)
 

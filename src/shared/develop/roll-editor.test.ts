@@ -104,16 +104,23 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'h', shiftKey: true }))).toBeNull();
   });
 
-  it('opens the Crop tab on R and the Develop tab on D', () => {
-    expect(editorKeyAction(press({ key: 'r' }))).toBe('crop');
-    expect(editorKeyAction(press({ key: 'R' }))).toBe('crop');
-    expect(editorKeyAction(press({ key: 'd' }))).toBe('develop');
-    expect(editorKeyAction(press({ key: 'D' }))).toBe('develop');
+  it('opens each tab on its own initial', () => {
+    expect(editorKeyAction(press({ key: 'a' }))).toEqual({ tab: 'adjust' });
+    expect(editorKeyAction(press({ key: 'A' }))).toEqual({ tab: 'adjust' });
+    expect(editorKeyAction(press({ key: 'd' }))).toEqual({ tab: 'detail' });
+    expect(editorKeyAction(press({ key: 'l' }))).toEqual({ tab: 'layers' });
+    expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
+    expect(editorKeyAction(press({ key: 'e' }))).toEqual({ tab: 'export' });
     expect(editorKeyAction(press({ key: 'x' }))).toBe('swap');
     expect(editorKeyAction(press({ key: 'X' }))).toBe('swap');
-    expect(editorKeyAction(press({ key: 'r', metaKey: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'r', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'r' }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'a', targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'd', repeat: true }))).toBeNull();
+  });
+
+  it('keeps ⌘C for the develop, so a bare C can open the crop', () => {
+    expect(editorKeyAction(press({ key: 'c', metaKey: true }))).toBe('copy');
+    expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
   });
 });
 

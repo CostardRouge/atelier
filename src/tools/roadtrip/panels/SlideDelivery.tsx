@@ -76,24 +76,6 @@ function choiceHint(choice: SlideMedium, reason: SlideReason, medium: string): s
   }
 }
 
-/** One word for a row in the rail or a plan: what this slide delivers. */
-export function shortAnswer(reason: SlideReason): string {
-  switch (reason) {
-    case 'animated':
-      return 'video · it animates';
-    case 'moving':
-      return 'video · it is a clip';
-    case 'forced-video':
-      return 'video · a held card';
-    case 'settled':
-      return 'image · settled';
-    case 'frozen':
-      return 'image · one frame';
-    case 'plain':
-      return 'image';
-  }
-}
-
 /**
  * What this slide is delivered as, and for how long — decided HERE, where the
  * piece is composed, and never at the door.

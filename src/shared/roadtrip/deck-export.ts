@@ -9,6 +9,7 @@
  * ground — because losing a file must never cost the piece.
  */
 
+import type { FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import type { SavedMediaRef } from '../projects/project-types';
 import {
@@ -24,6 +25,14 @@ import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
 import { slideRender } from './slide-render';
 import type { TripDoc, TripPost } from './trip-types';
+
+/**
+ * The long edge every still of a deck is written at. One number, exported,
+ * because the *Delivers* row has to ask its question against the very frame
+ * the renderer will write (`develop-originals.md` O2) — a row measured
+ * against a different size is a row that lies.
+ */
+export const DECK_LONG_EDGE = 1920;
 
 export interface RenderedSlide {
   name: string;
@@ -47,6 +56,8 @@ export interface RenderDeckOptions {
    * closing card carries no picture, so it is never graded.
    */
   lutFor?: (slide: DeckSlide) => CubeLut | null;
+  /** The film TEXTURE a slide wears — `TripGradeBinding.filmFor`, the twin of `lutFor`. */
+  filmFor?: (slide: DeckSlide) => FilmTexture | null;
   /**
    * The pictures the piece's opener asked for, already decoded. An itinerary
    * shows its stops' photographs at rest, so a deck rendered without them
@@ -65,6 +76,12 @@ export interface RenderDeckOptions {
    */
   include?: (slide: DeckSlide) => boolean;
   onProgress?: (done: number, total: number) => void;
+  /**
+   * Stop between two slides (T4 of `docs/progress-feedback.md`): what has
+   * rendered is handed back, so a cancelled run keeps what it made and the
+   * caller says how many. Never inside a slide — a PNG is one draw.
+   */
+  signal?: AbortSignal;
 }
 
 /**
@@ -83,6 +100,7 @@ export async function renderDeck(
   const out: RenderedSlide[] = [];
 
   for (const slide of slides) {
+    if (opts.signal?.aborted) break;
     let source: BadgeSource | null = null;
     let cells: CollageSources | null = null;
     try {
@@ -115,6 +133,7 @@ export async function renderDeck(
         width: w,
         height: h,
         lut: opts.lutFor?.(slide) ?? null,
+        film: opts.filmFor?.(slide) ?? null,
       });
       if (blob) {
         out.push({

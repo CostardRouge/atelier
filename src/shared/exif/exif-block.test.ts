@@ -140,5 +140,52 @@ describe('retagExifBlock', () => {
     expect(read.make).toBe('DJI');
     expect(read.gps?.lon).toBeCloseTo(-21.9426, 6);
     expect(read.dateTimeOriginal).toBe('2026:07:14 18:32:05');
+    expect(read.software).toBeUndefined();
+  });
+
+  describe('software', () => {
+    it('writes over the camera’s own entry when it is wide enough, moving nothing', () => {
+      // A Sony body writes its firmware there — sixteen bytes, room for ours.
+      const block = buildExifBlock({ make: 'SONY', model: 'ILCE-7CM2', software: 'ILCE-7CM2 v1.00' });
+      const out = retagExifBlock(block, { software: 'Atelier' });
+      expect(out.length).toBe(block.length);
+      const read = parseExif(out.buffer);
+      expect(read.software).toBe('Atelier');
+      expect(read.model).toBe('ILCE-7CM2');
+    });
+
+    it('adds the entry to a block that has none, by copying IFD0 to the end', () => {
+      const out = retagExifBlock(sample, { software: 'Atelier', pixelWidth: 1920, pixelHeight: 1440 });
+      expect(out.length).toBeGreaterThan(sample.length);
+      const read = parseExif(out.buffer);
+      expect(read.software).toBe('Atelier');
+      // Everything the old directory pointed at is still where it was.
+      expect(read.make).toBe('DJI');
+      expect(read.model).toBe('FC8482');
+      expect(read.iso).toBe(100);
+      expect(read.gps?.lat).toBeCloseTo(64.1466, 6);
+      expect(read.dateTimeOriginal).toBe('2026:07:14 18:32:05');
+      expect(read.orientation).toBe(1);
+    });
+
+    it('replaces an entry too narrow to hold the mark rather than leaving both', () => {
+      const block = buildExifBlock({ make: 'DJI', software: 'v1' });
+      const out = retagExifBlock(block, { software: 'Atelier' });
+      const read = parseExif(out.buffer);
+      expect(read.software).toBe('Atelier');
+      expect(read.make).toBe('DJI');
+      // One Software entry in the copied directory, in tag order.
+      const view = new DataView(out.buffer);
+      const ifd0 = view.getUint32(4, true);
+      const count = view.getUint16(ifd0, true);
+      const tags = Array.from({ length: count }, (_, i) => view.getUint16(ifd0 + 2 + i * 12, true));
+      expect(tags.filter((t) => t === 0x0131)).toHaveLength(1);
+      expect(tags).toEqual([...tags].sort((a, b) => a - b));
+    });
+
+    it('is read back through a JPEG, the way the delivered file will be', () => {
+      const out = retagExifBlock(sample, { software: 'Atelier' });
+      expect(parseExif(withExifBlock(bareJpeg(), out).slice().buffer).software).toBe('Atelier');
+    });
   });
 });

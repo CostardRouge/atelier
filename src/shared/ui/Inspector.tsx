@@ -246,7 +246,7 @@ export function SelectField<T extends string>({ value, options, onChange, label 
         value={value}
         onChange={(e) => onChange(e.target.value as T)}
         aria-label={label}
-        className="w-full appearance-none font-sans text-sm h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+        className={selectClass}
       >
         {options.map((o) => (
           <option key={o.id} value={o.id} disabled={o.disabled}>
@@ -297,8 +297,17 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
   );
 }
 
+// `max-[820px]:text-base` on every typed field and select: below 16px iOS
+// zooms the page the moment the control is focused, and on a tool screen the
+// document is locked so it never zooms back (`frontend.md`, «Touch sizing»).
+// A viewport query rather than the layout hook because under 820px every
+// inspector in the suite is a `position: fixed` sheet, the one place a raw
+// breakpoint still belongs — and because these are recipe strings, not
+// components.
 const fieldClass =
-  'w-full min-w-0 font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
+  'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
+const selectClass =
+  'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 
 interface NumberFieldProps {
   /** `null` draws an empty field — with `onClear`, for a value that may be absent. */
@@ -399,7 +408,7 @@ export function NativeSelect({ label, children, className = '', ...rest }: Nativ
     <span className="relative flex-1 min-w-0 inline-flex">
       <select
         aria-label={label}
-        className={`w-full appearance-none font-sans text-sm h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 ${className}`}
+        className={`${selectClass} ${className}`}
         {...rest}
       >
         {children}

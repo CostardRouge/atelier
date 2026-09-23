@@ -1,6 +1,6 @@
 /**
  * "Your packs" — importing a folder of purchased looks into this browser's
- * vault, and forgetting one.
+ * vault, saying what it all WEIGHS, and forgetting what is not worth keeping.
  *
  * The gesture is deliberately two-step: pick the folder, then LOOK at what was
  * read — the categories, the cameras, the counts — and name the pack before
@@ -8,30 +8,61 @@
  * the ten seconds spent here are what stop it arriving as 25 files called
  * `AUTHENTIC_LUT_*`.
  *
- * Nothing leaves the machine: the files are read, encoded and stored locally
- * (`docs/lut-packs.md` §3 — a purchased look may never reach the deployed
- * site, a document or a shared file). Keeping a pack on a Winnow so a phone
- * can read it is step V5 of the plan, and this screen will say so then.
+ * A purchased look never reaches the deployed site, a document or a shared
+ * file (`docs/lut-packs.md` §3). It does reach an instance the author keeps
+ * the pack on — their own server, on their own gesture ("Keep on …", step 6 of
+ * the plan) — which is what lets a phone grade with a look bought on a Mac.
+ *
+ * ## The weight, and the two gestures beside it
+ *
+ * Every row says what it costs, here and on that instance
+ * (`pack-weight.ts`), because the maintainer's pack is 41 MB of lattices for
+ * cameras he mostly does not own. Two different verbs answer that, and the
+ * difference is the point:
+ *
+ * - a **tick** puts a category or a look away — presentation only, the bytes
+ *   stay and a grade already wearing it still renders (§6);
+ * - **forget** reclaims the bytes, here and on the instance, and is the only
+ *   one of the two that a document can notice.
  */
 
 import { useCallback, useEffect, useState } from 'react';
 import { createPortal } from 'react-dom';
 import { pickDirectoryTree } from '../sources/file-sources';
 import Button from '../ui/Button';
+import ConfirmDialog from '../ui/ConfirmDialog';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
+import InfoDot from '../ui/InfoDot';
 import useDialogKeys from '../ui/use-dialog-keys';
-import { flattenNodes, prettyName, type LutPackIndex } from './lut-pack';
+import { flattenPack, prettyName, type LutPackIndex, type PackLook } from './lut-pack';
 import { cubeEntries, importPackFromFolder, type ImportFailure } from './pack-import';
+import { startTask } from '../tasks/tasks';
 import type { PackHost } from './pack-remote';
+import { storedLatticeSizes } from './pack-store';
 import {
   adoptRemotePack,
+  forgetLook,
   keepPackOn,
   packKeepers,
   removePack,
   remotePacksNotHere,
   setPackHidden,
 } from './pack-vault';
+import {
+  forgotten,
+  formatBytes,
+  freedHashes,
+  hashBytes,
+  instanceWeights,
+  lookWeight,
+  lookWeightLabel,
+  lookWeightNote,
+  looksBytes,
+  packWeight,
+  vaultWeight,
+  type LatticeSizes,
+} from './pack-weight';
 import { subscribeWinnowConnections } from '../sources/winnow/store';
 import { useLutPacks } from './use-lut-packs';
 
@@ -52,10 +83,22 @@ function uid(): string {
     : `pk_${Math.random().toString(36).slice(2)}`;
 }
 
-const mb = (bytes: number) => `${(bytes / 1048576).toFixed(1)} MB`;
-
 export default function LutPackImportModal({ onClose, onImported }: LutPackImportModalProps) {
   const packs = useLutPacks();
+  // MEASURED off the stored buffers, not read off the indexes, which record
+  // what each `.cube` weighed — four times its encoded lattice
+  // (`pack-weight.ts`). Re-read whenever the packs change, so an import or a
+  // forget moves the numbers rather than leaving a stale total on screen.
+  const [sizes, setSizes] = useState<LatticeSizes>(() => new Map());
+  useEffect(() => {
+    let cancelled = false;
+    void storedLatticeSizes().then((next) => {
+      if (!cancelled) setSizes(next);
+    });
+    return () => {
+      cancelled = true;
+    };
+  }, [packs]);
   // Not `useSyncExternalStore`: `packKeepers()` builds fresh objects on every
   // call, which that hook reads as a changed snapshot and re-renders forever.
   // A subscription that SETS state keeps one array per change.
@@ -95,13 +138,21 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
     if (!picked) return;
     setError(null);
     setProgress({ done: 0, total: picked.files.length, file: '' });
+    // The import as a TASK (`tasks.md`, T5): the modal keeps its line, the
+    // pill draws the bar. No Cancel — the vault is written look by look and
+    // stopping half-way would leave a pack the index does not describe.
+    const packName = name.trim() || prettyName(picked.rootName || 'Pack');
+    const task = startTask({ label: `Importing ${packName}`, progress: 0, detail: `${picked.files.length} looks` });
     try {
       const result = await importPackFromFolder(picked.files, {
         id: uid(),
-        name: name.trim() || prettyName(picked.rootName || 'Pack'),
+        name: packName,
         author: author.trim(),
         url: url.trim() || undefined,
-        onProgress: setProgress,
+        onProgress: (p) => {
+          setProgress(p);
+          task.update({ progress: p.done / Math.max(1, p.total), detail: `${Math.min(p.done + 1, p.total)} of ${p.total}` });
+        },
       });
       setFailed(result.failed);
       setDone({ looks: result.index.looks.length, stored: result.stored, reused: result.reused });
@@ -110,6 +161,7 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
     } catch (e) {
       setError((e as Error).message || 'The import stopped.');
     } finally {
+      task.done();
       setProgress(null);
     }
   }, [picked, name, author, url, onImported]);
@@ -140,7 +192,7 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
           <div>
             <h2 className="m-0 font-serif text-2xl">Your packs</h2>
             <p className="m-0 mt-1 text-sm text-muted">
-              Looks you bought, kept in this browser — never uploaded, never in an exported file.
+              Looks you bought — kept in this browser, never in an exported file.
             </p>
           </div>
           <IconButton label="Close" variant="ghost" onClick={onClose} disabled={!!progress}>
@@ -149,16 +201,17 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
         </div>
 
         <div className="flex-1 min-h-0 overflow-auto -mr-1 pr-1 flex flex-col gap-4">
-          {/* What this browser already holds. */}
+          {/* What this browser already holds, and what it costs. */}
           {packs.length > 0 && (
-            <section className="flex flex-col gap-2">
-              <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
-                In this browser
-              </h3>
-              {packs.map((pack) => (
-                <PackRow key={pack.id} pack={pack} hosts={hosts} />
-              ))}
-            </section>
+            <VaultSection
+              packs={packs}
+              hosts={hosts}
+              sizes={sizes}
+              // The import's own report is about a vault that has since
+              // changed: "5 looks · 421 KB written" sitting under a total
+              // that now reads 211 KB is one of the two contradicting itself.
+              onForgotten={() => setDone(null)}
+            />
           )}
 
           {/* What an instance holds that this browser does not — the other
@@ -183,7 +236,8 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
           {picked && !progress && (
             <section className="flex flex-col gap-3">
               <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
-                {picked.files.length} looks in “{picked.rootName || 'the folder'}” · {mb(pickedBytes)} to read
+                {picked.files.length} looks in “{picked.rootName || 'the folder'}” ·{' '}
+                {formatBytes(pickedBytes)} to read
               </h3>
               <div className="grid grid-cols-[auto_1fr] gap-x-3 gap-y-2 items-center">
                 <label className="text-xs text-muted" htmlFor="pack-name">Pack</label>
@@ -230,15 +284,10 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
 
           {progress && (
             <section className="flex flex-col gap-2">
+              {/* The line stays; the bar is the masthead's (T5, `tasks.md`). */}
               <p className="m-0 text-sm text-ink">
-                Reading {progress.done + 1} of {progress.total}…
+                Reading {Math.min(progress.done + 1, progress.total)} of {progress.total}…
               </p>
-              <div className="h-1.5 rounded-full bg-paper-2 overflow-hidden">
-                <div
-                  className="h-full bg-accent transition-[width] duration-150"
-                  style={{ width: `${(progress.done / Math.max(1, progress.total)) * 100}%` }}
-                />
-              </div>
               <p className="m-0 font-mono text-2xs text-muted truncate">{progress.file}</p>
             </section>
           )}
@@ -246,7 +295,8 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
           {done && (
             <section className="flex flex-col gap-1">
               <p className="m-0 text-sm text-ok">
-                {done.looks} looks in the vault{done.stored ? ` · ${mb(done.stored)} written` : ''}
+                {done.looks} looks in the vault
+                {done.stored ? ` · ${formatBytes(done.stored)} written` : ''}
                 {done.reused ? ` · ${done.reused} already here` : ''}.
               </p>
               <p className="m-0 text-xs text-muted">
@@ -273,7 +323,7 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
 
         <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
           <p className="m-0 text-xs text-muted">
-            Stored in this browser only. Reading them on your phone comes with the vault’s sync.
+            Stored in this browser, and on the instance you keep a pack on — nowhere else.
           </p>
           <Button variant="ghost" onClick={onClose} disabled={!!progress}>
             Done
@@ -286,17 +336,81 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
 }
 
 /**
- * One pack in the vault: what it holds, what shows in the pickers, and the
- * verb that forgets it.
+ * Everything the vault holds, with its total above it.
+ *
+ * The total is NOT the sum of the rows, and the arithmetic lives in
+ * `pack-weight.ts` for exactly that reason: both stores are content-addressed,
+ * so a lattice two packs happen to share is one stored copy and is counted
+ * once. A screen that added its own rows up would over-report it.
+ */
+function VaultSection({
+  packs,
+  hosts,
+  sizes,
+  onForgotten,
+}: {
+  packs: readonly LutPackIndex[];
+  hosts: readonly PackHost[];
+  sizes: LatticeSizes;
+  onForgotten: () => void;
+}) {
+  const total = vaultWeight(packs, sizes);
+  const instances = instanceWeights(packs, sizes);
+
+  return (
+    <section className="flex flex-col gap-2">
+      <div className="flex items-baseline justify-between gap-x-3 gap-y-1 flex-wrap">
+        <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
+          In this browser
+        </h3>
+        <span className="font-mono text-2xs text-muted tabular-nums">
+          {formatBytes(total.here)} here
+          {[...instances].map(([host, bytes]) => ` · ${formatBytes(bytes)} on ${host}`)}
+          {total.unweighed > 0 && ` · ${total.unweighed} not weighed`}
+        </span>
+      </div>
+      {packs.map((pack) => (
+        <PackRow
+          key={pack.id}
+          pack={pack}
+          hosts={hosts}
+          sizes={sizes}
+          onForgotten={onForgotten}
+        />
+      ))}
+    </section>
+  );
+}
+
+/**
+ * One pack in the vault: what it holds, what it weighs, what shows in the
+ * pickers, and the verb that forgets it.
  *
  * Hiding is PRESENTATION — the looks stay stored and a grade already wearing
  * a hidden one still renders (`docs/lut-packs.md` §6). It is the answer to a
- * pack whose cameras you do not own: 25 looks of which you shoot four.
+ * pack whose cameras you do not own: 25 looks of which you shoot four. The
+ * weight beside it is the answer to the other half of that sentence, the one
+ * hiding cannot give: the bytes those looks are still costing.
  */
-function PackRow({ pack, hosts }: { pack: LutPackIndex; hosts: readonly PackHost[] }) {
+function PackRow({
+  pack,
+  hosts,
+  sizes,
+  onForgotten,
+}: {
+  pack: LutPackIndex;
+  hosts: readonly PackHost[];
+  sizes: LatticeSizes;
+  onForgotten: () => void;
+}) {
+  const packs = useLutPacks();
   const [open, setOpen] = useState(false);
   const [push, setPush] = useState<{ done: number; total: number; bytes: number } | null>(null);
   const [pushError, setPushError] = useState<string | null>(null);
+  /** The pack itself, or one of its looks, waiting on the question. */
+  const [asking, setAsking] = useState<PackLook | 'pack' | null>(null);
+  const [forgetting, setForgetting] = useState(false);
+  const [note, setNote] = useState<string | null>(null);
   const hidden = new Set(pack.hidden);
   const keptOn = pack.sourceId ?? null;
   // Somewhere to put it: an instance that keeps documents AND files. One
@@ -320,6 +434,30 @@ function PackRow({ pack, hosts }: { pack: LutPackIndex; hosts: readonly PackHost
       setPush(null);
     }
   };
+
+  /** What the question quotes, and what the answer reports: measured, not promised. */
+  const doomed = asking === 'pack' ? pack.looks.map((l) => l.id) : asking ? [asking.id] : [];
+  const wouldFree = hashBytes(freedHashes(packs, pack.id, doomed).free, sizes);
+
+  const runForget = async () => {
+    if (!asking) return;
+    const look = asking === 'pack' ? null : asking;
+    setPushError(null);
+    setNote(null);
+    setForgetting(true);
+    try {
+      const result = look ? await forgetLook(pack.id, look.id) : await removePack(pack.id);
+      // A pack that is gone has no row left to print this in; a look does.
+      if (look) setNote(`Forgot “${look.label}” — ${forgotten(result)}`);
+      onForgotten();
+      setAsking(null);
+    } catch (e) {
+      setPushError((e as Error).message || 'That could not be forgotten.');
+      setAsking(null);
+    } finally {
+      setForgetting(false);
+    }
+  };
   const toggle = (id: string) => {
     const next = new Set(hidden);
     if (next.has(id)) next.delete(id);
@@ -327,18 +465,23 @@ function PackRow({ pack, hosts }: { pack: LutPackIndex; hosts: readonly PackHost
     void setPackHidden(pack.id, [...next]);
   };
 
+  const weight = packWeight(pack, sizes);
+
   return (
     <div className="flex flex-col gap-2 px-3 py-2 border border-line rounded-control bg-paper">
-      <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0">
+      {/* Wrapping, not squeezing: the verbs drop to their own line on a phone
+          rather than crushing a name and a weight into nothing. */}
+      <div className="flex items-center gap-x-3 gap-y-1.5 flex-wrap">
+        <span className="flex-1 min-w-[11rem]">
           <span className="block text-sm font-medium text-ink truncate">
             {pack.name || 'Pack'}
             {pack.author && <span className="text-muted"> · {pack.author}</span>}
           </span>
           <span className="block font-mono text-2xs text-muted">
-            {pack.looks.length} looks
+            {pack.looks.length} looks · {formatBytes(weight.here)} here
+            {keptOn && ` · ${formatBytes(weight.instance)} on ${keptOn}`}
+            {weight.unweighed > 0 && ` · ${weight.unweighed} not weighed`}
             {hidden.size > 0 && ` · ${pack.looks.length - visibleCount(pack)} hidden`}
-            {keptOn && ` · kept on ${keptOn}`}
           </span>
         </span>
         {target && !push && (
@@ -360,55 +503,207 @@ function PackRow({ pack, hosts }: { pack: LutPackIndex; hosts: readonly PackHost
             {push.total ? `${push.done}/${push.total}` : 'Checking…'}
           </span>
         )}
-        {pack.tree.length > 0 && (
+        {/* On the LOOKS, not on the tree: a pack with no categories at all —
+            "My looks", where every upload lands — still has looks to weigh
+            and to forget, and used to offer no way in. */}
+        {pack.looks.length > 0 && (
           <Button size="sm" variant="ghost" onClick={() => setOpen((v) => !v)}>
-            {open ? 'Done' : 'What shows…'}
+            {open ? 'Done' : 'Looks…'}
           </Button>
         )}
         <Button
           size="sm"
           variant="ghost"
-          onClick={() => void removePack(pack.id)}
-          title="Forget this pack and its looks on this device"
+          onClick={() => setAsking('pack')}
+          title={
+            keptOn
+              ? `Forget this pack and its looks, here and on ${keptOn}`
+              : 'Forget this pack and its looks on this device'
+          }
         >
           Forget
         </Button>
       </div>
 
       {pushError && <p className="m-0 text-xs text-warn">{pushError}</p>}
+      {note && <p className="m-0 text-xs text-ok">{note}</p>}
 
       {open && (
-        <ul className="m-0 p-0 list-none flex flex-col gap-1 border-t border-line pt-2">
-          {flattenNodes(pack.tree).map(({ node, depth }) => (
-            <li key={node.id}>
-              <label
-                className="flex items-center gap-2 text-xs text-ink-soft"
-                style={{ paddingLeft: `${depth * 0.9}rem` }}
-              >
-                <input
-                  type="checkbox"
-                  className="accent-accent"
-                  checked={!hidden.has(node.id)}
-                  onChange={() => toggle(node.id)}
+        <div className="flex flex-col gap-2 border-t border-line pt-2">
+          <div className="flex items-baseline gap-1.5 flex-wrap">
+            <h4 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
+              What shows, and what it weighs
+            </h4>
+            <InfoDot about="showing a look and forgetting one">
+              <p>
+                A tick decides what the look pickers offer. It is presentation only: the bytes stay,
+                and a grade already wearing an unticked look still renders.
+              </p>
+              <p>
+                A weight reading <code>there</code> is a look whose bytes are not in this browser —
+                it downloads by itself when a picture asks for it.
+              </p>
+            </InfoDot>
+          </div>
+          <ul className="m-0 p-0 list-none flex flex-col gap-1">
+            {flattenPack(pack).map((entry) =>
+              entry.kind === 'node' ? (
+                <li key={`n:${entry.node.id}`}>
+                  <label
+                    className="flex items-center gap-2 text-xs text-ink-soft"
+                    style={{ paddingLeft: `${entry.depth * 0.9}rem` }}
+                  >
+                    <input
+                      type="checkbox"
+                      className="accent-accent"
+                      checked={!hidden.has(entry.node.id)}
+                      onChange={() => toggle(entry.node.id)}
+                    />
+                    <span className="flex-1 min-w-0 truncate">{entry.node.label}</span>
+                    {/* What the node HOLDS, not what shows: a count that fell to
+                        zero the moment you unticked it would read as a category
+                        that lost its looks. */}
+                    <span className="font-mono text-2xs text-muted tabular-nums">
+                      {branchLooks(pack, entry.node.id).length}
+                    </span>
+                    <span className="font-mono text-2xs text-muted tabular-nums">
+                      {formatBytes(looksBytes(branchLooks(pack, entry.node.id), sizes))}
+                    </span>
+                  </label>
+                </li>
+              ) : (
+                <LookRow
+                  key={`l:${entry.look.id}`}
+                  pack={pack}
+                  look={entry.look}
+                  depth={entry.depth}
+                  sizes={sizes}
+                  hidden={hidden.has(entry.look.id)}
+                  onToggle={() => toggle(entry.look.id)}
+                  onForget={() => setAsking(entry.look)}
                 />
-                <span className="flex-1 min-w-0 truncate">{node.label}</span>
-                {/* What the node HOLDS, not what shows: a count that fell to
-                    zero the moment you unticked it would read as a category
-                    that lost its looks. */}
-                <span className="font-mono text-2xs text-muted tabular-nums">
-                  {branchCount(pack, node.id)}
-                </span>
-              </label>
-            </li>
-          ))}
-        </ul>
+              ),
+            )}
+          </ul>
+        </div>
+      )}
+
+      {asking && (
+        <ConfirmDialog
+          title={
+            asking === 'pack'
+              ? `Forget “${pack.name || 'this pack'}”?`
+              : `Forget “${asking.label}”?`
+          }
+          confirmLabel="Forget"
+          danger
+          busy={forgetting}
+          onConfirm={() => void runForget()}
+          onCancel={() => setAsking(null)}
+        >
+          <p>
+            {/* The number is MEASURED off the vault, not promised: a look whose
+                lattice another look of another pack also ships frees nothing,
+                and saying "1.6 MB" there would be a small lie about the one
+                thing this gesture is for. */}
+            {wouldFree > 0
+              ? `${formatBytes(wouldFree)} come back${keptOn ? `, here and on ${keptOn}` : ''}.`
+              : 'No bytes come back: another look still holds the same lattice.'}
+          </p>
+          <p>
+            {asking === 'pack'
+              ? `Its ${pack.looks.length} looks leave the pickers.`
+              : 'It leaves the pickers.'}{' '}
+            {/* And what a document that wears it will do — which follows from
+                the line above rather than from the gesture: a grade names a
+                lattice by its hash, so one whose bytes another look keeps here
+                goes on rendering, and only bytes that really left make a
+                document say the look is gone. */}
+            {wouldFree > 0
+              ? `A grade already wearing ${
+                  asking === 'pack' ? 'one of them' : 'it'
+                } will say the look is gone instead of rendering flat.`
+              : 'A grade already wearing it keeps rendering, from the lattice the other look holds.'}{' '}
+            Importing the folder again brings {asking === 'pack' ? 'them' : 'it'} back.
+          </p>
+          {asking !== 'pack' && (
+            <p>
+              To keep the bytes and only put the look away, cancel and untick it instead.
+            </p>
+          )}
+        </ConfirmDialog>
       )}
     </div>
   );
 }
 
-function branchCount(pack: LutPackIndex, nodeId: string): number {
-  return pack.looks.filter((l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`)).length;
+/**
+ * One look: whether the pickers offer it, and what its lattice weighs.
+ *
+ * Its own component, and NOT wrapped in a `<label>` the way a node row is,
+ * because the verb that forgets a look lands beside the tick: a button inside
+ * a label toggles the label's own control on every press, so the text carries
+ * an explicit `htmlFor` instead and the button stays a sibling.
+ */
+function LookRow({
+  pack,
+  look,
+  depth,
+  sizes,
+  hidden,
+  onToggle,
+  onForget,
+}: {
+  pack: LutPackIndex;
+  look: PackLook;
+  depth: number;
+  sizes: LatticeSizes;
+  hidden: boolean;
+  onToggle: () => void;
+  onForget: () => void;
+}) {
+  const id = `pack-look-${pack.id}-${look.id}`;
+  const weight = lookWeight(pack, look, sizes);
+
+  return (
+    <li
+      className="flex items-center gap-2 text-xs text-ink-soft"
+      style={{ paddingLeft: `${depth * 0.9}rem` }}
+    >
+      <input
+        id={id}
+        type="checkbox"
+        className="accent-accent flex-none"
+        checked={!hidden}
+        onChange={onToggle}
+      />
+      <label htmlFor={id} className="flex-1 min-w-0 flex items-center gap-2 cursor-pointer">
+        <span className="flex-1 min-w-0 truncate text-muted">{look.label}</span>
+        <span
+          className={`font-mono text-2xs tabular-nums ${
+            weight.where === 'here' ? 'text-ink-soft' : 'text-muted'
+          }`}
+          title={lookWeightNote(weight, pack.sourceId ?? null)}
+        >
+          {lookWeightLabel(weight)}
+        </span>
+      </label>
+      <IconButton
+        label={`Forget “${look.label}”`}
+        size="sm"
+        variant="ghost"
+        className="flex-none"
+        onClick={onForget}
+      >
+        {Icons.trash}
+      </IconButton>
+    </li>
+  );
+}
+
+/** The looks a node holds, its descendants included — hidden ones counted. */
+function branchLooks(pack: LutPackIndex, nodeId: string): PackLook[] {
+  return pack.looks.filter((l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`));
 }
 
 function visibleCount(pack: LutPackIndex): number {

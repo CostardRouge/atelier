@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   dayStageActions,
   insertStageInOrder,
+  nearerEdge,
   resizeStage,
   shiftStage,
   stageOverGap,
@@ -13,7 +14,7 @@ const stage = (start: string, end: string, name = ''): TripStage =>
   createTripStage(name, '', start, end);
 
 const trip = (stages: TripStage[] = []): TripDoc => ({
-  ...createTripDoc('Test', '', '2025-03-01', '2025-03-20'),
+  ...createTripDoc('Test', '2025-03-01', '2025-03-20'),
   stages,
 });
 
@@ -183,5 +184,25 @@ describe('dayStageActions', () => {
       { id: 'b', name: 'Kalbarri', region: '', coords: null },
     ];
     expect(dayStageActions(trip([leg]), '2025-03-04')[1].label).toBe('End “Perth → Kalbarri” here');
+  });
+});
+
+describe('nearerEdge', () => {
+  const leg = { startDate: '2025-08-03', endDate: '2025-09-02' };
+
+  it('is the side a day outside the leg lies on, whatever the distance', () => {
+    expect(nearerEdge(leg, '2025-03-03')).toBe('start');
+    expect(nearerEdge(leg, '2025-08-02')).toBe('start');
+    expect(nearerEdge(leg, '2025-09-03')).toBe('end');
+    expect(nearerEdge(leg, '2026-02-10')).toBe('end');
+  });
+
+  it('is the nearer edge inside the leg, the end on a tie', () => {
+    expect(nearerEdge(leg, '2025-08-05')).toBe('start');
+    expect(nearerEdge(leg, '2025-08-30')).toBe('end');
+    // 3 Aug + 15 = 18 Aug; 18 Aug + 15 = 2 Sep — equidistant.
+    expect(nearerEdge(leg, '2025-08-18')).toBe('end');
+    expect(nearerEdge(leg, '2025-08-03')).toBe('start');
+    expect(nearerEdge(leg, '2025-09-02')).toBe('end');
   });
 });

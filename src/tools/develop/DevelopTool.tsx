@@ -68,12 +68,30 @@ export default function DevelopTool() {
   useEffect(() => {
     if (!mine || !route.ref) return;
     if (loadedRef.current === route.ref && open) return;
+    // The same roll under another spelling of its reference — a link by its
+    // bare id, then the slugged path a step writes — is not a reload: reading
+    // the store here would hand back the copy the debounced save has not
+    // written yet, and the picture just added would vanish from the screen.
+    if (open && rollFromRef(route.ref, [open])) {
+      loadedRef.current = route.ref;
+      return;
+    }
     loadedRef.current = route.ref;
+    const ref = route.ref;
+    let alive = true;
     void listRolls().then((rolls) => {
-      const found = rollFromRef(route.ref!, rolls);
+      // Two links opened back to back resolve in any order: only the one
+      // the route still names may open, or the earlier answer landed last,
+      // opened the wrong roll, and the guard above then kept the right one
+      // from ever loading.
+      if (!alive || loadedRef.current !== ref) return;
+      const found = rollFromRef(ref, rolls);
       if (found) setOpen(found);
       else navigate(DEVELOP_HOME);
     });
+    return () => {
+      alive = false;
+    };
   }, [mine, route.ref, open]);
 
   // --- the local save machine ---------------------------------------------
@@ -109,18 +127,26 @@ export default function DevelopTool() {
     onDiscardPending: () => {
       pending.current = null;
     },
-    onReplace: (doc) => {
-      setOpen(doc);
-      // The instance's copy is not an edit: stepping back onto what it
-      // replaced would push the losing version straight back up.
-      historyRef.current?.reset(doc);
-    },
+    onReplace: (doc) => replaceOpen(doc),
     onDeleted: () => {
       setOpen(null);
       navigate(DEVELOP_HOME);
     },
   });
   const { edited, resume, clear } = sync;
+
+  /**
+   * The document replaced UNDER the tool — by the pill's verbs, or by a
+   * resume that found the instance's copy newer than a clean mirror. Not an
+   * edit: stepping back onto what it replaced would push the losing version
+   * straight back up, so the history starts again from it, and a write the
+   * debounce still holds is dropped rather than landing over it.
+   */
+  function replaceOpen(doc: RollDoc) {
+    pending.current = null;
+    setOpen(doc);
+    historyRef.current?.reset(doc);
+  }
 
   const flush = useCallback(async () => {
     const doc = pending.current;
@@ -178,12 +204,19 @@ export default function DevelopTool() {
     if (resumedFor.current === open.id) return;
     resumedFor.current = open.id;
     void resume(open).then((r) => {
-      if (r?.replaced) setOpen(r.doc);
+      // Through the same path as "take theirs": `setOpen` alone left the
+      // mirror on the undo stack, and one ⌘Z pushed it over the newer copy.
+      if (r?.replaced) replaceOpen(r.doc);
     });
   }, [open, resume, clear]);
 
   const handleOpen = useCallback((doc: RollDoc) => {
-    setOpen(doc);
+    // The gallery lists what the store held when it MOUNTED, and the roll
+    // that is open may carry edits the 800 ms debounce had not written yet:
+    // taking the listed copy back put the screen a step behind, and the next
+    // edit wrote that older roll over the newer one. The copy in memory is
+    // kept unless the store's is genuinely newer (moved between sources).
+    setOpen((cur) => (cur && cur.id === doc.id && cur.updatedAt >= doc.updatedAt ? cur : doc));
     loadedRef.current = rollRef(doc);
     navigate(developPath(rollRef(doc)));
   }, []);

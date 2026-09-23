@@ -13,6 +13,7 @@ import {
   framePoint,
   unframePoint,
   wrapDegrees,
+  zoomFramingAbout,
   type Framing,
 } from './framing';
 
@@ -419,5 +420,66 @@ describe('framePoint / unframePoint', () => {
     // caller needs to be able to tell rather than being handed a clamp.
     const [x, y] = unframePoint(0, 0, 800, 600, 400, 500, { ...DEFAULT_FRAMING, fit: 'contain' });
     expect(x < 0 || y < 0).toBe(true);
+  });
+});
+
+describe('zoomFramingAbout', () => {
+  const src = { w: 4000, h: 3000 };
+  const dst = { w: 1080, h: 1920 };
+  /** The source point under a frame point, the way the painter would find it. */
+  const under = (f: Framing, p: { x: number; y: number }) => unframePoint(p.x, p.y, src.w, src.h, dst.w, dst.h, f);
+
+  it('keeps the source point under the anchor still, notch after notch', () => {
+    // Deep enough in that the clamp does not bind on either axis.
+    let f = zoomFramingAbout(DEFAULT_FRAMING, 2, { x: 540, y: 960 }, src.w, src.h, dst.w, dst.h);
+    const anchor = { x: 200, y: 1500 };
+    const [x0, y0] = under(f, anchor);
+    for (const scale of [2.4, 2.9, 3.5, 4.2]) {
+      f = zoomFramingAbout(f, scale, anchor, src.w, src.h, dst.w, dst.h);
+      const [x, y] = under(f, anchor);
+      expect(x).toBeCloseTo(x0, 4);
+      expect(y).toBeCloseTo(y0, 4);
+      expect(covers(src.w, src.h, dst.w, dst.h, f)).toBe(true);
+    }
+  });
+
+  it('is exact turned and mirrored, under cover and under contain', () => {
+    for (const base of [
+      { ...DEFAULT_FRAMING, scale: 2.5, rotation: 37, flipX: true },
+      { ...DEFAULT_FRAMING, scale: 2.5, rotation: -110, flipY: true, fit: 'contain' as const },
+    ]) {
+      const anchor = { x: 700, y: 400 };
+      const f0 = zoomFramingAbout(base, 2.5, { x: 540, y: 960 }, src.w, src.h, dst.w, dst.h);
+      const [x0, y0] = under(f0, anchor);
+      const f1 = zoomFramingAbout(f0, 3.4, anchor, src.w, src.h, dst.w, dst.h);
+      const [x1, y1] = under(f1, anchor);
+      expect(x1).toBeCloseTo(x0, 4);
+      expect(y1).toBeCloseTo(y0, 4);
+    }
+  });
+
+  it('never opens a gap: where the clamp binds the pan stops at the edge', () => {
+    // Zooming OUT at a corner from a pan already at its limit.
+    const zoomed = panBy({ ...DEFAULT_FRAMING, scale: 3 }, src.w, src.h, dst.w, dst.h, 9999, 9999);
+    const out = zoomFramingAbout(zoomed, 1.2, { x: 0, y: 0 }, src.w, src.h, dst.w, dst.h);
+    expect(out.scale).toBeCloseTo(1.2);
+    expect(covers(src.w, src.h, dst.w, dst.h, out)).toBe(true);
+    // Back at 1 the pan is what the slack allows — a 4:3 picture still has
+    // room sideways in a 9:16 frame — and it covers.
+    const back = zoomFramingAbout(zoomed, 0.4, { x: 900, y: 100 }, src.w, src.h, dst.w, dst.h);
+    expect(back.scale).toBe(1);
+    expect(back.y).toBe(0);
+    expect(covers(src.w, src.h, dst.w, dst.h, back)).toBe(true);
+    // A picture that exactly covers has no slack at all: back to 1 is centred.
+    const square = panBy({ ...DEFAULT_FRAMING, scale: 3 }, 2000, 2000, 1000, 1000, 9999, -9999);
+    expect(zoomFramingAbout(square, 0.4, { x: 900, y: 100 }, 2000, 2000, 1000, 1000)).toEqual({ ...square, scale: 1, x: 0, y: 0 });
+  });
+
+  it('holds the ceiling and leaves rotation, mirror and fit alone', () => {
+    const f = zoomFramingAbout({ ...DEFAULT_FRAMING, rotation: 12, flipX: true, fit: 'contain' }, 50, { x: 10, y: 10 }, src.w, src.h, dst.w, dst.h);
+    expect(f.scale).toBe(8);
+    expect(f.rotation).toBe(12);
+    expect(f.flipX).toBe(true);
+    expect(f.fit).toBe('contain');
   });
 });

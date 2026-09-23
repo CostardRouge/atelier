@@ -12,6 +12,7 @@ import {
   type WinnowCapabilities,
   type WinnowChapter,
 } from './client';
+import { forgetHealedUrls } from './cache-heal';
 import { TIMELINE_SYNC_ENABLED } from './features';
 import type { TimelineChapter } from '../../roadtrip/timeline-import';
 
@@ -57,8 +58,12 @@ describe('WinnowClient URLs', () => {
     expect(c.thumbRetryUrl(12, -1)).toBe(`${BASE}/api/assets/12/thumb`);
   });
 
-  it('discriminates a RETRY, so a failed load is not answered from cache', () => {
-    expect(c.thumbRetryUrl(12, 1)).toBe(`${BASE}/api/assets/12/thumb?retry=1`);
+  it('asks the PLAIN url again on the first retry — the heal replaced the entry', () => {
+    expect(c.thumbRetryUrl(12, 1)).toBe(`${BASE}/api/assets/12/thumb`);
+  });
+
+  it('discriminates the LATER retries, for a request that was merely shed', () => {
+    expect(c.thumbRetryUrl(12, 2)).toBe(`${BASE}/api/assets/12/thumb?retry=2`);
     expect(c.thumbRetryUrl(12, 3)).toBe(`${BASE}/api/assets/12/thumb?retry=3`);
   });
 
@@ -361,6 +366,41 @@ describe('WinnowClient requests', () => {
       .rejects.toMatchObject({ kind: 'protocol', status: 500 });
   });
 
+  it('carries the instance’s own reason into the message, clamped', async () => {
+    // What a pack push actually got, and what the panel could not show until
+    // this: the status alone sent the maintainer to the network tab.
+    const refused = new Response(JSON.stringify({ error: 'the body does not hash to that id' }), {
+      status: 400,
+      headers: { 'content-type': 'application/json' },
+    });
+    const err = await client(async () => refused)
+      .capabilities()
+      .catch((e: unknown) => e as WinnowError);
+    expect((err as WinnowError).message).toContain('the body does not hash to that id');
+    expect((err as WinnowError).status).toBe(400);
+
+    // A proxy's HTML page, a bare body and a blank reason say nothing: the
+    // status stands alone rather than dragging markup into a sentence.
+    const quiet = async (body: string, type = 'text/html') =>
+      (
+        (await client(async () => new Response(body, { status: 502, headers: { 'content-type': type } }))
+          .capabilities()
+          .catch((e: unknown) => e)) as WinnowError
+      ).message;
+    expect(await quiet('<html>Bad gateway</html>')).toBe(`${BASE}/api/capabilities answered 502.`);
+    expect(await quiet('')).toBe(`${BASE}/api/capabilities answered 502.`);
+    expect(await quiet('{"error":"  "}', 'application/json')).toBe(
+      `${BASE}/api/capabilities answered 502.`,
+    );
+
+    const long = await client(
+      async () => new Response(JSON.stringify({ error: 'x'.repeat(400) }), { status: 400 }),
+    )
+      .capabilities()
+      .catch((e: unknown) => e as WinnowError);
+    expect((long as WinnowError).message.length).toBeLessThan(260);
+  });
+
   it('maps a thrown fetch (CORS refusal, offline, bad host) to unreachable', async () => {
     const c = client(async () => {
       throw new TypeError('Failed to fetch');
@@ -374,6 +414,64 @@ describe('WinnowClient requests', () => {
   it('rejects a 200 that is not JSON as a protocol error', async () => {
     const c = client(async () => new Response('<html>', { status: 200 }));
     await expect(c.capabilities()).rejects.toMatchObject({ kind: 'protocol' });
+  });
+
+  // A thrown fetch is also what a cache entry stored without its CORS headers
+  // looks like, and that one never heals on its own (`cache-heal.ts`).
+  describe('a read that throws is asked again past the cache', () => {
+    it('replays it with cache: reload, and the answer stands', async () => {
+      const seen: (RequestCache | undefined)[] = [];
+      const c = client(async (_url, init) => {
+        seen.push(init?.cache);
+        if (seen.length === 1) throw new TypeError('Failed to fetch');
+        return ok({ api: { version: 1 } });
+      });
+      await expect(c.capabilities()).resolves.toMatchObject({ api: { version: 1 } });
+      expect(seen).toEqual([undefined, 'reload']);
+    });
+
+    it('says so when even that fails, so a report is not ambiguous', async () => {
+      const c = client(async () => {
+        throw new TypeError('Failed to fetch');
+      });
+      const err = (await c.capabilities().catch((e: unknown) => e)) as WinnowError;
+      expect(err.kind).toBe('unreachable');
+      expect(err.message).toContain('past this browser');
+    });
+
+    it('never replays a WRITE — it may have landed', async () => {
+      const calls: string[] = [];
+      const c = client(async (url) => {
+        calls.push(url);
+        throw new TypeError('Failed to fetch');
+      });
+      await expect(c.reconcile()).rejects.toMatchObject({ kind: 'unreachable' });
+      expect(calls).toHaveLength(1);
+    });
+
+    it('does not replay an ANSWER — a 401 is not a cache to bypass', async () => {
+      const calls: string[] = [];
+      const c = client(async (url) => {
+        calls.push(url);
+        return new Response('', { status: 401 });
+      });
+      await expect(c.capabilities()).rejects.toMatchObject({ kind: 'unauthenticated' });
+      expect(calls).toHaveLength(1);
+    });
+  });
+
+  describe('heal — for the URLs an <img> reads, outside this client', () => {
+    it('asks past the cache, with the instance’s credentials', async () => {
+      forgetHealedUrls();
+      const seen: RequestInit[] = [];
+      const c = client(async (_url, init) => {
+        seen.push(init ?? {});
+        return new Response('', { status: 200 });
+      });
+      expect(await c.heal(c.thumbUrl(9))).toBe(true);
+      expect(seen[0].cache).toBe('reload');
+      expect(seen[0].credentials).toBe('include');
+    });
   });
 
   describe('the document bucket', () => {

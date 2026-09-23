@@ -48,10 +48,16 @@ Today it ships ten tools, converging into a few editors:
 >   and coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
 >
+> Naming a place from *coordinates* is deliberately **not** one of them: the
+> city index Trips names a deduced leg from ships with the app (see "Working
+> the itinerary out"), so the position of your photographs is never sent
+> anywhere for a name.
+>
 > A third kind of request exists only once you have connected a **Winnow**
 > instance of your own (see "Sources" under the Studio): media is fetched from
-> it, and a trip can be kept on it, under your account there. Nothing is
-> sent to a server you did not name yourself.
+> it, a trip or a project can be kept on it, and a **LUT pack's looks** are
+> fetched from it the first time a picture asks for one — all under your
+> account there. Nothing is sent to a server you did not name yourself.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -448,8 +454,8 @@ happened, is another. Trips is about the second one. Its route is still
 `#/roadtrip` — the name on screen changed, every link ever made still
 resolves.
 
-**A trip is its two dates.** Give a trip a name, a destination and the days you
-left and came back, and everything else derives from that: day 27 of 310 is a
+**A trip is its two dates.** Give a trip a name and the days you left and came
+back, and everything else derives from that: day 27 of 310 is a
 subtraction, not something you record. Dates are handled as plain calendar days
 (`YYYY-MM-DD`) and every subtraction runs in UTC, so a trip planned in one
 timezone and reviewed in another never disagrees about which day a photo
@@ -460,13 +466,19 @@ same sheet that asked for them, which says before saving what a shorter span
 does to the legs it no longer covers (trimmed, or removed when they fall
 outside it entirely). Pieces are never moved and never deleted.
 
-**The grid is the point.** `#/roadtrip` lists the trips as **cards with their
-cover** or, one toggle away, as **bands** — the trip you were on first with a
-Resume button, then one progress row per trip. A trip opens on every day of
-it. Up to a month, that is a **strip**: each day a cell of real width, the
-legs drawn right under it. Longer, it is a contribution-style grid, one column
-per week, Monday at the top, fitted to the width of the window so a year
-reads at a glance, with the legs drawn as a lane under the weeks they cover.
+**The calendar is the point.** `#/roadtrip` lists the trips as **cards with
+their cover** or, one toggle away, as **bands** — the trip you were on first
+with a Resume button, then one progress row per trip. A trip opens on every
+day of it, as a **calendar of months**: one block per calendar month the trip
+touches, seven columns Monday to Sunday, the blocks side by side where the
+window is wide enough (three to a row above 1180px, two below, one on a phone)
+and a day never narrower than a pointer can aim at. Above the blocks the
+whole trip stays in view as a **map** — a contribution-style heatmap, one
+column per week, fitted to the width — read and jumped from (one click per
+month) and never aimed at; the frame on it is where you have scrolled to.
+Under each week a **ribbon** says which leg you were on. A trip of a month or
+less skips all that: it is drawn as its own weeks with one week either side to
+situate it, and no map — four days do not need a year.
 Its job is the **holes**: with thousands of photos and a year's distance,
 what you cannot answer from memory is which days you have never told. Empty
 cells are drawn like any other, five intensity rungs separate "nothing here"
@@ -483,7 +495,9 @@ where it is named and dressed. The same three verbs also sit under a picture
 you are looking at large, in the Library's preview sheet — the moment "this one
 is worth a piece" is actually decided — and starting one there brings the
 picture across (fetching it from a connected Winnow if that is where it lives)
-and composes the new piece over it. Any row in that list opens its piece — the whole
+and composes the new piece over it. A fourth verb sits beside them, **Locate
+it**, which reads where that photograph was taken and offers the place to the
+leg of its own day (see *Working the itinerary out*, below). Any row in that list opens its piece — the whole
 row, not just the thumbnail — and a piece can be **duplicated** on the spot,
 carrying its look and its slides but neither its publication nor its Studio
 link. **Where you are is in the URL**: `#/roadtrip/australia-d1060760/2025-07-09`
@@ -509,8 +523,10 @@ rather than stopping at a fixed fraction of it — while the transport and the
 export button stay put. On a wide screen the badge holds still while its
 controls scroll beside it —
 the Studio's layout, and the reason is the same: you are watching the picture,
-not the panel. Stacked on a phone, the page scrolls as one, because a panel
-with its own scrollbar inside a scrolling page is a trap.
+not the panel. On a phone the picture and the band under it own the screen
+and nothing scrolls: the four tabs are the bottom bar, each raising its panel
+as a sheet over the picture, the band's controls are finger-sized, and the
+band keeps clear of the bar however tall the frame is.
 
 A piece is renamed in place, by typing over its title — the same gesture as a
 Studio project's name.
@@ -528,24 +544,52 @@ preview follows the drag, and the arrows nudge frame by frame.
 a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
 
-They live on a **ruler under the grid** — a video editor's timeline scaled to
-days. On a long trip the ruler details the **loupe**: a window you drag over
-the grid (its grip on top slides it, its two edges widen it), so the legs of
-two months at a time get the width a finger can grab, while the grid above
-keeps the whole year in view. Each leg is a bar: drag either edge to change when it began or ended,
+They live on a **ruler between the map and the months** — a video editor's
+timeline scaled to days. It details the **months on screen**: the one you
+have scrolled to and its two neighbours, so the legs of a quarter at a time
+get the width a pointer can grab (about nine pixels a day on a year-long
+trip) while the map above keeps the whole year in view — scroll the calendar
+and the ruler follows. Each leg is a bar: drag either edge to change when it began or ended,
 drag its middle to slide it whole, and every move snaps to a day while a pin
 follows the pointer saying the date it would land on and how long the leg
 would then be. A run of days no leg covers offers a `+` that adds one over
 exactly that run; legs that overlap on a travel day stack in a second row
-rather than hiding one another. The grid and the ruler are the same calendar
-seen twice: each day's cell wears a stripe in its leg's tint, the day you have
+rather than hiding one another. The months and the ruler are the same calendar
+seen twice: each week wears its leg's ribbon in the leg's tint, the day you have
 open is a **playhead** — click anywhere on the track to go to that day, or
 move it with the arrow keys — and **right-clicking a day** offers the edits
 that make sense there, worded with the leg they would touch: start a stage
 here (inside a leg, that cuts it in two), end "Perth → Kalbarri" here, extend
-it to here. Clicking a bar opens that leg's fields beneath the ruler and goes
-to the day it began; clicking a day a leg covers opens that leg. Nothing is
-drag-only — a focused edge, bar or playhead moves with the arrow keys.
+it to here. Clicking a bar opens that leg's fields — in a column beside the
+calendar above 1180px, with the open day, and beneath the ruler below — and
+goes to the day it began; clicking a day a leg covers opens that leg. Nothing
+is drag-only — a focused edge, bar or playhead moves with the arrow keys.
+
+**On a phone the same calendar is the whole screen.** Below 820px the grid
+this replaced gave a year-long trip a 6px cell — seven times too small for a
+finger — so the months stack one to a row, the column scrolling, and a day is
+a seventh of the width, ~47px, with nothing to invent; the map above is one
+tap per month. The ruler does not fit a phone and leaves it entirely (its job
+is done on the calendar itself, below).
+A tap on a day **selects** it and never opens anything: the **strip** above
+the bottom bar re-reads — the date, the leg, and the day's pieces as their own
+hook thumbnails, three at most, then `+N`; on a day nothing came out of, the
+strip carries **+ Tell it** instead. The strip pulls up into the **day sheet**:
+what was told, each row's actions behind one `⋯`, the leg in one row with
+*Edit ›*, and the three verbs. The bottom bar the shell draws on every tool
+screen carries the overview's own cells beside the library: **Stages** — the
+legs as a list, each with its coverage as a small barcode, the open one
+unfolding its fields, and the uncovered runs as rows with `+ cover` — and
+**Trip**, the dates-and-route sheet. A leg's dates are dragged on the
+calendar itself: **Adjust on the calendar** fades every other day, puts a
+28px grip on each end, and one cell is one day — 47px against the ruler's
+6 — with a tap moving the nearer edge and a stepper per edge under the
+calendar as the keyboard's twin; Done writes it, Cancel drops it. A toggle in
+the bar swaps the rungs for **pictures**: each told day draws the hook of its
+piece in its cell, with a count when it holds several. The choice is
+remembered by the browser, and the same toggle sits in the wide screen's bar.
+Above 820px the strip, the sheets and Adjust do not apply: the day and the
+leg are panels on the screen, and the ruler is what edits a leg.
 
 A stage lists **the places it went through, in the order you lived them**,
 as a row of chips joined by the badge's own arrow. The first is where the leg
@@ -565,10 +609,50 @@ place), or use the **optional place search**, which sends the words you type to
 OpenStreetMap's Nominatim and fills in the name, the region and the position.
 That search is **off until you turn it on**, it says exactly what it will send
 before it sends anything, and it fires on Enter or the button — never as you
-type. The trip's two ends can be set from the New trip dialog, where **From**
-and **To** replace the old free-text destination; fill them and the trip starts
-with one stage covering its whole span, so a badge can name a place from day
-one. Leave them empty and no stage is created at all.
+type. Places are only ever typed on a leg: the New trip dialog asks for the
+name and the two dates and nothing else, so a trip starts with no leg at all
+and a day outside every leg names no place rather than claiming one.
+
+**Working the itinerary out, instead of typing it.** Drawing a three-month
+trip's legs by hand is some three hundred gestures, most of them archaeology
+about where you were on a given day — so the legs can be *deduced* instead,
+and a picture can place a single day.
+
+**Deduce** (in the stages header, for any connected Winnow) asks the instance
+for **one position per day** over the trip's span — a few kilobytes for a
+hundred days; no photograph is fetched and nothing is read from your media. A
+leg is then a run of consecutive days whose position stays inside a radius of
+the run so far, and you say what that means: the radius of one halt, how many
+days make a halt rather than a stop on the way, whether a shorter run is listed
+on its own (marked, and left unticked) or folded into the halt it was on the
+way to, whether a day the instance has no position for is **covered** by the
+leg around it — nothing is invented there, a leg is a span — and, off by
+default and marked wherever it shows, whether the days of a move are guessed
+between two places. Moving any of those never asks the instance again. What
+comes back is a list of proposals, one tick each, in the same shape a re-run
+later would produce: nothing is written until you accept it, and no piece is
+ever created.
+
+**Locate it**, under a photograph you are looking at large, is the same
+question asked of one picture: it reads the position and the day out of the
+file's own EXIF (or, for a picture fetched from a Winnow, the metadata that
+instance recorded at ingest), says what it measured, and offers **one** edit —
+name the leg of that day, add the place to a leg that already has a route, or
+start a leg there when none covers it. A picture dated outside the trip, one
+with no position, and one whose position is the `0, 0` a camera writes with no
+fix are each said plainly rather than quietly used.
+
+Both name a place from a **city index that ships with the app** — GeoNames'
+`cities1000` (135 000 towns), built into `public/geo/cities.json` and fetched
+from this site the first time a name is needed, never at start-up. So naming a
+leg is **not** a third network exception: the alternative, reverse-geocoding,
+would send the coordinates of your photographs to someone else's server for a
+name, which is a far larger claim on your data than the place search's typed
+words. Nothing near enough in the index means the leg arrives with its dates
+and no place, rather than a made-up one. *The GeoNames data is used under
+[CC BY 4.0](https://creativecommons.org/licenses/by/4.0/); the attribution is
+carried inside the generated file, and `scripts/gen-gazetteer.mjs` rebuilds
+it.*
 
 **The temporal line.** Under the place, in the badge's quietest type, a line
 can say how long ago the picture was taken — **beside** the trip's name, never
@@ -648,7 +732,8 @@ server's own page.
 
 **The picture is framed where you want it.** A 3:2 photograph in a 9:16 frame
 loses its sides, and the subject is rarely in the middle: drag the picture on
-the stage to move it, the wheel (or a trackpad pinch) to zoom, and a slider or
+the stage to move it, the wheel, a trackpad pinch or two fingers to zoom it
+about the point you aim at, and a slider or
 a quarter-turn button to rotate — straightening a horizon included — and two
 buttons to **flip** it horizontally or vertically, which mirror what the frame
 shows whatever the rotation. The badge keeps first claim on a press, so grab
@@ -663,7 +748,8 @@ the same transform. Each picture of a carousel is framed on its own.
 offers grids, stacks, bentos, insets and scattered prints; the slide's own
 picture is always the first cell, and the others are filled from the Library,
 which follows whichever cell is selected. Click a cell on the stage to select
-it, drag to reframe the picture inside it, use the wheel to zoom it, and hold
+it, drag to reframe the picture inside it, the wheel or a pinch to zoom it about
+the point under your hand, and hold
 (or Alt-drag) onto another cell to swap the two. A picture can also be
 **dragged straight onto a cell** — grab any row of the Library, or a tile of
 the Winnow tab (it is fetched as it lands). As soon as a drag starts the stage
@@ -1004,20 +1090,40 @@ preview above it shows the file exactly as the export will write it, with its
 size. **Apply crop to…** and **Apply borders to…** are separate: one border
 can go on a whole roll whose crops each differ.
 
+**Which file.** A chip above the photograph says what it is developed from
+(`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the list of the
+capture's files: the proxy your Winnow made, what the camera delivered — its
+JPEG, or the render written inside a RAW — and the sensor itself, with its
+calibration rungs nested under it (*Gain*, *Gain map*, *Gain map + warp*,
+each an amount of the camera's own calibration read from the DNG, offered
+only where the file carries it). A file that is not here is fetched from its
+instance and held for the session, its weight said before the click; a DNG
+beside a JPEG in a folder is the sensor with no fetch at all. The choice is
+saved on the picture, so another device shows the same one, and the export
+follows it.
+
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
 where the browser has no folder picker). Each is decoded at its own size,
 developed under the roll's look and cropped as the stage showed it — a crop
 leaves at the picture's own density, so a small zone makes a small file, never
 one blown up to fill its aspect; the **Size** is a ceiling on the long edge and
-never upscales. For a picture that
-came from your Winnow, **Pixels** decides where its pixels come from: *Auto*
-fetches the full-size original only where the proxy could not fill the frame
-asked for, *Proxies* never fetches, *Originals* always does — and a *Delivers*
-line says, for the picture in hand, exactly what will be written
-(`Proxy 2000 px → 1080 · ×1.85 to spare`, `Original 6048 px → 1920 · ×3.15
-to spare`). A RAW original is never fetched: the render you developed is what
-leaves. Fetched originals are kept for the session only. After a run whose
+never upscales. Each picture leaves from the file you chose above the
+photograph — its RAW when you developed it on the sensor, the camera's own
+JPEG when you picked it, else where it opened, and there the full-size
+original is fetched only where the proxy could not fill the frame asked for.
+The panel says the whole run before a byte moves (`4 pictures · 1 from the
+sensor · 1 from the file chosen · 69 MB to fetch`, one line per picture behind
+*picture by picture*), and a *Delivers* line says, for the picture in hand,
+exactly what will be written (`Proxy 2000 px → 1080 · ×1.85 to spare`,
+`DJI_0101.JPG 6048 px → 1920 · ×3.15 to spare`). One switch, **Proxies only,
+for this run**, delivers everything from what is already here — a RAW base is
+set aside and the run says so — and is never remembered on the roll. A RAW
+original is reached only through the render inside it, measured first. Fetched
+originals are kept for the session only, up to a ceiling sized from your
+device (a quarter of its memory, between 256 MB and 1 GB); past it the ones you
+used least recently are let go and fetched again when a picture needs them.
+After a run whose
 pictures came from an instance, **Send N files to …** uploads them home into
 that Winnow's finals, each linked to its own capture — the same panel the
 Studio uses, and the same rule: only what you just rendered, only to the
@@ -1027,7 +1133,10 @@ instance it came from, never automatically.
 Library's preview sheet, or a day on your Winnow — a **Develop** button adds
 it to the open roll and opens it there (a picture already on the roll is
 opened, never added twice); from the rolls gallery the same button starts a
-new roll from it.
+new roll from it. That sheet also shows the capture's other files as chips —
+*Proxy*, the camera's JPEG, the render inside its DNG or ARW — fetched only
+when you click one and kept for the session; looking writes nothing, and
+pressing **Develop** while one is on screen opens the roll on that file.
 
 **Keeping it.** A roll saves as you go — with the same undo and redo as the
 Studio and Trips, over the whole roll — and one kept on a Winnow saves there
@@ -1118,6 +1227,94 @@ Batch-export graded copies (H.264 via WebCodecs). The built-in LUTs live in
 (apple/dji/sony/classic). See [`public/luts/README.md`](./public/luts/README.md)
 to add your own — just drop a `.cube` in, no code to edit.
 
+### Choosing a look
+
+Every panel that grades — the Studio's Grade tab, a Trips piece, the Develop
+workbench — offers the same two ways in: a native list grouped by family, and
+a **gallery** that shows each look *on a photograph* before you pick it, since
+reading a name off a dropdown tells you nothing about a LUT.
+
+**Where the tool has your picture open, the gallery shows it.** A band across
+the top draws the look you are aiming at on *that* photograph, with a compare
+toggle that wipes it against the original — before on the left, after on the
+right, the way Lightroom and Capture One put it. So the gesture there is aim,
+then take: the first click moves the band, and the look is yours on the second
+click, on "Use this look", or on Enter. Where no picture is open there is
+nothing to aim at and a click is the choice, as it always was.
+
+It costs one lattice — the look under your eye — and that is the point: the
+grid keeps its cheap pre-baked tiles, which is also what makes two looks
+comparable, since every tile is the same subject. The band shows the look
+*alone*, without the correction you have set on the picture. And it says the
+one thing only your own photograph can reveal: aim a conversion look at a
+picture that is not log footage and it tells you so, rather than leaving you
+to read the over-contrast as a broken look.
+
+The tiles are baked once, ahead of time, and shipped — so opening the gallery
+fetches and parses no `.cube` at all. Each look is shown on the reference its
+kind asks for: a **conversion look** (D-Log, S-Log3, Apple Log…) on a log
+frame, because a conversion LUT read on an ordinary picture comes out
+over-contrasted and looks broken through no fault of its own; everything else
+on an ordinary photograph. Both references are in `public/reference/`. If you
+want *every tile* on your own picture too — not just the band above them —
+"Tiles on my picture too" or "Preview on a photo…" puts them all on a live
+bake. That one is offered rather than assumed, because it reads a lattice per
+look and the band already answers the usual question for one.
+
+A **★** in a tile's corner builds a Favourites row at the top of the rail, and
+the same shortlist becomes the first group of "Add a look". It is kept in this
+browser, never in a trip or a project file — your shortlist is yours and does
+not travel with a document you share.
+
+### Your own looks — the vault
+
+A `.cube` you bought or made goes into a **vault**: a private library this
+browser keeps in IndexedDB, holding each look's lattice as compact binary
+rather than text.
+
+- **"Upload .cube…"** puts a single look there, under *My looks*.
+- **"Packs…"** in the gallery imports a whole purchased **pack** — pick its
+  folder and Atelier reads the author's own tree (category, camera), cleans
+  the names, lets you rename and hide what you do not shoot, and bakes each
+  look's thumbnail once. The pack appears in the rail under its own name, with
+  the author and where it came from behind an ⓘ.
+
+Two things about this are deliberate, and both are about *keeping the looks
+yours*:
+
+- **A document stores a reference, never a lattice.** A trip, project or roll
+  that uses one of your looks records which look it is — about a hundred bytes
+  — and the lattice stays in the vault. So a `.roadtrip.json` you send someone
+  does not carry the looks you paid for, and a trip does not grow by several
+  megabytes per look. Graded exports are unaffected: the picture you deliver is
+  the whole point of a licence.
+- **Nothing of a pack is ever published.** Its files are not in this
+  repository, not in the deployed site, and not in anything you export. A look
+  is never resampled either — 65³ stays 65³, exactly as its author made it.
+
+If you have connected a Winnow, a pack can be **kept on it** so your other
+devices have it too: the small index goes into your document bucket, the
+lattices into your own file store, and a device downloads a look the first
+time a picture actually asks for it — then never again. A device that does not
+hold a look says so on the layer, in its place, rather than quietly grading
+the picture as if no look had been chosen.
+
+**What it all weighs, and dropping what you will never use.** A pack of 65³
+looks is about 1.6 MB apiece — forty-odd megabytes for twenty-five, most of
+them for cameras you may not own. So "Packs…" says what every row costs: the
+vault's total, each pack's, each category's and each look's, measured in this
+browser and worked out for the instance the pack is kept on. Beside that,
+there are two different verbs and the difference matters:
+
+- **unticking** a category or a look puts it away. It leaves the pickers, its
+  bytes stay, and a grade already wearing it still renders.
+- **forgetting** a look (the bin at the end of its row) gives the bytes back,
+  here and on the instance. A grade wearing it then says the look is gone,
+  the way it does for a look this device never had; importing the folder again
+  brings it back. A look whose lattice another look also uses is dropped from
+  the pack without freeing anything, and the screen says so rather than
+  claiming a megabyte came back.
+
 ### Sources — connecting a Winnow
 
 The library's files usually come from a folder on this machine. They can also
@@ -1172,12 +1369,20 @@ project gallery and the project bar; its media folder never travels — only
 the list of clips does, so on another device the project opens and asks you
 to point it at the footage.
 
+A connected Winnow can also **keep your LUT vault** (see "Your own looks"
+under LUT Studio), which is the third thing Atelier writes to a server: a
+pack's index into the same document bucket, its lattices into your own file
+store, keyed by the file's hash so a look is stored once and never
+re-uploaded. A device fetches a look the first time a picture asks for it and
+caches it, which is what lets a phone grade offline afterwards.
+
 Plainly, what this changes about the promise above: Atelier holds no account
 and talks only to a server you named yourself, signed in with that server's own
 session — nothing runs at boot, and no credential is stored here. It **fetches**
 from it; **uploads to it** only on that one button, only what you just
-rendered; and, if you ask it to, **keeps a trip's document** on it, under your
-account there. Your media never leaves machines you own. It works when Atelier
+rendered; and, if you ask it to, **keeps a document** — a trip, a project, a
+LUT pack — on it, under your account there. Your media never leaves machines
+you own, and neither do the looks you paid for. It works when Atelier
 and the Winnow share a site (e.g. `atelier.example` and `winnow.example`) and
 the Winnow lists Atelier's origin in its `CORS_ALLOWED_ORIGINS`; a foreign
 instance would need a credential of its own, which is not built. The timeline

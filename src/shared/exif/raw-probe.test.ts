@@ -3,9 +3,14 @@ import {
   describeCompression,
   describeRaw,
   extractRawPreview,
+  previewOrientation,
   probeRaw,
+  rawSizesFrom,
   sensorIfd,
 } from './raw-probe';
+import { readExifBlock, withExifBlock } from './exif-block';
+import { buildOrientationBlock } from './exif-build';
+import { parseExif } from './exif-parser';
 
 /**
  * A hand-built little-endian TIFF, the EXIF parser's own tradition: a real
@@ -127,6 +132,89 @@ function droneDng(previewOffset = 8000, previewLength = 1200): ArrayBuffer {
   ]);
 }
 
+/**
+ * An ARW shaped like a Sony's, shot with the body turned: IFD0 states how it
+ * was held, SubIFD 0 is the sensor plane AS IT IS LAID OUT (landscape, always
+ * — a sensor does not turn), SubIFD 1 the camera's full-size render in those
+ * same axes.
+ */
+function portraitArw(
+  options: {
+    orientation?: number;
+    previewW?: number;
+    previewH?: number;
+    /** A render that states an orientation of its own, which few bodies write. */
+    previewOrientation?: number;
+    previewOffset?: number;
+    previewLength?: number;
+  } = {},
+): ArrayBuffer {
+  const {
+    orientation = 6,
+    previewW = 7008,
+    previewH = 4672,
+    previewOrientation: ownOrientation,
+    previewOffset = 8000,
+    previewLength = 1200,
+  } = options;
+  return buildTiff([
+    {
+      // IFD0: the thumbnail, and the capture's own orientation.
+      fields: [
+        { tag: 254, type: LONG, values: [1] },
+        { tag: 256, type: SHORT, values: [160] },
+        { tag: 257, type: SHORT, values: [120] },
+        { tag: 259, type: SHORT, values: [7] },
+        { tag: 262, type: SHORT, values: [6] },
+        ...(orientation ? [{ tag: 274, type: SHORT, values: [orientation] }] : []),
+        { tag: 513, type: LONG, values: [6000] },
+        { tag: 514, type: LONG, values: [400] },
+      ],
+      subIfdIndexes: [1, 2],
+    },
+    {
+      // SubIFD 0: the sensor plane, uncompressed, CFA.
+      fields: [
+        { tag: 254, type: LONG, values: [0] },
+        { tag: 256, type: SHORT, values: [7040] },
+        { tag: 257, type: SHORT, values: [4688] },
+        { tag: 259, type: SHORT, values: [1] },
+        { tag: 262, type: SHORT, values: [32803] },
+        { tag: 273, type: LONG, values: [20000] },
+        { tag: 279, type: LONG, values: [3000] },
+      ],
+    },
+    {
+      // SubIFD 1: the camera's full-size render.
+      fields: [
+        { tag: 254, type: LONG, values: [1] },
+        { tag: 256, type: SHORT, values: [previewW] },
+        { tag: 257, type: SHORT, values: [previewH] },
+        { tag: 259, type: SHORT, values: [7] },
+        { tag: 262, type: SHORT, values: [6] },
+        ...(ownOrientation ? [{ tag: 274, type: SHORT, values: [ownOrientation] }] : []),
+        { tag: 513, type: LONG, values: [previewOffset] },
+        { tag: 514, type: LONG, values: [previewLength] },
+      ],
+    },
+  ]);
+}
+
+/** A real, minimal JPEG — what a splice needs, where a byte run would be refused. */
+function previewJpeg(pixels = [0x01, 0x02]): Uint8Array<ArrayBuffer> {
+  return new Uint8Array([
+    0xff, 0xd8, 0xff, 0xdb, 0x00, 0x04, 0x00, 0x00, 0xff, 0xda, 0x00, 0x02, ...pixels, 0xff, 0xd9,
+  ]);
+}
+
+/** A blob of `size` holding `buffer`'s IFDs, with `picture` laid at `at`. */
+function fileWith(buffer: ArrayBuffer, size: number, at: number, picture: Uint8Array): Blob {
+  const bytes = new Uint8Array(size);
+  bytes.set(new Uint8Array(buffer).slice(0, Math.min(buffer.byteLength, size)));
+  bytes.set(picture, at);
+  return new Blob([bytes]);
+}
+
 describe('probeRaw', () => {
   it('refuses anything that is not a TIFF', () => {
     expect(probeRaw(new ArrayBuffer(4))).toBeNull();
@@ -194,6 +282,50 @@ describe('probeRaw', () => {
   });
 });
 
+describe('the calibration, read through the probe', () => {
+  it('reads OpcodeList3 out of a DNG head and says what it asks for', () => {
+    // A minimal TIFF whose IFD0 carries tag 51022 (OpcodeList3) with one
+    // GainMap: 1 plane, a 2x2 grid whose corner asks for 5.93x.
+    const gains = [5.93, 1, 1, 1];
+    const params = new ArrayBuffer(76 + gains.length * 4);
+    const pv = new DataView(params);
+    [0, 0, 4536, 8064, 0, 3, 1, 1, 2, 2].forEach((n, i) => pv.setUint32(i * 4, n, false));
+    pv.setFloat64(40, 1, false);
+    pv.setFloat64(48, 1, false);
+    pv.setFloat64(56, 0, false);
+    pv.setFloat64(64, 0, false);
+    pv.setUint32(72, 1, false);
+    gains.forEach((g, i) => pv.setFloat32(76 + i * 4, g, false));
+
+    const list = new ArrayBuffer(4 + 16 + params.byteLength);
+    const lv = new DataView(list);
+    lv.setUint32(0, 1, false);
+    lv.setUint32(4, 9, false);
+    lv.setUint32(16, params.byteLength, false);
+    new Uint8Array(list).set(new Uint8Array(params), 20);
+
+    const OP_AT = 256;
+    const buf = new ArrayBuffer(OP_AT + list.byteLength);
+    const v = new DataView(buf);
+    v.setUint16(0, 0x4949, false);
+    v.setUint16(2, 42, true);
+    v.setUint32(4, 8, true);
+    v.setUint16(8, 1, true); // one entry
+    v.setUint16(10, 51022, true);
+    v.setUint16(12, 7, true); // UNDEFINED
+    v.setUint32(14, list.byteLength, true);
+    v.setUint32(18, OP_AT, true);
+    v.setUint32(22, 0, true);
+    new Uint8Array(buf).set(new Uint8Array(list), OP_AT);
+
+    const probe = probeRaw(buf);
+    expect(probe?.opcodes).toEqual([51022]);
+    expect(probe?.calibration?.gainMaps).toHaveLength(1);
+    expect(probe?.calibration?.gainMaps[0].gains[0]).toBeCloseTo(5.93, 2);
+    expect(describeRaw(probe!)).toContain('gain map 2×2 ×1 · up to 5.93×');
+  });
+});
+
 describe('describeCompression and describeRaw', () => {
   it('names the codes that decide the decoder question', () => {
     expect(describeCompression(52546)).toBe('JPEG XL');
@@ -239,5 +371,113 @@ describe('extractRawPreview', () => {
 
   it('answers null for a file that is not a RAW at all', async () => {
     expect(await extractRawPreview(new Blob([new Uint8Array(64)]))).toBeNull();
+  });
+});
+
+describe('the orientation a RAW states', () => {
+  it('reads IFD0’s tag, and answers null for a file that says nothing', () => {
+    expect(probeRaw(portraitArw())!.orientation).toBe(6);
+    expect(probeRaw(droneDng())!.orientation).toBeNull();
+  });
+
+  it('gives the camera’s turn to a render nobody has turned', () => {
+    expect(previewOrientation(probeRaw(portraitArw())!)).toBe(6);
+  });
+
+  it('withdraws it where there is nothing to apply', () => {
+    expect(previewOrientation(probeRaw(droneDng())!)).toBe(1);
+    expect(previewOrientation(probeRaw(portraitArw({ orientation: 1 }))!)).toBe(1);
+  });
+
+  it('withdraws it from a render the camera ALREADY turned', () => {
+    // Its frame is the transpose of the sensor plane's, so it has been turned
+    // once: turning it again would lay the photograph down.
+    const probe = probeRaw(portraitArw({ previewW: 4672, previewH: 7008 }))!;
+    expect(probe.orientation).toBe(6);
+    expect(previewOrientation(probe)).toBe(1);
+  });
+
+  it('asks the shape only of the QUARTER turns', () => {
+    // A half turn leaves the frame as it was, so a landscape render under a
+    // landscape sensor says nothing about whether it has been turned — and
+    // withdrawing on shape there would drop a correction the file asked for.
+    expect(previewOrientation(probeRaw(portraitArw({ orientation: 3 }))!)).toBe(3);
+  });
+
+  it('lets a render that states its own orientation answer for itself', () => {
+    const probe = probeRaw(portraitArw({ orientation: 6, previewOrientation: 8 }))!;
+    expect(previewOrientation(probe)).toBe(8);
+  });
+});
+
+describe('extractRawPreview gives the slice its orientation', () => {
+  it('splices a block in, leaving the picture’s own bytes untouched', async () => {
+    const picture = previewJpeg();
+    const blob = fileWith(portraitArw({ previewLength: picture.length }), 60_000, 8000, picture);
+    const out = await extractRawPreview(blob);
+    const bytes = new Uint8Array(await out!.arrayBuffer());
+    const block = readExifBlock(bytes);
+    expect(block).not.toBeNull();
+    expect(parseExif(block!.buffer).orientation).toBe(6);
+    // A header was ADDED and nothing else: past the segment, byte for byte
+    // what the camera wrote.
+    expect(bytes.length).toBe(picture.length + 36);
+    expect([...bytes.subarray(38)]).toEqual([...picture.subarray(2)]);
+  });
+
+  it('hands back the byte-exact lazy slice when nothing needs turning', async () => {
+    const picture = previewJpeg();
+    const blob = fileWith(droneDng(8000, picture.length), 60_000, 8000, picture);
+    const out = await extractRawPreview(blob);
+    expect(out!.size).toBe(picture.length);
+    expect(readExifBlock(new Uint8Array(await out!.arrayBuffer()))).toBeNull();
+  });
+
+  it('never inserts ahead of a render that carries its own block', async () => {
+    const own = withExifBlock(previewJpeg(), buildOrientationBlock(8));
+    const blob = fileWith(portraitArw({ previewLength: own.length }), 60_000, 8000, own);
+    const out = await extractRawPreview(blob);
+    expect(out!.size).toBe(own.length);
+    const read = readExifBlock(new Uint8Array(await out!.arrayBuffer()));
+    expect(parseExif(read!.buffer).orientation).toBe(8);
+  });
+
+  it('costs the picture nothing when the bytes are not a JPEG at all', async () => {
+    // A pointer into something that will not splice must still deliver the
+    // render: the turn is worth less than the photograph.
+    const run = new Uint8Array(1200).fill(0xab);
+    const blob = fileWith(portraitArw(), 60_000, 8000, run);
+    const out = await extractRawPreview(blob);
+    expect(out!.size).toBe(1200);
+    expect(new Uint8Array(await out!.slice(0, 1).arrayBuffer())[0]).toBe(0xab);
+  });
+});
+
+describe('rawSizesFrom — the pixels as they are SHOWN', () => {
+  it('turns both sizes for a capture the body was turned for', () => {
+    const sizes = rawSizesFrom(portraitArw());
+    expect(sizes.sensor).toEqual({ width: 4688, height: 7040 });
+    expect(sizes.render).toEqual({ width: 4672, height: 7008 });
+    expect(sizes.orientation).toBe(6);
+  });
+
+  it('leaves them exactly as stated where nothing turns', () => {
+    expect(rawSizesFrom(droneDng()).sensor).toEqual({ width: 8064, height: 6048 });
+    expect(rawSizesFrom(droneDng()).orientation).toBeNull();
+    expect(rawSizesFrom(portraitArw({ orientation: 1 })).render).toEqual({ width: 7008, height: 4672 });
+    // A half turn and a mirror keep the frame: only 5 to 8 swap the axes.
+    expect(rawSizesFrom(portraitArw({ orientation: 3 })).render).toEqual({ width: 7008, height: 4672 });
+    expect(rawSizesFrom(portraitArw({ orientation: 2 })).sensor).toEqual({ width: 7040, height: 4688 });
+  });
+
+  it('turns the sensor without turning a render that was turned already', () => {
+    const sizes = rawSizesFrom(portraitArw({ previewW: 4672, previewH: 7008 }));
+    expect(sizes.sensor).toEqual({ width: 4688, height: 7040 });
+    expect(sizes.render).toEqual({ width: 4672, height: 7008 });
+  });
+
+  it('leaves sensorIfd on the STORED plane — the two views answer different questions', () => {
+    expect(sensorIfd(probeRaw(portraitArw())!)!.width).toBe(7040);
+    expect(sensorIfd(probeRaw(portraitArw())!)!.height).toBe(4688);
   });
 });

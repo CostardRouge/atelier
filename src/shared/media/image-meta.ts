@@ -25,6 +25,37 @@ export interface ImageMeta {
   imageType: string;
 }
 
+/** The cover's long edge, in pixels — a list row, never a preview. */
+const COVER_EDGE = 200;
+
+/**
+ * The picture's UPRIGHT size, from its header alone. An `<img>` fires `load`
+ * once the dimensions are known and decodes the pixels only when it is
+ * drawn, so this costs the header's bytes and no bitmap — where
+ * `createImageBitmap` at full size costs 96 MB for a 24-megapixel JPEG
+ * before a 200 px cover is cut from it. `naturalWidth` honours the EXIF
+ * orientation (`image-orientation: from-image` is the default), which is
+ * what `decodePhoto` decodes to: the size listed must be the one the export
+ * cuts from, or a phone portrait is listed sideways.
+ */
+function readImageSize(file: File): Promise<{ width: number; height: number }> {
+  return new Promise((resolve, reject) => {
+    const url = URL.createObjectURL(file);
+    const img = new Image();
+    const done = () => URL.revokeObjectURL(url);
+    img.onload = () => {
+      done();
+      if (!img.naturalWidth) reject(new Error('no size'));
+      else resolve({ width: img.naturalWidth, height: img.naturalHeight });
+    };
+    img.onerror = () => {
+      done();
+      reject(new Error('undecodable'));
+    };
+    img.src = url;
+  });
+}
+
 /**
  * Read an image's dimensions and build a cover thumbnail. Never rejects: an
  * undecodable file (RAW, or a format the browser lacks) resolves with just its
@@ -32,15 +63,22 @@ export interface ImageMeta {
  */
 export async function loadImageMeta(file: File): Promise<ImageMeta> {
   const imageType = imageTypeLabel(file.name);
+  let bitmap: ImageBitmap | null = null;
   try {
-    // Upright, as `decodePhoto` decodes it: the width and height shown here
-    // must be the ones the export will cut from, or a phone portrait is
-    // listed sideways.
-    const bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
-    const { width, height } = bitmap;
-    const scale = Math.min(1, 200 / Math.max(1, width));
+    const { width, height } = await readImageSize(file);
+    // Decoded AT the cover's size: for a JPEG the browser scales inside the
+    // decoder rather than decoding the whole picture and shrinking it, so a
+    // scroll over a folder of big stills no longer holds a full-size bitmap
+    // per row. Upright, as above.
+    const scale = Math.min(1, COVER_EDGE / Math.max(1, width));
     const cw = Math.max(1, Math.round(width * scale));
     const ch = Math.max(1, Math.round(height * scale));
+    bitmap = await createImageBitmap(file, {
+      imageOrientation: 'from-image',
+      resizeWidth: cw,
+      resizeHeight: ch,
+      resizeQuality: 'medium',
+    });
     const canvas = document.createElement('canvas');
     canvas.width = cw;
     canvas.height = ch;
@@ -56,10 +94,13 @@ export async function loadImageMeta(file: File): Promise<ImageMeta> {
         ),
       );
     }
-    bitmap.close?.();
     return { width, height, thumbUrl, imageType };
   } catch {
     // RAW / HEIC / anything the browser can't decode — type only.
     return { imageType };
+  } finally {
+    // On every path: a bitmap left open on the failure path stayed for
+    // the session.
+    bitmap?.close?.();
   }
 }

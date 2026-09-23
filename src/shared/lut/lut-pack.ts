@@ -46,8 +46,23 @@ export interface PackLook {
   lattice?: number;
   /** Bytes of the source `.cube`. */
   bytes?: number;
-  /** SHA-256 of the source file, lowercase hex — the vault's and file store's key. */
+  /** SHA-256 of the source file, lowercase hex — the vault's key and a reference's identity. */
   hash?: string;
+  /**
+   * SHA-256 of the ENCODED lattice (`pack-codec.ts`), lowercase hex — the file
+   * store's key, which is a different number from `hash`.
+   *
+   * The instance's bucket is content-addressed on the bytes it is GIVEN: its
+   * `PUT` hashes the body and refuses the pair when it does not equal the path
+   * (`docs/lut-packs.md` §4.4). What travels is the 16-bit lattice, not the
+   * `.cube` text `hash` is taken from, so keying the upload on `hash` made
+   * every push answer *400 — the body does not hash to that id*.
+   *
+   * Measured from the bytes as they are sent (`pushPack`) and written into the
+   * index that is pushed beside them, so another device knows what to ask for;
+   * absent on a look this browser has never pushed.
+   */
+  blob?: string;
   /**
    * The look baked onto its family's reference at import, as a data URL
    * (`pack-thumbs.ts`): ~4 KB, so the picker draws 25 purchased looks without
@@ -160,6 +175,7 @@ function readLook(raw: Record<string, unknown>): PackLook {
     ...(lattice ? { lattice } : {}),
     ...(bytes ? { bytes } : {}),
     ...(typeof raw.hash === 'string' && raw.hash ? { hash: raw.hash } : {}),
+    ...(typeof raw.blob === 'string' && raw.blob ? { blob: raw.blob } : {}),
     // A data URL and nothing else: a stored index is untrusted input, and an
     // arbitrary string here would go straight into an <img src>.
     ...(typeof raw.thumb === 'string' && raw.thumb.startsWith('data:image/')
@@ -327,6 +343,58 @@ export function slug(raw: string): string {
  */
 export function familyFor(categoryName: string): PackFamily {
   return /conversion|one.?click|log|convert/i.test(categoryName) ? 'log' : 'rec709';
+}
+
+/**
+ * Log formats and conversion words as they appear INSIDE a look's own name,
+ * once every separator is gone (`Apple-Log-2-Rec709` → `applelog2rec709`).
+ * Matching without word boundaries is deliberate: a pack writes
+ * `SGamut3CineSLog3_To_Cine+709` as one run, so there is no boundary in front
+ * of `slog` to anchor to.
+ */
+const LOG_IN_NAME: readonly string[] = [
+  'dlog',
+  'slog',
+  'nlog',
+  'vlog',
+  'clog',
+  'flog',
+  'ilog',
+  'hlog',
+  'blog',
+  'logc',
+  'applelog',
+  'sgamut',
+  'sgammut',
+  'conversion',
+  'convert',
+  'torec709',
+  '2rec709',
+  'tocine709',
+  'tolc709',
+];
+
+/**
+ * Which reference a look previews on when nothing but its NAME says what it
+ * expects — an uploaded `.cube` (there is no category above it) and a
+ * built-in (its folder is a brand, not a category).
+ *
+ * The stake is `docs/lut-packs.md` §7's log-input trap: a conversion LUT read
+ * on a display-referred picture comes out over-contrasted and over-saturated,
+ * which reads as a broken look rather than as the wrong reference. So a name
+ * that says it converts log footage previews on the D-Log M frame, and
+ * everything else on the Rec.709 one.
+ *
+ * It is a HEURISTIC over a file name and is documented as one: the cost of
+ * being wrong is one thumbnail read on the wrong picture, never a wrong
+ * render — a look's own lattice is untouched either way.
+ */
+export function familyForLookName(name: string): PackFamily {
+  const tight = name.replace(/\.cube$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, '');
+  if (LOG_IN_NAME.some((token) => tight.includes(token))) return 'log';
+  // A standalone word, for a name that spells it out: `APPLE_APPLE LOG.cube`.
+  const spaced = name.replace(/\.cube$/i, '').toLowerCase().replace(/[^a-z0-9]+/g, ' ');
+  return / log /.test(` ${spaced} `) ? 'log' : 'rec709';
 }
 
 /**
@@ -527,4 +595,83 @@ export function looksUnder(index: LutPackIndex, nodeId: string): PackLook[] {
   return visibleLooks(index).filter(
     (l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`),
   );
+}
+
+/**
+ * The pack without those looks — what forgetting one writes back.
+ *
+ * Three things go with the look, and each of them reads as a bug if it stays:
+ * a category left holding nothing would show in the picker's rail as a folder
+ * whose looks vanished; a `hidden` entry naming a look that no longer exists
+ * would accumulate forever in a list nobody can see to clean; and a node kept
+ * only because a CHILD of it still has looks must survive, which is why the
+ * test is the branch and not the node's own looks.
+ *
+ * Pure: it returns a new index and touches nothing. Freeing the bytes those
+ * looks named is a separate question with its own answer (`pack-weight.ts`'s
+ * `freedHashes`), because the bytes may be another look's too.
+ */
+export function withoutLooks(index: LutPackIndex, lookIds: readonly string[]): LutPackIndex {
+  const doomed = new Set(lookIds);
+  const looks = index.looks.filter((l) => !doomed.has(l.id));
+  const holds = (nodeId: string) =>
+    looks.some((l) => l.node === nodeId || l.node.startsWith(`${nodeId}/`));
+  const prune = (nodes: readonly PackNode[]): PackNode[] =>
+    nodes
+      .filter((n) => holds(n.id))
+      .map((n) => {
+        const children = prune(n.children ?? []);
+        return {
+          id: n.id,
+          label: n.label,
+          ...(n.hint ? { hint: n.hint } : {}),
+          ...(children.length ? { children } : {}),
+        };
+      });
+  const tree = prune(index.tree);
+  const nodeIds = new Set(flattenNodes(tree).map(({ node }) => node.id));
+  const lookIdSet = new Set(looks.map((l) => l.id));
+  return {
+    ...index,
+    tree,
+    looks,
+    hidden: index.hidden.filter((h) => nodeIds.has(h) || lookIdSet.has(h)),
+  };
+}
+
+/** A row of a pack listed in full: one of its nodes, or one of its looks. */
+export type PackEntry =
+  | { kind: 'node'; node: PackNode; depth: number }
+  | { kind: 'look'; look: PackLook; depth: number };
+
+/**
+ * Every node AND every look of a pack, flattened in the order a manager lists
+ * them: the looks at the pack's root first, then each node followed by its
+ * own looks one level in.
+ *
+ * `flattenNodes` is the rail's view — categories alone, because a rail picks
+ * a family and a grid draws its looks. This is the other one, for the screen
+ * that must name a single look to weigh it or forget it. Hidden looks are
+ * INCLUDED: putting a look away and reclaiming its bytes are different
+ * gestures (`docs/lut-packs.md` §6), and a manager that could not show a
+ * hidden look could never offer to forget one.
+ *
+ * A look whose `node` names nothing in the tree is listed at the root rather
+ * than dropped: an index is stored input, and a look that exists must be
+ * reachable by the screen that can delete it.
+ */
+export function flattenPack(index: LutPackIndex): PackEntry[] {
+  const out: PackEntry[] = [];
+  const listed = new Set<string>();
+  const take = (look: PackLook, depth: number) => {
+    listed.add(look.id);
+    out.push({ kind: 'look', look, depth });
+  };
+  for (const look of index.looks) if (!look.node) take(look, 0);
+  for (const { node, depth } of flattenNodes(index.tree)) {
+    out.push({ kind: 'node', node, depth });
+    for (const look of index.looks) if (look.node === node.id) take(look, depth + 1);
+  }
+  for (const look of index.looks) if (!listed.has(look.id)) take(look, 0);
+  return out;
 }

@@ -24,6 +24,15 @@ export interface AssetParts {
   video?: File;
   srt?: File;
   image?: File;
+  /**
+   * The capture's OTHER image files — the ones that did not take the `image`
+   * slot: the `.DNG` beside a DJI's `.JPG`, the `.HIF` beside a Sony's `.ARW`.
+   * Kept, since 2026-09-21, because they are the capture's renditions
+   * (`media/renditions.ts`) and a folder is the only place a card-only
+   * workflow can find them. In listing order; a tool that wants ONE picture
+   * keeps reading `image` and never these.
+   */
+  siblings?: File[];
 }
 
 export interface Asset {
@@ -40,15 +49,34 @@ export interface Asset {
 type PartKind = 'video' | 'srt' | 'image' | 'other';
 
 const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm'];
-/** Formats a browser can normally decode and draw. */
+/**
+ * Formats a browser can normally decode and draw — `heic`/`heif`/`hif` being
+ * the honest exception the list has always carried: only WebKit decodes them,
+ * and a source's proxy is what every other browser draws instead. `hif` is
+ * Sony's and Canon's spelling of the same thing (an A7C II shoots `.HIF`
+ * beside its `.ARW`), so leaving it out classified those stills as junk and
+ * dropped them at the library's door.
+ */
 const ENCODED_IMAGE_EXTENSIONS = [
-  'jpg', 'jpeg', 'png', 'heic', 'heif', 'webp', 'tif', 'tiff', 'avif', 'gif',
+  'jpg', 'jpeg', 'png', 'heic', 'heif', 'hif', 'webp', 'tif', 'tiff', 'avif', 'gif',
 ];
 /** Camera RAW — handles are kept even though the browser can't decode them. */
 const RAW_EXTENSIONS = [
   'raf', 'arw', 'cr2', 'cr3', 'nef', 'dng', 'orf', 'rw2', 'raw', 'srw', 'pef',
 ];
 const IMAGE_EXTENSIONS = [...ENCODED_IMAGE_EXTENSIONS, ...RAW_EXTENSIONS];
+
+/**
+ * The narrower list inside `ENCODED_IMAGE_EXTENSIONS`: what a browser really
+ * draws ON ITS OWN, in every browser. HEIF (`.heic`/`.heif`/`.hif`) and TIFF
+ * are pictures WebKit alone decodes, so they are recognised as images and
+ * never counted on to DRAW one.
+ *
+ * `bmp` is here and not above on purpose: nobody shoots one, but an original
+ * may be one, and this list is also what says an export can deliver from a
+ * file rather than from the render (`roll-export.ts`).
+ */
+const DRAWABLE_IMAGE_EXTENSIONS = ['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp'];
 
 /** Split a filename into `{ base, ext }`; ext is lowercased, no leading dot. */
 function splitName(name: string): { base: string; ext: string } {
@@ -71,6 +99,26 @@ export function isRawImage(name: string): boolean {
   return RAW_EXTENSIONS.includes(splitName(name).ext);
 }
 
+/** True where any browser draws this file without a decoder of our own. */
+export function isDrawableImage(name: string): boolean {
+  return DRAWABLE_IMAGE_EXTENSIONS.includes(splitName(name).ext);
+}
+
+/**
+ * Which file of one capture fills the image slot, when several could.
+ *
+ * Not "the one that is not a RAW": a Sony shoots `.ARW` + `.HIF`, and the HEIF
+ * is the half MOST browsers cannot draw at all, while the RAW draws through
+ * the render its camera wrote inside it (`exif/raw-probe.ts`). Ranking rather
+ * than yielding is also what makes the answer independent of the order the
+ * directory listed the two files in.
+ */
+function imageRank(name: string): number {
+  if (isDrawableImage(name)) return 2;
+  if (isRawImage(name)) return 1;
+  return 0;
+}
+
 /** Classify a file by extension into the part slot it fills. */
 export function classifyPart(name: string): PartKind {
   const { ext } = splitName(name);
@@ -89,12 +137,13 @@ function kindOf(parts: AssetParts): AssetKind {
   return 'other';
 }
 
+/** Every file of an asset, the siblings included — what leaves when it does. */
+export function assetFiles(parts: AssetParts): File[] {
+  return [parts.video, parts.srt, parts.image, ...(parts.siblings ?? [])].filter((f): f is File => !!f);
+}
+
 function sizeOf(parts: AssetParts): number {
-  return (
-    (parts.video?.size ?? 0) +
-    (parts.srt?.size ?? 0) +
-    (parts.image?.size ?? 0)
-  );
+  return assetFiles(parts).reduce((n, f) => n + f.size, 0);
 }
 
 /**
@@ -102,7 +151,8 @@ function sizeOf(parts: AssetParts): number {
  *
  * - Recognised videos, SRTs and images fill an asset's parts; anything else
  *   (`.LRF` proxies, `.THM`, hidden dotfiles) is ignored.
- * - First file to claim a slot wins, so the result is deterministic.
+ * - First file to claim a slot wins, so the result is deterministic. An image
+ *   that loses the slot is kept in `siblings` rather than dropped.
  * - Sorted by base name for stable ordering.
  */
 export function buildAssets(files: File[]): Asset[] {
@@ -126,14 +176,20 @@ export function buildAssets(files: File[]): Asset[] {
     if (part === 'video' && !group.parts.video) group.parts.video = file;
     else if (part === 'srt' && !group.parts.srt) group.parts.srt = file;
     else if (part === 'image') {
-      // First to claim the slot wins — except that a RAW yields to its own
-      // sidecar JPEG. A `IMG_8801.RAF` + `IMG_8801.JPG` pair is one photo, and
-      // the half the browser can actually decode is the one every tool wants
-      // to show, grade and export; which of the two the directory listed first
-      // must not decide that.
+      // First to claim the slot wins among equals — but a file the browser can
+      // really DRAW always outranks one it cannot. A `IMG_8801.RAF` +
+      // `IMG_8801.JPG` pair is one photo and the JPEG is the half every tool
+      // wants to show, grade and export; a `DSC00123.ARW` + `DSC00123.HIF`
+      // pair is one photo too, and there the RAW is the better half, since
+      // only WebKit draws a HEIF while the RAW draws through its own render.
       const current = group.parts.image;
-      if (!current || (isRawImage(current.name) && !isRawImage(name))) {
+      if (!current) {
         group.parts.image = file;
+      } else if (imageRank(name) > imageRank(current.name)) {
+        group.parts.image = file;
+        (group.parts.siblings ??= []).push(current);
+      } else {
+        (group.parts.siblings ??= []).push(file);
       }
     }
   }

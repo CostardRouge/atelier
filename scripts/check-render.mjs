@@ -718,6 +718,400 @@ const out = await page.evaluate(async () => {
     bitmap.close();
   }
 
+
+  // --- the gain map: the camera's own shading, against gain-map.ts ---------
+  //
+  // A gain grid is a function of WHERE, so like the keystone and the repair it
+  // is checked from a canvas AND an ImageBitmap: the two hand the shader
+  // opposite y conventions, and a corner lifted 2.5 stops on the WRONG corner
+  // is the worst outcome of all — it looks like a correction. The gains are
+  // the DJI's own, 5.93 / 5.06 / 4.97 at one corner against 1.00 at the far
+  // one, so a plane read out of order shows up as a colour cast.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const gm = await import('/atelier/src/shared/render/gain-map.ts');
+    const { makeGainMapPass } = await import('/atelier/src/shared/render/gain-map-pass.ts');
+    const GW = 96, GH = 64;
+    // Mid grey everywhere, so every output code IS the gain at that point.
+    const gc = document.createElement('canvas'); gc.width = GW; gc.height = GH;
+    const gg = gc.getContext('2d');
+    gg.fillStyle = 'rgb(128,128,128)';
+    gg.fillRect(0, 0, GW, GH);
+    const maps = [{
+      rect: { top: 0, left: 0, bottom: GH, right: GW },
+      plane: 0, planes: 3, rows: 3, cols: 3,
+      originV: 0, originH: 0, spacingV: 0.5, spacingH: 0.5, mapPlanes: 3,
+      gains: new Float32Array([
+        5.93, 5.06, 4.97,  2.4, 2.2, 2.1,  4.0, 3.6, 3.4,
+        2.0, 1.9, 1.8,     1.0, 1.0, 1.0,  1.6, 1.5, 1.4,
+        3.0, 2.8, 2.7,     1.5, 1.4, 1.3,  1.0, 1.0, 1.0,
+      ]),
+    }];
+    const field = gm.gainFieldFrom(maps, GW, GH);
+    const bitmap = await createImageBitmap(gc);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(GW, GH);
+      graph.render(source, [makeGainMapPass(field)]);
+      const o = document.createElement('canvas'); o.width = GW; o.height = GH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, GW, GH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 1; y < GH - 1; y += 3) for (let x = 1; x < GW - 1; x += 5) probes.push([x, y]);
+    const compare = (gpu) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        const g = gm.gainAt(field, (x + 0.5) / GW, (y + 0.5) / GH);
+        for (let c = 0; c < 3; c++) {
+          const want = Math.round(Math.max(0, Math.min(1, gm.gainEncoded(128 / 255, g[c]))) * 255);
+          worst = Math.max(worst, Math.abs(gpu[(y * GW + x) * 4 + c] - want));
+        }
+      }
+      return worst;
+    };
+    const canvasOut = through(gc);
+    results.gainMap = {
+      canvas: compare(canvasOut),
+      bitmap: compare(through(bitmap)),
+      // The corner the file asks 5.93x for must be the BRIGHT one, and the far
+      // corner untouched: a flipped grid passes a per-pixel comparison against
+      // a flipped twin, so the two corners are read as absolute facts too.
+      lifted: canvasOut[(1 * GW + 1) * 4],
+      untouched: canvasOut[((GH - 2) * GW + (GW - 2)) * 4],
+      flat: makeGainMapPass(gm.gainFieldFrom([{ ...maps[0], gains: new Float32Array(27).fill(1) }], GW, GH)) === null,
+    };
+    bitmap.close();
+  }
+
+
+  // --- the camera warp: WarpRectilinear against camera-warp.ts -------------
+  //
+  // NOT radial about the frame's centre — the optical centre is the file's —
+  // so it asks WHERE a pixel is, and both source kinds must land it in the
+  // same place. The picture is a grid of hard squares so a warp that moved
+  // nothing, or moved the wrong way, cannot hide in a smooth ramp.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const cw = await import('/atelier/src/shared/render/camera-warp.ts');
+    const { makeCameraWarpPass } = await import('/atelier/src/shared/render/camera-warp-pass.ts');
+    const VW = 120, VH = 80;
+    const vc = document.createElement('canvas'); vc.width = VW; vc.height = VH;
+    const vg = vc.getContext('2d');
+    for (let y = 0; y < VH; y++) for (let x = 0; x < VW; x++) {
+      const on = ((x / 10 | 0) + (y / 10 | 0)) % 2 === 0;
+      const r = on ? 220 : 40, g = on ? 60 : 200, b = Math.round(20 + (x / VW) * 200);
+      vg.fillStyle = `rgb(${r},${g},${b})`;
+      vg.fillRect(x, y, 1, 1);
+    }
+    const src = vg.getImageData(0, 0, VW, VH).data;
+    // The DJI's own shape (a magnification, the planes a hair apart), plus an
+    // OFF-CENTRE optical centre and real k1/k2, which is what makes the
+    // normalising radius observable at all.
+    const warp = {
+      planes: [
+        { radial: [1.0495, 0.012, -0.004, 0.001], tangential: [0.0005, -0.0004] },
+        { radial: [1.0493, 0.012, -0.004, 0.001], tangential: [0.0005, -0.0004] },
+        { radial: [1.0491, 0.012, -0.004, 0.001], tangential: [0.0005, -0.0004] },
+      ],
+      centerH: 0.47,
+      centerV: 0.52,
+    };
+    const bitmap = await createImageBitmap(vc);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(VW, VH);
+      graph.render(source, [makeCameraWarpPass(warp, VW, VH)]);
+      const o = document.createElement('canvas'); o.width = VW; o.height = VH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, VW, VH).data;
+      graph.dispose();
+      return d;
+    };
+    // The pure twin samples the source bilinearly exactly as the GPU does.
+    const pick = (u, v, c) => {
+      const x = u * VW - 0.5, y = v * VH - 0.5;
+      const x0 = Math.floor(x), y0 = Math.floor(y);
+      const fx = x - x0, fy = y - y0;
+      const at = (xx, yy) => {
+        const cx = Math.min(VW - 1, Math.max(0, xx)), cy = Math.min(VH - 1, Math.max(0, yy));
+        return src[(cy * VW + cx) * 4 + c];
+      };
+      return (at(x0, y0) * (1 - fx) + at(x0 + 1, y0) * fx) * (1 - fy) +
+             (at(x0, y0 + 1) * (1 - fx) + at(x0 + 1, y0 + 1) * fx) * fy;
+    };
+    // Well inside, so the pass's own refusal at the edge is not what is measured.
+    const probes = [];
+    for (let y = 10; y < VH - 10; y += 3) for (let x = 10; x < VW - 10; x += 4) probes.push([x, y]);
+    const compare = (gpu) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        for (let c = 0; c < 3; c++) {
+          const [u, v] = cw.warpSourceUv(warp, c, (x + 0.5) / VW, (y + 0.5) / VH, VW, VH);
+          worst = Math.max(worst, Math.abs(gpu[(y * VW + x) * 4 + c] - Math.round(pick(u, v, c))));
+        }
+      }
+      return worst;
+    };
+    const warped = through(vc);
+    let moved = 0;
+    for (const [x, y] of probes) moved = Math.max(moved, Math.abs(warped[(y * VW + x) * 4] - src[(y * VW + x) * 4]));
+    results.cameraWarp = {
+      canvas: compare(warped),
+      bitmap: compare(through(bitmap)),
+      moved,
+      identity: makeCameraWarpPass(
+        { planes: [{ radial: [1, 0, 0, 0], tangential: [0, 0] }], centerH: 0.5, centerV: 0.5 },
+        VW,
+        VH,
+      ) === null,
+    };
+    bitmap.close();
+  }
+
+  // --- the FilmNode: grain and halation against the pure twins -------------
+  //
+  // The node is the one place in the graph that renders buffers of its OWN
+  // (the halo, at a size the radius alone decides), and the one whose result
+  // must survive a resample that happens after the graph. Neither is visible
+  // to a unit test: a wrong noise scale, a blur run on one axis twice, a halo
+  // read upside down all come out as a plausible picture.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeCubePass } = await import('/atelier/src/shared/render/cube-pass.ts');
+    const { makeFilmPass } = await import('/atelier/src/shared/render/film-pass.ts');
+    const tx = await import('/atelier/src/shared/film/film-texture.ts');
+    const fn = await import('/atelier/src/shared/film/film-noise.ts');
+    const fg = await import('/atelier/src/shared/film/film-grain.ts');
+
+    const identity = () => makeCubePass({ lut: null, intensity: 1, interpolation: 'tetrahedral' });
+    // A picture with the whole tonal range in it, so `grainWeight` is exercised
+    // rather than evaluated once — and quantised to 8 bits, so the canvas and
+    // the pure copy hold the same numbers.
+    const paint = (w, h, at) => {
+      const cv = document.createElement('canvas'); cv.width = w; cv.height = h;
+      const c2 = cv.getContext('2d');
+      const px = new Float32Array(w * h * 3);
+      for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+        const v = at(x, y).map((c) => Math.round(Math.max(0, Math.min(1, c)) * 255) / 255);
+        px.set(v, (y * w + x) * 3);
+        c2.fillStyle = `rgb(${Math.round(v[0] * 255)},${Math.round(v[1] * 255)},${Math.round(v[2] * 255)})`;
+        c2.fillRect(x, y, 1, 1);
+      }
+      return { canvas: cv, px, w, h };
+    };
+    const filmed = (src, texture, seconds) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(src.w, src.h);
+      const film = makeFilmPass(texture, src.w, src.h);
+      if (seconds !== undefined) film.setSourceSeconds(seconds);
+      graph.render(src.canvas, [identity(), film]);
+      const o = document.createElement('canvas'); o.width = src.w; o.height = src.h;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const data = oc.getImageData(0, 0, src.w, src.h).data;
+      graph.releasePass(film);
+      graph.dispose();
+      return data;
+    };
+    // `quadUv` — the coordinate the node works in. A framebuffer's y runs UP
+    // from the bottom of what is displayed, so row `y` of a readback is at
+    // `1 − (y + 0.5) / h`. Getting this wrong mirrors the grain field and the
+    // halo together, which looks like nothing at all.
+    const quadOf = (x, y, w, h) => [(x + 0.5) / w, 1 - (y + 0.5) / h];
+
+    const rows = {};
+
+    // 1. A silent texture is not a pass at all.
+    rows.silent = makeFilmPass({ ...tx.DEFAULT_FILM_TEXTURE, grain: 0, halation: 0 }, 64, 64) === null;
+
+    // 2. Grain, per pixel, against applyGrain over the bilinear tile read.
+    {
+      const W = 480, H = 320;
+      const texture = {
+        ...tx.DEFAULT_FILM_TEXTURE,
+        grain: 0.8, grainSize: 0.01, grainChroma: 0.35, grainFps: 0, seed: 17,
+      };
+      const src = paint(W, H, (x, y) => [x / W, y / H, ((x + y) % 64) / 64]);
+      const u = tx.grainUniforms(texture, W, H);
+      const bytes = fn.makeGrainNoise(texture.seed);
+      const phase = fn.grainPhase(fn.grainFrameIndex(0, texture.grainFps), texture.seed);
+      const got = filmed(src, texture);
+      let worst = 0, moved = 0;
+      for (let y = 2; y < H; y += 7) for (let x = 2; x < W; x += 5) {
+        const [qx, qy] = quadOf(x, y, W, H);
+        const ux = qx * u.aspect[0] * u.scale + phase[0];
+        const uy = qy * u.aspect[1] * u.scale + phase[1];
+        const n = fg.combineOctaves(
+          fn.sampleGrainTile(bytes, ux, uy),
+          fn.sampleGrainTile(bytes, ux * fg.OCTAVE_SCALE, uy * fg.OCTAVE_SCALE),
+        );
+        const before = [src.px[(y * W + x) * 3], src.px[(y * W + x) * 3 + 1], src.px[(y * W + x) * 3 + 2]];
+        const want = fg.applyGrain(before, n, u.amount, u.chroma, u.fade);
+        for (let c = 0; c < 3; c++) {
+          worst = Math.max(worst, Math.abs(got[(y * W + x) * 4 + c] - Math.round(want[c] * 255)));
+          moved = Math.max(moved, Math.abs(Math.round(want[c] * 255) - Math.round(before[c] * 255)));
+        }
+      }
+      rows.grain = { worst, moved, fade: u.fade };
+    }
+
+    // 3. Halation, per pixel, against extractHighlight → blurSeparable →
+    //    screenHalation. The render is sized to the halo buffer ITSELF, so the
+    //    extract is one texel per texel and the row measures the blur and the
+    //    composite rather than a downsample.
+    {
+      const texture = {
+        ...tx.DEFAULT_FILM_TEXTURE,
+        grain: 0, halation: 0.7, halationRadius: 0.05, halationThreshold: 0.6, seed: 3,
+      };
+      const W = 120, H = 80;
+      const buffer = tx.halationBuffer(texture, W, H);
+      const sized = buffer.w === W && buffer.h === H;
+      // A bright warm disc on a dark field: something to bleed, and a colour
+      // to bleed in.
+      const src = paint(W, H, (x, y) => {
+        const d = Math.hypot(x - 40, y - 30);
+        return d < 9 ? [1, 0.92, 0.7] : [0.18, 0.2, 0.22];
+      });
+      const got = filmed(src, texture);
+      // The pure halo, in QUAD order — row 0 at the bottom of what is drawn.
+      const chan = [0, 1, 2].map(() => new Float32Array(W * H));
+      for (let j = 0; j < H; j++) for (let i = 0; i < W; i++) {
+        const y = H - 1 - j;
+        const rgb = [src.px[(y * W + i) * 3], src.px[(y * W + i) * 3 + 1], src.px[(y * W + i) * 3 + 2]];
+        const e = fg.extractHighlight(rgb, texture.halationThreshold);
+        for (let c = 0; c < 3; c++) chan[c][j * W + i] = e[c];
+      }
+      const kernel = fg.gaussianKernel(buffer.sigma, fg.halationTaps(buffer.sigma));
+      const blurred = chan.map((c) => fg.blurSeparable(c, W, H, kernel));
+      let worst = 0, moved = 0;
+      for (let y = 0; y < H; y += 3) for (let x = 0; x < W; x += 3) {
+        const j = H - 1 - y;
+        const before = [src.px[(y * W + x) * 3], src.px[(y * W + x) * 3 + 1], src.px[(y * W + x) * 3 + 2]];
+        const halo = [blurred[0][j * W + x], blurred[1][j * W + x], blurred[2][j * W + x]];
+        const want = fg.screenHalation(before, halo, texture.halationTint, texture.halation);
+        for (let c = 0; c < 3; c++) {
+          worst = Math.max(worst, Math.abs(got[(y * W + x) * 4 + c] - Math.round(want[c] * 255)));
+          moved = Math.max(moved, Math.abs(Math.round(want[c] * 255) - Math.round(before[c] * 255)));
+        }
+      }
+      rows.halation = { worst, moved, sized, taps: kernel.length, sigma: buffer.sigma };
+    }
+
+    // 4. The field re-rolls on the SOURCE frame quantised to grainFps — never
+    //    per render, or a still's grain would crawl under every repaint.
+    {
+      // 320 tall, not 128: at 128 a 0.01 cell is 1.28 px, `fade` is 0 and the
+      // row would compare four pictures with no grain in them at all.
+      const W = 320, H = 320;
+      const src = paint(W, H, () => [0.45, 0.45, 0.45]);
+      const live = { ...tx.DEFAULT_FILM_TEXTURE, grain: 1, grainSize: 0.01, grainFps: 24, seed: 5 };
+      const frozen = { ...live, grainFps: 0 };
+      const same = (a, b) => { let w = 0; for (let i = 0; i < a.length; i++) if (i % 4 !== 3) w = Math.max(w, Math.abs(a[i] - b[i])); return w; };
+      const t0 = filmed(src, live, 0);
+      rows.frame = {
+        repaint: same(t0, filmed(src, live, 0)),
+        withinBucket: same(t0, filmed(src, live, 1 / 60)),
+        nextBucket: same(t0, filmed(src, live, 1 / 24)),
+        frozen: same(filmed(src, frozen, 0), filmed(src, frozen, 10)),
+      };
+    }
+
+    // 5. The SAME field at two render sizes — the claim `grainUniforms` makes,
+    //    and the one a per-fragment hash could never keep: a cell is a fraction
+    //    of the HEIGHT, so the export's grain is the preview's, resampled.
+    {
+      const texture = { ...tx.DEFAULT_FILM_TEXTURE, grain: 1, grainSize: 0.006, grainChroma: 0, grainFps: 0, seed: 23 };
+      // 512 and 1536 and not 512 and 1024, so the comparison needs no
+      // interpolation of its own: at three times the size the CENTRE pixel of
+      // each 3×3 block has exactly the smaller render's frame coordinate
+      // ((3x+1)+0.5)/1536 = (x+0.5)/512), so the two sample the noise field at
+      // the very same point and any disagreement is the node's, not the
+      // harness's. A cell is 3.1 px at 512 and 9.2 at 1536, so `fade` is 1 at
+      // both and the row is about the field, not about the fade.
+      const small = filmed(paint(512, 512, () => [0.4, 0.4, 0.4]), texture);
+      const big = filmed(paint(1536, 1536, () => [0.4, 0.4, 0.4]), texture);
+      let worst = 0, spread = 0;
+      for (let y = 0; y < 512; y += 3) for (let x = 0; x < 512; x += 3) {
+        for (let c = 0; c < 3; c++) {
+          const here = small[(y * 512 + x) * 4 + c];
+          worst = Math.max(worst, Math.abs(big[((3 * y + 1) * 1536 + 3 * x + 1) * 4 + c] - here));
+          spread = Math.max(spread, Math.abs(here - 102));
+        }
+      }
+      rows.sizes = { worst, spread };
+    }
+
+    // 6. THE SEAM: `makeFrameGrader` builds the node, in a FIXED position no
+    //    caller chooses — after the look and after every extra pass — and it
+    //    swaps in place rather than rebuilding, since the grain slider moves
+    //    on every step of a drag.
+    {
+      const { makeFrameGrader } = await import('/atelier/src/shared/lut/frame-grader.ts');
+      const { makeSharpenPass } = await import('/atelier/src/shared/render/detail-pass.ts');
+      const dm = await import('/atelier/src/shared/render/detail.ts');
+      const W = 384, H = 320;
+      const src = paint(W, H, (x, y) => [0.45 + 0.1 * Math.sin(x / 11), 0.45, 0.45 + 0.1 * Math.cos(y / 9)]);
+      const texture = { ...tx.DEFAULT_FILM_TEXTURE, grain: 0.9, grainSize: 0.01, grainFps: 0, seed: 41 };
+      const readOf = (canvas) => {
+        const o = document.createElement('canvas'); o.width = W; o.height = H;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(canvas, 0, 0);
+        return oc.getImageData(0, 0, W, H).data;
+      };
+      const spread = (a, b) => { let w = 0; for (let i = 0; i < a.length; i++) if (i % 4 !== 3) w = Math.max(w, Math.abs(a[i] - b[i])); return w; };
+
+      const plainG = makeFrameGrader(null, W, H, 1);
+      const plain = readOf(plainG.render(src.canvas));
+      plainG.dispose();
+
+      // A silent texture through the seam must be the same picture as none.
+      const silentG = makeFrameGrader(null, W, H, 1, [], [], { ...tx.DEFAULT_FILM_TEXTURE, grain: 0, halation: 0 });
+      const silent = spread(plain, readOf(silentG.render(src.canvas)));
+      silentG.dispose();
+
+      // Built with the texture, against the same grader SWAPPED onto it.
+      const builtG = makeFrameGrader(null, W, H, 1, [], [], texture);
+      const built = readOf(builtG.render(src.canvas));
+      builtG.dispose();
+      const swapG = makeFrameGrader(null, W, H, 1);
+      readOf(swapG.render(src.canvas));
+      swapG.setFilm(texture);
+      const swapped = spread(built, readOf(swapG.render(src.canvas)));
+      swapG.dispose();
+
+      // And the POSITION: with a sharpen among the extra passes, the grain
+      // must be added AFTER it. Sharpening grain would amplify it, so the two
+      // orders are far apart — the row asserts the node is last by comparing
+      // against a picture sharpened first and grained after, built by hand.
+      const terms = dm.detailTerms({ ...dm.DEFAULT_DETAIL, sharpen: 100, sharpenRadius: 1.5 }, 1);
+      const lastG = makeFrameGrader(null, W, H, 1, [makeSharpenPass(terms)], [], texture);
+      const last = readOf(lastG.render(src.canvas));
+      lastG.dispose();
+      // Sharpened alone, then the SAME texture over it in a second graph:
+      // that is what "the node is last" must equal.
+      const sharpG = makeFrameGrader(null, W, H, 1, [makeSharpenPass(terms)]);
+      const sharpened = await createImageBitmap(sharpG.render(src.canvas));
+      sharpG.dispose();
+      const overG = makeFrameGrader(null, W, H, 1, [], [], texture);
+      const over = readOf(overG.render(sharpened));
+      overG.dispose();
+      sharpened.close();
+
+      results.seam = { silent, swapped, ordered: spread(last, over), moved: spread(plain, built) };
+    }
+
+    results.film = rows;
+  }
+
   // --- the cube without OES_texture_float_linear: half-float, never 8-bit --
   //
   // This GPU has the extension, so the fallback would otherwise run nowhere a
@@ -955,6 +1349,76 @@ const rep = out.repair;
   console.log(
     `\n  ${ok ? 'ok  ' : 'FAIL'}  repair against repair.ts: canvas worst ${rep.canvas}, ImageBitmap worst ${rep.bitmap} code(s) (allowed 2); ` +
       `the spot went ${rep.spotBefore} → ${rep.spotAfter}${rep.spotAfter > rep.spotBefore + 40 ? '' : ' — NOT healed'}`,
+  );
+}
+
+const gmr = out.gainMap;
+{
+  // The two corners are read as ABSOLUTE facts, not only against the twin: a
+  // grid flipped in BOTH would agree with itself and still lift the wrong
+  // corner. The far one is not exactly 128 because the last pixel sits a
+  // whisker inside the x1.00 node and picks up its neighbours.
+  const ok = gmr.canvas <= 2 && gmr.bitmap <= 2 && gmr.lifted >= 250 && gmr.untouched <= 133 && gmr.flat;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  gain map against gain-map.ts: canvas worst ${gmr.canvas}, ImageBitmap worst ` +
+      `${gmr.bitmap} code(s) (allowed 2); the x5.93 corner reads ${gmr.lifted} and the x1.00 one ${gmr.untouched}` +
+      (gmr.flat ? '' : ' — a FLAT field still built a pass'),
+  );
+}
+
+const cwr = out.cameraWarp;
+{
+  const ok = cwr.canvas <= 3 && cwr.bitmap <= 3 && cwr.moved > 30 && cwr.identity;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  camera warp against camera-warp.ts: canvas worst ${cwr.canvas}, ImageBitmap worst ` +
+      `${cwr.bitmap} code(s) (allowed 3); it moved the picture by ${cwr.moved}` +
+      (cwr.identity ? '' : ' — an IDENTITY warp still built a pass'),
+  );
+}
+
+const film = out.film;
+{
+  console.log('\n  the FilmNode, against film-grain.ts / film-noise.ts:');
+  const say = (ok, line) => { if (!ok) bad += 1; console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${line}`); };
+  say(film.silent, 'a silent texture is no pass at all, so an unfilmed picture is what it always was');
+  say(
+    film.grain.worst <= 2 && film.grain.moved > 8 && film.grain.fade === 1,
+    `grain     worst ${film.grain.worst} code(s) (allowed 2), and it moved the picture by ${film.grain.moved}` +
+      (film.grain.fade === 1 ? '' : ` — at fade ${film.grain.fade}, so the row measures the fade and not the grain`),
+  );
+  say(
+    film.halation.worst <= 2 && film.halation.moved > 8 && film.halation.sized,
+    `halation  worst ${film.halation.worst} code(s) (allowed 2) over a ${film.halation.taps}-tap blur at sigma ` +
+      `${film.halation.sigma.toFixed(2)}, and it moved the picture by ${film.halation.moved}` +
+      (film.halation.sized ? '' : ' — the render is NOT the size of the halo buffer, so the extract is a downsample'),
+  );
+  const fr = film.frame;
+  say(
+    fr.repaint === 0 && fr.withinBucket === 0 && fr.nextBucket > 4 && fr.frozen === 0,
+    `the field is the SOURCE frame's: a repaint ${fr.repaint}, the same 1/24 bucket ${fr.withinBucket}, ` +
+      `the next one ${fr.nextBucket} (must differ), frozen at 0 fps ${fr.frozen}`,
+  );
+  const seam = out.seam;
+  say(
+    seam.silent === 0,
+    `through makeFrameGrader a silent texture is the same picture as none (${seam.silent})`,
+  );
+  say(
+    seam.swapped <= 1 && seam.moved > 8,
+    `a texture SWAPPED onto a grader is the one it was built with: worst ${seam.swapped} code(s), ` +
+      `and the texture moved the picture by ${seam.moved}`,
+  );
+  say(
+    seam.ordered <= 2,
+    `the node is LAST — grain after a sharpen, not sharpened: worst ${seam.ordered} code(s) against ` +
+      'the same texture drawn over a separately sharpened picture (allowed 2)',
+  );
+  say(
+    film.sizes.worst <= 2 && film.sizes.spread > 8,
+    `the same field at 512 and at 1536: worst ${film.sizes.worst} code(s) at the coincident pixels (allowed 2), ` +
+      `grain spread ${film.sizes.spread}`,
   );
 }
 

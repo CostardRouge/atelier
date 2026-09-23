@@ -20,7 +20,6 @@ import {
 } from '../../shared/develop/roll-editor';
 import {
   availabilityText,
-  photoFiles,
   pictureDay,
   splitByRoll,
   summarizeAvailability,
@@ -43,11 +42,12 @@ import {
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { hashedMediaRefs } from '../../shared/projects/media-identity';
+import { fileBaseName } from '../../shared/library/assets';
+import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identity';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/sources/file-sources';
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
-import { usePublishMediaActions, type MediaActions } from '../../shared/sources/media-scope';
+import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -68,6 +68,9 @@ import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
 import { useRollPreviews } from './use-roll-previews';
 import WinnowDaySheet from './WinnowDaySheet';
+
+/** One empty answer, so a memo keyed on it holds. */
+const NO_SIBLINGS: readonly File[] = [];
 
 interface RollEditorProps {
   roll: RollDoc;
@@ -103,7 +106,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const { connection } = useWinnowConnection();
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
-  const [tab, setTab] = useState<WorkbenchTab>('develop');
+  const [tab, setTab] = useState<WorkbenchTab>('adjust');
 
   const latest = useRef(roll);
   latest.current = roll;
@@ -165,6 +168,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // remembers and the files dropped on it (F4) — the same name-then-hash match.
   const folders = useRollFolders(roll.id);
   const localPhotos = useMemo(() => [...libraryPhotos, ...folders.photos], [libraryPhotos, folders.photos]);
+  // The capture files BESIDE the local photographs — a JPEG's DNG, an ARW's
+  // HIF (`AssetParts.siblings`, R2): the workbench offers them as the open
+  // picture's other renditions, found by base name. A LOCAL picture's only:
+  // a file an instance handed over has its own companion (`MediaOrigin`).
+  const localSiblings = useMemo(
+    () => [...lib.assets.flatMap((a) => (a.kind === 'photo' ? (a.parts.siblings ?? []) : [])), ...folders.siblings],
+    [lib.assets, folders.siblings],
+  );
   const media = useRollMedia({ pictures: roll.pictures, openId, localPhotos });
   const { retryFailed, remoteThumb } = media;
   // A local picture whose file is away is developed from its working preview
@@ -186,6 +197,28 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     async (p: RollPicture) => (await mediaFileFor(p)) ?? previewFiles.get(p.id) ?? null,
     [mediaFileFor, previewFiles],
   );
+  const openFile = openId ? (files.get(openId) ?? null) : null;
+  // Indexed once per sibling list: the export plan asks for every picture's
+  // siblings on every roll change, and a filter over the whole folder per
+  // picture was rows × folder each time.
+  const siblingsByBase = useMemo(() => {
+    const map = new Map<string, File[]>();
+    for (const s of localSiblings) {
+      const base = fileBaseName(s.name).toLowerCase();
+      const list = map.get(base);
+      if (list) list.push(s);
+      else map.set(base, [s]);
+    }
+    return map;
+  }, [localSiblings]);
+  const siblingsFor = useCallback(
+    (file: File): readonly File[] => {
+      if (mediaOrigin(file)) return NO_SIBLINGS;
+      return siblingsByBase.get(fileBaseName(file.name).toLowerCase()) ?? NO_SIBLINGS;
+    },
+    [siblingsByBase],
+  );
+  const openSiblings = useMemo(() => (openFile ? siblingsFor(openFile) : []), [openFile, siblingsFor]);
   const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
@@ -266,7 +299,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // the same tick as the activation, so a closure would read the previous
   // active asset. The verb only asks; the effect below answers once the
   // render has caught up, from the active asset as it then is.
+  //
+  // It is also handed WHICH FILE of the capture the sheet was showing (R6 of
+  // `docs/capture-renditions.md`): the lightbox writes nothing, so pressing
+  // Develop over the camera's JPEG is the one gesture that puts that choice
+  // on the picture — the same field the chip above the photograph writes.
   const [pendingAdd, setPendingAdd] = useState(0);
+  const pendingView = useRef<MediaView | null>(null);
   const activeFile = useMemo(() => {
     const a = lib.assets.find((x) => x.id === lib.activeId);
     return a?.kind === 'photo' && a.parts.image ? a.parts.image : null;
@@ -274,6 +313,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   useEffect(() => {
     if (pendingAdd === 0) return;
     setPendingAdd(0);
+    const view = pendingView.current;
+    pendingView.current = null;
     if (!activeFile) {
       setNotice('only a photograph can be developed');
       return;
@@ -283,7 +324,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       // Never added twice: a picture already on the roll is opened instead.
       update((r) => addPictures(r, [ref]));
       const found = latest.current.pictures.find((p) => sameMediaRef(p.ref, ref));
-      if (found) onOpenPicture(found.id);
+      if (!found) return;
+      // The rendition looked at, on the picture — and a RAW base set aside
+      // where it stood, exactly as choosing a file under the chip does.
+      if (view) {
+        update((r) => {
+          const p = r.pictures.find((x) => x.id === found.id);
+          if (!p || p.rendition === view.rendition) return r;
+          const develop = p.develop && isRawDevelop(p.develop) ? withoutBase(p.develop) : p.develop;
+          return patchPicture(r, found.id, { rendition: view.rendition, develop });
+        });
+      }
+      onOpenPicture(found.id);
     })();
   }, [pendingAdd, activeFile, update, onOpenPicture]);
   const offer = useMemo<MediaActions>(
@@ -293,8 +345,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         {
           id: 'develop',
           label: 'Develop',
-          hint: 'add this picture to the roll and open it — one already on the roll is opened, never added twice',
-          run: () => setPendingAdd((n) => n + 1),
+          hint: 'add this picture to the roll and open it on the file you are looking at — one already on the roll is opened, never added twice',
+          run: (view) => {
+            pendingView.current = view ?? null;
+            setPendingAdd((n) => n + 1);
+          },
         },
       ],
     }),
@@ -385,11 +440,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     // Both started INSIDE the event: a DataTransfer is emptied once it returns.
     const handles = dropDirectoryHandles(e.dataTransfer);
     const listed = filesFromDataTransfer(e.dataTransfer);
-    void Promise.all([listed, handles]).then(([dropped, folderHandles]) => {
-      const photos = photoFiles(dropped);
-      folders.accept(photos, folderHandles);
-      return takeLocal(photos);
-    });
+    void Promise.all([listed, handles]).then(([dropped, folderHandles]) => takeLocal(folders.accept(dropped, folderHandles)));
   };
 
   function remove(picture: RollPicture) {
@@ -445,6 +496,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
     [update],
   );
+  const handleRendition = useCallback(
+    (id: string, rendition: string | null) => update((r) => patchPicture(r, id, { rendition })),
+    [update],
+  );
   const handleBorder = useCallback(
     (id: string, border: RollBorder | null) => update((r) => copyBorderTo(r, [id], border)),
     [update],
@@ -457,7 +512,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // --- the still export (D9): each picture through its own cube --------------
   const { composeWith } = stack;
   const lutFor = useCallback((p: RollPicture) => composeWith(p.develop), [composeWith]);
-  const exports = useRollExport({ roll, files, fileFor, openId, lutFor });
+  // "Proxies only, for this run": the editor's, reset with it, never written
+  // to the roll — which pixels is otherwise each picture's own choice.
+  const [proxiesOnly, setProxiesOnly] = useState(false);
+  const exports = useRollExport({ roll, files, fileFor, openId, lutFor, siblingsOf: siblingsFor, proxiesOnly });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
@@ -745,8 +803,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onRepair={(repair) => handleRepair(open.id, repair)}
               onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
+              onRendition={(rendition) => handleRendition(open.id, rendition)}
+              siblings={openSiblings}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}
+              proxiesOnly={proxiesOnly}
+              onProxiesOnly={setProxiesOnly}
               exports={exports}
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}

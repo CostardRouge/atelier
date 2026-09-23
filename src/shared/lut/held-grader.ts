@@ -21,6 +21,7 @@
  * must not pay a readback (~3 ms at a 4K frame) for a result it throws away.
  */
 
+import type { FilmTexture } from '../film/film-texture';
 import type { FrameGrader, GradeSource, PassGrader } from './frame-grader';
 import type { RenderPass } from '../render/graph';
 
@@ -45,6 +46,12 @@ export interface HeldGrader extends FrameGrader {
    * made with the old ones. Absent for a grader that cannot.
    */
   setPasses?: (passes: readonly RenderPass[], before?: readonly RenderPass[]) => void;
+  /**
+   * Change the film texture under the held grade, where the grader supports it
+   * — and forget the held copy, for the same reason `setPasses` does: it was
+   * graded through the texture that just left.
+   */
+  setFilm?: (film: FilmTexture | null) => void;
 }
 
 function isCanvas(source: GradeSource): source is RasterSurface {
@@ -92,11 +99,23 @@ export const copyToRaster: CopyPicture = (picture, into) => {
  */
 export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster): HeldGrader {
   let source: GradeSource | null = null;
+  /**
+   * Which SOURCE instant the held picture was graded at.
+   *
+   * The hold is keyed on the whole EDIT and not on the picture alone, because
+   * the film node's field re-rolls per source frame: a clip whose element is
+   * the same object at every frame would otherwise be served the grain of
+   * whichever frame happened to be graded first
+   * (`docs/photo-editor.md` §11 item 7). A still passes nothing, so this stays
+   * `undefined` and the hold is exactly what it was.
+   */
+  let seconds: number | undefined;
   let graded: CanvasImageSource | null = null;
   let held: RasterSurface | null = null;
   let surface: RasterSurface | null = null;
   let copyTried = false;
   const swappable = (inner as Partial<PassGrader>).setPasses;
+  const filmable = (inner as Partial<PassGrader>).setFilm;
 
   return {
     ...(swappable
@@ -109,10 +128,23 @@ export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster)
           },
         }
       : {}),
-    render(next) {
-      if (graded === null || next !== source) {
-        graded = inner.render(next);
+    ...(filmable
+      ? {
+          setFilm(film: FilmTexture | null) {
+            filmable.call(inner, film);
+            // The held copy wears the texture that just left — and on a still
+            // it is the ONLY thing the grain slider could move, so without
+            // this the slider is inert on the one surface it is tuned on.
+            graded = null;
+            held = null;
+          },
+        }
+      : {}),
+    render(next, nextSeconds) {
+      if (graded === null || next !== source || nextSeconds !== seconds) {
+        graded = inner.render(next, nextSeconds);
         source = next;
+        seconds = nextSeconds;
         held = null;
         copyTried = false;
         return graded;

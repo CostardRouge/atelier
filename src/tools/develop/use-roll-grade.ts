@@ -1,4 +1,4 @@
-import { useEffect, useRef } from 'react';
+import { useEffect, useMemo, useRef } from 'react';
 import { useLutStack, type LutStack } from '../../shared/lut/use-lut-stack';
 import type { RollDoc, RollGrade } from '../../shared/develop/roll-types';
 
@@ -19,14 +19,17 @@ import type { RollDoc, RollGrade } from '../../shared/develop/roll-types';
  */
 export function useRollGrade(roll: RollDoc, update: (change: (roll: RollDoc) => RollDoc) => void): LutStack {
   const stack = useLutStack();
-  const source: RollGrade = roll.grade ?? { layers: [], output: 'none' };
-  const sourceKey = JSON.stringify(source);
+  // Memoised on the grade's identity: the editor renders on every slider
+  // tick, and a stored grade is stringified once per render otherwise — with
+  // a legacy upload's whole `.cube` inlined in it, once a tick was the drag.
+  const source = useMemo<RollGrade>(() => roll.grade ?? { layers: [], output: 'none', film: null }, [roll.grade]);
+  const sourceKey = useMemo(() => JSON.stringify(source), [source]);
   const agreed = useRef<string | null>(null);
 
   useEffect(() => {
     if (agreed.current === sourceKey) return;
     agreed.current = sourceKey;
-    void stack.restore(source.layers, source.output);
+    void stack.restore(source.layers, source.output, source.film);
     // `source` is what `sourceKey` stringifies; `stack.restore` is stable.
   }, [sourceKey]);
 
@@ -34,15 +37,17 @@ export function useRollGrade(roll: RollDoc, update: (change: (roll: RollDoc) => 
   latest.current = update;
   useEffect(() => {
     if (stack.busy) return;
-    const saved: RollGrade = { layers: stack.toSaved(), output: stack.output };
+    const saved: RollGrade = { layers: stack.toSaved(), output: stack.output, film: stack.film };
     const key = JSON.stringify(saved);
     if (key === agreed.current) return;
     agreed.current = key;
-    const empty = saved.layers.length === 0 && saved.output === 'none';
+    // A texture alone IS a look: grain with no LUT is exactly what a stock's
+    // texture half is for, so it must not be stored as "no look".
+    const empty = saved.layers.length === 0 && saved.output === 'none' && !saved.film;
     // An updater, so a look written in the same tick as a develop composes
     // with it instead of replacing a roll that has already moved on.
     latest.current((r) => ({ ...r, grade: empty ? null : saved, updatedAt: Date.now() }));
-  }, [stack.layers, stack.output, stack.busy]);
+  }, [stack.layers, stack.output, stack.film, stack.busy]);
 
   return stack;
 }

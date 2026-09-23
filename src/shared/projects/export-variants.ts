@@ -21,13 +21,7 @@
 
 import { ASPECT_PRESETS } from './project-types';
 import { even } from '../media/compose-layout';
-import {
-  describeFrameRate,
-  describeSpeed,
-  resolveSpeed,
-  speedSuffix,
-  type ExportFrameRate,
-} from '../media/frame-rate';
+import { resolveSpeed, speedSuffix, type ExportFrameRate } from '../media/frame-rate';
 
 export type VariantAspect = 'source' | string;
 export type VariantResolution = 'source' | 1080 | 720;
@@ -173,19 +167,4 @@ export function variantFileName(
 /** True when this variant re-times, and therefore delivers without audio. */
 export function variantIsRetimed(variant: ExportVariant): boolean {
   return resolveSpeed(variant.speed) !== 1;
-}
-
-/** Human summary for a variant row ("9:16 · 1080p · 30 fps · 2× speed · clean"). */
-export function describeVariant(
-  variant: ExportVariant,
-  medium: VariantMedium = 'video',
-): string {
-  const parts = [
-    variant.aspectId === 'source' ? 'Source frame' : variant.aspectId,
-    variant.resolution === 'source' ? 'source res' : `${variant.resolution}p`,
-    medium === 'video' ? describeFrameRate(variant.frameRate) : null,
-    medium === 'video' ? describeSpeed(variant.speed) : null,
-    variant.overlays ? 'overlays' : 'clean',
-  ].filter(Boolean);
-  return parts.join(' · ');
 }

@@ -15,6 +15,10 @@ interface LutPickerProps {
   onUpload: () => void;
   /** The tool's own open picture, if it has one handy — the gallery's truest preview. */
   previewImage?: LutPreviewSource | null;
+  /** What that picture is called, for the line under the gallery's scene. */
+  previewLabel?: string | null;
+  /** True only for LOG footage — a photograph is display-referred. */
+  previewIsLog?: boolean;
 }
 
 // Re-export so consumers don't need a second import path for the LUT list.
@@ -35,6 +39,8 @@ export default function LutPicker({
   onSelect,
   onUpload,
   previewImage = null,
+  previewLabel = null,
+  previewIsLog = false,
 }: LutPickerProps) {
   const [gallery, setGallery] = useState(false);
   return (
@@ -143,8 +149,14 @@ export default function LutPicker({
           selected={selected}
           allowNone
           previewImage={previewImage}
-          onPick={(id) => {
+          previewLabel={previewLabel}
+          previewIsLog={previewIsLog}
+          intensity={intensity}
+          onPick={(id, strength) => {
             onSelect(id);
+            // The gallery's slider IS this one: the author judged the look at
+            // that strength, so it is the tool's from the moment they pick.
+            onIntensityChange(strength);
             setGallery(false);
           }}
           onClose={() => setGallery(false)}

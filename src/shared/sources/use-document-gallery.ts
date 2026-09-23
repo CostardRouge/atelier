@@ -2,14 +2,17 @@ import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore
 import type { SyncRecord } from './doc-sync';
 import { explainFailure, failureOf, isRemoteSource, remoteFor, type RemoteSource } from './doc-remote';
 import {
+  absentSources,
   documentSourcesFor,
   groupDocuments,
   sourceLabel,
+  type AbsentSource,
   type DocumentGroup,
   type RemoteDocRow,
   type RemoteList,
 } from './document-gallery';
 import type { SourceInfo } from './source';
+import { refreshCapabilitiesOnce, type CapabilityProbe } from './winnow/refresh-capabilities';
 import { listWinnowConnections, subscribeWinnowConnections } from './winnow/store';
 
 /** How one kind of document is listed, written and removed — everything a gallery does not decide. */
@@ -46,6 +49,12 @@ export interface DocumentGallery<D, Row> {
   /** Re-read the mirrors and re-ask every instance. */
   refresh: () => void;
   groups: DocumentGroup<D, Row>[];
+  /**
+   * Connected instances that draw no group, because their capabilities say
+   * they cannot keep this kind — each with the line to print, or null while
+   * the sheet is being re-asked (`document-gallery.ts`, `absentSources`).
+   */
+  absent: AbsentSource[];
   /** Nothing here and nothing there. */
   nothingAnywhere: boolean;
   /** Every instance has answered with its list. */
@@ -117,6 +126,26 @@ export function useDocumentGallery<D extends { id: string; sourceId: string }, R
   }, [remoteSourceIds, kind]);
 
   useEffect(refresh, [refresh]);
+
+  // An instance this browser has connected but that no group is drawn for was
+  // judged on a STORED capabilities sheet, which is the one thing here that
+  // goes stale silently (`winnow/refresh-capabilities.ts`). Ask it once — and
+  // only in this case, so a gallery whose instances already keep the kind
+  // makes no request at all. A stored answer replaced by the probe notifies
+  // the connection store, which re-decides `documentSources` and re-lists.
+  const [probes, setProbes] = useState<Record<string, CapabilityProbe>>({});
+  useEffect(() => {
+    let alive = true;
+    for (const conn of connections) {
+      if (remoteSourceIds.includes(conn.id)) continue;
+      void refreshCapabilitiesOnce(conn).then((probe) => {
+        if (alive) setProbes((cur) => (cur[conn.id] ? cur : { ...cur, [conn.id]: probe }));
+      });
+    }
+    return () => {
+      alive = false;
+    };
+  }, [connections, remoteSourceIds]);
 
   const setBusyFor = useCallback((id: string, text: string | null) => {
     setBusy((cur) => {
@@ -219,6 +248,11 @@ export function useDocumentGallery<D extends { id: string; sourceId: string }, R
     () => (docs === null ? [] : groupDocuments(docs, remoteSourceIds, remoteLists)),
     [docs, remoteSourceIds, remoteLists],
   );
+  const absent = useMemo(
+    () => absentSources(connections, remoteSourceIds, driver.noun, probes),
+    // The driver may be a fresh object every render; its noun is a constant.
+    [connections, remoteSourceIds, driver.noun, probes],
+  );
   const nothingAnywhere = docs !== null && groups.every((g) => g.items.length === 0 && g.remoteOnly.length === 0);
   const allListed = remoteSourceIds.every((id) => remoteLists[id]?.status === 'ok');
 
@@ -230,6 +264,7 @@ export function useDocumentGallery<D extends { id: string; sourceId: string }, R
     remoteLists,
     refresh,
     groups,
+    absent,
     nothingAnywhere,
     allListed,
     busy,

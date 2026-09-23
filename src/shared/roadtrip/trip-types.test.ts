@@ -19,6 +19,7 @@ import {
   type TripDoc,
   type TripStage,
 } from './trip-types';
+import { tripRouteLabel } from './trip-places';
 import { createShade } from './shades';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_FRAMING } from '../media/framing';
@@ -40,16 +41,14 @@ const stage = (
 
 describe('createTripDoc', () => {
   it('is born at the current version, in English, with a safe badge look', () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     expect(doc.version).toBe(TRIP_DOC_VERSION);
     expect(doc.badgeWords.day).toBe('Day');
     expect(doc.theme?.presetId).toBe('neutral');
   });
 
   it('trims what the user typed', () => {
-    const doc = createTripDoc('  Australie ', ' Australia ', '2025-03-01', '2026-01-04');
-    expect(doc.name).toBe('Australie');
-    expect(doc.destination).toBe('Australia');
+    expect(createTripDoc('  Australie ', '2025-03-01', '2026-01-04').name).toBe('Australie');
   });
 });
 
@@ -130,7 +129,7 @@ describe('migrateTripDoc', () => {
   });
 
   it('leaves a current document untouched', () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     expect(migrateTripDoc(doc)).toBe(doc);
   });
 });
@@ -138,7 +137,7 @@ describe('migrateTripDoc', () => {
 describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
   /** A v22 trip: a piece and a remembered look, neither knowing the credit. */
   const v22 = () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     const post = createTripPost('reel', '2025-03-27', 'Cliffs');
     delete (post.badge as Partial<typeof post.badge>).showExif;
     const defaults = hookDefaultsFrom(post.badge);
@@ -167,7 +166,7 @@ describe('migrateTripDoc — v22 → v23, the camera credit is opt-in', () => {
 
 describe('migrateTripDoc — v24 → v25, the badge may cascade', () => {
   const v24 = () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     const post = createTripPost('reel', '2025-03-27', 'Cliffs');
     delete (post.badge as Partial<typeof post.badge>).cascade;
     return { ...doc, version: 24, posts: [post] } as TripDoc;
@@ -194,7 +193,7 @@ describe('migrateTripDoc — v24 → v25, the badge may cascade', () => {
 
 describe('migrateTripDoc — v23 → v24, a slide may hold several pictures', () => {
   const v23 = () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
     post.slides = [createPostSlide(null)];
     delete (post.badge as Partial<typeof post.badge>).collage;
@@ -223,7 +222,7 @@ describe('migrateTripDoc — v23 → v24, a slide may hold several pictures', ()
 describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
   /** A v21 trip: a grade on the trip and on the piece, none on a picture. */
   const v21 = () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
     post.slides = [createPostSlide(null)];
     delete (post.badge as Partial<typeof post.badge>).grade;
@@ -244,7 +243,7 @@ describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
     doc.posts[0].badge.grade = grade as never;
     (doc.posts[0].slides[0] as { grade?: unknown }).grade = 'a look';
     const migrated = migrateTripDoc(doc);
-    expect(migrated.posts[0].badge.grade).toEqual(grade);
+    expect(migrated.posts[0].badge.grade).toEqual({ ...grade, film: null });
     expect(migrated.posts[0].slides[0].grade).toBeNull();
   });
 });
@@ -252,7 +251,7 @@ describe('migrateTripDoc — v21 → v22, every picture may depart', () => {
 describe('migrateTripDoc — v20 → v21, the car is repaired', () => {
   /** What the Itinerary branch stamped v19 — and main then stamped v20 — with no car. */
   const carless = (version: number) => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     delete (doc as Partial<TripDoc>).car;
     return { ...doc, version } as TripDoc;
   };
@@ -263,7 +262,7 @@ describe('migrateTripDoc — v20 → v21, the car is repaired', () => {
   });
 
   it('keeps the car a v20 trip already has', () => {
-    const doc = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
     const car = { ...doc.car, color: '#b3261e', finish: 'gloss' as const };
     const migrated = migrateTripDoc({ ...doc, version: 20, car });
     expect(migrated.car).toEqual(car);
@@ -580,7 +579,7 @@ describe('spanProblem', () => {
 });
 
 describe('stageProblem', () => {
-  const trip = createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04');
+  const trip = createTripDoc('Australie', '2025-03-01', '2026-01-04');
 
   it('passes a stage inside the trip', () => {
     expect(stageProblem(trip, stage('2025-03-25', '2025-03-28'))).toBeNull();
@@ -602,7 +601,7 @@ describe('stageProblem', () => {
 describe('migrateTripDoc — v5 → v6, the shades', () => {
   /** A v5 document, with the vignette + scrim pair the shades replace. */
   const v5 = (backdrop: Record<string, unknown>): TripDoc => {
-    const doc = createTripDoc('Australia', 'AU', '2025-03-01', '2026-01-04');
+    const doc = createTripDoc('Australia', '2025-03-01', '2026-01-04');
     const post = createTripPost('photo', '2025-03-27', 'A day');
     const badge = { ...post.badge } as unknown as Record<string, unknown>;
     delete badge.shades;
@@ -735,7 +734,7 @@ describe('hook defaults — the look a trip gives a new piece', () => {
   });
 
   it('starts a trip with none — a default nobody chose is a factory setting', () => {
-    expect(createTripDoc('A', 'B', '2025-03-01', '2025-03-10').hookDefaults).toEqual({});
+    expect(createTripDoc('A', '2025-03-01', '2025-03-10').hookDefaults).toEqual({});
   });
 });
 
@@ -801,40 +800,20 @@ describe('duplicateTripPost', () => {
   });
 });
 
-describe('createTripDoc — the route the modal asks for', () => {
+describe('createTripDoc — the legs a new trip starts with', () => {
   const dates = ['2025-11-02', '2026-02-14'] as const;
 
-  it('seeds NOTHING when both fields were left empty', () => {
-    // A trip whose author skipped them must behave exactly as it did before
-    // places existed: no stage covers any day, and the counters fall back.
-    expect(createTripDoc('Australie', 'Australia', ...dates).stages).toEqual([]);
-  });
-
-  it('seeds one stage covering the whole trip from the two ends', () => {
-    const trip = createTripDoc('Australie', '', ...dates, [
-      createTripPlace('Perth'),
-      createTripPlace('Cairns'),
-    ]);
-    expect(trip.stages).toHaveLength(1);
-    expect(trip.stages[0].startDate).toBe(dates[0]);
-    expect(trip.stages[0].endDate).toBe(dates[1]);
-    expect(trip.stages[0].places.map((p) => p.name)).toEqual(['Perth', 'Cairns']);
-  });
-
-  it('leaves that stage unnamed, so its label derives and stays honest', () => {
-    const trip = createTripDoc('Australie', '', ...dates, [createTripPlace('Perth')]);
-    expect(trip.stages[0].name).toBe('');
-  });
-
-  it('accepts one end alone', () => {
-    const trip = createTripDoc('Australie', '', ...dates, [createTripPlace('Perth')]);
-    expect(trip.stages[0].places.map((p) => p.name)).toEqual(['Perth']);
+  it('starts with NONE', () => {
+    // Creation used to take a From and a To and seed one leg over the whole
+    // span from them; a place belongs to a leg now, and the legs are drawn on
+    // the calendar. A day outside every leg names no place and says so.
+    expect(createTripDoc('Australie', ...dates).stages).toEqual([]);
   });
 });
 
 describe('migrateTripDoc — v8 → v9', () => {
   function v8(): TripDoc {
-    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    const doc = createTripDoc('Australie', '2025-11-02', '2026-02-14');
     doc.version = 8;
     doc.stages = [
       { id: 's1', name: 'Kalbarri', region: 'Western Australia',
@@ -870,7 +849,7 @@ describe('migrateTripDoc — v8 → v9', () => {
 
 describe('migrateTripDoc — v10 → v11, the source', () => {
   function v10(): TripDoc {
-    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    const doc = createTripDoc('Australie', '2025-11-02', '2026-02-14');
     doc.version = 10;
     doc.stages = [createTripStage('Kalbarri', 'WA', '2025-11-05', '2025-11-09')];
     delete (doc as Partial<TripDoc>).sourceId;
@@ -893,7 +872,7 @@ describe('migrateTripDoc — v10 → v11, the source', () => {
   it('keeps the grade a v10 document already carries', () => {
     const doc = v10();
     doc.grade = { layers: [], output: 'rec709-to-srgb' };
-    expect(migrateTripDoc(doc).grade).toEqual({ layers: [], output: 'rec709-to-srgb' });
+    expect(migrateTripDoc(doc).grade).toEqual({ layers: [], output: 'rec709-to-srgb', film: null });
   });
 
   it('reaches the current version and is idempotent', () => {
@@ -905,18 +884,18 @@ describe('migrateTripDoc — v10 → v11, the source', () => {
 
 describe('createTripDoc — the source it belongs to', () => {
   it('is this browser unless told otherwise', () => {
-    expect(createTripDoc('A', 'B', '2025-03-01', '2025-03-10').sourceId).toBe('local');
+    expect(createTripDoc('A', '2025-03-01', '2025-03-10').sourceId).toBe('local');
   });
 
   it('takes the source it is created in', () => {
-    const doc = createTripDoc('A', 'B', '2025-03-01', '2025-03-10', [], 'winnow.example');
+    const doc = createTripDoc('A', '2025-03-01', '2025-03-10', 'winnow.example');
     expect(doc.sourceId).toBe('winnow.example');
   });
 });
 
 describe('migrateTripDoc — v9 → v10, the grade', () => {
   function v9(): TripDoc {
-    const doc = createTripDoc('Australie', 'Australia', '2025-11-02', '2026-02-14');
+    const doc = createTripDoc('Australie', '2025-11-02', '2026-02-14');
     doc.version = 9;
     delete (doc as Partial<TripDoc>).grade;
     const post = createTripPost('reel', '2025-11-05', 'Kalbarri');
@@ -927,7 +906,7 @@ describe('migrateTripDoc — v9 → v10, the grade', () => {
 
   it('gives the trip an empty grade and every post follows it', () => {
     const doc = migrateTripDoc(v9());
-    expect(doc.grade).toEqual({ layers: [], output: 'none' });
+    expect(doc.grade).toEqual({ layers: [], output: 'none', film: null });
     expect(doc.posts[0].grade).toBeNull();
   });
 
@@ -941,8 +920,8 @@ describe('migrateTripDoc — v9 → v10, the grade', () => {
     };
     doc.posts[0].grade = { layers: [], output: 'none' };
     const migrated = migrateTripDoc(doc);
-    expect(migrated.grade).toEqual(doc.grade);
-    expect(migrated.posts[0].grade).toEqual({ layers: [], output: 'none' });
+    expect(migrated.grade).toEqual({ ...doc.grade, film: null });
+    expect(migrated.posts[0].grade).toEqual({ layers: [], output: 'none', film: null });
   });
 
   it('reaches the current version and is idempotent', () => {
@@ -976,7 +955,7 @@ describe('framing (v12)', () => {
   /** A v11 document: decks and grades exist, framing does not. */
   const v11 = (): TripDoc =>
     ({
-      ...createTripDoc('Australia', 'Perth', '2025-08-24', '2025-09-23'),
+      ...createTripDoc('Australia', '2025-08-24', '2025-09-23'),
       version: 11,
       posts: [
         {
@@ -1019,7 +998,7 @@ describe('migrateTripDoc — v18 → v19 (the trip’s car)', () => {
   /** A v18 document: no car at all. */
   const v18 = (car?: unknown) =>
     ({
-      ...createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04'),
+      ...createTripDoc('Australie', '2025-03-01', '2026-01-04'),
       version: 18,
       ...(car === undefined ? {} : { car }),
     }) as unknown as TripDoc;
@@ -1050,7 +1029,7 @@ describe('migrateTripDoc — v17 → v18 (a mirror and a fit)', () => {
   /** A v17 document: framings that know pan, zoom and rotation, nothing else. */
   const v17 = () =>
     ({
-      ...createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04'),
+      ...createTripDoc('Australie', '2025-03-01', '2026-01-04'),
       version: 17,
       posts: [
         {
@@ -1091,7 +1070,7 @@ describe('migrateTripDoc — v16 → v17 (a picture’s own develop)', () => {
     delete slide.develop;
     if (slideDevelop !== undefined) slide.develop = slideDevelop;
     return {
-      ...createTripDoc('Australie', 'Australia', '2025-03-01', '2026-01-04'),
+      ...createTripDoc('Australie', '2025-03-01', '2026-01-04'),
       version: 16,
       posts: [
         {
@@ -1310,5 +1289,34 @@ describe('migrateTripDoc — v15 → v16 (a clip slide has a speed)', () => {
     expect(doc.posts[0].badge.videoSpeed).toBe(1);
     expect(doc.posts[0].badge.mode).toBe('day');
     expect(doc.posts[0].badge.hookSeconds).toBeGreaterThan(0);
+  });
+});
+
+describe('migrateTripDoc — v26 → v27, the stored destination is dropped', () => {
+  it('deletes the key a v26 document carried', () => {
+    const v26 = {
+      ...createTripDoc('Australie', '2025-03-01', '2025-03-10'),
+      version: 26,
+      destination: 'Perth → Cairns',
+    } as unknown as TripDoc;
+    const doc = migrateTripDoc(v26);
+    // Not merely absent from the type: gone from the record, so no later
+    // reader can mistake a stale copy of the route for a fact.
+    expect('destination' in doc).toBe(false);
+  });
+
+  it('leaves the legs, which is where the route actually lives, untouched', () => {
+    const v26 = {
+      ...createTripDoc('Australie', '2025-03-01', '2025-03-10'),
+      version: 26,
+      destination: 'a line nothing derives',
+      stages: [
+        createTripStage('', '', '2025-03-01', '2025-03-10', [
+          createTripPlace('Perth'),
+          createTripPlace('Cairns'),
+        ]),
+      ],
+    } as unknown as TripDoc;
+    expect(tripRouteLabel(migrateTripDoc(v26))).toBe('Perth → Cairns');
   });
 });

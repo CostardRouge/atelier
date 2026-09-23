@@ -35,6 +35,17 @@ headroom a develop reads), quality 3, half size when it fits. Measured on a
 synthetic 12-megapixel DNG: 2.2 s to open (parse + unpack), 0.6 s to
 demosaic at half size, 1.6 s whole; ~500 MB of heap for the run.
 
+**`userFlip` is deliberately ABSENT from those settings (2026-09-22).** LibRaw's
+own default is `-1`, "use the file's flip", so `dcraw_process` turns the
+picture the way the camera was held and transposes the output dimensions with
+it. That is the whole reason the sensor path has always come back upright —
+not our code, a good default. Its twin does not: a RAW's embedded render is
+sliced out of the container and leaves the camera's Orientation behind, so it
+had to be GIVEN the tag (`media-pipeline.md`, «A RAW's embedded render is
+turned by a block we SPLICE into it»). The two halves are a PAIR: setting
+`userFlip` here would turn the sensor rung back on its side while the proxy
+rung stands up, which is the same defect with the signs swapped.
+
 **One instance, one decode at a time**, serialised on a promise chain as
 ffmpeg's runs are, and rebuilt after a refusal (its heap may be mid-file).
 
@@ -80,15 +91,105 @@ exposure.
 **Layers and geometry are unchanged**: they run after the one cube, on the
 displayed picture, RAW or not.
 
+## The calibration a DNG carries, READ (2026-09-20)
+
+`shared/exif/dng-opcodes.ts` (pure, 9 specs) parses `OpcodeList3` out of the
+head `raw-probe.ts` already walks, through the same TIFF reader; the probe
+returns it as `RawProbe.calibration` and `rawCalibration(file)` fetches it
+with a megabyte and no decoder. `describeRaw` now ends with what the file
+really asks for — `gain map 32×32 ×3 · up to 5.93× · warp ×1.049` — instead
+of counting lists.
+
+Rules a later agent must keep:
+
+- **The bytes are BIG-ENDIAN, always**, whatever the TIFF's own byte order.
+  That is the one trap in the format: read little-endian, a gain of 1.0 comes
+  back as a denormal near 1e-40, which is a correction that turns a picture
+  black rather than one that merely looks wrong. A spec pins the byte.
+- **Only list 3 is read.** Lists 1 and 2 act on the MOSAIC, before and during
+  demosaicing — inside LibRaw, where nothing here can reach. Reading them
+  would offer a correction that cannot be applied.
+- **A GainMap with a row or column PITCH above 1 is refused**, not applied: a
+  pitch addresses one CFA plane of a mosaic, and spreading it over every
+  pixel of the demosaiced picture would be a real correction of the wrong
+  thing. `unread` names it rather than dropping it silently.
+- **Sizes are the spec's, and they check out against the real file**: a
+  GainMap's parameters are 76 bytes plus `rows × cols × planes` float32s —
+  76 + 32·32·3·4 = **12 364**, exactly the blob PR #145 measured — and a
+  three-plane WarpRectilinear is 4 + 3·6·8 + 16 = **164**, also exact. If a
+  future reader disagrees with those two numbers it has the layout wrong.
+- **Nothing is invented.** A file with no opcodes yields null and the rungs
+  above `gain` are simply not offered.
+
+## The four rungs: a LADDER, not a switch (2026-09-20)
+
+**Decision (maintainer).** `DevelopSettings.base` was `render | raw`. It is
+now four rungs, **each a real and nameable amount of the camera's own
+calibration**:
+
+| rung | what it adds |
+| --- | --- |
+| `proxy` | the 8-bit picture every browser decodes — the embedded render, or a source's proxy |
+| `gain` | the sensor decoded to linear light, with the measured `rawGain` |
+| `gainMap` | and the DNG's GainMap applied (`render-gain-map.md`) |
+| `gainMapWarp` | and its WarpRectilinear (`camera-warp.ts`) |
+
+Rules a later agent must keep:
+
+- **`proxy` is the ABSENCE of a base**, never a stored value — which is what
+  keeps "empty means as shot" true and what made the migration cost nothing:
+  `render` → null, `raw` → `gain`. No stored document changed meaning, because
+  `raw` WAS the sensor with its gain and no calibration, which is exactly what
+  `gain` means. `normaliseBase` is the one reader.
+- **A rung is offered only where the FILE carries the opcode**
+  (`raw/calibration.ts`, `rungsFor`): no GainMap, no `gainMap` rung. This is
+  the P6 rule — a correction nobody measured is worse than none — applied
+  where the measured data finally exists.
+- **A rung a file cannot reach is never left standing.** A picture developed
+  on `gainMapWarp` and re-opened from a file whose opcodes are gone falls back
+  to the top rung that IS there, rather than claiming a correction it cannot
+  apply.
+- **Each rung contains the one below**, so `calibrationAt` is a comparison and
+  not a switch, and climbing can never lose what was already applied. **It
+  also builds a fresh `{ gain, warp }` per call** (2026-09-22): the workbench
+  memoises it on `[rung, calibration]`, and `use-develop-picture.ts` keys
+  every effect on the two FIELDS, never the wrapper. Before that, a RAW on the
+  gain-map rung re-rendered, re-graded and read the GPU back at frame rate for
+  as long as it was open — the histogram effect took the wrapper's identity
+  as a dep and SETS state, which is a loop by construction. The rule it
+  taught: an effect that sets state must never take a dep the host rebuilds
+  per render; key it on the values inside.
+- **The base still travels nowhere.** `withoutBase` strips all four; a preset,
+  a paste and a batch verb keep each target's own.
+- **The calibration is read once per file and held for the session**
+  (`readRawCalibration`), the shape `original-cache.ts` already uses: a stage
+  that re-reads a header on every repaint is a stage that stutters.
+- **`developLines` names the rung** (`RAW + gain map +2.0 EV metered`): "RAW"
+  alone let a picture with 2.5 stops taken out of its corners read the same as
+  one without.
+
+**The PREVIEW carries the calibration from `gain map` up** — the maintainer's
+own recommendation, and the reason it is right: a GainMap multiply and a
+radial warp are one GPU pass each, trivial beside the decode itself (4.4 s
+whole, 456 ms at the stage budget), so applying them on the stage makes
+export-at-max a no-op for shading and `preview = export` hold by
+construction rather than by a warning.
+
 ## The tool (2026-09-20, P10 second commit)
 
-`DevelopBaseSection` (`shared/develop/DevelopBase.tsx`, drawn under the
-histogram of the Develop tab, only where a RAW is REACHABLE: the file itself
-is one, or a proxy's original is — `MediaOrigin.name`) is a Segmented
-*Camera render · RAW* with one status line: what RAW would fetch and weigh,
-"decoding…", or "the sensor's data, metered +x.x EV". The modal hosts (Trips,
-the Studio) never see it — the maintainer's call that they keep the simple
-sheet.
+**The ladder hangs off the FIDELITY CHIP** (`DevelopBaseMenu`,
+`shared/develop/DevelopBase.tsx`, an `OverflowMenu` whose worded trigger IS
+the chip — the maintainer's placement, 2026-09-20). The chip already says
+what the picture IS, so what it could be belongs on the same word, above the
+photograph, where the question comes up. It replaced the Develop tab's
+`DevelopBaseSection`: one control for one value, never two. Each rung's line
+says what it ADDS, and the foot of the menu says what the FILE asks for in
+the numbers a person can check (`gain map up to 5.93× · warp ×1.049 · CA
+0.9 px at the corner`) rather than a promise. Drawn only where a RAW is
+REACHABLE (the file itself is one, or a proxy's original is —
+`MediaOrigin.name`), and hidden under 880px of tool width as the chip always
+was. The modal hosts (Trips, the Studio) never see it — the maintainer's
+call that they keep the simple sheet.
 
 - **`useDevelopPicture` takes a `raw` option** (the file and the stored gain)
   and decodes through `decodeRaw` at the STAGE budget (half size when it
@@ -123,3 +224,77 @@ switch decoded 2000×1500 at half size, metered at its white (a patch above
 saturation clips more than 1 %), −1.5 EV read 160 on the clipped patch, and
 the export decoded the whole 4000×3000 and wrote the same 160 — preview =
 export from two decodes of two sizes, which is what storing the gain buys.
+
+## Which FILE the sensor's data is in — see `renditions.md`
+
+A capture is often several files (Sony `.ARW` + `.HIF`, DJI `.DNG` + `.JPG`),
+and everything about reaching the RAW that is a SEPARATE file — the decision,
+Winnow's pairing, the measurements on his own bodies, and the pure module over
+them — lives in `renditions.md`. This file stays about what happens once the
+sensor's bytes are in hand.
+
+## What a DJI DNG actually holds (measured 2026-09-20, body FC8482)
+
+Two files off the maintainer's own drone (DJI Fly, `dji_fly_*_photo.DNG`,
+74 MB each), walked by `probeRaw` itself and decoded in the browser pane —
+this replaces the format EXAMPLE `develop.md` carried, which was never a
+measurement:
+
+- **IFD0** — 160×90 JPEG thumbnail.
+- **SubIFD** — 8064×4536 CFA, **compression 1, uncompressed** 16 bits,
+  73 156 608 bytes: the file, near enough. Black 4096, white 65472, 16:9 at
+  capture. No JPEG XL on this body, so P3's decoder question does not arise
+  for it — ProRAW and ARW are still unanswered.
+- **SubIFD1** — **960×540** JPEG, 762 KB. The only thing a browser can draw.
+
+**0.52 of 36.6 megapixels — 8.4× short on the long edge.** That is the whole
+of "macOS shows it sharp, Atelier shows it pixelated": nothing in
+`pickPreview` is wrong (it takes the larger of the two JPEGs correctly), the
+render simply is not in the file, and macOS is not showing a preview at all —
+it demosaics the CFA plane and applies the opcodes below. Any stage wider than
+960 px upscales; the 640 px thumbnail is the one surface the embedded render
+is honestly big enough for. **A camera that writes a preview this small is the
+case `DevelopSettings.base` exists for** — what nothing says today is the
+PIXEL count: `pictureFidelity` names the bits and never the size, and
+`DecodedPhoto.viaRawPreview` is returned by `photo-frame.ts` and read by
+nobody.
+
+Decode timings, this Mac, the 74 MB already in memory: **4.4 s** whole
+(8064×4536, including the wasm's first load), **456 ms** at
+`budgetPixels: 3840×2160` — LibRaw's half (4032×2268) box-averaged to
+2016×1134. So the panel's "a few seconds, once" is right for the first decode
+and pessimistic for every one after.
+
+## LibRaw skips the DNG opcodes, and DJI's are enormous (2026-09-20)
+
+`OpcodeList3` on that body carries **GainMap + WarpRectilinear**, and LibRaw
+applies neither:
+
+- **GainMap** (12 364 bytes) — a 32×32 grid over three planes, corner gains
+  **5.93 / 5.06 / 4.97** (R/G/B) against 1.00 at the centre: about **2.5
+  stops** of vignetting, and a different figure per channel, so colour shading
+  as well. Measured against DJI's own render on patches 5 % in from each
+  corner, LibRaw's corners land at **0.44–0.51** of where the render puts them
+  relative to the centre.
+- **WarpRectilinear** (164 bytes) — three planes, centre 0.5,0.5, and it is
+  **almost entirely a 4.93 % magnification**: the green plane is `k0 = 0.9530`
+  with `k1 = k2 = k3 = 0` EXACTLY, a pure scale, and the red and blue planes
+  deviate from their own `k0` by at most 0.6 px and 1.2 px at the corner. So
+  this lens needs no distortion correction worth a pixel; what the two other
+  planes carry is lateral CA, +0.70 px R−G and −0.22 px B−G at the corner.
+
+So `base: 'raw'` on a DJI file is sharper than the render and **wrong**, but
+not in equal parts: the corners are the fault (2.5 stops), the frame is 4.93 %
+wider than the render's, and the distortion everyone expects a drone lens to
+need is simply not in the numbers. Saying it is the floor; correcting it is
+the cure. Showing it as the better material without saying either is the
+fabrication this file's rules exist to stop.
+
+**And it retires the reason P6 shipped with no lens profiles.** The index
+records "a profile is MEASURED calibration data and invented coefficients
+would be a fabricated correction". A DNG carries that calibration for the
+exact body and lens, inside the file, in the DNG spec's own units — and
+`render/lens.ts` + `lens-pass.ts` already do the radial warp and the
+per-channel scale it asks for. Both blobs are tiny and sit in the head the
+probe already reads, so `raw-probe.ts`'s TIFF reader is the whole of the
+parsing work.

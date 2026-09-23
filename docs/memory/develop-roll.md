@@ -264,6 +264,13 @@ shared block. Rules a later phase must keep:
   `DJI_0101.jpg` — which is the case that matters, since an export named after
   its picture is exactly what would otherwise land on its own original. A
   DOWNLOAD cannot honour the choice: the browser numbers a repeat itself.
+  **And the run SAYS it when the folder it was given is the one the pictures
+  came from** (2026-09-21, his call), offering a suffix — the one exception to
+  the exact name above, never the default. Only where a directory HANDLE was
+  picked: a download has no folder to compare, and the browser and the OS name
+  it. The comparison is `FileSystemHandle.isSameEntry` against the handle the
+  roll already remembers for its local pictures (`develop-media.md`), never a
+  path or a name, so a folder that merely looks alike answers false.
 - **A delivered picture carries the ORIGINAL's EXIF, whatever its pixels came
   from** (2026-09-20, the maintainer's rule: *"il faut que je puisse à la fin
   exporter… avec les informations du fichier original"*). Where the pixels come
@@ -276,10 +283,70 @@ shared block. Rules a later phase must keep:
   since Winnow's download route ignores `Range` —, else what the instance
   vouched for. The choice and the block are `shared/exif/stamp-exif.ts`; a
   picture that ends up on the poorest account, or on none, is SAID in the run's
-  sentence rather than filed away silently.
-- **A RAW original is never fetched** (`decodableOriginal`: jpg/png/webp/
-  avif/gif/bmp only — no HEIC, no TIFF): decision 4, the render the person
-  developed is what leaves, and the reason is said on the *Delivers* row.
+  sentence rather than filed away silently. Whatever the account, the block
+  says `Software: Atelier` (since 2026-09-21, the copied one included) — the
+  mark that keeps an export sitting beside its original from being offered as
+  the camera's file (`renditions.md`, R1b).
+- **The workbench holds TWO files since 2026-09-21: the picture's, and the one
+  on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
+  picture IS — its identity, its origin, its EXIF, what the export hook
+  measures — while `shownFile` is the rendition drawn (a fetched original, a
+  folder sibling): it is what `useDevelopPicture`, the chip and the kernels'
+  `fullWidth` read. A new consumer of the bytes on screen takes `shownFile`;
+  one that needs the picture's identity takes `file`. Since R4 the export
+  follows the same answer (`renditions.md`, «R4 is BUILT»): a stored
+  delivered rendition is fetched through `deliveredSourceFor`, the three
+  words are gone from the roll and the panel, and *Proxies only, for this
+  run* is the editor's switch, never the document's.
+- **The row NAMES the pixels it measured** (2026-09-20): `sourceLabel` reads
+  `Camera render` where the file in hand is a RAW — `MeasuredPicture.viaRawPreview`
+  from `measurePicture`, which now decodes through `decodePhotoSource` — so a
+  DNG says `Camera render 960 px → 1920 · ×2.00 upscaled · asked 1920` instead
+  of `File 8064 px`, which was the one sentence the plan must never say. The
+  fidelity half of it is `develop.md`, «A picture says its PIXELS».
+- **A RAW original is reached only through the render INSIDE it, and only
+  when that render is bigger than the proxy** (2026-09-20, correcting
+  decision 4 — `develop-originals.md` §7.4). `decodableOriginal` still names
+  what a browser reads on its own (jpg/png/webp/avif/gif/bmp — no HEIC, no
+  TIFF), and a RAW now goes down its own branch: `originalPixels` answers
+  with `OriginalInfo.render`, which is null until the file's head has been
+  read, and `choosePixels` refuses to act on a guess while it is. The sizes
+  come from `rawSizesFrom` over a megabyte of the original's head — the read
+  the run was already making for the EXIF, raised from 256 KB — cached for
+  the session in `original-cache.ts` (`heldRawRender`, `undefined` = not read,
+  `null` = read and the file said nothing), and the *Delivers* row reads the
+  SAME cache, so the row and the run can never disagree. The frame is no
+  longer planned against the sensor's pixels either: they can never be
+  delivered here, so `· asked 8064` was a promise nothing could keep. A RAW
+  original that does win is labelled `Original render`, never `Original`.
+  **Why it matters**: a DJI DNG holds a 960 × 540 render — `Auto` fetching
+  74 MB for 0.52 megapixels is the mistake the whole branch exists to stop.
+  The sensor is reached by developing on `base: 'raw'`, never by the export.
+  Measured in the pane on two synthetic DNGs (`testing.md`'s recipe): the
+  960 px one delivered `DJI_0101.jpg 2048×1152` with **zero** full fetches
+  and the row read *"its original is a RAW whose own render is 960 px against
+  the proxy's 2048 — the proxy is what leaves"*; the 6048 px one delivered
+  `DJI_0202.jpg 6048×4032` after ONE fetch, the row reading `Original render
+  6048 px → 6048 · exact`, and Proxies held it at `2048 · exact · asked 6048`. Driven at **390 px** too, where the row lives in the
+  docked drawer: `Camera render 960 px → 960 · exact`, no horizontal
+  overflow, and *Export this picture* wrote `DJI_0101.jpg 960×540` — the
+  picker-first order (`pickDeliveryTarget` → render → `deliverFilesTo`) is
+  what makes that work at any width, and it is unchanged.
+- **The export climbs the RAW ladder to the top rung the FILE can give, and
+  never crosses `proxy` → `gain`** (2026-09-20, the maintainer's "always max"
+  with the one boundary it does not override). Within the RAW rungs there is
+  no reason to deliver less calibration than the body was measured for — it
+  is two GPU passes — so the run reads `topRung(cal)` and renders through
+  `calibrationAt` at it. Crossing from the proxy to the sensor, by contrast,
+  is refused exactly as it always was (`develop-originals.md` §7.4,
+  `raw.md`): numbers nobody has seen on the sensor's data are never applied to
+  it at the door, and a RAW never checked in Develop still leaves from its
+  render with the run saying so. Because the PREVIEW already carries the
+  calibration from `gain map` up, the climb changes the file only for a
+  picture left standing on `gain` — and that is the one case the *Delivers*
+  row names: *"developed on its RAW at Gain — the export climbs to Gain map +
+  warp, the calibration its own file carries, so the file will differ from the
+  stage"*. Measured in the pane.
 - **Each picture renders through its OWN cube** (`stack.composeWith(develop)`),
   decoded whole, graded at source density, then `drawFramed` — the crop stage's
   transform, so the file is the stage. The frame seam of `develop-tool.md` §6
@@ -476,6 +543,20 @@ moved that edge exactly 60 px, the left edge and the height untouched (read
 back by hover-scanning the stage's cursor zones); under Original the same drag
 kept 1.5:1 about the centre. Not driven: a real phone, a real multi-touch.
 
+**An untouched picture opens on Free** (2026-09-21, the maintainer: *"quand je
+vais dans crop, j'aimerais que par défaut l'option soit réglée sur free, comme
+ça je ne perds pas de temps à faire un clic"*). `openingCropChip`
+(`crop-aspect.ts`, pure, tested) is the one reader: untouched — `'original'`
+with a default framing — opens on Free; anything else opens on the chip its
+STORED crop names, so a locked ratio comes back locked and `'original'` is
+still `'original'` where it was deliberately chosen. `reset` lands on Free for
+the same reason: it leaves the picture untouched. **It writes nothing** —
+`setChip('free')` has no ratio to fit — so a picture opened on Free and left
+alone still stores `'original'` with an untouched framing, and `rollProgress`
+still counts it as uncropped. The rule is worth keeping wherever a default
+chip is added: a default that DIRTIES a document is a different thing from a
+default that only says what the next gesture may do.
+
 ## A picture may be delivered on a BORDER (2026-09-19, roll v2)
 
 **Decision (maintainer, over a second prototype).** Coloured bars or margins
@@ -591,7 +672,7 @@ visibly did nothing. **(2) A tap that missed the frame fell through to the wipe
 and threw the divider.** Both are cured by SUSPENDING the compare whenever a
 mask tool holds the pointer — the rule the grey dropper already followed by
 taking the pointer whole. `useDevelopPicture` now derives `suspended` from
-`paint || picking`: `comparing` goes false, the shown wipe goes to 1 (the whole
+`paint || picking`: `comparing` goes false, the shown wipe goes to 0 (the whole
 picture delivered), the divider is not drawn and a drag places nothing. The
 stored wipe is REMEMBERED, so the line is back where it was the moment the tool
 is put down. Beside it, a plain switch the host owns — `compare`, a browser
@@ -629,3 +710,168 @@ the divider returns to 0.45 where it was; Pick arms the `copy` cursor and holds
 the compare, a tap draws its marker at the tapped pixel, a second adds, clicking
 a marker takes it off, putting the tool down brings the divider back; the eye
 hides and shows.
+
+## 2026-09-22 — The compare reads BEFORE → AFTER, left to right
+
+**The maintainer: *"lets invert the compare after/before — I prefer
+before/after, it will be more coherent with other places"*.** The shader's
+split had put the GRADE on the left since the LUT tool's first version
+(`lut-gl.ts`), and everything that drives it inherited that: the LUT Studio's
+wipe, the look gallery's scene, the Develop stage's own 2D wipe. The Studio's
+overlay stage had always done the opposite — the original on the left, the
+composite on the right (`use-overlay-stage.ts`) — so the suite disagreed with
+itself, and the LUT side also disagreed with Lightroom and Capture One, which
+the code claimed to be copying.
+
+**One direction now, everywhere: the picture AS SHOT on the left of the
+divider, the corrected one on its right.** How to apply: `u_splitX` is the
+divider's position and the original is drawn where `v_uv.x < u_splitX`; a label
+beside the divider says `Original` left, `Graded` right; the Develop stage's
+pill says `before · after`.
+
+**The consequence to watch in `useDevelopPicture`**: `wipe` is no longer "the
+share painted graded" but the DIVIDER's position, with the as-shot picture to
+its left — so **no split is 0, not 1**. Every reader of it flipped with the
+meaning (`shownWipe`, the stage paint, the loupe's paint, the divider line, the
+pill), and a `wipe < 1` left anywhere would draw a split nobody asked for on a
+picture at rest.
+
+## 2026-09-22 — The stage bar: four controls, and nothing inserted
+
+**The maintainer, looking at the row above the photograph: *"elles ne sont pas
+toutes uniformes… la pilule de changement de proxy n'a pas du tout les mêmes
+codes visuels que les autres… les boutons copy, paste, as shot prennent de la
+place… peut-être qu'il serait temps d'appeler cette option reset de manière
+explicite… le bouton compare, je pense qu'il peut être plus discret, on pourrait
+reprendre l'exemple qui est fait dans le studio… lorsque l'on clique sur plus,
+automatiquement, si on reclique une deuxième fois sans changer de position de la
+souris, on se retrouve sur le bouton pixel"*.** Seven controls in four visual
+codes. Variants were drawn for each fault on one canvas
+(https://claude.ai/artifact/PsWGj7UBtDpz9EGNjz6DUz) and he picked **A2 · B2 ·
+C1 · D1**, with E2's one block of verbs; what each buys is below, and what it
+costs is the line after it.
+
+**The NAME is the menu of the capture's files (B2).** The file name and the
+fidelity chip answered the same question — which bytes are on screen — so they
+are ONE control at the left of the bar: `DJI_0202.DNG` in mono, the chip as its
+faint uppercase suffix, a `▾` at the end, and `DevelopBaseMenu`'s own list of
+renditions under it. It costs no pill, and that is what pays for the real win:
+the chip used to be `@max-[880px]:hidden`, so a phone could not reach the
+rendition at all. **How to apply**: `name` is a prop of `DevelopBaseMenu` now,
+and when there is nothing to choose (one row, no rung) it renders the same two
+spans as TEXT — a chevron over a menu that cannot change anything is an
+invitation to a dead end.
+
+**Copy · Paste · Reset as one WELL of glyphs (A2), and the stage's own two
+verbs join them in it (E2).** Three underlined links were the bar's third
+visual code and ≈ 150px of it. A menu was drawn beside this one and NOT taken:
+every verb stays at one click, which is what a photographer pasting the same
+light down a filmstrip actually does. `DevelopActionsGroup`
+(`shared/develop/`) draws the three `IconButton`s, and `children` — past a
+hairline — are the HOST's: the Develop bar puts its `A/B` and its `?` there, so
+the row ends with ONE block instead of five loose pills. **How to apply**:
+Reset is a GHOST button, set apart from two benign verbs because it throws work
+away, and it greys with `asShot` so the block also says whether there is
+anything to undo; the full sentence, `Reset to as shot` included, lives in each
+tooltip, which is the whole of his "appeler cette option reset de manière
+explicite"; `clipboard={false}` keeps the well for the host's verbs alone on a
+stage with no develop to copy (the crop). The modal keeps
+`DevelopClipboardActions`: a sheet has room and no stage bar. `Icons` gained
+`copy` and `paste` — the suite had neither.
+
+**The compare is `A/B` (C1)**, the Studio's own word and its exact colours
+(`border-accent bg-accent-wash text-accent-ink` on, plain and muted off), at
+`IconButton`'s height inside the well. Three states still, and the suspended one
+— a mask tool holding the pointer — is a DASHED border rather than a third word.
+**The trap it walked into**: neither it nor the `?` can be `IconButton` plus an
+override, and neither could ride `developPillClass` (which carries `text-muted`)
+— two utilities of one property resolve by Tailwind's order, not the class
+list's. Both spell their own shape at `IconButton`'s exact height, so the well
+still reads as one family, and take their colour at the call site.
+
+**Nothing is INSERTED in the bar any more (D1).** The `smooth ↔ pixels` button
+was rendered only past 1:1, so crossing 100 % pushed every verb after it
+sideways and a second press of `+` landed on `pixels` — his report, exactly.
+The mode now hangs off the percentage, which was already a button ("back to the
+fitted size", now the menu's first rung): `StageZoomControl` takes optional
+`items`, and with them the label becomes an `OverflowMenu` trigger of ONE
+width. `ZoomControls` gained an optional `zoomTo` for the `100 %` rung.
+**The one thing D1 costs, and he chose it**: the mode's state is only visible
+inside the menu — D2 (the mode as a `· px` suffix in the pill) was offered
+beside it and not taken.
+
+Driven headless on a dropped JPEG and on a JPEG + DNG capture: `+` stays at the
+same x to the pixel while the zoom crosses 100 % (three measurements, 0 px),
+the menu's four rungs mark the live one and `Pixels as pixels` really sets
+`image-rendering: pixelated`, the name is a menu for the pair and TEXT for the
+lone JPEG, the well's five verbs are all 28px and enable exactly when they can
+act (`· copied` / `· reset`), A/B goes accent → plain → dashed under Pick grey,
+and at 390px the bar holds two lines with no horizontal overflow.
+
+## 2026-09-22 — The corner says what the CAMERA did too
+
+**The maintainer: *"dans les info overlay (i kb shortcut) ca sera bien
+d'afficher les info exif: shutter, f/, iso, ev etc"*, then, shown six
+placements, *"option a"*.** The stack toggled by `I` said only what this
+session had done — `developLines`, the layers, the patches, the fidelity note —
+while the two lightboxes had been drawing `exposureSummary` all along. Develop
+was the one editor that never read a photograph's own numbers.
+
+**One stack, the capture on TOP, marked.** `DevelopViewport` gained a `shot`
+prop drawn above `facts`, behind a hairline that only exists when both families
+are present, with the accent down its left edge. The mark is the whole point:
+everything under the rule is a draft that changes on every drag, the line above
+it is the file's own and can never be edited — two authorships in one box is
+readable exactly as long as one of them is marked. Same key, same chip, no
+second corner (`after` and `◐ hold` already hold the other three).
+
+**A shorter line than the lightbox's** — `captureLine` in `exif-summary.ts`,
+`ƒ/1.7 · 1/240 · ISO 100 · +0.3 EV`, where `exposureSummary` leads with the body
+and the lens: the stage names the file in its bar, and every character is a
+pixel of the photograph. It is also the one place the COMPENSATION is printed,
+since that is what says the camera was argued with before the sliders were; a
+bias of zero says nothing, a default being no decision. Absent fields stay
+absent — the rule `exposureSummary` already held.
+
+**Which file's EXIF: the one ON SCREEN** (`shownFile`, the picture's rendition).
+Switch to the DNG and the numbers are the DNG's; stay on a Winnow proxy, whose
+re-encode carries no metadata at all, and `readEffectiveExif` merges the
+instance's vouched record under it. Nothing is stored on the roll: a read costs
+the head of one file and is always true.
+
+The hook moved to `shared/exif/use-effective-exif.ts` at its second consumer
+(it was Road Trip's `use-exposure-line.ts`), and split: `useEffectiveExif`
+returns the merged `ExifData`, `useExposureLine` stays the badge's line over it.
+
+Not driven in a browser: the pure half (`captureLine`) is unit-tested and the
+four CI gates are green, but the corner itself was not seen over a real
+photograph — it needs a file drop this container cannot perform.
+
+## 2026-09-23 — The tabs answer to their own initials, and the first one is Adjust
+
+**The maintainer: *"why r is the kb shortcut for crop? lets have it to be C"*,
+*"lets rename develop tab to adjust"*, then the whole set — `E` export, `L`
+layers, `D` detail, `A` adjust, `C` crop.** `R` and `D` were the only two tabs
+with keys and neither named itself: `R` was reached for because `C` was
+believed taken by copy, and `D` opened a tab called Develop *inside the Develop
+tool* — a word that told you nothing about which of the five you were on.
+
+**A tab's key is its initial, with no exception, or the set is not learnable.**
+`TAB_KEYS` in `roll-editor.ts` maps the five letters onto `WorkbenchTab`, and
+`editorKeyAction` returns `{ tab }` rather than a fifth and sixth string in its
+union — one object case in the workbench's switch covers every tab, so a sixth
+tab is one line in the map and nothing at the call site.
+
+**`C` was never taken.** The chord branch is read FIRST (`metaKey || ctrlKey`
+returns before the bare letters), so ⌘C is still copy-the-develop and a bare
+`C` opens the crop; that ordering is what makes initials possible at all, and
+it is asserted in the test rather than left to be re-discovered.
+
+**The tab is `adjust` in the code, not only on screen.** Renaming the label and
+keeping the id `develop` would have left the mismatch that caused the ask; the
+id is internal state (`RollEditor`'s `useState`, the section bar it publishes)
+and appears in no route or document, so it cost nothing.
+
+## Two per-render costs from the 2026-09-22 audit (2026-09-22)
+
+**Decision.** `PictureWorkbench` memoises the crop zone's `src` (`{ width, height }` of the decoded source) on the source, and `RollEditor` indexes a folder's siblings by lowercased base name once per sibling list. **Why**: a fresh `src` object per render recomputed the crop zone and the view, and both canvases under them repainted — a rotated, high-quality draw at device pixels — on every render of the workbench, which renders on every slider tick and pointer move; and the export plan asked every picture's siblings on every roll change, each answer a filter over the whole folder, rows × folder per edit. **How to apply**: a hook that takes an OBJECT argument memoises on the values inside, never on a literal built in the call; a lookup a plan runs per row is a `Map` built once per list.

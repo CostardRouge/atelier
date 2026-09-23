@@ -1,74 +1,200 @@
-import Segmented from '../ui/Segmented';
-import SectionLegend from '../ui/SectionLegend';
+import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import { formatBytes } from '../lib/format';
-import { signed } from './develop';
+import { renditionFacts, type Rendition } from '../media/renditions';
+import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
 
-const BASE_HINT =
-  'What the numbers act on. "Camera render" is the 8-bit picture every browser decodes — the JPEG your camera wrote inside its RAW, or the proxy — and it clips at white. "RAW" decodes the sensor’s own data to linear light, sixteen bits of it: the white balance is a real one, and what the sensor kept above the displayed white is there for the highlights to bring back. It is ANOTHER starting point, not a sharper copy of the same one: numbers set on the render act differently here, and the picture opens metered by its own brightest tone. Chosen per picture, never copied by a preset or a paste, and never switched by an export.';
-
-export type DevelopBase = 'render' | 'raw';
-
-/** Where the sensor's data would come from: the file in hand is a RAW, or a proxy's original is one. */
-export type RawOffer = 'file' | 'original';
+export type { DevelopBase } from './develop';
 
 /**
- * The material switch — Camera render · RAW — drawn only where a RAW is
- * reachable at all. The Develop tool's own section (`docs/develop-originals.md`
- * §3.1): the modal hosts keep the simple sheet and never see it.
+ * What each rung ADDS to the one below — the whole point of a ladder, and the
+ * line a person reads before climbing it.
  */
-export function DevelopBaseSection({
-  offer,
+export const BASE_ADDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
+  proxy: 'the 8-bit picture every browser decodes — the render your camera wrote, or your source’s proxy. It clips at white.',
+  gain: 'the sensor’s own data at sixteen bits, metered by its brightest tone. A real white balance, and the highlights above white are there to bring back.',
+  gainMap: 'and the shading grid the body was calibrated for — up to 2.5 stops at the corners on a DJI, a different figure per channel.',
+  gainMapWarp: 'and the rectilinear warp beside it: the magnification and the lateral colour fringe the same file states.',
+});
+
+/** What a delivered row IS, in the words under its name. */
+function describeDelivered(row: Rendition): string {
+  if (row.blocked) return row.blocked;
+  const fetched = row.here ? '' : ' — fetched from its instance and held for this session';
+  if (row.reach === 'embedded') return `the 8-bit render your camera wrote inside the RAW${fetched}`;
+  return `the file itself, 8-bit, drawn as it is${fetched}`;
+}
+
+/**
+ * THE CAPTURE'S FILES, under the fidelity chip (2026-09-21, replacing the
+ * four-rung ladder of 2026-09-20 — `docs/capture-renditions.md` §9.1).
+ *
+ * One list: the source's proxy where there is one, then what the camera
+ * delivered — a JPEG, a HEIF, the render inside a RAW — then the sensor,
+ * with the calibration rungs (`raw/calibration.ts`) nested under it, since
+ * they are amounts of the SENSOR's own calibration and mean nothing on a
+ * render. A row this browser cannot draw is listed blocked and says why; a
+ * row not in hand says what fetching it costs before it is pressed.
+ *
+ * It hangs off the NAME of the file (2026-09-22, variant B2 of the stage-bar
+ * study): the name and the chip answer the same question — which bytes are on
+ * screen — so they are one control, at the left of the bar, and the menu
+ * lists the capture's other files under the one that is open. It costs no
+ * pill of its own, which is what lets it be drawn at every width: as a
+ * separate chip it was hidden under 880px, and a phone could not reach the
+ * rendition at all.
+ */
+export function DevelopBaseMenu({
+  name,
+  chip,
+  rows,
+  current,
   base,
+  rungs,
+  onRendition,
   onBase,
   status,
   gain,
-  originalName,
-  originalBytes,
-  numbersSet,
+  calibration,
+  className = '',
 }: {
-  offer: RawOffer | null;
+  /** The open file's name — the trigger's first words, truncated before the chip. */
+  name: string;
+  /** The fidelity chip's own words, as the name's suffix; null before anything is measured. */
+  chip: string | null;
+  /** Every rendition of the capture, in the order `renditionsOf` gives them. */
+  rows: readonly Rendition[];
+  /** The rendition on screen, when the develop is below the sensor. */
+  current: string | null;
+  /** The rung the develop stands on; `proxy` while a rendition is on screen. */
   base: DevelopBase;
+  /** Which rungs the RAW can honestly offer, lowest first (`rungsFor`). */
+  rungs: readonly DevelopBase[];
+  onRendition: (id: string) => void;
   onBase: (base: DevelopBase) => void;
-  /** What is happening to get the RAW on screen — fetching, decoding — or null. */
+  /** What is happening to get the chosen bytes on screen — fetching, decoding — or null. */
   status: string | null;
-  /** The metered exposure once decoded, as `rawGain`; null before. */
+  /** The metered exposure once the sensor is decoded, as `rawGain`; null before. */
   gain: number | null;
-  /** For an `original` offer: what would be fetched, and how heavy. */
-  originalName?: string | null;
-  originalBytes?: number | null;
-  /** Sliders are already set: switching means they act on another base. */
-  numbersSet: boolean;
+  /** What the RAW's own calibration asks for, once read; null when it carries none. */
+  calibration?: string | null;
+  className?: string;
 }) {
-  if (!offer) return null;
+  const onSensor = baseRung(base) > 0;
   const ev = gain ? Math.log2(gain) : 0;
-  const line =
-    status ??
-    (base === 'raw'
-      ? gain
-        ? `the sensor’s data, metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}${numbersSet ? ' — your numbers act on it, another starting point' : ''}`
-        : 'decoding the sensor’s data…'
-      : offer === 'original'
-        ? `RAW opens ${originalName ?? 'the original'} from its instance${originalBytes ? ` · ${formatBytes(originalBytes)}` : ''}, held for this session`
-        : 'RAW decodes the file’s own sensor data — a few seconds, once');
+  const sensor = rows.find((r) => r.role === 'sensor') ?? null;
+
+  const item = (id: string, marked: boolean, title: string, facts: string, hint: string, onSelect: () => void, disabled = false): OverflowItem => ({
+    id,
+    title: hint,
+    disabled,
+    onSelect,
+    label: (
+      <span className="flex flex-col items-start gap-0.5 text-left">
+        <span className="font-mono text-xs">
+          {marked ? '· ' : '  '}
+          {title}
+          {facts && <span className="text-faint"> · {facts}</span>}
+        </span>
+        <span className="font-mono text-3xs text-faint leading-relaxed max-w-[22rem] whitespace-normal">{hint}</span>
+      </span>
+    ),
+  });
+
+  const items: OverflowItem[] = rows
+    .filter((r) => r.role !== 'sensor')
+    .map((row) => {
+      const marked = !onSensor && row.id === current;
+      const hint = marked && status ? status : row.role === 'proxy' ? BASE_ADDS.proxy : describeDelivered(row);
+      return item(
+        row.id,
+        marked,
+        row.role === 'proxy' ? 'Proxy' : row.name,
+        renditionFacts(row, formatBytes),
+        hint,
+        () => onRendition(row.id),
+        Boolean(row.blocked),
+      );
+    });
+
+  if (sensor) {
+    for (const rung of rungs) {
+      if (rung === 'proxy') continue;
+      const marked = onSensor && rung === base;
+      let hint: string;
+      if (marked) {
+        hint = gain ? `metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}` : (status ?? 'decoding the sensor’s data…');
+      } else if (rung === 'gain' && !onSensor && !sensor.here) {
+        hint = `opens ${sensor.name} from its instance${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}, held for this session`;
+      } else {
+        hint = BASE_ADDS[rung];
+      }
+      items.push(
+        item(
+          rung,
+          marked,
+          rung === 'gain' ? `${sensor.name} → ${BASE_LABELS.gain}` : `→ ${BASE_LABELS[rung]}`,
+          rung === 'gain' ? renditionFacts(sensor, formatBytes) : '',
+          hint,
+          () => onBase(rung),
+        ),
+      );
+    }
+  }
+
+  // What the FILE asks for, said once at the foot: the numbers a person can
+  // check against the picture, rather than a promise.
+  if (calibration) {
+    items.push({
+      id: 'calibration',
+      disabled: true,
+      onSelect: () => {},
+      label: (
+        <span className="font-mono text-3xs text-faint whitespace-normal max-w-[22rem]">this file asks for {calibration}</span>
+      ),
+    });
+  }
+
+  const words = (
+    <>
+      <span className="min-w-0 truncate font-mono text-xs text-ink-soft group-hover:text-accent-ink">{name}</span>
+      {chip && (
+        <span className="min-w-0 truncate font-mono text-3xs tracking-[0.12em] uppercase text-faint group-hover:text-accent-ink">
+          {chip}
+        </span>
+      )}
+    </>
+  );
+
+  // Nothing to choose — one file, no rung: the name stays TEXT. A chevron over
+  // a menu that cannot change anything is an invitation to a dead end.
+  if (items.filter((i) => !i.disabled).length <= 1) {
+    return (
+      <span className={`min-w-0 flex items-baseline gap-2 ${className}`} title={name}>
+        {words}
+      </span>
+    );
+  }
+
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Base">
-        <p>{BASE_HINT}</p>
-      </SectionLegend>
-      <Segmented<DevelopBase>
-        fill
-        size="sm"
-        label="Base"
-        value={base}
-        onChange={onBase}
-        options={[
-          { id: 'render', label: 'Camera render' },
-          { id: 'raw', label: 'RAW' },
-        ]}
-      />
-      <p className="m-0 font-mono text-2xs text-faint leading-relaxed" role="status">
-        {line}
-      </p>
-    </div>
+    <OverflowMenu
+      label="What this picture is developed from"
+      className={`min-w-0 ${className}`}
+      size="sm"
+      align="start"
+      trigger={{
+        bare: true,
+        title: name,
+        className: 'group min-w-0 flex items-baseline gap-2 p-0 border-0 bg-transparent text-left cursor-pointer',
+        text: (
+          <>
+            {words}
+            <span className="flex-none font-mono text-3xs text-faint group-hover:text-accent-ink" aria-hidden="true">
+              ▾
+            </span>
+          </>
+        ),
+      }}
+      items={items}
+    />
   );
 }

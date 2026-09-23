@@ -1,0 +1,669 @@
+import {
+  forwardRef,
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MutableRefObject,
+  type ReactNode,
+} from 'react';
+import {
+  MONTH_GAP,
+  monthCell,
+  monthWidth,
+  scrollForWeek,
+  tripBlocks,
+  visibleBlock,
+  visibleWeekSpan,
+  weekIndexOf,
+  weekRuns,
+  type MonthBlock,
+  type WeekRow,
+  type WeekSpan,
+} from '../../shared/roadtrip/month-grid';
+import { stageTint } from '../../shared/roadtrip/stage-ruler';
+import { daysBetween, formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { stageAt, type DayCell } from '../../shared/roadtrip/trip-coverage';
+import { stageLabel } from '../../shared/roadtrip/trip-places';
+import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
+import { useElementWidth } from '../../shared/ui/use-element-width';
+import { HEATMAP_LEVELS as LEVELS } from './heatmap-ramp';
+import {
+  DayCard,
+  DayMenu,
+  cellTitle,
+  levelOf,
+  type DayMenuItem,
+  type DayStage,
+  type Hovered,
+  type Menu,
+} from './DayHeatmap';
+import YearMap from './YearMap';
+
+interface MonthCalendarProps {
+  trip: TripDoc;
+  days: readonly DayCell[];
+  selected: IsoDate | null;
+  onSelect: (date: IsoDate) => void;
+  /** The leg a day belongs to, for the cell's name and card. */
+  stageOf?: (date: IsoDate) => DayStage | null;
+  /** What a right-click on a day offers. */
+  menuFor?: (date: IsoDate) => DayMenuItem[];
+  /** A leg's ribbon was tapped. */
+  onOpenLeg?: (id: string) => void;
+  /** The leg drawn open, its ribbon raised. */
+  selectedLegId?: string | null;
+  /**
+   * A leg being ADJUSTED on the calendar: only its ribbon is drawn, every day
+   * outside it fades, and its two ends carry a grip that is dragged over the
+   * cells — one cell, one day. The phone's replacement for the ruler's drag
+   * (`docs/roadtrip-overview-mobile.md` §8.3).
+   */
+  adjust?: AdjustLeg;
+  /**
+   * The PICTURES view: a told day draws its own hook thumbnail in its cell
+   * instead of its rung. Absent, the ramp is drawn. Keyed by date; a told day
+   * with no entry (its hook not read yet, or never painted) keeps its rung —
+   * the honest fallback, never a blank tile.
+   */
+  pictures?: ReadonlyMap<IsoDate, DayPicture>;
+  /** The month on screen changed — what the pictures view reads its window from. */
+  onVisible?: (block: MonthBlock) => void;
+  /**
+   * At most this many blocks side by side, wrapping — a wide screen's layout.
+   * How many really sit in a row is what the width allows at a cell a mouse
+   * can still aim at (`FIT_CELL`): two at 1280px beside the library's rail,
+   * three at 1440. One is the phone's stack.
+   */
+  columns?: number;
+  /** Drawn between the map and the scroller — the wide screen's stage ruler. */
+  between?: ReactNode;
+  /**
+   * Something drawn INSIDE the scroller after the blocks — a hint, a spacer
+   * — so it scrolls away with them rather than eating the calendar's height.
+   */
+  tail?: ReactNode;
+  /**
+   * The side room, in pixels, paid INSIDE the scroller and under the map —
+   * never by the box around them. A gutter outside a scroll container is
+   * paper the content is clipped against (`frontend.md`): a selected cell on
+   * the Monday column lost its outline to it. In here it scrolls with the
+   * weeks and an outline at the edge has somewhere to draw.
+   */
+  gutter?: number;
+}
+
+/** What a cell shows of a day in the pictures view. */
+export interface DayPicture {
+  /** The hook of the day's first piece (a published one first), as an object URL. */
+  url: string;
+  /** How many pieces the day holds. */
+  count: number;
+  /** Whether any of them went out. */
+  published: boolean;
+}
+
+export interface AdjustLeg {
+  stage: TripStage;
+  /** An edge was moved to a day — by a grip, or by a tap on the day. */
+  onEdge: (edge: 'start' | 'end', date: IsoDate) => void;
+}
+
+const WEEKDAYS = ['Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa', 'Su'] as const;
+/** The hover callback while a leg is adjusted: nothing, and the SAME nothing every render. */
+const NO_HOVER = () => undefined;
+const RIBBON = 12;
+/** The grip on an adjusted leg's end: a finger's target, over the cell's foot. */
+const GRIP = 28;
+/** Between two blocks drawn side by side. */
+const COLUMN_GAP = 24;
+/** The narrowest cell a row of blocks may be packed down to. */
+const FIT_CELL = 34;
+
+/**
+ * The trip as a stack of calendar months, the phone's own calendar — one
+ * block per month, seven columns Monday to Sunday, the page scrolling. Built
+ * for the compact shell, where the fitted heatmap gave a 345-day trip a 6px
+ * cell (`docs/roadtrip-overview-mobile.md` §2): here the cell is a seventh of
+ * the width and there is nothing to invent. The weekday pattern the heatmap
+ * exists for survives, because the columns ARE the weekdays.
+ *
+ * Above it the year map keeps the whole trip in view and jumps a month; the
+ * map's frame is the scroll position, never a brush. Under each week a ribbon
+ * says which leg you were on, and a tap on it opens the leg.
+ */
+export default function MonthCalendar({
+  trip,
+  days,
+  selected,
+  onSelect,
+  stageOf,
+  menuFor,
+  onOpenLeg,
+  selectedLegId = null,
+  adjust,
+  pictures,
+  onVisible,
+  columns = 1,
+  between,
+  tail,
+  gutter = 0,
+}: MonthCalendarProps) {
+  // A SHORT trip (≤ 31 days) is one block of its weeks, a week either side,
+  // and no map: a year map of one column and a whole month drawn for four
+  // days told the maintainer nothing. Longer, the months.
+  const blocks = useMemo(() => tripBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
+  const short = blocks.length === 1 && blocks[0].key === 'weeks';
+  const byDate = useMemo(() => new Map(days.map((d) => [d.date, d])), [days]);
+  const today = useMemo(() => todayIso(), []);
+  const [hovered, setHovered] = useState<Hovered | null>(null);
+  const [menu, setMenu] = useState<Menu | null>(null);
+
+  // The cell FITS the column: a seventh of what the gutters leave — the
+  // block's share of the row when several blocks sit side by side. The box
+  // is measured with its own side room, which the blocks do not get.
+  const [boxRef, boxWidth] = useElementWidth<HTMLDivElement>();
+  const width = Math.max(0, boxWidth - 2 * gutter);
+  const fit = width > 0 ? Math.floor((width + COLUMN_GAP) / (monthWidth(FIT_CELL) + COLUMN_GAP)) : 1;
+  const cols = short ? 1 : Math.max(1, Math.min(Math.floor(columns), fit));
+  const perBlock = cols > 1 ? Math.floor((width - (cols - 1) * COLUMN_GAP) / cols) : width;
+  const cell = monthCell(perBlock);
+  const cellH = Math.round(cell * 0.9);
+  const step = cell + MONTH_GAP;
+  const blockWidth = monthWidth(cell);
+
+  // Which leg a day wears: the last covering stage, as `stageAt` resolves it.
+  const legOf = useCallback(
+    (date: IsoDate): { stage: TripStage; index: number } | null => {
+      if (!isWithin(trip.startDate, trip.endDate, date)) return null;
+      if (adjust) {
+        // Only the leg being adjusted is drawn, at its draft dates.
+        if (!isWithin(adjust.stage.startDate, adjust.stage.endDate, date)) return null;
+        return { stage: adjust.stage, index: Math.max(0, trip.stages.findIndex((s) => s.id === adjust.stage.id)) };
+      }
+      const stage = stageAt(trip, date);
+      if (!stage) return null;
+      return { stage, index: trip.stages.indexOf(stage) };
+    },
+    [trip, adjust],
+  );
+
+  // What is on screen, read from the scroll: the BLOCK under the upper third
+  // (the pictures window, the wide screen's ruler) and the WEEKS at the
+  // pixel — the map's frame, which glides with the thumb because one of its
+  // columns is one of these rows (`weekIndexOf`).
+  const scroller = useRef<HTMLDivElement | null>(null);
+  const blockEls = useRef<(HTMLDivElement | null)[]>([]);
+  const [visible, setVisible] = useState(0);
+  const [span, setSpan] = useState<WeekSpan | null>(null);
+  const weekRows = useCallback((el: HTMLElement): WeekRow[] =>
+    Array.from(el.querySelectorAll<HTMLElement>('[data-week]'), (row) => ({
+      top: row.offsetTop,
+      height: row.offsetHeight,
+      week: Number(row.dataset.week),
+    })), []);
+  const readVisible = useCallback(() => {
+    const el = scroller.current;
+    if (!el) return;
+    const tops = blockEls.current.map((b) => b?.offsetTop ?? 0);
+    const next = visibleBlock(tops, el.scrollTop, el.clientHeight);
+    if (next >= 0) setVisible((v) => (v === next ? v : next));
+    const weeks = visibleWeekSpan(weekRows(el), el.scrollTop, el.clientHeight);
+    setSpan((s) => (s && weeks && s.from === weeks.from && s.to === weeks.to ? s : weeks));
+  }, [weekRows]);
+  // The scroll fires more often than the screen paints: one read per frame
+  // is all the map's frame can use, and each read measures sixty rows.
+  const readQueued = useRef(0);
+  const onScroll = useCallback(() => {
+    if (readQueued.current) return;
+    readQueued.current = requestAnimationFrame(() => {
+      readQueued.current = 0;
+      readVisible();
+    });
+  }, [readVisible]);
+  useEffect(() => () => cancelAnimationFrame(readQueued.current), []);
+  // What a right-click on a day opens. Stable while `menuFor` is, so the
+  // memoised blocks below keep their props across a hover or a scroll.
+  const onMenu = useCallback(
+    (date: IsoDate, cellData: DayCell, x: number, y: number): boolean => {
+      const items = menuFor?.(date) ?? [];
+      if (!items.length) return false;
+      setHovered(null);
+      setMenu({ cell: cellData, items, x, y });
+      return true;
+    },
+    [menuFor],
+  );
+  // One ref callback per block, made once per list of blocks: a fresh
+  // closure per render would re-attach every block's ref on every scroll.
+  const blockRefs = useMemo(
+    () =>
+      blocks.map(
+        (_, i) => (node: HTMLDivElement | null) => {
+          blockEls.current[i] = node;
+        },
+      ),
+    [blocks],
+  );
+  // A new width re-flows every row: the frame must be re-read, not only on scroll.
+  useEffect(() => {
+    readVisible();
+  }, [cell, cols, blocks, readVisible]);
+
+  useEffect(() => {
+    const block = blocks[visible];
+    if (block) onVisible?.(block);
+  }, [visible, blocks, onVisible]);
+
+  const jumpTo = useCallback((index: number, behavior: ScrollBehavior = 'smooth') => {
+    const el = scroller.current;
+    const block = blockEls.current[index];
+    if (!el || !block) return;
+    el.scrollTo({ top: block.offsetTop, behavior });
+  }, []);
+
+  // The map's drag: put a (fractional) week at the top edge, following the
+  // finger frame by frame — so no smoothing, which would lag it.
+  const scrollToWeek = useCallback((week: number) => {
+    const el = scroller.current;
+    if (!el) return;
+    const top = scrollForWeek(weekRows(el), week);
+    if (top !== null) el.scrollTo({ top, behavior: 'auto' });
+  }, [weekRows]);
+
+  // The route says where you are: open on the selected day's month, without
+  // an animation, and follow a day chosen from elsewhere (the silence figure,
+  // a leg opened) only when its cell is off screen.
+  const mounted = useRef(false);
+  useEffect(() => {
+    if (!selected) return;
+    const index = blocks.findIndex((b) => b.tripDays.includes(selected));
+    if (index < 0) return;
+    if (!mounted.current) {
+      mounted.current = true;
+      jumpTo(index, 'auto');
+      readVisible();
+      return;
+    }
+    const el = scroller.current;
+    const cellEl = el?.querySelector<HTMLElement>(`[data-date="${selected}"]`);
+    if (!el || !cellEl) return;
+    const box = el.getBoundingClientRect();
+    const r = cellEl.getBoundingClientRect();
+    if (r.top < box.top || r.bottom > box.bottom) jumpTo(index);
+  }, [selected, blocks, jumpTo, readVisible]);
+
+  // Entering the adjust mode brings the leg on screen: its grips are what
+  // the mode is for, and a leg picked from the sheet is usually months away
+  // from where the calendar was left.
+  const adjustId = adjust?.stage.id ?? null;
+  const adjustStart = adjust?.stage.startDate ?? null;
+  useEffect(() => {
+    if (!adjustId || !adjustStart) return;
+    const index = blocks.findIndex((b) => b.tripDays.includes(adjustStart));
+    if (index >= 0) jumpTo(index);
+    // Keyed on the leg's id alone — a drag that moves its start must not scroll.
+  }, [adjustId, blocks, jumpTo]);
+
+  if (!blocks.length) return null;
+
+  return (
+    <div className="flex flex-col flex-1 min-h-0" aria-label="The journey, month by month">
+      {!short && (
+        <div style={gutter ? { paddingInline: gutter } : undefined}>
+          <YearMap
+            startDate={trip.startDate}
+            endDate={trip.endDate}
+            days={days}
+            blocks={blocks}
+            span={span}
+            onJump={(i) => jumpTo(i)}
+            onScrub={scrollToWeek}
+          />
+        </div>
+      )}
+
+      {between}
+
+      <div
+        ref={(node) => {
+          scroller.current = node;
+          (boxRef as MutableRefObject<HTMLDivElement | null>).current = node;
+        }}
+        onScroll={onScroll}
+        // `relative`, so a block's `offsetTop` is measured from THIS box and a
+        // jump lands on the block's own top rather than that far past it.
+        className={`relative flex-1 min-h-0 overflow-y-auto overscroll-y-contain pb-4 ${
+          cols > 1 ? 'flex flex-wrap content-start' : ''
+        }`}
+        style={{
+          paddingInline: gutter || undefined,
+          ...(cols > 1 ? { columnGap: COLUMN_GAP, rowGap: 12 } : null),
+        }}
+      >
+        {blocks.map((block, i) => (
+          <MonthBlockView
+            key={block.key}
+            ref={blockRefs[i]}
+            block={block}
+            trip={trip}
+            byDate={byDate}
+            selected={selected}
+            today={today}
+            cell={cell}
+            cellH={cellH}
+            step={step}
+            width={blockWidth}
+            legOf={legOf}
+            selectedLegId={selectedLegId}
+            adjust={adjust}
+            pictures={pictures}
+            stageOf={stageOf}
+            onSelect={onSelect}
+            onOpenLeg={onOpenLeg}
+            onHover={adjust ? NO_HOVER : setHovered}
+            centred={cols === 1}
+            onMenu={onMenu}
+          />
+        ))}
+        {tail}
+      </div>
+
+      {hovered && !menu && <DayCard hovered={hovered} />}
+      {menu && <DayMenu menu={menu} onClose={() => setMenu(null)} />}
+    </div>
+  );
+}
+
+interface MonthBlockViewProps {
+  block: MonthBlock;
+  trip: TripDoc;
+  byDate: ReadonlyMap<IsoDate, DayCell>;
+  selected: IsoDate | null;
+  today: IsoDate;
+  cell: number;
+  cellH: number;
+  step: number;
+  width: number;
+  legOf: (date: IsoDate) => { stage: TripStage; index: number } | null;
+  selectedLegId: string | null;
+  adjust?: AdjustLeg;
+  pictures?: ReadonlyMap<IsoDate, DayPicture>;
+  stageOf?: (date: IsoDate) => DayStage | null;
+  onSelect: (date: IsoDate) => void;
+  onOpenLeg?: (id: string) => void;
+  onHover: (h: Hovered | null) => void;
+  /** Returns whether a menu was opened. */
+  onMenu: (date: IsoDate, cell: DayCell, x: number, y: number) => boolean;
+  /**
+   * Centred in the scroller: one block to a row is capped at a 56px cell
+   * (416px), and a compact window wider than that — a tablet, a narrow
+   * desktop window — otherwise leaves it stuck to the left with paper on
+   * the right. Blocks in a grid sit where the grid puts them.
+   */
+  centred: boolean;
+}
+
+
+/**
+ * MEMOISED: the calendar re-renders on every scroll frame (the map's frame is
+ * its `span` state) and on every hovered cell, and a 345-day trip is twelve
+ * of these blocks — 420 day buttons and their ribbons, each cell asking its
+ * leg. Redrawn on every scroll pixel, that measured 28 ms of script per step.
+ * Every prop the calendar hands down is stable across those renders, so a
+ * block redraws only when its own month, the trip or the selection changed.
+ */
+const MonthBlockView = memo(forwardRef<HTMLDivElement, MonthBlockViewProps>(function MonthBlockView(
+  {
+    block,
+    trip,
+    byDate,
+    selected,
+    today,
+    cell,
+    cellH,
+    step,
+    width,
+    legOf,
+    selectedLegId,
+    adjust,
+    pictures,
+    stageOf,
+    onSelect,
+    onOpenLeg,
+    onHover,
+    onMenu,
+    centred,
+  },
+  ref,
+) {
+  const inAdjusted = (date: IsoDate) =>
+    !adjust || isWithin(adjust.stage.startDate, adjust.stage.endDate, date);
+  const told = block.tripDays.filter((d) => (byDate.get(d)?.posts.length ?? 0) > 0).length;
+  const inTrip = (date: IsoDate) => isWithin(trip.startDate, trip.endDate, date);
+
+  return (
+    <div ref={ref} id={`month-${block.key}`} className={centred ? 'mx-auto' : undefined} style={{ width }}>
+      {/* The month's name stays while its weeks scroll under it — on paper
+          that is TRANSLUCENT and blurred, never a flat of the paper token:
+          the page's ground is the paper plus two radial gradients
+          (index.css), so a flat drawn on it was visibly lighter than its
+          surroundings wherever the gradient darkens, a rectangle in the
+          maintainer's screenshot. Blurred, the band takes the tone of
+          whatever is under it, weeks included. */}
+      <div className="sticky top-0 z-10 flex items-baseline gap-2 h-7 bg-paper/85 backdrop-blur-sm">
+        <span className="font-serif text-lg leading-none">{block.label}</span>
+        {block.tripDays.length > 0 && (
+          <span className="font-mono text-2xs text-muted">
+            {told}/{block.tripDays.length} told
+          </span>
+        )}
+      </div>
+
+      <div className="flex pb-0.5" style={{ gap: MONTH_GAP }} aria-hidden="true">
+        {WEEKDAYS.map((w) => (
+          <span key={w} className="text-center font-mono text-3xs leading-none text-faint" style={{ width: cell }}>
+            {w}
+          </span>
+        ))}
+      </div>
+
+      {block.weeks.map((week, w) => {
+        const runs = weekRuns(
+          week.cells,
+          (date) => legOf(date),
+          (a, b) => a.stage.id === b.stage.id,
+        );
+        const grips: { edge: 'start' | 'end'; col: number }[] = [];
+        if (adjust) {
+          week.cells.forEach((date, col) => {
+            if (date === adjust.stage.startDate) grips.push({ edge: 'start', col });
+            if (date === adjust.stage.endDate) grips.push({ edge: 'end', col });
+          });
+        }
+        // The row's week, counted from the trip's first: the map's column for it.
+        const firstDay = week.cells.find((d) => d !== null) ?? null;
+        const weekIndex = firstDay ? weekIndexOf(firstDay, trip.startDate) : null;
+        const mark = block.marks.find((m) => m.week === w) ?? null;
+        return (
+          <div key={w} className="relative mb-1.5" data-week={weekIndex ?? undefined}>
+            {/* A short trip's block runs across a month's edge: the row
+                holding its 1st says which month begins here. */}
+            {mark && (
+              <div className="font-serif text-base leading-none text-ink-soft pt-1 pb-1.5" aria-hidden="true">
+                {mark.label}
+              </div>
+            )}
+            <div className="flex" style={{ gap: MONTH_GAP }} role="row">
+              {week.cells.map((date, col) => {
+                if (!date) {
+                  return <span key={col} style={{ width: cell, height: cellH }} aria-hidden="true" />;
+                }
+                const data = byDate.get(date);
+                if (!inTrip(date) || !data) {
+                  // The month's own day outside the trip: drawn, so the month
+                  // reads whole, but nothing to open.
+                  return (
+                    <span
+                      key={col}
+                      className="grid place-items-center font-mono text-xs text-line-strong select-none"
+                      style={{ width: cell, height: cellH }}
+                      aria-hidden="true"
+                    >
+                      {Number(date.slice(8, 10))}
+                    </span>
+                  );
+                }
+                const level = levelOf(data);
+                const picture = pictures?.get(date) ?? null;
+                const isSelected = date === selected;
+                const isToday = date === today;
+                const stage = stageOf?.(date) ?? null;
+                const show = (el: HTMLElement) => {
+                  const r = el.getBoundingClientRect();
+                  onHover({ cell: data, stage, x: r.left + r.width / 2, y: r.top });
+                };
+                return (
+                  <button
+                    key={col}
+                    type="button"
+                    role="gridcell"
+                    data-date={date}
+                    onClick={() => onSelect(date)}
+                    onContextMenu={(e) => {
+                      if (onMenu(date, data, e.clientX, e.clientY)) e.preventDefault();
+                    }}
+                    onPointerEnter={(e) => {
+                      if (e.pointerType === 'mouse') show(e.currentTarget);
+                    }}
+                    onPointerLeave={() => onHover(null)}
+                    onFocus={(e) => show(e.currentTarget)}
+                    onBlur={() => onHover(null)}
+                    aria-label={cellTitle(data, stage)}
+                    aria-selected={isSelected}
+                    className={`relative p-0 box-border rounded-[8px] font-mono text-xs tabular-nums cursor-pointer overflow-hidden transition-[box-shadow] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+                      picture
+                        ? `border ${picture.published ? 'border-accent-ink' : 'border-dashed border-line-strong'} text-paper`
+                        : `border-0 ${level >= 3 ? 'text-paper' : level === 0 ? 'text-muted' : 'text-ink-soft'}`
+                    }`}
+                    style={{
+                      width: cell,
+                      height: cellH,
+                      background: picture ? `url(${picture.url}) center / cover no-repeat` : LEVELS[level],
+                      opacity: inAdjusted(date) ? undefined : 0.34,
+                      outline: isSelected && !adjust ? '2px solid var(--color-ink)' : undefined,
+                      outlineOffset: isSelected && !adjust ? 1 : undefined,
+                      boxShadow: isToday && !isSelected ? 'inset 0 0 0 2px var(--color-muted)' : undefined,
+                    }}
+                  >
+                    {picture ? (
+                      <>
+                        {/* The number on a dark strip along the foot, so it reads on any picture. */}
+                        <span className="absolute inset-x-0 bottom-0 py-px bg-frame/55 text-2xs leading-none text-center">
+                          {Number(date.slice(8, 10))}
+                        </span>
+                        {picture.count > 1 && (
+                          <span className="absolute top-0.5 right-0.5 min-w-[14px] h-[14px] px-1 rounded-full bg-frame/75 text-3xs leading-[14px] text-center">
+                            {picture.count}
+                          </span>
+                        )}
+                      </>
+                    ) : (
+                      Number(date.slice(8, 10))
+                    )}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* The ribbon: which leg you were on, under the week, named where
+                the leg begins and where it enters a new month. */}
+            <div className="relative mt-[3px]" style={{ height: RIBBON }}>
+              {runs.map((run) => {
+                const { stage, index } = run.value;
+                const first = week.cells[run.from] as IsoDate;
+                const last = week.cells[run.to] as IsoDate;
+                const startsHere = first === stage.startDate;
+                const endsHere = last === stage.endDate;
+                // Named where the leg begins and where it enters a new
+                // month — but only where the name has room: a run of one
+                // or two cells is a stub, and a stub reads better blank
+                // than as three letters and an ellipsis (the title keeps
+                // it). A leg starting on a weekend is named on the row
+                // after instead, where its ribbon first has the width.
+                const sinceStart = daysBetween(stage.startDate, first);
+                const carried = run.from === 0 && sinceStart !== null && sinceStart > 0 && sinceStart <= 2;
+                const named = run.to - run.from >= 2 && (startsHere || carried || (run.from === 0 && w === 0));
+                const tint = stageTint(index);
+                const on = stage.id === selectedLegId;
+                return (
+                  <button
+                    key={stage.id}
+                    type="button"
+                    onClick={() => onOpenLeg?.(stage.id)}
+                    title={`${stageLabel(stage) || 'Unnamed stage'} · ${formatIsoDate(stage.startDate)} → ${formatIsoDate(stage.endDate)}`}
+                    aria-label={`Open the stage ${stageLabel(stage) || ''}`.trim()}
+                    aria-pressed={on}
+                    className={`absolute top-0 box-border px-1.5 border-0 text-left text-3xs leading-[12px] truncate cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ink ${
+                      on ? 'text-ink font-semibold' : 'text-ink-soft'
+                    }`}
+                    // One flat tint and one rule for its shape: rounded at
+                    // the leg's two real ends, square where the WEEK cuts
+                    // it — so a ribbon continuing on the next row reads as
+                    // a continuation and a whole leg reads as a pill. The
+                    // darker cap that marked a start was the maintainer's
+                    // "radical" cut: it drew a head on every leg.
+                    style={{
+                      left: run.from * step,
+                      width: (run.to - run.from + 1) * cell + (run.to - run.from) * MONTH_GAP,
+                      height: RIBBON,
+                      borderRadius: `${startsHere ? 6 : 0}px ${endsHere ? 6 : 0}px ${endsHere ? 6 : 0}px ${startsHere ? 6 : 0}px`,
+                      background: `color-mix(in oklch, ${tint} ${on ? 55 : 30}%, var(--color-paper))`,
+                    }}
+                  >
+                    {named ? stageLabel(stage) || 'Unnamed stage' : ''}
+                  </button>
+                );
+              })}
+            </div>
+
+            {/* The adjusted leg's ends: a grip each, dragged over the cells.
+                It is the one surface here that WRITES sideways, so it alone
+                takes the pointer (`touch-none`); the day under the finger is
+                read from the cell it is over, so the drag crosses weeks. */}
+            {grips.map((g) => (
+              <button
+                key={g.edge}
+                type="button"
+                aria-label={`${g.edge === 'start' ? 'Arrival' : 'Departure'}, ${formatIsoDate(g.edge === 'start' ? adjust!.stage.startDate : adjust!.stage.endDate)} — drag over the days, or use the steppers below`}
+                onPointerDown={(e) => {
+                  if (!e.isPrimary) return;
+                  e.currentTarget.setPointerCapture(e.pointerId);
+                  if (e.pointerType === 'touch') navigator.vibrate?.(8);
+                }}
+                onPointerMove={(e) => {
+                  if (!e.currentTarget.hasPointerCapture(e.pointerId)) return;
+                  const under = document.elementFromPoint(e.clientX, e.clientY)?.closest<HTMLElement>('[data-date]');
+                  const date = under?.dataset.date;
+                  if (date) adjust!.onEdge(g.edge, date);
+                }}
+                onPointerUp={(e) => {
+                  if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+                }}
+                className="absolute z-20 p-0 box-border rounded-full border-[3px] border-ink bg-paper shadow-[0_2px_6px_rgba(43,33,18,0.35)] cursor-ew-resize touch-none focus:outline-none focus-visible:ring-2 focus-visible:ring-accent"
+                style={{
+                  width: GRIP,
+                  height: GRIP,
+                  left: g.col * step + cell / 2 - GRIP / 2,
+                  top: cellH - GRIP / 2 + 4,
+                }}
+              />
+            ))}
+          </div>
+        );
+      })}
+    </div>
+  );
+}));

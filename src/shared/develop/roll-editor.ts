@@ -4,11 +4,11 @@
  * (`tools/develop/RollEditor.tsx`) feeds it plain descriptions.
  */
 
-export type WorkbenchTab = 'develop' | 'detail' | 'layers' | 'crop' | 'export';
+export type WorkbenchTab = 'adjust' | 'detail' | 'layers' | 'crop' | 'export';
 
 /** The inspector's tabs, in order — the SAME list drives the desktop strip and the phone's bottom bar. */
 export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
-  { id: 'develop', label: 'Develop' },
+  { id: 'adjust', label: 'Adjust' },
   { id: 'detail', label: 'Detail' },
   { id: 'layers', label: 'Layers' },
   { id: 'crop', label: 'Crop' },
@@ -111,22 +111,35 @@ export type EditorKeyAction =
   | 'zoom'
   | 'copy'
   | 'paste'
-  | 'crop'
-  | 'develop'
+  | { tab: WorkbenchTab }
   | 'swap'
   | 'help'
   | 'facts'
   | null;
 
 /**
+ * The letter each inspector tab answers to — its own initial, which is what
+ * makes the set learnable in one reading: `A`djust, `D`etail, `L`ayers,
+ * `C`rop, `E`xport. `R` used to open the crop and named nothing.
+ */
+const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
+  a: 'adjust',
+  d: 'detail',
+  l: 'layers',
+  c: 'crop',
+  e: 'export',
+};
+
+/**
  * What a key press means in the editor, or null when it belongs to someone
  * else. ←/→ move along the strip, `\` holds "before" (its release is the
- * caller's), `Z` goes closer or back to the fit, `R` opens the Crop tab and
- * `D` the Develop tab, `X` swaps the crop's orientation, `H` (or `?`) the
- * shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V copy and paste
- * the develop. A field or
- * a slider keeps every key it could use; a held arrow does step (it is how a
- * strip is swept), a held `\` does not re-press.
+ * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
+ * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, `H`
+ * (or `?`) the shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V
+ * copy and paste the develop — the chord is read first, so ⌘C stays copy while
+ * a bare `C` opens the crop. A field or a slider keeps every key it could use;
+ * a held arrow does step (it is how a strip is swept), a held `\` does not
+ * re-press.
  */
 export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.targetTypes || press.altKey) return null;
@@ -147,8 +160,8 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.repeat) return null;
   if (press.key === '\\') return 'hold';
   if (press.key === 'z' || press.key === 'Z') return 'zoom';
-  if (press.key === 'r' || press.key === 'R') return 'crop';
-  if (press.key === 'd' || press.key === 'D') return 'develop';
+  const tab = TAB_KEYS[press.key.toLowerCase()];
+  if (tab) return { tab };
   // The crop's portrait ↔ landscape; the editor answers it on the Crop tab only.
   if (press.key === 'x' || press.key === 'X') return 'swap';
   if (press.key === 'h' || press.key === 'H') return 'help';

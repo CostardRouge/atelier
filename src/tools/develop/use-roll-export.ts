@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import {
@@ -6,22 +6,37 @@ import {
   describeRun,
   exportName,
   type DeliverySummary,
-  type OriginalInfo,
   type PictureSize,
 } from '../../shared/develop/roll-export';
-import { measurePicture, renderRollPicture } from '../../shared/develop/roll-render';
+import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
-import { knownIdentity, mediaOrigin, type MediaOrigin } from '../../shared/projects/media-identity';
+import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
 import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
-import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
+import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
-import { isRawDevelop, rawGainOf, withoutBase } from '../../shared/develop/develop';
-import { isRawImage } from '../../shared/library/assets';
-import { canDecodeRaw } from '../../shared/raw/raw-decoder';
+import {
+  BASE_LABELS,
+  baseRung,
+  developBase,
+  isRawDevelop,
+  rawGainOf,
+  withoutBase,
+} from '../../shared/develop/develop';
+import {
+  calibrationAt,
+  readRawCalibration,
+  topRung,
+  type RawCalibration,
+} from '../../shared/raw/calibration';
+import { deliveredSourceFor, fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { trackedFetch } from '../../shared/tasks/tracked';
+import { startTask } from '../../shared/tasks/tasks';
+import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/run-plan';
 
 /**
  * What the last run rendered, and each file's own capture on its instance.
@@ -50,15 +65,16 @@ export interface RollExports {
   lastRun: RollRun | null;
   /** What the OPEN picture will deliver, or null until its size is known. */
   openDelivery: DeliverySummary | null;
-  /** The open picture's FILE size in pixels, once measured — the crop's tag reads it. */
-  openSize: PictureSize | null;
+  /**
+   * The open picture's FILE size in pixels, once measured — the crop's tag
+   * reads it, and so does the fidelity chip, which says whether those pixels
+   * are the file's own or the render inside a RAW.
+   */
+  openSize: MeasuredPicture | null;
+  /** What the whole run will deliver, picture by picture, and the bytes it costs — before a byte is fetched. */
+  plan: RunPlan;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
-}
-
-function originalOf(origin: MediaOrigin | null): OriginalInfo | null {
-  if (!origin || origin.fidelity !== 'proxy') return null;
-  return { width: origin.width, height: origin.height, name: origin.name ?? null, bytes: origin.bytes ?? null };
 }
 
 /**
@@ -79,6 +95,8 @@ export function useRollExport({
   fileFor,
   openId,
   lutFor,
+  siblingsOf,
+  proxiesOnly = false,
 }: {
   roll: RollDoc;
   files: ReadonlyMap<string, File>;
@@ -86,15 +104,50 @@ export function useRollExport({
   fileFor: (picture: RollPicture) => Promise<File | null>;
   openId: string | null;
   lutFor: (picture: RollPicture) => CubeLut | null;
+  /** The capture files a folder listed beside a local picture (`AssetParts.siblings`) — where its RAW may be. */
+  siblingsOf?: (file: File) => readonly File[];
+  /**
+   * *Proxies only, for this run* (`docs/capture-renditions.md` §13.2): every
+   * picture leaves from what is in hand, a RAW base set aside and said. A
+   * run-time choice, never on the document — "not now, not on this
+   * connection" is about this machine, not about the roll.
+   */
+  proxiesOnly?: boolean;
 }): RollExports {
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  const latest = useRef({ roll, files, fileFor, lutFor });
-  latest.current = { roll, files, fileFor, lutFor };
+  const latest = useRef({ roll, files, fileFor, lutFor, siblingsOf, proxiesOnly });
+  latest.current = { roll, files, fileFor, lutFor, siblingsOf, proxiesOnly };
+
+  // What the run will deliver, picture by picture, before a byte is fetched.
+  // Re-planned whenever the session holds something new — the stage fetching
+  // a file is what turns "to fetch" into "in hand".
+  const held = useSyncExternalStore(subscribeHeld, heldVersion);
+  const plan = useMemo<RunPlan>(() => {
+    const factsFor = (picture: RollPicture): PictureFacts => {
+      const file = files.get(picture.id) ?? null;
+      if (!file) return { file: null, proxy: false, sensor: null, delivered: null, original: null };
+      const origin = mediaOrigin(file);
+      const assetId = knownIdentity(file)?.assetId ?? null;
+      const beside = siblingsOf?.(file) ?? [];
+      const proxy = origin?.fidelity === 'proxy';
+      return {
+        file,
+        proxy,
+        sensor: sensorSourceFor(file, origin, beside, assetId),
+        delivered: deliveredSourceFor(picture.rendition, file, origin, beside, assetId),
+        original:
+          proxy && origin?.name
+            ? { name: origin.name, bytes: origin.bytes ?? null, held: assetId ? heldOriginal(assetId) !== null : false }
+            : null,
+      };
+    };
+    return planRun(roll.pictures, factsFor, proxiesOnly, formatBytes);
+  }, [roll.pictures, files, siblingsOf, proxiesOnly, held]);
 
   // --- the open picture's own size, measured once per file, for the Delivers line
-  const [openSize, setOpenSize] = useState<{ file: File; size: PictureSize } | null>(null);
+  const [openSize, setOpenSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
   const openFile = openId ? (files.get(openId) ?? null) : null;
   useEffect(() => {
     if (!openFile) return;
@@ -107,6 +160,40 @@ export function useRollExport({
     };
   }, [openFile]);
 
+  // How big the render inside the open picture's RAW original is. Read once
+  // per picture, from a megabyte of its head — the row must say what the RUN
+  // will really deliver, and the run takes the larger of that render and the
+  // proxy. Only for a proxy over a RAW; nothing else costs a byte.
+  const [rawRender, setRawRender] = useState<{ file: File; size: PictureSize | null } | null>(null);
+  useEffect(() => {
+    const origin = mediaOrigin(openFile);
+    if (!openFile || !origin || !isProxyOverRaw(origin)) return;
+    let alive = true;
+    void rawRenderOf(origin, knownIdentity(openFile)?.assetId ?? null).then(({ render }) => {
+      if (alive) setRawRender({ file: openFile, size: render });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openFile]);
+
+  // What the OPEN picture's own file is calibrated for — from the RAW in
+  // hand: the file itself, or an original already held. Nothing is fetched
+  // for a sentence; without it the row simply says less.
+  const [rawCal, setRawCal] = useState<{ file: File; cal: RawCalibration | null } | null>(null);
+  useEffect(() => {
+    if (!openFile) return;
+    const source = sensorSourceFor(openFile, mediaOrigin(openFile), siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null)?.held ?? null;
+    if (!source) return;
+    let alive = true;
+    void readRawCalibration(source).then((cal) => {
+      if (alive) setRawCal({ file: openFile, cal });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [openFile, siblingsOf]);
+
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   let openDelivery: DeliverySummary | null = null;
   if (open && openFile && openSize && openSize.file === openFile) {
@@ -114,24 +201,46 @@ export function useRollExport({
     openDelivery = deliverySummary(
       openSize.size,
       origin?.fidelity === 'proxy',
-      originalOf(origin),
+      originalOf(origin, rawRender?.file === openFile ? rawRender.size : null),
       open.framing,
       pictureAspectRatio(open.aspect, openSize.size.width, openSize.size.height),
       open.border,
-      roll.export,
+      { longEdge: roll.export.longEdge, pixels: proxiesOnly ? 'proxies' : 'auto' },
     );
-    if (isRawDevelop(open.develop)) {
-      // The row was measured on the render; a RAW develop leaves from the
-      // sensor's data at its own density, and the reason says so.
+    const chosen = proxiesOnly
+      ? null
+      : deliveredSourceFor(open.rendition, openFile, origin, siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null);
+    if (chosen && !isRawDevelop(open.develop)) {
+      // The picture's own answer: the file set above the photograph, at its
+      // own size — measured when it is fetched, never planned from the proxy.
       openDelivery = {
         ...openDelivery,
-        reason: 'developed on its RAW — delivered from the sensor’s data, decoded at its own size',
+        from: 'original',
+        line: `${chosen.name} · as chosen${chosen.held ? '' : chosen.bytes ? ` · ${formatBytes(chosen.bytes)} to fetch` : ''}`,
+        reason: 'delivered from the file chosen above the photograph, at its own size',
+      };
+    } else if (proxiesOnly && isRawDevelop(open.develop)) {
+      openDelivery = { ...openDelivery, reason: 'proxies only for this run — its RAW base is set aside and the numbers act on the proxy' };
+    } else if (isRawDevelop(open.develop)) {
+      // The row was measured on the render; a RAW develop leaves from the
+      // sensor's data at its own density, and the reason says so — including
+      // the one way the file can differ from the stage: the export climbs to
+      // the top rung the file carries, and a picture left standing on `gain`
+      // will deliver a calibration the preview did not show.
+      const at = developBase(open.develop);
+      const top = rawCal?.file === openFile ? topRung(rawCal.cal) : at;
+      openDelivery = {
+        ...openDelivery,
+        reason:
+          baseRung(top) > baseRung(at)
+            ? `developed on its RAW at ${BASE_LABELS[at]} — the export climbs to ${BASE_LABELS[top]}, the calibration its own file carries, so the file will differ from the stage`
+            : `developed on its RAW at ${BASE_LABELS[at]} — delivered from the sensor’s data, decoded at its own size`,
       };
     }
   }
 
   const exportPictures = useCallback(async (ids: readonly string[]) => {
-    const { roll: r, files: f, fileFor: fetchFor, lutFor: cubeFor } = latest.current;
+    const { roll: r, files: f, fileFor: fetchFor, lutFor: cubeFor, proxiesOnly: onlyProxies } = latest.current;
     const targets = ids.flatMap((id) => r.pictures.filter((p) => p.id === id));
     if (targets.length === 0) return;
     setNote(null);
@@ -150,6 +259,15 @@ export function useRollExport({
       return;
     }
     setExporting('Preparing…');
+    // The run as a TASK (`tasks.md`, T4): one per run, a picture at a time on
+    // its bar, a Cancel that stops BETWEEN two pictures — and ends a fetch or
+    // a RAW decode in flight — and keeps what was rendered (his question 2).
+    const controller = new AbortController();
+    const task = startTask({
+      label: targets.length === 1 ? `Exporting ${targets[0].ref.name}` : `Exporting ${targets.length} pictures`,
+      progress: 0,
+      cancel: () => controller.abort(),
+    });
     const rendered: File[] = [];
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
@@ -161,7 +279,9 @@ export function useRollExport({
     const named = new Set<string>();
     try {
       for (const [i, picture] of targets.entries()) {
+        if (controller.signal.aborted) break;
         const step = `${i + 1}/${targets.length}`;
+        task.update({ progress: i / targets.length, detail: `${step} · ${picture.ref.name}` });
         let file = f.get(picture.id) ?? null;
         if (!file) {
           setExporting(`Fetching ${step}…`);
@@ -192,32 +312,79 @@ export function useRollExport({
           // reachable, the render leaves instead and the run says so —
           // never the RAW with numbers nobody has seen on it, and never
           // silently the wrong material.
+          const beside = latest.current.siblingsOf?.(file) ?? [];
           let raw: { file: File; gain: number } | null = null;
           if (isRawDevelop(picture.develop)) {
-            let rawFile: File | null = canDecodeRaw(file) ? file : null;
-            if (!rawFile && origin?.name && isRawImage(origin.name) && origin.fetchOriginal) {
-              const key = identity?.assetId ?? null;
-              rawFile = key ? heldOriginal(key) : null;
-              if (!rawFile) {
-                setExporting(`Fetching the RAW ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
-                rawFile = await origin.fetchOriginal();
-                if (key) holdOriginal(key, rawFile);
+            if (onlyProxies) {
+              failures.push(`${picture.ref.name} left from its proxy: proxies only for this run, its RAW base set aside`);
+            } else {
+              // The one answer the stage gave (`sensor-source.ts`): the file,
+              // a folder sibling, the proxy's original or the capture's companion.
+              const sensor = sensorSourceFor(file, origin, beside, identity?.assetId ?? null);
+              let rawFile: File | null = null;
+              if (sensor) {
+                if (!sensor.held) setExporting(`Fetching ${sensor.name} ${step}${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}…`);
+                rawFile = await fetchSourceFile(sensor, identity?.assetId ?? null, controller.signal).catch(() => null);
               }
+              if (controller.signal.aborted) break;
+              if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
+              else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
             }
-            if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
-            else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
+          }
+          // The file set above the photograph (`RollPicture.rendition`) is
+          // the picture's own answer to which pixels: fetched once and held,
+          // exactly as the stage did. Below the sensor only, and never under
+          // "proxies only".
+          const chosen = !raw && !onlyProxies ? deliveredSourceFor(picture.rendition, file, origin, beside, identity?.assetId ?? null) : null;
+          if (chosen) {
+            if (!chosen.held) setExporting(`Fetching ${chosen.name} ${step}${chosen.bytes ? ` · ${formatBytes(chosen.bytes)}` : ''}…`);
+            try {
+              source = await fetchSourceFile(chosen, identity?.assetId ?? null, controller.signal);
+            } catch {
+              // The run's own cancel ended this fetch: not a failure to list.
+              if (controller.signal.aborted) break;
+              failures.push(`${picture.ref.name}: ${chosen.name} could not be fetched — what is in hand left instead`);
+            }
+          }
+          // WITHIN the RAW rungs, the export climbs to the top one the file
+          // can give: the calibration is the body's own, it is two GPU passes,
+          // and there is no reason to deliver less of it than exists. It
+          // never crosses proxy → gain, which is decision 4 and the rule
+          // `raw.md` states twice: numbers nobody has seen on the sensor's
+          // data are never applied to it by an export.
+          let calibration = null as ReturnType<typeof calibrationAt> | null;
+          if (raw) {
+            const cal = await readRawCalibration(raw.file);
+            calibration = calibrationAt(topRung(cal), cal);
           }
           // Decide from the file's own pixels which pixels to deliver from.
+          // Where nothing above decided, `Auto`'s arithmetic still does — never
+          // fewer pixels than a reachable original would give the frame — and
+          // "proxies only" turns it off.
+          const undecided = !raw && source === file;
           const size = raw ? null : await measurePicture(file);
-          if (size && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
+          // A RAW original hands over the RENDER inside it and nothing else,
+          // so its size is read from the head before anything is decided —
+          // that head then pays for the EXIF too. Without this the delivery
+          // would be guessing, and decision 4's guess (the embedded render
+          // wins) is measurably wrong on the maintainer's own DJI.
+          let rawHead: Uint8Array | null = null;
+          let originalRender: PictureSize | null = null;
+          if (size && undecided && !onlyProxies && isProxyOverRaw(origin)) {
+            setExporting(`Reading the RAW’s head ${step}…`);
+            const probed = await rawRenderOf(origin!, identity?.assetId ?? null);
+            originalRender = probed.render;
+            rawHead = probed.head;
+          }
+          if (size && undecided && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
             const summary = deliverySummary(
               size,
               true,
-              originalOf(origin),
+              originalOf(origin, originalRender),
               picture.framing,
               pictureAspectRatio(picture.aspect, size.width, size.height),
               picture.border,
-              r.export,
+              { longEdge: r.export.longEdge, pixels: onlyProxies ? 'proxies' : 'auto' },
             );
             if (summary.from === 'original') {
               const held = identity?.assetId ? heldOriginal(identity.assetId) : null;
@@ -227,7 +394,11 @@ export function useRollExport({
                 setExporting(
                   `Fetching the original ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`,
                 );
-                source = await origin.fetchOriginal();
+                const fetchOriginal = origin.fetchOriginal;
+                source = await trackedFetch(
+                  { label: `Fetching ${origin.name ?? 'the original'}`, scope: identity?.assetId ?? null, bytes: origin.bytes ?? null, signal: controller.signal },
+                  (opts) => fetchOriginal(opts),
+                );
                 if (identity?.assetId) holdOriginal(identity.assetId, source);
               }
             }
@@ -240,10 +411,10 @@ export function useRollExport({
           const key = identity?.assetId ?? null;
           const originalFile =
             raw?.file ?? (source !== file ? source : origin?.fidelity === 'proxy' ? (key ? heldOriginal(key) : null) : file);
-          let head: Uint8Array | null = null;
+          let head: Uint8Array | null = rawHead;
           if (originalFile) {
             head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
-          } else if (origin?.fetchOriginalHead) {
+          } else if (!head && origin?.fetchOriginalHead) {
             setExporting(`Reading the original’s EXIF ${step}…`);
             head = await origin
               .fetchOriginalHead(EXIF_SLICE_BYTES)
@@ -279,6 +450,7 @@ export function useRollExport({
             return stampExif(jpeg, exif, delivered);
           };
           const out = await renderRollPicture(source, {
+            signal: controller.signal,
             framing: picture.framing,
             aspect: picture.aspect,
             border: picture.border,
@@ -290,7 +462,12 @@ export function useRollExport({
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
             repair: picture.repair ?? null,
+            // The ROLL's texture, not the picture's: grain and halation belong
+            // to the stock, which dresses the whole roll. The document's copy,
+            // which the write-through keeps level with the stack.
+            film: r.grade?.film ?? null,
             raw,
+            calibration,
             hdr,
             stamp,
           });
@@ -330,21 +507,32 @@ export function useRollExport({
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
         } catch (err) {
+          // Cancelled mid-picture: that picture is not a failure to list.
+          if (controller.signal.aborted) break;
           failures.push(`${picture.ref.name}: ${err instanceof Error ? err.message : String(err)}`);
         }
       }
+      const cancelled = controller.signal.aborted;
       if (rendered.length === 0) {
-        setNote(failures[0] ?? 'Nothing could be rendered.');
+        setNote(cancelled ? 'Export cancelled — nothing was written.' : (failures[0] ?? 'Nothing could be rendered.'));
         return;
       }
+      // A cancelled run keeps what it rendered: written, and said as such.
       setExporting('Writing…');
+      task.update({ label: 'Writing the pictures', progress: 0, detail: null });
       const delivery = await deliverFilesTo(target, rendered, {
         replace: r.export.replace,
-        onProgress: (done, total) => setExporting(`Writing ${done}/${total}…`),
+        onProgress: (done, total) => {
+          setExporting(`Writing ${done}/${total}…`);
+          task.update({ progress: done / total, detail: `${done} of ${total}` });
+        },
       });
       const errors = delivery.method === 'folder' ? delivery.errors : [];
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
-      setNote(describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed));
+      setNote(
+        (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
+          describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed),
+      );
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
@@ -352,10 +540,11 @@ export function useRollExport({
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'The pictures could not be exported.');
     } finally {
+      task.done();
       setExporting(null);
     }
   }, []);
 
   const measuredOpen = openFile && openSize && openSize.file === openFile ? openSize.size : null;
-  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, exportPictures };
+  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, plan, exportPictures };
 }

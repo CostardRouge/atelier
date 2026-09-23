@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type MutableRefObject } from 'react';
-import { isFreeAspect, pictureAspectRatio } from '../../shared/develop/crop-aspect';
+import { openingCropChip, pictureAspectRatio, type CropChip } from '../../shared/develop/crop-aspect';
 import {
   aspectIdFor,
   cropFromZone,
@@ -14,11 +14,11 @@ import {
   type CropZone,
   type PictureDims,
 } from '../../shared/develop/crop-rect';
-import { sameFraming, wrapDegrees, type Framing } from '../../shared/media/framing';
+import { isDefaultFraming, sameFraming, wrapDegrees, type Framing } from '../../shared/media/framing';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
+import { CROP_VIEW_FIT, clampCropView, type CropView, type StageBox } from './crop-view';
 
-/** The format chip on screen: Free, Original, or a preset id. */
-export type CropChip = 'free' | 'original' | string;
+export type { CropChip } from '../../shared/develop/crop-aspect';
 
 export interface CropZoneApi {
   /** The decoded picture the zone is measured on; null while decoding. */
@@ -59,30 +59,18 @@ export interface CropZoneApi {
   intent: MutableRefObject<CropZone | null>;
   /**
    * How closely the STAGE looks at the picture — inspection only, never the
-   * zone: a pinch or the wheel on the crop stage moves this, and the crop is
-   * exactly what it was. `x`/`y` pan the view in CSS px.
+   * zone: a pinch, the wheel, the pill or `Z` move this, and the crop is
+   * exactly what it was. Every write is clamped to the stage the stage
+   * reports (`crop-view.ts`), so what is stored is what is drawn.
    */
   view: CropView;
   setView: (view: CropView | ((v: CropView) => CropView)) => void;
+  /** The stage's measured size, which the view is held inside; null while unmeasured. */
+  setStageBox: (box: StageBox | null) => void;
 }
-
-export interface CropView {
-  zoom: number;
-  x: number;
-  y: number;
-}
-
-export const CROP_VIEW_FIT: CropView = { zoom: 1, x: 0, y: 0 };
-export const CROP_VIEW_MAX = 8;
 
 /** How long the dense grid stays after the angle last moved. */
 const ROTATING_MS = 700;
-
-function chipOf(aspect: string): CropChip {
-  if (aspect === 'original') return 'original';
-  if (isFreeAspect(aspect)) return 'free';
-  return ASPECT_PRESETS.some((p) => p.id === aspect) ? aspect : 'free';
-}
 
 /** The ratio a chip holds, on a picture whose DISPLAYED shape is `shown`. */
 function chipRatio(chip: CropChip, shown: number): number | null {
@@ -116,14 +104,35 @@ export function useCropZone({
   onAspect: (aspect: string) => void;
   onFraming: (framing: Framing) => void;
 }): CropZoneApi {
-  const [chip, setChipState] = useState<CropChip>(() => chipOf(aspect));
+  // An untouched picture opens on Free, a cropped one on the chip its stored
+  // crop names (`openingCropChip`). The workbench is keyed per picture, so
+  // stepping along the roll re-asks this for the picture actually open.
+  const [chip, setChipState] = useState<CropChip>(() =>
+    openingCropChip(aspect, aspect === 'original' && isDefaultFraming(framing)),
+  );
   const intent = useRef<CropZone | null>(null);
   // What this hook last wrote, to tell its own writes from an undo, a batch
   // verb or an instance's copy — after which the intent is the zone on screen.
   const written = useRef<{ aspect: string; framing: Framing } | null>(null);
   const [rotating, setRotating] = useState(false);
   const [levelling, setLevelling] = useState(false);
-  const [view, setView] = useState<CropView>(CROP_VIEW_FIT);
+  const [rawView, setRawView] = useState<CropView>(CROP_VIEW_FIT);
+  const [stageBox, setStageBox] = useState<StageBox | null>(null);
+  // Held inside the stage on every write AND whenever the stage, the picture
+  // or its quarter turn changes under a zoomed view.
+  const view = useMemo(
+    () => clampCropView(rawView, stageBox, src, framing.rotation),
+    [rawView, stageBox, src, framing.rotation],
+  );
+  const bounds = useRef({ stageBox, src, rotation: framing.rotation });
+  bounds.current = { stageBox, src, rotation: framing.rotation };
+  const setView = useCallback((next: CropView | ((v: CropView) => CropView)) => {
+    setRawView((v) => {
+      const b = bounds.current;
+      const held = clampCropView(v, b.stageBox, b.src, b.rotation);
+      return clampCropView(typeof next === 'function' ? next(held) : next, b.stageBox, b.src, b.rotation);
+    });
+  }, []);
   const rotatingTimer = useRef(0);
   useEffect(() => () => window.clearTimeout(rotatingTimer.current), []);
 
@@ -289,7 +298,8 @@ export function useCropZone({
 
   const reset = useCallback(() => {
     const { src: s, onAspect: setAspect, onFraming: setFraming, aspect: a } = live.current;
-    setChipState('original');
+    // Reset leaves the picture untouched, which is where Free is the default.
+    setChipState('free');
     intent.current = s ? { cx: 0, cy: 0, w: s.width, h: s.height } : null;
     if (a !== 'original') setAspect('original');
     const whole: Framing = { scale: 1, x: 0, y: 0, rotation: 0, flipX: false, flipY: false, fit: 'cover' };
@@ -318,5 +328,6 @@ export function useCropZone({
     intent,
     view,
     setView,
+    setStageBox,
   };
 }

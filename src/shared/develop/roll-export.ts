@@ -5,21 +5,48 @@
  * the original is worth fetching for it, the sentence that says so, and the
  * file's name. Pure and DOM-free; `roll-render.ts` does the drawing.
  *
- * Two axes, kept apart as decided there: the PIXELS (the Library's file — a
- * Winnow proxy or the file itself — against the full-size original) are chosen
- * here per picture; the MATERIAL (an 8-bit render against a RAW) is not chosen
- * at export at all — a RAW original is never fetched, and the picture is
- * delivered from the render the person looked at (decision 4).
+ * Since 2026-09-21 (`docs/capture-renditions.md` §13.2) which file a picture
+ * leaves from is the PICTURE's own choice — its rendition, on the document —
+ * and this module keeps only the arithmetic that was never a preference:
+ * never deliver fewer pixels than a reachable original would give the frame
+ * asked for. That is `Auto`, unnamed, in every host; the one word a door still
+ * says is `proxies` — *Proxies only, for this run*, the Develop editor's
+ * switch, never on a roll. A RAW original is reached only through the render
+ * inside it, measured (decision 4, corrected below).
  */
 
-import { isRawImage } from '../library/assets';
+import { isDrawableImage, isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
-import type { RollExport, RollOriginals } from './roll-types';
+import type { RollExport } from './roll-types';
+
+/**
+ * How a delivery weighs the original against the file in hand: `auto` fetches
+ * it only where the file would upscale into the frame; `proxies` never — the
+ * Develop editor's *Proxies only, for this run*. A third word, `originals`,
+ * forced a fetch from the Trips and Studio doors until 2026-09-21 and was
+ * retired with them: forcing more pixels than the frame needs is what the
+ * picture's rendition is for, not a door.
+ */
+export type PixelsMode = 'auto' | 'proxies';
 
 export interface PictureSize {
   width: number;
   height: number;
+}
+
+/**
+ * The picture in hand as the delivery knows it: its pixels, and whether they
+ * are the render a camera wrote inside a RAW (`MeasuredPicture`). The label on
+ * the *Delivers* row turns on that flag — `File 8064 px` over a DNG whose only
+ * decodable half is 960 × 540 is the one sentence the plan must never say.
+ */
+export type DeliverySource = PictureSize & { viaRawPreview?: boolean };
+
+/** What the *Delivers* row calls the pixels it is measuring. */
+export function sourceLabel(fileIsProxy: boolean, source: DeliverySource): string {
+  if (fileIsProxy) return 'Proxy';
+  return source.viaRawPreview ? 'Camera render' : 'File';
 }
 
 /** What a source says about the picture's original, when the file in hand is a proxy. */
@@ -29,6 +56,29 @@ export interface OriginalInfo {
   /** The original's file name, for its extension. */
   name: string | null;
   bytes: number | null;
+  /**
+   * For a RAW: the size of the RENDER inside it — all a browser ever decodes
+   * of one — read from its head (`rawSizesFrom`), never assumed.
+   *
+   * `width`/`height` above are the SENSOR's, which is what the source
+   * recorded and what no delivery here can reach: 8064 × 4536 on the
+   * maintainer's DJI against a 960 × 540 render. Absent means the head has
+   * not been read, and nothing is decided on a guess.
+   */
+  render?: PictureSize | null;
+}
+
+/**
+ * The pixels an original can really hand a delivery. For a RAW that is the
+ * render inside it and nothing else — null until its head says how big that
+ * render is, because "a RAW may carry a full-size render" (F5 of
+ * `docs/develop-originals.md`) turned out to be false for the one camera we
+ * have measured, and a 74 MB fetch for 0.52 megapixels is the mistake this
+ * refusal exists to prevent.
+ */
+export function originalPixels(original: OriginalInfo): PictureSize | null {
+  if (isRawImage(original.name ?? '')) return original.render ?? null;
+  return original.width && original.height ? { width: original.width, height: original.height } : null;
 }
 
 /**
@@ -125,13 +175,15 @@ export function pixelHeadroom(src: PictureSize, framing: Framing | null, out: { 
   return t.scale > 0 ? 1 / t.scale : 0;
 }
 
-/** The formats the browser decodes on its own; a RAW, HEIC or TIFF original is delivered from its render. */
-const DECODABLE = new Set(['jpg', 'jpeg', 'png', 'webp', 'avif', 'gif', 'bmp']);
-
+/**
+ * The formats the browser decodes on its own; a RAW, HEIF or TIFF original is
+ * delivered from its render. The list is `assets.ts`'s — the same one that
+ * says which half of a RAW + JPEG pair is shown, since it is the same
+ * question asked twice.
+ */
 export function decodableOriginal(name: string | null): boolean {
   if (!name || isRawImage(name)) return false;
-  const dot = name.lastIndexOf('.');
-  return dot >= 0 && DECODABLE.has(name.slice(dot + 1).toLowerCase());
+  return isDrawableImage(name);
 }
 
 export type PixelsFrom = 'file' | 'original';
@@ -143,17 +195,28 @@ export interface PixelsChoice {
 }
 
 /**
- * Which pixels a picture is delivered from. `Auto` fetches the original only
- * where the file in hand would upscale; `Proxies` never; `Originals` whenever
- * there is one the browser decodes. A file that IS the original, or whose
- * original is a RAW (decision 4), has nothing to choose.
+ * Which pixels a picture is delivered from. `auto` fetches the original only
+ * where the file in hand would upscale; `proxies` never. A file that IS the
+ * original has nothing to choose.
+ *
+ * **A RAW original is the case decision 4 got half right** (2026-09-20). It
+ * said a RAW never checked in Develop is delivered "from its render —
+ * full-size embedded preview, else the proxy", which assumes the embedded
+ * render wins. On the maintainer's own DJI it loses, badly: 960 × 540 against
+ * a 2048 px proxy. So the rule here is the LARGER of the two, measured and
+ * named — and where the render's size has not been read, the proxy delivers,
+ * because a proxy is built FROM that render and fetching the file again to
+ * find out would cost tens of megabytes for pixels that may not be there.
  */
 export function choosePixels(
-  mode: RollOriginals,
+  mode: PixelsMode,
   fileHeadroom: number,
   original: OriginalInfo | null,
+  /** The file in hand, so a RAW's render can be measured against it. */
+  file: PictureSize | null = null,
 ): PixelsChoice {
   if (!original) return { from: 'file', reason: null };
+  if (isRawImage(original.name ?? '')) return chooseAgainstRaw(mode, fileHeadroom, original, file);
   if (!decodableOriginal(original.name)) {
     return {
       from: 'file',
@@ -161,10 +224,44 @@ export function choosePixels(
     };
   }
   if (mode === 'proxies') return { from: 'file', reason: 'proxies only' };
-  if (mode === 'originals') return { from: 'original', reason: 'originals asked for' };
   return fileHeadroom < 1
     ? { from: 'original', reason: `the proxy would be upscaled ×${(1 / fileHeadroom).toFixed(2)}` }
     : { from: 'file', reason: 'the proxy has the pixels this frame needs' };
+}
+
+function chooseAgainstRaw(
+  mode: PixelsMode,
+  fileHeadroom: number,
+  original: OriginalInfo,
+  file: PictureSize | null,
+): PixelsChoice {
+  const render = originalPixels(original);
+  if (!render) {
+    return {
+      from: 'file',
+      reason:
+        'its original is a RAW: only the render inside it is decodable, and this proxy was built from that render — its size is read from the file’s head at export, and the larger of the two delivers',
+    };
+  }
+  const fileLong = file ? Math.max(file.width, file.height) : 0;
+  const rawLong = Math.max(render.width, render.height);
+  if (rawLong <= fileLong * 1.005) {
+    return {
+      from: 'file',
+      reason: `its original is a RAW whose own render is ${rawLong} px against the proxy’s ${fileLong} — the proxy is what leaves`,
+    };
+  }
+  if (mode === 'proxies') return { from: 'file', reason: 'proxies only' };
+  if (fileHeadroom >= 1) {
+    return {
+      from: 'file',
+      reason: `the proxy has the pixels this frame needs — the ${rawLong} px render inside its RAW would buy nothing here`,
+    };
+  }
+  return {
+    from: 'original',
+    reason: `its original is a RAW, and the ${rawLong} px render inside it is larger than the ${fileLong} px proxy`,
+  };
 }
 
 function labelOf(name: string): string {
@@ -172,6 +269,19 @@ function labelOf(name: string): string {
   const dot = name.lastIndexOf('.');
   const ext = dot >= 0 ? name.slice(dot + 1).toUpperCase() : '';
   return ext ? `a ${ext}` : 'a format this browser does not decode';
+}
+
+/**
+ * What the *Delivers* row calls an original it will fetch: the FILE's name,
+ * the same word the fidelity chip's menu uses for that row (2026-09-21, one
+ * vocabulary — `docs/capture-renditions.md` §13.2), and `render` after a
+ * RAW's, since only the render inside it is ever delivered. `Original` is the
+ * fallback for a source that vouched for no name.
+ */
+export function originalLabel(original: OriginalInfo | null): string {
+  const name = original?.name ?? null;
+  if (!name) return 'Original';
+  return isRawImage(name) ? `${name} render` : name;
 }
 
 /**
@@ -223,34 +333,44 @@ export interface DeliverySummary {
  * that cannot fill it is what `Auto` fetches the original for. Without one,
  * the file delivers what it has and the line says what was asked.
  */
+/** What ONE delivery is decided against: the roll's cap, and the door's mode for this run. */
+export interface DeliverySettings {
+  longEdge: RollExport['longEdge'];
+  pixels: PixelsMode;
+}
+
 export function deliverySummary(
-  file: PictureSize,
+  file: DeliverySource,
   fileIsProxy: boolean,
   original: OriginalInfo | null,
   framing: Framing | null,
   aspectRatio: number,
   border: RollBorder | null,
-  settings: Pick<RollExport, 'longEdge' | 'originals'>,
+  settings: DeliverySettings,
 ): DeliverySummary {
-  const known = fileIsProxy && original && original.width && original.height ? original : null;
-  const best = known ? { width: known.width!, height: known.height! } : file;
+  // What the original could really hand over — for a RAW, the render inside
+  // it, and only once its head has said how big that render is.
+  const known = fileIsProxy && original ? originalPixels(original) : null;
+  const best = known ?? file;
   const asked = deliveredLayout(best, aspectRatio, framing, border, settings.longEdge);
   const bordered = border !== null;
   const fileHeadroom = deliveryHeadroom(file, aspectRatio, framing, asked);
-  const choice = choosePixels(settings.originals, fileHeadroom, fileIsProxy ? original : null);
+  const choice = choosePixels(settings.pixels, fileHeadroom, fileIsProxy ? original : null, file);
   if (choice.from === 'original' && known) {
     const headroom = deliveryHeadroom(best, aspectRatio, framing, asked);
+    // A RAW's original is reached only through the render inside it, and the
+    // row says so rather than letting the file's name suggest the sensor.
     return {
       from: 'original',
       out: asked.out,
       headroom,
-      line: deliversLine('Original', asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
+      line: deliversLine(originalLabel(original), asked.out, headroom, null, bordered ? Math.max(asked.zone.w, asked.zone.h) : null),
       reason: choice.reason,
     };
   }
   const own = deliveredLayout(file, aspectRatio, framing, border, settings.longEdge);
   const headroom = deliveryHeadroom(file, aspectRatio, framing, own);
-  const label = fileIsProxy ? 'Proxy' : 'File';
+  const label = sourceLabel(fileIsProxy, file);
   return {
     from: choice.from,
     out: own.out,
@@ -262,6 +382,48 @@ export function deliverySummary(
       Math.max(asked.out.w, asked.out.h),
       bordered ? Math.max(own.zone.w, own.zone.h) : null,
     ),
+    reason: choice.from === 'original' ? 'the original will be measured once fetched' : choice.reason,
+  };
+}
+
+/**
+ * The same decision where the output frame is FIXED rather than capped —
+ * Trips' deck (1920 on the long edge, whatever the picture gives) and a
+ * Studio variant, both of which will upscale rather than deliver less.
+ *
+ * The roll's own `deliverySummary` cannot answer for them: its long edge is a
+ * cap, so a proxy's frame is always "exact" there and the upscale question
+ * is asked against what the original could give. Here the frame is the
+ * frame, so the question is simply whether the pixels in hand fill it —
+ * which is what `pixelHeadroom` has always answered (F3 of
+ * `docs/develop-originals.md`: a landscape proxy cropped to 4:5 at a 1920
+ * export is ×1.25 upscaled). Everything else — which pixels, why, and the
+ * sentence — is the roll's, shared rather than written a second time.
+ *
+ * These hosts have no mode: `auto` is what they do, unnamed (R5 of
+ * `docs/capture-renditions.md`, 2026-09-21). A door that could force the
+ * original, or refuse it, was one control answering the picture's own
+ * question a second time.
+ */
+export function fixedFrameDelivery(
+  file: DeliverySource,
+  fileIsProxy: boolean,
+  original: OriginalInfo | null,
+  framing: Framing | null,
+  out: { w: number; h: number },
+): DeliverySummary {
+  const fileHeadroom = pixelHeadroom(file, framing, out);
+  const choice = choosePixels('auto', fileHeadroom, fileIsProxy ? original : null, file);
+  const best = fileIsProxy && original ? originalPixels(original) : null;
+  if (choice.from === 'original' && best) {
+    const headroom = pixelHeadroom(best, framing, out);
+    return { from: 'original', out, headroom, line: deliversLine(originalLabel(original), out, headroom), reason: choice.reason };
+  }
+  return {
+    from: 'file',
+    out,
+    headroom: fileHeadroom,
+    line: deliversLine(sourceLabel(fileIsProxy, file), out, fileHeadroom),
     reason: choice.from === 'original' ? 'the original will be measured once fetched' : choice.reason,
   };
 }

@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { toLinear } from '../lut/transfer';
+import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import { drawFramed, framePoint, unframePoint, type Framing } from '../media/framing';
@@ -27,10 +28,15 @@ import type { BrushRaster } from '../render/brush-raster';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
+import { isAbortError } from '../sources/fetch-options';
+import { startTask } from '../tasks/tasks';
 import { isDefaultDetail, sameDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
 import { samePatches, type Patch } from '../render/repair';
 import { makeRepairPass } from '../render/repair-pass';
+import { makeGainMapPass } from '../render/gain-map-pass';
+import type { GainField } from '../render/gain-map';
+import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
@@ -59,6 +65,9 @@ interface GraderRecord {
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
+  /** The camera's shading grid — compared by IDENTITY: it is read once per file. */
+  gain: GainField | null;
+  film: FilmTexture | null;
   scale: number;
   w: number;
   h: number;
@@ -92,6 +101,9 @@ function graderFrom(
   detail: DetailSettings | null,
   scale: number,
   repair: readonly Patch[] | null = null,
+  film: FilmTexture | null = null,
+  /** The camera's own shading grid, read from the file and never edited. */
+  gain: GainField | null = null,
 ): HeldGrader | null {
     const cur = slot.current;
     // Geometry or a layer with NO look still needs the GPU: both are passes,
@@ -102,10 +114,15 @@ function graderFrom(
     const needsGpu =
       Boolean(lut) ||
       hasGeometry(geometry) ||
+      Boolean(gain) ||
       stack.length > 0 ||
       Boolean(overlayOf?.mask) ||
       !isDefaultDetail(detail) ||
-      patches.length > 0;
+      patches.length > 0 ||
+      // A texture with nothing but grain in it is still a render: the node is
+      // the only thing that draws it, so "no lut and no pass" stopped meaning
+      // "nothing to do" the day the film node arrived.
+      !isSilentTexture(film);
     if (!needsGpu) {
       cur?.grader.dispose();
       slot.current = null;
@@ -122,7 +139,9 @@ function graderFrom(
       sameLayers(cur.layers, stack) &&
       sameDetail(cur.detail, detail) &&
       samePatches(cur.repair, patches) &&
-      cur.scale === scale
+      cur.gain === gain &&
+      cur.scale === scale &&
+      filmTextureKey(cur.film) === filmTextureKey(film)
     ) {
       return cur.grader;
     }
@@ -136,7 +155,12 @@ function graderFrom(
     // repaired picture.
     const { pre: detailPre, post } = detailPasses(detail, scale);
     const repairPass = makeRepairPass(patches, ar);
-    const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
+    // The camera's own shading goes FIRST of all, ahead of the repair: a
+    // copied pixel is then copied from data the lens has been taken out of,
+    // and a develop is measured on a picture that is not 2.5 stops down in
+    // the corners (`render-gain-map.md`).
+    const gainPass = makeGainMapPass(gain);
+    const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
     const passes = [
       ...geometryPasses(geometry, ar),
       ...cache.passes(stack, ar, rasters),
@@ -149,12 +173,20 @@ function graderFrom(
     // LOOK is still a new grader — the cube is baked, not a pass.
     if (sized && cur.grader.setPasses) {
       cur.grader.setPasses(passes, pre);
+      // The texture is swapped the same way and for the same reason: the
+      // grain and halation sliders move on every step of a drag, and a
+      // rebuilt grader is a new WebGL2 context per step.
+      if (cur.grader.setFilm && filmTextureKey(cur.film) !== filmTextureKey(film)) {
+        cur.grader.setFilm(film);
+      }
+      cur.film = film;
       cur.geometry = cloneGeometry(geometry);
       cur.layers = cloneLayers(stack);
       cur.overlay = overlay;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
+      cur.gain = gain;
       cur.scale = scale;
       return cur.grader;
     }
@@ -162,7 +194,9 @@ function graderFrom(
     // A null cube is legitimate now: `u_hasLut` is false and the passes are
     // the whole of the work. The grader's own signature keeps the cube first
     // because sixteen callers pass one.
-    const grader = holdGrades(makeFrameGrader(lut as CubeLut, s.width, s.height, 1, passes, pre));
+    const grader = holdGrades(
+      makeFrameGrader(lut as CubeLut, s.width, s.height, 1, passes, pre, film),
+    );
     slot.current = {
       lut,
       geometry: cloneGeometry(geometry),
@@ -171,6 +205,8 @@ function graderFrom(
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
+      gain,
+      film,
       scale,
       w: s.width,
       h: s.height,
@@ -206,10 +242,20 @@ export interface DevelopPicture {
   /** Why it could not be decoded, in the decoder's words. */
   problem: string | null;
   canvasRef: RefObject<HTMLCanvasElement>;
+  /**
+   * The stage canvas's own size in pixels — the RENDER size, within the stage
+   * budget and never the file's. What tells a panel whether a grain cell can
+   * be resolved here at all (`film-texture.ts`, `grainShowable`). Null while
+   * there is nothing decoded.
+   */
+  canvasSize: { w: number; h: number } | null;
   /** The cube it is painted through: develop → look → output. */
   cube: CubeLut | null;
   view: PictureZoom;
-  /** Share of the picture, from the left, painted graded; 1 = no split. */
+  /**
+   * Share of the picture, from the left, painted AS SHOT — the "before" side;
+   * 0 = no split, the whole picture corrected.
+   */
   wipe: number;
   holding: boolean;
   setHolding: (on: boolean) => void;
@@ -284,7 +330,7 @@ export interface DevelopPicture {
     canvasRef: RefObject<HTMLCanvasElement>;
     /** The view is magnified past the stage and the loupe is on. */
     active: boolean;
-    state: 'idle' | 'decoding' | 'ready' | 'same' | 'failed';
+    state: 'idle' | 'decoding' | 'ready' | 'same' | 'failed' | 'cancelled';
     /** The decoded file's long edge, once known. */
     longEdge: number | null;
   };
@@ -328,15 +374,30 @@ export function useDevelopPicture({
   compare = true,
   raw = null,
   onRawDecoded,
+  onRawAborted,
+  taskScope = null,
   detail = null,
   pixelScale = 1,
   loupe = false,
+  calibration = null,
   pixelView = 'smooth',
   repair = null,
+  film = null,
 }: {
   file: File | null;
   videoTimeSeconds?: number;
   cube: CubeLut | null;
+  /**
+   * What this picture's TASKS are scoped to (`tasks.md`): the decode of its
+   * RAW and the loupe's decode of the file register under it, so the stage's
+   * edge and the masthead's pill say "Opening DSC00123.ARW" with a Cancel.
+   */
+  taskScope?: string | null;
+  /**
+   * The RAW's decode was CANCELLED from the pill — the host takes the picture
+   * back to its render, since a base whose data never arrived is not a base.
+   */
+  onRawAborted?: () => void;
   /**
    * Develop from the SENSOR's data instead of `file`'s 8-bit render: the RAW
    * to decode (`shared/raw/raw-decoder.ts`) and the gain the develop already
@@ -361,6 +422,13 @@ export function useDevelopPicture({
   /** Heal and clone patches (`render/repair.ts`), drawn first on the source. */
   repair?: readonly Patch[] | null;
   /**
+   * The grade's film TEXTURE — grain and halation — drawn by ONE node LAST of
+   * all (`render-film.md`). Its cell is a fraction of the render's height, so
+   * a cell finer than the stage can resolve fades out rather than aliasing:
+   * the loupe, at one file pixel per device pixel, is where grain is judged.
+   */
+  film?: FilmTexture | null;
+  /**
    * The stage's pixels per SOURCE pixel (≤ 1): a kernel is stated in source
    * pixels, and the preview scales it so a 1 px sharpen reads roughly as one
    * on a picture shown at half its density. The loupe is the honest judge.
@@ -377,6 +445,14 @@ export function useDevelopPicture({
    * holds that order for every renderer at once.
    */
   lens?: LensCorrection | null;
+  /**
+   * The CAMERA's own calibration at the rung this picture stands on
+   * (`raw/calibration.ts`): the shading grid, drawn FIRST on the decoded
+   * sensor data, and the rectilinear warp, drawn before the lens. Both are
+   * read out of the file and neither is ever edited, so they arrive together
+   * and leave together.
+   */
+  calibration?: { gain: GainField | null; warp: CameraWarp | null } | null;
   /**
    * Adjustment layers, bottom to top. They run AFTER the one cube — a local
    * correction is set on the picture as it is displayed, not in the log space
@@ -424,7 +500,7 @@ export function useDevelopPicture({
    * where it is only in the way.
    *
    * Turning it off does not FORGET where the divider was — it stops splitting
-   * (`shownWipe` goes to 1, the whole picture delivered) and puts the line
+   * (`shownWipe` goes to 0, the whole picture delivered) and puts the line
    * back exactly where it was when it comes on again.
    */
   compare?: boolean;
@@ -432,7 +508,10 @@ export function useDevelopPicture({
   const canvasRef = useRef<HTMLCanvasElement>(null);
   const [source, setSource] = useState<BadgeSource | null>(null);
   const [problem, setProblem] = useState<string | null>(null);
-  const [wipe, setWipe] = useState(1);
+  // Where the divider sits, 0..1 from the left; the picture is AS SHOT on its
+  // left and corrected on its right, so it reads before → after. 0 is no split
+  // at all — the divider at the far left leaves the whole picture corrected.
+  const [wipe, setWipe] = useState(0);
   const [holding, setHolding] = useState(false);
   const [picking, setPickingState] = useState(false);
   /**
@@ -449,7 +528,7 @@ export function useDevelopPicture({
    * was the moment the tool is put down.
    */
   const suspended = Boolean(paint) || picking;
-  const shownWipe = compare && !suspended ? wipe : 1;
+  const shownWipe = compare && !suspended ? wipe : 0;
 
   // Read at decode time, not listed as a dep: the gain is measured by the
   // first decode and STORED by the host right after, and a re-decode for the
@@ -458,7 +537,17 @@ export function useDevelopPicture({
   rawGainRef.current = raw?.gain ?? null;
   const onRawDecodedRef = useRef(onRawDecoded);
   onRawDecodedRef.current = onRawDecoded;
+  const onRawAbortedRef = useRef(onRawAborted);
+  onRawAbortedRef.current = onRawAborted;
+  const taskScopeRef = useRef(taskScope);
+  taskScopeRef.current = taskScope;
   const rawFile = raw?.file ?? null;
+  // A source that was REPLACED is released one commit later, never in the
+  // decode effect's own cleanup: the paint effect below runs in that same
+  // commit whenever another of its inputs moved with the file — the stage's
+  // scale, say, when the delivered file changes under it — and it would draw
+  // a bitmap already closed (`studio.md`, «released one commit after»).
+  const retired = useRef<BadgeSource[]>([]);
 
   useEffect(() => {
     let cancelled = false;
@@ -466,11 +555,20 @@ export function useDevelopPicture({
     setProblem(null);
     if (!file) return;
     let loaded: BadgeSource | null = null;
+    // The decode is a TASK on this picture's edge. A RAW's can be cancelled —
+    // the decoder drops its turn — and the host is told; a render's decode is
+    // the browser's own and only says that it is happening.
+    const controller = new AbortController();
+    const opening = rawFile
+      ? null
+      : startTask({ label: `Opening ${file.name}`, scope: taskScopeRef.current, detail: null });
     const load: Promise<BadgeSource> = rawFile
       ? decodeRaw(rawFile, {
           budgetPixels: MAX_STAGE_PIXELS,
           gain: rawGainRef.current,
           maxEdge: maxRenderSize(),
+          signal: controller.signal,
+          scope: taskScopeRef.current,
         }).then((d) => {
           // The as-shot picture for every 2D draw; the half-floats for the GPU.
           const canvas = document.createElement('canvas');
@@ -493,17 +591,57 @@ export function useDevelopPicture({
         setSource(s);
       })
       .catch((e: unknown) => {
-        if (!cancelled) setProblem(e instanceof Error ? e.message : String(e));
-      });
+        if (cancelled) return;
+        if (isAbortError(e)) {
+          // Nothing to say on the stage: the host takes the picture back to
+          // its render and says so where it says things.
+          onRawAbortedRef.current?.();
+          return;
+        }
+        setProblem(e instanceof Error ? e.message : String(e));
+      })
+      .finally(() => opening?.done());
     return () => {
       cancelled = true;
-      loaded?.release();
+      // A picture stepped away from while its RAW decodes: the turn is
+      // dropped like a cancel, and nobody is told — nothing was asked.
+      controller.abort();
+      if (loaded) retired.current.push(loaded);
     };
   }, [file, videoTimeSeconds, rawFile]);
+  useEffect(() => {
+    const stale = retired.current;
+    if (!stale.length) return;
+    // The CURRENT source can be on the list: a decode that landed in the same
+    // commit as the next change of `file` (the proxy arriving as the RAW does)
+    // was retired by that change's cleanup while it is what the state now
+    // holds. It waits for the next change, or for the unmount.
+    retired.current = stale.filter((s) => s === source);
+    for (const s of stale) if (s !== source) s.release();
+  }, [source]);
+  // On unmount nothing re-renders: what is still retired goes with the hook.
+  useEffect(
+    () => () => {
+      for (const s of retired.current) s.release();
+      retired.current = [];
+    },
+    [],
+  );
 
+  // The calibration's two FIELDS, never the wrapper: `calibrationAt` hands the
+  // host a fresh `{ gain, warp }` per call, and keying anything below on that
+  // object made the histogram effect re-run on every render — and it SETS
+  // state, so a RAW on the gain-map rung rendered, read the GPU back and
+  // rendered again at frame rate for as long as it was open. The grid and the
+  // warp themselves come from the probe's one record and stand still.
+  const gainField = calibration?.gain ?? null;
+  const warpField = calibration?.warp ?? null;
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
-  const geometry = useMemo<PictureGeometry>(() => ({ lens, keystone }), [lens, keystone]);
+  const geometry = useMemo<PictureGeometry>(
+    () => ({ cameraWarp: warpField, lens, keystone }),
+    [warpField, lens, keystone],
+  );
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
   const stack = useMemo(() => drawingLayers(layers), [layers]);
@@ -524,7 +662,10 @@ export function useDevelopPicture({
       detail: DetailSettings | null,
       scale: number,
       patches: readonly Patch[] | null,
-    ): HeldGrader | null => graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches),
+      texture: FilmTexture | null,
+      gain: GainField | null,
+    ): HeldGrader | null =>
+      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain),
     [],
   );
   useEffect(
@@ -561,7 +702,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film, gainField);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -570,21 +711,22 @@ export function useDevelopPicture({
     } else {
       ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
     }
-    // The wipe: the untouched picture to the RIGHT of the divider, the way the
-    // shader's own split works — graded on the left. The divider itself is
-    // drawn over the canvas, in the page, so it stays a hairline at any zoom.
-    if (grader && shownWipe < 1) {
+    // The wipe: the untouched picture to the LEFT of the divider, the way the
+    // shader's own split works — before on the left, after on the right. The
+    // divider itself is drawn over the canvas, in the page, so it stays a
+    // hairline at any zoom.
+    if (grader && shownWipe > 0) {
       const x = Math.round(shownWipe * w);
       if (layout && framing) {
         ctx.save();
         ctx.beginPath();
-        ctx.rect(x, 0, w - x, h);
+        ctx.rect(0, 0, x, h);
         ctx.clip();
         drawPictureIn(ctx, source.image, source.width, source.height, framing, layout);
         ctx.restore();
       } else {
         const sx = Math.round(shownWipe * source.width);
-        ctx.drawImage(source.image, sx, 0, source.width - sx, source.height, x, 0, w - x, h);
+        ctx.drawImage(source.image, 0, 0, sx, source.height, 0, 0, x, h);
       }
     }
   }, [
@@ -603,6 +745,13 @@ export function useDevelopPicture({
     detail,
     pixelScale,
     repair,
+    // The TEXTURE is a dep like any other: `graderFor` is a stable callback,
+    // so a value only it reads would never repaint the stage — the trap
+    // `render-geometry.md` records for the keystone's own callback. The gain
+    // grid likewise: a rung climbed from `gain` to `gain map` changes it and
+    // nothing else.
+    film,
+    gainField,
     graderFor,
   ]);
 
@@ -632,7 +781,7 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair);
+        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, gainField);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
@@ -649,7 +798,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, graderFor]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -783,19 +932,19 @@ export function useDevelopPicture({
   // callback that never changed left the crop stage showing a warp-less
   // picture until the cube or the crop moved. Fresh values through the ref,
   // a new function when what it would draw changes — both, not either.
-  const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair });
-  latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair };
+  const latest = useRef({ source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gain: gainField });
+  latest.current = { source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gain: gainField };
   const delivered = useCallback((): CanvasImageSource | null => {
-    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp } = latest.current;
+    const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
     // Never the overlay: this is what LEAVES, and a red wash is a way of
     // looking, like the wipe.
-    const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp);
+    const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
     return grader ? grader.render(s.gpu ?? s.image) : s.image;
-  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair]);
+  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
-      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp } = latest.current;
+      const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
       if (!s || s.width <= 0 || s.height <= 0) return null;
       const { w, h } = thumbSize(s.width, s.height, longEdge);
       const out = document.createElement('canvas');
@@ -804,7 +953,7 @@ export function useDevelopPicture({
       const ctx = out.getContext('2d');
       if (!ctx) return null;
       try {
-        const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp);
+        const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
         const graded = grader ? grader.render(s.gpu ?? s.image) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
@@ -813,7 +962,7 @@ export function useDevelopPicture({
       }
       return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
     },
-    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair],
+    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField],
   );
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
@@ -823,7 +972,7 @@ export function useDevelopPicture({
   const view = usePictureZoom({
     natural,
     resetKey: source,
-    claim: (e) => wipeClaims(e.target, zoomedRef.current),
+    claim: (target) => wipeClaims(target, zoomedRef.current),
     onTakeover: () => {
       dragging.current = null;
     },
@@ -843,7 +992,7 @@ export function useDevelopPicture({
   const loupeSlot = useRef<GraderSlot>({ cache: makeLayerPassCache(), current: null });
   const loupeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [full, setFull] = useState<{ source: BadgeSource; file: File; rawFile: File | null; fileWidth: number } | null>(null);
-  const [loupeState, setLoupeState] = useState<'idle' | 'decoding' | 'ready' | 'same' | 'failed'>('idle');
+  const [loupeState, setLoupeState] = useState<'idle' | 'decoding' | 'ready' | 'same' | 'failed' | 'cancelled'>('idle');
   const isClip = Boolean(file && (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)));
   const loupeWanted = loupe && Boolean(source) && view.magnifying && !isClip;
   const sourceRef = useRef(source);
@@ -853,8 +1002,18 @@ export function useDevelopPicture({
     if (full && full.file === file && full.rawFile === rawFile) return;
     let cancelled = false;
     setLoupeState('decoding');
+    // A task of its own — the file decoded whole is the dearest thing the
+    // stage ever does — with a Cancel: a RAW's drops the decoder's turn, a
+    // render's lets the browser finish and throws the bitmap away.
+    const controller = new AbortController();
+    const looking = startTask({
+      label: `Looking closer at ${file.name}`,
+      scope: taskScopeRef.current,
+      detail: 'the file at its own density',
+      cancel: () => controller.abort(),
+    });
     const load: Promise<{ source: BadgeSource; fileWidth: number }> = rawFile
-      ? decodeRaw(rawFile, { gain: rawGainRef.current, maxEdge: maxRenderSize() }).then((d) => {
+      ? decodeRaw(rawFile, { gain: rawGainRef.current, maxEdge: maxRenderSize(), signal: controller.signal, quiet: true }).then((d) => {
           const canvas = document.createElement('canvas');
           canvas.width = d.width;
           canvas.height = d.height;
@@ -866,6 +1025,10 @@ export function useDevelopPicture({
         })
       : decodePhoto(file).then(async (bitmap) => {
           const fit = await fitPhotoForRender(bitmap);
+          // Read BEFORE the close: a closed bitmap reports 0, and the kernel
+          // scale below then divided by it, so a picture the GPU had to shrink
+          // was denoised and sharpened at the stage's strength, not its own.
+          const fileWidth = bitmap.width;
           if (fit.resampled) bitmap.close();
           return {
             source: {
@@ -874,13 +1037,14 @@ export function useDevelopPicture({
               height: fit.height,
               release: () => (fit.resampled ? fit.release() : bitmap.close()),
             },
-            fileWidth: bitmap.width,
+            fileWidth,
           };
         });
     void load
       .then(({ source: s, fileWidth }) => {
-        if (cancelled) {
+        if (cancelled || controller.signal.aborted) {
           s.release();
+          if (!cancelled) setLoupeState('cancelled');
           return;
         }
         setFull((prev) => {
@@ -890,11 +1054,13 @@ export function useDevelopPicture({
         const stage = sourceRef.current;
         setLoupeState(stage && s.width <= stage.width ? 'same' : 'ready');
       })
-      .catch(() => {
-        if (!cancelled) setLoupeState('failed');
-      });
+      .catch((e: unknown) => {
+        if (!cancelled) setLoupeState(isAbortError(e) ? 'cancelled' : 'failed');
+      })
+      .finally(() => looking.done());
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [loupeWanted, file, rawFile, full]);
   // Released a moment after the view comes back under 1:1, and at once when
@@ -922,11 +1088,15 @@ export function useDevelopPicture({
     [],
   );
   useEffect(() => {
-    // The decode belongs to one file: a step to the next picture drops it.
+    // The decode belongs to one file: a step to the next picture drops it —
+    // and the full-density grader built over it, whose WebGL2 context the
+    // release timer above never reaches once the state is back to idle.
     setFull((prev) => {
       prev?.source.release();
       return null;
     });
+    loupeSlot.current.current?.grader.dispose();
+    loupeSlot.current.current = null;
     setLoupeState('idle');
   }, [file, rawFile]);
   const loupeActive = loupeWanted && loupeState !== 'idle';
@@ -961,7 +1131,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -974,11 +1144,11 @@ export function useDevelopPicture({
       else ctx.drawImage(img, 0, 0, f.width, f.height, 0, 0, w, h);
     };
     draw(graded);
-    if (grader && shownWipe < 1) {
+    if (grader && shownWipe > 0) {
       const x = Math.round(shownWipe * w);
       ctx.save();
       ctx.beginPath();
-      ctx.rect(x, 0, w - x, h);
+      ctx.rect(0, 0, x, h);
       ctx.clip();
       draw(f.image);
       ctx.restore();
@@ -997,6 +1167,8 @@ export function useDevelopPicture({
     subjectMasks,
     detail,
     repair,
+    film,
+    gainField,
     holding,
     shownWipe,
     pixelView,
@@ -1121,6 +1293,7 @@ export function useDevelopPicture({
     source,
     problem,
     canvasRef,
+    canvasSize,
     cube,
     view,
     wipe: shownWipe,

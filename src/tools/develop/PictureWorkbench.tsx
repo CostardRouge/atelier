@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import {
+  DevelopActionsGroup,
   DevelopApplySection,
-  DevelopClipboardActions,
   DevelopLookSection,
   DevelopPresetsSection,
 } from '../../shared/develop/DevelopSections';
@@ -11,17 +11,38 @@ import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
-import { DEFAULT_DEVELOP, developLines, isDefaultDevelop, signed, type DevelopSettings } from '../../shared/develop/develop';
+import {
+  DEFAULT_DEVELOP,
+  baseRung,
+  developBase,
+  developLines,
+  isDefaultDevelop,
+  signed,
+  type DevelopSettings,
+} from '../../shared/develop/develop';
+import {
+  calibrationAt,
+  readRawCalibration,
+  rungsFor,
+  type RawCalibration,
+} from '../../shared/raw/calibration';
 import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
-import { developPillClass } from '../../shared/develop/develop-classes';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
-import { DevelopBaseSection, type RawOffer } from '../../shared/develop/DevelopBase';
-import { canDecodeRaw } from '../../shared/raw/raw-decoder';
-import { isRawImage } from '../../shared/library/assets';
+import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
+import { captureInput } from '../../shared/develop/capture-files';
+import { useSiblingFacts } from '../../shared/develop/use-sibling-facts';
+import { isProxyOverRaw, rawRenderFrom, rawRenderOf } from '../../shared/develop/delivery-source';
+import { measurePicture, type MeasuredPicture } from '../../shared/develop/roll-render';
+import { fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { trackedFetch } from '../../shared/tasks/tracked';
+import { openingRendition, renditionById, renditionsOf, type PixelSize, type Rendition } from '../../shared/media/renditions';
+import { fileIdentity, isRawImage } from '../../shared/library/assets';
+import { rawSizes } from '../../shared/exif/raw-probe';
+import { captureLine } from '../../shared/exif/exif-summary';
+import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
-import { formatBytes } from '../../shared/lib/format';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
@@ -66,6 +87,7 @@ import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '..
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
+import type { OverflowItem } from '../../shared/ui/OverflowMenu';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
@@ -97,11 +119,14 @@ import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import CropStage from './CropStage';
-import { CROP_VIEW_FIT, CROP_VIEW_MAX, useCropZone } from './use-crop-zone';
+import { useCropZone } from './use-crop-zone';
+import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
 import type { RollExports } from './use-roll-export';
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
 const SNAPSHOT_DELAY_MS = 700;
+
+const NO_FILES: readonly File[] = [];
 
 /**
  * ONE picture of a roll on the workbench — mounted with a `key` per picture,
@@ -143,8 +168,12 @@ export default function PictureWorkbench({
   onRepair,
   onLayers,
   onAspect,
+  onRendition,
+  siblings = NO_FILES,
   exportSettings,
   onExportSettings,
+  proxiesOnly,
+  onProxiesOnly,
   exports,
   exportVerbs,
   onSnapshot,
@@ -154,6 +183,10 @@ export default function PictureWorkbench({
   picture: RollPicture;
   /** Its bytes — the Library's or the roll's own — or null while they are not in hand. */
   file: File | null;
+  /** Which file of the capture the picture is developed from (`RollPicture.rendition`); null for where it opens. */
+  onRendition: (rendition: string | null) => void;
+  /** The capture's other files a folder listed beside `file` (`AssetParts.siblings`) — a local picture's only. */
+  siblings?: readonly File[];
   /** The roll's look; the draft rides it. */
   stack: LutStack;
   compact: boolean;
@@ -179,6 +212,9 @@ export default function PictureWorkbench({
   /** The roll's delivery settings, edited on the Export tab. */
   exportSettings: RollExport;
   onExportSettings: (patch: Partial<RollExport>) => void;
+  /** *Proxies only, for this run* — the editor's, never the roll's. */
+  proxiesOnly: boolean;
+  onProxiesOnly: (on: boolean) => void;
   /** The roll's still export — its state and what the open picture delivers. */
   exports: RollExports;
   exportVerbs: readonly ExportVerb[];
@@ -380,53 +416,238 @@ export default function PictureWorkbench({
   );
   const paint = repairPaint ?? layerPaint;
   // --- the RAW base ----------------------------------------------------------
-  // Where the sensor's data would come from: the file itself when it is a
-  // RAW, else a proxy's RAW original, fetched once and held for the session
-  // (`original-cache.ts`, decision 3). Nothing is fetched or decoded until the
-  // base says `raw`; back on the render the decode is dropped with the
-  // source, and the held original costs no second fetch.
+  // Where the sensor's data would come from — the file itself, a RAW beside
+  // it in its folder, a proxy's own original, or the capture's COMPANION on
+  // its instance — is `sensor-source.ts`'s one answer, shared with the
+  // export. Nothing is fetched or decoded until the base climbs above the
+  // proxy; back on the render the decode is dropped with the source, and a
+  // fetched RAW is held for the session (`original-cache.ts`, decision 3).
+  // Computed per render, since `held` reads that cache: a fetch that lands
+  // sets state, and the next render sees it in hand.
   const origin = useMemo(() => (file ? mediaOrigin(file) : null), [file]);
-  const rawOffer: RawOffer | null =
-    file && canDecodeRaw(file) ? 'file' : origin?.name && isRawImage(origin.name) && origin.fetchOriginal ? 'original' : null;
-  const wantsRaw = draft.draft.base === 'raw' && rawOffer !== null;
+  const assetKey = file ? (knownIdentity(file)?.assetId ?? null) : null;
+  // What this stage's tasks are scoped to (`TaskEdge`): the capture's asset
+  // id where a source vouched for one — the same key every fetch of its
+  // files uses — else the file's own identity.
+  const taskScope = file ? (assetKey ?? fileIdentity(file)) : null;
+  const taskScopeRef = useRef(taskScope);
+  taskScopeRef.current = taskScope;
+  const sensor = file ? sensorSourceFor(file, origin, siblings, assetKey) : null;
+  const sensorHeld = sensor?.held ?? null;
+  const sensorName = sensor?.name ?? null;
+  const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
-  const [rawStatus, setRawStatus] = useState<string | null>(null);
   const { patch: patchDraft } = draft;
+  const sensorRef = useRef(sensor);
+  sensorRef.current = sensor;
   useEffect(() => {
-    if (!wantsRaw || rawFile || !file || !rawOffer) return;
-    if (rawOffer === 'file') {
-      setRawFile(file);
-      return;
-    }
-    const key = knownIdentity(file)?.assetId ?? null;
-    const held = key ? heldOriginal(key) : null;
-    if (held) {
-      setRawFile(held);
+    const source = sensorRef.current;
+    if (!wantsRaw || rawFile || !source) return;
+    if (source.held) {
+      setRawFile(source.held);
       return;
     }
     let alive = true;
-    setRawStatus(`fetching the RAW${origin?.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`);
-    origin!.fetchOriginal!()
+    // The fetch is a task: the pill and the stage's edge say it (T2), so no
+    // prose of its own here — only what went wrong, below.
+    fetchSourceFile(source, taskScopeRef.current)
       .then((fetched) => {
         if (!alive) return;
-        if (key) holdOriginal(key, fetched);
         setRawFile(fetched);
-        setRawStatus(null);
       })
       .catch((err: unknown) => {
         if (!alive) return;
-        setRawStatus(null);
-        tell(`the RAW could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
+        tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         patchDraft({ base: null, rawGain: null });
       });
     return () => {
       alive = false;
     };
-  }, [wantsRaw, rawFile, file, rawOffer, origin, tell, patchDraft]);
+  }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
   const rawGain = draft.draft.rawGain ?? null;
-  const fullWidth = (wantsRaw ? rawSize?.w : null) ?? exports.openSize?.width ?? null;
-  const picture = useDevelopPicture({
+  // The calibration the RAW carries, read from a megabyte of its head as soon
+  // as it is in hand — it is what decides whether the two top rungs are
+  // offered at all, and what the passes apply at them.
+  const [calibration, setCalibration] = useState<RawCalibration | null>(null);
+  useEffect(() => {
+    setCalibration(null);
+    const source = rawFile ?? sensorHeld;
+    if (!source) return;
+    let alive = true;
+    void readRawCalibration(source).then((cal) => {
+      if (alive) setCalibration(cal);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [rawFile, sensorHeld]);
+  const rungs = rungsFor(calibration);
+  // A rung the file cannot reach is never left standing: a picture developed
+  // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
+  // back to what IS there, rather than claiming a correction it cannot apply.
+  const rung = rungs.includes(developBase(draft.draft)) ? developBase(draft.draft) : rungs[rungs.length - 1];
+  // Memoised: `calibrationAt` builds a fresh record per call, and the hook
+  // below took the record's identity as a dep of an effect that sets state —
+  // a RAW on the gain-map rung re-rendered, re-graded and read the GPU back
+  // at frame rate for as long as it was open.
+  const applied = useMemo(() => calibrationAt(rung, calibration), [rung, calibration]);
+  // The sensor's own pixels, read from the RAW's head alone (a megabyte, no
+  // decoder): what the render on screen is measured against. A proxy's
+  // original needs no read at all — its source already said.
+  const [sensorSize, setSensorSize] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    setSensorSize(null);
+    if (!file || !isRawImage(file.name)) return;
+    let alive = true;
+    void rawSizes(file).then((sizes) => {
+      if (alive) setSensorSize(sizes.sensor);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [file]);
+  const proxyOriginalSize =
+    origin?.fidelity === 'proxy' && origin.width && origin.height
+      ? { width: origin.width, height: origin.height }
+      : null;
+
+  // --- the capture's files ---------------------------------------------------
+  // Which FILE of the capture is on screen below the sensor
+  // (`docs/capture-renditions.md` §9.1): its proxy, or what the camera
+  // delivered — a drawable original fetched once and held, the render inside
+  // a RAW, a sibling a folder listed beside it. The list is built from what is
+  // in hand and what the source said; nothing is fetched until a row is chosen.
+  //
+  // A sibling is listed only once its head is read: whether it is an export
+  // of ours (`software-mark.ts`, never offered as the camera's file), and the
+  // sizes a RAW states.
+  const siblingFacts = useSiblingFacts(siblings);
+  // What the session knows of the proxy's original and of the capture's
+  // companion: whether each is held, and — for a RAW — how big the render
+  // inside it is, read from its head once (`original-cache.ts`). `undefined`
+  // is "not read yet". Held-ness is read per render: a fetch that lands sets
+  // state, so the rows say `here` on the next one.
+  const originalHeld = assetKey ? heldOriginal(assetKey) !== null : false;
+  const companion = origin?.companion ?? null;
+  const companionHeld = companion ? heldOriginal(companion.assetId) !== null : false;
+  const [originalRender, setOriginalRender] = useState<PixelSize | null | undefined>(undefined);
+  useEffect(() => {
+    setOriginalRender(undefined);
+    if (!origin || !isProxyOverRaw(origin)) return;
+    let alive = true;
+    void rawRenderOf(origin, assetKey).then(({ render }) => {
+      if (alive) setOriginalRender(render);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [origin, assetKey]);
+  const [companionRender, setCompanionRender] = useState<PixelSize | null | undefined>(undefined);
+  useEffect(() => {
+    setCompanionRender(undefined);
+    if (!companion || !isRawImage(companion.name)) return;
+    let alive = true;
+    void rawRenderFrom(companion.fetchHead, companion.assetId).then(({ render }) => {
+      if (alive) setCompanionRender(render);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [companion]);
+  const rows = useMemo<Rendition[]>(() => {
+    if (!file) return [];
+    return renditionsOf(
+      captureInput({
+        file,
+        origin,
+        measured: exports.openSize,
+        sensor: sensorSize,
+        original: { assetId: assetKey, held: originalHeld, render: originalRender },
+        companion: companion ? { held: companionHeld, render: companionRender } : undefined,
+        siblings: siblings.flatMap((s) => {
+          const facts = siblingFacts.get(fileIdentity(s));
+          return facts ? [{ file: s, facts }] : [];
+        }),
+      }),
+    );
+  }, [
     file,
+    origin,
+    exports.openSize,
+    sensorSize,
+    assetKey,
+    originalHeld,
+    originalRender,
+    companion,
+    companionHeld,
+    companionRender,
+    siblings,
+    siblingFacts,
+  ]);
+  const opening = openingRendition(rows);
+  const chosen = renditionById(rows, entry.rendition);
+  // The row on screen below the sensor: the stored choice where the capture
+  // still offers it, else where the picture opens — never a blocked row.
+  const current = (chosen && chosen.role !== 'sensor' && !chosen.blocked ? chosen : opening)?.id ?? null;
+  const wanted = !wantsRaw && chosen && chosen.role === 'delivered' && !chosen.blocked && chosen.id !== opening?.id ? chosen : null;
+  const wantedId = wanted?.id ?? null;
+  // The delivered file for the stage: in hand already (a sibling, a held
+  // original), else fetched once and held for the session. Keyed on the id
+  // alone, so a list rebuilt around it never restarts a fetch in flight.
+  const [deliveredFile, setDeliveredFile] = useState<{ id: string; file: File } | null>(null);
+  const deliver = useRef({ wanted, siblings, origin, tell, onRendition });
+  deliver.current = { wanted, siblings, origin, tell, onRendition };
+  useEffect(() => {
+    const { wanted: row, siblings: beside, origin: from } = deliver.current;
+    if (!row || row.id !== wantedId || !file) return;
+    const isNamed = (name: string) => name.toLowerCase() === row.name.toLowerCase();
+    const named = (f: File | null): f is File => !!f && isNamed(f.name);
+    const inHand = beside.find(named) ?? (row.assetId ? heldOriginal(row.assetId) : null);
+    if (named(inHand)) {
+      setDeliveredFile({ id: row.id, file: inHand });
+      return;
+    }
+    // The row's own fetch: the capture's companion by its name, else the
+    // proxy's original — each held under the row's own asset id.
+    const fetch = from?.companion && isNamed(from.companion.name) ? from.companion.fetchFile : (from?.fetchOriginal ?? null);
+    if (!fetch) return;
+    let alive = true;
+    // A task of its own — the pill and the edge say it — and only a failure
+    // is said here.
+    trackedFetch({ label: `Fetching ${row.name}`, scope: taskScopeRef.current, bytes: row.bytes }, (opts) => fetch(opts))
+      .then((fetched) => {
+        if (!alive) return;
+        if (row.assetId) holdOriginal(row.assetId, fetched);
+        setDeliveredFile({ id: row.id, file: fetched });
+      })
+      .catch((err: unknown) => {
+        if (!alive) return;
+        deliver.current.tell(`${row.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
+        deliver.current.onRendition(null);
+      });
+    return () => {
+      alive = false;
+    };
+  }, [wantedId, file]);
+  const shownFile = wanted && deliveredFile?.id === wanted.id ? deliveredFile.file : file;
+  // The open file is measured by the export hook; a delivered file on the
+  // stage is measured here, once, for the chip and the kernels.
+  const [shownSize, setShownSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
+  useEffect(() => {
+    if (!shownFile || shownFile === file) return;
+    let alive = true;
+    void measurePicture(shownFile).then((size) => {
+      if (alive && size) setShownSize({ file: shownFile, size });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [shownFile, file]);
+  const measured = shownFile === file ? exports.openSize : shownSize?.file === shownFile ? shownSize.size : null;
+
+  const fullWidth = (wantsRaw ? rawSize?.w : null) ?? measured?.width ?? null;
+  const picture = useDevelopPicture({
+    file: shownFile,
     cube: stack.composed,
     frame,
     keystone: keystoneDraft,
@@ -441,22 +662,54 @@ export default function PictureWorkbench({
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: detailDraft,
     repair: repairDraft,
+    // The roll's texture, drawn by the node after everything: the stage is
+    // where grain is DIALLED and the loupe is where it is judged, since a
+    // cell finer than the stage can resolve fades out rather than aliasing.
+    film: stack.film,
     pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
     loupe: true,
     pixelView,
+    // The camera's own calibration at the rung this picture stands on — the
+    // shading grid first on the sensor's data, the warp before the lens. The
+    // PREVIEW carries it from `gain map` up, so export-at-max is a no-op for
+    // shading and preview = export holds by construction (`raw.md`).
+    calibration: wantsRaw ? applied : null,
     // The measured exposure is STORED the moment it is known, so the export's
     // decode applies the same number (`raw.md`). Once: a stored gain is never
     // overwritten by a later decode's measurement.
+    taskScope,
+    // Cancelled from the pill: back on the render, and said — a base whose
+    // data never arrived is not a base.
+    onRawAborted: () => {
+      patchDraft({ base: null, rawGain: null });
+      tell('Opening the RAW was cancelled — back on the render');
+    },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       if (rawGain === null) {
-        patchDraft({ base: 'raw', rawGain: info.gain });
+        patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
         const ev = Math.log2(info.gain);
         tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
       }
     },
   });
-  const fidelity = pictureFidelity(file, draft.draft.base);
+  // What the picture IS, with the pixels it really has: the file's own,
+  // measured for the *Delivers* row, or the sensor's once the RAW is decoded —
+  // and, beside them, what the file holds and the screen is not showing (the
+  // sensor plane of a RAW, the original behind a proxy). A 960 × 540 render
+  // inside a 36-megapixel DNG says so here rather than merely looking soft.
+  const fidelityPixels = useMemo(() => {
+    if (wantsRaw && rawSize) return { width: rawSize.w, height: rawSize.h };
+    if (!measured) return null;
+    return {
+      width: measured.width,
+      height: measured.height,
+      viaRawPreview: measured.viaRawPreview,
+      // A delivered file on the stage IS the capture's pixels: nothing to fall short of.
+      full: shownFile === file ? (sensorSize ?? proxyOriginalSize) : null,
+    };
+  }, [wantsRaw, rawSize, measured, sensorSize, proxyOriginalSize, shownFile, file]);
+  const fidelity = pictureFidelity(shownFile, draft.draft.base, fidelityPixels);
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
@@ -607,8 +860,12 @@ export default function PictureWorkbench({
   }, []);
   // The Crop tab's zone, measured on the decoded picture and written back as
   // the aspect (to the roll, at once) and the framing (through its draft).
+  // Memoised on the source: a fresh `{ width, height }` per render recomputed
+  // the zone and the view, and both canvases under them repainted — a
+  // rotated, high-quality draw at device pixels — on every render.
+  const cropSrc = useMemo(() => (source ? { width: source.width, height: source.height } : null), [source]);
   const crop = useCropZone({
-    src: source ? { width: source.width, height: source.height } : null,
+    src: cropSrc,
     aspect: entry.aspect,
     framing: framingDraft,
     onAspect: (aspect) => callbacks.current.onAspect(aspect),
@@ -646,6 +903,11 @@ export default function PictureWorkbench({
       });
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
+      if (typeof action === 'object') {
+        e.preventDefault();
+        callbacks.current.onTabChange(action.tab);
+        return;
+      }
       switch (action) {
         case 'previous':
         case 'next':
@@ -679,14 +941,6 @@ export default function PictureWorkbench({
           say('pasted');
           return;
         }
-        case 'crop':
-          e.preventDefault();
-          callbacks.current.onTabChange('crop');
-          return;
-        case 'develop':
-          e.preventDefault();
-          callbacks.current.onTabChange('develop');
-          return;
         case 'help':
           e.preventDefault();
           // The same key closes it: a sheet opened by a letter that then does
@@ -737,7 +991,7 @@ export default function PictureWorkbench({
       reset: () => setCropView(CROP_VIEW_FIT),
     };
   }, [cropView, setCropView]);
-  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Develop';
+  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Adjust';
 
   /**
    * The points the author picked for the OPEN subject layer, drawn on the
@@ -778,19 +1032,140 @@ export default function PictureWorkbench({
     return lines;
   }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
 
+  /**
+   * What the CAMERA did, drawn above those facts under the same key — the
+   * aperture, the shutter, the ISO and the compensation, from the head of the
+   * file ON SCREEN. The rendition is what makes that read honest: switch the
+   * picture to its DNG and these are the DNG's own numbers; leave it on a
+   * Winnow proxy, whose re-encode carries no metadata at all, and the line is
+   * the instance's vouched record (`exif/read-exif.ts` merges the two).
+   *
+   * Absent for a picture that says nothing, and the stack then starts where
+   * it always did.
+   */
+  const shotExif = useEffectiveExif(shownFile);
+  const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
+
+  /**
+   * The two verbs the HOST puts in the well beside the clipboard glyphs: their
+   * SHAPE here, their colour at the call site.
+   *
+   * Written out rather than composed from `IconButton`: both carry a state the
+   * button has no variant for (the A/B's on / off / suspended) and a glyph that
+   * is TEXT, and a `Button` recipe plus an override is not the same thing — two
+   * utilities of one property are resolved by Tailwind's order, not by the class
+   * list's (`frontend.md`). The height is `IconButton`'s to the pixel, so the
+   * well reads as one family, and the colours are the Studio's A/B.
+   */
+  const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
+  const abPill =
+    `${verbHeight} px-2 flex-none inline-flex items-center justify-center rounded-control border ` +
+    'font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors';
+  /** The `?`, square like the glyphs it sits beside rather than a pill of its own. */
+  const helpVerb =
+    `${verbHeight} ${compact ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
+    'rounded-control border font-mono text-xs cursor-pointer transition-colors';
+  /** The wipe is suspended, and the pill says so rather than claiming to be on. */
+  const abHeld = compareOn && (picture.painting || picture.picking);
+
+  /**
+   * What hangs off the zoom's percentage: the two rungs a menu can name, then
+   * how a magnified pixel is DRAWN. Both readings are true at every scale, but
+   * the mode only changes the picture past 1:1 — so each says where it applies
+   * instead of the control vanishing below it, which is what used to move the
+   * bar under the pointer.
+   */
+  const zoomRow = (marked: boolean, title: string, hint: string) => (
+    <span className="flex flex-col items-start gap-0.5 text-left">
+      <span className="font-mono text-xs">
+        {marked ? '· ' : '  '}
+        {title}
+      </span>
+      <span className="font-mono text-3xs text-faint leading-relaxed max-w-[18rem] whitespace-normal">{hint}</span>
+    </span>
+  );
+  const atOnePixel = Math.abs(picture.view.zoom.scale - picture.view.onePixel) < 0.005;
+  const zoomItems: OverflowItem[] = [
+    {
+      id: 'fit',
+      label: zoomRow(!picture.view.zoomed, 'Fit', 'the whole picture, in the room it has'),
+      disabled: !picture.view.zoomed,
+      onSelect: () => picture.view.zoom.reset(),
+    },
+    {
+      id: 'one-pixel',
+      label: zoomRow(atOnePixel, '100 %', 'one of the picture’s pixels per pixel of this screen'),
+      disabled: atOnePixel || !picture.view.zoom.zoomTo,
+      onSelect: () => picture.view.zoom.zoomTo?.(picture.view.onePixel),
+    },
+    {
+      id: 'smooth',
+      label: zoomRow(
+        pixelView === 'smooth',
+        'Smooth',
+        'past 100 %, the gradients between pixels are the browser’s, not the picture’s',
+      ),
+      onSelect: () => setPixelView('smooth'),
+    },
+    {
+      id: 'pixels',
+      label: zoomRow(pixelView === 'pixels', 'Pixels as pixels', 'past 100 %, nothing is invented between them'),
+      onSelect: () => setPixelView('pixels'),
+    },
+  ];
+
   return (
     <>
       <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : 'col-start-1 row-start-1 min-w-0 min-h-0 flex flex-col gap-2'}>
-        {/* One row whatever the width: the name gives way first, the verbs never wrap. */}
-        <div className="flex-none flex items-center gap-2 min-w-0">
-          <span className="flex-1 min-w-0 truncate font-mono text-xs text-ink-soft" title={entry.ref.name}>
-            {entry.ref.name}
-            {told && <span className="text-accent-ink" role="status"> · {told}</span>}
-          </span>
-          {fidelity.chip && <span className={`${developPillClass} flex-none @max-[880px]:hidden`}>{fidelity.chip}</span>}
-          {!cropping && (
-            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
-          )}
+        {/* One row above a phone: the name gives way first, the verbs never
+            wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
+            the verbs take a line of their own under it — `contents` at every
+            other width keeps the desktop row the one flex line it was — and
+            every verb grows to a finger's height (`md` rather than `sm`). */}
+        <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
+          {/* The NAME is the list of the capture's files (2026-09-22): the two
+              answered the same question — which bytes are on screen — so they
+              are one control, and the rendition stops costing a pill. Which is
+              what lets it be drawn at every width: as a chip of its own it was
+              hidden under 880px, and a phone could not reach it at all. */}
+          <div className="flex-1 min-w-0 flex items-baseline gap-2">
+            <DevelopBaseMenu
+              className="min-w-0"
+              name={entry.ref.name}
+              chip={fidelity.chip}
+              rows={rows}
+              current={current}
+              base={wantsRaw ? rung : 'proxy'}
+              rungs={sensor ? rungs : []}
+              onRendition={(id) => {
+                // A file below the sensor: the base comes off with it, and
+                // the opening row is stored as nothing, one spelling.
+                if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null });
+                onRendition(id === opening?.id ? null : id);
+              }}
+              onBase={(next) => {
+                if (next === 'proxy') {
+                  patchDraft({ base: null, rawGain: null });
+                  return;
+                }
+                const climbing = baseRung(draft.draft.base) === 0;
+                patchDraft({ base: next });
+                if (climbing && !draft.asShot) {
+                  tell('your numbers now act on the RAW — another starting point');
+                }
+              }}
+              status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
+              gain={wantsRaw ? rawGain : null}
+              calibration={calibration?.summary ?? null}
+            />
+            {told && (
+              <span className="flex-none font-mono text-xs text-accent-ink" role="status">
+                · {told}
+              </span>
+            )}
+          </div>
+          <div className={compact ? 'basis-full flex items-center gap-2 min-w-0' : 'contents'}>
+          {compact && <span className="flex-1" />}
           {/* The pill is drawn at EVERY width, phone included — the lightbox
               hides it under 820px on the argument that the pinch is the gesture
               there, and a stage that answers a pinch best-effort (the browser
@@ -799,75 +1174,87 @@ export default function PictureWorkbench({
               FRAMING's own zoom, which is what the picture is cropped by. */}
           {source &&
             (cropping ? (
-              <StageZoomControl zoom={cropZoom} hint="look closer: pinch or the wheel — the crop stays" className="flex-none" />
+              <StageZoomControl zoom={cropZoom} hint="look closer: pinch, the wheel or Z — the crop stays" className="flex-none" />
             ) : (
-              <>
-                <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
-                {/* Only where it means anything: below 1:1 the browser is
-                    downscaling and `pixelated` is simply worse. */}
-                {picture.view.magnifying && (
-                  <button
-                    type="button"
-                    className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
-                    onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
-                    title={
-                      pixelView === 'pixels'
-                        ? 'Pixels as pixels — past 100 % nothing is invented between them'
-                        : 'Smoothed — past 100 % the gradients between pixels are the browser\u2019s, not the picture\u2019s'
-                    }
-                  >
-                    {pixelView === 'pixels' ? 'pixels' : 'smooth'}
-                  </button>
-                )}
-              </>
+              // How the picture is DRAWN hangs off the percentage, which was
+              // already the "back to the fit" button (that rung is now the
+              // menu's first). The mode used to be a pill INSERTED past 1:1,
+              // and inserting it slid every verb after it sideways — so a
+              // second press of `+` landed on `pixels`, which is the fault
+              // reported. Nothing is inserted now; the pill has one width.
+              <StageZoomControl
+                zoom={picture.view.zoom}
+                hint="wheel, pinch, or Z"
+                className="flex-none"
+                items={zoomItems}
+              />
             ))}
-          {/* The split, as a switch. It says what it IS rather than what
-              pressing it does, like every other pill in this bar; while a mask
-              tool holds the pointer the hook has suspended it anyway, and the
-              pill says that too rather than lying about a divider nobody can
-              see. */}
-          {source && !cropping && (
+          {/* ONE well of verbs ends the row (variant E2): the three clipboard
+              glyphs, then — past a hairline — the two that are about this
+              stage. Loose pills read as five unrelated things; a block reads as
+              "what you can do here", and the row has one edge instead of five.
+
+              The split still says `A/B`, the Studio's own word for the same
+              gesture: one wipe control across the suite is one thing to learn.
+              While a mask tool holds the pointer the hook has suspended it
+              anyway, and the button draws that (dashed, faint) rather than
+              lying about a divider nobody can see. */}
+          <DevelopActionsGroup
+            className="flex-none"
+            size={compact ? 'md' : 'sm'}
+            clipboard={!cropping}
+            draft={draft.draft}
+            asShot={draft.asShot}
+            onReplace={draft.setDraft}
+            onTold={tell}
+          >
+            {source && !cropping && (
+              <button
+                type="button"
+                className={`${abPill} ${
+                  abHeld
+                    ? 'border-line-strong border-dashed bg-paper-2 text-faint'
+                    : compareOn
+                      ? 'border-accent bg-accent-wash text-accent-ink'
+                      : 'border-line-strong bg-surface text-muted hover:border-accent hover:text-accent-ink'
+                }`}
+                onClick={() => setCompareOn(!compareOn)}
+                aria-pressed={compareOn}
+                title={
+                  abHeld
+                    ? 'Before / after — suspended while a mask tool has the pointer; the divider comes back where it was'
+                    : compareOn
+                      ? 'Before / after — the divider is on, and a drag across the picture places it'
+                      : 'Before / after — off: the whole picture is shown corrected'
+                }
+              >
+                A/B
+              </button>
+            )}
+            {/* The legend that used to run along the bottom of the editor, as a
+                verb. Drawn at every width: on a phone there are no keys, but the
+                GESTURES it lists are exactly the ones a finger has to
+                discover. */}
             <button
               type="button"
-              className={`${developPillClass} flex-none cursor-pointer hover:border-accent ${
-                compareOn ? '' : 'text-faint'
-              }`}
-              onClick={() => setCompareOn(!compareOn)}
-              aria-pressed={compareOn}
-              title={
-                compareOn
-                  ? 'The before/after divider is on — a drag across the picture places it'
-                  : 'The before/after divider is off — the whole picture is shown corrected'
-              }
+              className={`${helpVerb} border-transparent bg-transparent text-muted hover:text-accent-ink`}
+              onClick={() => setHelpOpen(true)}
+              title="Keys and gestures (H)"
+              aria-label="Keys and gestures"
             >
-              {!compareOn
-                ? 'compare off'
-                : picture.painting || picture.picking
-                  ? // Said out loud rather than drawn as a live divider that a
-                    // tap would move: this is the state the maintainer reported.
-                    'compare · held'
-                  : 'compare'}
+              ?
             </button>
-          )}
-          {/* The legend that used to run along the bottom of the editor, as a
-              verb. Drawn at every width: on a phone there are no keys, but the
-              GESTURES it lists are exactly the ones a finger has to discover. */}
-          <button
-            type="button"
-            className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
-            onClick={() => setHelpOpen(true)}
-            title="Keys and gestures (H)"
-            aria-label="Keys and gestures"
-          >
-            ?
-          </button>
+          </DevelopActionsGroup>
+          </div>
         </div>
         <DevelopViewport
           picture={picture}
           hasFile={Boolean(file)}
           emptyText={emptyText}
+          scope={taskScope}
           pixelView={pixelView}
           facts={facts}
+          shot={shotLine}
           marks={subjectMarks}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick
@@ -927,26 +1314,9 @@ export default function PictureWorkbench({
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
         )}
         <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
-          {tab === 'develop' ? (
+          {tab === 'adjust' ? (
             <>
               <DevelopHistogram histogram={picture.histogram} />
-              <DevelopBaseSection
-                offer={rawOffer}
-                base={draft.draft.base === 'raw' ? 'raw' : 'render'}
-                onBase={(base) => {
-                  if (base === 'raw') {
-                    patchDraft({ base: 'raw' });
-                    if (!draft.asShot) tell('your numbers now act on the RAW — another starting point');
-                  } else {
-                    patchDraft({ base: null, rawGain: null });
-                  }
-                }}
-                status={wantsRaw && (rawStatus || !picture.source) ? (rawStatus ?? 'decoding the sensor’s data…') : null}
-                gain={draft.draft.base === 'raw' ? rawGain : null}
-                originalName={origin?.name ?? null}
-                originalBytes={origin?.bytes ?? null}
-                numbersSet={!draft.asShot}
-              />
               <DevelopAutoSection
                 stats={picture.stats}
                 onPatch={draft.patch}
@@ -969,7 +1339,14 @@ export default function PictureWorkbench({
                 onTold={tell}
               />
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
-              <DevelopLookSection stack={stack} />
+              <DevelopLookSection
+                stack={stack}
+                previewHeight={picture.canvasSize?.h ?? null}
+                // The decoded picture already on the stage: the look gallery's
+                // scene grades THIS photograph rather than a reference frame.
+                previewImage={picture.source}
+                previewLabel={entry.ref.name}
+              />
             </>
           ) : tab === 'detail' ? (
             <>
@@ -1104,6 +1481,9 @@ export default function PictureWorkbench({
               settings={exportSettings}
               onSettings={onExportSettings}
               delivery={exports.openDelivery}
+              plan={exports.plan}
+              proxiesOnly={proxiesOnly}
+              onProxiesOnly={onProxiesOnly}
               verbs={exportVerbs}
               exporting={exports.exporting}
               note={exports.note}

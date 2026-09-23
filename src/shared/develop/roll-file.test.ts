@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { DEFAULT_FILM_TEXTURE } from '../film/film-texture';
 import { DEFAULT_DEVELOP } from './develop';
 import { addPictures, createRollDoc, patchPicture, ROLL_DOC_VERSION, type RollDoc } from './roll-types';
 import {
@@ -18,8 +19,12 @@ function sample(): RollDoc {
   doc = patchPicture(doc, 'p1', { develop: { ...DEFAULT_DEVELOP, highlights: -40 }, aspect: '4:5' }, 3000);
   return {
     ...doc,
-    grade: { layers: [{ id: 'l1', source: 'custom', name: 'Mine', customText: 'LUT_3D_SIZE 2', intensity: 0.6, enabled: true }], output: 'rec709-to-srgb' },
-    export: { longEdge: 2048, quality: 0.85, originals: 'originals', replace: true, hdr: true, hdrStops: 3 },
+    grade: {
+      layers: [{ id: 'l1', source: 'custom', name: 'Mine', customText: 'LUT_3D_SIZE 2', intensity: 0.6, enabled: true }],
+      output: 'rec709-to-srgb',
+      film: { ...DEFAULT_FILM_TEXTURE, grain: 0.35, halation: 0.2 },
+    },
+    export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3 },
   };
 }
 

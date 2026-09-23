@@ -46,7 +46,6 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   version: 1,
   id: 't1',
   name: 'Australie',
-  destination: 'Australia',
   startDate: '2025-03-01',
   endDate: '2025-03-10',
   stages: [],
@@ -214,6 +213,26 @@ describe('coverTiles', () => {
       ],
     });
     expect(tilesOf(doc, all, 2)).toEqual(['new', 'mid']);
+  });
+
+  // What lets `CoverPanel` resolve ONCE, at the widest layout, and draw every
+  // preview from that one answer: a narrower limit can only be a prefix of a
+  // wider one. Without it the Mosaic tile would have to be resolved apart, and
+  // the Cover preview could end up showing a picture the card would not.
+  it('answers a narrower limit with a prefix of the wider one', () => {
+    const doc = trip({
+      posts: [
+        post('2025-03-02', { id: 'a' }),
+        post('2025-03-02', { id: 'a2' }),
+        post('2025-03-05', { id: 'b' }),
+        post('2025-03-09', { id: 'c' }),
+      ],
+      cover: { layout: 'mosaic', pinned: ['c'] },
+    });
+    const three = tilesOf(doc, all, 3);
+    expect(three).toHaveLength(3);
+    expect(tilesOf(doc, all, 1)).toEqual(three.slice(0, 1));
+    expect(tilesOf(doc, all, 2)).toEqual(three.slice(0, 2));
   });
 
   it('is empty for a layout that draws no picture', () => {

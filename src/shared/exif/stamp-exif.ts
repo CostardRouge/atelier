@@ -22,6 +22,10 @@
  *    no make, no model, no lens, so it is the poorest of the three and is
  *    named as such wherever a panel says where the metadata came from.
  *
+ * Whichever account, the block says `Software: Atelier` — the mark
+ * `software-mark.ts` reads, so a file this suite wrote is never taken for the
+ * camera's own rendition of the picture it sits beside.
+ *
  * Only `stampExif` touches a `Blob`; the choice itself is pure.
  */
 
@@ -29,6 +33,7 @@ import { buildExifBlock } from './exif-build';
 import { readExifBlock, retagExifBlock, withExifBlock } from './exif-block';
 import { isEmptyExif, parseExif, type ExifData } from './exif-parser';
 import { mergeExif } from './merge-exif';
+import { ATELIER_SOFTWARE } from './software-mark';
 
 /** Which of the three accounts a block was made from. */
 export type ExifAccount = 'block' | 'fields' | 'vouched' | 'none';
@@ -56,7 +61,9 @@ export function exportExifBlock(
   vouched: ExifData | null,
   delivered: DeliveredSize,
 ): ExportExif {
-  const retag = { pixelWidth: delivered.width, pixelHeight: delivered.height };
+  // Every account names the software: it is the one mark that tells this
+  // export from the camera's own file once the rest is a copy (`software-mark.ts`).
+  const retag = { pixelWidth: delivered.width, pixelHeight: delivered.height, software: ATELIER_SOFTWARE };
   if (head && head.length > 0) {
     const copied = readExifBlock(head);
     if (copied) return { block: retagExifBlock(copied, retag), account: 'block' };
@@ -74,7 +81,7 @@ export function exportExifBlock(
 
 function build(exif: ExifData, delivered: DeliveredSize): Uint8Array<ArrayBuffer> {
   return buildExifBlock(exif, {
-    software: 'Atelier',
+    software: ATELIER_SOFTWARE,
     pixelWidth: delivered.width,
     pixelHeight: delivered.height,
   });

@@ -20,6 +20,7 @@ import { detailOrNull, type DetailSettings } from '../render/detail';
 import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, type DevelopSettings } from './develop';
+import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
@@ -33,24 +34,32 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * Bumped with a migration block in `migrateRollDoc`, never without.
  * v2 (2026-09-19): `RollPicture.border`, and a legacy Whole framing that is
  * exactly a border read as one (`legacyWholeBorder`).
+ * v3 (2026-09-20): `RollGrade.film` — grain and halation. No block of its own:
+ * `migrateRollDoc` re-READS the whole document, so a roll written before the
+ * texture existed lands with `film: null` and one written by a newer build
+ * lands clamped, both through `readRollGrade`.
+ * `RollPicture.rendition` (2026-09-21) needed no bump: absent reads as null,
+ * which means exactly what it means now — the picture opens where it opens.
+ * v4 (2026-09-21): `RollExport.originals` is GONE — which pixels a picture
+ * leaves from is the picture's own rendition (`docs/capture-renditions.md`
+ * §13.2), and "proxies only, this run" is a run-time choice that never
+ * touches the document. No block: the reader simply stops reading the key.
  */
-export const ROLL_DOC_VERSION = 2;
+export const ROLL_DOC_VERSION = 4;
 
 /** The roll's look, after every picture's develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
   layers: SavedLutLayer[];
   output: OutputTransform;
+  /** Grain and halation, or null for none — `SavedGrade.film`. */
+  film?: FilmTexture | null;
 }
-
-/** Where the export takes its pixels (`docs/develop-originals.md` §7, Auto by default). */
-export type RollOriginals = 'auto' | 'proxies' | 'originals';
 
 export interface RollExport {
   /** The delivered long edge in pixels, or null for the source's own size. */
   longEdge: number | null;
   /** JPEG quality, 0.5..1. */
   quality: number;
-  originals: RollOriginals;
   /**
    * Replace a file the chosen folder already holds under the export's name,
    * or number the incoming one (`DJI_0101-1.jpg`). OFF by default: an export
@@ -72,7 +81,6 @@ export interface RollExport {
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   longEdge: null,
   quality: 0.92,
-  originals: 'auto',
   replace: false,
   hdr: false,
   hdrStops: 2,
@@ -98,6 +106,17 @@ export interface RollPicture {
   aspect: RollAspect;
   /** Null is no border: the file is exactly the crop (`border-layout.ts`, v2). */
   border: RollBorder | null;
+  /**
+   * WHICH FILE of the capture this picture is developed from, below the
+   * sensor: a rendition id (`media/renditions.ts` — `proxy`, or
+   * `delivered:<file name>`), stored so a phone shows the same picture
+   * without re-picking (`docs/capture-renditions.md` §12, A3). Null is where
+   * the picture OPENS — its proxy where there is one, else the file itself —
+   * and an id the capture no longer offers falls back to that. The material
+   * rung above it is `develop.base`; a preset, a paste or a batch verb never
+   * carries either.
+   */
+  rendition?: string | null;
   /**
    * The perspective correction (`shared/render/geometry.ts`), or null for
    * none. It is applied BEFORE the crop frames the result: a keystone takes
@@ -180,6 +199,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     framing: null,
     aspect: 'original',
     border: null,
+    rendition: null,
     keystone: null,
     lens: null,
     detail: null,
@@ -230,8 +250,11 @@ export function readRollGrade(raw: unknown): RollGrade | null {
   if (!isRecord(raw)) return null;
   const layers = Array.isArray(raw.layers) ? raw.layers.flatMap((l) => readLayer(l) ?? []) : [];
   const output = typeof raw.output === 'string' && OUTPUTS.has(raw.output) ? (raw.output as OutputTransform) : 'none';
-  // A look with nothing in it is no look: stored as null, so "follows none" has one spelling.
-  return layers.length === 0 && output === 'none' ? null : { layers, output };
+  const film = filmTextureOrNull(raw.film);
+  // A look with nothing in it is no look: stored as null, so "follows none"
+  // has one spelling. A TEXTURE alone is a look — grain on an ungraded
+  // picture is exactly what a stock's texture half is for.
+  return layers.length === 0 && output === 'none' && !film ? null : { layers, output, film };
 }
 
 export function readRollExport(raw: unknown): RollExport {
@@ -243,7 +266,7 @@ export function readRollExport(raw: unknown): RollExport {
   return {
     longEdge: edge,
     quality: Math.min(quality.max, Math.max(quality.min, finite(raw.quality, DEFAULT_ROLL_EXPORT.quality))),
-    originals: raw.originals === 'proxies' || raw.originals === 'originals' ? raw.originals : 'auto',
+    // `originals`, written by v1–v3, is left behind on purpose (v4).
     // Anything but a stored `true` reads as off, so a roll written before the
     // choice existed keeps what is in its folder.
     replace: raw.replace === true,
@@ -283,6 +306,7 @@ function readPicture(raw: unknown): RollPicture | null {
     framing,
     aspect,
     border,
+    rendition: typeof raw.rendition === 'string' && raw.rendition ? raw.rendition : null,
     // Absent on every roll written before the warp existed, and `null` there
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
@@ -380,7 +404,10 @@ export function patchPicture(
   roll: RollDoc,
   id: string,
   patch: Partial<
-    Pick<RollPicture, 'develop' | 'framing' | 'aspect' | 'border' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'>
+    Pick<
+      RollPicture,
+      'develop' | 'framing' | 'aspect' | 'border' | 'rendition' | 'keystone' | 'lens' | 'detail' | 'repair' | 'layers'
+    >
   >,
   now: number = Date.now(),
 ): RollDoc {

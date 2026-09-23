@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
 import { readFilmSettings, type FilmSettings } from '../film/emulsion';
 import { isFilmLayer } from '../film/film-layer';
 import { FILM_GROUP_LABEL, FILM_STOCKS, type FilmStockId } from '../film/stocks';
@@ -7,12 +7,14 @@ import {
   UNGROUPED_LUTS,
 } from './builtin-luts';
 import FilmDials from './FilmDials';
-import { FILM_PICK, packPickId, readPackPick } from './gallery-nodes';
+import FilmTextureDials from './FilmTextureDials';
+import { FAVOURITES_NODE, FILM_PICK, galleryNodes, packPickId, readPackPick } from './gallery-nodes';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
 import { looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
 import { MAX_LAYER_INTENSITY } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
+import { useLutFavourites } from './use-lut-favourites';
 import { useLutPacks } from './use-lut-packs';
 
 import Button from '../ui/Button';
@@ -25,6 +27,19 @@ interface GradePanelProps {
   stack: LutStack;
   /** The picture on the stage, if there is one — the gallery's truest preview. */
   previewImage?: LutPreviewSource | null;
+  /** What that picture is called, for the line under the gallery's scene. */
+  previewLabel?: string | null;
+  /** True only for LOG footage — a photograph is display-referred. */
+  previewIsLog?: boolean;
+  /**
+   * The height in pixels of the surface the host really draws its preview at.
+   * What decides whether a grain cell can be SEEN here, said as a visible
+   * state rather than a tooltip (`docs/film-simulation.md` §6). A host that
+   * cannot say passes nothing and the panel claims nothing.
+   */
+  previewHeight?: number | null;
+  /** False where the host's preview does not draw the film node at all (the Studio's stage). */
+  previewDraws?: boolean;
 }
 
 /**
@@ -36,22 +51,49 @@ interface GradePanelProps {
  * The stack bakes into a single LUT, so the preview, the stills and every
  * export variant grade through exactly one shader pass.
  */
-export default function GradePanel({ stack, previewImage = null }: GradePanelProps) {
+export default function GradePanel({
+  stack,
+  previewImage = null,
+  previewLabel = null,
+  previewIsLog = false,
+  previewHeight = null,
+  previewDraws = true,
+}: GradePanelProps) {
   const packs = useLutPacks();
+  const favourites = useLutFavourites();
   const [pick, setPick] = useState('');
   const [gallery, setGallery] = useState(false);
 
-  const pickLook = (id: string) => {
+  // The starred looks, named — read from the gallery's own node list so a
+  // favourite is spelled here exactly as it is there, whatever family it came
+  // from. Pure and cheap: `galleryNodes` resolves nothing, and no thumbnail
+  // is wanted for a `<select>`.
+  const favouriteOptions = useMemo(() => {
+    const node = galleryNodes(packs, true, {}, favourites).find((n) => n.id === FAVOURITES_NODE);
+    return node?.items ?? [];
+  }, [packs, favourites]);
+
+  /**
+   * `intensity` is what the gallery's scene was judged at — the layer is born
+   * wearing it, rather than at 100 % with the author sent to find the strength
+   * slider again. The `<select>` beside it says nothing about strength, so it
+   * takes the default.
+   */
+  const pickLook = (id: string, intensity = 1) => {
     const packPick = readPackPick(id);
     if (packPick) {
       // The layer stores the REFERENCE; the vault holds the lattice.
       const pack = packs.find((p) => p.id === packPick.pack);
       const look = pack?.looks.find((l) => l.id === packPick.look);
-      void stack.addPackLook({ pack: packPick.pack, look: packPick.look, hash: look?.hash ?? '' });
+      void stack.addPackLook(
+        { pack: packPick.pack, look: packPick.look, hash: look?.hash ?? '' },
+        undefined,
+        intensity,
+      );
     } else if (id.startsWith(FILM_PICK)) {
-      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId);
+      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId, intensity);
     } else {
-      void stack.addBuiltin(id);
+      void stack.addBuiltin(id, intensity);
     }
   };
 
@@ -81,6 +123,19 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
           }}
         >
           <option value="">{stack.busy ? 'Loading…' : 'Built-in…'}</option>
+          {/* ★ Favourites first (`docs/lut-packs.md` §6) — the same starred
+              shortlist the gallery's top row draws, from the same list, so
+              the two can never disagree. Left out entirely when nothing is
+              starred: an empty group reads as a broken one. */}
+          {favouriteOptions.length > 0 && (
+            <optgroup label="★ FAVOURITES">
+              {favouriteOptions.map((item) => (
+                <option key={item.id} value={item.id}>
+                  {item.name}
+                </option>
+              ))}
+            </optgroup>
+          )}
           {/* The film stocks are generated, not files: they sit beside the
               folder groups rather than in the manifest, which lists files. */}
           <optgroup label={FILM_GROUP_LABEL}>
@@ -144,14 +199,20 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
           })}
         </NativeSelect>
         <IconButton
-          label="Browse looks with a live preview"
+          label="Browse every look on a real picture"
           size="sm"
           variant="ghost"
           onClick={() => setGallery(true)}
         >
           {Icons.grid}
         </IconButton>
-        <Button size="sm" onClick={() => void stack.addCustom()} title="Load a .cube file from disk">
+        {/* An upload is kept in this browser's vault and the document stores a
+            reference to it, never the lattice (`docs/lut-packs.md` §3.1). */}
+        <Button
+          size="sm"
+          onClick={() => void stack.addCustom()}
+          title="Load a .cube file from disk — kept in this browser’s vault, never written into the document"
+        >
           .cube…
         </Button>
       </FieldRow>
@@ -160,8 +221,10 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
         <LutGalleryModal
           includeFilm
           previewImage={previewImage}
-          onPick={(id) => {
-            pickLook(id);
+          previewLabel={previewLabel}
+          previewIsLog={previewIsLog}
+          onPick={(id, intensity) => {
+            pickLook(id, intensity);
             setGallery(false);
           }}
           onClose={() => setGallery(false)}
@@ -243,6 +306,16 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
         ))
       )}
 
+      {/* The TEXTURE, between the stack and the delivery stage — which is
+          where the node draws it: after the cube, before the output. It is
+          the grade's, not a layer's, because it cascades with the rung. */}
+      <FilmTextureDials
+        texture={stack.film}
+        onChange={(next) => stack.setTexture(next)}
+        previewHeight={previewHeight}
+        previewDraws={previewDraws}
+      />
+
       {/* The delivery stage, always last. */}
       <FieldRow label="Output" hint={outputHint}>
         <SelectField
@@ -279,7 +352,8 @@ export default function GradePanel({ stack, previewImage = null }: GradePanelPro
         {stack.layers.length > 1 && `${activeCount} of ${stack.layers.length} looks active. `}
         Looks apply top to bottom and bake into one LUT — the preview, the stills and every
         export grade identically. Above 100% a look extrapolates past what it was authored for.
-        A film stock goes after a conversion LUT, never before it.
+        A film stock goes after a conversion LUT, never before it. Its grain and halation are
+        not in the LUT: they are drawn after it, at the size the frame is delivered at.
       </p>
     </div>
   );

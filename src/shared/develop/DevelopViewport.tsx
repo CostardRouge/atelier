@@ -1,6 +1,7 @@
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
+import TaskEdge from '../ui/TaskEdge';
 import type { DevelopPicture } from './use-develop-picture';
 
 /**
@@ -33,12 +34,20 @@ export default function DevelopViewport({
   onPick,
   pixelView = 'smooth',
   facts = null,
+  shot = null,
   marks = null,
   onUnmark,
   rings = null,
   onUnring,
+  scope = null,
 }: {
   picture: DevelopPicture;
+  /**
+   * The media whose TASKS this stage draws on its bottom edge (`TaskEdge`,
+   * `tasks.md`): a RAW being fetched for it, its original on its way. The
+   * host names it — a picture's asset id, else its file identity.
+   */
+  scope?: string | null;
   /**
    * The picture's repair patches, drawn as rings that follow the zoom and the
    * pan: the destination solid, its source dashed, joined by a hair. Placed
@@ -67,6 +76,17 @@ export default function DevelopViewport({
    * drawn). The host decides whether they are showing (`I`).
    */
   facts?: readonly string[] | null;
+  /**
+   * What the CAMERA did — `ƒ/1.7 · 1/240 · ISO 100 · +0.3 EV`
+   * (`exif/exif-summary.ts`'s `captureLine`) — drawn at the TOP of the same
+   * stack, above a hairline and marked down its edge with the accent.
+   *
+   * Two authorships in one corner is exactly the thing that had to be kept
+   * apart: everything under the rule is this session's and changes on every
+   * drag, the line above it is the file's own and can never be edited. Same
+   * key (`I`), same chip, one mark saying which hand wrote it.
+   */
+  shot?: string | null;
   /**
    * How a MAGNIFIED picture is drawn. Only past 1:1 does it change anything,
    * and there it decides whether a magnified pixel looks like a pixel or like
@@ -155,7 +175,9 @@ export default function DevelopViewport({
               ? `loupe · ${picture.loupe.longEdge ?? ''} px`
               : picture.loupe.state === 'same'
                 ? 'loupe · the file has no more'
-                : 'loupe · could not decode'}
+                : picture.loupe.state === 'cancelled'
+                  ? 'loupe · cancelled'
+                  : 'loupe · could not decode'}
         </span>
       )}
       {picture.comparing && (
@@ -166,7 +188,7 @@ export default function DevelopViewport({
           title="Drag to compare with the picture as shot"
           aria-hidden="true"
         >
-          {wipe < 1 && (
+          {wipe > 0 && (
             <span className="absolute inset-y-0 left-1/2 w-[1.5px] -ml-[0.75px] bg-[rgba(251,248,241,0.9)] pointer-events-none" />
           )}
           <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
@@ -189,6 +211,9 @@ export default function DevelopViewport({
       {hasFile && !source && !problem && (
         <span className="absolute inset-0 grid place-items-center font-mono text-2xs text-muted">decoding…</span>
       )}
+      {/* The passive surface: a hairline along the bottom for whatever is
+          happening to THIS picture — the words and the Cancel are the pill's. */}
+      {scope && <TaskEdge scope={scope} className="z-10" />}
       {picking && (
         <span
           className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.92)] text-accent-ink border-accent`}
@@ -287,14 +312,25 @@ export default function DevelopViewport({
           })}
         </svg>
       )}
-      {facts && facts.length > 0 && source && (
+      {(shot || (facts && facts.length > 0)) && source && (
         <div
           // Pointer-transparent: the facts sit ON the picture, and the picture
           // under them still answers a drag, a wipe and a paint stroke.
           className="absolute bottom-2 left-2.5 max-w-[60%] pointer-events-none flex flex-col items-start gap-0.5"
           role="status"
         >
-          {facts.map((line) => (
+          {shot && (
+            <span className="font-mono text-2xs text-ink bg-[rgba(251,248,241,0.84)] rounded-[0.25rem] border-l-2 border-accent pl-1.5 pr-1.5 py-0.5 leading-snug">
+              {shot}
+            </span>
+          )}
+          {shot && facts && facts.length > 0 && (
+            // The rule only exists to separate two things: with one family on
+            // the picture there is nothing to divide, and a floating hairline
+            // over a photograph is noise.
+            <span aria-hidden className="self-stretch h-px bg-[rgba(251,248,241,0.5)] my-0.5" />
+          )}
+          {(facts ?? []).map((line) => (
             <span
               key={line}
               className="font-mono text-2xs text-ink-soft bg-[rgba(251,248,241,0.84)] rounded-[0.25rem] px-1.5 py-0.5 leading-snug"
@@ -307,7 +343,7 @@ export default function DevelopViewport({
       {source && cube && !picking && (
         <>
           <span className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}>
-            {holding ? 'before' : wipe < 1 ? 'after · before' : 'after'}
+            {holding ? 'before' : wipe > 0 ? 'before · after' : 'after'}
           </span>
           <button
             type="button"

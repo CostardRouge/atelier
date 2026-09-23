@@ -8,7 +8,7 @@
  * can sit at the end (probing it fully would mean reading the whole file).
  */
 
-import { createFile, MP4BoxBuffer, type Movie } from 'mp4box';
+import type { Movie } from 'mp4box';
 
 export interface ClipMeta {
   width: number;
@@ -138,11 +138,26 @@ export interface ContainerInfo {
  * Probe the container for codec and frame rate, feeding mp4box in chunks and
  * stopping as soon as the `moov` is parsed or `capBytes` is read. Best-effort:
  * resolves `{}` if the header isn't reachable within the cap.
+ *
+ * mp4box is imported here, on first use, rather than at the top of the module:
+ * this file is reached from the asset library (every page loads it) while the
+ * parser — 176 kB minified — is only ever needed once a clip is ACTIVE in a
+ * tool. A static import put it in the entry chunk of the home page.
  */
-export function probeContainer(
+export async function probeContainer(
   file: File,
   capBytes = 48 * 1024 * 1024,
 ): Promise<ContainerInfo> {
+  // Best-effort holds for the import too: a chunk that fails to load (a
+  // deploy under an open tab, a flaky link) is "no information", never a
+  // rejection the three callers were not written to catch.
+  let mp4box: typeof import('mp4box');
+  try {
+    mp4box = await import('mp4box');
+  } catch {
+    return {};
+  }
+  const { createFile, MP4BoxBuffer } = mp4box;
   return new Promise((resolve) => {
     const mp4 = createFile();
     let done = false;
@@ -167,12 +182,17 @@ export function probeContainer(
     const CHUNK = 1024 * 1024;
     let offset = 0;
     const pump = async () => {
-      while (!done && offset < file.size && offset < capBytes) {
-        const end = Math.min(offset + CHUNK, file.size);
-        const buffer = await file.slice(offset, end).arrayBuffer();
-        if (done) break;
-        mp4.appendBuffer(MP4BoxBuffer.fromArrayBuffer(buffer, offset));
-        offset = end;
+      try {
+        while (!done && offset < file.size && offset < capBytes) {
+          const end = Math.min(offset + CHUNK, file.size);
+          const buffer = await file.slice(offset, end).arrayBuffer();
+          if (done) break;
+          mp4.appendBuffer(MP4BoxBuffer.fromArrayBuffer(buffer, offset));
+          offset = end;
+        }
+      } catch {
+        // A file that changed on disk since it was listed, or a read the
+        // browser refused: without this the promise never settled at all.
       }
       finish({});
     };

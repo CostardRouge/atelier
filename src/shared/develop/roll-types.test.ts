@@ -139,7 +139,7 @@ describe('editing the strip', () => {
       ],
     };
     const doc = readRollDoc(raw)!;
-    expect(doc.version).toBe(2);
+    expect(doc.version).toBe(ROLL_DOC_VERSION);
     expect(doc.pictures[0]).toMatchObject({
       aspect: 'original',
       framing: null,
@@ -194,7 +194,8 @@ describe('reading a stored roll', () => {
     expect(doc.pictures[1].develop?.exposure).toBe(1);
     expect(doc.pictures[1].framing?.scale).toBe(2);
     expect(doc.grade).toBeNull();
-    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, originals: 'auto', replace: false, hdr: false, hdrStops: 2 });
+    // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
+    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2 });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
   });
@@ -204,16 +205,20 @@ describe('reading a stored roll', () => {
     expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 7 }], output: 'bogus' })).toEqual({
       layers: [{ id: 'l', source: 'builtin:x', name: 'l', customText: null, intensity: 3, enabled: true }],
       output: 'none',
+      film: null,
     });
     expect(readRollGrade({ layers: [{ id: 'l', source: 'builtin:x', intensity: 1.5 }], output: 'none' })?.layers[0].intensity).toBe(1.5);
-    expect(readRollGrade({ layers: [{ nope: 1 }], output: 'rec709-to-srgb' })).toEqual({ layers: [], output: 'rec709-to-srgb' });
+    expect(readRollGrade({ layers: [{ nope: 1 }], output: 'rec709-to-srgb' })).toEqual({ layers: [], output: 'rec709-to-srgb', film: null });
+    // A TEXTURE alone is a look: grain with no LUT is what a stock's texture half is for.
+    const grainy = readRollGrade({ layers: [], output: 'none', film: { grain: 0.5 } });
+    expect(grainy?.film?.grain).toBe(0.5);
+    expect(readRollGrade({ layers: [], output: 'none', film: 'nope' })).toBeNull();
   });
 
   it('reads the export through its limits, and the source size as null', () => {
     expect(readRollExport({ longEdge: 1920.4, quality: 0.8, originals: 'proxies', replace: true })).toEqual({
       longEdge: 1920,
       quality: 0.8,
-      originals: 'proxies',
       replace: true,
       hdr: false,
       hdrStops: 2,
@@ -226,6 +231,19 @@ describe('reading a stored roll', () => {
     // A roll written before the choice existed keeps what is in its folder.
     expect(readRollExport({ quality: 0.9 }).replace).toBe(false);
     expect(readRollExport({ replace: 'yes' }).replace).toBe(false);
+  });
+
+  it('reads the rendition a picture is developed from, and nothing as null', () => {
+    const doc = readRollDoc({
+      id: 'r',
+      pictures: [
+        { id: 'p1', ref: ref('a.jpg'), rendition: 'delivered:dji_0101.jpg' },
+        { id: 'p2', ref: ref('b.jpg'), rendition: '' },
+        { id: 'p3', ref: ref('c.jpg') },
+      ],
+    })!;
+    expect(doc.pictures.map((p) => p.rendition)).toEqual(['delivered:dji_0101.jpg', null, null]);
+    expect(patchPicture(doc, 'p3', { rendition: 'proxy' }).pictures[2].rendition).toBe('proxy');
   });
 
   it('migrates a stored roll onto the current shape without changing what it holds', () => {

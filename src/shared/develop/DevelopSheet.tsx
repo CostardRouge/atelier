@@ -1,8 +1,10 @@
-import { useState, type ReactNode } from 'react';
+import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
+import { useIsCompact } from '../ui/use-layout-mode';
 import { usePixelView } from '../ui/use-pixel-view';
+import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
@@ -21,6 +23,8 @@ import DevelopSliders from './DevelopSliders';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
 import { useDevelopPicture } from './use-develop-picture';
+import { usePicturePixels } from './use-picture-pixels';
+import { pictureFidelity } from './picture-fidelity';
 
 export interface DevelopSheetProps {
   /** The picture, or null when the slide has none — the controls still show. */
@@ -29,7 +33,13 @@ export interface DevelopSheetProps {
   videoTimeSeconds?: number;
   /** What the sheet is about, in the header: usually the file's name. */
   title: string;
-  /** What the picture IS — `JPEG · 8-bit`, `proxy · 8-bit`, later `RAW · 16-bit`. */
+  /**
+   * What the picture IS, when the host knows better than the sheet can. Left
+   * out — which is what both hosts do — the sheet says it itself, from the
+   * file and the pixels it measures (`usePicturePixels`): one sentence for
+   * every Develop screen, so Trips and the Studio cannot drift apart from the
+   * tool (2026-09-20).
+   */
   fidelity?: string | null;
   /** One line under the picture: what this picture can and cannot give back. */
   note?: string | null;
@@ -97,16 +107,51 @@ export default function DevelopSheet({
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
   const draft = useDevelopDraft(value, stack);
+  // What the picture is, said with its pixels. The host may override both,
+  // but neither does: the sheet is where the file is, so this is where the
+  // measurement belongs.
+  const pixels = usePicturePixels(file);
+  const own = pictureFidelity(file, draft.draft.base, pixels);
+  const chip = fidelity ?? own.chip;
+  const caption = note ?? own.note;
   const [told, tell] = useTold();
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
+  const compact = useIsCompact();
   // The loupe too: the modal hosts gain RENDERING, never panels (§4.2), and
   // the file's own pixels under a magnified view are rendering.
-  const picture = useDevelopPicture({ file, videoTimeSeconds, cube: stack.composed, loupe: true, pixelView });
+  const picture = useDevelopPicture({
+    file,
+    videoTimeSeconds,
+    cube: stack.composed,
+    // The grade's texture reaches the sheet too: the modal hosts RENDERING,
+    // never panels (§4.2), and grain is rendering.
+    film: stack.film,
+    loupe: true,
+    pixelView,
+  });
 
   const done = () => onDone(draft.result());
   // While a preset is being named, Enter belongs to that field's own form.
   useDialogKeys({ onCancel, onConfirm: naming ? null : done });
+  // `Z` and the arrows over the picture, the grammar every Looking surface
+  // shares (`zoom-keys.ts`); the workbench maps the same `Z` through
+  // `roll-editor.ts` and gives its arrows to the roll.
+  const keys = useRef({ view: picture.view });
+  keys.current = { view: picture.view };
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const v = keys.current.view;
+      const action = zoomKeyAction(describeZoomKey(e), v.zoomed);
+      if (!action) return;
+      e.preventDefault();
+      if (action.kind === 'pan') v.pan(action.dx, action.dy);
+      else if (v.zoomed) v.zoom.reset();
+      else v.zoom.zoomIn();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, []);
 
   return (
     <div
@@ -119,26 +164,33 @@ export default function DevelopSheet({
       }}
     >
       <div className="w-full max-w-[64rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
-        {/* Header: what, what it is, the clipboard, the zoom, close. */}
-        <div className="flex-none flex items-center gap-2.5 min-w-0">
-          <h2 className="m-0 font-serif text-lg min-w-0 truncate" title={title}>
+        {/* Header: what, what it is, the clipboard, the zoom, close. On a
+            phone the row WRAPS into two — the name with Close, then the chip
+            and the verbs — because one row of five things left the name as
+            "D…" at 390px: the verbs never wrap and the name gave way first.
+            The wrapper is `contents` at every other width, so the desktop
+            row is the one flex line it always was. */}
+        <div className="flex-none flex flex-wrap items-center gap-x-2.5 gap-y-1.5 min-w-0">
+          <h2 className="m-0 font-serif text-lg flex-1 min-w-0 truncate" title={title}>
             Develop · {title}
           </h2>
-          {fidelity && <span className={developPillClass}>{fidelity}</span>}
-          <span className="flex-1" />
-          <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+          <div className={compact ? 'basis-full order-last flex items-center gap-2.5 min-w-0' : 'contents'}>
+            {chip && <span className={developPillClass}>{chip}</span>}
+            <span className="flex-1" />
+            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+          </div>
           {/* In the header, never over the picture (the lightbox's rule); under
               820px there is none — the pinch is the gesture there. */}
-          {picture.source && (
-            <StageZoomControl zoom={picture.view.zoom} hint="wheel, or pinch" className="flex-none max-[820px]:hidden" />
+          {picture.source && !compact && (
+            <StageZoomControl zoom={picture.view.zoom} hint="wheel, pinch, or Z" className="flex-none" />
           )}
           {/* Only where it means anything: below 1:1 the browser is downscaling
               and `pixelated` is simply worse. The preference is the machine's,
               shared with the Develop tool (`use-pixel-view.ts`). */}
-          {picture.source && picture.view.magnifying && (
+          {picture.source && picture.view.magnifying && !compact && (
             <button
               type="button"
-              className={`${developPillClass} flex-none cursor-pointer hover:border-accent max-[820px]:hidden`}
+              className={`${developPillClass} flex-none cursor-pointer hover:border-accent`}
               onClick={() => setPixelView(pixelView === 'pixels' ? 'smooth' : 'pixels')}
               title={
                 pixelView === 'pixels'
@@ -183,7 +235,7 @@ export default function DevelopSheet({
               // column scrolls under it.
               className="flex-1 max-[820px]:flex-none max-[820px]:h-[calc(var(--app-h)*0.38)]"
             />
-            <DevelopCaption draft={draft.draft} note={note} picture={picture} />
+            <DevelopCaption draft={draft.draft} note={caption} picture={picture} />
           </div>
 
           {/* The column: the pipeline in order, then the look under it. */}
@@ -212,7 +264,12 @@ export default function DevelopSheet({
               onNaming={setNaming}
             />
             {applyTo && <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />}
-            <DevelopLookSection stack={stack} header={lookHeader} />
+            <DevelopLookSection
+              stack={stack}
+              header={lookHeader}
+              previewImage={picture.source}
+              previewLabel={title}
+            />
           </div>
         </div>
 

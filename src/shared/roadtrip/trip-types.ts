@@ -28,6 +28,7 @@ import {
 } from '../develop/develop';
 import type { SavedMediaRef } from '../projects/project-types';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
+import type { FilmTexture } from '../film/film-texture';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { gradeOrNull } from '../lut/saved-grade';
 import type { OutputTransform } from '../lut/transfer';
@@ -58,23 +59,26 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 25;
+export const TRIP_DOC_VERSION = 27;
 
 /**
- * A grade, in the Studio's own terms: an ordered stack of LUT layers and the
- * output transform, exactly what `ProjectDoc.lutStack` + `outputTransform`
- * hold. Road Trip grades THROUGH the Studio's engine (`useLutStack` →
- * `makeFrameGrader`), so the stored shape is the Studio's and a custom
- * `.cube` rides as text inside its layer. The interpolation mode is NOT here:
- * it is a render preference of the machine, never of a document.
+ * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
+ * output transform and the film texture, exactly what `ProjectDoc.lutStack` +
+ * `outputTransform` + `lutFilm` hold. Road Trip grades THROUGH the Studio's
+ * engine (`useLutStack` → `makeFrameGrader`), so the stored shape is the
+ * Studio's and a custom `.cube` rides as text inside its layer. The
+ * interpolation mode is NOT here: it is a render preference of the machine,
+ * never of a document.
  */
 export interface TripGrade {
   layers: SavedLutLayer[];
   output: OutputTransform;
+  /** Grain and halation, or null for none — `SavedGrade.film`, cascading with the rung. */
+  film?: FilmTexture | null;
 }
 
 export function emptyGrade(): TripGrade {
-  return { layers: [], output: 'none' };
+  return { layers: [], output: 'none', film: null };
 }
 
 /**
@@ -569,8 +573,6 @@ export interface TripDoc {
   id: string;
   /** What the trip is called on a badge ("Australie"). */
   name: string;
-  /** Where it happened, for the overview header. */
-  destination: string;
   startDate: IsoDate;
   endDate: IsoDate;
   stages: TripStage[];
@@ -641,24 +643,21 @@ export interface TripDoc {
 }
 
 /**
- * `places` seeds ONE stage covering the whole trip — where it set out from and
- * where it ended, which is what the creation modal asks for. It is left unnamed
- * on purpose, so its label derives to "Perth → Cairns" and stays honest if the
- * author later edits either end.
- *
- * Empty (the default, and what an import passes) seeds nothing: a trip whose
- * author skipped those fields keeps today's behaviour exactly, with no stage
- * covering any day and the badge counters falling back as they always have.
+ * A trip starts with NO leg at all — the state an import and a timeline seed
+ * have always landed in, and the one every new trip lands in since 2026-09-22.
+ * Creation used to take a From and a To and seed one stage covering the whole
+ * span from them; the maintainer retired that, because a place belongs to a
+ * leg and the legs are drawn on the calendar once the trip exists. A day
+ * outside every leg names no place and says so (`day-badge.ts`), rather than
+ * being told it spent 345 days on one.
  *
  * `sourceId` is where the document will LIVE; only `local` exists today, and a
  * remote document store (bridge phase 3) will hand its own id in here.
  */
 export function createTripDoc(
   name: string,
-  destination: string,
   startDate: IsoDate,
   endDate: IsoDate,
-  places: TripPlace[] = [],
   sourceId: string = DEFAULT_SOURCE_ID,
 ): TripDoc {
   const now = Date.now();
@@ -666,12 +665,9 @@ export function createTripDoc(
     version: TRIP_DOC_VERSION,
     id: crypto.randomUUID(),
     name: name.trim(),
-    destination: destination.trim(),
     startDate,
     endDate,
-    stages: places.length
-      ? [createTripStage('', '', startDate, endDate, places)]
-      : [],
+    stages: [],
     sourceId,
     posts: [],
     badgeWords: { ...DEFAULT_BADGE_WORDS },
@@ -1264,6 +1260,32 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         defaults ? { ...defaults, cascade: readCascade(defaults.cascade) } : defaults,
       ]),
     ) as HookDefaultsByKind;
+  }
+
+  if (migrated.version < 26) {
+    // A grade carries a film TEXTURE — grain and halation — on each of its
+    // four rungs. Every stored grade starts with none, so nothing composed
+    // before this existed changes by a code value; a value that IS there (a
+    // document from a newer build, a hand edit) is read through `gradeOrNull`,
+    // which clamps every number of it.
+    migrated.grade = gradeOrNull(migrated.grade) ?? emptyGrade();
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      grade: gradeOrNull(post.grade),
+      badge: { ...post.badge, grade: gradeOrNull(post.badge?.grade) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        grade: gradeOrNull(slide.grade),
+      })),
+    }));
+  }
+
+  if (migrated.version < 27) {
+    // `destination` is gone: the prose subtitle is DERIVED from the legs
+    // (`tripRouteLabel`) rather than kept as a second copy of where the trip
+    // went. Deleted rather than left lying in the record — a stored key no
+    // type names is what a later reader mistakes for a fact.
+    delete (migrated as { destination?: string }).destination;
   }
 
   migrated.version = TRIP_DOC_VERSION;

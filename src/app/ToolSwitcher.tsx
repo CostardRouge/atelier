@@ -1,5 +1,7 @@
-import { useEffect, useRef, useState } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState } from 'react';
+import { createPortal } from 'react-dom';
 import { Icons } from '../shared/ui/icons';
+import { menuAnchor, type MenuAnchor } from '../shared/ui/menu-anchor';
 import { HOME_PATH, TOOLS, type Tool } from './tools';
 
 /**
@@ -13,16 +15,29 @@ import { HOME_PATH, TOOLS, type Tool } from './tools';
  * visible. It is a real target now (a bordered pill on hover and while
  * open), and the entries are filed in two groups: the editors the suite is
  * converging on, then the instruments kept until the Studio absorbs them.
+ *
+ * The menu is drawn in a PORTAL at fixed coordinates through `menuAnchor`,
+ * like `OverflowMenu`, rather than `absolute left-0` under the trigger: the
+ * trigger sits ~100px into the masthead, so a 22rem menu hung from its left
+ * edge ran past the right edge of a 390px phone and cut every second column
+ * of instruments off (2026-09-21). The anchor slides it back inside the
+ * viewport, and caps its height so a short landscape phone scrolls it.
  */
 export default function ToolSwitcher({ tool }: { tool: Tool }) {
   const [open, setOpen] = useState(false);
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
 
   // Close on outside click or Escape — a lightweight popover, no library.
+  // "Inside" is two elements now that the menu is portalled: the trigger's
+  // box and the menu's own.
   useEffect(() => {
     if (!open) return;
     function onPointerDown(e: PointerEvent) {
-      if (!rootRef.current?.contains(e.target as Node)) setOpen(false);
+      const target = e.target as Node;
+      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
+      setOpen(false);
     }
     function onKey(e: KeyboardEvent) {
       if (e.key === 'Escape') setOpen(false);
@@ -34,6 +49,39 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
       document.removeEventListener('keydown', onKey);
     };
   }, [open]);
+
+  /** Measure the trigger and the menu, and say where the menu goes. */
+  const place = useCallback(() => {
+    const rect = rootRef.current?.getBoundingClientRect();
+    const el = menuRef.current;
+    if (!rect || !el) return;
+    setAnchor(
+      menuAnchor({
+        trigger: rect,
+        // `scrollHeight` stays the natural height once `maxHeight` clamps it.
+        menu: { width: el.offsetWidth, height: el.scrollHeight },
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        side: 'below',
+        align: 'start',
+      }),
+    );
+  }, []);
+
+  // Placed before the first paint, and again when the screen changes under
+  // it — a rotation, a resize; `capture` sees a scroll in any ancestor.
+  useLayoutEffect(() => {
+    if (!open) {
+      setAnchor(null);
+      return;
+    }
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [open, place]);
 
   const editors = TOOLS.filter((t) => t.group === 'editor');
   const instruments = TOOLS.filter((t) => t.group === 'instrument');
@@ -63,9 +111,20 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
         </span>
       </button>
 
-      {open && (
+      {open &&
+        createPortal(
         <div
-          className="absolute left-0 top-full mt-2 w-[22rem] max-w-[calc(100vw-1.5rem)] p-1.5 rounded-paper border border-line bg-surface shadow-paper z-50 font-sans not-italic tracking-normal"
+          ref={menuRef}
+          // z-[70] with the other portalled menus: above every sheet, so the
+          // way to another tool is never swallowed by the one that is open.
+          className="fixed z-[70] w-[22rem] max-w-[calc(100vw-1rem)] p-1.5 overflow-y-auto rounded-paper border border-line bg-surface shadow-paper font-sans not-italic tracking-normal"
+          style={
+            anchor
+              ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight }
+              : // The first paint of a menu nobody has measured yet: the
+                // layout effect places it before the browser draws.
+                { left: 0, top: 0, visibility: 'hidden' }
+          }
           role="menu"
           aria-label="Tools"
         >
@@ -90,6 +149,8 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
                   role="menuitem"
                   aria-current={active ? 'page' : undefined}
                   onClick={close}
+                  onPointerEnter={() => void t.preload()}
+                  onFocus={() => void t.preload()}
                   className={`flex items-center gap-2 px-3 py-2 rounded-[8px] no-underline text-sm text-ink transition-colors ${
                     active ? 'bg-paper-2 font-semibold' : 'hover:bg-paper-2/60'
                   }`}
@@ -119,13 +180,18 @@ export default function ToolSwitcher({ tool }: { tool: Tool }) {
               Sources
             </a>
           </div>
-        </div>
-      )}
+        </div>,
+        document.body,
+        )}
     </div>
   );
 }
 
-/** An editor's row: the name, and one line of what it is for. */
+/**
+ * An editor's row: the name, and one line of what it is for. Hovering or
+ * focusing it fetches the tool's chunk, so the click lands on a tool that
+ * is already here rather than on the route's "Opening…" fallback.
+ */
 function ToolRow({ tool, active, onPick }: { tool: Tool; active: boolean; onPick: () => void }) {
   return (
     <a
@@ -133,6 +199,8 @@ function ToolRow({ tool, active, onPick }: { tool: Tool; active: boolean; onPick
       role="menuitem"
       aria-current={active ? 'page' : undefined}
       onClick={onPick}
+      onPointerEnter={() => void tool.preload()}
+      onFocus={() => void tool.preload()}
       className={`flex items-center gap-3 px-3 py-2 rounded-[10px] no-underline transition-colors ${
         active ? 'bg-accent-wash' : 'hover:bg-paper-2/60'
       }`}

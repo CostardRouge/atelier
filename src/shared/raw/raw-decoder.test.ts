@@ -1,5 +1,42 @@
-import { describe, expect, it } from 'vitest';
-import { canDecodeRaw, librawSettings, wantsHalfSize } from './raw-decoder';
+import { afterEach, describe, expect, it } from 'vitest';
+import { clearTasks, listTasks } from '../tasks/tasks';
+import { canDecodeRaw, decodeRaw, librawSettings, wantsHalfSize } from './raw-decoder';
+
+afterEach(() => clearTasks());
+
+describe('a decode is a task, and a cancel drops its turn', () => {
+  it('registers "Opening <file>" with a cancel, and rejects before touching the file once cancelled', async () => {
+    const file = new File([new Uint8Array(16)], 'DJI_0001.DNG');
+    const controller = new AbortController();
+    controller.abort();
+    // A signal already aborted: the chain is entered and left with nothing
+    // read and no decoder loaded (loading libraw-wasm here would fail loudly).
+    await expect(decodeRaw(file, { signal: controller.signal, scope: 'p1' })).rejects.toMatchObject({
+      name: 'AbortError',
+      message: 'Opening DJI_0001.DNG was cancelled',
+    });
+    expect(listTasks()).toEqual([]);
+  });
+
+  it('is named and scoped, and its own cancel ends it', async () => {
+    const file = new File([new Uint8Array(16)], 'DSC08463.ARW');
+    const pending = decodeRaw(file, { scope: 'p2' });
+    const task = listTasks().find((t) => t.label === 'Opening DSC08463.ARW');
+    expect(task).toMatchObject({ scope: 'p2', progress: null, detail: 'the sensor’s data' });
+    expect(task?.cancel).toBeTypeOf('function');
+    task!.cancel!();
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+    expect(listTasks()).toEqual([]);
+  });
+
+  it('starts no task when told to be quiet', async () => {
+    const controller = new AbortController();
+    controller.abort();
+    const pending = decodeRaw(new File([], 'X.DNG'), { signal: controller.signal, quiet: true });
+    expect(listTasks()).toEqual([]);
+    await expect(pending).rejects.toMatchObject({ name: 'AbortError' });
+  });
+});
 
 describe('wantsHalfSize', () => {
   it('halves a picture past the budget and leaves one inside it whole', () => {
