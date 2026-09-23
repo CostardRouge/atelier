@@ -334,3 +334,7 @@ gate's brush row holds it to (0.0008).
 Picking a subject on the stage — segmentation on the tap, the mask's outline
 and fill, the blink, a subject SUBTRACTED from another layer, and the export's
 own segmentation — lives in `subject-picking.md`.
+
+
+Combining masks (a layer's PARTS) and the colour range live in
+`mask-parts.md`.

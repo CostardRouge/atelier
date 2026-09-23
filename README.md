@@ -1123,9 +1123,9 @@ marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.
 
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
-somewhere: a *linear* or *radial* gradient, a band of *brightness*, a mask
-*painted* by hand, a *subject* found by a model from a point you tap, or the
-*whole picture*. Every Develop slider works inside a layer, and layers add up
+somewhere: a *linear* or *radial* gradient, a band of *brightness*, a
+*colour* range, a mask *painted* by hand, a *subject* found by a model from a
+point you tap, or the *whole picture*. Every Develop slider works inside a layer, and layers add up
 from the bottom of the list to the top. A new Subject layer starts with
 **Pick** on (**P**): tap the thing you mean and the model finds it at once —
 a ring turns while it thinks, then what the tap added blinks twice — tap
@@ -1137,6 +1137,21 @@ whole picture except the person, and the person's own layer alone decides
 them. The model (17 MB) is served from this site and loads the first time a
 subject is asked for; an export segments the same points on the picture it
 delivers.
+
+**Combining masks.** A layer's mask can be combined with up to four more,
+the way Lightroom does it: under **Combine**, pick **Add**, **Subtract** or
+**Intersect**, then the kind. *Add* takes in the new shape too, *Subtract*
+takes it out (a sky minus the mountain you paint over), *Intersect* keeps only
+where both are (the shadows, but only inside an ellipse). The parts apply in
+order, each with its own invert. The list at the top of the mask panel opens
+one at a time: its sliders show below it, and Paint or Pick act on it. A
+**colour range** is picked by tapping the picture. Every pixel near that
+colour is in the mask, wherever it is. Tap again to add up to five colours,
+tap a marker to remove one, and **Refine** widens or narrows the range. The
+colour is read from the picture as the layer sees it (the layers below it,
+not its own change) and stored, so the mask does not move when a slider
+does. A subject is not offered as a part: a Subject layer can carry parts of
+its own, and *Except* takes a subject out of any other layer.
 
 **Cropping.** The **Crop** tab (**C**; **A** goes back to Adjust) shows the
 whole developed picture, still, with the part you keep drawn over it and the

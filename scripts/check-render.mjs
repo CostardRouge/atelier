@@ -439,6 +439,87 @@ const out = await page.evaluate(async () => {
         rows[`except_${invert ? 'inverted' : 'plain'}`] = Number(worst.toFixed(4));
       }
     }
+    // COMBINED masks (item 16): a linear, minus a painted part, intersected
+    // with an inverted ellipse, plus a band of brightness — every op, an
+    // invert, and a part's raster on its OWN unit (4), over the ramp so the
+    // band varies. `layerWeight` with each part's `maskAt` is the expectation.
+    {
+      const { layerWeight } = await import('/atelier/src/shared/develop/layer.ts');
+      const base = { ...maskMod.DEFAULT_LINEAR, x: 0.5, y: 0.5, angle: 70, feather: 0.9 };
+      const parts = [
+        { op: 'subtract', invert: false, mask: { kind: 'brush', strokes: [{ points: [[0.3, 0.3], [0.55, 0.7]], radius: 0.18, hardness: 0.3, erase: false }] } },
+        { op: 'intersect', invert: true, mask: { ...maskMod.DEFAULT_RADIAL, x: 0.75, y: 0.4, radiusX: 0.2, radiusY: 0.15, angle: 10, feather: 0.3 } },
+        { op: 'add', invert: false, mask: { ...maskMod.DEFAULT_LUMA, from: 0.8, to: 1, feather: 0.1 } },
+      ];
+      const bitmap = await createImageBitmap(ramp);
+      const values = [];
+      for (const [kind, from] of [['canvas', ramp], ['bitmap', bitmap]]) {
+        const lit = through(from, [passthroughPass]);
+        const got = through(from, [makeLayerPass({ lut: toBlack, mask: base, parts, aspectRatio: AR, id: `m:combined:${kind}` })]);
+        let worst = 0;
+        probes.forEach((p, i) => {
+          if (lit[i] < 0.15) return;
+          const [u, v] = uvOf(p);
+          const want = layerWeight(maskMod.maskAt(base, u, v, lit[i], AR), false, 0, 1,
+            parts.map((q) => ({ op: q.op, invert: q.invert, value: maskMod.maskAt(q.mask, u, v, lit[i], AR) })));
+          if (kind === 'canvas') values.push(want);
+          worst = Math.max(worst, Math.abs(1 - got[i] / lit[i] - want));
+        });
+        rows[`combined_${kind}`] = Number(worst.toFixed(4));
+      }
+      bitmap.close();
+      rows.combined_spread = Number((Math.max(...values) - Math.min(...values)).toFixed(3));
+    }
+    // A COLOUR RANGE: hue across the frame, lightness down it, so the range
+    // takes in a band and leaves the rest — measured against `maskAt` handed
+    // the very pixel the probe reads.
+    {
+      const hues = paint((g) => {
+        for (let x = 0; x < W; x += 1) {
+          for (let y = 0; y < H; y += 8) {
+            g.fillStyle = `hsl(${Math.round((x / W) * 360)}, 70%, ${Math.round(30 + (y / H) * 40)}%)`;
+            g.fillRect(x, y, 1, 8);
+          }
+        }
+      });
+      const readRgb = (canvas) => {
+        const o = document.createElement('canvas'); o.width = W; o.height = H;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(canvas, 0, 0);
+        const d = oc.getImageData(0, 0, W, H).data;
+        return probes.map(([x, y]) => [d[(y * W + x) * 4] / 255, d[(y * W + x) * 4 + 1] / 255, d[(y * W + x) * 4 + 2] / 255]);
+      };
+      // Two samples taken from the picture itself, at two probes' own colours,
+      // so the range is full at those two and falls off across the rest.
+      const shown = (() => {
+        const cv = document.createElement('canvas');
+        const g0 = createRenderGraph(cv); g0.resize(W, H); g0.render(hues, [passthroughPass]);
+        const got = readRgb(cv); g0.dispose();
+        return got;
+      })();
+      const at = (i) => ({ x: 0, y: 0, r: shown[i][0], g: shown[i][1], b: shown[i][2] });
+      const colour = { kind: 'colour', range: 0.3, samples: [at(6), at(13)] };
+      const bitmap = await createImageBitmap(hues);
+      const values = [];
+      for (const [kind, from] of [['canvas', hues], ['bitmap', bitmap]]) {
+        const cv = document.createElement('canvas');
+        const g1 = createRenderGraph(cv); g1.resize(W, H); g1.render(from, [passthroughPass]);
+        const lit = readRgb(cv); g1.dispose();
+        const got = through(from, [makeLayerPass({ lut: toBlack, mask: colour, aspectRatio: AR, id: `m:colour:${kind}` })]);
+        let worst = 0;
+        probes.forEach((p, i) => {
+          const [r, gg, b] = lit[i];
+          if (r < 0.15) return; // the red channel is what is read back
+          const [u, v] = uvOf(p);
+          const want = maskMod.maskAt(colour, u, v, maskMod.lumaOf(r, gg, b), AR, [r, gg, b]);
+          if (kind === 'canvas') values.push(want);
+          worst = Math.max(worst, Math.abs(1 - got[i] / r - want));
+        });
+        rows[`colour_${kind}`] = Number(worst.toFixed(4));
+      }
+      bitmap.close();
+      rows.colour_spread = Number((Math.max(...values) - Math.min(...values)).toFixed(3));
+    }
     // The OUTLINE finish: ink or paper only where the mask crosses one half,
     // the picture untouched wherever the mask is plainly in or out.
     {
@@ -1455,6 +1536,17 @@ for (const row of ['except_plain', 'except_inverted']) {
   const ok = mask[row] <= 0.006;
   if (!ok) bad += 1;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${row.padEnd(15)} worst ${mask[row].toFixed(4)} against layerWeight — the subject taken out, after the invert`);
+}
+for (const row of ['combined', 'colour']) {
+  const spread = mask[`${row}_spread`];
+  const worst = Math.max(mask[`${row}_canvas`], mask[`${row}_bitmap`]);
+  const ok = worst <= 0.006 && spread > 0.05;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  ${row.padEnd(15)} worst ${worst.toFixed(4)} ` +
+      `(canvas ${mask[`${row}_canvas`]}, bitmap ${mask[`${row}_bitmap`]}), spread ${spread}` +
+      (row === 'combined' ? ' — linear − painted ∩ not radial + band, against layerWeight' : ' — two samples, against maskAt on the pixel'),
+  );
 }
 {
   const { drawn, stray, edges, missed } = mask.outline;

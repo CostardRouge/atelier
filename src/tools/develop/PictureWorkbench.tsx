@@ -59,8 +59,10 @@ import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
   DEFAULT_BRUSH_HARDNESS,
   DEFAULT_BRUSH_RADIUS,
+  MAX_COLOUR_SAMPLES,
   MAX_STROKES,
   type BrushStroke,
+  type Mask,
   type MaskKind,
 } from '../../shared/render/mask';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
@@ -81,8 +83,10 @@ const FLASH_STEP_MS = 90;
 const SUBJECT_HIT_RADIUS = 0.04;
 import {
   addLayer,
+  componentMask,
   createLayer,
   drawingLayers,
+  withComponentMask,
   moveLayer,
   patchLayer,
   removeLayer,
@@ -396,73 +400,88 @@ export default function PictureWorkbench({
   // one frame behind and would drop points (the same trap the curve editor's
   // drag wore). Each move rewrites the LAST stroke rather than adding one.
   const strokeRef = useRef<BrushStroke | null>(null);
-  const paintKind = painting ? selectedLayer?.mask?.kind : undefined;
-  const paintId = paintKind === 'brush' || paintKind === 'subject' ? (selectedLayer?.id ?? null) : null;
+  // WHICH of the open layer's masks the stage's gestures act on: null is its
+  // own, 0.. its combined parts (item 16). Back to its own whenever another
+  // layer opens, and whenever the part it pointed at is gone.
+  const [selectedPart, setSelectedPart] = useState<number | null>(null);
+  useEffect(() => setSelectedPart(null), [selectedLayerId]);
+  const partIndex = selectedPart !== null && selectedLayer?.parts?.[selectedPart] ? selectedPart : null;
+  const activeMask = selectedLayer ? componentMask(selectedLayer, partIndex) : null;
+  const paintKind = painting ? activeMask?.kind : undefined;
+  const paintId =
+    paintKind === 'brush' || paintKind === 'subject' || paintKind === 'colour' ? (selectedLayer?.id ?? null) : null;
   const brushRef = useRef(brush);
   brushRef.current = brush;
-  const layerPaint = useMemo(
-    () =>
-      paintId
-        ? {
-            onStart: (point: [number, number]) => {
-              if (paintKind === 'subject') {
-                // A tap ADDS a point, and a tap on one REMOVES it — the
-                // click-a-marker-to-unpick gesture, which is how a subject is
-                // narrowed after the model took in too much.
-                setLayersDraft((list) =>
-                  list.map((l) => {
-                    if (l.id !== paintId || l.mask?.kind !== 'subject') return l;
-                    const hit = l.mask.points.findIndex(
-                      ([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS,
-                    );
-                    const points =
-                      hit >= 0
-                        ? l.mask.points.filter((_, i) => i !== hit)
-                        : [...l.mask.points, point];
-                    return { ...l, mask: { ...l.mask, points } };
-                  }),
-                );
-                return;
-              }
-              const made: BrushStroke = { points: [point], ...brushRef.current };
-              strokeRef.current = made;
-              setLayersDraft((list) =>
-                list.map((l) => {
-                  if (l.id !== paintId || l.mask?.kind !== 'brush') return l;
-                  if (l.mask.strokes.length >= MAX_STROKES) return l;
-                  return { ...l, mask: { kind: 'brush', strokes: [...l.mask.strokes, made] } };
-                }),
-              );
-            },
-            onMove: (point: [number, number]) => {
-              // A subject is TAPPED, never dragged: the model answers a point.
-              if (paintKind === 'subject') return;
-              const live = strokeRef.current;
-              if (!live) return;
-              const last = live.points[live.points.length - 1];
-              // Points closer than this add nothing the radius does not already
-              // cover, and every one of them is rasterised again.
-              const step = Math.max(0.004, live.radius * 0.12);
-              if (Math.hypot(point[0] - last[0], point[1] - last[1]) < step) return;
-              const grown: BrushStroke = { ...live, points: [...live.points, point] };
-              strokeRef.current = grown;
-              setLayersDraft((list) =>
-                list.map((l) => {
-                  if (l.id !== paintId || l.mask?.kind !== 'brush' || l.mask.strokes.length === 0) return l;
-                  const strokes = [...l.mask.strokes];
-                  strokes[strokes.length - 1] = grown;
-                  return { ...l, mask: { kind: 'brush', strokes } };
-                }),
-              );
-            },
-            onEnd: () => {
-              strokeRef.current = null;
-            },
-            gesture: paintKind === 'subject' ? ('tap' as const) : ('drag' as const),
-          }
-        : null,
-    [paintId, paintKind],
-  );
+  // The picture's own sampler, read at the tap: the hook is made further down.
+  const sampleColourRef = useRef<((point: readonly [number, number], layerId: string) => [number, number, number] | null) | null>(null);
+  const layerPaint = useMemo(() => {
+    if (!paintId) return null;
+    // Every write goes to the ONE mask open in the panel, through the pure
+    // helpers, so a painted part and the layer's own brush cannot be confused.
+    const edit = (fn: (m: Mask | null) => Mask | null) =>
+      setLayersDraft((list) =>
+        list.map((l) => {
+          if (l.id !== paintId) return l;
+          const next = fn(componentMask(l, partIndex));
+          return next ? withComponentMask(l, partIndex, next) : l;
+        }),
+      );
+    return {
+      onStart: (point: [number, number]) => {
+        if (paintKind === 'subject') {
+          // A tap ADDS a point, and a tap on one REMOVES it — the
+          // click-a-marker-to-unpick gesture, which is how a subject is
+          // narrowed after the model took in too much.
+          edit((m) => {
+            if (m?.kind !== 'subject') return null;
+            const hit = m.points.findIndex(([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS);
+            const points = hit >= 0 ? m.points.filter((_, i) => i !== hit) : [...m.points, point];
+            return { ...m, points };
+          });
+          return;
+        }
+        if (paintKind === 'colour') {
+          // The same gesture for a colour range: a tap SAMPLES the colour
+          // there — as this layer sees it — and a tap on a marker removes it.
+          const rgb = sampleColourRef.current?.(point, paintId) ?? null;
+          edit((m) => {
+            if (m?.kind !== 'colour') return null;
+            const hit = m.samples.findIndex((c) => Math.hypot(c.x - point[0], c.y - point[1]) < SUBJECT_HIT_RADIUS);
+            if (hit >= 0) return { ...m, samples: m.samples.filter((_, i) => i !== hit) };
+            if (!rgb || m.samples.length >= MAX_COLOUR_SAMPLES) return null;
+            return { ...m, samples: [...m.samples, { x: point[0], y: point[1], r: rgb[0], g: rgb[1], b: rgb[2] }] };
+          });
+          return;
+        }
+        const made: BrushStroke = { points: [point], ...brushRef.current };
+        strokeRef.current = made;
+        edit((m) => (m?.kind === 'brush' && m.strokes.length < MAX_STROKES ? { kind: 'brush', strokes: [...m.strokes, made] } : null));
+      },
+      onMove: (point: [number, number]) => {
+        // A subject and a colour are TAPPED, never dragged.
+        if (paintKind !== 'brush') return;
+        const live = strokeRef.current;
+        if (!live) return;
+        const last = live.points[live.points.length - 1];
+        // Points closer than this add nothing the radius does not already
+        // cover, and every one of them is rasterised again.
+        const step = Math.max(0.004, live.radius * 0.12);
+        if (Math.hypot(point[0] - last[0], point[1] - last[1]) < step) return;
+        const grown: BrushStroke = { ...live, points: [...live.points, point] };
+        strokeRef.current = grown;
+        edit((m) => {
+          if (m?.kind !== 'brush' || m.strokes.length === 0) return null;
+          const strokes = [...m.strokes];
+          strokes[strokes.length - 1] = grown;
+          return { kind: 'brush', strokes };
+        });
+      },
+      onEnd: () => {
+        strokeRef.current = null;
+      },
+      gesture: paintKind === 'brush' ? ('drag' as const) : ('tap' as const),
+    };
+  }, [paintId, paintKind, partIndex]);
   // --- repairing -------------------------------------------------------------
   // The same seam, and the same rule as a stroke: the patch being placed rides
   // a ref, because the pointermove closure reads state one frame behind. A
@@ -891,6 +910,7 @@ export default function PictureWorkbench({
       }
     },
   });
+  sampleColourRef.current = picture.sampleColour;
   // What the picture IS, with the pixels it really has: the file's own,
   // measured for the *Delivers* row, or the sensor's once the RAW is decoded —
   // and, beside them, what the file holds and the screen is not showing (the
@@ -1143,8 +1163,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing });
+  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1243,8 +1263,8 @@ export default function PictureWorkbench({
           return;
         }
         case 'pick': {
-          const kind = keyState.current.selectedLayer?.mask?.kind;
-          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush')) return;
+          const kind = keyState.current.activeMask?.kind;
+          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush' && kind !== 'colour')) return;
           e.preventDefault();
           setPainting(!keyState.current.painting);
           return;
@@ -1352,20 +1372,27 @@ export default function PictureWorkbench({
    * see"*.
    */
   const subjectMarks = useMemo<readonly (readonly [number, number])[] | null>(
-    () => (selectedLayer?.mask?.kind === 'subject' ? selectedLayer.mask.points : null),
-    [selectedLayer],
+    () =>
+      activeMask?.kind === 'subject'
+        ? activeMask.points
+        : activeMask?.kind === 'colour'
+          ? activeMask.samples.map((c) => [c.x, c.y] as const)
+          : null,
+    [activeMask],
   );
   const unmarkSubject = useCallback(
     (index: number) => {
       setLayersDraft((list) =>
-        list.map((l) =>
-          l.id === paintId && l.mask?.kind === 'subject'
-            ? { ...l, mask: { ...l.mask, points: l.mask.points.filter((_, i) => i !== index) } }
-            : l,
-        ),
+        list.map((l) => {
+          if (l.id !== paintId) return l;
+          const m = componentMask(l, partIndex);
+          if (m?.kind === 'subject') return withComponentMask(l, partIndex, { ...m, points: m.points.filter((_, i) => i !== index) });
+          if (m?.kind === 'colour') return withComponentMask(l, partIndex, { ...m, samples: m.samples.filter((_, i) => i !== index) });
+          return l;
+        }),
       );
     },
-    [paintId],
+    [paintId, partIndex],
   );
 
   /**
@@ -1628,7 +1655,7 @@ export default function PictureWorkbench({
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick
           // is on, so a settled mask cannot be edited by a stray click.
-          onUnmark={paintKind === 'subject' ? unmarkSubject : undefined}
+          onUnmark={paintKind === 'subject' || paintKind === 'colour' ? unmarkSubject : undefined}
           // The rings show on every tab — a patch is a fact about the
           // picture — and answer the hand on the Detail tab, where the panel
           // that explains them is. The proposed spots belong to the scan.
@@ -1819,7 +1846,7 @@ export default function PictureWorkbench({
                   setSelectedLayerId(made.id);
                   // A fresh subject's only use is to be tapped: Pick comes on
                   // with it rather than being one more thing to find.
-                  setPainting(kind === 'subject');
+                  setPainting(kind === 'subject' || kind === 'colour');
                 }}
                 onRemove={(id) => {
                   setLayersDraft((list) => removeLayer(list, id));
@@ -1834,6 +1861,8 @@ export default function PictureWorkbench({
                   <MaskPanel
                     layer={selectedLayer}
                     layers={layersDraft}
+                    part={partIndex}
+                    onPart={setSelectedPart}
                     onPatch={(patch) =>
                       setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
                     }
@@ -1842,40 +1871,13 @@ export default function PictureWorkbench({
                     painting={painting}
                     onPainting={setPainting}
                     subject={
-                      selectedLayer.mask?.kind === 'subject'
+                      partIndex === null && selectedLayer.mask?.kind === 'subject'
                         ? {
                             working: subject.working === selectedLayer.id,
                             state: subject.state,
                             resolved: subjectRasters.has(selectedLayer.id),
                           }
                         : null
-                    }
-                    onClearSubject={() =>
-                      setLayersDraft((list) =>
-                        list.map((l) =>
-                          l.id === selectedLayer.id && l.mask?.kind === 'subject'
-                            ? { ...l, mask: { ...l.mask, points: [] } }
-                            : l,
-                        ),
-                      )
-                    }
-                    onUndoStroke={() =>
-                      setLayersDraft((list) =>
-                        list.map((l) =>
-                          l.id === selectedLayer.id && l.mask?.kind === 'brush'
-                            ? { ...l, mask: { kind: 'brush', strokes: l.mask.strokes.slice(0, -1) } }
-                            : l,
-                        ),
-                      )
-                    }
-                    onClearStrokes={() =>
-                      setLayersDraft((list) =>
-                        list.map((l) =>
-                          l.id === selectedLayer.id && l.mask?.kind === 'brush'
-                            ? { ...l, mask: { kind: 'brush', strokes: [] } }
-                            : l,
-                        ),
-                      )
                     }
                   />
                   {/* The SAME sliders the global develop uses, because a

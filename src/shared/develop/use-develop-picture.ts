@@ -12,6 +12,9 @@ import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail
 import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
+
+/** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
+const COLOUR_SAMPLE_EDGE = 512;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection } from '../render/lens';
@@ -388,6 +391,12 @@ export interface DevelopPicture {
    * would be measured against the last one.
    */
   pickAt: (clientX: number, clientY: number) => [number, number, number] | null;
+  /**
+   * The colour at a [0,1] point as the layer `layerId` sees it — the picture
+   * under that layer, before anything above it — ENCODED 0..1, for a colour
+   * range's sample. Null off a picture.
+   */
+  sampleColour: (point: readonly [number, number], layerId: string) => [number, number, number] | null;
   /**
    * Where a client point lands in the SOURCE picture, as [0,1]; null outside
    * it. What a painted mask's strokes are made of. With `unbounded`, a point
@@ -808,7 +817,9 @@ export function useDevelopPicture({
   // The layer whose mask is shown, from the whole list: `stack` holds only the
   // layers that draw, and a subject still at zero is the one to look at.
   const overlay = useMemo<MaskOverlay | null>(() => {
-    const layer = showMaskOf ? (layers ?? []).find((l) => l.id === showMaskOf && (l.mask || l.except)) : null;
+    const layer = showMaskOf
+      ? (layers ?? []).find((l) => l.id === showMaskOf && (l.mask || l.except || (l.parts ?? []).length))
+      : null;
     return layer ? { layer, style: maskStyle } : null;
   }, [layers, showMaskOf, maskStyle]);
 
@@ -1096,6 +1107,72 @@ export function useDevelopPicture({
       }
     },
     [source, canvasSize, frameRatio, framing],
+  );
+
+  // --- the colour a layer sees ----------------------------------------------
+  /**
+   * The colour at a [0,1] point of the picture AS A LAYER SEES IT — graded,
+   * warped, with the layers BELOW it and nothing above: what a colour-range
+   * mask on that layer compares against (`mask.ts`, `ColourMask`). The stage
+   * canvas would be the wrong thing to read: it carries this layer's own
+   * change, the ones above it, the finishing passes that run after every
+   * layer (the sharpen, presence, the post-crop vignette, the grain) and the
+   * mask's own wash — a sample taken there would move the range every time a
+   * slider did. A 5×5 average at a small size, like the white-balance dropper.
+   */
+  const colourRef = useRef<HTMLCanvasElement | null>(null);
+  const sampleColour = useCallback(
+    (point: readonly [number, number], layerId: string): [number, number, number] | null => {
+      if (!source || source.width <= 0 || source.height <= 0) return null;
+      const all = layers ?? [];
+      const at = all.findIndex((l) => l.id === layerId);
+      const below = drawingLayers(at < 0 ? all : all.slice(0, at));
+      const k = Math.min(1, COLOUR_SAMPLE_EDGE / Math.max(source.width, source.height));
+      const w = Math.max(1, Math.round(source.width * k));
+      const h = Math.max(1, Math.round(source.height * k));
+      if (!colourRef.current) colourRef.current = document.createElement('canvas');
+      const canvas = colourRef.current;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      // The finishing passes run after every layer, so none of them is what a
+      // layer reads: the sharpen and presence are cleared, the grain is not
+      // passed, and the vignette the ref would hand in is held back.
+      const unfinished = detail ? { ...detail, sharpen: 0, texture: 0, clarity: 0, dehaze: 0 } : null;
+      const keepVignette = postVignetteRef.current;
+      postVignetteRef.current = null;
+      try {
+        const grader = graderFor(cube, source, geometry, below, null, subjectMasks, unfinished, pixelScale, repair, null, gainField);
+        const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
+        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        const x = Math.min(w - 1, Math.max(0, Math.floor(point[0] * w)));
+        const y = Math.min(h - 1, Math.max(0, Math.floor(point[1] * h)));
+        const half = 2;
+        const sx = Math.max(0, x - half);
+        const sy = Math.max(0, y - half);
+        const sw = Math.min(w, x + half + 1) - sx;
+        const sh = Math.min(h, y + half + 1) - sy;
+        const data = ctx.getImageData(sx, sy, sw, sh).data;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        const n = sw * sh;
+        for (let i = 0; i < n; i += 1) {
+          r += data[i * 4];
+          g += data[i * 4 + 1];
+          b += data[i * 4 + 2];
+        }
+        return n ? [r / n / 255, g / n / 255, b / n / 255] : null;
+      } catch {
+        return null;
+      } finally {
+        postVignetteRef.current = keepVignette;
+      }
+    },
+    [source, layers, cube, geometry, subjectMasks, detail, pixelScale, repair, gainField, graderFor],
   );
 
   /**
@@ -1629,6 +1706,7 @@ export function useDevelopPicture({
     picking,
     setPicking,
     pickAt,
+    sampleColour,
     pointAt,
     veilCanvasRef,
     stagePoint,
