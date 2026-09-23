@@ -1207,7 +1207,9 @@ the country, and the run says which pictures got no town. While every group of t
 capture is kept the camera's EXIF block is copied whole; leaving one out
 rebuilds it from the fields Atelier reads, and the panel says the maker notes
 stay behind. The file holds ONE XMP packet — an Ultra HDR export folds these
-into its own.
+into its own — and says its colour space: every export carries a small sRGB
+ICC profile, so a colour-managed reader (Lightroom, a print lab, a wide-gamut
+screen) reads the colours as they were meant instead of guessing.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or every picture that leaves — into a folder you choose (downloaded one

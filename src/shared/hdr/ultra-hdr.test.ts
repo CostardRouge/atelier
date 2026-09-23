@@ -15,6 +15,7 @@ import {
 } from './ultra-hdr';
 import { withXmpPacket } from '../exif/exif-block';
 import { deliveryXmp } from '../exif/delivery-meta';
+import { readIccProfile, withIccProfile } from '../exif/icc-srgb';
 
 /** A JPEG-shaped byte stream: SOI, a JFIF APP0, a quantisation table, a scan, EOI. */
 function fakeJpeg(scanBytes: number, seed = 1): Uint8Array {
@@ -110,7 +111,7 @@ describe('wrapUltraHdr / readUltraHdr', () => {
   });
 
   it('folds a packet the base already carried into its own, so the file keeps ONE', () => {
-    const signed = withXmpPacket(fakeJpeg(200, 3), deliveryXmp({ creator: 'Steeve Pommier', copyright: '© 2026 Steeve Pommier.' }));
+    const signed = withIccProfile(withXmpPacket(fakeJpeg(200, 3), deliveryXmp({ creator: 'Steeve Pommier', copyright: '© 2026 Steeve Pommier.' })));
     const file = wrapUltraHdr(signed, fakeJpeg(40, 5), meta);
     const segs = jpegSegments(file)!;
     const xmps = segs.filter((s) => s.marker === 0xe1 && new TextDecoder().decode(s.data).startsWith('http://ns.adobe.com/xap/1.0/'));
@@ -122,6 +123,8 @@ describe('wrapUltraHdr / readUltraHdr', () => {
     const parts = readUltraHdr(file)!;
     expect(parts.foundBy).toBe('mpf');
     expect(parts.gainMap.length + parts.primary.length).toBe(file.length);
+    // The base's colour profile rides through the container untouched.
+    expect(readIccProfile(parts.primary)).not.toBeNull();
   });
 
   it('falls back to the directory Length when the MPF segment is gone, and refuses a plain JPEG', () => {

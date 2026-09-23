@@ -93,9 +93,9 @@ repeated here.
 
 | # | Missing | Today | Size |
 |---|---|---|---|
-| 25 | **ICC profile embedded** (even sRGB), **Display P3 / Adobe RGB** | untagged sRGB | S for the tag, M for wide gamut |
+| 25 | **ICC profile embedded** (even sRGB), **Display P3 / Adobe RGB** | **sRGB tag BUILT (pass 2)**; wide gamut open | S for the tag, M for wide gamut |
 | 26 | **16-bit TIFF / PNG** (print, retouch hand-off), AVIF | JPEG + Ultra HDR, by decision | M |
-| 27 | **Remove GPS / metadata on export** | GPS always leaves | S |
+| 27 | **Remove GPS / metadata on export** | **BUILT by M3** — the roll's metadata groups | S |
 | 28 | **Export presets and several targets in one run** (full + 2048 web), short edge / megapixels / %, output sharpening, watermark | one long-edge cap per roll | M |
 
 ## 5. Workflow
@@ -116,7 +116,8 @@ repeated here.
 - **Pass 1 — correctness (this week's kind of bug):** 1, 2, 3, 9 — BUILT
   2026-09-23; 11 withdrawn.
 - **Pass 2 — the obvious for a Lightroom hand:** 4 + 5 (one sections picker
-  for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag).
+  for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag). Started
+  2026-09-23: 27 came with M3, 25 (the sRGB tag) is BUILT.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.

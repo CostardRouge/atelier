@@ -377,6 +377,16 @@ shared block. Rules a later phase must keep:
   XMP is ONE packet — `withXmpPacket` replaces, and `wrapUltraHdr` takes the
   stamp's packet OUT of the base and folds its `rdf:Description` into the
   container's, since two packets in one file is what readers disagree about.
+- **Every delivered JPEG carries an sRGB ICC profile** (2026-09-23, audit
+  item 25, `exif/icc-srgb.ts`): a 520-byte v4 display profile BUILT from its
+  numbers (Bradford-adapted primaries, D50 white, `chad`, one shared type-3
+  `para` curve), never a shipped blob, in one `APP2` after the EXIF and XMP
+  `APP1`s. The canvas encodes sRGB, so it moves no pixel (Chromium decodes the
+  tagged and untagged file identically, measured); what it removes is the
+  reader's GUESS — an untagged file is sRGB only by convention. Validated as an
+  exact identity against LittleCMS's own sRGB (Pillow's ImageCms, 2 197
+  colours, 0 codes apart): check a profile change the same way. Wide gamut
+  (P3, Adobe RGB) is pass 4 and needs a P3 canvas, not a tag.
 - **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
   `RollPicture.title` / `caption`, stored trimmed and absent when empty
   (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so

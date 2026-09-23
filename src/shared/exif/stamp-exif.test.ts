@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { buildExifBlock } from './exif-build';
 import { readXmpPacket, withExifBlock } from './exif-block';
+import { readIccProfile, srgbIcc } from './icc-srgb';
 import { parseExif, type ExifData } from './exif-parser';
 import { exifAccountText, exportExifBlock, stampExif } from './stamp-exif';
 import { ALL_META, META_PRESETS } from './meta-groups';
@@ -261,6 +262,8 @@ describe('stampExif', () => {
     expect(parseExif(out.buffer).artist).toBe('Steeve Pommier');
     const xmp = readXmpPacket(out)!;
     expect(xmp).toContain('xmp:CreatorTool="Atelier"');
+    // And the colour space the pixels are in.
+    expect(readIccProfile(out)).toEqual(srgbIcc());
     expect(xmp).toContain('<rdf:li>Steeve Pommier</rdf:li>');
   });
 

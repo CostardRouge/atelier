@@ -34,6 +34,7 @@
 
 import { buildExifBlock } from './exif-build';
 import { readExifBlock, retagExifBlock, withExifBlock, withXmpPacket } from './exif-block';
+import { withIccProfile } from './icc-srgb';
 import { isEmptyExif, parseExif, type ExifData, type GpsCoord } from './exif-parser';
 import { captureYear, deliveryXmp, resolveRights, type DeliveryIdentity, type DeliveryRights } from './delivery-meta';
 import { ALL_META, filterExif, keepsWholeBlock, type MetaChoice } from './meta-groups';
@@ -201,7 +202,7 @@ function build(exif: ExifData, delivered: DeliveredSize, tags: AuthorTags): Uint
 }
 
 /**
- * The same JPEG carrying `block` and the XMP packet. A block the format cannot
+ * The same JPEG carrying `block`, the XMP packet and an sRGB ICC profile. A block the format cannot
  * hold — a copied one can be larger than a segment — is REBUILT from what can
  * be read of it rather than dropped, so the position and the body still
  * travel. A packet too large for its segment (a caption of tens of kilobytes)
@@ -222,6 +223,9 @@ export async function stampExif(jpeg: Blob, exif: ExportExif, delivered: Deliver
   } catch {
     // Signed in the EXIF alone.
   }
+  // The colour space the pixels are IN, said rather than left to a reader's
+  // guess (`icc-srgb.ts`): the canvas encodes sRGB, so the tag moves no pixel.
+  bytes = withIccProfile(bytes);
   return new Blob([bytes], { type: 'image/jpeg' });
 }
 
