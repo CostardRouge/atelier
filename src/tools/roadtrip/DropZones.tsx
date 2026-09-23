@@ -31,8 +31,8 @@ interface DropZonesProps {
 }
 
 const TONE: Record<ChipTone, string> = {
-  accent: 'bg-ink text-paper',
-  muted: 'bg-ink text-paper',
+  accent: 'bg-frame text-on-media',
+  muted: 'bg-frame text-on-media',
   ok: 'bg-ok text-paper',
   danger: 'bg-danger text-paper',
 };
@@ -42,7 +42,7 @@ function ChipIcon({ icon }: { icon: DropChip['icon'] }): ReactNode {
     return (
       <span
         aria-hidden="true"
-        className="inline-block w-3 h-3 rounded-full border-2 border-paper/30 border-t-paper motion-safe:animate-spin"
+        className="inline-block w-3 h-3 rounded-full border-2 border-on-media/30 border-t-on-media motion-safe:animate-spin"
       />
     );
   }
@@ -114,12 +114,12 @@ export default function DropZones({ zones, state, collage }: DropZonesProps) {
             ? settled.phase === 'failed'
               ? 'border-2 border-solid border-danger bg-danger/15'
               : settled.phase === 'fetching'
-                ? 'border-2 border-solid border-accent bg-ink/45'
+                ? 'border-2 border-solid border-accent bg-frame/45'
                 : 'border-2 border-solid border-accent bg-accent/10 motion-safe:animate-[drop-settle_650ms_var(--ease-paper)_both]'
             : isOver
               ? 'border-[3px] border-solid border-accent bg-accent/25 ring-4 ring-accent/30'
               : armed
-                ? `border-2 border-dashed border-paper bg-accent/15 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.4)] ${
+                ? `border-2 border-dashed border-on-media bg-accent/15 shadow-[inset_0_0_0_1px_rgba(0,0,0,0.4)] ${
                     dimmed ? 'opacity-40' : ''
                   }`
                 : 'border-0';
@@ -148,7 +148,7 @@ export default function DropZones({ zones, state, collage }: DropZonesProps) {
                     dimmed ? 'opacity-40' : 'opacity-90'
                   }`}
                 >
-                  <span className="grid place-items-center w-9 h-9 rounded-full bg-ink/55 text-paper text-lg ring-1 ring-paper/60 motion-safe:animate-[drop-chip_160ms_var(--ease-paper)_both]">
+                  <span className="grid place-items-center w-9 h-9 rounded-full bg-frame/55 text-on-media text-lg ring-1 ring-on-media/60 motion-safe:animate-[drop-chip_160ms_var(--ease-paper)_both]">
                     {Icons.plus}
                   </span>
                 </div>
@@ -156,7 +156,7 @@ export default function DropZones({ zones, state, collage }: DropZonesProps) {
               {settledHere && settled.phase === 'fetching' && (
                 // The fetch has no length anyone can know: an indeterminate
                 // bar along the cell's foot, the suite's own (`deck-load`).
-                <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-paper/20">
+                <div className="absolute inset-x-0 bottom-0 h-1 overflow-hidden bg-on-media/20">
                   <div className="h-full w-1/4 bg-accent motion-safe:animate-deck-load" />
                 </div>
               )}
@@ -182,7 +182,7 @@ export default function DropZones({ zones, state, collage }: DropZonesProps) {
       {armed && over === null && settled === null && (
         // Named once, above the zones, while the pointer has not reached one.
         <div className="absolute inset-x-0 top-2 flex justify-center px-2">
-          <span className="inline-flex items-center gap-1.5 rounded-full bg-ink/85 px-3 py-1 font-mono text-3xs uppercase tracking-[0.1em] text-paper shadow-paper motion-safe:animate-[drop-chip_160ms_var(--ease-paper)_both]">
+          <span className="inline-flex items-center gap-1.5 rounded-full bg-frame/85 px-3 py-1 font-mono text-3xs uppercase tracking-[0.1em] text-on-media shadow-paper motion-safe:animate-[drop-chip_160ms_var(--ease-paper)_both]">
             <span className="inline-flex text-xs leading-none">{Icons.plus}</span>
             {dropHint(collage, zones.length)}
           </span>

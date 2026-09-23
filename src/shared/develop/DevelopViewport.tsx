@@ -182,7 +182,7 @@ export default function DevelopViewport({
               // Its OWN press: reaching the stage would start a pan under it.
               onPointerDown={(e) => e.stopPropagation()}
               onClick={onCropToView}
-              className={`${developPillClass} gap-1.5 bg-[rgba(251,248,241,0.86)] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+              className={`${developPillClass} gap-1.5 bg-surface/86 text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
               title="Crop to this view — what the screen shows becomes the crop (⇧C)"
             >
               <span className="text-xs leading-none">{Icons.crop}</span>
@@ -191,7 +191,7 @@ export default function DevelopViewport({
           )}
           {picture.loupe.active && (
             <span
-              className={`${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}
+              className={`${developPillClass} bg-surface/86 text-ink-soft`}
               role="status"
               title="Past the stage's own pixels the file is decoded whole and drawn at its own density"
             >
@@ -217,9 +217,9 @@ export default function DevelopViewport({
           aria-hidden="true"
         >
           {wipe > 0 && (
-            <span className="absolute inset-y-0 left-1/2 w-[1.5px] -ml-[0.75px] bg-[rgba(251,248,241,0.9)] pointer-events-none" />
+            <span className="absolute inset-y-0 left-1/2 w-[1.5px] -ml-[0.75px] bg-on-media/90 pointer-events-none" />
           )}
-          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
+          <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-surface/92 border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
             <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
               <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
             </svg>
@@ -232,7 +232,7 @@ export default function DevelopViewport({
         </span>
       )}
       {problem && (
-        <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-paper">
+        <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-on-media">
           {problem}
         </span>
       )}
@@ -244,7 +244,7 @@ export default function DevelopViewport({
       {scope && <TaskEdge scope={scope} className="z-10" />}
       {picking && (
         <span
-          className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.92)] text-accent-ink border-accent`}
+          className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/92 text-accent-ink border-accent`}
           role="status"
         >
           click something grey
@@ -271,7 +271,7 @@ export default function DevelopViewport({
                   : undefined
               }
               disabled={!onUnmark}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group ${
+              className={`absolute -translate-x-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full bg-surface/92 border border-line-strong text-ink-soft shadow-paper group ${
                 onUnmark ? 'cursor-pointer hover:border-accent hover:text-accent-ink' : 'pointer-events-none'
               }`}
               style={{ left: at.x, top: at.y }}
@@ -348,7 +348,7 @@ export default function DevelopViewport({
           role="status"
         >
           {shot && (
-            <span className="font-mono text-2xs text-ink bg-[rgba(251,248,241,0.84)] rounded-[0.25rem] border-l-2 border-accent pl-1.5 pr-1.5 py-0.5 leading-snug">
+            <span className="font-mono text-2xs text-ink bg-surface/84 rounded-[0.25rem] border-l-2 border-accent pl-1.5 pr-1.5 py-0.5 leading-snug">
               {shot}
             </span>
           )}
@@ -356,12 +356,12 @@ export default function DevelopViewport({
             // The rule only exists to separate two things: with one family on
             // the picture there is nothing to divide, and a floating hairline
             // over a photograph is noise.
-            <span aria-hidden className="self-stretch h-px bg-[rgba(251,248,241,0.5)] my-0.5" />
+            <span aria-hidden className="self-stretch h-px bg-surface/50 my-0.5" />
           )}
           {(facts ?? []).map((line) => (
             <span
               key={line}
-              className="font-mono text-2xs text-ink-soft bg-[rgba(251,248,241,0.84)] rounded-[0.25rem] px-1.5 py-0.5 leading-snug"
+              className="font-mono text-2xs text-ink-soft bg-surface/84 rounded-[0.25rem] px-1.5 py-0.5 leading-snug"
             >
               {line}
             </span>
@@ -370,7 +370,7 @@ export default function DevelopViewport({
       )}
       {source && cube && !picking && (
         <>
-          <span className={`absolute top-2 left-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}>
+          <span className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/86 text-ink-soft`}>
             {holding ? 'before' : wipe > 0 ? 'before · after' : 'after'}
           </span>
           <button
@@ -382,7 +382,7 @@ export default function DevelopViewport({
             onPointerUp={() => picture.setHolding(false)}
             onPointerLeave={() => picture.setHolding(false)}
             onPointerCancel={() => picture.setHolding(false)}
-            className={`absolute bottom-2 right-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft cursor-pointer hover:border-accent`}
+            className={`absolute bottom-2 right-2.5 ${developPillClass} bg-surface/86 text-ink-soft cursor-pointer hover:border-accent`}
             title="Hold to see the picture as shot"
           >
             ◐ hold for before

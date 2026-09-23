@@ -712,7 +712,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           className="absolute inset-0 z-30 grid place-items-center rounded-paper-lg border-2 border-dashed border-accent bg-[rgba(20,18,15,0.55)] pointer-events-none"
           aria-hidden="true"
         >
-          <p className="m-0 max-w-[28rem] px-6 text-center text-sm text-paper">
+          <p className="m-0 max-w-[28rem] px-6 text-center text-sm text-on-media">
             Drop photographs or their folder: pictures already on the roll are found again, the others are added.
           </p>
         </div>

@@ -312,9 +312,9 @@ export default function LookScene({
             title="Drag to compare with the original"
             aria-hidden="true"
           >
-            <span className="absolute inset-y-0 left-1/2 w-0.5 -ml-px bg-paper/90 pointer-events-none" />
+            <span className="absolute inset-y-0 left-1/2 w-0.5 -ml-px bg-on-media/90 pointer-events-none" />
             {view.zoomed && (
-              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-[rgba(251,248,241,0.92)] border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
+              <span className="absolute left-1/2 top-1/2 -translate-x-1/2 -translate-y-1/2 grid place-items-center w-6 h-6 rounded-full bg-surface/92 border border-line-strong text-ink-soft shadow-paper group-hover:border-accent group-hover:text-accent-ink pointer-events-none">
                 <svg viewBox="0 0 24 24" width="14" height="14" fill="none" stroke="currentColor" strokeWidth={1.9} strokeLinecap="round" strokeLinejoin="round">
                   <path d="M9 7l-5 5 5 5M15 7l5 5-5 5" />
                 </svg>
@@ -328,13 +328,13 @@ export default function LookScene({
           {!view.zoomed && (
             <>
               <span
-                className="absolute px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none"
+                className="absolute px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-on-media pointer-events-none"
                 style={{ left: rect.x + 8, top: rect.y + rect.height - 26 }}
               >
                 Original
               </span>
               <span
-                className="absolute px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-paper pointer-events-none"
+                className="absolute px-1.5 py-0.5 rounded-full bg-frame/70 font-mono text-3xs tracking-[0.1em] uppercase text-on-media pointer-events-none"
                 style={{ left: rect.x + rect.width - 8, top: rect.y + rect.height - 26, transform: 'translateX(-100%)' }}
               >
                 Graded
@@ -354,13 +354,13 @@ export default function LookScene({
       />
 
       {busy && (
-        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-frame/70 font-mono text-3xs text-paper">
+        <span className="absolute top-2 right-2 px-2 py-0.5 rounded-full bg-frame/70 font-mono text-3xs text-on-media">
           Reading…
         </span>
       )}
 
       {(error || !supported) && (
-        <p className="absolute inset-x-2 bottom-2 m-0 px-2 py-1.5 rounded-control bg-frame/80 text-2xs leading-snug text-paper">
+        <p className="absolute inset-x-2 bottom-2 m-0 px-2 py-1.5 rounded-control bg-frame/80 text-2xs leading-snug text-on-media">
           {error ??
             'Your browser does not expose WebGL2, so this is your picture ungraded — the looks below are still right.'}
         </p>

@@ -46,7 +46,7 @@ export default function StageZoomControl({
 
   return (
     <div
-      className={`flex items-center gap-1 rounded-full border border-line bg-[rgba(250,247,242,0.86)] backdrop-blur-[2px] px-1 py-1 ${className}`}
+      className={`flex items-center gap-1 rounded-full border border-line bg-surface/86 backdrop-blur-[2px] px-1 py-1 ${className}`}
     >
       <button
         type="button"

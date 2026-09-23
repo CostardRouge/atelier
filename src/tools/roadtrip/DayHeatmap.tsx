@@ -120,10 +120,10 @@ export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) 
             onClose();
           }
         }}
-        className="fixed z-50 p-1.5 rounded-paper border border-frame bg-frame text-paper shadow-[0_12px_26px_rgba(16,15,13,0.32)]"
+        className="fixed z-50 p-1.5 rounded-paper border border-frame bg-frame text-on-media shadow-[0_12px_26px_rgba(16,15,13,0.32)]"
         style={{ left: x, top: y, width: WIDTH }}
       >
-        <span className="block px-2.5 pt-1 pb-1.5 font-mono text-2xs tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
+        <span className="block px-2.5 pt-1 pb-1.5 font-mono text-2xs tracking-[0.12em] uppercase text-on-media/62">
           day {menu.cell.dayNumber} · {formatIsoDate(menu.cell.date)}
         </span>
         {menu.items.map((item, i) => {
@@ -131,11 +131,11 @@ export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) 
           return (
             <div key={`${item.group ?? ''}:${item.label}`} role="none">
               {opens && i > 0 && (
-                <span className="block h-px mx-2 my-1.5 bg-[rgba(244,240,231,0.16)]" role="separator" />
+                <span className="block h-px mx-2 my-1.5 bg-on-media/16" role="separator" />
               )}
               {opens && item.group && (
                 <span
-                  className="block px-2.5 pt-1 pb-0.5 font-sans text-3xs font-semibold text-[rgba(244,240,231,0.5)]"
+                  className="block px-2.5 pt-1 pb-0.5 font-sans text-3xs font-semibold text-on-media/50"
                   role="presentation"
                 >
                   {item.group}
@@ -149,7 +149,7 @@ export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) 
                   onClose();
                   item.run();
                 }}
-                className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-xs text-paper cursor-pointer hover:bg-[rgba(244,240,231,0.12)] focus:outline-none focus-visible:bg-[rgba(244,240,231,0.12)]"
+                className="block w-full px-2.5 py-1.5 border-0 rounded-[8px] bg-transparent text-left text-xs text-on-media cursor-pointer hover:bg-on-media/12 focus:outline-none focus-visible:bg-on-media/12"
               >
                 {item.label}
               </button>
@@ -186,8 +186,8 @@ export function DayCard({ hovered }: { hovered: Hovered }) {
       className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-full"
       style={{ left: x, top: hovered.y - 8 }}
     >
-      <div className="px-3 py-2 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] min-w-[9rem]">
-        <span className="block font-mono text-2xs tracking-[0.12em] uppercase text-[rgba(244,240,231,0.62)]">
+      <div className="px-3 py-2 rounded-paper border border-frame bg-frame text-on-media shadow-[0_6px_18px_rgba(16,15,13,0.28)] min-w-[9rem]">
+        <span className="block font-mono text-2xs tracking-[0.12em] uppercase text-on-media/62">
           day {cell.dayNumber}
         </span>
         <span className="block text-sm leading-tight">
@@ -198,7 +198,7 @@ export function DayCard({ hovered }: { hovered: Hovered }) {
             repeated as a dot so the card and the cell's stripe read as the
             same leg. */}
         {stage && (
-          <span className="flex items-center gap-1.5 mt-0.5 text-xs leading-tight text-[rgba(244,240,231,0.82)]">
+          <span className="flex items-center gap-1.5 mt-0.5 text-xs leading-tight text-on-media/82">
             <span
               className="flex-none w-1.5 h-1.5 rounded-full"
               style={{ background: stage.tint }}
@@ -208,13 +208,13 @@ export function DayCard({ hovered }: { hovered: Hovered }) {
           </span>
         )}
         {cell.posts.length === 0 ? (
-          <span className="block mt-1 font-mono text-2xs text-[rgba(244,240,231,0.62)]">
+          <span className="block mt-1 font-mono text-2xs text-on-media/62">
             nothing told yet
           </span>
         ) : (
-          <span className="block mt-1 font-mono text-2xs text-[rgba(244,240,231,0.82)]">
+          <span className="block mt-1 font-mono text-2xs text-on-media/82">
             {kinds.map((k) => `${k.count} ${k.label.toLowerCase()}`).join(' · ')}
-            <span className="block text-[rgba(244,240,231,0.62)]">
+            <span className="block text-on-media/62">
               {cell.published ? `${cell.published} published` : 'draft only'}
               {drafts > 0 && cell.published > 0 ? ` · ${drafts} draft` : ''}
             </span>

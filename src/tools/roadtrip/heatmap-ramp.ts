@@ -13,8 +13,14 @@
  * a trip's card and the trip's grid must not disagree about what a day looks
  * like, and two copies of five hex values is how they start to.
  */
-/* Rung zero is the recessed paper TOKEN, not a hex: on the dark theme bare
-   paper is near-black, and a hex would have drawn every untold day as a
-   bright tile. The four told rungs are the vermilion ramp, which reads on
-   both grounds. */
-export const HEATMAP_LEVELS = ['var(--color-paper-2)', '#f4cdbd', '#eb9878', '#e26a45', '#d9442a'];
+/* Every rung is a TOKEN, not a hex: on the dark theme bare paper is
+   near-black, and a hex drew every untold day as a bright tile — and the two
+   pale told rungs stayed pale under night ink, so a day's number vanished on
+   them. `index.css` carries both ramps (`--color-heat-*`). */
+export const HEATMAP_LEVELS = [
+  'var(--color-paper-2)',
+  'var(--color-heat-1)',
+  'var(--color-heat-2)',
+  'var(--color-heat-3)',
+  'var(--color-heat-4)',
+];

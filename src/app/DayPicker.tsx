@@ -564,7 +564,7 @@ function StripBody({ bars, picked: shown, marks, today, roving, busy, onPick, on
               aria-label={dayLabel(bar)}
               title={`${bar.date}${bar.count ? ` · ${bar.count} files` : ''}`}
               className={`flex-1 min-w-0 h-full flex flex-col justify-end border-0 p-0 cursor-pointer disabled:cursor-default disabled:opacity-40 group rounded-t-[3px] ${
-                picked ? 'bg-[rgba(27,24,19,0.08)]' : 'bg-transparent'
+                picked ? 'bg-ink/8' : 'bg-transparent'
               }`}
             >
               <span

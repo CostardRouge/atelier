@@ -219,7 +219,7 @@ function CoverArt({
         </div>
       )}
       <div className="absolute inset-x-0 bottom-0 h-14 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.52)] pointer-events-none" />
-      <span className="absolute left-3 bottom-2.5 font-mono text-2xs tracking-[0.1em] uppercase text-paper [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
+      <span className="absolute left-3 bottom-2.5 font-mono text-2xs tracking-[0.1em] uppercase text-on-media [text-shadow:0_1px_3px_rgba(0,0,0,0.5)]">
         {tileCaption(tiles[0])}
       </span>
     </div>
@@ -639,7 +639,7 @@ function TripCard({
           remoteOnly={remoteOnly}
         />
         {remoteOnly && trip.cover.layout !== 'none' && (
-          <span className="absolute top-2.5 right-2.5 px-2 py-[3px] rounded-[6px] border font-mono text-3xs tracking-[0.08em] uppercase bg-[rgba(251,248,241,0.92)] border-line text-muted">
+          <span className="absolute top-2.5 right-2.5 px-2 py-[3px] rounded-[6px] border font-mono text-3xs tracking-[0.08em] uppercase bg-surface/92 border-line text-muted">
             not here yet
           </span>
         )}

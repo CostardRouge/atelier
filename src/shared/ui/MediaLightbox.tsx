@@ -302,7 +302,7 @@ export default function MediaLightbox({
       onClick={() => viewer.pageBy(delta)}
       aria-label={label}
       title={`${label} (${delta < 0 ? '←' : '→'})`}
-      className={`absolute ${side} top-1/2 -translate-y-1/2 z-10 w-9 h-9 grid place-items-center rounded-full border border-line bg-[rgba(250,247,242,0.86)] backdrop-blur-[2px] text-ink-soft hover:text-accent hover:border-line-strong cursor-pointer transition-colors max-[820px]:hidden`}
+      className={`absolute ${side} top-1/2 -translate-y-1/2 z-10 w-9 h-9 grid place-items-center rounded-full border border-line bg-surface/86 backdrop-blur-[2px] text-ink-soft hover:text-accent hover:border-line-strong cursor-pointer transition-colors max-[820px]:hidden`}
     >
       <svg viewBox="0 0 16 16" width="15" height="15" aria-hidden="true">
         <path

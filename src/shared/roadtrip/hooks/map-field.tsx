@@ -88,7 +88,7 @@ export default function MapField({
     <svg
       ref={svgRef}
       viewBox={`0 0 ${VIEW.width} ${VIEW.height}`}
-      className="w-full rounded-paper border border-line bg-[var(--color-frame)] touch-none select-none"
+      className="w-full rounded-paper border border-line bg-frame touch-none select-none"
       // `height: auto` is load-bearing: an inline `<svg>` with no height
       // attribute defaults to `height: 100%`, which in an auto-height column
       // collapses it to a strip and leaves `aspect-ratio` with nothing to
@@ -155,7 +155,7 @@ export default function MapField({
           key={i}
           d={d}
           fill="none"
-          className="stroke-[var(--color-paper)]"
+          className="stroke-on-media"
           strokeWidth={1.6}
           strokeLinecap="round"
           opacity={0.9}
@@ -198,7 +198,7 @@ export default function MapField({
               textAnchor="middle"
               fontSize={6.4}
               fontWeight={600}
-              className="fill-[var(--color-frame)] font-mono"
+              className="fill-frame font-mono"
             >
               {index + 1}
             </text>
@@ -211,7 +211,7 @@ export default function MapField({
                 width={6}
                 height={6}
                 rx={1}
-                className="fill-[var(--color-paper)] stroke-[var(--color-frame)]"
+                className="fill-on-media stroke-frame"
                 strokeWidth={0.8}
               />
             )}
@@ -232,7 +232,7 @@ function Graticule() {
     lines.push(<line key={`y${y}`} x1={0} y1={y} x2={VIEW.width} y2={y} />);
   }
   return (
-    <g className="stroke-[var(--color-paper)]" strokeWidth={0.5} opacity={0.12}>
+    <g className="stroke-on-media" strokeWidth={0.5} opacity={0.12}>
       {lines}
     </g>
   );

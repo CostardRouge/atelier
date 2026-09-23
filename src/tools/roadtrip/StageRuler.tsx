@@ -592,7 +592,7 @@ function DatePin({ pin }: { pin: Pin }) {
       className="fixed z-50 pointer-events-none -translate-x-1/2 -translate-y-full"
       style={{ left: x, top: pin.y - 6 }}
     >
-      <div className="px-2.5 py-1 rounded-paper border border-frame bg-frame text-paper shadow-[0_6px_18px_rgba(16,15,13,0.28)] font-mono text-2xs tabular-nums whitespace-nowrap">
+      <div className="px-2.5 py-1 rounded-paper border border-frame bg-frame text-on-media shadow-[0_6px_18px_rgba(16,15,13,0.28)] font-mono text-2xs tabular-nums whitespace-nowrap">
         {pin.text}
       </div>
       <span className="block mx-auto w-2 h-2 -mt-1 rotate-45 bg-frame" aria-hidden="true" />

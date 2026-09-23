@@ -27,6 +27,21 @@
   --color-frame: #100f0d;
   /* The brightest corner of the page's paper glow (`body`). */
   --color-paper-glow: #f7f3ea;
+  /* Light ink laid ON a picture or a dark scrim — a caption burnt into a
+     thumbnail, a chip over the stage, a label on `frame`. FIXED: no theme
+     redefines it, because a photograph does not turn dark at night. `paper`
+     is the wrong token there — it is near-black in the dark theme, which is
+     what drew the Library's tile names dark on dark. */
+  --color-on-media: #f4f0e7;
+
+  /* The four told rungs of the day heatmap (`heat-1` drafted → `heat-4`
+     sent often; `tools/roadtrip/heatmap-ramp.ts`). Tokens, so the night
+     theme can sink the pale rungs into its own ground: a pale pink tile under
+     night ink was unreadable. */
+  --color-heat-1: #f4cdbd;
+  --color-heat-2: #eb9878;
+  --color-heat-3: #e26a45;
+  --color-heat-4: #d9442a;
 
   /* State colours — semantic, never the accent. Each is a trio: the text/ink,
      a wash for a filled chip or banner, and a line for its border. */
@@ -89,13 +104,23 @@ html[data-theme='dark'] {
   --color-ink-soft: #cfc6b5;
   --color-muted: #a49a86;
   --color-faint: #6f6656;
-  --color-line: #2d2820;
-  --color-line-strong: #40392e;
+  /* Lifted off Winnow's #2d2820 / #40392e: `line` sat three steps from
+     `surface`, so every field and pill drawn on a card or a sheet (the
+     Library's filter, its Sources pill) lost its edge at night. */
+  --color-line: #3b3429;
+  --color-line-strong: #51493b;
   --color-accent: #ef5638;
   --color-accent-ink: #f5745a;
   --color-accent-wash: #3b211b;
   --color-frame: #0a0908;
   --color-paper-glow: #1f1a13;
+  /* The ramp sunk into the night ground: the two pale rungs carry night ink
+     (`ink-soft`), the two bright ones the dark `paper` a cell's day number
+     uses from rung 3 — each pair measured above 4.5:1. */
+  --color-heat-1: #3f231b;
+  --color-heat-2: #7a3624;
+  --color-heat-3: #d4583a;
+  --color-heat-4: #ef5638;
   --color-danger: #d85a5a;
   --color-danger-ink: #e98383;
   --color-danger-wash: #331716;

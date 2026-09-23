@@ -1058,7 +1058,7 @@ function Tile({
           className={`absolute top-1.5 right-1.5 grid place-items-center w-7 h-7 rounded-full text-sm leading-none transition-colors ${
             favourite
               ? 'bg-accent-wash text-accent-ink'
-              : 'bg-[rgba(20,18,15,0.35)] text-paper opacity-70 hover:opacity-100'
+              : 'bg-[rgba(20,18,15,0.35)] text-on-media opacity-70 hover:opacity-100'
           }`}
         >
           <span aria-hidden="true">{favourite ? '★' : '☆'}</span>

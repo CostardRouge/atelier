@@ -175,7 +175,7 @@ export default function FrameStrip({
             phone gallery marks a cover. Pointer-transparent so a drag that
             crosses it is uninterrupted. */}
         <span
-          className="absolute top-0 bottom-0 pointer-events-none rounded-[5px] border-2 border-paper shadow-[0_0_0_1px_rgba(16,15,13,0.55)]"
+          className="absolute top-0 bottom-0 pointer-events-none rounded-[5px] border-2 border-on-media shadow-[0_0_0_1px_rgba(16,15,13,0.55)]"
           style={{
             // Clamped so the handle stays whole at both ends: an
             // `overflow-hidden` strip would otherwise cut it in half on frame

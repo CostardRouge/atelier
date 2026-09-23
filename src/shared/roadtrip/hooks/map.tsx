@@ -249,7 +249,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
                     stop.id === selectedId ? 'bg-accent-wash' : 'bg-paper hover:bg-surface'
                   }`}
                 >
-                  <span className="flex-none w-5 h-5 grid place-items-center rounded-full bg-frame font-mono text-3xs text-paper">
+                  <span className="flex-none w-5 h-5 grid place-items-center rounded-full bg-frame font-mono text-3xs text-on-media">
                     {index + 1}
                   </span>
                   <span className="min-w-0 flex-1 truncate text-xs text-ink">
