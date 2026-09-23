@@ -18,6 +18,7 @@ import {
   delivers,
   isEdited,
   isIgnored,
+  matchesDeliveryFilter,
   patchPicture,
   setDelivery,
   toggledDelivery,
@@ -255,6 +256,17 @@ describe('delivery — which pictures leave', () => {
     expect(toggledDelivery({ ...bare, deliver: 'yes' })).toBe('auto');
     // Ignored → back into the work on the rule.
     expect(toggledDelivery({ ...ed, deliver: 'ignore' })).toBe('auto');
+  });
+
+  it('filters the table, leaving an ignored picture to its own group', () => {
+    const doc = setDelivery(setDelivery(roll(['a', 'b', 'c']), ['p2'], 'yes'), ['p3'], 'ignore');
+    const withEdit = patchPicture(doc, 'p1', { develop: { ...DEFAULT_DEVELOP, exposure: 1 } });
+    const ids = (f: Parameters<typeof matchesDeliveryFilter>[1]) =>
+      withEdit.pictures.filter((p) => matchesDeliveryFilter(p, f)).map((p) => p.id);
+    expect(ids('all')).toEqual(['p1', 'p2']);
+    expect(ids('edited')).toEqual(['p1']);
+    expect(ids('leaving')).toEqual(['p1', 'p2']);
+    expect(ids('held')).toEqual([]);
   });
 
   it('writes a state onto several pictures, the same roll when nothing changes', () => {

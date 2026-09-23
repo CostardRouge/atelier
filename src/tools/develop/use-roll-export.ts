@@ -75,6 +75,8 @@ export interface RollExports {
   openSize: MeasuredPicture | null;
   /** What the whole run will deliver, picture by picture, and the bytes it costs — before a byte is fetched. */
   plan: RunPlan;
+  /** Every picture's run-plan line by id, leaving or not — the Export tab's table. */
+  lines: ReadonlyMap<string, string>;
   /** Render the pictures named and hand them over. */
   exportPictures: (ids: readonly string[]) => Promise<void>;
 }
@@ -127,7 +129,7 @@ export function useRollExport({
   // Re-planned whenever the session holds something new — the stage fetching
   // a file is what turns "to fetch" into "in hand".
   const held = useSyncExternalStore(subscribeHeld, heldVersion);
-  const plan = useMemo<RunPlan>(() => {
+  const { plan, lines } = useMemo<{ plan: RunPlan; lines: ReadonlyMap<string, string> }>(() => {
     const factsFor = (picture: RollPicture): PictureFacts => {
       const file = files.get(picture.id) ?? null;
       if (!file) return { file: null, proxy: false, sensor: null, delivered: null, original: null };
@@ -148,7 +150,13 @@ export function useRollExport({
     };
     // The run the roll's own verb makes: the pictures that LEAVE
     // (`delivers`) — the sentence must not count one held or ignored.
-    return planRun(roll.pictures.filter(delivers), factsFor, proxiesOnly, formatBytes);
+    // Every picture's own line, for the Export tab's table: a picture held
+    // back still says what it WOULD leave from, which is what decides it.
+    const every = planRun(roll.pictures, factsFor, proxiesOnly, formatBytes);
+    return {
+      plan: planRun(roll.pictures.filter(delivers), factsFor, proxiesOnly, formatBytes),
+      lines: new Map(every.pictures.map((p) => [p.id, p.line])),
+    };
   }, [roll.pictures, files, siblingsOf, proxiesOnly, held]);
 
   // --- the open picture's own size, measured once per file, for the Delivers line
@@ -572,5 +580,5 @@ export function useRollExport({
   }, []);
 
   const measuredOpen = openFile && openSize && openSize.file === openFile ? openSize.size : null;
-  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, plan, exportPictures };
+  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, plan, lines, exportPictures };
 }

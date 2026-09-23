@@ -194,6 +194,17 @@ still reaches it), out of both numbers of `rollProgress` (counted apart as
 `ignored`). (5) The roll's verb is *Export N pictures* over `delivers`, and the
 run plan counts only those. Keys `P` / `U` / `M` — letters, so AZERTY presses
 the same. An output instruction, never a rating: nothing goes to Winnow.
+**E2, the Export tab's *Pictures* table** (`DeliveryTable.tsx`): one row per
+picture, the WHOLE row the target at 48 px (his words — a box alone is too
+small, on a phone above all), a click giving `toggledDelivery`, `↺` back to
+the rule, `›` to open; filters All · Edited · Leaving · Held
+(`matchesDeliveryFilter`, which answers false for an ignored picture); the
+ignored folded in their own group, unfolding by itself when the open picture
+is one. Each row says the RUN PLAN's own line for that picture — so
+`use-roll-export` plans every picture for `lines` and only the leaving ones
+for the *Delivers* sentence — and the old read-only "picture by picture" list
+is gone, the table being that list made operable. The table is built by
+`RollEditor` (it holds the roll) and handed to `ExportPanel` as a node.
 
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 

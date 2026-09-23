@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import {
   DevelopActionsGroup,
   DevelopApplySection,
@@ -226,6 +226,7 @@ export default function PictureWorkbench({
   onSnapshot,
   onStep,
   onDeliver,
+  deliveryTable = null,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -282,6 +283,8 @@ export default function PictureWorkbench({
    * state depends on whether the picture is edited.
    */
   onDeliver: (action: DeliverAction) => void;
+  /** The Export tab's Pictures table — built by the editor, which holds the roll. */
+  deliveryTable?: ReactNode;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -1768,6 +1771,7 @@ export default function PictureWorkbench({
               exporting={exports.exporting}
               note={exports.note}
               hdrRun={exports.lastRun?.hdr ?? null}
+              pictures={deliveryTable}
             />
           ) : null}
         </div>

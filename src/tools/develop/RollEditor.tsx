@@ -68,6 +68,7 @@ import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
+import DeliveryTable from './DeliveryTable';
 import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type DeliverAction, type LookApplyVerb } from './PictureWorkbench';
 import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
@@ -907,6 +908,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
               onDeliver={(action) => handleDeliver(open.id, action)}
+              deliveryTable={
+                <DeliveryTable
+                  pictures={roll.pictures}
+                  openId={openId}
+                  lines={exports.lines}
+                  thumbs={thumbs}
+                  onDeliver={handleDeliver}
+                  onOpen={onOpenPicture}
+                />
+              }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
             <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>

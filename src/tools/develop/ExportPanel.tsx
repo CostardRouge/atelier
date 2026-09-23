@@ -8,6 +8,7 @@ import { hdrSupport } from '../../shared/hdr/hdr-display';
 import { formatBytes } from '../../shared/lib/format';
 import { heldCeilingBytes } from '../../shared/sources/original-cache';
 import type { RollRun } from './use-roll-export';
+import type { ReactNode } from 'react';
 
 const HDR_STOPS: readonly { id: string; label: string }[] = [
   { id: '1', label: '1 stop' },
@@ -62,6 +63,7 @@ export default function ExportPanel({
   exporting,
   note,
   hdrRun = null,
+  pictures = null,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -77,6 +79,8 @@ export default function ExportPanel({
   note: string | null;
   /** The last run's HDR outcome — the one part of the run the panel still shows. */
   hdrRun?: RollRun['hdr'];
+  /** Which pictures leave, one row each (`DeliveryTable`) — the editor builds it, since it holds the roll. */
+  pictures?: ReactNode;
 }) {
   const { quality } = ROLL_EXPORT_LIMITS;
   return (
@@ -147,22 +151,10 @@ export default function ExportPanel({
           />
         </FieldRow>
         <FieldRow label="Delivers" align="start">
-          {/* The run's sentence, and every picture's line behind it — read-only:
-              editable here it would be the choice above the photograph a second time. */}
+          {/* The run's sentence. Every picture's own line is in the Pictures
+              table below, where it is also where a picture is sent or held. */}
           <div className="flex flex-col gap-1 min-w-0 pt-1">
             <span className="font-mono text-sm tabular-nums leading-snug text-ink">{plan.summary}</span>
-            {plan.pictures.length > 0 && (
-              <details className="min-w-0">
-                <summary className="cursor-pointer font-mono text-3xs text-faint select-none">picture by picture</summary>
-                <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-0.5">
-                  {plan.pictures.map((p) => (
-                    <li key={p.id} className="font-mono text-3xs text-ink-soft leading-relaxed break-words">
-                      {p.line}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
           </div>
         </FieldRow>
         <SwitchRow
@@ -187,6 +179,30 @@ export default function ExportPanel({
           </span>
         </FieldRow>
       </InspectorSection>
+
+      {pictures && (
+        <InspectorSection
+          id="develop.pictures"
+          title="Pictures"
+          info={
+            <>
+              <p>
+                Which pictures leave. By default the ones you EDITED do; a click on a row gives the
+                other answer — send a picture you did not touch, hold back one you did — and{' '}
+                <strong>↺</strong> puts it back on the rule. <kbd>P</kbd> does the same on the picture on
+                the stage, <kbd>U</kbd> puts it back on the rule.
+              </p>
+              <p>
+                An <strong>ignored</strong> picture (<kbd>M</kbd>) is out of the roll’s work: it never
+                leaves, the arrows step over it, “apply to the others” leaves it alone. It is folded at
+                the bottom; a click there brings it back.
+              </p>
+            </>
+          }
+        >
+          {pictures}
+        </InspectorSection>
+      )}
 
       <InspectorSection
         id="develop.hdr"

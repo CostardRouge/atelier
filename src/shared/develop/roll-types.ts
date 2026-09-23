@@ -609,6 +609,23 @@ export function toggledDelivery(p: RollPicture): DeliverState {
   return leaving === isEdited(p) ? 'auto' : leaving ? 'yes' : 'no';
 }
 
+/** The Export tab's table filters. An ignored picture answers none of them: it has a group of its own. */
+export type DeliveryFilter = 'all' | 'edited' | 'leaving' | 'held';
+
+export function matchesDeliveryFilter(p: RollPicture, filter: DeliveryFilter): boolean {
+  if (isIgnored(p)) return false;
+  switch (filter) {
+    case 'all':
+      return true;
+    case 'edited':
+      return isEdited(p);
+    case 'leaving':
+      return delivers(p);
+    case 'held':
+      return !delivers(p);
+  }
+}
+
 /** One delivery state written onto several pictures; the same roll back when nothing changes. */
 export function setDelivery(
   roll: RollDoc,
