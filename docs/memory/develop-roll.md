@@ -117,7 +117,10 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   parent's cell, so stepping remounts the draft (never-inherit) and never the
   strip (its scroll survives). The grid is inside an `@container` wrapper: the
   inspector narrows to 18rem under 880px of TOOL width, the Library's width
-  included.
+  included. What is a TOOL rather than the picture's — the open tab, the
+  brush, the heal/clone disc — lives in `RollEditor` beside it, so a size set
+  on one picture is the size on the next (2026-09-23: the brush and the disc
+  were workbench state and reset on every step).
 - **A step is a history REPLACE** (`navigate(path, { replace: true })`, new in
   `use-hash-route.ts`): ←/→ along forty pictures must not make Back replay
   them. The route without a picture shows the first; it never redirects.

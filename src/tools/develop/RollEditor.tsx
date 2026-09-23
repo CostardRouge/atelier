@@ -64,7 +64,8 @@ import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
-import PictureWorkbench, { type LookApplyVerb } from './PictureWorkbench';
+import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type LookApplyVerb } from './PictureWorkbench';
+import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
@@ -111,6 +112,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('adjust');
+  // The brush and the heal disc are TOOLS, not the picture's: held here with
+  // the tab, so the size set on one picture is the size on the next.
+  const [brush, setBrush] = useState<BrushTool>({ ...DEFAULT_BRUSH_TOOL });
+  const [repairTool, setRepairTool] = useState<RepairTool>({ ...DEFAULT_REPAIR_TOOL });
+  const patchBrush = useCallback((patch: Partial<BrushTool>) => setBrush((b) => ({ ...b, ...patch })), []);
+  const patchRepairTool = useCallback((patch: Partial<RepairTool>) => setRepairTool((t) => ({ ...t, ...patch })), []);
 
   const latest = useRef(roll);
   latest.current = roll;
@@ -841,6 +848,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSheetOpen={setSheetOpen}
               tab={tab}
               onTabChange={setTab}
+              brush={brush}
+              onBrush={patchBrush}
+              repairTool={repairTool}
+              onRepairTool={patchRepairTool}
               applyTo={applyTo}
               lookApplyTo={lookApplyTo}
               cropApplyTo={cropApplyTo}

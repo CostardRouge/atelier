@@ -99,7 +99,7 @@ import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import DetailPanel from './DetailPanel';
-import RepairPanel, { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
+import RepairPanel, { type RepairTool } from './RepairPanel';
 import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
 import {
   DUST_SCAN_EDGE,
@@ -130,6 +130,24 @@ import type { RollExports } from './use-roll-export';
 const SNAPSHOT_DELAY_MS = 700;
 
 const NO_FILES: readonly File[] = [];
+
+/**
+ * What the NEXT stroke is painted with. Kept beside the layer rather than on
+ * it: a brush is a tool, and each stroke keeps the settings it was made with
+ * so a soft edge and a hard one can live in the same mask. Held by the EDITOR,
+ * like the open tab: a size set on one picture is the size on the next.
+ */
+export interface BrushTool {
+  radius: number;
+  hardness: number;
+  erase: boolean;
+}
+
+export const DEFAULT_BRUSH_TOOL: Readonly<BrushTool> = Object.freeze({
+  radius: DEFAULT_BRUSH_RADIUS,
+  hardness: DEFAULT_BRUSH_HARDNESS,
+  erase: false,
+});
 
 /** A look batch verb, naming its count ("Apply look to 3 selected"): the host copies the open picture's stored look. */
 export interface LookApplyVerb {
@@ -167,6 +185,10 @@ export default function PictureWorkbench({
   onSheetOpen,
   tab,
   onTabChange,
+  brush,
+  onBrush,
+  repairTool,
+  onRepairTool,
   applyTo,
   lookApplyTo,
   cropApplyTo,
@@ -207,6 +229,12 @@ export default function PictureWorkbench({
   /** Which inspector tab is open — lifted to the editor so it survives stepping to another picture. */
   tab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
+  /** What the next stroke is painted with — the editor's, so it survives stepping to another picture. */
+  brush: BrushTool;
+  onBrush: (patch: Partial<BrushTool>) => void;
+  /** The heal/clone disc — the editor's, like the brush. */
+  repairTool: RepairTool;
+  onRepairTool: (patch: Partial<RepairTool>) => void;
   applyTo: readonly DevelopApplyVerb[];
   /** The look's batch verbs — this picture's look written onto others, never its develop. */
   lookApplyTo: readonly LookApplyVerb[];
@@ -257,7 +285,6 @@ export default function PictureWorkbench({
   // The patch list, a draft like the rest: a drag setting a source fires per
   // pointermove, and each move must not be a document write.
   const [repairDraft, setRepairDraft] = useState<Patch[]>(entry.repair ?? []);
-  const [repairTool, setRepairTool] = useState<RepairTool>({ ...DEFAULT_REPAIR_TOOL });
   const [repairing, setRepairing] = useState(false);
   const [finding, setFinding] = useState<string | null>(null);
   // The FILE's own width, for the kernels: a RAW's sensor once decoded, else
@@ -284,14 +311,6 @@ export default function PictureWorkbench({
   // produces the map the stage draws. One extra commit per answer, which is
   // once per tap rather than once per frame.
   const [subjectRasters, setSubjectRasters] = useState<SubjectRasters>(EMPTY_RASTERS);
-  // What the NEXT stroke is painted with. Kept beside the layer rather than on
-  // it: a brush is a tool, and each stroke keeps the settings it was made with
-  // so a soft edge and a hard one can live in the same mask.
-  const [brush, setBrush] = useState({
-    radius: DEFAULT_BRUSH_RADIUS,
-    hardness: DEFAULT_BRUSH_HARDNESS,
-    erase: false,
-  });
   const [painting, setPainting] = useState(false);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
@@ -1435,7 +1454,7 @@ export default function PictureWorkbench({
               <RepairPanel
                 patches={repairDraft}
                 tool={repairTool}
-                onTool={(patch) => setRepairTool((t) => ({ ...t, ...patch }))}
+                onTool={onRepairTool}
                 repairing={repairing}
                 onRepairing={setRepairing}
                 onFindDust={findDust}
@@ -1473,7 +1492,7 @@ export default function PictureWorkbench({
                       setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
                     }
                     brush={brush}
-                    onBrush={(patch) => setBrush((b) => ({ ...b, ...patch }))}
+                    onBrush={onBrush}
                     painting={painting}
                     onPainting={setPainting}
                     subject={
