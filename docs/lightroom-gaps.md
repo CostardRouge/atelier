@@ -83,7 +83,7 @@ repeated here.
 | 17 | **White balance in Kelvin on a RAW** + presets (daylight, cloudy, shade…) | **BUILT (pass 3)** — `raw/white-balance.ts`, `rawWb` on the develop, a panel on the sensor rung; was: gains ±100, eyedropper | M — the decode knows the as-shot multipliers |
 | 18 | **B&W with a channel mixer** | **BUILT (pass 3)** — `MonoMix` in `mixer.ts`, the treatment switch at the head of the mixer, `V`; the wheels tint the grey | S |
 | 19 | **Camera profiles** (DCP/ICC input, "camera matching") | absent; RAW colour is LibRaw's matrix | L |
-| 20 | **Lens profiles, auto Upright** | manual sliders, no profile *by decision* | M/L — see §7 |
+| 20 | **Lens profiles, auto Upright** | **Lensfun profiles BUILT** — fetched per lens on request, kept locally, applied by itself on the sensor and offered on a render (`lens-profiles.md`); auto Upright not built | M/L — see §7 |
 | 21 | **Sharpening detail + masking**, post-crop vignette | **BUILT (pass 3)** — Detail, Masking and the mask view (`detail.ts`); the post-crop vignette (`post-vignette.ts`, `RollPicture.vignette`) | S |
 | 22 | **Content-aware remove**, spot visualisation | heal/clone discs, dust finder | L |
 | 23 | **Side-by-side before/after, reference picture** | wipe + `\` | S/M |

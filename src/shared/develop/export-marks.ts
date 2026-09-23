@@ -47,6 +47,7 @@ const KEYED = [
   'rendition',
   'keystone',
   'lens',
+  'lensProfile',
   'detail',
   'vignette',
   'repair',

@@ -17,7 +17,7 @@ import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './his
 const COLOUR_SAMPLE_EDGE = 512;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
-import type { LensCorrection } from '../render/lens';
+import type { LensCorrection, LensProfileTerms } from '../render/lens';
 import {
   cloneGeometry,
   geometryPasses,
@@ -491,6 +491,7 @@ export function useDevelopPicture({
   frame = null,
   keystone = null,
   lens = null,
+  lensProfile = null,
   layers = null,
   showMaskOf = null,
   maskStyle = 'fill',
@@ -600,6 +601,12 @@ export function useDevelopPicture({
    * holds that order for every renderer at once.
    */
   lens?: LensCorrection | null;
+  /**
+   * The lens's MEASURED profile, where it applies to this picture
+   * (`lens/lens-profile.ts`, `profileInEffect`) — composed in the same pass
+   * under the sliders.
+   */
+  lensProfile?: LensProfileTerms | null;
   /**
    * The CAMERA's own calibration at the rung this picture stands on
    * (`raw/calibration.ts`): the shading grid, drawn FIRST on the decoded
@@ -808,8 +815,8 @@ export function useDevelopPicture({
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
   const geometry = useMemo<PictureGeometry>(
-    () => ({ cameraWarp: warpField, lens, keystone }),
-    [warpField, lens, keystone],
+    () => ({ cameraWarp: warpField, lens, lensProfile, keystone }),
+    [warpField, lens, lensProfile, keystone],
   );
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.

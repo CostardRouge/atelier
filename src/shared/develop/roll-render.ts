@@ -22,7 +22,7 @@ import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import type { Keystone } from '../render/geometry';
-import type { LensCorrection } from '../render/lens';
+import type { LensCorrection, LensProfileTerms } from '../render/lens';
 import { geometryPasses, hasGeometry } from '../render/picture-geometry';
 import { drawingLayers, subjectLayersForRender, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
@@ -80,6 +80,8 @@ export interface RollRenderOptions {
   keystone?: Keystone | null;
   /** The lens correction, warped in BEFORE the keystone — `picture-geometry.ts`. */
   lens?: LensCorrection | null;
+  /** The lens's measured profile where it applies — `lens/lens-profile.ts`, `profileInEffect`. */
+  lensProfile?: LensProfileTerms | null;
   /** Adjustment layers, bottom to top, applied after the look — `layer-render.ts`. */
   layers?: readonly AdjustLayer[] | null;
   /** Denoise, defringe, sharpen — `render/detail.ts`; kernels in the decode's own pixels. */

@@ -1,3 +1,4 @@
+import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
@@ -527,6 +528,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
     [update],
   );
+  const handleLensProfile = useCallback(
+    (id: string, lensProfile: LensProfileApplied | null) => update((r) => patchPicture(r, id, { lensProfile })),
+    [update],
+  );
   const handleLayers = useCallback(
     (id: string, layers: AdjustLayer[]) => update((r) => patchPicture(r, id, { layers })),
     [update],
@@ -985,6 +990,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onFraming={(framing) => handleFraming(open.id, framing)}
               onKeystone={(keystone) => handleKeystone(open.id, keystone)}
               onLens={(lens) => handleLens(open.id, lens)}
+              onLensProfile={(profile) => handleLensProfile(open.id, profile)}
               onDetail={(detail) => handleDetail(open.id, detail)}
               onVignette={(vignette) => handleVignette(open.id, vignette)}
               onRepair={(repair) => handleRepair(open.id, repair)}

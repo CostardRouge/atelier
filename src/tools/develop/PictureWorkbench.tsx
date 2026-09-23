@@ -111,6 +111,8 @@ import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
+import { lensKey, profileInEffect, type LensProfileApplied } from '../../shared/lens/lens-profile';
+import { lookUpLens, profileFor, setLensfunAllowed, useLensfunAllowed, type LookUp, type ShotLens } from '../../shared/lens/lensfun-store';
 import DetailPanel, { PresencePanel } from './DetailPanel';
 import VignettePanel from './VignettePanel';
 import WhiteBalancePanel from './WhiteBalancePanel';
@@ -228,6 +230,7 @@ export default function PictureWorkbench({
   onFraming,
   onKeystone,
   onLens,
+  onLensProfile,
   onDetail,
   onVignette,
   onRepair,
@@ -284,6 +287,8 @@ export default function PictureWorkbench({
   onFraming: (framing: Framing | null) => void;
   onKeystone: (keystone: Keystone | null) => void;
   onLens: (lens: LensCorrection | null) => void;
+  /** The lens's measured profile put on the picture, or taken off (`null`). */
+  onLensProfile: (profile: LensProfileApplied | null) => void;
   onDetail: (detail: DetailSettings | null) => void;
   onVignette: (vignette: PostCropVignette | null) => void;
   onRepair: (repair: Patch[]) => void;
@@ -617,6 +622,9 @@ export default function PictureWorkbench({
   const sensorName = sensor?.name ?? null;
   const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
+  // Developed from the sensor's own data right now — where a measured lens
+  // profile applies by itself (`lens-profile.ts`).
+  const onSensor = wantsRaw && Boolean(rawFile);
   const { patch: patchDraft } = draft;
   const sensorRef = useRef(sensor);
   sensorRef.current = sensor;
@@ -859,6 +867,9 @@ export default function PictureWorkbench({
     frame,
     keystone: keystoneDraft,
     lens: lensDraft,
+    // The measured profile on the SENSOR by itself; on a camera render only
+    // where the author asked — a body's JPEG is often corrected in camera.
+    lensProfile: profileInEffect(entry.lensProfile, onSensor),
     layers: layersDraft,
     subjectMasks: subjectRasters,
     paint,
@@ -965,8 +976,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1424,6 +1435,53 @@ export default function PictureWorkbench({
    * it always did.
    */
   const shotExif = useEffectiveExif(shownFile);
+
+  // --- the lens's measured profile (Lensfun, `lens-profiles.md`) --------------
+  // Looked up from what the picture says about its glass; kept on this device
+  // once found. On the sensor, a picture that never decided gets it by itself;
+  // anywhere else it is offered, never applied.
+  const lensfunOn = useLensfunAllowed();
+  const shot = useMemo<ShotLens | null>(
+    () =>
+      shotExif?.make && shotExif.model
+        ? {
+            make: shotExif.make,
+            model: shotExif.model,
+            lensModel: shotExif.lensModel,
+            focalLength: shotExif.focalLength,
+            focalLength35: shotExif.focalLength35,
+            fNumber: shotExif.fNumber,
+          }
+        : null,
+    [shotExif],
+  );
+  const shotKey = shot ? `${lensKey(shot.make ?? '', shot.model ?? '', shot.lensModel)}|${shot.focalLength ?? ''}|${shot.fNumber ?? ''}` : '';
+  const [lensLookup, setLensLookup] = useState<{ key: string; result: LookUp } | null>(null);
+  const profileState = useRef({ undecided: entry.lensProfile === undefined, onSensor });
+  profileState.current = { undecided: entry.lensProfile === undefined, onSensor };
+  useEffect(() => {
+    if (!shot || !shotKey) {
+      setLensLookup(null);
+      return;
+    }
+    const ctrl = new AbortController();
+    let alive = true;
+    void lookUpLens(shot, ctrl.signal).then((result) => {
+      if (!alive) return;
+      setLensLookup({ key: shotKey, result });
+      if (result.kind === 'found' && profileState.current.onSensor && profileState.current.undecided) {
+        const found = profileFor(result.camera, result.lens, shot);
+        if (found) callbacks.current.onLensProfile(found);
+      }
+    });
+    return () => {
+      alive = false;
+      ctrl.abort();
+    };
+    // `shot` is keyed by `shotKey`; consent and the sensor are what re-ask.
+  }, [shotKey, lensfunOn, onSensor]);
+  const lookup = lensLookup?.key === shotKey ? lensLookup.result : null;
+  const candidate = lookup?.kind === 'found' && shot ? profileFor(lookup.camera, lookup.lens, shot, !onSensor) : null;
   const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
 
   /**
@@ -1925,7 +1983,22 @@ export default function PictureWorkbench({
           {tab === 'crop' ? (
             <>
               <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
-              <LensPanel value={lensDraft} onChange={setLensDraft} />
+              <LensPanel
+                value={lensDraft}
+                onChange={setLensDraft}
+                profile={{
+                  applied: entry.lensProfile,
+                  inEffect: profileInEffect(entry.lensProfile, onSensor) !== null,
+                  lookup,
+                  looking: Boolean(shot) && !lookup,
+                  allowed: lensfunOn,
+                  onSensor,
+                  candidate,
+                  onApply: () => candidate && onLensProfile(candidate),
+                  onRemove: () => onLensProfile(null),
+                  onAllow: () => setLensfunAllowed(true),
+                }}
+              />
             </>
           ) : tab === 'export' ? (
             <ExportPanel

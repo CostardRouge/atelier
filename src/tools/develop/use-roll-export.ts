@@ -17,6 +17,7 @@ import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity
 import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
 import { deliverFilesTo, pickDeliveryTarget, type FolderedFile } from '../../shared/sources/deliver-files';
 import { largestSize, targetFolder } from '../../shared/develop/export-targets';
+import { profileInEffect } from '../../shared/lens/lens-profile';
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES, parseExif, type ExifData, type GpsCoord } from '../../shared/exif/exif-parser';
 import { captureYear } from '../../shared/exif/delivery-meta';
@@ -556,6 +557,9 @@ export function useRollExport({
             targets: r.export.targets,
             keystone: picture.keystone ?? null,
             lens: picture.lens ?? null,
+            // On the sensor by itself; on a camera render only where the
+            // author said so — a body's JPEG is often corrected already.
+            lensProfile: profileInEffect(picture.lensProfile, Boolean(raw)),
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
             vignette: picture.vignette ?? null,

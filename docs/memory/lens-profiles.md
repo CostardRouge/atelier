@@ -49,3 +49,48 @@ and KEPT locally, never the whole database in `dist/`.
 - Gate row: a picture whose red is x and green is y reads back where each
   channel was sampled — distortion within 0.54 codes, distortion + TCA within
   0.64, moving up to 3.8; the measured vignetting lifts 128 → 150 against 149.
+
+## Fetched per lens, kept, and put on the PICTURE (2026-09-23, L2)
+
+- **What ships is a table of contents** (`lensfun-source.ts`): which of the 59
+  database files (5.1 MB) a maker's bodies live in, and which hold the
+  independent lens makers' glass for a kind of body. A lookup fetches the
+  camera maker's files until the body is found, then only if the lens is not
+  there the third-party files for mirrorless or SLR. Measured: an A7C II + FE
+  24-70 F4 asked `mil-sony.xml` alone, and a second picture from that lens
+  asked nothing.
+- **What is kept is the ANSWER** (`lensfun-store.ts`, IndexedDB
+  `atelier-lens-profiles`): per body + lens as the EXIF names them, the matched
+  camera and the whole calibrated lens (every focal length and aperture, a few
+  KB), or "not in Lensfun", believed for 30 days. Never a file. A parsed file
+  is held for the visit only.
+- **The picture stores the RESOLVED terms** (`RollPicture.lensProfile`,
+  `lens-profile.ts`): for its own focal length and aperture, with the names —
+  so preview = export by construction, a second device and a `.roll.json` need
+  no fetch, and a later change to Lensfun never moves a developed picture. No
+  migration: absent = never decided (auto may apply), `null` = taken off by the
+  author (nothing puts it back), an object = on.
+- **A profile is CALIBRATION, not an edit** — the RAW base's rule. Not copied by
+  the settings sheet (another lens, another focal), not cleared by Reset, not
+  what makes a picture "edited" for the delivery rule; it IS in the export
+  fingerprint (`export-marks.ts`), since it changes the file.
+- **It applies by itself on the SENSOR only** (`profileInEffect`). Lensfun
+  measures RAW data; a camera's JPEG — and the render inside a RAW — is often
+  corrected in the body (Sony's *Distortion Comp.: Auto* is on by default), and
+  correcting it again bends it the other way. There it is OFFERED (*Apply to
+  this render*, `onRender: true`), never applied; a profile put on for the
+  sensor is kept but not drawn while the picture stands on its render.
+- **A file that states its own `WarpRectilinear` keeps it**: the profile stands
+  aside whenever the camera warp is drawn (`picture-geometry.ts`), or the
+  distortion would be taken out twice. DJI's Mini 4 Pro is not in Lensfun
+  anyway; its DNG carries its own calibration (`raw.md`).
+- **A crop mode is read from the EXIF**: `focalLength35 / focalLength` beyond
+  the body's own crop factor (a full-frame Sony in APS-C) is the picture's crop,
+  and the calibration is read against that smaller area.
+- Driven headless with Lensfun's real files served in place of GitHub (a
+  Playwright route over a sparse clone — the container's browser does not go
+  through the proxy): a Sony JPEG at 24 mm was offered and not changed; *Apply
+  to this render* bent the grid's edge line from 0.9437 to 0.9363 of the width
+  near the top; the Sony-tagged synthetic DNG on its sensor got the profile by
+  itself (`onRender: false`) with no second request. Not driven: a real ARW or
+  a real lens the maintainer owns, and a phone.

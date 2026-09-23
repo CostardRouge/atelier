@@ -36,8 +36,8 @@ Today it ships ten tools, converging into a few editors:
   real time, with a before/after wipe.
 
 > **The network exceptions.** Everything above runs offline and uploads
-> nothing — no file, no photograph, no position ever leaves the machine. Two
-> *optional* features can make a request, both off by default and both stated
+> nothing — no file, no photograph, no position ever leaves the machine. Three
+> *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
 > - The Flight Map's **base map**: turning it on fetches map tiles from
@@ -47,6 +47,13 @@ Today it ships ten tools, converging into a few editors:
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
+> - **Lens profiles** in Develop: looking a lens up fetches the Lensfun
+>   database's file for your camera's maker from GitHub
+>   (`raw.githubusercontent.com`) — and, only when the lens is not there, the
+>   independent lens makers' files for that kind of body. Nothing about your
+>   pictures is sent; the request says only which maker's file is wanted. The
+>   answer is kept on your device, so each lens is looked up once, and the
+>   database itself never ships with the app.
 >
 > Naming a place from *coordinates* is deliberately **not** one of them: the
 > city index Trips names a deduced leg from ships with the app (see "Working
@@ -1168,6 +1175,22 @@ horizon. The quarter turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.
+
+**Lens profiles.** The **Lens** section of the Crop tab corrects distortion,
+fringing and vignetting by eye, and — once you allow it — from a **measured
+profile** out of [Lensfun](https://lensfun.github.io/), the open database of
+lens calibrations (CC BY-SA 3.0). The lens a picture's EXIF names is looked up
+the first time it is met and the answer is kept on your device (see "The
+network exceptions" above). A picture developed from its **sensor** gets the
+profile by itself; a camera's own JPEG, or the render inside a RAW, is only
+*offered* it (**Apply to this render**), because the body has often corrected
+it already and correcting it twice bends it the other way. The profile is
+worked out for the picture's own focal length and aperture, the way Lensfun
+itself interpolates, and stored on the picture, so the export, another device
+and a `.roll.json` draw exactly what you saw. It is calibration, not an edit: it
+is not copied to another picture, not cleared by Reset, and the sliders correct
+what it leaves. A DNG that carries its own lens correction keeps it, and the
+profile stands aside.
 
 **Crop to the view.** Zoomed in on the Adjust stage, a small **crop** pill
 appears in its top-right corner (or **⇧C**, or *Crop to this view* in the %

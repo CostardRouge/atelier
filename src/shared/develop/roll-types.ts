@@ -14,6 +14,7 @@
  * build wrote is left behind rather than trusted. Pure and DOM-free.
  */
 
+import { readLensProfile, type LensProfileApplied } from '../lens/lens-profile';
 import { DEFAULT_TARGET, readTargets, type ExportTarget } from './export-targets';
 import { DEFAULT_WATERMARK, readWatermark, type Watermark } from './watermark';
 import { ALL_META, readMetaChoice, type MetaChoice } from '../exif/meta-groups';
@@ -187,6 +188,15 @@ export interface RollPicture {
    * (`shared/render/picture-geometry.ts` states that order once).
    */
   lens?: LensCorrection | null;
+  /**
+   * The MEASURED profile of the lens that took it (Lensfun,
+   * `shared/lens/lens-profile.ts`), resolved to terms for its focal length and
+   * aperture. CALIBRATION, not an edit: never copied to another picture, not
+   * cleared by Reset, not what makes a picture "edited". `undefined` is never
+   * decided (an automatic lookup may apply one), `null` is taken off by the
+   * author (nothing puts it back by itself).
+   */
+  lensProfile?: LensProfileApplied | null;
   /**
    * Denoise, defringe and sharpen (`shared/render/detail.ts`), or null for
    * none. The noise passes run FIRST, on the source before the develop; the
@@ -414,6 +424,8 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     // means exactly what it means now — so there is no migration to run.
     keystone: keystoneOrNull(raw.keystone),
     lens: lensOrNull(raw.lens),
+    // Absent stays absent: "never decided" and "taken off" are two answers.
+    ...('lensProfile' in raw ? { lensProfile: readLensProfile(raw.lensProfile) ?? null } : {}),
     detail: detailOrNull(raw.detail),
     vignette: postVignetteOrNull(raw.vignette),
     repair: readPatches(raw.repair),
@@ -521,6 +533,7 @@ export function patchPicture(
       | 'border'
       | 'rendition'
       | 'deliver'
+      | 'lensProfile'
       | 'keystone'
       | 'lens'
       | 'detail'

@@ -110,7 +110,11 @@ export function geometryPasses(
   // in the same pixels it then divides out, so (ar, 1) is the whole frame.
   const camera = makeCameraWarpPass(g.cameraWarp, aspectRatio, 1);
   if (camera) passes.push(camera);
-  const lens = isDefaultLens(g.lens) && isIdentityProfile(g.lensProfile) ? null : makeLensPass(g.lens, aspectRatio, g.lensProfile);
+  // A file that states its OWN rectilinear warp has had its distortion taken
+  // out by the time the lens pass runs: a measured profile on top would bend
+  // it back the other way. The file's calibration wins; the sliders stay.
+  const profile = isIdentityWarp(g.cameraWarp) ? (g.lensProfile ?? null) : null;
+  const lens = isDefaultLens(g.lens) && isIdentityProfile(profile) ? null : makeLensPass(g.lens, aspectRatio, profile);
   if (lens) passes.push(lens);
   const keystone = isDefaultKeystone(g.keystone)
     ? null
