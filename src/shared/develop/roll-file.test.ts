@@ -33,7 +33,7 @@ function sample(): RollDoc {
   );
   return {
     ...doc,
-    export: { targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off' }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard' }], replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false } },
+    export: { targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off', watermark: false }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard', watermark: true }], replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false }, watermark: { text: '© {creator}', position: 'bottom-left', size: 3, opacity: 0.5, tone: 'dark' } },
   };
 }
 

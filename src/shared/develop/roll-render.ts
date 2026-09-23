@@ -44,6 +44,7 @@ import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
 import { decodeEdgeFor, longEdgeFor, type ExportTarget } from './export-targets';
 import { OUTPUT_SHARPEN_AMOUNT, SHARPEN_BAND_ROWS, sharpenRows } from './output-sharpen';
+import { watermarkLayout, type Watermark } from './watermark';
 import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
@@ -66,6 +67,12 @@ export interface RollRenderOptions {
    * target is a cut, a resize, a sharpen and an encode of that one render.
    */
   targets: readonly DeliverTarget[];
+  /**
+   * The watermark for this picture — its line already resolved against the
+   * identity and the capture — drawn on the targets that ask for it. Null
+   * or an empty line draws nothing.
+   */
+  watermark?: { text: string; style: Watermark } | null;
   /**
    * The perspective correction, warped in BEFORE the crop frames the result —
    * the stage's own order, so the file is what was on screen.
@@ -127,7 +134,7 @@ export interface RollRenderOptions {
 }
 
 /** What `deliver` needs of a target: its size, its quality, its screen sharpening. */
-export type DeliverTarget = Pick<ExportTarget, 'size' | 'quality' | 'sharpen'>;
+export type DeliverTarget = Pick<ExportTarget, 'size' | 'quality' | 'sharpen'> & { watermark?: boolean };
 
 /** One target's file. */
 export interface RollOutput {
@@ -285,7 +292,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const klass = deviceClass();
   // Known before the decode only when every target asks a long edge: a short
   // edge, an area or a percentage waits for the picture's own shape.
-  const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '' })));
+  const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '', watermark: Boolean(t.watermark) })));
   const gpuMax = maxRenderSize();
   const decoded = await decodeRaw(raw.file, {
     minLongEdge: decodeEdge ? decodeEdge * 2 : null,
@@ -443,6 +450,9 @@ async function deliverOne(
   drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
   // Sharpened for the SCREEN after the resize — the resize is what softened it.
   sharpenCanvas(ctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
+  // The mark AFTER the sharpening — it is not detail to bring back.
+  const mark = target.watermark && opts.watermark?.text ? opts.watermark : null;
+  if (mark) drawWatermark(ctx, out.w, out.h, mark.text, mark.style);
   if (darker && opts.hdr) {
     // The darker render, framed, bordered and sharpened the same, so the map
     // lines up with the base pixel for pixel and edge for edge.
@@ -454,6 +464,8 @@ async function deliverOne(
     dctx.imageSmoothingQuality = 'high';
     drawDelivered(dctx, darker, gradedAt.width, gradedAt.height, framing, layout, opts.border);
     sharpenCanvas(dctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
+    // The same mark on the darker half, so the gain map is flat where it is.
+    if (mark) drawWatermark(dctx, out.w, out.h, mark.text, mark.style);
     const delivered = { width: out.w, height: out.h };
     const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, target.quality, opts.stamp ? (b) => opts.stamp!(b, delivered) : null);
     return {
@@ -467,6 +479,28 @@ async function deliverOne(
   if (!encoded) throw new Error('The browser could not encode this picture.');
   const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
   return { blob, width: out.w, height: out.h, hdr: null };
+}
+
+/** The fonts a mark is drawn in: the suite's own sans where the page has it, else the system's. */
+const WATERMARK_FONT = '"Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif';
+
+/**
+ * One line of text on the file (`watermark.ts`): its tone at its opacity, with
+ * a soft shadow of the opposite tone so it reads over a sky and a coat alike.
+ */
+function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, text: string, style: Watermark): void {
+  const at = watermarkLayout(w, h, style);
+  ctx.save();
+  ctx.font = `500 ${at.fontPx}px ${WATERMARK_FONT}`;
+  ctx.textAlign = at.align;
+  ctx.textBaseline = at.baseline;
+  ctx.globalAlpha = style.opacity;
+  const light = style.tone === 'light';
+  ctx.shadowColor = light ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.45)';
+  ctx.shadowBlur = Math.max(1, at.fontPx * 0.18);
+  ctx.fillStyle = light ? '#ffffff' : '#000000';
+  ctx.fillText(text, at.x, at.y, w - 2 * Math.round(Math.min(w, h) * 0.02));
+  ctx.restore();
 }
 
 /**

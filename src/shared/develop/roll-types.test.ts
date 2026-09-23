@@ -318,11 +318,12 @@ describe('reading a stored roll', () => {
     // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
     // v5's one long edge and quality become the one target (v6), through their limits.
     expect(doc.export).toEqual({
-      targets: [{ name: '', size: { mode: 'long', value: 16384 }, quality: 1, sharpen: 'off' }],
+      targets: [{ name: '', size: { mode: 'long', value: 16384 }, quality: 1, sharpen: 'off', watermark: false }],
       replace: false,
       hdr: false,
       hdrStops: 2,
       metadata: DEFAULT_ROLL_EXPORT.metadata,
+      watermark: DEFAULT_ROLL_EXPORT.watermark,
     });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
@@ -370,11 +371,12 @@ describe('reading a stored roll', () => {
 
   it('reads the export through its limits, and the source size as null', () => {
     expect(readRollExport({ longEdge: 1920.4, quality: 0.8, originals: 'proxies', replace: true })).toEqual({
-      targets: [{ name: '', size: { mode: 'long', value: 1920 }, quality: 0.8, sharpen: 'off' }],
+      targets: [{ name: '', size: { mode: 'long', value: 1920 }, quality: 0.8, sharpen: 'off', watermark: false }],
       replace: true,
       hdr: false,
       hdrStops: 2,
       metadata: DEFAULT_ROLL_EXPORT.metadata,
+      watermark: DEFAULT_ROLL_EXPORT.watermark,
     });
     // The HDR delivery: off unless said, its reach clamped to the stops a RAW keeps.
     expect(readRollExport({ hdr: true, hdrStops: 9.6 })).toMatchObject({ hdr: true, hdrStops: 4 });

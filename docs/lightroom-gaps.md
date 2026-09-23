@@ -96,7 +96,7 @@ repeated here.
 | 25 | **ICC profile embedded** (even sRGB), **Display P3 / Adobe RGB** | **sRGB tag BUILT (pass 2)**; wide gamut open | S for the tag, M for wide gamut |
 | 26 | **16-bit TIFF / PNG** (print, retouch hand-off), AVIF | JPEG + Ultra HDR, by decision — **NO for now** (his answer, §8), so pass 4 leaves it | M |
 | 27 | **Remove GPS / metadata on export** | **BUILT by M3** — the roll's metadata groups | S |
-| 28 | **Export presets and several targets in one run** (full + 2048 web), short edge / megapixels / %, output sharpening, watermark | **BUILT (pass 4)** — `RollExport.targets` (roll v6), up to four, sub-folders named after the target, long / short / MP / %, screen sharpening, five presets (`develop-output.md`); watermark next | M |
+| 28 | **Export presets and several targets in one run** (full + 2048 web), short edge / megapixels / %, output sharpening, watermark | **BUILT (pass 4)** — `RollExport.targets` (roll v6), up to four, sub-folders named after the target, long / short / MP / %, screen sharpening, five presets, and a text watermark per target (`develop-output.md`) | M |
 
 ## 5. Workflow
 
@@ -129,7 +129,8 @@ repeated here.
   balance in kelvin on a RAW) and 16 (masks combined, a colour range) are
   BUILT — pass 3 is DONE.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut). Started 2026-09-23: 28's
-  targets, sizes and screen sharpening are BUILT; 26 is NO by his answer.
+  targets, sizes, screen sharpening and watermark are BUILT — 28 is done;
+  26 is NO by his answer.
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
 - Later, and each its own brief: 19, 20, 22, 24, 35.
 

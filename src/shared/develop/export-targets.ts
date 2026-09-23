@@ -53,6 +53,8 @@ export interface ExportTarget {
   /** JPEG quality, 0.5..1. */
   quality: number;
   sharpen: OutputSharpen;
+  /** Draw the roll's watermark (`watermark.ts`) on this target's files — the web copy, not the archive. */
+  watermark: boolean;
 }
 
 /** A run writes each picture this many times at most — each target is one more encode. */
@@ -72,6 +74,7 @@ export const DEFAULT_TARGET: Readonly<ExportTarget> = Object.freeze({
   size: null,
   quality: 0.92,
   sharpen: 'off',
+  watermark: false,
 });
 
 /**
@@ -80,11 +83,11 @@ export const DEFAULT_TARGET: Readonly<ExportTarget> = Object.freeze({
  * afterwards, every field its own.
  */
 export const TARGET_PRESETS: readonly { id: string; label: string; target: ExportTarget }[] = [
-  { id: 'full', label: 'Full size', target: { name: 'Full', size: null, quality: 0.92, sharpen: 'off' } },
-  { id: 'web', label: 'Web · 2048 px', target: { name: 'Web', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'standard' } },
-  { id: 'feed', label: 'Feed · 1080 px across', target: { name: 'Feed', size: { mode: 'short', value: 1080 }, quality: 0.9, sharpen: 'standard' } },
-  { id: 'mail', label: 'Mail · 2 MP', target: { name: 'Mail', size: { mode: 'megapixels', value: 2 }, quality: 0.8, sharpen: 'low' } },
-  { id: 'half', label: 'Half · 50 %', target: { name: 'Half', size: { mode: 'percent', value: 50 }, quality: 0.9, sharpen: 'low' } },
+  { id: 'full', label: 'Full size', target: { name: 'Full', size: null, quality: 0.92, sharpen: 'off', watermark: false } },
+  { id: 'web', label: 'Web · 2048 px', target: { name: 'Web', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'standard', watermark: false } },
+  { id: 'feed', label: 'Feed · 1080 px across', target: { name: 'Feed', size: { mode: 'short', value: 1080 }, quality: 0.9, sharpen: 'standard', watermark: false } },
+  { id: 'mail', label: 'Mail · 2 MP', target: { name: 'Mail', size: { mode: 'megapixels', value: 2 }, quality: 0.8, sharpen: 'low', watermark: false } },
+  { id: 'half', label: 'Half · 50 %', target: { name: 'Half', size: { mode: 'percent', value: 50 }, quality: 0.9, sharpen: 'low', watermark: false } },
 ];
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -165,7 +168,8 @@ export function describeSize(size: ExportSize | null | undefined): string {
 export function describeTarget(t: ExportTarget, first: boolean): string {
   const where = first ? 'this folder' : `${targetFolder(t.name, 1)}/`;
   const sharp = t.sharpen === 'off' ? '' : ` · ${t.sharpen} screen sharpening`;
-  return `${where} · ${describeSize(t.size)} · ${Math.round(t.quality * 100)} %${sharp}`;
+  const mark = t.watermark ? ' · watermarked' : '';
+  return `${where} · ${describeSize(t.size)} · ${Math.round(t.quality * 100)} %${sharp}${mark}`;
 }
 
 /**
@@ -208,6 +212,7 @@ export function readTarget(raw: unknown): ExportTarget | null {
     size: readSize(src.size),
     quality: clamp(finite(src.quality, DEFAULT_TARGET.quality), QUALITY_LIMITS.min, QUALITY_LIMITS.max),
     sharpen: OUTPUT_SHARPEN_LEVELS.includes(src.sharpen as OutputSharpen) ? (src.sharpen as OutputSharpen) : 'off',
+    watermark: src.watermark === true,
   };
 }
 
@@ -234,6 +239,7 @@ export function sameTarget(a: ExportTarget, b: ExportTarget): boolean {
     a.name === b.name &&
     a.quality === b.quality &&
     a.sharpen === b.sharpen &&
+    a.watermark === b.watermark &&
     (a.size === b.size || (!!a.size && !!b.size && a.size.mode === b.size.mode && a.size.value === b.size.value))
   );
 }

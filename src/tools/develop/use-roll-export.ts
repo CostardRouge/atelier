@@ -18,11 +18,29 @@ import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/de
 import { deliverFilesTo, pickDeliveryTarget, type FolderedFile } from '../../shared/sources/deliver-files';
 import { largestSize, targetFolder } from '../../shared/develop/export-targets';
 import { uniqueName } from '../../shared/sources/unique-name';
-import { EXIF_SLICE_BYTES, type GpsCoord } from '../../shared/exif/exif-parser';
+import { EXIF_SLICE_BYTES, parseExif, type ExifData, type GpsCoord } from '../../shared/exif/exif-parser';
+import { captureYear } from '../../shared/exif/delivery-meta';
+import { resolveWatermarkText, type Watermark } from '../../shared/develop/watermark';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
 import { keepsCapture } from '../../shared/exif/meta-groups';
 import { PLACE_MAX_KM, placeFor, type DeliveryPlace } from '../../shared/exif/delivery-place';
 import { gazetteerOrEmpty } from '../../shared/roadtrip/load-gazetteer';
+
+/** The pictures whose watermark said nothing — said once, with what would fill it. */
+function markNote(names: readonly string[]): string[] {
+  if (names.length === 0) return [];
+  const who = names.length === 1 ? names[0] : `${names.length} pictures`;
+  return [`${who} left without a watermark: its line says nothing yet — set a creator in Metadata, or write the line out`];
+}
+
+/** A capture's EXIF read from the head of its original, or null when it will not parse. */
+function exifOf(head: Uint8Array): ExifData | null {
+  try {
+    return parseExif(head.buffer.slice(head.byteOffset, head.byteOffset + head.byteLength));
+  } catch {
+    return null;
+  }
+}
 
 /** The pictures that had a position and no place near enough to name — said once, not per file. */
 function placeNote(names: readonly string[]): string[] {
@@ -322,6 +340,8 @@ export function useRollExport({
     // index that will not load names nothing, and the run says so below.
     let placeOf: ((gps: GpsCoord) => DeliveryPlace | null) | undefined;
     const unplaced: string[] = [];
+    // Pictures whose watermark line came out empty — no creator set, no title.
+    const unmarked: string[] = [];
     if (r.export.metadata.place) {
       setExporting('Loading the place index…');
       const cities = await gazetteerOrEmpty();
@@ -512,7 +532,22 @@ export function useRollExport({
             if (placeOf && exif.located && !exif.place?.city) unplaced.push(picture.ref.name);
             return stampExif(jpeg, exif, delivered);
           };
+          // The watermark's line for THIS picture: the identity, the year it
+          // was taken, its own title. Resolved only when a target draws it.
+          let watermark: { text: string; style: Watermark } | null = null;
+          if (r.export.targets.some((t) => t.watermark)) {
+            const capture = head ? exifOf(head) : null;
+            const year = captureYear(capture?.dateTimeOriginal ?? origin?.exif?.dateTimeOriginal, new Date().getFullYear());
+            const text = resolveWatermarkText(r.export.watermark.text, {
+              creator: latest.current.identity?.creator ?? null,
+              year,
+              title: picture.title ?? null,
+            });
+            if (text) watermark = { text, style: r.export.watermark };
+            else unmarked.push(picture.ref.name);
+          }
           const out = await renderRollPicture(source, {
+            watermark,
             signal: controller.signal,
             framing: picture.framing,
             aspect: picture.aspect,
@@ -627,7 +662,7 @@ export function useRollExport({
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
       setNote(
         (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
-          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...errors], renamed, {
+          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...errors], renamed, {
             pictures: rendered.length,
             targets: r.export.targets.length,
           }),

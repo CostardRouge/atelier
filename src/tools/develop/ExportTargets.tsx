@@ -12,7 +12,7 @@ import {
   type OutputSharpen,
   type SizeMode,
 } from '../../shared/develop/export-targets';
-import { FieldRow, RangeField, SelectField, TextField, fieldClass } from '../../shared/ui/Inspector';
+import { FieldRow, RangeField, SelectField, SwitchRow, TextField, fieldClass } from '../../shared/ui/Inspector';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
@@ -148,6 +148,12 @@ export default function ExportTargets({
             <FieldRow label="Sharpen" hint={t.sharpen === 'off' ? undefined : 'for a screen, after the resize'}>
               <Segmented size="sm" label="Sharpen for screen" value={t.sharpen} onChange={(v) => patch(i, { sharpen: v as OutputSharpen })} options={SHARPEN_OPTIONS} />
             </FieldRow>
+            <SwitchRow
+              label="Watermark"
+              name={`Watermark ${i === 0 ? 'the chosen folder' : folder}`}
+              checked={t.watermark}
+              onChange={(on) => patch(i, { watermark: on })}
+            />
           </div>
         );
       })}

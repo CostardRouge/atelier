@@ -1314,7 +1314,13 @@ inside it named after the target, and every file keeps its picture's name —
 `DJI_0101.jpg` and `Web/DJI_0101.jpg` are the same photograph (a download,
 where there is no folder picker, becomes `Web-DJI_0101.jpg`). A new target
 starts from a preset — Full size, Web · 2048 px, Feed · 1080 px across,
-Mail · 2 MP, Half · 50 %. Each picture leaves from the file you chose above the
+Mail · 2 MP, Half · 50 %. A target can carry a **watermark**: a line such as
+`© {year} {creator}` (the name set under Metadata, the year the picture was
+taken, `{title}` its own title) in a corner or along the bottom, sized as a
+share of the file's short side and drawn after the sharpening; its style is
+the roll's, and each target switches it on, so the web copy is signed and the
+archive left clean. A line that names its author before a name is set is not
+drawn, and the run says so. Each picture leaves from the file you chose above the
 photograph — its RAW when you developed it on the sensor, the camera's own
 JPEG when you picked it, else where it opened, and there the full-size
 original is fetched only where the proxy could not fill the frame asked for.

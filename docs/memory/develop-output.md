@@ -47,6 +47,24 @@ target (`readTargets(raw.targets, legacy)`), so an old roll exports as it did.
   the roll's own. Personal export presets across rolls are not built (the
   preset book would be their home).
 
+## A watermark is the roll's STYLE, drawn on the targets that ask (2026-09-23)
+
+`watermark.ts`, `RollExport.watermark` (additive, absent = default),
+`ExportTarget.watermark` (a switch per target — the web copy signed, the
+archive clean). The line is a TEMPLATE over what the files are already signed
+with: `{creator}` (the identity on the preset book), `{year}` (the CAPTURE's,
+`captureYear` on the original's EXIF head, as the copyright reads it),
+`{title}` (the picture's). **A line that names `{creator}` while no name is
+set is not drawn** — "© 2025" alone signs nothing, `resolveRights`' rule —
+and the run says which pictures left unmarked. Size is a % of the file's
+SHORT side, so every target carries the same mark; drawn AFTER the screen
+sharpening (a mark is not detail) and on BOTH halves of an Ultra HDR file, so
+the gain map is flat under it. A soft shadow of the opposite tone keeps it
+readable over sky and coat alike. Driven headless: with a creator set and the
+switch on the Web target only, the Web file's corner peaked at 240 over a
+170 grey and the main file's stayed 170; the panel read `© 2026 Steeve
+Pommier` (a PNG with no EXIF falls back to this year).
+
 Driven headless: a v5 roll (`longEdge: 1200`) read as its one target; the
 first set to 50 % and a Feed target added from the menu; one export
 downloaded `edge.jpg` 1500×1000 and `Feed-edge.jpg` 1620×1080, the second's

@@ -15,6 +15,7 @@
  */
 
 import { DEFAULT_TARGET, readTargets, type ExportTarget } from './export-targets';
+import { DEFAULT_WATERMARK, readWatermark, type Watermark } from './watermark';
 import { ALL_META, readMetaChoice, type MetaChoice } from '../exif/meta-groups';
 import { isDefaultKeystone, keystoneOrNull, type Keystone } from '../render/geometry';
 import { isDefaultLens, lensOrNull, type LensCorrection } from '../render/lens';
@@ -96,6 +97,11 @@ export interface RollExport {
    * delivery. Absent reads as All — the GPS leaves by default, his call.
    */
   metadata: MetaChoice;
+  /**
+   * The watermark's STYLE (`watermark.ts`): one look for the set, drawn only
+   * on the targets that ask for it. Absent reads as the default.
+   */
+  watermark: Watermark;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
@@ -104,6 +110,7 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   hdr: false,
   hdrStops: 2,
   metadata: ALL_META,
+  watermark: DEFAULT_WATERMARK,
 });
 
 export const ROLL_EXPORT_LIMITS = {
@@ -313,7 +320,7 @@ export function readRollGrade(raw: unknown): RollGrade | null {
 }
 
 export function readRollExport(raw: unknown): RollExport {
-  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, targets: [{ ...DEFAULT_TARGET }], metadata: { ...ALL_META } };
+  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, targets: [{ ...DEFAULT_TARGET }], metadata: { ...ALL_META }, watermark: { ...DEFAULT_WATERMARK } };
   return {
     // v5 and earlier held one long edge and one quality: they become the
     // only target, so an old roll exports exactly as it did.
@@ -327,6 +334,7 @@ export function readRollExport(raw: unknown): RollExport {
       Math.min(ROLL_EXPORT_LIMITS.hdrStops.max, Math.max(ROLL_EXPORT_LIMITS.hdrStops.min, finite(raw.hdrStops, DEFAULT_ROLL_EXPORT.hdrStops))),
     ),
     metadata: readMetaChoice(raw.metadata),
+    watermark: readWatermark(raw.watermark),
   };
 }
 

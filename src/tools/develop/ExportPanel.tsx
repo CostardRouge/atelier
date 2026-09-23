@@ -3,7 +3,19 @@ import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
 import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
 import Button from '../../shared/ui/Button';
-import { FieldRow, InspectorSection, SelectField, SwitchRow } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import Segmented from '../../shared/ui/Segmented';
+import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
+import { targetFolder } from '../../shared/develop/export-targets';
+import { captureYear } from '../../shared/exif/delivery-meta';
+
+const WATERMARK_POSITION_OPTIONS: readonly { id: WatermarkPosition; label: string }[] = [
+  { id: 'bottom-right', label: 'Bottom right' },
+  { id: 'bottom-left', label: 'Bottom left' },
+  { id: 'bottom', label: 'Bottom, centred' },
+  { id: 'top-right', label: 'Top right' },
+  { id: 'top-left', label: 'Top left' },
+];
 import { Icons } from '../../shared/ui/icons';
 import { hdrSupport } from '../../shared/hdr/hdr-display';
 import { formatBytes } from '../../shared/lib/format';
@@ -95,6 +107,13 @@ export default function ExportPanel({
   onWords?: (words: { title?: string; caption?: string }) => void;
 }) {
   const identity = useDeliveryIdentity();
+  // The line on the picture in hand, as the run will draw it.
+  const markPreview = resolveWatermarkText(settings.watermark.text, {
+    creator: identity.creator,
+    year: captureYear(openExif?.dateTimeOriginal, new Date().getFullYear()),
+    title: picture?.title ?? null,
+  });
+  const marked = settings.targets.flatMap((t, i) => (t.watermark ? [i === 0 ? 'the chosen folder' : `${targetFolder(t.name, i)}/`] : []));
   return (
     <>
       <InspectorSection
@@ -183,6 +202,88 @@ export default function ExportPanel({
           {/* The calculator's sentence wraps rather than truncates: its end is the verdict. */}
           <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
             {delivery ? delivery.line : '—'}
+          </span>
+        </FieldRow>
+      </InspectorSection>
+
+      <InspectorSection
+        id="develop.watermark"
+        title="Watermark"
+        info={
+          <>
+            <p>
+              A line of text drawn on the file, in a corner or along the bottom edge. The style is the
+              roll’s; each target above says whether it carries it, so the copy that goes online can
+              be signed and the one kept for the archive left clean.
+            </p>
+            <p>
+              The line is a template: <code>{'{creator}'}</code> is the name set under Metadata,{' '}
+              <code>{'{year}'}</code> the year the picture was TAKEN, <code>{'{title}'}</code> the
+              picture’s own. A line that names its author before a name is set is not drawn. Its
+              size is a share of the file’s short side, so a 1080 px copy and the full picture carry
+              the same mark, and it is drawn after the screen sharpening.
+            </p>
+          </>
+        }
+      >
+        <FieldRow label="Line">
+          <TextField
+            label="Watermark line"
+            value={settings.watermark.text}
+            placeholder={DEFAULT_WATERMARK.text}
+            onChange={(text) => onSettings({ watermark: { ...settings.watermark, text } })}
+          />
+        </FieldRow>
+        <FieldRow label="Reads" align="start">
+          <span className={`font-mono text-sm leading-snug pt-1 ${markPreview ? 'text-ink' : 'text-muted'}`}>
+            {markPreview || (settings.watermark.text.includes('{creator}') && !identity.creator ? 'nothing yet — set a creator under Metadata' : 'nothing — the line is empty')}
+          </span>
+        </FieldRow>
+        <FieldRow label="Where">
+          <SelectField
+            label="Watermark position"
+            value={settings.watermark.position}
+            options={WATERMARK_POSITION_OPTIONS}
+            onChange={(position) => onSettings({ watermark: { ...settings.watermark, position } })}
+          />
+        </FieldRow>
+        <FieldRow label="Size">
+          <RangeField
+            label="Watermark size"
+            min={WATERMARK_LIMITS.size.min}
+            max={WATERMARK_LIMITS.size.max}
+            step={0.5}
+            value={settings.watermark.size}
+            onChange={(size) => onSettings({ watermark: { ...settings.watermark, size } })}
+            format={(v) => `${v.toFixed(1)} %`}
+          />
+        </FieldRow>
+        <FieldRow label="Opacity">
+          <RangeField
+            label="Watermark opacity"
+            min={WATERMARK_LIMITS.opacity.min}
+            max={WATERMARK_LIMITS.opacity.max}
+            step={0.05}
+            value={settings.watermark.opacity}
+            onChange={(opacity) => onSettings({ watermark: { ...settings.watermark, opacity } })}
+            format={(v) => `${Math.round(v * 100)} %`}
+          />
+        </FieldRow>
+        <FieldRow label="Tone">
+          <Segmented
+            size="sm"
+            label="Watermark tone"
+            value={settings.watermark.tone}
+            onChange={(tone) => onSettings({ watermark: { ...settings.watermark, tone: tone as WatermarkTone } })}
+            options={[
+              { id: 'light', label: 'Light' },
+              { id: 'dark', label: 'Dark' },
+            ]}
+          />
+        </FieldRow>
+        <FieldRow label="Drawn on" align="start">
+          <span className="font-mono text-2xs leading-snug text-muted pt-1">
+            {marked.length ? marked.join(' · ') : 'no target yet — switch it on under a target above'}
           </span>
         </FieldRow>
       </InspectorSection>

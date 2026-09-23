@@ -64,7 +64,7 @@ describe('the record', () => {
     const many = Array.from({ length: 9 }, () => ({ name: 'W', size: { mode: 'megapixels', value: 999 }, quality: 3, sharpen: 'max' }));
     const read = readTargets([...many, 'junk']);
     expect(read).toHaveLength(MAX_TARGETS);
-    expect(read[0]).toEqual({ name: 'W', size: { mode: 'megapixels', value: 200 }, quality: 1, sharpen: 'off' });
+    expect(read[0]).toEqual({ name: 'W', size: { mode: 'megapixels', value: 200 }, quality: 1, sharpen: 'off', watermark: false });
     expect(readSize({ mode: 'percent', value: 1 })).toEqual({ mode: 'percent', value: 5 });
     expect(readSize({ mode: 'inches', value: 3 })).toBeNull();
   });
