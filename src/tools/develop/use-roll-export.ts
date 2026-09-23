@@ -19,6 +19,7 @@ import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver
 import { uniqueName } from '../../shared/sources/unique-name';
 import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
+import { keepsCapture } from '../../shared/exif/meta-groups';
 import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
@@ -469,6 +470,7 @@ export function useRollExport({
               identity: latest.current.identity,
               title: picture.title,
               caption: picture.caption,
+              keep: r.export.metadata,
             });
             stamped.account = exif.account;
             return stampExif(jpeg, exif, delivered);
@@ -529,11 +531,13 @@ export function useRollExport({
           }
           // Said, not hidden: a file that lost its position is worth knowing
           // about before it is filed away.
-          if (stamped.account === 'vouched') {
+          // Only where the choice asked for what was missing: a Minimal run
+          // never wanted the body, so its absence is no news.
+          if (stamped.account === 'vouched' && r.export.metadata.camera) {
             failures.push(
               `${picture.ref.name} took its EXIF from ${origin?.sourceId ?? 'the source'}’s record — the original was out of reach, so no body or lens`,
             );
-          } else if (stamped.account === 'none') {
+          } else if (stamped.account === 'none' && keepsCapture(r.export.metadata)) {
             failures.push(`${picture.ref.name} carries no camera EXIF — nothing is known about the picture it came from, only the signature is written`);
           }
           const blob = out.blob;

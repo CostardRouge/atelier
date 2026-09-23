@@ -1,3 +1,4 @@
+import { ALL_META } from '../exif/meta-groups';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FILM_TEXTURE } from '../film/film-texture';
 import { DEFAULT_DEVELOP } from './develop';
@@ -32,7 +33,7 @@ function sample(): RollDoc {
   );
   return {
     ...doc,
-    export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3 },
+    export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false } },
   };
 }
 

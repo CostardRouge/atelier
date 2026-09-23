@@ -316,7 +316,7 @@ describe('reading a stored roll', () => {
     expect(doc.pictures[1].framing?.scale).toBe(2);
     expect(doc.pictures.map((p) => p.grade)).toEqual([null, null]);
     // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
-    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2 });
+    expect(doc.export).toEqual({ longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2, metadata: DEFAULT_ROLL_EXPORT.metadata });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
   });
@@ -368,12 +368,15 @@ describe('reading a stored roll', () => {
       replace: true,
       hdr: false,
       hdrStops: 2,
+      metadata: DEFAULT_ROLL_EXPORT.metadata,
     });
     // The HDR delivery: off unless said, its reach clamped to the stops a RAW keeps.
     expect(readRollExport({ hdr: true, hdrStops: 9.6 })).toMatchObject({ hdr: true, hdrStops: 4 });
     expect(readRollExport({ hdr: 'yes', hdrStops: 0 })).toMatchObject({ hdr: false, hdrStops: 1 });
     expect(readRollExport({ longEdge: null })).toEqual({ ...DEFAULT_ROLL_EXPORT });
     expect(readRollExport('junk')).toEqual({ ...DEFAULT_ROLL_EXPORT });
+    // M3: what leaves is read group by group, a roll written before it as All.
+    expect(readRollExport({ metadata: { position: false } }).metadata).toEqual({ ...DEFAULT_ROLL_EXPORT.metadata, position: false });
     // A roll written before the choice existed keeps what is in its folder.
     expect(readRollExport({ quality: 0.9 }).replace).toBe(false);
     expect(readRollExport({ replace: 'yes' }).replace).toBe(false);

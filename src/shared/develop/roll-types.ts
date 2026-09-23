@@ -14,6 +14,7 @@
  * build wrote is left behind rather than trusted. Pure and DOM-free.
  */
 
+import { ALL_META, readMetaChoice, type MetaChoice } from '../exif/meta-groups';
 import { isDefaultKeystone, keystoneOrNull, type Keystone } from '../render/geometry';
 import { isDefaultLens, lensOrNull, type LensCorrection } from '../render/lens';
 import { detailOrNull, isDefaultDetail, type DetailSettings } from '../render/detail';
@@ -80,6 +81,12 @@ export interface RollExport {
   hdr: boolean;
   /** How far above white the map may reach, in stops: the RAW is developed this much darker to find them. */
   hdrStops: number;
+  /**
+   * Which groups of metadata leave (`exif/meta-groups.ts`, M3): the roll's,
+   * because "this set goes online without its position" is said of a
+   * delivery. Absent reads as All — the GPS leaves by default, his call.
+   */
+  metadata: MetaChoice;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
@@ -88,6 +95,7 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   replace: false,
   hdr: false,
   hdrStops: 2,
+  metadata: ALL_META,
 });
 
 export const ROLL_EXPORT_LIMITS = {
@@ -293,7 +301,7 @@ export function readRollGrade(raw: unknown): RollGrade | null {
 }
 
 export function readRollExport(raw: unknown): RollExport {
-  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT };
+  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, metadata: { ...ALL_META } };
   const { longEdge, quality } = ROLL_EXPORT_LIMITS;
   const edge = typeof raw.longEdge === 'number' && Number.isFinite(raw.longEdge)
     ? Math.round(Math.min(longEdge.max, Math.max(longEdge.min, raw.longEdge)))
@@ -309,6 +317,7 @@ export function readRollExport(raw: unknown): RollExport {
     hdrStops: Math.round(
       Math.min(ROLL_EXPORT_LIMITS.hdrStops.max, Math.max(ROLL_EXPORT_LIMITS.hdrStops.min, finite(raw.hdrStops, DEFAULT_ROLL_EXPORT.hdrStops))),
     ),
+    metadata: readMetaChoice(raw.metadata),
   };
 }
 

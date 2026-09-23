@@ -385,6 +385,22 @@ shared block. Rules a later phase must keep:
   not worth a tag. A picture with no caption keeps the capture's own
   `ImageDescription`. Typed into drafts committed on blur, in the Export tab's
   Metadata section; text fields keep P/U/M (the editor's keys yield to typing).
+- **What leaves is ONE choice per ROLL, in groups** (2026-09-23, M3,
+  `exif/meta-groups.ts`, `RollExport.metadata`, absent = All). A roll because
+  "this set goes online without its position" is said of a delivery, not of
+  a frame. Seven groups (camera · exposure · time · position · maker notes and
+  serials · title and caption · creator and copyright) plus the signature
+  drawn LOCKED among them, so its missing switch does not read as an
+  oversight; presets All (default — GPS leaves, his call) · Share online (no
+  position, no serials) · Minimal (rights + signature). The one cost, said in
+  the panel: `keepsWholeBlock` (every capture group AND the maker notes) is
+  what lets the camera's block be COPIED; anything less REBUILDS it from the
+  fields `ExifData` names, and maker notes, serials and unnamed tags stay
+  behind. A group left out CLEARS the camera's own value too (`authorTags`:
+  string writes, null clears, undefined keeps) — rights off means no owner
+  string either. The copyright's `{year}` is still the capture's even when the
+  time does not leave. The run's "no body / no EXIF" warnings fire only when
+  the choice asked for what was missing.
 - **The workbench holds TWO files since 2026-09-21: the picture's, and the one
   on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
   picture IS — its identity, its origin, its EXIF, what the export hook

@@ -36,6 +36,7 @@ import { buildExifBlock } from './exif-build';
 import { readExifBlock, retagExifBlock, withExifBlock, withXmpPacket } from './exif-block';
 import { isEmptyExif, parseExif, type ExifData } from './exif-parser';
 import { captureYear, deliveryXmp, resolveRights, type DeliveryIdentity, type DeliveryRights } from './delivery-meta';
+import { ALL_META, filterExif, keepsWholeBlock, type MetaChoice } from './meta-groups';
 import { mergeExif } from './merge-exif';
 import { ATELIER_SOFTWARE } from './software-mark';
 
@@ -52,8 +53,10 @@ export interface ExportExif {
   account: ExifAccount;
   /** The rights written, resolved against the capture's year. */
   rights: DeliveryRights;
-  /** The caption written as `ImageDescription`, or null to keep the capture's. */
-  caption: string | null;
+  /** The author's tags as written over the capture's — what a rebuild must write again. */
+  tags: AuthorTags;
+  /** What was asked to leave (`meta-groups.ts`). */
+  keep: MetaChoice;
   /** The XMP packet the file carries: the signature, and the rights where there are some. */
   xmp: string;
 }
@@ -67,6 +70,8 @@ export interface AuthorMeta {
   /** The picture's own title and caption (`RollPicture`), or none. */
   title?: string | null;
   caption?: string | null;
+  /** Which groups leave (`meta-groups.ts`); everything when not given. */
+  keep?: MetaChoice;
 }
 
 export interface DeliveredSize {
@@ -87,57 +92,90 @@ export function exportExifBlock(
   delivered: DeliveredSize,
   author: AuthorMeta = {},
 ): ExportExif {
+  const keep = author.keep ?? ALL_META;
   const fallbackYear = author.fallbackYear ?? new Date().getFullYear();
-  const caption = author.caption?.trim() || null;
-  const title = author.title?.trim() || null;
-  const signed = (block: Uint8Array<ArrayBuffer>, account: ExifAccount, rights: DeliveryRights): ExportExif => ({
-    block,
-    account,
-    rights,
-    caption,
-    xmp: deliveryXmp({ ...rights, title, caption }),
-  });
-  const rightsOf = (exif: ExifData | null) => resolveRights(author.identity ?? null, captureYear(exif?.dateTimeOriginal, fallbackYear));
+  const caption = keep.words ? author.caption?.trim() || null : null;
+  const title = keep.words ? author.title?.trim() || null : null;
+  const rightsOf = (exif: ExifData | null): DeliveryRights =>
+    keep.rights
+      ? resolveRights(author.identity ?? null, captureYear(exif?.dateTimeOriginal, fallbackYear))
+      : { creator: null, copyright: null };
+  const signed = (block: Uint8Array<ArrayBuffer>, account: ExifAccount, rights: DeliveryRights): ExportExif => {
+    const tags = authorTags(keep, rights, caption);
+    return { block, account, rights, tags, keep, xmp: deliveryXmp({ ...rights, title, caption }) };
+  };
+  // What leaves of the capture, once the choice has had its say.
+  const kept = (exif: ExifData) => filterExif(exif, keep);
 
   if (head && head.length > 0) {
     const copied = readExifBlock(head);
     if (copied) {
-      const rights = rightsOf(parseExif(copied.buffer));
-      // Every account names the software: it is the one mark that tells this
-      // export from the camera's own file once the rest is a copy
-      // (`software-mark.ts`). The rights go over the camera's own only where
-      // the author has a name to sign with.
-      const block = retagExifBlock(copied, {
-        pixelWidth: delivered.width,
-        pixelHeight: delivered.height,
-        software: ATELIER_SOFTWARE,
-        ...(rights.creator ? { artist: rights.creator, copyright: rights.copyright } : {}),
-        ...(caption ? { description: caption } : {}),
-      });
-      return signed(block, 'block', rights);
+      const own = parseExif(copied.buffer);
+      const rights = rightsOf(own);
+      if (keepsWholeBlock(keep)) {
+        // Every account names the software: it is the one mark that tells this
+        // export from the camera's own file once the rest is a copy
+        // (`software-mark.ts`). The author's tags go over the camera's own.
+        const block = retagExifBlock(copied, {
+          pixelWidth: delivered.width,
+          pixelHeight: delivered.height,
+          software: ATELIER_SOFTWARE,
+          ...authorTags(keep, rights, caption),
+        });
+        return signed(block, 'block', rights);
+      }
+      // A group left out: the block is REBUILT from its fields, and what the
+      // fields do not name — the maker notes, the serials — stays behind.
+      const merged = mergeExif(own, vouched) ?? own;
+      return signed(build(kept(merged), delivered, authorTags(keep, rights, caption)), 'fields', rights);
     }
     const fields = parseExif(head.buffer.slice(head.byteOffset, head.byteOffset + head.byteLength));
     const merged = mergeExif(isEmptyExif(fields) ? null : fields, vouched);
     if (merged && !isEmptyExif(merged)) {
       const rights = rightsOf(merged);
-      return signed(build(merged, delivered, rights, caption), 'fields', rights);
+      return signed(build(kept(merged), delivered, authorTags(keep, rights, caption)), 'fields', rights);
     }
   }
   if (vouched && !isEmptyExif(vouched)) {
     const rights = rightsOf(vouched);
-    return signed(build(vouched, delivered, rights, caption), 'vouched', rights);
+    return signed(build(kept(vouched), delivered, authorTags(keep, rights, caption)), 'vouched', rights);
   }
   const rights = rightsOf(null);
-  return signed(build({}, delivered, rights, caption), 'none', rights);
+  return signed(build({}, delivered, authorTags(keep, rights, caption)), 'none', rights);
 }
 
-function build(exif: ExifData, delivered: DeliveredSize, rights: DeliveryRights, caption: string | null): Uint8Array<ArrayBuffer> {
+/** The author's three tags, as the writers take them: a string writes, null clears the capture's, undefined keeps it. */
+export interface AuthorTags {
+  artist?: string | null;
+  copyright?: string | null;
+  description?: string | null;
+}
+
+/**
+ * What the author's half writes over the capture's. A group left out CLEARS
+ * the capture's own value too — "no rights" means none, not the camera's
+ * owner string — while a group kept with nothing to say leaves it alone.
+ */
+function authorTags(keep: MetaChoice, rights: DeliveryRights, caption: string | null): AuthorTags {
+  const tags: AuthorTags = {};
+  if (!keep.rights) {
+    tags.artist = null;
+    tags.copyright = null;
+  } else if (rights.creator) {
+    tags.artist = rights.creator;
+    tags.copyright = rights.copyright;
+  }
+  if (!keep.words) tags.description = null;
+  else if (caption) tags.description = caption;
+  return tags;
+}
+
+function build(exif: ExifData, delivered: DeliveredSize, tags: AuthorTags): Uint8Array<ArrayBuffer> {
   return buildExifBlock(exif, {
     software: ATELIER_SOFTWARE,
     pixelWidth: delivered.width,
     pixelHeight: delivered.height,
-    ...(rights.creator ? { artist: rights.creator, copyright: rights.copyright } : {}),
-    ...(caption ? { description: caption } : {}),
+    ...tags,
   });
 }
 
@@ -155,7 +193,7 @@ export async function stampExif(jpeg: Blob, exif: ExportExif, delivered: Deliver
       bytes = withExifBlock(bytes, exif.block);
     } catch {
       const fields = parseExif(exif.block.buffer.slice(exif.block.byteOffset));
-      bytes = withExifBlock(bytes, build(fields, delivered, exif.rights, exif.caption));
+      bytes = withExifBlock(bytes, build(filterExif(fields, exif.keep), delivered, exif.tags));
     }
   }
   try {

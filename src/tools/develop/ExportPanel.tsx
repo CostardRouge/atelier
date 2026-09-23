@@ -223,6 +223,8 @@ export default function ExportPanel({
         openExif={openExif}
         picture={picture}
         onWords={onWords}
+        choice={settings.metadata}
+        onChoice={(metadata) => onSettings({ metadata })}
       />
 
       <InspectorSection

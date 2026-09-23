@@ -11,6 +11,16 @@ import type { RollPicture } from '../../shared/develop/roll-types';
 import { ATELIER_SOFTWARE } from '../../shared/exif/software-mark';
 import { FieldRow, InspectorSection, fieldClass } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
+import Segmented from '../../shared/ui/Segmented';
+import {
+  META_GROUPS,
+  META_PRESETS,
+  keepsWholeBlock,
+  presetOf,
+  type MetaChoice,
+  type MetaGroup,
+  type MetaPresetId,
+} from '../../shared/exif/meta-groups';
 
 /**
  * What a delivered file SAYS beyond its pixels (`docs/lightroom-gaps.md` §9):
@@ -26,7 +36,12 @@ export default function MetadataSection({
   openExif,
   picture = null,
   onWords,
+  choice,
+  onChoice,
 }: {
+  /** Which groups leave — the roll's (`RollExport.metadata`). */
+  choice: MetaChoice;
+  onChoice: (choice: MetaChoice) => void;
   identity: DeliveryIdentity;
   onIdentity: (identity: DeliveryIdentity) => void;
   /** The open picture's effective EXIF — what the preview's year is read from. */
@@ -70,6 +85,13 @@ export default function MetadataSection({
             Atelier recognises its own exports beside the originals, so it is not a switch.
           </p>
           <p>
+            <strong>What leaves</strong> is chosen for the whole roll, in groups: <em>All</em> keeps
+            everything (the GPS included), <em>Share online</em> drops the position and the serial
+            numbers, <em>Minimal</em> writes your rights and the signature alone. While every group
+            of the capture is kept, the camera’s EXIF is copied whole; leaving one out rebuilds it
+            from the fields Atelier reads, and the maker notes stay behind.
+          </p>
+          <p>
             A picture’s <strong>title</strong> and <strong>caption</strong> are its own — written as
             XMP <code>dc:title</code> and <code>dc:description</code>, the caption also as EXIF{' '}
             <code>ImageDescription</code>, which Lightroom and Capture One show as the caption.
@@ -86,15 +108,7 @@ export default function MetadataSection({
         </>
       }
     >
-      {picture && onWords && <PictureWords key={picture.id} picture={picture} onWords={onWords} />}
-      <FieldRow label="Signature" hint="written into every file — it is how Atelier knows its own exports">
-        <span className="inline-flex items-center gap-1.5 font-mono text-sm text-ink">
-          <span className="inline-flex text-xs text-accent-ink" aria-hidden="true">
-            {Icons.check}
-          </span>
-          {ATELIER_SOFTWARE}
-        </span>
-      </FieldRow>
+      <WhatLeaves choice={choice} onChoice={onChoice} />
       <FieldRow label="Creator" htmlFor={creatorId}>
         <input
           id={creatorId}
@@ -136,7 +150,92 @@ export default function MetadataSection({
           className={fieldClass}
         />
       </FieldRow>
+      {picture && onWords && (
+        <PictureWords key={picture.id} picture={picture} onWords={onWords} written={choice.words} />
+      )}
     </InspectorSection>
+  );
+}
+
+/**
+ * The roll's choice of what leaves: three presets, and the groups one row
+ * each — the whole row the target, as in the Pictures table. The signature is
+ * drawn among them, ticked and locked, so its absence from the switches does
+ * not read as an oversight.
+ */
+function WhatLeaves({ choice, onChoice }: { choice: MetaChoice; onChoice: (choice: MetaChoice) => void }) {
+  const preset = presetOf(choice);
+  const options: { id: MetaPresetId | 'custom'; label: string; disabled?: string }[] = META_PRESETS.map((p) => ({ id: p.id, label: p.label }));
+  if (!preset) options.push({ id: 'custom', label: 'Custom', disabled: 'Pick a preset, or keep ticking groups below' });
+  const toggle = (id: MetaGroup) => onChoice({ ...choice, [id]: !choice[id] });
+  const whole = keepsWholeBlock(choice);
+  return (
+    <div className="flex flex-col gap-2">
+      <FieldRow label="Leaves">
+        <Segmented
+          size="sm"
+          label="What leaves"
+          options={options}
+          value={preset ?? 'custom'}
+          onChange={(id) => {
+            const next = META_PRESETS.find((p) => p.id === id);
+            if (next) onChoice({ ...next.choice });
+          }}
+        />
+      </FieldRow>
+      <div className="flex flex-col border-t border-line">
+        {META_GROUPS.map((g) => (
+          <GroupRow key={g.id} label={g.label} hint={g.hint} on={choice[g.id]} onToggle={() => toggle(g.id)} />
+        ))}
+        <GroupRow label="Signature" hint={`${ATELIER_SOFTWARE} — always written`} on locked />
+      </div>
+      <p className="m-0 text-xs leading-relaxed text-muted" role="status">
+        {whole
+          ? 'The camera’s own EXIF travels whole, maker notes included.'
+          : 'The camera’s EXIF is rebuilt from its fields: the maker notes, the serial numbers and every tag Atelier does not name stay behind.'}
+      </p>
+    </div>
+  );
+}
+
+function GroupRow({
+  label,
+  hint,
+  on,
+  locked = false,
+  onToggle,
+}: {
+  label: string;
+  hint: string;
+  on: boolean;
+  locked?: boolean;
+  onToggle?: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="checkbox"
+      aria-checked={on}
+      aria-disabled={locked || undefined}
+      onClick={locked ? undefined : onToggle}
+      title={locked ? 'Always written — it is how Atelier knows its own exports' : undefined}
+      className={`flex items-center gap-2.5 min-h-11 px-1 border-0 border-b border-line bg-transparent text-left select-none ${
+        locked ? 'cursor-default' : 'cursor-pointer hover:bg-paper'
+      } focus-visible:outline-2 focus-visible:outline-accent`}
+    >
+      <span
+        aria-hidden="true"
+        className={`flex-none grid place-items-center w-5 h-5 rounded-[5px] border-2 ${
+          on ? (locked ? 'bg-line-strong border-line-strong text-white' : 'bg-accent border-accent text-white') : 'border-line-strong'
+        }`}
+      >
+        {on && <span className="inline-flex text-xs">{Icons.check}</span>}
+      </span>
+      <span className="flex-1 min-w-0 flex flex-col">
+        <span className={`text-sm leading-tight ${on ? 'text-ink' : 'text-muted'}`}>{label}</span>
+        <span className="text-xs leading-snug text-faint">{hint}</span>
+      </span>
+    </button>
   );
 }
 
@@ -144,9 +243,12 @@ export default function MetadataSection({
 function PictureWords({
   picture,
   onWords,
+  written,
 }: {
   picture: RollPicture;
   onWords: (words: { title?: string; caption?: string }) => void;
+  /** Whether the roll writes them — *Title and caption* ticked. */
+  written: boolean;
 }) {
   const [title, setTitle] = useState(picture.title ?? '');
   const [caption, setCaption] = useState(picture.caption ?? '');
@@ -181,7 +283,12 @@ function PictureWords({
           className={fieldClass}
         />
       </FieldRow>
-      <FieldRow label="Caption" htmlFor={captionId} align="start">
+      <FieldRow
+        label="Caption"
+        htmlFor={captionId}
+        align="start"
+        hint={written ? undefined : <p>Kept on the picture, not written: <em>Title and caption</em> is off for this roll.</p>}
+      >
         <textarea
           id={captionId}
           value={caption}

@@ -3,6 +3,7 @@ import { buildExifBlock } from './exif-build';
 import { readXmpPacket, withExifBlock } from './exif-block';
 import { parseExif, type ExifData } from './exif-parser';
 import { exifAccountText, exportExifBlock, stampExif } from './stamp-exif';
+import { ALL_META, META_PRESETS } from './meta-groups';
 
 const me = { creator: 'Steeve Pommier', copyright: '© {year} {creator}. All rights reserved.' };
 
@@ -167,6 +168,54 @@ describe('exportExifBlock — the picture’s words', () => {
   });
 });
 
+describe('exportExifBlock — what leaves (M3)', () => {
+  const preset = (id: string) => META_PRESETS.find((p) => p.id === id)!.choice;
+  const words = { identity: me, title: 'T', caption: 'C' };
+
+  it('copies the block whole under All, maker note and all', () => {
+    const chosen = exportExifBlock(cameraJpeg(capture), null, delivered, { ...words, keep: ALL_META });
+    expect(chosen.account).toBe('block');
+  });
+
+  it('Share online REBUILDS without the position, keeping the body and the exposure', () => {
+    const chosen = exportExifBlock(cameraJpeg(capture), null, delivered, { ...words, keep: preset('share') });
+    expect(chosen.account).toBe('fields');
+    const read = parseExif(chosen.block!.buffer);
+    expect(read.gps).toBeUndefined();
+    expect(read.gpsAltitude).toBeUndefined();
+    expect(read.model).toBe('FC8482');
+    expect(read.iso).toBe(100);
+    expect(read.dateTimeOriginal).toBe('2026:07:14 18:32:05');
+    expect(read.copyright).toBe('© 2026 Steeve Pommier. All rights reserved.');
+    expect(read.imageDescription).toBe('C');
+    expect(read.software).toBe('Atelier');
+  });
+
+  it('Minimal leaves the rights and the signature alone — no words, no capture', () => {
+    for (const head of [cameraJpeg(capture), dngHead(capture)]) {
+      const chosen = exportExifBlock(head, vouched, delivered, { ...words, keep: preset('minimal') });
+      const read = parseExif(chosen.block!.buffer);
+      expect([read.make, read.model, read.iso, read.gps, read.dateTimeOriginal, read.imageDescription]).toEqual([
+        undefined, undefined, undefined, undefined, undefined, undefined,
+      ]);
+      expect(read.software).toBe('Atelier');
+      // The year still comes from the capture, even though its time does not leave.
+      expect(read.copyright).toBe('© 2026 Steeve Pommier. All rights reserved.');
+      expect(chosen.xmp).not.toContain('dc:title');
+    }
+  });
+
+  it('a group left out CLEARS the camera’s own value, even on a whole copy', () => {
+    const owned = cameraJpeg({ ...capture, artist: 'CAMERA OWNER', copyright: 'owner', imageDescription: 'SONY DSC' });
+    const chosen = exportExifBlock(owned, null, delivered, { identity: me, keep: { ...ALL_META, rights: false, words: false } });
+    expect(chosen.account).toBe('block');
+    const read = parseExif(chosen.block!.buffer);
+    expect([read.artist, read.copyright, read.imageDescription]).toEqual([undefined, undefined, undefined]);
+    expect(chosen.xmp).not.toContain('dc:rights');
+    expect(read.gps?.lat).toBeCloseTo(64.1466, 6);
+  });
+});
+
 describe('stampExif', () => {
   it('hands back a JPEG the reader finds the capture in', async () => {
     const chosen = exportExifBlock(cameraJpeg(capture), null, delivered);
@@ -194,7 +243,7 @@ describe('stampExif', () => {
     huge.set(buildExifBlock(capture), 0);
     const out = await stampExif(
       new Blob([canvasJpeg()], { type: 'image/jpeg' }),
-      { block: huge, account: 'block', rights: { creator: null, copyright: null }, caption: null, xmp: '' },
+      { block: huge, account: 'block', rights: { creator: null, copyright: null }, tags: {}, keep: ALL_META, xmp: '' },
       delivered,
     );
     const read = parseExif(await out.arrayBuffer());

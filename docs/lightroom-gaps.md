@@ -236,6 +236,11 @@ EXIF text in UTF-8, and ONE XMP packet folded into the Ultra HDR container's
 `dc:description`, the caption also as `ImageDescription`), in the Metadata
 section (`develop-roll.md`, «A picture's title and caption are the PICTURE's»).
 
+**M3 BUILT 2026-09-23** — the roll's choice of what leaves, seven groups and
+the locked signature, presets All · Share online · Minimal, the block copied
+whole only while every capture group and the maker notes stay (`develop-roll.md`,
+«What leaves is ONE choice per ROLL»).
+
 **Proposed then, accepted as drawn** (his idea, drawn in the lab): an **ignored** state.
 Recommended as the FOURTH value of the one delivery field —
 `auto · yes · no · ignore` — never a second flag beside it, so no combination

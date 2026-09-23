@@ -1169,8 +1169,15 @@ device signs the same way; nothing is written until a name is given. Each
 picture also takes its own **title** and **caption** there (`dc:title`,
 `dc:description`, and the caption as EXIF `ImageDescription`, which Lightroom
 and Capture One show as the caption) — the picture's alone, carried by no
-preset, paste or "apply to". The file holds ONE XMP packet — an Ultra HDR
-export folds these into its own.
+preset, paste or "apply to". **What leaves** is chosen for the whole roll, in
+groups — camera and lens, exposure, capture time, GPS position, maker notes and
+serials, title and caption, creator and copyright — with three presets: *All*
+(the default, GPS included), *Share online* (no position, no serials) and
+*Minimal* (your rights and the signature alone). While every group of the
+capture is kept the camera's EXIF block is copied whole; leaving one out
+rebuilds it from the fields Atelier reads, and the panel says the maker notes
+stay behind. The file holds ONE XMP packet — an Ultra HDR export folds these
+into its own.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or every picture that leaves — into a folder you choose (downloaded one
