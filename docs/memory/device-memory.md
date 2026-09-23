@@ -44,7 +44,24 @@ is where a phone dies and why the rules below are about RAWs first.
   and its Cancel lands between two bands and drops everything at once.
   "Split the work" — his words — is this, not a second worker: the decode
   itself is already off-thread, and a worker for the conversion would move
-  the allocation without shrinking it.
+  the allocation without shrinking it. **The yield is `scheduler.yield()`,
+  else a `MessageChannel` message, never `setTimeout(0)`**: browsers stretch
+  a nested zero timer to 4 ms, and a whole-picture conversion has a few
+  hundred bands — measured in node, 300 yields cost 338 ms through the timer
+  and 48 ms through the channel; in Safari, which has no `scheduler`, the
+  timer would have added about a second to every loupe and export.
+- **Three things the final pass fixed, each a rule** (2026-09-23): the four
+  constant tables (BT.709 inverse, the sRGB encode, the sRGB bytes, the
+  code→half map) are built ONCE per page and shared — a decode that rebuilt
+  them paid 65 536 `pow`s per picture; the small picture's half-floats and
+  bytes are written by ONE fused pass (`encodeLinearRows`, one read of each
+  sample, the two single-output functions defined as it), so the box path
+  no longer walks the linear picture twice; and the 16-bit plane is RELEASED
+  before the small picture is encoded (`convert`'s `release`, the caller
+  nulling its reference and the box loop living in its own frame), so the
+  six bytes a pixel of LibRaw's output are gone before the next allocation.
+  The worker also loads WHILE the file is read (`Promise.all`), which is
+  where a phone that let its decoder go was paying twice in a row.
 - **A constrained device decodes to a LONG EDGE per purpose**
   (`raw-budget.ts`): stage and loupe 2560 px, export 4096 px, always under
   the GPU's own cap (`rawDecodeEdge` folds the two). And a picture the cap

@@ -1396,6 +1396,8 @@ function AssetTile({
   }, [inView, onEnsure]);
 
   const drag = useLibraryDrag(asset, usable);
+  // Once per render: the chip is read twice below.
+  const pair = asset.parts.video ? null : pairTag(asset);
   return (
     <div
       ref={ref}
@@ -1434,9 +1436,9 @@ function AssetTile({
       <span className="absolute inset-x-0 bottom-0 px-1 pb-[2px] pt-2 bg-gradient-to-b from-transparent to-[rgba(16,15,13,0.6)] font-mono text-3xs text-on-media truncate pointer-events-none">
         {asset.baseName}
       </span>
-      {!asset.parts.video && pairTag(asset) && (
+      {pair && (
         <span className={`${scrim('top-[3px]')} pointer-events-none`} aria-hidden="true">
-          {pairTag(asset)}
+          {pair}
         </span>
       )}
       {active && (

@@ -68,8 +68,7 @@ import {
   boxedSize,
   bt709Table,
   byteTableFromLibRaw,
-  bytesFromLinear,
-  halfImageFromLinear,
+  encodeLinearRows,
   halfTableFromLibRaw,
   packBytePixels,
   packHalfSamples,
@@ -360,11 +359,14 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     let image: Awaited<ReturnType<LibRawLike['imageData']>>;
     let metadata: Record<string, unknown> | undefined;
     try {
-      const raw = await loadLibRaw();
-      // The file's bytes are TRANSFERRED to the worker (libraw-wasm posts a
-      // typed array's buffer in its transfer list), so this thread holds them
-      // for the length of one `await` and never beside the worker's copy.
-      const bytes = new Uint8Array(await file.arrayBuffer());
+      // The worker loads WHILE the file is read: on a phone the worker was
+      // let go after the last picture, and its wasm takes a moment to come
+      // back that a 74 MB read would otherwise wait behind. The file's bytes
+      // are then TRANSFERRED to the worker (libraw-wasm posts a typed array's
+      // buffer in its transfer list), so this thread holds them for the
+      // length of one `await` and never beside the worker's copy.
+      const [raw, buffer] = await Promise.all([loadLibRaw(), file.arrayBuffer()]);
+      const bytes = new Uint8Array(buffer);
       try {
         await raw.open(bytes, librawSettings(halved));
         metadata = await raw.metadata(false);
@@ -387,7 +389,17 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     // drops it here rather than spending the conversion on it.
     if (signal.aborted) throw cancelled();
 
-    const converted = await convert(image.data, image.width, image.height, opts, withBytes, signal, cancelled);
+    // The plane is held by THIS frame alone from here: once it is boxed the
+    // reference is dropped before the small picture is encoded, so the six
+    // bytes a pixel of LibRaw's output are gone before the next allocation —
+    // on a phone that is the difference between two peaks and one.
+    const width = image.width;
+    const height = image.height;
+    let plane: Uint16Array | null = image.data;
+    image = undefined;
+    const converted = await convert(plane, width, height, opts, withBytes, signal, cancelled, () => {
+      plane = null;
+    });
     const meta: RawMeta = {
       make: typeof metadata?.camera_make === 'string' ? metadata.camera_make : '',
       model: typeof metadata?.camera_model === 'string' ? metadata.camera_model : '',
@@ -398,8 +410,8 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     };
     const decoded: RawDecoded = {
       ...converted,
-      sourceWidth: image.width * (halved ? 2 : 1),
-      sourceHeight: image.height * (halved ? 2 : 1),
+      sourceWidth: width * (halved ? 2 : 1),
+      sourceHeight: height * (halved ? 2 : 1),
       halved,
       meta,
     };
@@ -425,10 +437,13 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
  * two-step arithmetic by `raw-image.test.ts`:
  *
  * - **box-averaged** (a stage, a phone's export): the target-size linear
- *   picture is summed straight from the codes, band by band, then measured
- *   and encoded at its own small size;
+ *   picture is summed straight from the codes, band by band; the plane is
+ *   then RELEASED (`release`, the caller dropping its own reference) before
+ *   the small picture is measured and encoded — one fused pass writing the
+ *   half-floats and the bytes together;
  * - **whole** (a desktop's export, a loupe): a code maps to one half-float
- *   and one byte, so two tables carry the whole conversion.
+ *   and one byte, so two tables carry the whole conversion and the plane is
+ *   read straight through.
  */
 async function convert(
   rgb16: Uint16Array,
@@ -438,6 +453,7 @@ async function convert(
   withBytes: boolean,
   signal: AbortSignal,
   cancelled: () => DOMException,
+  release: () => void,
 ): Promise<Pick<RawDecoded, 'half' | 'bytes' | 'width' | 'height' | 'gain'>> {
   const table = bt709Table();
   const byBudget = opts.budgetPixels ? rawBoxFactor(width, height, opts.budgetPixels) : 1;
@@ -449,21 +465,25 @@ async function convert(
   };
 
   if (factor > 1) {
-    const size = boxedSize(width, height, factor);
-    const out = new Float32Array(size.width * size.height * 3);
-    const rows = Math.max(1, Math.floor(BAND_PIXELS / Math.max(1, size.width)));
-    for (let y = 0; y < size.height; y += rows) {
-      boxLinearRows(rgb16, width, factor, table, out, size.width, y, Math.min(size.height, y + rows));
+    const linear = await boxPlane(rgb16, width, height, factor, table, check);
+    // Nothing below reads the plane: the caller lets it go, and this frame's
+    // own reference ends with `boxPlane`'s argument.
+    release();
+    const gain = opts.gain ?? autoBrightGain(linear);
+    const pixels = linear.width * linear.height;
+    const half = new Uint16Array(pixels * 3);
+    const bytes = withBytes ? new Uint8ClampedArray(new ArrayBuffer(pixels * 4)) : null;
+    for (let p = 0; p < pixels; p += BAND_PIXELS) {
+      encodeLinearRows(linear, gain, half, bytes, p, Math.min(pixels, p + BAND_PIXELS));
       await check();
     }
-    // The plane is read; nothing below needs it, and a small picture is what
-    // the rest is made from.
-    const linear: LinearRgb = { width: size.width, height: size.height, data: out };
-    const gain = opts.gain ?? autoBrightGain(linear);
-    const half = halfImageFromLinear(linear);
-    await check();
-    const bytes = withBytes ? new ImageData(bytesFromLinear(linear, gain), size.width, size.height) : null;
-    return { half, bytes, width: size.width, height: size.height, gain };
+    return {
+      half: { kind: 'half', width: linear.width, height: linear.height, data: half },
+      bytes: bytes ? new ImageData(bytes, linear.width, linear.height) : null,
+      width: linear.width,
+      height: linear.height,
+      gain,
+    };
   }
 
   const gain = opts.gain ?? autoBrightGainFromLibRaw(rgb16, width, height, table);
@@ -487,5 +507,25 @@ async function convert(
     }
     bytes = new ImageData(out, width, height);
   }
+  release();
   return { half, bytes, width, height, gain };
+}
+
+/** The plane box-averaged to the target picture, a band of rows at a time; its argument is this function's only hold on the plane. */
+async function boxPlane(
+  rgb16: Uint16Array,
+  width: number,
+  height: number,
+  factor: number,
+  table: Float32Array,
+  check: () => Promise<void>,
+): Promise<LinearRgb> {
+  const size = boxedSize(width, height, factor);
+  const out = new Float32Array(size.width * size.height * 3);
+  const rows = Math.max(1, Math.floor(BAND_PIXELS / Math.max(1, size.width)));
+  for (let y = 0; y < size.height; y += rows) {
+    boxLinearRows(rgb16, width, factor, table, out, size.width, y, Math.min(size.height, y + rows));
+    await check();
+  }
+  return { width: size.width, height: size.height, data: out };
 }

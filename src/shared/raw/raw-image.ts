@@ -74,15 +74,24 @@ export function linearToBt709(linear: number): number {
 }
 
 /**
- * The decoder's curve inverted over every 16-bit code — 256 KB, built per
- * decode. The ONE table both decode paths read: a code's linear value is
+ * The decoder's curve inverted over every 16-bit code — 256 KB, built once
+ * per page. The ONE table both decode paths read: a code's linear value is
  * this entry, whether it is copied out whole or summed into a box.
  */
 export function bt709Table(): Float32Array {
-  const table = new Float32Array(65536);
-  for (let i = 0; i < 65536; i += 1) table[i] = bt709ToLinear(i / 65535);
-  return table;
+  if (!bt709) {
+    bt709 = new Float32Array(65536);
+    for (let i = 0; i < 65536; i += 1) bt709[i] = bt709ToLinear(i / 65535);
+  }
+  return bt709;
 }
+// The four tables that depend on nothing but the maths are built ONCE per
+// page and shared: each is 64–256 KB and a few milliseconds of `pow`, and a
+// decode that rebuilt them paid that on every picture. Read-only by contract.
+let bt709: Float32Array | null = null;
+let srgbEncode: Float32Array | null = null;
+let srgbByte: Uint8ClampedArray | null = null;
+let halfOfCode: Uint16Array | null = null;
 
 /**
  * LibRaw's 16-bit output → linear light, whole. Through the table, since a
@@ -275,9 +284,11 @@ const ENCODE_STEPS = 4096;
  * half-float itself holds ~11 bits) and 30× faster than the curve per sample.
  */
 function srgbEncodeTable(): Float32Array {
-  const table = new Float32Array(ENCODE_STEPS + 1);
-  for (let i = 0; i <= ENCODE_STEPS; i += 1) table[i] = fromLinear(i / ENCODE_STEPS, 'srgb');
-  return table;
+  if (!srgbEncode) {
+    srgbEncode = new Float32Array(ENCODE_STEPS + 1);
+    for (let i = 0; i <= ENCODE_STEPS; i += 1) srgbEncode[i] = fromLinear(i / ENCODE_STEPS, 'srgb');
+  }
+  return srgbEncode;
 }
 
 /** ONE linear sample sRGB-encoded as the GPU picture has it: the table inside 0..1, the exact curve past white. */
@@ -299,11 +310,44 @@ function encodeLinearSample(v: number, table: Float32Array): number {
  * sits between the two.
  */
 export function halfImageFromLinear(picture: LinearRgb): HalfImage {
-  const { data } = picture;
-  const table = srgbEncodeTable();
-  const out = new Uint16Array(data.length);
-  for (let i = 0; i < data.length; i += 1) out[i] = toHalf(encodeLinearSample(data[i], table));
+  const out = new Uint16Array(picture.data.length);
+  encodeLinearRows(picture, 1, out, null, 0, picture.width * picture.height);
   return { kind: 'half', width: picture.width, height: picture.height, data: out };
+}
+
+/**
+ * Pixels `[p0, p1)` of a linear picture, encoded in ONE pass into what the
+ * stage takes: the half-floats (always) and, where `bytes` is given, the
+ * as-shot RGBA at `gain`. One read of each sample serves both, and a band
+ * at a time is what lets the decoder yield between two. `halfImageFromLinear`
+ * and `bytesFromLinear` are this over the whole picture, one output each —
+ * so the three can never disagree about a sample.
+ */
+export function encodeLinearRows(
+  picture: LinearRgb,
+  gain: number,
+  half: Uint16Array,
+  bytes: Uint8ClampedArray | null,
+  p0: number,
+  p1: number,
+): void {
+  const { data } = picture;
+  const encode = srgbEncodeTable();
+  const byteOf = bytes ? srgbByteTable() : null;
+  for (let p = p0, i = p0 * 3, o = p0 * 4; p < p1; p += 1, i += 3, o += 4) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    half[i] = toHalf(encodeLinearSample(r, encode));
+    half[i + 1] = toHalf(encodeLinearSample(g, encode));
+    half[i + 2] = toHalf(encodeLinearSample(b, encode));
+    if (bytes && byteOf) {
+      bytes[o] = byteOf[byteStep(r, gain)];
+      bytes[o + 1] = byteOf[byteStep(g, gain)];
+      bytes[o + 2] = byteOf[byteStep(b, gain)];
+      bytes[o + 3] = 255;
+    }
+  }
 }
 
 /**
@@ -312,9 +356,11 @@ export function halfImageFromLinear(picture: LinearRgb): HalfImage {
  * lookup per sample and no float picture is ever built. 128 KB.
  */
 export function halfTableFromLibRaw(table: Float32Array): Uint16Array {
+  if (table === bt709 && halfOfCode) return halfOfCode;
   const encode = srgbEncodeTable();
   const out = new Uint16Array(65536);
   for (let i = 0; i < 65536; i += 1) out[i] = toHalf(encodeLinearSample(table[i], encode));
+  if (table === bt709) halfOfCode = out;
   return out;
 }
 
@@ -338,9 +384,11 @@ export function bytesFromLinear(picture: LinearRgb, gain: number): Uint8ClampedA
 }
 
 function srgbByteTable(): Uint8ClampedArray {
-  const table = new Uint8ClampedArray(ENCODE_STEPS + 1);
-  for (let i = 0; i <= ENCODE_STEPS; i += 1) table[i] = Math.round(fromLinear(i / ENCODE_STEPS, 'srgb') * 255);
-  return table;
+  if (!srgbByte) {
+    srgbByte = new Uint8ClampedArray(ENCODE_STEPS + 1);
+    for (let i = 0; i <= ENCODE_STEPS; i += 1) srgbByte[i] = Math.round(fromLinear(i / ENCODE_STEPS, 'srgb') * 255);
+  }
+  return srgbByte;
 }
 
 function byteStep(linear: number, gain: number): number {
