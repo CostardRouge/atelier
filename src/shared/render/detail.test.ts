@@ -17,6 +17,7 @@ import {
   pixelAt,
   sameDetail,
   sharpenAt,
+  edgeSobel,
   toYcc,
   type DetailImage,
 } from './detail';
@@ -51,9 +52,21 @@ describe('the record', () => {
     expect(sameDetail(null, { ...DEFAULT_DETAIL })).toBe(true);
     expect(sameDetail({ ...DEFAULT_DETAIL, colour: 10 }, { ...DEFAULT_DETAIL, colour: 11 })).toBe(false);
     const read = normaliseDetail({ luminance: 400, colour: -5, sharpen: 'x', sharpenRadius: 9 });
-    expect(read).toEqual({ luminance: 100, colour: 0, defringe: 0, sharpen: 0, sharpenRadius: 3, texture: 0, clarity: 0, dehaze: 0 });
+    // A record written before Detail existed reads back as the plain unsharp mask (100).
+    expect(read).toEqual({
+      luminance: 100,
+      colour: 0,
+      defringe: 0,
+      sharpen: 0,
+      sharpenRadius: 3,
+      sharpenDetail: 100,
+      sharpenMasking: 0,
+      texture: 0,
+      clarity: 0,
+      dehaze: 0,
+    });
     expect(detailOrNull({ sharpenRadius: 2 })).toBeNull();
-    expect(detailOrNull({ sharpen: 30 })).toEqual({ ...DEFAULT_DETAIL, sharpen: 30 });
+    expect(detailOrNull({ sharpen: 30 })).toEqual({ ...DEFAULT_DETAIL, sharpen: 30, sharpenDetail: 100 });
     expect(describeDetail({ ...DEFAULT_DETAIL, luminance: 40, sharpen: 50, sharpenRadius: 1.2 })).toBe('denoise 40 · sharpen 50 @ 1.2 px');
     expect(describeDetail(null)).toBe('');
   });
@@ -164,5 +177,46 @@ describe('sharpen', () => {
     const dark = picture(20, 4, (x) => (x < 10 ? [0, 0, 0] : [1, 1, 1]));
     const dout = applyDetail(dark, (im, x, y) => sharpenAt(im, x, y, { ...terms, sharpenGain: 3 }));
     for (let x = 0; x < 20; x += 1) expect(pixelAt(dout, x, 2)[0]).toBeGreaterThanOrEqual(0);
+  });
+});
+
+describe('sharpen detail and masking', () => {
+  // A hard step with a little grain on both sides.
+  const step = (() => {
+    const w = 24;
+    const h = 12;
+    const data = new Float32Array(w * h * 3);
+    let seed = 7;
+    const rnd = () => ((seed = (seed * 1103515245 + 12345) % 2147483648) / 2147483648 - 0.5) * 0.02;
+    for (let y = 0; y < h; y++) for (let x = 0; x < w; x++) {
+      const v = (x < 12 ? 0.3 : 0.7) + rnd();
+      data.set([v, v, v], (y * w + x) * 3);
+    }
+    return { width: w, height: h, data };
+  })();
+  const at = (settings: Partial<typeof DEFAULT_DETAIL>, x: number, y = 6) =>
+    sharpenAt(step, x, y, detailTerms({ ...DEFAULT_DETAIL, sharpen: 100, sharpenRadius: 1.5, ...settings }, 1))[0];
+
+  it('damps the halo at the edge more than the grain at a low Detail', () => {
+    const plainEdge = at({ sharpenDetail: 100 }, 12) - step.data[(6 * 24 + 12) * 3];
+    const heldEdge = at({ sharpenDetail: 0 }, 12) - step.data[(6 * 24 + 12) * 3];
+    expect(Math.abs(heldEdge)).toBeLessThan(Math.abs(plainEdge) * 0.6);
+    const plainGrain = at({ sharpenDetail: 100 }, 4) - step.data[(6 * 24 + 4) * 3];
+    const heldGrain = at({ sharpenDetail: 0 }, 4) - step.data[(6 * 24 + 4) * 3];
+    expect(Math.abs(heldGrain)).toBeGreaterThan(Math.abs(plainGrain) * 0.6);
+  });
+
+  it('with Masking, leaves the flat grain alone and still sharpens the edge', () => {
+    const flat = (6 * 24 + 4) * 3;
+    expect(at({ sharpenMasking: 60 }, 4)).toBeCloseTo(step.data[flat], 6);
+    expect(Math.abs(at({ sharpenMasking: 60 }, 12) - step.data[(6 * 24 + 12) * 3])).toBeGreaterThan(0.02);
+    expect(edgeSobel(step, 12, 6)).toBeGreaterThan(0.15);
+    expect(edgeSobel(step, 4, 6)).toBeLessThan(0.02);
+  });
+
+  it('is said and compared like the rest', () => {
+    expect(describeDetail({ ...DEFAULT_DETAIL, sharpen: 40, sharpenMasking: 30 })).toBe('sharpen 40 @ 1 px, masking 30');
+    expect(sameDetail({ ...DEFAULT_DETAIL, sharpenMasking: 1 }, DEFAULT_DETAIL)).toBe(false);
+    expect(isDefaultDetail({ ...DEFAULT_DETAIL, sharpenMasking: 50, sharpenDetail: 0 })).toBe(true);
   });
 });

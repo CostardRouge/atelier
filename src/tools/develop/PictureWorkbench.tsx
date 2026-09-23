@@ -363,6 +363,10 @@ export default function PictureWorkbench({
   // past the session: a red wash met on the next visit would be taken for
   // the picture — the rule the mask's own wash follows.
   const [clipping, setClipping] = useState(false);
+  // The sharpen's Masking weight painted on the stage — only while the
+  // Detail tab is where the author is: a white-and-black picture met on
+  // another tab would read as a broken render.
+  const [sharpenMaskView, setSharpenMaskView] = useState(false);
   // The before/after split, as a switch. On by default — it is what the editor
   // has always done — but a divider is a second thing on the picture, and the
   // hours spent on a mask are exactly the hours it is in the way.
@@ -832,6 +836,7 @@ export default function PictureWorkbench({
     paint,
     compare: compareOn,
     clipping,
+    sharpenMask: sharpenMaskView && tab === 'detail',
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
@@ -1764,7 +1769,12 @@ export default function PictureWorkbench({
                 onRemoveLast={() => setRepairDraft((list) => list.slice(0, -1))}
                 onClear={() => setRepairDraft([])}
               />
-              <DetailPanel value={detailDraft} onChange={setDetailDraft} />
+              <DetailPanel
+                value={detailDraft}
+                onChange={setDetailDraft}
+                maskView={sharpenMaskView}
+                onMaskView={setSharpenMaskView}
+              />
             </>
           ) : tab === 'layers' ? (
             <>

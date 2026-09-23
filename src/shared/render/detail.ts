@@ -50,6 +50,19 @@ export interface DetailSettings {
   /** 0.5..3 source pixels. The unsharp mask's Gaussian sigma. */
   sharpenRadius: number;
   /**
+   * 0..100, Lightroom's DETAIL: how much of a strong edge's high-pass is let
+   * through. At 100 the plain unsharp mask — which is what every record
+   * written before the field existed reads back as, so no sharpened picture
+   * changes —; lower, the large differences (a halo's cause) are damped while
+   * the small ones (texture) keep most of their gain. 25 for a new picture.
+   */
+  sharpenDetail: number;
+  /**
+   * 0..100, Lightroom's MASKING: 0 sharpens everywhere; higher, only where
+   * the luma changes steeply — edges, not a sky's noise or a cheek.
+   */
+  sharpenMasking: number;
+  /**
    * −100..100 each: PRESENCE (`presence.ts`, audit item 13) — local contrast
    * at a small scale, at a large one weighted to the midtones, and the haze.
    * They live here because they are what is AROUND a pixel too, and ride the
@@ -67,6 +80,8 @@ export const DEFAULT_DETAIL: Readonly<DetailSettings> = Object.freeze({
   defringe: 0,
   sharpen: 0,
   sharpenRadius: 1,
+  sharpenDetail: 25,
+  sharpenMasking: 0,
   texture: 0,
   clarity: 0,
   dehaze: 0,
@@ -78,6 +93,8 @@ export const DETAIL_RANGES = {
   defringe: { min: 0, max: 100, step: 1 },
   sharpen: { min: 0, max: 100, step: 1 },
   sharpenRadius: { min: 0.5, max: 3, step: 0.1 },
+  sharpenDetail: { min: 0, max: 100, step: 1 },
+  sharpenMasking: { min: 0, max: 100, step: 1 },
   texture: { min: -100, max: 100, step: 1 },
   clarity: { min: -100, max: 100, step: 1 },
   dehaze: { min: -100, max: 100, step: 1 },
@@ -110,11 +127,16 @@ export function sameDetail(a: DetailSettings | null | undefined, b: DetailSettin
     x.defringe === y.defringe &&
     x.sharpen === y.sharpen &&
     x.sharpenRadius === y.sharpenRadius &&
+    x.sharpenDetail === y.sharpenDetail &&
+    x.sharpenMasking === y.sharpenMasking &&
     x.texture === y.texture &&
     x.clarity === y.clarity &&
     x.dehaze === y.dehaze
   );
 }
+
+/** What a record written before Detail existed was sharpened with: the plain unsharp mask. */
+export const LEGACY_SHARPEN_DETAIL = 100;
 
 export function normaliseDetail(raw: unknown): DetailSettings {
   const src = (raw && typeof raw === 'object' ? raw : {}) as Record<string, unknown>;
@@ -126,6 +148,11 @@ export function normaliseDetail(raw: unknown): DetailSettings {
     defringe: clamp(num(src.defringe, 0), r.defringe.min, r.defringe.max),
     sharpen: clamp(num(src.sharpen, 0), r.sharpen.min, r.sharpen.max),
     sharpenRadius: clamp(num(src.sharpenRadius, DEFAULT_DETAIL.sharpenRadius), r.sharpenRadius.min, r.sharpenRadius.max),
+    // ABSENT reads as 100 — the plain unsharp mask every record written
+    // before the field was sharpened with — not the default a new picture
+    // starts from, or every sharpened picture would change under its author.
+    sharpenDetail: clamp(num(src.sharpenDetail, LEGACY_SHARPEN_DETAIL), r.sharpenDetail.min, r.sharpenDetail.max),
+    sharpenMasking: clamp(num(src.sharpenMasking, 0), r.sharpenMasking.min, r.sharpenMasking.max),
     texture: clamp(num(src.texture, 0), r.texture.min, r.texture.max),
     clarity: clamp(num(src.clarity, 0), r.clarity.min, r.clarity.max),
     dehaze: clamp(num(src.dehaze, 0), r.dehaze.min, r.dehaze.max),
@@ -149,11 +176,26 @@ export function describeDetail(d: DetailSettings | null | undefined): string {
   if (d.luminance) parts.push(`denoise ${d.luminance}`);
   if (d.colour) parts.push(`colour noise ${d.colour}`);
   if (d.defringe) parts.push(`defringe ${d.defringe}`);
-  if (d.sharpen) parts.push(`sharpen ${d.sharpen} @ ${d.sharpenRadius} px`);
+  if (d.sharpen) {
+    const extra = [
+      d.sharpenDetail !== DEFAULT_DETAIL.sharpenDetail ? `detail ${d.sharpenDetail}` : '',
+      d.sharpenMasking ? `masking ${d.sharpenMasking}` : '',
+    ].filter(Boolean);
+    parts.push(`sharpen ${d.sharpen} @ ${d.sharpenRadius} px${extra.length ? `, ${extra.join(', ')}` : ''}`);
+  }
   return parts.join(' · ');
 }
 
 // --- the numbers the shaders take ------------------------------------------
+
+/**
+ * Detail 0 damps a high-pass `h` to `h / (1 + 20|h|)`: a 0.1 edge keeps a
+ * third of its gain, a 0.02 grain three quarters. The curve is squared on the
+ * slider so the top half (the plain mask's neighbourhood) moves gently.
+ */
+export const SHARPEN_DAMP = 20;
+/** Masking 100 sharpens fully only where the edge steepness (`edgeSobel`) reaches 0.1. */
+export const SHARPEN_MASK_REACH = 0.1;
 
 /** The largest half-window any pass walks; a GLSL loop needs a constant bound. */
 export const CHROMA_MAX_RADIUS = 12;
@@ -177,6 +219,10 @@ export interface DetailTerms {
   /** The unsharp Gaussian's sigma in pixels, and its half-window ≤ SHARPEN_MAX_RADIUS. */
   sharpenSigma: number;
   sharpenRadius: number;
+  /** How hard a large high-pass is damped (`damp`): 0 = the plain unsharp mask. */
+  sharpenDamp: number;
+  /** The edge steepness at which sharpening is fully on; 0 = everywhere (no mask). */
+  sharpenMask: number;
 }
 
 export function detailTerms(d: DetailSettings | null | undefined, pixelScale = 1): DetailTerms {
@@ -194,7 +240,20 @@ export function detailTerms(d: DetailSettings | null | undefined, pixelScale = 1
   const sharpenGain = (s.sharpen / 100) * 1.5;
   const sharpenSigma = Math.max(0.3, s.sharpenRadius * scale);
   const sharpenRadius = Math.min(SHARPEN_MAX_RADIUS, Math.max(1, Math.ceil(sharpenSigma * 2)));
-  return { chromaSigma, chromaRadius, rangeSigma, spatialSigma, defringe, sharpenGain, sharpenSigma, sharpenRadius };
+  const sharpenDamp = SHARPEN_DAMP * (1 - s.sharpenDetail / 100) ** 2;
+  const sharpenMask = SHARPEN_MASK_REACH * (s.sharpenMasking / 100);
+  return {
+    chromaSigma,
+    chromaRadius,
+    rangeSigma,
+    spatialSigma,
+    defringe,
+    sharpenGain,
+    sharpenSigma,
+    sharpenRadius,
+    sharpenDamp,
+    sharpenMask,
+  };
 }
 
 // --- the maths, per pixel, on an IMAGE ---------------------------------------
@@ -319,7 +378,30 @@ export function defringeAt(img: DetailImage, x: number, y: number, terms: Detail
   return fromYcc(Y, cb * keep, cr * keep);
 }
 
-/** The unsharp mask on luma: a 2D Gaussian blur of the luma, the high-pass gained, RGB following as one ratio. */
+/**
+ * How steep the luma is here, as a Sobel magnitude over 3×3 divided by 8 — a
+ * step of height `h` reads `h / 2` on its edge. What Masking thresholds.
+ */
+export function edgeSobel(img: DetailImage, x: number, y: number): number {
+  const l = (dx: number, dy: number) => {
+    const [r, g, b] = pixelAt(img, x + dx, y + dy);
+    return lumaOf(r, g, b);
+  };
+  const gx = (l(1, -1) + 2 * l(1, 0) + l(1, 1) - l(-1, -1) - 2 * l(-1, 0) - l(-1, 1)) / 8;
+  const gy = (l(-1, 1) + 2 * l(0, 1) + l(1, 1) - l(-1, -1) - 2 * l(0, -1) - l(1, -1)) / 8;
+  return Math.hypot(gx, gy);
+}
+
+/** The Masking weight of a pixel: 1 everywhere with no mask, else rising to 1 at the edge steepness asked for. */
+export function sharpenMaskAt(img: DetailImage, x: number, y: number, terms: DetailTerms): number {
+  if (terms.sharpenMask <= 0) return 1;
+  return smoothstep(0.25 * terms.sharpenMask, terms.sharpenMask, edgeSobel(img, x, y));
+}
+
+/**
+ * The unsharp mask on luma: a 2D Gaussian blur of the luma, the high-pass
+ * damped by Detail and weighted by Masking, gained, RGB following as one ratio.
+ */
 export function sharpenAt(img: DetailImage, x: number, y: number, terms: DetailTerms): [number, number, number] {
   const [r, g, b] = pixelAt(img, x, y);
   const Y = lumaOf(r, g, b);
@@ -335,7 +417,9 @@ export function sharpenAt(img: DetailImage, x: number, y: number, terms: DetailT
     }
   }
   const blurred = acc / sum;
-  const out = Math.max(0, Y + terms.sharpenGain * (Y - blurred));
+  const h = Y - blurred;
+  const damped = h / (1 + terms.sharpenDamp * Math.abs(h));
+  const out = Math.max(0, Y + terms.sharpenGain * damped * sharpenMaskAt(img, x, y, terms));
   return scaleToLuma(r, g, b, Y, out);
 }
 

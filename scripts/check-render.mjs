@@ -678,7 +678,9 @@ const out = await page.evaluate(async () => {
       dg.fillRect(x, y, 1, 1);
     }
     const img = { width: DW, height: DH, data: rgb };
-    const settings = { ...dm.DEFAULT_DETAIL, luminance: 60, colour: 50, defringe: 100, sharpen: 80, sharpenRadius: 1.2 };
+    // Detail at 25 and Masking at 40, so the sharpen row holds the damping and
+    // the edge mask as well as the plain unsharp mask.
+    const settings = { ...dm.DEFAULT_DETAIL, luminance: 60, colour: 50, defringe: 100, sharpen: 80, sharpenRadius: 1.2, sharpenDetail: 25, sharpenMasking: 40 };
     const terms = dm.detailTerms(settings, 1);
     const through = (passes) => {
       const cv = document.createElement('canvas');
@@ -710,6 +712,11 @@ const out = await page.evaluate(async () => {
     rows.denoise = compare(through([dp.makeBilateralPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
     rows.defringe = compare(through([dp.makeDefringePass(terms)]), dm.applyDetail(img, (i, x, y) => dm.defringeAt(i, x, y, terms)));
     rows.sharpen = compare(through([dp.makeSharpenPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
+    // The Masking view: the weight painted as grey, against sharpenMaskAt.
+    rows.sharpenMask = compare(
+      through([dp.makeSharpenPass(terms, true)]),
+      dm.applyDetail(img, (i, x, y) => { const m = dm.sharpenMaskAt(i, x, y, terms); return [m, m, m]; }),
+    );
     // And that each did something: the pure output differs from the source.
     const moved = (pure) => { let m = 0; for (let i = 0; i < rgb.length; i++) m = Math.max(m, Math.abs(pure.data[i] - rgb[i])); return m; };
     rows.movedDenoise = moved(dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
@@ -1475,11 +1482,11 @@ const hs = out.half;
 
 const det = out.detail;
 console.log('\n  detail, against detail.ts at 96 probes of a noisy edge:');
-for (const name of ['chroma', 'denoise', 'defringe', 'sharpen']) {
+for (const name of ['chroma', 'denoise', 'defringe', 'sharpen', 'sharpenMask']) {
   const worst = det[name];
   const ok = worst <= 2;
   if (!ok) bad += 1;
-  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(9)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed 2)`);
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(11)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed 2)`);
 }
 if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
   bad += 1;

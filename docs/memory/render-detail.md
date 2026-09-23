@@ -54,6 +54,27 @@ what is NEXT TO a pixel rather than what a pixel is — written through like
 the lens, reaching the stage, the crop stage, the thumbnail and the export,
 and named in the facts corner.
 
+## Sharpen has Detail and Masking, and a mask view (2026-09-23, audit item 21)
+
+Two more fields on `DetailSettings`, read by the same sharpen pass and its
+twin `sharpenAt` (the gate holds both, plus the mask view, at 0 codes):
+**Detail** 0..100 damps the high-pass `h → h / (1 + k|h|)`, `k = 20·(1 −
+d/100)²` — a large difference (a halo's cause) loses most, a grain keeps
+most; **Masking** 0..100 weights the move by `smoothstep(0.25t, t, e)`, `e`
+a 3×3 Sobel magnitude on luma ÷ 8 (a step of `h` reads `h/2`), `t = 0.1 ×
+masking/100`; 0 is no mask. **Rule for a new field with a new default**:
+ABSENT reads as the value that reproduces what the record already rendered
+(`LEGACY_SHARPEN_DETAIL = 100`, the plain mask), while `DEFAULT_DETAIL` gives
+a NEW picture Lightroom's 25 — otherwise every sharpened picture changes under
+its author on the next open. Neither field alone is an operation (like the
+radius), so they snap back while Amount is 0. The mask view is a third
+argument of `detailPasses` (`showSharpenMask`), threaded as `graderFrom`'s
+last parameter beside `clip` and asked for only by the stage and the loupe,
+and only while the Detail tab is open (a black-and-white picture met on
+another tab reads as a broken render). Verified headless on a grainy step:
+the view black on both flats and white on the edge, the Adjust tab back to
+the picture, a legacy `{ sharpen: 50 }` record reading Detail 100.
+
 ## Presence — texture, clarity, dehaze — rides the same record and passes (2026-09-23, audit item 13)
 
 `presence.ts` (pure twin, 12 specs) + `presence-pass.ts`, three more fields

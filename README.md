@@ -1187,6 +1187,14 @@ ring to heal it, or **Heal all**; a proposal is never a patch until you take
 it. Patches are numbers on the roll, never pixels: they follow the crop, the
 thumbnail and the full-size export. Under Repair, the same tab holds
 **Noise**, **Fringing** and **Sharpen**, judged honestly under the loupe.
+Sharpen has Lightroom's four: **Amount**, **Radius**, **Detail** (how much of
+a strong edge is sharpened — held back low, where a halo is born, while fine
+texture keeps its gain; 100 is the plain unsharp mask, and a picture
+sharpened before the slider existed reads 100 so it does not change) and
+**Masking** (sharpen only where the picture changes steeply, so a sky's noise
+and a cheek are left alone). **Show the mask** paints the picture white where
+it is sharpened and black where it is not, on the Detail tab only; it never
+reaches a thumbnail or an export.
 
 **Which file.** A chip above the photograph says what it is developed from
 (`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the list of the

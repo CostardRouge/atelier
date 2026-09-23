@@ -82,6 +82,8 @@ interface GraderRecord {
   flash: BrushRaster | null;
   /** The clipping view is painted over the picture. */
   clip: boolean;
+  /** The sharpen's Masking weight is painted instead of the picture. */
+  sharpenMask: boolean;
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
@@ -148,6 +150,8 @@ function graderFrom(
    * nothing and gets the picture.
    */
   clip = false,
+  /** Paint the sharpen's Masking weight (`makeSharpenPass`) — a way of LOOKING, like `clip`. */
+  sharpenMask = false,
 ): HeldGrader | null {
     const overlayOf = overlay?.layer ?? null;
     const overlayExcept = overlayOf ? exceptRaster(overlayOf, rasters) : null;
@@ -165,6 +169,7 @@ function graderFrom(
       Boolean(overlayExcept) ||
       Boolean(flash) ||
       clip ||
+      sharpenMask ||
       !isDefaultDetail(detail) ||
       patches.length > 0 ||
       // A texture with nothing but grain in it is still a render: the node is
@@ -184,6 +189,7 @@ function graderFrom(
       sameOverlay(cur.overlay, overlay) &&
       cur.flash === flash &&
       cur.clip === clip &&
+      cur.sharpenMask === sharpenMask &&
       cur.rasters === rasters &&
       sameGeometry(cur.geometry, geometry) &&
       sameLayers(cur.layers, stack) &&
@@ -206,7 +212,7 @@ function graderFrom(
     // Repair FIRST, on the source: a copied pixel then takes the same
     // develop, look, warp and layer as its neighbours, and a denoise sees a
     // repaired picture.
-    const { pre: detailPre, post } = detailPasses(detail, scale);
+    const { pre: detailPre, post } = detailPasses(detail, scale, sharpenMask);
     const repairPass = makeRepairPass(patches, ar);
     // The camera's own shading goes FIRST of all, ahead of the repair: a
     // copied pixel is then copied from data the lens has been taken out of,
@@ -243,6 +249,7 @@ function graderFrom(
       cur.overlay = overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null;
       cur.flash = flash;
       cur.clip = clip;
+      cur.sharpenMask = sharpenMask;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
@@ -264,6 +271,7 @@ function graderFrom(
       overlay: overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null,
       flash,
       clip,
+      sharpenMask,
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
@@ -466,7 +474,14 @@ export function useDevelopPicture({
   film = null,
   veil = null,
   clipping = false,
+  sharpenMask = false,
 }: {
+  /**
+   * Paint where the sharpen reaches (its Masking weight) instead of the
+   * picture — Lightroom's Alt-drag on Masking. A way of LOOKING: never
+   * delivered, never measured.
+   */
+  sharpenMask?: boolean;
   /**
    * Paint what is clipped over the picture — red where a channel has gone to
    * white, blue where every channel has gone to black (`render/clipping.ts`).
@@ -782,8 +797,9 @@ export function useDevelopPicture({
       gain: GainField | null,
       flash: BrushRaster | null = null,
       clip = false,
+      maskView = false,
     ): HeldGrader | null =>
-      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain, flash, clip),
+      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain, flash, clip, maskView),
     [],
   );
   useEffect(
@@ -822,7 +838,7 @@ export function useDevelopPicture({
     if (!ctx) return;
     const grader = holding
       ? null
-      : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping);
+      : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping, sharpenMask);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -863,6 +879,7 @@ export function useDevelopPicture({
     overlay,
     flashMask,
     clipping,
+    sharpenMask,
     subjectMasks,
     detail,
     pixelScale,
@@ -1299,7 +1316,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, null, clipping);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, null, clipping, sharpenMask);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1341,6 +1358,7 @@ export function useDevelopPicture({
     shownWipe,
     pixelView,
     clipping,
+    sharpenMask,
     loupeRect.x,
     loupeRect.y,
     loupeRect.width,
