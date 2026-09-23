@@ -37,6 +37,11 @@ function store(sections: readonly PictureSection[]) {
  * the marked pictures or to the others. Lightroom's Copy Settings dialog, as
  * one sheet — the per-tab Apply-to verbs stay for the one-section gesture.
  *
+ * **Reset** is the same picker read the other way (audit item 7): the ticked
+ * sections of THIS picture back to as shot — the look and the layers had no
+ * reset at all, and the develop's ↺ still resets the numbers alone. No
+ * confirmation: it is one undo step, like every write of the roll.
+ *
  * The ticks are remembered in this browser, a convenience like a remembered
  * tab. Each row says whether THIS picture has anything in that section, so a
  * copy of an untouched section reads as what it is: a reset of the others.
@@ -49,6 +54,7 @@ export default function SettingsSheet({
   onCopy,
   onPaste,
   onApply,
+  onReset,
   onClose,
 }: {
   picture: RollPicture;
@@ -60,6 +66,8 @@ export default function SettingsSheet({
   onCopy: (sections: PictureSection[]) => void;
   onPaste: () => void;
   onApply: (ids: readonly string[], sections: PictureSection[]) => void;
+  /** Put the ticked sections of THIS picture back to as shot — one undo step away. */
+  onReset: (sections: PictureSection[]) => void;
   onClose: () => void;
 }) {
   const [ticked, setTicked] = useState<PictureSection[]>(readStored);
@@ -169,6 +177,17 @@ export default function SettingsSheet({
         </p>
 
         <div className="flex flex-wrap items-center gap-2">
+          <Button
+            size="sm"
+            variant="ghost"
+            icon={Icons.reset}
+            disabled={none || !ticked.some((id) => edited.has(id))}
+            onClick={act(() => onReset(ticked))}
+            title="Reset — the ticked sections of this picture back to as shot (⌘Z brings them back)"
+          >
+            Reset
+          </Button>
+          <span className="flex-1" />
           <Button size="sm" icon={Icons.copy} disabled={none} onClick={act(() => onCopy(ticked))} title="Copy ⌘⇧C — hold these sections for another picture, in this session">
             Copy
           </Button>

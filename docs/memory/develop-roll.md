@@ -402,7 +402,10 @@ shared block. Rules a later phase must keep:
   that is as shot at the source RESETS it on the targets — said in the sheet,
   and each row marks `edited` / `as shot`. The per-tab Apply-to verbs stay for
   the one-section gesture. ⌘⇧C replaced a test pinning it to nothing: ⇧C alone
-  is still crop-to-view.
+  is still crop-to-view. **Reset this picture** (item 7) is the same sheet read
+  the other way: the ticked sections back to as shot, NO confirmation — it is
+  one undo step like every roll write (measured: reset all, ⌘Z restores the
+  develop and the look); the well's ↺ still resets the develop numbers alone.
 - **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
   `RollPicture.title` / `caption`, stored trimmed and absent when empty
   (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so

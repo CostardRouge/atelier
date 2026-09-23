@@ -81,6 +81,7 @@ import {
   applySections,
   copiedSettings,
   copySettings,
+  resetSections,
   subscribeCopiedSettings,
   type PictureSection,
 } from '../../shared/develop/picture-sections';
@@ -667,6 +668,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     setNotice(`pasted ${sectionNames(held.sections)} from ${held.from.ref.name}`);
     return true;
   }, [update]);
+  const resetSectionsOf = useCallback(
+    (sections: PictureSection[]) => {
+      const id = openIdRef.current;
+      if (!id) return;
+      update((r) => resetSections(r, id, sections));
+      setNotice(`reset ${sectionNames(sections)} — ⌘Z brings them back`);
+    },
+    [update],
+  );
   const applySectionsTo = useCallback(
     (ids: readonly string[], sections: PictureSection[]) => {
       const source = latest.current.pictures.find((x) => x.id === openIdRef.current);
@@ -1181,6 +1191,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           onCopy={copySectionsOf}
           onPaste={() => void pasteSections()}
           onApply={applySectionsTo}
+          onReset={resetSectionsOf}
           onClose={() => setSettingsOpen(false)}
         />
       )}
