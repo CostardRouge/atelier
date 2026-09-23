@@ -16,6 +16,7 @@
  * holding the `File` keeps it, and the next reader fetches again.
  */
 
+import { deviceClass } from '../lib/device-class';
 import { heldCeiling, toEvict, type HeldEntry } from './held-budget';
 
 const held = new Map<string, { file: File; lastUsed: number }>();
@@ -31,7 +32,7 @@ function changed(): void {
   for (const fn of listeners) fn();
 }
 
-/** The ceiling this device gets — from the browser's own word on its memory, else the default. */
+/** The ceiling this device gets — a phone's own, else from the browser's word on its memory, else the default. */
 let ceilingOverride: number | null = null;
 export function heldCeilingBytes(): number {
   if (ceilingOverride !== null) return ceilingOverride;
@@ -39,7 +40,7 @@ export function heldCeilingBytes(): number {
     typeof navigator !== 'undefined' && 'deviceMemory' in navigator
       ? (navigator as { deviceMemory?: number }).deviceMemory
       : undefined;
-  return heldCeiling(memory);
+  return heldCeiling(memory, deviceClass());
 }
 
 /** For a spec, or a diagnostic: a ceiling of one's own; null returns to the device's. */

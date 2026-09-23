@@ -137,6 +137,36 @@ function kindOf(parts: AssetParts): AssetKind {
   return 'other';
 }
 
+/** The type a capture's file is known by on screen: its extension upper-cased, `JPEG` for both spellings. */
+export function captureFileType(name: string): string {
+  const { ext } = splitName(name);
+  if (ext === 'jpg' || ext === 'jpeg') return 'JPEG';
+  return ext ? ext.toUpperCase() : 'file';
+}
+
+/**
+ * The types of the capture's OTHER image files — the `DNG` beside a DJI's
+ * JPEG, the `ARW` beside a Sony's JPEG — once each, in the order they came.
+ *
+ * `buildAssets` files a RAW that shares its base name with a JPEG as a
+ * SIBLING of the JPEG (the half every tool draws), and the Library listed
+ * the JPEG alone: a RAW added beside its twin changed nothing on screen and
+ * read as ignored (2026-09-23). This is what the row says so it cannot.
+ */
+export function siblingTypes(parts: AssetParts): string[] {
+  const out: string[] = [];
+  for (const file of parts.siblings ?? []) {
+    const type = captureFileType(file.name);
+    if (!out.includes(type)) out.push(type);
+  }
+  return out;
+}
+
+/** True when one of the capture's other files is a camera RAW. */
+export function hasRawSibling(parts: AssetParts): boolean {
+  return (parts.siblings ?? []).some((f) => isRawImage(f.name));
+}
+
 /** Every file of an asset, the siblings included — what leaves when it does. */
 export function assetFiles(parts: AssetParts): File[] {
   return [parts.video, parts.srt, parts.image, ...(parts.siblings ?? [])].filter((f): f is File => !!f);

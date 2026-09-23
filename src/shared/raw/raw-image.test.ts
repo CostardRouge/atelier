@@ -3,12 +3,21 @@ import { fromHalf } from '../render/half-image';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   autoBrightGain,
+  autoBrightGainFromLibRaw,
   boxDownscale,
+  boxLinearRows,
+  boxedSize,
+  bt709Table,
   bt709ToLinear,
+  byteTableFromLibRaw,
   bytesFromLinear,
+  encodeLinearRows,
   halfImageFromLinear,
+  halfTableFromLibRaw,
   linearFromLibRaw,
   linearToBt709,
+  packBytePixels,
+  packHalfSamples,
   rawBoxFactor,
   type LinearRgb,
 } from './raw-image';
@@ -110,5 +119,92 @@ describe('what reaches the GPU and the 2D canvas', () => {
     expect(bytes[4]).toBe(255);
     expect(bytes[8]).toBe(Math.round(fromLinear(0.1, 'srgb') * 255));
     expect(bytes[3]).toBe(255);
+  });
+});
+
+describe('the fused paths agree with the two-step ones to the bit', () => {
+  // A 16-bit decode with every kind of value in it: a ramp, noise, a clipped
+  // patch — 9×7 so a box factor of 2 drops an edge row and column.
+  const W = 9;
+  const H = 7;
+  const rgb16 = new Uint16Array(W * H * 3);
+  for (let i = 0; i < rgb16.length; i += 1) {
+    const seed = (i * 2654435761) >>> 0;
+    rgb16[i] = i % 11 === 0 ? 65535 : i % 7 === 0 ? 0 : (seed >>> 16) & 0xffff;
+  }
+  const table = bt709Table();
+
+  it('boxLinearRows writes what boxDownscale(linearFromLibRaw()) computes, band by band', () => {
+    for (const factor of [2, 3]) {
+      const expected = boxDownscale(linearFromLibRaw(rgb16, W, H), factor);
+      const { width, height } = boxedSize(W, H, factor);
+      expect({ width, height }).toEqual({ width: expected.width, height: expected.height });
+      const out = new Float32Array(width * height * 3);
+      // Two bands, an odd split, so a row boundary inside the picture is exercised.
+      boxLinearRows(rgb16, W, factor, table, out, width, 0, 1);
+      boxLinearRows(rgb16, W, factor, table, out, width, 1, height);
+      expect(Array.from(out)).toEqual(Array.from(expected.data));
+    }
+  });
+
+  it('the whole-picture tables give the same half-floats and bytes as the linear picture would', () => {
+    const linear = linearFromLibRaw(rgb16, W, H, table);
+    const half = halfImageFromLinear(linear);
+    const halfTable = halfTableFromLibRaw(table);
+    const packed = new Uint16Array(rgb16.length);
+    packHalfSamples(rgb16, halfTable, packed, 0, 10);
+    packHalfSamples(rgb16, halfTable, packed, 10, rgb16.length);
+    expect(Array.from(packed)).toEqual(Array.from(half.data));
+
+    const gain = autoBrightGain(linear, 0.01, 1);
+    expect(autoBrightGainFromLibRaw(rgb16, W, H, table, 0.01, 1)).toBe(gain);
+    expect(autoBrightGainFromLibRaw(rgb16, W, H, table)).toBe(autoBrightGain(linear));
+    const bytes = bytesFromLinear(linear, gain);
+    const byteTable = byteTableFromLibRaw(table, gain);
+    const out = new Uint8ClampedArray(W * H * 4);
+    packBytePixels(rgb16, byteTable, out, 0, 20);
+    packBytePixels(rgb16, byteTable, out, 20, W * H);
+    expect(Array.from(out)).toEqual(Array.from(bytes));
+  });
+
+  it('halfImageFromLinear still encodes every sample as the packed float picture did', () => {
+    // The old path: an encoded Float32 picture, then packed. Pinned so the
+    // fused encode cannot drift from it by a rounding step.
+    const linear = linearFromLibRaw(rgb16, W, H, table);
+    const encoded = new Float32Array(linear.data.length);
+    for (let i = 0; i < encoded.length; i += 1) {
+      const v = linear.data[i];
+      encoded[i] = v <= 0 ? 0 : v >= 1 ? 1 : fromLinear(v, 'srgb');
+    }
+    const half = halfImageFromLinear(linear);
+    for (let i = 0; i < encoded.length; i += 1) {
+      expect(Math.abs(fromHalf(half.data[i]) - encoded[i])).toBeLessThan(0.002);
+    }
+  });
+});
+
+describe('the fused encode over a linear picture', () => {
+  it('writes the very half-floats and bytes the two single-output functions do, band by band', () => {
+    const w = 7;
+    const h = 5;
+    const data = new Float32Array(w * h * 3);
+    for (let i = 0; i < data.length; i += 1) data[i] = ((i * 37) % 101) / 80; // 0..1.26, headroom included
+    const linear = { width: w, height: h, data };
+    const gain = 1.37;
+    const half = new Uint16Array(data.length);
+    const bytes = new Uint8ClampedArray(w * h * 4);
+    encodeLinearRows(linear, gain, half, bytes, 0, 9);
+    encodeLinearRows(linear, gain, half, bytes, 9, w * h);
+    expect(Array.from(half)).toEqual(Array.from(halfImageFromLinear(linear).data));
+    expect(Array.from(bytes)).toEqual(Array.from(bytesFromLinear(linear, gain)));
+    // Asked for the half-floats alone, it touches no bytes.
+    const halfOnly = new Uint16Array(data.length);
+    encodeLinearRows(linear, gain, halfOnly, null, 0, w * h);
+    expect(Array.from(halfOnly)).toEqual(Array.from(half));
+  });
+
+  it('shares its tables between calls and never hands out a different one', () => {
+    expect(bt709Table()).toBe(bt709Table());
+    expect(halfTableFromLibRaw(bt709Table())).toBe(halfTableFromLibRaw(bt709Table()));
   });
 });

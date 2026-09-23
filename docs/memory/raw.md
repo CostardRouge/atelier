@@ -48,6 +48,13 @@ rung stands up, which is the same defect with the signs swapped.
 
 **One instance, one decode at a time**, serialised on a promise chain as
 ffmpeg's runs are, and rebuilt after a refusal (its heap may be mid-file).
+**Since 2026-09-23 what the decode COSTS is `device-memory.md`'s**: the plane
+is converted in bands with nothing full-size in between (the first version
+built three Float32 pictures and an iPhone reloaded on every DNG), a phone
+decodes to a long edge per purpose and lets the worker go on rest and on a
+hidden tab, and a decode is held for the session at its size. `raw-image.ts`'s
+fused paths are bit-identical to the two-step ones, pinned by spec — the
+numbers in this file did not move.
 
 ## The picture the GPU takes (2026-09-20)
 

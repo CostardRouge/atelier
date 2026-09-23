@@ -148,10 +148,13 @@ over one instant, so the deck is drawn **settled**: every element where and how
 it comes to rest, no entrances half-played. Export writes JPEGs through the
 same variant rows — reframed, capped, overlays in or out
 (`IMG_8801-4x5-1080p.jpg`) — with the cadence and speed controls simply gone.
-A RAW file the browser cannot decode is kept in the library and says so in
-words, pointing at the JPEG or TIFF your developer can produce; where a RAW
-and its sidecar JPEG share a name, the pair is one photo and the decodable
-half is the one you see, whichever the folder happened to list first.
+A RAW file is kept in the library with the render its camera wrote inside it
+as its cover and its sensor's pixels as its size; one that carries no render
+says so in words, pointing at the JPEG or TIFF your developer can produce.
+Where a RAW and its sidecar JPEG share a name, the pair is one photo and the
+decodable half is the one you see, whichever the folder happened to list first. The row
+still names both — `JPEG + DNG`, and a `+DNG` chip on the cover — so a RAW
+added beside its JPEG is visibly there, and Develop opens it as the sensor.
 
 **Trim.** The scrub bar carries two handles: everything before the in point
 and after the out point greys out, and the playhead can only travel between
@@ -1108,7 +1111,14 @@ only where the file carries it). A file that is not here is fetched from its
 instance and held for the session, its weight said before the click; a DNG
 beside a JPEG in a folder is the sensor with no fetch at all. The choice is
 saved on the picture, so another device shows the same one, and the export
-follows it.
+follows it. **On a phone or a tablet** the sensor is decoded to what the
+device can hold — 2560 px on the stage, 4096 px in an export, and the export
+says when a picture left under its sensor's pixels — the decoder is let go
+between pictures, and a picture you come back to is not decoded twice; the
+loupe, which decodes the file whole on a computer, says *as close as this
+device goes* instead. A browser cannot ask a phone how much memory a tab may
+take, so the rule is coarse: iPhone, iPad and Android count as phones, and
+`localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
@@ -1129,8 +1139,9 @@ for this run**, delivers everything from what is already here — a RAW base is
 set aside and the run says so — and is never remembered on the roll. A RAW
 original is reached only through the render inside it, measured first. Fetched
 originals are kept for the session only, up to a ceiling sized from your
-device (a quarter of its memory, between 256 MB and 1 GB); past it the ones you
-used least recently are let go and fetched again when a picture needs them.
+device (a quarter of its memory, between 256 MB and 1 GB; 192 MB on a phone
+or a tablet); past it the ones you used least recently are let go and fetched
+again when a picture needs them.
 After a run whose
 pictures came from an instance, **Send N files to …** uploads them home into
 that Winnow's finals, each linked to its own capture — the same panel the

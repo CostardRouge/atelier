@@ -29,6 +29,8 @@ import { layerPasses } from './layer-render';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto, decodePhotoSource, fitPhotoForRender } from '../media/photo-frame';
 import { decodeRaw } from '../raw/raw-decoder';
+import { rawDecodeCap, rawDecodeEdge } from '../raw/raw-budget';
+import { deviceClass } from '../lib/device-class';
 import { isDefaultDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
 import type { Patch } from '../render/repair';
@@ -126,6 +128,14 @@ export interface RollRendered {
    * resampled away.
    */
   gradedAt: PictureSize;
+  /**
+   * On the RAW path: the sensor's own pixels, and which limit the decode ran
+   * into when `source` is smaller than them — the GPU's edge cap, or a
+   * phone's own ceiling (`raw-budget.ts`). Null for a render, and for a RAW
+   * decoded to what was asked.
+   */
+  sensor: PictureSize | null;
+  capped: 'device' | 'gpu' | null;
 }
 
 /** A measured picture: the pixels, and whether they are a RAW's own render. */
@@ -222,16 +232,31 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
  * both come from `deliver`.
  */
 async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRenderOptions): Promise<RollRendered> {
+  const klass = deviceClass();
+  const gpuMax = maxRenderSize();
   const decoded = await decodeRaw(raw.file, {
     minLongEdge: opts.longEdge ? opts.longEdge * 2 : null,
     gain: raw.gain,
-    maxEdge: maxRenderSize(),
+    // The GPU's cap and, on a phone, the device's own export ceiling
+    // (`raw-budget.ts`): a whole sensor is what a phone's tab dies of.
+    maxEdge: rawDecodeEdge('export', klass, gpuMax),
     // Under the run's own task, which names the picture; the run's cancel
     // drops this decode's turn.
     signal: opts.signal,
     quiet: true,
+    // The 2D as-shot picture is the stage's; a delivery grades the half image
+    // and never draws it — four bytes a pixel not made.
+    withBytes: false,
   });
   const source = { width: decoded.width, height: decoded.height };
+  const sensor = { width: decoded.sourceWidth, height: decoded.sourceHeight };
+  // Fewer pixels than the sensor has, and not because the delivery asked for
+  // fewer (a long edge the half still covers twice over): one of the two
+  // limits was met, and the run says which.
+  const sensorEdge = Math.max(sensor.width, sensor.height);
+  const decodedEdge = Math.max(source.width, source.height);
+  const askedLess = Boolean(opts.longEdge) && decodedEdge >= (opts.longEdge ?? 0);
+  const capped = decodedEdge < sensorEdge && !askedLess ? rawDecodeCap(sensorEdge, 'export', klass, gpuMax) : null;
   const ar = source.width / source.height;
   const stack = drawingLayers(opts.layers);
   // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
@@ -253,7 +278,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
     // read by `deliver` after the darker has drawn, and a grader's canvas is
     // only its LAST render.
     const darker = darkGrader ? copyOf(darkGrader.render(decoded.half)) : null;
-    return await deliver(grader.render(decoded.half), source, source, opts, darker);
+    return { ...(await deliver(grader.render(decoded.half), source, source, opts, darker)), sensor, capped };
   } finally {
     grader.dispose();
     darkGrader?.dispose();
@@ -332,10 +357,12 @@ async function deliver(
       source,
       gradedAt,
       hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
+      sensor: null,
+      capped: null,
     };
   }
   const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
   if (!encoded) throw new Error('The browser could not encode this picture.');
   const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
-  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null };
+  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null, sensor: null, capped: null };
 }

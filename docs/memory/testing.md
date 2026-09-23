@@ -42,6 +42,26 @@ path reads `webkitGetAsEntry`, which a hand-built `DataTransfer` does not
 have; patch `HTMLInputElement.prototype.click` instead. Inside the editor, →
 steps to the next picture once the rail is out of the way.
 
+**A RAW LibRaw really DECODES can be built in the page too (2026-09-23)** —
+for the sensor rung, the loupe and the export, where the probe's empty
+sensor plane is not enough. IFD0 a 16 × 9 uncompressed RGB thumbnail with
+the DNG identity (`DNGVersion` 1.4.0.0, `UniqueCameraModel`, `ColorMatrix1`
+as nine SRATIONALs — sRGB's inverse ×10000 does —, `AsShotNeutral` 1/1 ×3,
+`CalibrationIlluminant1` 21) and `SubIFDs` (330) to two IFDs: the SENSOR
+(`NewSubfileType` 0, 16 bits, compression 1, photometric 32803,
+`CFARepeatPatternDim` 2×2, `CFAPattern` 0 1 1 2, `CFAPlaneColor`,
+`CFALayout` 1, `BlackLevel` 4096, `WhiteLevel` 65472, one strip of real
+`Uint16` samples — a gradient with a clipped patch is enough) and the
+RENDER (compression 7, photometric 6, a canvas JPEG). libraw-wasm 1.6 opens
+it and hands back 16-bit RGB; 6000 × 4000 is 48 MB and decodes at half in a
+couple of seconds under SwiftShader. Force the device class through
+`localStorage['atelier.device']` in `addInitScript` to drive the phone path;
+`page.workers().length` is how the decoder's lifecycle is read; a
+`showDirectoryPicker` stub that keeps the blobs catches the export. The
+rung menu is the button `What this picture is developed from`, its items
+are named `DJI_0101.DNG → Gain` and the like, and the chip is uppercase on
+screen — match `/16-bit/i`, not the source string.
+
 ## The deployed pair is NOT required: two localhosts are same-site (2026-09-07)
 
 **Fact, measured.** `docs/roadtrip-persistence.md` §10 and several memory entries said the remote-document flow could only be exercised on `atelier.steeve.website` ↔ `winnow.steeve.website`, because `localhost` is cross-site to the deployed Winnow. True of THAT pair, and it hid the obvious: run **both** locally and the problem disappears. A cookie is scoped to a HOST, not an origin, so `127.0.0.1:5199` → `127.0.0.1:3000` is cross-origin but same-site, and Winnow's session cookie travels. Verified: `POST /api/auth/login` from the Atelier page, then `credentials: 'include'` on every bucket call, all the way to a 201.

@@ -593,6 +593,14 @@ function DeckSlide({
 
   // The thumbnail, under everything. `aria-hidden`: it is the same picture as
   // the layer above, and a screen reader should hear about it once.
+  //
+  // Under ANOTHER file of the capture it is not the same picture: the still
+  // is the item's own cover, and a DNG's 16:9 render drawn over a square
+  // JPEG's cover left the cover showing above and below it — two pictures at
+  // once (2026-09-23). So under an override the still is only a placeholder:
+  // it holds the slot while the file loads, then fades out as the file fades
+  // in. Under the item's own file the frames match and it stays, covered.
+  const stillLeaves = Boolean(override) && loaded;
   const under = item.still ? (
     <img
       // A new element per round, or the browser may ignore the same `src`
@@ -605,7 +613,7 @@ function DeckSlide({
       draggable={false}
       onError={still.onError}
       style={framed}
-      className={fill}
+      className={`${fill} transition-opacity duration-200 ${stillLeaves ? 'opacity-0' : 'opacity-100'}`}
     />
   ) : null;
 

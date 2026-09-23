@@ -28,6 +28,8 @@ import type { BrushRaster } from '../render/brush-raster';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
+import { rawDecodeEdge } from '../raw/raw-budget';
+import { deviceClass } from '../lib/device-class';
 import { isAbortError } from '../sources/fetch-options';
 import { startTask } from '../tasks/tasks';
 import { isDefaultDetail, sameDetail, type DetailSettings } from '../render/detail';
@@ -55,6 +57,13 @@ function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
   return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
 }
 
+
+/**
+ * Where the loupe is: `same` when the file holds no more than the stage
+ * already shows, `capped` when THIS DEVICE holds no more — a phone's RAW is
+ * decoded to its ceiling and never whole (`raw-budget.ts`).
+ */
+export type LoupeState = 'idle' | 'decoding' | 'ready' | 'same' | 'capped' | 'failed' | 'cancelled';
 
 /** What one grader was built from, held to compare the next ask by value. */
 interface GraderRecord {
@@ -330,7 +339,7 @@ export interface DevelopPicture {
     canvasRef: RefObject<HTMLCanvasElement>;
     /** The view is magnified past the stage and the loupe is on. */
     active: boolean;
-    state: 'idle' | 'decoding' | 'ready' | 'same' | 'failed' | 'cancelled';
+    state: LoupeState;
     /** The decoded file's long edge, once known. */
     longEdge: number | null;
   };
@@ -566,15 +575,21 @@ export function useDevelopPicture({
       ? decodeRaw(rawFile, {
           budgetPixels: MAX_STAGE_PIXELS,
           gain: rawGainRef.current,
-          maxEdge: maxRenderSize(),
+          // The GPU's cap and, on a phone, the device's own ceiling
+          // (`raw-budget.ts`): a RAW is the one source decoded in the tab's
+          // own memory, and a phone's tab was killed for the whole of it.
+          maxEdge: rawDecodeEdge('stage', deviceClass(), maxRenderSize()),
           signal: controller.signal,
           scope: taskScopeRef.current,
+          // Held for the session at this size: a picture stepped back to is
+          // not decoded, nor spiked for, twice.
+          hold: true,
         }).then((d) => {
           // The as-shot picture for every 2D draw; the half-floats for the GPU.
           const canvas = document.createElement('canvas');
           canvas.width = d.width;
           canvas.height = d.height;
-          canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
+          if (d.bytes) canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
           if (!cancelled) {
             onRawDecodedRef.current?.({ gain: d.gain, width: d.width, height: d.height, sourceWidth: d.sourceWidth, sourceHeight: d.sourceHeight, halved: d.halved, meta: d.meta });
           }
@@ -992,7 +1007,7 @@ export function useDevelopPicture({
   const loupeSlot = useRef<GraderSlot>({ cache: makeLayerPassCache(), current: null });
   const loupeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [full, setFull] = useState<{ source: BadgeSource; file: File; rawFile: File | null; fileWidth: number } | null>(null);
-  const [loupeState, setLoupeState] = useState<'idle' | 'decoding' | 'ready' | 'same' | 'failed' | 'cancelled'>('idle');
+  const [loupeState, setLoupeState] = useState<LoupeState>('idle');
   const isClip = Boolean(file && (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)));
   const loupeWanted = loupe && Boolean(source) && view.magnifying && !isClip;
   const sourceRef = useRef(source);
@@ -1000,6 +1015,15 @@ export function useDevelopPicture({
   useEffect(() => {
     if (!loupeWanted || !file) return;
     if (full && full.file === file && full.rawFile === rawFile) return;
+    // A RAW decoded WHOLE is exactly what a phone cannot hold — the stage
+    // already works its sensor at the device's ceiling (`raw-budget.ts`), so
+    // there is nothing closer to decode: the loupe says so instead of trying
+    // and taking the tab down with it. A render's loupe is the browser's own
+    // decode and stays.
+    if (rawFile && deviceClass() === 'constrained') {
+      setLoupeState('capped');
+      return;
+    }
     let cancelled = false;
     setLoupeState('decoding');
     // A task of its own — the file decoded whole is the dearest thing the
@@ -1013,11 +1037,17 @@ export function useDevelopPicture({
       cancel: () => controller.abort(),
     });
     const load: Promise<{ source: BadgeSource; fileWidth: number }> = rawFile
-      ? decodeRaw(rawFile, { gain: rawGainRef.current, maxEdge: maxRenderSize(), signal: controller.signal, quiet: true }).then((d) => {
+      ? decodeRaw(rawFile, {
+          gain: rawGainRef.current,
+          maxEdge: rawDecodeEdge('loupe', deviceClass(), maxRenderSize()),
+          signal: controller.signal,
+          quiet: true,
+          hold: true,
+        }).then((d) => {
           const canvas = document.createElement('canvas');
           canvas.width = d.width;
           canvas.height = d.height;
-          canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
+          if (d.bytes) canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
           return {
             source: { image: canvas, width: d.width, height: d.height, gpu: d.half, release: () => {} },
             fileWidth: d.sourceWidth,
