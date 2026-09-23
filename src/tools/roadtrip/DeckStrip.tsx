@@ -16,6 +16,9 @@
  * a 56px band. What they carried is still here: the cut of a clip opens the
  * Studio's own trim bar IN the band (✂), the speed is a pill on the row, and
  * the deck's verbs (move, remove, the closing card) sit behind ⋯ with `+`.
+ * On a compact shell the row is 40px and every control on it a finger's
+ * target (34px pills, `md` icon buttons, a 40px play), and the ticks toggle
+ * moves into ⋯ — see `pillCompact` below.
  *
  * The strip is laid out by `shared/roadtrip/deck-strip.ts`: a fixed number of
  * pixels a second with a floor, so a clip keeps its size wherever it sits and
@@ -101,8 +104,19 @@ const CELL_PX = 38;
 const TAP_SLOP_PX = 5;
 const SNAP_PX = 10;
 
-const pill =
-  'flex-none h-7 px-2 rounded-full border font-mono text-2xs tracking-[0.04em] cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+const pillBase =
+  'flex-none rounded-full border font-mono tracking-[0.04em] cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+/**
+ * The pill's geometry: a caption's height beside a mouse, a finger's on a
+ * phone — 34px, `Button`'s `md`, the height every pill of the page bar above
+ * already wears. Two recipes rather than a second `h-*` appended to the
+ * first: two utilities of one property resolve by Tailwind's order, not the
+ * class list's (`frontend.md`). The text size is left to each pill, because
+ * the speed `<select>` needs 16px on a phone (iOS zooms the page on focus
+ * below that) while an icon-only pill needs none.
+ */
+const pillWide = 'h-7 px-2';
+const pillCompact = 'h-[2.125rem] px-2.5';
 const pillOff = 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent';
 const pillOn = 'border-accent bg-accent-wash text-accent-ink';
 
@@ -310,12 +324,30 @@ export default function DeckStrip({
   const contentCount = slides.filter((s) => s.kind === 'content').length;
   const hasCard = slides.some((s) => s.kind === 'cta');
 
+  // The row's geometry on this shell. On a phone every control is a finger's
+  // target: the play button a size up from the 34px pills beside it (the same
+  // step the 32/28 desktop pair makes), ⋯ and + at `md`. The row grows from
+  // 32px to 40px for it, which the stage column pays.
+  const pill = `${pillBase} ${compact ? pillCompact : pillWide}`;
+  const iconSize = compact ? 'md' : 'sm';
+
   const menu: OverflowItem[] = [];
   if (ci >= 0) {
     menu.push(
       { id: 'earlier', label: 'Move earlier', disabled: ci === 0, onSelect: () => onMove(ci, ci - 1) },
       { id: 'later', label: 'Move later', disabled: ci >= contentCount - 1, onSelect: () => onMove(ci, ci + 1) },
     );
+  }
+  // On a phone the ticks toggle lives here rather than on the row: a clip
+  // hook already puts the speed and the cut on that row, and at 374px a
+  // seventh control left the slide's name no room at all. The pill stays
+  // where there is width for it.
+  if (sound && compact) {
+    menu.push({
+      id: 'sound',
+      label: sound.on ? 'Mute the opener’s ticks' : 'Hear the opener’s ticks',
+      onSelect: sound.onToggle,
+    });
   }
   if (!includeCta) {
     menu.push({ id: 'cta-on', label: 'Close with the call to action', onSelect: () => onIncludeCta(true) });
@@ -343,7 +375,9 @@ export default function DeckStrip({
         <button
           type="button"
           onClick={onTogglePlay}
-          className="flex-none w-8 h-8 border-0 rounded-full bg-ink text-paper cursor-pointer inline-flex items-center justify-center hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent [&>svg]:w-3.5 [&>svg]:h-3.5"
+          className={`flex-none border-0 rounded-full bg-ink text-paper cursor-pointer inline-flex items-center justify-center hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
+            compact ? 'w-10 h-10 [&>svg]:w-4 [&>svg]:h-4' : 'w-8 h-8 [&>svg]:w-3.5 [&>svg]:h-3.5'
+          }`}
           aria-label={playing ? 'Pause' : trimming ? 'Play the cut' : slideLoop ? 'Play this slide' : 'Play the piece'}
           title={
             trimming
@@ -371,7 +405,7 @@ export default function DeckStrip({
             onClick={() => onLoopScope(slideLoop ? 'piece' : 'slide')}
             aria-pressed={slideLoop}
             aria-label={slideLoop ? 'Looping this slide — loop the whole piece' : 'Looping the whole piece — loop this slide'}
-            className={`${pill} inline-flex items-center gap-1 [&>svg]:w-3.5 [&>svg]:h-3.5 ${slideLoop ? pillOn : pillOff}`}
+            className={`${pill} text-2xs inline-flex items-center gap-1 [&>svg]:w-3.5 [&>svg]:h-3.5 ${slideLoop ? pillOn : pillOff}`}
             title={slideLoop ? 'Looping this slide — click for the whole piece (L)' : 'Looping the whole piece — click for this slide only (L)'}
           >
             {slideLoop ? Icons.loopOne : Icons.loop}
@@ -382,7 +416,16 @@ export default function DeckStrip({
           <select
             value={String(clip.speed)}
             onChange={(e) => clip.onSpeed(Number(e.target.value))}
-            className={`${pill} pr-1 ${clip.speed === 1 ? pillOff : pillOn}`}
+            // On a phone: 16px (below that iOS zooms the page on focus and, on
+            // a locked document, never zooms it back), a FIXED width and no
+            // native arrow — a select sizes itself on its widest option, and
+            // "0.25×" at 16px plus the arrow was a 94px pill that left the
+            // slide's name 14px. A pill among pills, a tap opens the wheel.
+            className={`${pillBase} ${
+              compact
+                ? 'h-[2.125rem] w-14 px-0 text-center text-base appearance-none'
+                : `${pillWide} text-2xs pr-1`
+            } ${clip.speed === 1 ? pillOff : pillOn}`}
             aria-label="Clip speed"
             title="The speed this slide plays at — on the stage and in the file. Other than 1× it goes out without sound"
           >
@@ -398,21 +441,21 @@ export default function DeckStrip({
             type="button"
             onClick={() => onTrimming(!trimming)}
             aria-pressed={trimming}
-            className={`${pill} inline-flex items-center gap-1 [&>svg]:w-3.5 [&>svg]:h-3.5 ${trimming ? pillOn : pillOff}`}
+            className={`${pill} text-2xs inline-flex items-center gap-1 [&>svg]:w-3.5 [&>svg]:h-3.5 ${trimming ? pillOn : pillOff}`}
             title={trimming ? 'Back to the piece' : 'Cut this clip: its in and out points (I · O at the playhead)'}
           >
             {trimming ? Icons.check : Icons.scissors}
             {!compact && <span>{trimming ? 'Done' : 'Cut'}</span>}
           </button>
         )}
-        {sound && (
+        {sound && !compact && (
           <button
             type="button"
             onClick={sound.onToggle}
             aria-pressed={sound.on}
             aria-label={sound.on ? 'Mute the opener’s ticks' : 'Hear the opener’s ticks'}
             title={sound.on ? 'Mute the ticks (M)' : 'Hear the ticks (M)'}
-            className={`${pill} w-7 px-0 inline-flex items-center justify-center ${sound.on ? pillOn : pillOff}`}
+            className={`${pillBase} ${pillWide} text-2xs w-7 px-0 inline-flex items-center justify-center ${sound.on ? pillOn : pillOff}`}
           >
             <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none">
               <path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor" />
@@ -424,8 +467,8 @@ export default function DeckStrip({
             </svg>
           </button>
         )}
-        <OverflowMenu label={`More for ${slide ? slideName(slide) : 'this slide'}`} items={menu} side="above" />
-        <IconButton size="sm" variant="ghost" label="Add the active picture to this piece" title="Add the active picture to this piece" onClick={onAdd}>
+        <OverflowMenu label={`More for ${slide ? slideName(slide) : 'this slide'}`} items={menu} side="above" size={iconSize} />
+        <IconButton size={iconSize} variant="ghost" label="Add the active picture to this piece" title="Add the active picture to this piece" onClick={onAdd}>
           {Icons.plus}
         </IconButton>
       </div>

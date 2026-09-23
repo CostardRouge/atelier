@@ -523,8 +523,10 @@ rather than stopping at a fixed fraction of it — while the transport and the
 export button stay put. On a wide screen the badge holds still while its
 controls scroll beside it —
 the Studio's layout, and the reason is the same: you are watching the picture,
-not the panel. Stacked on a phone, the page scrolls as one, because a panel
-with its own scrollbar inside a scrolling page is a trap.
+not the panel. On a phone the picture and the band under it own the screen
+and nothing scrolls: the four tabs are the bottom bar, each raising its panel
+as a sheet over the picture, the band's controls are finger-sized, and the
+band keeps clear of the bar however tall the frame is.
 
 A piece is renamed in place, by typing over its title — the same gesture as a
 Studio project's name.

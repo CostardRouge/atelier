@@ -8,8 +8,10 @@
 
 import { buttonClass } from '../../../shared/ui/Button';
 
+// 16px under 820px, where the panel is a sheet: below that iOS zooms the page
+// on focus and a locked document never zooms it back (`Inspector.tsx`).
 export const inputClass =
-  'font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
+  'font-sans text-sm max-[820px]:text-base h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
 export const smallButton = buttonClass('default', 'sm');
 export const linkButton =
   'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink';
