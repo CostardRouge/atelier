@@ -61,10 +61,14 @@ import {
   type MaskKind,
 } from '../../shared/render/mask';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
+import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
+import { nextMaskView, type MaskView } from './LayersPanel';
 import type { BrushRaster } from '../../shared/render/brush-raster';
 
 type SubjectRasters = ReadonlyMap<string, BrushRaster>;
 const EMPTY_RASTERS: SubjectRasters = new Map();
+/** One beat of the blink: on, off, on, off — about a third of a second. */
+const FLASH_STEP_MS = 90;
 
 /**
  * How near a tap must land to count as a tap ON an existing point rather than
@@ -284,7 +288,15 @@ export default function PictureWorkbench({
   // rather than one document write per step.
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
+  // The mask pinned on outside Pick / Paint. While either is on the mask shows
+  // by itself (below), which is when it is needed.
   const [showMask, setShowMask] = useState(false);
+  // HOW the mask is shown: its line by default, the red wash on `M` — the
+  // maintainer's pick (2026-09-23): an outline says where the edge is without
+  // hiding the colour being set under it.
+  const [maskView, setMaskView] = useState<MaskView>('outline');
+  // One point's region, on and off twice after the model answers a tap.
+  const [flashMask, setFlashMask] = useState<BrushRaster | null>(null);
   const [pixelView, setPixelView] = usePixelView();
   // What the picture SAYS about itself, and where. Off by default — the
   // maintainer does not want the numbers in front of him while he works, and
@@ -766,9 +778,12 @@ export default function PictureWorkbench({
     subjectMasks: subjectRasters,
     paint,
     compare: compareOn,
-    // Only while the layer is open AND the box is ticked: a red wash left on
-    // by accident would be mistaken for the picture.
-    showMaskOf: showMask && selectedLayer ? selectedLayer.id : null,
+    // Only while the layer is open, and then by itself while Pick or Paint is
+    // on — the moment the mask is what is being made — else only when pinned:
+    // a red wash left on by accident would be mistaken for the picture.
+    showMaskOf: selectedLayer && maskView !== 'off' && (paintId !== null || showMask) ? selectedLayer.id : null,
+    maskStyle: maskView === 'fill' ? 'fill' : 'outline',
+    flashMask,
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: detailDraft,
     repair: repairDraft,
@@ -832,8 +847,27 @@ export default function PictureWorkbench({
     // Per PICTURE: one picture's subject must never be shown on another.
     pictureKey: entry.id,
   });
-  const { rasters: resolvedSubjects } = subject;
+  const { rasters: resolvedSubjects, fresh: freshSubject } = subject;
   useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);
+  // The region a tap just added BLINKS twice (on, off, on, off, 90 ms each),
+  // like a macOS menu item, then leaves the stage to the chosen view. Only
+  // what the tap added, never the whole subject; nothing under reduced motion,
+  // where the outline alone says it.
+  useEffect(() => {
+    const raster = freshSubject?.raster;
+    if (!raster || prefersReducedMotion()) return;
+    let step = 0;
+    setFlashMask(raster);
+    const timer = window.setInterval(() => {
+      step += 1;
+      setFlashMask(step === 2 ? raster : null);
+      if (step >= 3) window.clearInterval(timer);
+    }, FLASH_STEP_MS);
+    return () => {
+      window.clearInterval(timer);
+      setFlashMask(null);
+    };
+  }, [freshSubject]);
 
   // --- write-through ---------------------------------------------------------
   // Both drafts ride `use-write-through.ts`, which also takes the roll BACK
@@ -1032,8 +1066,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing });
+  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1099,6 +1133,20 @@ export default function PictureWorkbench({
           e.preventDefault();
           keyState.current.setFactsOn(!keyState.current.factsOn);
           return;
+        case 'mask': {
+          // The Layers tab, with a layer open: anywhere else there is no mask.
+          if (open !== 'layers' || !keyState.current.selectedLayer) return;
+          e.preventDefault();
+          setMaskView((v) => nextMaskView(v));
+          return;
+        }
+        case 'pick': {
+          const kind = keyState.current.selectedLayer?.mask?.kind;
+          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush')) return;
+          e.preventDefault();
+          setPainting(!keyState.current.painting);
+          return;
+        }
         case 'swap':
           if (open !== 'crop') return;
           e.preventDefault();
@@ -1614,11 +1662,17 @@ export default function PictureWorkbench({
                 layers={layersDraft}
                 selectedId={selectedLayerId}
                 showMask={showMask}
+                maskView={maskView}
+                onMaskView={setMaskView}
+                autoShown={paintId !== null}
                 onSelect={setSelectedLayerId}
                 onAdd={(kind: MaskKind | null) => {
                   const made = createLayer(kind);
                   setLayersDraft((list) => addLayer(list, made));
                   setSelectedLayerId(made.id);
+                  // A fresh subject's only use is to be tapped: Pick comes on
+                  // with it rather than being one more thing to find.
+                  setPainting(kind === 'subject');
                 }}
                 onRemove={(id) => {
                   setLayersDraft((list) => removeLayer(list, id));
@@ -1632,6 +1686,7 @@ export default function PictureWorkbench({
                 <>
                   <MaskPanel
                     layer={selectedLayer}
+                    layers={layersDraft}
                     onPatch={(patch) =>
                       setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
                     }

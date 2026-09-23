@@ -51,6 +51,8 @@ const GROUPS: readonly Group[] = [
       { keys: '⇧C · the crop pill', what: 'zoomed in, make what the screen shows the crop — the view goes back to the fit' },
       { keys: '⌘/Ctrl C · V', what: 'copy this develop, paste it onto another — and the three verbs above the picture' },
       { keys: '⌘/Ctrl Z', what: 'undo — and ⇧ to put it back' },
+      { keys: 'P', what: 'on the Layers tab, Pick (a subject) or Paint (a painted mask) on and off' },
+      { keys: 'M', what: 'on the Layers tab, the mask hidden, as its outline, or filled in red' },
       { keys: 'tap', what: 'with Pick on, add a point to the subject — the + cursor' },
       { keys: 'tap a marker', what: 'take that point off again — it shows −' },
       { keys: '⇧ / ⌘-click', what: 'choose pictures along the filmstrip' },

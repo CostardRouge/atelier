@@ -321,3 +321,7 @@ texel — a million short-lived objects per `pointermove` on a 1024-wide map —
 so it is written out inline, the row's y once per row. `brushAt` still goes
 through `framePoint`; the loop must keep saying the same thing, which the
 gate's brush row holds it to (0.0008).
+
+Picking a subject on the stage — segmentation on the tap, the mask's outline
+and fill, the blink, a subject SUBTRACTED from another layer, and the export's
+own segmentation — lives in `subject-picking.md`.

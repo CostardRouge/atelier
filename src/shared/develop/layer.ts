@@ -50,6 +50,15 @@ export interface AdjustLayer {
   mask: Mask | null;
   /** Apply everywhere the mask ISN'T — one flag rather than a second mask kind. */
   invert: boolean;
+  /**
+   * The id of a SUBJECT layer whose mask is taken OUT of this one — "the whole
+   * picture except the subject", Lightroom's subtract, the maintainer's pick
+   * (2026-09-23). Applied after `invert`, so the hole stays a hole whichever
+   * way this mask faces. Only a subject: its mask is a raster already on the
+   * GPU, so the subtraction is one texture and one multiply. Null, a missing
+   * layer or one that is not a subject subtracts nothing.
+   */
+  except: string | null;
   develop: DevelopSettings;
   /** 0..1, how much of the adjustment lands where the mask is full. */
   opacity: number;
@@ -70,6 +79,7 @@ export function createLayer(kind: MaskKind | null = 'linear', id: string = newLa
     name: '',
     mask: kind ? defaultMask(kind) : null,
     invert: false,
+    except: null,
     develop: { ...DEFAULT_DEVELOP },
     opacity: 1,
     enabled: true,
@@ -88,6 +98,7 @@ export function normaliseLayer(raw: unknown, id: string = newLayerId()): AdjustL
     name: typeof src.name === 'string' ? src.name.slice(0, 80) : '',
     mask: normaliseMask(src.mask),
     invert: src.invert === true,
+    except: typeof src.except === 'string' && src.except ? src.except : null,
     // A layer whose develop is absent or junk is a layer that does nothing —
     // kept, because deleting somebody's layer on a read is never the answer.
     develop: developOrNull(src.develop) ?? { ...DEFAULT_DEVELOP },
@@ -115,11 +126,53 @@ export function drawingLayers(layers: readonly AdjustLayer[] | null | undefined)
   return (layers ?? []).filter(layerDraws);
 }
 
+/**
+ * The layers whose SUBJECT the model must find: every visible one with a point,
+ * whether or not it draws yet. Deliberately not `drawingLayers` — a fresh
+ * subject has its sliders at zero, and waiting for it to draw meant a tap
+ * segmented nothing until a slider moved, a pick that looked as if it had not
+ * taken. The mask is found on the tap; the layer uses it once it has a develop.
+ */
+export function subjectLayersToSegment(layers: readonly AdjustLayer[] | null | undefined): AdjustLayer[] {
+  const list = layers ?? [];
+  // A subject another layer SUBTRACTS is wanted even hidden: hiding the
+  // subject's own adjustment must not fill the hole it cuts in the whole.
+  const cut = new Set(list.filter((l) => l.enabled && l.except).map((l) => l.except));
+  return list.filter(
+    (l) => (l.enabled || cut.has(l.id)) && l.mask?.kind === 'subject' && l.mask.points.length > 0,
+  );
+}
+
+/**
+ * The subject layers a DELIVERY must segment: those that draw, and those a
+ * drawing layer subtracts. Narrower than `subjectLayersToSegment`, which also
+ * serves a subject still at zero for the author to look at — an export segments
+ * nothing it would not use, since each point is an inference.
+ */
+export function subjectLayersForRender(layers: readonly AdjustLayer[] | null | undefined): AdjustLayer[] {
+  const drawing = drawingLayers(layers);
+  const needed = new Set<string>();
+  for (const l of drawing) {
+    if (l.mask?.kind === 'subject') needed.add(l.id);
+    if (l.except) needed.add(l.except);
+  }
+  return subjectLayersToSegment(layers).filter((l) => needed.has(l.id));
+}
+
+/** The subject layers a layer may subtract: every other layer whose mask is a subject. */
+export function exceptCandidates(
+  layers: readonly AdjustLayer[] | null | undefined,
+  id: string,
+): AdjustLayer[] {
+  return (layers ?? []).filter((l) => l.id !== id && l.mask?.kind === 'subject');
+}
+
 export function sameLayer(a: AdjustLayer, b: AdjustLayer): boolean {
   return (
     a.id === b.id &&
     a.name === b.name &&
     a.invert === b.invert &&
+    a.except === b.except &&
     a.opacity === b.opacity &&
     a.enabled === b.enabled &&
     sameMask(a.mask, b.mask) &&
@@ -166,7 +219,11 @@ export function removeLayer(
   layers: readonly AdjustLayer[] | null | undefined,
   id: string,
 ): AdjustLayer[] {
-  return (layers ?? []).filter((l) => l.id !== id);
+  // A layer that subtracted the one removed subtracts nothing now, rather than
+  // pointing at an id that is gone.
+  return (layers ?? [])
+    .filter((l) => l.id !== id)
+    .map((l) => (l.except === id ? { ...l, except: null } : l));
 }
 
 /** `delta` is in STACK terms: +1 is nearer the top, and the ends hold. */
@@ -195,9 +252,22 @@ export function patchLayer(
 }
 
 /** The layer's own name, else what its mask is — never an empty row. */
-export function layerLabel(l: AdjustLayer): string {
+export function layerLabel(l: AdjustLayer, layers?: readonly AdjustLayer[] | null): string {
   const named = l.name.trim();
   if (named) return named;
-  const where = describeMask(l.mask);
-  return l.invert ? `not ${where}` : where;
+  const described = describeMask(l.mask);
+  const where = l.invert ? `not ${described}` : described;
+  const cut = l.except ? layers?.find((o) => o.id === l.except && o.mask?.kind === 'subject') : null;
+  return cut ? `${where} except ${cut.name.trim() || 'the subject'}` : where;
+}
+
+/**
+ * How much of a layer lands on a pixel: the mask, turned by `invert`, holed by
+ * the subtracted subject, scaled by the opacity. `layer-pass.ts`'s shader is a
+ * transcription of this; the order is the point — the hole comes AFTER the
+ * invert, so it stays a hole whichever way the mask faces.
+ */
+export function layerWeight(mask: number, invert: boolean, except: number, opacity: number): number {
+  const m = invert ? 1 - mask : mask;
+  return m * (1 - except) * opacity;
 }

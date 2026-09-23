@@ -86,6 +86,15 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'q' }))).toBeNull();
   });
 
+  it('steps the mask view on M and turns Pick on P', () => {
+    expect(editorKeyAction(press({ key: 'm' }))).toBe('mask');
+    expect(editorKeyAction(press({ key: 'M' }))).toBe('mask');
+    expect(editorKeyAction(press({ key: 'p' }))).toBe('pick');
+    // A slider or a field keeps its letters.
+    expect(editorKeyAction(press({ key: 'm', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'p', repeat: true }))).toBeNull();
+  });
+
   it('removes the selection on Delete or Backspace and lets go on Escape, never from a field', () => {
     expect(editorKeyAction(press({ key: 'Delete' }))).toBe('remove');
     expect(editorKeyAction(press({ key: 'Backspace' }))).toBe('remove');

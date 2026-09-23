@@ -10,7 +10,8 @@ import {
   type Mask,
   type MaskKind,
 } from '../../shared/render/mask';
-import type { AdjustLayer } from '../../shared/develop/layer';
+import { exceptCandidates, layerLabel, type AdjustLayer } from '../../shared/develop/layer';
+import { isDefaultDevelop } from '../../shared/develop/develop';
 
 const KIND_OPTIONS: readonly { id: string; label: string }[] = [
   { id: 'none', label: 'Whole' },
@@ -43,6 +44,7 @@ const HINT =
  */
 export default function MaskPanel({
   layer,
+  layers,
   onPatch,
   brush,
   onBrush,
@@ -54,6 +56,8 @@ export default function MaskPanel({
   onClearSubject,
 }: {
   layer: AdjustLayer;
+  /** The whole stack, for the subjects this layer may take out of itself. */
+  layers: readonly AdjustLayer[];
   onPatch: (patch: Partial<Omit<AdjustLayer, 'id'>>) => void;
   /** The settings the NEXT stroke is painted with. */
   brush: { radius: number; hardness: number; erase: boolean };
@@ -68,6 +72,14 @@ export default function MaskPanel({
 }) {
   const mask = layer.mask;
   const kind: string = mask?.kind ?? 'none';
+  // The subjects this layer may SUBTRACT — «sauf le sujet», the maintainer's
+  // pick (2026-09-23). Offered only where one exists: a control with nothing
+  // to choose is a question the author cannot answer.
+  const cuts = exceptCandidates(layers, layer.id);
+  const exceptOptions = [
+    { id: 'none', label: 'Nothing' },
+    ...cuts.map((l) => ({ id: l.id, label: cuts.length === 1 ? 'The subject' : layerLabel(l, layers) })),
+  ];
 
   const setKind = (next: string) => {
     // Switching kinds STARTS the new shape fresh rather than carrying numbers
@@ -288,7 +300,11 @@ export default function MaskPanel({
                 : subject?.working
                   ? `finding it… (${mask.points.length} point${mask.points.length === 1 ? '' : 's'})`
                   : subject?.resolved
-                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it`
+                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it${
+                        // Found, and still doing nothing: said, or a subject
+                        // that the model answered reads as a pick that failed.
+                        isDefaultDevelop(layer.develop) ? ' · found — move a slider below to act on it' : ''
+                      }`
                     : 'the model is loading — 17 MB, once per visit'}
           </span>
         </>
@@ -312,6 +328,24 @@ export default function MaskPanel({
           />
           invert — apply everywhere the mask is not
         </label>
+      )}
+
+      {cuts.length > 0 && (
+        <div className="flex flex-col gap-1">
+          <Segmented
+            size="sm"
+            label="Except"
+            columns={exceptOptions.length > 3 ? 2 : undefined}
+            value={layer.except && cuts.some((l) => l.id === layer.except) ? layer.except : 'none'}
+            onChange={(id) => onPatch({ except: id === 'none' ? null : id })}
+            options={exceptOptions}
+          />
+          <span className="font-mono text-3xs text-faint">
+            {layer.except
+              ? 'except — the subject is taken out of this layer, so its own layer alone decides it'
+              : 'except — take a subject out of this layer: darken everything but the person'}
+          </span>
+        </div>
       )}
     </div>
   );

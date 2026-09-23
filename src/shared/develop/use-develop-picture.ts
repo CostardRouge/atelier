@@ -22,8 +22,8 @@ import {
   sameGeometry,
   type PictureGeometry,
 } from '../render/picture-geometry';
-import { cloneLayers, drawingLayers, sameLayers, type AdjustLayer } from './layer';
-import { makeLayerPassCache, type LayerPassCache } from './layer-render';
+import { cloneLayer, cloneLayers, drawingLayers, sameLayer, sameLayers, type AdjustLayer } from './layer';
+import { exceptRaster, makeLayerPassCache, type LayerPassCache, type MaskOverlayStyle } from './layer-render';
 import type { BrushRaster } from '../render/brush-raster';
 import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import type { PixelView } from '../ui/use-pixel-view';
@@ -74,7 +74,9 @@ interface GraderRecord {
   lut: CubeLut | null;
   geometry: PictureGeometry;
   layers: AdjustLayer[];
-  overlay: string | null;
+  overlay: MaskOverlay | null;
+  /** The blink's raster, by identity — one per answered tap. */
+  flash: BrushRaster | null;
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
@@ -85,6 +87,16 @@ interface GraderRecord {
   w: number;
   h: number;
   grader: HeldGrader;
+}
+
+/** Show-the-mask: which layer, and drawn as a wash or as its line. */
+export interface MaskOverlay {
+  layer: AdjustLayer;
+  style: MaskOverlayStyle;
+}
+
+function sameOverlay(a: MaskOverlay | null, b: MaskOverlay | null): boolean {
+  return a && b ? a.style === b.style && sameLayer(a.layer, b.layer) : a === b;
 }
 
 /**
@@ -109,7 +121,13 @@ function graderFrom(
   s: BadgeSource,
   geometry: PictureGeometry,
   stack: readonly AdjustLayer[],
-  overlay: string | null,
+  /**
+   * The layer whose mask is painted over the picture, resolved from the WHOLE
+   * list and not from `stack`: a layer that does not draw yet — a fresh
+   * subject, its sliders still at zero — is exactly the one whose mask the
+   * author needs to see before giving it anything to do.
+   */
+  overlay: MaskOverlay | null,
   rasters: ReadonlyMap<string, BrushRaster> | null,
   detail: DetailSettings | null,
   scale: number,
@@ -117,12 +135,15 @@ function graderFrom(
   film: FilmTexture | null = null,
   /** The camera's own shading grid, read from the file and never edited. */
   gain: GainField | null = null,
+  /** One point's region, blinking after the model answered a tap. */
+  flash: BrushRaster | null = null,
 ): HeldGrader | null {
+    const overlayOf = overlay?.layer ?? null;
+    const overlayExcept = overlayOf ? exceptRaster(overlayOf, rasters) : null;
     const cur = slot.current;
     // Geometry or a layer with NO look still needs the GPU: both are passes,
     // not cubes, so "no lut" stopped meaning "nothing to render" the day
     // geometry arrived.
-    const overlayOf = overlay ? (stack.find((l) => l.id === overlay) ?? null) : null;
     const patches = repair ?? [];
     const needsGpu =
       Boolean(lut) ||
@@ -130,6 +151,8 @@ function graderFrom(
       Boolean(gain) ||
       stack.length > 0 ||
       Boolean(overlayOf?.mask) ||
+      Boolean(overlayExcept) ||
+      Boolean(flash) ||
       !isDefaultDetail(detail) ||
       patches.length > 0 ||
       // A texture with nothing but grain in it is still a render: the node is
@@ -146,7 +169,8 @@ function graderFrom(
     const sized = cur && cur.lut === lut && cur.w === s.width && cur.h === s.height;
     if (
       sized &&
-      cur.overlay === overlay &&
+      sameOverlay(cur.overlay, overlay) &&
+      cur.flash === flash &&
       cur.rasters === rasters &&
       sameGeometry(cur.geometry, geometry) &&
       sameLayers(cur.layers, stack) &&
@@ -160,7 +184,10 @@ function graderFrom(
     }
     const ar = s.width / s.height;
     const cache = slot.cache;
-    const overlayPass = overlayOf ? cache.overlay(overlayOf, ar, rasters?.get(overlayOf.id) ?? null) : null;
+    const overlayPass = overlay
+      ? cache.overlay(overlay.layer, ar, rasters?.get(overlay.layer.id) ?? null, overlay.style, overlayExcept)
+      : null;
+    const flashPass = cache.flash(flash, ar);
     // Noise and fringe BEFORE the cube, on the source; sharpen AFTER every
     // warp and layer, so nothing resamples it (`detail.ts`, «Order»).
     // Repair FIRST, on the source: a copied pixel then takes the same
@@ -179,6 +206,7 @@ function graderFrom(
       ...cache.passes(stack, ar, rasters),
       ...post,
       ...(overlayPass ? [overlayPass] : []),
+      ...(flashPass ? [flashPass] : []),
     ];
     // Only the PASSES moved, so swap them rather than rebuilding: the
     // context, its programs and (for a bitmap) the uploaded source all
@@ -195,7 +223,8 @@ function graderFrom(
       cur.film = film;
       cur.geometry = cloneGeometry(geometry);
       cur.layers = cloneLayers(stack);
-      cur.overlay = overlay;
+      cur.overlay = overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null;
+      cur.flash = flash;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
@@ -214,7 +243,8 @@ function graderFrom(
       lut,
       geometry: cloneGeometry(geometry),
       layers: cloneLayers(stack),
-      overlay,
+      overlay: overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null,
+      flash,
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
@@ -392,6 +422,8 @@ export function useDevelopPicture({
   lens = null,
   layers = null,
   showMaskOf = null,
+  maskStyle = 'fill',
+  flashMask = null,
   paint = null,
   subjectMasks = null,
   compare = true,
@@ -497,6 +529,14 @@ export function useDevelopPicture({
    * LOOKING, like the wipe.
    */
   showMaskOf?: string | null;
+  /** How that mask is shown: a red wash, or the line where it crosses one half. */
+  maskStyle?: MaskOverlayStyle;
+  /**
+   * One point's own region, blinking — the host toggles it on and off after
+   * the model answers a tap. A way of LOOKING like the overlay: never
+   * delivered, never measured.
+   */
+  flashMask?: BrushRaster | null;
   /**
    * Alpha maps for the SUBJECT layers, resolved by the model — the one mask
    * kind the renderer cannot compute for itself (`use-subject-masks.ts`).
@@ -682,6 +722,12 @@ export function useDevelopPicture({
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
   const stack = useMemo(() => drawingLayers(layers), [layers]);
+  // The layer whose mask is shown, from the whole list: `stack` holds only the
+  // layers that draw, and a subject still at zero is the one to look at.
+  const overlay = useMemo<MaskOverlay | null>(() => {
+    const layer = showMaskOf ? (layers ?? []).find((l) => l.id === showMaskOf && (l.mask || l.except)) : null;
+    return layer ? { layer, style: maskStyle } : null;
+  }, [layers, showMaskOf, maskStyle]);
 
   // The layer passes, remembered between changes: a cube, a raster and a pass
   // are kept per layer while the values they were built from stand still, so
@@ -694,15 +740,16 @@ export function useDevelopPicture({
       s: BadgeSource,
       geometry: PictureGeometry,
       stack: readonly AdjustLayer[],
-      overlay: string | null,
+      overlay: MaskOverlay | null,
       rasters: ReadonlyMap<string, BrushRaster> | null,
       detail: DetailSettings | null,
       scale: number,
       patches: readonly Patch[] | null,
       texture: FilmTexture | null,
       gain: GainField | null,
+      flash: BrushRaster | null = null,
     ): HeldGrader | null =>
-      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain),
+      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain, flash),
     [],
   );
   useEffect(
@@ -739,7 +786,7 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, showMaskOf, subjectMasks, detail, pixelScale, repair, film, gainField);
+    const grader = holding ? null : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -777,7 +824,8 @@ export function useDevelopPicture({
     holding,
     geometry,
     stack,
-    showMaskOf,
+    overlay,
+    flashMask,
     subjectMasks,
     detail,
     pixelScale,

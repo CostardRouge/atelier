@@ -26,6 +26,8 @@ import type { LensCorrection } from '../render/lens';
 import { geometryPasses, hasGeometry } from '../render/picture-geometry';
 import { drawingLayers, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
+import { needsSubjectRasters, resolveSubjectRasters } from './subject-rasters';
+import type { BrushRaster } from '../render/brush-raster';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto, decodePhotoSource, fitPhotoForRender } from '../media/photo-frame';
 import { decodeRaw } from '../raw/raw-decoder';
@@ -201,14 +203,17 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const { pre: detailPre, post } = detailPasses(opts.detail, gradedAt.width / source.width);
     const repairPass = makeRepairPass(patches, ar);
     const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
-    const passes = [...geometryPasses(opts, ar), ...layerPasses(stack, ar), ...post];
+    // The subjects, segmented on the picture being delivered — an export
+    // built without them dropped every Subject layer from the file.
+    const rasters = needsSubjectRasters(opts.layers) ? await resolveSubjectRasters(opts.layers, bitmap) : null;
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
       : null;
     // The darker render for the gain map takes a grader of its own with
     // fresh passes: a pass holds textures on the context it first drew on.
     const darkGrader = opts.hdr && fit
-      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, stack, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width), opts.film ?? null)
+      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, rasters, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width), opts.film ?? null)
       : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
@@ -258,7 +263,6 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const askedLess = Boolean(opts.longEdge) && decodedEdge >= (opts.longEdge ?? 0);
   const capped = decodedEdge < sensorEdge && !askedLess ? rawDecodeCap(sensorEdge, 'export', klass, gpuMax) : null;
   const ar = source.width / source.height;
-  const stack = drawingLayers(opts.layers);
   // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
   const { pre: detailPre, post } = detailPasses(opts.detail, source.width / decoded.sourceWidth);
   const repairPass = makeRepairPass(opts.repair, ar);
@@ -266,12 +270,23 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   // `render-gain-map.md`'s order, the same one the stage runs.
   const gainPass = makeGainMapPass(opts.calibration?.gain);
   const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
-  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(stack, ar), ...post];
+  // A half-float picture is not something the model can be shown: it sees the
+  // picture through its own cube, as the author does, rendered once apart.
+  let rasters: Map<string, BrushRaster> | null = null;
+  if (needsSubjectRasters(opts.layers)) {
+    const shown = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], null);
+    try {
+      rasters = await resolveSubjectRasters(opts.layers, copyOf(shown.render(decoded.half)));
+    } finally {
+      shown.dispose();
+    }
+  }
+  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
   const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
   const darkGrader = opts.hdr
-    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, stack, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth), opts.film ?? null)
+    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, rasters, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth), opts.film ?? null)
     : null;
   try {
     // Copied out: two graders' canvases are two contexts, but the SDR one is
@@ -295,8 +310,13 @@ function withCalibration(opts: RollRenderOptions) {
 }
 
 /** The passes after the cube, built anew for a second grader. */
-function freshPasses(opts: RollRenderOptions, ar: number, stack: readonly AdjustLayer[], scale: number) {
-  return [...geometryPasses(withCalibration(opts), ar), ...layerPasses(stack, ar), ...detailPasses(opts.detail, scale).post];
+function freshPasses(
+  opts: RollRenderOptions,
+  ar: number,
+  rasters: ReadonlyMap<string, BrushRaster> | null,
+  scale: number,
+) {
+  return [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...detailPasses(opts.detail, scale).post];
 }
 
 /** The passes before the cube, built anew for a second grader. */

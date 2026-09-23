@@ -414,6 +414,70 @@ const out = await page.evaluate(async () => {
       ]);
       rows.nearlyOff = Number((1 - got[0]).toFixed(4));
     }
+    // A subject TAKEN OUT (`AdjustLayer.except`): the hole comes after the
+    // invert, so `layerWeight` is the expectation. The subtracted map is a
+    // soft left-to-right ramp at the render's own size, so every probe reads
+    // one texel centre of it exactly -- a map uploaded the wrong way round
+    // would put the hole at the other end, and a flat one would prove nothing.
+    {
+      const { layerWeight } = await import('/atelier/src/shared/develop/layer.ts');
+      const ex = { width: W, height: H, data: new Uint8Array(W * H) };
+      for (let y = 0; y < H; y += 1) {
+        for (let x = 0; x < W; x += 1) ex.data[y * W + x] = Math.round(255 * Math.max(0, 1 - x / (W * 0.6)));
+      }
+      const exAt = ([x, y]) => ex.data[y * W + x] / 255;
+      const lin = { ...maskMod.DEFAULT_LINEAR, x: 0.5, y: 0.5, angle: 180, feather: 0.6 };
+      for (const invert of [false, true]) {
+        const base = through(white, [passthroughPass]);
+        const got = through(white, [makeLayerPass({ lut: toBlack, mask: lin, invert, except: ex, aspectRatio: AR, id: `m:except:${invert}` })]);
+        let worst = 0;
+        probes.forEach((p, i) => {
+          const [u, v] = uvOf(p);
+          const want = layerWeight(maskMod.maskAt(lin, u, v, base[i], AR), invert, exAt(p), 1);
+          worst = Math.max(worst, Math.abs(1 - got[i] / base[i] - want));
+        });
+        rows[`except_${invert ? 'inverted' : 'plain'}`] = Number(worst.toFixed(4));
+      }
+    }
+    // The OUTLINE finish: ink or paper only where the mask crosses one half,
+    // the picture untouched wherever the mask is plainly in or out.
+    {
+      const grey = paint((g) => { g.fillStyle = '#808080'; g.fillRect(0, 0, W, H); });
+      const radial = { ...maskMod.DEFAULT_RADIAL, x: 0.5, y: 0.5, radiusX: 0.35, radiusY: 0.3, angle: 0, feather: 0.1 };
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(W, H);
+      graph.render(grey, [makeLayerPass({ lut: toBlack, mask: radial, finish: 'outline', aspectRatio: AR, id: 'm:outline' })]);
+      const o = document.createElement('canvas'); o.width = W; o.height = H;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      graph.dispose();
+      const d = oc.getImageData(0, 0, W, H).data;
+      // The expectation is the shader's own test run on maskAt: a texel is an
+      // edge when the mask at it and 1.5 texels either side straddles one half.
+      const m = (x, y) => maskMod.maskAt(radial, (x + 0.5) / W, (y + 0.5) / H, 0.5, AR);
+      const edgeAt = (x, y) => {
+        const v = [m(x, y), m(x + 1.5, y), m(x - 1.5, y), m(x, y + 1.5), m(x, y - 1.5)];
+        return Math.min(...v) < 0.5 && Math.max(...v) >= 0.5;
+      };
+      const near = (x, y) => {
+        for (let dy = -1; dy <= 1; dy += 1) for (let dx = -1; dx <= 1; dx += 1) if (edgeAt(x + dx, y + dy)) return true;
+        return false;
+      };
+      let drawn = 0, stray = 0, edges = 0, missed = 0;
+      for (let y = 1; y < H - 1; y += 1) {
+        for (let x = 1; x < W - 1; x += 1) {
+          const changed = Math.abs(d[(y * W + x) * 4] - 128) > 4;
+          if (changed) drawn += 1;
+          if (changed && !near(x, y)) stray += 1;
+          if (edgeAt(x, y)) {
+            edges += 1;
+            if (!changed) missed += 1;
+          }
+        }
+      }
+      rows.outline = { drawn, stray, edges, missed };
+    }
     results.mask = rows;
   }
 
@@ -1259,6 +1323,22 @@ for (const shape of ['linear', 'radial', 'luma', 'brush']) {
     `  ${ok ? 'ok  ' : 'FAIL'}  ${shape.padEnd(7)} worst ${worst.toFixed(4)} ` +
       `(canvas ${mask[`${shape}_canvas`]}, bitmap ${mask[`${shape}_bitmap`]}), ` +
       `spread ${spread}${spread > 0.05 ? '' : ' — FLAT, so this row proves nothing'}`,
+  );
+}
+for (const row of ['except_plain', 'except_inverted']) {
+  const ok = mask[row] <= 0.006;
+  if (!ok) bad += 1;
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${row.padEnd(15)} worst ${mask[row].toFixed(4)} against layerWeight — the subject taken out, after the invert`);
+}
+{
+  const { drawn, stray, edges, missed } = mask.outline;
+  // A texel whose mask sits on 0.5 to float precision may go either way: a
+  // few misses are rounding, a stray texel is a line in the wrong place.
+  const ok = drawn > 60 && stray === 0 && missed <= edges * 0.02;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  outline draws ${drawn} texels: ${stray} away from maskAt's half line, ` +
+      `${missed} of its ${edges} edge texels missed`,
   );
 }
 if (mask.nearlyOff > 0.002) {
