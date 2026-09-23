@@ -239,6 +239,13 @@ this". Rules:
   editor stage decodes through `badge-render.ts`; `photo-frame.ts` is the
   export path. Both now try the preview, and both keep the honest refusal for a
   RAW that carries none.
+- **The Library's cover comes from the same render** (2026-09-23, the
+  maintainer's ask): `loadImageMeta` falls back to `extractRawPreview` for a
+  RAW the browser refused, cuts the 200 px cover from it, and lists the
+  SENSOR's pixels (`rawSizesFrom`, the head read once and handed to both) —
+  never the render's, which on a DJI would caption a 36-megapixel file
+  `960×540`. A RAW with no render keeps the type-only box, and the lightbox
+  still refuses (an `<img>` over a RAW says where the picture can be seen).
 - **`pictureFidelity` tests `isRawImage` BEFORE the media type.** A RAW off a
   disk usually carries an EMPTY type, so asking the type first labelled every
   DNG a clip. The chip reads `RAW · camera render` and the note says it is the

@@ -364,9 +364,10 @@ const PREVIEW_SPLICE_MAX = 32 * 1024 * 1024;
  * carries none. Reads only the head to find it, then slices the bytes: a 60 MB
  * DNG is never pulled into memory to show its preview.
  */
-export async function extractRawPreview(file: Blob): Promise<Blob | null> {
-  const head = await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer();
-  const probe = probeRaw(head);
+export async function extractRawPreview(file: Blob, head?: ArrayBuffer): Promise<Blob | null> {
+  // A caller that has already read the head (for the sizes, say) hands it
+  // over rather than paying the megabyte twice.
+  const probe = probeRaw(head ?? (await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer()));
   if (!probe?.preview) return null;
   const { offset, length } = probe.preview;
   if (offset + length > file.size) return null;

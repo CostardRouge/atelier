@@ -148,10 +148,11 @@ over one instant, so the deck is drawn **settled**: every element where and how
 it comes to rest, no entrances half-played. Export writes JPEGs through the
 same variant rows — reframed, capped, overlays in or out
 (`IMG_8801-4x5-1080p.jpg`) — with the cadence and speed controls simply gone.
-A RAW file the browser cannot decode is kept in the library and says so in
-words, pointing at the JPEG or TIFF your developer can produce; where a RAW
-and its sidecar JPEG share a name, the pair is one photo and the decodable
-half is the one you see, whichever the folder happened to list first. The row
+A RAW file is kept in the library with the render its camera wrote inside it
+as its cover and its sensor's pixels as its size; one that carries no render
+says so in words, pointing at the JPEG or TIFF your developer can produce.
+Where a RAW and its sidecar JPEG share a name, the pair is one photo and the
+decodable half is the one you see, whichever the folder happened to list first. The row
 still names both — `JPEG + DNG`, and a `+DNG` chip on the cover — so a RAW
 added beside its JPEG is visibly there, and Develop opens it as the sensor.
 
