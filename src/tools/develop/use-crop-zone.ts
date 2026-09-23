@@ -31,6 +31,12 @@ export interface CropZoneApi {
   lock: number | null;
   /** A zone the author drew — written through, and remembered as the intent. */
   setZone: (zone: CropZone) => void;
+  /**
+   * A zone that came from OUTSIDE the crop stage — the Develop stage's "crop
+   * to this view": written like a drawn one, and the chip goes to Free, since
+   * the shape is the screen's and no format was chosen.
+   */
+  cropTo: (zone: CropZone) => void;
   /** A format chip: the centre kept, the largest zone of that ratio that fits there. */
   setChip: (chip: CropChip) => void;
   /** Portrait ↔ landscape about the centre. */
@@ -259,6 +265,15 @@ export function useCropZone({
     [write],
   );
 
+  const cropTo = useCallback(
+    (z: CropZone) => {
+      setChipState('free');
+      intent.current = z;
+      write(z, 'free');
+    },
+    [write],
+  );
+
   const setChip = useCallback(
     (next: CropChip) => {
       const { src: s, zone: z, framing: f, shown: sh } = live.current;
@@ -314,6 +329,7 @@ export function useCropZone({
     chip,
     lock,
     setZone,
+    cropTo,
     setChip,
     swap,
     maximize,

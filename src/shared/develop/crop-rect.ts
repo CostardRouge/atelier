@@ -39,6 +39,7 @@ import {
   wrapDegrees,
   type Framing,
 } from '../media/framing';
+import type { PictureWindow } from '../ui/pan-zoom';
 import { FREE_ASPECT_MAX, FREE_ASPECT_MIN, freeAspectId, type CropHandle } from './crop-aspect';
 
 /** A crop zone in the turned picture's frame, in source pixels from its centre. */
@@ -377,6 +378,78 @@ export function maxZone(ratio: number, deg: number, src: PictureDims): CropZone 
  */
 export function fitIntent(intent: CropZone, deg: number, src: PictureDims): CropZone {
   return fitAround(intent.cx, intent.cy, intent.w, intent.h, deg, src, 1);
+}
+
+/**
+ * The crop a zoomed VIEW asks for — "crop to what I am looking at", the verb
+ * the Develop stage offers once it is zoomed (2026-09-23): the part of the
+ * delivered canvas on screen (`win`, shares of the canvas from `visibleWindow`)
+ * read back into the zone's frame through the crop the canvas shows now
+ * (`shown`, `zoneFromCrop`'s answer) and the border it sits in (`layout`, any
+ * units — only its proportions are read).
+ *
+ * The canvas is the zone, axis-aligned and the right way up — `drawFramed`
+ * turns the picture, never the frame — so the arithmetic is a linear map and
+ * a rotation, a flip or a pan already on the crop is kept as it is. What the
+ * screen shows of a border is margin, not picture, and is cut away.
+ *
+ * Null when there is nothing to crop: the whole crop is on screen, or only the
+ * border is. Otherwise the zone, held inside a free aspect's 1:5..5:1 about its
+ * centre and grown to the smallest zone a framing allows, slid in only as far
+ * as the picture's edge needs — and `clamped` says it was.
+ */
+export function zoneFromView(
+  shown: CropZone,
+  layout: { w: number; h: number; x: number; y: number; pw: number; ph: number },
+  win: PictureWindow,
+  deg: number,
+  src: PictureDims,
+): { zone: CropZone; clamped: boolean } | null {
+  if (!(layout.pw > 0 && layout.ph > 0 && shown.w > 0 && shown.h > 0)) return null;
+  const l = Math.max(layout.x, win.x0 * layout.w);
+  const r = Math.min(layout.x + layout.pw, win.x1 * layout.w);
+  const t = Math.max(layout.y, win.y0 * layout.h);
+  const b = Math.min(layout.y + layout.ph, win.y1 * layout.h);
+  if (!(r - l > 0 && b - t > 0)) return null;
+  const kx = shown.w / layout.pw;
+  const ky = shown.h / layout.ph;
+  let w = (r - l) * kx;
+  let h = (b - t) * ky;
+  // A tolerance a pixel of the canvas cannot reach: the fit shows the whole
+  // crop, and a view that does is not asking for one.
+  if (w >= shown.w * (1 - 1e-3) && h >= shown.h * (1 - 1e-3)) return null;
+  const cx = shown.cx - shown.w / 2 + ((l + r) / 2 - layout.x) * kx;
+  const cy = shown.cy - shown.h / 2 + ((t + b) / 2 - layout.y) * ky;
+  let clamped = false;
+  if (w / h > FREE_ASPECT_MAX) {
+    w = h * FREE_ASPECT_MAX;
+    clamped = true;
+  } else if (w / h < FREE_ASPECT_MIN) {
+    h = w / FREE_ASPECT_MIN;
+    clamped = true;
+  }
+  // Grown about the view's centre to the smallest zone a framing allows — a
+  // view at 4000 % is far closer than a crop may go. (`fitAround` is not the
+  // tool: capped at 1 it cannot grow a zone, and it pulls the centre toward
+  // the middle along a diagonal, which moved a view by an edge on both axes.)
+  const base = zoneBase(w, h, deg, src);
+  if (base > 0 && base < 1 / MAX_FRAMING_SCALE) {
+    const grow = (1 / MAX_FRAMING_SCALE / base) * (1 + 1e-9);
+    w *= grow;
+    h *= grow;
+    clamped = true;
+  }
+  // Then slid back inside the turned picture, the nearest place it fits — in
+  // the picture's own axes the centre's room is a rectangle, so a clamp there
+  // is exact. A zone that was not grown is inside already and does not move.
+  const { cos, sin, c, s } = turn(deg);
+  const roomX = Math.max(0, src.width / 2 - (w * c + h * s) / 2);
+  const roomY = Math.max(0, src.height / 2 - (w * s + h * c) / 2);
+  const q = intoPicture(cx, cy, deg);
+  const qx = Math.max(-roomX, Math.min(roomX, q.qx));
+  const qy = Math.max(-roomY, Math.min(roomY, q.qy));
+  const zone = { cx: qx * cos - qy * sin, cy: qx * sin + qy * cos, w, h };
+  return { zone, clamped };
 }
 
 /** The zone turned with the picture by a quarter: clockwise (cx, cy, w, h) → (−cy, cx, h, w). */

@@ -213,6 +213,8 @@ export const Icons = {
       <path d="M7 9 17 3v6z" fill="currentColor" />
     </>,
   ),
+  // The cropping L's: two corners that overlap, the frame they cut.
+  crop: icon(<path d="M7 3v14h14M3 7h14v14" />),
 } as const;
 
 export type IconName = keyof typeof Icons;

@@ -17,6 +17,7 @@ import {
   zoneBase,
   zoneContained,
   zoneFromCrop,
+  zoneFromView,
   zoneValid,
   type CropZone,
 } from './crop-rect';
@@ -265,5 +266,98 @@ describe('rotation under the zone', () => {
     expect(splitRotation(93)).toEqual({ quarter: 90, fine: 3 });
     expect(splitRotation(-2.5)).toEqual({ quarter: 0, fine: -2.5 });
     expect(splitRotation(178).quarter).toBe(180);
+  });
+});
+
+describe('cropping to the view', () => {
+  /** The source pixel under a point of the delivered canvas, from its centre — `drawFramed` run backwards. */
+  function sourceAt(framing: Framing, dstW: number, dstH: number, dx: number, dy: number) {
+    const t = framingTransform(SRC.width, SRC.height, dstW, dstH, framing);
+    const cos = Math.cos(t.angle);
+    const sin = Math.sin(t.angle);
+    // d = R·(pan + S·M·q)  →  q = M·(R⁻¹·d − pan) / S
+    const ux = dx * cos + dy * sin - t.panX;
+    const uy = -dx * sin + dy * cos - t.panY;
+    return { x: (ux / t.scale) * t.mirrorX, y: (uy / t.scale) * t.mirrorY };
+  }
+  const plain = (ratio: number) => ({ w: ratio, h: 1, x: 0, y: 0, pw: ratio, ph: 1 });
+
+  it('keeps the part of the picture that was on screen, where it was, under a turned and panned crop', () => {
+    const before: Framing = { scale: 1.6, x: 0.04, y: -0.03, rotation: 7, flipX: true, flipY: false, fit: 'cover' };
+    const ratio = 4 / 5;
+    const shown = zoneFromCrop(SRC, ratio, before);
+    const win = { x0: 0.5, y0: 0.2, x1: 0.9, y1: 0.6 };
+    const out = zoneFromView(shown, plain(ratio), win, before.rotation, SRC);
+    expect(out).not.toBeNull();
+    const { zone, clamped } = out!;
+    expect(clamped).toBe(false);
+    expect(zone.w / zone.h).toBeCloseTo((0.4 * ratio) / 0.4, 6);
+    const after = cropFromZone(SRC, zone, before.rotation, before.flipX, before.flipY);
+    // The window's centre on the old canvas is the new canvas's centre…
+    const oldW = 1000 * ratio;
+    const q0 = sourceAt(before, oldW, 1000, (0.7 - 0.5) * oldW, (0.4 - 0.5) * 1000);
+    const newRatio = zone.w / zone.h;
+    const q1 = sourceAt(after, 1000 * newRatio, 1000, 0, 0);
+    expect(q1.x).toBeCloseTo(q0.x, 4);
+    expect(q1.y).toBeCloseTo(q0.y, 4);
+    // …and its corner is the new corner: nothing turned, nothing mirrored.
+    const c0 = sourceAt(before, oldW, 1000, (0.9 - 0.5) * oldW, (0.6 - 0.5) * 1000);
+    const c1 = sourceAt(after, 1000 * newRatio, 1000, (1000 * newRatio) / 2, 500);
+    expect(c1.x).toBeCloseTo(c0.x, 4);
+    expect(c1.y).toBeCloseTo(c0.y, 4);
+    expect(after.rotation).toBeCloseTo(7, 9);
+    expect(after.flipX).toBe(true);
+    expectZone(shownZone(after, newRatio), zone, 4);
+  });
+
+  it('crops the untouched picture to its right half', () => {
+    const shown = zoneFromCrop(SRC, 1.5, DEFAULT_FRAMING);
+    const out = zoneFromView(shown, plain(1.5), { x0: 0.5, y0: 0, x1: 1, y1: 1 }, 0, SRC);
+    expectZone(out!.zone, { cx: 750, cy: 0, w: 1500, h: 2000 }, 3);
+  });
+
+  it('asks for nothing when the whole crop is on screen, or only its border', () => {
+    const shown = zoneFromCrop(SRC, 1.5, DEFAULT_FRAMING);
+    expect(zoneFromView(shown, plain(1.5), { x0: 0, y0: 0, x1: 1, y1: 1 }, 0, SRC)).toBeNull();
+    // A border of 0.25 on each side: the view shows margin only.
+    const bordered = { w: 2, h: 1.5, x: 0.25, y: 0.25, pw: 1.5, ph: 1 };
+    expect(zoneFromView(shown, bordered, { x0: 0, y0: 0, x1: 0.1, y1: 1 }, 0, SRC)).toBeNull();
+  });
+
+  it('cuts the border away and keeps the picture under it', () => {
+    const shown = zoneFromCrop(SRC, 1.5, DEFAULT_FRAMING);
+    const bordered = { w: 2, h: 1.5, x: 0.25, y: 0.25, pw: 1.5, ph: 1 };
+    // The left half of the canvas: margin, then the picture's left half.
+    const out = zoneFromView(shown, bordered, { x0: 0, y0: 0, x1: 0.5, y1: 1 }, 0, SRC);
+    expectZone(out!.zone, { cx: -750, cy: 0, w: 1500, h: 2000 }, 3);
+  });
+
+  it('grows a view closer than a crop may go to the smallest zone, and says so', () => {
+    const shown = zoneFromCrop(SRC, 1.5, DEFAULT_FRAMING);
+    const out = zoneFromView(shown, plain(1.5), { x0: 0.5, y0: 0.5, x1: 0.51, y1: 0.51 }, 0, SRC);
+    expect(out!.clamped).toBe(true);
+    expect(zoneValid(out!.zone, 0, SRC)).toBe(true);
+    expect(zoneBase(out!.zone.w, out!.zone.h, 0, SRC)).toBeCloseTo(1 / MAX_FRAMING_SCALE, 6);
+    // Grown about where the view was, not moved to the middle.
+    expect(out!.zone.cx).toBeCloseTo(0.505 * 3000 - 1500, 3);
+    expect(out!.zone.cy).toBeCloseTo(0.505 * 2000 - 1000, 3);
+  });
+
+  it('grows a tiny view by an edge in place, slid in only as far as the picture needs', () => {
+    const shown = zoneFromCrop(SRC, 1.5, DEFAULT_FRAMING);
+    const out = zoneFromView(shown, plain(1.5), { x0: 0.99, y0: 0.3, x1: 1, y1: 0.31 }, 0, SRC);
+    const { zone } = out!;
+    expect(zoneValid(zone, 0, SRC)).toBe(true);
+    // Its right edge on the picture's, its centre height where the view was.
+    expect(zone.cx + zone.w / 2).toBeCloseTo(1500, 3);
+    expect(zone.cy).toBeCloseTo(0.305 * 2000 - 1000, 3);
+  });
+
+  it('holds a sliver of a view inside a free aspect', () => {
+    const shown = zoneFromCrop(SRC, 1.5, DEFAULT_FRAMING);
+    const out = zoneFromView(shown, plain(1.5), { x0: 0, y0: 0.45, x1: 1, y1: 0.5 }, 0, SRC);
+    expect(out!.clamped).toBe(true);
+    expect(out!.zone.w / out!.zone.h).toBeCloseTo(5, 6);
+    expect(zoneValid(out!.zone, 0, SRC)).toBe(true);
   });
 });

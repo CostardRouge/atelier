@@ -557,6 +557,30 @@ still counts it as uncropped. The rule is worth keeping wherever a default
 chip is added: a default that DIRTIES a document is a different thing from a
 default that only says what the next gesture may do.
 
+**Crop to the view** (2026-09-23, the maintainer: zoomed in on the stage he
+often likes the view AS a crop, and wanted iOS Photos' discreet offer rather
+than trips back and forth to the Crop tab to find the same zone again). A
+zoomed Adjust stage offers it three ways — a quiet `crop` pill heading the
+top-right corner's column (the loupe's status under it, so the verb never
+moves), `⇧C` (`'crop-view'`, the one shift chord besides `?`), and a row of the
+`%` menu. Rules: (1) the zoom stays LOOKING (`frontend.md`, «Two uses, one
+hand») — no gesture writes; only the explicit verb does. (2) The arithmetic is
+`zoneFromView` (`crop-rect.ts`, pure, tested through `framingTransform` under a
+turned, flipped, panned crop): the visible share of the DELIVERED canvas
+(`visibleWindow`, `pan-zoom.ts`), the border cut away, mapped linearly into the
+zone the canvas shows — the canvas is the zone the right way up, so rotation,
+flips and pan are kept for free. (3) It is offered only when it would change
+something (null at the fit, or over margin only) and never over a legacy
+`contain` framing, whose canvas is not its zone. (4) It writes through
+`useCropZone().cropTo` (chip → Free: the shape is the screen's), and the view
+returns to the fit AT ONCE (`PictureZoom.fit`, not the animated reset) — the
+new picture at the fit IS what was on screen, measured headless to 0.004 of
+the frame. (5) A view closer than a crop may go (8×) grows to the smallest
+zone about its own centre and is slid in by an exact clamp in the picture's
+axes; **trap**: `fitAround(…, cap = 1)` cannot grow a zone, and asked to it
+pulls the centre along a diagonal to the MIDDLE — the first build cropped a
+4000 % view by an edge to the picture's centre. One undo step, like any crop.
+
 ## A picture may be delivered on a BORDER (2026-09-19, roll v2)
 
 **Decision (maintainer, over a second prototype).** Coloured bars or margins

@@ -2,6 +2,7 @@ import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
 import TaskEdge from '../ui/TaskEdge';
+import { Icons } from '../ui/icons';
 import type { DevelopPicture } from './use-develop-picture';
 
 /**
@@ -32,6 +33,7 @@ export default function DevelopViewport({
   emptyText = 'No picture to develop yet.',
   className = '',
   onPick,
+  onCropToView,
   pixelView = 'smooth',
   facts = null,
   shot = null,
@@ -103,6 +105,13 @@ export default function DevelopViewport({
    * answers a click while `picture.picking` is on; omitted, there is no dropper.
    */
   onPick?: (linear: [number, number, number]) => void;
+  /**
+   * Make what the zoomed view shows the crop. Given only while it would CHANGE
+   * something (the host's `zoneFromView`), and drawn as one quiet pill in the
+   * top-right corner — iOS Photos' own gesture: you zoom, the crop is offered,
+   * nothing has to be found again on the Crop tab.
+   */
+  onCropToView?: () => void;
 }) {
   const { view, source, problem, cube, holding, wipe, divider, handlers } = picture;
   const picking = Boolean(onPick && picture.picking && source);
@@ -163,22 +172,41 @@ export default function DevelopViewport({
         className="absolute inset-0 w-full h-full pointer-events-none"
         aria-hidden="true"
       />
-      {picture.loupe.active && (
-        <span
-          className={`absolute top-2 right-2.5 ${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}
-          role="status"
-          title="Past the stage's own pixels the file is decoded whole and drawn at its own density"
-        >
-          {picture.loupe.state === 'decoding'
-            ? 'loupe · decoding…'
-            : picture.loupe.state === 'ready'
-              ? `loupe · ${picture.loupe.longEdge ?? ''} px`
-              : picture.loupe.state === 'same'
-                ? 'loupe · the file has no more'
-                : picture.loupe.state === 'cancelled'
-                  ? 'loupe · cancelled'
-                  : 'loupe · could not decode'}
-        </span>
+      {/* The top-right corner is a COLUMN: the crop verb first, so it never
+          moves when the loupe's status comes and goes under it. */}
+      {((onCropToView && !picking) || picture.loupe.active) && (
+        <div className="absolute top-2 right-2.5 flex flex-col items-end gap-1">
+          {onCropToView && !picking && (
+            <button
+              type="button"
+              // Its OWN press: reaching the stage would start a pan under it.
+              onPointerDown={(e) => e.stopPropagation()}
+              onClick={onCropToView}
+              className={`${developPillClass} gap-1.5 bg-[rgba(251,248,241,0.86)] text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink`}
+              title="Crop to this view — what the screen shows becomes the crop (⇧C)"
+            >
+              <span className="text-xs leading-none">{Icons.crop}</span>
+              crop
+            </button>
+          )}
+          {picture.loupe.active && (
+            <span
+              className={`${developPillClass} bg-[rgba(251,248,241,0.86)] text-ink-soft`}
+              role="status"
+              title="Past the stage's own pixels the file is decoded whole and drawn at its own density"
+            >
+              {picture.loupe.state === 'decoding'
+                ? 'loupe · decoding…'
+                : picture.loupe.state === 'ready'
+                  ? `loupe · ${picture.loupe.longEdge ?? ''} px`
+                  : picture.loupe.state === 'same'
+                    ? 'loupe · the file has no more'
+                    : picture.loupe.state === 'cancelled'
+                      ? 'loupe · cancelled'
+                      : 'loupe · could not decode'}
+            </span>
+          )}
+        </div>
       )}
       {picture.comparing && (
         <div

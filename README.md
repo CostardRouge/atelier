@@ -1064,7 +1064,7 @@ picture as it was last seen in the editor — developed and cropped — and a do
 marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.
 
-**Cropping.** The **Crop** tab (**R**; **D** goes back to Develop) shows the
+**Cropping.** The **Crop** tab (**C**; **A** goes back to Adjust) shows the
 whole developed picture, still, with the part you keep drawn over it and the
 rest darkened. Drag inside the zone to move it, on the picture to draw a new
 one, or one of its eight handles to move that edge or corner — the opposite
@@ -1079,6 +1079,14 @@ horizon. The quarter turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.
+
+**Crop to the view.** Zoomed in on the Adjust stage, a small **crop** pill
+appears in its top-right corner (or **⇧C**, or *Crop to this view* in the %
+menu): what the screen shows becomes the crop, the view goes back to the fit,
+and the picture on screen does not move — so the part you were studying never
+has to be found again on the Crop tab. It keeps the angle and the flips
+already set, leaves a border out, is one undo, and a view closer than a crop
+may go (8×) is grown to the smallest crop about where you were looking.
 
 **Borders.** Under the crop, **Borders** puts a canvas round it: a **file**
 format the bars reach (*Free* is the crop plus its margins; 4:5, 9:16, 1:1… for
