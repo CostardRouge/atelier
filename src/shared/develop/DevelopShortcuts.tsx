@@ -56,6 +56,18 @@ const GROUPS: readonly Group[] = [
       { keys: '⇧ / ⌘-click', what: 'choose pictures along the filmstrip' },
     ],
   },
+  {
+    title: 'Repairing',
+    rows: [
+      { keys: 'tap', what: 'with Repair on, place a patch — it borrows from beside itself' },
+      { keys: 'drag from the spot', what: 'point at where it borrows from, at any distance — the source turns with the hand' },
+      { keys: 'drag a solid ring', what: 'move that patch, its source going with it' },
+      { keys: 'drag a dashed ring', what: 'move where that patch borrows from' },
+      { keys: 'click a ring', what: 'select the patch — Size, Feather and Heal / Clone then edit it' },
+      { keys: '⌫ · Esc', what: 'take the selected patch off · let go of it, then put Repair down' },
+      { keys: 'tap a dotted ring', what: 'heal a spot Find spots proposed — a proposal is never a patch until it is taken' },
+    ],
+  },
 ];
 
 /**

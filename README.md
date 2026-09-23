@@ -1104,6 +1104,25 @@ preview above it shows the file exactly as the export will write it, with its
 size. **Apply crop to…** and **Apply borders to…** are separate: one border
 can go on a whole roll whose crops each differ.
 
+**Repairing.** The **Detail** tab (**D**) starts with **Repair**: a patch
+replaces a disc of the picture with another disc's pixels, feathered at its
+edge — **Heal** matches the borrowed texture to the spot's own surroundings,
+**Clone** copies it as it is. With Repair on, a tap places a patch that
+borrows from beside itself; a drag from the spot points at where to borrow
+from, at any distance, the source turning round the spot as your hand does.
+Every ring on the picture stays alive afterwards: drag a solid ring to move
+its patch, drag its dashed ring to change where it borrows from, click either
+to select it — **Size**, **Feather** and Heal / Clone then edit that patch —
+and **⌫** takes it off. **Find spots** looks over the picture for the marks a
+sensor leaves: it draws the photograph as a **map** of what falls below its
+surroundings, where a mark a screen hides at the fit reads as a bright disc,
+and *proposes* the small round ones as dotted rings at the **sensitivity** you
+set — a texture, a wire or the corner of a roof is left alone. Tap a proposed
+ring to heal it, or **Heal all**; a proposal is never a patch until you take
+it. Patches are numbers on the roll, never pixels: they follow the crop, the
+thumbnail and the full-size export. Under Repair, the same tab holds
+**Noise**, **Fringing** and **Sharpen**, judged honestly under the loupe.
+
 **Which file.** A chip above the photograph says what it is developed from
 (`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the list of the
 capture's files: the proxy your Winnow made, what the camera delivered — its

@@ -301,9 +301,19 @@ export interface DevelopPicture {
   pickAt: (clientX: number, clientY: number) => [number, number, number] | null;
   /**
    * Where a client point lands in the SOURCE picture, as [0,1]; null outside
-   * it. What a painted mask's strokes are made of.
+   * it. What a painted mask's strokes are made of. With `unbounded`, a point
+   * past the picture's edge is answered as it is (below 0, above 1) instead
+   * of refused — what a DRAG of something already on the picture needs, so
+   * a hand that strays over the edge still moves it to the edge.
    */
-  pointAt: (clientX: number, clientY: number) => [number, number] | null;
+  pointAt: (clientX: number, clientY: number, unbounded?: boolean) => [number, number] | null;
+  /**
+   * The VEIL (`veil` option): a canvas over the stage carrying a map of the
+   * picture in the picture's own place — the dust map, today — drawn through
+   * the same crop as the stage so it lands on the photograph to the pixel.
+   * Sized 0 when there is nothing to draw.
+   */
+  veilCanvasRef: RefObject<HTMLCanvasElement>;
   /**
    * The other way: where a point of the SOURCE picture, as [0,1], is drawn on
    * the stage — in the VIEWPORT's own pixels, so a marker can be positioned
@@ -392,8 +402,16 @@ export function useDevelopPicture({
   pixelView = 'smooth',
   repair = null,
   film = null,
+  veil = null,
 }: {
   file: File | null;
+  /**
+   * A map drawn OVER the picture, in the picture's own [0,1] — the dust map
+   * at its scan size. The hook frames it exactly as it frames the stage and
+   * exposes the canvas (`veilCanvasRef`); the viewport lays it on top. Null
+   * draws nothing and costs nothing.
+   */
+  veil?: { image: CanvasImageSource; width: number; height: number } | null;
   videoTimeSeconds?: number;
   cube: CubeLut | null;
   /**
@@ -917,7 +935,7 @@ export function useDevelopPicture({
    * know where, so this goes through `unframePoint`.
    */
   const pointAt = useCallback(
-    (clientX: number, clientY: number): [number, number] | null => {
+    (clientX: number, clientY: number, unbounded = false): [number, number] | null => {
       const canvas = canvasRef.current;
       if (!canvas || !source || !canvasSize) return null;
       const rect = canvas.getBoundingClientRect();
@@ -928,16 +946,47 @@ export function useDevelopPicture({
       const scale = Math.min(rect.width / w, rect.height / h);
       const x = (clientX - rect.left - (rect.width - w * scale) / 2) / scale;
       const y = (clientY - rect.top - (rect.height - h * scale) / 2) / scale;
-      if (x < 0 || y < 0 || x > w || y > h) return null;
+      if (!unbounded && (x < 0 || y < 0 || x > w || y > h)) return null;
       if (!frameRatio || !framing) {
         return [x / w, y / h];
       }
       const [sx, sy] = unframePoint(x, y, source.width, source.height, w, h, framing);
-      if (sx < 0 || sy < 0 || sx > source.width || sy > source.height) return null;
+      if (!unbounded && (sx < 0 || sy < 0 || sx > source.width || sy > source.height)) return null;
       return [sx / source.width, sy / source.height];
     },
     [source, canvasSize, frameRatio, framing],
   );
+
+  // --- the veil: a map of the picture, in the picture's place ---------------
+  // The host hands a small canvas in SOURCE coordinates (the dust map at its
+  // scan size); it is drawn through the stage's own crop into a canvas of the
+  // stage's size, so the same CSS box and transform put it on the photograph
+  // exactly. A way of LOOKING, like the wipe: `delivered()` never sees it.
+  const veilCanvasRef = useRef<HTMLCanvasElement>(null);
+  useEffect(() => {
+    const canvas = veilCanvasRef.current;
+    if (!canvas) return;
+    if (!veil || !source || !canvasSize) {
+      if (canvas.width || canvas.height) {
+        canvas.width = 0;
+        canvas.height = 0;
+      }
+      return;
+    }
+    const { w, h } = canvasSize;
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return;
+    ctx.clearRect(0, 0, w, h);
+    ctx.imageSmoothingEnabled = true;
+    ctx.imageSmoothingQuality = 'high';
+    const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
+    if (layout && framing) drawPictureIn(ctx, veil.image, veil.width, veil.height, framing, layout);
+    else ctx.drawImage(veil.image, 0, 0, veil.width, veil.height, 0, 0, w, h);
+  }, [veil, source, canvasSize, delivered1, framing]);
 
   // Read through refs: a snapshot is asked for after a quiet delay, and must
   // take the cube of THAT moment, not the one the closure was made with.
@@ -1338,6 +1387,7 @@ export function useDevelopPicture({
     setPicking,
     pickAt,
     pointAt,
+    veilCanvasRef,
     stagePoint,
     divider,
     snapshot,

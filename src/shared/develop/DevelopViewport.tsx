@@ -1,3 +1,4 @@
+import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
@@ -11,6 +12,7 @@ import type { DevelopPicture } from './use-develop-picture';
  * shares of the frame's width and height (`repair.ts`, `patchExtent`).
  */
 export interface RepairRing {
+  id: string;
   x: number;
   y: number;
   sx: number;
@@ -18,7 +20,41 @@ export interface RepairRing {
   ru: number;
   rv: number;
   kind: 'heal' | 'clone';
+  /** The one the panel's sliders edit — drawn in the accent. */
+  selected?: boolean;
 }
+
+/** The two halves of a ring a hand can take hold of. */
+export type RingPart = 'patch' | 'source';
+
+/**
+ * A drag on a ring, in the source's own [0,1] — UNBOUNDED, so a hand that
+ * strays past the picture's edge still moves the patch to the edge. `onEnd`
+ * says whether the pointer travelled at all: a press that did not is a tap,
+ * which selects without moving.
+ */
+export interface RingGesture {
+  onStart: (id: string, part: RingPart, point: [number, number]) => void;
+  onMove: (point: [number, number]) => void;
+  onEnd: (travelled: boolean) => void;
+}
+
+/** A spot the dust scan proposes: a heal to accept with a tap, never a patch yet. */
+export interface SpotRing {
+  x: number;
+  y: number;
+  ru: number;
+}
+
+/** Pixels a pointer may wander before a press on a ring is a drag rather than a tap. */
+const RING_SLOP = 3;
+/** A ring's hit disc is never smaller than this, in screen pixels: a 3 px ring is not a target. */
+const RING_HIT = 11;
+
+/** How a light stroke is drawn on the picture — the fixed `on-media` ink, never a theme colour that goes near-black at night. */
+const RING_INK = 'rgba(251,248,241,0.92)';
+const CLONE_INK = 'rgba(255,220,120,0.92)';
+const RING_HALO = 'rgba(20,18,14,0.55)';
 
 /**
  * The picture being developed: the canvas, the before/after divider and its
@@ -40,7 +76,9 @@ export default function DevelopViewport({
   marks = null,
   onUnmark,
   rings = null,
-  onUnring,
+  onRing,
+  spots = null,
+  onSpot,
   scope = null,
 }: {
   picture: DevelopPicture;
@@ -57,8 +95,21 @@ export default function DevelopViewport({
    * the pixels were, exactly as the subject marks do.
    */
   rings?: readonly RepairRing[] | null;
-  /** Taking a patch off. Given, a destination ring answers its own click. */
-  onUnring?: (index: number) => void;
+  /**
+   * Given, a ring answers its own press: a drag on the destination MOVES the
+   * patch (its source travelling with it), a drag on the dashed source moves
+   * where it borrows from, and a tap on either selects it. Nothing here
+   * removes a patch — that is a key or a verb, once it is selected — so a
+   * press can never throw away what it meant to move.
+   */
+  onRing?: RingGesture | null;
+  /**
+   * Spots the dust scan PROPOSES, drawn as dotted rings with a `+`: a
+   * candidate is accepted with a tap (`onSpot`) and healed then, never
+   * before. In source coordinates like the rings.
+   */
+  spots?: readonly SpotRing[] | null;
+  onSpot?: (index: number) => void;
   /**
    * Points the author PICKED on the picture, in the source's own [0,1] — a
    * subject mask's taps. Drawn as `+` discs that follow the zoom and the pan.
@@ -115,6 +166,52 @@ export default function DevelopViewport({
 }) {
   const { view, source, problem, cube, holding, wipe, divider, handlers } = picture;
   const picking = Boolean(onPick && picture.picking && source);
+  // The ring under the hand: which pointer, where it pressed, whether it has
+  // travelled past the slop. One at a time — a second finger is the pinch's.
+  const ringDrag = useRef<{ pointerId: number; x: number; y: number; travelled: boolean } | null>(null);
+  const grab = (ring: RepairRing, part: RingPart) => (e: ReactPointerEvent<SVGElement>) => {
+    if (!onRing) return;
+    e.preventDefault();
+    // Its OWN press, never the stage's: a press that reached the paint seam
+    // would place a new patch under the one being taken hold of.
+    e.stopPropagation();
+    if (ringDrag.current) return;
+    const at = picture.pointAt(e.clientX, e.clientY, true);
+    if (!at) return;
+    ringDrag.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, travelled: false };
+    try {
+      e.currentTarget.setPointerCapture(e.pointerId);
+    } catch {
+      /* not a live pointer */
+    }
+    onRing.onStart(ring.id, part, at);
+  };
+  const ringMove = (e: ReactPointerEvent<SVGElement>) => {
+    const d = ringDrag.current;
+    if (!d || d.pointerId !== e.pointerId || !onRing) return;
+    e.stopPropagation();
+    if (!d.travelled && Math.hypot(e.clientX - d.x, e.clientY - d.y) <= RING_SLOP) return;
+    d.travelled = true;
+    const at = picture.pointAt(e.clientX, e.clientY, true);
+    if (at) onRing.onMove(at);
+  };
+  const ringRelease = (e: ReactPointerEvent<SVGElement>) => {
+    const d = ringDrag.current;
+    if (!d || d.pointerId !== e.pointerId) return;
+    e.stopPropagation();
+    ringDrag.current = null;
+    onRing?.onEnd(d.travelled);
+  };
+  const ringHandlers = (ring: RepairRing, part: RingPart) =>
+    onRing
+      ? {
+          onPointerDown: grab(ring, part),
+          onPointerMove: ringMove,
+          onPointerUp: ringRelease,
+          onPointerCancel: ringRelease,
+          style: { pointerEvents: 'all' as const, cursor: 'move' },
+        }
+      : {};
   // A tap-gesture mask tool is armed: the pointer ADDS a point, and the native
   // `copy` cursor is the browser's own `+` badge saying so.
   const tapping = !picking && picture.painting && picture.paintGesture === 'tap';
@@ -170,6 +267,19 @@ export default function DevelopViewport({
       <canvas
         ref={picture.loupe.canvasRef}
         className="absolute inset-0 w-full h-full pointer-events-none"
+        aria-hidden="true"
+      />
+      {/* The veil: a map of the picture in the picture's place — the same
+          box and transform as the stage canvas, its backing the same size,
+          so `object-contain` letterboxes the two alike. Sized 0 when there
+          is nothing to show (`use-develop-picture.ts`, «the veil»). */}
+      <canvas
+        ref={picture.veilCanvasRef}
+        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+        style={{
+          transform: view.transform,
+          transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
+        }}
         aria-hidden="true"
       />
       {/* The top-right corner is a COLUMN: the crop verb first, so it never
@@ -290,13 +400,50 @@ export default function DevelopViewport({
             </button>
           );
         })}
-      {source && rings && rings.length > 0 && (
+      {source && ((rings && rings.length > 0) || (spots && spots.length > 0)) && (
         <svg
           className="absolute inset-0 w-full h-full overflow-visible"
           style={{ pointerEvents: 'none' }}
-          aria-hidden={!onUnring}
+          aria-hidden={!onRing && !onSpot}
         >
-          {rings.map((ring, i) => {
+          {spots?.map((spot, i) => {
+            const at = picture.stagePoint(spot.x, spot.y);
+            if (!at || !at.inside) return null;
+            const edge = picture.stagePoint(spot.x + spot.ru, spot.y);
+            const r = edge ? Math.max(4, Math.hypot(edge.x - at.x, edge.y - at.y)) : 6;
+            return (
+              <g key={`spot-${spot.x},${spot.y}`}>
+                <circle cx={at.x} cy={at.y} r={r} fill="none" stroke={RING_HALO} strokeWidth={2.5} />
+                <circle cx={at.x} cy={at.y} r={r} fill="none" stroke={RING_INK} strokeWidth={1} strokeDasharray="1.5 2.5" />
+                <path
+                  d={`M${at.x - 3} ${at.y}h6M${at.x} ${at.y - 3}v6`}
+                  stroke={RING_INK}
+                  strokeWidth={1.2}
+                  strokeLinecap="round"
+                  opacity={0.9}
+                />
+                {onSpot && (
+                  <circle
+                    cx={at.x}
+                    cy={at.y}
+                    r={Math.max(r, RING_HIT)}
+                    fill="rgba(251,248,241,0.001)"
+                    style={{ pointerEvents: 'all', cursor: 'pointer' }}
+                    // Its own press: reaching the stage would place a second
+                    // patch under the heal this tap makes.
+                    onPointerDown={(e) => {
+                      e.preventDefault();
+                      e.stopPropagation();
+                      onSpot(i);
+                    }}
+                  >
+                    <title>Heal this spot</title>
+                  </circle>
+                )}
+              </g>
+            );
+          })}
+          {rings?.map((ring) => {
             const at = picture.stagePoint(ring.x, ring.y);
             if (!at) return null;
             // The radius in screen pixels: a point one radius to the right,
@@ -304,38 +451,39 @@ export default function DevelopViewport({
             const edge = picture.stagePoint(ring.x + ring.ru, ring.y);
             const r = edge ? Math.max(3, Math.hypot(edge.x - at.x, edge.y - at.y)) : 6;
             const from = picture.stagePoint(ring.sx, ring.sy);
-            const stroke = ring.kind === 'heal' ? 'rgba(251,248,241,0.92)' : 'rgba(255,220,120,0.92)';
+            const ink = ring.kind === 'heal' ? RING_INK : CLONE_INK;
+            const stroke = ring.selected ? 'var(--color-accent)' : ink;
             return (
-              <g key={`${ring.x},${ring.y},${i}`}>
+              <g key={ring.id}>
                 {from && (
                   <>
                     <line x1={at.x} y1={at.y} x2={from.x} y2={from.y} stroke={stroke} strokeWidth={1} strokeDasharray="2 3" opacity={0.7} />
-                    <circle cx={from.x} cy={from.y} r={r} fill="none" stroke={stroke} strokeWidth={1.2} strokeDasharray="3 3" />
+                    <circle cx={from.x} cy={from.y} r={r} fill="none" stroke={RING_HALO} strokeWidth={2.5} />
+                    <circle
+                      cx={from.x}
+                      cy={from.y}
+                      r={r}
+                      fill="none"
+                      stroke={stroke}
+                      strokeWidth={ring.selected ? 1.6 : 1.2}
+                      strokeDasharray="3 3"
+                    />
+                    <circle
+                      cx={from.x}
+                      cy={from.y}
+                      r={Math.max(r, RING_HIT)}
+                      fill="rgba(251,248,241,0.001)"
+                      {...ringHandlers(ring, 'source')}
+                    >
+                      {onRing && <title>Drag to change where this patch borrows from</title>}
+                    </circle>
                   </>
                 )}
-                <circle cx={at.x} cy={at.y} r={r} fill="none" stroke="rgba(20,18,14,0.55)" strokeWidth={3} />
-                <circle
-                  cx={at.x}
-                  cy={at.y}
-                  r={r}
-                  fill={onUnring ? 'rgba(251,248,241,0.001)' : 'none'}
-                  stroke={stroke}
-                  strokeWidth={1.4}
-                  style={onUnring ? { pointerEvents: 'all', cursor: 'pointer' } : undefined}
-                  // Its OWN press, never the stage's: a click that reached
-                  // the paint seam would place a new patch under the one
-                  // it just removed.
-                  onPointerDown={
-                    onUnring
-                      ? (e) => {
-                          e.preventDefault();
-                          e.stopPropagation();
-                          onUnring(i);
-                        }
-                      : undefined
-                  }
-                >
-                  {onUnring && <title>Take this patch off</title>}
+                <circle cx={at.x} cy={at.y} r={r} fill="none" stroke={RING_HALO} strokeWidth={3} />
+                <circle cx={at.x} cy={at.y} r={r} fill="none" stroke={stroke} strokeWidth={ring.selected ? 2 : 1.4} />
+                {ring.selected && <circle cx={at.x} cy={at.y} r={1.6} fill={stroke} />}
+                <circle cx={at.x} cy={at.y} r={Math.max(r, RING_HIT)} fill="rgba(251,248,241,0.001)" {...ringHandlers(ring, 'patch')}>
+                  {onRing && <title>Drag to move this patch · click to select it</title>}
                 </circle>
               </g>
             );
