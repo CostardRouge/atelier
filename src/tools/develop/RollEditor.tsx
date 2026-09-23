@@ -717,32 +717,47 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           </p>
         </div>
       )}
+      {/* On a phone the bar must hold ONE row — back, name, history, Add — or
+          it wraps to two and the photograph pays ~50px for it: the back is its
+          chevron, the name one step smaller, and Add is its glyph (the menu
+          still names every way in). The Trips overview's bar, the same fix. */}
       <PageBar
-        back={{ label: 'Rolls', onClick: onBack }}
+        back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
         trailing={
           <>
             {headerExtra}
             {/* The Library's item only when it holds something the roll does
                 not: a ticked picture already on the roll is nothing to add. */}
             {adding ? (
-              <Button variant="primary" icon={Icons.plus} disabled>
-                Adding…
+              <Button variant="primary" icon={Icons.plus} disabled aria-label="Adding…">
+                {compact ? null : 'Adding…'}
               </Button>
             ) : addItems.length > 1 ? (
               <OverflowMenu
                 label="Add pictures to this roll"
                 items={addItems}
-                trigger={{ text: 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
+                trigger={{ text: compact ? null : 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
               />
             ) : addItems[0] ? (
-              <Button icon={Icons.plus} onClick={addItems[0].onSelect}>
-                {addButtonLabel[addItems[0].id]}
+              <Button
+                icon={Icons.plus}
+                onClick={addItems[0].onSelect}
+                aria-label={compact ? addButtonLabel[addItems[0].id] : undefined}
+                title={compact ? addButtonLabel[addItems[0].id] : undefined}
+              >
+                {compact ? null : addButtonLabel[addItems[0].id]}
               </Button>
             ) : null}
           </>
         }
       >
-        <RollTitle name={roll.name} onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))} />
+        <span className="min-w-0 flex-1">
+          <RollTitle
+            name={roll.name}
+            size={compact ? 'md' : 'lg'}
+            onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))}
+          />
+        </span>
       </PageBar>
 
       {!open ? (
@@ -985,7 +1000,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
  * The roll's name on the bar, renamed in place — the trip title's rule: an
  * emptied field gives the old name back rather than saving a blank.
  */
-function RollTitle({ name, onRename }: { name: string; onRename: (name: string) => void }) {
+function RollTitle({
+  name,
+  onRename,
+  size = 'lg',
+}: {
+  name: string;
+  onRename: (name: string) => void;
+  /** `md` in a phone's one-row bar, `lg` as a wide screen's heading. */
+  size?: 'lg' | 'md';
+}) {
+  const face = size === 'lg' ? 'text-2xl' : 'text-xl';
   const [draft, setDraft] = useState<string | null>(null);
   const inputRef = useRef<HTMLInputElement>(null);
   const editing = draft !== null;
@@ -1015,7 +1040,7 @@ function RollTitle({ name, onRename }: { name: string; onRename: (name: string) 
             setDraft(null);
           }
         }}
-        className="w-full min-w-0 max-w-[28rem] font-serif text-2xl leading-tight px-1.5 py-0.5 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent"
+        className={`w-full min-w-0 max-w-[28rem] font-serif ${face} leading-tight px-1.5 py-0.5 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent`}
       />
     );
   }
@@ -1025,7 +1050,7 @@ function RollTitle({ name, onRename }: { name: string; onRename: (name: string) 
         type="button"
         onClick={() => setDraft(name)}
         title="Rename the roll"
-        className="w-full p-0 border-0 bg-transparent font-serif text-2xl leading-tight text-ink text-left truncate cursor-text hover:text-accent-ink"
+        className={`w-full p-0 border-0 bg-transparent font-serif ${face} leading-tight text-ink text-left truncate cursor-text hover:text-accent-ink`}
       >
         {name || 'Untitled roll'}
       </button>
