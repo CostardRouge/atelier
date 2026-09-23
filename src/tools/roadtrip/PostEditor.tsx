@@ -10,6 +10,7 @@ import {
   collageCellAt,
   collageCellCount,
   collageSettleSeconds,
+  resolveCollage,
   swapCollageCells,
   withCollageCell,
   type CollageLead,
@@ -21,6 +22,8 @@ import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
 import {
+  MOTION_PRESETS,
+  applyPreset,
   deepestFraming,
   flipMotion,
   framingAtNeedle,
@@ -31,9 +34,12 @@ import {
   motionProgress,
   needleTarget,
   placeAtNeedle,
+  presetProblem,
   removeAtNeedle,
   snapShare,
   type FramingMotion,
+  type MotionPreset,
+  type PictureBox,
 } from '../../shared/media/framing-motion';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
@@ -975,6 +981,40 @@ export default function PostEditor({
             ? 'The first frame'
             : `The frame at ${keySeconds(cellMotion, cellMotion.keys[cellTarget.index].at, slideSeconds, openerSeconds).toFixed(1)} s`
           : `A new frame at ${deck.local.toFixed(1)} s`;
+  // Each picture's decoded shape, as the stage reports it — keyed by the slide
+  // so a slide just opened never measures a pan against the last one's.
+  const [pictureSizes, setPictureSizes] = useState<{
+    key: string;
+    sizes: readonly ({ width: number; height: number } | null)[];
+  }>({ key: '', sizes: [] });
+  const onPictureSizes = useCallback(
+    (sizes: readonly ({ width: number; height: number } | null)[]) => setPictureSizes({ key: slideKey, sizes }),
+    [slideKey],
+  );
+  /** The selected picture in its frame (or its cell), for a preset to measure a pan's room. */
+  const presetBox = useMemo((): PictureBox | null => {
+    const src = pictureSizes.key === slideKey ? pictureSizes.sizes[cellIndex] : null;
+    if (!src) return null;
+    const w = 1080;
+    const h = Math.round(1080 / aspect);
+    if (!collage) return { srcW: src.width, srcH: src.height, dstW: w, dstH: h };
+    const rect = resolveCollage(collage, w, h)[cellIndex];
+    return rect ? { srcW: src.width, srcH: src.height, dstW: rect.w, dstH: rect.h } : null;
+  }, [pictureSizes, slideKey, cellIndex, collage, aspect]);
+  const presets = useMemo(
+    () => MOTION_PRESETS.map((id) => ({ id, problem: presetProblem(id, cellFraming, presetBox) })),
+    [cellFraming, presetBox],
+  );
+  /** Write a one-tap move over the selected picture — two frames the needle then refines. */
+  const writePreset = useCallback(
+    (preset: MotionPreset) => {
+      const out = applyPreset(preset, cellFraming, cellMotion, presetBox);
+      if (!out) return;
+      holdTheNeedle();
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [cellFraming, cellMotion, presetBox, holdTheNeedle, patchCell, cellIndex],
+  );
   /** Move the needle between the selected picture's frames. */
   const jumpNeedle = useCallback(
     (to: NeedleJump) => {
@@ -1644,6 +1684,7 @@ export default function PostEditor({
             onDropAsset={isCta ? undefined : dropAsset}
             cellLabels={cellLabels}
             onSourceLoaded={onSourceLoaded}
+            onPictureSizes={onPictureSizes}
             onRendered={captureThumb}
             onFit={setFitWidth}
           />
@@ -1760,6 +1801,8 @@ export default function PostEditor({
                       onMotion: setCellMotion,
                       onRemove: () => setCellMotion(removeAtNeedle(cellMotion, cellNeedle.u, cellNeedle.snap)),
                       onJump: jumpNeedle,
+                      presets,
+                      onPreset: writePreset,
                     }
               }
               grade={grade}

@@ -1,5 +1,11 @@
 import { DEFAULT_STEPS, MAX_STEPS, MIN_STEPS } from '../../../shared/motion/easing';
-import { hasMotion, keepEnds, starterMotion, type FramingMotion } from '../../../shared/media/framing-motion';
+import {
+  hasMotion,
+  keepEnds,
+  starterMotion,
+  type FramingMotion,
+  type MotionPreset,
+} from '../../../shared/media/framing-motion';
 import type { Framing } from '../../../shared/media/framing';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, Readout, SelectField, ToggleField } from '../../../shared/ui/Inspector';
@@ -25,6 +31,34 @@ export interface PanZoomSectionProps {
   onMotion: (motion: FramingMotion | null) => void;
   onRemove: () => void;
   onJump: (to: NeedleJump) => void;
+  /** The one-tap moves, each with the reason it cannot be written here, if any. */
+  presets: readonly { id: MotionPreset; problem: string | null }[];
+  onPreset: (preset: MotionPreset) => void;
+}
+
+/** What each preset is called, and what it does, from the camera's side. */
+const PRESET_WORDS: Record<MotionPreset, { label: string; title: string }> = {
+  'pan-left': { label: 'Pan ←', title: 'The view travels left across the picture, from its right edge to its left' },
+  'pan-right': { label: 'Pan →', title: 'The view travels right across the picture, from its left edge to its right' },
+  'pan-up': { label: 'Pan ↑', title: 'The view travels up the picture, from its foot to its top' },
+  'pan-down': { label: 'Pan ↓', title: 'The view travels down the picture, from its top to its foot' },
+  'push-in': { label: 'Push in', title: 'The view starts wider and moves in on the middle of your framing' },
+  'pull-out': { label: 'Pull out', title: 'The view starts close on the middle and pulls back to your framing' },
+};
+
+/**
+ * Why the disabled presets are disabled, said under them — a disabled button
+ * shows no tooltip, and a move refused in silence reads as a broken one.
+ * One line per reason, naming the buttons it holds back.
+ */
+function presetHint(presets: readonly { id: MotionPreset; problem: string | null }[]): string | undefined {
+  const byReason = new Map<string, string[]>();
+  for (const { id, problem } of presets) {
+    if (!problem) continue;
+    byReason.set(problem, [...(byReason.get(problem) ?? []), PRESET_WORDS[id].label]);
+  }
+  if (byReason.size === 0) return undefined;
+  return [...byReason].map(([reason, labels]) => `${labels.join(', ')}: ${reason}`).join(' ');
 }
 
 /**
@@ -44,6 +78,8 @@ export default function PanZoomSection({
   onMotion,
   onRemove,
   onJump,
+  presets,
+  onPreset,
 }: PanZoomSectionProps) {
   const moving = hasMotion(motion);
   return (
@@ -66,6 +102,11 @@ export default function PanZoomSection({
             changed is a pause.
           </p>
           <p>
+            A <strong>quick move</strong> writes a whole move in one tap — a pan from one edge
+            of the picture to the other, a push in or a pull out — over your framing. It
+            replaces the frames placed so far and keeps the easing; refine it at the needle.
+          </p>
+          <p>
             A slide that moves leaves as a video under Auto. The zoom it reaches decides
             whether the original is fetched for the export, not the zoom it rests at.
           </p>
@@ -80,6 +121,22 @@ export default function PanZoomSection({
         >
           {moving ? `${motion.keys.length + 1} frames` : 'Holds still'}
         </ToggleField>
+      </FieldRow>
+      <FieldRow label="Quick move" align="start" hint={presetHint(presets)}>
+        <div className="grid grid-cols-3 gap-1.5 w-full">
+          {presets.map(({ id, problem }) => (
+            <Button
+              key={id}
+              size="sm"
+              onClick={() => onPreset(id)}
+              disabled={problem !== null}
+              title={problem ?? PRESET_WORDS[id].title}
+              className="justify-center"
+            >
+              {PRESET_WORDS[id].label}
+            </Button>
+          ))}
+        </div>
       </FieldRow>
       {moving && (
         <>

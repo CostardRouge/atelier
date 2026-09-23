@@ -3,6 +3,9 @@ import { DEFAULT_FRAMING, flipFraming, framePoint, framingTransform, unframePoin
 import {
   KEY_SNAP_SECONDS,
   STARTER_ZOOM,
+  PRESET_ZOOM,
+  applyPreset,
+  presetProblem,
   deepestFraming,
   flipMotion,
   framingAt,
@@ -279,5 +282,74 @@ describe('deepestFraming', () => {
     expect(deepestFraming(rest, motion([{ at: 0, scale: 2.4, x: 0, y: 0 }])).scale).toBe(2.4);
     expect(deepestFraming(rest, motion([{ at: 0, scale: 1, x: 0, y: 0 }]))).toBe(rest);
     expect(deepestFraming(rest, null)).toBe(rest);
+  });
+});
+
+describe('presets', () => {
+  // A 3:2 landscape in a 9:16 reel: all the room is sideways.
+  const box = { srcW: SRC.w, srcH: SRC.h, dstW: DST.w, dstH: DST.h };
+  const rest: Framing = { ...DEFAULT_FRAMING };
+
+  it('pans from one edge of the real slack to the other, the view travelling the way it says', () => {
+    const out = applyPreset('pan-right', rest, null, box)!;
+    const start = framingAtProgress(out.framing, out.motion, 0);
+    const a = framingTransform(SRC.w, SRC.h, DST.w, DST.h, start);
+    const b = framingTransform(SRC.w, SRC.h, DST.w, DST.h, out.framing);
+    // Starts on the picture's left edge, rests on its right.
+    expect(a.panX).toBeCloseTo(a.slackX, 6);
+    expect(b.panX).toBeCloseTo(-b.slackX, 6);
+    const [leftStart] = unframePoint(0, DST.h / 2, SRC.w, SRC.h, DST.w, DST.h, start);
+    const [rightEnd] = unframePoint(DST.w, DST.h / 2, SRC.w, SRC.h, DST.w, DST.h, out.framing);
+    expect(leftStart).toBeCloseTo(0, 3);
+    expect(rightEnd).toBeCloseTo(SRC.w, 3);
+    // Left is the same move backwards.
+    const left = applyPreset('pan-left', rest, null, box)!;
+    expect(left.motion.keys[0].x).toBeCloseTo(-out.motion.keys[0].x);
+    expect(left.framing.x).toBeCloseTo(-out.framing.x);
+  });
+
+  it('refuses a pan with no room, and says why', () => {
+    expect(presetProblem('pan-up', rest, box)).toMatch(/No room to pan up/);
+    expect(applyPreset('pan-up', rest, null, box)).toBeNull();
+    // Zoomed in, the same picture has room to travel up and down.
+    expect(presetProblem('pan-up', { ...rest, scale: 1.5 }, box)).toBeNull();
+    expect(presetProblem('pan-left', rest, null)).toMatch(/still being read/);
+  });
+
+  it('pushes in onto the composition when it can start wider', () => {
+    const composed: Framing = { ...rest, scale: 2, x: 0.05 };
+    const out = applyPreset('push-in', composed, null, box)!;
+    expect(out.framing).toEqual(composed);
+    expect(out.motion.keys[0].scale).toBeCloseTo(2 / PRESET_ZOOM);
+    // About the middle of the frame: the point there does not move.
+    const mid = (f: Framing) => unframePoint(DST.w / 2, DST.h / 2, SRC.w, SRC.h, DST.w, DST.h, f);
+    const start = framingAtProgress(out.framing, out.motion, 0);
+    expect(mid(start)[0]).toBeCloseTo(mid(composed)[0], 3);
+  });
+
+  it('pushes the rest in when the composition is already at its widest', () => {
+    const out = applyPreset('push-in', rest, null, box)!;
+    expect(out.motion.keys[0].scale).toBe(1);
+    expect(out.framing.scale).toBeCloseTo(PRESET_ZOOM);
+  });
+
+  it('pulls out onto the composition, and refuses at the ceiling', () => {
+    const out = applyPreset('pull-out', rest, null, box)!;
+    expect(out.framing).toBe(rest);
+    expect(out.motion.keys[0].scale).toBeCloseTo(PRESET_ZOOM);
+    expect(presetProblem('pull-out', { ...rest, scale: 8 }, box)).toMatch(/already as close/);
+  });
+
+  it('replaces the frames and keeps how the motion travels', () => {
+    const before = motion(
+      [
+        { at: 0, scale: 3, x: 0, y: 0 },
+        { at: 0.5, scale: 2, x: 0, y: 0 },
+      ],
+      { easing: 'steps', steps: 6, start: 'after-opener' },
+    );
+    const out = applyPreset('pull-out', rest, before, box)!;
+    expect(out.motion.keys).toHaveLength(1);
+    expect(out.motion).toMatchObject({ easing: 'steps', steps: 6, start: 'after-opener' });
   });
 });

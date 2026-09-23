@@ -758,7 +758,12 @@ the picture comes to **rest** — which is also what the PNG, the rail and the
 grid show. The section says what the next gesture will write (the first frame,
 the rest, the frame at 2.4 s, or a new one), steps the needle between frames,
 takes one off, and picks the curve it travels on; a frame placed twice unchanged
-is a pause. The zoom is geometric and a point the two frames share stays still
+is a pause. **Quick move** writes a whole move in one tap over your framing —
+**Pan ← → ↑ ↓** from one edge of the picture to the other at the zoom you chose,
+**Push in** (from wider onto your framing, or closer onto its middle when it is
+already at its widest) and **Pull out** (from close on the middle back to your
+framing) — replacing the frames placed so far and keeping the curve; a pan with
+no room to travel is greyed out, and the reason is written under the buttons. The zoom is geometric and a point the two frames share stays still
 on screen, so a push in lands on what you aimed at. On a hook with an opener
 that covers the frame (Défilé, Virée), the move can wait for the opener to
 finish. It works on a hook, on every picture of a carousel, on each cell of a

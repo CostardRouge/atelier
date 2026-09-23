@@ -37,7 +37,7 @@
  */
 
 import { clampSteps, easeAt, isEasingId, type EasingId } from '../motion/easing';
-import { MAX_FRAMING_SCALE, type Framing } from './framing';
+import { MAX_FRAMING_SCALE, framingTransform, zoomFramingAbout, type Framing } from './framing';
 
 /** One placed frame: where the picture sits at `at` of the motion's span. */
 export interface FramingKey {
@@ -410,4 +410,132 @@ export function deepestFraming(framing: Framing, motion: FramingMotion | null | 
   if (!hasMotion(motion)) return framing;
   const scale = motion.keys.reduce((deepest, k) => Math.max(deepest, k.scale), framing.scale);
   return scale === framing.scale ? framing : { ...framing, scale };
+}
+
+/**
+ * A move written in one tap — the first frame and the rest together, which
+ * the needle then refines like any other. Named from the camera's side:
+ * `pan-right` is the view travelling right across the picture, `push-in` the
+ * camera moving closer.
+ */
+export type MotionPreset = 'pan-left' | 'pan-right' | 'pan-up' | 'pan-down' | 'push-in' | 'pull-out';
+
+export const MOTION_PRESETS: readonly MotionPreset[] = [
+  'pan-left',
+  'pan-right',
+  'pan-up',
+  'pan-down',
+  'push-in',
+  'pull-out',
+];
+
+/** How much closer a push or a pull goes. */
+export const PRESET_ZOOM = 1.6;
+
+/**
+ * The least room a pan must have to be worth offering, as a share of the
+ * frame's long edge: under it the picture would creep, not travel.
+ */
+export const MIN_PAN_SHARE = 0.02;
+
+/** A picture in its frame, in any consistent pixels — only the shapes matter. */
+export interface PictureBox {
+  srcW: number;
+  srcH: number;
+  dstW: number;
+  dstH: number;
+}
+
+/**
+ * How far a pan can travel each way from the middle, as a share of the
+ * frame's long edge — the slack `framingTransform` measures at this zoom, in
+ * the axes the framing stores its pan in.
+ */
+function panReach(framing: Framing, box: PictureBox): { x: number; y: number } {
+  const t = framingTransform(box.srcW, box.srcH, box.dstW, box.dstH, framing);
+  const unit = Math.max(box.dstW, box.dstH);
+  return unit > 0 ? { x: t.slackX / unit, y: t.slackY / unit } : { x: 0, y: 0 };
+}
+
+function boxKnown(box: PictureBox | null | undefined): box is PictureBox {
+  return Boolean(box && box.srcW > 0 && box.srcH > 0 && box.dstW > 0 && box.dstH > 0);
+}
+
+/**
+ * Why a preset cannot be written for this picture as it is framed, or null
+ * when it can. Said, never hidden: a pan across a picture with no room to
+ * pan is a button that would do nothing.
+ */
+export function presetProblem(preset: MotionPreset, framing: Framing, box: PictureBox | null | undefined): string | null {
+  if (!boxKnown(box)) return 'The picture is still being read.';
+  if (preset === 'pan-left' || preset === 'pan-right') {
+    return panReach(framing, box).x < MIN_PAN_SHARE
+      ? 'No room to pan sideways at this zoom — zoom in, or use a picture wider than the frame.'
+      : null;
+  }
+  if (preset === 'pan-up' || preset === 'pan-down') {
+    return panReach(framing, box).y < MIN_PAN_SHARE
+      ? 'No room to pan up or down at this zoom — zoom in, or use a picture taller than the frame.'
+      : null;
+  }
+  if (preset === 'pull-out' && framing.scale * 1.01 >= MAX_FRAMING_SCALE) {
+    return 'The picture is already as close as it goes.';
+  }
+  return null;
+}
+
+/** The framing at `scale`, about the middle of the frame. */
+function zoomedAbout(framing: Framing, scale: number, box: PictureBox): Framing {
+  return zoomFramingAbout(framing, scale, { x: box.dstW / 2, y: box.dstH / 2 }, box.srcW, box.srcH, box.dstW, box.dstH);
+}
+
+/**
+ * Write `preset` over this picture: a fresh move of two frames, the curve
+ * and the start of the motion it replaces kept. Null when the preset has a
+ * {@link presetProblem}.
+ *
+ * - A PAN keeps the zoom the author composed and travels from one edge of
+ *   the real slack to the other — the rest moves to the far edge, since a
+ *   pan that ends where it started is no pan.
+ * - A PUSH ends on the composition when there is room to start wider
+ *   (`PRESET_ZOOM` back, never past covering); a picture composed at its
+ *   widest is pushed in on instead, the rest brought `PRESET_ZOOM` closer
+ *   about the middle of the frame.
+ * - A PULL starts `PRESET_ZOOM` closer on the middle and ends on the
+ *   composition, untouched.
+ */
+export function applyPreset(
+  preset: MotionPreset,
+  framing: Framing,
+  motion: FramingMotion | null | undefined,
+  box: PictureBox | null | undefined,
+): { framing: Framing; motion: FramingMotion } | null {
+  if (!boxKnown(box) || presetProblem(preset, framing, box)) return null;
+  const kept = {
+    easing: motion?.easing ?? DEFAULT_MOTION_EASING,
+    start: motion?.start ?? ('slide' as const),
+    ...(motion?.easing === 'steps' ? { steps: motion.steps } : {}),
+  };
+  const keyOf = (f: Framing): FramingKey => ({ at: 0, scale: f.scale, x: f.x, y: f.y });
+  const moved = (start: Framing, rest: Framing) => ({ framing: rest, motion: { ...kept, keys: [keyOf(start)] } });
+
+  if (preset === 'pan-left' || preset === 'pan-right' || preset === 'pan-up' || preset === 'pan-down') {
+    const reach = panReach(framing, box);
+    // A positive pan moves the PICTURE right (or down), so the view is on
+    // the picture's left (or top): travelling right means + to −.
+    const sign = preset === 'pan-right' || preset === 'pan-down' ? 1 : -1;
+    if (preset === 'pan-left' || preset === 'pan-right') {
+      return moved({ ...framing, x: sign * reach.x }, { ...framing, x: -sign * reach.x });
+    }
+    return moved({ ...framing, y: sign * reach.y }, { ...framing, y: -sign * reach.y });
+  }
+
+  if (preset === 'pull-out') {
+    return moved(zoomedAbout(framing, Math.min(MAX_FRAMING_SCALE, framing.scale * PRESET_ZOOM), box), framing);
+  }
+
+  // Push in: from wider onto the composition when it can start wider.
+  const wider = Math.max(1, framing.scale / PRESET_ZOOM);
+  if (framing.scale / wider >= 1.15) return moved(zoomedAbout(framing, wider, box), framing);
+  return moved(framing, zoomedAbout(framing, Math.min(MAX_FRAMING_SCALE, framing.scale * PRESET_ZOOM), box));
 }
