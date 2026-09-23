@@ -21,7 +21,7 @@
 
 import type { ExifData } from './exif-parser';
 
-export type MetaGroup = 'camera' | 'exposure' | 'time' | 'position' | 'makerNotes' | 'words' | 'rights';
+export type MetaGroup = 'camera' | 'exposure' | 'time' | 'position' | 'place' | 'makerNotes' | 'words' | 'rights';
 
 export type MetaChoice = Record<MetaGroup, boolean>;
 
@@ -31,6 +31,7 @@ export const META_GROUPS: readonly { id: MetaGroup; label: string; hint: string 
   { id: 'exposure', label: 'Exposure', hint: 'shutter, aperture, ISO, focal length, compensation, flash' },
   { id: 'time', label: 'Capture time', hint: 'the moment it was taken' },
   { id: 'position', label: 'GPS position', hint: 'latitude, longitude, altitude' },
+  { id: 'place', label: 'Place name', hint: 'city and country, named offline from the GPS — written even when the position is left out' },
   { id: 'makerNotes', label: 'Maker notes and serials', hint: 'everything else the camera wrote — kept only by copying its block whole' },
   { id: 'words', label: 'Title and caption', hint: 'this picture’s own words' },
   { id: 'rights', label: 'Creator and copyright', hint: 'your name and your line' },
@@ -41,6 +42,7 @@ export const ALL_META: Readonly<MetaChoice> = Object.freeze({
   exposure: true,
   time: true,
   position: true,
+  place: true,
   makerNotes: true,
   words: true,
   rights: true,
@@ -52,7 +54,8 @@ export type MetaPresetId = 'all' | 'share' | 'minimal';
  * The three usual answers. *All* is the default — the maintainer finds a
  * photograph by its position, so the GPS leaves unless asked otherwise.
  * *Share online* keeps what a viewer enjoys and drops what locates or
- * identifies: the position and the serials. *Minimal* is the rights alone.
+ * identifies: the position and the serials — the town stays, a position to
+ * the metre does not (`delivery-place.ts`). *Minimal* is the rights alone.
  */
 export const META_PRESETS: readonly { id: MetaPresetId; label: string; choice: Readonly<MetaChoice> }[] = [
   { id: 'all', label: 'All', choice: ALL_META },
@@ -65,6 +68,7 @@ export const META_PRESETS: readonly { id: MetaPresetId; label: string; choice: R
       exposure: false,
       time: false,
       position: false,
+      place: false,
       makerNotes: false,
       words: false,
       rights: true,
@@ -88,8 +92,8 @@ export function presetOf(choice: MetaChoice): MetaPresetId | null {
 
 /**
  * Whether the camera's own block can travel whole — every capture group and
- * the maker notes kept. The rights and the words are written over a copy
- * either way, so they never force a rebuild.
+ * the maker notes kept. The rights, the words and the place are written over
+ * a copy (or into the XMP) either way, so they never force a rebuild.
  */
 export function keepsWholeBlock(choice: MetaChoice): boolean {
   return choice.camera && choice.exposure && choice.time && choice.position && choice.makerNotes;

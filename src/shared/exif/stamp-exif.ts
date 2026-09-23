@@ -34,9 +34,10 @@
 
 import { buildExifBlock } from './exif-build';
 import { readExifBlock, retagExifBlock, withExifBlock, withXmpPacket } from './exif-block';
-import { isEmptyExif, parseExif, type ExifData } from './exif-parser';
+import { isEmptyExif, parseExif, type ExifData, type GpsCoord } from './exif-parser';
 import { captureYear, deliveryXmp, resolveRights, type DeliveryIdentity, type DeliveryRights } from './delivery-meta';
 import { ALL_META, filterExif, keepsWholeBlock, type MetaChoice } from './meta-groups';
+import type { DeliveryPlace } from './delivery-place';
 import { mergeExif } from './merge-exif';
 import { ATELIER_SOFTWARE } from './software-mark';
 
@@ -57,6 +58,10 @@ export interface ExportExif {
   tags: AuthorTags;
   /** What was asked to leave (`meta-groups.ts`). */
   keep: MetaChoice;
+  /** The place written, or null. */
+  place: DeliveryPlace | null;
+  /** Whether the capture had a position a place could have been named from. */
+  located: boolean;
   /** The XMP packet the file carries: the signature, and the rights where there are some. */
   xmp: string;
 }
@@ -72,6 +77,12 @@ export interface AuthorMeta {
   caption?: string | null;
   /** Which groups leave (`meta-groups.ts`); everything when not given. */
   keep?: MetaChoice;
+  /**
+   * Names a position (`delivery-place.ts` over the loaded index), or absent
+   * when the run did not load one. Asked of the capture's OWN position,
+   * whether or not that position leaves.
+   */
+  placeOf?: (gps: GpsCoord) => DeliveryPlace | null;
 }
 
 export interface DeliveredSize {
@@ -100,9 +111,19 @@ export function exportExifBlock(
     keep.rights
       ? resolveRights(author.identity ?? null, captureYear(exif?.dateTimeOriginal, fallbackYear))
       : { creator: null, copyright: null };
-  const signed = (block: Uint8Array<ArrayBuffer>, account: ExifAccount, rights: DeliveryRights): ExportExif => {
+  // The place is read from the capture as it WAS — before the choice drops
+  // its position — so a town can leave without the coordinates it came from.
+  let located = false;
+  const placeFrom = (exif: ExifData | null): DeliveryPlace | null => {
+    const gps = exif?.gps;
+    if (!gps) return null;
+    located = true;
+    return keep.place && author.placeOf ? author.placeOf(gps) : null;
+  };
+  const signed = (block: Uint8Array<ArrayBuffer>, account: ExifAccount, rights: DeliveryRights, capture: ExifData | null): ExportExif => {
     const tags = authorTags(keep, rights, caption);
-    return { block, account, rights, tags, keep, xmp: deliveryXmp({ ...rights, title, caption }) };
+    const place = placeFrom(capture);
+    return { block, account, rights, tags, keep, place, located, xmp: deliveryXmp({ ...rights, title, caption, place }) };
   };
   // What leaves of the capture, once the choice has had its say.
   const kept = (exif: ExifData) => filterExif(exif, keep);
@@ -122,26 +143,26 @@ export function exportExifBlock(
           software: ATELIER_SOFTWARE,
           ...authorTags(keep, rights, caption),
         });
-        return signed(block, 'block', rights);
+        return signed(block, 'block', rights, mergeExif(own, vouched));
       }
       // A group left out: the block is REBUILT from its fields, and what the
       // fields do not name — the maker notes, the serials — stays behind.
       const merged = mergeExif(own, vouched) ?? own;
-      return signed(build(kept(merged), delivered, authorTags(keep, rights, caption)), 'fields', rights);
+      return signed(build(kept(merged), delivered, authorTags(keep, rights, caption)), 'fields', rights, merged);
     }
     const fields = parseExif(head.buffer.slice(head.byteOffset, head.byteOffset + head.byteLength));
     const merged = mergeExif(isEmptyExif(fields) ? null : fields, vouched);
     if (merged && !isEmptyExif(merged)) {
       const rights = rightsOf(merged);
-      return signed(build(kept(merged), delivered, authorTags(keep, rights, caption)), 'fields', rights);
+      return signed(build(kept(merged), delivered, authorTags(keep, rights, caption)), 'fields', rights, merged);
     }
   }
   if (vouched && !isEmptyExif(vouched)) {
     const rights = rightsOf(vouched);
-    return signed(build(kept(vouched), delivered, authorTags(keep, rights, caption)), 'vouched', rights);
+    return signed(build(kept(vouched), delivered, authorTags(keep, rights, caption)), 'vouched', rights, vouched);
   }
   const rights = rightsOf(null);
-  return signed(build({}, delivered, authorTags(keep, rights, caption)), 'none', rights);
+  return signed(build({}, delivered, authorTags(keep, rights, caption)), 'none', rights, null);
 }
 
 /** The author's three tags, as the writers take them: a string writes, null clears the capture's, undefined keeps it. */

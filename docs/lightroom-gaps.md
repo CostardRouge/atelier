@@ -241,6 +241,12 @@ the locked signature, presets All · Share online · Minimal, the block copied
 whole only while every capture group and the maker notes stay (`develop-roll.md`,
 «What leaves is ONE choice per ROLL»).
 
+**M4 BUILT 2026-09-23** — the place name from the capture's own GPS through the
+offline city index, its own group (kept by *Share online*, which drops the
+position), a town within 30 km, else the country alone (`develop-roll.md`,
+«The place is named OFFLINE»). The metadata plan M1–M4 is complete; E4
+(*changed since last export*) is what remains of §9–§10.
+
 **Proposed then, accepted as drawn** (his idea, drawn in the lab): an **ignored** state.
 Recommended as the FOURTH value of the one delivery field —
 `auto · yes · no · ignore` — never a second flag beside it, so no combination

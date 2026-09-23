@@ -17,9 +17,18 @@ import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity
 import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
 import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { uniqueName } from '../../shared/sources/unique-name';
-import { EXIF_SLICE_BYTES } from '../../shared/exif/exif-parser';
+import { EXIF_SLICE_BYTES, type GpsCoord } from '../../shared/exif/exif-parser';
 import { exportExifBlock, stampExif, type ExifAccount } from '../../shared/exif/stamp-exif';
 import { keepsCapture } from '../../shared/exif/meta-groups';
+import { PLACE_MAX_KM, placeFor, type DeliveryPlace } from '../../shared/exif/delivery-place';
+import { gazetteerOrEmpty } from '../../shared/roadtrip/load-gazetteer';
+
+/** The pictures that had a position and no place near enough to name — said once, not per file. */
+function placeNote(names: readonly string[]): string[] {
+  if (names.length === 0) return [];
+  const who = names.length === 1 ? names[0] : `${names.length} pictures`;
+  return [`${who} had no named town within ${PLACE_MAX_KM} km of its position — no city was written`];
+}
 import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
@@ -294,6 +303,16 @@ export function useRollExport({
     const sourceIds = new Set<string>();
     const failures: string[] = [];
     const hdrRun = r.export.hdr ? { asked: 0, ultra: 0, headroom: 0, checked: null as number | null } : null;
+    // The place index (`delivery-place.ts`), loaded once per run and only when
+    // the roll writes a place: 2 MB from our own origin, never at boot. An
+    // index that will not load names nothing, and the run says so below.
+    let placeOf: ((gps: GpsCoord) => DeliveryPlace | null) | undefined;
+    const unplaced: string[] = [];
+    if (r.export.metadata.place) {
+      setExporting('Loading the place index…');
+      const cities = await gazetteerOrEmpty();
+      placeOf = (gps) => placeFor(cities, gps);
+    }
     // A run names each file after its picture, so two crops of ONE picture
     // want one name: the second is numbered here, before the folder is even
     // chosen. Case-folded, like the volume it will land on.
@@ -471,8 +490,10 @@ export function useRollExport({
               title: picture.title,
               caption: picture.caption,
               keep: r.export.metadata,
+              placeOf,
             });
             stamped.account = exif.account;
+            if (placeOf && exif.located && !exif.place?.city) unplaced.push(picture.ref.name);
             return stampExif(jpeg, exif, delivered);
           };
           const out = await renderRollPicture(source, {
@@ -577,7 +598,7 @@ export function useRollExport({
       const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
       setNote(
         (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
-          describeRun(delivery.written, delivery.method, [...failures, ...errors], renamed),
+          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...errors], renamed),
       );
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.

@@ -401,6 +401,19 @@ shared block. Rules a later phase must keep:
   string either. The copyright's `{year}` is still the capture's even when the
   time does not leave. The run's "no body / no EXIF" warnings fire only when
   the choice asked for what was missing.
+- **The place is named OFFLINE from the capture's own GPS, and is its own
+  group** (2026-09-23, M4, `exif/delivery-place.ts`): `photoshop:City`,
+  `photoshop:Country`, `Iptc4xmpCore:CountryCode` (XMP only — EXIF has no
+  place field), from the committed GeoNames index loaded ONCE per run and only
+  when the group is on. Read from the position as CAPTURED, before the choice
+  drops it, so *Share online* sends the town without the coordinates. A town
+  within 30 km only (`PLACE_MAX_KM`; the index's own 90 km is for naming a
+  LEG — the Pinnacles are 35 km from Jurien Bay, the nearest town it holds),
+  else the COUNTRY alone from the nearest town within 90 km (wrong only at a
+  border in empty country, accepted), else nothing; the run names the
+  pictures that got no town. Trap met building it: the run built `placeOf`
+  and never handed it to `exportExifBlock` — every unit test passed, only
+  reading the delivered file back caught it.
 - **The workbench holds TWO files since 2026-09-21: the picture's, and the one
   on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
   picture IS — its identity, its origin, its EXIF, what the export hook

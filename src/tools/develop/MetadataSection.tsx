@@ -92,6 +92,13 @@ export default function MetadataSection({
             from the fields Atelier reads, and the maker notes stay behind.
           </p>
           <p>
+            The <strong>place name</strong> is read from the picture’s own GPS against the city
+            index that ships with Atelier — nothing is sent anywhere — and written as XMP{' '}
+            <code>photoshop:City</code> / <code>Country</code>, even when the position itself is left
+            out. A town is named only within 30 km; farther out only the country is, and the run
+            says which pictures got no town.
+          </p>
+          <p>
             A picture’s <strong>title</strong> and <strong>caption</strong> are its own — written as
             XMP <code>dc:title</code> and <code>dc:description</code>, the caption also as EXIF{' '}
             <code>ImageDescription</code>, which Lightroom and Capture One show as the caption.

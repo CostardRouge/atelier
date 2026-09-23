@@ -25,6 +25,10 @@
  *   EXIF has no title tag worth writing (Windows' `XPTitle` is UTF-16 in a
  *   BYTE array and read by Explorer alone), so a title lives in the XMP.
  *
+ * - **The place** (M4, `delivery-place.ts`): `photoshop:City`,
+ *   `photoshop:Country`, `Iptc4xmpCore:CountryCode` — XMP only, since EXIF
+ *   has no field for a place's name.
+ *
  * Written twice, EXIF and XMP, because readers split: a camera-minded viewer
  * reads the EXIF, Lightroom and every DAM prefer the XMP, and only the XMP
  * holds Unicode by definition. The XMP is ONE packet — a second one in the
@@ -103,6 +107,8 @@ export interface DeliveryText {
   title?: string | null;
   /** The picture's caption — `dc:description`, and EXIF `ImageDescription` beside it (M2). */
   caption?: string | null;
+  /** Where it was taken, named offline (M4, `delivery-place.ts`). */
+  place?: { city: string; country: string; countryCode: string } | null;
 }
 
 const NS = {
@@ -111,6 +117,8 @@ const NS = {
   xmp: 'http://ns.adobe.com/xap/1.0/',
   dc: 'http://purl.org/dc/elements/1.1/',
   xmpRights: 'http://ns.adobe.com/xap/1.0/rights/',
+  photoshop: 'http://ns.adobe.com/photoshop/1.0/',
+  iptc: 'http://iptc.org/std/Iptc4xmpCore/1.0/xmlns/',
 };
 
 /** Text as XML character data or an attribute value. */
@@ -137,8 +145,14 @@ export function deliveryDescription(text: DeliveryText): string {
   }
   if (text.title) children.push(alt('dc:title', text.title));
   if (text.caption) children.push(alt('dc:description', text.caption));
+  if (text.place) {
+    if (text.place.city) attrs.push(`photoshop:City="${escapeXml(text.place.city)}"`);
+    if (text.place.country) attrs.push(`photoshop:Country="${escapeXml(text.place.country)}"`);
+    if (text.place.countryCode) attrs.push(`Iptc4xmpCore:CountryCode="${escapeXml(text.place.countryCode)}"`);
+  }
   return (
-    `<rdf:Description rdf:about="" xmlns:xmp="${NS.xmp}" xmlns:dc="${NS.dc}" xmlns:xmpRights="${NS.xmpRights}" ${attrs.join(' ')}>` +
+    `<rdf:Description rdf:about="" xmlns:xmp="${NS.xmp}" xmlns:dc="${NS.dc}" xmlns:xmpRights="${NS.xmpRights}"` +
+    ` xmlns:photoshop="${NS.photoshop}" xmlns:Iptc4xmpCore="${NS.iptc}" ${attrs.join(' ')}>` +
     children.join('') +
     `</rdf:Description>`
   );

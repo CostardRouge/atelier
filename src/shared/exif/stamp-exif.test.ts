@@ -216,6 +216,34 @@ describe('exportExifBlock — what leaves (M3)', () => {
   });
 });
 
+describe('exportExifBlock — the place (M4)', () => {
+  const placeOf = () => ({ city: 'Reykjavik', country: 'Iceland', countryCode: 'IS' });
+
+  it('names the place from the capture’s own position, even when that position stays home', () => {
+    const share = META_PRESETS.find((p) => p.id === 'share')!.choice;
+    const chosen = exportExifBlock(cameraJpeg(capture), null, delivered, { keep: share, placeOf });
+    expect(parseExif(chosen.block!.buffer).gps).toBeUndefined();
+    expect(chosen.place?.city).toBe('Reykjavik');
+    expect(chosen.xmp).toContain('photoshop:City="Reykjavik"');
+    expect(chosen.xmp).toContain('photoshop:Country="Iceland"');
+    expect(chosen.xmp).toContain('Iptc4xmpCore:CountryCode="IS"');
+  });
+
+  it('writes none when the group is off, when nothing is near, or when there is no position', () => {
+    expect(exportExifBlock(cameraJpeg(capture), null, delivered, { keep: { ...ALL_META, place: false }, placeOf }).xmp).not.toContain('photoshop:City');
+    const far = exportExifBlock(cameraJpeg(capture), null, delivered, { placeOf: () => null });
+    expect([far.place, far.located]).toEqual([null, true]);
+    const nowhere = exportExifBlock(cameraJpeg({ make: 'DJI' }), null, delivered, { placeOf });
+    expect([nowhere.place, nowhere.located]).toEqual([null, false]);
+    // A country alone writes no city.
+    const country = exportExifBlock(cameraJpeg(capture), null, delivered, { placeOf: () => ({ city: '', country: 'Iceland', countryCode: 'IS' }) });
+    expect(country.xmp).not.toContain('photoshop:City');
+    expect(country.xmp).toContain('photoshop:Country="Iceland"');
+    // A vouched position names a place too.
+    expect(exportExifBlock(null, vouched, delivered, { placeOf }).place?.city).toBe('Reykjavik');
+  });
+});
+
 describe('stampExif', () => {
   it('hands back a JPEG the reader finds the capture in', async () => {
     const chosen = exportExifBlock(cameraJpeg(capture), null, delivered);
@@ -243,7 +271,7 @@ describe('stampExif', () => {
     huge.set(buildExifBlock(capture), 0);
     const out = await stampExif(
       new Blob([canvasJpeg()], { type: 'image/jpeg' }),
-      { block: huge, account: 'block', rights: { creator: null, copyright: null }, tags: {}, keep: ALL_META, xmp: '' },
+      { block: huge, account: 'block', rights: { creator: null, copyright: null }, tags: {}, keep: ALL_META, place: null, located: true, xmp: '' },
       delivered,
     );
     const read = parseExif(await out.arrayBuffer());
