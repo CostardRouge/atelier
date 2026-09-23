@@ -107,7 +107,11 @@ and checks the spot really rose.
   slop is what tells it from a move —, the ring wears a NATIVE minus cursor
   (`REMOVE_CURSOR`, an SVG data URI with its hotspot at the centre, `pointer`
   as the fallback) and draws the same `−` in the ring under the pointer, as
-  the subject markers do; a click on the DASHED ring selects without
+  the subject markers do — and once the press travels past the slop the
+  cursor becomes `grabbing` on the ring AND the stage (the ring holds the
+  pointer capture, so its own cursor is what shows), back to the `−` on
+  release: a cursor says what the hand is doing NOW, never what a click
+  would have done (his nit, 2026-09-23); a click on the DASHED ring selects without
   removing, and ⌫ still takes the selected one off. **The zoom machine must
   be told to leave the ring alone**: `use-zoom-gestures.ts` listens NATIVELY
   in the capture phase on the viewport, so React's `stopPropagation` on the

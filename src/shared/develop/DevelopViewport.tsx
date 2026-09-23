@@ -1,4 +1,4 @@
-import { useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
@@ -180,6 +180,11 @@ export default function DevelopViewport({
   // The ring under the hand: which pointer, where it pressed, whether it has
   // travelled past the slop. One at a time — a second finger is the pinch's.
   const ringDrag = useRef<{ pointerId: number; x: number; y: number; travelled: boolean } | null>(null);
+  const ringMoved = useRef<string | null>(null);
+  // The ring being MOVED, once the press has travelled past the slop: its
+  // cursor turns from the `−` a click would mean to a closed hand, and back
+  // to the `−` on release — the hand is told what it is doing NOW.
+  const [moving, setMoving] = useState<string | null>(null);
   const grab = (ring: RepairRing, part: RingPart) => (e: ReactPointerEvent<SVGElement>) => {
     if (!onRing) return;
     e.preventDefault();
@@ -190,6 +195,7 @@ export default function DevelopViewport({
     const at = picture.pointAt(e.clientX, e.clientY, true);
     if (!at) return;
     ringDrag.current = { pointerId: e.pointerId, x: e.clientX, y: e.clientY, travelled: false };
+    ringMoved.current = ring.id;
     try {
       e.currentTarget.setPointerCapture(e.pointerId);
     } catch {
@@ -202,6 +208,7 @@ export default function DevelopViewport({
     if (!d || d.pointerId !== e.pointerId || !onRing) return;
     e.stopPropagation();
     if (!d.travelled && Math.hypot(e.clientX - d.x, e.clientY - d.y) <= RING_SLOP) return;
+    if (!d.travelled) setMoving(ringMoved.current);
     d.travelled = true;
     const at = picture.pointAt(e.clientX, e.clientY, true);
     if (at) onRing.onMove(at);
@@ -211,6 +218,8 @@ export default function DevelopViewport({
     if (!d || d.pointerId !== e.pointerId) return;
     e.stopPropagation();
     ringDrag.current = null;
+    ringMoved.current = null;
+    setMoving(null);
     onRing?.onEnd(d.travelled);
   };
   const ringHandlers = (ring: RepairRing, part: RingPart) =>
@@ -223,7 +232,10 @@ export default function DevelopViewport({
           // `data-ring` is what the zoom machine reads to leave the press
           // alone (`use-develop-picture.ts`, `wipeClaims`).
           'data-ring': part,
-          style: { pointerEvents: 'all' as const, cursor: part === 'patch' ? REMOVE_CURSOR : 'move' },
+          style: {
+            pointerEvents: 'all' as const,
+            cursor: moving === ring.id ? 'grabbing' : part === 'patch' ? REMOVE_CURSOR : 'move',
+          },
         }
       : {};
   // A tap-gesture mask tool is armed: the pointer ADDS a point, and the native
@@ -235,7 +247,9 @@ export default function DevelopViewport({
       className={`relative min-h-0 bg-frame rounded-paper overflow-hidden touch-none select-none ${
         picking
           ? 'cursor-crosshair'
-          : tapping
+          : moving
+            ? 'cursor-grabbing'
+            : tapping
             ? 'cursor-copy'
             : view.zoomed
             ? view.panning
