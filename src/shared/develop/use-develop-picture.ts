@@ -40,6 +40,9 @@ import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
+import { clipPass } from '../render/clip-pass';
+import { readoutOf } from '../render/clipping';
+import { createReadoutStore, type ReadoutStore } from './readout-store';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -77,6 +80,8 @@ interface GraderRecord {
   overlay: MaskOverlay | null;
   /** The blink's raster, by identity — one per answered tap. */
   flash: BrushRaster | null;
+  /** The clipping view is painted over the picture. */
+  clip: boolean;
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
@@ -137,6 +142,12 @@ function graderFrom(
   gain: GainField | null = null,
   /** One point's region, blinking after the model answered a tap. */
   flash: BrushRaster | null = null,
+  /**
+   * Paint what is clipped (`clip-pass.ts`) — a way of LOOKING, so only the
+   * stage and the loupe ever ask; everything that measures or leaves passes
+   * nothing and gets the picture.
+   */
+  clip = false,
 ): HeldGrader | null {
     const overlayOf = overlay?.layer ?? null;
     const overlayExcept = overlayOf ? exceptRaster(overlayOf, rasters) : null;
@@ -153,6 +164,7 @@ function graderFrom(
       Boolean(overlayOf?.mask) ||
       Boolean(overlayExcept) ||
       Boolean(flash) ||
+      clip ||
       !isDefaultDetail(detail) ||
       patches.length > 0 ||
       // A texture with nothing but grain in it is still a render: the node is
@@ -171,6 +183,7 @@ function graderFrom(
       sized &&
       sameOverlay(cur.overlay, overlay) &&
       cur.flash === flash &&
+      cur.clip === clip &&
       cur.rasters === rasters &&
       sameGeometry(cur.geometry, geometry) &&
       sameLayers(cur.layers, stack) &&
@@ -205,6 +218,10 @@ function graderFrom(
       ...geometryPasses(geometry, ar),
       ...cache.passes(stack, ar, rasters),
       ...post,
+      // After everything that shapes the picture, so it marks what the
+      // picture really holds; under the mask's wash and blink, which are
+      // looked at on top of it.
+      ...(clip ? [clipPass] : []),
       ...(overlayPass ? [overlayPass] : []),
       ...(flashPass ? [flashPass] : []),
     ];
@@ -225,6 +242,7 @@ function graderFrom(
       cur.layers = cloneLayers(stack);
       cur.overlay = overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null;
       cur.flash = flash;
+      cur.clip = clip;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
@@ -245,6 +263,7 @@ function graderFrom(
       layers: cloneLayers(stack),
       overlay: overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null,
       flash,
+      clip,
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
@@ -387,12 +406,19 @@ export interface DevelopPicture {
     /** The decoded file's long edge, once known. */
     longEdge: number | null;
   };
-  /** The wipe gesture, for the viewport element. */
+  /**
+   * The pixel under a mouse or a pen, as the stage shows it — 8-bit, what
+   * the file will hold — or null off the picture. A store, not a value: it
+   * moves with the pointer, and only the line that says it re-renders.
+   */
+  readout: ReadoutStore;
+  /** The wipe gesture and the readout, for the viewport element. */
   handlers: {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerMove: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerUp: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => void;
+    onPointerLeave: (e: ReactPointerEvent<HTMLElement>) => void;
   };
 }
 
@@ -439,7 +465,14 @@ export function useDevelopPicture({
   repair = null,
   film = null,
   veil = null,
+  clipping = false,
 }: {
+  /**
+   * Paint what is clipped over the picture — red where a channel has gone to
+   * white, blue where every channel has gone to black (`render/clipping.ts`).
+   * A way of LOOKING like the wipe: never delivered, never measured.
+   */
+  clipping?: boolean;
   file: File | null;
   /**
    * A map drawn OVER the picture, in the picture's own [0,1] — the dust map
@@ -748,8 +781,9 @@ export function useDevelopPicture({
       texture: FilmTexture | null,
       gain: GainField | null,
       flash: BrushRaster | null = null,
+      clip = false,
     ): HeldGrader | null =>
-      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain, flash),
+      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain, flash, clip),
     [],
   );
   useEffect(
@@ -786,7 +820,9 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask);
+    const grader = holding
+      ? null
+      : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -826,6 +862,7 @@ export function useDevelopPicture({
     stack,
     overlay,
     flashMask,
+    clipping,
     subjectMasks,
     detail,
     pixelScale,
@@ -1262,7 +1299,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, null, clipping);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1303,6 +1340,7 @@ export function useDevelopPicture({
     holding,
     shownWipe,
     pixelView,
+    clipping,
     loupeRect.x,
     loupeRect.y,
     loupeRect.width,
@@ -1310,6 +1348,68 @@ export function useDevelopPicture({
     loupeViewport.width,
     loupeViewport.height,
   ]);
+
+  // --- the readout: the pixel under the pointer ----------------------------
+  // Read off the STAGE canvas, one pixel, once per frame at most: what is
+  // read is what is shown, the crop, the border and the before side
+  // included — and with the clipping view on, a painted pixel is told as the
+  // clip it marks (`readoutOf`), never as the mark's own numbers.
+  const [readout] = useState(createReadoutStore);
+  const readoutAt = useRef<{ x: number; y: number } | null>(null);
+  const readoutFrame = useRef(0);
+  const readoutState = useRef({ clipping, shownWipe, canvasSize });
+  readoutState.current = { clipping, shownWipe, canvasSize };
+  const readPixel = useCallback(() => {
+    readoutFrame.current = 0;
+    const at = readoutAt.current;
+    const canvas = canvasRef.current;
+    const { clipping: clip, shownWipe: split, canvasSize: size } = readoutState.current;
+    if (!at || !canvas || !size) {
+      readout.set(null);
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const { w, h } = size;
+    // The letterbox undo `pickAt` makes; the rect carries the zoom.
+    const scale = Math.min(rect.width / w, rect.height / h);
+    const x = Math.floor((at.x - rect.left - (rect.width - w * scale) / 2) / scale);
+    const y = Math.floor((at.y - rect.top - (rect.height - h * scale) / 2) / scale);
+    if (x < 0 || y < 0 || x >= w || y >= h) {
+      readout.set(null);
+      return;
+    }
+    try {
+      const [r, g, b, a] = canvas.getContext('2d')?.getImageData(x, y, 1, 1).data ?? [];
+      // A transparent pixel is outside the delivered frame (a crop's margin
+      // before the border is drawn): nothing there to read.
+      if (a === undefined || a === 0) {
+        readout.set(null);
+        return;
+      }
+      const before = split > 0 && x < split * w;
+      readout.set({ readout: readoutOf(r, g, b, clip && !before), before });
+    } catch {
+      readout.set(null);
+    }
+  }, [readout]);
+  const trackReadout = (e: ReactPointerEvent<HTMLElement>) => {
+    // A finger is panning or placing the divider, not pointing at a pixel.
+    if (e.pointerType === 'touch') return;
+    readoutAt.current = { x: e.clientX, y: e.clientY };
+    if (!readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
+  };
+  // A new picture, a slider step, the clipping view: the pixel under a
+  // pointer that has not moved is read again from what is now drawn.
+  useEffect(() => {
+    if (readoutAt.current && !readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
+  });
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(readoutFrame.current);
+    },
+    [],
+  );
 
   const painting = useRef(false);
   const wipeFrom = (e: ReactPointerEvent<HTMLElement>) => {
@@ -1354,6 +1454,7 @@ export function useDevelopPicture({
       if (!touch) wipeFrom(e);
     },
     onPointerMove: (e) => {
+      trackReadout(e);
       if (painting.current && paint) {
         const at = pointAt(e.clientX, e.clientY);
         // A pointer that leaves the picture mid-stroke does NOT end it: a hand
@@ -1387,6 +1488,10 @@ export function useDevelopPicture({
         paint?.onEnd();
       }
       dragging.current = null;
+    },
+    onPointerLeave: () => {
+      readoutAt.current = null;
+      readout.set(null);
     },
   };
 
@@ -1450,6 +1555,7 @@ export function useDevelopPicture({
       state: loupeState,
       longEdge: full ? Math.max(full.source.width, full.source.height) : null,
     },
+    readout,
     handlers,
   };
 }

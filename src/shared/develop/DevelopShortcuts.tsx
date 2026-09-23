@@ -41,6 +41,7 @@ const GROUPS: readonly Group[] = [
       { keys: 'the divider’s handle', what: 'wipe at any zoom' },
       { keys: 'the A/B pill', what: 'the divider on or off — a mask tool suspends it on its own' },
       { keys: 'I', what: 'the facts — the exposure as shot, then this develop — over the picture' },
+      { keys: 'J · blacks / whites', what: 'paint what is clipped — red gone to white, blue gone to black; the pixel under the pointer is read under the histogram' },
     ],
   },
   {

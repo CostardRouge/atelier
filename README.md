@@ -1057,7 +1057,13 @@ needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 filmstrip under it, and beside it the same controls as the Develop sheet in
 Trips and the Studio — the histogram, the sliders, your presets, the
 before/after wipe and zoom, and the picture's **look** (LUTs, output
-transform, grain), applied after its correction. Every setting belongs to the
+transform, grain), applied after its correction. The histogram draws the
+three channels apart, so a sky whose red alone has gone is seen; **J** — or
+a click on its *blacks* / *whites* — paints on the picture what has gone to
+white (red) and to black (blue), and the pixel under the pointer is read
+under the strip as the file will hold it (`R 212 · G 180 · B 96`, or
+*clipped to white*). The Trips and Studio sheets have the same strip and the
+same click. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on

@@ -141,6 +141,13 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'I' }))).toBe('facts');
   });
 
+  it('paints the clipping on J, the letter Lightroom uses, and not while a field types', () => {
+    expect(editorKeyAction(press({ key: 'j' }))).toBe('clipping');
+    expect(editorKeyAction(press({ key: 'J' }))).toBe('clipping');
+    expect(editorKeyAction(press({ key: 'j', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'j', targetTypes: true }))).toBeNull();
+  });
+
   it('answers `?` although it is a shifted key — every other shift chord is not ours', () => {
     // On most layouts `?` cannot be pressed WITHOUT shift, so the blanket
     // refusal would have made the help key unreachable.

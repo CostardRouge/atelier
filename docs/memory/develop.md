@@ -97,6 +97,31 @@ never a theme token: `paper` is dark in the darkroom. Verified in the Browser
 pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
 at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.
 
+**RGB, the clipping view and the readout (2026-09-23, audit item 15).** The
+strip draws R, G and B apart (`channelShapes`, one scale for the three, SVG
+`mix-blend-mode: screen` so overlap goes white); `Histogram.bins` (luma) stays
+for the curve's backdrop. What counts as clipped is ONE rule,
+`render/clipping.ts` (`clipOf`: white if ANY channel ≥ 254, black only if
+EVERY one ≤ 1), read by the strip's percentages, by `clip-pass.ts` (its GLSL
+twin, tested on the value the canvas WILL round to — ≥ 253.5/255, < 1.5/255)
+and by the readout. The view is a PASS after sharpen and under the mask's wash,
+asked for only by the stage and the loupe (`graderFrom`'s last argument) — the
+histogram, `delivered()`, `snapshot()` and every export pass nothing, so it can
+never leave (measured: the percentages do not move with J). The **readout**
+reads ONE pixel of the stage canvas per animation frame under a mouse or pen
+(never a finger, which pans) and is a STORE (`readout-store.ts`), not state:
+as state it re-rendered the whole workbench per mouse move; only
+`DevelopHistogram`'s line subscribes. A painted pixel would read as the mark's
+own numbers, so the marks are Lightroom's red `255,0,0` and blue `0,128,255`,
+each with a channel at 255 — no UNPAINTED pixel within a step of one can exist
+(it would be clipped to white and painted), so `readoutOf` decodes a mark back
+to *clipped to white* / *crushed to black* exactly. Known limit: the film node
+draws LAST, after the pass, so a grained picture's marks carry grain and a
+readout over them shows numbers. The view is never remembered past the session
+(a red wash met on the next visit reads as the picture). Verified headless on
+a PNG with white, black, a red-only clip and a mid grey: every mark where the
+rule says, the readout decoding each, J and the end words toggling.
+
 ## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
 
 `DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`

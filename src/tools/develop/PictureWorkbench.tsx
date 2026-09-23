@@ -356,6 +356,10 @@ export default function PictureWorkbench({
   // maintainer does not want the numbers in front of him while he works, and
   // when he does they belong over the photograph, not under it.
   const [factsOn, setFactsOn] = useLocalFlag('atelier.develop.facts', false);
+  // The clipping view (J, or the histogram's end words). Never remembered
+  // past the session: a red wash met on the next visit would be taken for
+  // the picture — the rule the mask's own wash follows.
+  const [clipping, setClipping] = useState(false);
   // The before/after split, as a switch. On by default — it is what the editor
   // has always done — but a divider is a second thing on the picture, and the
   // hours spent on a mask are exactly the hours it is in the way.
@@ -824,6 +828,7 @@ export default function PictureWorkbench({
     subjectMasks: subjectRasters,
     paint,
     compare: compareOn,
+    clipping,
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
@@ -1112,8 +1117,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing });
+  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, painting, selectedPatchId, removeSelectedPatch, repairing };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1193,6 +1198,10 @@ export default function PictureWorkbench({
         case 'facts':
           e.preventDefault();
           keyState.current.setFactsOn(!keyState.current.factsOn);
+          return;
+        case 'clipping':
+          e.preventDefault();
+          keyState.current.setClipping((on) => !on);
           return;
         case 'mask': {
           // The Layers tab, with a layer open: anywhere else there is no mask.
@@ -1647,7 +1656,12 @@ export default function PictureWorkbench({
         <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
           {tab === 'adjust' ? (
             <>
-              <DevelopHistogram histogram={picture.histogram} />
+              <DevelopHistogram
+                histogram={picture.histogram}
+                clipping={clipping}
+                onClipping={() => setClipping((on) => !on)}
+                readout={picture.readout}
+              />
               <DevelopAutoSection
                 stats={picture.stats}
                 onPatch={draft.patch}

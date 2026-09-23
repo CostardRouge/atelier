@@ -118,6 +118,9 @@ export default function DevelopSheet({
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
   const compact = useIsCompact();
+  // The clipping view and the readout ride the shared strip: seeing what has
+  // clipped is a way of looking, not a panel (§4.2).
+  const [clipping, setClipping] = useState(false);
   // The loupe too: the modal hosts gain RENDERING, never panels (§4.2), and
   // the file's own pixels under a magnified view are rendering.
   const picture = useDevelopPicture({
@@ -129,6 +132,7 @@ export default function DevelopSheet({
     film: stack.film,
     loupe: true,
     pixelView,
+    clipping,
   });
 
   const done = () => onDone(draft.result());
@@ -240,7 +244,12 @@ export default function DevelopSheet({
 
           {/* The column: the pipeline in order, then the look under it. */}
           <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
-            <DevelopHistogram histogram={picture.histogram} />
+            <DevelopHistogram
+              histogram={picture.histogram}
+              clipping={clipping}
+              onClipping={() => setClipping((on) => !on)}
+              readout={picture.readout}
+            />
             <DevelopAutoSection
               stats={picture.stats}
               onPatch={draft.patch}

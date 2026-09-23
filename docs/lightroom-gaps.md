@@ -78,7 +78,7 @@ repeated here.
 | 12 | **HSL / colour mixer** (8 bands × H/S/L, targeted tool) | absent | M — it is a cube stage, `developStage` |
 | 13 | **Texture · clarity · dehaze** | absent | M — local contrast needs a neighbourhood: a pass like `detail-pass` |
 | 14 | **Colour grading wheels** (shadows/mids/highlights, balance) | absent | S/M — a cube stage |
-| 15 | **Clipping overlay on the picture, RGB histogram, readout under the cursor** | luma histogram + clip % only | S |
+| 15 | **Clipping overlay on the picture, RGB histogram, readout under the cursor** | **BUILT (pass 2)** — J or the strip's end words paint the clipping; R/G/B strip; 8-bit readout under the strip | S |
 | 16 | **Masks combined** (add / subtract / intersect), **colour range**, sky/background | one mask per layer; linear, radial, luma, brush, subject | M/L |
 | 17 | **White balance in Kelvin on a RAW** + presets (daylight, cloudy, shade…) | gains ±100, eyedropper | M — the decode knows the as-shot multipliers |
 | 18 | **B&W with a channel mixer** | a fixed film stock only | S |
@@ -119,8 +119,9 @@ repeated here.
   for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag). Started
   2026-09-23: 27 came with M3, 25 (the sRGB tag) and 4+5 (the sections sheet,
   ⌘⇧C / ⌘⇧V, apply to selected / others), 7 (Reset in the same sheet) and 6
-  (a preset may carry the look) and 8 (an undo opens the picture it changed)
-  are BUILT.
+  (a preset may carry the look), 8 (an undo opens the picture it changed)
+  and 15 (the clipping view, the RGB strip, the readout) are BUILT — pass 2
+  is DONE.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
