@@ -875,3 +875,14 @@ and appears in no route or document, so it cost nothing.
 ## Two per-render costs from the 2026-09-22 audit (2026-09-22)
 
 **Decision.** `PictureWorkbench` memoises the crop zone's `src` (`{ width, height }` of the decoded source) on the source, and `RollEditor` indexes a folder's siblings by lowercased base name once per sibling list. **Why**: a fresh `src` object per render recomputed the crop zone and the view, and both canvases under them repainted — a rotated, high-quality draw at device pixels — on every render of the workbench, which renders on every slider tick and pointer move; and the export plan asked every picture's siblings on every roll change, each answer a filter over the whole folder, rows × folder per edit. **How to apply**: a hook that takes an OBJECT argument memoises on the values inside, never on a literal built in the call; a lookup a plan runs per row is a `Map` built once per list.
+
+## On a phone the roll's bar is ONE row (2026-09-22, after his screenshot)
+
+The bar wrapped to two lines at 390px — back with its word, the name at
+`text-2xl`, then history and "Add a folder…" on a row of their own — and the
+photograph paid ~45px for it. On `compact` the back is its chevron
+(`iconOnly`), `RollTitle` takes `size="md"` inside a `flex-1 min-w-0` span,
+and Add is its glyph with the verb as `aria-label`/`title` (the menu, when
+there is one, still names every way in). The Trips overview's bar, the same
+fix; a wide screen keeps every word. Measured: the stage's top moved from 214
+to 172 css px.
