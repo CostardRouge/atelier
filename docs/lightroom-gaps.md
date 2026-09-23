@@ -208,3 +208,37 @@ Lab*). Nothing below is decided.
   position); the copyright text; the signature (`Atelier` · with a version ·
   with the site's address, which belongs in XMP rather than `Software`); and
   where the state is set (table + badge recommended · table alone · sheet).
+
+## 10. His answers to §9, and the ignored state (2026-09-23, lab v2)
+
+**Decided**: what leaves by default is the EDITED pictures (`pictureEdits`); the
+GPS leaves by default (preset *All*); the copyright text is ENGLISH, the
+interface's language — `© {year} Steeve Pommier. All rights reserved.`, `{year}`
+the capture's year; the signature is `Atelier` alone (there is no real version:
+`package.json` sits at `0.1.0` and was never bumped, and the roll's `version`
+is the document FORMAT — writing it would read as "Atelier 5"; a build id,
+injected at build time and written as XMP, is the honest version if ever
+wanted); and the state is set from BOTH the Export tab's table and a badge on
+each filmstrip cell. **A table row is clickable in full** (48 px), never its
+checkbox alone — his words: a box is too small a target, on a phone above all.
+
+**Proposed, awaiting him** (his idea, drawn in the lab): an **ignored** state.
+Recommended as the FOURTH value of the one delivery field —
+`auto · yes · no · ignore` — never a second flag beside it, so no combination
+can contradict another: an ignored picture never leaves, and un-ignoring puts
+it back to `auto`. *Ignored* means "out of the roll's work" in every reader at
+once: ←/→ skip it (from an ignored picture they go on to the next that is not),
+"Apply to N other pictures" skips it, the "developed" count leaves it out, the
+filmstrip dims it or hides it (*Show ignored*), the table folds it into an
+*Ignored · N* group — and a click still opens it. Against "take off the roll",
+it keeps the picture's edits and is undone with one key. It is Lightroom's
+reject / Capture One's hide scoped to ONE roll, and nothing is written to
+Winnow, whose culling stays its own (shown read-only, §8). Keys proposed, all
+free in `editorKeyAction` and plain letters so AZERTY is the same: `P` send ↔
+hold, `U` back to auto, `M` ignore ↔ un-ignore. The badge's click toggles send
+↔ hold; auto and ignore go through the keys, the table, or a long press /
+right click. Commits: E1 the four-state field, the rule, the keys and the
+skipping; E2 the table; E3 the badges and *Show ignored*; E4 (later) *changed
+since last export*; then M1–M4 of §9. His open questions: the ignored state as
+described or a display filter only; ignored cells dimmed (recommended) or
+hidden by default; the three keys; which pass comes first.
