@@ -53,7 +53,10 @@ export default function Filmstrip({
       ref={stripRef}
       aria-label="Pictures on this roll"
       // Claims only the axis it scrolls, so a finger on it can still move the page.
-      className="m-0 p-0 pb-1 list-none flex gap-1.5 overflow-x-auto overscroll-x-contain touch-pan-x"
+      // The room above and right is the × badge's: it overhangs its cell by
+      // 4px, and a scroller that clips x clips y too — on a touch screen,
+      // where the badge is always shown, its top was sliced flat.
+      className="m-0 p-0 pt-1.5 pr-1.5 pb-1 list-none flex gap-1.5 overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]"
     >
       {pictures.map((p) => (
         <Cell

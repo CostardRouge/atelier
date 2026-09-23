@@ -886,3 +886,8 @@ and Add is its glyph with the verb as `aria-label`/`title` (the menu, when
 there is one, still names every way in). The Trips overview's bar, the same
 fix; a wide screen keeps every word. Measured: the stage's top moved from 214
 to 172 css px.
+
+The filmstrip's × badge overhangs its cell by 4px, and a scroller that clips
+x clips y too — on a touch screen, where the badge is always drawn at 28px,
+its top was sliced flat. The strip pays `pt-1.5 pr-1.5` for it; any badge
+overhanging a cell in a horizontal scroller needs the same room.
