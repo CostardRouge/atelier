@@ -223,6 +223,16 @@ before it is fetched). Rules:
   just added vanished from the screen while the store held it. The same roll
   under another reference is not a reload (`rollFromRef(route.ref, [open])`).
 
+**The still under another file is a PLACEHOLDER, never a layer**
+(2026-09-23, his screenshot: *"I can see 2 images at the same time"*). A
+deck slot draws the item's cover under the full picture, which is right
+while the two share a frame. A switched file need not: a DJI pair's JPEG was
+square and its DNG's render 16:9, so the square cover showed above and below
+the render. `DeckSlide` now fades the still out, in the same 200 ms, once an
+OVERRIDE has loaded; under the item's own file it stays, covered. **How to
+apply**: anything drawn under a picture must either share its frame or leave
+once the picture is up.
+
 ## R9 is BUILT: the session cache has a ceiling (2026-09-21)
 
 His D16. `original-cache.ts` held every fetched original until the tab died;
