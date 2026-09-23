@@ -691,6 +691,25 @@ no metadata, and the instance's own reading of the capture is merged under the
 file's. Like every other piece it can be replaced with free text, which is how
 a scan or a film frame gets credited at all.
 
+**The credit is composed, not only switched on.** The Content tab's **Camera**
+section picks **which facts** — body, lens, the 35 mm-equivalent and the real
+focal length, aperture, shutter, ISO, exposure compensation, a drone's height
+above take-off — and **in what order**, each listed with the value this picture
+records or "not recorded". It sets them in one of **eight layouts**, each shown
+with the picture's own numbers: *Line* (the credit as it always read), *Two
+tiers* (what took it in small capitals over the numbers), *Plate* (the numbers
+large over their labels), *Ledger* (label and value, row by row), *Caption* (an
+italic "Shot on…" over the numbers), *Viewfinder* (the exposure as a camera
+shows it, with a −2…+2 meter where the camera was argued with), *Edge bar*
+(across the top or bottom edge) and *Margin* (a column down one side). It hangs
+**under the badge** and moves with it, or sits in **a cell of its own** on the
+3×3 grid, at a size of its own. Columns are set in JetBrains Mono, whose fixed
+advance is what keeps them from ever running into each other. A DJI still names
+its body `FC8482`: the **Body** field names it once for the whole trip ("DJI
+Mini 4 Pro"), and the plate's words — "Shot on", each label — are the trip's,
+in *Words*, like the rest of the badge. A piece that never opens the section
+keeps exactly the line it drew before.
+
 **Every option shows what it would really say.** The counter modes and the
 temporal modes are listed with the line they would draw *for the post in hand* —
 "Day · 27 · of 310", "Kalbarri · 3 · of 4", "515 days ago" — or, when a mode has
@@ -830,7 +849,13 @@ to the badge: **Edge** gives it the reach (a top or bottom shade lands on the
 block's own edge, a radial centres on it), **Anchor** gives it the place as well
 — a badge anchored bottom-left gets its shade in that corner, and takes it along
 when it is re-anchored. They stack, so a wash from the left and a corner vignette
-can be on at once.
+can be on at once. The fade itself has a shape: a **core** holds the full
+strength over part of the reach before the fade starts — a band at full strength
+is then a dark zone, not a dark line — and a **falloff** picks how it clears
+(Soft, the classic shape; Linear; Smooth; Held, dark most of the way; Quick). A
+band or a free radial can be moved off the middle, with its sliders or by
+**placing it on the picture**: while placing, a press or a drag anywhere on the
+stage moves the band's line or the radial's centre, and nothing else.
 Darkening the picture keeps the typography clean, which a panel behind every
 line does not.
 
@@ -1868,11 +1893,13 @@ src/
 │   │                           #   (incl. DJI video↔SRT pairing), capability-match per tool
 │   ├── telemetry/              # SRT parser, motion, cadence, cue lookup, flight-path extraction
 │   ├── exif/                   # dependency-free JPEG/TIFF EXIF reader, plus exif-cue:
-│   │                           #   a photograph read as the one telemetry cue it is worth
+│   │                           #   a photograph read as the one telemetry cue it is worth,
+│   │                           #   and camera-facts (a credit's facts, picked à la carte)
 │   ├── overlay/                # the overlay engine: element model, canvas stage,
 │   │                           #   draw/measure/hit-test, fonts, guides, burn-in export,
 │   │                           #   animation + scenes (the intro layer, pure), still-frame
-│   │                           #   (a deck settled for a still), and the
+│   │                           #   (a deck settled for a still), camera-plate (a credit's
+│   │                           #   eight layouts as text elements), and the
 │   │                           #   ElementList/ElementPanel/Timing/Scene/Guides editors
 │   ├── lut/                    # WebGL2 LUT renderer, frame grader, picker, built-ins
 │   ├── map/track-map.ts        # the one MapLibre track-map: style, line layer, OSM tiles

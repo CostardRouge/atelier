@@ -24,7 +24,6 @@
 
 import { useEffect, useState } from 'react';
 import type { ExifData } from './exif-parser';
-import { exposureSummary } from './exif-summary';
 import { readEffectiveExif, vouchedExif } from './read-exif';
 
 /**
@@ -57,9 +56,4 @@ export function useEffectiveExif(file: File | null): ExifData | null {
   }, [file]);
 
   return exif;
-}
-
-/** The exposure as one line — body, lens, focal length, aperture, shutter, ISO. */
-export function useExposureLine(file: File | null): string | null {
-  return exposureSummary(useEffectiveExif(file)) || null;
 }

@@ -40,6 +40,7 @@ import {
   type BadgeLayout,
   type BadgePieceStyles,
 } from './badge-layout';
+import type { CameraPlateSpec } from '../overlay/camera-plate';
 import { createShade, vignetteShade, type Shade } from './shades';
 import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
 import { mapFromRoute } from './hooks/map-plan';
@@ -234,6 +235,14 @@ export interface PostBadge {
    * EXIF all say the truth rather than a stale copy of it.
    */
   showExif: boolean;
+  /**
+   * How the credit is COMPOSED: which facts, in what order, in which of the
+   * plate layouts, under the badge or in a cell of its own
+   * (`overlay/camera-plate.ts`). Optional, no migration: a piece that never
+   * chose has none and keeps the plain line of six facts under the badge it
+   * always drew. What the facts SAY is still read from the picture.
+   */
+  camera?: CameraPlateSpec;
   /** How long the hook lasts, in seconds — what an exit animation lands on. */
   durationSeconds: number;
   /** What the hook slide is delivered as; see {@link SlideMedium}. */
@@ -364,6 +373,8 @@ export interface HookDefaults {
   timeAgo: TimeAgoMode;
   showPin: boolean;
   showExif: boolean;
+  /** How the credit is composed — see `PostBadge.camera`. */
+  camera?: CameraPlateSpec;
   durationSeconds: number;
   /** How the hook is delivered, and how long it is on screen — see `PostBadge`. */
   medium: SlideMedium;
@@ -387,6 +398,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     timeAgo: badge.timeAgo,
     showPin: badge.showPin,
     showExif: badge.showExif,
+    ...(badge.camera ? { camera: structuredClone(badge.camera) } : {}),
     durationSeconds: badge.durationSeconds,
     medium: badge.medium,
     hookSeconds: badge.hookSeconds,
@@ -424,6 +436,7 @@ export function defaultPostBadge(
     referenceDate: null,
     showPin: defaults?.showPin ?? false,
     showExif: defaults?.showExif ?? false,
+    ...(defaults?.camera ? { camera: structuredClone(defaults.camera) } : {}),
     durationSeconds: defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION,
     medium: defaults?.medium ?? 'auto',
     hookSeconds:
@@ -598,6 +611,14 @@ export interface TripDoc {
    * the author must always have the last word on.
    */
   badgeWords: BadgeWords;
+  /**
+   * What the badges call each camera BODY, keyed by the name its files give
+   * (`cameraName`: "DJI FC8482" → "DJI Mini 4 Pro"). Written by the author,
+   * once per body, never guessed from a table of models; optional, and absent
+   * on every trip written before it existed — the file's own name is then
+   * what is credited.
+   */
+  cameraNames?: Record<string, string>;
   /**
    * The title style every badge of this trip wears. Per trip, not per post,
    * on purpose: a constant badge is what makes a post recognisable in a feed

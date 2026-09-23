@@ -15,6 +15,7 @@ import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
 import { slideRender } from '../../shared/roadtrip/slide-render';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
+import type { ExifData } from '../../shared/exif/exif-parser';
 
 /**
  * Longest edge of a rail thumbnail, in device pixels. The cells are 44 CSS px
@@ -97,8 +98,8 @@ interface RailThumbInputs {
    * map the deck does not deliver.
    */
   pictures?: ReadonlyMap<string, HookPicture>;
-  /** The hook picture's exposure line, when the piece credits its camera. */
-  exposure?: string | null;
+  /** The hook picture's effective EXIF, when the piece credits its camera. */
+  exif?: ExifData | null;
 }
 
 /** One slide's thumbnail, or null while it has never been drawn. */
@@ -134,7 +135,7 @@ export default function useRailThumbs({
   resolve,
   lutFor,
   pictures,
-  exposure,
+  exif,
 }: RailThumbInputs): RailThumbs {
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(new Map());
   /** What has been drawn, and from what. A null url is a failed decode. */
@@ -152,7 +153,7 @@ export default function useRailThumbs({
     () =>
       slides.map((slide) => {
         const file = slide.kind === 'cta' ? null : resolve(slide.media);
-        const render = slideRender(trip, post, slide, aspect, pictures, exposure);
+        const render = slideRender(trip, post, slide, aspect, pictures, exif);
         // The cube of THIS slide: the grade it wears, baked with its own
         // develop. The bake is memoised per (grade, develop), so a deck of
         // untouched slides reads one cube and only a slide that departed —
@@ -195,7 +196,7 @@ export default function useRailThumbs({
           ]),
         };
       }),
-    [slides, trip, post, aspect, resolve, lutFor, pictures, exposure],
+    [slides, trip, post, aspect, resolve, lutFor, pictures, exif],
   );
 
   useEffect(() => {

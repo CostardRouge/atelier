@@ -82,6 +82,12 @@ import {
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
+import {
+  centreMovable,
+  resolvedDirection,
+  shadeCentre,
+  shadeFollow,
+} from '../../shared/roadtrip/shades';
 import { loopsOpenSlide, screenLength, slideMotionMarks, type LoopScope } from '../../shared/roadtrip/deck-strip';
 import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
@@ -115,7 +121,7 @@ import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
 import { frameSize } from '../../shared/roadtrip/badge-render';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import useRailThumbs from './use-rail-thumbs';
-import { useExposureLine } from '../../shared/exif/use-effective-exif';
+import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
@@ -521,7 +527,7 @@ export default function PostEditor({
    * camera credit, and the line the Content tab shows beside its toggle so a
    * piece whose photograph says nothing says why rather than drawing a blank.
    */
-  const exposure = useExposureLine(hookFile);
+  const hookExif = useEffectiveExif(hookFile);
 
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
@@ -536,10 +542,12 @@ export default function PostEditor({
         referenceDate: post.badge.referenceDate,
         showPin: post.badge.showPin,
         showExif: post.badge.showExif,
-        exposure,
+        exif: hookExif,
+        camera: post.badge.camera ?? null,
+        cameraNames: trip.cameraNames ?? null,
         overrides: post.badge.textOverrides,
       }),
-    [trip, post, exposure],
+    [trip, post, hookExif],
   );
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
@@ -1218,7 +1226,7 @@ export default function PostEditor({
     resolve,
     lutFor,
     pictures: hookPictures,
-    exposure,
+    exif: hookExif,
   });
 
   // What the OPEN picture would deliver into the deck's own 1920 frame —
@@ -1248,7 +1256,7 @@ export default function PostEditor({
     timeSeconds: settle,
     hook,
     hookPictures,
-    exposure,
+    exif: hookExif,
     hookElementsAt,
     resolve,
     hookFile,
@@ -1359,6 +1367,43 @@ export default function PostEditor({
   const moveBlockTo = useCallback(
     (x: number, y: number) => patchBadge({ layout: { ...post.badge.layout, x, y } }),
     [patchBadge, post.badge.layout],
+  );
+
+  /**
+   * A shade whose centre the stage is placing (the Look tab's "Place on the
+   * picture"). Only on the hook, only while the Look tab is the one open, and
+   * only while the shade still has a centre to move — anything else drops it,
+   * so the stage is never left taking presses for a panel nobody can see.
+   */
+  const [placingShade, setPlacingShade] = useState<string | null>(null);
+  const shadeInPlace =
+    placingShade && isHook && tab === 'look'
+      ? (post.badge.shades.find((s) => s.id === placingShade && s.enabled !== false) ?? null)
+      : null;
+  const placingAxis = shadeInPlace
+    ? centreMovable(resolvedDirection(shadeInPlace, block), shadeFollow(shadeInPlace))
+    : null;
+  const shadeHandle =
+    shadeInPlace && placingAxis ? { ...shadeCentre(shadeInPlace), axis: placingAxis } : null;
+  useEffect(() => {
+    if (placingShade && !shadeHandle) setPlacingShade(null);
+  }, [placingShade, shadeHandle]);
+  useEffect(() => setPlacingShade(null), [post.id]);
+  const placeShade = useCallback(
+    (id: string | null) => {
+      setPlacingShade(id);
+      // On a phone the inspector is a sheet over the very picture the centre
+      // is placed on: it steps aside, and the Look cell brings it back.
+      if (id && compact) setInspectorOpen(false);
+    },
+    [compact],
+  );
+  const moveShadeCentre = useCallback(
+    (x: number, y: number) =>
+      patchBadge({
+        shades: post.badge.shades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)),
+      }),
+    [patchBadge, post.badge.shades, placingShade],
   );
 
   /**
@@ -1693,6 +1738,8 @@ export default function PostEditor({
             // pointed at there.
             hookRectFor={isHook ? hookRectFor : null}
             onMoveHook={isHook && hookVariant?.moveBy ? moveHook : undefined}
+            shadeHandle={shadeHandle}
+            onMoveShadeCentre={shadeHandle ? moveShadeCentre : undefined}
             // Each picture as it stands at the needle: the stage draws what it is
             // given, and its gestures start from — and write — that frame.
             framing={stageFraming}
@@ -1776,7 +1823,8 @@ export default function PostEditor({
               content={content}
               piece={piece}
               slideFile={slideFile}
-              exposure={exposure}
+              exif={hookExif}
+              onChangeTrip={onChangeTrip}
               clipSeconds={isVideo ? duration : 0}
               clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed } : null}
               onChangePost={onChangePost}
@@ -1799,6 +1847,8 @@ export default function PostEditor({
               patchBadge={patchBadge}
               onOpenTripSettings={() => setTripSheet('words')}
               onConfigureCar={() => setGarageOpen(true)}
+              placingShade={shadeHandle ? placingShade : null}
+              onPlaceShade={placeShade}
             />
           )}
 
