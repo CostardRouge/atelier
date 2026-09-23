@@ -93,7 +93,7 @@ import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
 import { frameSize } from '../../shared/roadtrip/badge-render';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import useRailThumbs from './use-rail-thumbs';
-import { useExposureLine } from '../../shared/exif/use-effective-exif';
+import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
@@ -491,7 +491,7 @@ export default function PostEditor({
    * camera credit, and the line the Content tab shows beside its toggle so a
    * piece whose photograph says nothing says why rather than drawing a blank.
    */
-  const exposure = useExposureLine(hookFile);
+  const hookExif = useEffectiveExif(hookFile);
 
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
@@ -506,10 +506,12 @@ export default function PostEditor({
         referenceDate: post.badge.referenceDate,
         showPin: post.badge.showPin,
         showExif: post.badge.showExif,
-        exposure,
+        exif: hookExif,
+        camera: post.badge.camera ?? null,
+        cameraNames: trip.cameraNames ?? null,
         overrides: post.badge.textOverrides,
       }),
-    [trip, post, exposure],
+    [trip, post, hookExif],
   );
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
@@ -1043,7 +1045,7 @@ export default function PostEditor({
     resolve,
     lutFor,
     pictures: hookPictures,
-    exposure,
+    exif: hookExif,
   });
 
   // What the OPEN picture would deliver into the deck's own 1920 frame —
@@ -1072,7 +1074,7 @@ export default function PostEditor({
     timeSeconds: settle,
     hook,
     hookPictures,
-    exposure,
+    exif: hookExif,
     hookElementsAt,
     resolve,
     hookFile,
@@ -1630,7 +1632,8 @@ export default function PostEditor({
               content={content}
               piece={piece}
               slideFile={slideFile}
-              exposure={exposure}
+              exif={hookExif}
+              onChangeTrip={onChangeTrip}
               clipSeconds={isVideo ? duration : 0}
               clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed } : null}
               onChangePost={onChangePost}

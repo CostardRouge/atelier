@@ -34,6 +34,7 @@ import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 import { startTask, type TaskHandle } from '../../shared/tasks/tasks';
 import { isAbortError } from '../../shared/sources/fetch-options';
+import type { ExifData } from '../../shared/exif/exif-parser';
 
 export interface PostExportInputs {
   trip: TripDoc;
@@ -68,12 +69,12 @@ export interface PostExportInputs {
    */
   hookPictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The hook picture's exposure line, when the piece credits its camera —
-   * measured in the editor, so the PNG deck says what the stage says. The
+   * The hook picture's effective EXIF, when the piece credits its camera —
+   * read in the editor, so the PNG deck says what the stage says. The
    * video paths need nothing: they burn in `hookElements`, which already
    * carries the credit.
    */
-  exposure?: string | null;
+  exif?: ExifData | null;
   /** The badge's elements at a moment, when the opener rewrites its words. */
   hookElementsAt: ElementsAt | null;
   block: HookBlock | null;
@@ -472,7 +473,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           timeSeconds: inputs.timeSeconds,
           resolve,
           pictures: inputs.hookPictures,
-          exposure: inputs.exposure,
+          exif: inputs.exif,
           lutFor: inputs.lutFor,
           filmFor: inputs.filmFor,
           include: (slide) => wanted.has(slide.position),
@@ -607,7 +608,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         timeSeconds: inputs.timeSeconds,
         resolve,
         pictures: inputs.hookPictures,
-        exposure: inputs.exposure,
+        exif: inputs.exif,
         lutFor: inputs.lutFor,
         filmFor: inputs.filmFor,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
