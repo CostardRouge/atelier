@@ -24,6 +24,7 @@
  * Pure and DOM-free.
  */
 
+import type { SavedGrade } from '../lut/saved-grade';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   cloneCurves,
@@ -339,17 +340,30 @@ export interface DevelopPreset {
   id: string;
   name: string;
   settings: DevelopSettings;
+  /**
+   * The LOOK saved with the light, when its author ticked it (2026-09-23,
+   * `docs/lightroom-gaps.md` item 6): since roll v5 a look is per picture, so
+   * "Portra + my curve" was two gestures on every picture. Applied where a
+   * picture owns its look — the Develop tool; Trips and the Studio sheets
+   * apply the numbers and say the look stays behind. Absent is a light alone.
+   */
+  look?: SavedGrade;
 }
 
-/** Presets as a document holds them, read back safely: junk entries dropped. */
-export function normaliseDevelopPresets(raw: unknown): DevelopPreset[] {
+/**
+ * Presets as a document holds them, read back safely: junk entries dropped.
+ * `readLook` reads a preset's look where the caller knows how (the preset
+ * book passes the roll's grade reader); without it a look is dropped.
+ */
+export function normaliseDevelopPresets(raw: unknown, readLook?: (raw: unknown) => SavedGrade | null): DevelopPreset[] {
   if (!Array.isArray(raw)) return [];
   const out: DevelopPreset[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
     if (typeof e.id !== 'string' || !e.id || typeof e.name !== 'string') continue;
-    out.push({ id: e.id, name: e.name, settings: normaliseDevelop(e.settings) });
+    const look = readLook && e.look !== undefined ? readLook(e.look) : null;
+    out.push({ id: e.id, name: e.name, settings: normaliseDevelop(e.settings), ...(look ? { look } : {}) });
   }
   return out;
 }

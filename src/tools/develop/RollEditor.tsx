@@ -997,6 +997,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onDeliver={(action) => handleDeliver(open.id, action)}
               onWords={(words) => handleWords(open.id, words)}
               onSettings={() => setSettingsOpen(true)}
+              onLook={(look) => update((r) => copyGradeTo(r, [open.id], look))}
               onPasteSettings={pasteSections}
               deliveryTable={
                 <DeliveryTable

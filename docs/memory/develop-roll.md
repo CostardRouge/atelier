@@ -406,6 +406,16 @@ shared block. Rules a later phase must keep:
   the other way: the ticked sections back to as shot, NO confirmation — it is
   one undo step like every roll write (measured: reset all, ⌘Z restores the
   develop and the look); the well's ↺ still resets the develop numbers alone.
+- **A preset may carry the LOOK** (2026-09-23, item 6, `DevelopPreset.look`,
+  optional — no book version bump, an older book reads with none). Saved only
+  from a host whose pictures OWN their look (the Develop tool passes `look`
+  and `onApplyLook` to `DevelopPresetsSection`), ticked per save (*+ look*,
+  off by default — a preset stays a light unless asked); a look alone is a
+  valid preset. Trips and the Studio keep their looks on other rungs, so there
+  the chip applies the numbers and says the look stays behind (a struck
+  `+ look`), rather than guessing which rung to write. `develop.ts` cannot
+  import the roll's grade reader (a cycle), so `normaliseDevelopPresets` takes
+  an optional `readLook` the book passes.
 - **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
   `RollPicture.title` / `caption`, stored trimmed and absent when empty
   (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so

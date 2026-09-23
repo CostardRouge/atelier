@@ -47,7 +47,7 @@ repeated here.
    (one body, one lens, one sensor) and cannot be synced; the Crop tab's
    "Apply crop" leaves the keystone beside it behind. The sections picker of
    item 4 is the one fix for both. S per group, or one M.
-6. **A preset is the develop only** (`develop-presets.ts:30`,
+6. **BUILT (pass 2)** — **A preset is the develop only** (`develop-presets.ts:30`,
    `DevelopPreset`). Since v5 a look is per picture, so "Portra + my curve" is
    two gestures on every picture. Optional `grade` (and sections) on a preset,
    a book version bump. M.
@@ -118,8 +118,8 @@ repeated here.
 - **Pass 2 — the obvious for a Lightroom hand:** 4 + 5 (one sections picker
   for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag). Started
   2026-09-23: 27 came with M3, 25 (the sRGB tag) and 4+5 (the sections sheet,
-  ⌘⇧C / ⌘⇧V, apply to selected / others) and 7 (Reset in the same sheet) are
-  BUILT.
+  ⌘⇧C / ⌘⇧V, apply to selected / others), 7 (Reset in the same sheet) and 6
+  (a preset may carry the look) are BUILT.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.

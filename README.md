@@ -1073,7 +1073,10 @@ layers — ticked like Lightroom's Copy Settings: **Copy** holds them, **⌘⇧V
 pastes them onto the picture on screen, and *Apply to N selected / N other
 pictures* writes them across the roll; **Reset** puts the ticked sections of
 the picture on screen back to as shot — its look and its layers included —
-one ⌘Z away. The develop, the look, the lens and the
+one ⌘Z away. A **preset** saved here can carry the picture's look too (tick
+*+ look* when naming it): the chip then dresses a picture in both. In the
+Trips and Studio sheets, where a look lives elsewhere, the same chip applies
+the numbers alone and says so. The develop, the look, the lens and the
 detail are ticked to start — what a roll shot with one body shares — and the
 ticks are remembered. A picture's file, its RAW base, its title and caption and
 whether it leaves are never carried. A filmstrip cell shows the

@@ -20,6 +20,8 @@ import { normaliseDevelopPresets, type DevelopPreset, type DevelopSettings } fro
 import { removePresetFrom, savePresetIn } from './develop-presets';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { readIdentity, type DeliveryIdentity } from '../exif/delivery-meta';
+import type { SavedGrade } from '../lut/saved-grade';
+import { readRollGrade } from './roll-types';
 
 export const PRESET_BOOK_VERSION = 1;
 
@@ -55,7 +57,7 @@ export function readPresetBook(raw: unknown, fallbackSourceId: string = DEFAULT_
   const b = raw as Record<string, unknown>;
   if (typeof b.id !== 'string' || !b.id || !Array.isArray(b.presets)) return null;
   const seen = new Set<string>();
-  const presets = normaliseDevelopPresets(b.presets).filter((p) => {
+  const presets = normaliseDevelopPresets(b.presets, readRollGrade).filter((p) => {
     // One preset per name, the first kept: names are what a person picks by.
     const key = p.name.trim().toLowerCase();
     if (!key || seen.has(key)) return false;
@@ -88,8 +90,9 @@ export function savePresetInBook(
   settings: DevelopSettings | null,
   id: string,
   now: number = Date.now(),
+  look: SavedGrade | null = null,
 ): PresetBook {
-  const presets = savePresetIn(book.presets, name, settings, id);
+  const presets = savePresetIn(book.presets, name, settings, id, look);
   return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
 }
 
@@ -119,7 +122,7 @@ export function mergeTripPresets(
       const key = p.name.trim().toLowerCase();
       if (!key || names.has(key)) continue;
       names.add(key);
-      presets.push({ id: p.id, name: p.name.trim(), settings: { ...p.settings } });
+      presets.push({ id: p.id, name: p.name.trim(), settings: { ...p.settings }, ...(p.look ? { look: structuredClone(p.look) } : {}) });
     }
   }
   return {

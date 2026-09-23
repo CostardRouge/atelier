@@ -13,6 +13,7 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { listWinnowConnections, subscribeWinnowConnections } from '../sources/winnow/store';
 import { listTrips } from '../roadtrip/trip-store';
 import type { DevelopSettings } from './develop';
+import type { SavedGrade } from '../lut/saved-grade';
 import type { DevelopPresets } from './develop-host';
 import {
   createPresetBook,
@@ -227,10 +228,10 @@ export function ensurePresetBook(): Promise<void> {
   return loading;
 }
 
-export async function saveToPresetBook(name: string, settings: DevelopSettings) {
+export async function saveToPresetBook(name: string, settings: DevelopSettings, look: SavedGrade | null = null) {
   await ensurePresetBook();
   if (!state.book) return;
-  const next = savePresetInBook(state.book, name, settings, newRollId());
+  const next = savePresetInBook(state.book, name, settings, newRollId(), Date.now(), look);
   if (next !== state.book) await commit(next);
 }
 
@@ -336,7 +337,7 @@ export function usePresetBookHost(): DevelopPresets {
     const sources = documentSourcesFor(PRESET_BOOK_KIND);
     return {
       list: book?.presets ?? [],
-      onSave: (name: string, settings: DevelopSettings) => void saveToPresetBook(name, settings),
+      onSave: (name: string, settings: DevelopSettings, look?: SavedGrade | null) => void saveToPresetBook(name, settings, look ?? null),
       onRemove: (id: string) => void removeFromPresetBook(id),
       keptOn: 'in your own book, shared by every Develop sheet and tool',
       place: {

@@ -47,7 +47,7 @@ import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache'
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
 import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
-import type { RollPicture } from '../../shared/develop/roll-types';
+import type { RollGrade, RollPicture } from '../../shared/develop/roll-types';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
@@ -236,6 +236,7 @@ export default function PictureWorkbench({
   onWords,
   onSettings,
   onPasteSettings,
+  onLook,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -300,6 +301,8 @@ export default function PictureWorkbench({
   onSettings: () => void;
   /** Paste the copied sections onto this picture; ⌘⇧V. False when nothing is held. */
   onPasteSettings: () => boolean;
+  /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
+  onLook: (look: RollGrade) => void;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -1665,6 +1668,8 @@ export default function PictureWorkbench({
                 asShot={draft.asShot}
                 onApply={draft.setDraft}
                 onTold={tell}
+                look={entry.grade ?? null}
+                onApplyLook={onLook}
               />
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection

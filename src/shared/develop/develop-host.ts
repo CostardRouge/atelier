@@ -5,6 +5,7 @@
  * them and hands back numbers.
  */
 
+import type { SavedGrade } from '../lut/saved-grade';
 import type { DevelopPreset, DevelopSettings } from './develop';
 
 /**
@@ -13,7 +14,8 @@ import type { DevelopPreset, DevelopSettings } from './develop';
  */
 export interface DevelopPresets {
   list: readonly DevelopPreset[];
-  onSave: (name: string, settings: DevelopSettings) => void;
+  /** `look` only from a host whose pictures own their look (the Develop tool). */
+  onSave: (name: string, settings: DevelopSettings, look?: SavedGrade | null) => void;
   onRemove: (id: string) => void;
   /** Where they are kept, said in the section's ⓘ: "on the trip". */
   keptOn?: string;
