@@ -33,14 +33,41 @@ import {
   type DevelopSettings,
 } from './develop';
 import {
+  MASK_OPS,
   cloneMask,
+  combineMask,
   defaultMask,
   describeMask,
   normaliseMask,
   sameMask,
   type Mask,
   type MaskKind,
+  type MaskOp,
 } from '../render/mask';
+
+/**
+ * A further mask COMBINED with the layer's own — Lightroom's Add, Subtract,
+ * Intersect (audit item 16). "The sky, minus what I painted over the
+ * mountain", "the shadows, but only in this ellipse", "this blue, anywhere
+ * below the horizon".
+ *
+ * Any kind but a SUBJECT: a subject's raster comes from a model per LAYER
+ * (`use-subject-masks.ts`), and the two combinations it is wanted in already
+ * exist — a subject intersected with anything is a Subject layer carrying
+ * that part, and anything minus the subject is `except`.
+ */
+export interface MaskPart {
+  op: MaskOp;
+  mask: Mask;
+  /** This part turned inside out before it combines — each part has its own. */
+  invert: boolean;
+}
+
+/** Each part is one more shape the pass evaluates per pixel, and a painted one a texture. */
+export const MAX_MASK_PARTS = 4;
+
+/** The kinds a part may be — every kind but a subject. */
+export const PART_KINDS: readonly MaskKind[] = ['linear', 'radial', 'luma', 'colour', 'brush'];
 
 export interface AdjustLayer {
   id: string;
@@ -59,6 +86,12 @@ export interface AdjustLayer {
    * layer or one that is not a subject subtracts nothing.
    */
   except: string | null;
+  /**
+   * Further masks combined with `mask`, in order — each one reads what the
+   * ones before it made. Empty is the layer's own mask alone, which is every
+   * layer written before these existed.
+   */
+  parts: MaskPart[];
   develop: DevelopSettings;
   /** 0..1, how much of the adjustment lands where the mask is full. */
   opacity: number;
@@ -80,6 +113,7 @@ export function createLayer(kind: MaskKind | null = 'linear', id: string = newLa
     mask: kind ? defaultMask(kind) : null,
     invert: false,
     except: null,
+    parts: [],
     develop: { ...DEFAULT_DEVELOP },
     opacity: 1,
     enabled: true,
@@ -99,12 +133,42 @@ export function normaliseLayer(raw: unknown, id: string = newLayerId()): AdjustL
     mask: normaliseMask(src.mask),
     invert: src.invert === true,
     except: typeof src.except === 'string' && src.except ? src.except : null,
+    parts: readParts(src.parts),
     // A layer whose develop is absent or junk is a layer that does nothing —
     // kept, because deleting somebody's layer on a read is never the answer.
     develop: developOrNull(src.develop) ?? { ...DEFAULT_DEVELOP },
     opacity: clamp01(src.opacity, 1),
     enabled: src.enabled !== false,
   };
+}
+
+/** A stored part list: junk and subjects dropped, capped at `MAX_MASK_PARTS`. */
+export function readParts(raw: unknown): MaskPart[] {
+  if (!Array.isArray(raw)) return [];
+  const out: MaskPart[] = [];
+  for (const entry of raw) {
+    if (!entry || typeof entry !== 'object') continue;
+    const e = entry as Record<string, unknown>;
+    const mask = normaliseMask(e.mask);
+    if (!mask || !PART_KINDS.includes(mask.kind)) continue;
+    out.push({
+      op: MASK_OPS.includes(e.op as MaskOp) ? (e.op as MaskOp) : 'add',
+      mask,
+      invert: e.invert === true,
+    });
+    if (out.length >= MAX_MASK_PARTS) break;
+  }
+  return out;
+}
+
+export function sameParts(a: readonly MaskPart[] | null | undefined, b: readonly MaskPart[] | null | undefined): boolean {
+  const x = a ?? [];
+  const y = b ?? [];
+  return x.length === y.length && x.every((p, i) => p.op === y[i].op && p.invert === y[i].invert && sameMask(p.mask, y[i].mask));
+}
+
+export function cloneParts(parts: readonly MaskPart[] | null | undefined): MaskPart[] {
+  return (parts ?? []).map((p) => ({ op: p.op, invert: p.invert, mask: cloneMask(p.mask) as Mask }));
 }
 
 /** Read a stored list, dropping what is not a layer and capping the length. */
@@ -173,6 +237,7 @@ export function sameLayer(a: AdjustLayer, b: AdjustLayer): boolean {
     a.name === b.name &&
     a.invert === b.invert &&
     a.except === b.except &&
+    sameParts(a.parts, b.parts) &&
     a.opacity === b.opacity &&
     a.enabled === b.enabled &&
     sameMask(a.mask, b.mask) &&
@@ -191,7 +256,7 @@ export function sameLayers(
 }
 
 export function cloneLayer(l: AdjustLayer): AdjustLayer {
-  return { ...l, mask: cloneMask(l.mask), develop: { ...l.develop } };
+  return { ...l, mask: cloneMask(l.mask), parts: cloneParts(l.parts), develop: { ...l.develop } };
 }
 
 export function cloneLayers(layers: readonly AdjustLayer[] | null | undefined): AdjustLayer[] {
@@ -251,23 +316,77 @@ export function patchLayer(
   return (layers ?? []).map((l) => (l.id === id ? { ...l, ...patch } : l));
 }
 
+const OP_GLYPH: Record<MaskOp, string> = { add: '+', subtract: '−', intersect: '∩' };
+
+/** `− painted · 2 strokes`, `∩ not shadows` — one part, as the list and a label read it. */
+export function describePart(p: MaskPart): string {
+  const d = describeMask(p.mask);
+  return `${OP_GLYPH[p.op]} ${p.invert ? `not ${d}` : d}`;
+}
+
 /** The layer's own name, else what its mask is — never an empty row. */
 export function layerLabel(l: AdjustLayer, layers?: readonly AdjustLayer[] | null): string {
   const named = l.name.trim();
   if (named) return named;
   const described = describeMask(l.mask);
-  const where = l.invert ? `not ${described}` : described;
+  const own = l.invert ? `not ${described}` : described;
+  const where = (l.parts ?? []).length ? `${own} ${l.parts.map(describePart).join(' ')}` : own;
   const cut = l.except ? layers?.find((o) => o.id === l.except && o.mask?.kind === 'subject') : null;
   return cut ? `${where} except ${cut.name.trim() || 'the subject'}` : where;
 }
 
 /**
- * How much of a layer lands on a pixel: the mask, turned by `invert`, holed by
- * the subtracted subject, scaled by the opacity. `layer-pass.ts`'s shader is a
+ * How much of a layer lands on a pixel: the mask, turned by `invert`, combined
+ * with each PART in order (each turned by its own invert first), holed by the
+ * subtracted subject, scaled by the opacity. `layer-pass.ts`'s shader is a
  * transcription of this; the order is the point — the hole comes AFTER the
- * invert, so it stays a hole whichever way the mask faces.
+ * invert and the parts, so it stays a hole whichever way the mask faces.
+ *
+ * `parts` carries each part's VALUE at this pixel, already evaluated
+ * (`maskAt`), beside its op and invert.
  */
-export function layerWeight(mask: number, invert: boolean, except: number, opacity: number): number {
-  const m = invert ? 1 - mask : mask;
+export function layerWeight(
+  mask: number,
+  invert: boolean,
+  except: number,
+  opacity: number,
+  parts: readonly { op: MaskOp; invert: boolean; value: number }[] = [],
+): number {
+  let m = invert ? 1 - mask : mask;
+  for (const p of parts) m = combineMask(m, p.invert ? 1 - p.value : p.value, p.op);
   return m * (1 - except) * opacity;
+}
+
+// --- which mask the author is working on ---------------------------------------
+//
+// A layer's masks are the COMPONENT list: null is its own mask, 0.. its parts.
+// The stage's gestures (paint, pick, sample) act on the one open in the panel.
+
+export function componentMask(l: AdjustLayer, part: number | null): Mask | null {
+  if (part === null) return l.mask;
+  return l.parts?.[part]?.mask ?? null;
+}
+
+/** The layer with one component's mask replaced; an index past the list changes nothing. */
+export function withComponentMask(l: AdjustLayer, part: number | null, mask: Mask | null): AdjustLayer {
+  if (part === null) return { ...l, mask };
+  if (!mask || !l.parts?.[part]) return l;
+  return { ...l, parts: l.parts.map((p, i) => (i === part ? { ...p, mask } : p)) };
+}
+
+/** A part appended, capped at `MAX_MASK_PARTS`; a subject is refused. */
+export function addPart(l: AdjustLayer, op: MaskOp, kind: MaskKind): AdjustLayer {
+  const parts = l.parts ?? [];
+  if (parts.length >= MAX_MASK_PARTS || !PART_KINDS.includes(kind)) return l;
+  return { ...l, parts: [...parts, { op, mask: defaultMask(kind), invert: false }] };
+}
+
+export function patchPart(l: AdjustLayer, index: number, patch: Partial<MaskPart>): AdjustLayer {
+  if (!l.parts?.[index]) return l;
+  return { ...l, parts: l.parts.map((p, i) => (i === index ? { ...p, ...patch } : p)) };
+}
+
+export function removePart(l: AdjustLayer, index: number): AdjustLayer {
+  if (!l.parts?.[index]) return l;
+  return { ...l, parts: l.parts.filter((_, i) => i !== index) };
 }

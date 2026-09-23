@@ -54,6 +54,63 @@ what is NEXT TO a pixel rather than what a pixel is — written through like
 the lens, reaching the stage, the crop stage, the thumbnail and the export,
 and named in the facts corner.
 
+## Sharpen has Detail and Masking, and a mask view (2026-09-23, audit item 21)
+
+Two more fields on `DetailSettings`, read by the same sharpen pass and its
+twin `sharpenAt` (the gate holds both, plus the mask view, at 0 codes):
+**Detail** 0..100 damps the high-pass `h → h / (1 + k|h|)`, `k = 20·(1 −
+d/100)²` — a large difference (a halo's cause) loses most, a grain keeps
+most; **Masking** 0..100 weights the move by `smoothstep(0.25t, t, e)`, `e`
+a 3×3 Sobel magnitude on luma ÷ 8 (a step of `h` reads `h/2`), `t = 0.1 ×
+masking/100`; 0 is no mask. **Rule for a new field with a new default**:
+ABSENT reads as the value that reproduces what the record already rendered
+(`LEGACY_SHARPEN_DETAIL = 100`, the plain mask), while `DEFAULT_DETAIL` gives
+a NEW picture Lightroom's 25 — otherwise every sharpened picture changes under
+its author on the next open. Neither field alone is an operation (like the
+radius), so they snap back while Amount is 0. The mask view is a third
+argument of `detailPasses` (`showSharpenMask`), threaded as `graderFrom`'s
+last parameter beside `clip` and asked for only by the stage and the loupe,
+and only while the Detail tab is open (a black-and-white picture met on
+another tab reads as a broken render). Verified headless on a grainy step:
+the view black on both flats and white on the edge, the Adjust tab back to
+the picture, a legacy `{ sharpen: 50 }` record reading Detail 100.
+
+## Presence — texture, clarity, dehaze — rides the same record and passes (2026-09-23, audit item 13)
+
+`presence.ts` (pure twin, 12 specs) + `presence-pass.ts`, three more fields
+on `DetailSettings` (−100..100, read as 0 when absent — no migration), so they
+share the record, the `detail` section of a copy and `detailPasses`, which puts
+them in `post` BEFORE the sharpen: dehaze → clarity → texture → sharpen. The
+Adjust tab draws them (`PresencePanel`, where Lightroom has them); the Detail
+tab's Reset clears ITS five keys only. Develop tool only — the Trips/Studio
+sheets carry no detail at all. Rules:
+
+- **Scales are FRACTIONS of the short side** (dehaze 3 %, clarity 1.2 %,
+  texture 0.2 %), never source pixels and never `pixelScale`: the shader reads
+  the render's size from `u_texel`, so stage, loupe and export blur the same
+  part of the scene with no plumbing.
+- **A wide blur is ≤ 24 taps a side, spaced past a pixel and read
+  bilinearly** (`sampleBilinear` mirrors LINEAR + CLAMP_TO_EDGE) — one
+  program, a bounded loop at any sigma.
+- **Two passes a slider, the estimate carried in ALPHA**: the X blur writes
+  it there because a pass sees only its input and the second half needs the
+  picture AND the estimate; the apply pass writes alpha back to 1. Safe
+  because every picture here is opaque and nothing blends.
+- **Dehaze works in LINEAR light**: the dark channel is the smallest channel
+  DECODED, and `I = J·t + (1 − t)` (white airlight, `t ≥ 0.2`) is inverted
+  on decoded values. On encoded values a clear dark field read as haze and
+  went 80 → 43 at +80; in light it keeps 58, and a bright sky still darkens,
+  as haze removal does.
+- **Clarity and texture move LUMA, RGB as one ratio**, the detail
+  soft-limited `d / (1 + 10|d|)`: at 4 a block against a sky wore a visible
+  glow at clarity +100. Clarity is weighted by a midtone bell, texture not;
+  +100 adds 1.5× the detail, −100 takes 1× away.
+
+`GLSL`: `step` is a built-in function and must not name a variable (the
+`patch` trap's cousin). The render gate holds the six passes (±, each op) to
+the twin on a 400×300 picture where the taps really are fractional: worst 1
+code everywhere.
+
 ## The loupe: the file's own pixels under a magnified view (2026-09-20, P11 second commit)
 
 The stage works to a pixel budget, so past its 1:1 a smooth resample invents

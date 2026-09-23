@@ -24,7 +24,7 @@ import type { RenderPass } from '../render/graph';
 import type { BrushRaster } from '../render/brush-raster';
 import { cloneMask, sameMask, type BrushStroke, type Mask } from '../render/mask';
 import { rasteriseBrush } from '../render/brush-raster';
-import { drawingLayers, type AdjustLayer } from './layer';
+import { cloneParts, drawingLayers, sameParts, type AdjustLayer, type MaskPart } from './layer';
 import { cloneDevelop, sameDevelop, type DevelopSettings } from './develop';
 
 /** One layer's develop as a cube: the correction alone, no look, no transform. */
@@ -66,6 +66,7 @@ export function layerPasses(
       interpolation,
       raster: rasters?.get(layer.id) ?? null,
       except: exceptRaster(layer, rasters),
+      parts: layer.parts,
       // Keyed by the LAYER's id: the graph caches programs by pass id, and two
       // layers sharing one would share a program and, through it, one uploaded
       // cube — the second layer would then grade with the first one's numbers.
@@ -131,16 +132,20 @@ export function maskOverlayPass(
   raster?: BrushRaster | null,
   style: MaskOverlayStyle = 'fill',
   except: BrushRaster | null = null,
+  /** The painted parts' maps, by index, when the caller holds them (`undefined` rasterises). */
+  partRasters?: readonly (BrushRaster | null | undefined)[],
 ): RenderPass | null {
   // A layer with no mask of its own is still worth showing once it subtracts
-  // a subject: the hole IS its shape.
-  if (!layer?.mask && !except) return null;
+  // a subject or combines a part: the hole, or the part, IS its shape.
   if (!layer) return null;
+  if (!layer.mask && !except && !(layer.parts ?? []).length) return null;
   return makeLayerPass({
     lut: RED_CUBE,
     mask: layer.mask,
     raster: raster ?? null,
     except,
+    parts: layer.parts,
+    partRasters,
     invert: layer.invert,
     opacity: style === 'outline' ? 1 : OVERLAY_STRENGTH,
     finish: style === 'outline' ? 'outline' : 'grade',
@@ -251,17 +256,41 @@ interface Held {
   aspectRatio: number;
   passRaster: BrushRaster | null;
   passExcept: BrushRaster | null;
+  /** Each part's painted map and the strokes it was walked from, by index. */
+  partStrokes: (readonly BrushStroke[] | null)[];
+  partRasters: (BrushRaster | null)[];
+  parts: MaskPart[];
   pass: RenderPass | null;
 }
 
 interface HeldOverlay {
   mask: Mask | null;
+  parts: MaskPart[];
+  partRasters: (BrushRaster | null)[];
   invert: boolean;
   aspectRatio: number;
   raster: BrushRaster | null;
   style: MaskOverlayStyle;
   except: BrushRaster | null;
   pass: RenderPass | null;
+}
+
+/**
+ * Each painted part's map, reused from the last call while its strokes are the
+ * same array at the same aspect — a part being painted re-walks itself alone.
+ */
+function partRasterFor(
+  parts: readonly MaskPart[],
+  strokes: readonly (readonly BrushStroke[] | null)[],
+  prev: Held | undefined,
+  aspectRatio: number,
+): (BrushRaster | null)[] {
+  return parts.map((_, i) => {
+    const s = strokes[i];
+    if (!s) return null;
+    if (prev && prev.partStrokes[i] === s && prev.rasterAspect === aspectRatio) return prev.partRasters[i];
+    return s.length ? rasteriseBrush(s, aspectRatio) : null;
+  });
 }
 
 export function makeLayerPassCache(): LayerPassCache {
@@ -300,11 +329,17 @@ export function makeLayerPassCache(): LayerPassCache {
         }
 
         const except = exceptRaster(layer, rasters);
+        const parts = layer.parts ?? [];
+        const partStrokes = parts.map((p) => (p.mask.kind === 'brush' ? p.mask.strokes : null));
+        const partRasters = partRasterFor(parts, partStrokes, prev, aspectRatio);
         const reusable =
           prev?.pass &&
           prev.cube === cube &&
           prev.passRaster === raster &&
           prev.passExcept === except &&
+          prev.partRasters.length === partRasters.length &&
+          prev.partRasters.every((r, i) => r === partRasters[i]) &&
+          sameParts(prev.parts, parts) &&
           prev.invert === layer.invert &&
           prev.opacity === layer.opacity &&
           prev.aspectRatio === aspectRatio &&
@@ -321,6 +356,8 @@ export function makeLayerPassCache(): LayerPassCache {
                 interpolation,
                 raster,
                 except,
+                parts,
+                partRasters,
                 id: `layer:${layer.id}`,
               })
             : null;
@@ -338,6 +375,9 @@ export function makeLayerPassCache(): LayerPassCache {
           aspectRatio,
           passRaster: raster,
           passExcept: except,
+          partStrokes,
+          partRasters,
+          parts: cloneParts(parts),
           pass,
         });
         if (pass) out.push(pass);
@@ -347,13 +387,30 @@ export function makeLayerPassCache(): LayerPassCache {
     },
 
     overlay(layer, aspectRatio, raster = null, style = 'fill', except = null) {
-      if (!layer || (!layer.mask && !except)) {
+      if (!layer || (!layer.mask && !except && !(layer.parts ?? []).length)) {
         overlay = null;
         return null;
       }
       const prev = overlay?.id === layer.id ? overlay.held : null;
+      // The painted parts' maps come from the layer's own held entry when it
+      // draws, so showing the mask of a layer being painted walks nothing twice.
+      const own = held.get(layer.id);
+      const parts = layer.parts ?? [];
+      const partRasters = parts.map((p, i) =>
+        p.mask.kind !== 'brush'
+          ? null
+          : own && own.partStrokes[i] === p.mask.strokes && own.rasterAspect === aspectRatio
+            ? own.partRasters[i]
+            : prev && prev.parts[i]?.mask.kind === 'brush' && sameMask(prev.parts[i].mask, p.mask) && prev.aspectRatio === aspectRatio
+              ? prev.partRasters[i]
+              : p.mask.strokes.length
+                ? rasteriseBrush(p.mask.strokes, aspectRatio)
+                : null,
+      );
       if (
         prev?.pass &&
+        sameParts(prev.parts, parts) &&
+        prev.partRasters.every((r, i) => r === partRasters[i]) &&
         prev.raster === raster &&
         prev.style === style &&
         prev.except === except &&
@@ -363,10 +420,20 @@ export function makeLayerPassCache(): LayerPassCache {
       ) {
         return prev.pass;
       }
-      const pass = maskOverlayPass(layer, aspectRatio, raster, style, except);
+      const pass = maskOverlayPass(layer, aspectRatio, raster, style, except, partRasters);
       overlay = {
         id: layer.id,
-        held: { mask: cloneMask(layer.mask), invert: layer.invert, aspectRatio, raster, style, except, pass },
+        held: {
+          mask: cloneMask(layer.mask),
+          parts: cloneParts(parts),
+          partRasters,
+          invert: layer.invert,
+          aspectRatio,
+          raster,
+          style,
+          except,
+          pass,
+        },
       };
       return pass;
     },

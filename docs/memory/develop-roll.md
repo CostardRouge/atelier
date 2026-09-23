@@ -28,7 +28,10 @@ only), so an instance without Winnow's `43f01e9` hides rolls instead of a 400
 on the first push. The trip and project drivers still call `remoteFor(id)`
 without a kind — unchanged, since every bucket keeps them. (5) the file is a
 BACKUP (fresh id, importing source, refs and custom `.cube` text travel), the
-trip file's rule, and a newer version is refused. Verified: 19 specs, and the
+trip file's rule, and a newer version is refused. **Every PICTURE gets a fresh
+id on import too** (2026-09-23): thumbnails and working previews are keyed by
+picture id alone, so one file imported twice made two rolls overwrite each
+other's cells and deleting one deleted the other's. Verified: 19 specs, and the
 store round-tripped in the Browser pane (put/get/list, a thumbnail written and
 pruned, a sync record, the four stores present). **Winnow's side was committed
 without its typecheck**: that checkout has no `node_modules`.
@@ -114,7 +117,10 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
   parent's cell, so stepping remounts the draft (never-inherit) and never the
   strip (its scroll survives). The grid is inside an `@container` wrapper: the
   inspector narrows to 18rem under 880px of TOOL width, the Library's width
-  included.
+  included. What is a TOOL rather than the picture's — the open tab, the
+  brush, the heal/clone disc — lives in `RollEditor` beside it, so a size set
+  on one picture is the size on the next (2026-09-23: the brush and the disc
+  were workbench state and reset on every step).
 - **A step is a history REPLACE** (`navigate(path, { replace: true })`, new in
   `use-hash-route.ts`): ←/→ along forty pictures must not make Back replay
   them. The route without a picture shows the first; it never redirects.
@@ -171,6 +177,93 @@ read as one. Verified headless: a v4 roll read as two dressed pictures; a look
 removed on one left the other's; a fast ←/→ sweep over look / no look / look
 moved nothing; the verb dressed the bare one; an export of a black & white
 picture and a bare one delivered 133,133,133 and 200,122,60.
+
+## A VARIANT is a whole picture sharing a file; it leaves into a folder, never under a new name (2026-09-23, item 30)
+
+His YES (`docs/lightroom-gaps.md` §8): Capture One's variants. **Decisions**:
+(1) `RollPicture.variant` — absent for the first, 2, 3… for copies, numbered
+one past the highest of the capture so a number is never reused while a higher
+one stands; a variant is a WHOLE `RollPicture` (its own id, develop, crop,
+look, words, delivery), not a diff over the first. (2) `addPictures`' dedupe
+STAYS: a variant is MADE (`addVariant`, placed after the last entry of its
+capture), never added from a file. (3) Two starts: `clone` (⌘', Lightroom's
+virtual copy — everything, delivery back to `auto`) and `fresh` (Capture One's
+New Variant — only what belongs to the FILE: `rendition`, the RAW base with its
+measured `rawGain`, `lensProfile`; never `rawWb`, which is a choice). (4) THE
+NAME: Winnow's `reconcile` pairs a final with its capture on the exact basename
++ capture time (read in `winnow/src/lib/reconcile.ts`), and his Gallery pairs
+by name — so a copy leaves as `Variant 2/DJI_0101.jpg` (`variantFolder`), a
+second target as `Web/Variant 2/…`, a download as `Variant 2-DJI_0101.jpg`; a
+`_v2` suffix was rejected for breaking both. `deliverFilesTo` walks a `/` path.
+(5) The bytes are the capture's: `use-roll-media` fetches once for a family
+(`mates`, only built when a variant exists), `use-roll-previews` keeps one
+working preview, the local count counts files. **How to apply**: anything keyed
+by picture id stays per variant (thumbs, export marks, the draft); anything
+keyed by the FILE must go through `sameMediaRef` or it doubles per variant; a
+list that names a picture uses `pictureLabel`, a message about the file may
+keep `ref.name`.
+
+## Winnow's culling is READ live, never stored and never written (2026-09-23, item 33)
+
+His answer (`docs/lightroom-gaps.md` §8): picks and stars SHOWN and FILTERED
+on in Develop, culling staying Winnow's. **Decisions**: (1) the source is the
+row Winnow already sends — `GRID_SELECT` joins `ratings` as `verdict` (`pick ·
+reject · skip · unrated`, migrations 0001 + 0016), `star` 0–5 and a free-text
+`color_label` no Winnow screen sets — read from ITS code, not guessed (the
+timeline's lesson); `culling.ts` reads it, `use-roll-culling.ts` asks
+`assetsByIds` per connected host in chunks of 200. (2) NEVER on the roll: a
+copy would go stale while he culls in Winnow and would read as the roll's own
+rating; it is a session cache keyed `host/id`, re-asked on `visibilitychange`
+after 60 s and by *Refresh*. (3) A picture Winnow said nothing of (local, not
+connected) has NO culling, not "unrated": it passes *all* and *not rejected*,
+fails *picks* and *★ and up*. (4) The filter is the sitting's (React state),
+and filters the strip the way *ignored* does — the open picture stays, ←/→
+skip what it hides (`stepPicture`'s `skip`), and `otherIds` (every *Apply to N
+other pictures*) follows the STRIP: Lightroom's "filter picks, then sync", the
+count on the verb saying it. The Pictures table gains *Picks*, drawn only when
+the roll has an instance to ask. **How to apply**: never add a verb that
+WRITES a verdict or a star from Atelier; a colour label is shown only for the
+five shared names (`labelColour`).
+
+## Which pictures LEAVE is one field on the picture (2026-09-23, E1)
+
+`RollPicture.deliver`: `auto · yes · no · ignore` (`docs/lightroom-gaps.md` §10,
+his call). **Rules**: (1) ONE field — *ignored* is its fourth value, never a
+flag beside it, so no two answers contradict; absent reads `auto`, so no roll
+migrated. (2) `auto` leaves when `pictureEdits` is non-empty (`delivers`); `yes`
+/ `no` are the author's and win. (3) A toggle (`toggledDelivery`: `P`, a row, a
+badge) gives the OTHER answer and stores `auto` when the rule already says it —
+two toggles are back on the rule, never pinned. (4) *Ignored* = out of the
+roll's WORK everywhere at once: never exported, stepped over by ←/→
+(`stepPicture`'s `skip`, which also hands on from an ignored picture opened by
+a click), left out of every Apply-to-ALL (`otherIds`; an explicit selection
+still reaches it), out of both numbers of `rollProgress` (counted apart as
+`ignored`). (5) The roll's verb is *Export N pictures* over `delivers`, and the
+run plan counts only those. Keys `P` / `U` / `M` — letters, so AZERTY presses
+the same; on the LAYERS tab `P` and `M` are the mask's instead (Pick, mask
+view — #185, `subject-picking.md`), `U` stays the delivery's everywhere, one
+flag on the pure key map (`layersTab`) so the rule is written once. An output instruction, never a rating: nothing goes to Winnow.
+**E2, the Export tab's *Pictures* table** (`DeliveryTable.tsx`): one row per
+picture, the WHOLE row the target at 48 px (his words — a box alone is too
+small, on a phone above all), a click giving `toggledDelivery`, `↺` back to
+the rule, `›` to open; filters All · Edited · Leaving · Held
+(`matchesDeliveryFilter`, which answers false for an ignored picture); the
+ignored folded in their own group, unfolding by itself when the open picture
+is one. Each row says the RUN PLAN's own line for that picture — so
+`use-roll-export` plans every picture for `lines` and only the leaving ones
+for the *Delivers* sentence — and the old read-only "picture by picture" list
+is gone, the table being that list made operable. The table is built by
+`RollEditor` (it holds the roll) and handed to `ExportPanel` as a node.
+**E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
+moved to the top-right to make room); a click toggles, a right-click or a
+550 ms touch hold ignores ↔ brings back, and the click that ends a hold is
+swallowed so it is not a second gesture. Filled = the author decided, dashed =
+the rule answers; a picture on the rule that stays OUT (a big roll's untouched
+majority) shows its badge only under the pointer — always on a touch screen —
+so the strip does not wear a hundred grey rings. Ignored cells are dimmed, or
+left out by the status line's Hide (`atelier.develop.showIgnored`, a
+`localStorage` view pref, never the roll's), the OPEN picture always staying
+in the strip.
 
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 
@@ -315,6 +408,125 @@ shared block. Rules a later phase must keep:
   says `Software: Atelier` (since 2026-09-21, the copied one included) — the
   mark that keeps an export sitting beside its original from being offered as
   the camera's file (`renditions.md`, R1b).
+- **Every delivered file is SIGNED, and carries the author's rights**
+  (2026-09-23, M1 of `docs/lightroom-gaps.md` §9). The signature is not a
+  switch: `software-mark.ts` READS it to refuse the suite's own exports as a
+  capture's rendition, so a picture with NO account now leaves with a block of
+  the signature alone (it used to leave bare) plus `xmp:CreatorTool`. The
+  identity (`creator` + a copyright TEMPLATE, `exif/delivery-meta.ts`) lives on
+  the PRESET BOOK (`PresetBook.identity`), because the book is the one personal
+  document every device already finds; `mergeBooks` keeps the edited copy's.
+  No default name — the site is public, so his name is nobody's default; the
+  template's `{year}` is the CAPTURE year (`captureYear`, the export's own
+  when unknown). Written over the camera's `Artist`/`Copyright` (an in-camera
+  owner string is not the author), in EXIF AND XMP: EXIF ASCII is now written
+  and read as UTF-8 (a `©` came out `)` through the old 7-bit mask), and the
+  XMP is ONE packet — `withXmpPacket` replaces, and `wrapUltraHdr` takes the
+  stamp's packet OUT of the base and folds its `rdf:Description` into the
+  container's, since two packets in one file is what readers disagree about.
+- **Every delivered JPEG carries an sRGB ICC profile** (2026-09-23, audit
+  item 25, `exif/icc-srgb.ts`): a 520-byte v4 display profile BUILT from its
+  numbers (Bradford-adapted primaries, D50 white, `chad`, one shared type-3
+  `para` curve), never a shipped blob, in one `APP2` after the EXIF and XMP
+  `APP1`s. The canvas encodes sRGB, so it moves no pixel (Chromium decodes the
+  tagged and untagged file identically, measured); what it removes is the
+  reader's GUESS — an untagged file is sRGB only by convention. Validated as an
+  exact identity against LittleCMS's own sRGB (Pillow's ImageCms, 2 197
+  colours, 0 codes apart): check a profile change the same way. Wide gamut
+  (P3, Adobe RGB) is pass 4 and needs a P3 canvas, not a tag.
+- **Copy, paste and Apply-to go through ONE picker of SECTIONS**
+  (2026-09-23, audit items 4+5, `develop/picture-sections.ts`,
+  `SettingsSheet.tsx`). The sections ARE `PictureEdit` — "edited" and "what can
+  be copied" one vocabulary. ⌘C/⌘V stay the develop numbers (shared with the
+  Trips/Studio modals); ⌘⇧C opens the sheet (and a ⚙ glyph in the stage-bar
+  well), ⌘⇧V pastes what was copied. The clipboard holds a SNAPSHOT of the
+  source picture, so pasting back onto that same picture restores it
+  (`applySections` skips the source only by IDENTITY, i.e. an apply-to).
+  Defaults: develop, look, lens, detail — what one body shares; crop, border,
+  perspective, repair and layers belong to one frame. Ticks remembered in
+  `localStorage` (a convenience). Never carried: rendition, RAW base
+  (`developOnto` keeps the TARGET's), words, delivery state. A ticked section
+  that is as shot at the source RESETS it on the targets — said in the sheet,
+  and each row marks `edited` / `as shot`. The per-tab Apply-to verbs stay for
+  the one-section gesture. ⌘⇧C replaced a test pinning it to nothing: ⇧C alone
+  is still crop-to-view. **Reset this picture** (item 7) is the same sheet read
+  the other way: the ticked sections back to as shot, NO confirmation — it is
+  one undo step like every roll write (measured: reset all, ⌘Z restores the
+  develop and the look); the well's ↺ still resets the develop numbers alone.
+- **A preset may carry the LOOK** (2026-09-23, item 6, `DevelopPreset.look`,
+  optional — no book version bump, an older book reads with none). Saved only
+  from a host whose pictures OWN their look (the Develop tool passes `look`
+  and `onApplyLook` to `DevelopPresetsSection`), ticked per save (*+ look*,
+  off by default — a preset stays a light unless asked); a look alone is a
+  valid preset. Trips and the Studio keep their looks on other rungs, so there
+  the chip applies the numbers and says the look stays behind (a struck
+  `+ look`), rather than guessing which rung to write. `develop.ts` cannot
+  import the roll's grade reader (a cycle), so `normaliseDevelopPresets` takes
+  an optional `readLook` the book passes.
+- **An undo OPENS the picture it changed** (2026-09-23, item 8,
+  `pictureAfterRestore`, called in `DevelopTool`'s `onRestore`). The stack
+  stays ONE for the roll (per-picture stacks would split an Apply-to's single
+  step), so ⌘Z after stepping undid the previous picture out of sight. The
+  diff is by OBJECT IDENTITY — every write replaces the picture it touches and
+  keeps the others — and the route is REPLACED, not pushed; the open picture
+  among the changed, or nothing changed per picture, means stay. Measured:
+  edit a, step to b, ⌘Z lands on a reverted, ⌘⇧Z re-applies there.
+- **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
+  `RollPicture.title` / `caption`, stored trimmed and absent when empty
+  (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so
+  a blur is no undo step). Carried by no preset, paste or Apply-to (two frames
+  of one scene are captioned apart), but by the `.roll.json` backup. The
+  caption is written as `ImageDescription` too (Lightroom's and Capture One's
+  Caption); a title is XMP only — EXIF's `XPTitle` is Windows-only UTF-16 and
+  not worth a tag. A picture with no caption keeps the capture's own
+  `ImageDescription`. Typed into drafts committed on blur, in the Export tab's
+  Metadata section; text fields keep P/U/M (the editor's keys yield to typing).
+- **What leaves is ONE choice per ROLL, in groups** (2026-09-23, M3,
+  `exif/meta-groups.ts`, `RollExport.metadata`, absent = All). A roll because
+  "this set goes online without its position" is said of a delivery, not of
+  a frame. Seven groups (camera · exposure · time · position · maker notes and
+  serials · title and caption · creator and copyright) plus the signature
+  drawn LOCKED among them, so its missing switch does not read as an
+  oversight; presets All (default — GPS leaves, his call) · Share online (no
+  position, no serials) · Minimal (rights + signature). The one cost, said in
+  the panel: `keepsWholeBlock` (every capture group AND the maker notes) is
+  what lets the camera's block be COPIED; anything less REBUILDS it from the
+  fields `ExifData` names, and maker notes, serials and unnamed tags stay
+  behind. A group left out CLEARS the camera's own value too (`authorTags`:
+  string writes, null clears, undefined keeps) — rights off means no owner
+  string either. The copyright's `{year}` is still the capture's even when the
+  time does not leave. The run's "no body / no EXIF" warnings fire only when
+  the choice asked for what was missing.
+- **The place is named OFFLINE from the capture's own GPS, and is its own
+  group** (2026-09-23, M4, `exif/delivery-place.ts`): `photoshop:City`,
+  `photoshop:Country`, `Iptc4xmpCore:CountryCode` (XMP only — EXIF has no
+  place field), from the committed GeoNames index loaded ONCE per run and only
+  when the group is on. Read from the position as CAPTURED, before the choice
+  drops it, so *Share online* sends the town without the coordinates. A town
+  within 30 km only (`PLACE_MAX_KM`; the index's own 90 km is for naming a
+  LEG — the Pinnacles are 35 km from Jurien Bay, the nearest town it holds),
+  else the COUNTRY alone from the nearest town within 90 km (wrong only at a
+  border in empty country, accepted), else nothing; the run names the
+  pictures that got no town. Trap met building it: the run built `placeOf`
+  and never handed it to `exportExifBlock` — every unit test passed, only
+  reading the delivered file back caught it.
+- **"Changed since last export" is a MARK kept BESIDE the roll, never on it**
+  (2026-09-23, E4, `develop/export-marks.ts`, store `exports` v4 in
+  `atelier-develop`). On the document it would be a write the undo stack
+  records — every export an undo step, and an undo un-marking what WAS
+  delivered — and the fact is this DEVICE's (the files landed in a folder
+  here), like a folder handle; it does not travel with a synced roll or the
+  `.roll.json`. A mark is `{at, key}`, `key` a fingerprint of the picture AS
+  RENDERED (develop, look, crop/aspect/border, rendition, geometry, detail,
+  repair, layers, title, caption — absent, `null` and `[]` one spelling at
+  every depth, keys sorted); the roll's export settings, the delivery state
+  and the identity are deliberately OUT (a new size is a knowing choice for a
+  run, not a change to find). Only files that LANDED are marked
+  (`Delivery.failed` names the refused ones). Undoing the edit brings the
+  picture back to exported, because the key matches again — measured, as is
+  a look restored after a reload keeping its key. Surfaces: a `✓ time` /
+  `changed` chip per row, a *Changed* filter, the status line's count, and
+  *Export N new or changed* only when it is a real subset of what leaves.
 - **The workbench holds TWO files since 2026-09-21: the picture's, and the one
   on the stage** (`renditions.md`, «R3a is BUILT»). `file` stays what the
   picture IS — its identity, its origin, its EXIF, what the export hook
@@ -643,7 +855,12 @@ Rules a later agent must keep:
 - **Apply to is TWO verbs** (the maintainer's one change to the prototype):
   `copyCropTo` never touches the border, `copyBorderTo` (pure, tested) never
   the crop, so a roll can wear one border over crops that each differ.
-- `rollProgress` counts a border as looked at.
+- **"Edited" has ONE answer, `pictureEdits`** (`roll-types.ts`, 2026-09-23):
+  develop, look, crop (an aspect alone counts), border, perspective, lens,
+  detail, repair, layers — a value dragged back to its default is none, and
+  the `rendition` is a choice of bytes, never an edit. The filmstrip's dot and
+  tooltip, `rollProgress` and the remove confirmation all read it: they had
+  three different tests, and an hour of heal spots was removed without asking.
 
 Verified in the pane through the app's own `renderRollPicture` on a 3000×2000
 half-blue/half-green JPEG: a 10 % vermilion border on a 1:1 file → 3400×3400,

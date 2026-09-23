@@ -27,7 +27,7 @@
 
 import { isDefaultKeystone, sameKeystone, type Keystone } from './geometry';
 import { makeKeystonePass } from './keystone-pass';
-import { isDefaultLens, sameLens, type LensCorrection } from './lens';
+import { isDefaultLens, isIdentityProfile, sameLens, sameProfileTerms, type LensCorrection, type LensProfileTerms } from './lens';
 import { makeLensPass } from './lens-pass';
 import { sameWarp, type CameraWarp } from './camera-warp';
 import { makeCameraWarpPass } from './camera-warp-pass';
@@ -44,6 +44,11 @@ export interface PictureGeometry {
   cameraWarp?: CameraWarp | null;
   /** Distortion, lateral CA and vignetting — `lens.ts`. */
   lens?: LensCorrection | null;
+  /**
+   * A MEASURED lens profile (Lensfun, `shared/lens/lensfun.ts`), in the lens
+   * pass's own units, applied in the same pass under the sliders.
+   */
+  lensProfile?: LensProfileTerms | null;
   /** The perspective correction — `geometry.ts`. */
   keystone?: Keystone | null;
 }
@@ -51,7 +56,9 @@ export interface PictureGeometry {
 /** Does this picture need the GPU for its SHAPE, whatever its look? */
 export function hasGeometry(g: PictureGeometry | null | undefined): boolean {
   if (!g) return false;
-  return !isIdentityWarp(g.cameraWarp) || !isDefaultLens(g.lens) || !isDefaultKeystone(g.keystone);
+  return (
+    !isIdentityWarp(g.cameraWarp) || !isDefaultLens(g.lens) || !isIdentityProfile(g.lensProfile) || !isDefaultKeystone(g.keystone)
+  );
 }
 
 /**
@@ -66,6 +73,7 @@ export function sameGeometry(
   return (
     sameWarp(a?.cameraWarp, b?.cameraWarp) &&
     sameLens(a?.lens, b?.lens) &&
+    sameProfileTerms(a?.lensProfile, b?.lensProfile) &&
     sameKeystone(a?.keystone ?? null, b?.keystone ?? null)
   );
 }
@@ -77,6 +85,8 @@ export function cloneGeometry(g: PictureGeometry | null | undefined): PictureGeo
     // copying a per-plane polynomial per draft would be work for nothing.
     cameraWarp: g?.cameraWarp ?? null,
     lens: g?.lens ? { ...g.lens } : null,
+    // Terms are replaced whole, never edited in place.
+    lensProfile: g?.lensProfile ?? null,
     keystone: g?.keystone ? { ...g.keystone } : null,
   };
 }
@@ -100,7 +110,11 @@ export function geometryPasses(
   // in the same pixels it then divides out, so (ar, 1) is the whole frame.
   const camera = makeCameraWarpPass(g.cameraWarp, aspectRatio, 1);
   if (camera) passes.push(camera);
-  const lens = isDefaultLens(g.lens) ? null : makeLensPass(g.lens, aspectRatio);
+  // A file that states its OWN rectilinear warp has had its distortion taken
+  // out by the time the lens pass runs: a measured profile on top would bend
+  // it back the other way. The file's calibration wins; the sliders stay.
+  const profile = isIdentityWarp(g.cameraWarp) ? (g.lensProfile ?? null) : null;
+  const lens = isDefaultLens(g.lens) && isIdentityProfile(profile) ? null : makeLensPass(g.lens, aspectRatio, profile);
   if (lens) passes.push(lens);
   const keystone = isDefaultKeystone(g.keystone)
     ? null

@@ -1,13 +1,30 @@
-import { LONG_EDGE_CHOICES, longEdgeChoiceId, type DeliverySummary } from '../../shared/develop/roll-export';
-import { ROLL_EXPORT_LIMITS, type RollExport } from '../../shared/develop/roll-types';
+import type { DeliverySummary } from '../../shared/develop/roll-export';
+import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
+import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
 import Button from '../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import Segmented from '../../shared/ui/Segmented';
+import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
+import { targetFolder } from '../../shared/develop/export-targets';
+import { captureYear } from '../../shared/exif/delivery-meta';
+
+const WATERMARK_POSITION_OPTIONS: readonly { id: WatermarkPosition; label: string }[] = [
+  { id: 'bottom-right', label: 'Bottom right' },
+  { id: 'bottom-left', label: 'Bottom left' },
+  { id: 'bottom', label: 'Bottom, centred' },
+  { id: 'top-right', label: 'Top right' },
+  { id: 'top-left', label: 'Top left' },
+];
 import { Icons } from '../../shared/ui/icons';
 import { hdrSupport } from '../../shared/hdr/hdr-display';
 import { formatBytes } from '../../shared/lib/format';
 import { heldCeilingBytes } from '../../shared/sources/original-cache';
 import type { RollRun } from './use-roll-export';
+import type { ReactNode } from 'react';
+import MetadataSection from './MetadataSection';
+import type { ExifData } from '../../shared/exif/exif-parser';
+import { useDeliveryIdentity, setDeliveryIdentity } from '../../shared/develop/use-preset-book';
 
 const HDR_STOPS: readonly { id: string; label: string }[] = [
   { id: '1', label: '1 stop' },
@@ -62,6 +79,10 @@ export default function ExportPanel({
   exporting,
   note,
   hdrRun = null,
+  pictures = null,
+  openExif = null,
+  picture = null,
+  onWords,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -77,8 +98,22 @@ export default function ExportPanel({
   note: string | null;
   /** The last run's HDR outcome — the one part of the run the panel still shows. */
   hdrRun?: RollRun['hdr'];
+  /** Which pictures leave, one row each (`DeliveryTable`) — the editor builds it, since it holds the roll. */
+  pictures?: ReactNode;
+  /** The open picture's effective EXIF — the Metadata section previews against it. */
+  openExif?: ExifData | null;
+  /** The open picture, whose title and caption the Metadata section edits. */
+  picture?: RollPicture | null;
+  onWords?: (words: { title?: string; caption?: string }) => void;
 }) {
-  const { quality } = ROLL_EXPORT_LIMITS;
+  const identity = useDeliveryIdentity();
+  // The line on the picture in hand, as the run will draw it.
+  const markPreview = resolveWatermarkText(settings.watermark.text, {
+    creator: identity.creator,
+    year: captureYear(openExif?.dateTimeOriginal, new Date().getFullYear()),
+    title: picture?.title ?? null,
+  });
+  const marked = settings.targets.flatMap((t, i) => (t.watermark ? [i === 0 ? 'the chosen folder' : `${targetFolder(t.name, i)}/`] : []));
   return (
     <>
       <InspectorSection
@@ -88,14 +123,27 @@ export default function ExportPanel({
           <>
             <p>
               Each picture is decoded at its own size, developed under its own look, cropped as the
-              Crop tab shows it and written as a JPEG. The size is a ceiling on the long edge — a
-              picture is never upscaled to reach it.
+              Crop tab shows it and written as a JPEG. A size is a ceiling — a long edge, a short
+              edge, an area in megapixels or a share of the picture — and a picture is never
+              upscaled to reach it.
+            </p>
+            <p>
+              One run can write several <strong>targets</strong>: the full picture for the archive
+              and a 2048 px set for the web, say. Each picture is rendered once and cut to every
+              target. The first writes into the folder you choose; each other one into a folder
+              inside it, named after the target — the files keep their pictures’ own names, so{' '}
+              <code>DJI_0101.jpg</code> and <code>Web/DJI_0101.jpg</code> are the same photograph.
+              A browser with no folder picker downloads instead, and there the target’s name goes
+              before the file’s (<code>Web-DJI_0101.jpg</code>). <strong>Sharpen</strong> is for a
+              screen, applied to the file after its resize: a picture brought down to 2048 px is
+              softer than it was at its own size, and how much to bring back depends on the size.
             </p>
             <p>
               A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
               hour it was taken — whatever its pixels were taken from, so a file developed on a proxy
-              still reads like the capture. Only three tags are corrected: the way up, the size, and
-              the thumbnail, which would otherwise show the picture before you developed it.
+              still reads like the capture. Only a few tags are corrected: the way up, the size, the
+              thumbnail, which would otherwise show the picture before you developed it — and what
+              the Metadata section below writes.
             </p>
             <p>
               Which pixels a picture leaves from is the picture’s own answer, chosen above the
@@ -127,42 +175,12 @@ export default function ExportPanel({
           </>
         }
       >
-        <FieldRow label="Size">
-          <SelectField
-            label="Long edge"
-            value={longEdgeChoiceId(settings.longEdge)}
-            options={LONG_EDGE_CHOICES.map((c) => ({ id: c.id, label: c.label }))}
-            onChange={(id) => onSettings({ longEdge: LONG_EDGE_CHOICES.find((c) => c.id === id)?.longEdge ?? null })}
-          />
-        </FieldRow>
-        <FieldRow label="Quality">
-          <RangeField
-            label="JPEG quality"
-            min={quality.min}
-            max={quality.max}
-            step={0.01}
-            value={settings.quality}
-            onChange={(q) => onSettings({ quality: q })}
-            format={(v) => `${Math.round(v * 100)} %`}
-          />
-        </FieldRow>
+        <ExportTargets targets={settings.targets} onTargets={(targets) => onSettings({ targets })} />
         <FieldRow label="Delivers" align="start">
-          {/* The run's sentence, and every picture's line behind it — read-only:
-              editable here it would be the choice above the photograph a second time. */}
+          {/* The run's sentence. Every picture's own line is in the Pictures
+              table below, where it is also where a picture is sent or held. */}
           <div className="flex flex-col gap-1 min-w-0 pt-1">
             <span className="font-mono text-sm tabular-nums leading-snug text-ink">{plan.summary}</span>
-            {plan.pictures.length > 0 && (
-              <details className="min-w-0">
-                <summary className="cursor-pointer font-mono text-3xs text-faint select-none">picture by picture</summary>
-                <ul className="m-0 mt-1 p-0 list-none flex flex-col gap-0.5">
-                  {plan.pictures.map((p) => (
-                    <li key={p.id} className="font-mono text-3xs text-ink-soft leading-relaxed break-words">
-                      {p.line}
-                    </li>
-                  ))}
-                </ul>
-              </details>
-            )}
           </div>
         </FieldRow>
         <SwitchRow
@@ -187,6 +205,122 @@ export default function ExportPanel({
           </span>
         </FieldRow>
       </InspectorSection>
+
+      <InspectorSection
+        id="develop.watermark"
+        title="Watermark"
+        info={
+          <>
+            <p>
+              A line of text drawn on the file, in a corner or along the bottom edge. The style is the
+              roll’s; each target above says whether it carries it, so the copy that goes online can
+              be signed and the one kept for the archive left clean.
+            </p>
+            <p>
+              The line is a template: <code>{'{creator}'}</code> is the name set under Metadata,{' '}
+              <code>{'{year}'}</code> the year the picture was TAKEN, <code>{'{title}'}</code> the
+              picture’s own. A line that names its author before a name is set is not drawn. Its
+              size is a share of the file’s short side, so a 1080 px copy and the full picture carry
+              the same mark, and it is drawn after the screen sharpening.
+            </p>
+          </>
+        }
+      >
+        <FieldRow label="Line">
+          <TextField
+            label="Watermark line"
+            value={settings.watermark.text}
+            placeholder={DEFAULT_WATERMARK.text}
+            onChange={(text) => onSettings({ watermark: { ...settings.watermark, text } })}
+          />
+        </FieldRow>
+        <FieldRow label="Reads" align="start">
+          <span className={`font-mono text-sm leading-snug pt-1 ${markPreview ? 'text-ink' : 'text-muted'}`}>
+            {markPreview || (settings.watermark.text.includes('{creator}') && !identity.creator ? 'nothing yet — set a creator under Metadata' : 'nothing — the line is empty')}
+          </span>
+        </FieldRow>
+        <FieldRow label="Where">
+          <SelectField
+            label="Watermark position"
+            value={settings.watermark.position}
+            options={WATERMARK_POSITION_OPTIONS}
+            onChange={(position) => onSettings({ watermark: { ...settings.watermark, position } })}
+          />
+        </FieldRow>
+        <FieldRow label="Size">
+          <RangeField
+            label="Watermark size"
+            min={WATERMARK_LIMITS.size.min}
+            max={WATERMARK_LIMITS.size.max}
+            step={0.5}
+            value={settings.watermark.size}
+            onChange={(size) => onSettings({ watermark: { ...settings.watermark, size } })}
+            format={(v) => `${v.toFixed(1)} %`}
+          />
+        </FieldRow>
+        <FieldRow label="Opacity">
+          <RangeField
+            label="Watermark opacity"
+            min={WATERMARK_LIMITS.opacity.min}
+            max={WATERMARK_LIMITS.opacity.max}
+            step={0.05}
+            value={settings.watermark.opacity}
+            onChange={(opacity) => onSettings({ watermark: { ...settings.watermark, opacity } })}
+            format={(v) => `${Math.round(v * 100)} %`}
+          />
+        </FieldRow>
+        <FieldRow label="Tone">
+          <Segmented
+            size="sm"
+            label="Watermark tone"
+            value={settings.watermark.tone}
+            onChange={(tone) => onSettings({ watermark: { ...settings.watermark, tone: tone as WatermarkTone } })}
+            options={[
+              { id: 'light', label: 'Light' },
+              { id: 'dark', label: 'Dark' },
+            ]}
+          />
+        </FieldRow>
+        <FieldRow label="Drawn on" align="start">
+          <span className="font-mono text-2xs leading-snug text-muted pt-1">
+            {marked.length ? marked.join(' · ') : 'no target yet — switch it on under a target above'}
+          </span>
+        </FieldRow>
+      </InspectorSection>
+
+      {pictures && (
+        <InspectorSection
+          id="develop.pictures"
+          title="Pictures"
+          info={
+            <>
+              <p>
+                Which pictures leave. By default the ones you EDITED do; a click on a row gives the
+                other answer — send a picture you did not touch, hold back one you did — and{' '}
+                <strong>↺</strong> puts it back on the rule. <kbd>P</kbd> does the same on the picture on
+                the stage, <kbd>U</kbd> puts it back on the rule.
+              </p>
+              <p>
+                An <strong>ignored</strong> picture (<kbd>M</kbd>) is out of the roll’s work: it never
+                leaves, the arrows step over it, “apply to the others” leaves it alone. It is folded at
+                the bottom; a click there brings it back.
+              </p>
+            </>
+          }
+        >
+          {pictures}
+        </InspectorSection>
+      )}
+
+      <MetadataSection
+        identity={identity}
+        onIdentity={(next) => void setDeliveryIdentity(next)}
+        openExif={openExif}
+        picture={picture}
+        onWords={onWords}
+        choice={settings.metadata}
+        onChoice={(metadata) => onSettings({ metadata })}
+      />
 
       <InspectorSection
         id="develop.hdr"

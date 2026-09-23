@@ -24,6 +24,8 @@
  * Pure and DOM-free.
  */
 
+import type { SavedGrade } from '../lut/saved-grade';
+import { apply3, describeWhiteBalance, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   cloneCurves,
@@ -44,6 +46,30 @@ import {
   type Levels,
   type ToneCurves,
 } from './curves';
+import {
+  cloneMixer,
+  cloneMono,
+  describeMixer,
+  describeMono,
+  isDefaultMixer,
+  mixLinear,
+  mixerOrNull,
+  monoLinear,
+  monoOrNull,
+  sameMixer,
+  sameMono,
+  type ColourMixer,
+  type MonoMix,
+} from './mixer';
+import {
+  cloneGrading,
+  describeGrading,
+  gradeLinear,
+  gradingOrNull,
+  isDefaultGrading,
+  sameGrading,
+  type ColourGrading,
+} from './grading';
 
 export interface DevelopSettings {
   /** Stops, −3..+3. A linear gain in scene light. */
@@ -86,6 +112,25 @@ export interface DevelopSettings {
   /** Levels per channel (`curves.ts`), or null for none. The same, coarser. */
   levels?: Levels | null;
   /**
+   * The colour mixer (`mixer.ts`): hue, saturation and luminance for eight
+   * bands of hue, or null for none — Lightroom's HSL. Last of the stages, as
+   * there. Optional like the curves, so nothing stored before it migrates.
+   */
+  mixer?: ColourMixer | null;
+  /**
+   * The BLACK-AND-WHITE treatment and its mix (`mixer.ts`, `MonoMix`): null
+   * is colour. While set, it takes the colour mixer's place — the mixer is
+   * kept, not applied — and colour grading still tints the grey after it,
+   * which is how a split tone is made.
+   */
+  mono?: MonoMix | null;
+  /**
+   * Colour grading (`grading.ts`): a colour and a light for the shadows, the
+   * midtones, the highlights and the whole picture — Lightroom's wheels —
+   * after the mixer, as there. Optional, so nothing migrates.
+   */
+  grading?: ColourGrading | null;
+  /**
    * The MATERIAL the numbers act on, as a LADDER of four rungs — each a real
    * and nameable amount of the camera's own calibration (2026-09-20,
    * `docs/develop-originals.md` §7 decision 1, `raw.md`):
@@ -116,10 +161,22 @@ export interface DevelopSettings {
    * and preview = export is a promise. Absent means 1.
    */
   rawGain?: number | null;
+  /**
+   * With a RAW base, a white balance in KELVIN (`raw/white-balance.ts`): the
+   * temperature and tint asked for, and the 3×3 matrix they came to through
+   * THIS picture's own as-shot white and camera matrices — stored, like the
+   * gain, so the export applies exactly what the stage did. Absent is as
+   * shot. A fact about one capture's bytes: it travels with the base and
+   * nowhere else (`withoutBase`).
+   */
+  rawWb?: RawWhiteBalance | null;
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
-export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'base' | 'rawGain'>;
+export type DevelopKey = Exclude<
+  keyof DevelopSettings,
+  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb'
+>;
 
 /**
  * The rungs of the material ladder, lowest first. `proxy` is never stored —
@@ -184,7 +241,7 @@ export function rawGainOf(d: DevelopSettings | null | undefined): number {
  * it onto a JPEG would apply a RAW's gain to a render, four stops too bright.
  */
 export function withoutBase(d: DevelopSettings): DevelopSettings {
-  return { ...d, base: null, rawGain: null };
+  return { ...d, base: null, rawGain: null, rawWb: null };
 }
 
 /** The sliders, in the order every panel draws them. */
@@ -243,8 +300,12 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   vibrance: 0,
   curves: null,
   levels: null,
+  mixer: null,
+  mono: null,
+  grading: null,
   base: null,
   rawGain: null,
+  rawWb: null,
 });
 
 /**
@@ -258,7 +319,10 @@ export function isDefaultDevelop(d: DevelopSettings | null | undefined): boolean
     !isRawDevelop(d) &&
     DEVELOP_KEYS.every((k) => d[k] === 0) &&
     isDefaultCurves(d.curves) &&
-    isDefaultLevels(d.levels)
+    isDefaultLevels(d.levels) &&
+    isDefaultMixer(d.mixer) &&
+    !d.mono &&
+    isDefaultGrading(d.grading)
   );
 }
 
@@ -274,6 +338,10 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   const out = { ...DEFAULT_DEVELOP, ...src };
   out.curves = cloneCurves(src.curves);
   out.levels = cloneLevels(src.levels);
+  out.mixer = cloneMixer(src.mixer);
+  out.mono = cloneMono(src.mono);
+  out.grading = cloneGrading(src.grading);
+  out.rawWb = src.rawWb ? { ...src.rawWb, matrix: [...src.rawWb.matrix] } : null;
   return out;
 }
 
@@ -289,8 +357,12 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     DEVELOP_KEYS.every((k) => x[k] === y[k]) &&
     sameCurves(x.curves, y.curves) &&
     sameLevels(x.levels, y.levels) &&
+    sameMixer(x.mixer, y.mixer) &&
+    sameMono(x.mono, y.mono) &&
+    sameGrading(x.grading, y.grading) &&
     isRawDevelop(x) === isRawDevelop(y) &&
-    rawGainOf(x) === rawGainOf(y)
+    rawGainOf(x) === rawGainOf(y) &&
+    JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null)
   );
 }
 
@@ -310,6 +382,9 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   }
   out.curves = curvesOrNull(normaliseCurves(src.curves));
   out.levels = levelsOrNull(normaliseLevels(src.levels));
+  out.mixer = mixerOrNull(src.mixer);
+  out.mono = monoOrNull(src.mono);
+  out.grading = gradingOrNull(src.grading);
   const base = normaliseBase(src.base);
   if (base) {
     out.base = base;
@@ -318,6 +393,8 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
       typeof g === 'number' && Number.isFinite(g) && g > 0
         ? Math.min(RAW_GAIN_LIMITS.max, Math.max(RAW_GAIN_LIMITS.min, g))
         : null;
+    // Only with a base: a white balance in Kelvin is the RAW's, never a render's.
+    out.rawWb = rawWhiteBalanceOrNull(src.rawWb);
   }
   return out;
 }
@@ -339,17 +416,30 @@ export interface DevelopPreset {
   id: string;
   name: string;
   settings: DevelopSettings;
+  /**
+   * The LOOK saved with the light, when its author ticked it (2026-09-23,
+   * `docs/lightroom-gaps.md` item 6): since roll v5 a look is per picture, so
+   * "Portra + my curve" was two gestures on every picture. Applied where a
+   * picture owns its look — the Develop tool; Trips and the Studio sheets
+   * apply the numbers and say the look stays behind. Absent is a light alone.
+   */
+  look?: SavedGrade;
 }
 
-/** Presets as a document holds them, read back safely: junk entries dropped. */
-export function normaliseDevelopPresets(raw: unknown): DevelopPreset[] {
+/**
+ * Presets as a document holds them, read back safely: junk entries dropped.
+ * `readLook` reads a preset's look where the caller knows how (the preset
+ * book passes the roll's grade reader); without it a look is dropped.
+ */
+export function normaliseDevelopPresets(raw: unknown, readLook?: (raw: unknown) => SavedGrade | null): DevelopPreset[] {
   if (!Array.isArray(raw)) return [];
   const out: DevelopPreset[] = [];
   for (const entry of raw) {
     if (!entry || typeof entry !== 'object') continue;
     const e = entry as Record<string, unknown>;
     if (typeof e.id !== 'string' || !e.id || typeof e.name !== 'string') continue;
-    out.push({ id: e.id, name: e.name, settings: normaliseDevelop(e.settings) });
+    const look = readLook && e.look !== undefined ? readLook(e.look) : null;
+    out.push({ id: e.id, name: e.name, settings: normaliseDevelop(e.settings), ...(look ? { look } : {}) });
   }
   return out;
 }
@@ -467,7 +557,8 @@ function shapeChannel(lin: number, channel: 0 | 1 | 2, shape: ChannelShaper): nu
  *
  * Order: white balance → exposure → the luminance curve as one ratio → the
  * luma curve, also as a ratio → levels and the per-channel curves → saturation
- * and vibrance around the new luminance.
+ * and vibrance around the new luminance → the colour mixer (`mixer.ts`) →
+ * colour grading (`grading.ts`).
  *
  * `shapers` is the resolved curve/level maps. Pass it in any loop —
  * `developStage` does; omitting it resolves them per pixel, which is only
@@ -481,6 +572,18 @@ export function developLinear(
   let r = rgb[0] < 0 ? 0 : rgb[0];
   let g = rgb[1] < 0 ? 0 : rgb[1];
   let b = rgb[2] < 0 ? 0 : rgb[2];
+
+  // A RAW's white balance in Kelvin FIRST: it re-balances the capture as the
+  // camera would have under that light, and every slider below — the
+  // relative temperature and tint included — then works on that picture.
+  // Only on a RAW base: a draft that left the sensor for the render may still
+  // hold one for a moment, and on an 8-bit picture it would be a fabrication.
+  if (d.rawWb && isRawDevelop(d)) {
+    [r, g, b] = apply3(d.rawWb.matrix, [r, g, b]);
+    if (r < 0) r = 0;
+    if (g < 0) g = 0;
+    if (b < 0) b = 0;
+  }
 
   if (d.temperature) {
     const t = (d.temperature / 100) * TEMPERATURE_REACH;
@@ -561,6 +664,15 @@ export function developLinear(
     }
   }
 
+  // The colour mixer last, as in Lightroom: a band is picked on the colour
+  // the pixel HAS once every global move is made.
+  // Black and white takes the mixer's PLACE: its eight bands become eight
+  // lights in grey, and the colour mixer waits, kept, for the colour to come back.
+  if (d.mono) [r, g, b] = monoLinear([r, g, b], d.mono);
+  else if (d.mixer && !isDefaultMixer(d.mixer)) [r, g, b] = mixLinear([r, g, b], d.mixer);
+  // Then the wheels, which colour the RANGES of the picture as it now is.
+  if (d.grading && !isDefaultGrading(d.grading)) [r, g, b] = gradeLinear([r, g, b], d.grading);
+
   return [r, g, b];
 }
 
@@ -638,6 +750,7 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
     const rung = developBase(d);
     const adds = rung === 'gainMapWarp' ? ' + gain map + warp' : rung === 'gainMap' ? ' + gain map' : '';
     parts.push(`RAW${adds}${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
+    if (d.rawWb) parts.push(describeWhiteBalance(d.rawWb));
   }
   for (const k of DEVELOP_KEYS) {
     const v = d[k];
@@ -649,6 +762,12 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
   if (levels) parts.push(levels);
   const curves = describeCurves(d.curves);
   if (curves) parts.push(curves);
+  const mono = describeMono(d.mono);
+  const mixer = mono ? null : describeMixer(d.mixer);
+  if (mono) parts.push(mono);
+  if (mixer) parts.push(mixer);
+  const grading = describeGrading(d.grading);
+  if (grading) parts.push(grading);
   return parts;
 }
 

@@ -28,11 +28,13 @@ import type { ExifData } from './exif-parser';
 // --- tag numbers, the writer's half of the parser's three maps --------------
 
 const IFD0 = {
+  imageDescription: 0x010e,
   make: 0x010f,
   model: 0x0110,
   orientation: 0x0112,
   software: 0x0131,
   artist: 0x013b,
+  copyright: 0x8298,
   exifPointer: 0x8769,
   gpsPointer: 0x8825,
 };
@@ -84,7 +86,7 @@ interface Field {
   type: number;
   /**
    * Numbers for every type but ASCII and UNDEFINED, which carry a string —
-   * ASCII gains the NUL the format asks for, UNDEFINED does not (an
+   * ASCII gains the NUL the format asks for (and is UTF-8, `stringBytes`), UNDEFINED does not (an
    * `ExifVersion` is four bytes and exactly four).
    *
    * A RATIONAL's numbers are FLAT numerator/denominator pairs, so a GPS
@@ -161,11 +163,27 @@ function srational(tag: number, value: number | undefined): Field | null {
   return { tag, type: SRATIONAL, values: toRational(value) };
 }
 
+const utf8 = new TextEncoder();
+
+/**
+ * A string field's bytes. An ASCII tag is written as UTF-8 plus its NUL:
+ * the format says seven bits, but a copyright line opens with `©` and a
+ * caption is written in whatever language its author speaks, and UTF-8 is
+ * what Lightroom, Capture One and exiftool write and read there — the XMP
+ * copy (`delivery-meta.ts`) is the Unicode record either way. UNDEFINED is
+ * byte for byte (an `ExifVersion` is four bytes and exactly four).
+ */
+function stringBytes(field: Field & { values: string }): Uint8Array {
+  if (field.type === UNDEFINED) return Uint8Array.from(field.values, (c) => c.charCodeAt(0) & 0xff);
+  const text = utf8.encode(field.values);
+  const out = new Uint8Array(text.length + 1);
+  out.set(text);
+  return out;
+}
+
 /** How many VALUES a field holds, in the sense the entry's count means. */
 function fieldCount(field: Field): number {
-  if (typeof field.values === 'string') {
-    return field.type === UNDEFINED ? field.values.length : field.values.length + 1;
-  }
+  if (typeof field.values === 'string') return stringBytes(field as Field & { values: string }).length;
   if (field.type === RATIONAL || field.type === SRATIONAL) return field.values.length / 2;
   return field.values.length;
 }
@@ -182,8 +200,7 @@ function ifdSize(entries: number): number {
 /** One field's value bytes, little-endian, pushed one at a time. */
 function writeValue(field: Field, push: (byte: number) => void): void {
   if (typeof field.values === 'string') {
-    for (let i = 0; i < field.values.length; i += 1) push(field.values.charCodeAt(i) & 0xff);
-    if (field.type !== UNDEFINED) push(0);
+    for (const b of stringBytes(field as Field & { values: string })) push(b);
     return;
   }
   // A rational's two halves are 4-byte words, so every number here fits one.
@@ -232,6 +249,14 @@ function writeIfd(
 export interface BuildExifOptions {
   /** What wrote the file — `Software`, a courtesy to whoever reads it later. */
   software?: string;
+  /**
+   * The author's own words, written OVER what the capture carried: `Artist`,
+   * `Copyright` and `ImageDescription` (`delivery-meta.ts`). Null clears the
+   * capture's value; undefined keeps it.
+   */
+  artist?: string | null;
+  copyright?: string | null;
+  description?: string | null;
   /** The delivered picture's own size, which is never the original's. */
   pixelWidth?: number;
   pixelHeight?: number;
@@ -253,7 +278,9 @@ export function buildExifBlock(exif: ExifData, options: BuildExifOptions = {}): 
   const ifd0: Field[] = [
     ascii(IFD0.make, exif.make),
     ascii(IFD0.model, exif.model),
-    ascii(IFD0.artist, exif.artist),
+    ascii(IFD0.artist, options.artist === undefined ? exif.artist : (options.artist ?? undefined)),
+    ascii(IFD0.copyright, options.copyright === undefined ? exif.copyright : (options.copyright ?? undefined)),
+    ascii(IFD0.imageDescription, options.description === undefined ? exif.imageDescription : (options.description ?? undefined)),
     ascii(IFD0.software, options.software ?? exif.software),
     { tag: IFD0.orientation, type: SHORT, values: [1] },
   ].filter((f): f is Field => f !== null);

@@ -21,11 +21,34 @@ export function openPictureId(pictures: readonly { id: string }[], routeId: stri
   return pictures[0]?.id ?? null;
 }
 
-/** The picture `step` away along the strip, held at its ends (never wrapping: the end of a roll is a place). */
-export function stepPicture(pictures: readonly { id: string }[], currentId: string | null, step: number): string | null {
+/**
+ * The picture `step` away along the strip, held at its ends (never wrapping:
+ * the end of a roll is a place). A picture `skip` answers true for — an
+ * IGNORED one — is stepped over, from wherever the step starts: opened by a
+ * click, an ignored picture still hands the arrows on to the next that is not.
+ * With nothing further in that direction, the step stays where it is.
+ */
+export function stepPicture<T extends { id: string }>(
+  pictures: readonly T[],
+  currentId: string | null,
+  step: number,
+  skip: (picture: T) => boolean = () => false,
+): string | null {
   if (pictures.length === 0) return null;
   const at = Math.max(0, pictures.findIndex((p) => p.id === currentId));
-  return pictures[Math.max(0, Math.min(pictures.length - 1, at + step))].id;
+  if (step === 0) return pictures[at].id;
+  const dir = Math.sign(step);
+  let left = Math.abs(step);
+  let i = at;
+  let landed = at;
+  while (left > 0) {
+    i += dir;
+    if (i < 0 || i >= pictures.length) break;
+    if (skip(pictures[i])) continue;
+    landed = i;
+    left -= 1;
+  }
+  return pictures[landed].id;
 }
 
 /**
@@ -102,6 +125,8 @@ export interface EditorKeyPress {
   targetTypes: boolean;
   /** Text is selected on the page: ⌘C copies THAT, not the develop. */
   hasSelection: boolean;
+  /** The Layers tab is open — where `P` and `M` are the mask's keys, not the delivery's. */
+  layersTab?: boolean;
 }
 
 export type EditorKeyAction =
@@ -120,6 +145,14 @@ export type EditorKeyAction =
   | 'pick'
   | 'remove'
   | 'escape'
+  | 'deliver'
+  | 'deliver-auto'
+  | 'ignore'
+  | 'copy-settings'
+  | 'paste-settings'
+  | 'clipping'
+  | 'mono'
+  | 'variant'
   | null;
 
 /**
@@ -141,7 +174,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
- * (or `?`) the shortcuts, `I` the facts over the picture, `M` the mask's view
+ * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
+ * painted on it, `V` black and white, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
@@ -154,8 +188,19 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.targetTypes || press.altKey) return null;
   const mod = press.metaKey || press.ctrlKey;
   if (mod) {
-    if (press.shiftKey) return null;
+    if (press.shiftKey) {
+      // ⌘⇧C / ⌘⇧V: the SECTIONS, Lightroom's chord (`picture-sections.ts`) —
+      // ⌘C / ⌘V below stay the develop numbers, shared with the modals.
+      const k = press.key.toLowerCase();
+      if (press.repeat) return null;
+      if (k === 'c') return press.hasSelection ? null : 'copy-settings';
+      if (k === 'v') return 'paste-settings';
+      return null;
+    }
     const k = press.key.toLowerCase();
+    // ⌘' — Lightroom's virtual copy: a variant of the picture as it stands
+    // (item 30). The apostrophe is unshifted on QWERTY and on AZERTY (its 4).
+    if (k === "'") return press.repeat ? null : 'variant';
     if (k === 'c') return press.hasSelection ? null : 'copy';
     if (k === 'v') return 'paste';
     return null;
@@ -180,10 +225,44 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'x' || press.key === 'X') return 'swap';
   if (press.key === 'h' || press.key === 'H') return 'help';
   if (press.key === 'i' || press.key === 'I') return 'facts';
-  // On the Layers tab (the editor's call): `M` steps the mask's view —
-  // hidden, outline, fill — and `P` turns Pick or Paint on and off, so a hand
-  // on the picture never has to reach for the inspector.
-  if (press.key === 'm' || press.key === 'M') return 'mask';
-  if (press.key === 'p' || press.key === 'P') return 'pick';
+  // `J` paints what is clipped over the picture — Lightroom's own letter, so
+  // a hand that learnt it there finds it here.
+  if (press.key === 'j' || press.key === 'J') return 'clipping';
+  // `V` flips colour ↔ black and white — Lightroom's letter again.
+  if (press.key === 'v' || press.key === 'V') return 'mono';
+  // `P` and `M` mean two things, by where the author is (2026-09-23, the
+  // maintainer's merge of #183 and #185): on the LAYERS tab they are the
+  // mask's — `M` steps its view (hidden, outline, fill), `P` turns Pick or
+  // Paint on and off, so a hand on the picture never reaches for the
+  // inspector; everywhere else they are the delivery state's
+  // (`docs/lightroom-gaps.md` §10) — `P` sends ↔ holds, `M` ignores. `U`
+  // puts the picture back on the roll's rule on every tab. Letters, so an
+  // AZERTY board presses the same ones.
+  if (press.key === 'p' || press.key === 'P') return press.layersTab ? 'pick' : 'deliver';
+  if (press.key === 'm' || press.key === 'M') return press.layersTab ? 'mask' : 'ignore';
+  if (press.key === 'u' || press.key === 'U') return 'deliver-auto';
   return null;
+}
+
+/**
+ * Which picture to OPEN after an undo or a redo put `after` back over
+ * `before` (audit item 8): the undo stack is one for the whole roll, so ⌘Z
+ * after stepping on could undo the previous picture — or an Apply-to on the
+ * others — with nothing on screen changing. The restore is made visible by
+ * going to what it changed.
+ *
+ * Changed means a different OBJECT: every write replaces the picture it
+ * touches and keeps the others, so identity is the diff. Null — stay — when
+ * the open picture is among the changed ones, or when no picture changed (a
+ * roll-wide field, a name).
+ */
+export function pictureAfterRestore<T extends { id: string }>(
+  before: readonly T[],
+  after: readonly T[],
+  openId: string | null,
+): string | null {
+  const was = new Map(before.map((p) => [p.id, p]));
+  const changed = after.filter((p) => was.get(p.id) !== p).map((p) => p.id);
+  if (changed.length === 0 || (openId !== null && changed.includes(openId))) return null;
+  return changed[0];
 }

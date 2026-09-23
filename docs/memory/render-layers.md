@@ -236,7 +236,16 @@ and returned a mask covering 19 % of the frame against the ~21 % actually drawn.
 ## The subject, wired (2026-09-19, P9 second commit)
 
 A `Subject` mask kind in both panels, tap-to-pick on the stage, and the rasters
-reaching every renderer.
+reaching every renderer. **The Develop export segments too** (2026-09-23,
+fixed twice the same day by #183 and #185 and merged onto #185's shape —
+`subject-picking.md`): `subject-rasters.ts` asks the model for exactly the
+subjects a delivery uses (`subjectLayersForRender`), on the picture being
+delivered — a RAW shown to the model through its own cube, never its
+half-floats. What survived of #183's version is the ACCOUNT: `renderRollPicture`
+reports `subjects {asked, resolved}` and calls `onSubjects` before asking, so
+the run says "Finding the subject…" and names a picture that left without a
+mask the model did not answer. Measured headless: a +2 EV subject on a disc
+left at 150,40,39 before, 255,81,80 after, ground untouched.
 
 **The two hooks need each other**, so the rasters come back through state: the
 stage decodes the picture the model segments, and the model produces the map the
@@ -325,3 +334,7 @@ gate's brush row holds it to (0.0008).
 Picking a subject on the stage — segmentation on the tap, the mask's outline
 and fill, the blink, a subject SUBTRACTED from another layer, and the export's
 own segmentation — lives in `subject-picking.md`.
+
+
+Combining masks (a layer's PARTS) and the colour range live in
+`mask-parts.md`.

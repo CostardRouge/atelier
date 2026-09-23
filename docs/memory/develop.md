@@ -97,6 +97,31 @@ never a theme token: `paper` is dark in the darkroom. Verified in the Browser
 pane on a PNG with a known 6.25 % white block: `whites 6.3 %` at as shot, 28 %
 at +1.5 EV (over the hook's stored +0.7), none and `blacks 2.5 %` at −2 EV.
 
+**RGB, the clipping view and the readout (2026-09-23, audit item 15).** The
+strip draws R, G and B apart (`channelShapes`, one scale for the three, SVG
+`mix-blend-mode: screen` so overlap goes white); `Histogram.bins` (luma) stays
+for the curve's backdrop. What counts as clipped is ONE rule,
+`render/clipping.ts` (`clipOf`: white if ANY channel ≥ 254, black only if
+EVERY one ≤ 1), read by the strip's percentages, by `clip-pass.ts` (its GLSL
+twin, tested on the value the canvas WILL round to — ≥ 253.5/255, < 1.5/255)
+and by the readout. The view is a PASS after sharpen and under the mask's wash,
+asked for only by the stage and the loupe (`graderFrom`'s last argument) — the
+histogram, `delivered()`, `snapshot()` and every export pass nothing, so it can
+never leave (measured: the percentages do not move with J). The **readout**
+reads ONE pixel of the stage canvas per animation frame under a mouse or pen
+(never a finger, which pans) and is a STORE (`readout-store.ts`), not state:
+as state it re-rendered the whole workbench per mouse move; only
+`DevelopHistogram`'s line subscribes. A painted pixel would read as the mark's
+own numbers, so the marks are Lightroom's red `255,0,0` and blue `0,128,255`,
+each with a channel at 255 — no UNPAINTED pixel within a step of one can exist
+(it would be clipped to white and painted), so `readoutOf` decodes a mark back
+to *clipped to white* / *crushed to black* exactly. Known limit: the film node
+draws LAST, after the pass, so a grained picture's marks carry grain and a
+readout over them shows numbers. The view is never remembered past the session
+(a red wash met on the next visit reads as the picture). Verified headless on
+a PNG with white, black, a red-only clip and a mid grey: every mark where the
+rule says, the readout decoding each, J and the end words toggling.
+
 ## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
 
 `DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`
@@ -172,11 +197,10 @@ AS-SHOT read keyed on the source alone. Rules a later phase must keep:
 - **The median is pulled only PART of the way to mid-grey** (0.6 of it), so a
   picture that is dark because it was meant to be keeps its character.
 
-**No Kelvin, and that is deliberate.** The brief listed a Kelvin readout;
-temperature here is a channel GAIN, and an 8-bit render carries no as-shot
-white balance to offset from, so a number in kelvin would be invented. It waits
-for the RAW path (`AsShotNeutral` and a colour matrix are what make it real) —
-`docs/photo-editor.md` P10.
+**No Kelvin on an 8-bit picture, and that is deliberate.** Temperature here
+is a channel GAIN, and an 8-bit render carries no as-shot white balance to
+offset from, so a number in kelvin would be invented. On a RAW it is real since
+2026-09-23 (`raw.md`, «White balance in kelvin») — and only there.
 
 `DevelopSliders.tsx` gained `RangeSlider` — the same row with an explicit
 label, range and reset — because Levels needed it and a second copy is how two
@@ -316,6 +340,97 @@ and a real 960 × 540 canvas JPEG as the render — the recipe is in
 *"960 × 540 · 0.5 MP, 8.4× short on the long edge of its 8064 × 4536"*, and
 the Export tab's row read `Camera render 960 px → 960 · exact` where it used
 to read `—`. An ordinary JPEG beside it read `JPEG · 8-bit · 1600 × 1200`.
+
+## The colour mixer is a develop STAGE, last, in every host (2026-09-23, audit item 12)
+
+`mixer.ts` (pure, tested) + `DevelopMixer.tsx`: `DevelopSettings.mixer`, three
+arrays of eight (hue · saturation · luminance, −100..100, Lightroom's bands at
+0/30/60/120/180/225/270/315°), null for none — optional, so nothing migrated,
+and wired into `isDefault`/`clone`/`same`/`normalise`/`developLines` like the
+curves. It runs LAST in `developLinear` (after saturation and vibrance, as in
+Lightroom), so it bakes into the one cube and reaches the stage, every export,
+every layer and the presets/clipboard for nothing. Rules: the bands are a
+PARTITION OF UNITY (a raised cosine between neighbouring centres — equal moves
+on all bands equal one global move, no hole between two); every move is
+weighted by the pixel's HSV saturation on the ENCODED values (0 at grey, full
+by 0.5 — `chromaWeight`), so a grey is bit-identical whatever the bands say;
+a hue shift (±30°, never past the next band) is rescaled to the luminance it
+had, so hue does not double as luminance; luminance is a gain (±1.5 stops at
+full colour); headroom above white is read on its colour and scaled back. It
+is in the Trips/Studio SHEET too, not only the tool: it is a global number of
+the develop record like the curve, and a mixer pasted or preset into a sheet
+that could not show it would render with no control to undo it — "the modals
+gain rendering, not panels" is about layers, masks and repair. Not built: the
+targeted tool (drag on the picture to move the band under the pointer).
+Verified headless: blue luminance −100 took a `70,130,220` sky to `43,83,144`
+with a red and a grey unmoved; red hue +100 turned `220,60,40` orange at the
+same luminance; ⌘Z undid it.
+
+## Black and white takes the mixer's PLACE, and the mixer waits (2026-09-23, audit item 18)
+
+`DevelopSettings.mono` (`MonoMix` in `mixer.ts`): null is colour, `{ mix }`
+IS the treatment — a straight conversion at all zeros is NOT as shot
+(`isDefaultDevelop` says so, a document stores it). While set, `monoLinear`
+replaces `mixLinear` in `developLinear`: the pixel's luminance times the light
+of the bands its hue sits in (the mixer's `bandWeights` and `chromaWeight`,
+±1.5 stops), so a grey stays its own grey; the colour mixer is KEPT, not
+applied (Lightroom's behaviour — switching back finds the colour work), and
+grading runs after, so the wheels tint the grey (a split tone). UI: the
+Colour / B&W switch heads the mixer section, which then draws the eight
+lights; `V` flips it in the Develop tool (⌘V stays paste). Verified headless:
+V turned a `70,130,220` sky to `130` grey at its own luminance, red +60 /
+blue −100 took it to `84` and a red to `154`, a shadows wheel tinted the
+grey, Colour gave the picture back untouched.
+
+## Colour grading is the stage after the mixer, three ranges that sum to 1 (2026-09-23, audit item 14)
+
+`grading.ts` (pure, tested) + `DevelopGrading.tsx`: `DevelopSettings.grading`
+— four wheels (shadows · midtones · highlights · global: hue 0..360,
+saturation 0..100, luminance −100..100) plus `blending` (0..100, 50) and
+`balance` (−100..100) — optional, null for none, wired into the record like
+the mixer and run AFTER it in `developLinear` (Lightroom's order), so it bakes
+into the cube and reaches both sheets, layers, presets and the clipboard.
+Rules: the three ranges are a PARTITION OF UNITY over the encoded luma
+(`zoneWeights`: shadows fall from black to a pivot, highlights rise from it,
+midtones are the rest and peak AT it; balance moves the pivot ±0.25,
+blending is a gamma `2^((50 − b)/50)` on the two ramps); weights are read at
+the luma the pixel ENTERS with, so a wheel's own light cannot move it into
+another range; a tint is a per-channel gain of luminance 1 (`hueGain`)
+pulled by the saturation (×0.25 at 100), and the pixel is brought back to its
+own luminance before the zone's stops (±1) apply — a wheel colours and never
+brightens, black stays black. Hue is kept while the saturation is 0, so the
+colour is found again. Blending and balance with no wheel moved are "none" and
+do not survive a reload — they shape nothing. The wheel is a `role="slider"`
+div over a CSS conic gradient (0° at the right, clockwise — `wheelPoint` /
+`pointOnWheel` are the geometry, in the spec), arrows turn/strengthen it,
+double-click clears its colour. Verified headless on a 30/128/230 grey ramp:
+shadows 220°·70 gave `27,29,43` with the 128 midtone untouched; highlights
+40°·40 by keyboard `238,228,222`; global light +50 lifted all three; ⌘Z
+undid the last move.
+
+## The inspector's sections FOLD, for the session (2026-09-23, the maintainer's ask)
+
+Once the Adjust tab passed a dozen blocks, every section holding two
+controls or more became an `InspectorSection` — the one fold Trips and the
+Studio already use, not a second one — through `DevelopFold`
+(`shared/develop/DevelopFold.tsx`, ids `develop.<block>`): Light, Tone,
+Colour, Presence, Levels, Curve, the mixer, grading, Presets, Apply to…,
+Look on Adjust; Repair, Noise, Sharpen on Detail. **His rules**: the fold
+survives changing picture but is NEVER on the document — it lives in
+`sessionStorage` (`remember: 'session'`), so a reload keeps it and a new tab
+starts from the defaults; Auto is NOT foldable (one row of verbs), nor is
+Fringing (one slider) or an Apply-to with one verb — they wear the same
+header with no chevron (`foldable: false`). **Mine** (he left it to me):
+folded by default are Levels, Curve, the mixer and grading, what a pass over
+a picture reaches for last; a folded section with anything set in it keeps
+an accent dot after its title (`marked`), or folding would hide an edit. A
+layer's sliders and curve fold under their own ids (`foldPrefix="layer."`).
+The Develop tool and the Trips/Studio sheet share the ids. The column's
+`gap-4` was dropped on Adjust, Detail and in the sheet: a section brings its
+own rule and padding, and both was the air twice. **Trap met**:
+`shared/develop/DevelopSection.tsx` already exists (the settled row) — a
+`cat >` over it erased it; it was restored from git, hence the name
+`DevelopFold`.
 
 ## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
 

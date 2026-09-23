@@ -21,6 +21,7 @@ import {
   deleteRoll,
   deleteRollFolders,
   deleteRollPreviews,
+  deleteExportMarks,
   deleteRollThumbs,
   deleteSyncRecord,
   getRollThumbs,
@@ -285,6 +286,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
       await deleteRollThumbs(doc.pictures.map((p) => p.id));
       await deleteRollFolders(doc.id);
         await deleteRollPreviews(doc.pictures.map((p) => p.id));
+        await deleteExportMarks(doc.id);
     },
     mirror: mirrorRoll,
     move: moveRoll,

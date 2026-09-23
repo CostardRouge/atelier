@@ -1,3 +1,4 @@
+import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
@@ -5,6 +6,7 @@ import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../..
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
 import type { DetailSettings } from '../../shared/render/detail';
+import type { PostCropVignette } from '../../shared/render/post-vignette';
 import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
@@ -31,16 +33,28 @@ import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
 import {
   addPictures,
+  addVariant,
+  variantNumber,
+  newRollId,
+  pictureLabel,
   copyBorderTo,
   copyCropTo,
   copyGradeTo,
+  delivers,
+  isEdited,
+  isIgnored,
+  setDelivery,
+  toggledDelivery,
   patchPicture,
+  setPictureWords,
+  pictureEdits,
   removePictures,
   rollProgress,
   sameMediaRef,
   type RollDoc,
   type RollExport,
   type RollPicture,
+  type VariantStart,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { fileBaseName } from '../../shared/library/assets';
@@ -57,17 +71,43 @@ import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
+import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
 import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
-import PictureWorkbench, { type LookApplyVerb } from './PictureWorkbench';
+import DeliveryTable from './DeliveryTable';
+import PictureWorkbench, { DEFAULT_BRUSH_TOOL, type BrushTool, type DeliverAction, type LookApplyVerb } from './PictureWorkbench';
+import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
+import { useExportMarks } from './use-export-marks';
+import SettingsSheet from './SettingsSheet';
+import {
+  PICTURE_SECTIONS,
+  applySections,
+  copiedSettings,
+  copySettings,
+  resetSections,
+  subscribeCopiedSettings,
+  type PictureSection,
+} from '../../shared/develop/picture-sections';
+import { exportState, needsExport } from '../../shared/develop/export-marks';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
+import { useRollCulling } from './use-roll-culling';
+import {
+  CULL_FILTERS,
+  NO_CULL_FILTER,
+  countCulling,
+  cullFilterKey,
+  cullFilterLabel,
+  passesCull,
+  readCullFilter,
+  type CullFilter,
+} from '../../shared/sources/winnow/culling';
 import { useRollPreviews } from './use-roll-previews';
 import WinnowDaySheet from './WinnowDaySheet';
 
@@ -109,6 +149,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('adjust');
+  // Ignored pictures in the strip: dimmed (the default) or left out — a view
+  // preference of this browser, never the roll's.
+  const [showIgnored, setShowIgnored] = useLocalFlag('atelier.develop.showIgnored', true);
+  // The brush and the heal disc are TOOLS, not the picture's: held here with
+  // the tab, so the size set on one picture is the size on the next.
+  const [brush, setBrush] = useState<BrushTool>({ ...DEFAULT_BRUSH_TOOL });
+  const [repairTool, setRepairTool] = useState<RepairTool>({ ...DEFAULT_REPAIR_TOOL });
+  const patchBrush = useCallback((patch: Partial<BrushTool>) => setBrush((b) => ({ ...b, ...patch })), []);
+  const patchRepairTool = useCallback((patch: Partial<RepairTool>) => setRepairTool((t) => ({ ...t, ...patch })), []);
 
   const latest = useRef(roll);
   latest.current = roll;
@@ -179,6 +228,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [lib.assets, folders.siblings],
   );
   const media = useRollMedia({ pictures: roll.pictures, openId, localPhotos });
+  // Winnow's picks and stars, read-only (item 33): shown on the strip and
+  // filtered on — the filter is this sitting's, never the roll's.
+  const culling = useRollCulling(roll.pictures);
+  const [cullFilter, setCullFilter] = useState<CullFilter>(NO_CULL_FILTER);
+  const filtering = culling.reachable && cullFilter.kind !== 'all';
+  const cullingRef = useRef(culling.byPicture);
+  cullingRef.current = culling.byPicture;
+  const cullFilterRef = useRef(cullFilter);
+  cullFilterRef.current = filtering ? cullFilter : NO_CULL_FILTER;
+  const shownByCull = useCallback(
+    (p: RollPicture) => passesCull(cullingRef.current.get(p.id), cullFilterRef.current),
+    [],
+  );
   const { retryFailed, remoteThumb } = media;
   // A local picture whose file is away is developed from its working preview
   // when the roll keeps them (F5); the real file always wins.
@@ -221,7 +283,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [siblingsByBase],
   );
   const openSiblings = useMemo(() => (openFile ? siblingsFor(openFile) : []), [openFile, siblingsFor]);
-  const localCount = roll.pictures.filter((p) => !p.ref.assetId).length;
+  // Files, not entries: a variant (item 30) is the same file, previewed once.
+  const localCount = roll.pictures.filter((p) => !p.ref.assetId && variantNumber(p) < 2).length;
   const reach = summarizeAvailability(
     roll.pictures.map((p) => p.id),
     availability,
@@ -455,10 +518,32 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const step = useCallback(
     (by: number) => {
-      const next = stepPicture(latest.current.pictures, openIdRef.current, by);
+      // The arrows walk the roll's WORK: an ignored picture is stepped over,
+      // and so is one Winnow's filter has taken off the strip.
+      const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !shownByCull(p));
       if (next && next !== openIdRef.current) onOpenPicture(next);
     },
-    [onOpenPicture],
+    [onOpenPicture, shownByCull],
+  );
+
+  // A VARIANT of the open picture (item 30): Lightroom's virtual copy when it
+  // is cloned, Capture One's New Variant when it starts as shot. It is opened
+  // at once — making a copy is always to work on it — and wears the source's
+  // thumbnail until its own is taken.
+  const makeVariant = useCallback(
+    (start: VariantStart) => {
+      const from = openIdRef.current;
+      if (!from) return;
+      const id = newRollId();
+      update((r) => addVariant(r, from, start, id));
+      if (!latest.current.pictures.some((p) => p.id === id)) return;
+      setThumbs((cur) => {
+        const blob = cur.get(from);
+        return blob && start === 'clone' ? new Map(cur).set(id, blob) : cur;
+      });
+      onOpenPicture(id);
+    },
+    [update, onOpenPicture],
   );
 
   const handleDevelop = useCallback(
@@ -486,8 +571,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, detail: DetailSettings | null) => update((r) => patchPicture(r, id, { detail })),
     [update],
   );
+  const handleVignette = useCallback(
+    (id: string, vignette: PostCropVignette | null) => update((r) => patchPicture(r, id, { vignette })),
+    [update],
+  );
   const handleLens = useCallback(
     (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
+    [update],
+  );
+  const handleLensProfile = useCallback(
+    (id: string, lensProfile: LensProfileApplied | null) => update((r) => patchPicture(r, id, { lensProfile })),
     [update],
   );
   const handleLayers = useCallback(
@@ -502,8 +595,30 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, rendition: string | null) => update((r) => patchPicture(r, id, { rendition })),
     [update],
   );
+  const handleWords = useCallback(
+    (id: string, words: { title?: string; caption?: string }) => update((r) => setPictureWords(r, id, words)),
+    [update],
+  );
   const handleBorder = useCallback(
     (id: string, border: RollBorder | null) => update((r) => copyBorderTo(r, [id], border)),
+    [update],
+  );
+  // The delivery keys, answered from the roll as it stands (the state depends on
+  // whether the picture is edited), and said in the status line.
+  const handleDeliver = useCallback(
+    (id: string, action: DeliverAction) => {
+      const picture = latest.current.pictures.find((p) => p.id === id);
+      if (!picture) return;
+      const next =
+        action === 'toggle' ? toggledDelivery(picture) : action === 'auto' ? 'auto' : isIgnored(picture) ? 'auto' : 'ignore';
+      update((r) => setDelivery(r, [id], next));
+      const after = { ...picture, deliver: next };
+      setNotice(
+        next === 'ignore'
+          ? `${pictureLabel(picture)} ignored — the arrows step over it`
+          : `${pictureLabel(picture)} ${delivers(after) ? 'will be exported' : 'stays out of the export'}${next === 'auto' ? ' (the roll’s rule)' : ''}`,
+      );
+    },
     [update],
   );
   const handleExportSettings = useCallback(
@@ -518,7 +633,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // "Proxies only, for this run": the editor's, reset with it, never written
   // to the roll — which pixels is otherwise each picture's own choice.
   const [proxiesOnly, setProxiesOnly] = useState(false);
-  const exports = useRollExport({ roll, files, fileFor, openId, interpolation, siblingsOf: siblingsFor, proxiesOnly });
+  // When each picture last LEFT, on this device (`export-marks.ts`): read
+  // beside the roll and written when a run lands — never an edit, never undone.
+  const pictureIds = useMemo(() => roll.pictures.map((p) => p.id), [roll.pictures]);
+  const { marks: exportMarks, record: recordExported } = useExportMarks(roll.id, pictureIds);
+  const exports = useRollExport({
+    roll,
+    files,
+    fileFor,
+    openId,
+    interpolation,
+    siblingsOf: siblingsFor,
+    proxiesOnly,
+    onDelivered: recordExported,
+  });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
@@ -534,16 +662,30 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         run: () => void exportPictures(ids),
       });
     }
-    if (roll.pictures.length > 1) {
+    // What LEAVES: the edited pictures, and those marked to send — never an
+    // ignored one, never one marked to hold (`docs/lightroom-gaps.md` §10).
+    const leaving = roll.pictures.filter(delivers).map((p) => p.id);
+    if (leaving.length > 0) {
       verbs.push({
         id: 'roll',
-        label: `Export the roll · ${roll.pictures.length}`,
-        hint: 'every picture on the roll, in the strip’s order',
-        run: () => void exportPictures(roll.pictures.map((p) => p.id)),
+        label: `Export ${leaving.length} picture${leaving.length === 1 ? '' : 's'}`,
+        hint: 'the pictures that leave — edited ones, and those marked to send — in the strip’s order',
+        run: () => void exportPictures(leaving),
       });
+      // E4: of those, the ones never delivered from here or changed since —
+      // offered only when it is a real subset, else it is the verb above.
+      const due = roll.pictures.filter((p) => delivers(p) && needsExport(p, exportMarks)).map((p) => p.id);
+      if (due.length > 0 && due.length < leaving.length) {
+        verbs.push({
+          id: 'changed',
+          label: `Export ${due.length} new or changed`,
+          hint: 'the pictures that leave and were never exported from this device, or were edited since',
+          run: () => void exportPictures(due),
+        });
+      }
     }
     return verbs;
-  }, [openId, visibleSelected, roll.pictures, exportPictures]);
+  }, [openId, visibleSelected, roll.pictures, exportPictures, exportMarks]);
 
   const writeDevelopTo = useCallback(
     (targets: readonly string[], develop: DevelopSettings | null) => {
@@ -565,7 +707,64 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
-  const others = roll.pictures.length - 1;
+  // --- the sections: ⌘⇧C / ⌘⇧V and "apply to others" for any part of a picture
+  const [settingsOpen, setSettingsOpen] = useState(false);
+  const copied = useSyncExternalStore(subscribeCopiedSettings, copiedSettings);
+  const sectionNames = (sections: readonly PictureSection[]) =>
+    sections.map((id) => PICTURE_SECTIONS.find((x) => x.id === id)?.label.toLowerCase()).join(', ');
+  const copySectionsOf = useCallback(
+    (sections: PictureSection[]) => {
+      const p = latest.current.pictures.find((x) => x.id === openIdRef.current);
+      if (!p) return;
+      copySettings(p, sections);
+      setNotice(`copied ${sectionNames(sections)}`);
+    },
+    [],
+  );
+  const pasteSections = useCallback((): boolean => {
+    const held = copiedSettings();
+    const id = openIdRef.current;
+    if (!held || !id) return false;
+    update((r) => applySections(r, held.from, [id], held.sections));
+    setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)}`);
+    return true;
+  }, [update]);
+  const resetSectionsOf = useCallback(
+    (sections: PictureSection[]) => {
+      const id = openIdRef.current;
+      if (!id) return;
+      update((r) => resetSections(r, id, sections));
+      setNotice(`reset ${sectionNames(sections)} — ⌘Z brings them back`);
+    },
+    [update],
+  );
+  const applySectionsTo = useCallback(
+    (ids: readonly string[], sections: PictureSection[]) => {
+      const source = latest.current.pictures.find((x) => x.id === openIdRef.current);
+      if (!source) return;
+      update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, sections));
+      setNotice(`${sectionNames(sections)} applied to ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
+    },
+    [update],
+  );
+  // "The others" are the pictures still in the roll's WORK: an ignored one is
+  // never written by an Apply-to-all (`docs/lightroom-gaps.md` §10) — a picture
+  // the author marked explicitly still is. With Winnow's filter on, they are
+  // the others IN THE STRIP — Lightroom's "filter the picks, then sync": the
+  // verbs count what they will write, so the number says it.
+  const otherIds = useMemo(
+    () =>
+      roll.pictures
+        .filter(
+          (p) =>
+            p.id !== openId &&
+            !isIgnored(p) &&
+            (!filtering || passesCull(culling.byPicture.get(p.id), cullFilter)),
+        )
+        .map((p) => p.id),
+    [roll.pictures, openId, filtering, culling.byPicture, cullFilter],
+  );
+  const others = otherIds.length;
   const applyTo = useMemo<DevelopApplyVerb[]>(() => {
     if (!openId) return [];
     if (selectionTargets.length > 0) {
@@ -598,13 +797,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         label: `Apply to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the rest of this roll, each as its own copy',
         run: (settings: DevelopSettings) =>
-          writeDevelopTo(
-            roll.pictures.filter((p) => p.id !== openId).map((p) => p.id),
-            settings,
-          ),
+          writeDevelopTo(otherIds, settings),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, canPaste, writeDevelopTo]);
+  }, [openId, others, otherIds, selectionTargets, canPaste, writeDevelopTo]);
 
   const cropApplyTo = useMemo<CropApplyVerb[]>(() => {
     if (!openId) return [];
@@ -627,10 +823,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         id: 'roll',
         label: `Apply crop to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the rest of this roll, each as its own copy',
-        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+        run: write(otherIds),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // The look's own verbs, apart from the develop's: a look is chosen per
   // picture, and this is the one gesture that dresses others with it. They
@@ -656,10 +852,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         id: 'roll',
         label: `Apply look to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'this picture’s look onto the rest of the roll, each as its own copy, their develops untouched',
-        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+        run: write(otherIds),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // The border's own verbs, apart from the crop's: a roll can wear ONE border
   // over crops that each differ (the maintainer's change to the prototype).
@@ -684,10 +880,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         id: 'roll',
         label: `Apply borders to ${others} other picture${others === 1 ? '' : 's'}`,
         hint: 'the whole roll, each keeping its own crop',
-        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+        run: write(otherIds),
       },
     ];
-  }, [openId, others, roll.pictures, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // On a phone the inspector is a sheet, opened from the shell's bottom bar;
   // picking a section is also what raises it — the Studio's own convention.
@@ -711,6 +907,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const progress = rollProgress(roll);
   const withLook = roll.pictures.filter((p) => p.grade).length;
+  const leavingCount = roll.pictures.filter(delivers).length;
+  // Delivered from here once, and edited since — the ones a re-export is for.
+  const changedCount = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -722,6 +921,24 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       ? [{ id: 'winnow', label: `A day on ${connection.id}…`, onSelect: () => setPickingDay(true) }]
       : []),
     { id: 'folder', label: 'A folder on this computer…', onSelect: () => void addFolder() },
+    // A variant is MADE from the picture on the stage, never added from a
+    // file (item 30): the roll still refuses a file it holds.
+    ...(open
+      ? [
+          {
+            id: 'variant-clone',
+            label: `A variant of ${pictureLabel(open)}, as edited`,
+            title: "Lightroom's virtual copy — the same file with its own develop, crop, look and words (⌘')",
+            onSelect: () => makeVariant('clone'),
+          },
+          {
+            id: 'variant-fresh',
+            label: `A variant of ${pictureLabel(open)}, as shot`,
+            title: 'The same file, started again from as shot — its RAW base and lens profile kept',
+            onSelect: () => makeVariant('fresh'),
+          },
+        ]
+      : []),
   ];
   const addButtonLabel: Record<string, string> = {
     library: addLabel,
@@ -839,6 +1056,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSheetOpen={setSheetOpen}
               tab={tab}
               onTabChange={setTab}
+              brush={brush}
+              onBrush={patchBrush}
+              repairTool={repairTool}
+              onRepairTool={patchRepairTool}
               applyTo={applyTo}
               lookApplyTo={lookApplyTo}
               cropApplyTo={cropApplyTo}
@@ -848,7 +1069,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onFraming={(framing) => handleFraming(open.id, framing)}
               onKeystone={(keystone) => handleKeystone(open.id, keystone)}
               onLens={(lens) => handleLens(open.id, lens)}
+              onLensProfile={(profile) => handleLensProfile(open.id, profile)}
               onDetail={(detail) => handleDetail(open.id, detail)}
+              onVignette={(vignette) => handleVignette(open.id, vignette)}
               onRepair={(repair) => handleRepair(open.id, repair)}
               onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
@@ -862,11 +1085,56 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
+              onDeliver={(action) => handleDeliver(open.id, action)}
+              onWords={(words) => handleWords(open.id, words)}
+              onSettings={() => setSettingsOpen(true)}
+              onVariant={() => makeVariant('clone')}
+              onLook={(look) => update((r) => copyGradeTo(r, [open.id], look))}
+              onPasteSettings={pasteSections}
+              deliveryTable={
+                <DeliveryTable
+                  pictures={roll.pictures}
+                  openId={openId}
+                  lines={exports.lines}
+                  thumbs={thumbs}
+                  onDeliver={handleDeliver}
+                  onOpen={onOpenPicture}
+                  marks={exportMarks}
+                  culling={culling.reachable ? culling.byPicture : undefined}
+                />
+              }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
             <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
                 {progress.developed} of {progress.total} developed
+                {leavingCount > 0 && <span className="text-faint"> · {leavingCount} to export</span>}
+                {changedCount > 0 && <span className="text-faint"> · {changedCount} changed since exported</span>}
+                {progress.ignored > 0 && (
+                  <span className="text-faint">
+                    {' '}
+                    · {progress.ignored} ignored{' '}
+                    <button
+                      type="button"
+                      onClick={() => setShowIgnored(!showIgnored)}
+                      className="underline underline-offset-2 cursor-pointer"
+                      title={showIgnored ? 'Leave the ignored pictures out of the strip' : 'Show the ignored pictures in the strip, dimmed'}
+                    >
+                      {showIgnored ? 'Hide' : 'Show'}
+                    </button>
+                  </span>
+                )}
+                {culling.reachable && (
+                  <CullLine
+                    counts={countCulling(roll.pictures.map((p) => culling.byPicture.get(p.id)))}
+                    filter={cullFilter}
+                    onFilter={setCullFilter}
+                    shown={filtering ? roll.pictures.filter((p) => !isIgnored(p) && shownByCull(p)).length : null}
+                    asking={culling.asking}
+                    problem={culling.problem}
+                    onRefresh={culling.refresh}
+                  />
+                )}
                 {withLook > 0 && (
                   <span className="text-faint">
                     {' '}
@@ -1001,7 +1269,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 compact={compact}
                 onOpen={(id) => onOpenPicture(id)}
                 onSelectClick={handleSelectClick}
-                onRemove={(p) => (p.develop || p.grade || p.framing ? setConfirmRemove(p) : remove(p))}
+                onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
+                onDeliver={handleDeliver}
+                hideIgnored={!showIgnored}
+                culling={culling.byPicture}
+                shows={filtering ? shownByCull : undefined}
               />
             </div>
           </div>
@@ -1017,9 +1289,22 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         />
       )}
 
+      {settingsOpen && open && (
+        <SettingsSheet
+          picture={open}
+          copied={copied}
+          selectedIds={selectionTargets.filter((id) => !roll.pictures.find((p) => p.id === id && isIgnored(p)))}
+          otherIds={otherIds}
+          onCopy={copySectionsOf}
+          onPaste={() => void pasteSections()}
+          onApply={applySectionsTo}
+          onReset={resetSectionsOf}
+          onClose={() => setSettingsOpen(false)}
+        />
+      )}
       {confirmRemove && (
         <ConfirmDialog
-          title={`Take ${confirmRemove.ref.name} off the roll?`}
+          title={`Take ${pictureLabel(confirmRemove)} off the roll?`}
           confirmLabel="Remove"
           danger
           onCancel={() => setConfirmRemove(null)}
@@ -1028,10 +1313,83 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             setConfirmRemove(null);
           }}
         >
-          <p>Its develop and its look go with it. The file stays where it is.</p>
+          <p>
+            What was done to it goes with it — {pictureEdits(confirmRemove).join(', ')}. The file stays where it
+            is.
+          </p>
         </ConfirmDialog>
       )}
     </div>
+  );
+}
+
+/**
+ * Winnow's word on the roll, in the status line: how many picks and rejects
+ * it answered, and the strip's filter on them. Read-only — the filter shows
+ * and hides, it never writes to Winnow (item 33 of `docs/lightroom-gaps.md`).
+ */
+function CullLine({
+  counts,
+  filter,
+  onFilter,
+  shown,
+  asking,
+  problem,
+  onRefresh,
+}: {
+  counts: ReturnType<typeof countCulling>;
+  filter: CullFilter;
+  onFilter: (f: CullFilter) => void;
+  /** How many pictures the filter leaves in the strip, or null with none on. */
+  shown: number | null;
+  asking: boolean;
+  problem: string | null;
+  onRefresh: () => void;
+}) {
+  const said = [
+    counts.picks > 0 && `${counts.picks} pick${counts.picks === 1 ? '' : 's'}`,
+    counts.rejects > 0 && `${counts.rejects} rejected`,
+    counts.starred > 0 && `${counts.starred} starred`,
+  ].filter(Boolean);
+  return (
+    <span className="text-faint">
+      {' '}
+      · Winnow{' '}
+      {problem ? (
+        <span className="text-danger">{problem}</span>
+      ) : asking && counts.known === 0 ? (
+        'asking…'
+      ) : said.length ? (
+        said.join(', ')
+      ) : (
+        'nothing culled'
+      )}{' '}
+      <select
+        value={cullFilterKey(filter)}
+        onChange={(e) => onFilter(readCullFilter(e.target.value))}
+        aria-label="Show in the strip, by Winnow's culling"
+        title="Show in the strip, by Winnow's culling — read-only: culling stays Winnow's"
+        className={`bg-transparent border-0 border-b border-dotted font-mono text-2xs cursor-pointer ${
+          filter.kind === 'all' ? 'border-line-strong text-muted' : 'border-accent text-accent-ink'
+        }`}
+      >
+        {CULL_FILTERS.map((f) => (
+          <option key={cullFilterKey(f)} value={cullFilterKey(f)}>
+            {f.kind === 'all' ? 'show all' : `show ${cullFilterLabel(f).toLowerCase()}`}
+          </option>
+        ))}
+      </select>
+      {shown !== null && <> ({shown} shown)</>}{' '}
+      <button
+        type="button"
+        onClick={onRefresh}
+        disabled={asking}
+        className="underline underline-offset-2 cursor-pointer disabled:cursor-default disabled:no-underline"
+        title="Ask Winnow again — it is asked by itself when you come back to this tab"
+      >
+        {asking ? 'asking…' : 'Refresh'}
+      </button>
+    </span>
   );
 }
 

@@ -13,6 +13,7 @@ import {
   deleteRoll,
   deleteRollFolders,
   deleteRollPreviews,
+  deleteExportMarks,
   deleteRollThumbs,
   deleteSyncRecord,
   getSyncRecord,
@@ -21,6 +22,7 @@ import {
   putSyncRecord,
 } from '../../shared/develop/roll-store';
 import type { RollDoc } from '../../shared/develop/roll-types';
+import { openPictureId, pictureAfterRestore } from '../../shared/develop/roll-editor';
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
@@ -113,6 +115,7 @@ export default function DevelopTool() {
         await deleteRollThumbs(doc.pictures.map((p) => p.id));
         await deleteRollFolders(doc.id);
         await deleteRollPreviews(doc.pictures.map((p) => p.id));
+        await deleteExportMarks(doc.id);
       },
       push: pushOnce,
       pull: (remote, id, etag) => pullRoll(remote, id, etag),
@@ -188,7 +191,13 @@ export default function DevelopTool() {
     label: route.pictureId ? `picture:${route.pictureId}` : 'roll',
     what: 'edit',
     onRestore: (doc) => {
-      if (doc) handleChange(doc);
+      if (!doc) return;
+      // The stack is the roll's: an undo may land on another picture than the
+      // one on screen — go to it, so what changed is what is seen (audit item 8).
+      const before = open?.id === doc.id ? open.pictures : [];
+      const target = pictureAfterRestore(before, doc.pictures, openPictureId(doc.pictures, route.pictureId));
+      handleChange(doc);
+      if (target) navigate(developPath(rollRef(doc), target), { replace: true });
     },
   });
   historyRef.current = history;
