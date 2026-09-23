@@ -55,6 +55,12 @@ import {
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
+import {
+  centreMovable,
+  resolvedDirection,
+  shadeCentre,
+  shadeFollow,
+} from '../../shared/roadtrip/shades';
 import { loopsOpenSlide, screenLength, type LoopScope } from '../../shared/roadtrip/deck-strip';
 import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
@@ -1180,6 +1186,42 @@ export default function PostEditor({
   );
 
   /**
+   * A shade whose centre the stage is placing (the Look tab's "Place on the
+   * picture"). Only on the hook, only while the Look tab is the one open, and
+   * only while the shade still has a centre to move — anything else drops it,
+   * so the stage is never left taking presses for a panel nobody can see.
+   */
+  const [placingShade, setPlacingShade] = useState<string | null>(null);
+  const placing =
+    placingShade && isHook && tab === 'look'
+      ? (post.badge.shades.find((s) => s.id === placingShade && s.enabled !== false) ?? null)
+      : null;
+  const placingAxis = placing
+    ? centreMovable(resolvedDirection(placing, block), shadeFollow(placing))
+    : null;
+  const shadeHandle = placing && placingAxis ? { ...shadeCentre(placing), axis: placingAxis } : null;
+  useEffect(() => {
+    if (placingShade && !shadeHandle) setPlacingShade(null);
+  }, [placingShade, shadeHandle]);
+  useEffect(() => setPlacingShade(null), [post.id]);
+  const placeShade = useCallback(
+    (id: string | null) => {
+      setPlacingShade(id);
+      // On a phone the inspector is a sheet over the very picture the centre
+      // is placed on: it steps aside, and the Look cell brings it back.
+      if (id && compact) setInspectorOpen(false);
+    },
+    [compact],
+  );
+  const moveShadeCentre = useCallback(
+    (x: number, y: number) =>
+      patchBadge({
+        shades: post.badge.shades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)),
+      }),
+    [patchBadge, post.badge.shades, placingShade],
+  );
+
+  /**
    * Keep a small picture of the hook beside the trip, so a day opened months
    * later shows what is sitting in it rather than a file name. Debounced and
    * taken only from the hook — the stage redraws on every frame of the badge's
@@ -1506,6 +1548,8 @@ export default function PostEditor({
             // pointed at there.
             hookRectFor={isHook ? hookRectFor : null}
             onMoveHook={isHook && hookVariant?.moveBy ? moveHook : undefined}
+            shadeHandle={shadeHandle}
+            onMoveShadeCentre={shadeHandle ? moveShadeCentre : undefined}
             framing={slide.framing}
             // The closing card carries no photograph, so there is nothing to
             // reframe there and a drag must not pretend otherwise.
@@ -1609,6 +1653,8 @@ export default function PostEditor({
               patchBadge={patchBadge}
               onOpenTripSettings={() => setTripSheet('words')}
               onConfigureCar={() => setGarageOpen(true)}
+              placingShade={shadeHandle ? placingShade : null}
+              onPlaceShade={placeShade}
             />
           )}
 

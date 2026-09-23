@@ -791,7 +791,13 @@ to the badge: **Edge** gives it the reach (a top or bottom shade lands on the
 block's own edge, a radial centres on it), **Anchor** gives it the place as well
 — a badge anchored bottom-left gets its shade in that corner, and takes it along
 when it is re-anchored. They stack, so a wash from the left and a corner vignette
-can be on at once.
+can be on at once. The fade itself has a shape: a **core** holds the full
+strength over part of the reach before the fade starts — a band at full strength
+is then a dark zone, not a dark line — and a **falloff** picks how it clears
+(Soft, the classic shape; Linear; Smooth; Held, dark most of the way; Quick). A
+band or a free radial can be moved off the middle, with its sliders or by
+**placing it on the picture**: while placing, a press or a drag anywhere on the
+stage moves the band's line or the radial's centre, and nothing else.
 Darkening the picture keeps the typography clean, which a panel behind every
 line does not.
 
