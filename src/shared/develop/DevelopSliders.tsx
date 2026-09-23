@@ -1,4 +1,4 @@
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import { Icons } from '../ui/icons';
 import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
 
@@ -39,21 +39,27 @@ const GROUPS: ReadonlyArray<{ legend: string; keys: readonly DevelopKey[]; hint:
 export default function DevelopSliders({
   value,
   onChange,
+  foldPrefix = '',
 }: {
   value: DevelopSettings;
   onChange: (key: DevelopKey, v: number) => void;
+  /** Keeps a LAYER's folds apart from the picture's (`layer.`). */
+  foldPrefix?: string;
 }) {
   return (
     <>
       {GROUPS.map((group) => (
-        <div key={group.legend} className="flex flex-col gap-2">
-          <SectionLegend label={group.legend}>
-            <p>{group.hint}</p>
-          </SectionLegend>
+        <DevelopFold
+          key={group.legend}
+          id={`${foldPrefix}${group.legend.toLowerCase()}`}
+          title={group.legend}
+          info={<p>{group.hint}</p>}
+          marked={group.keys.some((key) => value[key] !== 0)}
+        >
           {group.keys.map((key) => (
             <DevelopSlider key={key} k={key} value={value[key]} onChange={(v) => onChange(key, v)} />
           ))}
-        </div>
+        </DevelopFold>
       ))}
     </>
   );

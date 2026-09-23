@@ -245,7 +245,7 @@ export default function DevelopSheet({
           </div>
 
           {/* The column: the pipeline in order, then the look under it. */}
-          <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-4 max-[820px]:w-full max-[820px]:flex-1">
+          <div className="w-[22rem] flex-none min-h-0 overflow-y-auto overscroll-contain pr-1.5 flex flex-col gap-0 max-[820px]:w-full max-[820px]:flex-1">
             <DevelopHistogram
               histogram={picture.histogram}
               clipping={clipping}

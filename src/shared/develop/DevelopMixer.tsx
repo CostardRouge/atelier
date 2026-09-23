@@ -1,5 +1,5 @@
 import { useState } from 'react';
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import Segmented from '../ui/Segmented';
 import { developLinkClass } from './develop-classes';
 import { RangeSlider } from './DevelopSliders';
@@ -69,10 +69,7 @@ export default function DevelopMixer({
   if (mono) {
     const mixed = mono.mix.some((v) => v !== 0);
     return (
-      <div className="flex flex-col gap-2">
-        <SectionLegend label="B&W mix">
-          <p>{MONO_HINT}</p>
-        </SectionLegend>
+      <DevelopFold id="mixer" title="B&W mix" info={<p>{MONO_HINT}</p>} marked defaultOpen={false}>
         {treatment}
         {MIXER_BANDS.map((band, i) => (
           <RangeSlider
@@ -89,14 +86,11 @@ export default function DevelopMixer({
             Reset mix
           </button>
         )}
-      </div>
+      </DevelopFold>
     );
   }
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Colour mixer">
-        <p>{HINT}</p>
-      </SectionLegend>
+    <DevelopFold id="mixer" title="Colour mixer" info={<p>{HINT}</p>} marked={!isDefaultMixer(value)} defaultOpen={false}>
       {treatment}
       <Segmented
         fill
@@ -132,6 +126,6 @@ export default function DevelopMixer({
           </button>
         </span>
       )}
-    </div>
+    </DevelopFold>
   );
 }

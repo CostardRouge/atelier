@@ -1084,7 +1084,12 @@ each place, in light, and taken out — or added below zero; a bright sky
 darkens with it, as haze removal does). Each looks around the pixel, so its
 scale is a share of the picture and the stage shows what the file will get;
 they are the Develop tool's, like the Detail tab, and not in the Trips and
-Studio sheets. Every setting belongs to the
+Studio sheets. The inspector's sections fold, like Trips' and the Studio's:
+click a section's title bar to close or open it; a closed section with
+anything set in it keeps a dot beside its name. Levels, the curve, the mixer and
+grading start closed. What you fold is remembered while the tab is open — from
+one picture to the next, and across a reload — and never written to the roll.
+Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on

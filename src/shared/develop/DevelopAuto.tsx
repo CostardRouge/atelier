@@ -1,4 +1,4 @@
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import { autoColour, autoTone, describeAutoTone, type SourceStats } from './auto-develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { RangeSlider } from './DevelopSliders';
@@ -41,10 +41,9 @@ export function DevelopAutoSection({
 }) {
   const ready = Boolean(stats && stats.total > 0);
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Auto">
-        <p>{AUTO_HINT}</p>
-      </SectionLegend>
+    // One row of verbs: not worth a fold, but drawn with the same header as
+    // the foldable sections under it.
+    <DevelopFold id="auto" title="Auto" info={<p>{AUTO_HINT}</p>} foldable={false}>
       <div className="flex items-center gap-2">
         <button
           type="button"
@@ -92,7 +91,7 @@ export function DevelopAutoSection({
           </button>
         )}
       </div>
-    </div>
+    </DevelopFold>
   );
 }
 
@@ -132,11 +131,9 @@ export function DevelopLevelsSection({
     onChange(empty ? null : { rgb, red: value?.red ?? null, green: value?.green ?? null, blue: value?.blue ?? null });
   };
 
+  const set = Boolean(value?.rgb || value?.red || value?.green || value?.blue);
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Levels">
-        <p>{LEVELS_HINT}</p>
-      </SectionLegend>
+    <DevelopFold id="levels" title="Levels" info={<p>{LEVELS_HINT}</p>} marked={set} defaultOpen={false}>
       {LEVEL_KEYS.map((key) =>
         key === 'gamma' ? (
           <RangeSlider
@@ -176,6 +173,6 @@ export function DevelopLevelsSection({
           Reset levels
         </button>
       )}
-    </div>
+    </DevelopFold>
   );
 }

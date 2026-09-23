@@ -1662,7 +1662,13 @@ export default function PictureWorkbench({
         {!compact && (
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
         )}
-        <div className={compact ? 'flex flex-col gap-4' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col gap-4 -mr-3 pr-3'}>
+        {/* Adjust and Detail are a column of folding sections, each with its
+            own rule and padding — a gap on top of that is the air twice. */}
+        <div
+          className={`${
+            compact ? 'flex flex-col' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col -mr-3 pr-3'
+          } ${tab === 'adjust' || tab === 'detail' ? 'gap-0' : 'gap-4'}`}
+        >
           {tab === 'adjust' ? (
             <>
               <DevelopHistogram
@@ -1839,6 +1845,7 @@ export default function PictureWorkbench({
                       layer's adjustment IS a DevelopSettings — one maths, one
                       panel, and a local exposure behaves like a global one. */}
                   <DevelopSliders
+                    foldPrefix="layer."
                     value={selectedLayer.develop}
                     onChange={(key, v) =>
                       setLayersDraft((list) =>
@@ -1849,6 +1856,7 @@ export default function PictureWorkbench({
                     }
                   />
                   <DevelopCurve
+                    foldPrefix="layer."
                     value={selectedLayer.develop.curves}
                     histogram={picture.histogram}
                     onChange={(curves) =>

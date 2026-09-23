@@ -13,7 +13,7 @@ import type { LutStack } from '../lut/use-lut-stack';
 import type { ButtonSize } from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
@@ -209,8 +209,10 @@ export function DevelopPresetsSection({
     onNaming?.(on);
   };
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-line">
-      <SectionLegend label="Presets">
+    <DevelopFold
+      id="presets"
+      title="Presets"
+      info={
         <p>
           Your own names for a light{presets.keptOn ? `, kept ${presets.keptOn}` : ''}. A chip writes a
           COPY of its numbers here — applied, never followed, so editing a preset later changes no
@@ -218,7 +220,8 @@ export function DevelopPresetsSection({
           picture’s LOOK too (<em>+ look</em>); it is worn where a picture owns its look, and
           elsewhere the numbers apply alone.
         </p>
-      </SectionLegend>
+      }
+    >
       {presets.place && <PresetsPlaceRow place={presets.place} />}
       {presets.list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -309,7 +312,7 @@ export function DevelopPresetsSection({
           Save current as…
         </button>
       )}
-    </div>
+    </DevelopFold>
   );
 }
 
@@ -372,13 +375,17 @@ export function DevelopApplySection({
 }) {
   if (verbs.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-line">
-      <SectionLegend label="Apply to…">
+    <DevelopFold
+      id="apply"
+      title="Apply to…"
+      foldable={verbs.length > 1}
+      info={
         <p>
           The same numbers written onto other pictures, now, each as its own copy — the look under it
           stays theirs. Done still writes this one.
         </p>
-      </SectionLegend>
+      }
+    >
       {verbs.map((verb) => (
         <div key={verb.id} className="flex flex-col items-start gap-1">
           <button
@@ -394,7 +401,7 @@ export function DevelopApplySection({
           {verb.hint && <span className="font-mono text-3xs text-faint leading-relaxed">{verb.hint}</span>}
         </div>
       ))}
-    </div>
+    </DevelopFold>
   );
 }
 
@@ -422,17 +429,19 @@ export function DevelopLookSection({
   previewLabel?: string | null;
 }) {
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-line">
-      <span className="flex items-center gap-2">
-        <SectionLegend label="Look">
-          {legend ?? (
-            <p>
-              The same grade the piece already wears, applied AFTER this correction — set both in one
-              place. Looks apply top to bottom and the output transform last.
-            </p>
-          )}
-        </SectionLegend>
-      </span>
+    <DevelopFold
+      id="look"
+      title="Look"
+      marked={stack.layers.length > 0}
+      info={
+        legend ?? (
+          <p>
+            The same grade the piece already wears, applied AFTER this correction — set both in one
+            place. Looks apply top to bottom and the output transform last.
+          </p>
+        )
+      }
+    >
       {header}
       <GradePanel
         stack={stack}
@@ -440,6 +449,6 @@ export function DevelopLookSection({
         previewImage={previewImage}
         previewLabel={previewLabel}
       />
-    </div>
+    </DevelopFold>
   );
 }

@@ -1,5 +1,5 @@
 import { useRef, type KeyboardEvent, type PointerEvent as ReactPointerEvent } from 'react';
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import { developLinkClass } from './develop-classes';
 import { RangeSlider } from './DevelopSliders';
 import {
@@ -148,10 +148,7 @@ export default function DevelopGrading({
   );
   const touched = !isDefaultGrading(value) || g.blending !== 50 || g.balance !== 0;
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Colour grading">
-        <p>{HINT}</p>
-      </SectionLegend>
+    <DevelopFold id="grading" title="Colour grading" info={<p>{HINT}</p>} marked={!isDefaultGrading(value)} defaultOpen={false}>
       <div className="grid grid-cols-3 gap-3">{GRADE_ZONES.filter((z) => z !== 'global').map(wheel)}</div>
       <div className="grid grid-cols-3 gap-3 items-start">
         {wheel('global')}
@@ -177,6 +174,6 @@ export default function DevelopGrading({
           Reset grading
         </button>
       )}
-    </div>
+    </DevelopFold>
   );
 }

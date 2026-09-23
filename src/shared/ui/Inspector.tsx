@@ -27,9 +27,20 @@ import { Icons } from './icons';
 
 const OPEN_KEY = 'atelier.inspector.';
 
-function readOpen(id: string, fallback: boolean): boolean {
+/** Where a fold is remembered: for good on this browser, or for this tab's session only. */
+export type FoldMemory = 'local' | 'session';
+
+function foldStore(memory: FoldMemory): Storage | null {
   try {
-    const stored = localStorage.getItem(OPEN_KEY + id);
+    return memory === 'session' ? sessionStorage : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readOpen(id: string, fallback: boolean, memory: FoldMemory): boolean {
+  try {
+    const stored = foldStore(memory)?.getItem(OPEN_KEY + id) ?? null;
     return stored === null ? fallback : stored === '1';
   } catch {
     return fallback;
@@ -48,6 +59,24 @@ interface InspectorSectionProps {
   actions?: ReactNode;
   defaultOpen?: boolean;
   /**
+   * Where the fold is remembered: `local` (the default) keeps it on this
+   * browser; `session` keeps it for the tab's session only — the Develop
+   * inspector's, where the maintainer wanted a fold to survive a change of
+   * picture but not to become a lasting setting (2026-09-23).
+   */
+  remember?: FoldMemory;
+  /**
+   * An accent dot after the title: something in the section departs from
+   * its default. What keeps a FOLDED section from hiding an edit.
+   */
+  marked?: boolean;
+  /**
+   * `false` draws the same header with no chevron and no fold — a section too
+   * small to be worth folding (one row of verbs) still reads like its
+   * neighbours.
+   */
+  foldable?: boolean;
+  /**
    * Controlled fold, for a section whose body COSTS something while open (a
    * request to an instance): the owner decides, and nothing is remembered.
    */
@@ -63,12 +92,15 @@ export function InspectorSection({
   info,
   actions,
   defaultOpen = true,
+  remember = 'local',
+  marked = false,
+  foldable = true,
   open: controlled,
   onOpenChange,
   children,
 }: InspectorSectionProps) {
-  const [remembered, setRemembered] = useState(() => readOpen(id, defaultOpen));
-  const open = controlled ?? remembered;
+  const [remembered, setRemembered] = useState(() => readOpen(id, defaultOpen, remember));
+  const open = !foldable || (controlled ?? remembered);
   const bodyId = useId();
   const toggle = () => {
     if (controlled !== undefined) {
@@ -77,7 +109,7 @@ export function InspectorSection({
     }
     setRemembered((o) => {
       try {
-        localStorage.setItem(OPEN_KEY + id, o ? '0' : '1');
+        foldStore(remember)?.setItem(OPEN_KEY + id, o ? '0' : '1');
       } catch {
         /* storage disabled: the fold lasts the session */
       }
@@ -93,6 +125,7 @@ export function InspectorSection({
   // The title stays the real button, so the keyboard and a screen reader keep
   // one control with `aria-expanded`; its click bubbles here like any other.
   const onBandClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!foldable) return;
     const band = e.currentTarget;
     const hit = e.target as Element;
     if (hit !== band) {
@@ -106,17 +139,30 @@ export function InspectorSection({
     <section className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
       <div
         onClick={onBandClick}
-        className="group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 cursor-pointer"
+        className={`group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 ${foldable ? 'cursor-pointer' : ''}`}
       >
-        <button
-          type="button"
-          data-fold
-          aria-expanded={open}
-          aria-controls={bodyId}
-          className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
-        >
-          {title}
-        </button>
+        {foldable ? (
+          <button
+            type="button"
+            data-fold
+            aria-expanded={open}
+            aria-controls={bodyId}
+            className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
+          >
+            {title}
+          </button>
+        ) : (
+          <span className="min-w-0 font-sans text-sm font-semibold text-ink truncate">{title}</span>
+        )}
+        {marked && (
+          <span
+            data-fold
+            role="img"
+            aria-label="changed"
+            title="Something here is set"
+            className="flex-none w-1.5 h-1.5 rounded-full bg-accent"
+          />
+        )}
         {badge && (
           <span
             data-fold
@@ -128,15 +174,17 @@ export function InspectorSection({
         {info && <InfoDot about={title.toLowerCase()}>{info}</InfoDot>}
         <span data-fold className="flex-1 self-stretch" />
         {open && actions}
-        <span
-          data-fold
-          aria-hidden="true"
-          className={`flex-none grid place-items-center w-7 h-7 -mr-1.5 rounded-[8px] text-muted group-hover/band:bg-paper-2 group-hover/band:text-ink transition-transform duration-200 ease-paper [&>svg]:w-4 [&>svg]:h-4 ${
-            open ? '' : '-rotate-90'
-          }`}
-        >
-          {Icons.down}
-        </span>
+        {foldable && (
+          <span
+            data-fold
+            aria-hidden="true"
+            className={`flex-none grid place-items-center w-7 h-7 -mr-1.5 rounded-[8px] text-muted group-hover/band:bg-paper-2 group-hover/band:text-ink transition-transform duration-200 ease-paper [&>svg]:w-4 [&>svg]:h-4 ${
+              open ? '' : '-rotate-90'
+            }`}
+          >
+            {Icons.down}
+          </span>
+        )}
       </div>
       {open && (
         <div id={bodyId} className="flex flex-col gap-2.5 pt-2.5">

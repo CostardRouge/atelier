@@ -1,4 +1,4 @@
-import SectionLegend from '../../shared/ui/SectionLegend';
+import DevelopFold from '../../shared/develop/DevelopFold';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
 import { developLinkClass } from '../../shared/develop/develop-classes';
 import { DEFAULT_DETAIL, DETAIL_RANGES, describeDetail, isDefaultDetail, type DetailSettings } from '../../shared/render/detail';
@@ -43,10 +43,12 @@ export function PresencePanel({
 }) {
   const detail: DetailSettings = value ?? { ...DEFAULT_DETAIL };
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Presence">
-        <p>{PRESENCE_HINT}</p>
-      </SectionLegend>
+    <DevelopFold
+      id="presence"
+      title="Presence"
+      info={<p>{PRESENCE_HINT}</p>}
+      marked={PRESENCE.some(({ key }) => detail[key] !== 0)}
+    >
       {PRESENCE.map(({ key, label }) => (
         <RangeSlider
           key={key}
@@ -59,7 +61,7 @@ export function PresencePanel({
           }}
         />
       ))}
-    </div>
+    </DevelopFold>
   );
 }
 
@@ -101,26 +103,27 @@ export default function DetailPanel({
 
   return (
     <>
-      <div className="flex flex-col gap-2">
-        <SectionLegend label="Noise">
-          <p>{NOISE_HINT}</p>
-          <p>{SCALE_NOTE}</p>
-        </SectionLegend>
+      <DevelopFold
+        id="noise"
+        title="Noise"
+        info={
+          <>
+            <p>{NOISE_HINT}</p>
+            <p>{SCALE_NOTE}</p>
+          </>
+        }
+        marked={detail.luminance !== 0 || detail.colour !== 0}
+      >
         {NOISE.map((k) => slider(k.key, k.label))}
-      </div>
-      <div className="flex flex-col gap-2">
-        <SectionLegend label="Fringing">
-          <p>{FRINGE_HINT}</p>
-        </SectionLegend>
+      </DevelopFold>
+      {/* One slider: the same header, no fold. */}
+      <DevelopFold id="fringing" title="Fringing" info={<p>{FRINGE_HINT}</p>} foldable={false}>
         {slider('defringe', 'Defringe')}
-      </div>
-      <div className="flex flex-col gap-2">
-        <SectionLegend label="Sharpen">
-          <p>{SHARPEN_HINT}</p>
-        </SectionLegend>
+      </DevelopFold>
+      <DevelopFold id="sharpen" title="Sharpen" info={<p>{SHARPEN_HINT}</p>} marked={detail.sharpen !== 0}>
         {slider('sharpen', 'Amount')}
         {slider('sharpenRadius', 'Radius', DEFAULT_DETAIL.sharpenRadius)}
-      </div>
+      </DevelopFold>
       {tabTouched && (
         <div className="flex items-center gap-2">
           <span className="font-mono text-3xs text-faint truncate" title={describeDetail(tabOnly)}>

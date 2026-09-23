@@ -409,6 +409,30 @@ shadows 220°·70 gave `27,29,43` with the 128 midtone untouched; highlights
 40°·40 by keyboard `238,228,222`; global light +50 lifted all three; ⌘Z
 undid the last move.
 
+## The inspector's sections FOLD, for the session (2026-09-23, the maintainer's ask)
+
+Once the Adjust tab passed a dozen blocks, every section holding two
+controls or more became an `InspectorSection` — the one fold Trips and the
+Studio already use, not a second one — through `DevelopFold`
+(`shared/develop/DevelopFold.tsx`, ids `develop.<block>`): Light, Tone,
+Colour, Presence, Levels, Curve, the mixer, grading, Presets, Apply to…,
+Look on Adjust; Repair, Noise, Sharpen on Detail. **His rules**: the fold
+survives changing picture but is NEVER on the document — it lives in
+`sessionStorage` (`remember: 'session'`), so a reload keeps it and a new tab
+starts from the defaults; Auto is NOT foldable (one row of verbs), nor is
+Fringing (one slider) or an Apply-to with one verb — they wear the same
+header with no chevron (`foldable: false`). **Mine** (he left it to me):
+folded by default are Levels, Curve, the mixer and grading, what a pass over
+a picture reaches for last; a folded section with anything set in it keeps
+an accent dot after its title (`marked`), or folding would hide an edit. A
+layer's sliders and curve fold under their own ids (`foldPrefix="layer."`).
+The Develop tool and the Trips/Studio sheet share the ids. The column's
+`gap-4` was dropped on Adjust, Detail and in the sheet: a section brings its
+own rule and padding, and both was the air twice. **Trap met**:
+`shared/develop/DevelopSection.tsx` already exists (the settled row) — a
+`cat >` over it erased it; it was restored from git, hence the name
+`DevelopFold`.
+
 ## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
 
 **Decision (maintainer, from an artifact proposal comparing five variants).**
