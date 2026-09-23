@@ -517,6 +517,7 @@ export function useRollExport({
             lens: picture.lens ?? null,
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
+            vignette: picture.vignette ?? null,
             repair: picture.repair ?? null,
             // The picture's own texture, part of its look (roll v5). The
             // document's copy, which the write-through keeps level with the stack.

@@ -48,6 +48,7 @@ const KEYED = [
   'keystone',
   'lens',
   'detail',
+  'vignette',
   'repair',
   'layers',
   'title',

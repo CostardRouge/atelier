@@ -18,6 +18,7 @@ import { ALL_META, readMetaChoice, type MetaChoice } from '../exif/meta-groups';
 import { isDefaultKeystone, keystoneOrNull, type Keystone } from '../render/geometry';
 import { isDefaultLens, lensOrNull, type LensCorrection } from '../render/lens';
 import { detailOrNull, isDefaultDetail, type DetailSettings } from '../render/detail';
+import { isDefaultPostVignette, postVignetteOrNull, type PostCropVignette } from '../render/post-vignette';
 import { readPatches, type Patch } from '../render/repair';
 import { readLayers, type AdjustLayer } from './layer';
 import { developOrNull, isDefaultDevelop, type DevelopSettings } from './develop';
@@ -181,6 +182,11 @@ export interface RollPicture {
    */
   detail?: DetailSettings | null;
   /**
+   * The post-crop vignette (`shared/render/post-vignette.ts`), or null for
+   * none — shaped in the DELIVERED frame, so it follows the crop.
+   */
+  vignette?: PostCropVignette | null;
+  /**
    * Heal and clone patches (`shared/render/repair.ts`), in order, drawn as
    * ONE pass on the source before everything else. Absent and empty mean the
    * same thing.
@@ -246,6 +252,7 @@ export function createRollPicture(ref: SavedMediaRef, id: string = newRollId()):
     keystone: null,
     lens: null,
     detail: null,
+    vignette: null,
     repair: [],
     layers: [],
   };
@@ -398,6 +405,7 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     keystone: keystoneOrNull(raw.keystone),
     lens: lensOrNull(raw.lens),
     detail: detailOrNull(raw.detail),
+    vignette: postVignetteOrNull(raw.vignette),
     repair: readPatches(raw.repair),
     layers: readLayers(raw.layers),
   };
@@ -506,6 +514,7 @@ export function patchPicture(
       | 'keystone'
       | 'lens'
       | 'detail'
+      | 'vignette'
       | 'repair'
       | 'layers'
     >
@@ -592,6 +601,7 @@ export type PictureEdit =
   | 'perspective'
   | 'lens'
   | 'detail'
+  | 'vignette'
   | 'repair'
   | 'layers';
 
@@ -613,6 +623,7 @@ export function pictureEdits(p: RollPicture): PictureEdit[] {
   if (!isDefaultKeystone(p.keystone)) out.push('perspective');
   if (!isDefaultLens(p.lens)) out.push('lens');
   if (!isDefaultDetail(p.detail)) out.push('detail');
+  if (!isDefaultPostVignette(p.vignette)) out.push('vignette');
   if ((p.repair ?? []).length > 0) out.push('repair');
   if ((p.layers ?? []).length > 0) out.push('layers');
   return out;

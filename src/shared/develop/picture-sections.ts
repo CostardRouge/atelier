@@ -32,6 +32,7 @@ export const PICTURE_SECTIONS: readonly { id: PictureSection; label: string; hin
   { id: 'perspective', label: 'Perspective', hint: 'the keystone' },
   { id: 'lens', label: 'Lens', hint: 'distortion, fringing, vignetting' },
   { id: 'detail', label: 'Detail', hint: 'denoise, defringe, sharpen — and texture, clarity, dehaze' },
+  { id: 'vignette', label: 'Vignette', hint: 'the post-crop vignette, drawn in the delivered frame' },
   { id: 'repair', label: 'Repair', hint: 'heal and clone spots — for dust on the sensor, the same place on every frame' },
   { id: 'layers', label: 'Layers', hint: 'masks and their adjustments' },
 ];
@@ -78,6 +79,7 @@ export function withSections(target: RollPicture, source: RollPicture, sections:
   if (on.has('perspective')) next.keystone = source.keystone ? structuredClone(source.keystone) : null;
   if (on.has('lens')) next.lens = source.lens ? structuredClone(source.lens) : null;
   if (on.has('detail')) next.detail = source.detail ? structuredClone(source.detail) : null;
+  if (on.has('vignette')) next.vignette = source.vignette ? { ...source.vignette } : null;
   if (on.has('repair')) next.repair = structuredClone(source.repair ?? []);
   if (on.has('layers')) next.layers = structuredClone(source.layers ?? []);
   return next;
@@ -97,6 +99,7 @@ export function withoutSections(picture: RollPicture, sections: readonly Picture
   if (on.has('perspective')) next.keystone = null;
   if (on.has('lens')) next.lens = null;
   if (on.has('detail')) next.detail = null;
+  if (on.has('vignette')) next.vignette = null;
   if (on.has('repair')) next.repair = [];
   if (on.has('layers')) next.layers = [];
   return next;
@@ -107,7 +110,7 @@ function sameSections(a: RollPicture, b: RollPicture): boolean {
 }
 
 function pictureSnapshot(p: RollPicture) {
-  return [p.develop, p.grade, p.aspect, p.framing, p.border, p.keystone, p.lens, p.detail, p.repair ?? [], p.layers ?? []];
+  return [p.develop, p.grade, p.aspect, p.framing, p.border, p.keystone, p.lens, p.detail, p.vignette ?? null, p.repair ?? [], p.layers ?? []];
 }
 
 /**

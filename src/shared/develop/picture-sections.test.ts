@@ -40,6 +40,7 @@ function everything(doc: RollDoc, id: string): RollDoc {
             keystone: { vertical: 0.2, horizontal: 0, rotate: 0, scale: 1 } as never,
             lens: { distortion: 0.1, ca: 0, vignette: 0 } as never,
             detail: { noise: 0.3, color: 0, defringe: 0, sharpen: 0, radius: 1 } as never,
+            vignette: { amount: -30, midpoint: 50, roundness: 0, feather: 50, highlights: 0 },
             repair: [{ id: 'x', x: 0.5, y: 0.5, r: 0.02, dx: 0.03, dy: 0, mode: 'heal', feather: 0.5 }] as never,
             layers: [createLayer('linear', 'l1')],
           },

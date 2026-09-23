@@ -5,6 +5,7 @@ import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../..
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
 import type { DetailSettings } from '../../shared/render/detail';
+import type { PostCropVignette } from '../../shared/render/post-vignette';
 import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
@@ -518,6 +519,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, detail: DetailSettings | null) => update((r) => patchPicture(r, id, { detail })),
     [update],
   );
+  const handleVignette = useCallback(
+    (id: string, vignette: PostCropVignette | null) => update((r) => patchPicture(r, id, { vignette })),
+    [update],
+  );
   const handleLens = useCallback(
     (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
     [update],
@@ -981,6 +986,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onKeystone={(keystone) => handleKeystone(open.id, keystone)}
               onLens={(lens) => handleLens(open.id, lens)}
               onDetail={(detail) => handleDetail(open.id, detail)}
+              onVignette={(vignette) => handleVignette(open.id, vignette)}
               onRepair={(repair) => handleRepair(open.id, repair)}
               onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}

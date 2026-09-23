@@ -724,6 +724,61 @@ const out = await page.evaluate(async () => {
     results.detail = rows;
   }
 
+  // --- the post-crop vignette, from BOTH source kinds ------------------------
+  //
+  // It asks WHERE a pixel is (through a crop's affine), so it converts with
+  // imageUv — and a pass that gets that wrong is right from a canvas and
+  // upside down from an ImageBitmap, which is every real photograph. A crop
+  // off-centre and turned, so a flip cannot hide in a symmetry.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const pv = await import('/atelier/src/shared/render/post-vignette.ts');
+    const pvp = await import('/atelier/src/shared/render/post-vignette-pass.ts');
+    const vf = await import('/atelier/src/shared/develop/vignette-frame.ts');
+    const VW = 180, VH = 120;
+    const vc = document.createElement('canvas'); vc.width = VW; vc.height = VH;
+    const vctx = vc.getContext('2d');
+    const vimg = vctx.createImageData(VW, VH);
+    for (let y = 0; y < VH; y++) for (let x = 0; x < VW; x++) {
+      const i = (y * VW + x) * 4;
+      vimg.data[i] = 90 + Math.round((x / VW) * 120); vimg.data[i + 1] = 150; vimg.data[i + 2] = 60 + Math.round((y / VH) * 150); vimg.data[i + 3] = 255;
+    }
+    vctx.putImageData(vimg, 0, 0);
+    const vbitmap = await createImageBitmap(vc);
+    const vignette = { amount: -80, midpoint: 20, roundness: 40, feather: 30, highlights: 50 };
+    const framing = { scale: 1.3, x: 0.25, y: -0.2, rotation: 15, flipX: false, flipY: false, fit: 'cover' };
+    const ratio = 0.8;
+    const affine = vf.frameAffine(VW, VH, ratio, framing);
+    const terms = pv.postVignetteTerms(vignette);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(VW, VH);
+      graph.render(source, [pvp.makePostVignettePass(vignette, affine, ratio)]);
+      const o = document.createElement('canvas'); o.width = VW; o.height = VH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, VW, VH).data;
+      graph.dispose();
+      return d;
+    };
+    const worst = (gpu) => {
+      let w = 0;
+      for (let y = 4; y < VH; y += 9) for (let x = 3; x < VW; x += 11) {
+        const i = (y * VW + x) * 4;
+        const [u, v] = pv.toFrame(affine, (x + 0.5) / VW, (y + 0.5) / VH);
+        const want = pv.postVignetteAt(vimg.data[i] / 255, vimg.data[i + 1] / 255, vimg.data[i + 2] / 255, u, v, ratio, terms);
+        for (let c = 0; c < 3; c++) w = Math.max(w, Math.abs(gpu[i + c] - Math.round(want[c] * 255)));
+      }
+      return w;
+    };
+    const fromCanvas = through(vc);
+    // How much it darkened somewhere — a pass that drew nothing proves nothing.
+    let moved = 0;
+    for (let i = 0; i < fromCanvas.length; i += 4) moved = Math.max(moved, vimg.data[i + 1] - fromCanvas[i + 1]);
+    results.postVignette = { canvas: worst(fromCanvas), bitmap: worst(through(vbitmap)), moved };
+  }
+
   // --- presence: dehaze, clarity, texture against presence.ts --------------
   //
   // Big enough (400×300) that each blur's taps are spaced PAST a pixel and
@@ -1491,6 +1546,16 @@ for (const name of ['chroma', 'denoise', 'defringe', 'sharpen', 'sharpenMask']) 
 if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
   bad += 1;
   console.log('  FAIL  a pass moved nothing, so its row proves nothing');
+}
+
+const pvr = out.postVignette;
+{
+  const ok = pvr.canvas <= 2 && pvr.bitmap <= 2 && pvr.moved > 20;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  post-crop vignette against post-vignette.ts, a turned off-centre crop: canvas worst ${pvr.canvas}, ` +
+      `ImageBitmap worst ${pvr.bitmap} code(s) (allowed 2); it darkened by up to ${pvr.moved}`,
+  );
 }
 
 const pres = out.presence;

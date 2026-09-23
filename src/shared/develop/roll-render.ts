@@ -46,6 +46,8 @@ import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
+import type { PostCropVignette } from '../render/post-vignette';
+import { postVignettePass } from './vignette-frame';
 
 export interface RollRenderOptions {
   /** The run's cancel: a RAW's decode drops its turn on it (the render is one draw and never looks). */
@@ -72,6 +74,8 @@ export interface RollRenderOptions {
   detail?: DetailSettings | null;
   /** Heal and clone patches — `render/repair.ts`; drawn first, on the source. */
   repair?: readonly Patch[] | null;
+  /** The post-crop vignette — `render/post-vignette.ts`, shaped in the frame `framing` + `aspect` cut. */
+  vignette?: PostCropVignette | null;
   /**
    * The roll's film TEXTURE — grain and halation — drawn by ONE node LAST
    * (`render-film.md`). At the density the picture is GRADED at, which is the
@@ -211,6 +215,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
       hasGeometry(opts) ||
       stack.length > 0 ||
       !isDefaultDetail(opts.detail) ||
+      Boolean(opts.vignette?.amount) ||
       patches.length > 0 ||
       !isSilentTexture(opts.film);
     // "Source density" stops at the GPU's own edge cap: a picture past it is
@@ -225,7 +230,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     // The subjects, segmented on the picture being delivered — an export
     // built without them dropped every Subject layer from the file.
     const { rasters, subjects } = await segmentFor(opts, () => bitmap);
-    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
       : null;
@@ -301,7 +306,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
     shown?.dispose();
   }
   const { rasters, subjects } = segmented;
-  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
+  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
   const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
@@ -336,7 +341,24 @@ function freshPasses(
   rasters: ReadonlyMap<string, BrushRaster> | null,
   scale: number,
 ) {
-  return [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...detailPasses(opts.detail, scale).post];
+  // The source's aspect is `ar` — the vignette's map is in [0,1] and asks for no size.
+  return [
+    ...geometryPasses(withCalibration(opts), ar),
+    ...layerPasses(opts.layers, ar, undefined, rasters),
+    ...detailPasses(opts.detail, scale).post,
+    ...vignettePasses(opts, { width: ar, height: 1 }),
+  ];
+}
+
+/**
+ * The post-crop vignette for this delivery, in the frame its crop cuts —
+ * after the sharpen, as the stage draws it. One place, so the SDR base and
+ * the HDR rendition cannot be vignetted differently.
+ */
+function vignettePasses(opts: RollRenderOptions, source: PictureSize) {
+  const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
+  const pass = postVignettePass(opts.vignette, source.width, source.height, ratio, opts.framing);
+  return pass ? [pass] : [];
 }
 
 /** The passes before the cube, built anew for a second grader. */

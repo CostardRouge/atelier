@@ -108,6 +108,8 @@ import CropPanel, { type CropApplyVerb } from './CropPanel';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import DetailPanel, { PresencePanel } from './DetailPanel';
+import VignettePanel from './VignettePanel';
+import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
 import {
@@ -221,6 +223,7 @@ export default function PictureWorkbench({
   onKeystone,
   onLens,
   onDetail,
+  onVignette,
   onRepair,
   onLayers,
   onAspect,
@@ -276,6 +279,7 @@ export default function PictureWorkbench({
   onKeystone: (keystone: Keystone | null) => void;
   onLens: (lens: LensCorrection | null) => void;
   onDetail: (detail: DetailSettings | null) => void;
+  onVignette: (vignette: PostCropVignette | null) => void;
   onRepair: (repair: Patch[]) => void;
   onLayers: (layers: AdjustLayer[]) => void;
   onAspect: (aspect: string) => void;
@@ -326,6 +330,7 @@ export default function PictureWorkbench({
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
   const [lensDraft, setLensDraft] = useState<LensCorrection | null>(entry.lens ?? null);
   const [detailDraft, setDetailDraft] = useState<DetailSettings | null>(entry.detail ?? null);
+  const [vignetteDraft, setVignetteDraft] = useState<PostCropVignette | null>(entry.vignette ?? null);
   // The patch list, a draft like the rest: a drag setting a source fires per
   // pointermove, and each move must not be a document write.
   const [repairDraft, setRepairDraft] = useState<Patch[]>(entry.repair ?? []);
@@ -837,6 +842,7 @@ export default function PictureWorkbench({
     compare: compareOn,
     clipping,
     sharpenMask: sharpenMaskView && tab === 'detail',
+    vignette: vignetteDraft,
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
@@ -934,8 +940,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings });
-  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings };
+  const callbacks = useRef({ onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings });
+  callbacks.current = { onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -971,6 +977,13 @@ export default function PictureWorkbench({
     same: sameDetail,
     onWrite: (value) => callbacks.current.onDetail(value),
     onReseed: (value) => setDetailDraft(value),
+  });
+  useWriteThrough<PostCropVignette>({
+    stored: entry.vignette ?? null,
+    draft: vignetteDraft,
+    same: samePostVignette,
+    onWrite: (value) => callbacks.current.onVignette(value),
+    onReseed: (value) => setVignetteDraft(value),
   });
   useWriteThrough<Patch[]>({
     stored: entry.repair?.length ? entry.repair : null,
@@ -1361,10 +1374,11 @@ export default function PictureWorkbench({
     const lines = developLines(draft.draft);
     if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
     if (detailDraft) lines.push(describeDetail(detailDraft));
+    if (vignetteDraft) lines.push(describePostVignette(vignetteDraft));
     if (repairDraft.length) lines.push(describePatches(repairDraft));
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
-  }, [factsOn, draft.draft, drawingCount, detailDraft, repairDraft, fidelity.note]);
+  }, [factsOn, draft.draft, drawingCount, detailDraft, vignetteDraft, repairDraft, fidelity.note]);
 
   /**
    * What the CAMERA did, drawn above those facts under the same key — the
@@ -1704,6 +1718,7 @@ export default function PictureWorkbench({
                 onMono={(mono) => draft.patch({ mono })}
               />
               <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
+              <VignettePanel value={vignetteDraft} onChange={setVignetteDraft} />
               <DevelopPresetsSection
                 presets={presets}
                 draft={draft.draft}

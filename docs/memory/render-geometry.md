@@ -220,3 +220,24 @@ where it was drawn, the harness itself would be upside down and every row above
 would be measuring the wrong thing. The two warps are also compared with each
 other, because both being wrong the same way would still be one picture, and
 that is the failure the pair exists to catch.
+
+## The post-crop vignette is shaped in the DELIVERED frame, through an affine (2026-09-23, audit item 21)
+
+`RollPicture.vignette` (`render/post-vignette.ts` pure, `post-vignette-pass.ts`
+its GLSL, Lightroom's Amount · Midpoint · Roundness · Feather · Highlights; null
+at Amount 0; its own `vignette` section in the copy sheet and in
+`pictureEdits`, in the export fingerprint). The crop is drawn AFTER the graph,
+in 2D (`drawDelivered`), so a pass cannot use its own coordinates: it is handed
+the AFFINE from image [0,1]² to the frame's (`vignette-frame.ts`,
+`frameAffine`), read off `framePoint` at three points — the crop's map is a
+scale, a turn, a mirror and a pan, so three points are all of it — and it
+converts with `imageUv` (this file's rule). The map depends on the ASPECTS
+only (a spec holds it), which is why the export's second, HDR grader can build
+it from `ar` with no pixel size. It runs after the sharpen, before the clip
+view, and is PART of the picture: the histogram, `delivered()`, a snapshot and
+the export carry it (the hook reads it through a ref at call time, so every
+`graderFor` caller gets it without a new positional argument). Develop tool
+only, like detail — the Adjust tab, folded by default. Its gate row runs a
+turned, off-centre crop from both source kinds: 0 codes each; headless, a 1:1
+crop of a 300×200 grey took Amount −100 to black corners with the centre at
+150, on the stage (300×300) and in the file (200×200) alike.
