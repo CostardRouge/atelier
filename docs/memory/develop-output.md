@@ -47,6 +47,19 @@ target (`readTargets(raw.targets, legacy)`), so an old roll exports as it did.
   the roll's own. Personal export presets across rolls are not built (the
   preset book would be their home).
 
+## Everything an export writes is sRGB, and a P3 source is CLIPPED (2026-09-23, measured)
+
+Not a choice anyone made: the grader uploads with WebGL's default
+`unpackColorSpace = 'srgb'` into an sRGB buffer, the delivered canvas is a
+default 2D canvas, and LibRaw is asked for sRGB. Measured: a Display P3 red
+decodes as `254,0,0` in P3 and leaves the grader as `234,51,35` — sRGB red.
+The browser itself would carry P3 (canvas, JPEG profile, `ImageBitmap`,
+WebGL2's colour-space attributes all work here). Wide gamut is item 25 and a
+WORKING-SPACE decision — a Rec.709 `.cube` fed P3 values shifts every colour —
+briefed in `docs/lightroom-gaps.md` §11 and waiting on him. Until then, do not
+"fix" one of the three places alone: a P3 buffer under an sRGB canvas, or a
+P3 upload into Rec.709 maths, changes colours without widening anything.
+
 ## A watermark is the roll's STYLE, drawn on the targets that ask (2026-09-23)
 
 `watermark.ts`, `RollExport.watermark` (additive, absent = default),

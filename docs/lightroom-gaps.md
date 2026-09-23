@@ -93,7 +93,7 @@ repeated here.
 
 | # | Missing | Today | Size |
 |---|---|---|---|
-| 25 | **ICC profile embedded** (even sRGB), **Display P3 / Adobe RGB** | **sRGB tag BUILT (pass 2)**; wide gamut open | S for the tag, M for wide gamut |
+| 25 | **ICC profile embedded** (even sRGB), **Display P3 / Adobe RGB** | **sRGB tag BUILT (pass 2)**; wide gamut MEASURED — the grader clips a P3 red to sRGB — and briefed in §11, his call | S for the tag, L for wide gamut |
 | 26 | **16-bit TIFF / PNG** (print, retouch hand-off), AVIF | JPEG + Ultra HDR, by decision — **NO for now** (his answer, §8), so pass 4 leaves it | M |
 | 27 | **Remove GPS / metadata on export** | **BUILT by M3** — the roll's metadata groups | S |
 | 28 | **Export presets and several targets in one run** (full + 2048 web), short edge / megapixels / %, output sharpening, watermark | **BUILT (pass 4)** — `RollExport.targets` (roll v6), up to four, sub-folders named after the target, long / short / MP / %, screen sharpening, five presets, and a text watermark per target (`develop-output.md`) | M |
@@ -130,7 +130,8 @@ repeated here.
   BUILT — pass 3 is DONE.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut). Started 2026-09-23: 28's
   targets, sizes, screen sharpening and watermark are BUILT — 28 is done;
-  26 is NO by his answer.
+  26 is NO by his answer; 25's wide gamut is measured and briefed in §11
+  (four questions) — pass 4 waits on him for that one.
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
 - Later, and each its own brief: 19, 20, 22, 24, 35.
 
@@ -284,3 +285,58 @@ skipping; E2 the table; E3 the badges and *Show ignored*; E4 (later) *changed
 since last export*; then M1–M4 of §9. His open questions: the ignored state as
 described or a display filter only; ignored cells dimmed (recommended) or
 hidden by default; the three keys; which pass comes first.
+
+## 11. Wide gamut (item 25), measured — a working-space decision, not built (2026-09-23)
+
+Measured in headless Chromium against this repo's own decode and grader
+(numbers are 8-bit Display P3 codes):
+
+| Step | A P3 red `color(display-p3 1 0 0)` reads |
+| --- | --- |
+| A 2D canvas in `display-p3`, its JPEG decoded back into P3 | `254,0,0` — kept |
+| `decodePhoto` (our decode) drawn into a P3 canvas | `254,0,0` — kept |
+| through `makeFrameGrader` (a develop of +0.0001 EV) | `234,51,35` — **clipped to sRGB red** |
+
+So the browser does its part: a P3 canvas, a JPEG that carries its profile
+(Chromium tags an sRGB canvas's JPEG too — `withIccProfile` replaces that, one
+profile per file), an `ImageBitmap` that keeps its gamut, and WebGL2's
+`unpackColorSpace` / `drawingBufferColorSpace`. The suite clips in THREE
+places: the grader uploads with the default `unpackColorSpace = 'srgb'` and
+renders an sRGB buffer; the delivered canvas is a default (sRGB) 2D canvas; and
+LibRaw is asked for sRGB output, so a RAW's colours past sRGB are gone at
+decode. An iPhone photograph (Display P3) therefore loses its reds and greens
+past sRGB the moment ANY develop, look or layer touches it — and even
+untouched, since the delivered canvas is sRGB.
+
+**What P3 output needs** — which is why it is not a flag:
+
+1. **A working space per picture**: P3 where the source is (read from its ICC)
+   or a RAW (LibRaw asked for a wide output and converted), sRGB otherwise.
+2. **The graph in that space**: upload with `unpackColorSpace = 'display-p3'`,
+   an internal P3 buffer, the delivered 2D canvas in `display-p3`, a P3 ICC
+   profile built like `icc-srgb.ts`.
+3. **The look is the hard part.** A `.cube` — every built-in, every purchased
+   look, every film stock — is authored for Rec.709 primaries. Fed P3 values it
+   shifts every colour. The honest wrapping is P3 → 709 (linear 3×3) before the
+   cube and 709 → P3 after, so a look changes what it was made to change and
+   clips only what IT maps past sRGB — but a picture wearing a conversion LUT
+   (D-Log → Rec.709) is sRGB by construction, whatever the container says.
+4. **The develop's maths name primaries**: the luma weights, the white balance,
+   the mixer's hue bands, the grading wheels. Run them in the working space
+   (the weights re-derived per space, the bands left where they are in hue) —
+   the same slider then moves a P3 picture slightly differently than an sRGB
+   one, which is what Lightroom does in its own wide space.
+5. **The stage** shows it only on a P3 screen (his Mac and iPhone are); the
+   container here reports `color-gamut: p3` false, so none of it was LOOKED at.
+
+**Recommended**: Display P3 as the one wide target (Adobe RGB for print is a
+second profile and a second set of weights for a use he has not named), end to
+end for P3 and RAW sources, looks wrapped as in 3, **opt-in per export target**
+(`Colour space: sRGB · Display P3`, sRGB by default because the web still
+assumes it). Size L: the cube bake, the graph's upload and buffers, the
+delivered canvas, a P3 profile, LibRaw's output and the develop's weights, each
+held by the render gate. **His questions**: is it wanted at all (his iPhone
+photographs and his RAWs are the pictures it changes); P3 alone or Adobe RGB
+too; opt-in per target as recommended, or the default for a P3 source; and a
+look on a P3 picture — wrapped (recommended) or the picture dropped to sRGB
+wherever a look is applied.
