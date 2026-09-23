@@ -6,6 +6,7 @@ import {
   DevelopPresetsSection,
 } from '../../shared/develop/DevelopSections';
 import DevelopCurve from '../../shared/develop/DevelopCurve';
+import { developButtonClass } from '../../shared/develop/develop-classes';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
@@ -130,6 +131,14 @@ const SNAPSHOT_DELAY_MS = 700;
 
 const NO_FILES: readonly File[] = [];
 
+/** A look batch verb, naming its count ("Apply look to 3 selected"): the host copies the open picture's stored look. */
+export interface LookApplyVerb {
+  id: string;
+  label: string;
+  hint?: string;
+  run: () => void;
+}
+
 /**
  * ONE picture of a roll on the workbench — mounted with a `key` per picture,
  * so a draft never leaks onto the next photograph (the never-inherit rule).
@@ -159,6 +168,7 @@ export default function PictureWorkbench({
   tab,
   onTabChange,
   applyTo,
+  lookApplyTo,
   cropApplyTo,
   borderApplyTo,
   onBorder,
@@ -189,7 +199,7 @@ export default function PictureWorkbench({
   onRendition: (rendition: string | null) => void;
   /** The capture's other files a folder listed beside `file` (`AssetParts.siblings`) — a local picture's only. */
   siblings?: readonly File[];
-  /** The roll's look; the draft rides it. */
+  /** THIS picture's look (roll v5) — the stack follows the open picture; the draft rides it. */
   stack: LutStack;
   compact: boolean;
   sheetOpen: boolean;
@@ -198,6 +208,8 @@ export default function PictureWorkbench({
   tab: WorkbenchTab;
   onTabChange: (tab: WorkbenchTab) => void;
   applyTo: readonly DevelopApplyVerb[];
+  /** The look's batch verbs — this picture's look written onto others, never its develop. */
+  lookApplyTo: readonly LookApplyVerb[];
   /** The crop's batch verbs — this picture's aspect and framing written onto others. */
   cropApplyTo: readonly CropApplyVerb[];
   /** The border's own batch verbs — never the crop (the maintainer's two verbs). */
@@ -1384,6 +1396,33 @@ export default function PictureWorkbench({
               <DevelopApplySection verbs={applyTo} draft={draft.draft} onTold={tell} />
               <DevelopLookSection
                 stack={stack}
+                legend={
+                  <p>
+                    This picture’s own look, applied AFTER its correction — the next picture keeps its
+                    own, and <em>Apply look to…</em> is the one way to dress others with it. Looks apply
+                    top to bottom and the output transform last.
+                  </p>
+                }
+                header={
+                  lookApplyTo.length > 0 ? (
+                    <div className="flex flex-wrap items-start gap-2">
+                      {lookApplyTo.map((verb) => (
+                        <button
+                          key={verb.id}
+                          type="button"
+                          title={verb.hint}
+                          onClick={() => {
+                            verb.run();
+                            tell(`done · ${verb.label.toLowerCase()}`);
+                          }}
+                          className={developButtonClass}
+                        >
+                          {verb.label}
+                        </button>
+                      ))}
+                    </div>
+                  ) : null
+                }
                 previewHeight={picture.canvasSize?.h ?? null}
                 // The decoded picture already on the stage: the look gallery's
                 // scene grades THIS photograph rather than a reference frame.

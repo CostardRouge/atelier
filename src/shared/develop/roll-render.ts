@@ -52,7 +52,7 @@ export interface RollRenderOptions {
   aspect: string;
   /** The canvas round the crop (`border-layout.ts`), or null for the crop alone. */
   border: RollBorder | null;
-  /** The picture's own cube — its develop under the roll's look — or null as shot. */
+  /** The picture's own cube — its develop under its own look — or null as shot. */
   lut: CubeLut | null;
   longEdge: number | null;
   /** JPEG quality 0..1. */

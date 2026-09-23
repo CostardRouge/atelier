@@ -7,7 +7,7 @@
  * scheduled for absorption and must not grow features.
  */
 
-import { useCallback, useDeferredValue, useMemo, useState } from 'react';
+import { useCallback, useDeferredValue, useMemo, useRef, useState } from 'react';
 import { DEFAULT_DEVELOP, isDefaultDevelop, type DevelopSettings } from '../develop/develop';
 import type { FilmSettings } from '../film/emulsion';
 import type { FilmTexture } from '../film/film-texture';
@@ -190,6 +190,12 @@ export function useLutStack(): LutStack {
   // Film settings and pack references, by layer id, so a project can restore
   // them. An OLD document's inlined `.cube` text lands here too, on restore.
   const [customText, setCustomText] = useState<Record<string, string>>({});
+  // Which restore is the latest: one that lands after a newer one was asked
+  // for must not put ITS layers back. A stack that follows the open picture
+  // (the Develop tool) restores on every step, and a slow look restored for
+  // the picture just left would otherwise land on — and be written to — the
+  // next one.
+  const restoreSeq = useRef(0);
 
   // Baking walks a lattice, and `setIntensity` maps to a NEW layers array, so
   // without this the strength slider re-bakes on every drag step, in render:
@@ -370,12 +376,15 @@ export function useLutStack(): LutStack {
     savedOutput: OutputTransform = 'none',
     savedFilm: FilmTexture | null = null,
   ) => {
+    const mine = ++restoreSeq.current;
     setOutput(savedOutput);
     // Set before the early return below, and before the await: a grade with no
     // layers can still carry a texture, and a restore that left the last
     // document's grain on would be the same fault as one that left its looks.
     setTexture(savedFilm);
     if (saved.length === 0) {
+      // A restore still in flight is superseded by this one: it stops being busy.
+      setBusy(false);
       // An empty grade is a real one — the picture that wears no look while
       // the trip wears one — so the stack has to EMPTY, not stay on whatever
       // the last document put in it. Only relevant since a deck's pictures
@@ -389,6 +398,7 @@ export function useLutStack(): LutStack {
     // One resolver for the whole suite (`saved-grade.ts`), shared with the
     // read-only bake of the grades nobody is editing.
     const { layers: restored, customText: texts } = await restoreLayers(saved);
+    if (mine !== restoreSeq.current) return;
     setCustomText(texts);
     setLayers(restored);
     setBusy(false);

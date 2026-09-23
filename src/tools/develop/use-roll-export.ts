@@ -10,6 +10,8 @@ import {
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
 import type { RollDoc, RollPicture } from '../../shared/develop/roll-types';
+import type { Interpolation } from '../../shared/lut/interpolate';
+import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
@@ -79,8 +81,8 @@ export interface RollExports {
 
 /**
  * The roll's still exports (D9 of `docs/develop-tool.md`): each picture
- * decoded whole, graded through its OWN cube (its develop under the roll's
- * look), framed as the crop stage showed it and written as a JPEG at the
+ * decoded whole, graded through its OWN cube (its develop under its own
+ * look, roll v5), framed as the crop stage showed it and written as a JPEG at the
  * roll's quality — into a folder, or downloaded where no picker exists.
  *
  * Which pixels is decided per picture by `deliverySummary`
@@ -94,7 +96,7 @@ export function useRollExport({
   files,
   fileFor,
   openId,
-  lutFor,
+  interpolation,
   siblingsOf,
   proxiesOnly = false,
 }: {
@@ -103,7 +105,8 @@ export function useRollExport({
   /** A picture's bytes for the run, fetched on the spot when they are not in hand. */
   fileFor: (picture: RollPicture) => Promise<File | null>;
   openId: string | null;
-  lutFor: (picture: RollPicture) => CubeLut | null;
+  /** The lattice lookup the stage bakes with — the export must bake the same (`interpolate.ts`). */
+  interpolation: Interpolation;
   /** The capture files a folder listed beside a local picture (`AssetParts.siblings`) — where its RAW may be. */
   siblingsOf?: (file: File) => readonly File[];
   /**
@@ -117,8 +120,8 @@ export function useRollExport({
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  const latest = useRef({ roll, files, fileFor, lutFor, siblingsOf, proxiesOnly });
-  latest.current = { roll, files, fileFor, lutFor, siblingsOf, proxiesOnly };
+  const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly });
+  latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly };
 
   // What the run will deliver, picture by picture, before a byte is fetched.
   // Re-planned whenever the session holds something new — the stage fetching
@@ -240,7 +243,10 @@ export function useRollExport({
   }
 
   const exportPictures = useCallback(async (ids: readonly string[]) => {
-    const { roll: r, files: f, fileFor: fetchFor, lutFor: cubeFor, proxiesOnly: onlyProxies } = latest.current;
+    const { roll: r, files: f, fileFor: fetchFor, interpolation: mode, proxiesOnly: onlyProxies } = latest.current;
+    // Each picture through ITS look, from the document — never the live
+    // stack, which follows whatever picture is open while the run goes on.
+    const cubeFor = rollCubes(mode);
     const targets = ids.flatMap((id) => r.pictures.filter((p) => p.id === id));
     if (targets.length === 0) return;
     setNote(null);
@@ -435,7 +441,7 @@ export function useRollExport({
             if (raw && develop) {
               hdrRun.asked += 1;
               const stops = r.export.hdrStops;
-              hdr = { lut: cubeFor({ ...picture, develop: { ...develop, exposure: develop.exposure - stops } }), stops };
+              hdr = { lut: await cubeFor(picture.grade ?? null, { ...develop, exposure: develop.exposure - stops }), stops };
             } else {
               failures.push(`${picture.ref.name} left as a plain JPEG: HDR needs the RAW base, a render holds nothing above white`);
             }
@@ -454,7 +460,7 @@ export function useRollExport({
             framing: picture.framing,
             aspect: picture.aspect,
             border: picture.border,
-            lut: cubeFor({ ...picture, develop }),
+            lut: await cubeFor(picture.grade ?? null, develop),
             longEdge: r.export.longEdge,
             quality: r.export.quality,
             keystone: picture.keystone ?? null,
@@ -462,10 +468,9 @@ export function useRollExport({
             layers: picture.layers ?? null,
             detail: picture.detail ?? null,
             repair: picture.repair ?? null,
-            // The ROLL's texture, not the picture's: grain and halation belong
-            // to the stock, which dresses the whole roll. The document's copy,
-            // which the write-through keeps level with the stack.
-            film: r.grade?.film ?? null,
+            // The picture's own texture, part of its look (roll v5). The
+            // document's copy, which the write-through keeps level with the stack.
+            film: picture.grade?.film ?? null,
             raw,
             calibration,
             hdr,

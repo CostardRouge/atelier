@@ -33,6 +33,7 @@ import {
   addPictures,
   copyBorderTo,
   copyCropTo,
+  copyGradeTo,
   patchPicture,
   removePictures,
   rollProgress,
@@ -61,7 +62,8 @@ import Filmstrip from './Filmstrip';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
-import PictureWorkbench from './PictureWorkbench';
+import PictureWorkbench, { type LookApplyVerb } from './PictureWorkbench';
+import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useRollExport } from './use-roll-export';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
@@ -119,10 +121,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     },
     [onChange],
   );
-  const stack = useRollGrade(roll, update);
-
   const openId = openPictureId(roll.pictures, pictureId);
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
+  // The look is the OPEN picture's (roll v5): the stack follows the strip.
+  const stack = useRollGrade(open, update);
   const openIdRef = useRef(openId);
   openIdRef.current = openId;
 
@@ -510,12 +512,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
 
   // --- the still export (D9): each picture through its own cube --------------
-  const { composeWith } = stack;
-  const lutFor = useCallback((p: RollPicture) => composeWith(p.develop), [composeWith]);
+  // Its own develop under its own look, baked from the document with the
+  // stage's lattice lookup (`roll-cubes.ts`).
+  const { interpolation } = useLutInterpolation();
   // "Proxies only, for this run": the editor's, reset with it, never written
   // to the roll — which pixels is otherwise each picture's own choice.
   const [proxiesOnly, setProxiesOnly] = useState(false);
-  const exports = useRollExport({ roll, files, fileFor, openId, lutFor, siblingsOf: siblingsFor, proxiesOnly });
+  const exports = useRollExport({ roll, files, fileFor, openId, interpolation, siblingsOf: siblingsFor, proxiesOnly });
   const { exportPictures } = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
@@ -629,6 +632,35 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, others, roll.pictures, selectionTargets, update]);
 
+  // The look's own verbs, apart from the develop's: a look is chosen per
+  // picture, and this is the one gesture that dresses others with it. They
+  // copy the open picture's STORED look, which the stack writes through.
+  const lookApplyTo = useMemo<LookApplyVerb[]>(() => {
+    if (!openId) return [];
+    const write = (targets: readonly string[]) => () =>
+      update((r) => copyGradeTo(r, targets, r.pictures.find((p) => p.id === openId)?.grade ?? null));
+    if (selectionTargets.length > 0) {
+      const n = selectionTargets.length;
+      return [
+        {
+          id: 'selection',
+          label: `Apply look to ${n} selected`,
+          hint: 'this picture’s look — LUTs, output, grain — onto the pictures marked in the filmstrip, their develops untouched',
+          run: write(selectionTargets),
+        },
+      ];
+    }
+    if (others <= 0) return [];
+    return [
+      {
+        id: 'roll',
+        label: `Apply look to ${others} other picture${others === 1 ? '' : 's'}`,
+        hint: 'this picture’s look onto the rest of the roll, each as its own copy, their develops untouched',
+        run: write(roll.pictures.filter((p) => p.id !== openId).map((p) => p.id)),
+      },
+    ];
+  }, [openId, others, roll.pictures, selectionTargets, update]);
+
   // The border's own verbs, apart from the crop's: a roll can wear ONE border
   // over crops that each differ (the maintainer's change to the prototype).
   const borderApplyTo = useMemo<BorderApplyVerb[]>(() => {
@@ -678,6 +710,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
 
   const progress = rollProgress(roll);
+  const withLook = roll.pictures.filter((p) => p.grade).length;
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -807,6 +840,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               tab={tab}
               onTabChange={setTab}
               applyTo={applyTo}
+              lookApplyTo={lookApplyTo}
               cropApplyTo={cropApplyTo}
               borderApplyTo={borderApplyTo}
               onBorder={(border) => handleBorder(open.id, border)}
@@ -833,7 +867,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
                 {progress.developed} of {progress.total} developed
-                {roll.grade && <span className="text-faint"> · the roll has a look</span>}
+                {withLook > 0 && (
+                  <span className="text-faint">
+                    {' '}
+                    · {withLook} with a look
+                  </span>
+                )}
                 {visibleSelected.size > 0 && (
                   <span className="text-accent-ink">
                     {' '}
@@ -962,7 +1001,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 compact={compact}
                 onOpen={(id) => onOpenPicture(id)}
                 onSelectClick={handleSelectClick}
-                onRemove={(p) => (p.develop || p.framing ? setConfirmRemove(p) : remove(p))}
+                onRemove={(p) => (p.develop || p.grade || p.framing ? setConfirmRemove(p) : remove(p))}
               />
             </div>
           </div>
@@ -989,7 +1028,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             setConfirmRemove(null);
           }}
         >
-          <p>Its develop goes with it. The file stays where it is.</p>
+          <p>Its develop and its look go with it. The file stays where it is.</p>
         </ConfirmDialog>
       )}
     </div>

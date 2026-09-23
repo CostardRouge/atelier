@@ -10,6 +10,7 @@ import {
   movePicture,
   copyBorderTo,
   copyCropTo,
+  copyGradeTo,
   patchPicture,
   readRollDoc,
   readRollExport,
@@ -40,9 +41,26 @@ describe('createRollDoc', () => {
       createdAt: 5,
       updatedAt: 5,
       pictures: [],
-      grade: null,
       export: { ...DEFAULT_ROLL_EXPORT },
     });
+  });
+});
+
+describe('copyGradeTo', () => {
+  const look = { layers: [], output: 'rec709-to-srgb' as const, film: null };
+  it('writes one look onto the pictures named, each as its own copy, and nothing else', () => {
+    const doc = patchPicture(roll(['a.jpg', 'b.jpg', 'c.jpg']), 'p1', { develop: { ...DEFAULT_DEVELOP, exposure: 1 } }, 3000);
+    const next = copyGradeTo(doc, ['p1', 'p2'], look, 4000);
+    expect(next.pictures.map((p) => p.grade?.output ?? null)).toEqual(['rec709-to-srgb', 'rec709-to-srgb', null]);
+    expect(next.pictures[0].grade).not.toBe(look);
+    expect(next.pictures[0].develop?.exposure).toBe(1);
+    expect(next.updatedAt).toBe(4000);
+  });
+
+  it('takes a look off with null, and returns the same roll when nothing changes', () => {
+    const dressed = copyGradeTo(roll(['a.jpg', 'b.jpg']), ['p1', 'p2'], look, 3000);
+    expect(copyGradeTo(dressed, ['p1'], { ...look }, 5000)).toBe(dressed);
+    expect(copyGradeTo(dressed, ['p1'], null, 5000).pictures.map((p) => p.grade ?? null)).toEqual([null, look]);
   });
 });
 
@@ -152,13 +170,14 @@ describe('editing the strip', () => {
     expect(readRollDoc(doc)).toEqual({ ...doc, updatedAt: doc.updatedAt, createdAt: doc.createdAt });
   });
 
-  it('counts a picture as developed when it has a develop or a crop', () => {
-    let doc = roll(['a', 'b', 'c', 'd']);
+  it('counts a picture as developed when it has a develop, a look or a crop', () => {
+    let doc = roll(['a', 'b', 'c', 'd', 'e']);
+    doc = patchPicture(doc, 'p5', { grade: { layers: [], output: 'rec709-to-srgb', film: null } });
     doc = patchPicture(doc, 'p1', { develop: { ...DEFAULT_DEVELOP, contrast: 10 } });
     doc = patchPicture(doc, 'p3', { framing: { ...DEFAULT_FRAMING, scale: 1.4 } });
     // A shape alone is a crop: a free zone drawn with the corners pans nothing.
     doc = patchPicture(doc, 'p4', { aspect: 'free:1.5' });
-    expect(rollProgress(doc)).toEqual({ total: 4, developed: 3 });
+    expect(rollProgress(doc)).toEqual({ total: 5, developed: 4 });
   });
 });
 
@@ -193,11 +212,36 @@ describe('reading a stored roll', () => {
     expect(doc.pictures[1].ref).toEqual({ name: 'c.jpg', size: 100, lastModified: 1, hash: 'h' });
     expect(doc.pictures[1].develop?.exposure).toBe(1);
     expect(doc.pictures[1].framing?.scale).toBe(2);
-    expect(doc.grade).toBeNull();
+    expect(doc.pictures.map((p) => p.grade)).toEqual([null, null]);
     // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
     expect(doc.export).toEqual({ longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2 });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
+  });
+
+  it('hands a pre-v5 roll’s one look to every picture, and never a v5 roll’s stray key', () => {
+    const look = { layers: [{ id: 'l', source: 'builtin:x', intensity: 0.5 }], output: 'rec709-to-srgb' };
+    const old = readRollDoc({
+      id: 'r',
+      version: 4,
+      pictures: [{ id: 'a', ref: ref('a.jpg') }, { id: 'b', ref: ref('b.jpg') }],
+      grade: look,
+    })!;
+    expect(old.version).toBe(ROLL_DOC_VERSION);
+    expect(old.pictures.map((p) => p.grade?.layers[0]?.source)).toEqual(['builtin:x', 'builtin:x']);
+    // Each its own copy: dressing one never dresses the other.
+    expect(old.pictures[0].grade).not.toBe(old.pictures[1].grade);
+    expect('grade' in old).toBe(false);
+    // Idempotent: reading the migrated roll again changes nothing.
+    expect(readRollDoc(JSON.parse(JSON.stringify(old)))).toEqual({ ...old, updatedAt: old.updatedAt, createdAt: old.createdAt });
+
+    const bare = readRollDoc({
+      id: 'r',
+      version: 5,
+      pictures: [{ id: 'a', ref: ref('a.jpg'), grade: null }, { id: 'b', ref: ref('b.jpg'), grade: look }],
+      grade: look,
+    })!;
+    expect(bare.pictures.map((p) => p.grade?.output ?? null)).toEqual([null, 'rec709-to-srgb']);
   });
 
   it('keeps a look with layers or a transform, and reads its layers safely', () => {

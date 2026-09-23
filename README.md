@@ -1055,8 +1055,11 @@ needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 **Developing.** A roll opens in its editor: the picture large, the roll as a
 filmstrip under it, and beside it the same controls as the Develop sheet in
 Trips and the Studio — the histogram, the sliders, your presets, the
-before/after wipe and zoom, and the roll's **look**, which dresses every
-picture after its own correction. There is no Done: what you set is saved on
+before/after wipe and zoom, and the picture's **look** (LUTs, output
+transform, grain), applied after its correction. Every setting belongs to the
+picture it was made on — the develop, the look, the crop, the masks — so the
+next picture keeps its own; **Apply look to N other pictures** (or to the
+marked ones) is how one look dresses several. There is no Done: what you set is saved on
 the roll as you go. **←/→** move along the strip, **\\** held shows the picture
 as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
 picture to the next, and **Apply to N other pictures** writes it onto the rest
@@ -1123,7 +1126,7 @@ take, so the rule is coarse: iPhone, iPad and Android count as phones, and
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
 ones, or the whole roll — into a folder you choose (downloaded one by one
 where the browser has no folder picker). Each is decoded at its own size,
-developed under the roll's look and cropped as the stage showed it — a crop
+developed under its own look and cropped as the stage showed it — a crop
 leaves at the picture's own density, so a small zone makes a small file, never
 one blown up to fill its aspect; the **Size** is a ceiling on the long edge and
 never upscales. Each picture leaves from the file you chose above the

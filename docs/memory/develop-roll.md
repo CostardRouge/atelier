@@ -83,10 +83,8 @@ hook's optional `kind`, so a roll is never pushed to a bucket that predates
 rolls), `RollGallery` (the project gallery over `useDocumentGallery`, the cover a
 mosaic of the first four thumbnails), `NewRollModal`, `use-roll-grade.ts`.
 Rules: (1) **routes** are `develop-route.ts`'s, the trip's `<slug>-<id8>` ref,
-so a rename keeps every link. (2) **The roll's look is one stack for every
-picture** (`useRollGrade`, Trips' `useTripGrade` with one scope), written back
-only when it differs from what was last restored, an empty look stored as
-`null`, and written through the editor's UPDATER (below). (3) **A thumbnail no
+so a rename keeps every link. (2) The look was one stack for the whole roll
+until v5 — see «The look is the PICTURE's» below. (3) **A thumbnail no
 picture has is baked from the Library's FILE** (`roll-thumb.ts`, `findMedia`
 name → hash), one decode at a time, once per picture per visit; a bake that
 lands after its run was superseded still sets it (the picture is already marked
@@ -123,8 +121,8 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
 - **The open picture's cell is redrawn AS DELIVERED** 700 ms after the picture
   or its cube rests (`useDevelopPicture().snapshot`, graded whole through the
   held grader, never the split). The accepted limit: a cell is the picture as
-  last SEEN in the editor, so "Apply to N others" and a look change leave the
-  other cells as they were until each is opened. The as-shot bake skips the open
+  last SEEN in the editor, so "Apply to N others" and "Apply look to…" leave
+  the other cells as they were until each is opened. The as-shot bake skips the open
   picture.
 - **Keys** (`editorKeyAction`): ←/→ step (a held arrow sweeps), `\` holds before
   until released, `Z` fit ↔ one step closer, ⌘/Ctrl-C/V copy and paste the
@@ -143,6 +141,36 @@ and released → `Z` scale 1 ↔ 1.5 → Apply to 3 → removal of a developed p
 through the confirm → reload: route, develops, thumbnails pruned to three → the
 look's output transform saved as `grade`, back to `null` on None → phone: stage,
 strip, the bar's Develop opening the sheet.
+
+## The look is the PICTURE's, never the roll's (2026-09-23, roll v5)
+
+**Decision (maintainer).** *"C'est le média qui décide"*: he found the look
+dressing every picture of a roll and wanted it per picture like every other
+setting (develop, crop, keystone, lens, detail, repair, layers, border and
+rendition already were). **How**: `RollPicture.grade` (a `RollGrade`, null for
+none), `RollDoc.grade` gone. **Migration is part of reading**: a roll whose
+stored `version` < 5 hands its one look to every picture carrying no `grade`
+key, each its own copy — nothing changes on screen; a v5 roll's stray
+top-level `grade` is ignored, so a picture its author left bare stays bare.
+**The one stack follows the open picture** (`useRollGrade(open, update)`): it
+remembers WHICH picture it holds and the look it agreed with it, writes back
+to that picture only (`copyGradeTo`), and skips the restore when the next
+picture wears the same look (no re-fetch on a roll dressed with one).
+`useLutStack.restore` now drops a restore that lands after a newer one was
+asked for — without it, stepping off a picture while its built-in was still
+being fetched put that look on the next picture and the write-back stored it.
+**The export never reads the live stack**: each picture is baked from its
+STORED look (`tools/develop/roll-cubes.ts`, one fetch per distinct look per
+run, waiting rather than answering "as shot" like `use-grade-cubes.ts` may on
+screen), its grain from `picture.grade.film`. A look is copied onto others
+only by `Apply look to N selected / N other pictures` (never the develop), a
+look counts as developed in `rollProgress`, and a new picture starts with
+none — never inherited. No rung above the picture (Trips' trip → piece →
+picture chain) was built: a roll is a set of photographs, not a feed that must
+read as one. Verified headless: a v4 roll read as two dressed pictures; a look
+removed on one left the other's; a fast ←/→ sweep over look / no look / look
+moved nothing; the verb dressed the bare one; an export of a black & white
+picture and a bare one delivered 133,133,133 and 200,122,60.
 
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 

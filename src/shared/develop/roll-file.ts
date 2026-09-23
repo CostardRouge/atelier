@@ -2,7 +2,7 @@
  * The roll file: a whole roll on disk, as JSON — `.roll.json`.
  *
  * A BACKUP and a transfer, the trip file's rule (`roadtrip/trip-file.ts`), not
- * the Studio's template: a roll's pictures, their develops and crops, its look
+ * the Studio's template: a roll's pictures, their develops, looks and crops,
  * and its export ARE the roll. It carries everything except what only means
  * something in the browser that wrote it:
  *
@@ -44,7 +44,6 @@ export function toRollFile(roll: RollDoc, exportedAt: number = Date.now()): Roll
     exportedAt: new Date(exportedAt).toISOString(),
     name: roll.name,
     pictures: structuredClone(roll.pictures),
-    grade: structuredClone(roll.grade),
     export: structuredClone(roll.export),
   };
 }
@@ -109,7 +108,6 @@ export function parseRollFile(text: string): RollParseResult {
       exportedAt: typeof body.exportedAt === 'string' ? body.exportedAt : '',
       name: read.name,
       pictures: read.pictures,
-      grade: read.grade,
       export: read.export,
     },
   };
@@ -126,7 +124,6 @@ export function rollDocFromFile(file: RollFile, now: number = Date.now(), source
   return {
     ...doc,
     pictures: structuredClone(file.pictures),
-    grade: structuredClone(file.grade),
     export: structuredClone(file.export),
   };
 }

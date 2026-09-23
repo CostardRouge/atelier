@@ -238,7 +238,10 @@ most, and the modals get it through the same blocks.
 All four recommendations accepted (*"ok pour tes recommandations"*):
 
 - **The roll has a look** — one LUT stack for the roll, Trips' trip-grade
-  shape, applied after each picture's develop.
+  shape, applied after each picture's develop. **Reversed 2026-09-23** (roll
+  v5): the look is the PICTURE's, like everything else it is developed with —
+  *"c'est le média qui décide"*; an older roll's one look is handed to every
+  picture on read, and `Apply look to…` dresses others (`develop-roll.md`).
 - **No rating or flags** on a picture: culling is Winnow's job.
 - **"Send to Trips / to a Studio project"** from a roll comes AFTER v1.
 - **The name on screen is *Develop*** (the suite's word), slug `develop`.
