@@ -236,6 +236,9 @@ export function useVideoTransport(
       // Held space repeats: one press, one toggle. Modified space belongs to
       // the browser (page down, shortcuts).
       if (e.repeat || e.ctrlKey || e.metaKey || e.altKey || e.shiftKey) return;
+      // A control that answered the key itself (a transport bar with its own
+      // Space binding) has already prevented it; the window must not toggle twice.
+      if (e.defaultPrevented) return;
       if (targetOwnsSpace(describeKeyTarget(e.target))) return;
       const v = videoRef.current;
       // No media loaded: leave the key alone rather than calling play() on an
