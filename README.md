@@ -1070,6 +1070,22 @@ picture as it was last seen in the editor — developed and cropped — and a do
 marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.
 
+**Layers.** The **Layers** tab (**L**) adds a develop that applies only
+somewhere: a *linear* or *radial* gradient, a band of *brightness*, a mask
+*painted* by hand, a *subject* found by a model from a point you tap, or the
+*whole picture*. Every Develop slider works inside a layer, and layers add up
+from the bottom of the list to the top. A new Subject layer starts with
+**Pick** on (**P**): tap the thing you mean and the model finds it at once —
+a ring turns while it thinks, then what the tap added blinks twice — tap
+again to add to it, tap a marker to take it off. While you pick or paint, the
+mask shows by itself as its **outline**; **M** steps it to a red **fill** and
+to hidden, and the box under it keeps it shown once Pick is off. Any layer
+can take a subject **out** of itself (*Except › The subject*): darken the
+whole picture except the person, and the person's own layer alone decides
+them. The model (17 MB) is served from this site and loads the first time a
+subject is asked for; an export segments the same points on the picture it
+delivers.
+
 **Cropping.** The **Crop** tab (**C**; **A** goes back to Adjust) shows the
 whole developed picture, still, with the part you keep drawn over it and the
 rest darkened. Drag inside the zone to move it, on the picture to draw a new

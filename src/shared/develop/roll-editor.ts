@@ -116,6 +116,8 @@ export type EditorKeyAction =
   | 'crop-view'
   | 'help'
   | 'facts'
+  | 'mask'
+  | 'pick'
   | null;
 
 /**
@@ -137,7 +139,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * caller's), `Z` goes closer or back to the fit, a tab's own initial opens it
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
- * (or `?`) the shortcuts and `I` the facts over the picture, ⌘/Ctrl-C and -V
+ * (or `?`) the shortcuts, `I` the facts over the picture, `M` the mask's view
+ * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. A field or a slider keeps every key it could use;
  * a held arrow does step (it is how a strip is swept), a held `\` does not
@@ -171,5 +174,10 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'x' || press.key === 'X') return 'swap';
   if (press.key === 'h' || press.key === 'H') return 'help';
   if (press.key === 'i' || press.key === 'I') return 'facts';
+  // On the Layers tab (the editor's call): `M` steps the mask's view —
+  // hidden, outline, fill — and `P` turns Pick or Paint on and off, so a hand
+  // on the picture never has to reach for the inspector.
+  if (press.key === 'm' || press.key === 'M') return 'mask';
+  if (press.key === 'p' || press.key === 'P') return 'pick';
   return null;
 }

@@ -322,27 +322,6 @@ so it is written out inline, the row's y once per row. `brushAt` still goes
 through `framePoint`; the loop must keep saying the same thing, which the
 gate's brush row holds it to (0.0008).
 
-## A subject is segmented on the TAP, not when its layer first draws (2026-09-23)
-
-The maintainer's report: a tap on a fresh Subject layer picked nothing until he
-turned Pick off and moved a slider. `useSubjectMasks` asked the model only for
-`drawingLayers`, and a new layer's develop is default, so it does not draw — the
-markers went down, the status said "the model is loading" for ever, and the
-raster arrived only once a slider made the layer draw. The same filter left
-"show the mask" empty (`overlayOf` was looked up in the DRAWING stack). **Rule**:
-what a layer WILL do (its mask, its segmentation, its overlay) is computed from
-the whole list — `subjectLayersToSegment` (visible + points, drawing or not) and
-the overlay resolved from `layers`, compared by value (`sameLayer`) in
-`graderFrom`; only the passes that CHANGE pixels are filtered by `layerDraws`.
-
-His second report — a Whole-picture layer "overriding" a Subject — was the same
-bug seen from the other side (the Subject had no raster, so only Whole acted);
-the render keeps each layer's program, cube and mask texture apart by
-`layer:<id>`. Layers ADD, bottom to top, like Lightroom. A Whole layer that
-EXCLUDES the subject ("Sauf le sujet", a subtract) is proposed, not built.
-
-Picking feedback is proposed, not built — Outline while picking / Fill on `M`,
-the mask shown only while Pick is on, the new region blinking twice on each tap,
-a hover on a marker outlining its own point's region (free: the cache is per
-point). Lab: https://claude.ai/artifact/KCLj3s4AAt1oeWGpCDV184 — awaiting his
-three answers there.
+Picking a subject on the stage — segmentation on the tap, the mask's outline
+and fill, the blink, a subject SUBTRACTED from another layer, and the export's
+own segmentation — lives in `subject-picking.md`.

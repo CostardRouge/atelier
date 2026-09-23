@@ -15,6 +15,9 @@ import {
   readLayers,
   sameLayers,
   subjectLayersToSegment,
+  subjectLayersForRender,
+  exceptCandidates,
+  layerWeight,
   type AdjustLayer,
 } from './layer';
 import { DEFAULT_LUMA, DEFAULT_RADIAL, SUBJECT_MODEL } from '../render/mask';
@@ -83,6 +86,62 @@ describe('which subjects the model is asked for', () => {
     const whole = layer({ id: 'w', mask: null, develop: { ...DEFAULT_DEVELOP, exposure: -1 } });
     expect(subjectLayersToSegment([hidden, empty, whole])).toEqual([]);
     expect(subjectLayersToSegment(null)).toEqual([]);
+  });
+});
+
+describe('a layer that takes a subject out of itself', () => {
+  const subject = (id: string, over: Partial<AdjustLayer> = {}): AdjustLayer => ({
+    ...createLayer('subject', id),
+    mask: { kind: 'subject', points: [[0.5, 0.5]], model: SUBJECT_MODEL },
+    ...over,
+  });
+  const whole = (over: Partial<AdjustLayer> = {}) =>
+    layer({ id: 'w', mask: null, develop: { ...DEFAULT_DEVELOP, exposure: -1 }, except: 's', ...over });
+
+  it('starts with nothing taken out, and reads back what was stored', () => {
+    expect(createLayer(null).except).toBeNull();
+    expect(normaliseLayer({ except: 's' })?.except).toBe('s');
+    expect(normaliseLayer({ except: 3 })?.except).toBeNull();
+    expect(normaliseLayer({})?.except).toBeNull();
+  });
+
+  it('counts the subtraction when comparing', () => {
+    expect(sameLayers([whole()], [whole({ except: null })])).toBe(false);
+  });
+
+  it('segments the subtracted subject even while its own layer is hidden', () => {
+    const hidden = subject('s', { enabled: false });
+    expect(subjectLayersToSegment([hidden, whole()]).map((l) => l.id)).toEqual(['s']);
+    expect(subjectLayersToSegment([hidden, whole({ enabled: false })])).toEqual([]);
+  });
+
+  it('asks a delivery only for the subjects something drawing uses', () => {
+    const parked = subject('p');
+    const cut = subject('s', { enabled: false });
+    expect(subjectLayersForRender([parked, cut, whole()]).map((l) => l.id)).toEqual(['s']);
+    const drawing = subject('d', { develop: { ...DEFAULT_DEVELOP, exposure: 1 } });
+    expect(subjectLayersForRender([drawing]).map((l) => l.id)).toEqual(['d']);
+  });
+
+  it('offers only the other subject layers', () => {
+    const s = subject('s');
+    expect(exceptCandidates([s, whole()], 'w').map((l) => l.id)).toEqual(['s']);
+    expect(exceptCandidates([s], 's')).toEqual([]);
+  });
+
+  it('forgets a subtraction whose subject is deleted', () => {
+    expect(removeLayer([subject('s'), whole()], 's')[0].except).toBeNull();
+  });
+
+  it('says what it takes out', () => {
+    expect(layerLabel(whole(), [subject('s'), whole()])).toBe('the whole picture except the subject');
+  });
+
+  it('holes the mask AFTER the invert, so the hole stays a hole', () => {
+    expect(layerWeight(1, false, 1, 1)).toBe(0);
+    expect(layerWeight(0, true, 1, 1)).toBe(0);
+    expect(layerWeight(1, false, 0, 0.5)).toBe(0.5);
+    expect(layerWeight(1, false, 0.25, 1)).toBe(0.75);
   });
 });
 
