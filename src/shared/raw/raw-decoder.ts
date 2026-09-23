@@ -61,6 +61,7 @@ import { startTask } from '../tasks/tasks';
 import type { HalfImage } from '../render/half-image';
 import { fileKey, makeDecodedCache } from './decoded-cache';
 import { decodedBytes, decodedCacheCeiling, decoderIdleMs } from './raw-budget';
+import { rawWhiteOrNull, type RawWhite } from './white-balance';
 import {
   autoBrightGain,
   autoBrightGainFromLibRaw,
@@ -91,6 +92,22 @@ export interface RawMeta {
   shutter: number | null;
   aperture: number | null;
   focal: number | null;
+  /**
+   * The camera's as-shot white and its matrices (`white-balance.ts`) — what
+   * makes a white balance in KELVIN mean something on this picture. Null
+   * when the decoder did not give them or they do not invert.
+   */
+  white: RawWhite | null;
+}
+
+/** The white a full metadata read carries, or null. */
+function whiteOf(metadata: Record<string, unknown> | undefined): RawWhite | null {
+  // `color_data` in libraw-wasm 1.6's full read (its typings say `color`; the
+  // object it returns says `color_data` — measured).
+  const color = metadata?.color_data ?? metadata?.color;
+  if (!color || typeof color !== 'object') return null;
+  const c = color as Record<string, unknown>;
+  return rawWhiteOrNull({ camMul: c.cam_mul, camXyz: c.cam_xyz, rgbCam: c.rgb_cam, preMul: c.pre_mul });
 }
 
 export interface RawDecoded {
@@ -369,7 +386,14 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
       const bytes = new Uint8Array(buffer);
       try {
         await raw.open(bytes, librawSettings(halved));
-        metadata = await raw.metadata(false);
+        // The FULL read carries `color` (cam_mul, cam_xyz, rgb_cam) — the white
+        // balance in Kelvin needs it. A build or a file that refuses it still
+        // decodes, with the short read and no Kelvin.
+        try {
+          metadata = await raw.metadata(true);
+        } catch {
+          metadata = await raw.metadata(false);
+        }
         image = await raw.imageData();
       } catch (err) {
         // A decoder that refused is a decoder to rebuild: its heap may be left
@@ -407,6 +431,7 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
       shutter: num(metadata?.shutter),
       aperture: num(metadata?.aperture),
       focal: num(metadata?.focal_len),
+      white: whiteOf(metadata),
     };
     const decoded: RawDecoded = {
       ...converted,

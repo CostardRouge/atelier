@@ -109,6 +109,8 @@ import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import DetailPanel, { PresencePanel } from './DetailPanel';
 import VignettePanel from './VignettePanel';
+import WhiteBalancePanel from './WhiteBalancePanel';
+import type { RawWhite } from '../../shared/raw/white-balance';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
@@ -345,6 +347,8 @@ export default function PictureWorkbench({
   // The FILE's own width, for the kernels: a RAW's sensor once decoded, else
   // the measured file; the stage's width follows the decode one render later.
   const [rawSize, setRawSize] = useState<{ w: number; h: number } | null>(null);
+  // The camera's white from the last RAW decode — what a Kelvin white balance is read against.
+  const [rawWhite, setRawWhite] = useState<RawWhite | null>(null);
   const [stageWidth, setStageWidth] = useState(0);
   // The stack is a draft like the rest, so a slider drag is one write-through
   // rather than one document write per step.
@@ -874,11 +878,12 @@ export default function PictureWorkbench({
     // Cancelled from the pill: back on the render, and said — a base whose
     // data never arrived is not a base.
     onRawAborted: () => {
-      patchDraft({ base: null, rawGain: null });
+      patchDraft({ base: null, rawGain: null, rawWb: null });
       tell('Opening the RAW was cancelled — back on the render');
     },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
+      setRawWhite(info.meta.white);
       if (rawGain === null) {
         patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
         const ev = Math.log2(info.gain);
@@ -1703,6 +1708,13 @@ export default function PictureWorkbench({
                 picking={picture.picking}
                 onPicking={picture.setPicking}
               />
+              {wantsRaw && rawWhite && (
+                <WhiteBalancePanel
+                  white={rawWhite}
+                  value={draft.draft.rawWb ?? null}
+                  onChange={(rawWb) => draft.patch({ rawWb })}
+                />
+              )}
               <DevelopSliders value={draft.draft} onChange={draft.set} />
               <PresencePanel value={detailDraft} onChange={setDetailDraft} />
               <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />

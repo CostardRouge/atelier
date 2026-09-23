@@ -1219,6 +1219,18 @@ device goes* instead. A browser cannot ask a phone how much memory a tab may
 take, so the rule is coarse: iPhone, iPad and Android count as phones, and
 `localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
 
+**White balance in kelvin.** On the sensor, the Adjust tab starts with
+**White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,
+*Shade*, *Tungsten*, *Fluorescent*, *Flash*), a **Temperature** in kelvin and a
+**Tint**. The camera's own reading is *As shot*, read back through its own
+colour matrix, and every value becomes the multipliers the camera would have
+used under that light — so a picture shot under tungsten and set to Tungsten
+is what the camera saw, and Daylight turns it warm. It exists only on a RAW: a
+JPEG has no as-shot white to measure from, and its Temperature and Tint stay
+the relative nudge they always were (they also work on top of a kelvin
+balance). A white balance belongs to its picture, like the RAW's measured
+exposure: copy, paste, presets and *Apply to* leave it where it is.
+
 **Which pictures leave.** Every picture says whether it leaves: by default the
 ones you **edited** do, and you decide otherwise per picture — send one you did
 not touch, hold back one you did. The **Pictures** table in the Export tab

@@ -197,11 +197,10 @@ AS-SHOT read keyed on the source alone. Rules a later phase must keep:
 - **The median is pulled only PART of the way to mid-grey** (0.6 of it), so a
   picture that is dark because it was meant to be keeps its character.
 
-**No Kelvin, and that is deliberate.** The brief listed a Kelvin readout;
-temperature here is a channel GAIN, and an 8-bit render carries no as-shot
-white balance to offset from, so a number in kelvin would be invented. It waits
-for the RAW path (`AsShotNeutral` and a colour matrix are what make it real) —
-`docs/photo-editor.md` P10.
+**No Kelvin on an 8-bit picture, and that is deliberate.** Temperature here
+is a channel GAIN, and an 8-bit render carries no as-shot white balance to
+offset from, so a number in kelvin would be invented. On a RAW it is real since
+2026-09-23 (`raw.md`, «White balance in kelvin») — and only there.
 
 `DevelopSliders.tsx` gained `RangeSlider` — the same row with an explicit
 label, range and reset — because Levels needed it and a second copy is how two

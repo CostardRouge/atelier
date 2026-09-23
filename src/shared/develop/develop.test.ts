@@ -239,7 +239,7 @@ describe('isDefaultDevelop / normaliseDevelop', () => {
     // The sliders, the five SHAPES that are not sliders, and the material — a
     // stored develop carries exactly these and nothing a stranger's file
     // smuggled in.
-    expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS, 'curves', 'levels', 'mixer', 'mono', 'grading', 'base', 'rawGain'].sort());
+    expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS, 'curves', 'levels', 'mixer', 'mono', 'grading', 'base', 'rawGain', 'rawWb'].sort());
     expect(normaliseDevelop(null)).toEqual(DEFAULT_DEVELOP);
   });
 });

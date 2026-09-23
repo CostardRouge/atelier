@@ -25,6 +25,7 @@
  */
 
 import type { SavedGrade } from '../lut/saved-grade';
+import { apply3, describeWhiteBalance, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   cloneCurves,
@@ -160,10 +161,22 @@ export interface DevelopSettings {
    * and preview = export is a promise. Absent means 1.
    */
   rawGain?: number | null;
+  /**
+   * With a RAW base, a white balance in KELVIN (`raw/white-balance.ts`): the
+   * temperature and tint asked for, and the 3×3 matrix they came to through
+   * THIS picture's own as-shot white and camera matrices — stored, like the
+   * gain, so the export applies exactly what the stage did. Absent is as
+   * shot. A fact about one capture's bytes: it travels with the base and
+   * nowhere else (`withoutBase`).
+   */
+  rawWb?: RawWhiteBalance | null;
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
-export type DevelopKey = Exclude<keyof DevelopSettings, 'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain'>;
+export type DevelopKey = Exclude<
+  keyof DevelopSettings,
+  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb'
+>;
 
 /**
  * The rungs of the material ladder, lowest first. `proxy` is never stored —
@@ -228,7 +241,7 @@ export function rawGainOf(d: DevelopSettings | null | undefined): number {
  * it onto a JPEG would apply a RAW's gain to a render, four stops too bright.
  */
 export function withoutBase(d: DevelopSettings): DevelopSettings {
-  return { ...d, base: null, rawGain: null };
+  return { ...d, base: null, rawGain: null, rawWb: null };
 }
 
 /** The sliders, in the order every panel draws them. */
@@ -292,6 +305,7 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   grading: null,
   base: null,
   rawGain: null,
+  rawWb: null,
 });
 
 /**
@@ -327,6 +341,7 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   out.mixer = cloneMixer(src.mixer);
   out.mono = cloneMono(src.mono);
   out.grading = cloneGrading(src.grading);
+  out.rawWb = src.rawWb ? { ...src.rawWb, matrix: [...src.rawWb.matrix] } : null;
   return out;
 }
 
@@ -346,7 +361,8 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     sameMono(x.mono, y.mono) &&
     sameGrading(x.grading, y.grading) &&
     isRawDevelop(x) === isRawDevelop(y) &&
-    rawGainOf(x) === rawGainOf(y)
+    rawGainOf(x) === rawGainOf(y) &&
+    JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null)
   );
 }
 
@@ -377,6 +393,8 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
       typeof g === 'number' && Number.isFinite(g) && g > 0
         ? Math.min(RAW_GAIN_LIMITS.max, Math.max(RAW_GAIN_LIMITS.min, g))
         : null;
+    // Only with a base: a white balance in Kelvin is the RAW's, never a render's.
+    out.rawWb = rawWhiteBalanceOrNull(src.rawWb);
   }
   return out;
 }
@@ -555,6 +573,18 @@ export function developLinear(
   let g = rgb[1] < 0 ? 0 : rgb[1];
   let b = rgb[2] < 0 ? 0 : rgb[2];
 
+  // A RAW's white balance in Kelvin FIRST: it re-balances the capture as the
+  // camera would have under that light, and every slider below — the
+  // relative temperature and tint included — then works on that picture.
+  // Only on a RAW base: a draft that left the sensor for the render may still
+  // hold one for a moment, and on an 8-bit picture it would be a fabrication.
+  if (d.rawWb && isRawDevelop(d)) {
+    [r, g, b] = apply3(d.rawWb.matrix, [r, g, b]);
+    if (r < 0) r = 0;
+    if (g < 0) g = 0;
+    if (b < 0) b = 0;
+  }
+
   if (d.temperature) {
     const t = (d.temperature / 100) * TEMPERATURE_REACH;
     r *= 1 + t;
@@ -720,6 +750,7 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
     const rung = developBase(d);
     const adds = rung === 'gainMapWarp' ? ' + gain map + warp' : rung === 'gainMap' ? ' + gain map' : '';
     parts.push(`RAW${adds}${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
+    if (d.rawWb) parts.push(describeWhiteBalance(d.rawWb));
   }
   for (const k of DEVELOP_KEYS) {
     const v = d[k];

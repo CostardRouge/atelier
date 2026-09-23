@@ -80,7 +80,7 @@ repeated here.
 | 14 | **Colour grading wheels** (shadows/mids/highlights, balance) | **BUILT (pass 3)** — `grading.ts`, after the mixer, three wheels + global, Blending, Balance, in the Develop tool and both sheets | S/M — a cube stage |
 | 15 | **Clipping overlay on the picture, RGB histogram, readout under the cursor** | **BUILT (pass 2)** — J or the strip's end words paint the clipping; R/G/B strip; 8-bit readout under the strip | S |
 | 16 | **Masks combined** (add / subtract / intersect), **colour range**, sky/background | one mask per layer; linear, radial, luma, brush, subject | M/L |
-| 17 | **White balance in Kelvin on a RAW** + presets (daylight, cloudy, shade…) | gains ±100, eyedropper | M — the decode knows the as-shot multipliers |
+| 17 | **White balance in Kelvin on a RAW** + presets (daylight, cloudy, shade…) | **BUILT (pass 3)** — `raw/white-balance.ts`, `rawWb` on the develop, a panel on the sensor rung; was: gains ±100, eyedropper | M — the decode knows the as-shot multipliers |
 | 18 | **B&W with a channel mixer** | **BUILT (pass 3)** — `MonoMix` in `mixer.ts`, the treatment switch at the head of the mixer, `V`; the wheels tint the grey | S |
 | 19 | **Camera profiles** (DCP/ICC input, "camera matching") | absent; RAW colour is LibRaw's matrix | L |
 | 20 | **Lens profiles, auto Upright** | manual sliders, no profile *by decision* | M/L — see §7 |
@@ -125,8 +125,8 @@ repeated here.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
   Started 2026-09-23: 12 (the colour mixer), 13 (texture, clarity,
   dehaze), 14 (the colour grading wheels), 18 (black and white with a
-  mixer) and 21 (Detail, Masking, the post-crop vignette) are BUILT; 17
-  and 16 remain.
+  mixer), 21 (Detail, Masking, the post-crop vignette) and 17 (white
+  balance in kelvin on a RAW) are BUILT; 16 remains.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
 - Later, and each its own brief: 19, 20, 22, 24, 35.
