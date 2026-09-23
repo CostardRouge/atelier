@@ -1076,7 +1076,9 @@ the picture on screen back to as shot — its look and its layers included —
 one ⌘Z away. A **preset** saved here can carry the picture's look too (tick
 *+ look* when naming it): the chip then dresses a picture in both. In the
 Trips and Studio sheets, where a look lives elsewhere, the same chip applies
-the numbers alone and says so. The develop, the look, the lens and the
+the numbers alone and says so. **⌘Z** undoes across the whole roll, and an
+undo that reaches another picture than the one on screen opens that picture,
+so what changed is what you see. The develop, the look, the lens and the
 detail are ticked to start — what a roll shot with one body shares — and the
 ticks are remembered. A picture's file, its RAW base, its title and caption and
 whether it leaves are never carried. A filmstrip cell shows the

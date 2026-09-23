@@ -416,6 +416,14 @@ shared block. Rules a later phase must keep:
   `+ look`), rather than guessing which rung to write. `develop.ts` cannot
   import the roll's grade reader (a cycle), so `normaliseDevelopPresets` takes
   an optional `readLook` the book passes.
+- **An undo OPENS the picture it changed** (2026-09-23, item 8,
+  `pictureAfterRestore`, called in `DevelopTool`'s `onRestore`). The stack
+  stays ONE for the roll (per-picture stacks would split an Apply-to's single
+  step), so ⌘Z after stepping undid the previous picture out of sight. The
+  diff is by OBJECT IDENTITY — every write replaces the picture it touches and
+  keeps the others — and the route is REPLACED, not pushed; the open picture
+  among the changed, or nothing changed per picture, means stay. Measured:
+  edit a, step to b, ⌘Z lands on a reverted, ⌘⇧Z re-applies there.
 - **A picture's title and caption are the PICTURE's** (2026-09-23, M2):
   `RollPicture.title` / `caption`, stored trimmed and absent when empty
   (`wordsOf`, `setPictureWords` — the same roll back when nothing changed, so

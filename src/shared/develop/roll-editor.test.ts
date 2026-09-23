@@ -3,6 +3,7 @@ import { DEFAULT_DEVELOP } from './develop';
 import {
   editorKeyAction,
   openAfterRemoval,
+  pictureAfterRestore,
   openPictureId,
   pictureRange,
   sameDevelop,
@@ -212,5 +213,27 @@ describe('selectionAfterClick', () => {
   it('leaves the selection alone on a plain click — that is the caller’s open, not a selection click', () => {
     const selected = new Set(['a', 'b']);
     expect(selectionAfterClick(wideStrip, selected, 'a', 'c', mods({}))).toBe(selected);
+  });
+});
+
+describe('pictureAfterRestore', () => {
+  const a = { id: 'a' };
+  const b = { id: 'b' };
+  const c = { id: 'c' };
+  it('opens the picture an undo changed when it is not the one on screen', () => {
+    const b2 = { id: 'b' };
+    expect(pictureAfterRestore([a, b, c], [a, b2, c], 'c')).toBe('b');
+  });
+  it('stays when the open picture is among the changed, or when no picture changed', () => {
+    const a2 = { id: 'a' };
+    const b2 = { id: 'b' };
+    expect(pictureAfterRestore([a, b, c], [a2, b2, c], 'a')).toBeNull();
+    expect(pictureAfterRestore([a, b, c], [a, b, c], 'c')).toBeNull();
+  });
+  it('opens a picture an undo brought back, and the first changed of an Apply-to', () => {
+    expect(pictureAfterRestore([a, c], [a, b, c], 'c')).toBe('b');
+    const b2 = { id: 'b' };
+    const c2 = { id: 'c' };
+    expect(pictureAfterRestore([a, b, c], [a, b2, c2], 'a')).toBe('b');
   });
 });

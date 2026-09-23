@@ -231,3 +231,26 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'u' || press.key === 'U') return 'deliver-auto';
   return null;
 }
+
+/**
+ * Which picture to OPEN after an undo or a redo put `after` back over
+ * `before` (audit item 8): the undo stack is one for the whole roll, so ⌘Z
+ * after stepping on could undo the previous picture — or an Apply-to on the
+ * others — with nothing on screen changing. The restore is made visible by
+ * going to what it changed.
+ *
+ * Changed means a different OBJECT: every write replaces the picture it
+ * touches and keeps the others, so identity is the diff. Null — stay — when
+ * the open picture is among the changed ones, or when no picture changed (a
+ * roll-wide field, a name).
+ */
+export function pictureAfterRestore<T extends { id: string }>(
+  before: readonly T[],
+  after: readonly T[],
+  openId: string | null,
+): string | null {
+  const was = new Map(before.map((p) => [p.id, p]));
+  const changed = after.filter((p) => was.get(p.id) !== p).map((p) => p.id);
+  if (changed.length === 0 || (openId !== null && changed.includes(openId))) return null;
+  return changed[0];
+}

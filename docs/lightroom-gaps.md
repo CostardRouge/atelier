@@ -53,7 +53,7 @@ repeated here.
    a book version bump. M.
 7. **BUILT (pass 2)** — **No "reset this picture".** Reset zeroes the develop numbers only; the look
    and the layers have no reset at all. S.
-8. **Undo is one stack for the roll** (`DevelopTool.tsx:185`, 50 steps, in
+8. **BUILT (pass 2) — the restore opens the picture it changed** — **Undo is one stack for the roll** (`DevelopTool.tsx:185`, 50 steps, in
    memory): ⌘Z after stepping undoes the previous picture — or an Apply-to on
    others — with nothing visible changing. At least: a restore opens the
    picture it changed. S/M.
@@ -119,7 +119,8 @@ repeated here.
   for ⌘⇧C/⌘⇧V and every Apply-to), 6, 7, 8, 15, 27, 25 (sRGB tag). Started
   2026-09-23: 27 came with M3, 25 (the sRGB tag) and 4+5 (the sections sheet,
   ⌘⇧C / ⌘⇧V, apply to selected / others), 7 (Reset in the same sheet) and 6
-  (a preset may carry the look) are BUILT.
+  (a preset may carry the look) and 8 (an undo opens the picture it changed)
+  are BUILT.
 - **Pass 3 — the tools a daily edit reaches for:** 12, 13, 14, 18, 21, 17, 16.
 - **Pass 4 — output:** 28, 26, 25 (wide gamut).
 - **Pass 5 — workflow:** 29, 30, 31, 33, 32, 34.
