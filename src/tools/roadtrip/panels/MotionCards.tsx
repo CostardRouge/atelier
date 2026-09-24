@@ -36,22 +36,36 @@ const CARD_HEIGHT = 84;
 const CARD_PIXELS = 500_000;
 
 /**
- * The picture decoded ONCE for the whole row, within a small budget, and
- * released when the file changes or the row goes. A clip is its element
- * seeked to the frame asked for — the same loader the stage and the rail use.
+ * The picture decoded ONCE for the whole row, within a small budget. A clip
+ * is its element seeked to the frame asked for — the same loader the stage
+ * and the rail use.
+ *
+ * The bitmap in hand is released ONE COMMIT AFTER it is replaced, or when
+ * the row goes — never in the decode effect's own cleanup. Released there,
+ * it was closed while the state still held it, and the paint effect of the
+ * same commit (the piece moving on to its next slide brings new cards and a
+ * new file at once) drew a closed `ImageBitmap`: "the image source is
+ * detached", which took the whole tool down. The stage's own rule
+ * (`studio.md`, «released one commit after»), met again here.
  */
 function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | null; seq: number } {
   const [state, setState] = useState<{ source: BadgeSource | null; seq: number }>({ source: null, seq: 0 });
   const file = thumb?.file ?? null;
   const isVideo = thumb?.isVideo ?? false;
   const videoSeconds = thumb?.videoSeconds ?? 0;
+  // What the state holds is released only once the state has let go of it.
+  useEffect(() => {
+    const held = state.source;
+    return () => {
+      if (held) held.release();
+    };
+  }, [state.source]);
   useEffect(() => {
     if (!file) {
       setState({ source: null, seq: 0 });
       return;
     }
     let cancelled = false;
-    let held: BadgeSource | null = null;
     void loadBadgeSource(file, isVideo ? videoSeconds : 0)
       .then(async (decoded) => {
         if (cancelled) {
@@ -63,7 +77,6 @@ function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | 
           small.release();
           return;
         }
-        held = small;
         setState((s) => ({ source: small, seq: s.seq + 1 }));
       })
       .catch(() => {
@@ -73,11 +86,16 @@ function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | 
       });
     return () => {
       cancelled = true;
-      if (held) held.release();
-      held = null;
     };
   }, [file, isVideo, videoSeconds]);
   return state;
+}
+
+/** A bitmap already closed draws nothing rather than throwing — its width is 0 once detached. */
+function drawable(source: BadgeSource): boolean {
+  if (!(source.width > 0 && source.height > 0)) return false;
+  const image = source.image;
+  return !(typeof ImageBitmap !== 'undefined' && image instanceof ImageBitmap && image.width === 0);
 }
 
 function seconds(v: number): string {
@@ -116,7 +134,7 @@ export default function MotionCards({ cards, arrivals, holdSeconds, selected, th
       ctx.setTransform(dpr, 0, 0, dpr, 0, 0);
       ctx.fillStyle = '#000';
       ctx.fillRect(0, 0, width, CARD_HEIGHT);
-      if (source && source.width > 0 && source.height > 0) {
+      if (source && drawable(source)) {
         drawFramed(ctx, source.image, source.width, source.height, width, CARD_HEIGHT, framing);
       }
     });
