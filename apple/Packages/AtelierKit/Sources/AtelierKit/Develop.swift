@@ -94,8 +94,23 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     /// With a RAW base, the picture's own exposure as MEASURED at decode. Stored
     /// rather than re-measured, because preview = export is a promise.
     public var rawGain: Double? = nil
+    /// The stages this port does not evaluate yet, as the web writes them —
+    /// `mixer` (Lightroom's HSL), `mono` (black and white), `grading` (the
+    /// wheels) and `rawWb` (a RAW's white balance in Kelvin) — carried through
+    /// verbatim, never dropped, and never DEFAULT: a develop holding one is an
+    /// edit, and a stage that renders it says so. `rawWb` travels with the
+    /// base and nowhere else (`withoutBase`).
+    public var carried: [String: JSONValue] = [:]
 
     public init() {}
+
+    /// The keys the web writes beside the sliders, the two shapes and the material.
+    public static let carriedKeys = ["mixer", "mono", "grading", "rawWb"]
+    /// The carried stages that hold PIXELS to a different answer than this port
+    /// renders — everything but the white balance's bookkeeping is one.
+    public var unrenderedStages: [String] {
+        DevelopSettings.carriedKeys.filter { carried[$0] != nil }
+    }
 
     /// Every field at 0 — "as shot". The identity on every pixel.
     public static let `default` = DevelopSettings()
@@ -133,14 +148,6 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
         }
     }
 
-    // Codable by hand, so a document written here carries EXACTLY the keys the
-    // web's `normaliseDevelop` writes — the sliders, the two shapes and the
-    // material — with nulls where the web writes nulls.
-    enum CodingKeys: String, CodingKey {
-        case exposure, brightness, contrast, highlights, shadows, whites, blacks, temperature, tint, saturation, vibrance
-        case curves, levels, base, rawGain
-    }
-
     public init(from decoder: Decoder) throws {
         // Reading is the JSONValue path: a develop is never decoded strictly.
         let value = try JSONValue(from: decoder)
@@ -148,22 +155,21 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     }
 
     public func encode(to encoder: Encoder) throws {
-        var c = encoder.container(keyedBy: CodingKeys.self)
-        try c.encode(exposure, forKey: .exposure)
-        try c.encode(brightness, forKey: .brightness)
-        try c.encode(contrast, forKey: .contrast)
-        try c.encode(highlights, forKey: .highlights)
-        try c.encode(shadows, forKey: .shadows)
-        try c.encode(whites, forKey: .whites)
-        try c.encode(blacks, forKey: .blacks)
-        try c.encode(temperature, forKey: .temperature)
-        try c.encode(tint, forKey: .tint)
-        try c.encode(saturation, forKey: .saturation)
-        try c.encode(vibrance, forKey: .vibrance)
-        try c.encode(curves, forKey: .curves)
-        try c.encode(levels, forKey: .levels)
-        try c.encode(base, forKey: .base)
-        try c.encode(rawGain, forKey: .rawGain)
+        try json.encode(to: encoder)
+    }
+
+    /// The record as the web's `normaliseDevelop` writes it — the sliders, the
+    /// five shapes, the material — with nulls where the web writes nulls, so a
+    /// document written here diffs cleanly against one the web app wrote.
+    public var json: JSONValue {
+        var o: [String: JSONValue] = [:]
+        for k in DevelopKey.allCases { o[k.rawValue] = .number(self[k]) }
+        o["curves"] = curves.flatMap { try? JSONEncoder().encode($0) }.flatMap { JSONValue.parse($0) } ?? .null
+        o["levels"] = levels.flatMap { try? JSONEncoder().encode($0) }.flatMap { JSONValue.parse($0) } ?? .null
+        o["base"] = base.map { .string($0.rawValue) } ?? .null
+        o["rawGain"] = rawGain.map { .number($0) } ?? .null
+        for key in DevelopSettings.carriedKeys { o[key] = carried[key] ?? .null }
+        return .object(o)
     }
 }
 
@@ -200,17 +206,19 @@ public func withoutBase(_ d: DevelopSettings) -> DevelopSettings {
     var out = d
     out.base = nil
     out.rawGain = nil
+    out.carried["rawWb"] = nil
     return out
 }
 
 /// Nothing changes the picture. A RAW base is NOT default even with every
-/// slider at 0.
+/// slider at 0, and neither is a carried stage.
 public func isDefaultDevelop(_ d: DevelopSettings?) -> Bool {
     guard let d else { return true }
     return !isRawDevelop(d)
         && DevelopKey.allCases.allSatisfy { d[$0] == 0 }
         && isDefaultCurves(d.curves)
         && isDefaultLevels(d.levels)
+        && d.carried.isEmpty
 }
 
 /// A copy — value semantics make it deep already; kept as the one name every
@@ -229,6 +237,7 @@ public func sameDevelop(_ a: DevelopSettings?, _ b: DevelopSettings?) -> Bool {
         && sameLevels(x.levels, y.levels)
         && isRawDevelop(x) == isRawDevelop(y)
         && rawGainOf(x) == rawGainOf(y)
+        && x.carried == y.carried
 }
 
 /// A stored develop, read back safely: every field clamped to its range, a
@@ -243,6 +252,12 @@ public func normaliseDevelop(_ raw: JSONValue?) -> DevelopSettings {
     }
     out.curves = curvesOrNull(normaliseCurvesValue(src["curves"]))
     out.levels = levelsOrNull(normaliseLevelsValue(src["levels"]))
+    // The stages this port carries: a record each, kept as written. The web
+    // reads an all-zero mixer or grading as none; this reader cannot tell one
+    // apart and keeps it, which makes such a picture read as edited here.
+    for key in ["mixer", "mono", "grading"] {
+        if let v = src[key], v.objectValue != nil { out.carried[key] = v }
+    }
     if let base = normaliseBase(src["base"]) {
         out.base = base
         if let g = src["rawGain"]?.finiteNumber, g > 0 {
@@ -250,6 +265,8 @@ public func normaliseDevelop(_ raw: JSONValue?) -> DevelopSettings {
         } else {
             out.rawGain = nil
         }
+        // Only with a base: a white balance in Kelvin is the RAW's, never a render's.
+        if let wb = src["rawWb"], wb.objectValue != nil { out.carried["rawWb"] = wb }
     }
     return out
 }
@@ -276,12 +293,15 @@ public func developOrNull(_ raw: JSONValue?) -> DevelopSettings? {
 }
 
 /// A named develop kept on a document, applied by a click — never followed.
-public struct DevelopPreset: Codable, Equatable, Sendable {
+public struct DevelopPreset: Equatable, Sendable {
     public var id: String
     public var name: String
     public var settings: DevelopSettings
-    public init(id: String, name: String, settings: DevelopSettings) {
-        self.id = id; self.name = name; self.settings = settings
+    /// The LOOK saved with the light, when its author ticked it — a
+    /// `SavedGrade` carried as written; nil is a light alone.
+    public var look: JSONValue?
+    public init(id: String, name: String, settings: DevelopSettings, look: JSONValue? = nil) {
+        self.id = id; self.name = name; self.settings = settings; self.look = look
     }
 }
 
@@ -292,7 +312,9 @@ public func normaliseDevelopPresets(_ raw: JSONValue?) -> [DevelopPreset] {
     for entry in entries {
         guard let e = entry.objectValue, let id = e["id"]?.stringValue, !id.isEmpty,
               let name = e["name"]?.stringValue else { continue }
-        out.append(DevelopPreset(id: id, name: name, settings: normaliseDevelop(e["settings"])))
+        var look: JSONValue? = nil
+        if let l = e["look"], l.objectValue != nil { look = l }
+        out.append(DevelopPreset(id: id, name: name, settings: normaliseDevelop(e["settings"]), look: look))
     }
     return out
 }
@@ -494,6 +516,10 @@ public func developLines(_ d: DevelopSettings?) -> [String] {
         let rung = developBase(d)
         let adds = rung == .gainMapWarp ? " + gain map + warp" : (rung == .gainMap ? " + gain map" : "")
         parts.append("RAW\(adds)\(ev != 0 ? " \(signed(ev, digits: 1)) EV metered" : "")")
+        if let wb = d.carried["rawWb"]?.objectValue, let kelvin = wb["kelvin"]?.finiteNumber {
+            let tint = Int((wb["tint"]?.finiteNumber ?? 0).rounded())
+            parts.append("\(Int(kelvin.rounded())) K\(tint != 0 ? ", tint \(signed(Double(tint)))" : "")")
+        }
     }
     for k in DevelopKey.allCases {
         let v = d[k]
@@ -514,6 +540,10 @@ public func developLines(_ d: DevelopSettings?) -> [String] {
     if !levels.isEmpty { parts.append(levels) }
     let curves = describeCurves(d.curves)
     if !curves.isEmpty { parts.append(curves) }
+    // The carried stages, named the way the web names them — without the
+    // detail a port of their modules would add.
+    if d.carried["mono"] != nil { parts.append("B&W") } else if d.carried["mixer"] != nil { parts.append("mixer") }
+    if d.carried["grading"] != nil { parts.append("grading") }
     return parts
 }
 

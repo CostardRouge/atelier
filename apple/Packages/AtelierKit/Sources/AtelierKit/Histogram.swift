@@ -1,7 +1,8 @@
-// The develop's one instrument: a luminance histogram of the picture as it will
-// be delivered, with how much of it is clipped at either end — and AUTO, what
-// the picture itself says its correction should be. Port of
-// `src/shared/develop/histogram.ts` and `auto-develop.ts`.
+// The develop's one instrument: a histogram of the picture as it will be
+// delivered — its three channels, and its luminance — with how much of it is
+// clipped at either end; and AUTO, what the picture itself says its correction
+// should be. Port of `src/shared/develop/histogram.ts`, `auto-develop.ts` and
+// the clipping rule of `render/clipping.ts`.
 
 import Foundation
 
@@ -10,17 +11,43 @@ public let histogramBins = 64
 /// The long edge the picture is shrunk to before it is read.
 public let histogramSampleEdge = 160
 
-private let whiteCode = 254
-private let blackCode = 1
+/// An 8-bit value at or past which a channel has lost its highlight detail.
+public let clipWhite = 254
+/// An 8-bit value at or under which a channel has lost its shadow detail.
+public let clipBlack = 1
+
+public enum Clip: String, Sendable {
+    case white, black
+}
+
+/// Whether an 8-bit pixel is clipped: to WHITE when ANY channel is — a sky
+/// whose red alone has gone has lost its colour — and to BLACK only when
+/// EVERY channel is, because a saturated blue with no red in it is a colour,
+/// not a crushed shadow. White is asked first: a pixel cannot be both.
+public func clipOf(_ r: Int, _ g: Int, _ b: Int) -> Clip? {
+    if r >= clipWhite || g >= clipWhite || b >= clipWhite { return .white }
+    if r <= clipBlack && g <= clipBlack && b <= clipBlack { return .black }
+    return nil
+}
 
 public struct Histogram: Equatable, Sendable {
     /// Pixels per luminance bin, dark to light.
     public var bins: [Int]
+    /// Pixels per bin of each channel on its own — what the strip draws: a
+    /// luminance curve hides a red gone to 255 under a sky that reads mid grey.
+    public var red: [Int]
+    public var green: [Int]
+    public var blue: [Int]
     public var total: Int
     /// Share (0..1) of pixels with at least one channel at white.
     public var clippedHighlights: Double
     /// Share (0..1) of pixels with every channel at black.
     public var crushedShadows: Double
+
+    public init(bins: [Int], red: [Int] = [], green: [Int] = [], blue: [Int] = [], total: Int, clippedHighlights: Double, crushedShadows: Double) {
+        self.bins = bins; self.red = red; self.green = green; self.blue = blue
+        self.total = total; self.clippedHighlights = clippedHighlights; self.crushedShadows = crushedShadows
+    }
 }
 
 /// The histogram of RGBA bytes. Luminance is the Rec.709 weighting of the
@@ -28,17 +55,27 @@ public struct Histogram: Equatable, Sendable {
 public func luminanceHistogram(_ rgba: UnsafeBufferPointer<UInt8>, binCount: Int = histogramBins) -> Histogram {
     let count = max(1, binCount)
     var bins = [Int](repeating: 0, count: count)
+    var red = [Int](repeating: 0, count: count)
+    var green = [Int](repeating: 0, count: count)
+    var blue = [Int](repeating: 0, count: count)
     let pixels = rgba.count / 4
     var highs = 0, lows = 0
+    @inline(__always) func bin(_ v: Double) -> Int { min(count - 1, max(0, Int((v * Double(count) / 256).rounded(.down)))) }
     for i in 0..<pixels {
         let o = i * 4
         let r = Int(rgba[o]), g = Int(rgba[o + 1]), b = Int(rgba[o + 2])
         let y = 0.2126 * Double(r) + 0.7152 * Double(g) + 0.0722 * Double(b)
-        bins[min(count - 1, max(0, Int((y * Double(count) / 256).rounded(.down))))] += 1
-        if r >= whiteCode || g >= whiteCode || b >= whiteCode { highs += 1 }
-        else if r <= blackCode && g <= blackCode && b <= blackCode { lows += 1 }
+        bins[bin(y)] += 1
+        red[bin(Double(r))] += 1
+        green[bin(Double(g))] += 1
+        blue[bin(Double(b))] += 1
+        switch clipOf(r, g, b) {
+        case .white?: highs += 1
+        case .black?: lows += 1
+        case nil: break
+        }
     }
-    return Histogram(bins: bins, total: pixels,
+    return Histogram(bins: bins, red: red, green: green, blue: blue, total: pixels,
                      clippedHighlights: pixels > 0 ? Double(highs) / Double(pixels) : 0,
                      crushedShadows: pixels > 0 ? Double(lows) / Double(pixels) : 0)
 }
@@ -47,15 +84,30 @@ public func luminanceHistogram(_ rgba: [UInt8], binCount: Int = histogramBins) -
     rgba.withUnsafeBufferPointer { luminanceHistogram($0, binCount: binCount) }
 }
 
+private func innerPeak(_ bins: [Int]) -> Int {
+    let inner = bins.count > 2 ? Array(bins[1..<(bins.count - 1)]) : bins
+    return max(0, inner.max() ?? 0)
+}
+
 /// Bar heights 0..1 for drawing, scaled on the tallest INNER bin; the end bins
 /// are capped at the top — their excess is what the clip marks say in words.
 public func histogramShape(_ histogram: Histogram) -> [Double] {
     let bins = histogram.bins
-    let inner = bins.count > 2 ? Array(bins[1..<(bins.count - 1)]) : bins
-    let innerPeak = max(0, inner.max() ?? 0)
-    let peak = innerPeak > 0 ? innerPeak : max(0, bins.max() ?? 0)
+    let inner = innerPeak(bins)
+    let peak = inner > 0 ? inner : max(0, bins.max() ?? 0)
     if peak <= 0 { return bins.map { _ in 0 } }
     return bins.map { min(1, Double($0) / Double(peak)) }
+}
+
+/// The three channels' bar heights, on ONE scale — the tallest inner bin of
+/// any of them — so a channel that sits lower reads lower. End bins capped as
+/// `histogramShape` does.
+public func channelShapes(_ histogram: Histogram) -> (red: [Double], green: [Double], blue: [Double]) {
+    let channels = [histogram.red, histogram.green, histogram.blue]
+    let inner = channels.map(innerPeak).max() ?? 0
+    let peak = inner > 0 ? inner : (channels.map { max(0, $0.max() ?? 0) }.max() ?? 0)
+    func shape(_ c: [Int]) -> [Double] { peak > 0 ? c.map { min(1, Double($0) / Double(peak)) } : c.map { _ in 0 } }
+    return (shape(histogram.red), shape(histogram.green), shape(histogram.blue))
 }
 
 /// "2.1 %", or "<0.1 %" for a sliver still worth saying, or nil for none.
@@ -104,9 +156,7 @@ public func measureSource(_ rgba: UnsafeBufferPointer<UInt8>, binCount: Int = hi
         let r = Int(rgba[o]), g = Int(rgba[o + 1]), b = Int(rgba[o + 2])
         let y = 0.2126 * Double(r) + 0.7152 * Double(g) + 0.0722 * Double(b)
         bins[min(count - 1, max(0, Int((y * Double(count) / 256).rounded(.down))))] += 1
-        let clipped = r >= whiteCode || g >= whiteCode || b >= whiteCode
-        let crushed = r <= blackCode && g <= blackCode && b <= blackCode
-        if !clipped && !crushed {
+        if clipOf(r, g, b) == nil {
             sr += table[r]; sg += table[g]; sb += table[b]
             counted += 1
         }
@@ -160,6 +210,9 @@ public struct AutoColour: Equatable, Sendable {
     public var temperature: Double
     public var tint: Double
     public var clamped: Bool
+    public init(temperature: Double, tint: Double, clamped: Bool) {
+        self.temperature = temperature; self.tint = tint; self.clamped = clamped
+    }
 }
 
 /// Temperature and tint that make the AVERAGE of the picture neutral.

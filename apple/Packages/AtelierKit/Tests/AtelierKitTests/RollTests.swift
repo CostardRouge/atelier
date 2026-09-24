@@ -37,7 +37,15 @@ private func sample() -> RollDoc {
             film: ["grain": 0.35, "halation": 0.2]
         )
     }
-    doc.export = RollExport(longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3)
+    doc.export = RollExport(
+        targets: [
+            ExportTarget(name: "", size: ExportSize(mode: .long, value: 2048), quality: 0.85, sharpen: .off, watermark: false),
+            ExportTarget(name: "Web", size: ExportSize(mode: .short, value: 1080), quality: 0.8, sharpen: .standard, watermark: true),
+        ],
+        replace: true, hdr: true, hdrStops: 3,
+        metadata: ["position": false],
+        watermark: ["text": "© {creator}", "position": "bottom-left", "size": 3, "opacity": 0.5, "tone": "dark"]
+    )
     return doc
 }
 
@@ -109,6 +117,181 @@ final class RollDocTests: XCTestCase {
         let progress = rollProgress(doc)
         XCTAssertEqual(progress.total, 5)
         XCTAssertEqual(progress.developed, 4)
+        XCTAssertEqual(progress.ignored, 0)
+        // An ignored picture is out of both numbers, and counted apart.
+        let aside = rollProgress(setDelivery(doc, ["p1", "p2"], .ignore))
+        XCTAssertEqual(aside.total, 3)
+        XCTAssertEqual(aside.developed, 3)
+        XCTAssertEqual(aside.ignored, 2)
+    }
+
+    func testPictureEditsNamesEveryKindOfEditAndNothingOnAPictureAsItCame() {
+        let bare = roll(["a"]).pictures[0]
+        XCTAssertEqual(pictureEdits(bare), [])
+        XCTAssertFalse(isEdited(bare))
+        var all = bare
+        all.develop = dev { $0.exposure = 1 }
+        all.grade = RollGrade(layers: [], output: .rec709ToSrgb)
+        all.aspect = "4:5"
+        all.carried["border"] = ["aspect": nil, "fill": "#ffffff", "margin": ["x": 0.1, "y": 0.1]]
+        all.carried["keystone"] = ["vertical": 20, "horizontal": 0, "rotation": 0, "aspect": 0, "scale": 1]
+        all.carried["lens"] = ["distortion": 10]
+        all.carried["detail"] = ["sharpen": 40]
+        all.carried["repair"] = [["id": "h1", "kind": "heal", "x": 0.5, "y": 0.5, "radius": 0.02, "feather": 0.5, "dx": 0.05, "dy": 0]]
+        all.carried["layers"] = [["id": "l1", "kind": "radial"]]
+        XCTAssertEqual(pictureEdits(all), [.develop, .look, .crop, .border, .perspective, .lens, .detail, .repair, .layers])
+    }
+
+    func testDoesNotCountAValueDraggedBackToItsDefaultNorWhichFileThePictureIsDevelopedFrom() {
+        var p = roll(["a"]).pictures[0]
+        p.develop = .default
+        p.framing = .default
+        p.carried["keystone"] = ["vertical": 0, "horizontal": 0, "rotation": 0, "aspect": 0, "scale": 1]
+        p.carried["lens"] = ["distortion": 0, "distortion2": 0, "chromaRed": 0, "chromaBlue": 0, "vignette": 0, "vignetteMidpoint": 50]
+        p.carried["detail"] = ["luminance": 0, "colour": 0, "defringe": 0, "sharpen": 0, "sharpenRadius": 1]
+        p.carried["vignette"] = ["amount": 0, "midpoint": 50]
+        p.carried["lensProfile"] = ["lens": "DJI 24mm"]
+        p.rendition = "delivered:a.JPG"
+        XCTAssertFalse(isEdited(p))
+    }
+}
+
+final class DeliveryTests: XCTestCase {
+    private func edited() -> RollDoc {
+        patchPicture(roll(["a", "b"]), "p1") { $0.develop = dev { $0.exposure = 1 } }
+    }
+
+    func testLeavesWhenEditedByDefaultAndTheAuthorsCallWins() {
+        let doc = edited()
+        XCTAssertEqual(doc.pictures.map(delivers), [true, false])
+        let flipped = setDelivery(setDelivery(doc, ["p1"], .no), ["p2"], .yes)
+        XCTAssertEqual(flipped.pictures.map(delivers), [false, true])
+        let gone = setDelivery(doc, ["p1"], .ignore)
+        XCTAssertFalse(delivers(gone.pictures[0]))
+        XCTAssertTrue(isIgnored(gone.pictures[0]))
+    }
+
+    func testTogglesToTheOtherAnswerStoredAsAutoWhenTheRuleAlreadySaysIt() {
+        let pictures = edited().pictures
+        let ed = pictures[0]
+        let bare = pictures[1]
+        XCTAssertEqual(toggledDelivery(ed), .no)
+        var held = ed
+        held.deliver = .no
+        XCTAssertEqual(toggledDelivery(held), .auto)
+        XCTAssertEqual(toggledDelivery(bare), .yes)
+        var sent = bare
+        sent.deliver = .yes
+        XCTAssertEqual(toggledDelivery(sent), .auto)
+        var ignored = ed
+        ignored.deliver = .ignore
+        XCTAssertEqual(toggledDelivery(ignored), .auto)
+    }
+
+    func testFiltersTheTableLeavingAnIgnoredPictureToItsOwnGroup() {
+        let doc = setDelivery(setDelivery(roll(["a", "b", "c"]), ["p2"], .yes), ["p3"], .ignore)
+        let withEdit = patchPicture(doc, "p1") { $0.develop = dev { $0.exposure = 1 } }
+        func ids(_ f: DeliveryFilter) -> [String] { withEdit.pictures.filter { matchesDeliveryFilter($0, f) }.map(\.id) }
+        XCTAssertEqual(ids(.all), ["p1", "p2"])
+        XCTAssertEqual(ids(.edited), ["p1"])
+        XCTAssertEqual(ids(.leaving), ["p1", "p2"])
+        XCTAssertEqual(ids(.held), [])
+    }
+
+    func testWritesAStateOntoSeveralPicturesTheSameRollWhenNothingChanges() {
+        let doc = roll(["a", "b"])
+        XCTAssertEqual(setDelivery(doc, ["p1"], .auto), doc)
+        XCTAssertEqual(setDelivery(doc, ["p1", "p2"], .ignore, now: 9).pictures.map(\.deliver), [.ignore, .ignore])
+    }
+
+    func testReadsAnAbsentOrUnknownStateAsAutoAndIsNeverAnEdit() {
+        let doc = readRollDoc([
+            "id": "r",
+            "pictures": [["id": "a", "ref": refJSON("a.jpg")], ["id": "b", "ref": refJSON("b.jpg"), "deliver": "maybe"], ["id": "c", "ref": refJSON("c.jpg"), "deliver": "ignore"]],
+        ])!
+        XCTAssertEqual(doc.pictures.map(\.deliver), [.auto, .auto, .ignore])
+        XCTAssertFalse(isEdited(doc.pictures[2]))
+    }
+
+    func testAPicturesWordsAreItsOwnTrimmedAnEmptiedOneTakenOff() {
+        let doc = roll(["a.jpg", "b.jpg"])
+        let titled = setPictureWords(doc, "p1", title: "  Pinnacles  ", caption: "At dawn, Nambung.", now: 5)
+        XCTAssertEqual(titled.pictures[0].title, "Pinnacles")
+        XCTAssertEqual(titled.pictures[0].caption, "At dawn, Nambung.")
+        XCTAssertEqual(titled.pictures[1], doc.pictures[1])
+        XCTAssertEqual(titled.updatedAt, 5)
+        XCTAssertEqual(setPictureWords(titled, "p1", title: "Pinnacles"), titled)
+        let cleared = setPictureWords(titled, "p1", caption: "  ")
+        XCTAssertEqual(cleared.pictures[0].title, "Pinnacles")
+        XCTAssertNil(cleared.pictures[0].caption)
+        XCTAssertEqual(setPictureWords(doc, "nope", title: "x"), doc)
+        // The words survive the round trip; a roll written before them reads with none.
+        let back = readRollDoc(titled.json)!
+        XCTAssertEqual(back.pictures[0].title, "Pinnacles")
+        XCTAssertEqual(back.pictures[0].caption, "At dawn, Nambung.")
+        XCTAssertNil(back.pictures[1].title)
+        // An emptied caption is not written blank: the key is gone from the file.
+        XCTAssertNil(cleared.pictures[0].json.objectValue?["caption"])
+    }
+}
+
+final class VariantTests: XCTestCase {
+    private func base() -> RollDoc {
+        var n = 0
+        var doc = addPictures(createRollDoc(name: "R", sourceId: "local", now: 1, id: "r1"), [ref("a.jpg", size: 10), ref("b.jpg", size: 10)], now: 2) {
+            n += 1
+            return "p\(n)"
+        }
+        doc = patchPicture(doc, "p1") { $0.develop = dev { $0.exposure = 1 }; $0.deliver = .no }
+        doc = setPictureWords(doc, "p1", title: "Dawn")
+        return doc
+    }
+
+    func testClonesAPictureRightAfterItNumberedTwoItsDeliveryBackOnTheRule() {
+        let doc = addVariant(base(), "p1", .clone, newId: "v1", now: 5)
+        XCTAssertEqual(doc.pictures.map(\.id), ["p1", "v1", "p2"])
+        let v = doc.pictures[1]
+        XCTAssertEqual(v.variant, 2)
+        XCTAssertEqual(v.develop?.exposure, 1)
+        XCTAssertEqual(v.title, "Dawn")
+        XCTAssertEqual(v.deliver, .auto)
+        XCTAssertEqual(v.ref, doc.pictures[0].ref)
+        XCTAssertEqual(pictureLabel(v), "a.jpg · 2")
+        XCTAssertEqual(pictureLabel(doc.pictures[0]), "a.jpg")
+        XCTAssertEqual(variantFolder(v), "Variant 2")
+        XCTAssertEqual(variantFolder(doc.pictures[0]), "")
+    }
+
+    func testStartsAFreshVariantAsShotKeepingWhatBelongsToTheFile() {
+        var doc = patchPicture(base(), "p1") {
+            $0.develop = normaliseDevelop(["exposure": 1, "base": "gain", "rawGain": 1.5, "rawWb": ["kelvin": 3000, "tint": 0, "matrix": [1, 0, 0, 0, 1, 0, 0, 0, 1]]])
+            $0.rendition = "delivered:a.jpg"
+            $0.carried["lensProfile"] = ["lens": "DJI 24mm"]
+        }
+        doc = addVariant(doc, "p1", .fresh, newId: "v1")
+        let v = doc.pictures[1]
+        XCTAssertEqual(v.develop, dev { $0.base = .gain; $0.rawGain = 1.5 })
+        XCTAssertEqual(v.rendition, "delivered:a.jpg")
+        XCTAssertEqual(v.carried["lensProfile"], ["lens": "DJI 24mm"])
+        XCTAssertNil(v.title)
+        XCTAssertFalse(isEdited(addVariant(base(), "p1", .fresh, newId: "v2").pictures[1]))
+    }
+
+    func testNumbersPastTheHighestOfItsCaptureAndGoesAfterTheLastOfThem() {
+        var doc = addVariant(base(), "p1", .clone, newId: "v1")
+        doc = addVariant(doc, "p1", .fresh, newId: "v2")
+        XCTAssertEqual(doc.pictures.map { "\($0.id):\(variantNumber($0))" }, ["p1:1", "v1:2", "v2:3", "p2:1"])
+        doc = removePictures(doc, ["v1"])
+        doc = addVariant(doc, "v2", .clone, newId: "v3")
+        XCTAssertEqual(doc.pictures.first { $0.id == "v3" }?.variant, 4)
+    }
+
+    func testNeverLetsAFileBeAddedTwiceAndSurvivesBeingReadBack() {
+        let doc = addVariant(base(), "p1", .clone, newId: "v1")
+        XCTAssertEqual(addPictures(doc, [ref("a.jpg", size: 10)]), doc)
+        let read = readRollDoc(JSONValue.parse(doc.json.serialized()))
+        XCTAssertEqual(read?.pictures.map(\.variant), [nil, 2, nil])
+        XCTAssertEqual(addVariant(doc, "nope", .clone), doc)
     }
 }
 
@@ -141,7 +324,9 @@ final class ReadRollDocTests: XCTestCase {
         XCTAssertEqual(doc.pictures[1].develop?.exposure, 1)
         XCTAssertEqual(doc.pictures[1].framing?.scale, 2)
         XCTAssertEqual(doc.pictures.map(\.grade), [nil, nil])
-        XCTAssertEqual(doc.export, RollExport(longEdge: 16384, quality: 1, replace: false, hdr: false, hdrStops: 2))
+        // v5's one long edge and quality become the one target (v6), through their limits.
+        XCTAssertEqual(doc.export, RollExport(targets: [ExportTarget(name: "", size: ExportSize(mode: .long, value: 16384), quality: 1)],
+                                              replace: false, hdr: false, hdrStops: 2))
         XCTAssertEqual(doc.sourceId, "winnow.example")
         XCTAssertEqual(doc.version, rollDocVersion)
     }
@@ -182,7 +367,7 @@ final class ReadRollDocTests: XCTestCase {
 
     func testReadsTheExportThroughItsLimitsAndTheSourceSizeAsNil() {
         XCTAssertEqual(readRollExport(["longEdge": 1920.4, "quality": 0.8, "originals": "proxies", "replace": true]),
-                       RollExport(longEdge: 1920, quality: 0.8, replace: true, hdr: false, hdrStops: 2))
+                       RollExport(targets: [ExportTarget(size: ExportSize(mode: .long, value: 1920), quality: 0.8)], replace: true))
         let hdr = readRollExport(["hdr": true, "hdrStops": 9.6])
         XCTAssertTrue(hdr.hdr)
         XCTAssertEqual(hdr.hdrStops, 4)
@@ -193,6 +378,40 @@ final class ReadRollDocTests: XCTestCase {
         XCTAssertEqual(readRollExport("junk"), .default)
         XCTAssertFalse(readRollExport(["quality": 0.9]).replace)
         XCTAssertFalse(readRollExport(["replace": "yes"]).replace)
+        // What leaves, and the watermark, are carried as the web wrote them.
+        XCTAssertEqual(readRollExport(["metadata": ["position": false]]).metadata, ["position": false])
+        XCTAssertNil(readRollExport(["metadata": "all"]).metadata)
+    }
+
+    func testReadsTheTargetsThroughTheirLimitsCappedAndNeverEmpty() {
+        let read = readTargets([
+            ["name": "Web", "size": ["mode": "short", "value": 1080.4], "quality": 0.85, "sharpen": "standard", "watermark": true],
+            ["name": "Mail", "size": ["mode": "megapixels", "value": 2.06], "quality": 3, "sharpen": "loud"],
+            ["size": ["mode": "sideways", "value": 9]],
+            "junk",
+        ])
+        XCTAssertEqual(read.count, 3)
+        XCTAssertEqual(read[0], ExportTarget(name: "Web", size: ExportSize(mode: .short, value: 1080), quality: 0.85, sharpen: .standard, watermark: true))
+        XCTAssertEqual(read[1], ExportTarget(name: "Mail", size: ExportSize(mode: .megapixels, value: 2.1), quality: 1, sharpen: .off, watermark: false))
+        XCTAssertEqual(read[2], ExportTarget(name: "", size: nil, quality: 0.92))
+        XCTAssertEqual(readTargets(nil), [ExportTarget.default])
+        XCTAssertEqual(readTargets([], legacyLongEdge: 2048, legacyQuality: 0.7), [ExportTarget(size: ExportSize(mode: .long, value: 2048), quality: 0.7)])
+        XCTAssertEqual(readTargets(.array(Array(repeating: ["name": "x"], count: 6))).count, maxTargets)
+    }
+
+    func testASizeIsACapThatNeverUpscales() {
+        XCTAssertEqual(longEdgeFor(nil, width: 6000, height: 4000), nil)
+        XCTAssertEqual(longEdgeFor(ExportSize(mode: .long, value: 2048), width: 6000, height: 4000), 2048)
+        XCTAssertEqual(longEdgeFor(ExportSize(mode: .long, value: 8000), width: 6000, height: 4000), nil)
+        XCTAssertEqual(longEdgeFor(ExportSize(mode: .short, value: 1080), width: 6000, height: 4000), 1620)
+        XCTAssertEqual(longEdgeFor(ExportSize(mode: .percent, value: 50), width: 6000, height: 4000), 3000)
+        XCTAssertEqual(longEdgeFor(ExportSize(mode: .megapixels, value: 6), width: 6000, height: 4000), 3000)
+        XCTAssertEqual(describeSize(nil), "full size")
+        XCTAssertEqual(describeSize(ExportSize(mode: .long, value: 2048)), "2048 px long edge")
+        XCTAssertEqual(describeSize(ExportSize(mode: .megapixels, value: 2)), "2 MP")
+        XCTAssertEqual(targetFolder("Web", index: 1), "Web")
+        XCTAssertEqual(targetFolder("  ../Web: two  ", index: 1), "Web two")
+        XCTAssertEqual(targetFolder("", index: 1), "Target 2")
     }
 
     func testReadsTheRenditionAPictureIsDevelopedFromAndNothingAsNil() {
@@ -218,6 +437,12 @@ final class ReadRollDocTests: XCTestCase {
         XCTAssertEqual(doc.pictures[0].carried["layers"], [["id": "L1"]])
         XCTAssertNil(doc.pictures[0].carried["repair"])
         XCTAssertNil(doc.pictures[0].carried["border"])
+        // A lens profile taken OFF by the author is a null that means something: kept.
+        let off = readRollDoc(["id": "r", "pictures": [["id": "p1", "ref": refJSON("a.jpg"), "lensProfile": nil, "future": 7]]])!
+        XCTAssertEqual(off.pictures[0].carried["lensProfile"], .null)
+        XCTAssertEqual(off.pictures[0].carried["future"], 7)
+        XCTAssertEqual(off.pictures[0].json.objectValue?["lensProfile"], .null)
+        XCTAssertEqual(readRollDoc(off.json), off)
         let written = doc.pictures[0].json.objectValue!
         XCTAssertEqual(written["keystone"], keystone)
         XCTAssertEqual(written["repair"], [])
@@ -251,7 +476,12 @@ final class RollFileTests: XCTestCase {
         XCTAssertEqual(imported.createdAt, 9000)
         XCTAssertEqual(imported.updatedAt, 9000)
         XCTAssertEqual(imported.name, original.name)
-        XCTAssertEqual(imported.pictures, original.pictures)
+        // Each picture's look travels with it — under a fresh id.
+        func withoutIds(_ pictures: [RollPicture]) -> [RollPicture] {
+            pictures.map { var p = $0; p.id = ""; return p }
+        }
+        XCTAssertEqual(withoutIds(imported.pictures), withoutIds(original.pictures))
+        XCTAssertNotEqual(imported.pictures[0].id, original.pictures[0].id)
         XCTAssertEqual(imported.pictures[0].grade?.output, .rec709ToSrgb)
         XCTAssertEqual(imported.export, original.export)
     }
@@ -264,6 +494,19 @@ final class RollFileTests: XCTestCase {
         ]).serialized()
         guard case .success(let doc) = parseRollFile(text) else { return XCTFail("the file did not parse") }
         XCTAssertEqual(doc.pictures.map { $0.grade?.output }, [.rec709ToSrgb, .rec709ToSrgb])
+    }
+
+    func testGivesEveryPictureAFreshIdSoOneFileImportedTwiceIsTwoRollsThatShareNothing() {
+        let text = rollFileJSON(sample()).serialized()
+        var n = 0
+        guard case .success(let first) = parseRollFile(text, now: 1, makeId: { n += 1; return "a\(n)" }),
+              case .success(let second) = parseRollFile(text, now: 2, makeId: { n += 1; return "b\(n)" }) else {
+            return XCTFail("the file did not parse")
+        }
+        XCTAssertEqual(first.id, "a1")
+        XCTAssertEqual(first.pictures.map(\.id), ["a2"])
+        XCTAssertEqual(second.id, "b3")
+        XCTAssertEqual(second.pictures.map(\.id), ["b4"])
     }
 
     func testRefusesWhatItCannotReadSayingWhy() {

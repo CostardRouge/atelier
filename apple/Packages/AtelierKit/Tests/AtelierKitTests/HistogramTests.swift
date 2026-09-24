@@ -65,7 +65,36 @@ final class LuminanceHistogramTests: XCTestCase {
     }
 
     func testReadsNothingIntoAnEmptySample() {
-        XCTAssertEqual(luminanceHistogram([], binCount: 4), Histogram(bins: [0, 0, 0, 0], total: 0, clippedHighlights: 0, crushedShadows: 0))
+        let zeros = [0, 0, 0, 0]
+        XCTAssertEqual(luminanceHistogram([], binCount: 4),
+                       Histogram(bins: zeros, red: zeros, green: zeros, blue: zeros, total: 0, clippedHighlights: 0, crushedShadows: 0))
+    }
+
+    func testBinsEachChannelOnItsOwnSoARedGoneToWhiteShowsUnderAMidGreyLuminance() {
+        let h = luminanceHistogram(flat(4, 255, 90, 60), binCount: 8)
+        XCTAssertEqual(h.red[7], 4)
+        XCTAssertEqual(h.green[2], 4)
+        XCTAssertEqual(h.blue[1], 4)
+        XCTAssertEqual(h.bins[3], 4)
+        XCTAssertEqual(h.clippedHighlights, 1)
+    }
+
+    func testDrawsTheThreeChannelsOnOneScaleSoALowerChannelReadsLower() {
+        let h = luminanceHistogram(flat(6, 100, 100, 200) + flat(2, 100, 140, 200), binCount: 8)
+        let s = channelShapes(h)
+        XCTAssertEqual(s.red[3], 1)
+        XCTAssertEqual(s.blue[6], 1)
+        assertClose(s.green[3], 6 / 8, 2)
+        assertClose(s.green[4], 2 / 8, 2)
+        XCTAssertEqual(channelShapes(luminanceHistogram([], binCount: 4)).red, [0, 0, 0, 0])
+    }
+
+    func testClipOfAsksWhiteFirstAndBlackOnlyWhenEveryChannelIs() {
+        XCTAssertEqual(clipOf(255, 0, 0), .white)
+        XCTAssertEqual(clipOf(254, 254, 254), .white)
+        XCTAssertEqual(clipOf(0, 0, 1), .black)
+        XCTAssertNil(clipOf(0, 0, 30))
+        XCTAssertNil(clipOf(90, 90, 90))
     }
 
     func testShapeScalesOnTheTallestInnerBin() {

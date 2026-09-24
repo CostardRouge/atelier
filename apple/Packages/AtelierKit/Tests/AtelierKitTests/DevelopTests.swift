@@ -192,9 +192,40 @@ final class DevelopRecordTests: XCTestCase {
         // a stored develop carries exactly these, so a roll written here diffs
         // cleanly against one the web app wrote.
         let keys = DevelopSettings.default.json.objectValue?.keys.sorted()
-        XCTAssertEqual(keys, (DevelopKey.allCases.map(\.rawValue) + ["curves", "levels", "base", "rawGain"]).sorted())
+        XCTAssertEqual(keys, (DevelopKey.allCases.map(\.rawValue) + ["curves", "levels", "mixer", "mono", "grading", "base", "rawGain", "rawWb"]).sorted())
         XCTAssertEqual(DevelopSettings.default.json.objectValue?["curves"], .null)
+        XCTAssertEqual(DevelopSettings.default.json.objectValue?["mixer"], .null)
         XCTAssertEqual(dev { $0.exposure = 0.5 }.json.objectValue?["exposure"], .number(0.5))
+    }
+
+    func testCarriesTheStagesItDoesNotRenderAndNeverCallsThemDefault() {
+        let mixer: JSONValue = ["hue": [0, 0, 10, 0, 0, 0, 0, 0], "saturation": [0, 0, 0, 0, 0, 0, 0, 0], "luminance": [0, 0, 0, 0, 0, 0, 0, 0]]
+        let grading: JSONValue = ["shadows": ["hue": 220, "saturation": 20, "luminance": 0]]
+        let d = normaliseDevelop(["exposure": 0.5, "mixer": mixer, "grading": grading, "mono": nil, "rawWb": ["kelvin": 5600]])
+        XCTAssertFalse(isDefaultDevelop(d))
+        XCTAssertEqual(d.carried["mixer"], mixer)
+        XCTAssertEqual(d.carried["grading"], grading)
+        XCTAssertNil(d.carried["mono"])
+        // A white balance in Kelvin is the RAW's: without a base it is dropped.
+        XCTAssertNil(d.carried["rawWb"])
+        XCTAssertEqual(d.unrenderedStages, ["mixer", "grading"])
+        XCTAssertEqual(developLines(d), ["+0.5 EV", "mixer", "grading"])
+        // The round trip keeps them, and a copy compares by value.
+        let back = normaliseDevelop(JSONValue.parse(d.json.serialized()))
+        XCTAssertEqual(back, d)
+        XCTAssertTrue(sameDevelop(back, d))
+        XCTAssertFalse(sameDevelop(d, dev { $0.exposure = 0.5 }))
+        // Black and white takes the mixer's place in the line.
+        XCTAssertEqual(developLines(normaliseDevelop(["mixer": mixer, "mono": ["mix": [0, 0, 0, 0, 0, 0, 0, 0]]])), ["B&W"])
+    }
+
+    func testARAWWhiteBalanceTravelsWithTheBaseAndNowhereElse() {
+        let d = normaliseDevelop(["base": "gain", "rawGain": 2, "rawWb": ["kelvin": 5600.4, "tint": -3, "matrix": [1, 0, 0, 0, 1, 0, 0, 0, 1]]])
+        XCTAssertNotNil(d.carried["rawWb"])
+        XCTAssertEqual(developLines(d), ["RAW +1.0 EV metered", "5600 K, tint −3"])
+        XCTAssertNil(withoutBase(d).carried["rawWb"])
+        XCTAssertTrue(isDefaultDevelop(withoutBase(d)))
+        XCTAssertEqual(developLines(normaliseDevelop(["base": "gain", "rawWb": ["kelvin": 3200]])), ["RAW", "3200 K"])
     }
 
     func testStoresNothingForAsShotAndAClampedRecordOtherwise() {
