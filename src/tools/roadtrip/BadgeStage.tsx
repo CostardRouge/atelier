@@ -262,7 +262,19 @@ interface BadgeStageProps {
    * because this is the only place it already exists.
    */
   onRendered?: (canvas: HTMLCanvasElement) => void;
+  /**
+   * A word in the picture's top-left corner saying what the stage shows —
+   * which card of a move, or why a gesture just did nothing — on the surface
+   * the gesture happens on, never only in the inspector (`roadtrip.md`).
+   */
+  caption?: { text: string; tone?: 'plain' | 'accent' | 'muted' } | null;
 }
+
+const CAPTION_TONES = {
+  plain: 'bg-[rgba(20,18,15,0.7)] text-on-media',
+  accent: 'bg-accent text-on-media',
+  muted: 'bg-[rgba(20,18,15,0.55)] text-on-media/80',
+} as const;
 
 /**
  * The badge over its picture, drawn through exactly the code the PNG export
@@ -317,6 +329,7 @@ export default function BadgeStage({
   onPictureSizes,
   onRendered,
   onFit,
+  caption = null,
 }: BadgeStageProps) {
   // Whether anything else is competing for this screen's height — see the
   // wrapper's comment below.
@@ -1590,6 +1603,16 @@ export default function BadgeStage({
           />
           {onDropAsset && (
             <DropZones zones={zones} state={dropState} collage={cellRectsRef.current.length > 0} />
+          )}
+          {caption && (
+            <span
+              role="status"
+              className={`absolute left-2 top-2 z-20 max-w-[calc(100%-1rem)] truncate rounded-full px-2.5 py-1 font-mono text-2xs tabular-nums pointer-events-none ${
+                CAPTION_TONES[caption.tone ?? 'plain']
+              }`}
+            >
+              {caption.text}
+            </span>
           )}
         </div>
         {loading && (
