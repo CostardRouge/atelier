@@ -37,7 +37,7 @@ Signing is the developer's: set your team in Xcode (or `DEVELOPMENT_TEAM` in
 
 ### If Xcode refuses the project on your Mac
 
-Two issues that show up together on a clone kept under `~/Documents` (or
+Three messages that show up together on a clone kept under `~/Documents` (or
 `~/Desktop`, `~/Downloads`, iCloud Drive), and are ONE problem:
 
 ```
@@ -46,25 +46,36 @@ failed to read asset tags: The command `(cd …/apple && env -i …/actool
   exited with status 1. … "Contents.json" couldn't be opened because you
   don't have permission to view it. … Operation not permitted
 Atelier.xcodeproj  Missing package product 'AtelierKit'
+Resolving Package Graph Failed — the package at '…/apple/Packages/AtelierKit'
+  cannot be accessed (encountered an I/O error (code: 1) while reading …)
 ```
 
-The first line is Xcode's own build system, not XcodeGen: it runs `actool`
-over every asset catalog when it loads the project, and macOS refused the read
-(`Operation not permitted` is the privacy layer, never a POSIX permission —
-the files are `644` and CI reads them). The same refusal hits the compile of
-`Packages/AtelierKit/Package.swift`, and Xcode reports the product it could not
-resolve as *missing*. The spec is not the cause: CI generates and builds both
-targets from it.
+None of them is XcodeGen's. The first is Xcode's own build system, which runs
+`actool` over every asset catalog when it loads the project; the third is
+SwiftPM inside Xcode, refused while LISTING the package directory — I/O error
+code 1 is `EPERM`, `Operation not permitted`, and both are macOS's privacy
+layer, never a POSIX permission (the files are `644`, CI reads them, and your
+terminal lists them fine). The product is then reported *missing* because the
+package could not be read at all. The spec is not the cause: CI generates and
+builds both targets from it.
+
+Why the project itself opens: double-clicking (or `open`-ing) the
+`.xcodeproj` grants Xcode THAT bundle by user intent, and nothing beside it.
+`Packages/AtelierKit` and `Atelier/Resources/Assets.xcassets` are siblings,
+so they need the *Documents Folder* consent — which Xcode has been refused,
+usually by a "Don't Allow" clicked once, long ago, on the first prompt.
 
 1. Quit Xcode. **System Settings → Privacy & Security → Files and Folders**:
-   give **Xcode** (and the terminal you generate from) the *Documents Folder*;
-   if Xcode is not listed there, add it under **Full Disk Access**.
+   turn on *Documents Folder* under **Xcode** (and under the terminal you
+   generate from). If Xcode is not listed there, either add it under
+   **Full Disk Access**, or make macOS ask again and answer *Allow*:
+   `tccutil reset SystemPolicyDocumentsFolder com.apple.dt.Xcode`.
 2. `rm -rf ~/Library/Developer/Xcode/DerivedData/Atelier-*`, run
    `xcodegen generate` again, reopen the project. If the package line
    survives alone: **File → Packages → Reset Package Caches**, then
    *Resolve Package Versions*.
 3. Or keep the clone out of the protected folders — `~/Developer/atelier`
-   is the conventional place, and neither error can occur there.
+   is the conventional place, and none of the three can occur there.
 
 To tell whose read is refused, run from the terminal:
 
