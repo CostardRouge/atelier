@@ -357,5 +357,9 @@ wherever a look is applied.
   (12, the HSL mixer he named beside them, is BUILT.)
 - **The Crop tab folds, and every row's prose goes behind an ⓘ** — built the
   same day (`develop.md`).
+- **22 (content-aware remove) and 23 (side-by-side before/after, a reference
+  picture): set aside.** 22 is overkill and hard, and he wants no in-browser
+  AI model — nor would it suit a phone; heal and clone stay the tools. 23 is
+  "not needed for now", noted for another time.
 - **A subject mask must follow the geometry** — his report, fixed the same day
   (`subject-picking.md`, «The model is shown the WARPED frame»).

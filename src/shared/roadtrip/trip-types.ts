@@ -36,6 +36,7 @@ import type { OutputTransform } from '../lut/transfer';
 import { themeFromPreset, type StyleTheme } from '../overlay/title-styles';
 import {
   DEFAULT_BADGE_DURATION,
+  LEGACY_BADGE_DURATION,
   DEFAULT_BADGE_LAYOUT,
   type BadgeLayout,
   type BadgePieceStyles,
@@ -1017,7 +1018,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         timeAgo: post.badge?.timeAgo ?? (legacy?.showAnniversary ? 'auto' : 'off'),
         referenceDate: post.badge?.referenceDate ?? null,
         showPin: post.badge?.showPin ?? false,
-        durationSeconds: post.badge?.durationSeconds ?? DEFAULT_BADGE_DURATION,
+        durationSeconds: post.badge?.durationSeconds ?? LEGACY_BADGE_DURATION,
         shades: post.badge?.shades ?? [],
       };
       delete (badge as unknown as { showAnniversary?: boolean }).showAnniversary;
@@ -1101,7 +1102,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         medium: post.badge?.medium ?? 'auto',
         hookSeconds:
           post.badge?.hookSeconds ??
-          defaultHookSeconds(post.badge?.durationSeconds ?? DEFAULT_BADGE_DURATION),
+          defaultHookSeconds(post.badge?.durationSeconds ?? LEGACY_BADGE_DURATION),
       },
       slides: (post.slides ?? []).map((slide) => ({
         ...slide,

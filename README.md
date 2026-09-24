@@ -741,7 +741,9 @@ lower), its ink, a panel behind it (fill, corner radius, outline) and an
 entrance and exit drawn from the engine's own animation model — fade, slide,
 scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
 has a **duration**, which is what an exit animation lands on; playing the piece
-from the band under the preview shows the entrance land and the exit leave.
+from the band under the preview shows the entrance land and the exit leave. A
+new hook is on screen for **3 s** — the badge settles in 2, the picture holds
+one more — unless the trip remembers another length for that kind of piece.
 
 **A look you like becomes the starting point.** Trip settings (the ⚙ beside the
 way back) → **New pieces** saves
