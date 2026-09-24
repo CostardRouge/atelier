@@ -1,0 +1,96 @@
+# The native app's Xcode project, GENERATED — never edit the .xcodeproj, edit
+# this and run `xcodegen generate` (`brew install xcodegen`). The project file
+# is gitignored: it is a build artefact of this spec, the way `dist/` is one of
+# `vite build`, and merging two hand-edited pbxproj files is how a week gets
+# lost. One spec, two targets, one source tree: iPhone/iPad and Mac are the
+# same SwiftUI code under `#if os(...)` where the platform differs.
+name: Atelier
+
+options:
+  deploymentTarget:
+    iOS: "17.0"
+    macOS: "14.0"
+  developmentLanguage: en
+  createIntermediateGroups: true
+  generateEmptyDirectories: false
+
+packages:
+  AtelierKit:
+    path: Packages/AtelierKit
+
+settings:
+  base:
+    SWIFT_VERSION: "5.9"
+    MARKETING_VERSION: "0.1.0"
+    CURRENT_PROJECT_VERSION: "1"
+    PRODUCT_NAME: Atelier
+    PRODUCT_BUNDLE_IDENTIFIER: website.steeve.atelier
+    ASSETCATALOG_COMPILER_APPICON_NAME: AppIcon
+    ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME: AccentColor
+    ENABLE_USER_SCRIPT_SANDBOXING: YES
+    SWIFT_STRICT_CONCURRENCY: minimal
+    CODE_SIGN_STYLE: Automatic
+
+targets:
+  Atelier-iOS:
+    type: application
+    platform: iOS
+    sources:
+      - path: Atelier
+    dependencies:
+      - package: AtelierKit
+    info:
+      path: Support/Info-iOS.plist
+      properties:
+        CFBundleDisplayName: Atelier
+        CFBundleName: Atelier
+        UILaunchScreen: {}
+        UISupportedInterfaceOrientations:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        UISupportedInterfaceOrientations~ipad:
+          - UIInterfaceOrientationPortrait
+          - UIInterfaceOrientationPortraitUpsideDown
+          - UIInterfaceOrientationLandscapeLeft
+          - UIInterfaceOrientationLandscapeRight
+        NSPhotoLibraryAddUsageDescription: Atelier saves the pictures you export to your photo library.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        TARGETED_DEVICE_FAMILY: "1,2"
+        SUPPORTS_MACCATALYST: NO
+
+  Atelier-macOS:
+    type: application
+    platform: macOS
+    sources:
+      - path: Atelier
+    dependencies:
+      - package: AtelierKit
+    info:
+      path: Support/Info-macOS.plist
+      properties:
+        CFBundleDisplayName: Atelier
+        CFBundleName: Atelier
+        LSApplicationCategoryType: public.app-category.photography
+        NSPhotoLibraryAddUsageDescription: Atelier saves the pictures you export to your photo library.
+        ITSAppUsesNonExemptEncryption: false
+    settings:
+      base:
+        CODE_SIGN_ENTITLEMENTS: Support/Atelier-macOS.entitlements
+        ENABLE_HARDENED_RUNTIME: YES
+
+schemes:
+  Atelier-iOS:
+    build:
+      targets:
+        Atelier-iOS: all
+    run:
+      config: Debug
+  Atelier-macOS:
+    build:
+      targets:
+        Atelier-macOS: all
+    run:
+      config: Debug

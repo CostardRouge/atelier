@@ -41,3 +41,31 @@ jobs:
 
       - name: Test the kernel
         run: swift test --package-path apple/Packages/AtelierKit
+
+  app:
+    name: Atelier · xcodebuild (iOS + macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Build for iOS
+        working-directory: apple
+        run: >
+          xcodebuild build -project Atelier.xcodeproj -scheme Atelier-iOS
+          -destination 'generic/platform=iOS' -configuration Debug
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet
+
+      - name: Build for macOS
+        working-directory: apple
+        run: >
+          xcodebuild build -project Atelier.xcodeproj -scheme Atelier-macOS
+          -destination 'platform=macOS' -configuration Debug
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet
