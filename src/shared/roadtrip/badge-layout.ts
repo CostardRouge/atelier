@@ -27,6 +27,14 @@ import {
   type OverlayElement,
 } from '../overlay/overlay-types';
 import type { BadgeContent, BadgePiece } from './day-badge';
+import {
+  columnOf,
+  gridOrigin,
+  heightFraction,
+  plateElements,
+  plateRuns,
+  type PlateRuns,
+} from '../overlay/camera-plate';
 
 /** Where the block sits and how big its numeral is. */
 export interface BadgeLayout {
@@ -185,7 +193,9 @@ export function pieceElementId(piece: BadgePiece): string {
 /** The piece an element id names, or null for an id that is not a badge piece's. */
 export function pieceFromElementId(id: string): BadgePiece | null {
   if (!id.startsWith(PIECE_ID_PREFIX)) return null;
-  const key = id.slice(PIECE_ID_PREFIX.length);
+  // A camera plate is several elements of ONE piece: `piece:exif`, then
+  // `piece:exif:1`, `piece:exif:2`… — each names the piece it belongs to.
+  const key = id.slice(PIECE_ID_PREFIX.length).replace(/:\d+$/, '');
   return (ORDER as readonly string[]).includes(key) ? (key as BadgePiece) : null;
 }
 
@@ -233,7 +243,8 @@ function applyPieceStyle(
   style: BadgePieceStyle | undefined,
   durationSeconds: number,
 ): void {
-  const pinned: string[] = [];
+  // Kept: a camera plate's runs arrive with their face already pinned.
+  const pinned: string[] = [...(el.styleOverrides ?? [])];
 
   if (style?.textCase && style.textCase !== 'as-is') {
     el.uppercase = false;
@@ -280,17 +291,49 @@ function applyPieceStyle(
   el.styleOverrides = pinned;
 }
 
+/**
+ * The camera plate, laid out for this badge: its runs, its unit (U as a
+ * fraction of the shorter side — the credit's own size, so a plate grows with
+ * the badge) and whether it hangs under the block or sits in a cell of its
+ * own. Null when the credit is the plain line, or says nothing.
+ */
+function plateFor(
+  content: BadgeContent,
+  layout: BadgeLayout,
+  aspect: number,
+): { runs: PlateRuns; unit: number; inBlock: boolean } | null {
+  const plate = content.plate;
+  if (!plate || !content.exif) return null;
+  const align = plate.spec.place === 'badge' ? horizontalOf(layout.anchor) : columnOf(plate.spec.place);
+  const unit = layout.sizeFrac * RATIOS.exif * plate.spec.size;
+  // The frame's width in U: its width over its shorter side, over the unit.
+  const runs = plateRuns(plate.facts, plate.spec, plate.words, align, Math.max(aspect, 1) / unit);
+  if (!runs) return null;
+  return { runs, unit, inBlock: runs.place === 'badge' };
+}
+
 /** The block's own metrics, shared by the layout and by anything drawn under it. */
 function blockMetrics(
   content: BadgeContent,
   layout: BadgeLayout,
   aspect: number,
-): { pieces: { key: BadgePiece; text: string }[]; heights: number[]; gaps: number[]; top: number; height: number } {
-  const pieces = ORDER.map((key) => ({ key, text: content[key] })).filter(
-    (p): p is { key: BadgePiece; text: string } => Boolean(p.text),
-  );
+): {
+  pieces: { key: BadgePiece; text: string }[];
+  heights: number[];
+  gaps: number[];
+  top: number;
+  height: number;
+  plate: ReturnType<typeof plateFor>;
+} {
+  const plate = plateFor(content, layout, aspect);
+  const pieces = ORDER.map((key) => ({ key, text: content[key] }))
+    .filter((p): p is { key: BadgePiece; text: string } => Boolean(p.text))
+    // A plate placed in a cell of its own is no part of the block.
+    .filter((p) => p.key !== 'exif' || !plate || plate.inBlock);
   const heights = pieces.map((p) =>
-    heightFractionOf(layout.sizeFrac * RATIOS[p.key], aspect),
+    p.key === 'exif' && plate
+      ? heightFraction(plate.runs.height * plate.unit, aspect)
+      : heightFractionOf(layout.sizeFrac * RATIOS[p.key], aspect),
   );
   const gaps = pieces.map((p, i) =>
     i === pieces.length - 1
@@ -305,7 +348,7 @@ function blockMetrics(
       : vertical === 'bottom'
         ? layout.y - height
         : layout.y - height / 2;
-  return { pieces, heights, gaps, top, height };
+  return { pieces, heights, gaps, top, height, plate };
 }
 
 /**
@@ -342,7 +385,7 @@ export function badgeElements(
   durationSeconds: number = DEFAULT_BADGE_DURATION,
   cascade: BadgeCascade | null = null,
 ): OverlayElement[] {
-  const { pieces, heights, gaps, top } = blockMetrics(content, layout, aspect);
+  const { pieces, heights, gaps, top, plate } = blockMetrics(content, layout, aspect);
   if (!pieces.length) return [];
 
   const horizontal = horizontalOf(layout.anchor);
@@ -361,31 +404,48 @@ export function badgeElements(
   });
   const delays = cascade ? staggerDelays(boxes, { w: aspect, h: 1 }, cascade.stagger) : null;
 
+  /** A piece's style, with the cascade's entrance at its delay when there is one. */
+  const styleAt = (key: BadgePiece, delay: number | null): BadgePieceStyle | undefined => {
+    const style = styles[key];
+    return cascade && delay !== null
+      ? { ...style, animation: { in: { ...cascade.step, delay }, out: style?.animation?.out ?? null } }
+      : style;
+  };
+  /** A camera plate's runs, styled as the one piece they are. */
+  const plateAt = (origin: { x: number; top: number }, delay: number | null): OverlayElement[] => {
+    if (!plate) return [];
+    const style = styleAt('exif', delay);
+    return plateElements(plate.runs, origin, plate.unit, aspect, pieceElementId('exif')).map((el) => {
+      el.text = casedText(el.text ?? '', style);
+      applyPieceStyle(el, style, durationSeconds);
+      return el;
+    });
+  };
+
   let cursor = top;
-  return pieces.map((piece, i) => {
-    const style = styles[piece.key];
+  const out = pieces.flatMap((piece, i) => {
+    const delay = delays ? delays[i] : null;
+    const at = cursor;
+    cursor += heights[i] + gaps[i];
+    if (piece.key === 'exif' && plate) return plateAt({ x: layout.x, top: at }, delay);
+    const style = styleAt(piece.key, delay);
     const el = createTextElement(casedText(piece.text, style));
     el.id = pieceElementId(piece.key);
     el.anchor = lineAnchor;
     el.x = layout.x;
-    el.y = cursor;
+    el.y = at;
     el.sizeFrac = layout.sizeFrac * RATIOS[piece.key];
-    applyPieceStyle(
-      el,
-      cascade && delays
-        ? {
-            ...style,
-            animation: {
-              in: { ...cascade.step, delay: delays[i] },
-              out: style?.animation?.out ?? null,
-            },
-          }
-        : style,
-      durationSeconds,
-    );
-    cursor += heights[i] + gaps[i];
-    return el;
+    applyPieceStyle(el, style, durationSeconds);
+    return [el];
   });
+
+  // A plate in a cell of its own comes after the block, and arrives after it.
+  if (plate && !plate.inBlock) {
+    const last = delays?.length ? Math.max(...delays) + (cascade?.stagger.each ?? 0) : null;
+    const origin = gridOrigin(plate.runs, plate.unit, aspect);
+    out.push(...plateAt(origin, last));
+  }
+  return out;
 }
 
 /**

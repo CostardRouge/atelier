@@ -236,10 +236,10 @@ describe('isDefaultDevelop / normaliseDevelop', () => {
     expect(out.vibrance).toBe(0);
     expect(out.tint).toBe(0);
     expect(out.highlights).toBe(0);
-    // The sliders, the two SHAPES that are not sliders, and the material — a
+    // The sliders, the five SHAPES that are not sliders, and the material — a
     // stored develop carries exactly these and nothing a stranger's file
     // smuggled in.
-    expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS, 'curves', 'levels', 'base', 'rawGain'].sort());
+    expect(Object.keys(out).sort()).toEqual([...DEVELOP_KEYS, 'curves', 'levels', 'mixer', 'mono', 'grading', 'base', 'rawGain', 'rawWb'].sort());
     expect(normaliseDevelop(null)).toEqual(DEFAULT_DEVELOP);
   });
 });

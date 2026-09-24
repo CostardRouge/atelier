@@ -196,6 +196,15 @@ interface BadgeStageProps {
   /** A drag of the opener: fractions of the frame, incremental. */
   onMoveHook?: (dx: number, dy: number) => void;
   /**
+   * A shade whose CENTRE is being placed (a band's line or a radial's pool),
+   * in frame fractions, and the axis it may move on. While given, a press
+   * anywhere on the picture moves that centre and nothing else — the badge
+   * and the framing wait — and the chrome draws where it is.
+   */
+  shadeHandle?: { x: number; y: number; axis: 'x' | 'y' | 'both' } | null;
+  /** The placed centre, in frame fractions; the axis the handle cannot move keeps its value. */
+  onMoveShadeCentre?: (x: number, y: number) => void;
+  /**
    * Several pictures in this slide's frame. `file`, `framing` and `lut` are
    * then its FIRST cell's; the others come through the three lists below, by
    * cell index (the lead first, so `collageFiles[0]` is ignored in favour of
@@ -291,6 +300,8 @@ export default function BadgeStage({
   onMoveBlock,
   hookRectFor = null,
   onMoveHook,
+  shadeHandle = null,
+  onMoveShadeCentre,
   collage = null,
   collageFiles,
   collageLuts,
@@ -557,6 +568,10 @@ export default function BadgeStage({
   selectedCellRef.current = selectedCell;
   const collageRef = useRef(collage);
   collageRef.current = collage;
+  const shadeHandleRef = useRef(shadeHandle);
+  shadeHandleRef.current = shadeHandle;
+  const onMoveShadeCentreRef = useRef(onMoveShadeCentre);
+  onMoveShadeCentreRef.current = onMoveShadeCentre;
 
   /** The dashed outline around the selected element, on the chrome canvas. */
   const drawChrome = useCallback(() => {
@@ -619,6 +634,49 @@ export default function BadgeStage({
         ctx.fillText(String(i + 1), -c.w / 2 + r * 1.3, -c.h / 2 + r * 1.35);
         ctx.restore();
       });
+    }
+    // A shade's centre being placed: its line (a band) or its point (a
+    // radial), dashed like a selection, with a disc where the hand is.
+    const handle = shadeHandleRef.current;
+    if (handle) {
+      const short = Math.min(w, h);
+      const hx = handle.x * w;
+      const hy = handle.y * h;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(244,240,231,0.92)';
+      ctx.lineWidth = Math.max(1.5, short * 0.003);
+      ctx.setLineDash([short * 0.014, short * 0.01]);
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = short * 0.006;
+      ctx.beginPath();
+      if (handle.axis === 'y') {
+        ctx.moveTo(0, hy);
+        ctx.lineTo(w, hy);
+      } else if (handle.axis === 'x') {
+        ctx.moveTo(hx, 0);
+        ctx.lineTo(hx, h);
+      } else {
+        const r = short * 0.06;
+        ctx.moveTo(hx - r, hy);
+        ctx.lineTo(hx + r, hy);
+        ctx.moveTo(hx, hy - r);
+        ctx.lineTo(hx, hy + r);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const r = Math.max(7, short * 0.018);
+      // A band's disc sits mid-frame on its own line.
+      const dx = handle.axis === 'y' ? w / 2 : hx;
+      const dy = handle.axis === 'x' ? h / 2 : hy;
+      ctx.fillStyle = '#d9442a';
+      ctx.beginPath();
+      ctx.arc(dx, dy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#f4f0e7';
+      ctx.lineWidth = Math.max(1.5, r * 0.28);
+      ctx.stroke();
+      ctx.restore();
     }
     const sel = selectedRef.current;
     if (!sel) return;
@@ -875,6 +933,12 @@ export default function BadgeStage({
 
   useEffect(() => () => releaseLater(sourceRef.current), []);
 
+  // The placing handle is chrome: turning placement on or off repaints only
+  // the chrome canvas (a moved centre repaints everything through `shades`).
+  useEffect(() => {
+    drawChrome();
+  }, [shadeHandle?.x, shadeHandle?.y, shadeHandle?.axis, drawChrome]);
+
   // --- pointing at the badge -------------------------------------------------
   const [hovering, setHovering] = useState(false);
   /** Whether the picture has any room to be dragged at its current framing. */
@@ -905,6 +969,7 @@ export default function BadgeStage({
       }
     | { kind: 'picture'; lastPx: number; lastPy: number }
     | { kind: 'hook'; lastPx: number; lastPy: number }
+    | { kind: 'shade' }
     | {
         kind: 'cell';
         i: number;
@@ -1080,13 +1145,35 @@ export default function BadgeStage({
       },
     },
   });
+  /** Writes the placed shade centre under a canvas point, on the handle's own axis. */
+  const placeShadeAt = useCallback((px: number, py: number) => {
+    const canvas = canvasRef.current;
+    const handle = shadeHandleRef.current;
+    const write = onMoveShadeCentreRef.current;
+    if (!canvas || !handle || !write) return;
+    const fx = Math.min(1, Math.max(0, px / canvas.width));
+    const fy = Math.min(1, Math.max(0, py / canvas.height));
+    write(handle.axis === 'y' ? handle.x : fx, handle.axis === 'x' ? handle.y : fy);
+  }, []);
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!onSelect || e.button !== 0) return;
+      if (e.button !== 0) return;
       // Two fingers are the machine's pinch; the one left after it starts nothing.
       if (pinching.current) return;
       const pt = toPixels(e);
       if (!pt) return;
+      // Placing a shade's centre takes the whole picture: the author asked for
+      // it, and a press that selected the badge instead would read as the
+      // placement not working.
+      if (shadeHandleRef.current && onMoveShadeCentreRef.current) {
+        e.preventDefault();
+        drag.current = { kind: 'shade' };
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        placeShadeAt(pt.px, pt.py);
+        return;
+      }
+      if (!onSelect) return;
       // Cancelling the pointerdown cancels the mousedown behind it, whose
       // default action is to move focus — onto the body, away from the field
       // the selection is about to focus.
@@ -1158,7 +1245,18 @@ export default function BadgeStage({
         canvasRef.current?.setPointerCapture(e.pointerId);
       }
     },
-    [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels, onSelectCell, onSwapCells],
+    [
+      onSelect,
+      blockAnchor,
+      onMoveBlock,
+      hookRectNow,
+      onMoveHook,
+      onFraming,
+      toPixels,
+      onSelectCell,
+      onSwapCells,
+      placeShadeAt,
+    ],
   );
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -1166,6 +1264,10 @@ export default function BadgeStage({
       const pt = toPixels(e);
       if (!canvas || !pt) return;
       const d = drag.current;
+      if (d?.kind === 'shade') {
+        placeShadeAt(pt.px, pt.py);
+        return;
+      }
       if (!d) {
         if (onSelect) {
           setHovering(
@@ -1245,7 +1347,19 @@ export default function BadgeStage({
       );
       onMoveBlock?.(next.x, next.y);
     },
-    [onSelect, onMoveBlock, onMoveHook, hookRectNow, onFraming, framing, toPixels, onMoveCell, onCellFraming, cellFramingAt],
+    [
+      onSelect,
+      onMoveBlock,
+      onMoveHook,
+      hookRectNow,
+      onFraming,
+      framing,
+      toPixels,
+      onMoveCell,
+      onCellFraming,
+      cellFramingAt,
+      placeShadeAt,
+    ],
   );
 
   /**
@@ -1394,7 +1508,9 @@ export default function BadgeStage({
   const onSelectCellRef = useRef(onSelectCell);
   onSelectCellRef.current = onSelectCell;
 
-  const cursor = !onSelect
+  const cursor = shadeHandle && onMoveShadeCentre
+    ? 'cursor-crosshair'
+    : !onSelect
     ? ''
     : swapping
       ? 'cursor-copy'

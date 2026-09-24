@@ -3,6 +3,7 @@ import { DEFAULT_DEVELOP } from './develop';
 import {
   editorKeyAction,
   openAfterRemoval,
+  pictureAfterRestore,
   openPictureId,
   pictureRange,
   sameDevelop,
@@ -50,6 +51,18 @@ describe('which picture is open', () => {
     expect(stepPicture([], 'a', 1)).toBeNull();
   });
 
+  it('steps over an ignored picture, and hands on from one opened by a click', () => {
+    const roll = [{ id: 'a' }, { id: 'x', ignored: true }, { id: 'y', ignored: true }, { id: 'b' }, { id: 'z', ignored: true }];
+    const skip = (p: { ignored?: boolean }) => Boolean(p.ignored);
+    expect(stepPicture(roll, 'a', 1, skip)).toBe('b');
+    expect(stepPicture(roll, 'b', -1, skip)).toBe('a');
+    // Nothing further that way: it stays.
+    expect(stepPicture(roll, 'b', 1, skip)).toBe('b');
+    // Opened by hand, an ignored picture lets the arrows go on to the next live one.
+    expect(stepPicture(roll, 'x', 1, skip)).toBe('b');
+    expect(stepPicture(roll, 'y', -1, skip)).toBe('a');
+  });
+
   it('opens the picture that takes the removed one’s place', () => {
     expect(openAfterRemoval(strip, 'a', 'b')).toBe('b');
     expect(openAfterRemoval(strip, 'b', 'b')).toBe('c');
@@ -76,23 +89,48 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'V', ctrlKey: true }))).toBe('paste');
   });
 
+  it('maps the delivery keys off the Layers tab: P sends ↔ holds, U back to the rule, M ignores', () => {
+    expect(editorKeyAction(press({ key: 'p' }))).toBe('deliver');
+    expect(editorKeyAction(press({ key: 'U' }))).toBe('deliver-auto');
+    expect(editorKeyAction(press({ key: 'm' }))).toBe('ignore');
+    expect(editorKeyAction(press({ key: 'p', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'm', targetTypes: true }))).toBeNull();
+  });
+
+  it("makes a variant on ⌘' — Lightroom's virtual copy — once per press, never while typing", () => {
+    expect(editorKeyAction(press({ key: "'", metaKey: true }))).toBe('variant');
+    expect(editorKeyAction(press({ key: "'", ctrlKey: true }))).toBe('variant');
+    expect(editorKeyAction(press({ key: "'", metaKey: true, repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: "'", metaKey: true, targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: "'" }))).toBeNull();
+  });
+
+  it('opens the sections on ⌘⇧C and pastes them on ⌘⇧V, never over a text selection', () => {
+    expect(editorKeyAction(press({ key: 'C', metaKey: true, shiftKey: true }))).toBe('copy-settings');
+    expect(editorKeyAction(press({ key: 'v', ctrlKey: true, shiftKey: true }))).toBe('paste-settings');
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true, hasSelection: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true, targetTypes: true }))).toBeNull();
+  });
+
   it('yields to a field, a selection, a held key and other chords', () => {
     expect(editorKeyAction(press({ key: 'ArrowLeft', targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c', metaKey: true, hasSelection: true }))).toBeNull();
     expect(editorKeyAction(press({ key: '\\', repeat: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'z', metaKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'ArrowRight', shiftKey: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'x', metaKey: true, shiftKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'q' }))).toBeNull();
   });
 
-  it('steps the mask view on M and turns Pick on P', () => {
-    expect(editorKeyAction(press({ key: 'm' }))).toBe('mask');
-    expect(editorKeyAction(press({ key: 'M' }))).toBe('mask');
-    expect(editorKeyAction(press({ key: 'p' }))).toBe('pick');
+  it('on the Layers tab, steps the mask view on M and turns Pick on P — U stays the delivery’s', () => {
+    const layers = { layersTab: true };
+    expect(editorKeyAction(press({ key: 'm', ...layers }))).toBe('mask');
+    expect(editorKeyAction(press({ key: 'M', ...layers }))).toBe('mask');
+    expect(editorKeyAction(press({ key: 'p', ...layers }))).toBe('pick');
+    expect(editorKeyAction(press({ key: 'u', ...layers }))).toBe('deliver-auto');
     // A slider or a field keeps its letters.
-    expect(editorKeyAction(press({ key: 'm', targetTypes: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'p', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'm', targetTypes: true, ...layers }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'p', repeat: true, ...layers }))).toBeNull();
   });
 
   it('removes the selection on Delete or Backspace and lets go on Escape, never from a field', () => {
@@ -111,6 +149,20 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'I' }))).toBe('facts');
   });
 
+  it('paints the clipping on J, the letter Lightroom uses, and not while a field types', () => {
+    expect(editorKeyAction(press({ key: 'j' }))).toBe('clipping');
+    expect(editorKeyAction(press({ key: 'J' }))).toBe('clipping');
+    expect(editorKeyAction(press({ key: 'j', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'j', targetTypes: true }))).toBeNull();
+  });
+
+  it('flips black and white on V, and leaves ⌘V to the paste', () => {
+    expect(editorKeyAction(press({ key: 'v' }))).toBe('mono');
+    expect(editorKeyAction(press({ key: 'V' }))).toBe('mono');
+    expect(editorKeyAction(press({ key: 'v', metaKey: true }))).toBe('paste');
+    expect(editorKeyAction(press({ key: 'v', repeat: true }))).toBeNull();
+  });
+
   it('answers `?` although it is a shifted key — every other shift chord is not ours', () => {
     // On most layouts `?` cannot be pressed WITHOUT shift, so the blanket
     // refusal would have made the help key unreachable.
@@ -126,7 +178,8 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'C', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'c', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'C', shiftKey: true, repeat: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBeNull();
+    // With ⌘ it is the settings' copy, never the crop.
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBe('copy-settings');
     expect(editorKeyAction(press({ key: 'C', shiftKey: true, targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
   });
@@ -182,5 +235,27 @@ describe('selectionAfterClick', () => {
   it('leaves the selection alone on a plain click — that is the caller’s open, not a selection click', () => {
     const selected = new Set(['a', 'b']);
     expect(selectionAfterClick(wideStrip, selected, 'a', 'c', mods({}))).toBe(selected);
+  });
+});
+
+describe('pictureAfterRestore', () => {
+  const a = { id: 'a' };
+  const b = { id: 'b' };
+  const c = { id: 'c' };
+  it('opens the picture an undo changed when it is not the one on screen', () => {
+    const b2 = { id: 'b' };
+    expect(pictureAfterRestore([a, b, c], [a, b2, c], 'c')).toBe('b');
+  });
+  it('stays when the open picture is among the changed, or when no picture changed', () => {
+    const a2 = { id: 'a' };
+    const b2 = { id: 'b' };
+    expect(pictureAfterRestore([a, b, c], [a2, b2, c], 'a')).toBeNull();
+    expect(pictureAfterRestore([a, b, c], [a, b, c], 'c')).toBeNull();
+  });
+  it('opens a picture an undo brought back, and the first changed of an Apply-to', () => {
+    expect(pictureAfterRestore([a, c], [a, b, c], 'c')).toBe('b');
+    const b2 = { id: 'b' };
+    const c2 = { id: 'c' };
+    expect(pictureAfterRestore([a, b, c], [a, b2, c2], 'a')).toBe('b');
   });
 });

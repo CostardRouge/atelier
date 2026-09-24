@@ -10,7 +10,6 @@ import {
   describeRun,
   fixedFrameDelivery,
   exportName,
-  longEdgeChoiceId,
   pixelHeadroom,
   rollOutputSize,
 } from './roll-export';
@@ -272,10 +271,9 @@ describe('names and sentences', () => {
     expect(exportName('.jpg')).toBe('picture.jpg');
   });
 
-  it('maps a stored long edge to a Size choice and back to source', () => {
-    expect(longEdgeChoiceId(1920)).toBe('1920');
-    expect(longEdgeChoiceId(null)).toBe('source');
-    expect(longEdgeChoiceId(1234)).toBe('source');
+  it('counts files and pictures apart once a run has several targets', () => {
+    expect(describeRun(6, 'folder', [], 0, { pictures: 3, targets: 2 })).toBe('3 pictures × 2 targets — 6 files written');
+    expect(describeRun(3, 'folder', [], 0, { pictures: 3, targets: 1 })).toBe('3 pictures written');
   });
 
   it('describes a run with its first failure', () => {

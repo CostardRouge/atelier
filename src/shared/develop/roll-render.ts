@@ -22,9 +22,9 @@ import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
 import type { Keystone } from '../render/geometry';
-import type { LensCorrection } from '../render/lens';
+import type { LensCorrection, LensProfileTerms } from '../render/lens';
 import { geometryPasses, hasGeometry } from '../render/picture-geometry';
-import { drawingLayers, type AdjustLayer } from './layer';
+import { drawingLayers, subjectLayersForRender, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
 import { needsSubjectRasters, resolveSubjectRasters } from './subject-rasters';
 import type { BrushRaster } from '../render/brush-raster';
@@ -42,10 +42,15 @@ import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
+import { decodeEdgeFor, longEdgeFor, type ExportTarget } from './export-targets';
+import { OUTPUT_SHARPEN_AMOUNT, SHARPEN_BAND_ROWS, sharpenRows } from './output-sharpen';
+import { watermarkLayout, type Watermark } from './watermark';
 import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { encodeUltraHdr, type UltraHdrResult } from '../hdr/ultra-hdr-export';
+import type { PostCropVignette } from '../render/post-vignette';
+import { postVignettePass } from './vignette-frame';
 
 export interface RollRenderOptions {
   /** The run's cancel: a RAW's decode drops its turn on it (the render is one draw and never looks). */
@@ -56,9 +61,18 @@ export interface RollRenderOptions {
   border: RollBorder | null;
   /** The picture's own cube — its develop under its own look — or null as shot. */
   lut: CubeLut | null;
-  longEdge: number | null;
-  /** JPEG quality 0..1. */
-  quality: number;
+  /**
+   * Where the file goes, at what size and quality — one or more
+   * (`export-targets.ts`). The picture is decoded and graded ONCE; each
+   * target is a cut, a resize, a sharpen and an encode of that one render.
+   */
+  targets: readonly DeliverTarget[];
+  /**
+   * The watermark for this picture — its line already resolved against the
+   * identity and the capture — drawn on the targets that ask for it. Null
+   * or an empty line draws nothing.
+   */
+  watermark?: { text: string; style: Watermark } | null;
   /**
    * The perspective correction, warped in BEFORE the crop frames the result —
    * the stage's own order, so the file is what was on screen.
@@ -66,12 +80,16 @@ export interface RollRenderOptions {
   keystone?: Keystone | null;
   /** The lens correction, warped in BEFORE the keystone — `picture-geometry.ts`. */
   lens?: LensCorrection | null;
+  /** The lens's measured profile where it applies — `lens/lens-profile.ts`, `profileInEffect`. */
+  lensProfile?: LensProfileTerms | null;
   /** Adjustment layers, bottom to top, applied after the look — `layer-render.ts`. */
   layers?: readonly AdjustLayer[] | null;
   /** Denoise, defringe, sharpen — `render/detail.ts`; kernels in the decode's own pixels. */
   detail?: DetailSettings | null;
   /** Heal and clone patches — `render/repair.ts`; drawn first, on the source. */
   repair?: readonly Patch[] | null;
+  /** The post-crop vignette — `render/post-vignette.ts`, shaped in the frame `framing` + `aspect` cut. */
+  vignette?: PostCropVignette | null;
   /**
    * The roll's film TEXTURE — grain and halation — drawn by ONE node LAST
    * (`render-film.md`). At the density the picture is GRADED at, which is the
@@ -113,9 +131,27 @@ export interface RollRenderOptions {
    * and the delivered size, and runs before the container is written.
    */
   stamp?: ((jpeg: Blob, delivered: PictureSize) => Promise<Blob>) | null;
+  /** Called once, before the model is asked for this picture's subjects — the run's progress line says so. */
+  onSubjects?: (() => void) | null;
+}
+
+/** What `deliver` needs of a target: its size, its quality, its screen sharpening. */
+export type DeliverTarget = Pick<ExportTarget, 'size' | 'quality' | 'sharpen'> & { watermark?: boolean };
+
+/** One target's file. */
+export interface RollOutput {
+  blob: Blob;
+  width: number;
+  height: number;
+  hdr: Pick<UltraHdrResult, 'ultra' | 'headroom' | 'checked' | 'reason'> | null;
 }
 
 export interface RollRendered {
+  /**
+   * Every target's file, in the targets' order. The fields below repeat the
+   * FIRST one's, which is what a run reports about the picture.
+   */
+  outputs: RollOutput[];
   blob: Blob;
   /** What the HDR delivery came to, when one was asked — `ultra` false means the plain JPEG left, with the reason. */
   hdr: Pick<UltraHdrResult, 'ultra' | 'headroom' | 'checked' | 'reason'> | null;
@@ -138,6 +174,23 @@ export interface RollRendered {
    */
   sensor: PictureSize | null;
   capped: 'device' | 'gpu' | null;
+  /**
+   * The subject masks this delivery asked the model for, and how many it
+   * answered (`subject-rasters.ts`). A layer left unanswered draws nothing in
+   * the file, and the run says which picture lost one.
+   */
+  subjects?: { asked: number; resolved: number };
+}
+
+/** The subjects of a delivery, segmented on `image`, and the count the run reports. */
+async function segmentFor(
+  opts: RollRenderOptions,
+  image: () => TexImageSource,
+): Promise<{ rasters: Map<string, BrushRaster> | null; subjects: { asked: number; resolved: number } }> {
+  if (!needsSubjectRasters(opts.layers)) return { rasters: null, subjects: { asked: 0, resolved: 0 } };
+  opts.onSubjects?.();
+  const rasters = await resolveSubjectRasters(opts.layers, image());
+  return { rasters, subjects: { asked: subjectLayersForRender(opts.layers).length, resolved: rasters.size } };
 }
 
 /** A measured picture: the pixels, and whether they are a RAW's own render. */
@@ -192,6 +245,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
       hasGeometry(opts) ||
       stack.length > 0 ||
       !isDefaultDetail(opts.detail) ||
+      Boolean(opts.vignette?.amount) ||
       patches.length > 0 ||
       !isSilentTexture(opts.film);
     // "Source density" stops at the GPU's own edge cap: a picture past it is
@@ -205,8 +259,8 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
     // The subjects, segmented on the picture being delivered — an export
     // built without them dropped every Subject layer from the file.
-    const rasters = needsSubjectRasters(opts.layers) ? await resolveSubjectRasters(opts.layers, bitmap) : null;
-    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
+    const { rasters, subjects } = await segmentFor(opts, () => bitmap);
+    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
       : null;
@@ -218,7 +272,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
       const darker = darkGrader && fit ? copyOf(darkGrader.render(fit.image)) : null;
-      return await deliver(graded, source, gradedAt, opts, darker);
+      return { ...(await deliver(graded, source, gradedAt, opts, darker)), subjects };
     } finally {
       grader?.dispose();
       darkGrader?.dispose();
@@ -238,9 +292,12 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
  */
 async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRenderOptions): Promise<RollRendered> {
   const klass = deviceClass();
+  // Known before the decode only when every target asks a long edge: a short
+  // edge, an area or a percentage waits for the picture's own shape.
+  const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '', watermark: Boolean(t.watermark) })));
   const gpuMax = maxRenderSize();
   const decoded = await decodeRaw(raw.file, {
-    minLongEdge: opts.longEdge ? opts.longEdge * 2 : null,
+    minLongEdge: decodeEdge ? decodeEdge * 2 : null,
     gain: raw.gain,
     // The GPU's cap and, on a phone, the device's own export ceiling
     // (`raw-budget.ts`): a whole sensor is what a phone's tab dies of.
@@ -260,7 +317,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   // limits was met, and the run says which.
   const sensorEdge = Math.max(sensor.width, sensor.height);
   const decodedEdge = Math.max(source.width, source.height);
-  const askedLess = Boolean(opts.longEdge) && decodedEdge >= (opts.longEdge ?? 0);
+  const askedLess = Boolean(decodeEdge) && decodedEdge >= (decodeEdge ?? 0);
   const capped = decodedEdge < sensorEdge && !askedLess ? rawDecodeCap(sensorEdge, 'export', klass, gpuMax) : null;
   const ar = source.width / source.height;
   // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
@@ -272,16 +329,17 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
   // A half-float picture is not something the model can be shown: it sees the
   // picture through its own cube, as the author does, rendered once apart.
-  let rasters: Map<string, BrushRaster> | null = null;
-  if (needsSubjectRasters(opts.layers)) {
-    const shown = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], null);
-    try {
-      rasters = await resolveSubjectRasters(opts.layers, copyOf(shown.render(decoded.half)));
-    } finally {
-      shown.dispose();
-    }
+  const shown = needsSubjectRasters(opts.layers)
+    ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], null)
+    : null;
+  let segmented: Awaited<ReturnType<typeof segmentFor>>;
+  try {
+    segmented = await segmentFor(opts, () => copyOf(shown!.render(decoded.half)));
+  } finally {
+    shown?.dispose();
   }
-  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post];
+  const { rasters, subjects } = segmented;
+  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
   const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
@@ -293,7 +351,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
     // read by `deliver` after the darker has drawn, and a grader's canvas is
     // only its LAST render.
     const darker = darkGrader ? copyOf(darkGrader.render(decoded.half)) : null;
-    return { ...(await deliver(grader.render(decoded.half), source, source, opts, darker)), sensor, capped };
+    return { ...(await deliver(grader.render(decoded.half), source, source, opts, darker)), sensor, capped, subjects };
   } finally {
     grader.dispose();
     darkGrader?.dispose();
@@ -316,7 +374,24 @@ function freshPasses(
   rasters: ReadonlyMap<string, BrushRaster> | null,
   scale: number,
 ) {
-  return [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...detailPasses(opts.detail, scale).post];
+  // The source's aspect is `ar` — the vignette's map is in [0,1] and asks for no size.
+  return [
+    ...geometryPasses(withCalibration(opts), ar),
+    ...layerPasses(opts.layers, ar, undefined, rasters),
+    ...detailPasses(opts.detail, scale).post,
+    ...vignettePasses(opts, { width: ar, height: 1 }),
+  ];
+}
+
+/**
+ * The post-crop vignette for this delivery, in the frame its crop cuts —
+ * after the sharpen, as the stage draws it. One place, so the SDR base and
+ * the HDR rendition cannot be vignetted differently.
+ */
+function vignettePasses(opts: RollRenderOptions, source: PictureSize) {
+  const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
+  const pass = postVignettePass(opts.vignette, source.width, source.height, ratio, opts.framing);
+  return pass ? [pass] : [];
 }
 
 /** The passes before the cube, built anew for a second grader. */
@@ -339,7 +414,7 @@ function copyOf(image: CanvasImageSource): HTMLCanvasElement {
   return canvas;
 }
 
-/** Cut, border and encode a graded picture — the one place the file's frame is made. */
+/** Cut, border and encode a graded picture for every target — the one place the file's frame is made. */
 async function deliver(
   graded: CanvasImageSource,
   source: PictureSize,
@@ -347,42 +422,102 @@ async function deliver(
   opts: RollRenderOptions,
   darker: HTMLCanvasElement | null = null,
 ): Promise<RollRendered> {
+  if (opts.targets.length === 0) throw new Error('This export has no target.');
+  const outputs: RollOutput[] = [];
+  for (const target of opts.targets) outputs.push(await deliverOne(graded, source, gradedAt, opts, target, darker));
+  const first = outputs[0];
+  return { outputs, blob: first.blob, width: first.width, height: first.height, source, gradedAt, hdr: first.hdr, sensor: null, capped: null };
+}
+
+async function deliverOne(
+  graded: CanvasImageSource,
+  source: PictureSize,
+  gradedAt: PictureSize,
+  opts: RollRenderOptions,
+  target: DeliverTarget,
+  darker: HTMLCanvasElement | null,
+): Promise<RollOutput> {
   const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
   const framing = opts.framing ?? DEFAULT_FRAMING;
-  const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, opts.longEdge);
+  // The target's size read against this picture's own delivered frame.
+  const cap = longEdgeFor(target.size, deliveredLayout(source, ratio, opts.framing, opts.border, null).out);
+  const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, cap);
   if (out.w <= 0 || out.h <= 0) throw new Error('This picture has no pixels to deliver.');
   const canvas = document.createElement('canvas');
   canvas.width = out.w;
   canvas.height = out.h;
-  const ctx = canvas.getContext('2d');
+  const ctx = canvas.getContext('2d', target.sharpen === 'off' ? undefined : { willReadFrequently: true });
   if (!ctx) throw new Error('Could not create a 2D canvas for export.');
   ctx.imageSmoothingQuality = 'high';
   drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  // Sharpened for the SCREEN after the resize — the resize is what softened it.
+  sharpenCanvas(ctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
+  // The mark AFTER the sharpening — it is not detail to bring back.
+  const mark = target.watermark && opts.watermark?.text ? opts.watermark : null;
+  if (mark) drawWatermark(ctx, out.w, out.h, mark.text, mark.style);
   if (darker && opts.hdr) {
-    // The darker render, framed and bordered the same, so the map lines up
-    // with the base pixel for pixel.
+    // The darker render, framed, bordered and sharpened the same, so the map
+    // lines up with the base pixel for pixel and edge for edge.
     const dark = document.createElement('canvas');
     dark.width = out.w;
     dark.height = out.h;
-    const dctx = dark.getContext('2d');
+    const dctx = dark.getContext('2d', target.sharpen === 'off' ? undefined : { willReadFrequently: true });
     if (!dctx) throw new Error('Could not create a 2D canvas for the HDR export.');
     dctx.imageSmoothingQuality = 'high';
     drawDelivered(dctx, darker, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+    sharpenCanvas(dctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
+    // The same mark on the darker half, so the gain map is flat where it is.
+    if (mark) drawWatermark(dctx, out.w, out.h, mark.text, mark.style);
     const delivered = { width: out.w, height: out.h };
-    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, opts.quality, opts.stamp ? (b) => opts.stamp!(b, delivered) : null);
+    const result = await encodeUltraHdr(canvas, dark, opts.hdr.stops, target.quality, opts.stamp ? (b) => opts.stamp!(b, delivered) : null);
     return {
       blob: result.blob,
       width: out.w,
       height: out.h,
-      source,
-      gradedAt,
       hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
-      sensor: null,
-      capped: null,
     };
   }
-  const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', opts.quality));
+  const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', target.quality));
   if (!encoded) throw new Error('The browser could not encode this picture.');
   const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
-  return { blob, width: out.w, height: out.h, source, gradedAt, hdr: null, sensor: null, capped: null };
+  return { blob, width: out.w, height: out.h, hdr: null };
+}
+
+/** The fonts a mark is drawn in: the suite's own sans where the page has it, else the system's. */
+const WATERMARK_FONT = '"Space Grotesk", "Helvetica Neue", Helvetica, Arial, sans-serif';
+
+/**
+ * One line of text on the file (`watermark.ts`): its tone at its opacity, with
+ * a soft shadow of the opposite tone so it reads over a sky and a coat alike.
+ */
+function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, text: string, style: Watermark): void {
+  const at = watermarkLayout(w, h, style);
+  ctx.save();
+  ctx.font = `500 ${at.fontPx}px ${WATERMARK_FONT}`;
+  ctx.textAlign = at.align;
+  ctx.textBaseline = at.baseline;
+  ctx.globalAlpha = style.opacity;
+  const light = style.tone === 'light';
+  ctx.shadowColor = light ? 'rgba(0, 0, 0, 0.45)' : 'rgba(255, 255, 255, 0.45)';
+  ctx.shadowBlur = Math.max(1, at.fontPx * 0.18);
+  ctx.fillStyle = light ? '#ffffff' : '#000000';
+  ctx.fillText(text, at.x, at.y, w - 2 * Math.round(Math.min(w, h) * 0.02));
+  ctx.restore();
+}
+
+/**
+ * The output sharpening, in bands of rows read with one row either side —
+ * the same pixels as the whole canvas done at once, without a second copy of
+ * a 60-megapixel file in memory.
+ */
+function sharpenCanvas(ctx: CanvasRenderingContext2D, w: number, h: number, amount: number): void {
+  if (amount <= 0) return;
+  for (let y0 = 0; y0 < h; y0 += SHARPEN_BAND_ROWS) {
+    const y1 = Math.min(h, y0 + SHARPEN_BAND_ROWS);
+    const top = Math.max(0, y0 - 1);
+    const bottom = Math.min(h, y1 + 1);
+    const band = ctx.getImageData(0, top, w, bottom - top);
+    const done = sharpenRows(band.data, w, bottom - top, y0 - top, y1 - top, amount);
+    ctx.putImageData(new ImageData(done, w, y1 - y0), 0, y0);
+  }
 }

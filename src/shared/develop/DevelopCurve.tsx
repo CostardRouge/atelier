@@ -1,5 +1,5 @@
 import { useRef, useState } from 'react';
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import Segmented from '../ui/Segmented';
 import { developLinkClass } from './develop-classes';
 import {
@@ -57,10 +57,13 @@ export default function DevelopCurve({
   value,
   histogram,
   onChange,
+  foldPrefix = '',
 }: {
   value: ToneCurves | null | undefined;
   histogram: Histogram | null;
   onChange: (curves: ToneCurves | null) => void;
+  /** Keeps a LAYER's fold apart from the picture's (`layer.`). */
+  foldPrefix?: string;
 }) {
   const [channel, setChannel] = useState<CurveChannel>('luma');
   const [dragging, setDragging] = useState(-1);
@@ -147,10 +150,13 @@ export default function DevelopCurve({
       : '';
 
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Curve">
-        <p>{HINT}</p>
-      </SectionLegend>
+    <DevelopFold
+      id={`${foldPrefix}curve`}
+      title="Curve"
+      info={<p>{HINT}</p>}
+      marked={touched.length > 0}
+      defaultOpen={false}
+    >
 
       <Segmented
         options={CURVE_CHANNELS.map((c) => ({
@@ -255,6 +261,6 @@ export default function DevelopCurve({
           </button>
         )}
       </div>
-    </div>
+    </DevelopFold>
   );
 }

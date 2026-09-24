@@ -232,6 +232,36 @@ saturation clips more than 1 %), −1.5 EV read 160 on the clipped patch, and
 the export decoded the whole 4000×3000 and wrote the same 160 — preview =
 export from two decodes of two sizes, which is what storing the gain buys.
 
+## White balance in kelvin: one 3×3 matrix on the decoded picture (2026-09-23, audit item 17)
+
+`raw/white-balance.ts` (pure, tested) + `WhiteBalancePanel.tsx`
+(Develop tool, on a RAW base whose decode gave the camera's white).
+**The approach**: the picture is decoded ONCE, balanced as shot (camera
+white balance, camera matrix, sRGB); a kelvin balance is then the exact
+re-balance `rgb_cam · diag(new ÷ as-shot multipliers) · rgb_cam⁻¹` in linear
+light, the multipliers the camera would have used under that light coming
+from `cam_xyz · XYZ(T, tint)` — what LibRaw would give with `userMul`,
+without a second decode. **Stored on the develop** as `rawWb { kelvin, tint,
+matrix }`, like `rawGain` and for the same reason (preview = export), applied
+FIRST in `developLinear` and only on a RAW base; `withoutBase` strips it, so
+copy/paste/presets/Apply-to leave it — a white balance is one capture's, and
+pasting it to another RAW would need that RAW's own matrix (open: a sync that
+recomputes the matrix per target). **Facts measured on a synthetic DNG**
+(128×96, sRGB primaries, AsShotNeutral of a 2850 K black body, made in the
+scratchpad): libraw-wasm 1.6's full read carries the colour under
+`color_data`, NOT `color` as its typings say; `cam_mul` is 1 / AsShotNeutral
+(camera space); `rgb_cam` is camera → sRGB with the COLOUR COLUMNS first;
+and **`cam_xyz` is all ZEROS for a DNG** — recovered as `diag(1/pre_mul) ·
+rgb_cam⁻¹ · XYZ→sRGB`, since LibRaw built `rgb_cam` as the inverse of
+`cam_xyz · xyz_rgb` with rows normalised by `pre_mul`. The as-shot read back
+2850.03 K, tint 0.00. **Conventions**: the locus is Krystek's rational fit in
+uv (smooth — Kim's piecewise cubic kinks at 4000 K and threw a round trip 8 K
+off there); tint is 3000 per unit Duv, POSITIVE toward green, so Lightroom's
+Daylight (5500 K, +10) is daylight's own chromaticity and the correction of a
++tint is magenta; the slider is log-scaled 2000–50000 K. In the app: the
+sensor rung showed the panel with *as shot 2850 K*, Daylight warmed the grey,
+Tungsten and As shot gave it back.
+
 ## Which FILE the sensor's data is in — see `renditions.md`
 
 A capture is often several files (Sony `.ARW` + `.HIF`, DJI `.DNG` + `.JPG`),

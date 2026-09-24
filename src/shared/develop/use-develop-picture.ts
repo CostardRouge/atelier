@@ -12,9 +12,12 @@ import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail
 import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
+
+/** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
+const COLOUR_SAMPLE_EDGE = 512;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
-import type { LensCorrection } from '../render/lens';
+import type { LensCorrection, LensProfileTerms } from '../render/lens';
 import {
   cloneGeometry,
   geometryPasses,
@@ -40,6 +43,12 @@ import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
+import { clipPass } from '../render/clip-pass';
+import { makePostVignettePass } from '../render/post-vignette-pass';
+import type { FrameAffine, PostCropVignette } from '../render/post-vignette';
+import { frameAffine } from './vignette-frame';
+import { readoutOf } from '../render/clipping';
+import { createReadoutStore, type ReadoutStore } from './readout-store';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -77,6 +86,12 @@ interface GraderRecord {
   overlay: MaskOverlay | null;
   /** The blink's raster, by identity — one per answered tap. */
   flash: BrushRaster | null;
+  /** The clipping view is painted over the picture. */
+  clip: boolean;
+  /** The sharpen's Masking weight is painted instead of the picture. */
+  sharpenMask: boolean;
+  /** The post-crop vignette, compared by value. */
+  postVignette: PostVignetteInput | null;
   rasters: ReadonlyMap<string, BrushRaster> | null;
   detail: DetailSettings | null;
   repair: Patch[];
@@ -87,6 +102,17 @@ interface GraderRecord {
   w: number;
   h: number;
   grader: HeldGrader;
+}
+
+/** The post-crop vignette as the grader takes it: the settings, and where the delivered frame sits. */
+export interface PostVignetteInput {
+  vignette: PostCropVignette;
+  affine: FrameAffine;
+  aspect: number;
+}
+
+function samePostVignetteInput(a: PostVignetteInput | null, b: PostVignetteInput | null): boolean {
+  return a === b || (a !== null && b !== null && JSON.stringify(a) === JSON.stringify(b));
 }
 
 /** Show-the-mask: which layer, and drawn as a wash or as its line. */
@@ -137,6 +163,19 @@ function graderFrom(
   gain: GainField | null = null,
   /** One point's region, blinking after the model answered a tap. */
   flash: BrushRaster | null = null,
+  /**
+   * Paint what is clipped (`clip-pass.ts`) — a way of LOOKING, so only the
+   * stage and the loupe ever ask; everything that measures or leaves passes
+   * nothing and gets the picture.
+   */
+  clip = false,
+  /** Paint the sharpen's Masking weight (`makeSharpenPass`) — a way of LOOKING, like `clip`. */
+  sharpenMask = false,
+  /**
+   * The post-crop vignette — part of the picture, unlike the two above, so
+   * every caller that measures or delivers passes it too.
+   */
+  postVignette: PostVignetteInput | null = null,
 ): HeldGrader | null {
     const overlayOf = overlay?.layer ?? null;
     const overlayExcept = overlayOf ? exceptRaster(overlayOf, rasters) : null;
@@ -153,6 +192,9 @@ function graderFrom(
       Boolean(overlayOf?.mask) ||
       Boolean(overlayExcept) ||
       Boolean(flash) ||
+      clip ||
+      sharpenMask ||
+      Boolean(postVignette) ||
       !isDefaultDetail(detail) ||
       patches.length > 0 ||
       // A texture with nothing but grain in it is still a render: the node is
@@ -171,6 +213,9 @@ function graderFrom(
       sized &&
       sameOverlay(cur.overlay, overlay) &&
       cur.flash === flash &&
+      cur.clip === clip &&
+      cur.sharpenMask === sharpenMask &&
+      samePostVignetteInput(cur.postVignette, postVignette) &&
       cur.rasters === rasters &&
       sameGeometry(cur.geometry, geometry) &&
       sameLayers(cur.layers, stack) &&
@@ -193,7 +238,7 @@ function graderFrom(
     // Repair FIRST, on the source: a copied pixel then takes the same
     // develop, look, warp and layer as its neighbours, and a denoise sees a
     // repaired picture.
-    const { pre: detailPre, post } = detailPasses(detail, scale);
+    const { pre: detailPre, post } = detailPasses(detail, scale, sharpenMask);
     const repairPass = makeRepairPass(patches, ar);
     // The camera's own shading goes FIRST of all, ahead of the repair: a
     // copied pixel is then copied from data the lens has been taken out of,
@@ -205,6 +250,13 @@ function graderFrom(
       ...geometryPasses(geometry, ar),
       ...cache.passes(stack, ar, rasters),
       ...post,
+      // The post-crop vignette after the sharpen — an effect on the finished
+      // picture, shaped in its delivered frame.
+      ...(postVignette ? [makePostVignettePass(postVignette.vignette, postVignette.affine, postVignette.aspect)!] : []),
+      // After everything that shapes the picture, so it marks what the
+      // picture really holds; under the mask's wash and blink, which are
+      // looked at on top of it.
+      ...(clip ? [clipPass] : []),
       ...(overlayPass ? [overlayPass] : []),
       ...(flashPass ? [flashPass] : []),
     ];
@@ -225,6 +277,9 @@ function graderFrom(
       cur.layers = cloneLayers(stack);
       cur.overlay = overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null;
       cur.flash = flash;
+      cur.clip = clip;
+      cur.sharpenMask = sharpenMask;
+      cur.postVignette = postVignette;
       cur.rasters = rasters;
       cur.detail = detail ? { ...detail } : null;
       cur.repair = patches.map((p) => ({ ...p }));
@@ -245,6 +300,9 @@ function graderFrom(
       layers: cloneLayers(stack),
       overlay: overlay ? { layer: cloneLayer(overlay.layer), style: overlay.style } : null,
       flash,
+      clip,
+      sharpenMask,
+      postVignette,
       rasters,
       detail: detail ? { ...detail } : null,
       repair: patches.map((p) => ({ ...p })),
@@ -334,6 +392,12 @@ export interface DevelopPicture {
    */
   pickAt: (clientX: number, clientY: number) => [number, number, number] | null;
   /**
+   * The colour at a [0,1] point as the layer `layerId` sees it — the picture
+   * under that layer, before anything above it — ENCODED 0..1, for a colour
+   * range's sample. Null off a picture.
+   */
+  sampleColour: (point: readonly [number, number], layerId: string) => [number, number, number] | null;
+  /**
    * Where a client point lands in the SOURCE picture, as [0,1]; null outside
    * it. What a painted mask's strokes are made of. With `unbounded`, a point
    * past the picture's edge is answered as it is (below 0, above 1) instead
@@ -387,12 +451,19 @@ export interface DevelopPicture {
     /** The decoded file's long edge, once known. */
     longEdge: number | null;
   };
-  /** The wipe gesture, for the viewport element. */
+  /**
+   * The pixel under a mouse or a pen, as the stage shows it — 8-bit, what
+   * the file will hold — or null off the picture. A store, not a value: it
+   * moves with the pointer, and only the line that says it re-renders.
+   */
+  readout: ReadoutStore;
+  /** The wipe gesture and the readout, for the viewport element. */
   handlers: {
     onPointerDown: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerMove: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerUp: (e: ReactPointerEvent<HTMLElement>) => void;
     onPointerCancel: (e: ReactPointerEvent<HTMLElement>) => void;
+    onPointerLeave: (e: ReactPointerEvent<HTMLElement>) => void;
   };
 }
 
@@ -420,6 +491,7 @@ export function useDevelopPicture({
   frame = null,
   keystone = null,
   lens = null,
+  lensProfile = null,
   layers = null,
   showMaskOf = null,
   maskStyle = 'fill',
@@ -439,7 +511,28 @@ export function useDevelopPicture({
   repair = null,
   film = null,
   veil = null,
+  clipping = false,
+  sharpenMask = false,
+  vignette = null,
 }: {
+  /**
+   * The post-crop vignette (`render/post-vignette.ts`), shaped in the frame
+   * `frame` describes — part of the picture: the histogram, `delivered()` and
+   * a snapshot all carry it.
+   */
+  vignette?: PostCropVignette | null;
+  /**
+   * Paint where the sharpen reaches (its Masking weight) instead of the
+   * picture — Lightroom's Alt-drag on Masking. A way of LOOKING: never
+   * delivered, never measured.
+   */
+  sharpenMask?: boolean;
+  /**
+   * Paint what is clipped over the picture — red where a channel has gone to
+   * white, blue where every channel has gone to black (`render/clipping.ts`).
+   * A way of LOOKING like the wipe: never delivered, never measured.
+   */
+  clipping?: boolean;
   file: File | null;
   /**
    * A map drawn OVER the picture, in the picture's own [0,1] — the dust map
@@ -508,6 +601,12 @@ export function useDevelopPicture({
    * holds that order for every renderer at once.
    */
   lens?: LensCorrection | null;
+  /**
+   * The lens's MEASURED profile, where it applies to this picture
+   * (`lens/lens-profile.ts`, `profileInEffect`) — composed in the same pass
+   * under the sliders.
+   */
+  lensProfile?: LensProfileTerms | null;
   /**
    * The CAMERA's own calibration at the rung this picture stands on
    * (`raw/calibration.ts`): the shading grid, drawn FIRST on the decoded
@@ -716,8 +815,8 @@ export function useDevelopPicture({
   // The two warps as one record, memoised by VALUE — every effect below takes
   // it as a dep, and the panels hand down a fresh object per slider step.
   const geometry = useMemo<PictureGeometry>(
-    () => ({ cameraWarp: warpField, lens, keystone }),
-    [warpField, lens, keystone],
+    () => ({ cameraWarp: warpField, lens, lensProfile, keystone }),
+    [warpField, lens, lensProfile, keystone],
   );
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
@@ -725,7 +824,9 @@ export function useDevelopPicture({
   // The layer whose mask is shown, from the whole list: `stack` holds only the
   // layers that draw, and a subject still at zero is the one to look at.
   const overlay = useMemo<MaskOverlay | null>(() => {
-    const layer = showMaskOf ? (layers ?? []).find((l) => l.id === showMaskOf && (l.mask || l.except)) : null;
+    const layer = showMaskOf
+      ? (layers ?? []).find((l) => l.id === showMaskOf && (l.mask || l.except || (l.parts ?? []).length))
+      : null;
     return layer ? { layer, style: maskStyle } : null;
   }, [layers, showMaskOf, maskStyle]);
 
@@ -734,6 +835,9 @@ export function useDevelopPicture({
   // an opacity nudge on one layer costs one small pass and nothing else
   // (`layer-render.ts`). One per hook, like the grader it feeds.
   const stageSlot = useRef<GraderSlot>({ cache: makeLayerPassCache(), current: null });
+  // The post-crop vignette the picture HAS, for every grader call below —
+  // computed once the frame is known, further down.
+  const postVignetteRef = useRef<PostVignetteInput | null>(null);
   const graderFor = useCallback(
     (
       lut: CubeLut | null,
@@ -748,8 +852,29 @@ export function useDevelopPicture({
       texture: FilmTexture | null,
       gain: GainField | null,
       flash: BrushRaster | null = null,
+      clip = false,
+      maskView = false,
     ): HeldGrader | null =>
-      graderFrom(stageSlot.current, lut, s, geometry, stack, overlay, rasters, detail, scale, patches, texture, gain, flash),
+      graderFrom(
+        stageSlot.current,
+        lut,
+        s,
+        geometry,
+        stack,
+        overlay,
+        rasters,
+        detail,
+        scale,
+        patches,
+        texture,
+        gain,
+        flash,
+        clip,
+        maskView,
+        // Read through a ref: every caller — the paint, the histogram, a
+        // snapshot, `delivered()` — draws the vignette the picture HAS.
+        postVignetteRef.current,
+      ),
     [],
   );
   useEffect(
@@ -762,6 +887,15 @@ export function useDevelopPicture({
 
   const frameRatio = frame && frame.aspectRatio > 0 ? frame.aspectRatio : null;
   const framing = frame?.framing ?? null;
+  // Keyed by VALUE: a host hands down a fresh record per slider step.
+  const vignetteKey = vignette && vignette.amount !== 0 ? JSON.stringify(vignette) : '';
+  const postVignette = useMemo<PostVignetteInput | null>(() => {
+    if (!vignetteKey || !source || source.width <= 0 || source.height <= 0) return null;
+    const v = JSON.parse(vignetteKey) as PostCropVignette;
+    const aspect = frameRatio ?? source.width / source.height;
+    return { vignette: v, affine: frameAffine(source.width, source.height, aspect, framing), aspect };
+  }, [vignetteKey, source, frameRatio, framing]);
+  postVignetteRef.current = postVignette;
   const border = frame?.border ?? null;
   // The delivered canvas in the crop's own units (a crop of frameRatio × 1).
   const delivered1 = useMemo(
@@ -786,7 +920,9 @@ export function useDevelopPicture({
     }
     const ctx = canvas.getContext('2d');
     if (!ctx) return;
-    const grader = holding ? null : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask);
+    const grader = holding
+      ? null
+      : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping, sharpenMask);
     const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
@@ -826,6 +962,9 @@ export function useDevelopPicture({
     stack,
     overlay,
     flashMask,
+    clipping,
+    sharpenMask,
+    postVignette,
     subjectMasks,
     detail,
     pixelScale,
@@ -883,7 +1022,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, graderFor]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, graderFor]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -977,6 +1116,72 @@ export function useDevelopPicture({
     [source, canvasSize, frameRatio, framing],
   );
 
+  // --- the colour a layer sees ----------------------------------------------
+  /**
+   * The colour at a [0,1] point of the picture AS A LAYER SEES IT — graded,
+   * warped, with the layers BELOW it and nothing above: what a colour-range
+   * mask on that layer compares against (`mask.ts`, `ColourMask`). The stage
+   * canvas would be the wrong thing to read: it carries this layer's own
+   * change, the ones above it, the finishing passes that run after every
+   * layer (the sharpen, presence, the post-crop vignette, the grain) and the
+   * mask's own wash — a sample taken there would move the range every time a
+   * slider did. A 5×5 average at a small size, like the white-balance dropper.
+   */
+  const colourRef = useRef<HTMLCanvasElement | null>(null);
+  const sampleColour = useCallback(
+    (point: readonly [number, number], layerId: string): [number, number, number] | null => {
+      if (!source || source.width <= 0 || source.height <= 0) return null;
+      const all = layers ?? [];
+      const at = all.findIndex((l) => l.id === layerId);
+      const below = drawingLayers(at < 0 ? all : all.slice(0, at));
+      const k = Math.min(1, COLOUR_SAMPLE_EDGE / Math.max(source.width, source.height));
+      const w = Math.max(1, Math.round(source.width * k));
+      const h = Math.max(1, Math.round(source.height * k));
+      if (!colourRef.current) colourRef.current = document.createElement('canvas');
+      const canvas = colourRef.current;
+      if (canvas.width !== w || canvas.height !== h) {
+        canvas.width = w;
+        canvas.height = h;
+      }
+      const ctx = canvas.getContext('2d', { willReadFrequently: true });
+      if (!ctx) return null;
+      // The finishing passes run after every layer, so none of them is what a
+      // layer reads: the sharpen and presence are cleared, the grain is not
+      // passed, and the vignette the ref would hand in is held back.
+      const unfinished = detail ? { ...detail, sharpen: 0, texture: 0, clarity: 0, dehaze: 0 } : null;
+      const keepVignette = postVignetteRef.current;
+      postVignetteRef.current = null;
+      try {
+        const grader = graderFor(cube, source, geometry, below, null, subjectMasks, unfinished, pixelScale, repair, null, gainField);
+        const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
+        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        const x = Math.min(w - 1, Math.max(0, Math.floor(point[0] * w)));
+        const y = Math.min(h - 1, Math.max(0, Math.floor(point[1] * h)));
+        const half = 2;
+        const sx = Math.max(0, x - half);
+        const sy = Math.max(0, y - half);
+        const sw = Math.min(w, x + half + 1) - sx;
+        const sh = Math.min(h, y + half + 1) - sy;
+        const data = ctx.getImageData(sx, sy, sw, sh).data;
+        let r = 0;
+        let g = 0;
+        let b = 0;
+        const n = sw * sh;
+        for (let i = 0; i < n; i += 1) {
+          r += data[i * 4];
+          g += data[i * 4 + 1];
+          b += data[i * 4 + 2];
+        }
+        return n ? [r / n / 255, g / n / 255, b / n / 255] : null;
+      } catch {
+        return null;
+      } finally {
+        postVignetteRef.current = keepVignette;
+      }
+    },
+    [source, layers, cube, geometry, subjectMasks, detail, pixelScale, repair, gainField, graderFor],
+  );
+
   /**
    * Where a client point lands in the SOURCE picture, as [0,1] — null outside
    * it, which is how a stroke painted off the edge of a crop is refused rather
@@ -1057,7 +1262,7 @@ export function useDevelopPicture({
     // looking, like the wipe.
     const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
     return grader ? grader.render(s.gpu ?? s.image) : s.image;
-  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField]);
+  }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
       const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
@@ -1078,7 +1283,7 @@ export function useDevelopPicture({
       }
       return new Promise((resolve) => out.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
     },
-    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField],
+    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette],
   );
 
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
@@ -1262,7 +1467,7 @@ export function useDevelopPicture({
     const f = full.source;
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, null, clipping, sharpenMask, postVignette);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1303,6 +1508,9 @@ export function useDevelopPicture({
     holding,
     shownWipe,
     pixelView,
+    clipping,
+    sharpenMask,
+    postVignette,
     loupeRect.x,
     loupeRect.y,
     loupeRect.width,
@@ -1310,6 +1518,68 @@ export function useDevelopPicture({
     loupeViewport.width,
     loupeViewport.height,
   ]);
+
+  // --- the readout: the pixel under the pointer ----------------------------
+  // Read off the STAGE canvas, one pixel, once per frame at most: what is
+  // read is what is shown, the crop, the border and the before side
+  // included — and with the clipping view on, a painted pixel is told as the
+  // clip it marks (`readoutOf`), never as the mark's own numbers.
+  const [readout] = useState(createReadoutStore);
+  const readoutAt = useRef<{ x: number; y: number } | null>(null);
+  const readoutFrame = useRef(0);
+  const readoutState = useRef({ clipping, shownWipe, canvasSize });
+  readoutState.current = { clipping, shownWipe, canvasSize };
+  const readPixel = useCallback(() => {
+    readoutFrame.current = 0;
+    const at = readoutAt.current;
+    const canvas = canvasRef.current;
+    const { clipping: clip, shownWipe: split, canvasSize: size } = readoutState.current;
+    if (!at || !canvas || !size) {
+      readout.set(null);
+      return;
+    }
+    const rect = canvas.getBoundingClientRect();
+    if (rect.width <= 0 || rect.height <= 0) return;
+    const { w, h } = size;
+    // The letterbox undo `pickAt` makes; the rect carries the zoom.
+    const scale = Math.min(rect.width / w, rect.height / h);
+    const x = Math.floor((at.x - rect.left - (rect.width - w * scale) / 2) / scale);
+    const y = Math.floor((at.y - rect.top - (rect.height - h * scale) / 2) / scale);
+    if (x < 0 || y < 0 || x >= w || y >= h) {
+      readout.set(null);
+      return;
+    }
+    try {
+      const [r, g, b, a] = canvas.getContext('2d')?.getImageData(x, y, 1, 1).data ?? [];
+      // A transparent pixel is outside the delivered frame (a crop's margin
+      // before the border is drawn): nothing there to read.
+      if (a === undefined || a === 0) {
+        readout.set(null);
+        return;
+      }
+      const before = split > 0 && x < split * w;
+      readout.set({ readout: readoutOf(r, g, b, clip && !before), before });
+    } catch {
+      readout.set(null);
+    }
+  }, [readout]);
+  const trackReadout = (e: ReactPointerEvent<HTMLElement>) => {
+    // A finger is panning or placing the divider, not pointing at a pixel.
+    if (e.pointerType === 'touch') return;
+    readoutAt.current = { x: e.clientX, y: e.clientY };
+    if (!readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
+  };
+  // A new picture, a slider step, the clipping view: the pixel under a
+  // pointer that has not moved is read again from what is now drawn.
+  useEffect(() => {
+    if (readoutAt.current && !readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
+  });
+  useEffect(
+    () => () => {
+      cancelAnimationFrame(readoutFrame.current);
+    },
+    [],
+  );
 
   const painting = useRef(false);
   const wipeFrom = (e: ReactPointerEvent<HTMLElement>) => {
@@ -1354,6 +1624,7 @@ export function useDevelopPicture({
       if (!touch) wipeFrom(e);
     },
     onPointerMove: (e) => {
+      trackReadout(e);
       if (painting.current && paint) {
         const at = pointAt(e.clientX, e.clientY);
         // A pointer that leaves the picture mid-stroke does NOT end it: a hand
@@ -1387,6 +1658,10 @@ export function useDevelopPicture({
         paint?.onEnd();
       }
       dragging.current = null;
+    },
+    onPointerLeave: () => {
+      readoutAt.current = null;
+      readout.set(null);
     },
   };
 
@@ -1438,6 +1713,7 @@ export function useDevelopPicture({
     picking,
     setPicking,
     pickAt,
+    sampleColour,
     pointAt,
     veilCanvasRef,
     stagePoint,
@@ -1450,6 +1726,7 @@ export function useDevelopPicture({
       state: loupeState,
       longEdge: full ? Math.max(full.source.width, full.source.height) : null,
     },
+    readout,
     handlers,
   };
 }

@@ -42,7 +42,9 @@ three accepted as drawn.
   id `mask-outline:<id>`): it evaluates `coverage` at the texel and 1.5 texels
   either side and draws ink/paper dashes where they straddle one half — the
   very line a gradient panel draws. The view is Hidden · Outline · Fill
-  (default Outline, **M** steps it), shown BY ITSELF while Pick or Paint is on
+  (default Outline, **M** steps it — ON THE LAYERS TAB: off it, `P` and `M`
+  are the delivery state's, send/hold and ignore, the rule fixed when #183 and
+  #185 met, `EditorKeyPress.layersTab`), shown BY ITSELF while Pick or Paint is on
   and otherwise only when pinned; **P** toggles Pick/Paint; a new Subject layer
   starts with Pick on.
 - **The blink is what the tap ADDED**: `useSubjectMasks.fresh` is one point's

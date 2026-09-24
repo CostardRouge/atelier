@@ -5,6 +5,7 @@
  * and the Develop tool place them where their own layout wants.
  */
 
+import type { SavedGrade } from '../lut/saved-grade';
 import { useState, useSyncExternalStore, type ReactNode } from 'react';
 import GradePanel from '../lut/GradePanel';
 import type { LutPreviewSource } from '../lut/LutGalleryModal';
@@ -12,7 +13,7 @@ import type { LutStack } from '../lut/use-lut-stack';
 import type { ButtonSize } from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
@@ -181,6 +182,8 @@ export function DevelopPresetsSection({
   onApply,
   onTold,
   onNaming,
+  look,
+  onApplyLook,
 }: {
   presets: DevelopPresets;
   draft: DevelopSettings;
@@ -188,22 +191,37 @@ export function DevelopPresetsSection({
   onApply: (settings: DevelopSettings) => void;
   onTold: (message: string) => void;
   onNaming?: (naming: boolean) => void;
+  /**
+   * The picture's own look, from a host whose pictures OWN one (the Develop
+   * tool): offered to a new preset as "with its look". Absent where a look
+   * lives elsewhere — Trips' rungs, the Studio's grade.
+   */
+  look?: SavedGrade | null;
+  /** Wear a preset's look — the same host only; elsewhere the numbers apply alone, and say so. */
+  onApplyLook?: (look: SavedGrade) => void;
 }) {
   const [naming, setNamingState] = useState(false);
   const [presetName, setPresetName] = useState('');
+  const [withLook, setWithLook] = useState(false);
+  const canSaveLook = Boolean(look);
   const setNaming = (on: boolean) => {
     setNamingState(on);
     onNaming?.(on);
   };
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-line">
-      <SectionLegend label="Presets">
+    <DevelopFold
+      id="presets"
+      title="Presets"
+      info={
         <p>
           Your own names for a light{presets.keptOn ? `, kept ${presets.keptOn}` : ''}. A chip writes a
           COPY of its numbers here — applied, never followed, so editing a preset later changes no
-          picture. There is no factory set.
+          picture. There is no factory set. A preset saved in the Develop tool may carry the
+          picture’s LOOK too (<em>+ look</em>); it is worn where a picture owns its look, and
+          elsewhere the numbers apply alone.
         </p>
-      </SectionLegend>
+      }
+    >
       {presets.place && <PresetsPlaceRow place={presets.place} />}
       {presets.list.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
@@ -213,12 +231,19 @@ export function DevelopPresetsSection({
                 type="button"
                 onClick={() => {
                   onApply({ ...DEFAULT_DEVELOP, ...p.settings });
-                  onTold(`applied ${p.name}`);
+                  if (p.look && onApplyLook) onApplyLook(p.look);
+                  onTold(p.look && !onApplyLook ? `applied ${p.name} — its look stays in Develop` : `applied ${p.name}`);
                 }}
                 className="px-2.5 py-[0.3rem] border-0 bg-transparent text-xs text-ink-soft cursor-pointer hover:text-accent-ink"
-                title={describeDevelop(p.settings)}
+                title={
+                  describeDevelop(p.settings) +
+                  (p.look ? (onApplyLook ? ' · and its look' : ' · its look applies in the Develop tool only; here the numbers alone') : '')
+                }
               >
                 {p.name}
+                {p.look && (
+                  <span className={`ml-1 font-mono text-3xs ${onApplyLook ? 'text-accent-ink' : 'text-faint line-through'}`}>+ look</span>
+                )}
               </button>
               <button
                 type="button"
@@ -240,8 +265,8 @@ export function DevelopPresetsSection({
             e.preventDefault();
             const name = presetName.trim();
             if (!name) return;
-            presets.onSave(name, { ...draft });
-            onTold(`saved ${name}`);
+            presets.onSave(name, { ...draft }, withLook && look ? look : null);
+            onTold(withLook && look ? `saved ${name} with its look` : `saved ${name}`);
             setPresetName('');
             setNaming(false);
           }}
@@ -263,6 +288,12 @@ export function DevelopPresetsSection({
             autoFocus
             className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
           />
+          {canSaveLook && (
+            <label className="flex-none inline-flex items-center gap-1 font-mono text-3xs text-muted cursor-pointer select-none" title="Save this picture’s look with the light">
+              <input type="checkbox" checked={withLook} onChange={(e) => setWithLook(e.target.checked)} className="accent-[var(--color-accent)]" />
+              + look
+            </label>
+          )}
           <button type="submit" className={developButtonClass} disabled={!presetName.trim()}>
             Save
           </button>
@@ -274,14 +305,14 @@ export function DevelopPresetsSection({
         <button
           type="button"
           onClick={() => setNaming(true)}
-          disabled={asShot}
+          disabled={asShot && !canSaveLook}
           className={`${developButtonClass} self-start`}
-          title={asShot ? 'Move a slider first' : 'Keep these numbers under a name of your own'}
+          title={asShot && !canSaveLook ? 'Move a slider first' : 'Keep these numbers under a name of your own'}
         >
           Save current as…
         </button>
       )}
-    </div>
+    </DevelopFold>
   );
 }
 
@@ -344,13 +375,17 @@ export function DevelopApplySection({
 }) {
   if (verbs.length === 0) return null;
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-line">
-      <SectionLegend label="Apply to…">
+    <DevelopFold
+      id="apply"
+      title="Apply to…"
+      foldable={verbs.length > 1}
+      info={
         <p>
           The same numbers written onto other pictures, now, each as its own copy — the look under it
           stays theirs. Done still writes this one.
         </p>
-      </SectionLegend>
+      }
+    >
       {verbs.map((verb) => (
         <div key={verb.id} className="flex flex-col items-start gap-1">
           <button
@@ -366,7 +401,7 @@ export function DevelopApplySection({
           {verb.hint && <span className="font-mono text-3xs text-faint leading-relaxed">{verb.hint}</span>}
         </div>
       ))}
-    </div>
+    </DevelopFold>
   );
 }
 
@@ -394,17 +429,19 @@ export function DevelopLookSection({
   previewLabel?: string | null;
 }) {
   return (
-    <div className="flex flex-col gap-2 pt-3 border-t border-line">
-      <span className="flex items-center gap-2">
-        <SectionLegend label="Look">
-          {legend ?? (
-            <p>
-              The same grade the piece already wears, applied AFTER this correction — set both in one
-              place. Looks apply top to bottom and the output transform last.
-            </p>
-          )}
-        </SectionLegend>
-      </span>
+    <DevelopFold
+      id="look"
+      title="Look"
+      marked={stack.layers.length > 0}
+      info={
+        legend ?? (
+          <p>
+            The same grade the piece already wears, applied AFTER this correction — set both in one
+            place. Looks apply top to bottom and the output transform last.
+          </p>
+        )
+      }
+    >
       {header}
       <GradePanel
         stack={stack}
@@ -412,6 +449,6 @@ export function DevelopLookSection({
         previewImage={previewImage}
         previewLabel={previewLabel}
       />
-    </div>
+    </DevelopFold>
   );
 }

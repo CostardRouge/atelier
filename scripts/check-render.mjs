@@ -291,6 +291,60 @@ const out = await page.evaluate(async () => {
     // The full lift from the centre out, on a dark frame: where a gain on the
     // code and a gain on the light are furthest apart.
     results.vignetteDark = vignetteRow('#404040', 100, 0);
+
+    // A MEASURED profile (Lensfun, `LensProfileTerms`): a picture whose red is
+    // its x and whose green is its y, so each channel reads back WHERE it was
+    // sampled — green through the profile's distortion (odd terms included,
+    // which the sliders never had), red through the distortion AND its own
+    // TCA. Then a flat grey through the profile's vignetting alone.
+    {
+      const profile = {
+        distortion: [0.06, -0.25, 0.1, 0.03],
+        tcaRed: [1.004, 0, 0.002],
+        tcaBlue: [0.997, 0, -0.001],
+        vignette: [0, 0, 0],
+      };
+      const ramp = draw((g) => {
+        const img = g.createImageData(S, S);
+        for (let y = 0; y < S; y += 1) for (let x = 0; x < S; x += 1) {
+          const i = (y * S + x) * 4;
+          img.data[i] = Math.round((255 * x) / (S - 1));
+          img.data[i + 1] = Math.round((255 * y) / (S - 1));
+          img.data[i + 2] = 128;
+          img.data[i + 3] = 255;
+        }
+        g.putImageData(img, 0, 0);
+      });
+      const pData = run(ramp, makeLensPass(null, 1, profile));
+      const span = Math.SQRT2; // a square frame: (ar / diag) * 2
+      const codeAt = (uv) => (255 * (uv * S - 0.5)) / (S - 1);
+      let worstG = 0, worstR = 0, probes = 0, moved = 0;
+      for (const fx of [0.12, 0.3, 0.5, 0.7, 0.88]) for (const fy of [0.15, 0.4, 0.62, 0.85]) {
+        const x = Math.floor(fx * S), y = Math.floor(fy * S);
+        const u = (x + 0.5) / S, v = (y + 0.5) / S;
+        const dx = (u - 0.5) * span, dy = (v - 0.5) * span;
+        const r = Math.hypot(dx, dy);
+        if (!r) continue;
+        const rs = lens.profileSourceRadius(r, profile.distortion);
+        const rr = lens.profileChannelRadius(rs, profile.tcaRed);
+        const gv = (dy / r) * rs / span + 0.5;
+        const ru = (dx / r) * rr / span + 0.5;
+        if (gv <= 0.01 || gv >= 0.99 || ru <= 0.01 || ru >= 0.99) continue;
+        probes += 1;
+        const i = (y * S + x) * 4;
+        worstG = Math.max(worstG, Math.abs(pData[i + 1] - codeAt(gv)));
+        worstR = Math.max(worstR, Math.abs(pData[i] - codeAt(ru)));
+        moved = Math.max(moved, Math.abs(codeAt(gv) - codeAt(v)));
+      }
+      const flat = draw((g) => { g.fillStyle = '#808080'; g.fillRect(0, 0, S, S); });
+      const k = [-0.9, 0.3, -0.1];
+      const vData = run(flat, makeLensPass(null, 1, { ...profile, distortion: [0, 0, 0, 0], tcaRed: [1, 0, 0], tcaBlue: [1, 0, 0], vignette: k }));
+      const centre = vData[((S >> 1) * S + (S >> 1)) * 4];
+      const corner = vData[((S >> 1) * S + OUT) * 4];
+      const { fromLinear, toLinear } = await import('/atelier/src/shared/lut/transfer.ts');
+      const expected = Math.round(255 * Math.min(1, fromLinear(toLinear(centre / 255, 'srgb') * lens.profileVignetteGain(toRadius(OUT), k), 'srgb')));
+      results.lensProfile = { probes, worstG: Number(worstG.toFixed(2)), worstR: Number(worstR.toFixed(2)), moved: Number(moved.toFixed(1)), centre, corner, expected };
+    }
   }
 
   // --- the mask: does the shader agree with maskAt, point for point? --------
@@ -438,6 +492,87 @@ const out = await page.evaluate(async () => {
         });
         rows[`except_${invert ? 'inverted' : 'plain'}`] = Number(worst.toFixed(4));
       }
+    }
+    // COMBINED masks (item 16): a linear, minus a painted part, intersected
+    // with an inverted ellipse, plus a band of brightness — every op, an
+    // invert, and a part's raster on its OWN unit (4), over the ramp so the
+    // band varies. `layerWeight` with each part's `maskAt` is the expectation.
+    {
+      const { layerWeight } = await import('/atelier/src/shared/develop/layer.ts');
+      const base = { ...maskMod.DEFAULT_LINEAR, x: 0.5, y: 0.5, angle: 70, feather: 0.9 };
+      const parts = [
+        { op: 'subtract', invert: false, mask: { kind: 'brush', strokes: [{ points: [[0.3, 0.3], [0.55, 0.7]], radius: 0.18, hardness: 0.3, erase: false }] } },
+        { op: 'intersect', invert: true, mask: { ...maskMod.DEFAULT_RADIAL, x: 0.75, y: 0.4, radiusX: 0.2, radiusY: 0.15, angle: 10, feather: 0.3 } },
+        { op: 'add', invert: false, mask: { ...maskMod.DEFAULT_LUMA, from: 0.8, to: 1, feather: 0.1 } },
+      ];
+      const bitmap = await createImageBitmap(ramp);
+      const values = [];
+      for (const [kind, from] of [['canvas', ramp], ['bitmap', bitmap]]) {
+        const lit = through(from, [passthroughPass]);
+        const got = through(from, [makeLayerPass({ lut: toBlack, mask: base, parts, aspectRatio: AR, id: `m:combined:${kind}` })]);
+        let worst = 0;
+        probes.forEach((p, i) => {
+          if (lit[i] < 0.15) return;
+          const [u, v] = uvOf(p);
+          const want = layerWeight(maskMod.maskAt(base, u, v, lit[i], AR), false, 0, 1,
+            parts.map((q) => ({ op: q.op, invert: q.invert, value: maskMod.maskAt(q.mask, u, v, lit[i], AR) })));
+          if (kind === 'canvas') values.push(want);
+          worst = Math.max(worst, Math.abs(1 - got[i] / lit[i] - want));
+        });
+        rows[`combined_${kind}`] = Number(worst.toFixed(4));
+      }
+      bitmap.close();
+      rows.combined_spread = Number((Math.max(...values) - Math.min(...values)).toFixed(3));
+    }
+    // A COLOUR RANGE: hue across the frame, lightness down it, so the range
+    // takes in a band and leaves the rest — measured against `maskAt` handed
+    // the very pixel the probe reads.
+    {
+      const hues = paint((g) => {
+        for (let x = 0; x < W; x += 1) {
+          for (let y = 0; y < H; y += 8) {
+            g.fillStyle = `hsl(${Math.round((x / W) * 360)}, 70%, ${Math.round(30 + (y / H) * 40)}%)`;
+            g.fillRect(x, y, 1, 8);
+          }
+        }
+      });
+      const readRgb = (canvas) => {
+        const o = document.createElement('canvas'); o.width = W; o.height = H;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(canvas, 0, 0);
+        const d = oc.getImageData(0, 0, W, H).data;
+        return probes.map(([x, y]) => [d[(y * W + x) * 4] / 255, d[(y * W + x) * 4 + 1] / 255, d[(y * W + x) * 4 + 2] / 255]);
+      };
+      // Two samples taken from the picture itself, at two probes' own colours,
+      // so the range is full at those two and falls off across the rest.
+      const shown = (() => {
+        const cv = document.createElement('canvas');
+        const g0 = createRenderGraph(cv); g0.resize(W, H); g0.render(hues, [passthroughPass]);
+        const got = readRgb(cv); g0.dispose();
+        return got;
+      })();
+      const at = (i) => ({ x: 0, y: 0, r: shown[i][0], g: shown[i][1], b: shown[i][2] });
+      const colour = { kind: 'colour', range: 0.3, samples: [at(6), at(13)] };
+      const bitmap = await createImageBitmap(hues);
+      const values = [];
+      for (const [kind, from] of [['canvas', hues], ['bitmap', bitmap]]) {
+        const cv = document.createElement('canvas');
+        const g1 = createRenderGraph(cv); g1.resize(W, H); g1.render(from, [passthroughPass]);
+        const lit = readRgb(cv); g1.dispose();
+        const got = through(from, [makeLayerPass({ lut: toBlack, mask: colour, aspectRatio: AR, id: `m:colour:${kind}` })]);
+        let worst = 0;
+        probes.forEach((p, i) => {
+          const [r, gg, b] = lit[i];
+          if (r < 0.15) return; // the red channel is what is read back
+          const [u, v] = uvOf(p);
+          const want = maskMod.maskAt(colour, u, v, maskMod.lumaOf(r, gg, b), AR, [r, gg, b]);
+          if (kind === 'canvas') values.push(want);
+          worst = Math.max(worst, Math.abs(1 - got[i] / r - want));
+        });
+        rows[`colour_${kind}`] = Number(worst.toFixed(4));
+      }
+      bitmap.close();
+      rows.colour_spread = Number((Math.max(...values) - Math.min(...values)).toFixed(3));
     }
     // The OUTLINE finish: ink or paper only where the mask crosses one half,
     // the picture untouched wherever the mask is plainly in or out.
@@ -678,7 +813,9 @@ const out = await page.evaluate(async () => {
       dg.fillRect(x, y, 1, 1);
     }
     const img = { width: DW, height: DH, data: rgb };
-    const settings = { ...dm.DEFAULT_DETAIL, luminance: 60, colour: 50, defringe: 100, sharpen: 80, sharpenRadius: 1.2 };
+    // Detail at 25 and Masking at 40, so the sharpen row holds the damping and
+    // the edge mask as well as the plain unsharp mask.
+    const settings = { ...dm.DEFAULT_DETAIL, luminance: 60, colour: 50, defringe: 100, sharpen: 80, sharpenRadius: 1.2, sharpenDetail: 25, sharpenMasking: 40 };
     const terms = dm.detailTerms(settings, 1);
     const through = (passes) => {
       const cv = document.createElement('canvas');
@@ -710,11 +847,135 @@ const out = await page.evaluate(async () => {
     rows.denoise = compare(through([dp.makeBilateralPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
     rows.defringe = compare(through([dp.makeDefringePass(terms)]), dm.applyDetail(img, (i, x, y) => dm.defringeAt(i, x, y, terms)));
     rows.sharpen = compare(through([dp.makeSharpenPass(terms)]), dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
+    // The Masking view: the weight painted as grey, against sharpenMaskAt.
+    rows.sharpenMask = compare(
+      through([dp.makeSharpenPass(terms, true)]),
+      dm.applyDetail(img, (i, x, y) => { const m = dm.sharpenMaskAt(i, x, y, terms); return [m, m, m]; }),
+    );
     // And that each did something: the pure output differs from the source.
     const moved = (pure) => { let m = 0; for (let i = 0; i < rgb.length; i++) m = Math.max(m, Math.abs(pure.data[i] - rgb[i])); return m; };
     rows.movedDenoise = moved(dm.applyDetail(img, (i, x, y) => dm.bilateralAt(i, x, y, terms)));
     rows.movedSharpen = moved(dm.applyDetail(img, (i, x, y) => dm.sharpenAt(i, x, y, terms)));
     results.detail = rows;
+  }
+
+  // --- the post-crop vignette, from BOTH source kinds ------------------------
+  //
+  // It asks WHERE a pixel is (through a crop's affine), so it converts with
+  // imageUv — and a pass that gets that wrong is right from a canvas and
+  // upside down from an ImageBitmap, which is every real photograph. A crop
+  // off-centre and turned, so a flip cannot hide in a symmetry.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const pv = await import('/atelier/src/shared/render/post-vignette.ts');
+    const pvp = await import('/atelier/src/shared/render/post-vignette-pass.ts');
+    const vf = await import('/atelier/src/shared/develop/vignette-frame.ts');
+    const VW = 180, VH = 120;
+    const vc = document.createElement('canvas'); vc.width = VW; vc.height = VH;
+    const vctx = vc.getContext('2d');
+    const vimg = vctx.createImageData(VW, VH);
+    for (let y = 0; y < VH; y++) for (let x = 0; x < VW; x++) {
+      const i = (y * VW + x) * 4;
+      vimg.data[i] = 90 + Math.round((x / VW) * 120); vimg.data[i + 1] = 150; vimg.data[i + 2] = 60 + Math.round((y / VH) * 150); vimg.data[i + 3] = 255;
+    }
+    vctx.putImageData(vimg, 0, 0);
+    const vbitmap = await createImageBitmap(vc);
+    const vignette = { amount: -80, midpoint: 20, roundness: 40, feather: 30, highlights: 50 };
+    const framing = { scale: 1.3, x: 0.25, y: -0.2, rotation: 15, flipX: false, flipY: false, fit: 'cover' };
+    const ratio = 0.8;
+    const affine = vf.frameAffine(VW, VH, ratio, framing);
+    const terms = pv.postVignetteTerms(vignette);
+    const through = (source) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(VW, VH);
+      graph.render(source, [pvp.makePostVignettePass(vignette, affine, ratio)]);
+      const o = document.createElement('canvas'); o.width = VW; o.height = VH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, VW, VH).data;
+      graph.dispose();
+      return d;
+    };
+    const worst = (gpu) => {
+      let w = 0;
+      for (let y = 4; y < VH; y += 9) for (let x = 3; x < VW; x += 11) {
+        const i = (y * VW + x) * 4;
+        const [u, v] = pv.toFrame(affine, (x + 0.5) / VW, (y + 0.5) / VH);
+        const want = pv.postVignetteAt(vimg.data[i] / 255, vimg.data[i + 1] / 255, vimg.data[i + 2] / 255, u, v, ratio, terms);
+        for (let c = 0; c < 3; c++) w = Math.max(w, Math.abs(gpu[i + c] - Math.round(want[c] * 255)));
+      }
+      return w;
+    };
+    const fromCanvas = through(vc);
+    // How much it darkened somewhere — a pass that drew nothing proves nothing.
+    let moved = 0;
+    for (let i = 0; i < fromCanvas.length; i += 4) moved = Math.max(moved, vimg.data[i + 1] - fromCanvas[i + 1]);
+    results.postVignette = { canvas: worst(fromCanvas), bitmap: worst(through(vbitmap)), moved };
+  }
+
+  // --- presence: dehaze, clarity, texture against presence.ts --------------
+  //
+  // Big enough (400×300) that each blur's taps are spaced PAST a pixel and
+  // read between texels — the branch the small detail picture never reaches —
+  // and each pair of passes (the X blur into alpha, then the Y blur and the
+  // move) is held to the pure twin at a grid of probes.
+  {
+    const { createRenderGraph } = await import('/atelier/src/shared/render/graph.ts');
+    const pm = await import('/atelier/src/shared/render/presence.ts');
+    const pp = await import('/atelier/src/shared/render/presence-pass.ts');
+    const PW = 400, PH = 300;
+    let seed = 777;
+    const rnd = () => { seed = (seed * 1664525 + 1013904223) >>> 0; return seed / 4294967296; };
+    const rgb = new Float32Array(PW * PH * 3);
+    const pc = document.createElement('canvas'); pc.width = PW; pc.height = PH;
+    const pctx = pc.getContext('2d');
+    const bytes = pctx.createImageData(PW, PH);
+    for (let y = 0; y < PH; y++) for (let x = 0; x < PW; x++) {
+      // A hazy gradient, a dark block, a bright block and noise over all of it.
+      const haze = 0.3 + 0.4 * (y / PH);
+      let px = [haze * 0.9, haze, haze * 1.1];
+      if (x > 60 && x < 160 && y > 60 && y < 200) px = [0.15, 0.25, 0.1];
+      if (x > 230 && x < 330 && y > 100 && y < 170) px = [0.85, 0.8, 0.7];
+      px = px.map((v) => Math.round(Math.max(0, Math.min(1, v + (rnd() - 0.5) * 0.06)) * 255) / 255);
+      rgb.set(px, (y * PW + x) * 3);
+      const i = (y * PW + x) * 4;
+      bytes.data[i] = Math.round(px[0] * 255); bytes.data[i + 1] = Math.round(px[1] * 255); bytes.data[i + 2] = Math.round(px[2] * 255); bytes.data[i + 3] = 255;
+    }
+    pctx.putImageData(bytes, 0, 0);
+    const img = { width: PW, height: PH, data: rgb };
+    const through = (passes) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(PW, PH);
+      graph.render(pc, passes);
+      const o = document.createElement('canvas'); o.width = PW; o.height = PH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      const d = oc.getImageData(0, 0, PW, PH).data;
+      graph.dispose();
+      return d;
+    };
+    const probes = [];
+    for (let y = 5; y < PH - 5; y += 23) for (let x = 5; x < PW - 5; x += 29) probes.push([x, y]);
+    const compare = (gpu, pure) => {
+      let worst = 0;
+      for (const [x, y] of probes) {
+        for (let c = 0; c < 3; c++) {
+          const want = Math.round(Math.max(0, Math.min(1, pure.data[(y * PW + x) * 3 + c])) * 255);
+          worst = Math.max(worst, Math.abs(gpu[(y * PW + x) * 4 + c] - want));
+        }
+      }
+      return worst;
+    };
+    const moved = (pure) => { let m = 0; for (let i = 0; i < rgb.length; i++) m = Math.max(m, Math.abs(pure.data[i] - rgb[i])); return m; };
+    const rows = {};
+    for (const [op, amount] of [['dehaze', 0.8], ['dehaze', -0.6], ['clarity', 1], ['clarity', -1], ['texture', 1], ['texture', -0.7]]) {
+      const amounts = { dehaze: 0, clarity: 0, texture: 0, [op]: amount };
+      const pure = pm.applyPresence(img, amounts);
+      rows[`${op} ${amount > 0 ? '+' : ''}${amount}`] = { worst: compare(through(pp.presencePasses(amounts)), pure), moved: moved(pure) };
+    }
+    results.presence = rows;
   }
 
   // --- repair: heal and clone against repair.ts, from BOTH source kinds ----
@@ -1311,6 +1572,16 @@ for (const [name, vig] of [['mid grey', out.vignette], ['dark grey', out.vignett
   }
 }
 
+{
+  const p = out.lensProfile;
+  const ok = p.probes >= 12 && p.worstG <= 1.6 && p.worstR <= 1.6 && p.moved > 3 && Math.abs(p.corner - p.expected) <= 2 && p.corner > p.centre + 10;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  a measured lens profile: green (distortion) worst ${p.worstG} codes, red (distortion + TCA) worst ${p.worstR} ` +
+      `over ${p.probes} probes, moving up to ${p.moved}; its vignetting lifts ${p.centre} → ${p.corner} against ${p.expected}`,
+  );
+}
+
 const mask = out.mask;
 console.log('\n  masks, against maskAt over 20 points of the frame:');
 for (const shape of ['linear', 'radial', 'luma', 'brush']) {
@@ -1329,6 +1600,17 @@ for (const row of ['except_plain', 'except_inverted']) {
   const ok = mask[row] <= 0.006;
   if (!ok) bad += 1;
   console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${row.padEnd(15)} worst ${mask[row].toFixed(4)} against layerWeight — the subject taken out, after the invert`);
+}
+for (const row of ['combined', 'colour']) {
+  const spread = mask[`${row}_spread`];
+  const worst = Math.max(mask[`${row}_canvas`], mask[`${row}_bitmap`]);
+  const ok = worst <= 0.006 && spread > 0.05;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  ${row.padEnd(15)} worst ${worst.toFixed(4)} ` +
+      `(canvas ${mask[`${row}_canvas`]}, bitmap ${mask[`${row}_bitmap`]}), spread ${spread}` +
+      (row === 'combined' ? ' — linear − painted ∩ not radial + band, against layerWeight' : ' — two samples, against maskAt on the pixel'),
+  );
 }
 {
   const { drawn, stray, edges, missed } = mask.outline;
@@ -1411,15 +1693,36 @@ const hs = out.half;
 
 const det = out.detail;
 console.log('\n  detail, against detail.ts at 96 probes of a noisy edge:');
-for (const name of ['chroma', 'denoise', 'defringe', 'sharpen']) {
+for (const name of ['chroma', 'denoise', 'defringe', 'sharpen', 'sharpenMask']) {
   const worst = det[name];
   const ok = worst <= 2;
   if (!ok) bad += 1;
-  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(9)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed 2)`);
+  console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(11)} worst ${worst} code${worst === 1 ? '' : 's'} (allowed 2)`);
 }
 if (det.movedDenoise < 0.01 || det.movedSharpen < 0.01) {
   bad += 1;
   console.log('  FAIL  a pass moved nothing, so its row proves nothing');
+}
+
+const pvr = out.postVignette;
+{
+  const ok = pvr.canvas <= 2 && pvr.bitmap <= 2 && pvr.moved > 20;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  post-crop vignette against post-vignette.ts, a turned off-centre crop: canvas worst ${pvr.canvas}, ` +
+      `ImageBitmap worst ${pvr.bitmap} code(s) (allowed 2); it darkened by up to ${pvr.moved}`,
+  );
+}
+
+const pres = out.presence;
+console.log('\n  presence, against presence.ts on 400×300 at 156 probes (taps spaced past a pixel, read bilinearly):');
+for (const [name, row] of Object.entries(pres)) {
+  const ok = row.worst <= 2 && row.moved > 0.01;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(12)} worst ${row.worst} code${row.worst === 1 ? '' : 's'} (allowed 2)` +
+      (row.moved > 0.01 ? '' : ' — and it MOVED NOTHING, so the row proves nothing'),
+  );
 }
 
 const rep = out.repair;

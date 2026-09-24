@@ -22,6 +22,7 @@ import type { RenderPass } from './graph';
 import {
   BILATERAL_RADIUS,
   CHROMA_MAX_RADIUS,
+  DEFAULT_DETAIL,
   DEFRINGE_EDGE,
   DEFRINGE_PURPLE,
   SHARPEN_MAX_RADIUS,
@@ -30,6 +31,7 @@ import {
   type DetailSettings,
   type DetailTerms,
 } from './detail';
+import { presencePasses } from './presence-pass';
 
 /** The BT.709 split and its inverse, exactly `toYcc` / `fromYcc`. */
 const YCC = `
@@ -132,10 +134,26 @@ uniform vec2 u_texel;
 uniform float u_gain;
 uniform float u_sigma;
 uniform int u_radius;
+uniform float u_damp;      // Detail: 0 = the plain unsharp mask
+uniform float u_mask;      // Masking: the edge steepness at which it is fully on; 0 = everywhere
+uniform bool u_showMask;   // paint the mask instead of the picture — a way of LOOKING
 ${YCC}
+float lumaAt(vec2 d) { return lumaOf(texture(u_src, v_uv + u_texel * d).rgb); }
+float edgeSobel() {
+  float gx = (lumaAt(vec2(1.0, -1.0)) + 2.0 * lumaAt(vec2(1.0, 0.0)) + lumaAt(vec2(1.0, 1.0))
+    - lumaAt(vec2(-1.0, -1.0)) - 2.0 * lumaAt(vec2(-1.0, 0.0)) - lumaAt(vec2(-1.0, 1.0))) / 8.0;
+  float gy = (lumaAt(vec2(-1.0, 1.0)) + 2.0 * lumaAt(vec2(0.0, 1.0)) + lumaAt(vec2(1.0, 1.0))
+    - lumaAt(vec2(-1.0, -1.0)) - 2.0 * lumaAt(vec2(0.0, -1.0)) - lumaAt(vec2(1.0, -1.0))) / 8.0;
+  return length(vec2(gx, gy));
+}
 void main() {
   vec4 src = texture(u_src, v_uv);
   float y = lumaOf(src.rgb);
+  float m = u_mask > 0.0 ? smoothstep(0.25 * u_mask, u_mask, edgeSobel()) : 1.0;
+  if (u_showMask) {
+    outColor = vec4(vec3(m), src.a);
+    return;
+  }
   float acc = 0.0;
   float sum = 0.0;
   for (int dy = -${SHARPEN_MAX_RADIUS}; dy <= ${SHARPEN_MAX_RADIUS}; dy++) {
@@ -147,7 +165,9 @@ void main() {
       sum += w;
     }
   }
-  float out_y = max(0.0, y + u_gain * (y - acc / sum));
+  float h = y - acc / sum;
+  float damped = h / (1.0 + u_damp * abs(h));
+  float out_y = max(0.0, y + u_gain * damped * m);
   outColor = vec4(scaleToLuma(src.rgb, y, out_y), src.a);
 }`;
 
@@ -187,7 +207,13 @@ export function makeDefringePass(terms: DetailTerms): RenderPass {
   };
 }
 
-export function makeSharpenPass(terms: DetailTerms): RenderPass {
+/**
+ * The sharpen. `showMask` paints its Masking weight instead — white where it
+ * sharpens, black where it leaves the picture alone — Lightroom's Alt-drag
+ * view, asked for only by the stage and the loupe, never by anything that
+ * leaves.
+ */
+export function makeSharpenPass(terms: DetailTerms, showMask = false): RenderPass {
   return {
     id: 'sharpen',
     fragment: SHARPEN_FRAGMENT,
@@ -195,6 +221,9 @@ export function makeSharpenPass(terms: DetailTerms): RenderPass {
       gl.uniform1f(at(gl, program, 'u_gain'), terms.sharpenGain);
       gl.uniform1f(at(gl, program, 'u_sigma'), terms.sharpenSigma);
       gl.uniform1i(at(gl, program, 'u_radius'), terms.sharpenRadius);
+      gl.uniform1f(at(gl, program, 'u_damp'), terms.sharpenDamp);
+      gl.uniform1f(at(gl, program, 'u_mask'), terms.sharpenMask);
+      gl.uniform1i(at(gl, program, 'u_showMask'), showMask ? 1 : 0);
     },
   };
 }
@@ -202,19 +231,30 @@ export function makeSharpenPass(terms: DetailTerms): RenderPass {
 export interface DetailPasses {
   /** Before the cube, on the source: colour noise (two passes), luminance noise, defringe. */
   pre: RenderPass[];
-  /** After every warp and layer: sharpen. */
+  /** After every warp and layer: dehaze, clarity, texture (`presence-pass.ts`), then sharpen. */
   post: RenderPass[];
 }
 
-/** Both lists for a picture's settings at the stage's pixel scale; both empty when nothing is set. */
-export function detailPasses(detail: DetailSettings | null | undefined, pixelScale = 1): DetailPasses {
-  if (isDefaultDetail(detail)) return { pre: [], post: [] };
+/**
+ * Both lists for a picture's settings at the stage's pixel scale; both empty
+ * when nothing is set. `showSharpenMask` is the stage's view of the Masking
+ * weight, drawn whatever the rest of the record says — white everywhere when
+ * nothing is masked.
+ */
+export function detailPasses(
+  detail: DetailSettings | null | undefined,
+  pixelScale = 1,
+  showSharpenMask = false,
+): DetailPasses {
+  if (isDefaultDetail(detail) && !showSharpenMask) return { pre: [], post: [] };
   const terms = detailTerms(detail, pixelScale);
   const pre: RenderPass[] = [];
   if (terms.chromaSigma > 0) pre.push(makeChromaBlurPass(terms, 'x'), makeChromaBlurPass(terms, 'y'));
   if (terms.rangeSigma > 0) pre.push(makeBilateralPass(terms));
   if (terms.defringe > 0) pre.push(makeDefringePass(terms));
-  const post: RenderPass[] = [];
-  if (terms.sharpenGain > 0) post.push(makeSharpenPass(terms));
+  const s = { ...DEFAULT_DETAIL, ...(detail ?? {}) };
+  const post: RenderPass[] = presencePasses({ dehaze: s.dehaze / 100, clarity: s.clarity / 100, texture: s.texture / 100 });
+  if (showSharpenMask) post.push(makeSharpenPass(terms, true));
+  else if (terms.sharpenGain > 0) post.push(makeSharpenPass(terms));
   return { pre, post };
 }

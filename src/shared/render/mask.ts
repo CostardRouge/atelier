@@ -6,14 +6,18 @@
  * is in (`docs/photo-editor.md` §2.2). A mask is a function of WHERE, so it
  * needed the multi-pass core before it could exist at all.
  *
- * Four shapes, which between them cover *masking*, *linear and radial
- * gradients* and *creative vignetting* from the maintainer's list:
+ * The shapes, which between them cover *masking*, *linear and radial
+ * gradients* and *creative vignetting* from the maintainer's list — and, since
+ * audit item 16, a layer COMBINES several of them (`combineMask`, `MaskPart`
+ * in `develop/layer.ts`):
  *
  * - **linear** — a straight edge with a soft transition. A darkened sky.
  * - **radial** — an ellipse, rotatable. A subject lifted out of its surround,
  *   or a vignette drawn on purpose rather than corrected away.
  * - **luma** — a band of BRIGHTNESS rather than a place: the shadows alone, or
  *   the highlights alone, wherever they are in the frame.
+ * - **colour** — the colours the author sampled, wherever they are: a sky's
+ *   blue, a jacket.
  * - **brush** — painted strokes, kept as VECTORS so the document stays small
  *   and a mask painted on a preview delivers at full size.
  *
@@ -34,7 +38,7 @@
  * Pure and DOM-free.
  */
 
-export type MaskKind = 'linear' | 'radial' | 'luma' | 'brush' | 'subject';
+export type MaskKind = 'linear' | 'radial' | 'luma' | 'colour' | 'brush' | 'subject';
 
 export interface LinearMask {
   kind: 'linear';
@@ -75,6 +79,37 @@ export interface LumaMask {
   to: number;
   /** How far past each end the mask fades out, in the same units. */
   feather: number;
+}
+
+/**
+ * A COLOUR RANGE — every pixel near one of the colours the author sampled,
+ * wherever it is in the frame: Lightroom's Color Range. A band of HUE and
+ * chroma the way `luma` is a band of brightness; a sky's blue, a jacket, the
+ * green of a hillside, picked by a tap on the picture.
+ *
+ * A sample keeps WHERE it was taken as well as the colour: the colour is what
+ * the render compares against, the place is what the stage marks and what a
+ * second tap on it removes. The colour is the one the LAYER sees — the picture
+ * under this layer, graded, warped, before any layer above and before the
+ * finishing passes — taken once at the tap and stored, so the mask does not
+ * slide when a slider below it moves.
+ */
+export interface ColourSample {
+  /** Where it was taken, in [0,1] frame coordinates. */
+  x: number;
+  y: number;
+  /** The colour there, ENCODED (display-referred) 0..1, as the pass reads it. */
+  r: number;
+  g: number;
+  b: number;
+}
+
+export interface ColourMask {
+  kind: 'colour';
+  /** Up to `MAX_COLOUR_SAMPLES`; none covers nothing, like an empty brush. */
+  samples: readonly ColourSample[];
+  /** Refine, 0..1: how far from a sample a colour may stray and still be in. */
+  range: number;
 }
 
 /**
@@ -123,7 +158,64 @@ export interface SubjectMask {
   model: string;
 }
 
-export type Mask = LinearMask | RadialMask | LumaMask | BrushMask | SubjectMask;
+export type Mask = LinearMask | RadialMask | LumaMask | ColourMask | BrushMask | SubjectMask;
+
+/**
+ * How a further mask COMBINES with what is there: Lightroom's Add, Subtract
+ * and Intersect. `combineMask` is the maths; `layer-pass.ts` transcribes it.
+ */
+export type MaskOp = 'add' | 'subtract' | 'intersect';
+
+export const MASK_OPS: readonly MaskOp[] = ['add', 'subtract', 'intersect'];
+
+/**
+ * `add` is the LARGER of the two — a union, so adding a shape to itself
+ * changes nothing and two overlapping gradients never add up to more than
+ * either (a screen would, and the overlap would read as a third shape).
+ * `subtract` is `m × (1 − v)` and `intersect` `m × v`: the product, so two
+ * feathers crossing make a feather rather than the corner a `min` draws. The
+ * subtraction is also the one the subject hole already used (`layerWeight`).
+ */
+export function combineMask(m: number, v: number, op: MaskOp): number {
+  if (op === 'subtract') return m * (1 - v);
+  if (op === 'intersect') return m * v;
+  return m > v ? m : v;
+}
+
+/** How many colours one range can hold — Lightroom's five. */
+export const MAX_COLOUR_SAMPLES = 5;
+
+export const DEFAULT_COLOUR_RANGE = 0.5;
+
+/**
+ * The colour a range compares in: an OPPONENT plane (red–green, yellow–blue)
+ * for the hue and chroma, and luma for the lightness at half the weight — so a
+ * sampled blue takes in the sky's lighter and darker blues, and not a grey of
+ * the same brightness. Encoded values, like the luma mask's, because that is
+ * what the author sees and taps.
+ */
+function opponent(r: number, g: number, b: number): [number, number, number] {
+  return [r - g, (r + g) * 0.5 - b, lumaOf(r, g, b)];
+}
+
+/** Refine → the distance inside which a colour is fully in; it fades out by twice that. */
+export function colourReach(range: number): number {
+  return 0.04 + 0.36 * clamp(range, 0, 1);
+}
+
+/** How much of a colour a range takes in, 0..1: the nearest sample decides. */
+export function colourRangeAt(mask: ColourMask, r: number, g: number, b: number): number {
+  const reach = colourReach(mask.range);
+  const [a, y, l] = opponent(r, g, b);
+  let best = 0;
+  for (const s of mask.samples) {
+    const [sa, sy, sl] = opponent(s.r, s.g, s.b);
+    const d = Math.hypot(a - sa, y - sy, (l - sl) * 0.5);
+    const m = 1 - smoothStep01((d - reach) / reach);
+    if (m > best) best = m;
+  }
+  return best;
+}
 
 export const DEFAULT_LINEAR: Readonly<LinearMask> = Object.freeze({
   kind: 'linear',
@@ -169,6 +261,7 @@ export const DEFAULT_LUMA: Readonly<LumaMask> = Object.freeze({
 export function defaultMask(kind: MaskKind): Mask {
   if (kind === 'radial') return { ...DEFAULT_RADIAL };
   if (kind === 'luma') return { ...DEFAULT_LUMA };
+  if (kind === 'colour') return { kind: 'colour', samples: [], range: DEFAULT_COLOUR_RANGE };
   if (kind === 'brush') return { kind: 'brush', strokes: [] };
   if (kind === 'subject') return { kind: 'subject', points: [], model: SUBJECT_MODEL };
   return { ...DEFAULT_LINEAR };
@@ -334,6 +427,8 @@ export function maskAt(
   v: number,
   luma: number,
   aspectRatio = 1,
+  /** The pixel itself, ENCODED — only a colour range reads it, and without it one covers nothing. */
+  rgb?: readonly [number, number, number],
 ): number {
   // No mask is the WHOLE picture, not none of it: a layer with nothing drawn
   // on it is a global adjustment, which is how one is started before a shape
@@ -347,6 +442,8 @@ export function maskAt(
     const down = smoothStep01((mask.to + f - luma) / f);
     return up * down;
   }
+
+  if (mask.kind === 'colour') return rgb ? colourRangeAt(mask, rgb[0], rgb[1], rgb[2]) : 0;
 
   const [px, py] = framePoint(u, v, aspectRatio);
 
@@ -420,6 +517,20 @@ export function normaliseMask(raw: unknown): Mask | null {
       feather: clamp(num(src.feather, DEFAULT_LUMA.feather), 0, 1),
     };
   }
+  if (src.kind === 'colour') {
+    const raw = Array.isArray(src.samples) ? src.samples : [];
+    const samples: ColourSample[] = [];
+    for (const entry of raw) {
+      if (!entry || typeof entry !== 'object') continue;
+      const e = entry as Record<string, unknown>;
+      const vals = [e.x, e.y, e.r, e.g, e.b].map((v) => num(v, NaN));
+      if (vals.some((v) => !Number.isFinite(v))) continue;
+      const [x, y, r, g, b] = vals;
+      samples.push({ x: clamp(x, 0, 1), y: clamp(y, 0, 1), r: clamp(r, 0, 1), g: clamp(g, 0, 1), b: clamp(b, 0, 1) });
+      if (samples.length >= MAX_COLOUR_SAMPLES) break;
+    }
+    return { kind: 'colour', samples, range: clamp(num(src.range, DEFAULT_COLOUR_RANGE), 0, 1) };
+  }
   if (src.kind === 'brush') {
     const raw = Array.isArray(src.strokes) ? src.strokes : [];
     const strokes: BrushStroke[] = [];
@@ -492,6 +603,16 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
       a.points.every((p, i) => p[0] === b.points[i][0] && p[1] === b.points[i][1])
     );
   }
+  if (a.kind === 'colour' && b.kind === 'colour') {
+    return (
+      a.range === b.range &&
+      a.samples.length === b.samples.length &&
+      a.samples.every((s, i) => {
+        const t = b.samples[i];
+        return s.x === t.x && s.y === t.y && s.r === t.r && s.g === t.g && s.b === t.b;
+      })
+    );
+  }
   if (a.kind === 'brush' && b.kind === 'brush') {
     if (a.strokes.length !== b.strokes.length) return false;
     return a.strokes.every((s, i) => {
@@ -536,6 +657,9 @@ export function cloneMask(m: Mask | null | undefined): Mask | null {
   if (m.kind === 'subject') {
     return { kind: 'subject', model: m.model, points: m.points.map((p) => [p[0], p[1]] as const) };
   }
+  if (m.kind === 'colour') {
+    return { kind: 'colour', range: m.range, samples: m.samples.map((s) => ({ ...s })) };
+  }
   return { ...m } as Mask;
 }
 
@@ -551,6 +675,10 @@ export function describeMask(m: Mask | null | undefined): string {
   if (m.kind === 'subject') {
     const n = m.points.length;
     return n === 0 ? 'subject · tap it' : `subject · ${n} point${n === 1 ? '' : 's'}`;
+  }
+  if (m.kind === 'colour') {
+    const n = m.samples.length;
+    return n === 0 ? 'colour · tap one' : `colour · ${n} sample${n === 1 ? '' : 's'}`;
   }
   // A luma band gets a WORD where it has one: "shadows" says more than
   // "0.00–0.35" to anybody, and the numbers are on the sliders anyway.
