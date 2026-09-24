@@ -134,6 +134,7 @@ export default function MetadataSection({
         label="Copyright"
         htmlFor={copyrightId}
         align="start"
+        hintShown
         hint={
           rights.copyright ? (
             <p>
@@ -294,6 +295,7 @@ function PictureWords({
         label="Caption"
         htmlFor={captionId}
         align="start"
+        hintShown
         hint={written ? undefined : <p>Kept on the picture, not written: <em>Title and caption</em> is off for this roll.</p>}
       >
         <textarea

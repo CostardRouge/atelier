@@ -1,4 +1,4 @@
-import SectionLegend from '../../shared/ui/SectionLegend';
+import DevelopFold from '../../shared/develop/DevelopFold';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
 import { developLinkClass } from '../../shared/develop/develop-classes';
 import { DEFAULT_LENS, isDefaultLens, type LensCorrection } from '../../shared/render/lens';
@@ -132,12 +132,27 @@ export default function LensPanel({
     onChange(isDefaultLens(next) ? null : next);
   };
 
+  const touched = !isDefaultLens(value);
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Lens">
-        <p>{HINT}</p>
-        <p>{PROFILES}</p>
-      </SectionLegend>
+    <DevelopFold
+      id="lens"
+      title="Lens"
+      marked={touched || Boolean(profile?.inEffect)}
+      info={
+        <>
+          <p>{HINT}</p>
+          <p>{PROFILES}</p>
+          <p>Corrected before the perspective, and before the crop.</p>
+        </>
+      }
+      actions={
+        touched ? (
+          <button type="button" className={developLinkClass} onClick={() => onChange(null)}>
+            Reset
+          </button>
+        ) : undefined
+      }
+    >
       {profile && <ProfileBlock p={profile} />}
       {KEYS.map((k) => (
         <RangeSlider
@@ -149,17 +164,6 @@ export default function LensPanel({
           onChange={(v) => write(k.key, v)}
         />
       ))}
-      {!isDefaultLens(value) && (
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-3xs text-faint">
-            corrected before the perspective, and before the crop
-          </span>
-          <span className="flex-1" />
-          <button type="button" className={developLinkClass} onClick={() => onChange(null)}>
-            Reset
-          </button>
-        </div>
-      )}
-    </div>
+    </DevelopFold>
   );
 }

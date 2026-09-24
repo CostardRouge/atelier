@@ -1156,6 +1156,11 @@ click a section's title bar to close or open it; a closed section with
 anything set in it keeps a dot beside its name. Levels, the curve, the mixer and
 grading start closed. What you fold is remembered while the tab is open — from
 one picture to the next, and across a reload — and never written to the roll.
+The Crop tab folds the same way (Crop, Borders, Perspective, Lens, and the
+Apply-to blocks; Borders starts closed). What a setting does is explained
+behind the small **ⓘ** beside its name rather than under it, so the column
+holds the controls; what a line says about the picture right now — why it
+leaves at this size, the copyright that will be written — stays in the open.
 Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the

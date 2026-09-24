@@ -21,8 +21,8 @@
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { useId, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
-import InfoDot from './InfoDot';
+import { createContext, useContext, useId, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import InfoDot, { InfoDotButton } from './InfoDot';
 import { Icons } from './icons';
 
 const OPEN_KEY = 'atelier.inspector.';
@@ -195,11 +195,44 @@ export function InspectorSection({
   );
 }
 
+/**
+ * Whether a row's `hint` is FOLDED behind an ⓘ beside its label instead of
+ * standing under the control. Off everywhere by default; the Develop
+ * inspector turns it on (`FoldHints`), where the maintainer found the prose
+ * under every dial — the grain's, the look's — costing the column more than
+ * the dials (2026-09-24). A hint that says a STATE rather than explaining
+ * (`hintShown`) stays in the open either way.
+ */
+const HintsFolded = createContext(false);
+
+export function FoldHints({ children }: { children: ReactNode }) {
+  return <HintsFolded.Provider value>{children}</HintsFolded.Provider>;
+}
+
+/** The hint of a row: under the control, or behind a dot the caller draws. */
+function useRowHint(hint: ReactNode, shown: boolean, about: ReactNode) {
+  const folded = useContext(HintsFolded) && !shown && Boolean(hint);
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const dot = folded ? (
+    <InfoDotButton
+      about={typeof about === 'string' ? about.toLowerCase() : 'this setting'}
+      open={open}
+      controls={id}
+      onToggle={() => setOpen((o) => !o)}
+    />
+  ) : null;
+  const visible = hint && (!folded || open);
+  return { dot, visible, id };
+}
+
 interface FieldRowProps {
   label: ReactNode;
   children: ReactNode;
   /** A sentence under the control — what it will really do, or why it cannot. */
   hint?: ReactNode;
+  /** The hint says a STATE, not a why: never folded behind a dot (`FoldHints`). */
+  hintShown?: boolean;
   /** `start` for a control taller than one line (a list, a grid of choices). */
   align?: 'center' | 'start';
   /** Ties the label to a single input, when there is one. */
@@ -207,22 +240,27 @@ interface FieldRowProps {
 }
 
 /** A label at the left, its control at the right, on one line. */
-export function FieldRow({ label, children, hint, align = 'center', htmlFor }: FieldRowProps) {
+export function FieldRow({ label, children, hint, hintShown = false, align = 'center', htmlFor }: FieldRowProps) {
   const Label = htmlFor ? 'label' : 'span';
+  const { dot, visible, id } = useRowHint(hint, hintShown, label);
   return (
     <div
       className={`grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 gap-y-1 ${
         align === 'start' ? 'items-start' : 'items-center'
       }`}
     >
-      <Label
-        htmlFor={htmlFor}
-        className={`text-sm text-ink-soft leading-tight ${align === 'start' ? 'pt-1.5' : ''}`}
-      >
-        {label}
-      </Label>
+      <span className={`flex items-center gap-1.5 min-w-0 ${align === 'start' ? 'pt-1.5' : ''}`}>
+        <Label htmlFor={htmlFor} className="text-sm text-ink-soft leading-tight">
+          {label}
+        </Label>
+        {dot}
+      </span>
       <div className="min-w-0 flex items-center gap-2">{children}</div>
-      {hint && <div className="col-start-2 text-xs leading-relaxed text-muted [&>p]:m-0">{hint}</div>}
+      {visible && (
+        <div id={id} className="col-start-2 text-xs leading-relaxed text-muted [&>p]:m-0">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
@@ -479,20 +517,30 @@ interface SwitchRowProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   hint?: ReactNode;
+  /** The hint says a STATE, not a why: never folded behind a dot (`FoldHints`). */
+  hintShown?: boolean;
 }
 
 /**
  * A setting that is on or off and needs a phrase to say so ("Letters at
  * N / E / S / W"): the phrase across the row, the switch at its end.
  */
-export function SwitchRow({ label, name, checked, onChange, hint }: SwitchRowProps) {
+export function SwitchRow({ label, name, checked, onChange, hint, hintShown = false }: SwitchRowProps) {
+  const { dot, visible, id } = useRowHint(hint, hintShown, label);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0 text-sm text-ink-soft leading-tight">{label}</span>
+        <span className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-ink-soft leading-tight">
+          <span className="min-w-0">{label}</span>
+          {dot}
+        </span>
         <ToggleField label={name ?? (typeof label === 'string' ? label : 'Toggle')} checked={checked} onChange={onChange} />
       </div>
-      {hint && <div className="text-xs leading-relaxed text-muted [&>p]:m-0">{hint}</div>}
+      {visible && (
+        <div id={id} className="text-xs leading-relaxed text-muted [&>p]:m-0">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
