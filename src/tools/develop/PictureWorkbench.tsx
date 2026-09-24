@@ -92,6 +92,7 @@ import {
   removeLayer,
   sameLayers,
   type AdjustLayer,
+  subjectLayersToSegment,
 } from '../../shared/develop/layer';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
@@ -875,6 +876,9 @@ export default function PictureWorkbench({
     lensProfile: profileInEffect(entry.lensProfile, onSensor),
     layers: layersDraft,
     subjectMasks: subjectRasters,
+    // A subject is shown to the model in the frame it was tapped in — the
+    // picture as the geometry bends it (`segment-view.ts`).
+    segmenting: subjectLayersToSegment(layersDraft).length > 0,
     paint,
     compare: compareOn,
     clipping,
@@ -947,7 +951,11 @@ export default function PictureWorkbench({
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
     // SVGImageElement nothing here ever produces and no GPU can upload —
     // narrowed rather than widening the model's own contract.
-    source: (picture.source?.image as TexImageSource | undefined) ?? null,
+    // The picture as its GEOMETRY bends it, never the raw source: a tap lands
+    // in the warped frame and the layer pass samples the mask there, so the
+    // model must see that frame too (his report, 2026-09-24 — a lens
+    // correction bent the subject away from what it had picked).
+    source: picture.segmentSource,
     // Per PICTURE: one picture's subject must never be shown on another.
     pictureKey: entry.id,
   });

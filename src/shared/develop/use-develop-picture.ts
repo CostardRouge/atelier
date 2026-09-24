@@ -3,6 +3,10 @@ import { toLinear } from '../lut/transfer';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
+import { segmentationView } from './segment-view';
+
+/** How long the geometry must stand still before the subject model is shown it again. */
+const SEGMENT_SETTLE_MS = 300;
 import { drawFramed, framePoint, unframePoint, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered, drawPictureIn } from './border-paint';
@@ -398,6 +402,13 @@ export interface DevelopPicture {
    */
   sampleColour: (point: readonly [number, number], layerId: string) => [number, number, number] | null;
   /**
+   * The picture the subject model is shown: the source bent by the lens, the
+   * keystone and the camera's warp, small, SETTLED a moment after the last
+   * geometry change so a slider drag does not ask the model per step. The
+   * source itself when there is no geometry; null when nothing is segmented.
+   */
+  segmentSource: TexImageSource | null;
+  /**
    * Where a client point lands in the SOURCE picture, as [0,1]; null outside
    * it. What a painted mask's strokes are made of. With `unbounded`, a point
    * past the picture's edge is answered as it is (below 0, above 1) instead
@@ -498,6 +509,7 @@ export function useDevelopPicture({
   flashMask = null,
   paint = null,
   subjectMasks = null,
+  segmenting = false,
   compare = true,
   raw = null,
   onRawDecoded,
@@ -641,6 +653,12 @@ export function useDevelopPicture({
    * kind the renderer cannot compute for itself (`use-subject-masks.ts`).
    */
   subjectMasks?: ReadonlyMap<string, BrushRaster> | null;
+  /**
+   * A subject is picked on this picture: `segmentSource` is then made — the
+   * picture as its geometry bends it, the frame a tap lands in and a layer
+   * samples its mask in (`segment-view.ts`). Nothing is rendered otherwise.
+   */
+  segmenting?: boolean;
   /**
    * Painting: a drag on the picture becomes a stroke instead of moving the
    * divider. The host owns the strokes, because they belong to a layer in its
@@ -818,6 +836,34 @@ export function useDevelopPicture({
     () => ({ cameraWarp: warpField, lens, lensProfile, keystone }),
     [warpField, lens, lensProfile, keystone],
   );
+  // What the subject model is shown (`segment-view.ts`): the geometry's frame,
+  // settled — each new view re-asks the model for every point.
+  const [segmentSource, setSegmentSource] = useState<TexImageSource | null>(null);
+  const hasSegmentSource = useRef(false);
+  hasSegmentSource.current = segmentSource !== null;
+  useEffect(() => {
+    if (!segmenting || !source) {
+      setSegmentSource(null);
+      return;
+    }
+    const image = source.image as TexImageSource;
+    if (!hasGeometry(geometry)) {
+      setSegmentSource(image);
+      return;
+    }
+    const timer = window.setTimeout(() => {
+      try {
+        setSegmentSource(segmentationView(source.image, { width: source.width, height: source.height }, geometry));
+      } catch {
+        // No WebGL2: the unwarped picture is still better than no subject.
+        setSegmentSource(image);
+      }
+      // The first view is made at once — a first tap must not wait on a
+      // drag that is not happening; only a CHANGE of geometry settles.
+    }, hasSegmentSource.current ? SEGMENT_SETTLE_MS : 0);
+    return () => window.clearTimeout(timer);
+  }, [segmenting, source, geometry]);
+
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
   const stack = useMemo(() => drawingLayers(layers), [layers]);
@@ -1714,6 +1760,7 @@ export function useDevelopPicture({
     setPicking,
     pickAt,
     sampleColour,
+    segmentSource,
     pointAt,
     veilCanvasRef,
     stagePoint,
