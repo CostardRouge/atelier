@@ -1093,7 +1093,12 @@ project's **outro** — the same closing card the carousel export appends as its
 last slide, appended here after the footage of the reel — under the same
 rules: a resend replaces it, unlinking removes it, and an outro you composed
 yourself in the Studio is never overwritten (the panel tells you the card
-stayed behind instead).
+stayed behind instead). The hook picture's **correction** — its exposure,
+tone and colour from the Develop sheet — goes too, onto that media in the
+project, so a reel from the Studio wears the correction the badge was composed
+over; a resend replaces it, unlinking removes it, and a correction you set on
+that media in the Studio is never overwritten. The picture's crop and the
+trip's title style stay in Trips, as the panel says.
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
