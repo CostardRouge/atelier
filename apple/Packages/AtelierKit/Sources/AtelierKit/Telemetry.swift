@@ -73,7 +73,13 @@ private func group(_ m: NSTextCheckingResult, _ i: Int, in s: String) -> String 
 }
 
 private func timecodeToSeconds(_ h: String, _ m: String, _ s: String, _ ms: String) -> Double {
-    (Double(h) ?? 0) * 3600 + (Double(m) ?? 0) * 60 + (Double(s) ?? 0) + (Double(ms) ?? 0) / 1000
+    // In steps: one expression of four optionals is what Swift 5.10 on Linux
+    // refuses to type-check "in reasonable time".
+    let hours: Double = Double(h) ?? 0
+    let minutes: Double = Double(m) ?? 0
+    let seconds: Double = Double(s) ?? 0
+    let millis: Double = Double(ms) ?? 0
+    return hours * 3600 + minutes * 60 + seconds + millis / 1000
 }
 
 private func stripTags(_ text: String) -> String {
@@ -153,7 +159,9 @@ private func num(_ value: String?) -> Double? {
 public func haversine(_ lat1: Double, _ lon1: Double, _ lat2: Double, _ lon2: Double) -> Double {
     let dLat = (lat2 - lat1) * deg2rad
     let dLon = (lon2 - lon1) * deg2rad
-    let a = pow(sin(dLat / 2), 2) + cos(lat1 * deg2rad) * cos(lat2 * deg2rad) * pow(sin(dLon / 2), 2)
+    let sinLat = sin(dLat / 2)
+    let sinLon = sin(dLon / 2)
+    let a = sinLat * sinLat + cos(lat1 * deg2rad) * cos(lat2 * deg2rad) * sinLon * sinLon
     return 2 * earthRadiusM * asin(min(1, a.squareRoot()))
 }
 
