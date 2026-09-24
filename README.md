@@ -774,36 +774,41 @@ appears where you asked for one: **Whole** shows the entire picture with
 them. The preview, the PNG deck and the burned-in hook clip all draw through
 the same transform. Each picture of a carousel is framed on its own.
 
-**A picture can move in its frame.** Turn on **Pan & zoom** in the Picture tab
-and the picture travels over the slide — a slow push in, a glide along a
-landscape too wide for a reel, a tour of three spots — like a camera over a
-print. There is no second editor: it is placed **at the needle**. Stop the
-band where a frame should be, then drag and zoom the picture on the stage as
-you always do, and that is the frame at that instant. Paused on the slide's
-first moment the stage shows the composition, and the same gesture sets where
-the picture comes to **rest** — which is also what the PNG, the rail and the
-grid show. The section says what the next gesture will write (the first frame,
-the rest, the frame at 2.4 s, or a new one), steps the needle between frames,
-takes one off, and picks the curve it travels on; a frame placed twice unchanged
-is a pause. **Quick move** writes a whole move in one tap over your framing —
-**Pan ← → ↑ ↓** from one edge of the picture to the other at the zoom you chose,
-**Push in** (from wider onto your framing, or closer onto its middle when it is
-already at its widest) and **Pull out** (from close on the middle back to your
-framing) — replacing the frames placed so far and keeping the curve; a pan with
-no room to travel is greyed out, and the reason is written under the buttons.
-**Plan a tour…** opens a map of the whole picture with the window each frame
-shows: tap where the view should go, drag a stop to move it, and set one zoom
-and one pause for every stop. The view visits the stops in order, the glides
-sharing the slide by how far each travels, and rests on the last. A tour is
-only a way of writing the frames — the map opens on whatever frames the picture
-already has, placed at the needle or by a quick move. The zoom is geometric and a point the two frames share stays still
-on screen, so a push in lands on what you aimed at. On a hook with an opener
-that covers the frame (Défilé, Virée), the move can wait for the opener to
-finish. It works on a hook, on every picture of a carousel, on each cell of a
-collage and on a clip — the clip's frame is re-framed at every instant of the
-export. A slide that moves leaves as a video under Auto, and a still that
-starts close in fetches the original where its closest frame would upscale the
-proxy, not where it rests. The band marks each placed frame on its slide.
+**A picture can move in its frame.** The **Pan & zoom** section of the Picture
+tab shows the move as a row of **cards** — the frames the picture rests on,
+**Start**, the stops, **End** — each a thumbnail of what the frame will show.
+A still picture is its one card, the composition, with a dashed **Start** before
+it: tap it and the picture travels over the slide — a slow push in, a glide
+along a landscape too wide for a reel, a tour of three spots — like a camera
+over a print. There is no second editor: tap a card, and the drag, the wheel
+and the pinch that already frame a picture on the stage reframe **that card**
+and no other; a word in the picture's corner says which one it is. **End** is
+where the picture comes to rest, which is also what the PNG, the rail and the
+grid show, and what a slide opens on. **+ Stop** adds a card after the one
+picked — a copy pushed a touch closer, for you to frame — and **Remove** takes
+one off (never End). The time between cards is not placed by hand: the glides
+share the slide by how far each travels, and **Pause** is how long the view
+holds on every card; the seconds are written on the arrows. Scrubbing the band
+between two cards shows that instant, and a gesture there does nothing but say
+so — a frame is never written in silence. **Play** runs the slide from its
+first frame. **Quick move** writes Start and End in one tap over your
+composition and plays them — **Pan ← → ↑ ↓** from one edge of the picture to
+the other at the zoom you chose, **Push in** (from wider onto your framing, or
+closer onto its middle when it is already at its widest) and **Pull out** (from
+close on the middle back to your framing); a pan with no room to travel is
+greyed out, and the reason is written under the buttons. **Plan a tour…** opens
+a map of the whole picture with the window each card shows: tap where the view
+should go, drag a stop to move it, and set one zoom and one pause for every
+stop. Both are only ways of writing cards — the row shows whatever the picture
+already has, however it was written. The zoom is geometric and a point two
+cards share stays still on screen, so a push in lands on what you aimed at. On
+a hook with an opener that covers the frame (Défilé, Virée), the move can wait
+for the opener to finish. It works on a hook, on every picture of a carousel,
+on each cell of a collage and on a clip — the clip's frame is re-framed at
+every instant of the export. A slide that moves leaves as a video under Auto,
+and a still that starts close in fetches the original where its closest frame
+would upscale the proxy, not where it rests. The band marks each card's frame
+on its slide.
 
 **A slide can hold several pictures.** The Picture tab's **Layout** section
 offers grids, stacks, bentos, insets and scattered prints; the slide's own

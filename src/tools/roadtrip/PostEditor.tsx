@@ -22,6 +22,7 @@ import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
 import {
+  KEY_SNAP_SECONDS,
   MOTION_PRESETS,
   applyPreset,
   arrivalMarks,
@@ -32,21 +33,24 @@ import {
   tourMotion,
   tourOf,
   flipMotion,
-  framingAtNeedle,
   framingAtProgress,
   hasMotion,
-  keySeconds,
   motionProgress,
-  needleTarget,
-  placeAtNeedle,
   presetProblem,
-  removeAtNeedle,
-  snapShare,
   type FramingMotion,
   type MotionPreset,
   type PictureBox,
   type TourPlan,
 } from '../../shared/media/framing-motion';
+import {
+  cardAtNeedle,
+  cardLabel,
+  cardsMotion,
+  insertCard,
+  readCards,
+  removeCard,
+  writeCard,
+} from '../../shared/media/motion-cards';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   applyDevelopToDay,
@@ -88,7 +92,14 @@ import {
   shadeCentre,
   shadeFollow,
 } from '../../shared/roadtrip/shades';
-import { loopsOpenSlide, screenLength, slideMotionMarks, type LoopScope } from '../../shared/roadtrip/deck-strip';
+import {
+  locate,
+  loopsOpenSlide,
+  screenLength,
+  slideMotionMarks,
+  stripLayout,
+  type LoopScope,
+} from '../../shared/roadtrip/deck-strip';
 import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
@@ -112,7 +123,7 @@ import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
 import PictureTab, { GradeScopeChips } from './panels/PictureTab';
-import type { NeedleJump } from './panels/PanZoomSection';
+import type { CardThumbSource } from './panels/MotionCards';
 import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
@@ -182,12 +193,18 @@ interface LoadedSource {
 
 /** Shortest cut `I` / `O` may leave — the floor `clipSlice` keeps. */
 const MIN_CUT = MIN_HOOK_SECONDS / 4;
+
 /**
- * How far into a slide the needle is set to show its FIRST frame. At the
- * slide's very first moment the stage shows the composition — the rest —
- * so a jump lands a hair after it, well inside the snap of a key at 0.
+ * Which card of a move the stage shows: the last (`'end'`, the composition —
+ * kept as a word so it survives a card being added before it), one by index,
+ * or none while the needle stands between two.
  */
-const NEEDLE_NUDGE_SECONDS = 0.04;
+type CardPick = number | 'end' | 'between';
+
+function pickOf(index: number | null, count: number): CardPick {
+  if (index === null) return 'between';
+  return index >= count - 1 ? 'end' : Math.max(0, index);
+}
 
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that
@@ -858,6 +875,16 @@ export default function PostEditor({
   const stagePlaying = trimOpen ? clipPlaying : deck.playing;
   const togglePlay = trimOpen ? () => setClipPlaying((p) => !p) : deck.toggle;
 
+  /**
+   * Which CARD of the selected picture's move the stage shows and a gesture
+   * writes (`motion-cards.ts`): the last — `'end'`, the composition — when a
+   * slide or a cell opens, a number once one is picked, and `'between'` when
+   * the needle stopped between two of them. Declared here because the
+   * composition's own rest below depends on it.
+   */
+  const [cardPick, setCardPick] = useState<CardPick>('end');
+  useEffect(() => setCardPick('end'), [slideKey, cellIndex]);
+
   // A new slide or a newly decoded file puts the playhead where the band sent
   // it (its in point, unless a scrub landed inside the clip); an in point
   // moved by the cut puts it on the new in point.
@@ -882,7 +909,10 @@ export default function PostEditor({
   const settle = badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade);
   const clipAtRest = !stagePlaying && playhead <= clipRange.start + TRIM_EPSILON;
   const stillAtRest = !deck.playing && deck.local <= TRIM_EPSILON;
-  const composedView = isClipSlide ? clipAtRest : stillAtRest;
+  // The composition is on the stage only while its END card is the one shown:
+  // a picture that moves shows its Start, a stop or an instant otherwise, and
+  // none of those is what the hook's thumbnail may be taken from.
+  const composedView = (isClipSlide ? clipAtRest : stillAtRest) && cardPick === 'end';
   // A collage's cells have an entrance of their own on ANY slide, so a content
   // slide has a clock too: at rest it shows the cells settled, playing it
   // shows them arriving and leaving on the piece's transport.
@@ -899,75 +929,127 @@ export default function PostEditor({
         ? Math.max(settle, hook.seconds, collageSettle)
         : deck.local;
 
-  // ——— The picture's pan and zoom, edited AT THE NEEDLE (`framing-motion.ts`).
-  // It moves on the band's own time. Paused on the slide's first moment the
-  // stage shows the COMPOSITION, so the picture rests there exactly as the
-  // badge settles — which is also what the hook's thumbnail is taken from, and
-  // what a gesture there writes: the framing itself. Anywhere inside the slide
-  // the stage shows the frame the needle is on, and the same gesture writes it.
+  // ——— The picture's pan and zoom, edited as CARDS (`motion-cards.ts`,
+  // `docs/picture-motion-ui.md`). Paused, the stage shows the SELECTED card
+  // of the selected picture — the composition when a slide opens, which is
+  // what the hook's thumbnail is taken from — and a gesture writes that card
+  // and no other; playing, it shows the move at the needle. The band's needle
+  // FOLLOWS the cards: picking one sends it to where the view arrives on that
+  // card, a scrub picks the card it lands on, and lands "between" two of them
+  // otherwise, where the stage shows the instant and a gesture is refused and
+  // said so on the picture. A frame is never placed in silence.
   const slideSeconds = lengths[slideIndex] ?? 0;
   const openerSeconds = isHook ? hook.seconds : 0;
-  const pictureNeedle = useCallback(
-    (motion: FramingMotion | null) => ({
-      u:
-        !hasMotion(motion) || composedView
-          ? 1
-          : motionProgress(motion, deck.local, slideSeconds, openerSeconds),
-      snap: snapShare(motion, slideSeconds, openerSeconds),
-    }),
-    [composedView, deck.local, slideSeconds, openerSeconds],
+  /** A picture's span: the slide, less what its move waits for the opener. */
+  const spanOf = useCallback(
+    (motion: FramingMotion | null) =>
+      slideSeconds - (hasMotion(motion) ? motionOffset(motion, slideSeconds, openerSeconds) : 0),
+    [slideSeconds, openerSeconds],
   );
-  /** A picture's framing as the stage shows it at the needle. */
+  /** Where the view arrives on each card, in the slide's seconds; a still picture arrives at once. */
+  const arrivalsOf = useCallback(
+    (framing: Framing, motion: FramingMotion | null): number[] =>
+      hasMotion(motion) ? arrivalMarks(framing, motion, slideSeconds, openerSeconds) : [0],
+    [slideSeconds, openerSeconds],
+  );
+  const cellCards = useMemo(
+    () => readCards(cellFraming, cellMotion, spanOf(cellMotion)),
+    [cellFraming, cellMotion, spanOf],
+  );
+  const cellArrivals = useMemo(() => arrivalsOf(cellFraming, cellMotion), [arrivalsOf, cellFraming, cellMotion]);
+  const cardCount = cellCards.cards.length;
+  /** The picked card as an index into the row, or null between two cards. */
+  const cardIndex: number | null =
+    cardPick === 'between' ? null : cardPick === 'end' ? cardCount - 1 : Math.min(cardPick, cardCount - 1);
+  // Read by the needle's followers, which must not be rebuilt per frame.
+  const cardsLive = useRef({ arrivals: cellArrivals, count: cardCount });
+  cardsLive.current = { arrivals: cellArrivals, count: cardCount };
+  /** The card under the needle once the needle moved on its own — a scrub, a pause. */
+  const followNeedle = useCallback((local: number) => {
+    const { arrivals, count } = cardsLive.current;
+    setCardPick(pickOf(cardAtNeedle(arrivals, local, KEY_SNAP_SECONDS), count));
+  }, []);
+  // Playback stopping anywhere leaves the needle where it stopped: on a card, or between two.
+  const wasPlaying = useRef(false);
+  useEffect(() => {
+    if (wasPlaying.current && !stagePlaying) followNeedle(deck.local);
+    wasPlaying.current = stagePlaying;
+  }, [stagePlaying, deck.local, followNeedle]);
+  /** A picture's framing as the stage shows it: the move at the needle while playing, else the card in hand. */
   const shownFraming = useCallback(
-    (framing: Framing, motion: FramingMotion | null): Framing => {
+    (framing: Framing, motion: FramingMotion | null, own: boolean): Framing => {
       if (!hasMotion(motion)) return framing;
-      const { u, snap } = pictureNeedle(motion);
-      // Playing, every instant is drawn; held, a frame the needle is on is
-      // drawn as itself, so a gesture starts from exactly what it will write.
-      return stagePlaying ? framingAtProgress(framing, motion, u) : framingAtNeedle(framing, motion, u, snap);
+      const u = motionProgress(motion, deck.local, slideSeconds, openerSeconds);
+      if (stagePlaying) return framingAtProgress(framing, motion, u);
+      // Another cell of the collage rests on its composition while this one is worked.
+      if (!own) return framing;
+      if (cardIndex === null) return framingAtProgress(framing, motion, u);
+      return readCards(framing, motion, spanOf(motion)).cards[cardIndex] ?? framing;
     },
-    [pictureNeedle, stagePlaying],
+    [deck.local, slideSeconds, openerSeconds, stagePlaying, cardIndex, spanOf],
   );
   const stageFraming = useMemo(
-    () => shownFraming(slide.framing, slide.motion),
-    [shownFraming, slide.framing, slide.motion],
+    () => shownFraming(slide.framing, slide.motion, cellIndex === 0),
+    [shownFraming, slide.framing, slide.motion, cellIndex],
   );
   const stageCollage = useMemo(
     () =>
       collage && collage.cells.some((c) => hasMotion(c.motion))
         ? {
             ...collage,
-            cells: collage.cells.map((c) =>
-              hasMotion(c.motion) ? { ...c, framing: shownFraming(c.framing, c.motion) } : c,
+            cells: collage.cells.map((c, i) =>
+              hasMotion(c.motion) ? { ...c, framing: shownFraming(c.framing, c.motion, cellIndex === i + 1) } : c,
             ),
           }
         : collage,
-    [collage, shownFraming],
+    [collage, shownFraming, cellIndex],
   );
-  /** A gesture on a moving slide stops it: the frame it writes is the one the needle is on. */
+  /** A gesture on a moving slide stops it: the card it writes is the one the needle is on. */
   const holdTheNeedle = useCallback(() => {
     if (deck.playing) deck.setPlaying(false);
     setClipPlaying(false);
   }, [deck]);
+  /** Say on the picture, for a moment, why a gesture did nothing. */
+  const [refusedUntil, setRefusedUntil] = useState(0);
+  const refuse = useCallback(() => setRefusedUntil(Date.now() + 1800), []);
+  useEffect(() => {
+    if (!refusedUntil) return;
+    const t = window.setTimeout(() => setRefusedUntil(0), Math.max(0, refusedUntil - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [refusedUntil]);
   /**
    * Write cell `i`'s framing (0 = the slide's own) as a gesture or a control
-   * left it — at the needle when the picture moves, as it always was when it
-   * holds still. One writer for the stage's drag, wheel and pinch and for the
-   * Picture tab's rows, so the two cannot place a frame differently.
+   * left it — into the card in hand when the picture moves, as it always was
+   * when it holds still. One writer for the stage's drag, wheel and pinch and
+   * for the Picture tab's rows, so the two cannot write a card differently. A
+   * gesture between two cards writes nothing and says so; on a cell that is
+   * not the one selected it writes that cell's composition, the frame shown.
    */
   const placeFraming = useCallback(
     (i: number, next: Framing) => {
       const cur = collage ? collageCellAt(lead, collage, i) : lead;
-      if (!hasMotion(cur.motion)) {
+      const motion = cur.motion;
+      if (!hasMotion(motion)) {
         patchCell(i, { framing: next });
         return;
       }
-      holdTheNeedle();
-      const { u, snap } = pictureNeedle(cur.motion);
-      const placed = placeAtNeedle(normaliseFraming(cur.framing), cur.motion, u, next, snap);
+      const framing = normaliseFraming(cur.framing);
+      const count = readCards(framing, motion, spanOf(motion)).cards.length;
+      let index: number | null;
+      if (i !== cellIndex) index = count - 1;
+      else if (stagePlaying) {
+        holdTheNeedle();
+        index = cardAtNeedle(arrivalsOf(framing, motion), deck.local, KEY_SNAP_SECONDS);
+        setCardPick(pickOf(index, count));
+      } else index = cardIndex;
+      if (index === null) {
+        refuse();
+        return;
+      }
+      const placed = writeCard(framing, motion, index, next);
       patchCell(i, { framing: placed.framing, motion: placed.motion });
     },
-    [collage, lead, patchCell, holdTheNeedle, pictureNeedle],
+    [collage, lead, patchCell, cellIndex, stagePlaying, holdTheNeedle, arrivalsOf, deck.local, cardIndex, spanOf, refuse],
   );
   /** Mirror cell `i` — its rest AND every frame of its move, whatever the needle says. */
   const flipPicture = useCallback(
@@ -981,20 +1063,79 @@ export default function PostEditor({
     (motion: FramingMotion | null) => patchCell(cellIndex, { motion }),
     [patchCell, cellIndex],
   );
-  // What the needle is on for the SELECTED picture, said as the author reads it.
-  const cellNeedle = pictureNeedle(cellMotion);
-  const cellTarget = hasMotion(cellMotion) && !composedView ? needleTarget(cellMotion, cellNeedle.u, cellNeedle.snap) : null;
-  const placing = !hasMotion(cellMotion)
-    ? ''
-    : composedView
-      ? 'The composition — where the picture rests'
-      : !cellTarget || cellTarget.kind === 'rest'
-        ? 'The rest — where the move ends'
-        : cellTarget.kind === 'key'
-          ? cellTarget.start
-            ? 'The first frame'
-            : `The frame at ${keySeconds(cellMotion, cellMotion.keys[cellTarget.index].at, slideSeconds, openerSeconds).toFixed(1)} s`
-          : `A new frame at ${deck.local.toFixed(1)} s`;
+  /** Pick a card: the stage shows it, and the needle goes to where the view arrives on it. */
+  const selectCard = useCallback(
+    (i: number) => {
+      holdTheNeedle();
+      const { arrivals, count } = cardsLive.current;
+      setCardPick(pickOf(i, count));
+      deck.goTo(slideIndex, Math.min(slideSeconds, arrivals[Math.min(i, count - 1)] ?? 0));
+    },
+    [holdTheNeedle, deck, slideIndex, slideSeconds],
+  );
+  /** Write a rewritten row — a card added or taken off — and pick the card it names. */
+  const writeCards = useCallback(
+    (out: { framing: Framing; motion: FramingMotion | null; selected: number } | null) => {
+      if (!out) return;
+      holdTheNeedle();
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+      const arrivals = arrivalsOf(out.framing, out.motion);
+      setCardPick(pickOf(out.selected, arrivals.length));
+      deck.goTo(slideIndex, Math.min(slideSeconds, arrivals[Math.min(out.selected, arrivals.length - 1)] ?? 0));
+    },
+    [holdTheNeedle, patchCell, cellIndex, arrivalsOf, deck, slideIndex, slideSeconds],
+  );
+  const addCard = () =>
+    writeCards(
+      insertCard(cellFraming, cellMotion, cellCards.cards, cellCards.holdSeconds, spanOf(cellMotion), cardIndex ?? cardCount - 1),
+    );
+  const dropCard = () => {
+    if (cardIndex === null) return;
+    writeCards(removeCard(cellFraming, cellMotion, cellCards.cards, cellCards.holdSeconds, spanOf(cellMotion), cardIndex));
+  };
+  const setHold = (seconds: number) => {
+    const out = cardsMotion(cellFraming, cellMotion, cellCards.cards, seconds, spanOf(cellMotion));
+    if (out) patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+  };
+  /** The section's own play: the slide from its first frame, or a pause. */
+  const playMove = () => {
+    if (trimOpen || stagePlaying) {
+      togglePlay();
+      return;
+    }
+    deck.goTo(slideIndex, 0);
+    deck.setPlaying(true);
+  };
+  /** The section's motion writes: a starter turns the move on, on its Start; null holds still on the composition. */
+  const setMotionFromSection = (motion: FramingMotion | null) => {
+    setCellMotion(motion);
+    if (!motion) setCardPick('end');
+    else if (!hasMotion(cellMotion)) {
+      setCardPick(0);
+      deck.goTo(slideIndex, 0);
+    }
+  };
+  /** What the stage says in its corner about the selected picture's move. */
+  const stageCaption = useMemo((): { text: string; tone: 'plain' | 'accent' | 'muted' } | null => {
+    if (stagePlaying || isCta) return null;
+    if (refusedUntil > 0) return { text: 'Between two cards — tap a card to reframe it', tone: 'accent' };
+    if (!hasMotion(cellMotion)) return null;
+    const cell = collage && cellIndex > 0 ? `Cell ${cellIndex + 1} · ` : '';
+    if (cardIndex === null) {
+      const arrived = cellArrivals.filter((a) => a <= deck.local + 1e-6).length - 1;
+      const a = Math.max(0, arrived);
+      const b = Math.min(cardCount - 1, a + 1);
+      return {
+        text: `${cell}Between ${cardLabel(a, cardCount)} and ${cardLabel(b, cardCount)} · ${deck.local.toFixed(1)} s`,
+        tone: 'muted',
+      };
+    }
+    const last = cardIndex === cardCount - 1;
+    return {
+      text: `${cell}${cardLabel(cardIndex, cardCount)}${last ? ' · the composition' : ''}`,
+      tone: last ? 'plain' : 'accent',
+    };
+  }, [stagePlaying, isCta, refusedUntil, cellMotion, collage, cellIndex, cardIndex, cellArrivals, deck.local, cardCount]);
   // Each picture's decoded shape, as the stage reports it — keyed by the slide
   // so a slide just opened never measures a pan against the last one's.
   const [pictureSizes, setPictureSizes] = useState<{
@@ -1019,15 +1160,17 @@ export default function PostEditor({
     () => MOTION_PRESETS.map((id) => ({ id, problem: presetProblem(id, cellFraming, presetBox) })),
     [cellFraming, presetBox],
   );
-  /** Write a one-tap move over the selected picture — two frames the needle then refines. */
+  /** Write a one-tap move over the selected picture — Start and End — and play it. */
   const writePreset = useCallback(
     (preset: MotionPreset) => {
       const out = applyPreset(preset, cellFraming, cellMotion, presetBox);
       if (!out) return;
-      holdTheNeedle();
       patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+      setCardPick(0);
+      deck.goTo(slideIndex, 0);
+      deck.setPlaying(true);
     },
-    [cellFraming, cellMotion, presetBox, holdTheNeedle, patchCell, cellIndex],
+    [cellFraming, cellMotion, presetBox, patchCell, cellIndex, deck, slideIndex],
   );
   // The TOUR over the selected picture: read out of its frames every render,
   // since a tour is only a way of writing them (`framing-motion.ts`).
@@ -1049,29 +1192,6 @@ export default function PostEditor({
     },
     [cellFraming, cellMotion, presetBox, tourSpan, holdTheNeedle, patchCell, cellIndex],
   );
-  /** Move the needle between the selected picture's frames. */
-  const jumpNeedle = useCallback(
-    (to: NeedleJump) => {
-      if (!hasMotion(cellMotion)) return;
-      holdTheNeedle();
-      // Arrivals only: the end of a pause is the same frame again.
-      const marks = arrivalMarks(cellFraming, cellMotion, slideSeconds, openerSeconds);
-      const here = deck.local;
-      const at =
-        to === 'first'
-          ? marks[0]
-          : to === 'rest'
-            ? slideSeconds
-            : to === 'prev'
-              ? ([...marks].reverse().find((m) => m < here - 0.02) ?? marks[0])
-              : (marks.find((m) => m > here + 0.02) ?? slideSeconds);
-      // A hair into the slide, never ON its first moment: there the stage
-      // shows the composition, and the needle would not be on the frame asked for.
-      deck.goTo(slideIndex, Math.min(slideSeconds, Math.max(NEEDLE_NUDGE_SECONDS, at)));
-    },
-    [cellFraming, cellMotion, holdTheNeedle, slideSeconds, openerSeconds, deck, slideIndex],
-  );
-
   // The opener's ticks, heard while whichever transport is actually driving
   // the badge plays — a clip's own, or the photo transport above — off until
   // asked for. `badgeTime` already reads whichever clock applies.
@@ -1458,6 +1578,21 @@ export default function PostEditor({
   );
 
 
+  /** What the cards row draws its thumbnails from: the selected picture, in the frame it sits in. */
+  const cardThumb = useMemo(
+    (): CardThumbSource | null =>
+      cellFile && presetBox
+        ? {
+            file: cellFile,
+            isVideo: classifyPart(cellFile.name) === 'video',
+            videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
+            dstW: presetBox.dstW,
+            dstH: presetBox.dstH,
+          }
+        : null,
+    [cellFile, presetBox, cellIndex, slide.videoTimeSeconds],
+  );
+
   const deckStrip = (
     <DeckStrip
       slides={slides}
@@ -1468,7 +1603,13 @@ export default function PostEditor({
       aspect={aspect}
       thumbFor={railThumb}
       onTogglePlay={togglePlay}
-      onScrub={deck.scrub}
+      onScrub={(t) => {
+        deck.scrub(t);
+        // The card the needle landed on, or between two — on this slide; a
+        // scrub onto another slide opens it on its composition.
+        const at = locate(stripLayout(lengths, 1, 0, 0), t);
+        if (at.index === slideIndex) followNeedle(at.local);
+      }}
       onSelect={(i) => deck.goTo(i, 0)}
       onAdd={() => void addSlide()}
       onRemove={removeSlide}
@@ -1761,6 +1902,7 @@ export default function PostEditor({
             onPictureSizes={onPictureSizes}
             onRendered={captureThumb}
             onFit={setFitWidth}
+            caption={stageCaption}
           />
           {compact && <div className="w-full flex-none mt-2">{deckStrip}</div>}
           </div>
@@ -1863,7 +2005,7 @@ export default function PostEditor({
               duration={duration}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
-              framing={shownFraming(cellFraming, cellMotion)}
+              framing={shownFraming(cellFraming, cellMotion, true)}
               onFraming={(f) => placeFraming(cellIndex, f)}
               onFlip={(axis) => flipPicture(cellIndex, axis)}
               panZoom={
@@ -1872,12 +2014,19 @@ export default function PostEditor({
                   : {
                       motion: cellMotion,
                       framing: cellFraming,
-                      placing,
-                      canRemove: cellTarget?.kind === 'key',
                       openerSeconds,
-                      onMotion: setCellMotion,
-                      onRemove: () => setCellMotion(removeAtNeedle(cellMotion, cellNeedle.u, cellNeedle.snap)),
-                      onJump: jumpNeedle,
+                      cards: cellCards.cards,
+                      holdSeconds: cellCards.holdSeconds,
+                      arrivals: cellArrivals,
+                      selected: cardIndex,
+                      playing: stagePlaying,
+                      thumb: cardThumb,
+                      onSelectCard: selectCard,
+                      onAddCard: addCard,
+                      onRemoveCard: dropCard,
+                      onHold: setHold,
+                      onMotion: setMotionFromSection,
+                      onPlay: playMove,
                       presets,
                       onPreset: writePreset,
                       tour:
