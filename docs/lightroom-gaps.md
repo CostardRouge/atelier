@@ -342,3 +342,24 @@ photographs and his RAWs are the pictures it changes); P3 alone or Adobe RGB
 too; opt-in per target as recommended, or the default for a P3 source; and a
 look on a P3 picture — wrapped (recommended) or the picture dropped to sRGB
 wherever a look is applied.
+
+## 12. His answers of 2026-09-24
+
+- **35, an import that copies a card: NO.** Winnow is his triage system: a
+  card goes into Winnow, and Develop works from what Winnow holds (or from a
+  folder already on disk). Nothing in Atelier copies off a card.
+- **19 (DCP / ICC input profiles) and 25's wide gamut (P3): parked as
+  overkill.** He asked whether they were; the answer is yes for his pictures —
+  his outputs are screens and social feeds in sRGB, LibRaw's matrix already
+  gives a camera-neutral start, and a camera-matching profile or a P3 working
+  space would change every look he has already set. Revive only on a real
+  need: a print lab asking for Adobe RGB, or a P3 screen he delivers to.
+  (12, the HSL mixer he named beside them, is BUILT.)
+- **The Crop tab folds, and every row's prose goes behind an ⓘ** — built the
+  same day (`develop.md`).
+- **22 (content-aware remove) and 23 (side-by-side before/after, a reference
+  picture): set aside.** 22 is overkill and hard, and he wants no in-browser
+  AI model — nor would it suit a phone; heal and clone stay the tools. 23 is
+  "not needed for now", noted for another time.
+- **A subject mask must follow the geometry** — his report, fixed the same day
+  (`subject-picking.md`, «The model is shown the WARPED frame»).

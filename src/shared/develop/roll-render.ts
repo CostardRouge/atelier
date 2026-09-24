@@ -27,6 +27,7 @@ import { geometryPasses, hasGeometry } from '../render/picture-geometry';
 import { drawingLayers, subjectLayersForRender, type AdjustLayer } from './layer';
 import { layerPasses } from './layer-render';
 import { needsSubjectRasters, resolveSubjectRasters } from './subject-rasters';
+import { segmentationView } from './segment-view';
 import type { BrushRaster } from '../render/brush-raster';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { decodePhoto, decodePhotoSource, fitPhotoForRender } from '../media/photo-frame';
@@ -259,7 +260,9 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
     // The subjects, segmented on the picture being delivered — an export
     // built without them dropped every Subject layer from the file.
-    const { rasters, subjects } = await segmentFor(opts, () => bitmap);
+    // Shown the picture as its GEOMETRY bends it — the frame the author tapped
+    // in and the layer pass samples (`segment-view.ts`).
+    const { rasters, subjects } = await segmentFor(opts, () => segmentationView(bitmap, source, opts));
     const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
     const grader = needsGpu && fit
       ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
@@ -328,17 +331,11 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const gainPass = makeGainMapPass(opts.calibration?.gain);
   const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
   // A half-float picture is not something the model can be shown: it sees the
-  // picture through its own cube, as the author does, rendered once apart.
-  const shown = needsSubjectRasters(opts.layers)
-    ? makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, [], [], null)
-    : null;
-  let segmented: Awaited<ReturnType<typeof segmentFor>>;
-  try {
-    segmented = await segmentFor(opts, () => copyOf(shown!.render(decoded.half)));
-  } finally {
-    shown?.dispose();
-  }
-  const { rasters, subjects } = segmented;
+  // picture through its own cube, as the author does, and bent by the same
+  // geometry — the camera's warp included — rendered once apart, small.
+  const { rasters, subjects } = await segmentFor(opts, () =>
+    segmentationView(decoded.half, source, withCalibration(opts), opts.lut as CubeLut),
+  );
   const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).

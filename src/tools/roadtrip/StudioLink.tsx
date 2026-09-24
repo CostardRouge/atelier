@@ -12,7 +12,9 @@ import {
   withHook,
   withoutCtaOutro,
   withoutHook,
+  withHookDevelop,
 } from '../../shared/roadtrip/hook-scene';
+import { isDefaultDevelop } from '../../shared/develop/develop';
 import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
 import type { Shade } from '../../shared/roadtrip/shades';
 import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
@@ -114,14 +116,27 @@ export default function StudioLink({
       } else {
         next = applied;
       }
+      // The hook picture's CORRECTION goes too, into the project's develop for
+      // that media (`withHookDevelop`): a reel from the project then wears the
+      // correction the badge was composed over. A develop the author set in
+      // the Studio for it is theirs, and stays.
+      const developed = withHookDevelop(
+        next,
+        post.media ? { name: post.media.name, hash: post.media.hash, settings: post.badge.develop } : null,
+      );
+      next = developed.doc;
+      const developHeld = developed.held
+        ? 'The picture’s correction stayed here: the project has its own for that media.'
+        : null;
       const ok = await putProject(next);
       if (!ok) {
         setNote('The browser refused to save the project.');
         return;
       }
       setLinked(next);
+      const held = [ctaHeld, developHeld].filter(Boolean).join(' ');
       if (openAfter) navigate(`/studio/open/${encodeURIComponent(next.id)}`);
-      else setNote(ctaHeld ? `Sent. ${ctaHeld}` : 'Sent. Open the Studio to export.');
+      else setNote(held ? `Sent. ${held}` : 'Sent. Open the Studio to export.');
     } finally {
       setBusy(null);
     }
@@ -283,6 +298,12 @@ export default function StudioLink({
             </span>
           )}
 
+          {/* What a send carries, in one line (`photo-develop.md` §7.7). */}
+          <p className="m-0 text-2xs text-faint leading-snug">
+            A send carries the badge{post.includeCta ? ', the closing card' : ''}
+            {post.badge.develop && !isDefaultDevelop(post.badge.develop) ? ' and the picture’s correction' : ''}; the
+            picture&rsquo;s crop and the trip&rsquo;s title style stay here.
+          </p>
           {/* Two grades, one file: say which one the Studio export will use. */}
           <p className="m-0 px-2.5 py-2 rounded-paper border border-line bg-paper text-xs text-ink-soft leading-snug">
             {projectGraded

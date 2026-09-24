@@ -18,6 +18,7 @@
 import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import { isRawImage } from '../library/assets';
 import { extractRawPreview } from '../exif/raw-probe';
+import { deviceClass } from '../lib/device-class';
 import type { Cue } from '../telemetry/srt-parser';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
@@ -78,28 +79,48 @@ export interface DecodedPhoto {
  * that is exactly why the caller is told which it got.
  */
 export async function decodePhotoSource(file: File): Promise<DecodedPhoto> {
+  // A RAW is read from the render INSIDE it first, in every browser
+  // (`rawRenderFirst`): Safari can decode a DNG natively, whole, and on an
+  // iPhone that decode is what killed the tab the moment the loupe asked for
+  // it (2026-09-24). It is also what keeps "camera render" the same picture
+  // in every browser.
+  if (isRawImage(file.name)) {
+    const bitmap = await rawRenderFirst(file, { imageOrientation: 'from-image' });
+    if (bitmap) return bitmap;
+    throw new PhotoDecodeError(file.name);
+  }
   try {
     return {
       bitmap: await createImageBitmap(file, { imageOrientation: 'from-image' }),
       viaRawPreview: false,
     };
   } catch {
-    // Only a RAW is worth a second attempt: anything else the browser refused
-    // is simply a picture it cannot read, and probing it would be wasted work.
-    if (isRawImage(file.name)) {
-      try {
-        const preview = await extractRawPreview(file);
-        if (preview) {
-          return {
-            bitmap: await createImageBitmap(preview, { imageOrientation: 'from-image' }),
-            viaRawPreview: true,
-          };
-        }
-      } catch {
-        // A malformed or previewless RAW falls through to the honest refusal.
-      }
-    }
     throw new PhotoDecodeError(file.name);
+  }
+}
+
+/**
+ * A RAW's picture as a browser can hold it: the render its camera wrote inside
+ * it, else — on a roomy device only — the browser's own decode of the file
+ * (Safari has one; it demosaics the whole sensor, 146 MB for a DJI DNG before
+ * the GPU sees it, which a phone's tab does not survive). Null when neither
+ * answers.
+ */
+export async function rawRenderFirst(
+  file: File,
+  options: ImageBitmapOptions,
+): Promise<DecodedPhoto | null> {
+  try {
+    const preview = await extractRawPreview(file);
+    if (preview) return { bitmap: await createImageBitmap(preview, options), viaRawPreview: true };
+  } catch {
+    // A malformed or previewless RAW: the native decode below, where allowed.
+  }
+  if (deviceClass() === 'constrained') return null;
+  try {
+    return { bitmap: await createImageBitmap(file, options), viaRawPreview: false };
+  } catch {
+    return null;
   }
 }
 
