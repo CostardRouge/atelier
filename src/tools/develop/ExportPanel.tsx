@@ -197,6 +197,7 @@ export default function ExportPanel({
         <FieldRow
           label="This picture"
           align="start"
+          hintShown
           hint={delivery?.reason ?? (delivery ? undefined : 'measured once the picture is in the Library')}
         >
           {/* The calculator's sentence wraps rather than truncates: its end is the verdict. */}
@@ -348,6 +349,7 @@ export default function ExportPanel({
           name="Ultra HDR"
           checked={settings.hdr}
           onChange={(hdr) => onSettings({ hdr })}
+          hintShown
           hint={<p>{hdrSupport().line}</p>}
         />
         {settings.hdr && (

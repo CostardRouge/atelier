@@ -92,6 +92,7 @@ import {
   removeLayer,
   sameLayers,
   type AdjustLayer,
+  subjectLayersToSegment,
 } from '../../shared/develop/layer';
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
@@ -109,6 +110,7 @@ import DevelopShortcuts from '../../shared/develop/DevelopShortcuts';
 import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
+import { FoldHints } from '../../shared/ui/Inspector';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import { lensKey, profileInEffect, type LensProfileApplied } from '../../shared/lens/lens-profile';
@@ -875,6 +877,9 @@ export default function PictureWorkbench({
     lensProfile: profileInEffect(entry.lensProfile, onSensor),
     layers: layersDraft,
     subjectMasks: subjectRasters,
+    // A subject is shown to the model in the frame it was tapped in — the
+    // picture as the geometry bends it (`segment-view.ts`).
+    segmenting: subjectLayersToSegment(layersDraft).length > 0,
     paint,
     compare: compareOn,
     clipping,
@@ -947,7 +952,11 @@ export default function PictureWorkbench({
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
     // SVGImageElement nothing here ever produces and no GPU can upload —
     // narrowed rather than widening the model's own contract.
-    source: (picture.source?.image as TexImageSource | undefined) ?? null,
+    // The picture as its GEOMETRY bends it, never the raw source: a tap lands
+    // in the warped frame and the layer pass samples the mask there, so the
+    // model must see that frame too (his report, 2026-09-24 — a lens
+    // correction bent the subject away from what it had picked).
+    source: picture.segmentSource,
     // Per PICTURE: one picture's subject must never be shown on another.
     pictureKey: entry.id,
   });
@@ -1779,12 +1788,17 @@ export default function PictureWorkbench({
         {!compact && (
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
         )}
-        {/* Adjust and Detail are a column of folding sections, each with its
-            own rule and padding — a gap on top of that is the air twice. */}
+        {/* Adjust, Detail and Crop are columns of folding sections, each with
+            its own rule and padding — a gap on top of that is the air twice
+            (Layers and Export keep theirs: their blocks are not all sections
+            yet). Every
+            row's explanation folds behind an ⓘ here (`FoldHints`); a line
+            that says a state stays in the open. */}
+        <FoldHints>
         <div
           className={`${
             compact ? 'flex flex-col' : 'flex-1 min-h-0 overflow-y-auto overflow-x-hidden overscroll-contain flex flex-col -mr-3 pr-3'
-          } ${tab === 'adjust' || tab === 'detail' ? 'gap-0' : 'gap-4'}`}
+          } ${tab === 'export' || tab === 'layers' ? 'gap-4' : 'gap-0'}`}
         >
           {tab === 'adjust' ? (
             <>
@@ -2027,6 +2041,7 @@ export default function PictureWorkbench({
             />
           ) : null}
         </div>
+        </FoldHints>
       </PanelHost>
 
       {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}

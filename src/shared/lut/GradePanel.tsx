@@ -1,3 +1,4 @@
+import InfoDot from '../ui/InfoDot';
 import { useMemo, useState } from 'react';
 import { readFilmSettings, type FilmSettings } from '../film/emulsion';
 import { isFilmLayer } from '../film/film-layer';
@@ -348,13 +349,19 @@ export default function GradePanel({
         />
       </FieldRow>
 
-      <p className="m-0 text-xs text-muted leading-relaxed">
-        {stack.layers.length > 1 && `${activeCount} of ${stack.layers.length} looks active. `}
-        Looks apply top to bottom and bake into one LUT — the preview, the stills and every
-        export grade identically. Above 100% a look extrapolates past what it was authored for.
-        A film stock goes after a conversion LUT, never before it. Its grain and halation are
-        not in the LUT: they are drawn after it, at the size the frame is delivered at.
-      </p>
+      {/* How looks combine is read once and true every time: behind the dot.
+          How many are on is a state, and stays in the open. */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted leading-relaxed">
+        {stack.layers.length > 1 && <span>{`${activeCount} of ${stack.layers.length} looks active`}</span>}
+        <InfoDot about="how looks combine">
+          <p>
+            Looks apply top to bottom and bake into one LUT — the preview, the stills and every
+            export grade identically. Above 100% a look extrapolates past what it was authored for.
+            A film stock goes after a conversion LUT, never before it. Its grain and halation are
+            not in the LUT: they are drawn after it, at the size the frame is delivered at.
+          </p>
+        </InfoDot>
+      </div>
     </div>
   );
 }

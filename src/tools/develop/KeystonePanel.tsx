@@ -1,4 +1,4 @@
-import SectionLegend from '../../shared/ui/SectionLegend';
+import DevelopFold from '../../shared/develop/DevelopFold';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
 import { developLinkClass } from '../../shared/develop/develop-classes';
 import {
@@ -45,11 +45,26 @@ export default function KeystonePanel({
     onChange(isDefaultKeystone(next) ? null : next);
   };
 
+  const touched = !isDefaultKeystone(value);
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label="Perspective">
-        <p>{HINT}</p>
-      </SectionLegend>
+    <DevelopFold
+      id="perspective"
+      title="Perspective"
+      marked={touched}
+      info={
+        <>
+          <p>{HINT}</p>
+          <p>The corners it empties are left EMPTY, never smeared — zoom to hide them.</p>
+        </>
+      }
+      actions={
+        touched ? (
+          <button type="button" className={developLinkClass} onClick={() => onChange(null)}>
+            Reset
+          </button>
+        ) : undefined
+      }
+    >
       {KEYS.map((k) => (
         <RangeSlider
           key={k.key}
@@ -67,17 +82,6 @@ export default function KeystonePanel({
           onChange={(v) => write(k.key, v)}
         />
       ))}
-      {!isDefaultKeystone(value) && (
-        <div className="flex items-center gap-2">
-          <span className="font-mono text-3xs text-faint">
-            the corners it empties are left EMPTY, never smeared — zoom to hide them
-          </span>
-          <span className="flex-1" />
-          <button type="button" className={developLinkClass} onClick={() => onChange(null)}>
-            Reset
-          </button>
-        </div>
-      )}
-    </div>
+    </DevelopFold>
   );
 }
