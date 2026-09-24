@@ -1118,7 +1118,8 @@ export default function PostEditor({
   /** What the stage says in its corner about the selected picture's move. */
   const stageCaption = useMemo((): { text: string; tone: 'plain' | 'accent' | 'muted' } | null => {
     if (stagePlaying || isCta) return null;
-    if (refusedUntil > 0) return { text: 'Between two cards — tap a card to reframe it', tone: 'accent' };
+    // Short enough for a phone's stage: the row under it says the rest.
+    if (refusedUntil > 0) return { text: 'Tap a card to reframe it', tone: 'accent' };
     if (!hasMotion(cellMotion)) return null;
     const cell = collage && cellIndex > 0 ? `Cell ${cellIndex + 1} · ` : '';
     if (cardIndex === null) {
@@ -1823,7 +1824,9 @@ export default function PostEditor({
           the column and not the gutter `frontend.md` warns about. */}
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
-          compact ? 'flex-1 min-h-0 pb-3' : ''
+          // The clearance above the bar is the column's while the column is
+          // last; with the Picture drawer up under it, the drawer is.
+          compact ? (inspectorOpen && tab === 'picture' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
         }`}
       >
         <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
@@ -1921,6 +1924,12 @@ export default function PostEditor({
 
       <PanelHost
         asSheet={compact}
+        // The Picture tab is a DRAWER on a phone, never the sheet: what it
+        // sets — the framing, the cards of a move, the develop — is judged on
+        // the picture above it, and a sheet's wash over that picture is a
+        // lie about it (`frontend.md`, Develop's rule). The three other tabs
+        // are picked FROM and keep the sheet, which gives them the height.
+        compactAs={tab === 'picture' ? 'drawer' : 'sheet'}
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title={TABS.find((t) => t.id === tab)?.label ?? 'Piece'}

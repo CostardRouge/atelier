@@ -394,8 +394,11 @@ that decides which: **a sheet's wash is a fair price for a panel you pick
 FROM** (the library, where you want all the library you can get and the stage
 behind is only context) **and a lie for a panel whose EFFECT you are watching**
 — a scrim over a photograph is a wrong answer to the question the sliders are
-asking. Only the Develop workbench passes `drawer`; everything else keeps the
-sheet.
+asking. The Develop workbench passes `drawer`, and since 2026-09-24 so does
+Trips' Picture tab alone (its framing, the cards of a move and the develop are
+all judged on the picture above it — `roadtrip.md`, «Built as cards»); every
+other panel, the piece editor's three other tabs included, keeps the sheet it
+is picked from.
 
 **This does not un-retire Trips' `DockedPanel`** (2026-09-12, above): what
 killed that was half a phone being too little library to pick from AND too
