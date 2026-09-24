@@ -6,6 +6,21 @@ import { AssetLibraryProvider } from './shared/library/AssetLibraryContext';
 import { MediaScopeProvider } from './shared/sources/media-scope';
 import { SectionBarProvider } from './shared/ui/section-rail';
 import { LayoutModeProvider } from './shared/ui/use-layout-mode';
+// The four faces, served from our OWN origin (2026-09-24, his call): they
+// used to come from Google Fonts on every page load, a request to a third
+// party the README's network callout never named. Exactly the weights the
+// old link asked for; each file names its unicode range, so a browser fetches
+// only the subsets a page draws.
+import '@fontsource/space-grotesk/400.css';
+import '@fontsource/space-grotesk/500.css';
+import '@fontsource/space-grotesk/600.css';
+import '@fontsource/space-grotesk/700.css';
+import '@fontsource/instrument-serif/400.css';
+import '@fontsource/instrument-serif/400-italic.css';
+import '@fontsource/jetbrains-mono/400.css';
+import '@fontsource/jetbrains-mono/500.css';
+import '@fontsource/jetbrains-mono/600.css';
+import '@fontsource/vt323/400.css';
 import './index.css';
 
 // Every tool is a chunk fetched on first use (`app/tools.tsx`), and the site
