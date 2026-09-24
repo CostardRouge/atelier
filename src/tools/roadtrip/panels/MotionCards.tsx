@@ -161,7 +161,10 @@ export default function MotionCards({ cards, arrivals, holdSeconds, selected, th
       ref={rowRef}
       role="group"
       aria-label="The frames the picture rests on, in order"
-      className="flex items-start gap-0 overflow-x-auto overflow-y-hidden pb-1 -mx-1 px-1 [scrollbar-width:thin]"
+      // The ring a picked card wears is drawn OUTSIDE its box, and a row that
+      // scrolls clips whatever leaves it: the padding is the ring's room on
+      // every side, or its top edge is cut (his report, 2026-09-24).
+      className="flex items-start gap-0 overflow-x-auto overflow-y-hidden pt-1 pb-1 -mx-1 px-1 [scrollbar-width:thin]"
     >
       {still && (
         <>
