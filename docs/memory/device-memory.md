@@ -134,3 +134,16 @@ decode; the way past those is a tiled decode through LibRaw's own `cropbox`
 (`libraw-wasm` exposes it; each tile re-opens the file), which is the next
 step if a measurement asks for it, and the honest way to a loupe at the
 file's density on a phone.
+
+## His phone, after all of the above (2026-09-24)
+
+**Still reloads, "en un rien de temps"** — his words, on the iPhone, a RAW.
+Opening a DNG reads only its head and the embedded JPEG (`raw-probe.ts`,
+`file.slice`), so the kill is the SENSOR decode (the worker's heap, 256 MB at
+start and growing, plus the file copied into it) or a 74 MB original fetched
+first. Asked of him: which gesture reloads — opening the picture, choosing the
+sensor rung, or exporting. The options on the table, none built: take the
+sensor rung away on a constrained device and say so (the render and the
+proxy stay; the RAW is developed on a computer); or the tiled `cropbox`
+decode above, which still pays LibRaw's full raw buffer. `INITIAL_MEMORY` is
+compiled into `libraw-wasm` and cannot be lowered without our own build.
