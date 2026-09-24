@@ -40,6 +40,14 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 **Decision.** Road Trip opens a Studio project by navigating to `#/studio/open/<id>`; the Studio loads it, opens it and rewrites the hash to `/studio`. **Why**: neither tool reaches into the other's state, the handover survives a full reload of the app, and the receiving tool keeps its own permission and reconciliation logic. **How to apply**: a consumed route must rewrite itself on arrival (a reload would otherwise re-run the open, and Back would bounce), and it is guarded by `isWithinRoute` like every other route effect.
 
+## A tool is an ELEMENT the other tools can use, not only a page (2026-09-21)
+
+**Decision, the maintainer's**, given while answering what should happen to a photograph's develop when it travels into the Studio: *"chaque outil, sur tous les outils comme Develop, sont des éléments qui sont utilisables dans les autres"*. A tool like Develop is reached **as a modal from inside another tool** — one asset corrected where you already are, without leaving for that tool's own page — and a trip can likewise reach for the Studio when a piece needs precise work. **Why it is not the route rule above**: a route HANDS A DOCUMENT OVER and the receiving tool takes the screen; this keeps you where you are and borrows one capability. Both exist, and which one applies is decided by whether a document changes hands.
+
+**How to apply**: the `DevelopSheet` already open in Trips' Picture tab and the Studio's Grade tab is the FIRST instance of this and the shape to extend — not a special case to work around. A capability offered this way lives in `shared/` (the `StylePanel` / `GradePanel` rule, applied one rung up), so the borrowing tool never reaches into the lending tool's own module. The asymmetry is deliberate and holds until he says otherwise: **Trips is not usable from outside itself** — it is a destination, not a capability.
+
+**And it settles a question open since 2026-09-13** (`photo-develop.md` §7.7, `photo-editor.md` §11): a picture's develop **crosses** the Trips → Studio bridge with the piece. It is the same answer as the look crossing whole (`studio.md`, the bridge): what the author did to the photograph is part of the photograph, not part of the tool they did it in.
+
 ## Hash routing (2026-08-20)
 
 **Decision.** Navigation is hash-based (`#/telemetry`, `#/lut`) through a minimal `useSyncExternalStore` router. **Why**: the site is served as static files from GitHub Pages, where a history-API path would 404 on deep-link/refresh. **How to apply**: do not introduce a history-API router without solving the static-hosting fallback first.
