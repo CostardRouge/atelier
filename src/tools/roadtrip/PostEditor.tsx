@@ -27,11 +27,10 @@ import {
   applyPreset,
   arrivalMarks,
   deepestFraming,
+  framingOn,
   framingWindow,
   motionOffset,
-  tourFrames,
-  tourMotion,
-  tourOf,
+  stopOf,
   flipMotion,
   framingAtProgress,
   hasMotion,
@@ -40,7 +39,7 @@ import {
   type FramingMotion,
   type MotionPreset,
   type PictureBox,
-  type TourPlan,
+  type TourStop,
 } from '../../shared/media/framing-motion';
 import {
   cardAtNeedle,
@@ -1173,25 +1172,48 @@ export default function PostEditor({
     },
     [cellFraming, cellMotion, presetBox, patchCell, cellIndex, deck, slideIndex],
   );
-  // The TOUR over the selected picture: read out of its frames every render,
-  // since a tour is only a way of writing them (`framing-motion.ts`).
-  const tourSpan = slideSeconds - (hasMotion(cellMotion) ? motionOffset(cellMotion, slideSeconds, openerSeconds) : 0);
+  // The MAP of the selected picture: every card as the window it shows and
+  // the point it looks at, read out of the same row the section draws — a
+  // map is only another way of writing cards (`framing-motion.ts`).
   const tour = useMemo(() => {
     if (!presetBox) return null;
-    const plan = tourOf(cellFraming, cellMotion, presetBox, tourSpan);
     return {
-      plan,
-      windows: tourFrames(cellFraming, cellMotion).map((f) => framingWindow(f, presetBox)),
+      stops: cellCards.cards.map((c) => stopOf(c, presetBox)),
+      windows: cellCards.cards.map((c) => framingWindow(c, presetBox)),
     };
-  }, [cellFraming, cellMotion, presetBox, tourSpan]);
-  const writeTour = useCallback(
-    (plan: TourPlan) => {
-      const out = tourMotion(cellFraming, cellMotion, plan, presetBox, tourSpan);
-      if (!out) return;
-      holdTheNeedle();
+  }, [cellCards, presetBox]);
+  /** A tap on the map: a card looking at that point, at the picked card's zoom, after the last — the new End. */
+  const mapAdd = useCallback(
+    (stop: TourStop) => {
+      if (!presetBox) return;
+      const zoom = cellCards.cards[cardIndex ?? cardCount - 1]?.scale ?? cellFraming.scale;
+      const cards = [...cellCards.cards, framingOn(cellFraming, stop, zoom, presetBox)];
+      const out = cardsMotion(cellFraming, cellMotion, cards, cellCards.holdSeconds, spanOf(cellMotion));
+      if (out) writeCards({ ...out, selected: cards.length - 1 });
+    },
+    [presetBox, cellCards, cardIndex, cardCount, cellFraming, cellMotion, spanOf, writeCards],
+  );
+  /** A card's dot dragged: it looks at the point, at its own zoom, at the instants it has. */
+  const mapMove = useCallback(
+    (index: number, stop: TourStop) => {
+      const card = cellCards.cards[index];
+      if (!presetBox || !card) return;
+      const out = writeCard(cellFraming, cellMotion, index, framingOn(cellFraming, stop, card.scale, presetBox));
       patchCell(cellIndex, { framing: out.framing, motion: out.motion });
     },
-    [cellFraming, cellMotion, presetBox, tourSpan, holdTheNeedle, patchCell, cellIndex],
+    [presetBox, cellCards, cellFraming, cellMotion, patchCell, cellIndex],
+  );
+  /** The picked card's zoom, about the point it looks at — the map's pinch and the row's slider. */
+  const zoomCard = useCallback(
+    (zoom: number) => {
+      const index = cardIndex;
+      const card = index === null ? null : cellCards.cards[index];
+      if (!presetBox || !card || index === null) return;
+      holdTheNeedle();
+      const out = writeCard(cellFraming, cellMotion, index, framingOn(cellFraming, stopOf(card, presetBox), zoom, presetBox));
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [cardIndex, cellCards, presetBox, holdTheNeedle, cellFraming, cellMotion, patchCell, cellIndex],
   );
   // The opener's ticks, heard while whichever transport is actually driving
   // the badge plays — a clip's own, or the photo transport above — off until
@@ -2045,9 +2067,12 @@ export default function PostEditor({
                               isVideo: Boolean(cellFile && classifyPart(cellFile.name) === 'video'),
                               videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
                               aspect: presetBox.srcW / presetBox.srcH,
-                              plan: tour.plan,
+                              stops: tour.stops,
                               windows: tour.windows,
-                              onPlan: writeTour,
+                              zoom: cardIndex === null ? null : (cellCards.cards[cardIndex]?.scale ?? null),
+                              onAdd: mapAdd,
+                              onMove: mapMove,
+                              onZoom: zoomCard,
                             }
                           : null,
                     }

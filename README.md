@@ -797,10 +797,11 @@ the other at the zoom you chose, **Push in** (from wider onto your framing, or
 closer onto its middle when it is already at its widest) and **Pull out** (from
 close on the middle back to your framing); a pan with no room to travel is
 greyed out, and the reason is written under the buttons. **Plan a tour…** opens
-a map of the whole picture with the window each card shows: tap where the view
-should go, drag a stop to move it, and set one zoom and one pause for every
-stop. Both are only ways of writing cards — the row shows whatever the picture
-already has, however it was written. The zoom is geometric and a point two
+a map of the whole picture with the window each card shows and a dot where it
+looks: tap where the view should go to add a card after the last, drag a dot to
+move that card, and pinch, scroll or slide to zoom the picked card — each card
+at its own zoom. Both are only ways of writing cards — the row shows whatever
+the picture already has, however it was written. The zoom is geometric and a point two
 cards share stays still on screen, so a push in lands on what you aimed at. On
 a hook with an opener that covers the frame (Défilé, Virée), the move can wait
 for the opener to finish. It works on a hook, on every picture of a carousel,

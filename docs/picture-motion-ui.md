@@ -1,10 +1,11 @@
 # Editing a picture's motion — why the needle is hard, and three faces for one storage
 
-**Status: he picked A on 2026-09-24; §6.1–6.4 are BUILT the same day** (the
-pure cards, the row in the section, the chip on the stage, the thumbnail on
-End, the Picture tab as a drawer on the phone — `docs/memory/roadtrip.md`,
-«Built as cards»); §6.5 (the tour on cards, a zoom per stop) follows; §7's
-four questions were taken as recommended for want of his answers. The lab that
+**Status: he picked A on 2026-09-24; §6.1–6.5 are BUILT the same day — the
+plan is complete** (the pure cards, the row in the section, the chip on the
+stage, the thumbnail on End, the Picture tab as a drawer on the phone, the map
+on the cards with a zoom per card — `docs/memory/roadtrip.md`, «Built as
+cards»); §6.6 stays unscheduled by decision; §7's four questions were taken as
+recommended for want of his answers, and are still his to overrule. The lab that
 carries the three faces — three phones one manipulates (drag, pinch, play), the
 diagnosis, the comparison and the recommendation:
 <https://claude.ai/artifact/CUaBnL4XxsHYsh8zHVCvG9>. §1 is fact, traced to

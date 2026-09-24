@@ -2,14 +2,13 @@ import { useState } from 'react';
 import { DEFAULT_STEPS, MAX_STEPS, MIN_STEPS } from '../../../shared/motion/easing';
 import {
   hasMotion,
-  MAX_TOUR_STOPS,
   starterMotion,
   type FramingMotion,
   type MotionPreset,
-  type TourPlan,
+  type TourStop,
 } from '../../../shared/media/framing-motion';
 import { MAX_CARDS } from '../../../shared/media/motion-cards';
-import type { Framing } from '../../../shared/media/framing';
+import { MAX_FRAMING_SCALE, scaleFramingBy, type Framing } from '../../../shared/media/framing';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, Readout, SelectField } from '../../../shared/ui/Inspector';
 import { Icons } from '../../../shared/ui/icons';
@@ -56,17 +55,23 @@ export interface PanZoomSectionProps {
   tour: TourProps | null;
 }
 
-/** What the tour's map needs, and where it writes. */
+/** What the map needs, and the card verbs it writes through. */
 export interface TourProps {
   file: File | null;
   isVideo: boolean;
   videoSeconds: number;
   /** The picture's width over its height. */
   aspect: number;
-  plan: TourPlan;
-  /** What each stop really shows, four corners in 0..1 of the picture. */
+  /** One per card: the point of the picture in the middle of its frame. */
+  stops: readonly TourStop[];
+  /** What each card shows, four corners in 0..1 of the picture. */
   windows: readonly (readonly [number, number][])[];
-  onPlan: (plan: TourPlan) => void;
+  /** The picked card's zoom; null between two cards. */
+  zoom: number | null;
+  onAdd: (stop: TourStop) => void;
+  onMove: (index: number, stop: TourStop) => void;
+  /** The picked card's zoom, absolute. */
+  onZoom: (zoom: number) => void;
 }
 
 /** What each preset is called, and what it does, from the camera's side. */
@@ -129,7 +134,6 @@ export default function PanZoomSection({
   const moving = hasMotion(motion);
   const count = cards.length;
   const [touring, setTouring] = useState(false);
-  const [stop, setStop] = useState(0);
   const canRemove = moving && selected !== null && selected < count - 1;
   const cardsHint =
     count >= MAX_CARDS
@@ -270,13 +274,11 @@ export default function PanZoomSection({
         </Button>
         {tour && (
           <Readout muted>
-            {tour.plan.stops.length} {tour.plan.stops.length === 1 ? 'stop' : 'stops'}
+            {tour.stops.length} {tour.stops.length === 1 ? 'stop' : 'stops'}
           </Readout>
         )}
       </FieldRow>
-      {touring && tour && (
-        <TourRows tour={tour} selected={Math.min(stop, tour.plan.stops.length - 1)} onSelect={setStop} />
-      )}
+      {touring && tour && <TourRows tour={tour} selected={selected ?? -1} onSelect={onSelectCard} />}
       {moving && (
         <>
           <FieldRow label="Easing">
@@ -327,13 +329,14 @@ export default function PanZoomSection({
 }
 
 /**
- * The open tour: the map, then the zoom and the pause every stop shares, and
- * the verbs on the selected stop. Every change rewrites the whole row of
- * cards — a tour IS those cards, written at one zoom.
+ * The open map: every card as the window it shows on the whole picture, and
+ * the picked card's zoom. The map writes through the same card verbs as the
+ * row — a card added after the last, a card moved at its own zoom, the
+ * picked card zoomed about the point it looks at — so the two can never
+ * disagree; the pause, Remove and Hold still are the section's own rows.
  */
 function TourRows({ tour, selected, onSelect }: { tour: TourProps; selected: number; onSelect: (i: number) => void }) {
-  const { plan, onPlan } = tour;
-  const write = (patch: Partial<TourPlan>) => onPlan({ ...plan, ...patch });
+  const zoom = tour.zoom;
   return (
     <>
       {/* The whole picture, as wide as the section: a map the width of a
@@ -344,61 +347,33 @@ function TourRows({ tour, selected, onSelect }: { tour: TourProps; selected: num
           isVideo={tour.isVideo}
           videoSeconds={tour.videoSeconds}
           aspect={tour.aspect}
-          stops={plan.stops}
+          stops={tour.stops}
           windows={tour.windows}
           selected={selected}
           onSelect={onSelect}
-          onChange={(stops) => write({ stops })}
+          onAdd={tour.onAdd}
+          onMove={tour.onMove}
+          onZoom={(factor) => {
+            if (zoom !== null) tour.onZoom(scaleFramingBy(zoom, factor));
+          }}
         />
         <p className="m-0 text-xs leading-relaxed text-muted">
-          Tap the picture to add a stop ({MAX_TOUR_STOPS} at most), drag one to move it. A stop sits
-          where the view can really centre at this zoom; the last is where the picture rests.
+          Tap the picture to add a card after the last ({MAX_CARDS} at most) — it becomes the End —,
+          drag a dot to move that card, pinch or scroll to zoom the picked one. A card looks where the
+          view can really centre at its zoom.
         </p>
       </div>
-      <FieldRow label="Zoom">
+      <FieldRow label="Zoom" hint={zoom === null ? 'Pick a card to zoom it.' : undefined}>
         <RangeField
-          label="The zoom every stop is seen at"
+          label="The picked card’s zoom"
           min={1}
-          max={4}
+          max={MAX_FRAMING_SCALE}
           step={0.05}
-          value={plan.zoom}
-          onChange={(zoom) => write({ zoom })}
+          value={zoom ?? 1}
+          onChange={tour.onZoom}
           format={(v) => `${v.toFixed(2)}×`}
+          disabled={zoom === null}
         />
-      </FieldRow>
-      {/* A pause is written as two equal frames, so it exists only between
-          stops: with one stop there is nowhere to keep it. */}
-      <FieldRow label="Pause" hint={plan.stops.length < 2 ? 'Pauses start with a second stop.' : undefined}>
-        <RangeField
-          label="How long the view rests on each stop"
-          min={0}
-          max={2}
-          step={0.05}
-          value={plan.holdSeconds}
-          onChange={(holdSeconds) => write({ holdSeconds })}
-          format={(v) => `${v.toFixed(2)} s`}
-          disabled={plan.stops.length < 2}
-        />
-      </FieldRow>
-      <FieldRow label="Stop">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => write({ stops: plan.stops.filter((_, i) => i !== selected) })}
-          disabled={plan.stops.length < 2}
-          title={`Take off stop ${selected + 1}`}
-        >
-          Remove {selected + 1}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => write({ stops: plan.stops.slice(-1) })}
-          disabled={plan.stops.length < 2}
-          title="Keep only the last stop — the picture holds still where it rests"
-        >
-          Clear
-        </Button>
       </FieldRow>
     </>
   );

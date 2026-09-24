@@ -1,5 +1,6 @@
-import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { MAX_TOUR_STOPS, type TourStop } from '../../../shared/media/framing-motion';
+import { useEffect, useRef, useState, type PointerEvent as ReactPointerEvent, type WheelEvent as ReactWheelEvent } from 'react';
+import { MAX_CARDS } from '../../../shared/media/motion-cards';
+import type { TourStop } from '../../../shared/media/framing-motion';
 import { useObjectUrl } from '../../../shared/media/use-object-url';
 
 interface TourMapProps {
@@ -10,12 +11,19 @@ interface TourMapProps {
   videoSeconds: number;
   /** The picture's width over its height. */
   aspect: number;
+  /** One per card: the point of the picture in the middle of its frame. */
   stops: readonly TourStop[];
-  /** What each stop shows, four corners in 0..1 of the picture. */
+  /** What each card shows, four corners in 0..1 of the picture. */
   windows: readonly (readonly [number, number][])[];
+  /** The card in hand, or -1 while the needle is between two. */
   selected: number;
   onSelect: (index: number) => void;
-  onChange: (stops: TourStop[]) => void;
+  /** A tap on the picture: a card there, after the last, which becomes the End. */
+  onAdd: (stop: TourStop) => void;
+  /** A card's dot dragged: that card looks at the point, at its own zoom. */
+  onMove: (index: number, stop: TourStop) => void;
+  /** A pinch or a wheel on the map: the picked card's zoom, by this factor. */
+  onZoom: (factor: number) => void;
 }
 
 /** The map's own units: 1000 across, whatever the picture's size. */
@@ -25,10 +33,12 @@ const DOT = 30;
 const MIN_REACH_PX = 12;
 
 /**
- * The whole picture, with the window each stop shows and the stops in order —
- * the one place a tour is drawn, since the stage only ever shows the frame.
- * A tap on the picture adds a stop, a drag moves one, a tap on one selects
- * it. Everything it writes goes through `onChange`, which rewrites the tour.
+ * The whole picture, with the window each card shows and its dot in order —
+ * the one place a move is drawn on the picture, since the stage only ever
+ * shows the frame. A tap on the picture adds a card, a drag moves one, a tap
+ * on one picks it, and a pinch (two fingers, a trackpad, the wheel) tightens
+ * the picked card's window about its middle — the zoom per card the row
+ * writes. Everything it writes goes through the editor's card verbs.
  */
 export default function TourMap({
   file,
@@ -39,7 +49,9 @@ export default function TourMap({
   windows,
   selected,
   onSelect,
-  onChange,
+  onAdd,
+  onMove,
+  onZoom,
 }: TourMapProps) {
   const url = useObjectUrl(file);
   const height = UNIT / Math.max(0.1, aspect);
@@ -50,6 +62,10 @@ export default function TourMap({
   // ones the document still shows a render behind (`frontend.md`).
   const latest = useRef(stops);
   latest.current = stops;
+  // Every pointer down on the map, for the pinch: two of them are a pinch,
+  // and the one left after it starts nothing.
+  const pointers = useRef(new Map<number, { x: number; y: number }>());
+  const pinching = useRef(false);
 
   useEffect(() => {
     const v = videoRef.current;
@@ -61,7 +77,17 @@ export default function TourMap({
     else v.addEventListener('loadedmetadata', seek, { once: true });
   }, [isVideo, videoSeconds, url]);
 
-  const toPicture = (e: ReactPointerEvent): TourStop | null => {
+  // The browser's own pinch must not take the gesture: a non-passive
+  // listener is the only way to refuse it (`frontend.md`).
+  useEffect(() => {
+    const el = svgRef.current;
+    if (!el) return;
+    const refuse = (e: Event) => e.preventDefault();
+    el.addEventListener('touchmove', refuse, { passive: false });
+    return () => el.removeEventListener('touchmove', refuse);
+  }, []);
+
+  const toPicture = (e: { clientX: number; clientY: number }): TourStop | null => {
     const r = svgRef.current?.getBoundingClientRect();
     if (!r || r.width <= 0 || r.height <= 0) return null;
     return {
@@ -79,6 +105,13 @@ export default function TourMap({
       // A pointer the browser no longer tracks: the gesture still lands, it
       // simply is not captured past the map's edge.
     }
+    pointers.current.set(e.pointerId, { x: e.clientX, y: e.clientY });
+    if (pointers.current.size >= 2) {
+      // The second finger turns a drag into a pinch; nothing is moved by it.
+      pinching.current = true;
+      setDrag(null);
+      return;
+    }
     const r = e.currentTarget.getBoundingClientRect();
     const reach = Math.max(MIN_REACH_PX, (DOT * 1.4 * r.width) / UNIT);
     const hit = latest.current.findIndex(
@@ -89,23 +122,42 @@ export default function TourMap({
       setDrag(hit);
       return;
     }
-    if (latest.current.length >= MAX_TOUR_STOPS) return;
-    const next = [...latest.current, p];
-    onChange(next);
-    onSelect(next.length - 1);
-    setDrag(next.length - 1);
+    if (latest.current.length >= MAX_CARDS) return;
+    onAdd(p);
+    // The card just added is the last; the same finger goes on placing it.
+    setDrag(latest.current.length);
   };
 
   const onPointerMove = (e: ReactPointerEvent<SVGSVGElement>) => {
+    const was = pointers.current.get(e.pointerId);
+    if (!was) return;
+    const now = { x: e.clientX, y: e.clientY };
+    pointers.current.set(e.pointerId, now);
+    if (pinching.current) {
+      const other = [...pointers.current.entries()].find(([id]) => id !== e.pointerId)?.[1];
+      if (!other) return;
+      const before = Math.hypot(was.x - other.x, was.y - other.y);
+      const after = Math.hypot(now.x - other.x, now.y - other.y);
+      if (before > 4) onZoom(after / before);
+      return;
+    }
     if (drag === null) return;
     const p = toPicture(e);
     if (!p) return;
-    const next = latest.current.map((s, i) => (i === drag ? p : s));
-    latest.current = next;
-    onChange(next);
+    onMove(drag, p);
   };
 
-  const onPointerUp = () => setDrag(null);
+  const onPointerUp = (e: ReactPointerEvent<SVGSVGElement>) => {
+    pointers.current.delete(e.pointerId);
+    if (pointers.current.size === 0) pinching.current = false;
+    setDrag(null);
+  };
+
+  // A wheel notch is the desktop's pinch — the one factor every zoom in the
+  // suite reads (`framing.ts`, `scaleFramingBy`).
+  const onWheel = (e: ReactWheelEvent<SVGSVGElement>) => {
+    onZoom(Math.exp(-e.deltaY / 400));
+  };
 
   const poly = (w: readonly [number, number][]) => w.map(([x, y]) => `${x * UNIT},${y * height}`).join(' ');
 
@@ -133,13 +185,14 @@ export default function TourMap({
         preserveAspectRatio="none"
         className="absolute inset-0 w-full h-full touch-none cursor-crosshair"
         role="application"
-        aria-label="The whole picture: tap to add a stop, drag a stop to move it"
+        aria-label="The whole picture: tap to add a card, drag a card's dot to move it, pinch or scroll to zoom the picked card"
         onPointerDown={onPointerDown}
         onPointerMove={onPointerMove}
         onPointerUp={onPointerUp}
         onPointerCancel={onPointerUp}
+        onWheel={onWheel}
       >
-        {/* The path the view travels, stop to stop. */}
+        {/* The path the view travels, card to card. */}
         {stops.length > 1 && (
           <polyline
             points={stops.map((s) => `${s.x * UNIT},${s.y * height}`).join(' ')}
