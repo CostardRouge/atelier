@@ -35,6 +35,49 @@ Signing is the developer's: set your team in Xcode (or `DEVELOPMENT_TEAM` in
 `project.yml`) before running on a device. The bundle id is
 `website.steeve.atelier` for both targets.
 
+### If Xcode refuses the project on your Mac
+
+Two issues that show up together on a clone kept under `~/Documents` (or
+`~/Desktop`, `~/Downloads`, iCloud Drive), and are ONE problem:
+
+```
+failed to read asset tags: The command `(cd …/apple && env -i …/actool
+  --print-asset-tag-combinations --output-format xml1 …/Assets.xcassets)`
+  exited with status 1. … "Contents.json" couldn't be opened because you
+  don't have permission to view it. … Operation not permitted
+Atelier.xcodeproj  Missing package product 'AtelierKit'
+```
+
+The first line is Xcode's own build system, not XcodeGen: it runs `actool`
+over every asset catalog when it loads the project, and macOS refused the read
+(`Operation not permitted` is the privacy layer, never a POSIX permission —
+the files are `644` and CI reads them). The same refusal hits the compile of
+`Packages/AtelierKit/Package.swift`, and Xcode reports the product it could not
+resolve as *missing*. The spec is not the cause: CI generates and builds both
+targets from it.
+
+1. Quit Xcode. **System Settings → Privacy & Security → Files and Folders**:
+   give **Xcode** (and the terminal you generate from) the *Documents Folder*;
+   if Xcode is not listed there, add it under **Full Disk Access**.
+2. `rm -rf ~/Library/Developer/Xcode/DerivedData/Atelier-*`, run
+   `xcodegen generate` again, reopen the project. If the package line
+   survives alone: **File → Packages → Reset Package Caches**, then
+   *Resolve Package Versions*.
+3. Or keep the clone out of the protected folders — `~/Developer/atelier`
+   is the conventional place, and neither error can occur there.
+
+To tell whose read is refused, run from the terminal:
+
+```
+xcrun actool --print-asset-tag-combinations --output-format xml1 \
+  apple/Atelier/Resources/Assets.xcassets
+```
+
+XML back means the terminal may read the folder and Xcode may not: step 1
+for Xcode alone. The same error back means the terminal is refused too, or
+the file itself is (`ls -lO@` shows flags and attributes a copy may have
+brought along).
+
 ## Layout
 
 ```
