@@ -1321,7 +1321,10 @@ device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the
 loupe, which decodes the file whole on a computer, says *as close as this
-device goes* instead. A browser cannot ask a phone how much memory a tab may
+device goes* instead — for every picture, not only a RAW. A RAW is always
+shown from the render its camera wrote inside it, never from the browser's own
+decode of the whole file (Safari has one, and on an iPhone it was what closed
+the tab on a zoom). A browser cannot ask a phone how much memory a tab may
 take, so the rule is coarse: iPhone, iPad and Android count as phones, and
 `localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
 

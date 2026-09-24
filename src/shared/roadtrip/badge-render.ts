@@ -16,7 +16,7 @@ import type { CubeLut } from '../lib/cube-parser';
 import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { framingAt, framingOnClock, type FramingMotion, type MotionClock } from '../media/framing-motion';
-import { fitPhotoForRender } from '../media/photo-frame';
+import { fitPhotoForRender, rawRenderFirst } from '../media/photo-frame';
 import type { HalfImage } from '../render/half-image';
 import type { SavedMediaRef } from '../projects/project-types';
 import {
@@ -109,6 +109,20 @@ export async function loadBadgeSource(
 ): Promise<BadgeSource> {
   if (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) {
     return loadVideoFrame(file, videoTimeSeconds);
+  }
+  // A RAW: its camera's render first, never the browser's whole decode on a
+  // phone (`rawRenderFirst`, `photo-frame.ts`) — Safari demosaics a DNG
+  // natively and that is what a phone's tab died of.
+  if (isRawImage(file.name)) {
+    const raw = await rawRenderFirst(file, decodeOptions(maxWidth));
+    if (raw) {
+      return { image: raw.bitmap, width: raw.bitmap.width, height: raw.bitmap.height, release: () => raw.bitmap.close() };
+    }
+    // Neither a render nor (where allowed) the browser's decode: the refusal
+    // below, never the whole-file decode the phone was spared above.
+    throw new Error(
+      `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
+    );
   }
   try {
     // `maxWidth` bounds the DECODE, for a caller that only needs a small

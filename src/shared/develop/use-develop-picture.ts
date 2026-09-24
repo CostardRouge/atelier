@@ -1372,7 +1372,11 @@ export function useDevelopPicture({
     // there is nothing closer to decode: the loupe says so instead of trying
     // and taking the tab down with it. A render's loupe is the browser's own
     // decode and stays.
-    if (rawFile && deviceClass() === 'constrained') {
+    // And on a phone the same holds for EVERY picture (2026-09-24, his "raw
+    // sur iphone plante quand je zoom"): the stage already stands at a 4K
+    // budget, and a whole 48-megapixel decode plus two full-size float16
+    // targets is more than a phone's tab is given.
+    if (deviceClass() === 'constrained') {
       setLoupeState('capped');
       return;
     }

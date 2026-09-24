@@ -14,6 +14,8 @@ import type { Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered } from './border-paint';
 import { cropZoneSize } from './roll-export';
+import { isRawImage } from '../library/assets';
+import { rawRenderFirst } from '../media/photo-frame';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 
 /**
@@ -64,7 +66,12 @@ export async function pictureThumbnail(
   try {
     // Upright, as every other decode in the suite (`decodePhoto`): a cell
     // must show the picture the way the stage and the export will.
-    bitmap = await createImageBitmap(file, { imageOrientation: 'from-image' });
+    // A RAW from the render inside it — never a phone's whole native decode
+    // per cell of the strip (`rawRenderFirst`).
+    bitmap = isRawImage(file.name)
+      ? ((await rawRenderFirst(file, { imageOrientation: 'from-image' }))?.bitmap ?? null)
+      : await createImageBitmap(file, { imageOrientation: 'from-image' });
+    if (!bitmap) return null;
     const { w, h } = thumbSize(bitmap.width, bitmap.height, longEdge);
     if (!w || !h) return null;
     const canvas = document.createElement('canvas');

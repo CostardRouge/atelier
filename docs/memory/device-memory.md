@@ -137,7 +137,29 @@ file's density on a phone.
 
 ## His phone, after all of the above (2026-09-24)
 
-**Still reloads, "en un rien de temps"** — his words, on the iPhone, a RAW.
+**It still reloaded — "quand je zoom".** The cause was not the sensor decode:
+**Safari decodes a DNG NATIVELY**, whole (ImageIO demosaics the sensor, 146 MB
+of RGBA for a DJI before the GPU), and four decoders tried the browser FIRST
+and fell back to the camera's embedded render only when it refused — which
+Chrome always does and Safari never does. So on an iPhone the loupe
+(`decodePhotoSource`), the stage (`loadBadgeSource`), every filmstrip cell
+(`pictureThumbnail`) and every Library cover (`loadImageMeta`) were full
+native decodes of the RAW, and a zoom past the stage's 1:1 added the loupe's
+two full-size float16 targets on top. **Rule, now in all four**: a RAW is
+read from the render INSIDE it first, in every browser (`rawRenderFirst`,
+`photo-frame.ts`); the browser's own decode is a last resort on a ROOMY device
+only, never on a phone — which also makes "camera render" the same picture
+in every browser. And **the loupe is `capped` on a constrained device for
+EVERY picture**, not only a RAW on its sensor: the stage already stands at a
+4K budget. Driven headless with the class forced and `createImageBitmap`
+instrumented: a DNG zoomed to 1709 % made no whole-file decode, the label
+read `loupe · as close as this device goes`, the strip's cell came from the
+render. A DNG with no render is refused on a phone rather than decoded. NOT
+yet on his phone.
+
+
+
+**Earlier the same day — "en un rien de temps"** — before the gesture was known.
 Opening a DNG reads only its head and the embedded JPEG (`raw-probe.ts`,
 `file.slice`), so the kill is the SENSOR decode (the worker's heap, 256 MB at
 start and growing, plus the file copied into it) or a 74 MB original fetched
