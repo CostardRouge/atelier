@@ -49,7 +49,11 @@ const CARD_PIXELS = 500_000;
  * (`studio.md`, «released one commit after»), met again here.
  */
 function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | null; seq: number } {
-  const [state, setState] = useState<{ source: BadgeSource | null; seq: number }>({ source: null, seq: 0 });
+  const [state, setState] = useState<{ file: File | null; source: BadgeSource | null; seq: number }>({
+    file: null,
+    source: null,
+    seq: 0,
+  });
   const file = thumb?.file ?? null;
   const isVideo = thumb?.isVideo ?? false;
   const videoSeconds = thumb?.videoSeconds ?? 0;
@@ -62,7 +66,7 @@ function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | 
   }, [state.source]);
   useEffect(() => {
     if (!file) {
-      setState({ source: null, seq: 0 });
+      setState((s) => (s.source ? { file: null, source: null, seq: s.seq + 1 } : s));
       return;
     }
     let cancelled = false;
@@ -77,18 +81,20 @@ function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | 
           small.release();
           return;
         }
-        setState((s) => ({ source: small, seq: s.seq + 1 }));
+        setState((s) => ({ file, source: small, seq: s.seq + 1 }));
       })
       .catch(() => {
         // A picture the browser cannot draw leaves the cards dark; the stage
         // already says why, and a row must not say it a second time.
-        if (!cancelled) setState({ source: null, seq: 0 });
+        if (!cancelled) setState((s) => (s.source ? { file: null, source: null, seq: s.seq + 1 } : s));
       });
     return () => {
       cancelled = true;
     };
   }, [file, isVideo, videoSeconds]);
-  return state;
+  // Another file's picture is never drawn under this one's cards while the
+  // new one decodes: the row stays dark for that moment rather than wrong.
+  return { source: state.file === file ? state.source : null, seq: state.seq };
 }
 
 /** A bitmap already closed draws nothing rather than throwing — its width is 0 once detached. */

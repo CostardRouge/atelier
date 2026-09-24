@@ -1136,26 +1136,38 @@ export default function PostEditor({
       tone: last ? 'plain' : 'accent',
     };
   }, [stagePlaying, isCta, refusedUntil, cellMotion, collage, cellIndex, cardIndex, cellArrivals, deck.local, cardCount]);
-  // Each picture's decoded shape, as the stage reports it — keyed by the slide
-  // so a slide just opened never measures a pan against the last one's.
+  // Each picture's decoded shape, as the stage reports it — keyed by the FILES
+  // it was measured from, so a new picture is never measured against the last
+  // one's shape. Keyed by the slide until 2026-09-24: the stage reports only
+  // when a decode lands, so a slide showing the SAME picture as the one before
+  // (a carousel's second slide, played into) never got a report, and its
+  // cards drew black and its quick moves said "still being read" for good.
+  const picturesKey = useMemo(
+    () => cellFiles.map((f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : '')).join('\u0001'),
+    [cellFiles],
+  );
   const [pictureSizes, setPictureSizes] = useState<{
     key: string;
     sizes: readonly ({ width: number; height: number } | null)[];
   }>({ key: '', sizes: [] });
   const onPictureSizes = useCallback(
-    (sizes: readonly ({ width: number; height: number } | null)[]) => setPictureSizes({ key: slideKey, sizes }),
-    [slideKey],
+    (sizes: readonly ({ width: number; height: number } | null)[]) => setPictureSizes({ key: picturesKey, sizes }),
+    [picturesKey],
   );
-  /** The selected picture in its frame (or its cell), for a preset to measure a pan's room. */
-  const presetBox = useMemo((): PictureBox | null => {
-    const src = pictureSizes.key === slideKey ? pictureSizes.sizes[cellIndex] : null;
-    if (!src) return null;
+  /** The frame the selected picture sits in — the slide's, or its cell's — at a nominal width. */
+  const frameBox = useMemo((): { dstW: number; dstH: number } | null => {
     const w = 1080;
     const h = Math.round(1080 / aspect);
-    if (!collage) return { srcW: src.width, srcH: src.height, dstW: w, dstH: h };
+    if (!collage) return { dstW: w, dstH: h };
     const rect = resolveCollage(collage, w, h)[cellIndex];
-    return rect ? { srcW: src.width, srcH: src.height, dstW: rect.w, dstH: rect.h } : null;
-  }, [pictureSizes, slideKey, cellIndex, collage, aspect]);
+    return rect ? { dstW: rect.w, dstH: rect.h } : null;
+  }, [collage, cellIndex, aspect]);
+  /** The selected picture in its frame (or its cell), for a preset to measure a pan's room. */
+  const presetBox = useMemo((): PictureBox | null => {
+    const src = pictureSizes.key === picturesKey ? pictureSizes.sizes[cellIndex] : null;
+    if (!src || !frameBox) return null;
+    return { srcW: src.width, srcH: src.height, ...frameBox };
+  }, [pictureSizes, picturesKey, cellIndex, frameBox]);
   const presets = useMemo(
     () => MOTION_PRESETS.map((id) => ({ id, problem: presetProblem(id, cellFraming, presetBox) })),
     [cellFraming, presetBox],
@@ -1601,19 +1613,24 @@ export default function PostEditor({
   );
 
 
-  /** What the cards row draws its thumbnails from: the selected picture, in the frame it sits in. */
+  /**
+   * What the cards row draws its thumbnails from: the selected picture, in the
+   * frame it sits in. It needs the frame's shape and nothing the stage
+   * measures — the row decodes the picture itself — so a card is never dark
+   * for want of a report.
+   */
   const cardThumb = useMemo(
     (): CardThumbSource | null =>
-      cellFile && presetBox
+      cellFile && frameBox
         ? {
             file: cellFile,
             isVideo: classifyPart(cellFile.name) === 'video',
             videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
-            dstW: presetBox.dstW,
-            dstH: presetBox.dstH,
+            dstW: frameBox.dstW,
+            dstH: frameBox.dstH,
           }
         : null,
-    [cellFile, presetBox, cellIndex, slide.videoTimeSeconds],
+    [cellFile, frameBox, cellIndex, slide.videoTimeSeconds],
   );
 
   const deckStrip = (
