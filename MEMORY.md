@@ -323,8 +323,10 @@ anything about media sources or document storage:
   intuitive: §1–§2 are fact (the built feature and the six rules that make it
   hard to read, traced to files), §3–§6 the three faces and the proposal (A ·
   Cards as the face, four rule changes, six commits), §7 his four questions.
-  **Designed, nothing built.** Read it before touching `PanZoomSection.tsx`,
-  `TourMap.tsx`, the needle half of `PostEditor.tsx` or the band's marks.
+  **He picked A and §6.1–6.5 are BUILT (2026-09-24)**; §7 was answered by
+  its own recommendations and is still his to overrule. Read it before
+  touching `motion-cards.ts`, `MotionCards.tsx`, `PanZoomSection.tsx`,
+  `TourMap.tsx`, the cards half of `PostEditor.tsx` or the band's marks.
 - **`docs/hook-engine.md`** — the agreed design (2026-09-13) for many hook
   variants over one badge: the contract, the three decisions that shaped it,
   the picker, how a synthesised sound bed reaches the MP4 through the export
