@@ -386,11 +386,8 @@ public func pixelAt(_ img: DetailImage, _ x: Int, _ y: Int) -> (Double, Double, 
     return (Double(img.data[i]), Double(img.data[i + 1]), Double(img.data[i + 2]))
 }
 
-/// BT.709 luma of encoded RGB — the same weights the mask's luma uses.
-@inline(__always)
-public func lumaOf(_ r: Double, _ g: Double, _ b: Double) -> Double {
-    0.2126 * r + 0.7152 * g + 0.0722 * b
-}
+// `lumaOf` (BT.709 luma of encoded RGB) is Mask.swift's — the web keeps an
+// identical copy in detail.ts and mask.ts; the kernel keeps one.
 
 /// Encoded RGB → (Y, Cb, Cr), BT.709; Cb and Cr are centred on 0.
 public func toYcc(_ r: Double, _ g: Double, _ b: Double) -> (Double, Double, Double) {

@@ -1,75 +1,62 @@
-// A painted mask, rasterised — port of `src/shared/render/brush-raster.ts`.
+// A painted mask, rasterised — the one mask kind the GPU cannot compute from
+// a handful of uniforms. Port of `src/shared/render/brush-raster.ts`.
 //
-// The other mask shapes are a few numbers and a formula, so a kernel mirrors
-// them directly. A brush is a list of polylines, and a per-pixel kernel that
-// walked every segment of every stroke would cost `pixels × points` —
-// hundreds of millions for an ordinary mask. So the CPU rasterises it once
-// into an alpha map and the GPU samples that.
-//
-// Rules kept:
-// - It is the SAME maths, not an approximation of it: every texel is
-//   `brushCoverageAt` at that texel's centre, so the raster and the pure
-//   module agree by construction (`brushAt` is the one-point twin).
-// - Cost is the area PAINTED, not the frame: each stroke is walked only inside
-//   its own bounding box, which is what makes a live drag possible.
-// - Strokes composite in the order they were painted; an eraser only removes
-//   what is already down, so a stroke painted after it comes back.
-// - No strokes is an EMPTY map (every texel 0): only the absence of a mask is
-//   the whole picture.
-//
-// Pure: it returns bytes, and the app uploads them.
+// The rules it keeps:
+// - it is the SAME maths as `Mask.swift`, not an approximation: every texel
+//   is `brushCoverageAt` at that texel's centre, so the raster and the pure
+//   module agree by construction and the GPU can be held to it;
+// - cost is the area PAINTED, not the frame: each stroke is walked only
+//   inside its own bounding box, which is what makes a live drag possible;
+// - strokes composite in the order painted, an eraser only removes what is
+//   already down, and the accumulator is 32-bit float as the web's is, so a
+//   byte here is the byte the web writes;
+// - the hot loop allocates nothing — `framePoint` is written out per row and
+//   per texel, and the stroke's centred points are read through a buffer.
 
 import Foundation
 
-/// One byte of coverage per texel, row-major from the TOP of the picture.
 public struct BrushRaster: Equatable, Sendable {
+    /// One byte of coverage per texel, row-major from the TOP of the picture.
     public var data: [UInt8]
     public var width: Int
     public var height: Int
 
     public init(data: [UInt8], width: Int, height: Int) {
-        self.data = data
-        self.width = width
-        self.height = height
+        self.data = data; self.width = width; self.height = height
     }
 }
 
 /// How big the alpha map is on its long edge. A mask is a soft thing, so it
-/// survives being sampled at a fraction of the picture's density far better
-/// than the picture would: 1024 keeps a 48-megapixel delivery honest while
-/// costing 1 MB rather than 48.
+/// survives being sampled at a fraction of the picture's density; 1024 keeps
+/// a 48-megapixel delivery honest while costing 1 MB rather than 48.
 public let brushRasterLongEdge = 1024
 
-/// JavaScript's `Math.round`: half up, whatever the sign.
-@inline(__always)
-private func jsRound(_ x: Double) -> Double {
-    (x + 0.5).rounded(.down)
-}
-
 /// The map's size for a frame of this shape, long edge capped.
-public func brushRasterSize(_ aspectRatio: Double, longEdge: Int = brushRasterLongEdge) -> (width: Int, height: Int) {
+public func brushRasterSize(_ aspectRatio: Double, _ longEdge: Int = brushRasterLongEdge) -> (width: Int, height: Int) {
     let ar = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1
     let edge = max(16, longEdge)
     if ar >= 1 {
-        return (width: edge, height: max(16, Int(jsRound(Double(edge) / ar))))
+        return (edge, max(16, Int((Double(edge) / ar).rounded())))
     }
-    return (width: max(16, Int(jsRound(Double(edge) * ar))), height: edge)
+    return (max(16, Int((Double(edge) * ar).rounded())), edge)
 }
 
 /// The strokes as an alpha map.
-public func rasteriseBrush(_ strokes: [BrushStroke], _ aspectRatio: Double, longEdge: Int = brushRasterLongEdge) -> BrushRaster {
-    let size = brushRasterSize(aspectRatio, longEdge: longEdge)
+public func rasteriseBrush(_ strokes: [BrushStroke], _ aspectRatio: Double, _ longEdge: Int = brushRasterLongEdge) -> BrushRaster {
+    let size = brushRasterSize(aspectRatio, longEdge)
     let width = size.width
     let height = size.height
     var acc = [Float](repeating: 0, count: width * height)
     let ar = aspectRatio.isFinite && aspectRatio > 0 ? aspectRatio : 1
     let diagonal = hypot(ar, 1)
     // The frame in the shared centred space, so a radius can be turned into a
-    // number of texels without going through `framePoint` per texel.
+    // number of texels without going through `framePoint` per pixel.
     let spanX = (ar / diagonal) * 2
     let spanY = (1 / diagonal) * 2
+    let w = Double(width)
+    let h = Double(height)
 
-    acc.withUnsafeMutableBufferPointer { buf in
+    acc.withUnsafeMutableBufferPointer { acc in
         for stroke in strokes {
             if stroke.points.isEmpty { continue }
             let r = max(stroke.radius, 1e-6)
@@ -88,23 +75,32 @@ public func rasteriseBrush(_ strokes: [BrushStroke], _ aspectRatio: Double, long
             }
             let padU = r / spanX
             let padV = r / spanY
-            let x0 = max(0, Int(((minU - padU) * Double(width)).rounded(.down)))
-            let x1 = min(width - 1, Int(((maxU + padU) * Double(width)).rounded(.up)))
-            let y0 = max(0, Int(((minV - padV) * Double(height)).rounded(.down)))
-            let y1 = min(height - 1, Int(((maxV + padV) * Double(height)).rounded(.up)))
+            let x0 = Int(min(w, max(0, ((minU - padU) * w).rounded(.down))))
+            let x1 = Int(max(-1, min(w - 1, ((maxU + padU) * w).rounded(.up))))
+            let y0 = Int(min(h, max(0, ((minV - padV) * h).rounded(.down))))
+            let y1 = Int(max(-1, min(h - 1, ((maxV + padV) * h).rounded(.up))))
             if x1 < x0 || y1 < y0 { continue }
 
-            for y in y0...y1 {
-                // `framePoint`, written out: the row's y is shared by the whole
-                // row, so it is computed once here, and no tuple is made per texel.
-                let py = (((Double(y) + 0.5) / Double(height) - 0.5) * 2) / diagonal
-                for x in x0...x1 {
-                    let px = (((Double(x) + 0.5) / Double(width) - 0.5) * 2 * ar) / diagonal
-                    let c = coverageAt(centred, stroke.radius, stroke.hardness, px, py)
-                    if c <= 0 { continue }
-                    let i = y * width + x
-                    let under = Double(buf[i])
-                    buf[i] = Float(stroke.erase ? under * (1 - c) : under + (1 - under) * c)
+            let radius = stroke.radius
+            let hardness = stroke.hardness
+            let erase = stroke.erase
+            centred.withUnsafeBufferPointer { pts in
+                var y = y0
+                while y <= y1 {
+                    // `framePoint`, written out: the row's y once per row.
+                    let py = (((Double(y) + 0.5) / h - 0.5) * 2) / diagonal
+                    var x = x0
+                    while x <= x1 {
+                        let px = (((Double(x) + 0.5) / w - 0.5) * 2 * ar) / diagonal
+                        let c = coverageAt(pts, radius, hardness, px, py)
+                        if c > 0 {
+                            let i = y * width + x
+                            let under = Double(acc[i])
+                            acc[i] = Float(erase ? under * (1 - c) : under + (1 - under) * c)
+                        }
+                        x += 1
+                    }
+                    y += 1
                 }
             }
         }
@@ -112,8 +108,10 @@ public func rasteriseBrush(_ strokes: [BrushStroke], _ aspectRatio: Double, long
 
     var data = [UInt8](repeating: 0, count: width * height)
     data.withUnsafeMutableBufferPointer { out in
-        for i in 0..<out.count {
-            out[i] = UInt8(jsRound(clamp01(Double(acc[i])) * 255))
+        acc.withUnsafeBufferPointer { acc in
+            for i in 0..<acc.count {
+                out[i] = UInt8((min(1, max(0, Double(acc[i]))) * 255).rounded())
+            }
         }
     }
     return BrushRaster(data: data, width: width, height: height)
