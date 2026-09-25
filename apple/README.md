@@ -27,6 +27,12 @@ toolchain — including Linux, which is where this project is written from:
 swift test --package-path apple/Packages/AtelierKit
 ```
 
+On a Linux box with no Swift and no way to reach swift.org (the cloud
+sessions), `apple/Scripts/linux-toolchain.sh` pulls the official
+`swift:5.10-jammy` image from Google's Docker Hub mirror, unpacks it into a
+rootfs and installs `swift` / `swiftc` wrappers that chroot into it — the
+same compiler as CI's Linux job, in about two minutes, for the kernel only.
+
 CI (`.github/workflows/apple.yml`) does exactly that on ubuntu in the
 `swift:5.10` image and on `macos-latest`, then generates the project and builds
 both targets unsigned. It runs only when something under `apple/` changes.
