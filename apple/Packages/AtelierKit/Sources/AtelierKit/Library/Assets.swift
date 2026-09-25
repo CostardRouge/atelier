@@ -93,26 +93,26 @@ private let rawExtensions: Set<String> = [
 private let drawableImageExtensions: Set<String> = ["jpg", "jpeg", "png", "webp", "avif", "gif", "bmp"]
 
 /// Split a filename into `(base, ext)`; ext is lowercased, no leading dot.
-private func splitName(_ name: String) -> (base: String, ext: String) {
+private func splitBaseExt(_ name: String) -> (base: String, ext: String) {
     guard let dot = name.lastIndex(of: "."), dot != name.startIndex else { return (name, "") }
     return (String(name[..<dot]), name[name.index(after: dot)...].lowercased())
 }
 
 /// The base name (without extension) of a file, for display/comparison.
 public func fileBaseName(_ name: String) -> String {
-    splitName(name).base
+    splitBaseExt(name).base
 }
 
 /// True for a camera RAW. Public because "can this be decoded and drawn?" is
 /// a question the library, the metadata reader and the studio all ask, and
 /// one list of extensions must answer it for all three.
 public func isRawImage(_ name: String) -> Bool {
-    rawExtensions.contains(splitName(name).ext)
+    rawExtensions.contains(splitBaseExt(name).ext)
 }
 
 /// True where any browser draws this file without a decoder of our own.
 public func isDrawableImage(_ name: String) -> Bool {
-    drawableImageExtensions.contains(splitName(name).ext)
+    drawableImageExtensions.contains(splitBaseExt(name).ext)
 }
 
 /// Which file of one capture fills the image slot, when several could.
@@ -130,7 +130,7 @@ private func imageRank(_ name: String) -> Int {
 
 /// Classify a file by extension into the part slot it fills.
 public func classifyPart(_ name: String) -> PartKind {
-    let ext = splitName(name).ext
+    let ext = splitBaseExt(name).ext
     if videoExtensions.contains(ext) { return .video }
     if ext == "srt" { return .srt }
     if encodedImageExtensions.contains(ext) || rawExtensions.contains(ext) { return .image }
@@ -148,7 +148,7 @@ private func kindOf(_ parts: AssetParts) -> AssetKind {
 
 /// The type a capture's file is known by on screen: its extension upper-cased, `JPEG` for both spellings.
 public func captureFileType(_ name: String) -> String {
-    let ext = splitName(name).ext
+    let ext = splitBaseExt(name).ext
     if ext == "jpg" || ext == "jpeg" { return "JPEG" }
     return ext.isEmpty ? "file" : ext.uppercased()
 }
