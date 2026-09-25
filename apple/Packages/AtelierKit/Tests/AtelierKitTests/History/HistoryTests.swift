@@ -13,7 +13,7 @@ private func doc(_ name: String) -> Doc { Doc(name: name) }
 final class HistoryRecordTests: XCTestCase {
     func testKeepsTheStateADocumentOpenedOnAsTheFirstStepBack() {
         let opened = doc("a")
-        let h = record(newHistory(opened), doc("b"), RecordOptions(now: 1_000))
+        let h = AtelierKit.record(newHistory(opened), doc("b"), RecordOptions(now: 1_000))
         XCTAssertEqual(h.past, [opened])
         XCTAssertTrue(canUndo(h))
     }
@@ -22,28 +22,28 @@ final class HistoryRecordTests: XCTestCase {
         // The seed is sealed: an edit one millisecond later must still leave the
         // opened document reachable, or a document edited on sight cannot be undone.
         let opened = doc("a")
-        let h = record(newHistory(opened), doc("b"), RecordOptions(now: 1))
+        let h = AtelierKit.record(newHistory(opened), doc("b"), RecordOptions(now: 1))
         XCTAssertEqual(h.past, [opened])
     }
 
     func testMergesEditsThatArriveCloseTogetherUnderTheSameLabel() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
-        h = record(h, doc("c"), RecordOptions(now: 1_100, label: "trip"))
-        h = record(h, doc("d"), RecordOptions(now: 1_200, label: "trip"))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
+        h = AtelierKit.record(h, doc("c"), RecordOptions(now: 1_100, label: "trip"))
+        h = AtelierKit.record(h, doc("d"), RecordOptions(now: 1_200, label: "trip"))
         XCTAssertEqual(h.present, doc("d"))
         // One gesture, one step: undo lands on what was there before it started.
         XCTAssertEqual(h.past, [doc("a")])
     }
 
     func testStartsANewStepOnceTheWindowHasPassed() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
-        h = record(h, doc("c"), RecordOptions(now: 1_000 + coalesceMs + 1, label: "trip"))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
+        h = AtelierKit.record(h, doc("c"), RecordOptions(now: 1_000 + coalesceMs + 1, label: "trip"))
         XCTAssertEqual(h.past, [doc("a"), doc("b")])
     }
 
     func testStartsANewStepWhenTheLabelChangesHoweverCloseTheEditsAre() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "post:1"))
-        h = record(h, doc("c"), RecordOptions(now: 1_010, label: "post:2"))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "post:1"))
+        h = AtelierKit.record(h, doc("c"), RecordOptions(now: 1_010, label: "post:2"))
         XCTAssertEqual(h.past, [doc("a"), doc("b")])
         XCTAssertEqual(h.label, "post:2")
     }
@@ -54,8 +54,8 @@ final class HistoryRecordTests: XCTestCase {
         // watcher that hands a restored value back down relies on.
         let same = doc("a")
         let h = newHistory(same)
-        XCTAssertEqual(record(h, same, RecordOptions(now: 1_000)), h)
-        XCTAssertEqual(record(h, doc("a"), RecordOptions(now: 1_000)), h)
+        XCTAssertEqual(AtelierKit.record(h, same, RecordOptions(now: 1_000)), h)
+        XCTAssertEqual(AtelierKit.record(h, doc("a"), RecordOptions(now: 1_000)), h)
     }
 
     func testTakesACallersOwnSamenessForADocumentWithIdentity() {
@@ -63,9 +63,9 @@ final class HistoryRecordTests: XCTestCase {
         final class Box { let name: String; init(_ name: String) { self.name = name } }
         let opened = Box("a")
         let h = newHistory(opened)
-        let unchanged = record(h, opened, RecordOptions(now: 1_000), same: { $0 === $1 })
+        let unchanged = AtelierKit.record(h, opened, RecordOptions(now: 1_000), same: { $0 === $1 })
         XCTAssertTrue(unchanged.past.isEmpty)
-        let edited = record(h, Box("a"), RecordOptions(now: 1_000), same: { $0 === $1 })
+        let edited = AtelierKit.record(h, Box("a"), RecordOptions(now: 1_000), same: { $0 === $1 })
         XCTAssertEqual(edited.past.count, 1)
         XCTAssertTrue(edited.past[0] === opened)
     }
@@ -73,7 +73,7 @@ final class HistoryRecordTests: XCTestCase {
     func testDropsTheOldestStepPastTheLimit() {
         var h = newHistory(doc("0"))
         for i in 1...5 {
-            h = record(h, doc(String(i)), RecordOptions(now: Double(i) * 10_000, limit: 3))
+            h = AtelierKit.record(h, doc(String(i)), RecordOptions(now: Double(i) * 10_000, limit: 3))
         }
         XCTAssertEqual(h.past, [doc("2"), doc("3"), doc("4")])
         XCTAssertEqual(h.present, doc("5"))
@@ -82,8 +82,8 @@ final class HistoryRecordTests: XCTestCase {
 
 final class HistoryUndoRedoTests: XCTestCase {
     func testWalkTheStackBothWays() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000))
-        h = record(h, doc("c"), RecordOptions(now: 10_000))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000))
+        h = AtelierKit.record(h, doc("c"), RecordOptions(now: 10_000))
         h = undo(h)
         XCTAssertEqual(h.present, doc("b"))
         h = undo(h)
@@ -103,19 +103,19 @@ final class HistoryUndoRedoTests: XCTestCase {
     }
 
     func testSealWhatTheyLandOnSoTheNextEditCannotSwallowIt() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
         h = undo(h)
         // Same label, one millisecond later: it must still be a step of its own,
         // or undoing and then editing loses the state undo just came back to.
-        h = record(h, doc("c"), RecordOptions(now: 1_001, label: "trip"))
+        h = AtelierKit.record(h, doc("c"), RecordOptions(now: 1_001, label: "trip"))
         XCTAssertEqual(h.past, [doc("a")])
         XCTAssertEqual(undo(h).present, doc("a"))
     }
 
     func testDropTheRedoBranchAsSoonAsSomethingElseIsEdited() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000))
         h = undo(h)
-        h = record(h, doc("c"), RecordOptions(now: 2_000))
+        h = AtelierKit.record(h, doc("c"), RecordOptions(now: 2_000))
         XCTAssertFalse(canRedo(h))
         XCTAssertEqual(h.present, doc("c"))
     }
@@ -123,8 +123,8 @@ final class HistoryUndoRedoTests: XCTestCase {
 
 final class HistorySealTests: XCTestCase {
     func testClosesTheOpenStep() {
-        var h = record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
-        h = record(seal(h), doc("c"), RecordOptions(now: 1_050, label: "trip"))
+        var h = AtelierKit.record(newHistory(doc("a")), doc("b"), RecordOptions(now: 1_000, label: "trip"))
+        h = AtelierKit.record(seal(h), doc("c"), RecordOptions(now: 1_050, label: "trip"))
         XCTAssertEqual(h.past, [doc("a"), doc("b")])
     }
 
