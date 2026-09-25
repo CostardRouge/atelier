@@ -160,3 +160,6 @@ apple/**/.swiftpm/
 apple/DerivedData/
 apple/Support/Info-*.plist
 xcuserdata/
+
+# Agent worktrees the cloud harness creates inside the checkout (one per parallel subagent)
+.claude/worktrees/
