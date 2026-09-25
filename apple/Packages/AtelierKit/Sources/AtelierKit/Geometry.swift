@@ -80,12 +80,12 @@ public struct Rect: Equatable, Sendable, Codable {
 
 /// `min(max(v, lo), hi)` — the web's `clamp`.
 @inlinable public func clamp(_ v: Double, _ lo: Double, _ hi: Double) -> Double {
-    min(max(v, lo), hi)
+    v < lo ? lo : (v > hi ? hi : v)
 }
 
 /// `clamp(v, 0, 1)`.
 @inlinable public func clamp01(_ v: Double) -> Double {
-    min(max(v, 0), 1)
+    v < 0 ? 0 : (v > 1 ? 1 : v)
 }
 
 /// Linear interpolation, `a + (b − a) × t`.

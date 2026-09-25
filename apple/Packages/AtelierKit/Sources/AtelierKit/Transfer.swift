@@ -53,10 +53,6 @@ public enum OutputTransform: String, Codable, Sendable, CaseIterable {
     }
 }
 
-@inline(__always) func clamp01(_ x: Double) -> Double {
-    x < 0 ? 0 : (x > 1 ? 1 : x)
-}
-
 /// sRGB's toe/power join, as the standard writes it on the encoded side. The
 /// linear knee is DERIVED from the encoded one (`0.04045 / 12.92`) rather than
 /// hard-coded to the published `0.0031308`, so the pair is exactly invertible —

@@ -39,10 +39,6 @@ public struct Framing: Codable, Equatable, Sendable {
 /// The most a picture can be zoomed in. Past this a JPEG is mush anyway.
 public let maxFramingScale = 8.0
 
-@inline(__always) private func clamp(_ v: Double, _ lo: Double, _ hi: Double) -> Double {
-    v < lo ? lo : (v > hi ? hi : v)
-}
-
 private func num(_ v: Double, _ fallback: Double) -> Double { v.isFinite ? v : fallback }
 
 /// A zoom factor applied to a framing's scale, held between covering the frame
