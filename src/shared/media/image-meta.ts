@@ -66,6 +66,14 @@ function readImageSize(file: Blob): Promise<{ width: number; height: number }> {
  */
 export async function loadImageMeta(file: File): Promise<ImageMeta> {
   const imageType = imageTypeLabel(file.name);
+  // A RAW from its camera's render FIRST, in every browser: Safari decodes a
+  // DNG natively, whole, and a Library of them on an iPhone is a tab killed
+  // (2026-09-24, `photo-frame.ts`'s `rawRenderFirst`). The render also keeps
+  // the size the row says the SENSOR's, as `rawCover` states.
+  if (isRawImage(file.name)) {
+    const cover = await rawCover(file);
+    if (cover) return { ...cover, imageType };
+  }
   try {
     const { width, height } = await readImageSize(file);
     return { width, height, thumbUrl: await coverOf(file, width, height), imageType };

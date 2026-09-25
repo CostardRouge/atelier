@@ -2,39 +2,52 @@ import { useState } from 'react';
 import { DEFAULT_STEPS, MAX_STEPS, MIN_STEPS } from '../../../shared/motion/easing';
 import {
   hasMotion,
-  keepEnds,
-  MAX_TOUR_STOPS,
   starterMotion,
   type FramingMotion,
   type MotionPreset,
-  type TourPlan,
+  type TourStop,
 } from '../../../shared/media/framing-motion';
-import type { Framing } from '../../../shared/media/framing';
+import { MAX_CARDS } from '../../../shared/media/motion-cards';
+import { MAX_FRAMING_SCALE, scaleFramingBy, type Framing } from '../../../shared/media/framing';
 import Button from '../../../shared/ui/Button';
-import { FieldRow, InspectorSection, RangeField, Readout, SelectField, ToggleField } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, RangeField, Readout, SelectField } from '../../../shared/ui/Inspector';
+import { Icons } from '../../../shared/ui/icons';
 import Segmented from '../../../shared/ui/Segmented';
 import { EASINGS } from '../PieceStylePanel';
+import MotionCards, { type CardThumbSource } from './MotionCards';
 import TourMap from './TourMap';
-
-/** Where the needle sends the arrows: the first frame, a neighbour, the rest. */
-export type NeedleJump = 'first' | 'prev' | 'next' | 'rest';
 
 export interface PanZoomSectionProps {
   /** The selected picture's motion, or null while it holds still. */
   motion: FramingMotion | null;
   /** The selected picture's framing — where a motion comes to rest. */
   framing: Framing;
-  /** What a gesture on the stage writes, said as the author reads it. */
-  placing: string;
-  /** The needle sits on a frame that can be taken off (not the rest). */
-  canRemove: boolean;
   /** The opener's own length on this slide; 0 where there is none to wait for. */
   openerSeconds: number;
   /** Shown beside the title — which cell of a collage this is about. */
   badge?: string;
+  /** The frames the view rests on, in order, the composition last (`readCards`). */
+  cards: readonly Framing[];
+  /** How long it holds on each, as read back out of the keys. */
+  holdSeconds: number;
+  /** Where the view arrives on each card, in the slide's seconds. */
+  arrivals: readonly number[];
+  /** The card the stage shows and a gesture writes; null between two cards. */
+  selected: number | null;
+  /** The move is running on the stage. */
+  playing: boolean;
+  /** What the cards are drawn from; null until the picture is known. */
+  thumb: CardThumbSource | null;
+  onSelectCard: (index: number) => void;
+  /** A card after the selected one, a touch closer, to be reframed. */
+  onAddCard: () => void;
+  /** The selected card off — never the last, which is the framing. */
+  onRemoveCard: () => void;
+  onHold: (seconds: number) => void;
+  /** The curve, the steps, the start — and null to hold still, a starter to move. */
   onMotion: (motion: FramingMotion | null) => void;
-  onRemove: () => void;
-  onJump: (to: NeedleJump) => void;
+  /** Play the slide from its first frame, or pause it. */
+  onPlay: () => void;
   /** The one-tap moves, each with the reason it cannot be written here, if any. */
   presets: readonly { id: MotionPreset; problem: string | null }[];
   onPreset: (preset: MotionPreset) => void;
@@ -42,17 +55,23 @@ export interface PanZoomSectionProps {
   tour: TourProps | null;
 }
 
-/** What the tour's map needs, and where it writes. */
+/** What the map needs, and the card verbs it writes through. */
 export interface TourProps {
   file: File | null;
   isVideo: boolean;
   videoSeconds: number;
   /** The picture's width over its height. */
   aspect: number;
-  plan: TourPlan;
-  /** What each stop really shows, four corners in 0..1 of the picture. */
+  /** One per card: the point of the picture in the middle of its frame. */
+  stops: readonly TourStop[];
+  /** What each card shows, four corners in 0..1 of the picture. */
   windows: readonly (readonly [number, number][])[];
-  onPlan: (plan: TourPlan) => void;
+  /** The picked card's zoom; null between two cards. */
+  zoom: number | null;
+  onAdd: (stop: TourStop) => void;
+  onMove: (index: number, stop: TourStop) => void;
+  /** The picked card's zoom, absolute. */
+  onZoom: (zoom: number) => void;
 }
 
 /** What each preset is called, and what it does, from the camera's side. */
@@ -81,29 +100,47 @@ function presetHint(presets: readonly { id: MotionPreset; problem: string | null
 }
 
 /**
- * The picture's pan and zoom over its slide (`framing-motion.ts`), edited AT
- * THE NEEDLE: the stage's own gesture — a drag, the wheel, a pinch — writes
- * the frame the needle is on, so there is no second editor to learn. This
- * section only turns the motion on, says what the gesture will write, moves
- * the needle between the placed frames and sets how the picture travels.
+ * The picture's pan and zoom over its slide (`framing-motion.ts`), edited as
+ * CARDS (`motion-cards.ts`, `docs/picture-motion-ui.md`): a row of the frames
+ * the view rests on — Start, stops, End — each a thumbnail one taps. The stage
+ * then shows that card and the drag, the wheel and the pinch that already
+ * frame a picture write it, and no other; a card is never placed by a gesture
+ * in silence. The time between cards is not set by hand: it is shared by how
+ * far each glide travels, with one pause for every card. This section holds
+ * the row, the verbs on it, the pause, the quick moves, the tour's map and how
+ * the picture travels.
  */
 export default function PanZoomSection({
   motion,
   framing,
-  placing,
-  canRemove,
   openerSeconds,
   badge,
+  cards,
+  holdSeconds,
+  arrivals,
+  selected,
+  playing,
+  thumb,
+  onSelectCard,
+  onAddCard,
+  onRemoveCard,
+  onHold,
   onMotion,
-  onRemove,
-  onJump,
+  onPlay,
   presets,
   onPreset,
   tour,
 }: PanZoomSectionProps) {
   const moving = hasMotion(motion);
+  const count = cards.length;
   const [touring, setTouring] = useState(false);
-  const [stop, setStop] = useState(0);
+  const canRemove = moving && selected !== null && selected < count - 1;
+  const cardsHint =
+    count >= MAX_CARDS
+      ? `${MAX_CARDS} cards at most — past that a slide is a slideshow of blurs.`
+      : selected === null
+        ? 'The needle is between two cards: pick one to reframe it, or add one after it.'
+        : undefined;
   return (
     <InspectorSection
       id="piece.panzoom"
@@ -113,26 +150,21 @@ export default function PanZoomSection({
         <>
           <p>
             The picture moves inside its frame over the slide — slow to leave and slow to
-            arrive, like a camera over a print. It comes to rest on the framing above,
-            which is also what the PNG and the grid show.
+            arrive, like a camera over a print. It comes to rest on <strong>End</strong>,
+            the composition, which is also what the PNG and the grid show.
           </p>
           <p>
-            Place it <strong>at the needle</strong>: stop the band where you want a frame,
-            then drag and zoom the picture on the stage as you always do. At the start of
-            the slide you are setting the rest (the composition); anywhere inside it you
-            set the frame the needle is on, or add one. A frame placed twice with nothing
-            changed is a pause.
+            Every frame it rests on is a <strong>card</strong>. Tap one: the stage shows it,
+            and dragging or zooming the picture there reframes that card and no other.{' '}
+            <strong>+ Stop</strong> adds a card after the one picked, a touch closer, for you
+            to frame. The time between cards shares itself by how far each glide travels;{' '}
+            <strong>Pause</strong> is how long the view holds on each.
           </p>
           <p>
-            A <strong>quick move</strong> writes a whole move in one tap — a pan from one edge
-            of the picture to the other, a push in or a pull out — over your framing. It
-            replaces the frames placed so far and keeps the easing; refine it at the needle.
-          </p>
-          <p>
-            A <strong>tour</strong> visits points of the picture in order: open the map of the
-            whole picture, tap where the view should go, drag a stop to move it. Every stop is
-            seen at one zoom and held for the pause you set; the glides share the rest of the
-            slide by how far they travel, and the last stop is where the picture rests.
+            A <strong>quick move</strong> writes Start and End in one tap — a pan from one edge
+            of the picture to the other, a push in or a pull out — over your composition,
+            and plays it. A <strong>tour</strong> places stops on a map of the whole picture.
+            Both are only ways of writing cards.
           </p>
           <p>
             A slide that moves leaves as a video under Auto. The zoom it reaches decides
@@ -141,15 +173,79 @@ export default function PanZoomSection({
         </>
       }
     >
-      <FieldRow label="Moves">
-        <ToggleField
-          label="The picture moves over the slide"
-          checked={moving}
-          onChange={(on) => onMotion(on ? starterMotion(framing) : null)}
+      <FieldRow label="Move">
+        <Button
+          size="sm"
+          icon={playing ? Icons.pause : Icons.play}
+          onClick={onPlay}
+          disabled={!moving}
+          title={playing ? 'Pause' : 'Play the slide from its first frame'}
+          aria-label={playing ? 'Pause the move' : 'Play the move'}
         >
-          {moving ? `${motion.keys.length + 1} frames` : 'Holds still'}
-        </ToggleField>
+          {playing ? 'Pause' : 'Play'}
+        </Button>
+        <Readout muted={!moving}>{moving ? `${count} cards` : 'Holds still'}</Readout>
+        {moving && (
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={() => onMotion(null)}
+            title="Take the move off — the picture holds still on its composition"
+            className="ml-auto"
+          >
+            Hold still
+          </Button>
+        )}
       </FieldRow>
+      <MotionCards
+        cards={cards}
+        arrivals={arrivals}
+        holdSeconds={holdSeconds}
+        selected={selected}
+        thumb={thumb}
+        onSelect={onSelectCard}
+        onStart={() => onMotion(starterMotion(framing))}
+      />
+      {moving && (
+        <FieldRow label="Cards" hint={cardsHint}>
+          <Button
+            size="sm"
+            icon={Icons.plus}
+            onClick={onAddCard}
+            disabled={count >= MAX_CARDS}
+            title="A card after the one picked, a touch closer — frame it on the stage"
+          >
+            Stop
+          </Button>
+          <Button
+            size="sm"
+            variant="ghost"
+            onClick={onRemoveCard}
+            disabled={!canRemove}
+            title={
+              selected === count - 1
+                ? 'End cannot go — it is the picture’s framing'
+                : 'Take the picked card off'
+            }
+          >
+            Remove
+          </Button>
+        </FieldRow>
+      )}
+      {moving && (
+        <FieldRow label="Pause" hint={count < 2 ? 'A pause needs a second card.' : undefined}>
+          <RangeField
+            label="How long the view holds on each card"
+            min={0}
+            max={2}
+            step={0.05}
+            value={holdSeconds}
+            onChange={onHold}
+            format={(v) => `${v.toFixed(2)} s`}
+            disabled={count < 2}
+          />
+        </FieldRow>
+      )}
       <FieldRow label="Quick move" align="start" hint={presetHint(presets)}>
         <div className="grid grid-cols-3 gap-1.5 w-full">
           {presets.map(({ id, problem }) => (
@@ -178,55 +274,16 @@ export default function PanZoomSection({
         </Button>
         {tour && (
           <Readout muted>
-            {tour.plan.stops.length} {tour.plan.stops.length === 1 ? 'stop' : 'stops'}
+            {tour.stops.length} {tour.stops.length === 1 ? 'stop' : 'stops'}
           </Readout>
         )}
       </FieldRow>
-      {touring && tour && (
-        <TourRows tour={tour} selected={Math.min(stop, tour.plan.stops.length - 1)} onSelect={setStop} />
-      )}
+      {touring && tour && <TourRows tour={tour} selected={selected ?? -1} onSelect={onSelectCard} />}
       {moving && (
         <>
-          <FieldRow label="Placing" hint="A drag or a zoom on the stage writes this frame.">
-            <Readout>{placing}</Readout>
-          </FieldRow>
-          <FieldRow label="Needle">
-            <Button size="sm" onClick={() => onJump('first')} title="Put the needle on the first frame">
-              First
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onJump('prev')} title="The frame before the needle">
-              ‹
-            </Button>
-            <Button size="sm" variant="ghost" onClick={() => onJump('next')} title="The frame after the needle">
-              ›
-            </Button>
-            <Button size="sm" onClick={() => onJump('rest')} title="Put the needle where the picture comes to rest">
-              Rest
-            </Button>
-          </FieldRow>
-          <FieldRow label="Frames">
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={onRemove}
-              disabled={!canRemove}
-              title="Take off the frame the needle is on — the rest stays, it is the framing"
-            >
-              Remove
-            </Button>
-            <Button
-              size="sm"
-              variant="ghost"
-              onClick={() => onMotion(keepEnds(motion))}
-              disabled={motion.keys.length < 2}
-              title="Keep the first frame and the rest, drop every frame between them"
-            >
-              Keep ends
-            </Button>
-          </FieldRow>
           <FieldRow label="Easing">
             <SelectField
-              label="How the picture travels between frames"
+              label="How the picture travels between cards"
               value={motion.easing}
               onChange={(easing) => onMotion({ ...motion, easing, steps: easing === 'steps' ? (motion.steps ?? DEFAULT_STEPS) : undefined })}
               options={EASINGS}
@@ -235,7 +292,7 @@ export default function PanZoomSection({
           {motion.easing === 'steps' && (
             <FieldRow label="Steps">
               <RangeField
-                label="Steps between two frames"
+                label="Steps between two cards"
                 min={MIN_STEPS}
                 max={MAX_STEPS}
                 step={1}
@@ -272,13 +329,14 @@ export default function PanZoomSection({
 }
 
 /**
- * The open tour: the map, then the zoom and the pause every stop shares, and
- * the verbs on the selected stop. Every change rewrites the whole tour — the
- * frames placed at the needle included, since a tour IS those frames.
+ * The open map: every card as the window it shows on the whole picture, and
+ * the picked card's zoom. The map writes through the same card verbs as the
+ * row — a card added after the last, a card moved at its own zoom, the
+ * picked card zoomed about the point it looks at — so the two can never
+ * disagree; the pause, Remove and Hold still are the section's own rows.
  */
 function TourRows({ tour, selected, onSelect }: { tour: TourProps; selected: number; onSelect: (i: number) => void }) {
-  const { plan, onPlan } = tour;
-  const write = (patch: Partial<TourPlan>) => onPlan({ ...plan, ...patch });
+  const zoom = tour.zoom;
   return (
     <>
       {/* The whole picture, as wide as the section: a map the width of a
@@ -289,61 +347,33 @@ function TourRows({ tour, selected, onSelect }: { tour: TourProps; selected: num
           isVideo={tour.isVideo}
           videoSeconds={tour.videoSeconds}
           aspect={tour.aspect}
-          stops={plan.stops}
+          stops={tour.stops}
           windows={tour.windows}
           selected={selected}
           onSelect={onSelect}
-          onChange={(stops) => write({ stops })}
+          onAdd={tour.onAdd}
+          onMove={tour.onMove}
+          onZoom={(factor) => {
+            if (zoom !== null) tour.onZoom(scaleFramingBy(zoom, factor));
+          }}
         />
         <p className="m-0 text-xs leading-relaxed text-muted">
-          Tap the picture to add a stop ({MAX_TOUR_STOPS} at most), drag one to move it. A stop sits
-          where the view can really centre at this zoom; the last is where the picture rests.
+          Tap the picture to add a card after the last ({MAX_CARDS} at most) — it becomes the End —,
+          drag a dot to move that card, pinch or scroll to zoom the picked one. A card looks where the
+          view can really centre at its zoom.
         </p>
       </div>
-      <FieldRow label="Zoom">
+      <FieldRow label="Zoom" hint={zoom === null ? 'Pick a card to zoom it.' : undefined}>
         <RangeField
-          label="The zoom every stop is seen at"
+          label="The picked card’s zoom"
           min={1}
-          max={4}
+          max={MAX_FRAMING_SCALE}
           step={0.05}
-          value={plan.zoom}
-          onChange={(zoom) => write({ zoom })}
+          value={zoom ?? 1}
+          onChange={tour.onZoom}
           format={(v) => `${v.toFixed(2)}×`}
+          disabled={zoom === null}
         />
-      </FieldRow>
-      {/* A pause is written as two equal frames, so it exists only between
-          stops: with one stop there is nowhere to keep it. */}
-      <FieldRow label="Pause" hint={plan.stops.length < 2 ? 'Pauses start with a second stop.' : undefined}>
-        <RangeField
-          label="How long the view rests on each stop"
-          min={0}
-          max={2}
-          step={0.05}
-          value={plan.holdSeconds}
-          onChange={(holdSeconds) => write({ holdSeconds })}
-          format={(v) => `${v.toFixed(2)} s`}
-          disabled={plan.stops.length < 2}
-        />
-      </FieldRow>
-      <FieldRow label="Stop">
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => write({ stops: plan.stops.filter((_, i) => i !== selected) })}
-          disabled={plan.stops.length < 2}
-          title={`Take off stop ${selected + 1}`}
-        >
-          Remove {selected + 1}
-        </Button>
-        <Button
-          size="sm"
-          variant="ghost"
-          onClick={() => write({ stops: plan.stops.slice(-1) })}
-          disabled={plan.stops.length < 2}
-          title="Keep only the last stop — the picture holds still where it rests"
-        >
-          Clear
-        </Button>
       </FieldRow>
     </>
   );

@@ -432,6 +432,22 @@ own rule and padding, and both was the air twice. **Trap met**:
 `cat >` over it erased it; it was restored from git, hence the name
 `DevelopFold`.
 
+**Crop tab and every row's prose, 2026-09-24 (his second ask: "mettre tout ça
+sur une petite icône d'information")**: Crop, Apply crop to…, Borders, Apply
+borders to…, Perspective and Lens are `DevelopFold`s too (Borders and both
+Apply-to folded by default, marked when set; the Reset moved into the
+header's actions, the one-line notes into the ⓘ), and the Crop tab lost its
+gap like Adjust and Detail. Every `FieldRow` / `SwitchRow` `hint` inside the
+Develop inspector folds behind an ⓘ beside its label — `FoldHints` in
+`shared/ui/Inspector.tsx`, a context the workbench turns on around its panel;
+OFF by default, so Trips and the Studio are unchanged (140 hints, most in the
+openers' panels — his ask was Develop's). A hint that says a STATE rather than
+a why passes `hintShown` and stays in the open (the delivery's reason, the HDR
+display line, the copyright that will be written, a caption not written); a
+standalone status `<p>` (a grain cell's size on this preview) is not a hint
+and stays too. `GradePanel`'s standing paragraph on how looks combine is an
+`InfoDot` everywhere, "N of M looks active" beside it in the open.
+
 ## Slider reset: a dot, bold and a dimmed ↺ — never hover-only (2026-09-20)
 
 **Decision (maintainer, from an artifact proposal comparing five variants).**

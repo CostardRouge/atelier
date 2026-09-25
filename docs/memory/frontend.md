@@ -70,7 +70,7 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **What is still owed at the bottom**: the bar pays `env(safe-area-inset-bottom)`, and since 2026-09-10 a compact tool screen always has one, so `<main>` owes nothing.
 
-**The same rule read from the other end: a scroller owes air at its END (2026-09-11).** `<main>` paying a gutter is the stripe above; the scroller paying nothing is the complaint that followed — *"in the bottom of the pages we lack of padding"* — because the scroller's bottom edge IS the bar's top, so the last card in a column landed against it with nothing between. A `gap-4` between cards does not put anything after the last one. **`shared/ui/page-scroll.ts` is now the one class the three tool SCREENS scroll in** (the trip overview and the two galleries), `pb-4` included and unconditional: above a phone the frame's own `pb-3` sits OUTSIDE the box, so the last card was landing on the frame's edge there too. They had already written those five classes by hand and already drifted — two paid `pt-3` at compact and the third did not. The TOP deliberately stays out of it: `PageBar` clears the masthead itself, and a screen without one adds its own. **And at its SIDES (2026-09-13)**: a scroll box clips both axes, so the selected day's 2px outline (offset 1) on a short trip's strip was cut off against the scroller's flush left edge. `pageScroll` now carries `-mx-1 px-1` — 4px of air inside, borrowed from the frame's `px-4`, so nothing moves. Anything drawn OUTSIDE an element's box (outline, ring, a corner badge) must fit in that 4px or bring its own inset.
+**The same rule read from the other end: a scroller owes air at its END (2026-09-11).** `<main>` paying a gutter is the stripe above; the scroller paying nothing is the complaint that followed — *"in the bottom of the pages we lack of padding"* — because the scroller's bottom edge IS the bar's top, so the last card in a column landed against it with nothing between. A `gap-4` between cards does not put anything after the last one. **`shared/ui/page-scroll.ts` is now the one class the three tool SCREENS scroll in** (the trip overview and the two galleries), `pb-4` included and unconditional: above a phone the frame's own `pb-3` sits OUTSIDE the box, so the last card was landing on the frame's edge there too. They had already written those five classes by hand and already drifted — two paid `pt-3` at compact and the third did not. The TOP deliberately stays out of it: `PageBar` clears the masthead itself, and a screen without one adds its own. **And at its SIDES (2026-09-13)**: a scroll box clips both axes, so the selected day's 2px outline (offset 1) on a short trip's strip was cut off against the scroller's flush left edge. `pageScroll` now carries `-mx-1 px-1` — 4px of air inside, borrowed from the frame's `px-4`, so nothing moves. Anything drawn OUTSIDE an element's box (outline, ring, a corner badge) must fit in that 4px or bring its own inset. **Met again 2026-09-24** in Trips' motion cards (`MotionCards`): a horizontal scroller with side padding and none on top cut the picked card's ring along its top edge (his screenshot) — a scroller clips BOTH axes, so it pads all four sides.
 
 **Verified** at 390×844 with a list long enough to scroll: the scroller runs `48→787`, flush with both, and scrolled content reaches the masthead's border with no stripe.
 
@@ -394,8 +394,11 @@ that decides which: **a sheet's wash is a fair price for a panel you pick
 FROM** (the library, where you want all the library you can get and the stage
 behind is only context) **and a lie for a panel whose EFFECT you are watching**
 — a scrim over a photograph is a wrong answer to the question the sliders are
-asking. Only the Develop workbench passes `drawer`; everything else keeps the
-sheet.
+asking. The Develop workbench passes `drawer`, and since 2026-09-24 so does
+Trips' Picture tab alone (its framing, the cards of a move and the develop are
+all judged on the picture above it — `roadtrip.md`, «Built as cards»); every
+other panel, the piece editor's three other tabs included, keeps the sheet it
+is picked from.
 
 **This does not un-retire Trips' `DockedPanel`** (2026-09-12, above): what
 killed that was half a phone being too little library to pick from AND too

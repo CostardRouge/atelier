@@ -49,9 +49,19 @@ export interface BadgeLayout {
 /**
  * How long the hook lasts, in seconds — the badge's own life, not the clip's.
  * It is what an EXIT animation is laid against, so it is also the answer to
- * "where do I change the hook duration": nowhere else.
+ * "where do I change the hook duration": nowhere else. 2 s since 2026-09-24,
+ * his call ("default hook duration 3s"): `defaultHookSeconds` adds the one
+ * second the picture is held after the badge settles, so a new hook is on
+ * screen for 3 s.
  */
-export const DEFAULT_BADGE_DURATION = 4;
+export const DEFAULT_BADGE_DURATION = 2;
+
+/**
+ * What a stored badge that never said its duration READS as — the default
+ * before 2026-09-24. Kept apart so a new default never re-times a piece
+ * already composed.
+ */
+export const LEGACY_BADGE_DURATION = 4;
 
 export const DEFAULT_BADGE_LAYOUT: BadgeLayout = {
   anchor: 'bottom-left',

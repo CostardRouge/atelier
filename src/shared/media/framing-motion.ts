@@ -587,8 +587,12 @@ export function framingOn(framing: Framing, stop: TourStop, zoom: number, box: P
   return panBy(base, box.srcW, box.srcH, box.dstW, box.dstH, box.dstW / 2 - px, box.dstH / 2 - py);
 }
 
-/** The point of the picture in the middle of the frame, as a stop. */
-function stopOf(framing: Framing, box: PictureBox): TourStop {
+/**
+ * The point of the picture in the middle of the frame, as a stop — where a
+ * map of the whole picture draws a card's dot, and what {@link framingOn}
+ * brings back to the middle at another zoom.
+ */
+export function stopOf(framing: Framing, box: PictureBox): TourStop {
   const [sx, sy] = unframePoint(box.dstW / 2, box.dstH / 2, box.srcW, box.srcH, box.dstW, box.dstH, framing);
   return { x: clamp(sx / box.srcW, 0, 1), y: clamp(sy / box.srcH, 0, 1) };
 }

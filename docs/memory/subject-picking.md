@@ -69,3 +69,23 @@ stray, 0 missed of 672). To run it here without a dev server left behind: Vite
 `createServer().listen()` in one process and the gate as an ASYNC child —
 `spawnSync` blocks the loop serving the page and every `goto` times out.
 Not driven in the UI: the model needs a GPU and a real picture on a roll.
+
+## The model is shown the WARPED frame (2026-09-24)
+
+His report: a subject picked fine, then a lens correction bent the mask away
+from it, and a new tap picked "based on the old coordinates". The cause was a
+split frame: a tap and the layer pass both live in the WARPED frame (the
+grader's order is `[cube, …geometry, …layers]`, `render-layers.md`), but
+`useSubjectMasks` and `resolveSubjectRasters` were handed the UNWARPED source.
+**Rule**: whatever a mask is computed FROM must be the frame it is sampled IN.
+`segment-view.ts` renders the source through `geometryPasses` alone (camera
+warp, lens + profile, keystone) at the model's 1024 px, and all three readers
+use it — the stage (`useDevelopPicture.segmentSource`, made at once the first
+time and SETTLED 300 ms after a geometry change so a slider drag does not
+re-ask the model per step), the JPEG export and the RAW export (through its
+cube, `withCalibration` so the DNG's own warp is in it). Stored points are
+screen positions in that frame: after a geometry change the subject is
+re-segmented from the same spot on the new picture, like every other mask kind
+stays where it was drawn. Measured: a line at 0.8950 of the source lands at
+0.8725 in both the model's view and the stage under distortion 60. Not driven
+with the model itself (it needs a real GPU).

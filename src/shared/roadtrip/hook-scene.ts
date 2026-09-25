@@ -31,6 +31,8 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import { OUTRO_SECONDS_DEFAULT, type OutroCard } from '../overlay/outro-card';
 import { type Scene, type SceneScrim } from '../overlay/scenes';
 import type { ProjectDoc } from '../projects/project-types';
+import { isDefaultDevelop, withoutBase, type DevelopSettings } from '../develop/develop';
+import { fileBaseName } from '../library/assets';
 import { ctaLayout, type CtaSlide } from './cta-slide';
 import type { Shade } from './shades';
 
@@ -124,16 +126,76 @@ export function withHook(doc: ProjectDoc, injection: HookInjection): ProjectDoc 
   };
 }
 
-/** The project with the hook taken back out, and nothing else changed. */
+/** The project with the hook taken back out — and the develop it sent — and nothing else changed. */
 export function withoutHook(doc: ProjectDoc): ProjectDoc {
-  if (!doc.elements.some(isHookElement) && !doc.scenes.some((s) => s.id === HOOK_SCENE_ID)) {
+  const sent = Object.entries(doc.media?.develops ?? {}).filter(([, d]) => d.via === 'roadtrip');
+  if (!doc.elements.some(isHookElement) && !doc.scenes.some((s) => s.id === HOOK_SCENE_ID) && sent.length === 0) {
     return doc;
   }
+  const develops = { ...(doc.media?.develops ?? {}) };
+  for (const [key] of sent) delete develops[key];
   return {
     ...doc,
     updatedAt: Date.now(),
     elements: doc.elements.filter((el) => !isHookElement(el)),
     scenes: doc.scenes.filter((s) => s.id !== HOOK_SCENE_ID),
+    ...(doc.media ? { media: { ...doc.media, develops } } : {}),
+  };
+}
+
+// --- the hook picture's DEVELOP --------------------------------------------
+//
+// The third thing the bridge used to leave behind (`docs/photo-develop.md`
+// §7.7, P8 — his "go", 2026-09-24): a reel exported from the linked project
+// lacked the correction the badge was composed over. The hook's develop now
+// crosses into the project's per-media develops, under the media's key (its
+// lowercased base name, the Studio's asset id), guarded by its hash like any
+// develop there. Same discipline as the outro: what the bridge writes is
+// MARKED (`via: 'roadtrip'`) so a resend replaces only its own, an entry the
+// author set in the Studio is never overwritten (it is held and said), and
+// an unlink takes only the marked one back out.
+
+/** The hook picture as the bridge sends it: which media, and its correction. */
+export interface HookDevelop {
+  /** The picture's file name — the project keys a media by its base name. */
+  name: string;
+  hash?: string | null;
+  /** Null or as shot: the project keeps nothing of Trips' for it. */
+  settings: DevelopSettings | null;
+}
+
+/** The key a project gives a media: its asset id, the lowercased base name. */
+export function projectMediaKey(name: string): string {
+  return fileBaseName(name).toLowerCase();
+}
+
+/**
+ * The project with the hook picture's develop written — `held` when the
+ * author's own develop for that media is there and was left alone. A
+ * develop's RAW base (`base`, `rawGain`, `rawWb`) never crosses: it is a
+ * choice about the file Develop opened, and the Studio renders its own.
+ */
+export function withHookDevelop(
+  doc: ProjectDoc,
+  hook: HookDevelop | null,
+): { doc: ProjectDoc; held: boolean } {
+  if (!hook) return { doc, held: false };
+  const key = projectMediaKey(hook.name);
+  const develops = doc.media?.develops ?? {};
+  const there = develops[key];
+  if (there && there.via !== 'roadtrip') return { doc, held: true };
+  const settings = hook.settings ? withoutBase(hook.settings) : null;
+  const next = { ...develops };
+  if (settings && !isDefaultDevelop(settings)) {
+    next[key] = { settings, ...(hook.hash ? { hash: hook.hash } : {}), via: 'roadtrip' };
+  } else if (there) {
+    delete next[key];
+  } else {
+    return { doc, held: false };
+  }
+  return {
+    doc: { ...doc, updatedAt: Date.now(), media: { ...doc.media, develops: next } },
+    held: false,
   };
 }
 
