@@ -198,23 +198,32 @@ final class DevelopRecordTests: XCTestCase {
         XCTAssertEqual(dev { $0.exposure = 0.5 }.json.objectValue?["exposure"], .number(0.5))
     }
 
-    func testCarriesTheStagesItDoesNotRenderAndNeverCallsThemDefault() {
+    func testReadsTheColourStagesAsTheWebDoesRendersThemAndNeverCallsThemDefault() {
         let mixer: JSONValue = ["hue": [0, 0, 10, 0, 0, 0, 0, 0], "saturation": [0, 0, 0, 0, 0, 0, 0, 0], "luminance": [0, 0, 0, 0, 0, 0, 0, 0]]
         let grading: JSONValue = ["shadows": ["hue": 220, "saturation": 20, "luminance": 0]]
         let d = normaliseDevelop(["exposure": 0.5, "mixer": mixer, "grading": grading, "mono": nil, "rawWb": ["kelvin": 5600]])
         XCTAssertFalse(isDefaultDevelop(d))
+        // A record the web wrote whole is kept as written; a partial one is
+        // read as the web reads it — every wheel, Blending 50, Balance 0.
         XCTAssertEqual(d.carried["mixer"], mixer)
-        XCTAssertEqual(d.carried["grading"], grading)
+        XCTAssertEqual(d.grading, withWheel(nil, .shadows, GradeWheel(hue: 220, saturation: 20, luminance: 0)))
+        XCTAssertEqual(d.carried["grading"]?.objectValue?["blending"], 50)
         XCTAssertNil(d.carried["mono"])
         // A white balance in Kelvin is the RAW's: without a base it is dropped.
         XCTAssertNil(d.carried["rawWb"])
-        XCTAssertEqual(d.unrenderedStages, ["mixer", "grading"])
-        XCTAssertEqual(developLines(d), ["+0.5 EV", "mixer", "grading"])
+        // Rendered now: nothing is said to be missing, and the line names what moved.
+        XCTAssertEqual(d.unrenderedStages, [])
+        XCTAssertEqual(normaliseDevelop(["base": "gain", "rawWb": ["kelvin": 5600]]).unrenderedStages, ["rawWb"])
+        XCTAssertEqual(developLines(d), ["+0.5 EV", "mixer hue", "grading shadows"])
         // The round trip keeps them, and a copy compares by value.
         let back = normaliseDevelop(JSONValue.parse(d.json.serialized()))
         XCTAssertEqual(back, d)
+        XCTAssertEqual(back.json.serialized(), d.json.serialized())
         XCTAssertTrue(sameDevelop(back, d))
         XCTAssertFalse(sameDevelop(d, dev { $0.exposure = 0.5 }))
+        // An all-zero mixer or a colourless grading is none, as on the web.
+        let zeros: JSONValue = ["hue": [0, 0, 0, 0, 0, 0, 0, 0]]
+        XCTAssertNil(developOrNull(["mixer": zeros, "grading": ["blending": 80]]))
         // Black and white takes the mixer's place in the line.
         XCTAssertEqual(developLines(normaliseDevelop(["mixer": mixer, "mono": ["mix": [0, 0, 0, 0, 0, 0, 0, 0]]])), ["B&W"])
     }

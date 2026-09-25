@@ -94,12 +94,13 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     /// With a RAW base, the picture's own exposure as MEASURED at decode. Stored
     /// rather than re-measured, because preview = export is a promise.
     public var rawGain: Double? = nil
-    /// The stages this port does not evaluate yet, as the web writes them —
-    /// `mixer` (Lightroom's HSL), `mono` (black and white), `grading` (the
-    /// wheels) and `rawWb` (a RAW's white balance in Kelvin) — carried through
-    /// verbatim, never dropped, and never DEFAULT: a develop holding one is an
-    /// edit, and a stage that renders it says so. `rawWb` travels with the
-    /// base and nowhere else (`withoutBase`).
+    /// The records the web writes beside the sliders, kept as the JSON it
+    /// writes — `mixer` (Lightroom's HSL), `mono` (black and white), `grading`
+    /// (the wheels) and `rawWb` (a RAW's white balance in Kelvin). The first
+    /// three are read and written through their typed fields (`mixer`, `mono`,
+    /// `grading`, `Develop/Mixer.swift` and `Develop/Grading.swift`) and
+    /// rendered by `developLinear`; `rawWb` is carried through verbatim, never
+    /// dropped, and travels with the base and nowhere else (`withoutBase`).
     public var carried: [String: JSONValue] = [:]
 
     public init() {}
@@ -107,9 +108,10 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     /// The keys the web writes beside the sliders, the two shapes and the material.
     public static let carriedKeys = ["mixer", "mono", "grading", "rawWb"]
     /// The carried stages that hold PIXELS to a different answer than this port
-    /// renders — everything but the white balance's bookkeeping is one.
+    /// renders: a RAW's white balance in Kelvin, whose matrix `developLinear`
+    /// does not apply yet. The mixer, black and white and the grading are rendered.
     public var unrenderedStages: [String] {
-        DevelopSettings.carriedKeys.filter { carried[$0] != nil }
+        carried["rawWb"] != nil ? ["rawWb"] : []
     }
 
     /// Every field at 0 — "as shot". The identity on every pixel.
@@ -211,14 +213,16 @@ public func withoutBase(_ d: DevelopSettings) -> DevelopSettings {
 }
 
 /// Nothing changes the picture. A RAW base is NOT default even with every
-/// slider at 0, and neither is a carried stage.
+/// slider at 0, and neither is black and white, even as a straight mix.
 public func isDefaultDevelop(_ d: DevelopSettings?) -> Bool {
     guard let d else { return true }
     return !isRawDevelop(d)
         && DevelopKey.allCases.allSatisfy { d[$0] == 0 }
         && isDefaultCurves(d.curves)
         && isDefaultLevels(d.levels)
-        && d.carried.isEmpty
+        && isDefaultMixer(d.mixer)
+        && d.mono == nil
+        && isDefaultGrading(d.grading)
 }
 
 /// A copy — value semantics make it deep already; kept as the one name every
@@ -235,9 +239,12 @@ public func sameDevelop(_ a: DevelopSettings?, _ b: DevelopSettings?) -> Bool {
     return DevelopKey.allCases.allSatisfy { x[$0] == y[$0] }
         && sameCurves(x.curves, y.curves)
         && sameLevels(x.levels, y.levels)
+        && sameMixer(x.mixer, y.mixer)
+        && sameMono(x.mono, y.mono)
+        && sameGrading(x.grading, y.grading)
         && isRawDevelop(x) == isRawDevelop(y)
         && rawGainOf(x) == rawGainOf(y)
-        && x.carried == y.carried
+        && x.carried["rawWb"] == y.carried["rawWb"]
 }
 
 /// A stored develop, read back safely: every field clamped to its range, a
@@ -252,12 +259,11 @@ public func normaliseDevelop(_ raw: JSONValue?) -> DevelopSettings {
     }
     out.curves = curvesOrNull(normaliseCurvesValue(src["curves"]))
     out.levels = levelsOrNull(normaliseLevelsValue(src["levels"]))
-    // The stages this port carries: a record each, kept as written. The web
-    // reads an all-zero mixer or grading as none; this reader cannot tell one
-    // apart and keeps it, which makes such a picture read as edited here.
-    for key in ["mixer", "mono", "grading"] {
-        if let v = src[key], v.objectValue != nil { out.carried[key] = v }
-    }
+    // The colour stages, read as the web reads them: clamped, and an all-zero
+    // mixer or grading as none (the setters keep them in `carried` as JSON).
+    out.mixer = mixerOrNull(src["mixer"])
+    out.mono = monoOrNull(src["mono"])
+    out.grading = gradingOrNull(src["grading"])
     if let base = normaliseBase(src["base"]) {
         out.base = base
         if let g = src["rawGain"]?.finiteNumber, g > 0 {
@@ -399,7 +405,16 @@ public func makeDevelopShapers(_ d: DevelopSettings) -> DevelopShapers {
 
 /// Develop one pixel in LINEAR light. Input ≥ 0, may exceed 1; output ≥ 0 and
 /// NOT clamped. The identity when every field is 0.
-public func developLinear(_ rgb: (Double, Double, Double), _ d: DevelopSettings, _ shapers: DevelopShapers? = nil) -> (Double, Double, Double) {
+///
+/// Order: white balance → exposure → the luminance curve as one ratio → the
+/// luma curve → levels and the per-channel curves → saturation and vibrance →
+/// black and white, else the colour mixer → colour grading
+/// (`applyColourStages`, `Develop/DevelopColour.swift`).
+///
+/// `shapers` and `stages` are resolved ONCE by a loop (`developStage` does);
+/// omitting them resolves them per pixel, which is only right for a one-off call.
+public func developLinear(_ rgb: (Double, Double, Double), _ d: DevelopSettings, _ shapers: DevelopShapers? = nil,
+                          _ stages: ColourStages? = nil) -> (Double, Double, Double) {
     let shapers = shapers ?? makeDevelopShapers(d)
     var r = rgb.0 < 0 ? 0 : rgb.0
     var g = rgb.1 < 0 ? 0 : rgb.1
@@ -474,7 +489,9 @@ public func developLinear(_ rgb: (Double, Double, Double), _ d: DevelopSettings,
         }
     }
 
-    return (r, g, b)
+    // The colour stages last, as in Lightroom: a band is picked on the colour
+    // the pixel HAS once every global move is made.
+    return applyColourStages((r, g, b), stages ?? makeColourStages(d))
 }
 
 /// The develop as a stage for the LUT bake: sRGB codes in [0,1] in, sRGB codes
@@ -483,9 +500,10 @@ public func developLinear(_ rgb: (Double, Double, Double), _ d: DevelopSettings,
 public func developStage(_ d: DevelopSettings) -> (Double, Double, Double) -> (Double, Double, Double) {
     if isDefaultDevelop(d) { return { r, g, b in (r, g, b) } }
     let shapers = makeDevelopShapers(d)
+    let stages = makeColourStages(d)
     let gain = rawGainOf(d)
     return { r, g, b in
-        let out = developLinear((toLinear(r, .srgb) * gain, toLinear(g, .srgb) * gain, toLinear(b, .srgb) * gain), d, shapers)
+        let out = developLinear((toLinear(r, .srgb) * gain, toLinear(g, .srgb) * gain, toLinear(b, .srgb) * gain), d, shapers, stages)
         return (fromLinear(out.0, .srgb), fromLinear(out.1, .srgb), fromLinear(out.2, .srgb))
     }
 }
@@ -540,10 +558,7 @@ public func developLines(_ d: DevelopSettings?) -> [String] {
     if !levels.isEmpty { parts.append(levels) }
     let curves = describeCurves(d.curves)
     if !curves.isEmpty { parts.append(curves) }
-    // The carried stages, named the way the web names them — without the
-    // detail a port of their modules would add.
-    if d.carried["mono"] != nil { parts.append("B&W") } else if d.carried["mixer"] != nil { parts.append("mixer") }
-    if d.carried["grading"] != nil { parts.append("grading") }
+    parts += colourStageLines(d)
     return parts
 }
 
