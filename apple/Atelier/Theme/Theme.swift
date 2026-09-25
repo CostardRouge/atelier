@@ -7,12 +7,17 @@
 // reads its colours from the environment (`\.palette`), so switching a
 // screen to the darkroom is one modifier and never a second set of views.
 //
-// Type: the brand's three faces are not bundled yet (the web loads them from
-// Google Fonts, and no font file is in the repository), so the slots are kept
-// in Apple's own faces — New York for the serif, SF Mono for numerals — behind
-// `Brand`, one place to swap when the files ship.
+// Type: the brand's faces travel with the app (`Resources/Fonts`, the OFL
+// files the web serves from its own origin since 2026-09-24): Space Grotesk
+// for the interface, Instrument Serif for a title, JetBrains Mono for
+// numerals, VT323 for the Pixel CRT title style. `Brand` is the one place
+// that names them; a weight is set on the variable font's own `wght` axis, so
+// the web's 600 is exactly 600 and never the nearest named instance. Where a
+// file failed to register, the slot falls back to the system face rather
+// than to Times.
 
 import SwiftUI
+import CoreText
 
 struct Palette: Equatable {
     var paper: Color
@@ -102,18 +107,84 @@ extension View {
     }
 }
 
-/// The type slots. `display` is the serif of a title (Instrument Serif on the
-/// web), `mono` the numerals, `eyebrow` the small capitals over a section.
+/// The type slots. `sans` is the interface (Space Grotesk), `display` the
+/// serif of a title (Instrument Serif), `mono` the numerals (JetBrains Mono),
+/// `pixel` the CRT title style (VT323), `eyebrow` the small capitals over a
+/// section.
 enum Brand {
-    static func display(_ size: CGFloat) -> Font {
-        .system(size: size, weight: .regular, design: .serif)
+    /// PostScript names of the bundled files' default faces. The two variable
+    /// files answer to their default instance's name; the weight is then a
+    /// variation, not another name.
+    static let sansName = "SpaceGrotesk-Light"
+    static let monoName = "JetBrainsMono-Regular"
+    static let serifName = "InstrumentSerif-Regular"
+    static let serifItalicName = "InstrumentSerif-Italic"
+    static let pixelName = "VT323-Regular"
+
+    /// Register every `.ttf` in the bundle for this process. Called once at
+    /// launch; a second call is harmless (the manager refuses a duplicate).
+    static func registerFonts() {
+        guard let urls = Bundle.main.urls(forResourcesWithExtension: "ttf", subdirectory: nil) else { return }
+        for url in urls {
+            var error: Unmanaged<CFError>?
+            _ = CTFontManagerRegisterFontsForURL(url as CFURL, .process, &error)
+        }
+        registered = Set(urls.compactMap { url in
+            (CTFontManagerCreateFontDescriptorsFromURL(url as CFURL) as? [CTFontDescriptor])?
+                .compactMap { CTFontDescriptorCopyAttribute($0, kCTFontNameAttribute) as? String }
+        }.flatMap { $0 })
+    }
+
+    private static var registered = Set<String>()
+    private static let wghtAxis = 0x77676874 // 'wght'
+
+    static func sans(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
+        face(sansName, size: size, weight: axisWeight(weight)) ?? .system(size: size, weight: weight)
+    }
+
+    static func display(_ size: CGFloat, italic: Bool = false) -> Font {
+        face(italic ? serifItalicName : serifName, size: size)
+            ?? .system(size: size, weight: .regular, design: .serif)
     }
 
     static func mono(_ size: CGFloat, weight: Font.Weight = .regular) -> Font {
-        .system(size: size, weight: weight, design: .monospaced)
+        face(monoName, size: size, weight: axisWeight(weight)) ?? .system(size: size, weight: weight, design: .monospaced)
     }
 
-    static let eyebrow: Font = .system(size: 11, weight: .medium, design: .monospaced)
+    static func pixel(_ size: CGFloat) -> Font {
+        face(pixelName, size: size) ?? .system(size: size, weight: .regular, design: .monospaced)
+    }
+
+    static var eyebrow: Font { mono(11, weight: .medium) }
+
+    /// A bundled face at a size, its `wght` axis set when asked; nil when the
+    /// file is not registered, so the caller can fall back to the system.
+    private static func face(_ name: String, size: CGFloat, weight: CGFloat? = nil) -> Font? {
+        guard registered.contains(name) else { return nil }
+        var font = CTFontCreateWithName(name as CFString, size, nil)
+        if let weight {
+            let variation: [NSNumber: NSNumber] = [NSNumber(value: wghtAxis): NSNumber(value: Double(weight))]
+            let descriptor = CTFontDescriptorCreateWithAttributes([kCTFontVariationAttribute: variation] as CFDictionary)
+            font = CTFontCreateCopyWithAttributes(font, size, nil, descriptor)
+        }
+        return Font(font)
+    }
+
+    /// The CSS weights the web uses, on the axis.
+    private static func axisWeight(_ weight: Font.Weight) -> CGFloat {
+        switch weight {
+        case .ultraLight: return 200
+        case .thin: return 250
+        case .light: return 300
+        case .regular: return 400
+        case .medium: return 500
+        case .semibold: return 600
+        case .bold: return 700
+        case .heavy: return 800
+        case .black: return 900
+        default: return 400
+        }
+    }
 
     /// Winnow's 11px control radius, so a button reads as the same object in both apps.
     static let controlRadius: CGFloat = 11

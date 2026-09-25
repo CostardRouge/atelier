@@ -105,7 +105,8 @@ apple/
     Render/                   PictureRenderer — decode, crop, cap, the kernel's cube through Core Image, encode
     Develop/                  RollStore (the roll on disk + where each picture's bytes are), RollEditor,
                               RollsView, RollView (stage + filmstrip + inspector), the three panels
-    Resources/                the app icon set, rasterised from ../public/icons/*.svg
+    Resources/                the app icon set, rasterised from ../public/icons/*.svg; the four brand
+                              faces (OFL TTFs from google/fonts) registered at launch by `Brand`
 ```
 
 ## Run-sheet — what is built, in commits, and what comes next
@@ -152,8 +153,6 @@ in the order that pays first; stop the run wherever you want.
 - The RAW path is Apple's developer, not LibRaw: the sensor is demosaiced by
   `CIRAWFilter` with its own defaults, so a RAW's `base: gain` and `rawGain`
   from the web do not mean the same pixels here yet. Unmeasured (#6).
-- The brand's three faces are not bundled — no font file is in the repository —
-  so the slots are Apple's own (New York, SF Mono) behind `Brand` in `Theme.swift`.
 - A Photos pick has no persistent handle without library permission, so its
   bytes are COPIED into the app's container; a file picked in Files or the
   Finder is remembered by a security-scoped bookmark and never copied.

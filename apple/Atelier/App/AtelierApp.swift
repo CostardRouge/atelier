@@ -9,10 +9,15 @@ import SwiftUI
 struct AtelierApp: App {
     @State private var rolls = RollStore()
 
+    init() {
+        Brand.registerFonts()
+    }
+
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(rolls)
+                .font(Brand.sans(15))
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
