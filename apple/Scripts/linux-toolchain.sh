@@ -48,15 +48,16 @@ else
 fi
 
 mkdir -p "$ROOT/proc" "$ROOT/dev" "$ROOT/home" "$ROOT/tmp" "$ROOT/root"
-for m in proc dev home tmp root; do
-  mountpoint -q "$ROOT/$m" || mount --bind "/$m" "$ROOT/$m"
-done
 
 cat > /usr/local/bin/swift-chroot <<EOF
 #!/usr/bin/env bash
 # A Swift toolchain binary from the unpacked swift image, run in its rootfs
 # from the caller's own directory (bind-mounted at the same path).
 R=$ROOT
+# The bind mounts do not survive a session's harness between calls: re-made here.
+for m in proc dev home tmp root; do
+  mountpoint -q "\$R/\$m" 2>/dev/null || mount --bind "/\$m" "\$R/\$m" 2>/dev/null
+done
 tool=\$(basename "\$0")
 [ "\$tool" = swift-chroot ] && { tool=\$1; shift; }
 exec chroot "\$R" /bin/bash -c 'cd "\$1" && shift && exec "\$@"' bash "\$PWD" /usr/bin/env -i PATH=/usr/bin:/bin:/usr/local/bin HOME=/root TERM=xterm LANG=C.UTF-8 "\$tool" "\$@"
