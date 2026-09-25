@@ -21,19 +21,27 @@ single-threaded ffmpeg does not bite here. Re-check on a new version of the
 package: the gate for it is the probe in this file's history, a decode from
 the dev server in headless Chromium.
 
-**Its `gamm` option is IGNORED**; the output is always dcraw's default BT.709
-curve (measured: 0.5 of sensor white came back as 0.7059, every gamma setting
-gave the same bytes). `raw-image.ts` inverts that curve exactly through a
-65536-entry table — sixteen bits carry it without loss — and it is the ONE
-assumption about the decoder's output; a build that starts honouring `gamm`
-would break it, which the settings say.
+**Its `gamm` option is a NO-OP as passed**; the output is always dcraw's
+default BT.709 curve (measured: 0.5 of sensor white came back as 0.7059,
+every gamma setting gave the same bytes — because the wrapper reads a
+SIX-entry array and ignores the two-entry one the typings promise, read
+2026-09-25). `raw-image.ts` inverts that curve exactly through a 65536-entry
+table — sixteen bits carry it without loss — and it is the ONE assumption
+about the decoder's output; a six-entry `gamm` WOULD be honoured and break
+it, which the settings say. Do not "fix" the length.
 
 **Settings**: 16-bit, camera white balance, camera matrix, sRGB primaries,
 NO auto-bright, highlight mode 0 (clip at sensor saturation — everything
 between the displayed white and saturation is kept whole, and that is the
-headroom a develop reads), quality 3, half size when it fits. Measured on a
-synthetic 12-megapixel DNG: 2.2 s to open (parse + unpack), 0.6 s to
-demosaic at half size, 1.6 s whole; ~500 MB of heap for the run.
+headroom a develop reads), quality 3, half size when it fits, **the white
+never lowered to the picture's own brightest pixel** (`adjustMaximumThr: 0`,
+2026-09-25 — LibRaw's default did, silently, for any frame whose brightest
+pixel sat within a quarter of white; `device-memory.md`, «Tiles», for what it
+cost and what it costs to have turned it off), and an explicit `cropbox` on
+EVERY open, because the settings persist on the instance (`WHOLE_CROP` for a
+whole decode; a tile's rectangle otherwise). Measured on a synthetic
+12-megapixel DNG: 2.2 s to open (parse + unpack), 0.6 s to demosaic at half
+size, 1.6 s whole; ~500 MB of heap for the run.
 
 **`userFlip` is deliberately ABSENT from those settings (2026-09-22).** LibRaw's
 own default is `-1`, "use the file's flip", so `dcraw_process` turns the
@@ -54,7 +62,13 @@ built three Float32 pictures and an iPhone reloaded on every DNG), a phone
 decodes to a long edge per purpose and lets the worker go on rest and on a
 hidden tab, and a decode is held for the session at its size. `raw-image.ts`'s
 fused paths are bit-identical to the two-step ones, pinned by spec — the
-numbers in this file did not move.
+numbers in this file did not move. **Since 2026-09-25 a big decode is cut
+into TILES** (`raw-tiles.ts`, one `open()` per band through `cropbox`, bit
+for bit the whole decode's bytes) and a REGION of the frame can be decoded
+alone — `device-memory.md`, «Tiles». The wrapper applies its settings at
+`open()` only and `imageData()` processes once per open, so a tile is a
+re-open and a re-unpack of the file; LibRaw itself would re-process after
+one unpack, but the package exposes no such verb.
 
 ## The picture the GPU takes (2026-09-20)
 

@@ -11,11 +11,14 @@ import {
   bt709ToLinear,
   byteTableFromLibRaw,
   bytesFromLinear,
+  countBrightness,
   encodeLinearRows,
+  gainFromHistogram,
   halfImageFromLinear,
   halfTableFromLibRaw,
   linearFromLibRaw,
   linearToBt709,
+  makeGainHistogram,
   packBytePixels,
   packHalfSamples,
   rawBoxFactor,
@@ -165,6 +168,62 @@ describe('the fused paths agree with the two-step ones to the bit', () => {
     packBytePixels(rgb16, byteTable, out, 0, 20);
     packBytePixels(rgb16, byteTable, out, 20, W * H);
     expect(Array.from(out)).toEqual(Array.from(bytes));
+  });
+
+  it('a band of the plane decoded on its own writes the same boxes, half-floats, bytes and gain as the whole', () => {
+    // The plane cut as a tile would be: rows 2..5 of the 9×7 picture, with a
+    // margin row above and below that LibRaw would decode and we discard.
+    const skip = 1;
+    const from = 2;
+    const to = 5;
+    const band = rgb16.subarray((from - skip) * W * 3, (to + skip) * W * 3);
+    // The boxed rows a factor-2 cut covers: plane rows 2..4 are boxed rows 1..2.
+    const factor = 2;
+    const expected = boxDownscale(linearFromLibRaw(rgb16, W, H), factor);
+    const { width } = boxedSize(W, H, factor);
+    const out = new Float32Array(expected.data.length);
+    boxLinearRows(rgb16, W, factor, table, out, width, 0, 1);
+    boxLinearRows(band, W, factor, table, out, width, 1, 2, from - skip);
+    boxLinearRows(rgb16, W, factor, table, out, width, 2, expected.height);
+    expect(Array.from(out)).toEqual(Array.from(expected.data));
+    // A piece with a side margin too — a region's tile. The region is plane
+    // rows 2..3 and columns 2..7 (one boxed row, three boxed columns, the
+    // whole picture's boxed row 1 and columns 1..3); the piece LibRaw hands
+    // back holds a margin column on the left (plane column 1) and rows 2..5.
+    // Coordinates are the REGION's own: its row 0 is plane row 2, its column
+    // 0 plane column 2, and the piece starts one column before it.
+    const piece = new Uint16Array(4 * 8 * 3);
+    for (let r = 0; r < 4; r += 1) piece.set(rgb16.subarray(((2 + r) * W + 1) * 3, ((2 + r) * W + 9) * 3), r * 8 * 3);
+    const region = new Float32Array(3 * 3);
+    boxLinearRows(piece, 8, factor, table, region, 3, 0, 1, 0, -1);
+    expect(Array.from(region)).toEqual(Array.from(expected.data.slice((1 * width + 1) * 3, (1 * width + 4) * 3)));
+
+    const halfTable = halfTableFromLibRaw(table);
+    const whole = new Uint16Array(rgb16.length);
+    packHalfSamples(rgb16, halfTable, whole, 0, rgb16.length);
+    const tiled = new Uint16Array(rgb16.length);
+    packHalfSamples(rgb16, halfTable, tiled, 0, from * W * 3);
+    packHalfSamples(band, halfTable, tiled, from * W * 3, to * W * 3, skip * W * 3 - from * W * 3);
+    packHalfSamples(rgb16, halfTable, tiled, to * W * 3, rgb16.length);
+    expect(Array.from(tiled)).toEqual(Array.from(whole));
+
+    const gain = 1.7;
+    const byteTable = byteTableFromLibRaw(table, gain);
+    const wholeBytes = new Uint8ClampedArray(W * H * 4);
+    packBytePixels(rgb16, byteTable, wholeBytes, 0, W * H);
+    const tiledBytes = new Uint8ClampedArray(W * H * 4);
+    packBytePixels(rgb16, byteTable, tiledBytes, 0, from * W);
+    packBytePixels(band, byteTable, tiledBytes, from * W, to * W, skip * W - from * W);
+    packBytePixels(rgb16, byteTable, tiledBytes, to * W, W * H);
+    expect(Array.from(tiledBytes)).toEqual(Array.from(wholeBytes));
+
+    // The exposure counted band by band, by absolute pixel index, is the whole plane's measurement.
+    const hist = makeGainHistogram();
+    countBrightness(rgb16, table, hist, 0, from * W);
+    countBrightness(band, table, hist, from * W, to * W, 4, skip * W - from * W);
+    countBrightness(rgb16, table, hist, to * W, W * H);
+    expect(gainFromHistogram(hist)).toBe(autoBrightGainFromLibRaw(rgb16, W, H, table));
+    expect(hist.counted).toBe(Math.ceil((W * H) / 4));
   });
 
   it('halfImageFromLinear still encodes every sample as the packed float picture did', () => {

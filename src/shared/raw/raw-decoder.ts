@@ -18,7 +18,7 @@
  *   (`media-pipeline.md`); this build was measured decoding on a page where
  *   `crossOriginIsolated` is false and `SharedArrayBuffer` is undefined.
  * - **The decoder's curve is inverted here** (`raw-image.ts`): its `gamm`
- *   option is ignored by the build and the output is always dcraw's BT.709.
+ *   option is a no-op as passed and the output is always dcraw's BT.709.
  * - **One instance, one decode at a time.** The wasm heap is a few hundred
  *   MB at 48 megapixels; two in flight would double it, and the worker holds
  *   ONE result slot. Runs are serialised on a promise chain, as ffmpeg's are.
@@ -28,6 +28,12 @@
  * - **The exposure is measured, not invented** (`autoBrightGain`), and handed
  *   back to be STORED on the develop, so the export's decode of another size
  *   applies the same number.
+ * - **The sensor's white is 1.0, whatever the picture holds** (2026-09-25):
+ *   LibRaw's `adjust_maximum` — its default, which scales a frame whose
+ *   brightest pixel sits within a quarter of white so that pixel IS white —
+ *   is off (`adjustMaximumThr: 0`). It was a hidden, picture-dependent gain
+ *   under the one the develop stores, and it would have scaled every tile of
+ *   a cut decode by that tile's own brightest pixel (`raw-tiles.ts`).
  *
  * And, since a phone reloaded the page on every DNG (2026-09-23), the shape
  * of the memory it spends:
@@ -38,6 +44,14 @@
  *   GPU takes and the as-shot bytes — through `raw-image.ts`'s fused paths.
  *   The first version built a full-size Float32 picture and two more of its
  *   kind between the two, three times the decode's own weight.
+ * - **A big decode is cut into TILES** (`raw-tiles.ts`, 2026-09-25): LibRaw
+ *   decodes a rectangle of the sensor per `open()` and pays its own buffers
+ *   for that rectangle alone, so the worker's heap stays under its first
+ *   256 MB for a 36-megapixel sensor on a phone, and the plane this thread
+ *   holds at any moment is one tile's. Each tile costs the file read and
+ *   unpacked again — cheap for an uncompressed DNG, seconds at most for a
+ *   compressed ARW — and lands bit for bit where the whole decode would put
+ *   it. A REGION of the frame can be asked for alone the same way.
  * - **The main thread is given back between bands** (`yieldToMain`), so the
  *   task pill paints and its Cancel lands between two bands rather than
  *   after the whole conversion; a cancel there drops everything at once.
@@ -57,10 +71,20 @@ import { probeRaw, RAW_PROBE_BYTES, sensorIfd } from '../exif/raw-probe';
 import { deviceClass } from '../lib/device-class';
 import { yieldToMain } from '../lib/yield-to-main';
 import { isRawImage } from '../library/assets';
-import { startTask } from '../tasks/tasks';
+import { startTask, type TaskHandle } from '../tasks/tasks';
 import type { HalfImage } from '../render/half-image';
 import { fileKey, makeDecodedCache } from './decoded-cache';
-import { decodedBytes, decodedCacheCeiling, decoderIdleMs } from './raw-budget';
+import { decodedBytes, decodedCacheCeiling, decoderIdleMs, rawTilePixels } from './raw-budget';
+import {
+  decodedFrame,
+  halfEdge,
+  isTileFlip,
+  librawFlip,
+  planRawTiles,
+  type Rect,
+  type TileFlip,
+  type TilePlan,
+} from './raw-tiles';
 import { rawWhiteOrNull, type RawWhite } from './white-balance';
 import {
   autoBrightGain,
@@ -110,6 +134,18 @@ function whiteOf(metadata: Record<string, unknown> | undefined): RawWhite | null
   return rawWhiteOrNull({ camMul: c.cam_mul, camXyz: c.cam_xyz, rgbCam: c.rgb_cam, preMul: c.pre_mul });
 }
 
+function metaOf(metadata: Record<string, unknown> | undefined): RawMeta {
+  return {
+    make: typeof metadata?.camera_make === 'string' ? metadata.camera_make : '',
+    model: typeof metadata?.camera_model === 'string' ? metadata.camera_model : '',
+    iso: num(metadata?.iso_speed),
+    shutter: num(metadata?.shutter),
+    aperture: num(metadata?.aperture),
+    focal: num(metadata?.focal_len),
+    white: whiteOf(metadata),
+  };
+}
+
 export interface RawDecoded {
   /** The picture for the GPU: sRGB-encoded half-floats, sensor white at 1. */
   half: HalfImage;
@@ -117,13 +153,24 @@ export interface RawDecoded {
   bytes: ImageData | null;
   width: number;
   height: number;
-  /** The sensor's own size as LibRaw decoded it, before the half-size flag and any box average. */
+  /** The sensor's own size as LibRaw decodes it whole — turned the way the camera was held — before the half-size flag and any box average. */
   sourceWidth: number;
   sourceHeight: number;
   /** The measured exposure — what the develop stores as `rawGain`. */
   gain: number;
   /** True when LibRaw decoded at half size (its `-h`). */
   halved: boolean;
+  /**
+   * Where this decode sits in the whole frame, in ITS OWN pixels, when a
+   * region was asked (`RawDecodeOptions.region`); null for the whole frame.
+   * The whole frame at this decode's scale is `sourceWidth × sourceHeight`
+   * over `scale`.
+   */
+  region: Rect | null;
+  /** Sensor pixels per pixel of this decode — 2 at half size, times the box factor. */
+  scale: number;
+  /** How many `open()`s of the file this decode took: 1 whole, more in tiles (`raw-tiles.ts`). */
+  tiles: number;
   meta: RawMeta;
 }
 
@@ -147,12 +194,22 @@ export interface RawDecodeOptions {
    */
   maxEdge?: number | null;
   /**
+   * A rectangle of the DECODED frame — the sensor turned as the camera was
+   * held, at its own resolution — to decode alone: what a loupe on a phone
+   * asks for, the window under the view and nothing else. Decoded through
+   * one tile of `raw-tiles.ts`, at the size the other options say, and
+   * reported back in `RawDecoded.region`. Needs a stored `gain` unless the
+   * result is box-averaged: the as-shot bytes of a whole-density region are
+   * drawn with the gain the whole picture measured, never with its own.
+   */
+  region?: Rect | null;
+  /**
    * Stop wanting the result (T3 of `docs/progress-feedback.md`). The decode
    * is a TASK — "Opening DSC00123.ARW", a sweep, since nothing measures a
    * demosaic — and its Cancel aborts this: the worker's turn is dropped,
    * never the worker, so a cancel costs nothing to the next decode. Checked
-   * before the file is read, when the worker hands the plane back, and
-   * between every band of the conversion.
+   * before the file is read, when the worker hands the plane back, between
+   * every tile and between every band of the conversion.
    */
   signal?: AbortSignal;
   /** The media the task belongs to, for its edge. */
@@ -182,6 +239,13 @@ let watchingVisibility = false;
 
 /** Output pixels converted between two turns of the main thread. */
 const BAND_PIXELS = 1 << 18;
+
+/**
+ * LibRaw's own "no crop": a box past any sensor. Passed on every whole
+ * decode, because the settings PERSIST on an instance from one `open()` to
+ * the next (measured: a tile's box stayed on the following whole decode).
+ */
+export const WHOLE_CROP: readonly [number, number, number, number] = [0, 0, 0xffffffff, 0xffffffff];
 
 const cache = makeDecodedCache<RawDecoded>(() => decodedCacheCeiling(deviceClass()));
 
@@ -264,7 +328,7 @@ export function canDecodeRaw(file: File | null | undefined): boolean {
 
 /**
  * LibRaw's settings for LINEAR output: camera white balance, no auto-bright,
- * sRGB primaries.
+ * sRGB primaries, the sensor's white at white, and the rectangle to decode.
  *
  * **`userFlip` is deliberately absent.** LibRaw's own default is `-1`, "use
  * the file's flip", so `dcraw_process` turns the picture the way the camera
@@ -272,12 +336,20 @@ export function canDecodeRaw(file: File | null | undefined): boolean {
  * path has always come back upright while the embedded render did not
  * (`media-pipeline.md`, and `exif/raw-probe.ts` for the other half). Setting
  * it here would break the pair.
+ *
+ * **Every key is passed on every open**: the settings persist on the
+ * instance, so a crop left over from a tile would cut the next whole decode.
  */
-export function librawSettings(halfSize: boolean): Record<string, unknown> {
+export function librawSettings(
+  halfSize: boolean,
+  cropbox: readonly [number, number, number, number] = WHOLE_CROP,
+): Record<string, unknown> {
   return {
     outputBps: 16,
-    // Ignored by this build — the curve is inverted in `raw-image.ts` — but
-    // stated, so a build that honours it gives the same linear result.
+    // A two-entry array is a NO-OP for this build — its wrapper reads six —
+    // and the curve is inverted in `raw-image.ts` instead. Kept as a no-op on
+    // purpose: a six-entry array WOULD change every byte the decoder returns
+    // and break the inversion. Not a curve to "fix".
     gamm: [1, 1],
     noAutoBright: true,
     useCameraWb: true,
@@ -286,7 +358,11 @@ export function librawSettings(halfSize: boolean): Record<string, unknown> {
     // below saturation is kept whole, and that is the headroom a develop reads.
     highlight: 0,
     userQual: 3,
+    // Never scale the picture by its own brightest pixel — the sensor's white
+    // is white, and a tile must be scaled like the whole.
+    adjustMaximumThr: 0,
     halfSize,
+    cropbox: [...cropbox],
   };
 }
 
@@ -314,6 +390,13 @@ export function wantsHalfSize(
   return Boolean(opts.minLongEdge);
 }
 
+/** The integer box factor a plane of `width`×`height` is averaged by for these options — `convert`'s own arithmetic, asked ahead of the decode. */
+export function boxFactorFor(width: number, height: number, opts: RawDecodeOptions): number {
+  const byBudget = opts.budgetPixels ? rawBoxFactor(width, height, opts.budgetPixels) : 1;
+  const byEdge = opts.maxEdge && Number.isFinite(opts.maxEdge) ? Math.ceil(Math.max(width, height) / opts.maxEdge) : 1;
+  return Math.max(byBudget, byEdge);
+}
+
 /**
  * The key a decode is held under: the file, and everything that decides its
  * size. The gain is not in it — a decode measured its own, and a caller
@@ -321,10 +404,34 @@ export function wantsHalfSize(
  * stores what the first decode measured).
  */
 export function decodeCacheKey(file: File, opts: RawDecodeOptions): string {
-  return `${fileKey(file)}|budget=${opts.budgetPixels ?? ''}|min=${opts.minLongEdge ?? ''}|edge=${opts.maxEdge ?? ''}`;
+  const region = opts.region ? `|region=${opts.region.x},${opts.region.y},${opts.region.w},${opts.region.h}` : '';
+  return `${fileKey(file)}|budget=${opts.budgetPixels ?? ''}|min=${opts.minLongEdge ?? ''}|edge=${opts.maxEdge ?? ''}${region}`;
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
+
+/** What the file's own head says about the sensor, without the decoder. */
+interface RawHead {
+  width: number;
+  height: number;
+  /** LibRaw's flip for the capture's orientation. */
+  flip: number;
+}
+
+async function readHead(file: File): Promise<RawHead | null> {
+  try {
+    const probe = probeRaw(await file.slice(0, RAW_PROBE_BYTES).arrayBuffer());
+    const sensor = probe ? sensorIfd(probe) : null;
+    if (!probe || !sensor?.width || !sensor?.height) return null;
+    return { width: sensor.width, height: sensor.height, flip: librawFlip(probe.orientation) };
+  } catch {
+    /* not a TIFF-shaped RAW (a CR2 is, an ARW is; an ORF is not): decode whole */
+    return null;
+  }
+}
+
+/** A tile plan the decoder found not to hold once LibRaw answered — the decode falls back to the whole frame. */
+class TilePlanMismatch extends Error {}
 
 /**
  * Decode a RAW to linear light, fitted to what is asked for. Rejects with the
@@ -359,89 +466,31 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     // touched, and the next decode in the chain goes straight on.
     if (signal.aborted) throw cancelled();
     // The file's own size, read from its IFDs without the decoder, decides
-    // whether a half-size decode fits — LibRaw cannot be asked after `open`.
-    let probedW: number | null = null;
-    let probedH: number | null = null;
-    try {
-      const probe = probeRaw(await file.slice(0, RAW_PROBE_BYTES).arrayBuffer());
-      const sensor = probe ? sensorIfd(probe) : null;
-      probedW = sensor?.width ?? null;
-      probedH = sensor?.height ?? null;
-    } catch {
-      /* not a TIFF-shaped RAW (a CR2 is, an ARW is; an ORF is not): decode whole */
-    }
-    const halved = wantsHalfSize(probedW, probedH, opts);
+    // whether a half-size decode fits — LibRaw cannot be asked after `open`
+    // — and, with how the camera was held, where the tiles go.
+    const head = await readHead(file);
+    const halved = wantsHalfSize(head?.width ?? null, head?.height ?? null, opts);
+    const plan = head ? tilePlanFor(head, halved, opts) : null;
+    if (opts.region && !plan) throw new Error(`The region asked of ${file.name} is off the picture.`);
 
     busy += 1;
-    let image: Awaited<ReturnType<LibRawLike['imageData']>>;
-    let metadata: Record<string, unknown> | undefined;
     try {
-      // The worker loads WHILE the file is read: on a phone the worker was
-      // let go after the last picture, and its wasm takes a moment to come
-      // back that a 74 MB read would otherwise wait behind. The file's bytes
-      // are then TRANSFERRED to the worker (libraw-wasm posts a typed array's
-      // buffer in its transfer list), so this thread holds them for the
-      // length of one `await` and never beside the worker's copy.
-      const [raw, buffer] = await Promise.all([loadLibRaw(), file.arrayBuffer()]);
-      const bytes = new Uint8Array(buffer);
-      try {
-        await raw.open(bytes, librawSettings(halved));
-        // The FULL read carries `color` (cam_mul, cam_xyz, rgb_cam) — the white
-        // balance in Kelvin needs it. A build or a file that refuses it still
-        // decodes, with the short read and no Kelvin.
+      if (plan && head) {
         try {
-          metadata = await raw.metadata(true);
-        } catch {
-          metadata = await raw.metadata(false);
+          return await decodeTiled(file, head, plan, halved, opts, withBytes, signal, cancelled, task);
+        } catch (err) {
+          if (!(err instanceof TilePlanMismatch)) throw err;
+          // The plan did not hold — a file LibRaw crops on its own grid, or
+          // turns another way than its tag says. Said once; decoded whole.
+          console.warn(`[raw] ${file.name}: tiles did not land (${err.message}); decoded whole`);
+          if (opts.region) throw new Error(`${file.name} cannot be decoded by region: ${err.message}`);
+          if (signal.aborted) throw cancelled();
         }
-        image = await raw.imageData();
-      } catch (err) {
-        // A decoder that refused is a decoder to rebuild: its heap may be left
-        // half-way through the file it choked on.
-        disposeRawDecoder();
-        throw new Error(
-          `LibRaw could not decode ${file.name}: ${err instanceof Error ? err.message : String(err)}`,
-        );
       }
+      return await decodeWhole(file, head, halved, opts, withBytes, signal, cancelled);
     } finally {
       busy -= 1;
     }
-    if (!image || !(image.data instanceof Uint16Array) || image.colors !== 3) {
-      throw new Error(`LibRaw returned no 16-bit RGB picture for ${file.name}.`);
-    }
-    // The worker has handed the plane back; a cancel that came meanwhile
-    // drops it here rather than spending the conversion on it.
-    if (signal.aborted) throw cancelled();
-
-    // The plane is held by THIS frame alone from here: once it is boxed the
-    // reference is dropped before the small picture is encoded, so the six
-    // bytes a pixel of LibRaw's output are gone before the next allocation —
-    // on a phone that is the difference between two peaks and one.
-    const width = image.width;
-    const height = image.height;
-    let plane: Uint16Array | null = image.data;
-    image = undefined;
-    const converted = await convert(plane, width, height, opts, withBytes, signal, cancelled, () => {
-      plane = null;
-    });
-    const meta: RawMeta = {
-      make: typeof metadata?.camera_make === 'string' ? metadata.camera_make : '',
-      model: typeof metadata?.camera_model === 'string' ? metadata.camera_model : '',
-      iso: num(metadata?.iso_speed),
-      shutter: num(metadata?.shutter),
-      aperture: num(metadata?.aperture),
-      focal: num(metadata?.focal_len),
-      white: whiteOf(metadata),
-    };
-    const decoded: RawDecoded = {
-      ...converted,
-      sourceWidth: width * (halved ? 2 : 1),
-      sourceHeight: height * (halved ? 2 : 1),
-      halved,
-      meta,
-    };
-    if (opts.hold) cache.remember(key, decoded, decodedBytes(decoded.width, decoded.height, withBytes));
-    return decoded;
   };
   const next = chain.then(run, run);
   chain = next.then(
@@ -453,7 +502,269 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     scheduleIdleDispose();
   };
   void next.then(settled, settled);
-  return next;
+  return next.then((decoded) => {
+    if (opts.hold) cache.remember(key, decoded, decodedBytes(decoded.width, decoded.height, withBytes));
+    return decoded;
+  });
+}
+
+/**
+ * The tiles this decode is cut into, or null for one open of the whole
+ * frame: a region always is; the whole frame only where its output is past
+ * the device's tile budget, the camera was held one of the four ways LibRaw
+ * turns on the grid, and the conversion can take it — a whole-density cut
+ * needs the stored gain, since the as-shot bytes are written tile by tile.
+ */
+function tilePlanFor(head: RawHead, halved: boolean, opts: RawDecodeOptions): TilePlan | null {
+  if (!isTileFlip(head.flip)) return null;
+  const frame = decodedFrame(head.width, head.height, head.flip);
+  const plane = halved ? { width: halfEdge(frame.width), height: halfEdge(frame.height) } : frame;
+  const factor = boxFactorFor(plane.width, plane.height, opts);
+  if (factor === 1 && opts.gain == null && !opts.region) return null;
+  return planRawTiles({
+    width: head.width,
+    height: head.height,
+    flip: head.flip as TileFlip,
+    halved,
+    factor,
+    tilePixels: rawTilePixels(deviceClass()),
+    region: opts.region ?? null,
+  });
+}
+
+/** The file's bytes for ONE open: read afresh each time, since the previous buffer was transferred to the worker. */
+async function readBytes(file: File, signal: AbortSignal, cancelled: () => DOMException): Promise<Uint8Array> {
+  if (signal.aborted) throw cancelled();
+  const buffer = await file.arrayBuffer();
+  if (signal.aborted) throw cancelled();
+  return new Uint8Array(buffer);
+}
+
+/** `open` + `imageData` on the worker, with the decoder rebuilt on a refusal. */
+async function openAndDecode(
+  raw: LibRawLike,
+  file: File,
+  bytes: Uint8Array,
+  settings: Record<string, unknown>,
+  onOpened?: (metadata: Record<string, unknown> | undefined) => void,
+): Promise<{ width: number; height: number; data: Uint16Array }> {
+  let image: Awaited<ReturnType<LibRawLike['imageData']>>;
+  try {
+    await raw.open(bytes, settings);
+    if (onOpened) {
+      // The FULL read carries `color` (cam_mul, cam_xyz, rgb_cam) — the white
+      // balance in Kelvin needs it. A build or a file that refuses it still
+      // decodes, with the short read and no Kelvin.
+      let metadata: Record<string, unknown> | undefined;
+      try {
+        metadata = await raw.metadata(true);
+      } catch {
+        metadata = await raw.metadata(false);
+      }
+      onOpened(metadata);
+    }
+    image = await raw.imageData();
+  } catch (err) {
+    if (err instanceof TilePlanMismatch) throw err;
+    // A decoder that refused is a decoder to rebuild: its heap may be left
+    // half-way through the file it choked on.
+    disposeRawDecoder();
+    throw new Error(`LibRaw could not decode ${file.name}: ${err instanceof Error ? err.message : String(err)}`);
+  }
+  if (!image || !(image.data instanceof Uint16Array) || image.colors !== 3) {
+    throw new Error(`LibRaw returned no 16-bit RGB picture for ${file.name}.`);
+  }
+  return { width: image.width, height: image.height, data: image.data };
+}
+
+/** The whole frame in one open — the path every decode took before tiles. */
+async function decodeWhole(
+  file: File,
+  head: RawHead | null,
+  askedHalf: boolean,
+  opts: RawDecodeOptions,
+  withBytes: boolean,
+  signal: AbortSignal,
+  cancelled: () => DOMException,
+): Promise<RawDecoded> {
+  // The worker loads WHILE the file is read: on a phone the worker was let go
+  // after the last picture, and its wasm takes a moment to come back that a
+  // 74 MB read would otherwise wait behind. The file's bytes are then
+  // TRANSFERRED to the worker (libraw-wasm posts a typed array's buffer in
+  // its transfer list), so this thread holds them for the length of one
+  // `await` and never beside the worker's copy.
+  const [raw, bytes] = await Promise.all([loadLibRaw(), readBytes(file, signal, cancelled)]);
+  let metadata: Record<string, unknown> | undefined;
+  let image: { width: number; height: number; data: Uint16Array } | undefined = await openAndDecode(
+    raw,
+    file,
+    bytes,
+    librawSettings(askedHalf),
+    (m) => {
+      metadata = m;
+    },
+  );
+  // The worker has handed the plane back; a cancel that came meanwhile
+  // drops it here rather than spending the conversion on it.
+  if (signal.aborted) throw cancelled();
+
+  const width = image.width;
+  const height = image.height;
+  // Half size is LibRaw's to grant: a three-colour (LinearRaw) DNG comes
+  // back whole whatever was asked, so the plane's own size says whether it
+  // was halved, never the request.
+  const frame = head ? decodedFrame(head.width, head.height, isTileFlip(head.flip) ? head.flip : 0) : null;
+  const halved = askedHalf && !(frame && width === frame.width && height === frame.height);
+  // The plane is held by THIS frame alone from here: once it is boxed the
+  // reference is dropped before the small picture is encoded, so the six
+  // bytes a pixel of LibRaw's output are gone before the next allocation —
+  // on a phone that is the difference between two peaks and one.
+  let plane: Uint16Array | null = image.data;
+  image = undefined;
+  const converted = await convert(plane, width, height, opts, withBytes, signal, cancelled, () => {
+    plane = null;
+  });
+  return {
+    ...converted,
+    sourceWidth: width * (halved ? 2 : 1),
+    sourceHeight: height * (halved ? 2 : 1),
+    halved,
+    region: null,
+    scale: (halved ? 2 : 1) * Math.round(width / converted.width),
+    tiles: 1,
+    meta: metaOf(metadata),
+  };
+}
+
+/**
+ * The frame — or a region of it — decoded in TILES, each one open of the
+ * file for a rectangle of the sensor, converted straight into the outputs at
+ * its place (`raw-tiles.ts`). What this thread holds at any moment: the
+ * outputs, and one tile's plane.
+ */
+async function decodeTiled(
+  file: File,
+  head: RawHead,
+  plan: TilePlan,
+  halved: boolean,
+  opts: RawDecodeOptions,
+  withBytes: boolean,
+  signal: AbortSignal,
+  cancelled: () => DOMException,
+  task: TaskHandle | null,
+): Promise<RawDecoded> {
+  const table = bt709Table();
+  const { tiles, plane, origin } = plan;
+  const factor = boxFactorFor(plane.width, plane.height, opts);
+  const boxed = factor > 1;
+  const out = boxed ? boxedSize(plane.width, plane.height, factor) : { width: plane.width, height: plane.height };
+  const pixels = out.width * out.height;
+  const linear: LinearRgb | null = boxed ? { width: out.width, height: out.height, data: new Float32Array(pixels * 3) } : null;
+  const packed = boxed ? null : new Uint16Array(pixels * 3);
+  const bytes = !boxed && withBytes ? new Uint8ClampedArray(new ArrayBuffer(pixels * 4)) : null;
+  // A whole-density cut is only planned with a stored gain (`tilePlanFor`).
+  const gain = opts.gain ?? 1;
+  const halfTable = boxed ? null : halfTableFromLibRaw(table);
+  const byteTable = bytes ? byteTableFromLibRaw(table, gain) : null;
+  const check = async () => {
+    await yieldToMain();
+    if (signal.aborted) throw cancelled();
+  };
+  let metadata: Record<string, unknown> | undefined;
+  const raw = await loadLibRaw();
+  for (let index = 0; index < tiles.length; index += 1) {
+    const tile = tiles[index];
+    task?.update({ progress: index / tiles.length, detail: tiles.length > 1 ? `tile ${index + 1} of ${tiles.length}` : 'the sensor’s data' });
+    const bytesIn = await readBytes(file, signal, cancelled);
+    let image: { width: number; height: number; data: Uint16Array } | undefined = await openAndDecode(
+      raw,
+      file,
+      bytesIn,
+      librawSettings(halved, tile.crop),
+      index === 0
+        ? (m) => {
+            metadata = m;
+            // The plan rests on the file's orientation tag; the decoder's own
+            // reading of it is what turns the picture. Where the two differ,
+            // no tile would land where the plan says.
+            const flip = typeof m?.flip === 'number' ? m.flip : null;
+            if (flip !== null && flip !== head.flip) throw new TilePlanMismatch(`the decoder turns it by ${flip}, the tag said ${head.flip}`);
+          }
+        : undefined,
+    );
+    if (image.width !== tile.size.width || image.height !== tile.size.height) {
+      throw new TilePlanMismatch(`tile ${index + 1} came back ${image.width}×${image.height}, planned ${tile.size.width}×${tile.size.height}`);
+    }
+    if (signal.aborted) throw cancelled();
+    let tilePlane: Uint16Array | null = image.data;
+    image = undefined;
+    // The tile's plane starts a margin above and to the left of its interior.
+    const srcRow0 = tile.rows.from - tile.skip;
+    const srcCol0 = -tile.skipX;
+    const tileWidth = tile.size.width;
+    if (linear) {
+      // The boxed rows this tile's interior fills.
+      const y0 = tile.rows.from / factor;
+      const y1 = Math.floor(tile.rows.to / factor);
+      const rows = Math.max(1, Math.floor(BAND_PIXELS / Math.max(1, out.width)));
+      for (let y = y0; y < y1; y += rows) {
+        boxLinearRows(tilePlane, tileWidth, factor, table, linear.data, out.width, y, Math.min(y1, y + rows), srcRow0, srcCol0);
+        await check();
+      }
+    } else {
+      // Row by row: the tile's rows are wider than the plane's by the side
+      // margins, so each output row is one contiguous run of the tile's.
+      const rows = Math.max(1, Math.floor(BAND_PIXELS / Math.max(1, plane.width)));
+      for (let r = tile.rows.from; r < tile.rows.to; r += rows) {
+        const r1 = Math.min(tile.rows.to, r + rows);
+        for (let row = r; row < r1; row += 1) {
+          const from = row * plane.width;
+          const shift = (row - srcRow0) * tileWidth + tile.skipX - from;
+          packHalfSamples(tilePlane, halfTable!, packed!, from * 3, (from + plane.width) * 3, shift * 3);
+          if (bytes && byteTable) packBytePixels(tilePlane, byteTable, bytes, from, from + plane.width, shift);
+        }
+        await check();
+      }
+    }
+    tilePlane = null;
+  }
+  task?.update({ progress: null, detail: 'the sensor’s data' });
+
+  const scale = (halved ? 2 : 1) * factor;
+  const frame = decodedFrame(head.width, head.height, head.flip as TileFlip);
+  const region: Rect | null = opts.region ? { x: origin.x / factor, y: origin.y / factor, w: out.width, h: out.height } : null;
+  const common = {
+    width: out.width,
+    height: out.height,
+    sourceWidth: frame.width,
+    sourceHeight: frame.height,
+    halved,
+    region,
+    scale,
+    tiles: tiles.length,
+    meta: metaOf(metadata),
+  };
+  if (linear) {
+    const measured = opts.gain ?? autoBrightGain(linear);
+    const half = new Uint16Array(pixels * 3);
+    const shot = withBytes ? new Uint8ClampedArray(new ArrayBuffer(pixels * 4)) : null;
+    for (let p = 0; p < pixels; p += BAND_PIXELS) {
+      encodeLinearRows(linear, measured, half, shot, p, Math.min(pixels, p + BAND_PIXELS));
+      await check();
+    }
+    return {
+      ...common,
+      half: { kind: 'half', width: out.width, height: out.height, data: half },
+      bytes: shot ? new ImageData(shot, out.width, out.height) : null,
+      gain: measured,
+    };
+  }
+  return {
+    ...common,
+    half: { kind: 'half', width: out.width, height: out.height, data: packed! },
+    bytes: bytes ? new ImageData(bytes, out.width, out.height) : null,
+    gain,
+  };
 }
 
 /**
@@ -481,9 +792,7 @@ async function convert(
   release: () => void,
 ): Promise<Pick<RawDecoded, 'half' | 'bytes' | 'width' | 'height' | 'gain'>> {
   const table = bt709Table();
-  const byBudget = opts.budgetPixels ? rawBoxFactor(width, height, opts.budgetPixels) : 1;
-  const byEdge = opts.maxEdge && Number.isFinite(opts.maxEdge) ? Math.ceil(Math.max(width, height) / opts.maxEdge) : 1;
-  const factor = Math.max(byBudget, byEdge);
+  const factor = boxFactorFor(width, height, opts);
   const check = async () => {
     await yieldToMain();
     if (signal.aborted) throw cancelled();
@@ -494,21 +803,7 @@ async function convert(
     // Nothing below reads the plane: the caller lets it go, and this frame's
     // own reference ends with `boxPlane`'s argument.
     release();
-    const gain = opts.gain ?? autoBrightGain(linear);
-    const pixels = linear.width * linear.height;
-    const half = new Uint16Array(pixels * 3);
-    const bytes = withBytes ? new Uint8ClampedArray(new ArrayBuffer(pixels * 4)) : null;
-    for (let p = 0; p < pixels; p += BAND_PIXELS) {
-      encodeLinearRows(linear, gain, half, bytes, p, Math.min(pixels, p + BAND_PIXELS));
-      await check();
-    }
-    return {
-      half: { kind: 'half', width: linear.width, height: linear.height, data: half },
-      bytes: bytes ? new ImageData(bytes, linear.width, linear.height) : null,
-      width: linear.width,
-      height: linear.height,
-      gain,
-    };
+    return encodeBoxed(linear, opts, withBytes, check);
   }
 
   const gain = opts.gain ?? autoBrightGainFromLibRaw(rgb16, width, height, table);
@@ -534,6 +829,35 @@ async function convert(
   }
   release();
   return { half, bytes, width, height, gain };
+}
+
+/**
+ * The small linear picture measured and encoded, in a frame that never held
+ * the plane: `convert` hands it over after releasing its own hold, so the six
+ * bytes a pixel of LibRaw's output are collectable before the half-floats
+ * and the bytes are allocated.
+ */
+async function encodeBoxed(
+  linear: LinearRgb,
+  opts: RawDecodeOptions,
+  withBytes: boolean,
+  check: () => Promise<void>,
+): Promise<Pick<RawDecoded, 'half' | 'bytes' | 'width' | 'height' | 'gain'>> {
+  const gain = opts.gain ?? autoBrightGain(linear);
+  const pixels = linear.width * linear.height;
+  const half = new Uint16Array(pixels * 3);
+  const bytes = withBytes ? new Uint8ClampedArray(new ArrayBuffer(pixels * 4)) : null;
+  for (let p = 0; p < pixels; p += BAND_PIXELS) {
+    encodeLinearRows(linear, gain, half, bytes, p, Math.min(pixels, p + BAND_PIXELS));
+    await check();
+  }
+  return {
+    half: { kind: 'half', width: linear.width, height: linear.height, data: half },
+    bytes: bytes ? new ImageData(bytes, linear.width, linear.height) : null,
+    width: linear.width,
+    height: linear.height,
+    gain,
+  };
 }
 
 /** The plane box-averaged to the target picture, a band of rows at a time; its argument is this function's only hold on the plane. */

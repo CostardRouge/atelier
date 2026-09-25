@@ -64,6 +64,25 @@ export function rawDecodeCap(edge: number, purpose: RawPurpose, klass: DeviceCla
   return device <= gpuMax ? 'device' : 'gpu';
 }
 
+/**
+ * The most OUTPUT pixels one `open()` of LibRaw may decode before the decode
+ * is cut into tiles (`raw-tiles.ts`): its own buffers cost 14 bytes per
+ * output pixel (an 8-byte work image, a 6-byte output) on top of the file's
+ * copy and the unpacked sensor plane, which every tile pays whole. A phone
+ * keeps a tile to 4 megapixels — 56 MB of LibRaw's buffers, so a 36-megapixel
+ * sensor decoded whole never grows the worker past its first 256 MB; a
+ * computer cuts only past 24 megapixels, where a whole decode would take
+ * the heap towards a gigabyte, and keeps a 24-megapixel sensor in one open.
+ * Measured 2026-09-25 on a 24-megapixel synthetic DNG in Chromium: the
+ * renderer's peak fell from +599 MB decoded whole to +311 MB in six tiles.
+ */
+export const CONSTRAINED_TILE_PIXELS = 4_000_000;
+export const ROOMY_TILE_PIXELS = 24_000_000;
+
+export function rawTilePixels(klass: DeviceClass): number {
+  return klass === 'constrained' ? CONSTRAINED_TILE_PIXELS : ROOMY_TILE_PIXELS;
+}
+
 const MIB = 1024 * 1024;
 
 /** How much decoded RAW the session may hold for a picture to be re-opened without a second decode. */

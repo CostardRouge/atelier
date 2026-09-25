@@ -1327,7 +1327,17 @@ device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the
 loupe, which decodes the file whole on a computer, says *as close as this
-device goes* instead — for every picture, not only a RAW. A RAW is always
+device goes* instead — for every picture, not only a RAW. A big sensor is
+decoded in **tiles**: LibRaw is asked for one band of the sensor at a time,
+and pays its own buffers for that band alone, so a 36-megapixel sensor on a
+phone never grows the decoder's heap past its first 256 MB — each tile costs
+the file read again, cheap for a DNG, a moment for a compressed ARW, and
+lands bit for bit where the whole decode would put it (a computer cuts only
+past 24 megapixels). The sensor's white is white, whatever the picture
+holds: the decoder no longer scales a frame by its own brightest pixel, so a
+RAW metered before 2026-09-25 may open a touch dark under its stored
+exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed
 the tab on a zoom). A browser cannot ask a phone how much memory a tab may

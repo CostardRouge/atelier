@@ -409,6 +409,12 @@ export interface DevelopPicture {
    */
   segmentSource: TexImageSource | null;
   /**
+   * Decode the picture again from its file — after the stored exposure was
+   * dropped and the session's held decodes with it, so the RAW is metered
+   * anew. Nothing else changes: the same file, the same size.
+   */
+  redecode: () => void;
+  /**
    * Where a client point lands in the SOURCE picture, as [0,1]; null outside
    * it. What a painted mask's strokes are made of. With `unbounded`, a point
    * past the picture's edge is answered as it is (below 0, above 1) instead
@@ -736,6 +742,10 @@ export function useDevelopPicture({
   // scale, say, when the delivered file changes under it — and it would draw
   // a bitmap already closed (`studio.md`, «released one commit after»).
   const retired = useRef<BadgeSource[]>([]);
+  // Bumped to decode the same file again — the RAW metered anew once its
+  // stored exposure is gone (`redecode`).
+  const [decodeNonce, setDecodeNonce] = useState(0);
+  const redecode = useCallback(() => setDecodeNonce((n) => n + 1), []);
 
   useEffect(() => {
     let cancelled = false;
@@ -802,7 +812,7 @@ export function useDevelopPicture({
       controller.abort();
       if (loaded) retired.current.push(loaded);
     };
-  }, [file, videoTimeSeconds, rawFile]);
+  }, [file, videoTimeSeconds, rawFile, decodeNonce]);
   useEffect(() => {
     const stale = retired.current;
     if (!stale.length) return;
@@ -1765,6 +1775,7 @@ export function useDevelopPicture({
     pickAt,
     sampleColour,
     segmentSource,
+    redecode,
     pointAt,
     veilCanvasRef,
     stagePoint,
