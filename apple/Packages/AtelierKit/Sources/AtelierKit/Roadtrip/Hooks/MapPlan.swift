@@ -1,14 +1,23 @@
-// The Itinerary opener's OPTIONS as a trip stores them — port of the stored
-// half of `src/shared/roadtrip/hooks/map-plan.ts`: the stops, every drawing
+// The Itinerary's arithmetic — an AUTHORED map. Port of
+// `src/shared/roadtrip/hooks/map-plan.ts`, whole: the stops, every drawing
 // option with its default and its bounds, the reader that clamps a stored
-// record, and the conversion of a retired Route layer (the v20 migration).
+// record, the conversion of a retired Route layer (the v20 migration) — and
+// the behaviour: the box and the drag, the projection and its inverse, the
+// arcs, the phased clock, the pen, the pictures' timing, the score, and the
+// itinerary's editing verbs. The variant is `MapVariant.swift`, one frame's
+// layout `MapPaint.swift`.
 //
-// Types + reader only; the behaviour of `map-plan.ts` (the box, the drag, the
-// projection and its inverse, the arcs, the phased clock, the pen, the
-// pictures' timing, the score, the itinerary's editing verbs) is ported later
-// INTO THIS FILE. `fitProjection` is already a public name of `Geo.swift`
-// (the openers' shared geography), so map-plan's own two-way projection must
-// be named differently when it lands here.
+// Unlike the retired Route trace (which read the legs and so refused to pin a
+// point), every stop here is one the author picked, in the order they chose,
+// holding the picture they gave it. Nothing is derived, so nothing is invented.
+//
+// Names that differ from the web's, and why:
+// - `fitProjection` → `fitMapProjection`, returning a `MapProjection` value
+//   with `project` / `unproject`: `fitProjection` is already `Geo.swift`'s
+//   (the openers' shared one-way projection, a different function).
+// - map-plan's own `haversineKm` and `formatDistance` are `Geo.swift`'s — the
+//   web carries two identical copies; the kernel keeps one. Its `Point`, `Box`
+//   and `LatLon` are `Geometry.swift`'s `Point` and `Rect` and `GeoPoint`.
 //
 // Rules kept:
 // - A stop is a place the AUTHOR picked and, optionally, one picture; a stop
@@ -21,6 +30,15 @@
 // - A stop's picture keeps its ref only when the ref names a file; the
 //   picture's coordinates are not read here — the stop's own are what it is
 //   drawn at.
+// - The clock is PHASES, never one curve over the whole line: a hold, then per
+//   hop a travel and a dwell. Travel is shared by LENGTH (in the projection's
+//   own units, frame-free), so the pen keeps one pace; the easing shapes each
+//   hop. With the drawing off every stop is reached at zero — a still map.
+// - The first stop's picture and pin are up from the first frame: it is where
+//   the piece starts, not somewhere the pen arrives.
+// - The projection runs BACKWARDS too (`unproject`), so a click on the
+//   picking map is a pair of coordinates; with fewer than two distinct points
+//   it fits the whole world, the only honest reading of an empty map.
 
 import Foundation
 
@@ -406,4 +424,521 @@ func mapFromRoute(_ raw: HookOptions, storedPlaces places: [(name: JSONValue?, l
     carried["media"] = .string(MapMedia.off.rawValue)
     carried["curve"] = .number(0)
     return mapOptions(carried)
+}
+
+// MARK: - Geometry
+
+/// How the map is placed: the coarse anchor, its size, and the drag's offset.
+/// The web's `MapPlacement` (a `Pick` of the options).
+public struct MapPlacement: Equatable, Sendable {
+    public var position: MapPosition
+    public var align: MapAlign
+    public var size: Double
+    public var offsetX: Double
+    public var offsetY: Double
+
+    public init(position: MapPosition, align: MapAlign, size: Double, offsetX: Double, offsetY: Double) {
+        self.position = position; self.align = align; self.size = size; self.offsetX = offsetX; self.offsetY = offsetY
+    }
+}
+
+extension MapOptions {
+    /// The options' own placement.
+    public var placement: MapPlacement {
+        MapPlacement(position: position, align: align, size: size, offsetX: offsetX, offsetY: offsetY)
+    }
+}
+
+/// The box the map is fitted into, on a frame of `w`×`h` — the anchor the
+/// author chose, plus wherever they have since dragged it. Everything else the
+/// opener draws is measured from this box, so the drag moves the line, the
+/// dots, the names and the card together.
+public func mapBox(_ w: Double, _ h: Double, _ p: MapPlacement) -> Rect {
+    let width = w * 0.76 * p.size
+    let height = min(h * 0.42, w * 0.95) * p.size
+    let anchorX: Double = p.align == .left ? w * 0.08 : (p.align == .right ? w * 0.92 - width : (w - width) / 2)
+    let anchorY: Double = p.position == .top ? h * 0.1 : (p.position == .bottom ? h * 0.88 - height : (h - height) / 2)
+    return Rect(x: anchorX + w * p.offsetX, y: anchorY + h * p.offsetY, width: width, height: height)
+}
+
+/// The same, read off the options.
+public func mapBox(_ w: Double, _ h: Double, _ o: MapOptions) -> Rect {
+    mapBox(w, h, o.placement)
+}
+
+/// The map after a drag of `dx`, `dy` — fractions of the frame, incremental.
+/// Clamped rather than free: a map dragged off the frame is a hook that draws
+/// nothing, with no way back but the panel.
+public func moveMap(_ o: MapOptions, _ dx: Double, _ dy: Double) -> MapOptions {
+    let L = mapLimits.offset
+    var out = o
+    out.offsetX = min(L.max, max(L.min, o.offsetX + dx))
+    out.offsetY = min(L.max, max(L.min, o.offsetY + dy))
+    return out
+}
+
+/// Whether the map has been dragged away from the anchor it was placed on.
+public func mapMoved(_ o: MapOptions) -> Bool {
+    o.offsetX != 0 || o.offsetY != 0
+}
+
+/// A projection fitting some points inside a box, and its inverse — the web's
+/// `fitProjection` in `map-plan.ts` (see the header for the name). Both
+/// directions share one scale, so a point projected and unprojected is itself.
+public struct MapProjection: Equatable, Sendable {
+    /// The inner box's centre, in frame pixels.
+    public let cx: Double
+    public let cy: Double
+    /// The fitted points' middle, in projected (pre-scale) units.
+    public let midX: Double
+    public let midY: Double
+    /// Pixels per degree of latitude.
+    public let scale: Double
+    /// The longitude's squeeze at the mean latitude, never below 0.05.
+    public let k: Double
+
+    /// A located place, on the frame.
+    public func project<P: GeoLocated>(_ p: P) -> Point {
+        Point(cx + (p.lon * k - midX) * scale, cy + (-p.lat - midY) * scale)
+    }
+
+    /// A point of the frame, as a located place: the latitude clamped to the
+    /// poles, the longitude wrapped — a drag off the left edge of the world
+    /// comes back on the right.
+    public func unproject(_ p: Point) -> GeoPoint {
+        let lat = -(midY + (p.y - cy) / scale)
+        let lon = (midX + (p.x - cx) / scale) / k
+        return GeoPoint(lat: min(90, max(-90, lat)), lon: mapWrapLon(lon))
+    }
+}
+
+/// `((lon + 180) % 360 + 360) % 360 - 180`, JavaScript's `%` being a truncating remainder.
+private func mapWrapLon(_ lon: Double) -> Double {
+    let once = (lon + 180).truncatingRemainder(dividingBy: 360)
+    return (once + 360).truncatingRemainder(dividingBy: 360) - 180
+}
+
+/// A projection fitting `points` inside `box`, `padding` pixels in from its
+/// edges, and its inverse.
+///
+/// The inverse is what makes the picking map a map rather than a picture of
+/// one: a click comes back as a coordinate pair, so a stop can be dropped where
+/// there is no place to click on.
+///
+/// With fewer than two distinct points there is no scale to derive. The
+/// fallback is the WHOLE WORLD fitted to the box rather than an arbitrary zoom:
+/// an empty itinerary's first pin has to land somewhere real, and "somewhere on
+/// Earth" is the only honest reading of a map with nothing on it yet.
+public func fitMapProjection<P: GeoLocated>(_ points: [P], _ box: Rect, _ padding: Double = 0) -> MapProjection {
+    let innerX = box.x + padding
+    let innerY = box.y + padding
+    let innerW = max(1, box.width - padding * 2)
+    let innerH = max(1, box.height - padding * 2)
+    let cx = innerX + innerW / 2
+    let cy = innerY + innerH / 2
+
+    let meanLat = points.isEmpty ? 0 : points.reduce(0.0) { $0 + $1.lat } / Double(points.count)
+    // Never let the cosine collapse at a pole: a scale of 0 is a projection
+    // that cannot be inverted.
+    let k = max(0.05, cos(meanLat * Double.pi / 180))
+    let xs = points.map { $0.lon * k }
+    let ys = points.map { -$0.lat }
+    let minX = xs.min() ?? 0, maxX = xs.max() ?? 0
+    let minY = ys.min() ?? 0, maxY = ys.max() ?? 0
+    let spanX = maxX - minX
+    let spanY = maxY - minY
+
+    var midX = 0.0
+    var midY = 0.0
+    let scale: Double
+    if spanX < 1e-9 && spanY < 1e-9 {
+        // One point, or none: the world, centred on what there is.
+        if let x = xs.first, let y = ys.first {
+            midX = x
+            midY = y
+        }
+        scale = min(innerW / (360 * k), innerH / 170)
+    } else {
+        midX = (minX + maxX) / 2
+        midY = (minY + maxY) / 2
+        let byWidth = spanX > 1e-9 ? innerW / spanX : Double.infinity
+        let byHeight = spanY > 1e-9 ? innerH / spanY : Double.infinity
+        scale = min(byWidth, byHeight)
+    }
+    return MapProjection(cx: cx, cy: cy, midX: midX, midY: midY, scale: scale, k: k)
+}
+
+/// The control point of the hop's arc. A straight hop reads as a ruler line;
+/// a bowed one reads as a journey, which is the whole idiom of a travel map.
+/// The bow is always to the LEFT of the direction of travel, so a there-and-
+/// back itinerary draws two arcs rather than one line drawn twice.
+public func arcControl(_ a: Point, _ b: Point, _ curve: Double) -> Point {
+    let mx = (a.x + b.x) / 2
+    let my = (a.y + b.y) / 2
+    if curve <= 0 { return Point(mx, my) }
+    let dx = b.x - a.x
+    let dy = b.y - a.y
+    let length = hypot(dx, dy)
+    if length < 1e-9 { return Point(mx, my) }
+    // The quadratic's peak is half-way to its control point, so the bow the
+    // eye sees is `curve / 2` of the hop's length.
+    return Point(mx + (dy / length) * length * curve, my - (dx / length) * length * curve)
+}
+
+/// A point on the quadratic Bézier at `s` (0..1).
+public func quadAt(_ a: Point, _ c: Point, _ b: Point, _ s: Double) -> Point {
+    let u = 1 - s
+    let x = u * u * a.x + 2 * u * s * c.x + s * s * b.x
+    let y = u * u * a.y + 2 * u * s * c.y + s * s * b.y
+    return Point(x, y)
+}
+
+/// The first `s` of a quadratic, as a quadratic of its own (de Casteljau) —
+/// what lets a partly-drawn hop be one quadratic rather than a polyline the
+/// arc's own curvature would betray at the join.
+public func quadSplit(_ a: Point, _ c: Point, _ b: Point, _ s: Double) -> (control: Point, end: Point) {
+    let p01 = Point(a.x + (c.x - a.x) * s, a.y + (c.y - a.y) * s)
+    let p12 = Point(c.x + (b.x - c.x) * s, c.y + (b.y - c.y) * s)
+    return (p01, Point(p01.x + (p12.x - p01.x) * s, p01.y + (p12.y - p01.y) * s))
+}
+
+/// The REST of a quadratic, from `s` to its end, as a quadratic of its own —
+/// the other half of the same split. It is what lets the line still to come go
+/// on being drawn under the pen: without it, the moment the pen entered a hop
+/// that hop's remainder vanished, and the shape of the journey stopped being
+/// readable exactly where it matters most.
+public func quadTail(_ a: Point, _ c: Point, _ b: Point, _ s: Double) -> (start: Point, control: Point, end: Point) {
+    let p01 = Point(a.x + (c.x - a.x) * s, a.y + (c.y - a.y) * s)
+    let p12 = Point(c.x + (b.x - c.x) * s, c.y + (b.y - c.y) * s)
+    return (Point(p01.x + (p12.x - p01.x) * s, p01.y + (p12.y - p01.y) * s), p12, b)
+}
+
+/// Each hop's length in kilometres, in the itinerary's order.
+public func hopKms(_ stops: [MapStop]) -> [Double] {
+    guard stops.count > 1 else { return [] }
+    return (1..<stops.count).map { haversineKm(stops[$0 - 1], stops[$0]) }
+}
+
+/// Each hop's length in the projection's own units — frame-free, since the
+/// projection is one uniform scale. What the travel times are shared out by,
+/// so the pen's pace is the same whatever size the frame is drawn at.
+public func planarHops(_ stops: [MapStop]) -> [Double] {
+    guard stops.count > 1 else { return [] }
+    let projection = fitMapProjection(stops, Rect(x: 0, y: 0, width: 1000, height: 1000))
+    return (1..<stops.count).map { i in
+        let a = projection.project(stops[i - 1])
+        let b = projection.project(stops[i])
+        return hypot(b.x - a.x, b.y - a.y)
+    }
+}
+
+// MARK: - The clock
+
+/// One hop's share of the run: the travel, then the wait at the stop it lands on.
+public struct MapHop: Equatable, Sendable {
+    public var travel: Double
+    public var dwell: Double
+
+    public init(travel: Double, dwell: Double) {
+        self.travel = travel; self.dwell = dwell
+    }
+}
+
+public struct MapTiming: Equatable, Sendable {
+    /// The hold on the first stop before the pen leaves.
+    public var delay: Double
+    public var hops: [MapHop]
+    /// When each stop is reached. The first is reached when the hold ends.
+    public var arrivals: [Double]
+    public var total: Double
+
+    public init(delay: Double, hops: [MapHop], arrivals: [Double], total: Double) {
+        self.delay = delay; self.hops = hops; self.arrivals = arrivals; self.total = total
+    }
+}
+
+/// The itinerary's clock. Travel is shared out by hop LENGTH, so a long hop
+/// takes longer than a short one and the pen keeps one pace; each arrival is
+/// followed by the dwell, including the last, which is what gives the final
+/// picture time to be looked at.
+///
+/// With the drawing off there is no clock at all: every hop is there from the
+/// first frame and the hook occupies nothing.
+public func mapTiming(_ lengths: [Double], _ o: MapOptions) -> MapTiming {
+    if !o.draw {
+        // A still map: every stop is reached at zero, which is what makes the
+        // whole path drawn, every pin up and the last stop the one showing —
+        // with no branch anywhere downstream on "is this one moving".
+        return MapTiming(delay: 0, hops: lengths.map { _ in MapHop(travel: 0, dwell: 0) },
+                         arrivals: [0] + lengths.map { _ in 0 }, total: 0)
+    }
+    if lengths.isEmpty { return MapTiming(delay: 0, hops: [], arrivals: [0], total: 0) }
+    let total = lengths.reduce(0, +)
+    let hops = lengths.map { length in
+        // A degenerate itinerary — every stop on one spot — still has to
+        // advance, or the pen would never arrive and the dwells never run.
+        MapHop(travel: o.drawSeconds * (total > 1e-9 ? length / total : 1 / Double(lengths.count)),
+               dwell: o.dwellSeconds)
+    }
+    var arrivals = [o.delaySeconds]
+    var at = o.delaySeconds
+    for hop in hops {
+        at += hop.travel
+        arrivals.append(at)
+        at += hop.dwell
+    }
+    return MapTiming(delay: o.delaySeconds, hops: hops, arrivals: arrivals, total: at)
+}
+
+/// The curve itself — every opener id has one (`HookEasing.swift`).
+private func mapEase(_ easing: HookEasing, _ u: Double) -> Double {
+    hookEasings[easing]?.ease(u) ?? u
+}
+
+/// Where the pen is at `t`.
+public struct PenAt: Equatable, Sendable {
+    /// The hop being travelled, or nil when the pen is waiting on a stop.
+    public var hop: Int?
+    /// How far along that hop, eased, 0..1.
+    public var fraction: Double
+    /// The last stop reached.
+    public var stop: Int
+    public var moving: Bool
+
+    public init(hop: Int?, fraction: Double, stop: Int, moving: Bool) {
+        self.hop = hop; self.fraction = fraction; self.stop = stop; self.moving = moving
+    }
+}
+
+public func penAt(_ timing: MapTiming, _ easing: HookEasing, _ t: Double) -> PenAt {
+    if timing.hops.isEmpty { return PenAt(hop: nil, fraction: 1, stop: 0, moving: false) }
+    if t < timing.delay { return PenAt(hop: nil, fraction: 0, stop: 0, moving: false) }
+    var at = timing.delay
+    for (i, hop) in timing.hops.enumerated() {
+        if t < at + hop.travel {
+            let u = hop.travel > 0 ? (t - at) / hop.travel : 1
+            return PenAt(hop: i, fraction: mapEase(easing, max(0, min(1, u))), stop: i, moving: true)
+        }
+        at += hop.travel
+        if t < at + hop.dwell { return PenAt(hop: nil, fraction: 1, stop: i + 1, moving: false) }
+        at += hop.dwell
+    }
+    return PenAt(hop: nil, fraction: 1, stop: timing.hops.count, moving: false)
+}
+
+/// How much of each hop is drawn at `t`, 0..1 — the pen's trail.
+public func drawnFractions(_ timing: MapTiming, _ easing: HookEasing, _ t: Double, _ count: Int) -> [Double] {
+    let pen = penAt(timing, easing, t)
+    return (0..<max(0, count)).map { i -> Double in
+        guard let hop = pen.hop else { return i < pen.stop ? 1 : 0 }
+        if i < hop { return 1 }
+        if i == hop { return pen.fraction }
+        return 0
+    }
+}
+
+/// Which picture is showing at `t`, and how far it has arrived.
+///
+/// The FIRST stop's picture is up from the first frame — it is where the piece
+/// starts, not somewhere the pen travels to — so a hold at the start shows it
+/// rather than an empty frame. Every later one cross-fades from the one before
+/// as the pen lands.
+public struct MediaAt: Equatable, Sendable {
+    public var current: Int
+    public var previous: Int?
+    /// 0 = the previous picture still, 1 = the current one alone.
+    public var mix: Double
+
+    public init(current: Int, previous: Int?, mix: Double) {
+        self.current = current; self.previous = previous; self.mix = mix
+    }
+}
+
+public func mediaAt(_ timing: MapTiming, _ t: Double, _ fade: Double) -> MediaAt {
+    var current = 0
+    for i in timing.arrivals.indices.dropFirst() where t + 1e-9 >= timing.arrivals[i] {
+        current = i
+    }
+    // The first stop, and a still map (the drawing off), are wholly there:
+    // there is nothing for them to arrive from.
+    if current == 0 || timing.total <= 0 { return MediaAt(current: current, previous: nil, mix: 1) }
+    let since = t - timing.arrivals[current]
+    let mix = fade > 0 ? max(0, min(1, since / fade)) : 1
+    return MediaAt(current: current, previous: mix < 1 ? current - 1 : nil, mix: mix)
+}
+
+/// How present a stop's own pin is at `t`, 0..1 — for the pins that stay.
+///
+/// The FIRST stop is whole from the first frame, never faded in: it is where
+/// the piece begins rather than somewhere the pen arrives, and `mediaAt` reads
+/// it the same way. Two readings of "is stop 0 there yet" is how a pinned
+/// picture and a backdrop of the same stop start disagreeing.
+public func pinAlphaAt(_ timing: MapTiming, _ t: Double, _ index: Int, _ fade: Double) -> Double {
+    // A still map (the drawing off) has nothing to arrive: everything is up.
+    if index == 0 || timing.total <= 0 { return 1 }
+    guard index > 0, index < timing.arrivals.count else { return 0 }
+    let at = timing.arrivals[index]
+    if t < at { return 0 }
+    return fade > 0 ? max(0, min(1, (t - at) / fade)) : 1
+}
+
+/// Which stops carry their name under `labels`, given where the pen is.
+///
+/// `passed` is the one that accumulates: a name appears as the pen reaches its
+/// stop and STAYS, so the itinerary reads as a list being written rather than
+/// as one name following the pen around. `current` is the opposite reading and
+/// both are wanted — which is why this is a list of modes and not a switch.
+public func wantsLabel(_ labels: MapLabels, _ index: Int, _ count: Int, _ at: Int) -> Bool {
+    if labels == .none || count == 0 { return false }
+    switch labels {
+    case .all: return true
+    case .current: return index == at
+    case .passed: return index <= at
+    case .ends, .none: return index == 0 || index == count - 1
+    }
+}
+
+/// The kilometres the pen has covered — each hop's length times how much of it
+/// is drawn. The straight-line sum between the stops, never a road distance.
+public func drawnKm(_ kms: [Double], _ fractions: [Double]) -> Double {
+    var sum = 0.0
+    for (i, km) in kms.enumerated() {
+        sum += km * (i < fractions.count ? fractions[i] : 0)
+    }
+    return sum
+}
+
+/// The itinerary, heard: a tick at every stop the pen reaches, the seat where
+/// it comes to rest. The first stop's tick is the departure, at the end of the
+/// hold. Timed on the arrivals, so a tick cannot land before its dot.
+public func mapScore(_ timing: MapTiming, _ tuning: (kit: TickKit, pitch: Double), _ volume: Double) -> [SoundEvent] {
+    if !(volume > 0) || timing.hops.isEmpty { return [] }
+    let kit = tuning.kit.spec
+    let pitch = tuning.pitch
+    let last = timing.arrivals.count - 1
+    return timing.arrivals.enumerated().map { i, at -> SoundEvent in
+        if i == last {
+            return SoundEvent(at: at, voice: kit.seat.rawValue, gain: 0.8 * volume, rate: pitch)
+        }
+        if i == 0 {
+            return SoundEvent(at: at, voice: kit.leg.voice.rawValue, gain: 0.75 * volume * kit.leg.gain,
+                              rate: pitch * kit.leg.rate)
+        }
+        return SoundEvent(at: at, voice: kit.tick.rawValue, gain: 0.75 * volume, rate: pitch)
+    }
+}
+
+/// The pictures the itinerary will draw, each under the key the shell decodes
+/// it by. Only what is actually shown: with the media off, nothing is fetched
+/// at all, and one picture used at two stops is decoded once.
+public func mapWants(_ o: MapOptions) -> [HookPictureWant] {
+    if o.media == .off { return [] }
+    var seen = Set<String>()
+    var out: [HookPictureWant] = []
+    for stop in o.stops {
+        guard let picture = stop.picture else { continue }
+        let key = hookPictureKey(picture.ref)
+        if seen.insert(key).inserted { out.append(HookPictureWant(key: key, ref: picture.ref)) }
+    }
+    return out
+}
+
+/// A stop's picture key, or nil — what the paint looks a picture up by.
+public func stopPictureKey(_ stop: MapStop) -> String? {
+    stop.picture.map { hookPictureKey($0.ref) }
+}
+
+/// Two positions within a millionth of a degree — the same place typed twice.
+private func mapNear<A: GeoLocated, B: GeoLocated>(_ a: A, _ b: B) -> Bool {
+    abs(a.lat - b.lat) < 1e-6 && abs(a.lon - b.lon) < 1e-6
+}
+
+/// The trip's own located places that are NOT already stops, for the faint
+/// context layer and for the panel's "add a place" chips. Matched on position
+/// rather than on name: the same place typed twice is one place.
+public func otherPlaces(_ stages: [HookStage]?, _ stops: [MapStop]) -> [MapPlace] {
+    var out: [MapPlace] = []
+    for stage in stages ?? [] {
+        for place in stage.places {
+            if stops.contains(where: { mapNear($0, place) }) || out.contains(where: { mapNear($0, place) }) { continue }
+            out.append(MapPlace(name: place.name, lat: place.lat, lon: place.lon))
+        }
+    }
+    return out
+}
+
+// MARK: - Editing the itinerary — pure, so the panel only draws
+
+/// A stop added at the end. The name is the author's to write.
+public func addStop(_ stops: [MapStop], _ at: GeoPoint, name: String? = nil, _ id: String) -> [MapStop] {
+    if stops.count >= mapMaxStops { return stops }
+    return stops + [MapStop(id: id, name: name ?? "", lat: at.lat, lon: at.lon)]
+}
+
+/// One stop changed in place; everything else, including its picture, kept.
+/// The patch may not change the stop's id (the web's `Omit<MapStop, 'id'>`).
+public func patchStop(_ stops: [MapStop], _ id: String, _ patch: (inout MapStop) -> Void) -> [MapStop] {
+    stops.map { stop in
+        guard stop.id == id else { return stop }
+        var patched = stop
+        patch(&patched)
+        patched.id = stop.id
+        return patched
+    }
+}
+
+public func removeStop(_ stops: [MapStop], _ id: String) -> [MapStop] {
+    stops.filter { $0.id != id }
+}
+
+/// A stop moved one place earlier or later. Out of range is a no-op, not a wrap.
+public func moveStop(_ stops: [MapStop], _ id: String, _ delta: Int) -> [MapStop] {
+    guard let from = stops.firstIndex(where: { $0.id == id }) else { return stops }
+    let to = from + delta
+    if to < 0 || to >= stops.count { return stops }
+    var out = stops
+    let moved = out.remove(at: from)
+    out.insert(moved, at: to)
+    return out
+}
+
+/// The pictures the chooser came back with, landing on the stops.
+///
+/// The first goes to the stop the author asked from. The rest fill the stops
+/// AFTER it that have none — never one that already holds a picture, so a
+/// generous pick can never quietly undo earlier work, and never a stop before
+/// the one asked from, which would edit behind the author's back. Anything
+/// left over is reported by the panel rather than dropped in silence.
+public func assignPictures(_ stops: [MapStop], _ index: Int,
+                           _ picked: [HookPickedPicture]) -> (stops: [MapStop], used: Int) {
+    var out = stops
+    if index < 0 || index >= out.count { return (out, 0) }
+    guard let first = picked.first else {
+        // An empty pick is "this stop shows nothing" — the way to take a
+        // picture off a stop from inside the chooser.
+        out[index].picture = nil
+        return (out, 0)
+    }
+    out[index].picture = first
+    var used = 1
+    var i = index + 1
+    while i < out.count && used < picked.count {
+        if out[i].picture == nil {
+            out[i].picture = picked[used]
+            used += 1
+        }
+        i += 1
+    }
+    return (out, used)
+}
+
+/// Every located place of the trip, in the order it was lived.
+public func tripPlaces(_ stages: [HookStage]?) -> [MapPlace] {
+    var out: [MapPlace] = []
+    for stage in stages ?? [] {
+        for place in stage.places where !out.contains(where: { mapNear($0, place) }) {
+            out.append(MapPlace(name: place.name, lat: place.lat, lon: place.lon))
+        }
+    }
+    return out
 }

@@ -7,11 +7,11 @@
 //
 // The web registers four: the badge, Défilé (the scrub), Virée (the drive)
 // and the Itinerary (the map). The kernel registers the variants whose PLANS
-// it holds — the badge and Défilé. Virée and the Itinerary join the list when
-// `drive-plan.ts` and the rest of `map-plan.ts` land (their stored options are
-// already `MapPlan.swift`'s); until then a trip holding one of them opens here
-// and plays the badge in its place, by the same rule that lets a trip from a
-// newer build open: an id this build does not know is skipped, never fatal.
+// it holds — the badge, Défilé and the Itinerary (`MapVariant.swift`). Virée
+// joins the list when `drive-plan.ts` lands; until then a trip holding one
+// opens here and plays the badge in its place, by the same rule that lets a
+// trip from a newer build open: an id this build does not know is skipped,
+// never fatal.
 
 import Foundation
 
@@ -20,7 +20,7 @@ public let hookVariants: [HookVariant] = [
     badgeVariant,
     scrubVariant,
     // driveVariant — Virée, when `drive-plan.ts` lands (`DrivePlan.swift`).
-    // mapVariant — the Itinerary, when the rest of `map-plan.ts` lands (`MapPlan.swift`).
+    mapVariant,
 ]
 
 public func hookVariantById(_ id: String) -> HookVariant? {
