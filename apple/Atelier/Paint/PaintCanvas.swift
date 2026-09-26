@@ -17,10 +17,13 @@
 //   with one): it is a `CGMutablePath` of our own, added to the context at
 //   each paint. Every call site builds and paints a path under one transform.
 // - SHADOWS: a canvas measures shadowBlur and the offsets in the canvas's
-//   own units, untouched by the transform; CG measures them in DEVICE space,
-//   untouched by the transform too. So both are converted once, through the
-//   frame space's device transform captured when the canvas is made — which
-//   also turns a canvas's "down" into whatever the device's y is.
+//   own units, untouched by the transform; CG measures them in DEVICE units,
+//   untouched by the transform's SCALE — but, measured on macOS 26, NOT by its
+//   flip: a context whose CTM is flipped (every y-down frame here) turns the
+//   offset's y itself. So both are converted once, through the frame space's
+//   device transform captured when the canvas is made, and the y handed to CG
+//   is then turned back by the current CTM's flip (`deviceShadow`) — without
+//   it, every offset shadow fell UP the frame.
 // - `filter: blur(r)` (the glow's softened core) has no CG twin: the run is
 //   drawn far outside the frame with a shadow of radius 2r offset back onto
 //   it — a Gaussian of σ = r, which is what the CSS blur is.
@@ -298,7 +301,16 @@ final class PaintCanvas {
             return
         }
         let offset = CGSize(width: state.shadowOffsetX, height: state.shadowOffsetY).applying(base)
-        cg.setShadow(offset: offset, blur: CGFloat(state.shadowBlur * baseScale), color: color)
+        cg.setShadow(offset: deviceShadow(offset), blur: CGFloat(state.shadowBlur * baseScale), color: color)
+    }
+
+    /// A device-space offset as CG's `setShadow` wants it: CG turns the y of
+    /// a shadow offset by the CTM's own flip, so under a flipped CTM the y is
+    /// handed over turned already, and the two flips cancel.
+    private func deviceShadow(_ offset: CGSize) -> CGSize {
+        let m = cg.ctm
+        let flipped = m.a * m.d - m.b * m.c < 0
+        return flipped ? CGSize(width: offset.width, height: -offset.height) : offset
     }
 
     private func applyStrokeGeometry() {
@@ -484,7 +496,7 @@ final class PaintCanvas {
         // Far past the frame in user units, whatever the scale.
         let far = (width + height) * 4 + 1000
         let away = CGSize(width: far, height: 0).applying(cg.userSpaceToDeviceSpaceTransform)
-        cg.setShadow(offset: CGSize(width: -away.width, height: -away.height),
+        cg.setShadow(offset: deviceShadow(CGSize(width: -away.width, height: -away.height)),
                      blur: CGFloat(state.blur * 2 * baseScale), color: color)
         cg.textPosition = CGPoint(x: far, y: 0)
         CTLineDraw(line, cg)
