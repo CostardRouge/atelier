@@ -1,16 +1,14 @@
 // How the Develop stage turns a picture into pixels — ONE seam, so the stage,
-// the before/after wipe, the filmstrip's snapshot and (later) the export all
-// ask the same question the same way: preview = export by construction.
+// the before/after wipe, the filmstrip's snapshot and the export all ask the
+// same question the same way: preview = export by construction.
 //
-// The default plan is today's pixel path: the crop, the cap on the budget and
-// the develop as ONE cube, through `PictureRenderer.compose` and the render
-// graph's `FrameGrader` (a tetrahedral cube pass, the web shader's own maths).
-// What the plan does NOT draw yet — the look, the border, the geometry
-// passes, detail, the post-crop vignette, repair, the layers — it SAYS
-// (`unrendered`), so the stage never shows a picture developed on the web as
-// something it is not. The integration task adds those passes BEHIND this
-// protocol (a plan built over `FrameGrader.setExtraPasses`); the stage and
-// its callers do not change.
+// The editor draws through `FullDevelopRenderPlan` (`Develop/Render/`): every
+// pass a picture carries, in the web's order, the look and the RAW ladder
+// included. The default plan here is the v0 path it replaced — the crop, the
+// cap and the develop as ONE cube through `PictureRenderer.compose` — kept
+// for a host with no plan installed; what it does not draw it SAYS
+// (`unrendered`), so no stage shows a picture developed on the web as
+// something it is not.
 
 import CoreImage
 import AtelierKit
@@ -36,15 +34,55 @@ protocol DevelopRenderPlan {
     /// The sections of `picture` this plan does not draw — named in the
     /// inspector's words, for the stage to say.
     func unrendered(picture: RollPicture) -> [String]
+
+    /// What a render of `picture` needs that is had ASYNCHRONOUSLY — a pack
+    /// look's lattice from the vault — fetched before `render` asks for it.
+    /// A caller that renders awaits it first; nothing to fetch costs nothing.
+    func prepare(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) async
+
+    /// The picture AS SHOT, for the left of the wipe and the held before.
+    func renderBefore(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) -> CIImage
+
+    /// A way of LOOKING drawn over the delivered frame — the clipping (J) —
+    /// on what the stage SHOWS only: the histogram, a snapshot and an export
+    /// take `render`'s picture and never this.
+    func looking(_ image: CIImage, clipping: Bool) -> CIImage
+
+    /// The pixels `render` draws FROM, before any budget — what a delivery's
+    /// arithmetic (its frame, its cap, its border) is read against. Not
+    /// always `decoded`'s own: a RAW on a sensor rung is drawn from its
+    /// sensor, not the render the pool decoded.
+    func sourceSize(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) -> CGSize
 }
 
-/// The picture AS SHOT for the left of the wipe: the same frame, with no
-/// correction and no look — the web's split lives in the CUBE (`u_splitX`),
-/// so only what the cube carries differs between the halves and the two line
-/// up pixel for pixel. Every other pass is the plan's, on both sides.
+extension DevelopRenderPlan {
+    func prepare(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) async {}
+
+    func sourceSize(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) -> CGSize {
+        CGSize(width: decoded.width, height: decoded.height)
+    }
+
+    func renderBefore(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) -> CIImage {
+        render(picture: asShotForCompare(picture), decoded: decoded, budget: budget)
+    }
+
+    /// The clipping painted after everything that shapes the picture, on the
+    /// delivered frame's own pixels — so the readout under the pointer reads a
+    /// mark as the clip it marks (`readoutOf`), exactly.
+    func looking(_ image: CIImage, clipping: Bool) -> CIImage {
+        guard clipping else { return image }
+        return ClippingPass.shared.apply(image, PassContext(renderSize: image.extent.size))
+    }
+}
+
+/// The picture AS SHOT for the left of the wipe: the same file at the same
+/// rung, framed the same, with nothing the author did — no develop, no look,
+/// no perspective, lens, detail, repair, vignette or layer (the web's wipe
+/// draws the decoded source itself under the same crop). A RAW base is a fact
+/// about the bytes, not a correction, so it stays, with its gain and the
+/// camera's own calibration at its rung.
 func asShotForCompare(_ picture: RollPicture) -> RollPicture {
     var out = picture
-    // A RAW base is a fact about the bytes, not a correction: it stays.
     if let d = picture.develop, isRawDevelop(d) {
         var base = DevelopSettings.default
         base.base = d.base
@@ -54,8 +92,12 @@ func asShotForCompare(_ picture: RollPicture) -> RollPicture {
         out.develop = nil
     }
     out.grade = nil
+    for key in asShotStripped { out.carried[key] = nil }
     return out
 }
+
+/// The stages a picture carries that are the author's corrections, never the capture's.
+private let asShotStripped = ["keystone", "lens", "lensProfile", "detail", "vignette", "repair", "layers"]
 
 struct DefaultDevelopRenderPlan: DevelopRenderPlan {
     func render(picture: RollPicture, decoded: DecodedPicture, budget: RenderBudget) -> CIImage {

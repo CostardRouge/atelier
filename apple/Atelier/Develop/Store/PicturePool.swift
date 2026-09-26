@@ -71,7 +71,9 @@ final class PicturePool {
         let name = picture.ref.name
         let task = Task.detached(priority: .userInitiated) { () throws -> PictureRead in
             let data = try RollStore.bytes(of: locator, mediaDirectory: media)
-            guard let decoded = PictureDecoder.decode(data, name: name) else { throw PictureError.undecodable }
+            // A RAW's bytes are read again when its sensor is asked for, never held.
+            let reread = { try RollStore.bytes(of: locator, mediaDirectory: media) }
+            guard let decoded = PictureDecoder.decode(data, name: name, reread: reread) else { throw PictureError.undecodable }
             let head = data.prefix(exifSliceBytes)
             let parsed = parseExif(Data(head))
             let stats = PictureRenderer.shared.rgbaBytes(decoded.image, longEdge: histogramSampleEdge).map { measureSource($0) }

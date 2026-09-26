@@ -71,6 +71,11 @@ struct DevelopStageView: View {
         }
         // The Crop tab raises its tool; the open picture's lens is looked up.
         .modifier(CropTabHooks(editor: editor))
+        // The clipping (J) is painted by the render plan over what the stage
+        // shows, so a toggle is a render — the histogram never carries it.
+        .onChange(of: editor.clipping) { _, _ in
+            editor.requestRender()
+        }
     }
 
     // MARK: - geometry
@@ -188,10 +193,7 @@ struct DevelopStageView: View {
                         StageChip(text: editor.holding ? "before" : (editor.shownWipe > 0 ? "before · after" : "after"))
                     }
                     if !editor.unrendered.isEmpty {
-                        StageChip(text: "not drawn here yet: \(editor.unrendered.joined(separator: ", "))", tone: palette.warn)
-                    }
-                    if editor.clipping {
-                        StageChip(text: "clipping — not painted here yet", tone: palette.warn)
+                        StageChip(text: "not drawn here: \(editor.unrendered.joined(separator: ", "))", tone: palette.warn)
                     }
                     Spacer(minLength: 0)
                     if zoom.magnifying {
@@ -281,7 +283,9 @@ struct DevelopStageView: View {
         if pixels?.image !== image { pixels = StagePixels(image) }
         guard let rgb = pixels?.rgb(atFraction: f) else { return }
         // The store tells only the one line that shows it; the same reading twice tells nobody.
-        editor.readoutStore.set(StageReadout(readout: readoutOf(rgb.0, rgb.1, rgb.2, clipping: editor.clipping), before: isBefore))
+        // The before side is never painted: a mark is read as a clip only after.
+        let painted = editor.clipping && !isBefore
+        editor.readoutStore.set(StageReadout(readout: readoutOf(rgb.0, rgb.1, rgb.2, clipping: painted), before: isBefore))
     }
 }
 

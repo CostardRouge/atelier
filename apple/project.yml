@@ -47,6 +47,14 @@ targets:
       # committed GeoNames file, bundled as it stands rather than copied.
       - path: ../public/geo/cities.json
         buildPhase: resources
+      # The built-in looks: ONE folder reference to the web's own
+      # `public/luts/`, never a copy under `apple/` — the bundle carries the
+      # folder once, as `luts/` (~37 MB, the same files the site serves), and
+      # a `.cube` added there reaches the app with no code change, as it
+      # reaches the site (`Develop/Render/DevelopLooks.swift` scans it).
+      - path: ../public/luts
+        type: folder
+        buildPhase: resources
     dependencies:
       - package: AtelierKit
     info:
@@ -90,6 +98,10 @@ targets:
       # (`delivery-place.ts`, the Export tab's Metadata): the web's own
       # committed GeoNames file, bundled as it stands rather than copied.
       - path: ../public/geo/cities.json
+        buildPhase: resources
+      # The built-in looks, as on iOS: one folder reference, carried once.
+      - path: ../public/luts
+        type: folder
         buildPhase: resources
     dependencies:
       - package: AtelierKit

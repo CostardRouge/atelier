@@ -37,7 +37,13 @@ struct RollEditorView: View {
             }
         }
         .onAppear {
-            if editor == nil { editor = RollEditor(store: store, pool: pool, presets: presets, rollId: rollId) }
+            if editor == nil {
+                let made = RollEditor(store: store, pool: pool, presets: presets, rollId: rollId)
+                // Every pass a picture carries, in the web's order, for the
+                // stage, the snapshot and the export alike.
+                made.installFullRenderPlan()
+                editor = made
+            }
         }
         .onDisappear { editor?.close() }
         .darkroom()

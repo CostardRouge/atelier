@@ -26,9 +26,22 @@ final class DecodedPicture {
     let height: Int
     /// ImageIO's read of the file: `{TIFF}`, `{Exif}`, `{GPS}` and the rest.
     let properties: [String: Any]
+    /// The file is a RAW whose SENSOR this device can decode — what a RAW
+    /// base needs to stand. What is on screen may still be its render
+    /// (`viaRawPreview`) until a develop climbs above the proxy.
     let isRaw: Bool
+    /// The pixels are the JPEG a camera wrote INSIDE its RAW (the web's
+    /// `viaRawPreview`): a render, 8-bit, not the file's own sensor data.
+    let viaRawPreview: Bool
+    /// The pixels are the SYSTEM's own demosaic of a RAW that carried no
+    /// render of its own (`CIRAWFilter` at its defaults) — said as such.
+    let systemDeveloped: Bool
+    /// A RAW's way back to its SENSOR, for a develop on a rung above the
+    /// proxy (`Develop/Render/RawSource.swift`); nil for any other file.
+    let raw: RawAccess?
 
-    init(image: CIImage, properties: [String: Any], isRaw: Bool) {
+    init(image: CIImage, properties: [String: Any], isRaw: Bool, viaRawPreview: Bool = false,
+         systemDeveloped: Bool = false, raw: RawAccess? = nil) {
         // Every extent starts at the origin, whatever the orientation did.
         let origin = image.extent.origin
         self.image = origin == .zero ? image : image.transformed(by: CGAffineTransform(translationX: -origin.x, y: -origin.y))
@@ -36,6 +49,9 @@ final class DecodedPicture {
         self.height = Int(image.extent.height.rounded())
         self.properties = properties
         self.isRaw = isRaw
+        self.viaRawPreview = viaRawPreview
+        self.systemDeveloped = systemDeveloped
+        self.raw = raw
     }
 }
 
@@ -46,9 +62,17 @@ enum PictureDecoder {
         rawExtensions.contains((name as NSString).pathExtension.lowercased())
     }
 
-    /// Decode a file's bytes. A RAW goes through Apple's own developer
-    /// (`CIRAWFilter`, the sensor demosaiced by the system), the rest through
-    /// ImageIO, oriented by the file's tag.
+    /// Decode a file's bytes, through ImageIO, oriented by the file's tag.
+    ///
+    /// A RAW is read from the render its camera wrote INSIDE it first, on
+    /// every device (`rawRenderFirst`, `device-memory.md`): the kernel slices
+    /// it out and gives it back the orientation the container kept
+    /// (`extractRawPreview`). Only a RAW with no render goes to Apple's own
+    /// developer at its defaults (`CIRAWFilter`, the sensor demosaiced by the
+    /// system), at a phone's stage edge on a constrained device. Either way
+    /// the RAW keeps its way back to its SENSOR (`RawAccess`), which a develop
+    /// on a rung above the proxy is drawn from (`FullDevelopRenderPlan`);
+    /// `reread` hands its bytes back then, since they are not held.
     ///
     /// Either way the picture enters the graph as CODES, the values the web's
     /// float16 buffers carry (`RenderContexts`). An 8-bit file enters as its
@@ -58,14 +82,31 @@ enum PictureDecoder {
     /// and recorded. A RAW's LINEAR light is brought onto the sRGB curve,
     /// which the colour-managed context used to do on the way out and a
     /// context with colour management off no longer does — reasoned, not
-    /// measured: the RAW task measures `CIRAWFilter`'s output on CI.
-    static func decode(_ data: Data, name: String) -> DecodedPicture? {
+    /// measured.
+    static func decode(_ data: Data, name: String, reread: (() throws -> Data)? = nil,
+                       device: DeviceClass = DevelopDevice.current) -> DecodedPicture? {
         let properties = fileProperties(data)
-        if isRaw(name),
-           let raw = CIRAWFilter(imageData: data, identifierHint: (name as NSString).pathExtension.lowercased()),
-           let linear = raw.outputImage {
-            let image = linear.applyingFilter("CILinearToSRGBToneCurve")
-            return DecodedPicture(image: image, properties: properties, isRaw: true)
+        if isRaw(name) {
+            let access = RawAccess.read(data, name: name, reread: reread ?? { data })
+            // Sliced by range, never the whole file copied into an array.
+            let bytes = data
+            if let render = extractRawPreview(fileSize: bytes.count, read: { [UInt8](bytes.subdata(in: $0)) }),
+               let image = CIImage(data: Data(render), options: [.applyOrientationProperty: true, .colorSpace: NSNull()]) {
+                return DecodedPicture(image: image, properties: properties, isRaw: true, viaRawPreview: true, raw: access)
+            }
+            if let filter = CIRAWFilter(imageData: data, identifierHint: access.hint) {
+                // A phone's stage edge where the device is constrained: the
+                // whole sensor is exactly what a phone cannot hold.
+                let native = filter.nativeSize
+                let long = Double(max(native.width, native.height))
+                let ceiling = rawDecodeEdge(.stage, device, .infinity)
+                if long > 0, ceiling < long { filter.scaleFactor = Float(ceiling / long) }
+                if let linear = filter.outputImage {
+                    let image = linear.applyingFilter("CILinearToSRGBToneCurve")
+                    return DecodedPicture(image: image, properties: properties, isRaw: true, systemDeveloped: true, raw: access)
+                }
+            }
+            return nil
         }
         guard let image = CIImage(data: data, options: [.applyOrientationProperty: true, .colorSpace: NSNull()]) else {
             return nil

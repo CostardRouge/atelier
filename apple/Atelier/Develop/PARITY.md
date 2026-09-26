@@ -18,12 +18,13 @@ Where things are:
 | `Filmstrip/` | `FilmstripView`, its cell and delivery badge |
 | `Layers/` | `LayersTab` (+ `LayerListSection`), `MaskSection` (+ `MaskShapeControls`), `MaskStageOverlay`, `LayerLooking` (the tab's own render, the seam a plan reads, the colour a layer sees); the state and verbs are `Store/RollEditor+Layers.swift` |
 | `Stage/` | `DevelopStageView`, `StageGeometry`, `LookingZoom`, `DevelopRenderPlan`, `DevelopTool` (+ the overlay slot, the eyedropper), `StageZoomPill`, `StageFacts`, `WheelCatcher` |
+| `Render/` | `FullDevelopRenderPlan` (every pass in the web's order, the crop, the border, the budget), `RawSource` (the RAW's render first, its sensor on a rung, the device class), `DevelopLooks` (built-ins from the bundle, pack looks from the vault, `DiskPackStore`); the editor's side in `Store/RollEditor+Render.swift` |
 | `Inspector/` | `InspectorView` (tabs + sections in the web's order), `InspectorDrawer` + `SectionStrip` (phone), `PresetsSection` + `ApplySection`, `PendingSections` (stand-ins until their tasks land) |
 | `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
 | `Panels/` | the Adjust sections (their own task) |
 | `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
 
-Counts: **203 ✅ · 34 ⏳ · 10 part-built** — 247 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40).
+Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40).
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -117,8 +118,15 @@ Counts: **203 ✅ · 34 ⏳ · 10 part-built** — 247 table rows (the Layers ta
 | Behaviour | |
 | --- | --- |
 | The picture as delivered, rendered ONCE per change on a pixel budget (long edge 2560), one render in flight and one owed | ✅ |
-| Through ONE seam, `DevelopRenderPlan` (default: crop + cap + the develop cube through `PictureRenderer` / `FrameGrader`) | ✅ |
-| The look, border, perspective, lens, detail, vignette, repair, layers DRAWN | ⏳ the integration task adds the passes behind `DevelopRenderPlan`; meanwhile the stage SAYS which ones it does not draw ("not drawn here yet: …") — the layers are drawn over the stage while one is open on the Layers tab (`LayerLookingRenderer`), see «Layers» |
+| Through ONE seam, `DevelopRenderPlan` — the stage, the snapshot and every export draw through `FullDevelopRenderPlan` (`Render/`), installed when the editor opens | ✅ |
+| EVERY pass in the web's order (`use-develop-picture.ts`, `roll-render.ts`): gain map → repair → colour noise → denoise → defringe → the ONE cube (develop + the picture's own look, tetrahedral) → camera warp → lens → keystone → layers → dehaze · clarity · texture → sharpen → post-crop vignette → film grain / halation → the crop | ✅ `FullDevelopRenderPlan.assemble`; the gate reads the order (`AtelierTests/Develop/FullDevelopRenderPlanTests`) |
+| A RAW opens on the camera's render INSIDE it (`rawRenderFirst`, its orientation given back), the system's own demosaic only where it carries none; a develop on a rung above the proxy is drawn from the SENSOR (`CIRAWFilter`, linear, sRGB-encoded, sensor white at 1), the gain map and the camera warp at their rungs, the exposure measured once and stored, the stage's decode held as half floats, a phone's edges from `rawDecodeEdge` | ✅ `RawSource` · ⏳ Apple's demosaic is not LibRaw's: a web develop's stored `rawGain` lands on other pixels here (unmeasured on a device) |
+| A RAW's white balance in Kelvin (`rawWb.matrix`) applied first inside the cube | ✅ `developLinear` |
+| Everything at SOURCE density before the crop; the budget scales the whole source (a preview within twice its cap), a framing zoomed in is drawn from the pixels it magnifies and brought down once cut | ✅ `budgetScale` / `renderScale` |
+| The look: built-in LUTs by the web's ids (`builtin:<id>`, the bundle's `luts/` — a folder reference to `public/luts/`), film stocks generated from their settings, an old inlined `.cube`, pack looks from the vault on this device; a look that cannot grade here SAID, never neutral | ✅ `DevelopLooks` (+ `DiskPackStore`) · ⏳ a pack look this device does not hold is not fetched from its instance (the vault's hosts wait on the Sources screen) |
+| The border drawn round the crop in every DELIVERY (colour, or the crop blurred on a tiny copy) | ✅ in exports · ⏳ not on the stage: its geometry has no border canvas; the Crop tab's delivered preview shows it |
+| Subject layers: segmented off the main thread (Vision), the stage drawing without a subject until it lands, a delivery segmenting its own | ✅ one `SubjectMasks` shared with the Layers tab; the tab's wash and blink drawn LAST (`LayerLooking`) |
+| What is not drawn is SAID ("not drawn here: …"): a RAW base on a file that is not a RAW, a refused sensor, a look this build or vault lacks, a subject Vision cannot answer | ✅ `unrendered` |
 | Looking zoom: fit to 4000 % (`inspectMaxZoom`), the point under the hand kept still (`zoomAbout`), clamped at the write | ✅ `LookingZoom` |
 | Pinch (touch, trackpad) | ✅ `MagnifyGesture`, about where it began |
 | Two fingers pan by their live centre during a pinch | ⏳ SwiftUI's `MagnifyGesture` gives no live centre; a drag pans after |
@@ -136,7 +144,7 @@ Counts: **203 ✅ · 34 ⏳ · 10 part-built** — 247 table rows (the Layers ta
 | `after` / `before · after` / `before` pill | ✅ |
 | `I`: the facts in the bottom-left corner — `captureLine` on top, marked with the accent, a hairline, then `developLines`, layers, detail, vignette, repair, the fidelity note | ✅ |
 | The pixel under the pointer read under the histogram (`ReadoutStore`, only its line re-renders) | ✅ on a pointer (Mac, iPad) |
-| `J` paints the clipping | ⏳ the pass exists (`ClippingPass`); the integration task wires it — the stage says "clipping — not painted here yet" |
+| `J` paints the clipping on the delivered frame's own pixels, the stage only (never the histogram, a snapshot or a file); the readout reads a mark as the clip it marks, and never on the before side | ✅ `DevelopRenderPlan.looking` + `ClippingPass` |
 | States: decoding…, a decoder's refusal, a picture not on this device (`availabilityText`) | ✅ |
 | The grey dropper: the tool takes the pointer whole, "click / tap something grey", solves `whiteBalanceFor` on the source AS SHOT at the tapped pixel, then puts itself down | ✅ `EyedropperOverlay` |
 | An overlay SLOT the active tool fills (`DevelopTool`: none · crop · mask · repair · eyedropper) with the view ↔ source transform (`StageGeometry`) | ✅ |
@@ -187,7 +195,7 @@ Counts: **203 ✅ · 34 ⏳ · 10 part-built** — 247 table rows (the Layers ta
 | Control | |
 | --- | --- |
 | The picture's NAME with its fidelity chip (`DevelopBaseChip`) | ✅ name + chip |
-| The name as the menu of the capture's files and the RAW rungs | ⏳ the chip draws no choice yet: the app's RAW path (`CIRAWFilter`) honours neither a rendition nor a rung, and offering them would lie |
+| The name as the menu of the capture's files and the RAW rungs | ✅ a RAW in hand: its render and its sensor with the rungs its file reaches (`rungsFor`), the measured exposure stored once (`RollEditor+Render`) · ⏳ a capture's OTHER files (a proxy's original, a companion, a folder's sibling) — the renditions task |
 | `· copied` said beside the name, gone after a moment | ✅ |
 | ONE well: Copy · Paste · Reset (a ghost), then Settings (⌘⇧C) · A/B · ? | ✅ |
 | The clipboard's three step aside on the crop | ✅ |

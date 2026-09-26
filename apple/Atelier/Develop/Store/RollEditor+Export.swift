@@ -47,11 +47,16 @@ extension RollEditor {
         guard let read = try? await pool.read(rollId, pic) else { return nil }
         let decoded = read.decoded
         let target = doc.export.primary
-        let delivered = PictureRenderer.deliveredSize(width: decoded.width, height: decoded.height, aspect: pic.aspect)
+        let plan = renderPlan
+        // The cap is read against what the plan draws FROM — a RAW's sensor
+        // on a sensor rung, never the render the pool decoded.
+        let src = plan.sourceSize(picture: pic, decoded: decoded, budget: .whole)
+        let delivered = PictureRenderer.deliveredSize(width: Int(src.width), height: Int(src.height), aspect: pic.aspect)
         let cap = longEdgeFor(target.size, width: Double(delivered.width), height: Double(delivered.height))
         let quality = target.quality
         let type = format.type
-        let plan = renderPlan
+        // What the render needs that is had asynchronously (a pack look's lattice).
+        await plan.prepare(picture: pic, decoded: decoded, budget: RenderBudget(longEdge: cap))
         let data = await Task.detached(priority: .userInitiated) { () -> Data? in
             let renderer = PictureRenderer.shared
             let composed = plan.render(picture: pic, decoded: decoded, budget: RenderBudget(longEdge: cap))

@@ -111,6 +111,8 @@ final class RollEditor {
     private(set) var problem: String?
     /// The open picture's decoded pixels, once read.
     private(set) var decodedSize: CGSize?
+    /// What each picture's last render drew from — its sensor at a rung, or its file (`RollEditor+Render`).
+    var sourceFacts: [String: DevelopSourceFacts] = [:]
     @ObservationIgnored private var renderGeneration = 0
     @ObservationIgnored private var rendering = false
     @ObservationIgnored private var renderDirty = false
@@ -604,7 +606,9 @@ final class RollEditor {
         let plan = renderPlan
         let rollId = self.rollId
         let wantsBefore = compareOn || holding
-        let key = "\(pic.id)|\(pic.aspect)|\(pic.framing?.json.serialized() ?? "")|\(pic.develop?.base?.rawValue ?? "")"
+        let clipping = self.clipping
+        let gain = pic.develop?.rawGain.map { "\($0)" } ?? ""
+        let key = "\(pic.id)|\(pic.aspect)|\(pic.framing?.json.serialized() ?? "")|\(pic.develop?.base?.rawValue ?? "")|\(gain)"
         let needsBefore = wantsBefore && (beforeKey != key || before == nil)
         if stage == nil { loading = true }
         Task { [weak self] in
@@ -612,14 +616,19 @@ final class RollEditor {
             do {
                 let read = try await self.pool.read(rollId, pic)
                 let decoded = read.decoded
+                // What the render needs that is had asynchronously (a pack
+                // look's lattice), fetched before the render asks for it.
+                await plan.prepare(picture: pic, decoded: decoded, budget: .stage)
                 let out = await Task.detached(priority: .userInitiated) { () -> RenderedStage in
                     let renderer = PictureRenderer.shared
                     let composed = plan.render(picture: pic, decoded: decoded, budget: .stage)
-                    let image = renderer.cgImage(composed)
+                    // What is SHOWN may carry a way of looking (J); what is
+                    // measured — the histogram, the snapshot — never does.
+                    let image = renderer.cgImage(plan.looking(composed, clipping: clipping))
                     let histogram = renderer.rgbaBytes(composed, longEdge: histogramSampleEdge).map { luminanceHistogram($0) }
                     var beforeImage: CGImage?
                     if needsBefore {
-                        beforeImage = renderer.cgImage(plan.render(picture: asShotForCompare(pic), decoded: decoded, budget: .stage))
+                        beforeImage = renderer.cgImage(plan.renderBefore(picture: pic, decoded: decoded, budget: .stage))
                     }
                     return RenderedStage(image: image, before: beforeImage, histogram: histogram,
                                          size: CGSize(width: image?.width ?? 0, height: image?.height ?? 0))
@@ -652,10 +661,11 @@ final class RollEditor {
     }
 
     /// The open picture's cell redrawn AS DELIVERED once it rests (700 ms) —
-    /// never while the crop shows the whole picture.
+    /// never while the crop shows the whole picture, nor while the clipping
+    /// is painted over it.
     private func scheduleSnapshot() {
         snapshotTask?.cancel()
-        guard let id = openId, !activeTool.showsWholePicture else { return }
+        guard let id = openId, !activeTool.showsWholePicture, !clipping else { return }
         snapshotTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 700_000_000)
             guard !Task.isCancelled, let self, self.openId == id, let image = self.stage else { return }
@@ -734,25 +744,25 @@ final class RollEditor {
         return lines
     }
 
-    /// What the bytes on screen ARE, beside the name — `JPEG · 8-bit · 4032 × 3024`.
+    /// What the bytes on screen ARE, beside the name — `JPEG · 8-bit · 4032 × 3024`,
+    /// `RAW · camera render · 960 × 540`, `RAW · 16-bit linear · gain map · 3840 × 2160`.
     var fidelityChip: String? {
         guard let p = picture else { return nil }
-        if let read = pool.held(p.id), read.decoded.isRaw {
+        if shownBase == .proxy, let read = pool.held(p.id), read.decoded.systemDeveloped {
             return "RAW · system developer · \(read.decoded.width) × \(read.decoded.height)"
         }
-        let pixels = decodedSize.map { FidelityPixels(width: Int($0.width), height: Int($0.height)) }
-        return pictureFidelity(FidelityFile(name: p.ref.name), developDraft.base, pixels).chip
+        return pictureFidelity(FidelityFile(name: p.ref.name), shownBase, shownPixels).chip
     }
 
-    /// What the bytes on screen can give back. A RAW here is demosaiced by the
-    /// system's developer, which the kernel's sentence (written for the web's
-    /// embedded render) would misname — so it is said in its own words.
+    /// What the bytes on screen can give back. A RAW with no render of its own
+    /// is demosaiced by the system's developer at its defaults, which the
+    /// kernel's sentence (written for the web's embedded render) would
+    /// misname — so it is said in its own words.
     var fidelityNote: String? {
-        guard let p = picture, let size = decodedSize else { return nil }
-        let pixels = FidelityPixels(width: Int(size.width), height: Int(size.height))
-        if let read = pool.held(p.id), read.decoded.isRaw {
-            return "the sensor’s data, demosaiced by the system’s RAW developer — not yet the web app’s LibRaw decode"
+        guard let p = picture, decodedSize != nil else { return nil }
+        if shownBase == .proxy, let read = pool.held(p.id), read.decoded.systemDeveloped {
+            return "the sensor’s data, demosaiced by the system’s RAW developer at its defaults — the file carries no render of its own"
         }
-        return pictureFidelity(FidelityFile(name: p.ref.name), developDraft.base, pixels).note
+        return pictureFidelity(FidelityFile(name: p.ref.name), shownBase, shownPixels).note
     }
 }
