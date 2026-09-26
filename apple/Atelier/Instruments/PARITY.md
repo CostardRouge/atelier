@@ -109,3 +109,22 @@ every view was written against the SDK and compiled by CI alone.
 | Location: Coordinates, Altitude, "OpenStreetMap ↗" (a plain link, opened only by a click) | ✅ `Link` — the system opens it on the person's tap | ✅ |
 | — | NATIVE: the GPS on a map, behind the SAME opt-in chip as every map (`BaseMapConsent`, off by default) | ✅ |
 | — | NATIVE: a RAW panel from the kernel's `probeRaw` / `rawSizesFrom` on the first megabyte: Sensor (as shown), Sensor data (compression), Camera render (or "none embedded"), Calibration (`OpcodeList3`), Opcode lists | ✅ |
+
+## Compare A/B (`Compare/`, kernel `Tools/ComparePair.swift`)
+
+| Web (`CompareTool.tsx`, `compare.ts`) | Native | |
+|---|---|---|
+| Accepts photos and clips (a clip wins over a picture on one asset — `resolveSide`) | ✅ | ✅ |
+| Empty bar: "Select two photos or clips in the Library to compare." | "Open two photos or clips to compare." | ✅ |
+| `A` · side select · ⇄ Swap A and B · side select · `B` | ✅ (`Picker`s, the swap disabled until both sides exist) | ✅ |
+| The pair kept valid as the set changes: a lone item in A, the two sides never one (`reconcilePair`) | the kernel's port, its spec case for case | ✅ |
+| Stage: A under, B over clipped to the RIGHT of the divider — before left, after right | ✅ a mask at the divider (`insetForSplit` ported for the record; the native stage masks by the fraction itself) | ✅ |
+| The divider follows the pointer (`clamp01`) | a drag moves it on every device; on a Mac it also follows the hover, as the web's does | ✅ |
+| Divider line + round grip, `A · name` / `B · name` labels | ✅ | ✅ |
+| "Pick a second asset (B) to compare." | ✅ | ✅ |
+| "Select two assets in the Library." / "Choose A and B above." | "Open two photos or clips." / "Choose A and B above." | ✅ |
+| A clip that cannot decode (HEVC) / a RAW that cannot preview | "This clip can't be played on this device." / "This file can't be previewed on this device." — HEVC and a RAW's render both draw here | ≠ |
+| Both clips muted | ✅ | ✅ |
+| "synced playback": one transport drives both, B follows A's clock | `InstrumentTransport` over both players; B is seeked back when it drifts past 0.1 s | ✅ |
+| — | NATIVE: a SYNCED zoom — both sides share one view (`UI/PanZoom.swift`): a pinch or a double tap looks closer at the same place of both; a drag that starts on the divider moves it, elsewhere it pans once zoomed; the zoom said in a chip | ✅ |
+| Only the two compared files are decoded | ✅ a picture at the stage's budget (2560 px long edge) | ✅ |
