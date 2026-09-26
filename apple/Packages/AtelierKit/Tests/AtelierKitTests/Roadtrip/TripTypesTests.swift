@@ -1163,15 +1163,10 @@ final class TripTypesMigrateDestinationTests: XCTestCase {
     }
 
     func testLeavesTheLegsWhichIsWhereTheRouteActuallyLivesUntouched() {
-        // The web reads the route back through `tripRouteLabel` ("Perth →
-        // Cairns"), a module not ported yet (`trip-places.ts`); what it reads —
-        // the leg and its two places, in order — is what must come through.
         let leg = createTripStage("", "", "2025-03-01", "2025-03-10", places: [createTripPlace("Perth"), createTripPlace("Cairns")])
         var v26 = setting(createTripDoc("Australie", "2025-03-01", "2025-03-10").json, "version", to: 26)
         v26 = setting(setting(v26, "destination", to: "a line nothing derives"), "stages", to: [leg.json])
-        let doc = migrate(v26)
-        XCTAssertEqual(doc.stages, [leg])
-        XCTAssertEqual(doc.stages[0].places.map(\.name), ["Perth", "Cairns"])
+        XCTAssertEqual(tripRouteLabel(migrate(v26)), "Perth → Cairns")
     }
 }
 

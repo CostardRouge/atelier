@@ -159,12 +159,12 @@ final class WinnowChapterFromWireTests: XCTestCase {
         ))
     }
 
-    func testIsWhatTheRoadTripImportTakesUnchanged() {
-        // The web pins this structurally against `TimelineChapter`, which the
-        // kernel does not carry yet; the field it reads is pinned here, and the
-        // hand-over is checked when `timeline-import.ts` is ported.
-        let chapter = chapterFromWire(wire())
-        XCTAssertEqual(chapter?.startDate, "2025-11-05")
+    func testIsWhatTheRoadTripImportTakesUnchanged() throws {
+        // Structural on the web; here the import's own record is built from
+        // the client's, field for field (`Roadtrip/TimelineImport.swift`).
+        let chapter = try XCTUnwrap(chapterFromWire(wire()))
+        let asImport = TimelineChapter(chapter)
+        XCTAssertEqual(asImport.startDate, "2025-11-05")
     }
 
     func testOffersNoLegAnywhereWhileTheTimelineSwitchIsOff() {
