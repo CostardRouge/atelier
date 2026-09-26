@@ -122,10 +122,7 @@ struct BorderSection: View {
                 .accessibilityLabel("Fill: \(swatch.label)")
                 .accessibilityAddTraits(b.fill == swatch.fill ? .isSelected : [])
             }
-            ColorPicker("Fill: any colour", selection: Binding(
-                get: { CSSColor.parse(b.fill == borderBlurFill ? "#000000" : b.fill) ?? CSSColor.black },
-                set: { colour in set(b) { $0.fill = hexOf(colour) } }
-            ), supportsOpacity: false)
+            ColorPicker("Fill: any colour", selection: anyColour(b), supportsOpacity: false)
             .labelsHidden()
             .padding(2)
             .overlay(Circle().stroke(custom ? palette.accent : .clear, lineWidth: 2))
@@ -166,6 +163,18 @@ struct BorderSection: View {
         .accessibilityLabel(linked ? "Margins linked" : "Margins apart")
         .accessibilityAddTraits(linked ? .isSelected : [])
         .padding(.bottom, 2)
+    }
+
+    /// The free colour's well: the fill as a colour (black under Blur), written back as `#rrggbb`.
+    private func anyColour(_ b: RollBorder) -> Binding<CGColor> {
+        let shown = b.fill == borderBlurFill ? "#000000" : b.fill
+        return Binding<CGColor>(
+            get: { CSSColor.parse(shown) ?? CSSColor.black },
+            set: { colour in
+                let hex = hexOf(colour)
+                set(b) { $0.fill = hex }
+            }
+        )
     }
 
     // MARK: - writing
