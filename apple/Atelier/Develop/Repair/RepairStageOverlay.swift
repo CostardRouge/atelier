@@ -31,7 +31,7 @@ struct RepairStageOverlay: View {
     @Environment(\.palette) private var palette
     /// The scale a pinch began at — let go by SwiftUI at the pinch's end and
     /// when it is cancelled alike.
-    @GestureState private var pinchStart: Double?
+    @GestureState private var pinchStart: Double? = nil
     /// The surface press: where it began, what it does, the pan's last step.
     @State private var press: SurfacePress?
 
