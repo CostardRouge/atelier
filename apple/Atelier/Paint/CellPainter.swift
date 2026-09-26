@@ -32,15 +32,8 @@ struct PaintPicture {
     }
 }
 
-/// Where cell `i` is in its entrance or exit — the overlay engine's own
-/// transform plus how it is applied to a picture. The web's `CellMotion`.
-struct CellMotion {
-    var transform: OverlayTransform
-    /// The edge a reveal grows from; `right` when unsaid (a left→right wipe).
-    var direction: AnimDirection?
-    /// Move the picture inside the mask rather than the cell.
-    var inside: Bool = false
-}
+// A cell's entrance or exit at a moment is the kernel's `CellMotion`
+// (`Roadtrip/Collage.swift`, the web's `cell-paint.ts` type).
 
 enum CellPainter {
     /// The paper a tile is mounted on, and the ink of a caption on it.
