@@ -20,11 +20,9 @@ final class SoftwareMarkTests: XCTestCase {
         XCTAssertFalse(isAtelierMade(nil))
     }
 
-    func testReadsBackThroughTheBlockWriterTheWayADeliveredFileIsRead() throws {
-        // The web builds an EXIF block with `Software: Atelier` and parses it
-        // back (`buildExifBlock` + `parseExif`). Neither is in the kernel yet:
-        // the Exif task ports them, and this case is then written against
-        // them rather than deleted.
-        throw XCTSkip("needs buildExifBlock and parseExif — the Exif port")
+    func testReadsBackThroughTheBlockWriterTheWayADeliveredFileIsRead() {
+        let block = buildExifBlock(ExifData(make: "DJI"), BuildExifOptions(software: atelierSoftware))
+        XCTAssertTrue(isAtelierMade(parseExif(block).software))
+        XCTAssertFalse(isAtelierMade(parseExif(buildExifBlock(ExifData(make: "DJI", software: "v1"))).software))
     }
 }
