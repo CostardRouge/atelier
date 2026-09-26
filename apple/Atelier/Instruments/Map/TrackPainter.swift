@@ -33,7 +33,7 @@ enum TrackPainter {
         cg.fill(rect)
         guard let camera else { return }
 
-        let size = Size(Double(rect.width), Double(rect.height))
+        let size = AtelierKit.Size(Double(rect.width), Double(rect.height))
         func place(_ lat: Double, _ lon: Double) -> CGPoint {
             let p = camera.point(lat: lat, lon: lon, in: size)
             // The view zoom: about the rect's centre, then the pan.
@@ -89,7 +89,7 @@ struct FlightTrackCanvas: View {
 
     var body: some View {
         GeometryReader { geo in
-            let viewport = Size(Double(geo.size.width), Double(geo.size.height))
+            let viewport = AtelierKit.Size(Double(geo.size.width), Double(geo.size.height))
             let camera = fitTrackCamera(track, viewport: viewport, padding: 48, maxZoom: 17, singleZoom: 16)
             Canvas { context, size in
                 context.withCGContext { cg in
@@ -106,7 +106,7 @@ struct FlightTrackCanvas: View {
         .onChange(of: track.count) { _, _ in view = .fitted }
     }
 
-    private func pan(_ viewport: Size) -> some Gesture {
+    private func pan(_ viewport: AtelierKit.Size) -> some Gesture {
         DragGesture()
             .onChanged { drag in
                 let start = gestureStart ?? view
@@ -118,12 +118,12 @@ struct FlightTrackCanvas: View {
             .onEnded { _ in gestureStart = nil }
     }
 
-    private func pinch(_ viewport: Size) -> some Gesture {
+    private func pinch(_ viewport: AtelierKit.Size) -> some Gesture {
         MagnifyGesture()
             .onChanged { value in
                 let start = gestureStart ?? view
                 if gestureStart == nil { gestureStart = view }
-                let anchor = Point(Double(value.startLocation.x) - viewport.width / 2,
+                let anchor = AtelierKit.Point(Double(value.startLocation.x) - viewport.width / 2,
                                    Double(value.startLocation.y) - viewport.height / 2)
                 view = zoomAbout(start, start.scale * Double(value.magnification), anchor: anchor,
                                  viewport: viewport, content: viewport, ceiling)
@@ -132,7 +132,7 @@ struct FlightTrackCanvas: View {
     }
 
     /// The web's NavigationControl: zoom in, zoom out.
-    private func zoomButtons(_ viewport: Size) -> some View {
+    private func zoomButtons(_ viewport: AtelierKit.Size) -> some View {
         VStack(spacing: 0) {
             Button { step(1, viewport) } label: { Image(systemName: "plus").frame(width: 30, height: 30) }
                 .accessibilityLabel("Zoom in")
@@ -146,7 +146,7 @@ struct FlightTrackCanvas: View {
         .padding(10)
     }
 
-    private func step(_ direction: Int, _ viewport: Size) {
+    private func step(_ direction: Int, _ viewport: AtelierKit.Size) {
         let next = stepViewZoom(view.scale, direction, ceiling)
         withAnimation(.easeOut(duration: 0.15)) {
             view = zoomAbout(view, next, anchor: .zero, viewport: viewport, content: viewport, ceiling)

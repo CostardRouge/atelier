@@ -170,9 +170,9 @@ struct CompareToolView: View {
     }
 
     /// A's own size — the picture decoded, or the clip's frame — for the pan limits.
-    private func natural(_ side: Side?) -> Size? {
+    private func natural(_ side: Side?) -> AtelierKit.Size? {
         guard let side, !side.isVideo, let image = aPicture.image else { return nil }
-        return Size(Double(image.width), Double(image.height))
+        return AtelierKit.Size(Double(image.width), Double(image.height))
     }
 
     private func load(_ side: Side?, playback: InstrumentPlayback, picture: PicturePreview) async {

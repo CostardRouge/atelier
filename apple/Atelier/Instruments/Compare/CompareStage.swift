@@ -27,7 +27,7 @@ struct CompareStage: View {
     let aName: String?
     let bName: String?
     /// The pictures' own size, for how far a zoomed view may pan.
-    let natural: Size?
+    let natural: AtelierKit.Size?
     @Binding var split: Double
     @Binding var view: ViewState
 
@@ -48,7 +48,7 @@ struct CompareStage: View {
 
     var body: some View {
         GeometryReader { geo in
-            let viewport = Size(Double(geo.size.width), Double(geo.size.height))
+            let viewport = AtelierKit.Size(Double(geo.size.width), Double(geo.size.height))
             let content = containedSize(natural, viewport)
             ZStack {
                 palette.frame
@@ -159,7 +159,7 @@ struct CompareStage: View {
 
     /// One point of travel before it is a drag, so a tap still reaches the
     /// double tap that zooms.
-    private func drag(_ size: CGSize, viewport: Size, content: Size) -> some Gesture {
+    private func drag(_ size: CGSize, viewport: AtelierKit.Size, content: AtelierKit.Size) -> some Gesture {
         DragGesture(minimumDistance: 1)
             .onChanged { value in
                 if dragMode == nil {
@@ -186,12 +186,12 @@ struct CompareStage: View {
             }
     }
 
-    private func pinch(viewport: Size, content: Size) -> some Gesture {
+    private func pinch(viewport: AtelierKit.Size, content: AtelierKit.Size) -> some Gesture {
         MagnifyGesture()
             .onChanged { value in
                 let start = gestureStart ?? view
                 if gestureStart == nil { gestureStart = view }
-                let anchor = Point(Double(value.startLocation.x) - viewport.width / 2,
+                let anchor = AtelierKit.Point(Double(value.startLocation.x) - viewport.width / 2,
                                    Double(value.startLocation.y) - viewport.height / 2)
                 view = zoomAbout(start, start.scale * Double(value.magnification), anchor: anchor,
                                  viewport: viewport, content: content, ceiling)
@@ -204,7 +204,7 @@ struct CompareStage: View {
     CompareStage(a: .picture(InstrumentFixtures.picture(warm: true)),
                  b: .picture(InstrumentFixtures.picture(warm: false)),
                  aName: "DSC00123", bName: "DSC00123-graded",
-                 natural: Size(1200, 800),
+                 natural: AtelierKit.Size(1200, 800),
                  split: .constant(0.5), view: .constant(.fitted))
         .frame(height: 360)
 }
