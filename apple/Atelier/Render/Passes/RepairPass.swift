@@ -144,16 +144,43 @@ struct RepairPass: RenderPass {
 
     /// The original's ROI for a tile `rect`: the tile itself, and for every
     /// patch whose disc crosses it, the source under the tile's share of the
-    /// disc and — for a heal — both rings.
+    /// disc and — for a heal — both rings, rounded OUT to whole pixels.
+    ///
+    /// Whole pixels because a chain of `CGRect.union`s cannot promise to
+    /// contain what it was handed: a rect stores an origin and a size, so each
+    /// union's far edge comes back as `origin + (max − origin)`, which can land
+    /// an ulp inside the edge it was built from — on the gate's heal, a ROI
+    /// whose maxX read 60.38398767333628 against its source ring's
+    /// 60.383987673336286, so `CGRect.contains` said the ROI did not hold the
+    /// ring it was grown for (and a sweep of random patches and tiles missed
+    /// 275 of 8640 reads that way). The edges are gathered as numbers from
+    /// each read's own `minX` / `maxX` and floored / ceiled once: integers are
+    /// exact, so the result holds every read with no rounding left, and a
+    /// tile already in whole pixels comes back unchanged when no patch
+    /// crosses it. A GPU reads whole texels anyway, so this asks for less
+    /// than a pixel more at most.
     static func originalROI(_ rect: CGRect, _ reads: [Reads]) -> CGRect {
-        var roi = rect
+        guard !rect.isNull, !rect.isInfinite else { return rect }
+        var minX = rect.minX
+        var minY = rect.minY
+        var maxX = rect.maxX
+        var maxY = rect.maxY
+        var reached: [CGRect] = []
         for read in reads {
             let covered = rect.intersection(read.disc)
             if covered.isNull || covered.isEmpty { continue }
-            roi = roi.union(covered.offsetBy(dx: read.offset.dx, dy: read.offset.dy).insetBy(dx: -2, dy: -2))
-            for ring in read.rings { roi = roi.union(ring) }
+            reached.append(covered.offsetBy(dx: read.offset.dx, dy: read.offset.dy).insetBy(dx: -2, dy: -2))
+            reached.append(contentsOf: read.rings)
         }
-        return roi
+        for r in reached {
+            minX = min(minX, r.minX)
+            minY = min(minY, r.minY)
+            maxX = max(maxX, r.maxX)
+            maxY = max(maxY, r.maxY)
+        }
+        let x0 = minX.rounded(.down)
+        let y0 = minY.rounded(.down)
+        return CGRect(x: x0, y: y0, width: maxX.rounded(.up) - x0, height: maxY.rounded(.up) - y0)
     }
 
     private static func usableAspect(_ ar: Double?) -> Double? {

@@ -1,7 +1,8 @@
 // The gate for the adjustment layers — the web's `scripts/check-render.mjs`
 // mask rows, on macOS: a synthetic source through `LayerRenderPass`, read
 // back in floats, held to the pure twins in AtelierKit — `maskAt`
-// (`Render/Mask.swift`) for each shape, `layerWeight` (`Develop/Layer.swift`)
+// (`Render/Mask.swift`) for each shape (a painted one through the map it is
+// rasterised into, read as the GPU reads it), `layerWeight` (`Develop/Layer.swift`)
 // for a combination and a subtraction, `sampleTetrahedral` for the develop's
 // own cube — at the web gate's tolerance: 0.006 of the weight for a mask
 // (the web's `worst <= 0.006`, measured there at 0.0008–0.0054), one 8-bit
@@ -204,9 +205,37 @@ final class LayerPassTests: XCTestCase {
         let mask = Mask.brush(BrushMask(strokes: strokes))
         // No map handed over: the pass rasterises the strokes itself.
         let got = try drawn(LayerRenderPass(Self.blackening(mask)), over: Self.white)
+        // The expectation is that MAP as the kernel reads it — the kit's own
+        // `rasteriseBrush`, sampled by the kit's GL LINEAR + CLAMP_TO_EDGE
+        // twin (`sampleAt`) at the pixel's centre — and not `maskAt` itself.
+        // The map is `maskAt` at its own texel centres (the kit's
+        // `BrushRasterTests` pins that to one code); between them the GPU
+        // interpolates, and on this row's eraser that is not `maskAt`: at
+        // hardness 1 its fall spans 5 % of its radius, 0.004 of the centred
+        // space, which is 2.5 texels of the 1024 × 683 map (0.00163 a texel
+        // across) and 0.29 of one of these 120 × 80 pixels. A smoothstep
+        // over 2.5 texels, read linearly between them, is off by up to 0.08 —
+        // the 0.0804 the Metal run measured at (65, 30), where `maskAt` says
+        // 0.014 and the map read bilinearly says 0.095 (and the same at its
+        // mirror, (54, 30)). The web's pass samples the same map the same
+        // way; its gate reads 20 probes and none lands on that rim.
+        //
+        // Against the map the tolerance is the web gate's again, with room:
+        // the map's bytes are exact k/255, filter weights held to 8 bits of
+        // a texel move the read by at most 0.0002 here, and a half float
+        // carries the rest to 0.0005. A y flip is still caught — read upside
+        // down this map is off by 1.0 — and so is a half-texel slip, which on
+        // this rim moves the read by up to 0.28.
+        //
+        // The very call `MaskRasterImage.painted` makes, at the layer's aspect.
+        let raster = rasteriseBrush(strokes, Self.aspect)
+        let map = DetailImage(width: raster.width, height: raster.height) { x, y in
+            let v = Double(raster.data[y * raster.width + x]) / 255
+            return (v, v, v)
+        }
         checkWeights(got, Self.white, "brush") { i in
             let (u, v) = Self.uv(i)
-            return maskAt(mask, u, v, 1, Self.aspect)
+            return sampleAt(map, u, v).0
         }
     }
 
