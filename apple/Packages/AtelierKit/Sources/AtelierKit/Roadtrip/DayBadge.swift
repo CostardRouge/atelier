@@ -112,3 +112,59 @@ public func readBadgeWords(_ raw: JSONValue?) -> BadgeWords {
         camera: readCameraWords(o["camera"])
     )
 }
+
+// MARK: - what a badge says, computed (the type half of `badgeContent`)
+
+/// Everything a camera plate is drawn from, bar where it lands.
+public struct CameraPlateInput: Equatable, Sendable {
+    public var facts: CameraFacts
+    public var spec: CameraPlateSpec
+    public var words: CameraWords
+
+    public init(facts: CameraFacts, spec: CameraPlateSpec, words: CameraWords) {
+        self.facts = facts; self.spec = spec; self.words = words
+    }
+}
+
+/// The badge's pieces for one post. Any may be absent; the headline never is.
+/// Computed at every render, never stored — what `badgeContent` returns (its
+/// behaviour lands in this file with the rest of `day-badge.ts`) and what a
+/// hook variant rewrites a piece of (`HookVariant.swift`).
+public struct BadgeContent: Equatable, Sendable {
+    /// Small line above — the trip's name.
+    public var kicker: String?
+    /// The word the number is of ("Day", or the place for a stage count).
+    public var label: String?
+    /// The dominant piece: the numeral, alone.
+    public var headline: String
+    /// What it is out of ("of 310"), read as subordinate.
+    public var counter: String?
+    /// Where it was.
+    public var caption: String?
+    /// Why it is going out now — "9 months ago", "1 year ago today".
+    public var timing: String?
+    /// What took it — "DJI Mini 4 Pro · 24 mm · ƒ/1.7 · 1/240 · ISO 100".
+    public var exif: String?
+    /// The camera credit COMPOSED, when it is more than the plain line; nil
+    /// draws `exif` as the line it always was.
+    public var plate: CameraPlateInput?
+
+    public init(kicker: String? = nil, label: String? = nil, headline: String, counter: String? = nil,
+                caption: String? = nil, timing: String? = nil, exif: String? = nil, plate: CameraPlateInput? = nil) {
+        self.kicker = kicker; self.label = label; self.headline = headline; self.counter = counter
+        self.caption = caption; self.timing = timing; self.exif = exif; self.plate = plate
+    }
+
+    /// One piece's text; the headline is never absent.
+    public subscript(piece: BadgePiece) -> String? {
+        switch piece {
+        case .kicker: return kicker
+        case .label: return label
+        case .headline: return headline
+        case .counter: return counter
+        case .caption: return caption
+        case .timing: return timing
+        case .exif: return exif
+        }
+    }
+}
