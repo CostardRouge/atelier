@@ -37,6 +37,11 @@ targets:
     platform: iOS
     sources:
       - path: Atelier
+        # A screen family's PARITY.md sits beside its views; an unknown
+        # extension would be copied into the bundle as a resource, and two of
+        # one name collide ("Multiple commands produce …/PARITY.md").
+        excludes:
+          - "**/*.md"
     dependencies:
       - package: AtelierKit
     info:
@@ -71,6 +76,11 @@ targets:
     platform: macOS
     sources:
       - path: Atelier
+        # A screen family's PARITY.md sits beside its views; an unknown
+        # extension would be copied into the bundle as a resource, and two of
+        # one name collide ("Multiple commands produce …/PARITY.md").
+        excludes:
+          - "**/*.md"
     dependencies:
       - package: AtelierKit
     info:
