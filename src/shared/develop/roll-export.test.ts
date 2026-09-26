@@ -54,13 +54,15 @@ describe('pixelHeadroom — F3 of develop-originals.md', () => {
 });
 
 describe('decodableOriginal', () => {
-  it('accepts what a browser decodes and refuses a RAW, HEIC or TIFF', () => {
+  it('accepts what a browser or a shipped decoder reads and refuses a RAW or a TIFF', () => {
     expect(decodableOriginal('a.JPG')).toBe(true);
     expect(decodableOriginal('a.png')).toBe(true);
     expect(decodableOriginal('a.webp')).toBe(true);
     expect(decodableOriginal('a.DNG')).toBe(false);
     expect(decodableOriginal('a.ARW')).toBe(false);
-    expect(decodableOriginal('a.heic')).toBe(false);
+    expect(decodableOriginal('a.heic')).toBe(true);
+    expect(decodableOriginal('a.HIF')).toBe(true);
+    expect(decodableOriginal('a.jxl')).toBe(true);
     expect(decodableOriginal('a.tif')).toBe(false);
     expect(decodableOriginal(null)).toBe(false);
   });

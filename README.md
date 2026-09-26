@@ -1350,6 +1350,19 @@ ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
 (`constrained` or `roomy`) overrides it.
 
+**HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
+itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
+libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a
+`.jxl` — served from this site like the RAW decoder and loaded only the first
+time such a file is met (about 2 MB each, nothing at page load). A picture is
+recognised by its bytes, not its name, and opens upright with its rotation
+applied, in Develop, Trips, the Studio, the Library's covers and its
+lightbox; a HEIF or JPEG XL original can deliver an export too. Two limits:
+these decoders cannot scale while they decode, so the whole picture exists
+once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
+profile (an iPhone's Display P3) is not applied, so its colours land a touch
+flatter than in Safari. TIFF is still not read.
+
 **White balance in kelvin.** On the sensor, the Adjust tab starts with
 **White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,
 *Shade*, *Tungsten*, *Fluorescent*, *Flash*), a **Temperature** in kelvin and a

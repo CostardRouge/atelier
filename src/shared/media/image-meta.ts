@@ -8,8 +8,8 @@
  */
 
 import { extractRawPreview, RAW_PROBE_BYTES, rawSizesFrom } from '../exif/raw-probe';
-import { imageTypeLabel, isRawImage } from '../library/assets';
-import { readImageSize } from './still-decode';
+import { imageTypeLabel, isDecodableImage, isRawImage } from '../library/assets';
+import { decodeStill, readImageSize } from './still-decode';
 
 /** Human label for an image file — kept here for its many readers; `library/assets.ts` owns it. */
 export { imageTypeLabel };
@@ -51,6 +51,11 @@ export async function loadImageMeta(file: File): Promise<ImageMeta> {
       const cover = await rawCover(file);
       if (cover) return { ...cover, imageType };
     }
+    // A HEIF or a JPEG XL: the suite's own decoder (`wasm-still.ts`).
+    if (isDecodableImage(file.name)) {
+      const cover = await decodedCover(file);
+      if (cover) return { ...cover, imageType };
+    }
     return { imageType };
   }
 }
@@ -85,6 +90,33 @@ async function coverOf(source: Blob, width: number, height: number): Promise<str
   } finally {
     // On every path: a bitmap left open on the failure path stayed for the session.
     bitmap.close();
+  }
+}
+
+/**
+ * The cover of a picture only a decoder of the suite's own reads — a HEIF or a
+ * JPEG XL in Chrome — decoded straight at the cover's width, with the file's
+ * own size beside it. Null where that decoder refuses it too.
+ */
+async function decodedCover(file: File): Promise<Pick<ImageMeta, 'width' | 'height' | 'thumbUrl'> | null> {
+  try {
+    const { bitmap, natural } = await decodeStill(file, { maxWidth: COVER_EDGE });
+    try {
+      const canvas = document.createElement('canvas');
+      canvas.width = bitmap.width;
+      canvas.height = bitmap.height;
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(bitmap, 0, 0);
+      const thumbUrl = await new Promise<string | undefined>((resolve) =>
+        canvas.toBlob((blob) => resolve(blob ? URL.createObjectURL(blob) : undefined), 'image/jpeg', 0.72),
+      );
+      return { width: natural.width, height: natural.height, thumbUrl };
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    return null;
   }
 }
 

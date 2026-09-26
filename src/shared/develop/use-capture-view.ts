@@ -2,6 +2,7 @@ import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { extractRawPreview } from '../exif/raw-probe';
 import { formatBytes } from '../lib/format';
 import type { Rendition } from '../media/renditions';
+import { drawableStill, stageBudget } from '../media/still-decode';
 import type { FetchFile } from '../sources/fetch-options';
 import { heldOriginal, holdOriginal } from '../sources/original-cache';
 import { trackedFetch } from '../tasks/tracked';
@@ -87,7 +88,13 @@ export function useCaptureView(sources: CaptureViewSources): CaptureView {
         file = await trackedFetch({ label: `Fetching ${row.name}`, scope: key, bytes: row.bytes }, (opts) => fetch(opts));
         if (row.assetId) holdOriginal(row.assetId, file);
       }
-      const blob = row.reach === 'embedded' ? await extractRawPreview(file) : file;
+      const blob =
+        row.reach === 'embedded'
+          ? await extractRawPreview(file)
+          : // A HEIF or a JPEG XL through the suite's own decoder, at the stage's budget.
+            row.reach === 'decoder'
+            ? await drawableStill(file, { budgetPixels: stageBudget() })
+            : file;
       if (!blob) throw new Error(`${row.name} carries no render a browser can draw`);
       const url = URL.createObjectURL(blob);
       made.current.set(slot, url);

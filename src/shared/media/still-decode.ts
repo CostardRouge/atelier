@@ -27,12 +27,18 @@
  * - **The file's own size travels with the bitmap** (`natural`): a stage
  *   works on fewer pixels than the file has, and the export, the delivery
  *   row and the kernel scales must still know what the file holds.
+ *
+ * A picture the browser refuses is not the end of it: a JPEG XL or a HEIF
+ * (`.heic`, a Sony `.HIF`) is recognised by its bytes (`still-format.ts`)
+ * and decoded by a decoder this suite ships (`wasm-still.ts`, loaded only
+ * then) — so Chrome and Firefox open what only Safari used to.
  */
 
 import { extractRawPreview, RAW_PROBE_BYTES } from '../exif/raw-probe';
 import { deviceClass } from '../lib/device-class';
 import { imageTypeLabel, isRawImage } from '../library/assets';
 import { fitStill, stageBudgetFor, type PixelSize, type StillFit } from './still-fit';
+import { sniffStillFormat, STILL_SNIFF_BYTES, type StillFormat } from './still-format';
 
 /**
  * A photo the browser refused to decode — camera RAW, or a format this engine
@@ -120,6 +126,53 @@ export async function stillSize(file: Blob, name = (file as File).name ?? ''): P
   try {
     return { ...(await readImageSize(file)), viaRawPreview: false };
   } catch {
+    // Refused by the browser: a format this suite decodes itself answers from its header.
+    const format = await formatOf(file);
+    if (!format) return null;
+    try {
+      const { wasmStillSize } = await import('./wasm-still');
+      return { ...(await wasmStillSize(file, format)), viaRawPreview: false };
+    } catch {
+      return null;
+    }
+  }
+}
+
+/** The format a refused file announces in its first bytes, if it is one this suite decodes. */
+async function formatOf(blob: Blob): Promise<StillFormat | null> {
+  try {
+    return sniffStillFormat(new Uint8Array(await blob.slice(0, STILL_SNIFF_BYTES).arrayBuffer()));
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * The picture as a blob an `<img>` draws in THIS browser: the file itself
+ * where the browser reads it, else — a JPEG XL or a HEIF in Chrome — a JPEG
+ * decoded through `decodeStill` at `fit`. Null where nothing reads it. For the
+ * surfaces that show a picture through a URL rather than a bitmap: the
+ * lightbox and the library's cover.
+ */
+export async function drawableStill(file: Blob, fit: StillFitArg = {}): Promise<Blob | null> {
+  try {
+    await readImageSize(file);
+    return file;
+  } catch {
+    if (!(await formatOf(file))) return null;
+  }
+  try {
+    const { bitmap } = await decodeStill(file, fit);
+    try {
+      const canvas = new OffscreenCanvas(bitmap.width, bitmap.height);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(bitmap, 0, 0);
+      return await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.92 });
+    } finally {
+      bitmap.close();
+    }
+  } catch {
     return null;
   }
 }
@@ -182,6 +235,25 @@ async function decodeBlob(blob: Blob, fit: StillFitArg): Promise<{ bitmap: Image
   if (natural) {
     const bitmap = await bitmapAt(blob, natural, targetFor(natural, fit));
     return { bitmap, natural };
+  }
+  // Refused by the browser: a JPEG XL or a HEIF goes to the decoder shipped for it.
+  const format = await formatOf(blob);
+  if (format) {
+    const { decodeWasmStill } = await import('./wasm-still');
+    const still = await decodeWasmStill(blob, format);
+    // A JPEG XL comes back as a PNG, which the browser sizes like any file.
+    if (still.kind === 'blob') return decodeBlob(still.blob, fit);
+    const size = { width: still.image.width, height: still.image.height };
+    const target = targetFor(size, fit);
+    const bitmap =
+      target.width === size.width && target.height === size.height
+        ? await createImageBitmap(still.image)
+        : await createImageBitmap(still.image, {
+            resizeWidth: target.width,
+            resizeHeight: target.height,
+            resizeQuality: 'high',
+          });
+    return { bitmap, natural: size };
   }
   // The header reader refused: the decoder itself is asked once, whole, and
   // the result bounded after — the old path, for a format an `<img>` will not

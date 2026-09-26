@@ -15,7 +15,7 @@
  * inside it, measured (decision 4, corrected below).
  */
 
-import { isDrawableImage, isRawImage } from '../library/assets';
+import { isDecodableImage, isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
 import { longEdgeFor, type ExportSize } from './export-targets';
@@ -176,14 +176,14 @@ export function pixelHeadroom(src: PictureSize, framing: Framing | null, out: { 
 }
 
 /**
- * The formats the browser decodes on its own; a RAW, HEIF or TIFF original is
- * delivered from its render. The list is `assets.ts`'s — the same one that
- * says which half of a RAW + JPEG pair is shown, since it is the same
- * question asked twice.
+ * The formats an original can be delivered FROM: what the browser decodes on
+ * its own, plus the HEIF and JPEG XL this suite decodes itself
+ * (`media/wasm-still.ts`). A RAW is delivered from its render, a TIFF from
+ * the render you developed. The list is `assets.ts`'s.
  */
 export function decodableOriginal(name: string | null): boolean {
   if (!name || isRawImage(name)) return false;
-  return isDrawableImage(name);
+  return isDecodableImage(name);
 }
 
 export type PixelsFrom = 'file' | 'original';

@@ -256,5 +256,8 @@ a forty-picture roll developed from its DNGs is forty times 74 MB. Rules:
 - `overrideHeldCeiling(bytes | null)` exists for a spec and a diagnostic,
   nothing else; the Export panel SAYS the device's ceiling in its sentence.
 
-The renditions plan is complete: R1 → R6 and R9; R7 (HEIF) and R6′ (Sony's
-calibration) stay unscheduled by decision (`docs/run-sheet.md`).
+The renditions plan is complete: R1 → R6 and R9; R6′ (Sony's calibration)
+stays unscheduled by decision (`docs/run-sheet.md`). R7's decode half (HEIF,
+and JPEG XL with it) was built on 2026-09-26 at the maintainer's ask, as a
+fallback inside `decodeStill` rather than a phase of its own
+(`media-pipeline.md`, «HEIF and JPEG XL»).

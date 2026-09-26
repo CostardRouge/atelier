@@ -20,7 +20,7 @@
  */
 
 import { isAtelierMade } from '../exif/software-mark';
-import { isDrawableImage, isRawImage } from '../library/assets';
+import { isDecodableImage, isDrawableImage, isRawImage } from '../library/assets';
 
 export interface PixelSize {
   width: number;
@@ -48,7 +48,12 @@ export type RenditionReach =
   | 'embedded'
   /** LibRaw develops the sensor plane (`raw/raw-decoder.ts`). */
   | 'sensor'
-  /** A decoder this suite does not ship. Listed, never silently dropped. */
+  /**
+   * A decoder of this suite's own, where the browser has none — a HEIF or a
+   * JPEG XL in Chrome (`media/wasm-still.ts`) — or, for a format nothing here
+   * reads, none at all: then the row is `blocked`, listed and never silently
+   * dropped.
+   */
   | 'decoder';
 
 /** One file of a capture, as a caller knows it. */
@@ -170,6 +175,7 @@ function rowsFor(file: CaptureFile, canDraw: (name: string) => boolean): Renditi
     ];
   }
   const drawable = canDraw(file.name);
+  const decodable = drawable || isDecodableImage(file.name);
   return [
     {
       ...base,
@@ -177,7 +183,7 @@ function rowsFor(file: CaptureFile, canDraw: (name: string) => boolean): Renditi
       role: 'delivered',
       reach: drawable ? 'file' : 'decoder',
       pixels: file.pixels ?? null,
-      blocked: drawable ? null : `this browser does not draw ${extOf(file.name).toUpperCase() || 'this format'}`,
+      blocked: decodable ? null : `this browser does not draw ${extOf(file.name).toUpperCase() || 'this format'}`,
     },
   ];
 }
@@ -185,25 +191,28 @@ function rowsFor(file: CaptureFile, canDraw: (name: string) => boolean): Renditi
 /**
  * Which delivered rows are worth showing.
  *
- * A row this browser cannot draw is dropped when the SAME capture already
- * offers a delivered row it can — the measured case being a Sony `.HIF`, whose
- * picture is a grid of six HEVC tiles no browser here decodes, beside an
- * `.ARW` whose own embedded render is the very same 7008 × 4672 photograph.
- * Offering the HIF as an unavailable row there would be a control that can
- * only disappoint. Where nothing else is drawable it STAYS, blocked and
- * saying why, because then it is the only thing standing between the person
- * and their picture.
+ * A row this browser cannot draw — blocked, or reached only through a
+ * decoder this suite ships — is dropped when the SAME capture already offers a
+ * delivered row the browser draws for nothing. The measured case is a Sony
+ * `.HIF`, a grid of six HEVC tiles Chrome reads only through libheif's wasm
+ * (seconds and a whole-picture heap), beside an `.ARW` whose own embedded
+ * render is the very same 7008 × 4672 photograph. Where nothing else is
+ * drawable it STAYS — decodable, or blocked and saying why — because then it
+ * is the only thing standing between the person and their picture.
  *
- * Pixels decide it where both are known; where the blocked row's are not, the
- * available row wins — which is the honest reading of "nobody measured it".
+ * Pixels decide it where both are known; where the costly row's are not, the
+ * free row wins — which is the honest reading of "nobody measured it".
  */
 function pruneUndrawable(rows: readonly Rendition[]): Rendition[] {
-  const available = rows.filter((r) => r.role === 'delivered' && !r.blocked);
+  const available = rows.filter((r) => r.role === 'delivered' && !r.blocked && r.reach !== 'decoder');
   if (!available.length) return [...rows];
   const best = Math.max(...available.map((r) => area(r.pixels)));
   const known = available.some((r) => r.pixels);
   return rows.filter((r) => {
-    if (r.role !== 'delivered' || !r.blocked) return true;
+    // A row only a shipped decoder reads is weighed like a blocked one: it
+    // works, but it costs a wasm decode for a picture the capture already
+    // offers for nothing.
+    if (r.role !== 'delivered' || !(r.blocked || r.reach === 'decoder')) return true;
     if (!r.pixels) return false;
     return known && area(r.pixels) > best;
   });
