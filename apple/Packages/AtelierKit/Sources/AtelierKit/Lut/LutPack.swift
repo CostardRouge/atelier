@@ -1,11 +1,12 @@
 // A PACK of purchased looks — its SHAPE, the reference a document stores
 // instead of a lattice, and the read-only questions the picker and the vault's
-// weighing ask of it. A PARTIAL port of `src/shared/lut/lut-pack.ts`: what
-// `gallery-nodes.ts`, `pack-weight.ts` and the saved-grade resolver read.
-// Reading a folder listing into an index (`buildPackIndex`, `prettyName`,
-// `stripNodePrefix`, `slug`, `familyFor`, the D-Log hint), migrating a stored
-// index (`migratePackIndex`), `withoutLooks`, `flattenPack`, `lookLabel` and
-// `nodeLabelPath` are the lut-pack task's, to be added to THIS file.
+// weighing ask of it. Half of the port of `src/shared/lut/lut-pack.ts`: what
+// `gallery-nodes.ts`, `pack-weight.ts` and the saved-grade resolver read. The
+// other half — reading a folder listing into an index (`buildPackIndex`,
+// `prettyName`, `stripNodePrefix`, `packSlug`, `familyFor`, the D-Log hint),
+// a stored index read and written (`migratePackIndex`, `json`),
+// `withoutLooks`, `flattenPack`, `lookLabel` and `nodeLabelPath` — is
+// `LutPackIndex.swift`.
 //
 // Three rules of `docs/lut-packs.md` shape it:
 // - A document carries a REFERENCE, never a lattice (§3, rule 1): a layer
