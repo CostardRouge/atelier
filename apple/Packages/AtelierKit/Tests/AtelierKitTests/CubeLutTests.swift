@@ -90,6 +90,20 @@ final class CubeParserTests: XCTestCase {
         XCTAssertNil(parseCube("not a cube file at all"))
     }
 
+    func testReadsTabsAsSeparatorsAsTheWebsWhitespaceDoes() {
+        // The shape of DJI's own `.cube` files (`public/luts/dji/`): a tab
+        // after the keyword, tabs between the values and one trailing each row.
+        let rows = ["0 0 0", "1 0 0", "0 1 0", "1 1 0", "0 0 1", "1 0 1", "0 1 1", "1 1 1"]
+            .map { $0.replacingOccurrences(of: " ", with: "\t") + "\t" }
+            .joined(separator: "\n")
+        let text = "# DaVinci Resolve Cube (3D LUT).\n#\n\nLUT_3D_SIZE\t2\n\nDOMAIN_MIN\t0\t0\t0\n" + rows + "\n"
+        let lut = parseCube(text)
+        XCTAssertEqual(lut?.size, 2)
+        XCTAssertEqual(lut?.data.count, 24)
+        XCTAssertEqual(lut.map { Array($0.data[3..<6]) }, [1, 0, 0])
+        XCTAssertEqual(parseCube("TITLE\t\"Tabbed\"\n" + text)?.title, "Tabbed")
+    }
+
     func testIgnoresCommentsBlankLinesAndWindowsLineEndings() {
         let withNoise = "# a comment\r\n\r\nLUT_3D_SIZE 2\r\n\r\n# another\r\n"
             + "0 0 0\r\n1 0 0\r\n0 1 0\r\n1 1 0\r\n0 0 1\r\n1 0 1\r\n0 1 1\r\n1 1 1\r\n"

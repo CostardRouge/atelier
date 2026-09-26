@@ -85,7 +85,9 @@ public func parseCube(_ text: String) -> CubeLut? {
         let looksNumeric = first == "-" || first == "." || first.isNumber
 
         if !looksNumeric {
-            let fields = line.split(separator: " ", omittingEmptySubsequences: true).map(String.init)
+            // `\s+`, as the web's patterns read it: a tab is a separator too
+            // (DJI's own LUTs write `LUT_3D_SIZE<TAB>33`).
+            let fields = line.split(whereSeparator: { $0 == " " || $0 == "\t" }).map(String.init)
             guard let keyword = fields.first else { continue }
             switch keyword {
             case "TITLE":
