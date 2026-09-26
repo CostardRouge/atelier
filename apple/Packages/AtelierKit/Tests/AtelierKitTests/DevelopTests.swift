@@ -237,6 +237,31 @@ final class DevelopRecordTests: XCTestCase {
         XCTAssertEqual(developLines(normaliseDevelop(["base": "gain", "rawWb": ["kelvin": 3200]])), ["RAW", "3200 K"])
     }
 
+    func testARAWWhiteBalanceIsAppliedFirstInLinearLightAndOnlyOnTheBase() {
+        // `develop.ts`: the matrix re-balances the capture FIRST, every slider
+        // below then works on that picture — and it is clamped at 0 as the
+        // web clamps it. Rendered now, so nothing is said to be missing.
+        let d = normaliseDevelop(["base": "gain", "rawGain": 1, "rawWb": ["kelvin": 3200, "tint": 0, "matrix": [2, 0, 0, 0, 1, 0, 0, -0.5, 0.5]]])
+        XCTAssertEqual(d.unrenderedStages, [])
+        XCTAssertEqual(rawWbMatrixOf(d), [2, 0, 0, 0, 1, 0, 0, -0.5, 0.5])
+        assertTriple(developLinear((0.2, 0.3, 0.2), d), (0.4, 0.3, 0), 12)
+        // Resolved once by the loop, the same answer as resolved per pixel.
+        assertTriple(developLinear((0.2, 0.3, 0.2), d, makeDevelopShapers(d), makeColourStages(d)), (0.4, 0.3, 0), 12)
+        // Then the sliders act on the re-balanced picture: +1 EV doubles it.
+        var brighter = d
+        brighter.exposure = 1
+        assertTriple(developLinear((0.2, 0.3, 0.2), brighter), (0.8, 0.6, 0), 12)
+        // Off the sensor, a matrix left in a draft is never applied.
+        var render = d
+        render.base = nil
+        XCTAssertNil(rawWbMatrixOf(render))
+        assertTriple(developLinear((0.2, 0.3, 0.2), render), (0.2, 0.3, 0.2), 12)
+        // Through the bake: sRGB codes in and out, the gain before the matrix.
+        let stage = developStage(d)
+        let out = stage(fromLinear(0.2, .srgb), fromLinear(0.2, .srgb), fromLinear(0.2, .srgb))
+        assertTriple(out, (fromLinear(0.4, .srgb), fromLinear(0.2, .srgb), fromLinear(0, .srgb)), 9)
+    }
+
     func testStoresNothingForAsShotAndAClampedRecordOtherwise() {
         XCTAssertNil(developOrNull(nil))
         XCTAssertNil(developOrNull(.null))

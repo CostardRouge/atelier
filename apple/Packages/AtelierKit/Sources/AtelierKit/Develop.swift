@@ -108,10 +108,11 @@ public struct DevelopSettings: Codable, Equatable, Sendable {
     /// The keys the web writes beside the sliders, the two shapes and the material.
     public static let carriedKeys = ["mixer", "mono", "grading", "rawWb"]
     /// The carried stages that hold PIXELS to a different answer than this port
-    /// renders: a RAW's white balance in Kelvin, whose matrix `developLinear`
-    /// does not apply yet. The mixer, black and white and the grading are rendered.
+    /// renders: a RAW's white balance in Kelvin that carries no usable matrix —
+    /// one that does is applied FIRST by `developLinear`, as on the web. The
+    /// mixer, black and white and the grading are rendered.
     public var unrenderedStages: [String] {
-        carried["rawWb"] != nil ? ["rawWb"] : []
+        carried["rawWb"] != nil && rawWhiteBalanceOrNull(carried["rawWb"]) == nil ? ["rawWb"] : []
     }
 
     /// Every field at 0 — "as shot". The identity on every pixel.
@@ -381,17 +382,33 @@ private func toneCurve(_ L: Double, _ d: DevelopSettings) -> Double {
     return v
 }
 
-/// The curve and level maps a develop needs, resolved ONCE.
+/// The curve and level maps a develop needs, resolved ONCE — and a RAW's
+/// white balance matrix with them, read out of its record once rather than
+/// per pixel.
 public struct DevelopShapers {
     public let luma: ((Double) -> Double)?
     public let channels: ChannelShaper?
+    /// A RAW's white balance in Kelvin (`rawWb.matrix`, linear sRGB → linear
+    /// sRGB, row-major), or nil — only on a RAW base (`rawWbMatrixOf`).
+    public var rawWb: [Double]? = nil
     /// Nothing shapes — the develop pays nothing for its curves and levels.
     public static let unshaped = DevelopShapers(luma: nil, channels: nil)
 }
 
+/// The matrix `developLinear` applies FIRST: a RAW's white balance, only on a
+/// RAW base — a draft that left the sensor for the render may still hold one
+/// for a moment, and on an 8-bit picture it would be a fabrication (`develop.ts`).
+public func rawWbMatrixOf(_ d: DevelopSettings) -> [Double]? {
+    guard isRawDevelop(d), let wb = rawWhiteBalanceOrNull(d.carried["rawWb"]) else { return nil }
+    return wb.matrix
+}
+
 public func makeDevelopShapers(_ d: DevelopSettings) -> DevelopShapers {
-    if isDefaultCurves(d.curves) && isDefaultLevels(d.levels) { return .unshaped }
-    return DevelopShapers(luma: makeLumaShaper(d.curves), channels: makeChannelShaper(d.curves, d.levels))
+    let wb = rawWbMatrixOf(d)
+    if isDefaultCurves(d.curves) && isDefaultLevels(d.levels) {
+        return wb == nil ? .unshaped : DevelopShapers(luma: nil, channels: nil, rawWb: wb)
+    }
+    return DevelopShapers(luma: makeLumaShaper(d.curves), channels: makeChannelShaper(d.curves, d.levels), rawWb: wb)
 }
 
 /// One channel through the per-channel map. Where the map leaves the value
@@ -406,7 +423,8 @@ public func makeDevelopShapers(_ d: DevelopSettings) -> DevelopShapers {
 /// Develop one pixel in LINEAR light. Input ≥ 0, may exceed 1; output ≥ 0 and
 /// NOT clamped. The identity when every field is 0.
 ///
-/// Order: white balance → exposure → the luminance curve as one ratio → the
+/// Order: a RAW's white balance in Kelvin (its matrix, on a RAW base only) →
+/// white balance → exposure → the luminance curve as one ratio → the
 /// luma curve → levels and the per-channel curves → saturation and vibrance →
 /// black and white, else the colour mixer → colour grading
 /// (`applyColourStages`, `Develop/DevelopColour.swift`).
@@ -419,6 +437,16 @@ public func developLinear(_ rgb: (Double, Double, Double), _ d: DevelopSettings,
     var r = rgb.0 < 0 ? 0 : rgb.0
     var g = rgb.1 < 0 ? 0 : rgb.1
     var b = rgb.2 < 0 ? 0 : rgb.2
+
+    // A RAW's white balance in Kelvin FIRST: it re-balances the capture as the
+    // camera would have under that light, and every slider below — the
+    // relative temperature and tint included — then works on that picture.
+    if let m = shapers.rawWb {
+        (r, g, b) = apply3(m, (r, g, b))
+        if r < 0 { r = 0 }
+        if g < 0 { g = 0 }
+        if b < 0 { b = 0 }
+    }
 
     if d.temperature != 0 {
         let t = (d.temperature / 100) * temperatureReach
