@@ -176,8 +176,8 @@ Rows: 93 ✅ · 11 ≠ · 2 ⏳ — plus three deferrals that are the shell's, n
 
 - ⏳ Dragging a palette cell onto the stage — the Studio stage's drop target.
 - ⏳ The outro's own stage — deferred on the web too.
-- ⏳ Keyboard: Delete removes the selected element, Space plays — the Studio
-  shell's `.keyboardShortcut`s, not a panel's.
-- ⏳ Undo — the shell's `History` store + `UndoManager`; every panel writes
-  whole values through its binding, which is what that store watches.
+- ✅ Keyboard: Delete removes the selected element, Space plays — built by
+  the Studio shell (`Studio/PARITY.md`, «Keys»), not by a panel.
+- ✅ Undo — the shell's `History` + `UndoManager` over the one funnel every
+  panel's binding writes through (`Studio/PARITY.md`, «Undo»).
 - ⏳ Running any of it on a device.

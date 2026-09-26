@@ -44,7 +44,7 @@ enum Tool: String, CaseIterable, Identifiable {
         switch self {
         case .develop: RollGallery()
         case .trips: PlannedToolView(tool: .trips)
-        case .studio: PlannedToolView(tool: .studio)
+        case .studio: StudioGallery()
         case .sources: SourcesView()
         }
     }
