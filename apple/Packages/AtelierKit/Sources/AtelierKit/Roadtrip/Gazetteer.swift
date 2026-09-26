@@ -1,36 +1,23 @@
-// Naming a place from its coordinates, offline — port of
-// `src/shared/roadtrip/gazetteer.ts` (the pure half; the web's
-// `load-gazetteer.ts` fetch is the app's, see below).
+// Naming a place from its coordinates, offline — the last step of the
+// itinerary deduction, and the one that decides whether its proposals can be
+// read at all. A leg that comes out as "2025-11-02 → 2025-11-05" is a row
+// nobody can accept or refuse; "Kalbarri" is. Port of
+// `src/shared/roadtrip/gazetteer.ts`.
 //
-// Ported ahead of the rest of Road Trip because the delivered picture's
-// place name (`Exif/DeliveryPlace.swift`) is read from this index. The rules
-// it keeps from the web module:
-// - **An index that ships with the app, never a lookup going out**: the
-//   committed GeoNames file (`public/geo/cities.json`, CC BY 4.0) answers,
-//   so no photograph's coordinates ever leave the device.
-// - **No answer is a real answer**: past `maxKm` it answers nil, and the caller
-//   keeps no place rather than a far one.
-// - A row it cannot read is DROPPED, never the whole index.
-// - Two cities within `Gazetteer.tieKm` of the nearest are the same answer, and
-//   the contest between them is total and order-free: a place beats a SECTION
-//   of a place, then the bigger population, then the nearer, then the name —
-//   measured on the real index (Perth vs its suburb Northbridge, Broome vs
-//   Cable Beach, which GeoNames makes bigger).
-// - A bounding box in degrees rejects almost every row before any
-//   trigonometry; near a pole the longitude window stops meaning anything and
-//   is dropped rather than computed wrong; a meridian gap is taken the short
-//   way round, so a town across the antimeridian is not lost.
+// **It is an index that ships with the app, never a lookup going out.**
+// Reverse-geocoding a deduced leg would send the coordinates of someone's
+// photographs, a larger claim on their data than a name is worth, so the
+// answer comes from the committed file (`public/geo/cities.json`, GeoNames
+// CC BY 4.0 — the attribution rides inside it; do not strip it). READING that
+// file is the app's (the web's `load-gazetteer.ts`); this module is the pure
+// half: validate the rows, then search them.
 //
-// The point is a `GpsCoord` (the web's `GeoPoint` has the same two fields and
-// is not ported yet); the distance is `hooks/geo.ts`'s `haversineKm`, kept
-// private here with the web's own radius, 6371.0088 km.
-//
-// Left to the app: reading `cities.json` from the bundle (the web's
-// `load-gazetteer.ts`) and handing its parsed JSON to `parseGazetteer`.
+// **No answer is a real answer.** Past `maxKm` this returns nil, and the leg
+// keeps a span and no place — the anti-fabrication line the whole tool holds.
 
 import Foundation
 
-public struct GazetteerCity: Equatable, Sendable {
+public struct GazetteerCity: GeoLocated, Equatable, Sendable {
     /// The place as GeoNames says it out loud ("Kalbarri").
     public var name: String
     /// ISO 3166-1 alpha-2, to tell two places of one name apart.
@@ -48,70 +35,59 @@ public struct GazetteerCity: Equatable, Sendable {
     }
 }
 
-/// The web's two module constants, under one name so they cannot collide.
-public enum Gazetteer {
-    /// Two cities this close to each other are, for naming purposes, the same answer.
-    public static let tieKm: Double = 5
-    /// How far a leg may be from a city and still be called by its name.
-    public static let defaultMaxKm: Double = 90
-}
+/// Two cities this close to each other are, for naming purposes, the same
+/// answer — so something other than distance has to decide. Without it a leg
+/// sitting between a town and its suburb is named after whichever is a
+/// kilometre nearer, which is not the name a person would have written.
+/// Measured against the real index (Perth / Northbridge, Broome / Cable
+/// Beach): neither distance nor population alone is enough, and the contest
+/// in `nearestCity` is what gets both right. The web's `TIE_KM`.
+public let gazetteerTieKm = 5.0
 
-/// The committed file, validated. Rows it cannot read are dropped rather than
-/// failing the whole index.
+/// How far a leg may be from a city and still be called by its name. The
+/// web's `DEFAULT_MAX_KM`.
+public let gazetteerDefaultMaxKm = 90.0
+
+/// The committed file, validated — `{ attribution, count, cities: [[name,
+/// country, lat, lon, population, section], …] }`. Rows it cannot read are
+/// dropped rather than failing the whole index: a gazetteer that refuses to
+/// load takes the naming of every leg with it, while a dropped row costs one
+/// name.
 public func parseGazetteer(_ raw: JSONValue?) -> [GazetteerCity] {
     guard let rows = raw?.objectValue?["cities"]?.arrayValue else { return [] }
+
     var cities: [GazetteerCity] = []
+    cities.reserveCapacity(rows.count)
     for row in rows {
         guard let cells = row.arrayValue else { continue }
         func cell(_ i: Int) -> JSONValue? { i < cells.count ? cells[i] : nil }
         guard let name = cell(0)?.stringValue, !name.isEmpty else { continue }
-        guard case .number(let lat)? = cell(2), case .number(let lon)? = cell(3) else { continue }
-        if !lat.isFinite || !lon.isFinite { continue }
+        guard let lat = cell(2)?.finiteNumber, let lon = cell(3)?.finiteNumber else { continue }
         if lat < -90 || lat > 90 || lon < -180 || lon > 180 { continue }
-        var population = 0.0
-        if case .number(let p)? = cell(4), p > 0 { population = p }
-        var section = false
-        if case .number(let s)? = cell(5), s == 1 { section = true }
-        if case .bool(true)? = cell(5) { section = true }
-        cities.append(GazetteerCity(
-            name: name,
-            country: cell(1)?.stringValue ?? "",
-            lat: lat,
-            lon: lon,
-            population: population,
-            section: section
-        ))
+        let population = cell(4)?.finiteNumber.flatMap { $0 > 0 ? $0 : nil } ?? 0
+        let section = cell(5) == .number(1) || cell(5) == .bool(true)
+        cities.append(GazetteerCity(name: name, country: cell(1)?.stringValue ?? "", lat: lat, lon: lon,
+                                    population: population, section: section))
     }
     return cities
 }
 
 /// Degrees of longitude between two meridians, the short way round.
 private func lonGap(_ a: Double, _ b: Double) -> Double {
-    let gap = (a - b).magnitude.truncatingRemainder(dividingBy: 360)
+    let gap = abs(a - b).truncatingRemainder(dividingBy: 360)
     return gap > 180 ? 360 - gap : gap
 }
 
 private let kmPerDegree = 111.32
 
-/// Great-circle distance between two located places, in kilometres — the web's `haversineKm`.
-private func gazetteerKm(_ aLat: Double, _ aLon: Double, _ bLat: Double, _ bLon: Double) -> Double {
-    let r = 6371.0088
-    let toRad = Double.pi / 180
-    let dLat = (bLat - aLat) * toRad
-    let dLon = (bLon - aLon) * toRad
-    let sLat = sin(dLat / 2)
-    let sLon = sin(dLon / 2)
-    let s = sLat * sLat + cos(aLat * toRad) * cos(bLat * toRad) * sLon * sLon
-    return 2 * r * asin(min(1, s.squareRoot()))
-}
-
-/// JS string order (UTF-16 code units), the web's `<` between two names.
-private func jsLess(_ a: String, _ b: String) -> Bool {
-    Array(a.utf16).lexicographicallyPrecedes(Array(b.utf16))
-}
-
 /// The nearest city to `point`, or nil when none is within `maxKm`.
-public func nearestCity(_ cities: [GazetteerCity], _ point: GpsCoord, maxKm: Double = Gazetteer.defaultMaxKm) -> GazetteerCity? {
+///
+/// A bounding box in degrees rejects almost every row before any trigonometry:
+/// the index is 135 000 cities and a trip asks about thirty legs. The box is
+/// deliberately generous — it only has to be a superset, and `haversineKm`
+/// settles what is actually inside.
+public func nearestCity<P: GeoLocated>(_ cities: [GazetteerCity], _ point: P,
+                                       maxKm: Double = gazetteerDefaultMaxKm) -> GazetteerCity? {
     let latWindow = maxKm / kmPerDegree
     // Near a pole, and for a window that spans the globe, the longitude filter
     // stops meaning anything — drop it rather than compute a wrong bound.
@@ -120,32 +96,52 @@ public func nearestCity(_ cities: [GazetteerCity], _ point: GpsCoord, maxKm: Dou
 
     var near: [(city: GazetteerCity, km: Double)] = []
     var bestKm = Double.infinity
+
     for city in cities {
-        if (city.lat - point.lat).magnitude > latWindow { continue }
+        if abs(city.lat - point.lat) > latWindow { continue }
         if lonWindow <= 180 && lonGap(city.lon, point.lon) > lonWindow { continue }
-        let km = gazetteerKm(point.lat, point.lon, city.lat, city.lon)
+        let km = haversineKm(point, city)
         if km > maxKm { continue }
         near.append((city, km))
         if km < bestKm { bestKm = km }
     }
-    if near.isEmpty { return nil }
 
-    // Two passes, so the answer cannot depend on the order the rows arrived
-    // in: the nearest sets the bar, then everything within `tieKm` competes.
-    let tied = near.filter { $0.km <= bestKm + Gazetteer.tieKm }
-    var best = 0
-    for i in tied.indices where i != best {
-        let candidate = tied[i]
-        let current = tied[best]
-        if candidate.city.section != current.city.section {
-            if !candidate.city.section { best = i }
-        } else if candidate.city.population != current.city.population {
-            if candidate.city.population > current.city.population { best = i }
-        } else if candidate.km != current.km {
-            if candidate.km < current.km { best = i }
-        } else if jsLess(candidate.city.name, current.city.name) {
-            best = i
+    // Two passes, so the answer cannot depend on the order the rows arrived in:
+    // the nearest sets the bar, then everything within `gazetteerTieKm` of it
+    // competes. The contest, in order: a place beats a SECTION of a place,
+    // then the bigger population, then the nearer, then the name — so the
+    // answer is total.
+    let tied = near.filter { $0.km <= bestKm + gazetteerTieKm }
+    guard var best = tied.first else { return nil }
+    for candidate in tied.dropFirst() {
+        if candidate.city.section != best.city.section {
+            if !candidate.city.section { best = candidate }
+        } else if candidate.city.population != best.city.population {
+            if candidate.city.population > best.city.population { best = candidate }
+        } else if candidate.km != best.km {
+            if candidate.km < best.km { best = candidate }
+        } else if gazetteerNameBefore(candidate.city.name, best.city.name) {
+            best = candidate
         }
     }
-    return tied[best].city
+    return best.city
+}
+
+/// JavaScript's `<` on two strings: UTF-16 code units, never a locale — so an
+/// accented name sorts the same on both clients.
+private func gazetteerNameBefore(_ a: String, _ b: String) -> Bool {
+    a.utf16.lexicographicallyPrecedes(b.utf16)
+}
+
+// MARK: - The EXIF side's reading
+
+/// A delivered picture's GPS is a point the gazetteer can answer about
+/// (`Exif/DeliveryPlace.swift` names the place a file is written with).
+extension GpsCoord: GeoLocated {}
+
+/// The web's two constants under one name, as `DeliveryPlace.swift` reads
+/// them — the same values as `gazetteerTieKm` / `gazetteerDefaultMaxKm`.
+public enum Gazetteer {
+    public static let tieKm = gazetteerTieKm
+    public static let defaultMaxKm = gazetteerDefaultMaxKm
 }
