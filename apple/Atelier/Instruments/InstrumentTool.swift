@@ -105,7 +105,7 @@ enum InstrumentTool: String, CaseIterable, Identifiable, Hashable {
         switch self {
         case .telemetry: TelemetryToolView()
         case .overlay: PlannedInstrumentView(instrument: self)
-        case .map: PlannedInstrumentView(instrument: self)
+        case .map: FlightMapToolView()
         case .composer: PlannedInstrumentView(instrument: self)
         case .exif: PlannedInstrumentView(instrument: self)
         case .compare: PlannedInstrumentView(instrument: self)

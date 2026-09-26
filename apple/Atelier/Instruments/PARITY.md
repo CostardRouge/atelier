@@ -63,3 +63,25 @@ every view was written against the SDK and compiled by CI alone.
 | — | NATIVE: a chart of the whole flight (Altitude · Speed · V/S, Swift Charts), the playhead drawn on it, a tap or drag seeks the clip; thinned to ≤ 600 real points, never interpolated | ✅ |
 | — | NATIVE: every cue as a table (a `Table` with ten columns where there is room, a three-column list on a phone); picking a row seeks the clip | ✅ |
 | Export CSV / GPX | the web has none, so neither does this page | — |
+
+## Flight Map (`Map/`, kernel `Tools/TrackCamera.swift`)
+
+| Web (`MapTool.tsx`, `use-flight-map.ts`, `shared/map/track-map.ts`) | Native | |
+|---|---|---|
+| Accepts `video+telemetry` and a loose `telemetry` | ✅ | ✅ |
+| Empty bar: "Select a DJI clip (or a loose .srt) in the Library to map its flight." | "Open a DJI clip (or a loose .srt) to map its flight." — the Open menu is the Library | ✅ |
+| Clip stepper, the clip's name, the active clip reflected back to the library | ✅ (the shelf's shared focus) | ✅ |
+| The path from the `.srt` alone (`extractTrack`) | the kernel's `extractTrack` | ✅ |
+| A tiles-free map by DEFAULT: paper `#e8e2d4`, the accent line 3 px round at 90 %, the aircraft a 14 px accent dot ringed in white | `TrackPainter` on a blank `Canvas`, the same fixed colours (a map is a picture, never themed) | ✅ |
+| `fitBounds` with 48 px of padding up to zoom 17, a lone fix at zoom 16 | the kernel's `fitTrackCamera` (MapLibre's zoom scale, a 512 px world), specced | ✅ |
+| MapLibre's NavigationControl (zoom in/out), drag to pan, wheel/pinch zoom | `+` / `−`, a pinch about the fingers, a drag once zoomed, a double tap to fit again — the kernel's `zoomAbout` / `clampView`, to 32× | ✅ |
+| "Load map background" / "Map background: on" — OpenStreetMap tiles, OFF by default, per visit, the one network exception | the same chip and words, MapKit's tiles from Apple, OFF by default and never stored; the hint says "Loads map tiles from Apple — a network request, made only once you turn this on" | ≠ |
+| "© OpenStreetMap contributors" while tiles are on | MapKit draws Apple's own legal mark | ≠ |
+| "Offline · no tiles loaded" while off | ✅ | ✅ |
+| The aircraft on the live cue's fix, else the path's start, never orphaned | ✅ | ✅ |
+| "No GPS fixes in this clip's telemetry." | ✅ | ✅ |
+| "The map library couldn't load." | ≠ nothing to load: the blank map is drawn by the app | ≠ |
+| Live readout bottom-left: `lat, lon` to six decimals, `alt m · speed · heading` | ✅ | ✅ |
+| The clip beneath with controls; scrubbing walks the aircraft | `VideoPlayer`; the cue under the playhead moves the dot | ✅ |
+| "Telemetry only — add this clip's video to scrub along the path." | ✅ | ✅ |
+| macOS sandbox | `com.apple.security.network.client` (already there for Sources) now names the map too — without it MapKit draws an empty grid | ✅ |
