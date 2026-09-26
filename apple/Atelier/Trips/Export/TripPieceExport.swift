@@ -254,7 +254,7 @@ enum TripPieceRuns {
     }
 
     static func runPiece(_ inputs: TripExportInputs, imagesOnly: Bool, flag: RunCancelFlag,
-                                     say: @escaping @Sendable (String?, Double?) -> Void) async -> TripExportOutcome {
+                         say: @escaping @Sendable (String?, Double?) -> Void) async -> TripExportOutcome {
         let slides = deckSlides(inputs.trip, inputs.post)
         var found: Set<Int> = []
         for slide in slides {
@@ -335,7 +335,7 @@ enum TripPieceRuns {
     }
 
     static func runDeck(_ inputs: TripExportInputs, format: TripStillFormat, flag: RunCancelFlag,
-                                    say: @escaping @Sendable (String?, Double?) -> Void) async -> TripExportOutcome {
+                        say: @escaping @Sendable (String?, Double?) -> Void) async -> TripExportOutcome {
         let folder: URL
         do {
             folder = try TripDeliveryFolder.make(tripRunFolderName(inputs))
@@ -364,7 +364,7 @@ enum TripPieceRuns {
     }
 
     static func runHookClip(_ inputs: TripExportInputs, flag: RunCancelFlag,
-                                        say: @escaping @Sendable (String?, Double?) -> Void) async -> TripExportOutcome {
+                            say: @escaping @Sendable (String?, Double?) -> Void) async -> TripExportOutcome {
         let post = inputs.post
         guard let slide = deckSlides(inputs.trip, post).first(where: { $0.kind == .hook }) else {
             return TripExportOutcome(files: [], folder: nil, note: "This piece has no hook to encode.")

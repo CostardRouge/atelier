@@ -122,7 +122,8 @@ final class TripsStore {
         if let open, open.id == doc.id, open.updatedAt >= doc.updatedAt {
             chosen = open
         } else {
-            if open != nil { await flush() }
+            // The trip being left: what the debounce holds written, and pushed.
+            if open != nil { await sync.flushAll() }
             chosen = doc
         }
         open = chosen

@@ -163,7 +163,7 @@ enum BadgeSources {
             return BadgeSource(image: first.image, duration: meta.duration, stills: stills, seconds: first.seconds)
         }
 
-        let data = try await Task.detached(priority: .userInitiated) { () -> Data in
+        let data = try await Task.detached(priority: .userInitiated) { () throws -> Data in
             let scoped = url.startAccessingSecurityScopedResource()
             defer { if scoped { url.stopAccessingSecurityScopedResource() } }
             return try Data(contentsOf: url)
