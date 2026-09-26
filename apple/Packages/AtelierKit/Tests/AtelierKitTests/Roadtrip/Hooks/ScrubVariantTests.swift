@@ -36,7 +36,7 @@ final class HookVariantFacesTests: XCTestCase {
     }
 
     func testTheRegistryIsTheWebsPickerOrderForTheVariantsWhosePlansAreHere() {
-        XCTAssertEqual(hookVariants.map(\.id), ["badge", "scrub", "map"])
+        XCTAssertEqual(hookVariants.map(\.id), ["badge", "scrub", "drive", "map"])
     }
 
     /// The house style resets `contentKeys` to the defaults: a list of pictures
