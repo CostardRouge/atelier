@@ -8,6 +8,10 @@ what it waits on) · ≠ built differently on purpose (why).
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
+Rows: 115 ✅ · 22 ≠ · 4 ⏳ — the ⏳ are the shelf remembered across launches,
+the built-in looks (37 MB, the maintainer's call), the look gallery that
+waits on them, and MapKit tiles in the Composer.
+
 ## The shell (`InstrumentTool.swift`, `App/RootView.swift`)
 
 | Web | Native | |
@@ -188,3 +192,20 @@ every view was written against the SDK and compiled by CI alone.
 | Export MP4 → "Rendering…" / NN % → Cancel; downloads `<clip>-composition.mp4` | ✅ the shared pipeline at the output size, the sound copied; the file handed to a move panel under the same name; also a task in the kernel's `TaskRegistry` | ✅ |
 | "Couldn't read the video file…", HEVC decode errors, "MP4 export needs WebCodecs" | ≠ the platform's own reason, said under the row | ≠ |
 | — | NATIVE: Save frame (PNG) — the frame under the playhead at the OUTPUT's size, through the same painter, `<clip>-composition.png` | ✅ |
+
+## Telemetry Overlay (`Overlay/OverlayMovedView.swift`)
+
+The web's `OverlayStudio.tsx` is a LEGACY page the Studio supersedes
+(`docs/memory/studio.md`: it "dies in phase 4 — don't polish it"). Read
+against the Studio, it does nothing the Studio cannot: its element list,
+style panel, guides, look picker and burn-in export are the shared overlay
+engine the Studio composes, and the Studio adds plain clips and photos,
+intro and outro, timing and variants. Its only own furniture — an add row
+in `ElementList` (the Studio adds from its palette) and `GuidesControl`'s
+toolbar layout (the Studio's is rows) — are two drawings of the same
+verbs. So it is built as a pointer, not a second editor.
+
+| Web | Native | |
+|---|---|---|
+| The page, its eyebrow and name | "Moved to the Studio", the registry's eyebrow, why, and that the web keeps the page only until the Studio absorbs it | ≠ |
+| Everything the page edits and exports | Open the Studio (`ShellNavigate` switches the shell to the Studio's tab or sidebar row) | ≠ |

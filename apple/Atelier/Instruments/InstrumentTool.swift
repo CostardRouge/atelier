@@ -104,33 +104,13 @@ enum InstrumentTool: String, CaseIterable, Identifiable, Hashable {
     var screen: some View {
         switch self {
         case .telemetry: TelemetryToolView()
-        case .overlay: PlannedInstrumentView(instrument: self)
+        case .overlay: OverlayMovedView()
         case .map: FlightMapToolView()
         case .composer: ComposerToolView()
         case .exif: ExifToolView()
         case .compare: CompareToolView()
         case .lut: LutStudioView()
         }
-    }
-}
-
-/// An instrument the native app does not carry yet — said, never blank.
-struct PlannedInstrumentView: View {
-    let instrument: InstrumentTool
-    @Environment(\.palette) private var palette
-
-    var body: some View {
-        ContentUnavailableView {
-            Label(instrument.title, systemImage: instrument.symbol)
-        } description: {
-            VStack(spacing: 8) {
-                Text(instrument.blurb)
-                Text("Not in the native app yet. The web app carries it today.")
-                    .font(.footnote)
-                    .foregroundStyle(palette.muted)
-            }
-        }
-        .navigationTitle(instrument.title)
     }
 }
 
