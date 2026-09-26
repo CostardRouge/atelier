@@ -406,21 +406,9 @@ private func readPicture(_ raw: JSONValue, rollGrade: RollGrade?) -> RollPicture
     )
 }
 
-/// The aspect ids a roll may store: `original` or one of the suite's presets.
-public let aspectPresets: [(id: String, label: String, w: Double, h: Double)] = [
-    ("9:16", "Reels · TikTok · Shorts", 9, 16),
-    ("16:9", "YouTube · landscape", 16, 9),
-    ("1:1", "Square post", 1, 1),
-    ("4:5", "Portrait post", 4, 5),
-    ("3:2", "Classic 3:2", 3, 2),
-    ("2:3", "Classic 2:3", 2, 3),
-    ("4:3", "Classic 4:3", 4, 3),
-    ("3:4", "Classic 3:4", 3, 4),
-]
-
-public func isStoredAspect(_ id: String) -> Bool {
-    id == "original" || aspectPresets.contains { $0.id == id }
-}
+// The aspect ids a roll may store — `original`, a preset, or a FREE zone's
+// `free:<ratio>` — are `isStoredAspect`'s (`Develop/CropAspect.swift`), over
+// the table in `Develop/AspectTable.swift`.
 
 /// A stored or received roll read onto the current shape, or nil when what
 /// arrived is not a roll at all. A roll written before v5 hands its one look to
