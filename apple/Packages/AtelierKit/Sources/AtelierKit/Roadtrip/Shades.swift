@@ -5,7 +5,7 @@
 //
 // Types + reader only; the behaviour of `shades.ts` (the 3×3 grid, the follow
 // modes, the stops and the sampled fades, the gradient a shade draws) is
-// ported later INTO THIS FILE.
+// `ShadeGradient.swift`.
 //
 // Rules kept:
 // - One model for what used to be a vignette and a scrim: a DIRECTION, how
