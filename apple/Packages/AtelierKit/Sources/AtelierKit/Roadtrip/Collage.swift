@@ -2,10 +2,10 @@
 // of the stored half of `src/shared/roadtrip/collage.ts`: the collage record,
 // its cells, how they arrive and leave, the factories and the reader.
 //
-// Types + reader only; the behaviour of `collage.ts` (which cells a template
-// draws, the cells' rects, their motion over the slide, the settle time, the
-// kept pictures, re-templating, swapping and writing a cell) is ported later
-// INTO THIS FILE. The geometry is `Media/MediaLayout.swift`'s.
+// The types and the reader, then the behaviour (`MARK: - behaviour`): which
+// cells a template draws, the cells' rects, their motion over the slide, the
+// settle time, the kept pictures, re-templating, swapping and writing a cell.
+// The geometry is `Media/MediaLayout.swift`'s; the paint is the app's.
 //
 // Rules kept:
 // - **Cell 1 IS the slide.** Its picture, framing, develop and motion stay on
@@ -209,4 +209,253 @@ public func readCollage(_ v: JSONValue?) -> SlideCollage? {
         enter: readEnter(c["enter"]),
         exit: readExit(c["exit"])
     )
+}
+
+// MARK: - behaviour
+
+/// Mirror an entrance into an exit: the same step, travelling back the way it came.
+public func mirroredExit(_ enter: CollageEnter) -> CollageExit {
+    var step = enter.step
+    step.delay = nil
+    if let direction = step.direction {
+        switch direction {
+        case .up: step.direction = .down
+        case .down: step.direction = .up
+        case .left: step.direction = .right
+        case .right: step.direction = .left
+        }
+    }
+    return CollageExit(step: step, reverse: true)
+}
+
+/// True when the cells move at all — what makes a collage slide a video.
+public func collageAnimates(_ collage: SlideCollage?) -> Bool {
+    guard let collage else { return false }
+    if let enter = collage.enter, enter.step.preset != .none || enter.stagger.each > 0 { return true }
+    return collage.exit != nil
+}
+
+/// True when a DRAWN cell's picture moves inside its mask — the lead's motion
+/// lives on the slide and is asked about there. A kept cell past the template
+/// draws nothing, so its motion makes nothing move.
+public func collageCellsMove(_ collage: SlideCollage?) -> Bool {
+    guard let collage else { return false }
+    let drawn = max(0, collageCellCount(collage) - 1)
+    return collage.cells.prefix(drawn).contains { hasMotion($0.motion) }
+}
+
+/// One cell's motion at a moment — the web's `CellMotion` (`cell-paint.ts`).
+public struct CellMotion: Equatable, Sendable {
+    public var transform: OverlayTransform
+    /// The edge a reveal grows from; `right` when unsaid.
+    public var direction: AnimDirection?
+    /// Move the picture inside the mask rather than the cell.
+    public var inside: Bool?
+
+    public init(transform: OverlayTransform, direction: AnimDirection? = nil, inside: Bool? = nil) {
+        self.transform = transform; self.direction = direction; self.inside = inside
+    }
+}
+
+/// Every drawn cell's motion at `t` seconds into the slide, or nil for a
+/// collage that does not move. `seconds` is the slide's screen time — what an
+/// exit is laid against; without one, cells that entered stay.
+public func collageCellMotions(_ collage: SlideCollage, _ cells: [CellRect], _ frame: Size, _ t: Double,
+                               _ seconds: Double?) -> [CellMotion?]? {
+    let enter = collage.enter
+    let exit = collage.exit
+    if enter == nil && exit == nil { return nil }
+    let boxes = cells.map(\.rect)
+    let delays = enter.map { staggerDelays(boxes, frame, $0.stagger) } ?? cells.map { _ in 0 }
+    var ends: [Double?] = cells.map { _ in nil }
+    if let exit, let seconds {
+        let stagger = enter?.stagger ?? Stagger(each: 0, order: .sequence)
+        let ranks = staggerRanks(boxes, frame, stagger.order, seed: stagger.seed ?? 0)
+        let top = max(0, ranks.max() ?? 0)
+        let each = max(0, stagger.each)
+        // Reverse: last in, first out — the highest rank's window ends first.
+        ends = ranks.map { r in seconds - Double(exit.reverse ? r : top - r) * each }
+    }
+    return cells.indices.map { i -> CellMotion? in
+        var inStep: AnimStep? = nil
+        if let enter {
+            var step = enter.step
+            step.delay = delays[i]
+            inStep = step
+        }
+        let outStep: AnimStep? = ends[i] != nil ? exit?.step : nil
+        let anim = ElementAnimation(in: .some(inStep), out: .some(outStep))
+        let transform = transformAt(anim, TimeWindow(start: 0, end: ends[i]), t)
+        let entering = t < delays[i] + (enter?.step.duration ?? 0)
+        let step = entering ? enter?.step : exit?.step
+        return CellMotion(transform: transform, direction: step?.direction, inside: step?.inside)
+    }
+}
+
+/// When a collage slide is at rest — the last cell's entrance done. What a
+/// still of it is taken at; 0 with no entrance. Resolved on a frame of the
+/// slide's shape, since the ranks depend on where the cells are.
+public func collageSettleSeconds(_ collage: SlideCollage?, _ aspect: Double) -> Double {
+    guard let collage, let enter = collage.enter else { return 0 }
+    let cells = resolveCollage(collage, aspect, 1)
+    return staggerSettle(staggerDelays(cells.map(\.rect), Size(aspect, 1), enter.stagger), enter.step)
+}
+
+/// The registry entry a collage draws with. Nil only for an id `readCollage` would already have refused.
+public func collageEntry(_ collage: SlideCollage) -> LayoutTemplateEntry? {
+    layoutTemplate(collage.template)
+}
+
+/// How many cells the collage's template DRAWS (its `cells` may hold more).
+public func collageCellCount(_ collage: SlideCollage) -> Int {
+    collageEntry(collage).map { cellCount($0.template) } ?? 0
+}
+
+/// The lead picture as the collage's first cell — what lets every consumer
+/// treat "cell i" uniformly. Cell 0 is the slide; the rest are `cells[i − 1]`.
+public struct CollageLead: Equatable, Sendable {
+    public var media: SavedMediaRef?
+    public var framing: Framing
+    public var develop: DevelopSettings?
+    public var motion: FramingMotion?
+
+    public init(media: SavedMediaRef?, framing: Framing, develop: DevelopSettings?, motion: FramingMotion?) {
+        self.media = media; self.framing = framing; self.develop = develop; self.motion = motion
+    }
+}
+
+public func collageCellAt(_ lead: CollageLead, _ collage: SlideCollage, _ i: Int) -> CollageCell {
+    if i == 0 {
+        return CollageCell(media: lead.media, framing: lead.framing, develop: lead.develop, motion: lead.motion,
+                           place: collage.place)
+    }
+    let k = i - 1
+    return k >= 0 && k < collage.cells.count ? collage.cells[k] : createCollageCell()
+}
+
+/// The places of every drawn cell, in cell order, for `resolveLayout`.
+public func collagePlaces(_ collage: SlideCollage) -> [CellPlace] {
+    (0..<collageCellCount(collage)).map { i in
+        if i == 0 { return collage.place }
+        return i - 1 < collage.cells.count ? collage.cells[i - 1].place : defaultCellPlace
+    }
+}
+
+/// The collage's cells in a `w`×`h` frame. Empty for an unknown template.
+public func resolveCollage(_ collage: SlideCollage, _ w: Double, _ h: Double) -> [CellRect] {
+    guard let entry = collageEntry(collage) else { return [] }
+    return resolveLayout(entry.template, w, h, collage.spacing, collagePlaces(collage))
+}
+
+/// The refs every DRAWN cell names, lead first — what a surface needs to find
+/// or fetch before it can paint the slide. A cell without a picture is skipped.
+public func collageMediaRefs(_ lead: CollageLead, _ collage: SlideCollage) -> [SavedMediaRef] {
+    (0..<collageCellCount(collage)).compactMap { collageCellAt(lead, collage, $0).media }
+}
+
+/// A picture a smaller template no longer draws, by its 1-based cell number.
+public struct KeptCollagePicture: Equatable, Sendable {
+    public var cell: Int
+    public var media: SavedMediaRef
+
+    public init(cell: Int, media: SavedMediaRef) { self.cell = cell; self.media = media }
+}
+
+/// The pictures a smaller template no longer draws — kept, and listed so the
+/// author knows they are there.
+public func collageKept(_ collage: SlideCollage) -> [KeptCollagePicture] {
+    let n = collageCellCount(collage)
+    var kept: [KeptCollagePicture] = []
+    for (k, cell) in collage.cells.enumerated() {
+        let number = k + 2
+        if number > n, let media = cell.media { kept.append(KeptCollagePicture(cell: number, media: media)) }
+    }
+    return kept
+}
+
+/// Change the template and keep every picture: the list is padded with empty
+/// cells up to the new count, never truncated.
+public func retemplateCollage(_ collage: SlideCollage, _ template: String) -> SlideCollage? {
+    guard let entry = layoutTemplate(template) else { return nil }
+    let need = max(0, cellCount(entry.template) - 1)
+    var out = collage
+    while out.cells.count < need { out.cells.append(createCollageCell()) }
+    out.template = template
+    return out
+}
+
+/// A lead and its collage, as a write hands them back.
+public struct CollageWrite: Equatable, Sendable {
+    public var lead: CollageLead
+    public var collage: SlideCollage
+
+    public init(lead: CollageLead, collage: SlideCollage) { self.lead = lead; self.collage = collage }
+}
+
+/// Swap two cells' pictures with everything that is about the picture — its
+/// framing, its develop, its motion — never their places, which belong to the slot.
+public func swapCollageCells(_ lead: CollageLead, _ collage: SlideCollage, _ a: Int, _ b: Int) -> CollageWrite {
+    if a == b || a < 0 || b < 0 { return CollageWrite(lead: lead, collage: collage) }
+    let n = max(collage.cells.count + 1, a + 1, b + 1)
+    var all = (0..<n).map { collageCellAt(lead, collage, $0) }
+    let cellA = all[a]
+    let cellB = all[b]
+    func swapped(_ from: CollageCell, into to: CollageCell) -> CollageCell {
+        var out = to
+        out.media = from.media
+        out.framing = from.framing
+        out.develop = from.develop
+        out.motion = from.motion
+        return out
+    }
+    all[a] = swapped(cellB, into: cellA)
+    all[b] = swapped(cellA, into: cellB)
+    var next = collage
+    next.cells = Array(all.dropFirst())
+    let first = all[0]
+    return CollageWrite(
+        lead: CollageLead(media: first.media, framing: first.framing, develop: first.develop, motion: first.motion),
+        collage: next
+    )
+}
+
+/// What a write changes on one cell — the web's `Partial<CollageCell>`. The
+/// fields that may be written NULL are double optionals: `.none` leaves the
+/// cell's own, `.some(nil)` clears it.
+public struct CollageCellPatch: Equatable, Sendable {
+    public var media: SavedMediaRef??
+    public var framing: Framing?
+    public var develop: DevelopSettings??
+    public var motion: FramingMotion??
+    public var place: CellPlace?
+
+    public init(media: SavedMediaRef?? = .none, framing: Framing? = nil, develop: DevelopSettings?? = .none,
+                motion: FramingMotion?? = .none, place: CellPlace? = nil) {
+        self.media = media; self.framing = framing; self.develop = develop; self.motion = motion; self.place = place
+    }
+}
+
+/// Write cell `i` (0 = the lead), returning the new lead and collage.
+public func withCollageCell(_ lead: CollageLead, _ collage: SlideCollage, _ i: Int,
+                            _ patch: CollageCellPatch) -> CollageWrite {
+    if i == 0 {
+        var nextLead = lead
+        if let media = patch.media { nextLead.media = media }
+        if let framing = patch.framing { nextLead.framing = framing }
+        if let develop = patch.develop { nextLead.develop = develop }
+        if let motion = patch.motion { nextLead.motion = motion }
+        var next = collage
+        if let place = patch.place { next.place = place }
+        return CollageWrite(lead: nextLead, collage: next)
+    }
+    var next = collage
+    while next.cells.count < i { next.cells.append(createCollageCell()) }
+    var cell = next.cells[i - 1]
+    if let media = patch.media { cell.media = media }
+    if let framing = patch.framing { cell.framing = framing }
+    if let develop = patch.develop { cell.develop = develop }
+    if let motion = patch.motion { cell.motion = motion }
+    if let place = patch.place { cell.place = place }
+    next.cells[i - 1] = cell
+    return CollageWrite(lead: lead, collage: next)
 }

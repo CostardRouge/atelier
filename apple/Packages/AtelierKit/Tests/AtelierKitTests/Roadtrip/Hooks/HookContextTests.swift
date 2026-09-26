@@ -1,9 +1,8 @@
 // Port of `src/shared/roadtrip/hooks/hook-context.test.ts` — the calendar a
 // hook reads, whether a piece's opener moves, and the scrub read through the
-// shared context. Two cases lean on modules not in the kernel yet: `deckSlides`
-// (`deck.ts`, ported in parallel) is skipped with its reason, and the web's
-// `badgeElements` + `DEFAULT_BADGE_LAYOUT` are stood in for by a builder that
-// makes one text element per piece under the same deterministic ids
+// shared context — the `auto` hook through `deckSlides` (`Deck.swift`). The
+// web's `badgeElements` + `DEFAULT_BADGE_LAYOUT` are stood in for by a builder
+// that makes one text element per piece under the same deterministic ids
 // (`piece:<key>`), which is all that case reads.
 
 import XCTest
@@ -94,8 +93,12 @@ final class HookMovesTests: XCTestCase {
         XCTAssertFalse(hookMoves(trip, first))
     }
 
-    func testMakesAnAutoHookLeaveAsAVideoAsAnAnimatedBadgeWould() throws {
-        throw XCTSkip("`deckSlides` is `deck.ts`, ported by a parallel task; `hookMoves` itself is pinned above")
+    func testMakesAnAutoHookLeaveAsAVideoAsAnAnimatedBadgeWould() {
+        let (trip, hero) = fixture()
+        let plain = deckSlides(trip, hero)[0]
+        let scrub = deckSlides(trip, scrubbing(hero))[0]
+        XCTAssertEqual(plain.medium, .image)
+        XCTAssertEqual(scrub.medium, .video)
     }
 }
 
