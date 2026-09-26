@@ -74,6 +74,7 @@ final class PaintCanvas {
         var stroke: PaintStyle = .color(CSSColor.black)
         var lineWidth: Double = 1
         var lineCap: CGLineCap = .butt
+        var lineJoin: CGLineJoin = .miter
         var dash: [CGFloat] = []
         var font = PaintFont(["sans-serif"], size: 10)
         var align: CanvasTextAlign = .left
@@ -157,6 +158,12 @@ final class PaintCanvas {
     var lineCap: CGLineCap {
         get { state.lineCap }
         set { state.lineCap = newValue }
+    }
+
+    /// `lineJoin`: a canvas's default is `miter`, as CG's is.
+    var lineJoin: CGLineJoin {
+        get { state.lineJoin }
+        set { state.lineJoin = newValue }
     }
 
     func setLineDash(_ segments: [Double]) {
@@ -316,6 +323,7 @@ final class PaintCanvas {
     private func applyStrokeGeometry() {
         cg.setLineWidth(CGFloat(state.lineWidth))
         cg.setLineCap(state.lineCap)
+        cg.setLineJoin(state.lineJoin)
         cg.setLineDash(phase: 0, lengths: state.dash)
     }
 
@@ -484,6 +492,42 @@ final class PaintCanvas {
             cg.textPosition = .zero
             CTLineDraw(set.line, cg)
         }
+        cg.restoreGState()
+    }
+
+    /// `strokeText(text, x, y, maxWidth)`: the glyphs' outlines stroked in
+    /// the stroke style at the line width (the openers' legibility halo),
+    /// placed and squeezed exactly as `fillText` places them.
+    func strokeText(_ text: String, _ x: Double, _ y: Double, maxWidth: Double? = nil) {
+        guard !text.isEmpty, case .color(let color) = state.stroke else { return }
+        let set = measureText(text)
+        var squeeze = 1.0
+        if let maxWidth, maxWidth > 0, set.width > maxWidth { squeeze = maxWidth / set.width }
+        let width = set.width * squeeze
+        let dx: Double
+        switch state.align {
+        case .left: dx = 0
+        case .center: dx = -width / 2
+        case .right: dx = -width
+        }
+        let dy: Double
+        switch state.baseline {
+        case .alphabetic: dy = 0
+        case .top: dy = set.emAscent
+        case .bottom: dy = -set.emDescent
+        case .middle: dy = (set.emAscent - set.emDescent) / 2
+        }
+
+        cg.saveGState()
+        applyCommon()
+        applyStrokeGeometry()
+        cg.setStrokeColor(color)
+        cg.setTextDrawingMode(.stroke)
+        cg.textMatrix = CGAffineTransform(scaleX: 1, y: -1)
+        cg.translateBy(x: CGFloat(x + dx), y: CGFloat(y + dy))
+        if squeeze != 1 { cg.scaleBy(x: CGFloat(squeeze), y: 1) }
+        cg.textPosition = .zero
+        CTLineDraw(set.line, cg)
         cg.restoreGState()
     }
 
