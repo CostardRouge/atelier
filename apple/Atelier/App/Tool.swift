@@ -43,7 +43,7 @@ enum Tool: String, CaseIterable, Identifiable {
         case .develop: RollGallery()
         case .trips: PlannedToolView(tool: .trips)
         case .studio: PlannedToolView(tool: .studio)
-        case .sources: PlannedToolView(tool: .sources)
+        case .sources: SourcesView()
         }
     }
 }

@@ -11,6 +11,9 @@
 	<true/>
 	<key>com.apple.security.files.bookmarks.app-scope</key>
 	<true/>
+	<!-- Outgoing requests: a connected Winnow (Sources), and nothing else. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
 	<!-- "Save to Photos" on the Mac. -->
 	<key>com.apple.security.personal-information.photos-library</key>
 	<true/>

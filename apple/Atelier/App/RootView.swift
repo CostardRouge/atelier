@@ -1,5 +1,6 @@
 // The shell: a tab bar on iPhone and iPad, a sidebar on the Mac — one
-// selection, the same four screens.
+// selection, the same four screens. The Winnow connections are the shell's
+// (`ConnectionStore.shared`), handed to every tool through the environment.
 
 import SwiftUI
 
@@ -17,6 +18,7 @@ struct RootView: View {
             }
         }
         .tint(palette.accent)
+        .environment(ConnectionStore.shared)
         #else
         NavigationSplitView {
             List(selection: $tool) {
@@ -30,6 +32,7 @@ struct RootView: View {
             NavigationStack { tool.screen }
         }
         .tint(palette.accent)
+        .environment(ConnectionStore.shared)
         #endif
     }
 }
