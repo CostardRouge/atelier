@@ -9,27 +9,20 @@
 // layer actually rewrites (`ResolvedHook.rewrites`), and called at paint time.
 // The ids stay deterministic (`piece:<key>`), so a tap on the stage still
 // lands on the numeral while it is counting.
-//
-// The web builds the elements with `badgeElements(content, layout, aspect,
-// styles, durationSeconds, cascade)`. That builder is `badge-layout.ts`'s
-// behaviour, not ported yet (`BadgeLayout.swift` holds its stored half), so
-// the builder is INJECTED here: the caller hands the one it has. When
-// `badgeElements` lands, the web's own signature is one line beside it —
-// `hookElementsAt(hook, content) { badgeElements($0, layout, aspect, styles,
-// durationSeconds, cascade) }`.
 
 import Foundation
 
 /// The badge's elements at `t` seconds into the hook.
 public typealias ElementsAt = (_ tSeconds: Double) -> [OverlayElement]
 
-/// A per-frame element builder, or nil when nothing rewrites the badge — the
-/// caller then keeps the static elements it already has.
-public func hookElementsAt(_ hook: ResolvedHook?, _ content: BadgeContent?,
-                           elements build: @escaping (BadgeContent) -> [OverlayElement]) -> ElementsAt? {
+/// A per-frame element builder over `badgeElements`, or nil when nothing
+/// rewrites the badge — the caller then keeps the static elements it has.
+public func hookElementsAt(_ hook: ResolvedHook?, _ content: BadgeContent?, _ layout: BadgeLayout, _ aspect: Double,
+                           _ styles: BadgePieceStyles, _ durationSeconds: Double,
+                           _ cascade: BadgeCascade? = nil) -> ElementsAt? {
     guard let hook, hook.rewrites, let content else { return nil }
     return { t in
         guard let at = hook.contentAt(content, t) else { return [] }
-        return build(at)
+        return badgeElements(at, layout, aspect, styles, durationSeconds, cascade)
     }
 }

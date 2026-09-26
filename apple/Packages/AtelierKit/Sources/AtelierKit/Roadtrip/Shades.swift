@@ -154,3 +154,16 @@ public func readShade(_ raw: JSONValue?, makeId: () -> String = newTripId) -> Sh
 public func readShades(_ raw: JSONValue?, makeId: () -> String = newTripId) -> [Shade] {
     (raw?.arrayValue ?? []).compactMap { readShade($0, makeId: makeId) }
 }
+
+/// The badge block's vertical extent, in fractions of the frame's height —
+/// what a shade following the hook ends at (`badgeBlockExtent` measures it).
+public struct HookBlock: Equatable, Sendable {
+    public var top: Double
+    public var bottom: Double
+    /// The badge's grid anchor, what `followAnchor` places a shade by.
+    public var anchor: OverlayAnchor?
+
+    public init(top: Double, bottom: Double, anchor: OverlayAnchor? = nil) {
+        self.top = top; self.bottom = bottom; self.anchor = anchor
+    }
+}

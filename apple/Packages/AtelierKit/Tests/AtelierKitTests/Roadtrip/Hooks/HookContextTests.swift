@@ -1,9 +1,8 @@
 // Port of `src/shared/roadtrip/hooks/hook-context.test.ts` — the calendar a
 // hook reads, whether a piece's opener moves, and the scrub read through the
-// shared context — the `auto` hook through `deckSlides` (`Deck.swift`). The
-// web's `badgeElements` + `DEFAULT_BADGE_LAYOUT` are stood in for by a builder
-// that makes one text element per piece under the same deterministic ids
-// (`piece:<key>`), which is all that case reads.
+// shared context — the `auto` hook through `deckSlides` (`Deck.swift`), the
+// per-frame elements through `badgeElements` over `defaultBadgeLayout`, as on
+// the web.
 
 import XCTest
 @testable import AtelierKit
@@ -113,17 +112,6 @@ final class HookScrubThroughContextTests: XCTestCase {
         exif: nil
     )
 
-    /// Stands in for `badgeElements(content, DEFAULT_BADGE_LAYOUT, …)`: one text
-    /// element per present piece, under the web's deterministic ids.
-    private func elements(_ c: BadgeContent) -> [OverlayElement] {
-        BadgePiece.allCases.compactMap { piece -> OverlayElement? in
-            guard let text = c[piece] else { return nil }
-            var el = OverlayElement(id: "piece:\(piece.rawValue)", kind: .text, anchor: .bottomLeft, x: 0.07, y: 0.9)
-            el.text = text
-            return el
-        }
-    }
-
     func testStepsTheNumeralWhileItSweepsAndGivesTheBadgeItsOwnValueBackAtRest() {
         let (trip, hero) = fixture()
         let post = scrubbing(hero)
@@ -147,11 +135,11 @@ final class HookScrubThroughContextTests: XCTestCase {
         let ctx = hookContextFor(trip, hero, 9.0 / 16, content)
         XCTAssertEqual(ctx.car, trip.car)
         let plain = resolveHook(hero.badge.hook, ctx)
-        XCTAssertNil(hookElementsAt(plain, content, elements: elements))
+        XCTAssertNil(hookElementsAt(plain, content, defaultBadgeLayout, 9.0 / 16, [:], 4))
 
         let post = scrubbing(hero)
         let scrub = resolveHook(post.badge.hook, hookContextFor(trip, post, 9.0 / 16, content))
-        let at = hookElementsAt(scrub, content, elements: elements)
+        let at = hookElementsAt(scrub, content, defaultBadgeLayout, 9.0 / 16, [:], 4)
         func headline(_ t: Double) -> String? {
             at?(t).first { $0.id == "piece:headline" }?.text
         }

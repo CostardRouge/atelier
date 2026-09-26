@@ -1,12 +1,20 @@
-// What the day badge SAYS, as the trip document stores it — port of the
-// stored half of `src/shared/roadtrip/day-badge.ts`: the counter's modes, the
-// badge's pieces, and every word the badge can say.
-//
-// Types + reader only; the behaviour of `day-badge.ts` (the content of a
-// badge for a post, the counter's pieces and their previews, the camera
-// plate's input) is ported later INTO THIS FILE.
+// What the day badge SAYS — port of `src/shared/roadtrip/day-badge.ts`: the
+// counter's modes, the badge's pieces and every word the badge can say (as the
+// trip stores them), then (`MARK: - what a badge says`) the content of a badge
+// for a post, the counter's pieces and their previews.
 //
 // Rules kept:
+// - ONE dominant number, everything else subordinate: the word ("Day") is a
+//   piece of its own, never part of the headline.
+// - Nothing is fabricated: a stage counter over a day no stage covers (or a
+//   stage naming no place) falls back to the day of the trip AND says why; a
+//   preview is the real line for the post in hand, or a reason.
+// - The WHEN line is a piece of its own under the place — it never displaces
+//   the trip's name; it reads the reference day, else the caller's today.
+// - The camera credit is asked for AND measured: off draws nothing, a picture
+//   recording none of the chosen facts draws nothing, and a plate that is only
+//   the plain line is that line. An override is always the plain line.
+// - An emptied override means "computed", never "blank"; an override is trimmed.
 // - The words are DATA and English is only their default: every one is an
 //   editable field on the trip, so a deck in another language is a handful of
 //   fields, never a second vocabulary in the code (the French set is a button,
@@ -167,4 +175,257 @@ public struct BadgeContent: Equatable, Sendable {
         case .exif: return exif
         }
     }
+}
+
+// MARK: - what a badge says
+
+/// A counter mode with a description of WHAT it counts — never an example of
+/// what it would say. The web's `COUNTER_MODES`.
+public struct CounterModeOption: Equatable, Sendable {
+    public let id: CounterMode
+    public let label: String
+    public let hint: String
+}
+
+public let counterModes: [CounterModeOption] = [
+    CounterModeOption(id: .day, label: "Day of trip", hint: "Where this day sits in the whole trip"),
+    CounterModeOption(id: .dayRange, label: "Range of days", hint: "A piece covering several days"),
+    CounterModeOption(id: .stageDay, label: "Day at the place", hint: "Which day of a stage this is"),
+    CounterModeOption(id: .stageLength, label: "Days at the place", hint: "How long the trip stayed there"),
+]
+
+/// The web's `BADGE_PIECES`.
+public struct BadgePieceOption: Equatable, Sendable {
+    public let id: BadgePiece
+    public let label: String
+}
+
+public let badgePieces: [BadgePieceOption] = [
+    BadgePieceOption(id: .kicker, label: "Trip name"),
+    BadgePieceOption(id: .label, label: "Word"),
+    BadgePieceOption(id: .headline, label: "Number"),
+    BadgePieceOption(id: .counter, label: "Out of"),
+    BadgePieceOption(id: .caption, label: "Place"),
+    BadgePieceOption(id: .timing, label: "When"),
+    BadgePieceOption(id: .exif, label: "Camera"),
+]
+
+/// The five plain words a trip edits. The web's `WORD_FIELDS`.
+public enum BadgeWordKey: String, CaseIterable, Sendable {
+    case day, days, of, at, pin
+}
+
+public struct BadgeWordField: Equatable, Sendable {
+    public let key: BadgeWordKey
+    public let label: String
+}
+
+public let wordFields: [BadgeWordField] = [
+    BadgeWordField(key: .day, label: "Day (singular)"),
+    BadgeWordField(key: .days, label: "Days (plural)"),
+    BadgeWordField(key: .of, label: "Out of"),
+    BadgeWordField(key: .at, label: "At a place"),
+    BadgeWordField(key: .pin, label: "Place marker"),
+]
+
+public struct BadgeOptions: Sendable {
+    public var mode: CounterMode
+    public var words: BadgeWords
+    /// What the WHEN line says. `off` leaves the piece out.
+    public var timeAgo: TimeAgoMode
+    /// The day the post is read on; nil = `today`.
+    public var referenceDate: IsoDate?
+    /// Set the place behind the marker glyph.
+    public var showPin: Bool
+    /// Credit the camera. Off by default: a badge is a signature.
+    public var showExif: Bool
+    /// The exposure line as the caller MEASURED it — the legacy path, read
+    /// only while `exif` is not given.
+    public var exposure: String?
+    /// The hook picture's effective EXIF, as the caller READ it: `.none` is
+    /// not given (the legacy `exposure` line is read), `.some(nil)` a picture
+    /// that says nothing.
+    public var exif: ExifData??
+    /// The piece's camera plate; nil is the legacy line under the badge.
+    public var camera: CameraPlateSpec?
+    /// The trip's display names for bodies, keyed by the name the file gives.
+    public var cameraNames: [String: String]?
+    /// Free text replacing a computed piece; empty means "computed".
+    public var overrides: [BadgePiece: String]?
+    /// The real today — the web's `todayIso()` default, handed in.
+    public var today: IsoDate
+
+    public init(mode: CounterMode, words: BadgeWords, timeAgo: TimeAgoMode, referenceDate: IsoDate? = nil,
+                showPin: Bool = false, showExif: Bool = false, exposure: String? = nil, exif: ExifData?? = .none,
+                camera: CameraPlateSpec? = nil, cameraNames: [String: String]? = nil,
+                overrides: [BadgePiece: String]? = nil, today: IsoDate = todayIso(Date(), in: .current)) {
+        self.mode = mode; self.words = words; self.timeAgo = timeAgo; self.referenceDate = referenceDate
+        self.showPin = showPin; self.showExif = showExif; self.exposure = exposure; self.exif = exif
+        self.camera = camera; self.cameraNames = cameraNames; self.overrides = overrides; self.today = today
+    }
+}
+
+/// An en dash, not a hyphen: it is a range, and it is set beside numerals.
+private let badgeRangeDash = "–"
+
+private func badgeTrim(_ s: String) -> String {
+    s.trimmingCharacters(in: .whitespacesAndNewlines)
+}
+
+/// The camera credit: its line, and — when the author composed it — the plate.
+private func badgeCredit(_ opts: BadgeOptions) -> (exif: String?, plate: CameraPlateInput?) {
+    if !opts.showExif { return (nil, nil) }
+    // The legacy path: a finished line handed over by the caller.
+    guard let given = opts.exif else {
+        let line = badgeTrim(opts.exposure ?? "")
+        return (line.isEmpty ? nil : line, nil)
+    }
+    let facts = cameraFacts(given, names: opts.cameraNames)
+    let spec = opts.camera.map { readPlateSpec($0.json) } ?? defaultPlateSpec()
+    let line = factsLine(facts, spec.fields)
+    if line.isEmpty { return (nil, nil) }
+    // The plain line under the badge is the PIECE it always was.
+    let plain = spec.layout == .line && spec.place == .badge && spec.size == 1
+    return (line, plain ? nil : CameraPlateInput(facts: facts, spec: spec, words: cameraWordsOf(opts.words.camera)))
+}
+
+extension BadgeContent {
+    /// One piece written — what an override does.
+    fileprivate mutating func set(_ piece: BadgePiece, _ text: String) {
+        switch piece {
+        case .kicker: kicker = text
+        case .label: label = text
+        case .headline: headline = text
+        case .counter: counter = text
+        case .caption: caption = text
+        case .timing: timing = text
+        case .exif: exif = text
+        }
+    }
+}
+
+/// Apply the author's free text over the derived pieces.
+private func applyOverrides(_ content: BadgeContent, _ overrides: [BadgePiece: String]?) -> BadgeContent {
+    guard let overrides else { return content }
+    var out = content
+    // A credit the author wrote is a line of their own: it replaces the plate.
+    if !badgeTrim(overrides[.exif] ?? "").isEmpty { out.plate = nil }
+    for piece in BadgePiece.allCases {
+        let value = badgeTrim(overrides[piece] ?? "")
+        if !value.isEmpty { out.set(piece, value) }
+    }
+    return out
+}
+
+/// What a counter mode produced, and why it could not produce it.
+public struct CounterPieces: Equatable, Sendable {
+    public var label: String?
+    public var headline: String
+    public var counter: String?
+    public var caption: String?
+    /// Why the mode the author ASKED for could not be honoured, in a sentence,
+    /// or nil when it was. The pieces then hold the day of the trip.
+    public var unavailable: String?
+
+    public init(label: String?, headline: String, counter: String?, caption: String?, unavailable: String?) {
+        self.label = label; self.headline = headline; self.counter = counter; self.caption = caption
+        self.unavailable = unavailable
+    }
+}
+
+/// The counting half of the badge: everything but the trip's name and the
+/// WHEN line. Nil only when the trip's own span cannot be read.
+public func counterPieces(_ trip: TripDoc, _ post: TripPost, _ mode: CounterMode, _ words: BadgeWords,
+                          _ showPin: Bool = false) -> CounterPieces? {
+    let w = words
+    guard let range = postDayRange(trip, post) else { return nil }
+
+    let stage = stageAt(trip, post.date)
+    // The stage's own name when it has one, else the leg its places describe.
+    let place: String? = stage.map(stageLabel).flatMap { $0.isEmpty ? nil : $0 }
+    let marker = badgeTrim(w.pin)
+    let pin = { (text: String?) -> String? in
+        guard let text, !text.isEmpty, showPin, !marker.isEmpty else { return text }
+        return "\(marker) \(text)"
+    }
+
+    var unavailable: String? = nil
+
+    if mode == .stageDay || mode == .stageLength {
+        if let stage, let place, let at = stageDayNumber(stage, post.date) {
+            let region = stageRegionLabel(stage)
+            if mode == .stageLength {
+                let total = spanLength(stage.startDate, stage.endDate) ?? at.total
+                let unit = total == 1 ? w.day.lowercased() : w.days.lowercased()
+                return CounterPieces(label: nil, headline: "\(total)", counter: "\(unit) \(w.at) \(place)",
+                                     caption: pin(region.isEmpty ? nil : region), unavailable: nil)
+            }
+            return CounterPieces(label: pin(place), headline: "\(at.day)", counter: "\(w.of) \(at.total)",
+                                 caption: pin(region.isEmpty ? nil : region), unavailable: nil)
+        }
+        // Outside every stage there is no place to count within.
+        unavailable = stage != nil
+            ? "The stage covering \(formatIsoDate(post.date)) names no place."
+            : "No stage covers \(formatIsoDate(post.date))."
+    }
+
+    let isRange = mode == .dayRange && range.to > range.from
+    if mode == .dayRange && !isRange {
+        unavailable = "This piece tells a single day — give it an end date to count a range."
+    }
+
+    return CounterPieces(
+        label: isRange ? w.days : w.day,
+        headline: isRange ? "\(range.from)\(badgeRangeDash)\(range.to)" : "\(range.from)",
+        counter: "\(w.of) \(range.total)",
+        caption: pin(place),
+        unavailable: unavailable
+    )
+}
+
+/// One mode, as it would really read for THIS post.
+public struct CounterPreview: Equatable, Sendable {
+    public var id: CounterMode
+    public var label: String
+    public var hint: String
+    /// The line this mode would draw, or nil when it cannot draw its own.
+    public var text: String?
+    /// Why not, when `text` is nil.
+    public var reason: String?
+}
+
+/// What each mode would actually say for the post in hand — the real value or
+/// nothing, never a fabricated example.
+public func counterPreviews(_ trip: TripDoc, _ post: TripPost, _ words: BadgeWords,
+                            _ showPin: Bool = false) -> [CounterPreview] {
+    counterModes.map { mode in
+        let pieces = counterPieces(trip, post, mode.id, words, showPin)
+        var text: String? = nil
+        if let pieces, pieces.unavailable == nil {
+            text = [pieces.label, pieces.headline, pieces.counter]
+                .compactMap { $0 }.filter { !$0.isEmpty }.joined(separator: " · ")
+        }
+        let reason = pieces.map { $0.unavailable } ?? "The trip’s own dates are the wrong way round."
+        return CounterPreview(id: mode.id, label: mode.label, hint: mode.hint, text: text, reason: reason)
+    }
+}
+
+/// The badge for a post, or nil when the trip's own span cannot be read (a
+/// reversed date range) — a badge with no trustworthy total says nothing.
+public func badgeContent(_ trip: TripDoc, _ post: TripPost, _ opts: BadgeOptions) -> BadgeContent? {
+    guard let pieces = counterPieces(trip, post, opts.mode, opts.words, opts.showPin) else { return nil }
+    let credit = badgeCredit(opts)
+    let name = badgeTrim(trip.name)
+    let reference = opts.referenceDate ?? opts.today
+    let content = BadgeContent(
+        kicker: name.isEmpty ? nil : name,
+        label: pieces.label,
+        headline: pieces.headline,
+        counter: pieces.counter,
+        caption: pieces.caption,
+        timing: timeAgoLine(post.date, reference, opts.timeAgo, opts.words.time),
+        exif: credit.exif,
+        plate: credit.plate
+    )
+    return applyOverrides(content, opts.overrides)
 }
