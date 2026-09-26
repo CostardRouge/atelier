@@ -5,15 +5,16 @@
 // function, and the cube is the kernel's own bake (`composeLutStack`), so the
 // numbers are the web app's numbers.
 //
-// Known gap, recorded: `CIColorCubeWithColorSpace` samples its lattice
-// TRILINEARLY, while the web's shader samples tetrahedrally by default. On a
-// develop-only cube every grey maps to a grey either way (the lattice is
-// neutral on its axis); the difference is bounded by the cell and shows only
-// on an asymmetric LOOK — a Metal kernel with tetrahedral sampling is the
-// remedy when a look layer arrives here.
+// The cube is drawn by the render graph (`Graph/FrameGrader.swift`): its
+// `CubePass` samples the lattice TETRAHEDRALLY in a Metal kernel
+// (`Kernels/Cube.metal`), the web shader's own maths — which retired
+// `CIColorCubeWithColorSpace` and its trilinear lookup, the one measured gap
+// there was in "preview = the web". The context is the graph's
+// (`RenderContexts.shared`): half-float, no colour management, so the cube
+// sees sRGB codes with headroom above white exactly as the web's float16
+// buffers carry them.
 
 import CoreImage
-import CoreImage.CIFilterBuiltins
 import ImageIO
 import UniformTypeIdentifiers
 import AtelierKit
@@ -48,14 +49,27 @@ enum PictureDecoder {
     /// Decode a file's bytes. A RAW goes through Apple's own developer
     /// (`CIRAWFilter`, the sensor demosaiced by the system), the rest through
     /// ImageIO, oriented by the file's tag.
+    ///
+    /// Either way the picture enters the graph as CODES, the values the web's
+    /// float16 buffers carry (`RenderContexts`). An 8-bit file enters as its
+    /// own codes, never converted — right for an sRGB file; a Display P3 file
+    /// (an iPhone's) has its P3 codes read AS sRGB ones, a little flatter than
+    /// the browser, which converts to sRGB at decode. Not converted here yet,
+    /// and recorded. A RAW's LINEAR light is brought onto the sRGB curve,
+    /// which the colour-managed context used to do on the way out and a
+    /// context with colour management off no longer does — reasoned, not
+    /// measured: the RAW task measures `CIRAWFilter`'s output on CI.
     static func decode(_ data: Data, name: String) -> DecodedPicture? {
         let properties = fileProperties(data)
         if isRaw(name),
            let raw = CIRAWFilter(imageData: data, identifierHint: (name as NSString).pathExtension.lowercased()),
-           let image = raw.outputImage {
+           let linear = raw.outputImage {
+            let image = linear.applyingFilter("CILinearToSRGBToneCurve")
             return DecodedPicture(image: image, properties: properties, isRaw: true)
         }
-        guard let image = CIImage(data: data, options: [.applyOrientationProperty: true]) else { return nil }
+        guard let image = CIImage(data: data, options: [.applyOrientationProperty: true, .colorSpace: NSNull()]) else {
+            return nil
+        }
         return DecodedPicture(image: image, properties: properties, isRaw: false)
     }
 
@@ -98,10 +112,17 @@ final class PictureRenderer {
         var longEdge: Int?
     }
 
-    private let context = CIContext(options: [.cacheIntermediates: false])
-    private let srgb = CGColorSpace(name: CGColorSpace.sRGB)!
+    /// The graph's own context (`RenderContexts`): half-float, no colour
+    /// management — the cube sees sRGB codes with headroom, as the web's do.
+    private let context = RenderContexts.shared
+    private let srgb = RenderContexts.srgb
     private let lock = NSLock()
-    private var cubeCache: (develop: DevelopSettings, data: Data, size: Int)?
+    /// The graph: today the cube alone; the passes come with their tasks.
+    private let grader = FrameGrader()
+    /// The develop baked once per develop: a repaint with the same numbers
+    /// pays neither the bake nor the repack — the SAME `CubeLut` goes back to
+    /// the grader, whose cube cache then answers on identity.
+    private var bakeCache: (develop: DevelopSettings?, cube: CubeLut?)?
 
     /// The delivered frame for an aspect: the largest box of it inside the picture.
     static func deliveredSize(width: Int, height: Int, aspect: String) -> (width: Int, height: Int) {
@@ -134,66 +155,46 @@ final class PictureRenderer {
 
         // 2. The cap. The develop is per pixel, so it commutes with a resample
         //    to within the resample's own rounding — and this is what keeps the
-        //    stage inside its budget.
+        //    stage inside its budget. The scale it took is handed to the graph,
+        //    for a pass whose kernel is sized in SOURCE pixels.
+        var scale = 1.0
         if let cap = recipe.longEdge, max(delivered.width, delivered.height) > cap {
-            image = scaled(image, longEdge: cap)
+            let fitted = FrameGrader.fit(image, longEdge: cap)
+            image = fitted.image
+            scale = fitted.scale
         }
 
-        // 3. The develop, as the ONE cube the kernel bakes.
-        if let cube = composeLutStack([], output: OutputTransform.none, interpolation: .tetrahedral, develop: recipe.develop) {
-            image = applyCube(cube, develop: recipe.develop ?? .default, to: image)
-        }
-        return image
-    }
-
-    /// Lanczos-resampled to `longEdge`, the extent kept integral.
-    func scaled(_ image: CIImage, longEdge: Int) -> CIImage {
-        let w = image.extent.width
-        let h = image.extent.height
-        let scale = CGFloat(longEdge) / max(w, h)
-        guard scale < 1 else { return image }
-        let filter = CIFilter.lanczosScaleTransform()
-        filter.inputImage = image
-        filter.scale = Float(scale)
-        filter.aspectRatio = 1
-        let out = filter.outputImage ?? image.transformed(by: CGAffineTransform(scaleX: scale, y: scale))
-        return out.cropped(to: CGRect(x: 0, y: 0, width: (w * scale).rounded(), height: (h * scale).rounded()))
-    }
-
-    private func applyCube(_ cube: CubeLut, develop: DevelopSettings, to image: CIImage) -> CIImage {
-        let data = cubeData(cube, develop: develop)
-        let filter = CIFilter.colorCubeWithColorSpace()
-        filter.inputImage = image
-        filter.cubeDimension = Float(cube.size)
-        filter.cubeData = data
-        // The cube is defined on sRGB CODES, as the web's is: Core Image
-        // converts from its working space to sRGB around the lookup.
-        filter.colorSpace = srgb
-        return filter.outputImage ?? image
-    }
-
-    /// The lattice as Core Image wants it — RGBA float32, red fastest — kept
-    /// for the develop it was baked from, so a repaint does not re-pack it.
-    private func cubeData(_ cube: CubeLut, develop: DevelopSettings) -> Data {
+        // 3. The develop, as the ONE cube the kernel bakes, drawn by the
+        //    graph's cube pass — tetrahedrally, the web shader's way. The
+        //    recipe is built under the lock and owes nothing to the grader
+        //    afterwards, so the render itself runs outside it.
         lock.lock()
         defer { lock.unlock() }
-        if let hit = cubeCache, hit.size == cube.size, sameDevelop(hit.develop, develop) { return hit.data }
-        let n = cube.size * cube.size * cube.size
-        var rgba = [Float](repeating: 1, count: n * 4)
-        for i in 0..<n {
-            rgba[i * 4] = cube.data[i * 3]
-            rgba[i * 4 + 1] = cube.data[i * 3 + 1]
-            rgba[i * 4 + 2] = cube.data[i * 3 + 2]
-        }
-        let data = rgba.withUnsafeBufferPointer { Data(buffer: $0) }
-        cubeCache = (develop, data, cube.size)
-        return data
+        grader.setCube(bakedCubeLocked(for: recipe.develop))
+        return grader.render(source: image, sourceScale: scale)
+    }
+
+    /// The develop's cube, baked once per develop (`sameDevelop`) — nil for
+    /// a picture as shot, which the graph then leaves untouched. The lock is
+    /// the caller's.
+    private func bakedCubeLocked(for develop: DevelopSettings?) -> CubeLut? {
+        if let hit = bakeCache, sameDevelop(hit.develop, develop) { return hit.cube }
+        let cube = composeLutStack([], output: OutputTransform.none, interpolation: .tetrahedral, develop: develop)
+        bakeCache = (develop, cube)
+        return cube
+    }
+
+    /// Lanczos-resampled to `longEdge`, never up, the extent kept integral —
+    /// the graph's own resampler.
+    func scaled(_ image: CIImage, longEdge: Int) -> CIImage {
+        FrameGrader.fit(image, longEdge: longEdge).image
     }
 
     // MARK: - out
 
+    /// 8-bit pixels through the graph's context, tagged sRGB.
     func cgImage(_ image: CIImage) -> CGImage? {
-        context.createCGImage(image, from: image.extent, format: .RGBA8, colorSpace: srgb)
+        FrameGrader.cgImage(image, context: context)
     }
 
     /// RGBA bytes of the image shrunk to `longEdge` — what the histogram and

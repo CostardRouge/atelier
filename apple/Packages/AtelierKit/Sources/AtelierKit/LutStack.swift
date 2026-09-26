@@ -5,7 +5,8 @@
 // output transform. A correction belongs before a look, a delivery curve after
 // it. Everything downstream — the stage, every export, every thumbnail — takes
 // exactly one cube and never learns that stacking exists. On Apple that one
-// cube is what `CIColorCube` is handed (`apple/Atelier/Render/`).
+// cube is what the render graph's cube pass is handed
+// (`apple/Atelier/Render/Passes/CubePass.swift`), read tetrahedrally.
 
 import Foundation
 

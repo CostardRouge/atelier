@@ -60,6 +60,11 @@ targets:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
         SUPPORTS_MACCATALYST: NO
+        # The Core Image kernels (Atelier/Render/Kernels/*.metal) compile
+        # into the app's default.metallib under these two flags, or they do
+        # not load at all (`Render/Graph/Kernels.swift`).
+        MTL_COMPILER_FLAGS: "-fcikernel"
+        MTLLINKER_FLAGS: "-cikernel"
 
   Atelier-macOS:
     type: application
@@ -80,6 +85,42 @@ targets:
       base:
         CODE_SIGN_ENTITLEMENTS: Support/Atelier-macOS.entitlements
         ENABLE_HARDENED_RUNTIME: YES
+        MTL_COMPILER_FLAGS: "-fcikernel"
+        MTLLINKER_FLAGS: "-cikernel"
+      configs:
+        # `@testable import Atelier` from the gate needs the host built for
+        # testing; Debug is what CI and Xcode run the tests in.
+        Debug:
+          ENABLE_TESTABILITY: YES
+
+  # The render gate (AtelierTests/Render/*Tests.swift): every Core Image
+  # kernel held to its pure twin in AtelierKit, the way the web's
+  # `scripts/check-render.mjs` holds the GLSL. Hosted by the Mac app because
+  # the kernels live in its default.metallib; run by `xcodebuild test -scheme
+  # Atelier-macOS`, which CI's app job does.
+  AtelierTests:
+    type: bundle.unit-test
+    platform: macOS
+    sources:
+      - path: AtelierTests
+    dependencies:
+      - target: Atelier-macOS
+      - package: AtelierKit
+    info:
+      path: Support/Info-AtelierTests.plist
+      properties:
+        CFBundleName: AtelierTests
+    settings:
+      base:
+        # The project's product name and bundle id are the app's; a test
+        # bundle wearing them would collide with its own host.
+        PRODUCT_NAME: AtelierTests
+        PRODUCT_BUNDLE_IDENTIFIER: website.steeve.atelier.tests
+        # Hosted: the gate runs INSIDE the Mac app, whose bundle holds the
+        # metallib `Kernels` loads. Said outright rather than left to the
+        # generator's inference from the dependency above.
+        TEST_HOST: "$(BUILT_PRODUCTS_DIR)/Atelier.app/Contents/MacOS/Atelier"
+        BUNDLE_LOADER: "$(TEST_HOST)"
 
 schemes:
   Atelier-iOS:
@@ -92,5 +133,10 @@ schemes:
     build:
       targets:
         Atelier-macOS: all
+        AtelierTests: [test]
     run:
       config: Debug
+    test:
+      config: Debug
+      targets:
+        - AtelierTests
