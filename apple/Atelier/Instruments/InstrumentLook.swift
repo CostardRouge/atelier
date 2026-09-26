@@ -5,11 +5,13 @@
 // web's `localStorage['atelier.lut.interpolation']`) and the output
 // transform (`Transfer.swift`).
 //
-// What is not here yet, said on screen rather than left blank: the BUILT-IN
-// looks. On the web they are `public/luts/` — 29 files, 37 MB, the four Sony
-// 65³ conversions alone 20 MB — and whether the app bundles them, a subset,
-// or fetches them is the maintainer's call (`apple/README.md`, the Looks
-// row). A `.cube` the person owns loads from Files today.
+// The BUILT-IN looks are the bundle's (`public/luts/`, 37 MB, bundled whole —
+// the coordinator's call), read through the ONE helper every look reader uses
+// (`Look/BuiltinLutFiles.swift`), grouped as the web's picker groups them.
+// The grid button opens the look gallery (`Look/LookGalleryView.swift`) with
+// "No LUT (original)" first, as the web's `LutPicker` does; a pack look or a
+// film stock picked there is resolved to its lattice and worn in the
+// uploaded slot, named. A `.cube` the person owns still loads from Files.
 //
 // The strength is the web LUT Studio's own: with no output transform the
 // cube pass blends the look against the original at its strength, exactly
@@ -65,11 +67,12 @@ final class LookCubes: @unchecked Sendable {
 @MainActor
 @Observable
 final class InstrumentLook {
-    /// The picker's value: the web's `'none' | builtin id | 'custom'`, less
-    /// the built-ins (see the header).
+    /// The picker's value: the web's `'none' | builtin id | 'custom'`.
     enum Choice: Hashable {
         /// "No LUT (original)".
         case original
+        /// A built-in, by its manifest id.
+        case builtin(String)
         case custom
     }
 
@@ -77,6 +80,9 @@ final class InstrumentLook {
     /// The uploaded look, kept while another is chosen (the web's `customLut`).
     private(set) var customLut: CubeLut?
     private(set) var customName: String?
+    /// The built-in worn now, parsed from the bundle.
+    private(set) var builtinLut: CubeLut?
+    private(set) var builtinName: String?
     private(set) var cubeError: String?
     private(set) var busy = false
     /// Strength, 0…3 — 100 % is the look as authored; it persists across looks.
@@ -87,11 +93,80 @@ final class InstrumentLook {
     private(set) var lutSerial = 0
 
     /// The look to grade through, or nil for the original.
-    var lut: CubeLut? { choice == .custom ? customLut : nil }
+    var lut: CubeLut? {
+        switch choice {
+        case .original: return nil
+        case .builtin: return builtinLut
+        case .custom: return customLut
+        }
+    }
 
     func choose(_ next: Choice) {
         cubeError = nil
-        choice = next == .custom && customLut == nil ? .original : next
+        switch next {
+        case .original:
+            choice = .original
+        case .custom:
+            choice = customLut == nil ? .original : .custom
+        case .builtin(let id):
+            Task { await loadBuiltin(id) }
+        }
+    }
+
+    /// A built-in from the bundle, parsed off the main actor, chosen once read.
+    func loadBuiltin(_ id: String) async {
+        cubeError = nil
+        busy = true
+        let parsed = await BuiltinLutFiles.loadCube(id)
+        busy = false
+        guard let parsed, let entry = BuiltinLutFiles.lut(id) else {
+            cubeError = "That look is no longer available."
+            return
+        }
+        builtinLut = parsed
+        builtinName = entry.name
+        lutSerial += 1
+        choice = .builtin(id)
+    }
+
+    /// What the gallery rings: the worn look's pick id.
+    var galleryId: String? {
+        switch choice {
+        case .original: return "none"
+        case .builtin(let id): return id
+        case .custom: return nil
+        }
+    }
+
+    /// A pick from the look gallery, at the strength it was judged at — the
+    /// gallery's slider IS this one from the moment of the pick.
+    func pick(_ id: String, strength: Double, library: LookLibrary) async {
+        intensity = strength
+        if id == "none" {
+            choose(.original)
+            return
+        }
+        if BuiltinLutFiles.lut(id) != nil {
+            await loadBuiltin(id)
+            return
+        }
+        // A pack look (or a film stock): resolved to its lattice and worn in
+        // the uploaded slot, under its own name.
+        let item = library.nodes(includeFilm: true, live: false).lazy.flatMap(\.items).first { $0.id == id }
+        guard let item else { return }
+        cubeError = nil
+        busy = true
+        let answer = await library.resolve(item.resolve)
+        busy = false
+        switch answer {
+        case .cube(let parsed):
+            customLut = parsed
+            customName = item.name
+            lutSerial += 1
+            choice = .custom
+        case .missing(let why):
+            cubeError = why
+        }
     }
 
     /// Lattice interpolation is a RENDER preference of this device, never a
@@ -137,7 +212,8 @@ final class InstrumentLook {
     /// What a renderer is handed now, or nil for the original.
     var grade: LookGrade? {
         guard let lut else { return nil }
-        return LookGrade(lut: lut, serial: lutSerial, name: customName ?? "Look", intensity: intensity,
+        let name = choice == .custom ? customName : builtinName
+        return LookGrade(lut: lut, serial: lutSerial, name: name ?? "Look", intensity: intensity,
                          interpolation: interpolation, output: output)
     }
 }
@@ -151,12 +227,22 @@ struct InstrumentLookControls: View {
     /// LUT Studio shows the render choices; the Composer, as on the web, does not.
     var showsRender = true
     @State private var importing = false
+    @State private var browsing = false
     @Environment(\.palette) private var palette
+    @Environment(LookLibrary.self) private var library
 
     var body: some View {
         VStack(alignment: .leading, spacing: 10) {
             HStack(spacing: 10) {
                 InstrumentRowLabel("Look")
+                Button {
+                    browsing = true
+                } label: {
+                    Image(systemName: "square.grid.2x2")
+                }
+                .buttonStyle(.borderless)
+                .help("Browse looks with a live preview")
+                .accessibilityLabel("Browse looks with a live preview")
                 picker
                 Button {
                     importing = true
@@ -170,13 +256,20 @@ struct InstrumentLookControls: View {
                 .disabled(look.busy)
                 if look.busy { ProgressView().controlSize(.small) }
             }
-            if look.customName == nil {
-                Text("The built-in looks are not in the app yet — upload your own .cube.")
+            if !BuiltinLutFiles.available {
+                Text("The built-in looks are not in this build — upload your own .cube.")
                     .font(Brand.sans(12))
                     .foregroundStyle(palette.muted)
             }
             if look.choice != .original { strength }
             if showsRender { renderChoices }
+        }
+        .lookGallery(isPresented: $browsing) {
+            LookGalleryView(selected: look.galleryId, allowNone: true, intensity: look.intensity, onPick: { id, strength in
+                browsing = false
+                Task { await look.pick(id, strength: strength, library: library) }
+            }, onClose: { browsing = false })
+            .environment(library)
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [InstrumentFileTypes.cube, .data],
                       allowsMultipleSelection: false) { result in
@@ -193,6 +286,16 @@ struct InstrumentLookControls: View {
         )
         return Picker("Look", selection: selection) {
             Text("No LUT (original)").tag(InstrumentLook.Choice.original)
+            ForEach(BuiltinLutFiles.ungrouped, id: \.id) { lut in
+                Text(lut.name).tag(InstrumentLook.Choice.builtin(lut.id))
+            }
+            ForEach(BuiltinLutFiles.groups, id: \.label) { group in
+                Section(group.label) {
+                    ForEach(group.luts, id: \.id) { lut in
+                        Text(lut.name).tag(InstrumentLook.Choice.builtin(lut.id))
+                    }
+                }
+            }
             if let name = look.customName {
                 Text("\(name) (uploaded)").tag(InstrumentLook.Choice.custom)
             }
@@ -268,4 +371,5 @@ struct InstrumentLookControls: View {
 #Preview("Look controls") {
     InstrumentLookControls(look: InstrumentLook())
         .padding()
+        .environment(LookLibrary.preview)
 }

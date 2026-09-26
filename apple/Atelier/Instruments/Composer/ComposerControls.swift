@@ -216,4 +216,5 @@ struct InstrumentFlow: Layout {
     ScrollView {
         ComposerControls(model: ComposerModel()).padding()
     }
+    .environment(LookLibrary.preview)
 }

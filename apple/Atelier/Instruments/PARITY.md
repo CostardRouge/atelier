@@ -8,9 +8,8 @@ what it waits on) · ≠ built differently on purpose (why).
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 115 ✅ · 22 ≠ · 4 ⏳ — the ⏳ are the shelf remembered across launches,
-the built-in looks (37 MB, the maintainer's call), the look gallery that
-waits on them, and MapKit tiles in the Composer.
+Rows: 117 ✅ · 22 ≠ · 2 ⏳ — the ⏳ are the shelf remembered across launches
+and MapKit tiles in the Composer.
 
 ## The shell (`InstrumentTool.swift`, `App/RootView.swift`)
 
@@ -138,9 +137,9 @@ waits on them, and MapKit tiles in the Composer.
 | Web (`LutStudio.tsx`, `use-lut-preview.ts`, `batch-export.ts`, `export-video.ts`, `shared/lut/{LutPicker.tsx,use-lut-selection.ts}`) | Native | |
 |---|---|---|
 | Accepts clips | clips AND photos — a photo is previewed through the same graph; none is exported here (a photograph is delivered from Develop, and the bar says so) | ≠ |
-| Look: "No LUT (original)", the built-in groups, "<name> (uploaded)" | "No LUT (original)" and the uploaded look | ✅ |
-| The BUILT-IN looks (`public/luts/`, the `virtual:luts` manifest) | ⏳ not bundled: 29 files, 37 MB (Sony 20 MB, DJI 12 MB, Apple 5.4 MB, classic 160 kB) — a subset, all of it or a fetch on demand is the maintainer's call (`apple/README.md`, the Looks row; the kernel's `BuiltinLuts.swift` is ready for the manifest). The picker SAYS "The built-in looks are not in the app yet — upload your own .cube." | ⏳ |
-| The look gallery with a live preview (`LutGalleryModal`) | ⏳ waits on the built-ins it would show | ⏳ |
+| Look: "No LUT (original)", the built-in groups, "<name> (uploaded)" | the same three, the groups as the web labels them (`lutGroups`) | ✅ |
+| The BUILT-IN looks (`public/luts/`, the `virtual:luts` manifest) | bundled WHOLE (29 files, 37 MB — a folder reference in `project.yml`, the coordinator's call), scanned at run time through the kernel's id rule (`lutManifest`) and read through the ONE helper (`Look/BuiltinLutFiles.swift`); a build without them says "The built-in looks are not in this build — upload your own .cube." | ✅ |
+| The look gallery with a live preview (`LutGalleryModal`) | the shared gallery (`Look/LookGalleryView.swift`, `Look/PARITY.md`) behind the grid button, "No look (original)" first, the strength handed back; a pack look picked there worn in the uploaded slot, named. It opens without a scene (a tap picks): LUT Studio's frame is its model's own | ✅ |
 | Upload .cube — "X isn't a supported 3D .cube LUT (1D LUTs aren't supported)." | Files, parsed by the kernel's `parseCube` off the main actor, the same sentence | ✅ |
 | Intensity 0–300 %, the readout, double-click resets to 100 % | a `Slider` 0…3 step 0.01, the readout; a TAP on the readout resets (a slider has no double-click on a phone) | ≠ |
 | — (the Studio's `GradePanel`) | Interpolation: Tetrahedral / Trilinear with the web's two hints, a per-DEVICE preference under the web's key (`atelier.lut.interpolation`) | ✅ |

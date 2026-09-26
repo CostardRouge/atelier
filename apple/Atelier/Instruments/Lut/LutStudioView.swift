@@ -178,4 +178,5 @@ struct LutSourceSwitch: View {
 #Preview("LUT Studio") {
     InstrumentFixtures.shelf()
     return NavigationStack { LutStudioView() }
+        .environment(LookLibrary.preview)
 }

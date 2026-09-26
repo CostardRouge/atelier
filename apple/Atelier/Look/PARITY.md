@@ -10,8 +10,9 @@ purpose (why). Nothing here has run on a device: written against the SDK,
 compiled by CI alone.
 
 Tool-agnostic on purpose: Develop's Look section draws it today
-(`Develop/Look/DevelopLookSection.swift`), and Trips and the Studio bind the
-same `GradeStackView` to their own `Binding<RollGrade?>` when they land.
+(`Develop/Look/DevelopLookSection.swift`), the LUT instrument opens its
+gallery, and Trips and the Studio bind the same `GradeStackView` to their own
+`Binding<RollGrade?>` when they land.
 
 Where things are:
 
@@ -30,7 +31,7 @@ Where things are:
 | `PackManagerView.swift` + `PackManagerModel.swift` + `PackRowView.swift` + `PackZip.swift` | "Your packs" |
 | `LookFixtures.swift` | preview fixtures (an in-memory vault) |
 
-Counts: **92 ✅ · 8 ≠ · 4 ⏳** — 104 rows.
+Counts: **95 ✅ · 8 ≠ · 5 ⏳** — 108 rows.
 
 ## The grade panel — `GradePanel.tsx`, `use-lut-stack.ts`, `use-roll-grade.ts`
 
@@ -164,6 +165,15 @@ Counts: **92 ✅ · 8 ≠ · 4 ⏳** — 104 rows.
 | The texture's "a grain cell is N px here" measured on the stage's real height | ✅ `lookPreviewHeight` | ✅ |
 | The stage DRAWS the look | ⏳ the Develop render plan's (`DevelopRenderPlan`); until then the stage says "not drawn here yet: look" and the texture's dials say the stage does not draw it — `LookLibrary.resolve(_ grade:)` + `ResolvedLook.cube(develop:interpolation:)` + `FilmPass.from(grade)` are what it reads | ⏳ |
 | A preset "+ look" worn on the open picture | ✅ `wearPreset` (the shell's) | ✅ |
+
+## The LUT instrument's picker — `LutPicker.tsx`
+
+| Web | Native | |
+| --- | --- | --- |
+| The built-in groups in the select | ✅ `InstrumentLook` over `BuiltinLutFiles` | ✅ |
+| "Browse looks with a live preview" → the gallery with "No look (original)", the strength handed back | ✅ | ✅ |
+| The gallery's scene on LUT Studio's frame | ⏳ `LutStudioModel` keeps its frame private; the gallery opens without a scene (a tap picks) | ⏳ |
+| A pack look picked there | ✅ resolved to its lattice and worn in the uploaded slot, named (the web's selection hook knows built-ins only) | ✅ |
 
 ## Not yet
 

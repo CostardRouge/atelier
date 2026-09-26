@@ -264,4 +264,5 @@ struct ComposerExportRow: View {
 #Preview("Composer") {
     InstrumentFixtures.shelf()
     return NavigationStack { ComposerToolView() }
+        .environment(LookLibrary.preview)
 }
