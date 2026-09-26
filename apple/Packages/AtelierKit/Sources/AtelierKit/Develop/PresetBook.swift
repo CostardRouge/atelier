@@ -63,40 +63,22 @@ private func presetKey(_ name: String) -> String {
 
 // MARK: - the identity (exif/delivery-meta.ts)
 
-/// Who signs a delivered picture.
-public struct DeliveryIdentity: Equatable, Sendable {
-    /// The name written as `Artist` and `dc:creator`. Empty: no rights are written.
-    public var creator: String
-    /// The copyright line as a template: `{year}` is the capture's year, `{creator}` the name.
-    public var copyright: String
+// `DeliveryIdentity`, `readIdentity`, `sameIdentity`, `emptyIdentity` and
+// `defaultCopyrightTemplate` are `Exif/DeliveryMeta.swift`'s — the web keeps
+// them in delivery-meta.ts, which preset-book.ts imports. The book adds the
+// writer it stores the identity with.
 
-    public init(creator: String, copyright: String) { self.creator = creator; self.copyright = copyright }
-
+extension DeliveryIdentity {
     public var json: JSONValue {
         .object(["creator": .string(creator), "copyright": .string(copyright)])
     }
 }
-
-/// The line a copyright takes until its author writes another — English, the suite's language.
-public let defaultCopyrightTemplate = "© {year} {creator}. All rights reserved."
-
-public let emptyIdentity = DeliveryIdentity(creator: "", copyright: defaultCopyrightTemplate)
 
 /// Text trimmed; an empty template falls back to the default.
 private func trimmedIdentity(_ creator: String, _ copyright: String) -> DeliveryIdentity {
     let c = copyright.trimmingCharacters(in: .whitespacesAndNewlines)
     return DeliveryIdentity(creator: creator.trimmingCharacters(in: .whitespacesAndNewlines),
                             copyright: c.isEmpty ? defaultCopyrightTemplate : c)
-}
-
-/// A stored identity, or the empty one.
-public func readIdentity(_ raw: JSONValue?) -> DeliveryIdentity {
-    guard let o = raw?.objectValue else { return emptyIdentity }
-    return trimmedIdentity(o["creator"]?.stringValue ?? "", o["copyright"]?.stringValue ?? "")
-}
-
-public func sameIdentity(_ a: DeliveryIdentity, _ b: DeliveryIdentity) -> Bool {
-    a.creator == b.creator && a.copyright == b.copyright
 }
 
 // MARK: - the book (preset-book.ts)
