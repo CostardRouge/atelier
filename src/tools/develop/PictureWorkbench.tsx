@@ -118,6 +118,7 @@ import { lookUpLens, profileFor, setLensfunAllowed, useLensfunAllowed, type Look
 import DetailPanel, { PresencePanel } from './DetailPanel';
 import VignettePanel from './VignettePanel';
 import WhiteBalancePanel from './WhiteBalancePanel';
+import { dropDecodedRaws } from '../../shared/raw/raw-decoder';
 import type { RawWhite } from '../../shared/raw/white-balance';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
@@ -1603,6 +1604,15 @@ export default function PictureWorkbench({
                 // the opening row is stored as nothing, one spelling.
                 if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null });
                 onRendition(id === opening?.id ? null : id);
+              }}
+              onRemeter={() => {
+                // The stored number goes, the held decodes with it (a held
+                // decode answers with the gain it was asked for), and the
+                // next decode measures anew and stores what it finds.
+                patchDraft({ rawGain: null });
+                dropDecodedRaws();
+                picture.redecode();
+                tell('metering the exposure again from the sensor’s data');
               }}
               onBase={(next) => {
                 if (next === 'proxy') {

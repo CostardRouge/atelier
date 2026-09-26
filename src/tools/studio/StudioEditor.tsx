@@ -89,7 +89,8 @@ import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import { settleForStill } from '../../shared/overlay/still-frame';
 import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
 import OutroPanel from './OutroPanel';
-import { decodePhoto, exportPhotoVariant } from '../../shared/media/photo-frame';
+import { decodePhoto, exportEdge, exportPhotoVariant } from '../../shared/media/photo-frame';
+import { decodeStill, stageBudget } from '../../shared/media/still-decode';
 import type { ExifData } from '../../shared/exif/exif-parser';
 import { cueFromExif } from '../../shared/exif/exif-cue';
 import {
@@ -457,12 +458,17 @@ export default function StudioEditor({
   // worth (exif-cue.ts) — so the exposure, position and time elements read
   // real values over a photo the way they do over a clip.
   const [photo, setPhoto] = useState<ImageBitmap | null>(null);
+  // The still's OWN upright size: the stage holds a copy decoded at its pixel
+  // budget (`still-decode.ts`), and every number about the FILE — the header
+  // badge, the variants' frames, the export — reads this one.
+  const [photoNatural, setPhotoNatural] = useState<{ width: number; height: number } | null>(null);
   const [photoError, setPhotoError] = useState<string | null>(null);
   const [photoExif, setPhotoExif] = useState<ExifData | null>(null);
 
   useEffect(() => {
     if (!activeImage) {
       setPhoto(null);
+      setPhotoNatural(null);
       setPhotoError(null);
       setPhotoExif(null);
       return;
@@ -470,17 +476,23 @@ export default function StudioEditor({
     let cancelled = false;
     setPhotoError(null);
     setPhotoExif(null);
-    void decodePhoto(activeImage)
-      .then((bitmap) => {
+    // Decoded AT the stage's budget, never whole: a 48-megapixel photograph
+    // held open for as long as it is the active media was 194 MB, rescaled
+    // into the 4K stage on every redraw. The export decodes the file again at
+    // its own density (`handleExport`).
+    void decodeStill(activeImage, { budgetPixels: stageBudget() })
+      .then(({ bitmap, natural }) => {
         if (cancelled) {
           bitmap.close();
           return;
         }
         setPhoto(bitmap);
+        setPhotoNatural(natural);
       })
       .catch((err: Error) => {
         if (cancelled) return;
         setPhoto(null);
+        setPhotoNatural(null);
         setPhotoError(err.message);
       });
     // EXIF is read from the head of the file, independently of the decode: a
@@ -1336,8 +1348,8 @@ export default function StudioEditor({
     if (!active || exporting || variants.length === 0) return;
     if (!activeVideo && !photo) return;
     const meta = lib.getMeta(active.id);
-    let srcWidth = photo?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
-    let srcHeight = photo?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
+    let srcWidth = photoNatural?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
+    let srcHeight = photoNatural?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
     if (!srcWidth || !srcHeight) {
       setExportError(
         isPhoto
@@ -1387,7 +1399,7 @@ export default function StudioEditor({
         if (chosen.file !== activeImage) {
           setFetchingOriginal(true);
           try {
-            fetchedStill = await decodePhoto(chosen.file);
+            fetchedStill = await decodePhoto(chosen.file, { maxEdge: exportEdge() });
             still = fetchedStill;
             srcWidth = fetchedStill.width;
             srcHeight = fetchedStill.height;
@@ -1395,6 +1407,15 @@ export default function StudioEditor({
             setFetchingOriginal(false);
           }
         }
+      }
+      // The stage's copy is decoded at the stage's budget: a still that holds
+      // more is decoded again for the run, at what this device delivers from,
+      // and closed with it.
+      if (photo && activeImage && still === photo && photoNatural && photoNatural.width > photo.width) {
+        fetchedStill = await decodePhoto(activeImage, { maxEdge: exportEdge() });
+        still = fetchedStill;
+        srcWidth = fetchedStill.width;
+        srcHeight = fetchedStill.height;
       }
       // Editing happened on the source's proxy; delivering should not. Fetch
       // the capture once, before the first variant, and encode every variant
@@ -1572,8 +1593,8 @@ export default function StudioEditor({
   // added. The header badge and the frame's aspect describe this, and must
   // keep describing it: claiming the capture's size for a picture the user is
   // not looking at is the same lie in the other direction.
-  const srcW = photo?.width ?? activeMeta?.width;
-  const srcH = photo?.height ?? activeMeta?.height;
+  const srcW = photoNatural?.width ?? activeMeta?.width;
+  const srcH = photoNatural?.height ?? activeMeta?.height;
   // What the EXPORT will encode, which is a different file when it fetches the
   // capture first. Only the variant maths uses this: a variant measured
   // against the proxy would promise 1080 from a file it is not going to use.

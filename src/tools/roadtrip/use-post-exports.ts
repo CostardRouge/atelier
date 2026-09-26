@@ -8,6 +8,7 @@ import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
 import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
+import { exportEdge } from '../../shared/media/photo-frame';
 import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
 import { deliveryFor } from '../../shared/develop/delivery-source';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
@@ -314,7 +315,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           ? await (async () => {
               // The hook's collage, painted: its cells decoded and graded
               // exactly as the piece export does for any collage slide.
-              const cells = await loadCollageSources(inputs.hookSlide, post.badge.collage!, inputs.resolve);
+              const cells = await loadCollageSources(inputs.hookSlide, post.badge.collage!, inputs.resolve, { maxEdge: exportEdge() });
               try {
                 return await exportHookStillVideo({
                   ...shared,
@@ -399,7 +400,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     // A collage is PAINTED, whatever its cells hold: every cell's picture
     // decoded, each graded through the slide's grade with its own develop.
     if (slide.collage) {
-      const cells = await loadCollageSources(slide, slide.collage, inputs.resolve);
+      const cells = await loadCollageSources(slide, slide.collage, inputs.resolve, { maxEdge: exportEdge() });
       try {
         return await exportHookStillVideo({
           ...shared,

@@ -1327,12 +1327,52 @@ device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the
 loupe, which decodes the file whole on a computer, says *as close as this
-device goes* instead — for every picture, not only a RAW. A RAW is always
+device goes* instead — for every picture, not only a RAW. A big sensor is
+decoded in **tiles**: LibRaw is asked for one band of the sensor at a time,
+and pays its own buffers for that band alone, so a 36-megapixel sensor on a
+phone never grows the decoder's heap past its first 256 MB — each tile costs
+the file read again, cheap for a DNG, a moment for a compressed ARW, and
+lands bit for bit where the whole decode would put it (a computer cuts only
+past 24 megapixels). The sensor's white is white, whatever the picture
+holds: the decoder no longer scales a frame by its own brightest pixel, so a
+RAW metered before 2026-09-25 may open a touch dark under its stored
+exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed
-the tab on a zoom). A browser cannot ask a phone how much memory a tab may
-take, so the rule is coarse: iPhone, iPad and Android count as phones, and
-`localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
+the tab on a zoom). **Every photograph is decoded at the size it is used**,
+never whole and shrunk afterwards: its size is read from the file's header and
+the browser is asked for exactly the pixels a stage, a filmstrip cell or an
+export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
+phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
+in the run's summary; a computer still exports every pixel. A browser cannot
+ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
+iPad and Android count as phones, and `localStorage['atelier.device']`
+(`constrained` or `roomy`) overrides it.
+
+**HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
+itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
+libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a
+`.jxl` — served from this site like the RAW decoder and loaded only the first
+time such a file is met (about 2 MB each, nothing at page load). A picture is
+recognised by its bytes, not its name, and opens upright with its rotation
+applied, in Develop, Trips, the Studio, the Library's covers and its
+lightbox; a HEIF or JPEG XL original can deliver an export too. Two limits:
+these decoders cannot scale while they decode, so the whole picture exists
+once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
+profile (an iPhone's Display P3) is not applied, so its colours land a touch
+flatter than in Safari. TIFF is still not read.
+
+**ProRAW in JPEG XL.** An iPhone ProRAW saved with JPEG XL compression is a
+DNG the RAW decoder cannot read, so Atelier develops it itself: its sensor
+data is already demosaiced, its tiles are decoded by the JPEG XL decoder on
+several threads at once, and the camera's own colour matrix and white balance
+are applied exactly as the RAW decoder would — measured against it on a twin
+file, the two agree to a fraction of a code. A zoomed-in view decodes only
+the tiles under it. Two honest limits: Apple's own local tone map is not
+applied, so a ProRAW looks flatter here than in Photos (the develop is where
+you give it its contrast), and it has not yet been tried on a real iPhone
+file.
 
 **White balance in kelvin.** On the sensor, the Adjust tab starts with
 **White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,

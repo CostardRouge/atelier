@@ -39,7 +39,7 @@ export interface FidelityPixels {
   height: number;
   /**
    * True when those pixels are the JPEG a camera wrote INSIDE a RAW rather
-   * than the file's own — `DecodedPhoto.viaRawPreview`, which until now was
+   * than the file's own — `DecodedStill.viaRawPreview`, which until now was
    * returned by `photo-frame.ts` and read by nobody.
    */
   viaRawPreview?: boolean;

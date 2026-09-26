@@ -80,7 +80,7 @@ import { useIsCompact } from '../ui/use-layout-mode';
 import { loadBuiltinThumbs } from './builtin-thumbs';
 import { galleryNodes, matchingItems, type GalleryItem, type GalleryNode } from './gallery-nodes';
 import LookScene from './LookScene';
-import { asPreviewPicture, sceneNote, type LutPreviewPicture } from './look-scene';
+import { SCENE_PIXELS, asPreviewPicture, sceneNote, type LutPreviewPicture } from './look-scene';
 import {
   PREVIEW_SAMPLE_SIZE,
   bakeLutPreview,
@@ -179,6 +179,16 @@ export default function LutGalleryModal({
   const [credits, setCredits] = useState<string | null>(null);
   const [customImage, setCustomImage] = useState<LutPreviewSource | null>(null);
   const [customLabel, setCustomLabel] = useState<string | null>(null);
+  // The picture picked here is this modal's alone: it goes with the modal.
+  const customRef = useRef<LutPreviewSource | null>(null);
+  customRef.current = customImage;
+  useEffect(
+    () => () => {
+      const held = customRef.current;
+      if (typeof ImageBitmap !== 'undefined' && held instanceof ImageBitmap) held.close();
+    },
+    [],
+  );
   const [imageBusy, setImageBusy] = useState(false);
   const [imageError, setImageError] = useState<string | null>(null);
   const [packsOpen, setPacksOpen] = useState(false);
@@ -381,7 +391,14 @@ export default function LutGalleryModal({
     if (!file) return;
     setImageBusy(true);
     try {
-      setCustomImage(await decodePhoto(file));
+      // At the scene's own budget, never whole — the scene draws 1280 × 720
+      // and uploads what it is handed per draw — and the picture it replaces
+      // is let go, as it now is on close.
+      const next = await decodePhoto(file, { budgetPixels: SCENE_PIXELS });
+      setCustomImage((prev) => {
+        if (prev instanceof ImageBitmap) prev.close();
+        return next;
+      });
       setCustomLabel(file.name);
       setLiveOn('custom');
     } catch {

@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
 import { drawFramed, type Framing } from '../../../shared/media/framing';
 import { cardLabel } from '../../../shared/media/motion-cards';
-import { boundSource, loadBadgeSource, type BadgeSource } from '../../../shared/roadtrip/badge-render';
+import { loadBadgeSource, type BadgeSource } from '../../../shared/roadtrip/badge-render';
 import { Icons } from '../../../shared/ui/icons';
 
 /** The picture a card row draws its thumbnails from, and the frame each card sits in. */
@@ -70,13 +70,9 @@ function useCardPicture(thumb: CardThumbSource | null): { source: BadgeSource | 
       return;
     }
     let cancelled = false;
-    void loadBadgeSource(file, isVideo ? videoSeconds : 0)
-      .then(async (decoded) => {
-        if (cancelled) {
-          decoded.release();
-          return;
-        }
-        const small = await boundSource(decoded, CARD_PIXELS);
+    // Decoded AT the cards' budget: a card never shows more.
+    void loadBadgeSource(file, isVideo ? videoSeconds : 0, { budgetPixels: CARD_PIXELS })
+      .then((small) => {
         if (cancelled) {
           small.release();
           return;
