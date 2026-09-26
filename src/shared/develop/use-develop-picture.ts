@@ -11,9 +11,10 @@ import { drawFramed, framePoint, unframePoint, type Framing } from '../media/fra
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
-import { MAX_STAGE_PIXELS, stageFrameSize } from '../overlay/stage-size';
+import { stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
-import { boundSource, frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
+import { frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
+import { decodeStill, stageBudget } from '../media/still-decode';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 
@@ -32,7 +33,6 @@ import {
 import { cloneLayer, cloneLayers, drawingLayers, sameLayer, sameLayers, type AdjustLayer } from './layer';
 import { exceptRaster, makeLayerPassCache, type LayerPassCache, type MaskOverlayStyle } from './layer-render';
 import type { BrushRaster } from '../render/brush-raster';
-import { decodePhoto, fitPhotoForRender } from '../media/photo-frame';
 import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
 import { rawDecodeEdge } from '../raw/raw-budget';
@@ -493,7 +493,8 @@ export interface DevelopPicture {
  * filmstrip) without a second copy of the grader's lifetime rules:
  *
  * - **A develop is judged on a screen, never at 48 megapixels**: the source is
- *   bounded (`boundSource`) and the export decodes the file again.
+ *   decoded to the stage's budget (`still-decode.ts`, a phone's smaller than
+ *   a computer's) and the export decodes the file again.
  * - **One grader**, re-made only when the cube or the source's size changes —
  *   a WebGL2 context per repaint is never reclaimed — and it HOLDS its grade,
  *   so dragging the wipe or holding "before" does not grade again per step.
@@ -762,7 +763,7 @@ export function useDevelopPicture({
       : startTask({ label: `Opening ${file.name}`, scope: taskScopeRef.current, detail: null });
     const load: Promise<BadgeSource> = rawFile
       ? decodeRaw(rawFile, {
-          budgetPixels: MAX_STAGE_PIXELS,
+          budgetPixels: stageBudget(),
           gain: rawGainRef.current,
           // The GPU's cap and, on a phone, the device's own ceiling
           // (`raw-budget.ts`): a RAW is the one source decoded in the tab's
@@ -784,7 +785,7 @@ export function useDevelopPicture({
           }
           return { image: canvas, width: d.width, height: d.height, gpu: d.half, release: () => {} };
         })
-      : loadBadgeSource(file, videoTimeSeconds).then((s) => boundSource(s));
+      : loadBadgeSource(file, videoTimeSeconds, { budgetPixels: stageBudget() });
     void load
       .then((s) => {
         if (cancelled) {
@@ -962,7 +963,7 @@ export function useDevelopPicture({
   // (the crop's long edge is the stage budget's long edge).
   const canvasSize = useMemo(() => {
     if (!source || source.width <= 0 || source.height <= 0) return null;
-    const whole = stageFrameSize(source.width, source.height);
+    const whole = stageFrameSize(source.width, source.height, stageBudget());
     return delivered1 ? frameSize(delivered1.w / delivered1.h, Math.max(whole.w, whole.h)) : whole;
   }, [source, delivered1]);
 
@@ -1419,23 +1420,14 @@ export function useDevelopPicture({
             fileWidth: d.sourceWidth,
           };
         })
-      : decodePhoto(file).then(async (bitmap) => {
-          const fit = await fitPhotoForRender(bitmap);
-          // Read BEFORE the close: a closed bitmap reports 0, and the kernel
-          // scale below then divided by it, so a picture the GPU had to shrink
-          // was denoised and sharpened at the stage's strength, not its own.
-          const fileWidth = bitmap.width;
-          if (fit.resampled) bitmap.close();
-          return {
-            source: {
-              image: fit.image,
-              width: fit.width,
-              height: fit.height,
-              release: () => (fit.resampled ? fit.release() : bitmap.close()),
-            },
-            fileWidth,
-          };
-        });
+      : decodeStill(file, { maxEdge: maxRenderSize() }).then(({ bitmap, natural }) => ({
+          // Decoded straight at what the GPU takes on one edge — never the
+          // whole file and a resampled copy beside it. The FILE's width is the
+          // kernel scale's denominator: a picture the GPU had to shrink is
+          // denoised and sharpened at its own strength, not the stage's.
+          source: { image: bitmap, width: bitmap.width, height: bitmap.height, release: () => bitmap.close() },
+          fileWidth: natural.width,
+        }));
     void load
       .then(({ source: s, fileWidth }) => {
         if (cancelled || controller.signal.aborted) {

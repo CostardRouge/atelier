@@ -1340,9 +1340,15 @@ exposure — *Meter the exposure again*, in the rung menu, measures it anew.
 A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed
-the tab on a zoom). A browser cannot ask a phone how much memory a tab may
-take, so the rule is coarse: iPhone, iPad and Android count as phones, and
-`localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
+the tab on a zoom). **Every photograph is decoded at the size it is used**,
+never whole and shrunk afterwards: its size is read from the file's header and
+the browser is asked for exactly the pixels a stage, a filmstrip cell or an
+export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
+phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
+in the run's summary; a computer still exports every pixel. A browser cannot
+ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
+iPad and Android count as phones, and `localStorage['atelier.device']`
+(`constrained` or `roomy`) overrides it.
 
 **White balance in kelvin.** On the sensor, the Adjust tab starts with
 **White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,

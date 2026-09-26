@@ -20,6 +20,7 @@ import {
   type BadgeSource,
   type CollageSources,
 } from './badge-render';
+import { exportEdge } from '../media/photo-frame';
 import { collageSettleSeconds } from './collage';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
@@ -108,10 +109,10 @@ export async function renderDeck(
       if (slide.collage) {
         // Every cell's picture, the lead's first; each cell's cube is the
         // slide's grade baked with THAT cell's develop.
-        cells = await loadCollageSources(slide, slide.collage, opts.resolve);
+        cells = await loadCollageSources(slide, slide.collage, opts.resolve, { maxEdge: exportEdge() });
       } else {
         const file = opts.resolve(slide.media);
-        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
+        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds, { maxEdge: exportEdge() });
       }
 
       const blob = await badgeToPng({

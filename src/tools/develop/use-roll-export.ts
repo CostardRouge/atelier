@@ -598,14 +598,15 @@ export function useRollExport({
               `${picture.ref.name} was graded at ${out.gradedAt.width}×${out.gradedAt.height}, the most this GPU renders on one edge — its ${out.source.width}×${out.source.height} were resampled`,
             );
           }
-          // A RAW decoded under its sensor's pixels says which limit it met:
-          // a phone's own ceiling is not the GPU's, and a computer delivers
-          // the same picture whole.
+          // A picture decoded under its own pixels — a RAW's sensor, a big
+          // JPEG's file — says which limit it met: a phone's own ceiling is
+          // not the GPU's, and a computer delivers the same picture whole.
           if (out.capped && out.sensor) {
+            const whole = `${out.sensor.width}×${out.sensor.height} ${raw ? 'sensor' : 'pixels'}`;
             failures.push(
               out.capped === 'device'
-                ? `${picture.ref.name} was delivered at ${out.source.width}×${out.source.height} from its ${out.sensor.width}×${out.sensor.height} sensor — as far as this device’s memory goes; a computer delivers it whole`
-                : `${picture.ref.name} was delivered at ${out.source.width}×${out.source.height} from its ${out.sensor.width}×${out.sensor.height} sensor — the most this GPU renders on one edge`,
+                ? `${picture.ref.name} was delivered at ${out.source.width}×${out.source.height} from its ${whole} — as far as this device’s memory goes; a computer delivers it whole`
+                : `${picture.ref.name} was delivered at ${out.source.width}×${out.source.height} from its ${whole} — the most this GPU renders on one edge`,
             );
           }
           // Said, not hidden: a file that lost its position is worth knowing

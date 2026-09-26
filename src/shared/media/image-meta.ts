@@ -8,16 +8,11 @@
  */
 
 import { extractRawPreview, RAW_PROBE_BYTES, rawSizesFrom } from '../exif/raw-probe';
-import { isRawImage } from '../library/assets';
+import { imageTypeLabel, isRawImage } from '../library/assets';
+import { readImageSize } from './still-decode';
 
-/** Human label for an image file: `RAW`, `JPEG`, or the bare extension. */
-export function imageTypeLabel(name: string): string {
-  const dot = name.lastIndexOf('.');
-  const ext = dot >= 0 ? name.slice(dot + 1).toLowerCase() : '';
-  if (isRawImage(name)) return 'RAW';
-  if (ext === 'jpg' || ext === 'jpeg') return 'JPEG';
-  return ext ? ext.toUpperCase() : 'image';
-}
+/** Human label for an image file — kept here for its many readers; `library/assets.ts` owns it. */
+export { imageTypeLabel };
 
 export interface ImageMeta {
   width?: number;
@@ -32,34 +27,6 @@ export interface ImageMeta {
 const COVER_EDGE = 200;
 
 /**
- * The picture's UPRIGHT size, from its header alone. An `<img>` fires `load`
- * once the dimensions are known and decodes the pixels only when it is
- * drawn, so this costs the header's bytes and no bitmap — where
- * `createImageBitmap` at full size costs 96 MB for a 24-megapixel JPEG
- * before a 200 px cover is cut from it. `naturalWidth` honours the EXIF
- * orientation (`image-orientation: from-image` is the default), which is
- * what `decodePhoto` decodes to: the size listed must be the one the export
- * cuts from, or a phone portrait is listed sideways.
- */
-function readImageSize(file: Blob): Promise<{ width: number; height: number }> {
-  return new Promise((resolve, reject) => {
-    const url = URL.createObjectURL(file);
-    const img = new Image();
-    const done = () => URL.revokeObjectURL(url);
-    img.onload = () => {
-      done();
-      if (!img.naturalWidth) reject(new Error('no size'));
-      else resolve({ width: img.naturalWidth, height: img.naturalHeight });
-    };
-    img.onerror = () => {
-      done();
-      reject(new Error('undecodable'));
-    };
-    img.src = url;
-  });
-}
-
-/**
  * Read an image's dimensions and build a cover thumbnail. Never rejects: an
  * undecodable file (RAW, or a format the browser lacks) resolves with just its
  * type label.
@@ -68,7 +35,7 @@ export async function loadImageMeta(file: File): Promise<ImageMeta> {
   const imageType = imageTypeLabel(file.name);
   // A RAW from its camera's render FIRST, in every browser: Safari decodes a
   // DNG natively, whole, and a Library of them on an iPhone is a tab killed
-  // (2026-09-24, `photo-frame.ts`'s `rawRenderFirst`). The render also keeps
+  // (2026-09-24, `still-decode.ts`). The render also keeps
   // the size the row says the SENSOR's, as `rawCover` states.
   if (isRawImage(file.name)) {
     const cover = await rawCover(file);

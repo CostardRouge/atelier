@@ -11,6 +11,7 @@ import type {
   HookPictureWant,
 } from '../../shared/roadtrip/hooks/hook-variant';
 import { coverCrop, perPicturePixels, wholeCrop } from '../../shared/roadtrip/hooks/picture-budget';
+import { decodeStill } from '../../shared/media/still-decode';
 import { hookVariantById } from '../../shared/roadtrip/hooks/registry';
 import { WinnowError } from '../../shared/sources/winnow/client';
 import { fetchPreviewStill, resolvableSource } from '../../shared/sources/winnow/resolve-media';
@@ -233,12 +234,22 @@ async function loadPicture(
   graders: Map<string, FrameGrader>,
 ): Promise<HookPicture> {
   const file = await findMedia(want.ref, pool);
+  // Decoded AT what the crop keeps (`still-decode.ts`): the crop is read off
+  // the picture's own size, and only the pixels it scales to are decoded —
+  // each of forty flashed pictures used to put its whole picture up first.
+  const cropFor = (w: number, h: number) =>
+    want.shape === 'own' ? wholeCrop(w, h, cap) : coverCrop(w, h, aspect, cap);
+  const sizeFor = (natural: { width: number; height: number }) => {
+    const crop = cropFor(natural.width, natural.height);
+    const scale = Math.min(1, crop.width / Math.max(1, crop.sw));
+    return { width: Math.ceil(natural.width * scale), height: Math.ceil(natural.height * scale) };
+  };
   let full: ImageBitmap;
   if (file) {
     full =
       file.type.startsWith('video/') || VIDEO_NAME.test(file.name)
         ? await clipFrame(file, want.atSeconds ?? 0)
-        : await decode(file, want.ref.name);
+        : await decode(file, want.ref.name, sizeFor);
   } else if (VIDEO_NAME.test(want.ref.name)) {
     throw new PictureProblem(
       `${want.ref.name} is a clip that is not in the Library — add it to flash its frame.`,
@@ -250,16 +261,13 @@ async function loadPicture(
         `${want.ref.name} is not in the Library, and no connected instance holds it.`,
       );
     }
-    full = await decode(blob, want.ref.name);
+    full = await decode(blob, want.ref.name, sizeFor);
   }
 
   try {
     // A print keeps the whole picture at its own shape; a flash is cropped to
     // the frame's, since everything outside it would be decoded for nothing.
-    const crop =
-      want.shape === 'own'
-        ? wholeCrop(full.width, full.height, cap)
-        : coverCrop(full.width, full.height, aspect, cap);
+    const crop = cropFor(full.width, full.height);
     const cropped = await createImageBitmap(
       full,
       Math.round(crop.sx),
@@ -275,9 +283,13 @@ async function loadPicture(
   }
 }
 
-async function decode(blob: Blob, name: string): Promise<ImageBitmap> {
+async function decode(
+  blob: Blob,
+  name: string,
+  sizeFor: (natural: { width: number; height: number }) => { width: number; height: number },
+): Promise<ImageBitmap> {
   try {
-    return await createImageBitmap(blob, { imageOrientation: 'from-image' });
+    return (await decodeStill(blob, sizeFor, name)).bitmap;
   } catch {
     throw new PictureProblem(`This browser cannot decode ${name}.`);
   }

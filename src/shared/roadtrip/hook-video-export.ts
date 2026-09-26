@@ -31,6 +31,7 @@ import {
   type CollageItem,
   type CollageRender,
 } from './badge-render';
+import { exportEdge } from '../media/photo-frame';
 import type { HookBlock, Shade } from './shades';
 import type { ResolvedHook } from './hooks/hook-variant';
 import { BED_SAMPLE_RATE, renderBed } from '../audio/render-bed';
@@ -222,7 +223,10 @@ async function gradedOnce(
 export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise<Blob> {
   if (opts.collage) return exportCollageStillVideo(opts, opts.collage);
   if (!opts.file) throw new Error('This slide has no picture to paint.');
-  const source = await loadBadgeSource(opts.file);
+  // At what this device delivers a still from — the GPU's edge, and a phone's
+  // own export ceiling (`exportEdge`): past the GPU's cap the grade below was
+  // a BLACK picture, and a 48-megapixel still graded whole is a phone's tab.
+  const source = await loadBadgeSource(opts.file, 0, { maxEdge: exportEdge() });
   let graded: ImageBitmap | null = null;
   try {
     graded = await gradedOnce(source, opts.lut ?? null, opts.film ?? null);

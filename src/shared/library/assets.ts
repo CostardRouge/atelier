@@ -99,6 +99,14 @@ export function isRawImage(name: string): boolean {
   return RAW_EXTENSIONS.includes(splitName(name).ext);
 }
 
+/** Human label for an image file: `RAW`, `JPEG`, or the bare extension. */
+export function imageTypeLabel(name: string): string {
+  const { ext } = splitName(name);
+  if (isRawImage(name)) return 'RAW';
+  if (ext === 'jpg' || ext === 'jpeg') return 'JPEG';
+  return ext ? ext.toUpperCase() : 'image';
+}
+
 /** True where any browser draws this file without a decoder of our own. */
 export function isDrawableImage(name: string): boolean {
   return DRAWABLE_IMAGE_EXTENSIONS.includes(splitName(name).ext);
