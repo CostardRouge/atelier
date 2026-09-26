@@ -106,7 +106,7 @@ enum InstrumentTool: String, CaseIterable, Identifiable, Hashable {
         case .telemetry: TelemetryToolView()
         case .overlay: PlannedInstrumentView(instrument: self)
         case .map: FlightMapToolView()
-        case .composer: PlannedInstrumentView(instrument: self)
+        case .composer: ComposerToolView()
         case .exif: ExifToolView()
         case .compare: CompareToolView()
         case .lut: LutStudioView()

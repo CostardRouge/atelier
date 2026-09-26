@@ -158,3 +158,33 @@ every view was written against the SDK and compiled by CI alone.
 | "N exported · M failed" | ✅ | ✅ |
 | "Export N MP4s" ("Render graded copies of the selected clips (H.264 MP4)") | ✅ | ✅ |
 | "Export needs WebCodecs (try Chrome/Edge)" | ≠ never: AVFoundation encodes | ≠ |
+
+## Composer (`Composer/`, kernel `Tools/ComposerReadout.swift`)
+
+| Web (`ComposerTool.tsx`, `overlay.ts`, `draw-readout.ts`, `export-composition.ts`, `use-composer-map.ts`, `map-shared.ts`, `shared/media/compose-layout.ts`) | Native | |
+|---|---|---|
+| Accepts `video+telemetry` | ✅ | ✅ |
+| "Select a DJI clip (video + .srt) in the Library to compose." | "Open a DJI clip (video + .srt) to compose." + an empty state | ✅ |
+| Clip stepper, name, `1080×1920` | ✅ | ✅ |
+| Aspect 16:9 · 9:16 · 1:1 · 4:5, HD 1280 · Full HD 1920 (defaults 9:16, Full HD) | ✅ the kernel's `outputSize` | ✅ |
+| Layout: Side by side · Stacked · Map inset · Video inset (default Stacked) | ✅ the kernel's `paneRects` | ✅ |
+| Split 0.2–0.8 (0.6), or Inset 0.15–0.5 (0.3) + ↖ ↗ ↙ ↘ (↘) | ✅ | ✅ |
+| Video cover / contain (`fitRect`) | ✅ | ✅ |
+| Map zoom −4…+4 by 0.5 over the fitted camera (40 px padding, zoom ≤ 16, a lone fix at 15) | ✅ the kernel's `fitTrackCamera` + `zoomed(by:)` | ✅ |
+| Follow: on / off — the camera centred on the aircraft ("Keep the map centred on the aircraft as the clip plays") | ✅ | ✅ |
+| Map: tiles / Map: offline — OpenStreetMap under the path | ⏳ MapKit tiles in the Composer need a snapshot per camera (and, with Follow, per frame) — unmeasured; the map is the blank paper and the pane says "Offline · no tiles loaded". NOTE the web's chip starts ON (`useState(true)`), against the one-exception rule of `local-first.md`, which says tiles are off by default — a web bug the native app does not copy | ⏳ |
+| "The map library couldn't load" | ≠ nothing to load | ≠ |
+| Look: the shared picker + Upload .cube + Intensity | `InstrumentLookControls` without the render choices, as the web's Composer | ✅ |
+| Overlay: shown/hidden, labels ("Show the field label prefixes"), ALT · SPD · V/S · HDG · GPS · ABS | ✅ the kernel's `composerOverlayFields` / `buildReadoutLines`, its spec ported | ✅ |
+| Text colour, Bg colour + opacity 0–1 by 0.05, Radius 0–32, Size 0.6–2.2 by 0.1, Font mono · sans · serif | ✅ `ColorPicker`s writing the web's `#rrggbb`; the fonts the web's stacks resolved by `Paint/PaintFonts` | ✅ |
+| The card: `max(10, round(h × 0.03))` × size, padding, 1.35 line height, pushed inside the frame, 600 weight | the kernel's `readoutMetrics` / `readoutBox`, painted by `PaintCanvas` (Core Text) — the same arithmetic at the preview's and the file's size | ✅ |
+| Drag the card on the preview ("Drag the telemetry readout to reposition it") | ✅ a press on the card picks it up where it was held (`readoutDragPosition`) | ✅ |
+| Preview canvas capped at 1440 px, the clip graded at ≤ 1280 px | ✅ | ✅ |
+| The composite: black, video pane, map pane (the map FIRST under Video inset), the card on top | `ComposerPainter.composite` — Core Image for the clip, Core Graphics rasters for the map and the card | ✅ |
+| The map framed at the preview's apparent scale in the export (`cameraForTrack(previewScale)`) | ✅ the preview's camera scaled by the export's size; the line and the dot scale with it | ✅ |
+| The export's map is the whole-track framing, never Follow | ≠ the file follows the aircraft when Follow is on — the same painter as the preview, so preview = export | ≠ |
+| The export's marker: `max(4, round(h × 0.008))` | ≠ the preview's dot scaled with the frame (the web's two sizes disagree) | ≠ |
+| Transport: play (Space) · scrub · length | ✅ | ✅ |
+| Export MP4 → "Rendering…" / NN % → Cancel; downloads `<clip>-composition.mp4` | ✅ the shared pipeline at the output size, the sound copied; the file handed to a move panel under the same name; also a task in the kernel's `TaskRegistry` | ✅ |
+| "Couldn't read the video file…", HEVC decode errors, "MP4 export needs WebCodecs" | ≠ the platform's own reason, said under the row | ≠ |
+| — | NATIVE: Save frame (PNG) — the frame under the playhead at the OUTPUT's size, through the same painter, `<clip>-composition.png` | ✅ |
