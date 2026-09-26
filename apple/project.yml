@@ -42,6 +42,11 @@ targets:
         # one name collide ("Multiple commands produce …/PARITY.md").
         excludes:
           - "**/*.md"
+      # The place index a delivered picture's town is named from
+      # (`delivery-place.ts`, the Export tab's Metadata): the web's own
+      # committed GeoNames file, bundled as it stands rather than copied.
+      - path: ../public/geo/cities.json
+        buildPhase: resources
     dependencies:
       - package: AtelierKit
     info:
@@ -81,6 +86,11 @@ targets:
         # one name collide ("Multiple commands produce …/PARITY.md").
         excludes:
           - "**/*.md"
+      # The place index a delivered picture's town is named from
+      # (`delivery-place.ts`, the Export tab's Metadata): the web's own
+      # committed GeoNames file, bundled as it stands rather than copied.
+      - path: ../public/geo/cities.json
+        buildPhase: resources
     dependencies:
       - package: AtelierKit
     info:
