@@ -9,7 +9,7 @@
 
 import Foundation
 
-public enum TickKit: String, CaseIterable, Sendable {
+public enum TickKit: String, CaseIterable, Codable, Sendable {
     case ratchet, wood, typewriter, click
 }
 
