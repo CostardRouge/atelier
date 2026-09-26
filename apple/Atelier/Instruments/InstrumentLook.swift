@@ -49,7 +49,7 @@ final class LookCubes: @unchecked Sendable {
     private var baked: CubeLut?
 
     func resolve(_ grade: LookGrade) -> (lut: CubeLut, intensity: Double) {
-        if grade.output == .none { return (grade.lut, grade.intensity) }
+        if grade.output == OutputTransform.none { return (grade.lut, grade.intensity) }
         lock.lock()
         defer { lock.unlock() }
         if let key, key == grade, let baked { return (baked, 1) }
@@ -68,11 +68,12 @@ final class InstrumentLook {
     /// The picker's value: the web's `'none' | builtin id | 'custom'`, less
     /// the built-ins (see the header).
     enum Choice: Hashable {
-        case none
+        /// "No LUT (original)".
+        case original
         case custom
     }
 
-    private(set) var choice: Choice = .none
+    private(set) var choice: Choice = .original
     /// The uploaded look, kept while another is chosen (the web's `customLut`).
     private(set) var customLut: CubeLut?
     private(set) var customName: String?
@@ -80,7 +81,7 @@ final class InstrumentLook {
     private(set) var busy = false
     /// Strength, 0…3 — 100 % is the look as authored; it persists across looks.
     var intensity: Double = 1
-    var output: OutputTransform = .none
+    var output: OutputTransform = OutputTransform.none
     private(set) var interpolation: Interpolation = InstrumentLook.storedInterpolation()
     /// Bumped per loaded file.
     private(set) var lutSerial = 0
@@ -90,7 +91,7 @@ final class InstrumentLook {
 
     func choose(_ next: Choice) {
         cubeError = nil
-        choice = next == .custom && customLut == nil ? .none : next
+        choice = next == .custom && customLut == nil ? .original : next
     }
 
     /// Lattice interpolation is a RENDER preference of this device, never a
@@ -174,7 +175,7 @@ struct InstrumentLookControls: View {
                     .font(Brand.sans(12))
                     .foregroundStyle(palette.muted)
             }
-            if look.choice != .none { strength }
+            if look.choice != .original { strength }
             if showsRender { renderChoices }
         }
         .fileImporter(isPresented: $importing, allowedContentTypes: [InstrumentFileTypes.cube, .data],
@@ -191,7 +192,7 @@ struct InstrumentLookControls: View {
             set: { look.choose($0) }
         )
         return Picker("Look", selection: selection) {
-            Text("No LUT (original)").tag(InstrumentLook.Choice.none)
+            Text("No LUT (original)").tag(InstrumentLook.Choice.original)
             if let name = look.customName {
                 Text("\(name) (uploaded)").tag(InstrumentLook.Choice.custom)
             }
