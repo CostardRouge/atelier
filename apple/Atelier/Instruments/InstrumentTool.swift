@@ -109,7 +109,7 @@ enum InstrumentTool: String, CaseIterable, Identifiable, Hashable {
         case .composer: PlannedInstrumentView(instrument: self)
         case .exif: ExifToolView()
         case .compare: CompareToolView()
-        case .lut: PlannedInstrumentView(instrument: self)
+        case .lut: LutStudioView()
         }
     }
 }

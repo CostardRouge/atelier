@@ -128,3 +128,33 @@ every view was written against the SDK and compiled by CI alone.
 | "synced playback": one transport drives both, B follows A's clock | `InstrumentTransport` over both players; B is seeked back when it drifts past 0.1 s | ✅ |
 | — | NATIVE: a SYNCED zoom — both sides share one view (`UI/PanZoom.swift`): a pinch or a double tap looks closer at the same place of both; a drag that starts on the divider moves it, elsewhere it pans once zoomed; the zoom said in a chip | ✅ |
 | Only the two compared files are decoded | ✅ a picture at the stage's budget (2560 px long edge) | ✅ |
+
+## LUT Studio (`Lut/`, `InstrumentLook.swift`, `StageFrames.swift`)
+
+| Web (`LutStudio.tsx`, `use-lut-preview.ts`, `batch-export.ts`, `export-video.ts`, `shared/lut/{LutPicker.tsx,use-lut-selection.ts}`) | Native | |
+|---|---|---|
+| Accepts clips | clips AND photos — a photo is previewed through the same graph; none is exported here (a photograph is delivered from Develop, and the bar says so) | ≠ |
+| Look: "No LUT (original)", the built-in groups, "<name> (uploaded)" | "No LUT (original)" and the uploaded look | ✅ |
+| The BUILT-IN looks (`public/luts/`, the `virtual:luts` manifest) | ⏳ not bundled: 29 files, 37 MB (Sony 20 MB, DJI 12 MB, Apple 5.4 MB, classic 160 kB) — a subset, all of it or a fetch on demand is the maintainer's call (`apple/README.md`, the Looks row; the kernel's `BuiltinLuts.swift` is ready for the manifest). The picker SAYS "The built-in looks are not in the app yet — upload your own .cube." | ⏳ |
+| The look gallery with a live preview (`LutGalleryModal`) | ⏳ waits on the built-ins it would show | ⏳ |
+| Upload .cube — "X isn't a supported 3D .cube LUT (1D LUTs aren't supported)." | Files, parsed by the kernel's `parseCube` off the main actor, the same sentence | ✅ |
+| Intensity 0–300 %, the readout, double-click resets to 100 % | a `Slider` 0…3 step 0.01, the readout; a TAP on the readout resets (a slider has no double-click on a phone) | ≠ |
+| — (the Studio's `GradePanel`) | Interpolation: Tetrahedral / Trilinear with the web's two hints, a per-DEVICE preference under the web's key (`atelier.lut.interpolation`) | ✅ |
+| — (the Studio's `GradePanel`) | Output transform: None · Rec.709 2.4 → sRGB · Rec.709 2.4 → 2.2 · sRGB → Rec.709 2.4, each with its hint (`Transfer.swift`); with one, `composeLutStack` bakes look-then-transform into one cube | ✅ |
+| Compare (disabled without a look; turning it on shows the grade) | ✅ | ✅ |
+| Original / Graded segmented switch ("Pick a LUT first") | `LutSourceSwitch`, the web's titles as help | ✅ |
+| Clip stepper, the clip's name, `1920×1080 · codec · fps` | ✅ size · codec (four characters) · cadence, read by `VideoSource.open` | ✅ |
+| The graded preview: WebGL, per presented video frame (`requestVideoFrameCallback`) | the render graph (`FrameGrader` + `CubePass`, tetrahedral by default), an `AVPlayerItemVideoOutput` read ~60×/s and graded only on a NEW frame, off the main actor, the latest request winning; the codes the export's reader sees (BGRA, labelled, non-709 brought to 709) | ✅ |
+| The wipe: a divider following the pointer, `Original` left of it, `Graded` right | a drag (and the hover on a Mac); the composite made in Core Image — original left, grade right | ✅ |
+| A click on the stage plays / pauses (Compare off) | a tap | ✅ |
+| Transport: play (Space) · position · scrub · length | `InstrumentTransport` | ✅ |
+| "Select a video in the Library." / "Select a clip to preview." | "Open a clip or a photo to preview a look on it." | ✅ |
+| WebGL2 missing / HEVC decode failure + transcode | ≠ Metal is always there; HEVC decodes; a clip the device refuses says the platform's reason | ≠ |
+| Export: every selected clip, sequential, one encoder at a time, a failure reported and skipped | every clip on the shelf, the same loop over the shared pipeline (`exportProcessedVideo`), graded in coded orientation (the rotation flag stands), audio copied | ✅ |
+| Each file downloads as it lands, named `<clip>-graded.mp4` | a FOLDER asked for at the click, each file written there as it lands under the same name, numbered if taken (`uniqueName`) | ≠ |
+| Results list: ✓ / ✕ / … / · with Queued · NN% · Exported · Failed and the reason | ✅ progress reported at half a percent at most | ✅ |
+| `Exporting 2/5` + the run's bar + Cancel | ✅ Esc cancels on a Mac; the run is also a task in the kernel's `TaskRegistry` (label, progress, "2 of 5", Cancel) | ✅ |
+| After a Cancel the rows stay as they were | ≠ the clips that never reached the folder leave the list and a note says how many did ("Cancelled — N exported before it stopped.") | ≠ |
+| "N exported · M failed" | ✅ | ✅ |
+| "Export N MP4s" ("Render graded copies of the selected clips (H.264 MP4)") | ✅ | ✅ |
+| "Export needs WebCodecs (try Chrome/Edge)" | ≠ never: AVFoundation encodes | ≠ |
