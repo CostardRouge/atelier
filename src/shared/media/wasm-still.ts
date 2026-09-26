@@ -22,6 +22,7 @@
  */
 
 import jxlWasmUrl from 'jxl-oxide-wasm/module.wasm?url';
+import { readPngSamples, type PngSamples } from './png-read';
 import type { PixelSize } from './still-fit';
 import type { StillFormat } from './still-format';
 
@@ -74,6 +75,24 @@ async function jxlDecode(blob: Blob): Promise<WasmStill> {
     // is a "null pointer passed to rust".
     const png = img.render().encodeToPng();
     return { kind: 'blob', blob: new Blob([png as Uint8Array<ArrayBuffer>], { type: 'image/png' }) };
+  } finally {
+    img.free();
+  }
+}
+
+/**
+ * A JPEG XL codestream's SAMPLES, as they are stored — 16 bits a channel where
+ * the file has them, no colour management, no cut to eight bits. For the
+ * JPEG XL tiles of a LinearRaw DNG (`raw/jxl-dng.ts`): jxl-oxide's one way out
+ * is a PNG, read back by `png-read.ts`.
+ */
+export async function decodeJxlSamples(bytes: Uint8Array): Promise<PngSamples> {
+  const mod = await loadJxl();
+  const img = new mod.JxlImage();
+  try {
+    img.feedBytes(bytes);
+    if (!img.tryInit() || !img.loaded) throw new Error('an incomplete JPEG XL tile');
+    return await readPngSamples(img.render().encodeToPng());
   } finally {
     img.free();
   }

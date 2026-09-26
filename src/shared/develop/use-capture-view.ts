@@ -90,7 +90,8 @@ export function useCaptureView(sources: CaptureViewSources): CaptureView {
       }
       const blob =
         row.reach === 'embedded'
-          ? await extractRawPreview(file)
+          ? // A JPEG XL render (a ProRAW DNG) is made drawable the same way.
+            await extractRawPreview(file).then((b) => b && drawableStill(b, { budgetPixels: stageBudget() }))
           : // A HEIF or a JPEG XL through the suite's own decoder, at the stage's budget.
             row.reach === 'decoder'
             ? await drawableStill(file, { budgetPixels: stageBudget() })

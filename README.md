@@ -1363,6 +1363,17 @@ once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
 profile (an iPhone's Display P3) is not applied, so its colours land a touch
 flatter than in Safari. TIFF is still not read.
 
+**ProRAW in JPEG XL.** An iPhone ProRAW saved with JPEG XL compression is a
+DNG the RAW decoder cannot read, so Atelier develops it itself: its sensor
+data is already demosaiced, its tiles are decoded by the JPEG XL decoder on
+several threads at once, and the camera's own colour matrix and white balance
+are applied exactly as the RAW decoder would — measured against it on a twin
+file, the two agree to a fraction of a code. A zoomed-in view decodes only
+the tiles under it. Two honest limits: Apple's own local tone map is not
+applied, so a ProRAW looks flatter here than in Photos (the develop is where
+you give it its contrast), and it has not yet been tried on a real iPhone
+file.
+
 **White balance in kelvin.** On the sensor, the Adjust tab starts with
 **White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,
 *Shade*, *Tungsten*, *Fluorescent*, *Flash*), a **Temperature** in kelvin and a

@@ -98,7 +98,7 @@ async function coverOf(source: Blob, width: number, height: number): Promise<str
  * JPEG XL in Chrome — decoded straight at the cover's width, with the file's
  * own size beside it. Null where that decoder refuses it too.
  */
-async function decodedCover(file: File): Promise<Pick<ImageMeta, 'width' | 'height' | 'thumbUrl'> | null> {
+async function decodedCover(file: Blob): Promise<Pick<ImageMeta, 'width' | 'height' | 'thumbUrl'> | null> {
   try {
     const { bitmap, natural } = await decodeStill(file, { maxWidth: COVER_EDGE });
     try {
@@ -134,10 +134,17 @@ async function rawCover(file: File): Promise<Pick<ImageMeta, 'width' | 'height' 
     const head = await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer();
     const preview = await extractRawPreview(file, head);
     if (!preview) return null;
-    const shown = await readImageSize(preview);
-    const thumbUrl = await coverOf(preview, shown.width, shown.height);
-    const size = rawSizesFrom(head).sensor ?? shown;
-    return { width: size.width, height: size.height, thumbUrl };
+    let cover: { width?: number; height?: number; thumbUrl?: string } | null;
+    try {
+      const shown = await readImageSize(preview);
+      cover = { ...shown, thumbUrl: await coverOf(preview, shown.width, shown.height) };
+    } catch {
+      // A JPEG XL render (a ProRAW DNG): the suite's own decoder.
+      cover = await decodedCover(preview);
+    }
+    if (!cover) return null;
+    const sensor = rawSizesFrom(head).sensor;
+    return { width: sensor?.width ?? cover.width, height: sensor?.height ?? cover.height, thumbUrl: cover.thumbUrl };
   } catch {
     return null;
   }

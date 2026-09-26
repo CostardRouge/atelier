@@ -115,7 +115,10 @@ export async function stillSize(file: Blob, name = (file as File).name ?? ''): P
     try {
       const head = await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer();
       const preview = await extractRawPreview(file, head);
-      if (preview) return { ...(await readImageSize(preview)), viaRawPreview: true };
+      if (preview) {
+        const size = await headerSize(preview);
+        return size ? { ...size, viaRawPreview: true } : null;
+      }
       // A RAW with no render: a computer may still decode it whole (Safari),
       // a phone never does — so on a phone it has no size to deliver from.
       if (deviceClass() === 'constrained') return null;
@@ -123,15 +126,23 @@ export async function stillSize(file: Blob, name = (file as File).name ?? ''): P
       return null;
     }
   }
+  const size = await headerSize(file);
+  return size ? { ...size, viaRawPreview: false } : null;
+}
+
+/**
+ * A picture's upright size from its header: the browser's reader, else — a
+ * JPEG XL or a HEIF it refuses — the reader of the decoder shipped for it.
+ */
+async function headerSize(blob: Blob): Promise<PixelSize | null> {
   try {
-    return { ...(await readImageSize(file)), viaRawPreview: false };
+    return await readImageSize(blob);
   } catch {
-    // Refused by the browser: a format this suite decodes itself answers from its header.
-    const format = await formatOf(file);
+    const format = await formatOf(blob);
     if (!format) return null;
     try {
       const { wasmStillSize } = await import('./wasm-still');
-      return { ...(await wasmStillSize(file, format)), viaRawPreview: false };
+      return await wasmStillSize(blob, format);
     } catch {
       return null;
     }

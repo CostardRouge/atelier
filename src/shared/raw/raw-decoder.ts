@@ -74,6 +74,8 @@ import { isRawImage } from '../library/assets';
 import { startTask, type TaskHandle } from '../tasks/tasks';
 import type { HalfImage } from '../render/half-image';
 import { fileKey, makeDecodedCache } from './decoded-cache';
+import { decodeJxlDngPlane } from './jxl-dng';
+import { readLinearDng, type LinearDng } from './linear-dng';
 import { decodedBytes, decodedCacheCeiling, decoderIdleMs, rawTilePixels } from './raw-budget';
 import {
   decodedFrame,
@@ -430,6 +432,73 @@ async function readHead(file: File): Promise<RawHead | null> {
   }
 }
 
+/** The head of a JPEG XL LinearRaw DNG, or null for every RAW LibRaw reads. */
+async function readJxlHead(file: File): Promise<{ head: ArrayBuffer; info: LinearDng } | null> {
+  try {
+    const head = await file.slice(0, RAW_PROBE_BYTES).arrayBuffer();
+    const info = readLinearDng(head);
+    return info ? { head, info } : null;
+  } catch {
+    return null;
+  }
+}
+
+/**
+ * A JPEG XL LinearRaw DNG, decoded without LibRaw (`jxl-dng.ts`) into the very
+ * plane LibRaw would have handed over — its 16-bit codes, or the box-averaged
+ * linear picture — and converted by the same two functions, so the gain, the
+ * half-floats and the as-shot bytes cannot differ from a LibRaw decode's.
+ */
+async function decodeJxl(
+  file: File,
+  head: ArrayBuffer,
+  info: LinearDng,
+  opts: RawDecodeOptions,
+  withBytes: boolean,
+  signal: AbortSignal,
+  cancelled: () => DOMException,
+  task: TaskHandle | null,
+): Promise<RawDecoded> {
+  const plane = await decodeJxlDngPlane(file, head, info, {
+    region: opts.region ?? null,
+    factorFor: (w, h) => boxFactorFor(w, h, opts),
+    signal,
+    cancelled,
+    task,
+  });
+  const check = async () => {
+    await yieldToMain();
+    if (signal.aborted) throw cancelled();
+  };
+  let converted: Pick<RawDecoded, 'half' | 'bytes' | 'width' | 'height' | 'gain'>;
+  if (plane.linear) {
+    converted = await encodeBoxed(plane.linear, opts, withBytes, check);
+  } else {
+    let rgb16: Uint16Array | null = plane.rgb16!;
+    // The plane is already at the size asked: no second box factor.
+    converted = await convert(rgb16, plane.width, plane.height, { ...opts, budgetPixels: null, maxEdge: null }, withBytes, signal, cancelled, () => {
+      rgb16 = null;
+    });
+  }
+  return {
+    ...converted,
+    sourceWidth: plane.frame.width,
+    sourceHeight: plane.frame.height,
+    halved: false,
+    region: opts.region
+      ? { x: plane.region.x / plane.factor, y: plane.region.y / plane.factor, w: plane.width, h: plane.height }
+      : null,
+    scale: plane.factor,
+    tiles: plane.tiles,
+    meta: {
+      make: info.make,
+      model: info.model,
+      ...plane.exif,
+      white: plane.color.white,
+    },
+  };
+}
+
 /** A tile plan the decoder found not to hold once LibRaw answered — the decode falls back to the whole frame. */
 class TilePlanMismatch extends Error {}
 
@@ -465,6 +534,10 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
     // Cancelled while waiting its turn: nothing is read, the worker is not
     // touched, and the next decode in the chain goes straight on.
     if (signal.aborted) throw cancelled();
+    // A LinearRaw DNG in JPEG XL tiles (ProRAW) is one LibRaw cannot read:
+    // it is decoded tile by tile through the JPEG XL decoder instead.
+    const jxl = await readJxlHead(file);
+    if (jxl) return decodeJxl(file, jxl.head, jxl.info, opts, withBytes, signal, cancelled, task);
     // The file's own size, read from its IFDs without the decoder, decides
     // whether a half-size decode fits — LibRaw cannot be asked after `open`
     // — and, with how the camera was held, where the tiles go.
