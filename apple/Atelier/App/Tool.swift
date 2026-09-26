@@ -1,6 +1,8 @@
-// The suite's tools, as the app's four tabs. The web app's registry
-// (`src/app/tools.tsx`) lists more — the legacy instrument pages — and the
-// design canvas folded them into these four: the tab bar IS the home.
+// The suite's tools, as the app's four tabs: the tab bar IS the home. The
+// web app's registry (`src/app/tools.tsx`) lists more — the instrument pages
+// kept until the Studio absorbs them — and those are `InstrumentTool`
+// (`Instruments/InstrumentTool.swift`), reached from the sidebar's second
+// section and, on a phone, the fifth tab (`RootView`).
 
 import SwiftUI
 
