@@ -85,3 +85,27 @@ every view was written against the SDK and compiled by CI alone.
 | The clip beneath with controls; scrubbing walks the aircraft | `VideoPlayer`; the cue under the playhead moves the dot | ✅ |
 | "Telemetry only — add this clip's video to scrub along the path." | ✅ | ✅ |
 | macOS sandbox | `com.apple.security.network.client` (already there for Sources) now names the map too — without it MapKit draws an empty grid | ✅ |
+
+## Photo EXIF (`Exif/`, kernel `Tools/ExifFormat.swift`)
+
+| Web (`ExifTool.tsx`, `Gallery.tsx`, `PhotoCard.tsx`, `DetailView.tsx`, `exif-view.tsx`, `exif-format.ts`, `use-exif.ts`) | Native | |
+|---|---|---|
+| Empty state: "Add your photos in the Library… EXIF is read straight from each file — JPEG and most RAW formats carry it" | "Open your photos, then inspect each one here. EXIF is read straight from each file — JPEG and most RAW formats carry it." + From Photos… / From Files… | ✅ |
+| Photos pick | the ORIGINAL file (`preferredItemEncoding: .current`), never a re-encode that would drop the EXIF | ✅ |
+| Only the head of each file is read (`EXIF_SLICE_BYTES`) | `exifSliceBytes` of the head, parsed by the kernel's `readEffectiveExif` | ✅ |
+| A RAW and its JPEG are one photograph | the kernel's `buildAssets`; the full view says `+ DNG` for the other half (`siblingTypes`) | ✅ |
+| Card: `NO. 01`, the GPS chip ("Geotagged"), 4:3 cover, name, type · weight | ✅ | ✅ |
+| Card: "Reading EXIF…" / "No EXIF metadata." / body, exposure triplet, capture moment (never the file's date) · via the instance | ✅ | ✅ |
+| Card: "RAW — preview unavailable (browser can't decode it)" | ≠ a RAW's preview is DRAWN (ImageIO reads the render inside it); "… — preview unavailable on this device" only when even that fails | ≠ |
+| Card verb: View metadata | ✅ | ✅ |
+| Full view: name as a serif title, type · weight | ✅ | ✅ |
+| Full view: large preview beside the panels (one column under 820 px) | side by side where there is room, stacked on a phone | ✅ |
+| "No EXIF metadata found in this file. Dimensions (if shown) come from the decoded image." | ✅ | ✅ |
+| "This file is X's editing rendition and carries no EXIF of its own…" | ✅ the rule is kept; no source vouches for a file opened here yet, so it never shows | ✅ |
+| The decoded size fills the Image panel where the EXIF says none | ✅ the size as SHOWN (a quarter-turn swaps the axes) | ✅ |
+| Camera: Make, Model, Lens, Software, Artist | ✅ | ✅ |
+| Exposure: Shutter, Aperture, ISO, Exposure bias, Focal length, 35 mm equiv., Program, Metering, White balance, Flash | ✅ — every formatter the kernel's port of `exif-format.ts`, its spec ported case for case | ✅ |
+| Image: Dimensions, Orientation, Captured | ✅ | ✅ |
+| Location: Coordinates, Altitude, "OpenStreetMap ↗" (a plain link, opened only by a click) | ✅ `Link` — the system opens it on the person's tap | ✅ |
+| — | NATIVE: the GPS on a map, behind the SAME opt-in chip as every map (`BaseMapConsent`, off by default) | ✅ |
+| — | NATIVE: a RAW panel from the kernel's `probeRaw` / `rawSizesFrom` on the first megabyte: Sensor (as shown), Sensor data (compression), Camera render (or "none embedded"), Calibration (`OpcodeList3`), Opcode lists | ✅ |
