@@ -31,7 +31,7 @@ final class FullDevelopRenderPlanTests: XCTestCase {
 
     /// A plan over the bundle's built-ins and a vault in a scratch folder.
     private func plan() -> FullDevelopRenderPlan {
-        let looks = DevelopLooks(folder: DevelopLooks.bundledFolder(), store: DiskPackStore(root: scratch))
+        let looks = DevelopLooks(folder: DevelopLooks.bundledFolder(), store: FilePackStore(root: scratch))
         return FullDevelopRenderPlan(looks: looks, device: .roomy, context: CubePassTests.context)
     }
 
@@ -284,7 +284,7 @@ final class FullDevelopRenderPlanTests: XCTestCase {
     // MARK: - the looks
 
     func testTheBundledBuiltInsResolveByTheWebsIds() throws {
-        let looks = DevelopLooks(folder: DevelopLooks.bundledFolder(), store: DiskPackStore(root: scratch))
+        let looks = DevelopLooks(folder: DevelopLooks.bundledFolder(), store: FilePackStore(root: scratch))
         XCTAssertNotNil(looks.folder, "the app bundle carries `luts/` (project.yml's folder reference)")
         let list = looks.builtinLooks
         XCTAssertFalse(list.isEmpty)
@@ -299,7 +299,7 @@ final class FullDevelopRenderPlanTests: XCTestCase {
     }
 
     func testAPackLookIsReadFromTheVaultOnDiskOrSaidMissing() async throws {
-        let store = DiskPackStore(root: scratch)
+        let store = FilePackStore(root: scratch)
         let looks = DevelopLooks(folder: nil, store: store)
         let ref = PackRef(pack: "authentic", look: "kodak", hash: "abc123")
         let grade = RollGrade(layers: [SavedLutLayer(id: "k", source: packSource, name: "Kodak",

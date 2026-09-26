@@ -115,16 +115,24 @@ final class LookLibrary {
     /// The instances that can keep a pack, as the connections stand.
     private(set) var hosts: [PackHost] = []
 
-    init(store: any PackStore = FilePackStore(), defaults: UserDefaults = .standard) {
-        let box = PackHostBox()
-        hostBox = box
-        vault = PackVault(store: store, hosts: { box.get() })
+    /// The app's library, over the device's one vault (`SharedVault`) — the
+    /// render plan reads the same one.
+    init(vault: PackVault = SharedVault.vault, hostBox: PackHostBox = SharedVault.hosts,
+         defaults: UserDefaults = .standard) {
+        self.hostBox = hostBox
+        self.vault = vault
         self.defaults = defaults
         let stored = defaults.string(forKey: lutFavouritesKey).flatMap { JSONValue.parse($0) }
         favourites = readLutFavourites(stored)
         interpolation = defaults.string(forKey: LookLibrary.interpolationKey) == Interpolation.trilinear.rawValue
             ? .trilinear : .tetrahedral
         Task { await self.start() }
+    }
+
+    /// A library over a store of its own — previews and specs, never the app.
+    convenience init(store: any PackStore, defaults: UserDefaults = .standard) {
+        let box = PackHostBox()
+        self.init(vault: PackVault(store: store, hosts: { box.get() }), hostBox: box, defaults: defaults)
     }
 
     private func start() async {
@@ -141,6 +149,9 @@ final class LookLibrary {
     func reloadPacks() async {
         _ = await vault.loadPacks()
         packs = await vault.packsSnapshot()
+        // The render plan keeps what the vault answered; a pack that came or
+        // went is asked again on the next render.
+        DevelopLooks.shared.packsChanged()
         loaded = true
     }
 

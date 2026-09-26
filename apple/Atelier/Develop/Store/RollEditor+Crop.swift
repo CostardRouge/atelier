@@ -376,10 +376,12 @@ extension RollEditor {
         return ShotLens(exif: pool.exif[id])
     }
 
-    /// Developed from the SENSOR's data — the system's RAW developer here.
+    /// Developed from the SENSOR's data — the develop on a rung above the
+    /// proxy, which the render plan draws from the system's RAW developer. A
+    /// RAW merely OPENED is shown on the camera's render inside it, and a
+    /// profile is only offered there, never applied by itself.
     var developsOnSensor: Bool {
-        guard let id = openId else { return false }
-        return pool.held(id)?.decoded.isRaw ?? false
+        openId != nil && shownBase != .proxy
     }
 
     /// The stored profile: `.none` never decided, `.some(nil)` taken off.

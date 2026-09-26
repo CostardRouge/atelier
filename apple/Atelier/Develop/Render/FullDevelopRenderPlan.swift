@@ -396,7 +396,7 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
 
     /// The develop and the picture's own look as ONE lattice — the kernel's
     /// `composeLutStack`, tetrahedral, baked once per develop and look.
-    private func baked(_ develop: DevelopSettings?, _ look: ResolvedLook, _ grade: RollGrade?) -> CubeLut? {
+    private func baked(_ develop: DevelopSettings?, _ look: DevelopLook, _ grade: RollGrade?) -> CubeLut? {
         let key = gradeKey(grade.map { SavedGrade($0) }) + "\u{1}" + look.missing.joined(separator: "\u{1}")
         lock.lock()
         if let hit = bake, hit.key == key, sameDevelop(hit.develop, develop) {

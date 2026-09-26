@@ -216,7 +216,7 @@ final class RollExportRun {
                 now: now,
                 year: year
             )
-            let outcome = await Task.detached(priority: .userInitiated) { RollExportRun.deliver(job, flag) }.value
+            let outcome = await Task.detached(priority: .userInitiated) { await RollExportRun.deliver(job, flag) }.value
             if outcome.cancelled { break }
 
             failures += outcome.failures
@@ -283,7 +283,7 @@ final class RollExportRun {
     // MARK: - one picture, off the main actor
 
     /// Read, decode, render once, make every target's file and land it.
-    nonisolated static func deliver(_ job: PictureJob, _ flag: RunCancelFlag) -> PictureOutcome {
+    nonisolated static func deliver(_ job: PictureJob, _ flag: RunCancelFlag) async -> PictureOutcome {
         var out = PictureOutcome()
         let label = job.picture.ref.name
         guard let locator = job.locator else {
@@ -322,6 +322,9 @@ final class RollExportRun {
                 picture.develop = isDefaultDevelop(numbers) ? nil : numbers
             }
         }
+        // What a render cannot wait for is read first: a pack look from the
+        // vault, a subject from the model — then what is still not drawn is said.
+        await job.plan.prepare(picture: picture, decoded: decoded, budget: .whole)
         out.unrendered = job.plan.unrendered(picture: picture)
 
         // The metadata is the ORIGINAL's: the file's own head, else what the
@@ -370,7 +373,10 @@ final class RollExportRun {
 
         // The file's own arithmetic: the crop at the source's density, inside
         // its border where the plan draws one, capped and never upscaled.
-        let src = Size(Double(decoded.width), Double(decoded.height))
+        // The pixels the plan renders from — a RAW's SENSOR where the develop
+        // is on it (8064 × 4536 on a DJI), never the render it opened on.
+        let drawn = job.plan.sourceSize(picture: picture, decoded: decoded, budget: .whole)
+        let src = Size(Double(drawn.width), Double(drawn.height))
         let ratio = pictureAspectRatio(picture.aspect, src.width, src.height)
         let border = out.unrendered.contains("border") ? nil : readBorder(picture.carried["border"])
         let frame = deliveredLayout(src, ratio, picture.framing, border, nil).out

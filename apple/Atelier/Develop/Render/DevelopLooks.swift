@@ -8,9 +8,9 @@
 //   graded in the browser resolves here only because both clients derive the
 //   same id from the same file (`BuiltinLuts.swift`, «THE ID RULE IS
 //   LOAD-BEARING»). A `.cube` is parsed once and kept;
-// - a PACK look is a reference into the VAULT (`Lut/PackVault.swift`), over a
-//   store on this device's disk (`DiskPackStore`, the web's IndexedDB
-//   `atelier-lut-packs`). The vault is an actor and resolving is async, while
+// - a PACK look is a reference into the VAULT (`Lut/PackVault.swift`) — the
+//   device's ONE vault (`Look/SharedVault.swift`, over `FilePackStore`, the
+//   web's IndexedDB `atelier-lut-packs`), the very one the look pickers use. The vault is an actor and resolving is async, while
 //   a render is synchronous: `prepare` resolves a grade's pack looks ahead of
 //   the render and keeps the lattices, and the render asks only what is kept.
 //   A look the vault does not hold comes back in its place CARRYING `missing`
@@ -27,7 +27,7 @@ import AtelierKit
 import Foundation
 
 /// A picture's look, resolved and ready to bake.
-struct ResolvedLook {
+struct DevelopLook {
     /// The layers `composeLutStack` takes, in the stack's order; a pack look
     /// this device does not hold is among them with `missing` set, and the
     /// bake skips it.
@@ -36,7 +36,7 @@ struct ResolvedLook {
     /// What does not grade here, in words — `AUTHENTIC · Kodak (not in this vault)`.
     var missing: [String]
 
-    static let none = ResolvedLook(layers: [], output: .none, missing: [])
+    static let none = DevelopLook(layers: [], output: .none, missing: [])
 }
 
 final class DevelopLooks: @unchecked Sendable {
@@ -64,9 +64,14 @@ final class DevelopLooks: @unchecked Sendable {
     /// How long a pack look the vault did not have is taken as missing before it is asked again.
     static let missRetry: TimeInterval = 5
 
-    init(folder: URL? = DevelopLooks.bundledFolder(), store: any PackStore = DiskPackStore.appDefault()) {
+    init(folder: URL? = DevelopLooks.bundledFolder(), vault: PackVault = SharedVault.vault) {
         self.folder = folder
-        vault = PackVault(store: store)
+        self.vault = vault
+    }
+
+    /// Over a store of its own — the render gate's scratch vault.
+    convenience init(folder: URL?, store: any PackStore) {
+        self.init(folder: folder, vault: PackVault(store: store))
     }
 
     /// Where the bundle keeps the built-ins — the folder reference `project.yml` adds.
@@ -259,7 +264,7 @@ final class DevelopLooks: @unchecked Sendable {
     /// `restoreLayers` over the two answers above. A stored layer that does
     /// not come back at all (a built-in this build lacks, a film layer whose
     /// settings will not read) is SAID in `missing`, never dropped in silence.
-    func resolve(_ grade: RollGrade?) -> ResolvedLook {
+    func resolve(_ grade: RollGrade?) -> DevelopLook {
         guard let grade else { return .none }
         let restored = restoreLayers(grade.layers, builtin: { self.builtin($0) }, pack: { self.packAnswer($0) })
         var missing: [String] = []
@@ -271,107 +276,6 @@ final class DevelopLooks: @unchecked Sendable {
         for layer in restored.layers where layer.missing != nil && layer.enabled {
             missing.append("\(layer.name) (not in this vault)")
         }
-        return ResolvedLook(layers: restored.layers, output: grade.output, missing: missing)
-    }
-}
-
-/// The vault's storage on THIS device — the web's `pack-store.ts` over
-/// IndexedDB, as files under `Application Support/Atelier/packs/`: one JSON
-/// index per pack (`index/<pack>.json`) and one ENCODED lattice per look
-/// (`lattices/<hash>.lut`, the `PackCodec` bytes, never `.cube` text), keyed
-/// by the SHA-256 of the source `.cube`, so two packs shipping one file store
-/// it once. Every call DEGRADES rather than throws, as the protocol asks.
-final class DiskPackStore: PackStore, @unchecked Sendable {
-    let root: URL
-    private let lock = NSLock()
-
-    init(root: URL) {
-        self.root = root
-    }
-
-    /// Beside the rolls, the presets and the thumbnails.
-    static func appDefault() -> DiskPackStore {
-        DiskPackStore(root: RollStore.defaultRoot().appendingPathComponent("packs", isDirectory: true))
-    }
-
-    private var indexDirectory: URL { root.appendingPathComponent("index", isDirectory: true) }
-    private var latticeDirectory: URL { root.appendingPathComponent("lattices", isDirectory: true) }
-
-    /// A pack id as a file name: anything but a letter, a digit, `-`, `_` or `.` escaped.
-    private func indexURL(_ packId: String) -> URL {
-        var allowed = CharacterSet.alphanumerics
-        allowed.insert(charactersIn: "-_.")
-        let safe = packId.addingPercentEncoding(withAllowedCharacters: allowed) ?? packId
-        return indexDirectory.appendingPathComponent("\(safe).json")
-    }
-
-    /// A hash is hex; anything else is not a key this store writes.
-    private func latticeURL(_ hash: String) -> URL? {
-        guard !hash.isEmpty, hash.unicodeScalars.allSatisfy({ CharacterSet.alphanumerics.contains($0) }) else { return nil }
-        return latticeDirectory.appendingPathComponent("\(hash).lut")
-    }
-
-    private func ensure(_ dir: URL) -> Bool {
-        (try? FileManager.default.createDirectory(at: dir, withIntermediateDirectories: true)) != nil
-    }
-
-    func listStoredPacks() async -> [LutPackIndex] {
-        let urls = (try? FileManager.default.contentsOfDirectory(at: indexDirectory, includingPropertiesForKeys: nil)) ?? []
-        var rows: [JSONValue] = []
-        for url in urls where url.pathExtension == "json" {
-            guard let text = try? String(contentsOf: url, encoding: .utf8), let row = JSONValue.parse(text) else { continue }
-            rows.append(row)
-        }
-        return readStoredPacks(rows)
-    }
-
-    func putStoredPack(_ index: LutPackIndex) async -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard ensure(indexDirectory) else { return false }
-        let text = index.json.serialized()
-        return (try? text.write(to: indexURL(index.id), atomically: true, encoding: .utf8)) != nil
-    }
-
-    func deleteStoredPack(_ packId: String) async {
-        lock.lock()
-        defer { lock.unlock() }
-        try? FileManager.default.removeItem(at: indexURL(packId))
-    }
-
-    func deleteStoredLattices(_ hashes: [String]) async {
-        lock.lock()
-        defer { lock.unlock() }
-        for hash in hashes {
-            if let url = latticeURL(hash) { try? FileManager.default.removeItem(at: url) }
-        }
-    }
-
-    func getStoredLattice(_ hash: String) async -> [UInt8]? {
-        guard let url = latticeURL(hash), let data = try? Data(contentsOf: url) else { return nil }
-        return [UInt8](data)
-    }
-
-    func putStoredLattice(_ hash: String, packId: String, bytes: [UInt8]) async -> Bool {
-        lock.lock()
-        defer { lock.unlock() }
-        guard let url = latticeURL(hash), ensure(latticeDirectory) else { return false }
-        return (try? Data(bytes).write(to: url, options: .atomic)) != nil
-    }
-
-    func storedLatticeHashes() async -> Set<String> {
-        let urls = (try? FileManager.default.contentsOfDirectory(at: latticeDirectory, includingPropertiesForKeys: nil)) ?? []
-        return Set(urls.filter { $0.pathExtension == "lut" }.map { $0.deletingPathExtension().lastPathComponent })
-    }
-
-    func storedLatticeSizes() async -> LatticeSizes {
-        let keys: [URLResourceKey] = [.fileSizeKey]
-        let urls = (try? FileManager.default.contentsOfDirectory(at: latticeDirectory, includingPropertiesForKeys: keys)) ?? []
-        var out: LatticeSizes = [:]
-        for url in urls where url.pathExtension == "lut" {
-            guard let size = try? url.resourceValues(forKeys: Set(keys)).fileSize else { continue }
-            out[url.deletingPathExtension().lastPathComponent] = size
-        }
-        return out
+        return DevelopLook(layers: restored.layers, output: grade.output, missing: missing)
     }
 }
