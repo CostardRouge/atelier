@@ -26,7 +26,7 @@ Where things are:
 | `Panels/` | the Adjust sections (their own task) |
 | `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
 
-Counts: **238 ✅ · 33 ⏳ · 9 part-built** — 280 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40; the Repair table: 24 ✅ · 2 ⏳ of 26).
+Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40; the Repair table: 24 ✅ · 2 ⏳ of 26).
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -151,7 +151,8 @@ Counts: **238 ✅ · 33 ⏳ · 9 part-built** — 280 table rows (the Layers tab
 | The grey dropper: the tool takes the pointer whole, "click / tap something grey", solves `whiteBalanceFor` on the source AS SHOT at the tapped pixel, then puts itself down | ✅ `EyedropperOverlay` |
 | An overlay SLOT the active tool fills (`DevelopTool`: none · crop · mask · repair · eyedropper) with the view ↔ source transform (`StageGeometry`) | ✅ |
 | Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table «The Crop tab») · the mask's marks, handles and brush (`MaskStageOverlay`) · the repair's rings, handles, proposed spots and map (`RepairStageOverlay`, `RepairMarksOverlay`, table «Repair») |
-| The task hairline on the stage's edge (`TaskEdge`) | ⏳ the tasks UI |
+| The task hairline on the stage's edge (`TaskEdge`) | ✅ `../Tasks/TaskEdge.swift` on the bottom edge, scoped to the open picture: its opening (`Opening <file>`, no Cancel) and its sensor's decode (`Opening <file>` · the sensor’s data) |
+| The same hairline on the filmstrip cell of a picture being opened | ✅ native addition — the web's filmstrip draws none |
 
 ## The Crop tab — `CropStage.tsx`, `use-crop-zone.ts`, `crop-view.ts`, `CropPanel.tsx`, `BorderSection.tsx`, `KeystonePanel.tsx`, `LensPanel.tsx`, `lensfun-store.ts`
 
@@ -267,7 +268,7 @@ Counts: **238 ✅ · 33 ⏳ · 9 part-built** — 280 table rows (the Layers tab
 | Other targets into their sub-folders, a variant into `Variant N/`, a refused file said with the folder's words | ✅ |
 | Each file written as it lands | ✅ (the web holds the roll until the end) |
 | What LANDED marked on this device (`export-marks.ts`) | ✅ |
-| One task per run, a picture at a time; Cancel between two pictures, what was written kept and said | ✅ in the task registry and on the tab · ⏳ the pill and the stage's edge (the tasks UI) |
+| One task per run, a picture at a time; Cancel between two pictures, what was written kept and said | ✅ one task (`TaskCenter`) on the tab and in the toolbar's pill, its Cancel the tab's own; unscoped as on the web, so the stage's edge keeps to the open picture's work |
 | A RAW base set aside under *Proxies only*, or when the RAW is out of reach — said | ✅ |
 | What the render plan does not draw yet (the look, the layers…) said per run | ✅ |
 | A RAW decoded under its sensor's pixels (the GPU's cap, a phone's ceiling) said | ⏳ the system's RAW developer decodes whole; nothing is capped to say |

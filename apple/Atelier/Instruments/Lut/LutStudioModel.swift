@@ -237,8 +237,8 @@ final class LutStudioModel {
         reports = clips.map { ClipReport(id: $0.id, name: $0.name, status: .queued) }
         let grade = look.grade
         let cubes = LookCubes()
-        let handle = TaskRegistry.shared.startTask(
-            label: "Exporting graded clips", progress: 0, detail: "1 of \(clips.count)",
+        let handle = TaskCenter.start(
+            "Exporting graded clips", progress: 0, detail: "1 of \(clips.count)",
             cancel: { [weak self] in
                 let owner = self
                 Task { @MainActor in owner?.cancelExport() }

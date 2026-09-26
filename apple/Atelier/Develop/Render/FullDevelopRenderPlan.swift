@@ -351,6 +351,12 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         let held = budget == .stage
         let key = "\(p.id)|\(raw.name)|\(raw.fileSize)|\(ObjectIdentifier(d).hashValue)|\(Int((edge ?? 0).rounded()))"
         if held, let hit = sensors.get(key), hit.gain != nil || !measure { return hit }
+        // The stage's demosaic is the dearest thing it does: a TASK of its
+        // own on the picture's edge (`tasks.md` T3, the web's `decodeRaw`) —
+        // with no Cancel, since the system's RAW developer cannot be stopped
+        // half-way. An export's decode is under the run's task already.
+        let opening = held ? TaskCenter.start("Opening \(raw.name)", scope: p.id, detail: "the sensor’s data") : nil
+        defer { opening?.done() }
         guard let data = try? raw.reread() else { return nil }
         guard let decode = SensorDecoder.decode(data, hint: raw.hint, maxEdge: edge, materialize: held,
                                                 measure: measure || held, context: context) else { return nil }

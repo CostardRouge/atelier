@@ -613,7 +613,15 @@ final class RollEditor {
         let key = "\(pic.id)|\(pic.aspect)|\(pic.framing?.json.serialized() ?? "")|\(pic.develop?.base?.rawValue ?? "")|\(gain)"
         let needsBefore = wantsBefore && (beforeKey != key || before == nil)
         if stage == nil { loading = true }
+        // Opening a picture is a TASK on its edge and in the pill past 400 ms
+        // (`tasks.md` T3): the decode, a pack look's lattice and the first
+        // render, named after the file — with no Cancel, a decode being
+        // nothing that stops half-way. A render of a picture already on
+        // screen is not one: it is a slider's step, and the stage keeps the
+        // last render meanwhile.
+        let opening = stage == nil ? TaskCenter.start("Opening \(pic.ref.name)", scope: pic.id) : nil
         Task { [weak self] in
+            defer { opening?.done() }
             guard let self else { return }
             do {
                 let read = try await self.pool.read(rollId, pic)

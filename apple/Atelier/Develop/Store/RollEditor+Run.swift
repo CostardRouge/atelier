@@ -15,6 +15,8 @@
 //   session (`RollRunState.forRoll`), never on the editor, so an export goes
 //   on while he walks back to the gallery — the web's task registry is module
 //   state for the same reason — and the tab shows it again when he returns.
+//   The run is ONE task (`TaskCenter`): the toolbar's pill says it wherever
+//   he is, with its Cancel.
 // - **The folder is picked AT THE CLICK**, before a pixel is rendered: the verb
 //   asks the Deliver section for a folder and the run starts from the answer
 //   (`startExport`). Photos is asked for its permission at the click too.
@@ -133,9 +135,9 @@ final class RollRunState {
         exporting = "Preparing…"
         progress = 0
         self.flag = flag
-        handle = TaskRegistry.shared.startTask(label: label, progress: 0, cancel: { [weak self] in
-            // Called from whoever cancels — the pill, one day — so the flag is
-            // set here and the rest waits for the main actor.
+        handle = TaskCenter.start(label, progress: 0, cancel: { [weak self] in
+            // Called from whoever cancels — the toolbar's pill, the tab's own
+            // verb — so the flag is set here and the rest waits for the main actor.
             flag.set()
             Task { @MainActor in self?.cancel() }
         })

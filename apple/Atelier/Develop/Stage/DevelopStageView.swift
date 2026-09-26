@@ -15,7 +15,8 @@
 //
 // Over the picture: the tool's overlay (`StageOverlaySlot`), then the chips —
 // `after` / `before · after` / `before`, what this stage does NOT draw yet,
-// the facts under `I`, and `◐ hold for before`.
+// the facts under `I`, and `◐ hold for before` — and the open picture's
+// tasks as a hairline on the bottom edge (`TaskEdge`).
 
 import CoreGraphics
 import SwiftUI
@@ -48,6 +49,10 @@ struct DevelopStageView: View {
                                  context: StageOverlayContext(editor: editor, geometry: geometry, zoom: zoom))
                 states
                 chips
+                // What is happening to THIS picture — its opening, its
+                // sensor's decode, a fetch of its files — on the bottom edge;
+                // the words and the Cancel are the toolbar pill's.
+                TaskEdge(scope: editor.openId)
             }
             .coordinateSpace(.named(DevelopStageView.space))
             .contentShape(Rectangle())

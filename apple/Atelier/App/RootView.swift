@@ -68,11 +68,11 @@ struct RootView: View {
     private var tabs: some View {
         TabView(selection: $tab) {
             ForEach(Tool.allCases) { tool in
-                NavigationStack { tool.screen }
+                NavigationStack { tool.screen.taskPill() }
                     .tabItem { Label(tool.title, systemImage: tool.symbol) }
                     .tag(ShellTab.tool(tool))
             }
-            NavigationStack { InstrumentsHome() }
+            NavigationStack { InstrumentsHome().taskPill() }
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
                 .tag(ShellTab.more)
         }
@@ -104,7 +104,7 @@ struct RootView: View {
         } detail: {
             // A new place is a new stack: a page pushed inside one tool never
             // survives the move to another.
-            NavigationStack { place.screen }
+            NavigationStack { place.screen.taskPill() }
                 .id(place)
         }
     }

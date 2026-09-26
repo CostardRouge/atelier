@@ -196,8 +196,8 @@ final class ComposerModel {
         let track = telemetry?.track ?? []
         let grade = look.grade
         let name = clipName
-        let handle = TaskRegistry.shared.startTask(
-            label: "Exporting \(name.isEmpty ? "the composition" : name)", progress: nil,
+        let handle = TaskCenter.start(
+            "Exporting \(name.isEmpty ? "the composition" : name)", progress: nil,
             cancel: { [weak self] in
                 let owner = self
                 Task { @MainActor in owner?.cancelExport() }

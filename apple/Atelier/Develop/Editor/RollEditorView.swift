@@ -94,6 +94,8 @@ struct RollWorkbench: View {
         .toolbar(compact ? .hidden : .automatic, for: .tabBar)
         #endif
         .toolbar { toolbar }
+        // Pushed over the gallery with a bar of its own: the pill comes too.
+        .taskPill()
         .photosPicker(isPresented: $showPhotos, selection: $photoItems, maxSelectionCount: 200, matching: .images)
         // ONE importer, two kinds: two `fileImporter`s on one view answer only the last.
         .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),

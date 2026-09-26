@@ -7,7 +7,7 @@
 // cameras, the counts — and name the pack before a byte is stored. The
 // preview is built from the paths alone (`importPreview`).
 //
-// The import is a TASK (`TaskRegistry`, `tasks.md` T5) with NO Cancel: the
+// The import is a TASK (`TaskCenter`, `tasks.md` T5) with NO Cancel: the
 // vault is written look by look and the index last, and stopping half-way
 // would leave a pack the index does not describe. The sheet keeps its line
 // ("Reading 3 of 25…"); the pill draws the bar.
@@ -153,7 +153,7 @@ final class PackManagerModel {
             author: author.trimmingCharacters(in: .whitespacesAndNewlines),
             url: trimmedLink.isEmpty ? nil : trimmedLink
         )
-        let handle = TaskRegistry.shared.startTask(label: "Importing \(packName)", progress: 0, detail: "\(total) looks")
+        let handle = TaskCenter.start("Importing \(packName)", progress: 0, detail: "\(total) looks")
         let result = await library.importPack(picked.files, options, read: { file in
             try await Task.detached(priority: .userInitiated) { try file.read() }.value
         }, onProgress: { [weak self] p in

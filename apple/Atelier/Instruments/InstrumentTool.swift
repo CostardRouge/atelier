@@ -160,7 +160,7 @@ struct InstrumentsHome: View {
         }
         .navigationTitle("More")
         .navigationDestination(for: InstrumentTool.self) { instrument in
-            instrument.screen
+            instrument.screen.taskPill()
         }
     }
 }

@@ -8,7 +8,8 @@
 // either (`lightroom-gaps.md` item 29 is still open).
 //
 // On a touch screen, where there is no Shift, the same two gestures are the
-// cell's context menu: *Select* and *Select up to here*.
+// cell's context menu: *Select* and *Select up to here*. A cell whose picture
+// is being opened wears the stage's task hairline on its bottom edge too.
 
 import SwiftUI
 import AtelierKit
@@ -82,6 +83,9 @@ struct FilmstripCell: View {
                     .multilineTextAlignment(.center)
                     .padding(3)
             }
+            // The picture's own tasks — its opening, its sensor's decode —
+            // on the cell's bottom edge, as on the stage's.
+            TaskEdge(scope: picture.id)
         }
         .frame(width: size, height: size)
         .clipShape(RoundedRectangle(cornerRadius: Brand.controlRadius - 3))

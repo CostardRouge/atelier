@@ -156,7 +156,7 @@ and MapKit tiles in the Composer.
 | Export: every selected clip, sequential, one encoder at a time, a failure reported and skipped | every clip on the shelf, the same loop over the shared pipeline (`exportProcessedVideo`), graded in coded orientation (the rotation flag stands), audio copied | ✅ |
 | Each file downloads as it lands, named `<clip>-graded.mp4` | a FOLDER asked for at the click, each file written there as it lands under the same name, numbered if taken (`uniqueName`) | ≠ |
 | Results list: ✓ / ✕ / … / · with Queued · NN% · Exported · Failed and the reason | ✅ progress reported at half a percent at most | ✅ |
-| `Exporting 2/5` + the run's bar + Cancel | ✅ Esc cancels on a Mac; the run is also a task in the kernel's `TaskRegistry` (label, progress, "2 of 5", Cancel) | ✅ |
+| `Exporting 2/5` + the run's bar + Cancel | ✅ Esc cancels on a Mac; the run is also a task (`TaskCenter`: label, progress, "2 of 5", Cancel), in the toolbar's pill wherever he walks | ✅ |
 | After a Cancel the rows stay as they were | ≠ the clips that never reached the folder leave the list and a note says how many did ("Cancelled — N exported before it stopped.") | ≠ |
 | "N exported · M failed" | ✅ | ✅ |
 | "Export N MP4s" ("Render graded copies of the selected clips (H.264 MP4)") | ✅ | ✅ |
@@ -188,7 +188,7 @@ and MapKit tiles in the Composer.
 | The export's map is the whole-track framing, never Follow | ≠ the file follows the aircraft when Follow is on — the same painter as the preview, so preview = export | ≠ |
 | The export's marker: `max(4, round(h × 0.008))` | ≠ the preview's dot scaled with the frame (the web's two sizes disagree) | ≠ |
 | Transport: play (Space) · scrub · length | ✅ | ✅ |
-| Export MP4 → "Rendering…" / NN % → Cancel; downloads `<clip>-composition.mp4` | ✅ the shared pipeline at the output size, the sound copied; the file handed to a move panel under the same name; also a task in the kernel's `TaskRegistry` | ✅ |
+| Export MP4 → "Rendering…" / NN % → Cancel; downloads `<clip>-composition.mp4` | ✅ the shared pipeline at the output size, the sound copied; the file handed to a move panel under the same name; also a task (`TaskCenter`), in the toolbar's pill | ✅ |
 | "Couldn't read the video file…", HEVC decode errors, "MP4 export needs WebCodecs" | ≠ the platform's own reason, said under the row | ≠ |
 | — | NATIVE: Save frame (PNG) — the frame under the playhead at the OUTPUT's size, through the same painter, `<clip>-composition.png` | ✅ |
 

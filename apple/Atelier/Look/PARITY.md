@@ -137,7 +137,7 @@ Counts: **95 ✅ · 8 ≠ · 5 ⏳** — 108 rows.
 | A ZIP | ≠ the web picks a folder only; here the archive is read in place (`PackZip`: stored + deflated entries, the one wrapping folder as the pack's root, `__MACOSX` and dot files left out) — ZIP64 and encrypted entries are refused with a sentence | ≠ |
 | Two steps: what was read, BEFORE a byte is stored — "N looks in “root” · X to read", Pack / Author / Link, the per-folder counts (`importPreview`) | ✅ | ✅ |
 | "Import N looks" · "Choose another folder" | ✅ | ✅ |
-| "Reading i of N…" + the file; the import a TASK with no Cancel (the index is written last) | ✅ `TaskRegistry` ("Importing <pack>", "i of N") | ✅ |
+| "Reading i of N…" + the file; the import a TASK with no Cancel (the index is written last) | ✅ `TaskCenter` ("Importing <pack>", "i of N"), in the toolbar's pill | ✅ |
 | Report: "N looks in the vault · X written · Y already here." + "They are in the look picker now, under the pack’s name." | ✅ | ✅ |
 | "N not taken" + each file's reason | ✅ | ✅ |
 | Thumbnails baked at import on the family's reference | ✅ through the render graph's cube pass, on `public/reference/` (bundled) | ✅ |
