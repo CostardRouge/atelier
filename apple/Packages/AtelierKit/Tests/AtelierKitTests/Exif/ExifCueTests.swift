@@ -94,12 +94,13 @@ final class CueFromExifTests: XCTestCase {
 
     func testFeedsTheOverlayFormatterTheWayAClipDoes() throws {
         let cue = try XCTUnwrap(cueFromExif(full))
-        // The half the kernel already speaks: `formatField` asks `motionAt`
-        // for a speed and a heading, and a still has neither to give.
-        XCTAssertNil(motionAt(cue).groundSpeed)
-        XCTAssertNil(motionAt(cue).heading)
-        XCTAssertEqual(cue.data["shutter"], "1/200")
+        XCTAssertEqual(formatField(.shutter, cue), "1/200")
+        XCTAssertEqual(formatField(.fnum, cue), "f/2.8")
+        XCTAssertEqual(formatField(.focalLen, cue), "23 mm")
+        XCTAssertEqual(formatField(.clock, cue), "05:49:34")
+        // Nothing measured a speed here, and nothing pretends to.
+        XCTAssertEqual(formatField(.gndSpeed, cue), "—")
+        XCTAssertEqual(formatField(.heading, cue), "—")
         XCTAssertEqual(cueAt([cue], 12.5)?.data["fnum"], "2.8", "any playhead resolves the one cue")
-        throw XCTSkip("`formatField` (shared/overlay/field-format.ts) is not ported yet: the web case reads `f/2.8`, `23 mm`, `05:49:34` and `—` through it")
     }
 }
