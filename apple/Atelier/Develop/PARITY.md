@@ -12,7 +12,7 @@ Where things are:
 
 | Folder | Holds |
 | --- | --- |
-| `Store/` | `RollStore` (rolls + locators + marks + thumbnails on disk), `PresetBookStore`, `PicturePool` (decodes, EXIF, as-shot stats, thumbnails), `RollEditor` (+ `Batch`, `Keys`, `Adding`, `Export`) |
+| `Store/` | `RollStore` (rolls + locators + marks + thumbnails on disk), `PresetBookStore`, `PicturePool` (decodes, EXIF, as-shot stats, thumbnails), `RollEditor` (+ `Batch`, `Keys`, `Adding`, `Export`, `Run` — the Export tab's state, plan and verbs) |
 | `Gallery/` | `RollGallery`, `RollCard`, `NewRollSheet` |
 | `Editor/` | `RollEditorView` (the screen), `StageBar`, `ProgressLine`, `SettingsSheet`, `ShortcutsSheet`, `EditorCommands` |
 | `Filmstrip/` | `FilmstripView`, its cell and delivery badge |
@@ -20,8 +20,9 @@ Where things are:
 | `Inspector/` | `InspectorView` (tabs + sections in the web's order), `InspectorDrawer` + `SectionStrip` (phone), `PresetsSection` + `ApplySection`, `PendingSections` (stand-ins until their tasks land) |
 | `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
 | `Panels/` | the Adjust sections (their own task) |
+| `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
 
-Counts: **129 ✅ · 28 ⏳ · 8 part-built** — 165 table rows.
+Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -207,8 +208,60 @@ Counts: **129 ✅ · 28 ⏳ · 8 part-built** — 165 table rows.
 | Detail: repair · detail | ✅ detail (`Panels/`) · ⏳ repair (Repair task) |
 | Layers | ⏳ Layers task |
 | Crop: crop · apply crop to… · borders · apply borders to… · perspective · lens | ✅ (`Crop/`, table below) |
-| Export | ✅ interim: one picture, JPEG/HEIC, the first target's size and quality, to Files or Photos, named exactly after the picture, the original's metadata, marked as delivered · ⏳ the run, targets, metadata groups, watermark, delivery table, Ultra HDR (Export task) |
+| Export | ✅ the whole tab and the run — «The Export tab» and «The run» below |
 | Word the sections the web's way, ⓘ for the standing prose | ✅ (`DevelopSection`) |
+
+## The Export tab — `ExportPanel.tsx`, `ExportTargets.tsx`, `DeliveryTable.tsx`, `MetadataSection.tsx`
+
+| Control | |
+| --- | --- |
+| The sections in the web's order — Export · Watermark · Pictures · Metadata · HDR · Deliver — each with its ⓘ prose | ✅ `Export/ExportTab.swift` |
+| Targets: the first into the chosen folder ("Where you choose, at the click" / "The chosen folder"), each other into a sub-folder named after it (`targetFolder`), renamed in place, removed | ✅ |
+| Two targets writing into one sub-folder said ("the second numbers its files") | ✅ |
+| Size: Full size · Long edge · Short edge · Megapixels · Percentage; a mode switch re-expresses the size (`convertSize`); the number committed on Return or leaving the field, clamped (`readSize`) | ✅ |
+| Quality 50–100 % · Sharpen Off / Low / Standard / High ("for a screen, after the resize") · Watermark, per target | ✅ |
+| Also write: the five presets, a repeated name numbered | ✅ |
+| Delivers: the run's sentence over the pictures that leave (`planRun`), before a byte moves | ✅ |
+| *Proxies only, for this run* — never on the roll | ✅ kept per roll for the app's session (`RollRunState`), not reset with the editor as the web's is |
+| This picture: the calculator's line (`deliverySummary`, the first target) and its reason; what the stage does not draw said | ✅ |
+| Watermark: the line (a template, drafted, written on leaving), Reads (the line on the picture in hand, or why nothing), Where, Size, Opacity, Tone, Drawn on | ✅ |
+| Pictures: one 48 pt row per picture, the whole row the target (send ↔ hold; an ignored one back into the work), ↺ back to the rule, › open, the plan's line, the thumbnail, `send` / `hold` chips, E4's `changed` / `✓ time` | ✅ |
+| Pictures: filters All · Edited · Leaving · Held · Changed, `N of M leave`, the ignored folded and unfolding by themselves for the open picture | ✅ |
+| Pictures: Winnow's *Picks* filter and culling marks | ⏳ the app's Winnow client |
+| Metadata: Leaves — All · Share online · Minimal (+ Custom); the seven groups one row each and the Signature locked among them; the one cost said (copied whole vs rebuilt) | ✅ |
+| Creator and copyright from the preset book's identity, drafted and written on leaving; the copyright read on this picture's capture year | ✅ |
+| The picture's title and caption, drafted, one undo step per field, written to the picture they were typed under; "Kept on the picture, not written" when the group is off | ✅ |
+| HDR: Deliver Ultra HDR JPEG, Reach 1–4 stops, the display's sentence (its EDR headroom), the last run's line | ✅ |
+| Deliver: Replace a file of the same name (the roll's), the verbs — this picture · N selected · N pictures · N new or changed — the progress line with its Cancel, the run's note | ✅ |
+| Every line of the run's sentence one tap away (the web shows the first and `(+N more)`) | ✅ native addition |
+| Format: JPEG (the web's) or HEIC — this device's choice, never the roll's | ✅ native addition |
+| Into: a folder, or Photos (each picture's first target, under its own name) | ✅ native addition |
+| Sending the finals home to a Winnow | ⏳ unplugged on the web too (`develop-roll.md`) |
+
+## The run — `use-roll-export.ts`, `roll-render.ts`, `deliver-files.ts`
+
+| Behaviour | |
+| --- | --- |
+| The folder picked AT THE CLICK, before a pixel is rendered (`.fileImporter`, its security scope held for the run); Photos' permission asked first | ✅ `Export/RollExportRun.swift` |
+| Each picture rendered ONCE through the editor's own `DevelopRenderPlan` at `.whole` (Core Image tiles it), then cut to every target | ✅ |
+| The crop at the source's own density, inside its border where the plan draws one; a size a cap that never upscales (`deliveredLayout`, `longEdgeFor`) | ✅ |
+| Screen sharpening after the resize, in bands of 256 rows, each band's upper neighbour the ORIGINAL row (the web's canvas loop reads it back sharpened) | ✅ `Export/DeliveredFile.swift` |
+| The watermark in Core Text after the sharpening, the suite's sans at 500, a soft shadow of the opposite tone, squeezed to the margins like `fillText`; a line that says nothing not drawn, and said | ✅ |
+| JPEG through ImageIO, stamped with the ORIGINAL's EXIF, ONE XMP packet and the sRGB profile (`stampExif`): signed, the rights, the words, the place | ✅ |
+| HEIC carrying the same metadata (the kernel's block read back by ImageIO) | ✅ · the maker notes may stay behind |
+| The metadata of a container the kernel's parser does not walk (a HEIC from Photos) read by ImageIO as the original's own account | ✅ native addition |
+| Ultra HDR from a RAW: a darker render, the gain map measured, the file read back and checked before it is called Ultra HDR (`encodeUltraHdr`); a render or a HEIC leaves plain, said | ✅ written · unmeasured on a device; the whole rendition is held in floats (~36 B a pixel), as the web's is |
+| The place named offline from the bundled GeoNames index (`project.yml` bundles `public/geo/cities.json`) | ✅ |
+| Named EXACTLY after the picture (`exportName`); numbered within the run, and around the folder's own names unless Replace | ✅ |
+| Other targets into their sub-folders, a variant into `Variant N/`, a refused file said with the folder's words | ✅ |
+| Each file written as it lands | ✅ (the web holds the roll until the end) |
+| What LANDED marked on this device (`export-marks.ts`) | ✅ |
+| One task per run, a picture at a time; Cancel between two pictures, what was written kept and said | ✅ in the task registry and on the tab · ⏳ the pill and the stage's edge (the tasks UI) |
+| A RAW base set aside under *Proxies only*, or when the RAW is out of reach — said | ✅ |
+| What the render plan does not draw yet (the look, the layers…) said per run | ✅ |
+| A RAW decoded under its sensor's pixels (the GPU's cap, a phone's ceiling) said | ⏳ the system's RAW developer decodes whole; nothing is capped to say |
+| A proxy's original, a companion RAW or the file set above the photograph fetched from an instance | ⏳ the app's Winnow client |
+| The run warning when the chosen folder is the one the pictures came from | ⏳ in the web's memory, not in its code |
 
 ## The sections picker — `SettingsSheet.tsx`
 

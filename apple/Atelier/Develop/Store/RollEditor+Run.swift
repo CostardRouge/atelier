@@ -355,9 +355,10 @@ extension RollEditor {
         setExport { $0.watermark = mark.json }
     }
 
-    /// The open picture's words — one undo step per field left, none when nothing changed.
-    func setWords(title: String? = nil, caption: String? = nil) {
-        guard let id = openId else { return }
+    /// A picture's words — one undo step per field left, none when nothing
+    /// changed. By id, never "the open one": a field is left as the next
+    /// picture opens, and its words are still the one it was typed under.
+    func setWords(_ id: String, title: String? = nil, caption: String? = nil) {
         update { setPictureWords($0, id, title: title, caption: caption) }
     }
 
