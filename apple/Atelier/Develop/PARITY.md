@@ -20,12 +20,13 @@ Where things are:
 | `Stage/` | `DevelopStageView`, `StageGeometry`, `LookingZoom`, `DevelopRenderPlan`, `DevelopTool` (+ the overlay slot, the eyedropper), `StageZoomPill`, `StageFacts`, `WheelCatcher` |
 | `Render/` | `FullDevelopRenderPlan` (every pass in the web's order, the crop, the border, the budget), `RawSource` (the RAW's render first, its sensor on a rung, the device class), `DevelopLooks` (built-ins from the bundle, pack looks from the vault, `DiskPackStore`); the editor's side in `Store/RollEditor+Render.swift` |
 | `Inspector/` | `InspectorView` (tabs + sections in the web's order), `InspectorDrawer` + `SectionStrip` (phone), `PresetsSection` + `ApplySection`, `PendingSections` (stand-ins until their tasks land) |
+| `Look/` | `DevelopLookSection` — the Adjust tab's last block: `Apply look to…` at its head, the shared grade panel (`../Look/GradeStackView.swift`, its own `../Look/PARITY.md`) bound to the OPEN picture's look (roll v5); the binding and the scene's picture are `Store/RollEditor+Look.swift` |
 | `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
 | `Repair/` | the Detail tab's repair: `RepairSection` (heal · clone · dust), `RepairStageOverlay` (the tool on the stage) + `RepairMarksOverlay` (the idle slot's rings), `RepairHandles` / `RepairLookingLayer` / `DustMapLayer` (`RepairRings.swift`), `RepairLooking` (the repaired picture, the map, the field read off the decode); the state and verbs in `Store/RollEditor+Repair.swift` |
 | `Panels/` | the Adjust sections (their own task) |
 | `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
 
-Counts: **237 ✅ · 33 ⏳ · 10 part-built** — 280 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40; the Repair table: 24 ✅ · 2 ⏳ of 26).
+Counts: **238 ✅ · 33 ⏳ · 9 part-built** — 280 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40; the Repair table: 24 ✅ · 2 ⏳ of 26).
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -210,11 +211,11 @@ Counts: **237 ✅ · 33 ⏳ · 10 part-built** — 280 table rows (the Layers ta
 | Five tabs in order — Adjust · Detail · Layers · Crop · Export (`WorkbenchTab`) | ✅ |
 | Wide: a column at the right, the tabs a segmented strip pinned at its top | ✅ |
 | Phone: a DOCKED DRAWER under the stage (never a sheet), rests 0.28 / 0.4 / 0.6 of the column, dragged or tapped on its head, closed under its floor; edge to edge, rounded top; the five sections as its own strip at the bottom; the app's tab bar hidden inside the editor | ✅ |
-| Adjust: histogram · Auto (+ pick grey) · white balance (a RAW) · light & colour · presence · levels · curve · mixer · grading · vignette · presets · apply to… · the look | ✅ wired (`Panels/`) · ⏳ the look (Looks task) |
+| Adjust: histogram · Auto (+ pick grey) · white balance (a RAW) · light & colour · presence · levels · curve · mixer · grading · vignette · presets · apply to… · the look | ✅ wired (`Panels/`; the look `Look/DevelopLookSection` over the shared grade panel, `../Look/`) |
 | Presets: chips write a COPY; × removes; Save current as… (+ look); the book on this device (`presets.json` beside the rolls) | ✅ |
 | Keep the preset book on a Winnow | ⏳ the app's Winnow client |
 | Apply to N selected / Paste to N selected / Apply to N others (the develop's numbers, never the material) | ✅ |
-| Apply look / crop / borders to… | ✅ look (its tab's stand-in) · crop and borders (`CropApplyFold`, folded, the web's words) |
+| Apply look / crop / borders to… | ✅ look (at the head of the Look section, where the web draws them) · crop and borders (`CropApplyFold`, folded, the web's words) |
 | Detail: repair · detail | ✅ repair (`Repair/`, table «Repair» below) · detail (`Panels/`) |
 | Layers | ✅ the list, the mask and the layer's develop (`Layers/`, table «Layers» below) |
 | Crop: crop · apply crop to… · borders · apply borders to… · perspective · lens | ✅ (`Crop/`, table below) |

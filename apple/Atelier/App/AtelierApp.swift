@@ -13,6 +13,9 @@ struct AtelierApp: App {
     @State private var pictures: PicturePool
     /// The personal preset book — one list of named lights.
     @State private var presets = PresetBookStore()
+    /// The looks: the built-ins, the vault of purchased and uploaded looks,
+    /// the film stocks, the ★ shortlist — held ONCE, read by every picker.
+    @State private var looks = LookLibrary.shared
     @Environment(\.scenePhase) private var scenePhase
 
     init() {
@@ -28,6 +31,7 @@ struct AtelierApp: App {
                 .environment(rolls)
                 .environment(pictures)
                 .environment(presets)
+                .environment(looks)
                 .font(Brand.sans(15))
         }
         .onChange(of: scenePhase) { _, phase in

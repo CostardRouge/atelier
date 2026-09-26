@@ -47,12 +47,21 @@ targets:
       # committed GeoNames file, bundled as it stands rather than copied.
       - path: ../public/geo/cities.json
         buildPhase: resources
-      # The built-in looks: ONE folder reference to the web's own
-      # `public/luts/`, never a copy under `apple/` — the bundle carries the
-      # folder once, as `luts/` (~37 MB, the same files the site serves), and
-      # a `.cube` added there reaches the app with no code change, as it
-      # reaches the site (`Develop/Render/DevelopLooks.swift` scans it).
+      # The LOOKS (`Atelier/Look/`): the built-in LUTs as the web ships them
+      # (`public/luts/`, 37 MB, four families — bundled whole, the
+      # coordinator's call), their pre-baked picker tiles
+      # (`public/lut-thumbs/`, `scripts/gen-lut-thumbs.mjs`) and the log +
+      # Rec.709 reference pair a pack look's tile is baked on
+      # (`public/reference/`). FOLDER references, read at run time as
+      # `Bundle.main.url(forResource: "luts", withExtension: nil)`: adding a
+      # `.cube` under `public/luts/` needs no change here, as on the web.
       - path: ../public/luts
+        type: folder
+        buildPhase: resources
+      - path: ../public/lut-thumbs
+        type: folder
+        buildPhase: resources
+      - path: ../public/reference
         type: folder
         buildPhase: resources
     dependencies:
@@ -99,8 +108,21 @@ targets:
       # committed GeoNames file, bundled as it stands rather than copied.
       - path: ../public/geo/cities.json
         buildPhase: resources
-      # The built-in looks, as on iOS: one folder reference, carried once.
+      # The LOOKS (`Atelier/Look/`): the built-in LUTs as the web ships them
+      # (`public/luts/`, 37 MB, four families — bundled whole, the
+      # coordinator's call), their pre-baked picker tiles
+      # (`public/lut-thumbs/`, `scripts/gen-lut-thumbs.mjs`) and the log +
+      # Rec.709 reference pair a pack look's tile is baked on
+      # (`public/reference/`). FOLDER references, read at run time as
+      # `Bundle.main.url(forResource: "luts", withExtension: nil)`: adding a
+      # `.cube` under `public/luts/` needs no change here, as on the web.
       - path: ../public/luts
+        type: folder
+        buildPhase: resources
+      - path: ../public/lut-thumbs
+        type: folder
+        buildPhase: resources
+      - path: ../public/reference
         type: folder
         buildPhase: resources
     dependencies:
