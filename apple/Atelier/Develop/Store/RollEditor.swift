@@ -134,6 +134,8 @@ final class RollEditor {
     /// the editor's observed state (`readout-store.ts`), so a hover re-renders
     /// the one line that subscribes and nothing else.
     let readoutStore = ReadoutStore()
+    /// The Layers task's state and caches — read through `layerState` (`RollEditor+Layers.swift`).
+    let layerEdit = LayerEditState()
 
     /// Pictures that LANDED, marked on this device as they were rendered —
     /// never an edit, never undone.

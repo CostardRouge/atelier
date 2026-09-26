@@ -16,13 +16,14 @@ Where things are:
 | `Gallery/` | `RollGallery`, `RollCard`, `NewRollSheet` |
 | `Editor/` | `RollEditorView` (the screen), `StageBar`, `ProgressLine`, `SettingsSheet`, `ShortcutsSheet`, `EditorCommands` |
 | `Filmstrip/` | `FilmstripView`, its cell and delivery badge |
+| `Layers/` | `LayersTab` (+ `LayerListSection`), `MaskSection` (+ `MaskShapeControls`), `MaskStageOverlay`, `LayerLooking` (the tab's own render, the seam a plan reads, the colour a layer sees); the state and verbs are `Store/RollEditor+Layers.swift` |
 | `Stage/` | `DevelopStageView`, `StageGeometry`, `LookingZoom`, `DevelopRenderPlan`, `DevelopTool` (+ the overlay slot, the eyedropper), `StageZoomPill`, `StageFacts`, `WheelCatcher` |
 | `Inspector/` | `InspectorView` (tabs + sections in the web's order), `InspectorDrawer` + `SectionStrip` (phone), `PresetsSection` + `ApplySection`, `PendingSections` (stand-ins until their tasks land) |
 | `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
 | `Panels/` | the Adjust sections (their own task) |
 | `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
 
-Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
+Counts: **203 ✅ · 34 ⏳ · 10 part-built** — 247 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40).
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -59,7 +60,7 @@ Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 | Undo / redo buttons, both always drawn | ✅ the bar's ControlGroup |
 | A never-inherit develop: stepping re-seeds the draft from the next picture | ✅ |
 | What is a TOOL (tab, stage tool, facts, compare, ticked sections) survives a step | ✅ |
-| The brush / heal-disc size kept across pictures | ⏳ with their tools (Layers, Repair tasks) — they belong on `RollEditor` beside `tab` |
+| The brush / heal-disc size kept across pictures | ✅ the brush (`LayerEditState.brush`, held by the editor) · ⏳ the heal disc (Repair task) |
 | Roll name renamed in place on the bar; an emptied field gives the old name back | ✅ `RollTitle` |
 | Add: from Photos (copied into the container), from Files (bookmark), a folder (ONE bookmark + each picture's path), a drop (files or a folder) | ✅ |
 | A picture already on the roll is FOUND AGAIN (its bytes now in hand), never added twice; the status says `found N again · added M` | ✅ (`relink`, variants included) |
@@ -117,7 +118,7 @@ Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 | --- | --- |
 | The picture as delivered, rendered ONCE per change on a pixel budget (long edge 2560), one render in flight and one owed | ✅ |
 | Through ONE seam, `DevelopRenderPlan` (default: crop + cap + the develop cube through `PictureRenderer` / `FrameGrader`) | ✅ |
-| The look, border, perspective, lens, detail, vignette, repair, layers DRAWN | ⏳ the integration task adds the passes behind `DevelopRenderPlan`; meanwhile the stage SAYS which ones it does not draw ("not drawn here yet: …") |
+| The look, border, perspective, lens, detail, vignette, repair, layers DRAWN | ⏳ the integration task adds the passes behind `DevelopRenderPlan`; meanwhile the stage SAYS which ones it does not draw ("not drawn here yet: …") — the layers are drawn over the stage while one is open on the Layers tab (`LayerLookingRenderer`), see «Layers» |
 | Looking zoom: fit to 4000 % (`inspectMaxZoom`), the point under the hand kept still (`zoomAbout`), clamped at the write | ✅ `LookingZoom` |
 | Pinch (touch, trackpad) | ✅ `MagnifyGesture`, about where it began |
 | Two fingers pan by their live centre during a pinch | ⏳ SwiftUI's `MagnifyGesture` gives no live centre; a drag pans after |
@@ -139,7 +140,7 @@ Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 | States: decoding…, a decoder's refusal, a picture not on this device (`availabilityText`) | ✅ |
 | The grey dropper: the tool takes the pointer whole, "click / tap something grey", solves `whiteBalanceFor` on the source AS SHOT at the tapped pixel, then puts itself down | ✅ `EyedropperOverlay` |
 | An overlay SLOT the active tool fills (`DevelopTool`: none · crop · mask · repair · eyedropper) with the view ↔ source transform (`StageGeometry`) | ✅ |
-| Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table below) · ⏳ masks, repair rings (their tasks; placeholders say so on the stage) |
+| Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table «The Crop tab») · the mask's marks, handles and brush (`MaskStageOverlay`) · ⏳ the repair rings (its task) |
 | The task hairline on the stage's edge (`TaskEdge`) | ⏳ the tasks UI |
 
 ## The Crop tab — `CropStage.tsx`, `use-crop-zone.ts`, `crop-view.ts`, `CropPanel.tsx`, `BorderSection.tsx`, `KeystonePanel.tsx`, `LensPanel.tsx`, `lensfun-store.ts`
@@ -206,7 +207,7 @@ Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 | Apply to N selected / Paste to N selected / Apply to N others (the develop's numbers, never the material) | ✅ |
 | Apply look / crop / borders to… | ✅ look (its tab's stand-in) · crop and borders (`CropApplyFold`, folded, the web's words) |
 | Detail: repair · detail | ✅ detail (`Panels/`) · ⏳ repair (Repair task) |
-| Layers | ⏳ Layers task |
+| Layers | ✅ the list, the mask and the layer's develop (`Layers/`, table «Layers» below) |
 | Crop: crop · apply crop to… · borders · apply borders to… · perspective · lens | ✅ (`Crop/`, table below) |
 | Export | ✅ the whole tab and the run — «The Export tab» and «The run» below |
 | Word the sections the web's way, ⓘ for the standing prose | ✅ (`DevelopSection`) |
@@ -263,6 +264,51 @@ Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 | A proxy's original, a companion RAW or the file set above the photograph fetched from an instance | ⏳ the app's Winnow client |
 | The run warning when the chosen folder is the one the pictures came from | ⏳ in the web's memory, not in its code |
 
+## Layers — `LayersPanel.tsx`, `MaskPanel.tsx`, the mask half of `PictureWorkbench.tsx`, `use-subject-masks.ts`
+
+| Control / behaviour | |
+| --- | --- |
+| The stack drawn TOP FIRST; every write through the kernel's helpers, addressed by id (`addLayer`, `moveLayer`, `patchLayer`, `removeLayer`) and through `update` — merged per picture into one undo step | ✅ |
+| Add by kind — Linear · Radial · Brightness · Colour · Painted · Subject · Whole picture — on top, opened at once; a fresh Subject or Colour comes with Pick on | ✅ |
+| `12 layers is the limit — each one is a pass over the whole picture`, the add pills disabled | ✅ |
+| Empty: "No layers. Add one and it changes nothing until you move a slider on it." | ✅ |
+| Visibility is a VERB: the eye / the eye crossed out, the hidden row struck through | ✅ |
+| The row's words: `layerLabel` (the name, else the mask described, `… except the subject`), `· NN %` under full opacity | ✅ |
+| Move up · Move down · Delete | ✅ (a layer whose develop changes something asks first — native; ⌘Z brings it back either way) |
+| Rename · Duplicate | ✅ native additions (the web has neither): the row's menu; an emptied name gives the row back to its mask; a copy lands just above, `<label> copy` (`renameLayer`, `duplicateLayer`) |
+| How the mask is shown: Hidden · Outline · Fill (Outline by default), `M` steps it; BY ITSELF while Pick / Paint is on, else only when pinned ("keep it shown once Pick / Paint is off" / "show it now — …") | ✅ |
+| Done closes the layer | ✅ (+ Esc once Pick / Paint is off) |
+| `Mask · <describeMask>` / `Mask · N combined` | ✅ |
+| The kind: Whole · Linear · Radial · Brightness · Colour · Painted · Subject, 4 to a row (3 for a part); a switch starts the new shape FRESH | ✅ |
+| Linear: Across · Down · Angle · Feather — the web's ranges, steps and resets | ✅ |
+| Radial: Across · Down · Width · Height · Turn · Feather | ✅ |
+| Brightness: From · To (held apart) · Feather | ✅ |
+| Painted: Paint / Painting · Erase · Undo stroke · Clear · Size (1–80 %) · Softness; "nothing painted yet — an empty painted mask covers nothing, …" | ✅ |
+| Brush FLOW | ⏳ not in the document: a stroke carries radius, hardness and erase only, on the web and in the kernel alike — a flow is a new stroke field on both sides first |
+| The Pencil's pressure | ⏳ the same reason: a stroke has ONE radius |
+| Subject: Pick / Picking · Clear · the status in the web's words ("tap the subject on the picture", "finding it… (N points)", "N points · tap a marker to remove it · found — move a slider below to act on it") | ✅ + two native states: the model's refusal in its own words (the Simulator), "no subject under them" |
+| Colour range: Pick · the swatches (a tap takes one off) · Clear · Refine · its three lines | ✅ |
+| Invert — "apply everywhere the mask is not" / "this part before it combines" | ✅ |
+| Opacity, 0–100 % | ✅ |
+| Except — «sauf le sujet» — offered only where a subject layer exists; "The subject", else each subject's label; its two lines | ✅ |
+| Combine: the next op (Add · Subtract · Intersect), `+ / − / ∩ <kind>` for any kind but a subject, at most 4 parts; the new part opens (Pick / Paint on for a colour or a painted one) | ✅ |
+| The components: the layer's own mask, then each part (`describePart`); a row opens it, the trash removes it; the open part's op as *This part* | ✅ |
+| The layer's DEVELOP edited by the Adjust tab's own sections — Light · Tone · Colour, Curve — folded under `layer.` | ✅ |
+| Levels, the mixer, the grading wheels inside a layer | ⏳ the web offers the sliders and the curve only; those three sections take no `foldPrefix` yet |
+| The stage's pointer is the mask tool's while a layer is open (`DevelopTool.mask`): the compare suspended, its drag and wipe standing down; the overlay keeps the pinch, a drag pans once zoomed, a double tap (when nothing is being made), the Mac's wheel | ✅ (the web suspends the compare only while Pick / Paint is on) |
+| A linear mask's full · mid · none lines and its handles — the centre, a turn knob on the mid line, a feather bar on each edge line (`linearGuides`, `dragLinear`) | ✅ native addition — the web places a gradient with numbers only |
+| A radial mask's ellipse and dashed feather ring and its handles — the centre, the two half-axes, the ring, a turn knob (`radialGuides`, `dragRadial`) | ✅ native addition |
+| Painting: a drag lays a VECTOR stroke (finger, Pencil, pointer); a press off the picture starts nothing; a hand past the edge carries on; points closer than the step dropped (`beginStroke`, `continueStroke`); the brush's ring and core under the pointer | ✅ |
+| Picking: a tap adds a subject point or samples a colour AS THIS LAYER SEES IT (the develop, the warps, the layers under it — 5 × 5 at 512 px), a tap on a marker takes it off | ✅ |
+| A brightness band put on a tapped tone, the tone and how much of it is in read under the pointer | ✅ native addition |
+| The picked points drawn: a `+` disc turning `−` under the pointer, answering its own press; a colour's marker ringed in its colour | ✅ |
+| The Mac's cursor: copy while picking, a crosshair while painting | ✅ |
+| Show-the-mask: the layer's own pass with a one-colour cube (`LayerPasses.overlay`), outline or wash | ✅ on the Layers tab's own render |
+| The region a tap added blinks twice, 90 ms a beat; nothing under reduced motion | ✅ |
+| A subject segmented on the TAP, from the picture as its geometry bends it, one run at a time, the last good map kept, cached per picture + frame + points | ✅ on Apple's Vision (`SubjectMasks`), not MediaPipe — its differences are that file's header |
+| The layers drawn on the stage with no layer open, in the filmstrip, the histogram and the export | ⏳ the integration task: `LayerStack` / `LayerPasses.build` behind `DevelopRenderPlan`, reading `LayerEditState.looking` for the subject maps, the wash and the blink (this tab's own render then stands down: `planDrawsLayers`) |
+| Apply layers to other pictures | ✅ the sections picker's `Layers` section (the shell's) |
+
 ## The sections picker — `SettingsSheet.tsx`
 
 | Control | |
@@ -284,7 +330,7 @@ Counts: **166 ✅ · 33 ⏳ · 8 part-built** — 207 table rows.
 | `H` / `?` the shortcuts sheet (the same key closes it while the editor has the keys) | ✅ |
 | `I` facts · `J` clipping (the switch) · `V` B&W ↔ colour | ✅ |
 | `P` send ↔ hold · `U` the roll's rule · `M` ignore (off the Layers tab), said in the status line | ✅ |
-| `P` / `M` on the Layers tab, `X`, ⇧C, ⌫, Esc | ✅ `X` swaps the crop's orientation, ⇧C crops to the zoomed view, Esc puts the dropper down or disarms Level · ⏳ `P` / `M` / ⌫ answered by their tasks (Layers, Repair) |
+| `P` / `M` on the Layers tab, `X`, ⇧C, ⌫, Esc | ✅ `P` / `M` answered by the Layers tab (`layerKey` — the press now carries `layersTab`, which the shell never set), `X` swaps the crop's orientation, ⇧C crops to the zoomed view, Esc lets go of Pick / Paint and then of the layer, puts the dropper down or disarms Level · ⏳ ⌫ answered by the Repair task |
 | ⌘C / ⌘V the develop | ✅ Mac: the Edit menu's Copy / Paste (`onCopyCommand` / `onPasteCommand`, a field keeps its own) · iPad: keyboard shortcuts off while a field types |
 | ⌘⇧C / ⌘⇧V / ⌘' | ✅ Mac: the *Picture* menu · iPad: keyboard shortcuts |
 | ⌘Z / ⇧⌘Z | ✅ the window's `UndoManager` |

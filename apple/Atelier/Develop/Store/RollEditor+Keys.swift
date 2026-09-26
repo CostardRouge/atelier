@@ -28,6 +28,9 @@ extension RollEditor {
             }
             return false
         }
+        // On the Layers tab `P` and `M` are the mask's, not the delivery's.
+        var press = press
+        press.layersTab = tab == .layers
         guard let action = editorKeyAction(press) else { return false }
         switch action {
         case .tab(let t):
@@ -76,7 +79,7 @@ extension RollEditor {
         case .mask, .pick:
             // The Layers tab's, with a layer open: the layers task answers.
             guard tab == .layers else { return false }
-            sendToTool(action)
+            return layerKey(action)
         case .swap:
             guard tab == .crop else { return false }
             sendToTool(.swap)

@@ -56,28 +56,6 @@ struct LookSectionPlaceholder: View {
 }
 
 // =============================================================================
-// MARK: - LAYERS — owned by the Layers task (`Develop/Layers/*`): adjustment
-// layers, their masks (linear, radial, brightness, colour range, brush,
-// subject), combined masks. Delete when it lands.
-// =============================================================================
-
-struct LayersSectionPlaceholder: View {
-    @Bindable var editor: RollEditor
-    var body: some View {
-        let count = readLayers(editor.picture?.carried["layers"]).count
-        ComingSection(id: "layers", title: "Layers",
-                      text: count > 0
-                          ? "This picture carries \(count) layer\(count == 1 ? "" : "s") from the web app — kept, and not drawn here yet. Layers and their masks come with their own task."
-                          : "Adjustment layers, each a develop through a mask — linear, radial, brightness, colour range, a brush, a subject. Coming with their own task.")
-    }
-}
-
-struct MaskStageOverlay: View {
-    let context: StageOverlayContext
-    var body: some View { PendingOverlayChip(text: "masks are coming with the Layers task") }
-}
-
-// =============================================================================
 // MARK: - REPAIR — owned by the Repair task (`Develop/Repair/*`): heal, clone,
 // the dust field and its proposals. Delete when it lands.
 // =============================================================================
