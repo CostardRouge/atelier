@@ -128,6 +128,8 @@ final class RollEditor {
     private(set) var exportMarks: ExportMarks = [:]
     /// A text field of the editor has the keyboard: every key is its.
     var textEditing = false
+    /// The Crop tab's session — the lit chip, the intent, the crop stage's view (`RollEditor+Crop.swift`).
+    let cropSession = CropSession()
     /// The pixel under the pointer, said under the histogram — held OUTSIDE
     /// the editor's observed state (`readout-store.ts`), so a hover re-renders
     /// the one line that subscribes and nothing else.

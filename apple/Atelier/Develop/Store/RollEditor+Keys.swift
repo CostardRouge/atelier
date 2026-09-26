@@ -81,9 +81,8 @@ extension RollEditor {
             guard tab == .crop else { return false }
             sendToTool(.swap)
         case .cropView:
-            // Offered only where it would change something — the crop task's.
-            guard tab != .crop else { return false }
-            sendToTool(.cropView)
+            // Only where it would change something: zoomed, off the Crop tab.
+            return cropToView(zoom)
         case .remove:
             // What is selected ON the picture (a repair patch) — the tool's.
             guard activeTool == .repair else { return false }

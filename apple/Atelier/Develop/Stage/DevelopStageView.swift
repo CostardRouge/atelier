@@ -69,6 +69,8 @@ struct DevelopStageView: View {
             zoom.reset()
             editor.readoutStore.set(nil)
         }
+        // The Crop tab raises its tool; the open picture's lens is looked up.
+        .modifier(CropTabHooks(editor: editor))
     }
 
     // MARK: - geometry
@@ -182,7 +184,9 @@ struct DevelopStageView: View {
         VStack(alignment: .leading, spacing: 6) {
             if editor.stage != nil && editor.activeTool != .eyedropper {
                 HStack(alignment: .top, spacing: 6) {
-                    StageChip(text: editor.holding ? "before" : (editor.shownWipe > 0 ? "before · after" : "after"))
+                    if editor.activeTool != .crop {
+                        StageChip(text: editor.holding ? "before" : (editor.shownWipe > 0 ? "before · after" : "after"))
+                    }
                     if !editor.unrendered.isEmpty {
                         StageChip(text: "not drawn here yet: \(editor.unrendered.joined(separator: ", "))", tone: palette.warn)
                     }
@@ -197,13 +201,16 @@ struct DevelopStageView: View {
                 .allowsHitTesting(false)
             }
             Spacer(minLength: 0)
-            HStack(alignment: .bottom, spacing: 8) {
-                if editor.showFacts, editor.stage != nil {
-                    StageFacts(shot: editor.captureFacts, facts: editor.factLines)
-                }
-                Spacer(minLength: 0)
-                if editor.stage != nil {
-                    holdPill
+            // The crop stage keeps its corners for its handles (`develop-roll.md`).
+            if editor.activeTool != .crop {
+                HStack(alignment: .bottom, spacing: 8) {
+                    if editor.showFacts, editor.stage != nil {
+                        StageFacts(shot: editor.captureFacts, facts: editor.factLines)
+                    }
+                    Spacer(minLength: 0)
+                    if editor.stage != nil {
+                        holdPill
+                    }
                 }
             }
         }

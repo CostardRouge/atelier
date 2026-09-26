@@ -18,9 +18,10 @@ Where things are:
 | `Filmstrip/` | `FilmstripView`, its cell and delivery badge |
 | `Stage/` | `DevelopStageView`, `StageGeometry`, `LookingZoom`, `DevelopRenderPlan`, `DevelopTool` (+ the overlay slot, the eyedropper), `StageZoomPill`, `StageFacts`, `WheelCatcher` |
 | `Inspector/` | `InspectorView` (tabs + sections in the web's order), `InspectorDrawer` + `SectionStrip` (phone), `PresetsSection` + `ApplySection`, `PendingSections` (stand-ins until their tasks land) |
+| `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
 | `Panels/` | the Adjust sections (their own task) |
 
-Counts: **95 ✅ · 27 ⏳ · 8 part-built** — 130 table rows.
+Counts: **129 ✅ · 28 ⏳ · 8 part-built** — 165 table rows.
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -124,7 +125,8 @@ Counts: **95 ✅ · 27 ⏳ · 8 part-built** — 130 table rows.
 | Double tap: closer about the tap, or the fit | ✅ |
 | `Z`: closer, or back to the fit | ✅ |
 | The ± pill at every width; the % a menu: Fit · 100 % (one pixel per device pixel, the landmark) · Smooth · Pixels as pixels | ✅ |
-| Crop to this view (⇧C and the pill) | ⏳ the Crop task (`sendToTool(.cropView)` is forwarded) |
+| Crop to this view (⇧C and the % menu's row): `zoneFromView` over the zoomed stage's visible window, written like a drawn zone on Free, the view back at the fit at once, `cropped to the view · C to adjust` / `· as close as a crop may go` | ✅ `RollEditor.cropToView` |
+| The quiet `crop` pill heading the zoomed stage's top-right corner | ⏳ the stage's chips are the shell's; the ⇧C key and the % menu row carry the verb |
 | The loupe: the file decoded whole past the stage's 1:1 | ⏳ the stage says "the stage's pixels, magnified" instead |
 | Compare BEFORE → AFTER, left to right; no split is 0; a switch the host owns (`A/B`, remembered on the device); suspended while a tool holds the pointer, the divider back where it was | ✅ |
 | At the fit a drag across the picture wipes; zoomed, the divider's handle wipes | ✅ |
@@ -136,8 +138,47 @@ Counts: **95 ✅ · 27 ⏳ · 8 part-built** — 130 table rows.
 | States: decoding…, a decoder's refusal, a picture not on this device (`availabilityText`) | ✅ |
 | The grey dropper: the tool takes the pointer whole, "click / tap something grey", solves `whiteBalanceFor` on the source AS SHOT at the tapped pixel, then puts itself down | ✅ `EyedropperOverlay` |
 | An overlay SLOT the active tool fills (`DevelopTool`: none · crop · mask · repair · eyedropper) with the view ↔ source transform (`StageGeometry`) | ✅ |
-| Crop zone / mask marks / repair rings drawn on the stage | ⏳ their tasks (placeholders say so on the stage) |
+| Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table below) · ⏳ masks, repair rings (their tasks; placeholders say so on the stage) |
 | The task hairline on the stage's edge (`TaskEdge`) | ⏳ the tasks UI |
+
+## The Crop tab — `CropStage.tsx`, `use-crop-zone.ts`, `crop-view.ts`, `CropPanel.tsx`, `BorderSection.tsx`, `KeystonePanel.tsx`, `LensPanel.tsx`, `lensfun-store.ts`
+
+| Control / behaviour | |
+| --- | --- |
+| The tab raises the crop tool (the stage shows the WHOLE picture) and lowering it puts the tool down; the tab is the editor's, so stepping keeps it | ✅ `syncCropTool` over `CropTabHooks` |
+| The zone DERIVED from the stored aspect + cover framing (`zoneFromCrop`), written back through `cropFromZone`; an undo or a batch verb moves it with no wiring | ✅ |
+| The whole picture, turned and mirrored UNDER the zone, fitted once on the quarter-turned picture with 28 pt for the handles; a fine angle never refits it | ✅ an image layer transformed by the framing |
+| Never the cropped render drawn as if it were whole (the render that follows the tool is awaited) | ✅ `framedStage` |
+| The veil (even-odd), the turned picture's dashed outline, thirds (stronger while a gesture is on), the dense grid for 700 ms after the angle moves, the zone's edge, corner brackets and mid-edge bars | ✅ one `Canvas` |
+| Inside the zone MOVES it, sliding along the picture's edge (`moveZone`) | ✅ |
+| On the picture outside the zone DRAWS a new one after 6 pt, clamped from the last zone this draw made (`drawCandidate`, `clampToward`) | ✅ |
+| Eight handles anchored on the opposite edge / corner, the grab offset kept, a finger's 22 pt reach against a pointer's 10 (`resizeZone`) | ✅ |
+| Shift holds the ratio in Free | ✅ Mac (the modifier flags) · ⏳ iPad with a keyboard (SwiftUI's drag carries no modifiers) |
+| Double-click / double-tap: the largest zone of the format (`maxZone`) | ✅ |
+| Arrows nudge the zone once the stage has been pressed (Shift ×10); unpressed, ←/→ still step the roll | ✅ the stage takes focus on a press; leaving the tab hands the keys back |
+| The cursor says what a press would do (resize / move / draw / Level) | ✅ Mac · a corner shows a pointing hand (macOS 14 has no diagonal resize cursor) |
+| The size tag in the file's pixels + the shape while a gesture is on (`zoneInSourcePixels`, `describeAspect`) | ✅ |
+| Level: "draw a line along the horizon, or along an upright", the line in the accent, under 12 pt a click keeps it armed (`levelDelta`) | ✅ |
+| The crop's hint line (`drag inside to move · on the picture to draw · a handle to resize · double-click for the largest`) | ✅ in the handles' room at the bottom of the stage, hidden while a gesture or Level is on or the view is zoomed |
+| A gesture writes ONCE, at its end — one undo step, no render of the whole picture per pointer move | ✅ (the web writes through a 200 ms draft; same document, fewer renders) |
+| The VIEW: pinch, the Mac's wheel (`ZoomGestureMachine`), the ± pill and `Z` — 1..8×, clamped at the write (`clampCropView`, `zoomCropViewAbout`), never the zone | ✅ `CropView` (kernel) + `CropZoomPill` + `CropWheelTarget` |
+| A second finger turns the first's gesture into a pinch: the zone keeps what it did and stops; the finger left starts nothing | ✅ |
+| A pinch zooms about the fingers' LIVE centre | ⏳ SwiftUI's `MagnifyGesture` gives its start location only |
+| Crop fold: Format (Free · Original · the eight named aspects, three columns, each titled); an untouched picture opens on Free and writes nothing (`openingCropChip`) | ✅ |
+| Shape (`1.50:1 · free`) + swap portrait ↔ landscape (`X`), a preset without a turned twin swapping into Free | ✅ |
+| Straighten −45..45 within the quarter, from the INTENT (`fitIntent`); `Straight` puts it back | ✅ |
+| Level / Draw the line… · −90° / +90° (the zone turning with the picture) · Horizontal / Vertical flips (`flipZone`) · Reset (lands on Free) | ✅ |
+| The ⓘ prose, in the web's words (double-click → double-tap on a touch screen) | ✅ |
+| Apply crop to… (folded): this crop onto the selection, else the others, `done · …` said | ✅ |
+| The delivered preview: the crop on its border, 240 pt, drawn by the export's own painter, `delivers W × H px` at the first target's cap | ✅ `DeliveredPreview` over `BorderPainter` |
+| Borders (folded): the switch restoring the last border of this visit; File (Free + the named aspects); Fill (black · white · paper · vermilion · any colour · Blur); Left · right and Top · bottom (0..25 %, linked by default, the link button) | ✅ |
+| Apply borders to… (folded), never the crop | ✅ |
+| Perspective: Vertical · Horizontal · Turn · Stretch · Zoom with their ranges and printouts, nil the moment it does nothing, Reset | ✅ |
+| Lens: Distortion · Secondary · Fringing red / blue · Vignetting · Falls off, nil the moment it does nothing (a midpoint alone is not a correction), Reset | ✅ |
+| The lens profile: looked up from the picture's EXIF whatever tab is open; applied by itself on the SENSOR to a picture that never decided; only offered on a camera render (`Apply to this render`); Remove writes the web's `null` | ✅ `lookUpOpenLens` + `LensProfileBlock` |
+| Lensfun, the third network exception: consent on the DEVICE (`atelier.lensfun`), one host, the maker's file then the independents', an ephemeral session, only the ANSWER kept (`lens-profiles.json`), a miss believed for a month, every state said (not allowed · looking · offline · camera / lens not in Lensfun · the picture says nothing) | ✅ `LensfunStore` over the kernel's `lookUpLens` |
+| "On the sensor" | ✅ read as the app's own RAW decode (`CIRAWFilter`) — the web's is LibRaw's; the same picture, another developer (`native-app.md`) |
+| The stage DRAWS the keystone, the lens and its profile | ⏳ the integration task's passes behind `DevelopRenderPlan`; until then the stage says "not drawn here yet: perspective, lens" |
 
 ## The stage bar
 
@@ -162,10 +203,10 @@ Counts: **95 ✅ · 27 ⏳ · 8 part-built** — 130 table rows.
 | Presets: chips write a COPY; × removes; Save current as… (+ look); the book on this device (`presets.json` beside the rolls) | ✅ |
 | Keep the preset book on a Winnow | ⏳ the app's Winnow client |
 | Apply to N selected / Paste to N selected / Apply to N others (the develop's numbers, never the material) | ✅ |
-| Apply look / crop / borders to… | ✅ look + crop (in their tab's stand-ins) · ⏳ borders (Crop task; `borderApplyVerbs` is ready) |
+| Apply look / crop / borders to… | ✅ look (its tab's stand-in) · crop and borders (`CropApplyFold`, folded, the web's words) |
 | Detail: repair · detail | ✅ detail (`Panels/`) · ⏳ repair (Repair task) |
 | Layers | ⏳ Layers task |
-| Crop: crop · border · perspective · lens | ✅ interim aspect · straighten · mirror · reset (v0's) · ⏳ the zone, border, keystone, lens (Crop task) |
+| Crop: crop · apply crop to… · borders · apply borders to… · perspective · lens | ✅ (`Crop/`, table below) |
 | Export | ✅ interim: one picture, JPEG/HEIC, the first target's size and quality, to Files or Photos, named exactly after the picture, the original's metadata, marked as delivered · ⏳ the run, targets, metadata groups, watermark, delivery table, Ultra HDR (Export task) |
 | Word the sections the web's way, ⓘ for the standing prose | ✅ (`DevelopSection`) |
 
@@ -185,12 +226,12 @@ Counts: **95 ✅ · 27 ⏳ · 8 part-built** — 130 table rows.
 | --- | --- |
 | ← / → step (a held arrow sweeps), over ignored pictures | ✅ |
 | `\` held | ✅ |
-| `Z` | ✅ (on the Crop tab forwarded to the crop tool) |
+| `Z` | ✅ (on the Crop tab the crop stage's view: two steps closer, or the fit) |
 | `A` `D` `L` `C` `E` the tabs | ✅ |
 | `H` / `?` the shortcuts sheet (the same key closes it while the editor has the keys) | ✅ |
 | `I` facts · `J` clipping (the switch) · `V` B&W ↔ colour | ✅ |
 | `P` send ↔ hold · `U` the roll's rule · `M` ignore (off the Layers tab), said in the status line | ✅ |
-| `P` / `M` on the Layers tab, `X`, ⇧C, ⌫, Esc | ✅ forwarded to the active tool (`RollEditor.toolCommand`) · ⏳ answered by their tasks (Esc puts the dropper down now) |
+| `P` / `M` on the Layers tab, `X`, ⇧C, ⌫, Esc | ✅ `X` swaps the crop's orientation, ⇧C crops to the zoomed view, Esc puts the dropper down or disarms Level · ⏳ `P` / `M` / ⌫ answered by their tasks (Layers, Repair) |
 | ⌘C / ⌘V the develop | ✅ Mac: the Edit menu's Copy / Paste (`onCopyCommand` / `onPasteCommand`, a field keeps its own) · iPad: keyboard shortcuts off while a field types |
 | ⌘⇧C / ⌘⇧V / ⌘' | ✅ Mac: the *Picture* menu · iPad: keyboard shortcuts |
 | ⌘Z / ⇧⌘Z | ✅ the window's `UndoManager` |

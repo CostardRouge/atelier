@@ -26,7 +26,7 @@ struct StageBar: View {
                 name
                 HStack(spacing: 8) {
                     Spacer(minLength: 0)
-                    if editor.stage != nil { StageZoomPill(zoom: zoom, large: true) }
+                    if editor.stage != nil { zoomPill(large: true) }
                     well
                 }
             }
@@ -34,9 +34,21 @@ struct StageBar: View {
             HStack(spacing: 8) {
                 name
                 Spacer(minLength: 8)
-                if editor.stage != nil { StageZoomPill(zoom: zoom) }
+                if editor.stage != nil { zoomPill(large: false) }
                 well
             }
+        }
+    }
+
+    /// The ± pill: the crop stage's own VIEW on the Crop tab (its zoom is
+    /// inspection, the zone's size is the crop), the Looking zoom elsewhere —
+    /// whose menu offers the zoomed view as a crop.
+    @ViewBuilder
+    private func zoomPill(large: Bool) -> some View {
+        if cropping {
+            CropZoomPill(editor: editor, large: large)
+        } else {
+            StageZoomPill(zoom: zoom, cropToView: editor.cropToViewAction(zoom), large: large)
         }
     }
 

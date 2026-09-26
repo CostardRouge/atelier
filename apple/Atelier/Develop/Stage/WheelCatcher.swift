@@ -15,7 +15,8 @@ import SwiftUI
 import AtelierKit
 
 struct WheelCatcher: NSViewRepresentable {
-    let target: LookingZoom
+    /// The Looking zoom, or the crop stage's view (`CropWheelTarget`).
+    let target: ZoomTarget
     /// False leaves the wheel to the page — no picture, or a tool has the pointer.
     var enabled = true
 

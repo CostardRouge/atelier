@@ -170,6 +170,9 @@ struct RollWorkbench: View {
         .onChange(of: editor.settingsOpen) { _, open in if !open { focused = true } }
         .onChange(of: editor.helpOpen) { _, open in if !open { focused = true } }
         .onChange(of: editor.textEditing) { _, typing in if !typing { focused = true } }
+        // The crop stage takes the keys once pressed (its arrows nudge the
+        // zone); leaving the Crop tab takes it away, and the keys come back here.
+        .onChange(of: editor.tab) { old, _ in if old == .crop { focused = true } }
     }
 
     /// What the one file importer is asked for.

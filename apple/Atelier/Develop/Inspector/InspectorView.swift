@@ -6,7 +6,8 @@
 //            presets · apply to… · the look (+ apply look to…)
 //   Detail   repair · detail
 //   Layers   the layers and their masks
-//   Crop     crop (+ border, perspective, lens)
+//   Crop     crop · apply crop to… · borders · apply borders to… ·
+//            perspective · lens (`Develop/Crop/`)
 //   Export   what leaves, and how
 //
 // One section = one slot, named after the web's section. The Adjust sections
@@ -73,7 +74,7 @@ struct InspectorTab: View {
         case .adjust: adjust
         case .detail: detail
         case .layers: LayersSectionPlaceholder(editor: editor)
-        case .crop: CropSectionPlaceholder(editor: editor)
+        case .crop: CropTabSections(editor: editor)
         case .export: ExportSectionPlaceholder(editor: editor)
         }
     }
