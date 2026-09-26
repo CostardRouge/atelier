@@ -162,11 +162,17 @@ struct LayerRenderPass: RenderPass {
                 packed[k * 3 + 1] = Float((s.r + s.g) * 0.5 - s.b)
                 packed[k * 3 + 2] = Float(lumaOf(s.r, s.g, s.b))
             }
-            let vectors: [Any] = (0..<4).map { i in
-                CIVector(x: CGFloat(packed[i * 4]), y: CGFloat(packed[i * 4 + 1]),
-                         z: CGFloat(packed[i * 4 + 2]), w: CGFloat(packed[i * 4 + 3]))
+            // Four float4s, built one statement at a time: a closure over
+            // four CGFloat conversions and an [Any] target is more than
+            // Xcode's type checker will solve in reasonable time.
+            var args: [Any] = [source, prev, rule(Double(samples.count), colourReach(m.range))]
+            for i in 0..<4 {
+                let x = CGFloat(packed[i * 4])
+                let y = CGFloat(packed[i * 4 + 1])
+                let z = CGFloat(packed[i * 4 + 2])
+                let w = CGFloat(packed[i * 4 + 3])
+                args.append(CIVector(x: x, y: y, z: z, w: w))
             }
-            let args: [Any] = [source, prev, rule(Double(samples.count), colourReach(m.range))] + vectors
             return try run("layerMaskColour", args, extent: frame)
         case .brush, .subject:
             guard let raster else {

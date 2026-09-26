@@ -69,7 +69,7 @@ targets:
         # into the app's default.metallib under these two flags, or they do
         # not load at all (`Render/Graph/Kernels.swift`).
         MTL_COMPILER_FLAGS: "-fcikernel"
-        MTLLINKER_FLAGS: "-cikernel"
+        MTLLINKER_FLAGS: "-fcikernel"
 
   Atelier-macOS:
     type: application
@@ -96,7 +96,7 @@ targets:
         CODE_SIGN_ENTITLEMENTS: Support/Atelier-macOS.entitlements
         ENABLE_HARDENED_RUNTIME: YES
         MTL_COMPILER_FLAGS: "-fcikernel"
-        MTLLINKER_FLAGS: "-cikernel"
+        MTLLINKER_FLAGS: "-fcikernel"
       configs:
         # `@testable import Atelier` from the gate needs the host built for
         # testing; Debug is what CI and Xcode run the tests in.
