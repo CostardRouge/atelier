@@ -29,6 +29,9 @@ jobs:
       - name: Checkout
         uses: actions/checkout@v4
 
+      - name: Names XCTestCase shadows on macOS
+        run: apple/Scripts/check-test-names.sh
+
       - name: Test the kernel
         run: swift test --package-path apple/Packages/AtelierKit
 

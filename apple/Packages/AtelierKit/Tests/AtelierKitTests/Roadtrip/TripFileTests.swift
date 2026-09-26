@@ -41,7 +41,7 @@ private func refusal(_ text: String) -> String? {
 }
 
 /// The file's JSON as a record, for the cases that delete or change a key.
-private func record(_ file: TripFile) -> [String: JSONValue] { file.json.objectValue ?? [:] }
+private func tripRecord(_ file: TripFile) -> [String: JSONValue] { file.json.objectValue ?? [:] }
 
 /// `posts.forEach((p) => …)` on a file's JSON.
 private func eachPost(_ o: inout [String: JSONValue], _ f: (inout [String: JSONValue]) -> Void) {
@@ -80,7 +80,7 @@ final class TripFileBackupTests: XCTestCase {
     func testNeverWritesSourceIdAnImportedTripBelongsToTheSourceThatImportsIt() {
         var doc = trip()
         doc.sourceId = "winnow.example"
-        XCTAssertNil(record(toTripFile(doc))["sourceId"])
+        XCTAssertNil(tripRecord(toTripFile(doc))["sourceId"])
         XCTAssertFalse(serializeTripFile(toTripFile(doc)).contains("sourceId"))
     }
 
@@ -109,7 +109,7 @@ final class TripFileBackupTests: XCTestCase {
     }
 
     func testLandsAFileWrittenBeforeGradesExistedOnAnEmptyGrade() throws {
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["version"] = 9
         o["grade"] = nil
         eachPost(&o) { $0["grade"] = nil }
@@ -130,7 +130,7 @@ final class TripFileBackupTests: XCTestCase {
         XCTAssertEqual(tripDocFromFile(file).developPresets, doc.developPresets)
         XCTAssertEqual(tripDocFromFile(file).posts[0].badge.develop, doc.posts[0].badge.develop)
 
-        var old = record(toTripFile(trip()))
+        var old = tripRecord(toTripFile(trip()))
         old["version"] = 14
         old["developPresets"] = nil
         eachPost(&old) { withoutBadgeKey(&$0, "develop") }
@@ -151,7 +151,7 @@ final class TripFileBackupTests: XCTestCase {
         XCTAssertEqual(tripDocFromFile(file).posts[0].badge.grade, own)
         XCTAssertEqual(tripDocFromFile(file).posts[0].slides[0].grade, own)
 
-        var old = record(toTripFile(trip()))
+        var old = tripRecord(toTripFile(trip()))
         old["version"] = 21
         eachPost(&old) { withoutBadgeKey(&$0, "grade") }
         XCTAssertNil(try XCTUnwrap(parsed(.object(old))).posts[0].badge.grade)
@@ -200,19 +200,19 @@ final class TripFileParseRefusalTests: XCTestCase {
     }
 
     func testRefusesAFileFromANewerAtelierRatherThanHalfReadingIt() {
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["version"] = .number(Double(tripDocVersion + 1))
         XCTAssertTrue(refusal(JSONValue.object(o).serialized())?.contains("newer version") == true)
     }
 
     func testRefusesATripWithNoDatesTheyAreTheSpineOfTheModel() {
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["startDate"] = "someday"
         XCTAssertEqual(parseTripFile(JSONValue.object(o).serialized()), .failure(TripFileError("The file has no trip dates.")))
     }
 
     func testFillsWhatAnOlderFileNeverWroteWithTheDefaultsANewTripGets() throws {
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["badgeWords"] = nil
         o["cta"] = nil
         o["hookDefaults"] = nil
@@ -226,11 +226,11 @@ final class TripFileParseRefusalTests: XCTestCase {
         // The route is the legs' business now. An older backup still parses, and
         // the line it used to hold is simply not read back — the legs it carries
         // are what says where the trip went.
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["version"] = 26
         o["destination"] = "Perth \u{2192} Cairns"
         let file = try XCTUnwrap(parsed(.object(o)))
-        XCTAssertNil(record(file)["destination"])
+        XCTAssertNil(tripRecord(file)["destination"])
         let doc = tripDocFromFile(file)
         XCTAssertNil(doc.json.objectValue?["destination"])
         XCTAssertNil(doc.carried["destination"])
@@ -243,15 +243,15 @@ final class TripFileParseRefusalTests: XCTestCase {
     }
 
     func testIgnoresAHandEditedSourceIdOnTheWayIn() throws {
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["sourceId"] = "smuggled.example"
         let file = try XCTUnwrap(parsed(.object(o)))
-        XCTAssertNil(record(file)["sourceId"])
+        XCTAssertNil(tripRecord(file)["sourceId"])
         XCTAssertEqual(tripDocFromFile(file).sourceId, "local")
     }
 
     func testReadsAFileWrittenBeforeTheDocumentHadASource() throws {
-        var o = record(toTripFile(trip()))
+        var o = tripRecord(toTripFile(trip()))
         o["version"] = 9
         XCTAssertEqual(try XCTUnwrap(parsed(.object(o))).version, tripDocVersion)
     }
