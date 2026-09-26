@@ -10,9 +10,10 @@
 // A tool's overlay is ITS file's: `StageOverlaySlot` names one view per tool
 // — `CropStageOverlay`, `MaskStageOverlay`, `RepairStageOverlay`,
 // `EyedropperOverlay` — each taking the same `StageOverlayContext` (the
-// editor, the stage's geometry, its zoom). The eyedropper is built here; the
-// other three are placeholders in `Inspector/PendingSections.swift` until
-// their tasks replace them with the real views under those names.
+// editor, the stage's geometry, its zoom). The eyedropper is built here.
+// With no tool up, and under the mask tool, the slot still draws the repair's
+// rings (`RepairMarksOverlay`): a patch is a fact about the picture on every
+// tab, and a handle on the Detail tab (`render-repair.md`).
 
 import SwiftUI
 import AtelierKit
@@ -51,10 +52,10 @@ struct StageOverlaySlot: View {
 
     var body: some View {
         switch tool {
-        case .none: EmptyView()
+        case .none: RepairMarksOverlay(context: context)
         case .eyedropper: EyedropperOverlay(context: context)
         case .crop: CropStageOverlay(context: context)
-        case .mask: MaskStageOverlay(context: context)
+        case .mask: MaskStageOverlay(context: context).overlay { RepairMarksOverlay(context: context) }
         case .repair: RepairStageOverlay(context: context)
         }
     }

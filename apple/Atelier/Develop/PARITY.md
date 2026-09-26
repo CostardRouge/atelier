@@ -21,10 +21,11 @@ Where things are:
 | `Render/` | `FullDevelopRenderPlan` (every pass in the web's order, the crop, the border, the budget), `RawSource` (the RAW's render first, its sensor on a rung, the device class), `DevelopLooks` (built-ins from the bundle, pack looks from the vault, `DiskPackStore`); the editor's side in `Store/RollEditor+Render.swift` |
 | `Inspector/` | `InspectorView` (tabs + sections in the web's order), `InspectorDrawer` + `SectionStrip` (phone), `PresetsSection` + `ApplySection`, `PendingSections` (stand-ins until their tasks land) |
 | `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
+| `Repair/` | the Detail tab's repair: `RepairSection` (heal · clone · dust), `RepairStageOverlay` (the tool on the stage) + `RepairMarksOverlay` (the idle slot's rings), `RepairHandles` / `RepairLookingLayer` / `DustMapLayer` (`RepairRings.swift`), `RepairLooking` (the repaired picture, the map, the field read off the decode); the state and verbs in `Store/RollEditor+Repair.swift` |
 | `Panels/` | the Adjust sections (their own task) |
 | `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
 
-Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40).
+Counts: **237 ✅ · 33 ⏳ · 10 part-built** — 280 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40; the Repair table: 24 ✅ · 2 ⏳ of 26).
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -61,7 +62,7 @@ Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers ta
 | Undo / redo buttons, both always drawn | ✅ the bar's ControlGroup |
 | A never-inherit develop: stepping re-seeds the draft from the next picture | ✅ |
 | What is a TOOL (tab, stage tool, facts, compare, ticked sections) survives a step | ✅ |
-| The brush / heal-disc size kept across pictures | ✅ the brush (`LayerEditState.brush`, held by the editor) · ⏳ the heal disc (Repair task) |
+| The brush / heal-disc size kept across pictures | ✅ the brush (`LayerEditState.brush`) and the heal disc (`RepairEditState.tool` — heal or clone, size, feather), both held by the editor |
 | Roll name renamed in place on the bar; an emptied field gives the old name back | ✅ `RollTitle` |
 | Add: from Photos (copied into the container), from Files (bookmark), a folder (ONE bookmark + each picture's path), a drop (files or a folder) | ✅ |
 | A picture already on the roll is FOUND AGAIN (its bytes now in hand), never added twice; the status says `found N again · added M` | ✅ (`relink`, variants included) |
@@ -148,7 +149,7 @@ Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers ta
 | States: decoding…, a decoder's refusal, a picture not on this device (`availabilityText`) | ✅ |
 | The grey dropper: the tool takes the pointer whole, "click / tap something grey", solves `whiteBalanceFor` on the source AS SHOT at the tapped pixel, then puts itself down | ✅ `EyedropperOverlay` |
 | An overlay SLOT the active tool fills (`DevelopTool`: none · crop · mask · repair · eyedropper) with the view ↔ source transform (`StageGeometry`) | ✅ |
-| Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table «The Crop tab») · the mask's marks, handles and brush (`MaskStageOverlay`) · ⏳ the repair rings (its task) |
+| Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table «The Crop tab») · the mask's marks, handles and brush (`MaskStageOverlay`) · the repair's rings, handles, proposed spots and map (`RepairStageOverlay`, `RepairMarksOverlay`, table «Repair») |
 | The task hairline on the stage's edge (`TaskEdge`) | ⏳ the tasks UI |
 
 ## The Crop tab — `CropStage.tsx`, `use-crop-zone.ts`, `crop-view.ts`, `CropPanel.tsx`, `BorderSection.tsx`, `KeystonePanel.tsx`, `LensPanel.tsx`, `lensfun-store.ts`
@@ -214,7 +215,7 @@ Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers ta
 | Keep the preset book on a Winnow | ⏳ the app's Winnow client |
 | Apply to N selected / Paste to N selected / Apply to N others (the develop's numbers, never the material) | ✅ |
 | Apply look / crop / borders to… | ✅ look (its tab's stand-in) · crop and borders (`CropApplyFold`, folded, the web's words) |
-| Detail: repair · detail | ✅ detail (`Panels/`) · ⏳ repair (Repair task) |
+| Detail: repair · detail | ✅ repair (`Repair/`, table «Repair» below) · detail (`Panels/`) |
 | Layers | ✅ the list, the mask and the layer's develop (`Layers/`, table «Layers» below) |
 | Crop: crop · apply crop to… · borders · apply borders to… · perspective · lens | ✅ (`Crop/`, table below) |
 | Export | ✅ the whole tab and the run — «The Export tab» and «The run» below |
@@ -317,6 +318,37 @@ Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers ta
 | The layers drawn on the stage with no layer open, in the filmstrip, the histogram and the export | ⏳ the integration task: `LayerStack` / `LayerPasses.build` behind `DevelopRenderPlan`, reading `LayerEditState.looking` for the subject maps, the wash and the blink (this tab's own render then stands down: `planDrawsLayers`) |
 | Apply layers to other pictures | ✅ the sections picker's `Layers` section (the shell's) |
 
+## Repair — `RepairPanel.tsx`, the repair half of `PictureWorkbench.tsx`, `DevelopViewport.tsx`'s rings
+
+| Control / behaviour | |
+| --- | --- |
+| The list is the picture's `repair` (`readPatches` on read — junk dropped, capped at 64, a repeated id dropped; an empty list written as the web's `[]`); every write through `update`, ONE undo step per gesture — a patch being placed and aimed, or a ring being dragged, is held LIVE and written at the gesture's end | ✅ `Store/RollEditor+Repair.swift` |
+| Title `Repair · N patches · N healed, N cloned`, the accent dot while it holds any; the web's ⓘ text | ✅ |
+| Repair / Repairing… (a pressed pill), refused at 64 patches unless already on | ✅ |
+| Heal · Clone, Size (0.4–40 %, step 0.2, `N.N %`), Feather (0–100 %, step 5): the SELECTED patch's (`· this patch`), else what the next patch is placed with | ✅ |
+| What the next patch is placed with kept across pictures; Repair armed, the selection and the dust scan start over on the next picture (the web's workbench is keyed per picture) | ✅ |
+| `patch N of M · drag its ring to move it, click it to take it off, drag the dashed one to change its source` + Done (Esc) + Remove (⌫) | ✅ (`tap` on a touch screen) |
+| `drag a ring to move it · click a solid ring to take it off · click a dashed one to edit it` / `64 patches, the most a picture holds` | ✅ |
+| Undo last · Clear | ✅ (Clear asks first — native, a destructive verb; ⌘Z brings the patches back either way) |
+| The stage's pointer is the repair tool's exactly while Repair is armed ON THE DETAIL TAB (the web's `repairActive`): the compare suspended, the stage's own drag standing down | ✅ `DevelopTool.repair` |
+| A tap places a patch sourced from beside it (`defaultSource`), selected at once; a drag from it AIMS the source at any distance (`placeSource`) — the angle read inside the disc too, the discs never overlapping; a press off the picture places nothing | ✅ (the source follows once the press has moved 3 pt, so a finger's tremor never swings a tap's source round; the web reads it from the first pixel) |
+| Every ring a HANDLE on the Detail tab, Repair armed or not: a drag on the solid ring moves the patch with its source (`movePatch`), on the dashed ring the source alone (`placeSource`, no dead zone); a press under 3 pt is a TAP — solid: take it off, dashed: select; a hand past the edge still moves it to the edge (unbounded points) | ✅ |
+| A ring's press CLAIMED against the stage (the web's `data-ring` for the zoom machine): no wipe, no pan, no second patch placed under it; a hit disc of at least 11 pt (22 under a finger) | ✅ a child's gesture takes precedence over the stage's own |
+| The rings drawn as FACTS on every other tab: the destination solid, the source dashed, a dotted link; a clone in the warm ink, a heal in the light one, the selected patch in the accent with its centre dot; the `−` in the solid ring under the pointer | ✅ (the idle slot and over the mask tool; the crop draws its own stage) |
+| The Mac's cursor: a native `−` over a solid ring, an open hand over a dashed one, a closed hand once the press moves, back when it lets go; a crosshair over the picture while Repair is on | ✅ `RepairCursor` |
+| While Repair holds the pointer: a pinch zooms, a press off the picture pans the zoomed picture, the Mac's wheel zooms | ✅ |
+| A chip on the stage saying what a tap does, and the 64-patch limit | ✅ native addition — the web says it in the panel alone |
+| Find spots / Finding spots…: the stage's decode read back ONCE at 1024 px into a field (`dustField`), the sensitivity then reading the field and never the picture (`dustSpots`) | ✅ off the main thread (`PicturePool.dustField`) — the web measures in an effect, ~110 ms on the main thread; `looking over the picture…` meanwhile |
+| `N spots proposed` / `no spot proposed` / `the picture is not decoded yet`, a spot already under a patch left out; Heal all, said: `N spots healed · N left, no room`, `N found, no room left`, `no spot could be healed from a neighbour` | ✅ |
+| Sensitivity (0–100 %, step 2), `show the map — …`, `tap a dotted ring to heal that spot · a proposal is never a patch until it is taken` | ✅ |
+| The spots as dotted rings with a `+`, each healed by its own tap from its cleanest neighbour (`dustPatch`, with the next patch's feather) or said: `that spot sits where no neighbour can be borrowed from — place a patch by hand`; a spot the crop left out not offered | ✅ |
+| The MAP in the picture's place, white on black as a share of the threshold (`dustVeil`), drawn through the stage's framing and zoom so a ring lands on the mark it names | ✅ `DustMapLayer` (one affine map from the source to the view) |
+| Nothing of the scan kept on the roll; the field let go when the scan is turned off or the picture changes | ✅ |
+| The repair DRAWN by the stage's plan — the stage, the filmstrip cell, the histogram, the export | ⏳ the integration task: `DetailPasses.make(detail:repair:…)` behind `DevelopRenderPlan`. Meanwhile the Detail tab draws the repaired picture itself (`RepairLooking`: the patches on the source at the stage's budget, then the stage's own plan), live under a drag, to the right of the divider off the tool — and stands down the moment the plan draws the repair (`planDrawsRepair`) |
+| The divider's left half shows the patches too (the web's split lives in the cube) | ⏳ the same integration: until then the stage's own before has no patch |
+| `N patches · …` in the facts (`I`) | ✅ (the shell's `factLines`) |
+| Apply the repair to other pictures, copy and paste it | ✅ the sections picker's `Repair` section (the shell's) |
+
 ## The sections picker — `SettingsSheet.tsx`
 
 | Control | |
@@ -338,7 +370,7 @@ Counts: **209 ✅ · 31 ⏳ · 14 part-built** — 254 table rows (the Layers ta
 | `H` / `?` the shortcuts sheet (the same key closes it while the editor has the keys) | ✅ |
 | `I` facts · `J` clipping (the switch) · `V` B&W ↔ colour | ✅ |
 | `P` send ↔ hold · `U` the roll's rule · `M` ignore (off the Layers tab), said in the status line | ✅ |
-| `P` / `M` on the Layers tab, `X`, ⇧C, ⌫, Esc | ✅ `P` / `M` answered by the Layers tab (`layerKey` — the press now carries `layersTab`, which the shell never set), `X` swaps the crop's orientation, ⇧C crops to the zoomed view, Esc lets go of Pick / Paint and then of the layer, puts the dropper down or disarms Level · ⏳ ⌫ answered by the Repair task |
+| `P` / `M` on the Layers tab, `X`, ⇧C, ⌫, Esc | ✅ `P` / `M` answered by the Layers tab (`layerKey` — the press now carries `layersTab`, which the shell never set), `X` swaps the crop's orientation, ⇧C crops to the zoomed view, Esc lets go of Pick / Paint and then of the layer, puts the dropper down or disarms Level; on the Detail tab ⌫ takes the selected repair patch off and Esc lets go of it, then puts Repair down (`repairRemoveKey`, `repairEscapeKey`) |
 | ⌘C / ⌘V the develop | ✅ Mac: the Edit menu's Copy / Paste (`onCopyCommand` / `onPasteCommand`, a field keeps its own) · iPad: keyboard shortcuts off while a field types |
 | ⌘⇧C / ⌘⇧V / ⌘' | ✅ Mac: the *Picture* menu · iPad: keyboard shortcuts |
 | ⌘Z / ⇧⌘Z | ✅ the window's `UndoManager` |

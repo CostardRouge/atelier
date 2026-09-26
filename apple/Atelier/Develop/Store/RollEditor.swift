@@ -138,6 +138,8 @@ final class RollEditor {
     let readoutStore = ReadoutStore()
     /// The Layers task's state and caches — read through `layerState` (`RollEditor+Layers.swift`).
     let layerEdit = LayerEditState()
+    /// The Repair section's state and caches — read through `repairState` (`RollEditor+Repair.swift`).
+    let repairEdit = RepairEditState()
 
     /// Pictures that LANDED, marked on this device as they were rendered —
     /// never an edit, never undone.

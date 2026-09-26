@@ -4,7 +4,9 @@
 // orientation, ⇧C crop to the view, `H` / `?` the shortcuts, `I` the facts,
 // `J` the clipping, `V` black and white, `P` / `U` / `M` the delivery (on the
 // Layers tab `P` and `M` are the mask's), ⌘C / ⌘V the develop, ⌘⇧C / ⌘⇧V the
-// sections, ⌘' a variant, ⌫ and Esc what the tool holds.
+// sections, ⌘' a variant, ⌫ and Esc what the tool holds (on the Detail tab
+// the selected repair patch: ⌫ takes it off, Esc lets go of it and then puts
+// Repair down).
 //
 // A field keeps every key it could use: the editor's view only hands a press
 // here while no text field of the editor has the keyboard (`textEditing`),
@@ -87,11 +89,14 @@ extension RollEditor {
             // Only where it would change something: zoomed, off the Crop tab.
             return cropToView(zoom)
         case .remove:
-            // What is selected ON the picture (a repair patch) — the tool's.
-            guard activeTool == .repair else { return false }
-            sendToTool(.remove)
+            // What is selected ON the picture — a repair patch, on the Detail
+            // tab (`RollEditor+Repair.swift`). Nothing selected, the key is
+            // somebody else's.
+            return repairRemoveKey()
         case .escape:
-            // Let go of what the tool holds, then put the tool down.
+            // The selected patch let go of, then Repair put down; else what
+            // the tool holds, then the tool.
+            if repairEscapeKey() { return true }
             guard activeTool != .none else { return false }
             if activeTool == .eyedropper {
                 setTool(.none)

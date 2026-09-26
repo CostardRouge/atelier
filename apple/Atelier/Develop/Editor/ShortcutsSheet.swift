@@ -56,9 +56,11 @@ private let shortcutGroups: [ShortcutGroup] = [
         ShortcutRow(keys: "tap", what: "with Repair on, place a patch — it borrows from beside itself"),
         ShortcutRow(keys: "drag from the spot", what: "point at where it borrows from, at any distance — the source turns with the hand"),
         ShortcutRow(keys: "drag a solid ring", what: "move that patch, its source going with it"),
-        ShortcutRow(keys: "click a solid ring", what: "take that patch off"),
+        ShortcutRow(keys: "click a solid ring", what: "take that patch off — the cursor shows −"),
         ShortcutRow(keys: "drag a dashed ring", what: "move where that patch borrows from"),
+        ShortcutRow(keys: "click a dashed ring", what: "edit the patch — Size, Feather and Heal / Clone then apply to it"),
         ShortcutRow(keys: "⌫ · Esc", what: "take the edited patch off · let go of it, then put Repair down"),
+        ShortcutRow(keys: "tap a dotted ring", what: "heal a spot Find spots proposed — a proposal is never a patch until it is taken"),
     ]),
 ]
 
