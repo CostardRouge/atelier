@@ -7,25 +7,45 @@ import SwiftUI
 
 @main
 struct AtelierApp: App {
-    @State private var rolls = RollStore()
+    /// The rolls this device keeps, and where each picture's bytes are.
+    @State private var rolls: RollStore
+    /// What the pictures ARE once looked at: decodes, EXIF, thumbnails.
+    @State private var pictures: PicturePool
+    /// The personal preset book — one list of named lights.
+    @State private var presets = PresetBookStore()
+    @Environment(\.scenePhase) private var scenePhase
 
     init() {
         Brand.registerFonts()
+        let store = RollStore()
+        _rolls = State(initialValue: store)
+        _pictures = State(initialValue: PicturePool(store: store))
     }
 
     var body: some Scene {
         WindowGroup {
             RootView()
                 .environment(rolls)
+                .environment(pictures)
+                .environment(presets)
                 .font(Brand.sans(15))
+        }
+        .onChange(of: scenePhase) { _, phase in
+            // Local now: whatever the debounce still holds is written before
+            // the app leaves the foreground.
+            if phase != .active {
+                rolls.flush()
+                presets.flush()
+            }
         }
         #if os(macOS)
         .defaultSize(width: 1280, height: 820)
         .commands {
             CommandGroup(replacing: .newItem) {
-                Button("New Roll") { rolls.create(name: "Untitled roll") }
+                Button("New Roll") { rolls.create(name: defaultRollName()) }
                     .keyboardShortcut("n", modifiers: [.command])
             }
+            DevelopCommands()
         }
         #endif
     }

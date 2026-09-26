@@ -124,11 +124,14 @@ final class PictureRenderer {
     /// the grader, whose cube cache then answers on identity.
     private var bakeCache: (develop: DevelopSettings?, cube: CubeLut?)?
 
-    /// The delivered frame for an aspect: the largest box of it inside the picture.
+    /// The delivered frame for an aspect: the largest box of it inside the
+    /// picture. Any aspect a roll may store — `original`, a preset, a FREE
+    /// zone's `free:<ratio>` — through the kernel's `pictureAspectRatio`, the
+    /// one the stage's geometry (`StageGeometry`) measures with too.
     static func deliveredSize(width: Int, height: Int, aspect: String) -> (width: Int, height: Int) {
-        let option = AspectOption.named(aspect)
-        guard option.w > 0, option.h > 0, width > 0, height > 0 else { return (width, height) }
-        let want = option.w / option.h
+        guard aspect != "original", width > 0, height > 0 else { return (width, height) }
+        let want = pictureAspectRatio(aspect, Double(width), Double(height))
+        guard want > 0, want.isFinite else { return (width, height) }
         if Double(width) / Double(height) > want {
             return (Int((Double(height) * want).rounded()), height)
         }

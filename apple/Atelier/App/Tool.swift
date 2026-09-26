@@ -40,7 +40,7 @@ enum Tool: String, CaseIterable, Identifiable {
     @ViewBuilder
     var screen: some View {
         switch self {
-        case .develop: RollsView()
+        case .develop: RollGallery()
         case .trips: PlannedToolView(tool: .trips)
         case .studio: PlannedToolView(tool: .studio)
         case .sources: PlannedToolView(tool: .sources)
