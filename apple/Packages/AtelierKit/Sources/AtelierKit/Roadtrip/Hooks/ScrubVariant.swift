@@ -1,9 +1,9 @@
 // «Défilé» — the trip runs past and stops on this day. Port of the variant in
 // `src/shared/roadtrip/hooks/scrub.tsx`: what it needs, when it cannot run,
 // which pictures it asks for, what `prepare` returns, and the tape a drag
-// moves. The arithmetic is `ScrubPlan.swift`; the drawing (`scrub-paint.ts`)
-// and the face — the picker `Sketch`, the options `Panel` with its stop
-// strip and its summary line — are the app's.
+// moves. The arithmetic is `ScrubPlan.swift` and a frame's layout
+// `ScrubPaint.swift`; the strokes and the face — the picker `Sketch`, the
+// options `Panel` with its stop strip and its summary line — are the app's.
 //
 // The trip's measuring tape sweeps from where it starts to the day this piece
 // tells, decelerating; every stop flashes a real picture as the head lands,

@@ -27,8 +27,8 @@
 //   falls back, a colour is kept lower-cased.
 //
 // The tape's GEOMETRY is here (`tapeGeometry`), so the rectangle the stage
-// grabs is exactly the one the app's painter draws; the painting itself
-// (`scrub-paint.ts`) is the app's, reading a `ScrubDrawing`.
+// grabs is exactly the one the app's painter draws; one frame's layout is
+// `ScrubPaint.swift`, and the strokes are the app's, reading a `ScrubDrawing`.
 
 import Foundation
 
@@ -747,9 +747,9 @@ public func scrubScore(_ plan: ScrubPlan, _ volume: Double = 1, _ tuning: ScrubT
 
 /// Défilé's drawing: the plan `prepare` built — the one its numeral and its
 /// ticks read — with the options and the pictures it was prepared against.
-/// The app's painter (`scrub-paint.ts` on the web) reads nothing else: the
-/// flash is `stops[stopAt(t)].pictureKey` looked up in `pictures` (or the
-/// empty day's ink), the tape `tapeGeometry(frame, options.tapeGeometryOptions)`.
+/// The app's painter (`scrub-paint.ts` on the web) reads nothing else, and
+/// reads it through `frame(at:_:)` (`ScrubPaint.swift`): what fills the frame,
+/// the dip, the band, the track, every tick and the head, placed and coloured.
 public struct ScrubDrawing: HookDrawing {
     public let plan: ScrubPlan
     public let options: ScrubOptions
