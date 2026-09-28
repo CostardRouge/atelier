@@ -13,6 +13,7 @@ import {
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
+import { runStateOf, type RunPictureState, type RunProgress } from '../../shared/develop/run-progress';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { describeCulling, type Culling } from '../../shared/sources/winnow/culling';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
@@ -37,9 +38,15 @@ import type { DeliverAction } from './PictureWorkbench';
  * pick flag, the stars and a label dot along the cell's top edge, and a
  * `shows` filter the roll's status line sets — a picture that fails it leaves
  * the strip, the open one excepted.
+ *
+ * While an export runs the strip is its QUEUE (his pick V4): a cell still to
+ * leave is veiled, the one in hand turns, a written one says ✓ and one that
+ * did not leave says ! — over the picture's centre, the one spot no badge
+ * owns, and never a target: a cell stays a click to open its picture.
  */
 export default function Filmstrip({
   pictures,
+  run = null,
   openId,
   selectedIds,
   thumbs,
@@ -55,6 +62,8 @@ export default function Filmstrip({
   shows = () => true,
 }: {
   pictures: readonly RollPicture[];
+  /** A running export (`run-progress.ts`): each cell says where its picture stands in it. */
+  run?: RunProgress | null;
   openId: string | null;
   selectedIds: ReadonlySet<string>;
   thumbs: ReadonlyMap<string, Blob>;
@@ -121,6 +130,7 @@ export default function Filmstrip({
             // The kind alone: the map is rebuilt per roll change, its objects with it.
             availabilityKind={availability.get(p.id)?.kind ?? 'local'}
             culling={culling?.get(p.id)}
+            runState={runStateOf(run, p.id)}
             remoteClient={remote?.client ?? null}
             remoteId={remote?.id ?? null}
             size={size}
@@ -147,6 +157,7 @@ const Cell = memo(function Cell({
   thumb,
   availabilityKind,
   culling,
+  runState,
   remoteClient,
   remoteId,
   size,
@@ -158,6 +169,8 @@ const Cell = memo(function Cell({
   thumb: Blob | null;
   availabilityKind: PictureAvailability['kind'];
   culling: Culling | undefined;
+  /** Where this picture stands in a running export, or null outside one. */
+  runState: RunPictureState | null;
   remoteClient: WinnowClient | null;
   remoteId: number | null;
   size: string;
@@ -194,7 +207,7 @@ const Cell = memo(function Cell({
         aria-selected={selected ? 'true' : undefined}
         aria-label={`${label}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
           fetching ? ', fetching' : unreachable ? ', not available' : ''
-        }`}
+        }${runState ? `, ${RUN_WORDS[runState]}` : ''}`}
         title={`${label}${variant > 1 ? ' (a variant)' : ''}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
           culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
         } — Shift or ⌘/Ctrl-click to select for a batch`}
@@ -257,6 +270,7 @@ const Cell = memo(function Cell({
             {Icons.check}
           </span>
         )}
+        {runState && <RunMark state={runState} />}
       </button>
       <DeliveryBadge picture={picture} name={label} onDeliver={onDeliver} />
       {/* Hover reveals it where a pointer can hover; a touch screen shows it
@@ -275,6 +289,39 @@ const Cell = memo(function Cell({
     </li>
   );
 });
+
+/** A cell's place in a running export, for a screen reader. */
+const RUN_WORDS: Record<RunPictureState, string> = {
+  queued: 'waiting to be exported',
+  active: 'being exported',
+  done: 'exported',
+  failed: 'not exported',
+};
+
+/**
+ * The cell's mark in a running export: a veil on what waits, a turning ring
+ * on the picture in hand, ✓ or ! on what is finished. Pointer-transparent.
+ */
+function RunMark({ state }: { state: RunPictureState }) {
+  return (
+    <span
+      className={`absolute inset-0 grid place-items-center pointer-events-none ${
+        state === 'queued' ? 'bg-[rgba(13,12,10,0.45)]' : state === 'active' ? 'bg-[rgba(13,12,10,0.25)]' : ''
+      }`}
+      aria-hidden="true"
+    >
+      {state === 'active' && (
+        <span className="w-5 h-5 rounded-full border-2 border-on-media/30 border-t-on-media/95 animate-spin motion-reduce:animate-none" />
+      )}
+      {state === 'done' && (
+        <span className="w-5 h-5 grid place-items-center rounded-full bg-ok text-white text-2xs">{Icons.check}</span>
+      )}
+      {state === 'failed' && (
+        <span className="w-5 h-5 grid place-items-center rounded-full bg-danger text-white font-mono text-2xs">!</span>
+      )}
+    </span>
+  );
+}
 
 /** What an empty cell says, in a word or two — the stage says the rest. */
 const CELL_WORDS: Record<PictureAvailability['kind'], string> = {

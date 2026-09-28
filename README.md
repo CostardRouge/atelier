@@ -1356,7 +1356,11 @@ never whole and shrunk afterwards: its size is read from the file's header and
 the browser is asked for exactly the pixels a stage, a filmstrip cell or an
 export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
 phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
-in the run's summary; a computer still exports every pixel. A browser cannot
+in the run's summary; a computer still exports every pixel. A Studio export
+of a photograph decodes only what its largest variant draws: a 1080 × 1350
+post from a 48-megapixel still is decoded at 1800 px — often the picture
+already on the stage — instead of the whole file, which on a computer took an
+export of that post from thirteen seconds to under one. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
 (`constrained` or `roomy`) overrides it. A big export is also graded in
@@ -1429,8 +1433,23 @@ undo never forgets one.
 The export buttons stay pinned at the bottom of the Export tab, whatever is
 scrolled above them: **Export N pictures** (the ones that leave) is the main
 button, and the menu beside it offers this picture, the filmstrip's selection
-and the new or changed ones. The run's progress and its outcome are said under
-it.
+and the new or changed ones. While an export runs, that bar becomes the run
+and stays on whichever tab you are working in: a segment per picture (green
+when written, red when it could not be), the picture in hand with its stage —
+*Fetch*, *Develop*, *Write* — and what it is doing in words, the time left once
+a first picture has measured it, and **Cancel**, which stops at the next
+picture and keeps what was written. The filmstrip is the queue at the same
+time: a picture still to go is veiled, the one in hand turns, a written one
+shows ✓ and one that could not leave shows !, and a hairline along the strip's
+top fills as the run goes.
+
+An export works from the roll **as it was when you pressed the button**. While
+it runs, the Export tab is locked and dimmed under a line that says so — its
+settings, and which pictures leave (the **P** / **U** / **M** keys and the
+strip's badges say they are locked too), would only apply to the next export.
+Developing, cropping and every other edit stay free: a picture you change
+while the roll leaves is named when the run ends, its row says **changed**,
+and **Export new or changed** sends it again.
 
 **Variants.** One frame, developed two ways — cropped square and 4:5, or in
 colour and in black and white — is two **variants** of it, Lightroom's virtual

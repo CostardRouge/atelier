@@ -373,8 +373,12 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     drawGuides(ctx, guidesRef.current, vw, vh);
 
     const sel = selectedRef.current;
-    if (sel) {
-      const boxes = measureOverlays(ctx, elementsRef.current, cue, vw, vh, {
+    // Only the selected element is measured: a box depends on its element
+    // alone, and measuring the whole list laid every title out a second time
+    // on every repaint — every played frame — just to outline one of them.
+    const selEl = sel ? elementsRef.current.find((e) => e.id === sel) : undefined;
+    if (sel && selEl) {
+      const boxes = measureOverlays(ctx, [selEl], cue, vw, vh, {
         theme: themeRef.current,
         timeShift: shiftRef.current,
         scenes: scenesRef.current,

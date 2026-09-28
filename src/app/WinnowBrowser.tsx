@@ -121,6 +121,9 @@ function shortDate(iso: string | null): string {
 export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrowserProps) {
   /** The add in flight, so the sheet's Cancel can stop it. */
   const adding = useRef<AbortController | null>(null);
+  // Unmounted by any other way out (a route change, the shell closing the
+  // sheet) is a Cancel too: the downloads must not land in the Library later.
+  useEffect(() => () => adding.current?.abort(), []);
   const client = useMemo(
     () => new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth }),
     [connection.baseUrl, connection.auth],
@@ -209,11 +212,12 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   useEffect(() => {
     if (view !== 'day') return;
     let cancelled = false;
+    const controller = new AbortController();
     const span = monthSpan(month);
     setCalendar(null);
     setProblem(null);
     client
-      .calendar(span.from, span.to, filter)
+      .calendar(span.from, span.to, filter, controller.signal)
       .then((cal) => {
         if (cancelled) return;
         if (!landed) {
@@ -230,6 +234,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [client, view, month, filter, landed]);
 
@@ -238,10 +243,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   useEffect(() => {
     if (view !== 'session') return;
     let cancelled = false;
+    const controller = new AbortController();
     setSessions(null);
     setProblem(null);
     client
-      .sessions(filter)
+      .sessions(filter, controller.signal)
       .then((list) => {
         if (cancelled) return;
         setSessions(list);
@@ -255,6 +261,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [client, view, filter]);
 
@@ -263,10 +270,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   useEffect(() => {
     if (view !== 'chapter' || !timelineOffered) return;
     let cancelled = false;
+    const controller = new AbortController();
     setChapters(null);
     setProblem(null);
     client
-      .timeline(filter)
+      .timeline(filter, controller.signal)
       .then((list) => {
         if (cancelled) return;
         setChapters(list);
@@ -283,6 +291,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [client, view, filter, timelineOffered, wantedChapterId]);
 
@@ -297,6 +306,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       return;
     }
     let cancelled = false;
+    const controller = new AbortController();
     setRows(null);
     setChecked(new Set());
     // A leg is asked for by its calendar days: Winnow has no chapter filter
@@ -317,7 +327,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       return;
     }
     client
-      .allAssets(query)
+      .allAssets(query, undefined, controller.signal)
       .then((all) => {
         if (!cancelled) setRows(all);
       })
@@ -326,6 +336,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [client, chosenDay, chosenSession, chosenChapter, filter]);
 
