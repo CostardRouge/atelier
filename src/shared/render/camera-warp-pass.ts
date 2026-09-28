@@ -20,8 +20,9 @@
  * assumption (what the radius is normalised by).
  */
 
+import { warpRows } from './band-plan';
 import { GLSL_VERSION, IMAGE_UV } from './glsl';
-import { planeOf, warpNormRadius, type CameraWarp } from './camera-warp';
+import { planeOf, warpNormRadius, warpSourceUv, type CameraWarp } from './camera-warp';
 import { isIdentityWarp } from '../exif/dng-opcodes';
 import type { RenderPass } from './graph';
 
@@ -101,6 +102,14 @@ export function makeCameraWarpPass(
   }
   return {
     id: 'camera-warp',
+    // The same map, in JavaScript, for the three planes.
+    rows: warpRows((u, v, flipY) => {
+      const imgY = flipY ? v : 1 - v;
+      return [0, 1, 2].map((plane) => {
+        const [sx, sy] = warpSourceUv(warp, plane, u, imgY, width, height);
+        return [sx, flipY ? sy : 1 - sy] as const;
+      });
+    }),
     fragment: FRAGMENT,
     setUniforms(gl, program) {
       const at = (name: string) => gl.getUniformLocation(program, name);

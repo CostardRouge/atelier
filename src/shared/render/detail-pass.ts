@@ -17,6 +17,7 @@
  * warp. `detailPasses` hands both lists back and the grader places them.
  */
 
+import { nearRows, OWN_ROWS } from './band-plan';
 import { GLSL_VERSION } from './glsl';
 import type { RenderPass } from './graph';
 import {
@@ -177,6 +178,8 @@ const at = (gl: WebGL2RenderingContext, program: WebGLProgram, name: string) => 
 export function makeChromaBlurPass(terms: DetailTerms, axis: 'x' | 'y'): RenderPass {
   return {
     id: `chroma-${axis}`,
+    // Along X a band reads its own rows; along Y, its radius more.
+    rows: axis === 'x' ? OWN_ROWS : nearRows(terms.chromaRadius + 1),
     fragment: CHROMA_FRAGMENT,
     setUniforms(gl, program) {
       gl.uniform2f(at(gl, program, 'u_axis'), axis === 'x' ? 1 : 0, axis === 'x' ? 0 : 1);
@@ -189,6 +192,7 @@ export function makeChromaBlurPass(terms: DetailTerms, axis: 'x' | 'y'): RenderP
 export function makeBilateralPass(terms: DetailTerms): RenderPass {
   return {
     id: 'denoise',
+    rows: nearRows(BILATERAL_RADIUS + 1),
     fragment: BILATERAL_FRAGMENT,
     setUniforms(gl, program) {
       gl.uniform1f(at(gl, program, 'u_rangeSigma'), terms.rangeSigma);
@@ -200,6 +204,7 @@ export function makeBilateralPass(terms: DetailTerms): RenderPass {
 export function makeDefringePass(terms: DetailTerms): RenderPass {
   return {
     id: 'defringe',
+    rows: nearRows(2),
     fragment: DEFRINGE_FRAGMENT,
     setUniforms(gl, program) {
       gl.uniform1f(at(gl, program, 'u_amount'), terms.defringe);
@@ -216,6 +221,8 @@ export function makeDefringePass(terms: DetailTerms): RenderPass {
 export function makeSharpenPass(terms: DetailTerms, showMask = false): RenderPass {
   return {
     id: 'sharpen',
+    // The kernel, and the Sobel's own row beyond it.
+    rows: nearRows(Math.max(1, terms.sharpenRadius) + 2),
     fragment: SHARPEN_FRAGMENT,
     setUniforms(gl, program) {
       gl.uniform1f(at(gl, program, 'u_gain'), terms.sharpenGain);

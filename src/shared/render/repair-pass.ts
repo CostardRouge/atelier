@@ -105,6 +105,40 @@ export function makeRepairPass(patches: readonly Patch[] | null | undefined, asp
   return {
     id: 'repair',
     fragment: FRAGMENT,
+    // A band reads its own rows and, for each patch that COVERS one of them,
+    // that part of the disc moved by the offset — and, to heal, the whole ring
+    // around the destination and around its source. Measured in IMAGE rows
+    // (y down), the shader's own convention through `imageUv`.
+    rows: (out, frame, flipY) => {
+      const H = frame.height;
+      const spanY = (1 / diagonal) * 2;
+      const toImg = (row: number) => (flipY ? row / H : 1 - row / H);
+      const a = toImg(out.y0);
+      const b = toImg(out.y1);
+      const lo = Math.min(a, b);
+      const hi = Math.max(a, b);
+      let reachLo = lo;
+      let reachHi = hi;
+      const take = (from: number, to: number) => {
+        reachLo = Math.min(reachLo, from);
+        reachHi = Math.max(reachHi, to);
+      };
+      for (const p of list) {
+        const r = p.radius / spanY;
+        const top = Math.max(lo, p.y - r);
+        const bottom = Math.min(hi, p.y + r);
+        if (top > bottom) continue;
+        take(top + p.dy, bottom + p.dy);
+        if (p.kind === 'heal') {
+          const ring = r * RING_REACH;
+          take(p.y - ring, p.y + ring);
+          take(p.y - ring + p.dy, p.y + ring + p.dy);
+        }
+      }
+      const r0 = flipY ? reachLo * H : (1 - reachHi) * H;
+      const r1 = flipY ? reachHi * H : (1 - reachLo) * H;
+      return { y0: r0 - 1, y1: r1 + 1 };
+    },
     setUniforms(gl, program) {
       gl.uniform2f(gl.getUniformLocation(program, 'u_span'), (ar / diagonal) * 2, (1 / diagonal) * 2);
       gl.uniform1i(gl.getUniformLocation(program, 'u_count'), list.length);

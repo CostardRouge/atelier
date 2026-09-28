@@ -17,6 +17,7 @@
  * lands a marker at, so a mirror creeping in would show up as a failure.
  */
 
+import { warpRows } from './band-plan';
 import { GLSL_VERSION, SRGB_TRANSFER } from './glsl';
 import {
   DEFAULT_LENS,
@@ -25,6 +26,8 @@ import {
   distortionTerms,
   isDefaultLens,
   isIdentityProfile,
+  lensSampleRadius,
+  profileSourceRadius,
   vignetteTerms,
   type LensCorrection,
   type LensProfileTerms,
@@ -150,6 +153,21 @@ export function makeLensPass(
 
   return {
     id: 'lens',
+    // Where the shader samples, in JavaScript — every channel's own scale.
+    rows: warpRows((u, v) => {
+      const sx = (ar / diagonal) * 2;
+      const sy = (1 / diagonal) * 2;
+      const dx = (u - 0.5) * sx;
+      const dy = (v - 0.5) * sy;
+      const r = Math.hypot(dx, dy);
+      const ux = r > 0 ? dx / r : 0;
+      const uy = r > 0 ? dy / r : 0;
+      const rs = profileSourceRadius(lensSampleRadius(r, k1, k2), p.distortion);
+      const channel = (t: readonly number[]) => t[0] + rs * (t[1] + rs * t[2]);
+      return [1, red * channel(p.tcaRed), blue * channel(p.tcaBlue)].map(
+        (scale) => [(ux * rs * scale) / sx + 0.5, (uy * rs * scale) / sy + 0.5] as const,
+      );
+    }),
     fragment: FRAGMENT,
     setUniforms(gl, program) {
       const at = (name: string) => gl.getUniformLocation(program, name);

@@ -27,6 +27,7 @@
  * Framework-free, like the renderer it grows from.
  */
 
+import { bandFragment, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
 import { VERTEX_SRC } from './glsl';
 import { isHalfImage, type HalfImage } from './half-image';
 import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
@@ -84,6 +85,50 @@ export interface RenderPass {
    * torn down with every change and took every texture with it.
    */
   dispose?: (gl: WebGL2RenderingContext) => void;
+  /**
+   * Which rows of its input this pass reads to write a span of rows
+   * (`band-plan.ts`) — what lets a big render be drawn in BANDS, with targets
+   * a band tall instead of the whole frame. Absent where the pass has not
+   * said: the graph then renders that chain whole, as it always has. A
+   * colour pass is `OWN_ROWS`, a blur `nearRows(r)`, a warp `warpRows(map)`.
+   */
+  rows?: RowNeed | null;
+}
+
+/**
+ * Frames at least this big are drawn in bands when every pass can say what it
+ * reads: the stage (a phone's 3.7 MP, a computer's 8.3 MP 4K frame) never is,
+ * so an interactive render stays one draw per pass; a full-density export is.
+ */
+const BAND_MIN_PIXELS = 12_000_000;
+/** The rows of one band, as a share of pixels: ~4 MP of output per band. */
+const BAND_PIXELS = 4_000_000;
+
+let bandOverride: { min: number; pixels: number } | null = null;
+
+/**
+ * Force the banding threshold and the band's size — for the render gate and a
+ * diagnostic, which must be able to band a small frame and compare it with the
+ * whole. `null` restores the defaults.
+ */
+export function setBandingForTest(next: { min: number; pixels: number } | null): void {
+  bandOverride = next;
+}
+
+let bandsLastDrawn = 1;
+
+/** How many bands the last render of any graph was drawn in — 1 for a whole one. For the gate. */
+export function bandsLastDrawnForTest(): number {
+  return bandsLastDrawn;
+}
+
+/** The rows of one band for this frame, or null where it is drawn whole. */
+export function bandRowsFor(width: number, height: number): number | null {
+  const min = bandOverride?.min ?? BAND_MIN_PIXELS;
+  const per = bandOverride?.pixels ?? BAND_PIXELS;
+  if (width * height < min) return null;
+  const rows = Math.max(16, Math.round(per / Math.max(1, width)));
+  return rows < height ? rows : null;
 }
 
 export interface RenderGraph {
@@ -113,6 +158,7 @@ export interface RenderGraph {
 
 const PASSTHROUGH: RenderPass = {
   id: 'passthrough',
+  rows: OWN_ROWS,
   fragment: `#version 300 es
 precision highp float;
 in vec2 v_uv;
@@ -315,9 +361,93 @@ export function createRenderGraph(
     return made;
   };
 
+  /** Pass ids whose fragment could be made band-aware (`bandFragment`). */
+  const bandable = new Set<string>();
   const programFor = (pass: RenderPass): WebGLProgram | null => {
-    if (!programs.has(pass.id)) programs.set(pass.id, linkProgram(gl, pass.fragment));
+    if (!programs.has(pass.id)) {
+      // Every program is linked band-aware where it can be: at rest the map
+      // is the identity to the bit, so a whole render is what it always was.
+      const banded = bandFragment(pass.fragment);
+      if (banded) bandable.add(pass.id);
+      programs.set(pass.id, linkProgram(gl, banded ?? pass.fragment));
+    }
     return programs.get(pass.id) ?? null;
+  };
+
+  /** The band plan for this chain at this size, or null to draw it whole. */
+  const bandPlanFor = (list: readonly RenderPass[], width: number, height: number): BandPlan | null => {
+    if (list.length < 2) return null;
+    const rows = bandRowsFor(width, height);
+    if (rows === null) return null;
+    for (const pass of list) {
+      if (!programFor(pass) || !bandable.has(pass.id)) return null;
+    }
+    return planBands({ width, height }, rows, list.map((pass) => pass.rows));
+  };
+
+  /**
+   * One pass's draw: its program, its input on unit 0, the band it covers
+   * (`u_band`) and where its input's rows sit in the texture it reads
+   * (`u_srcBand`) — both zero for a whole render.
+   */
+  const drawPass = (
+    pass: RenderPass,
+    program: WebGLProgram,
+    input: { texture: WebGLTexture | null; flipY: number; band: readonly [number, number, number, number] },
+    output: { framebuffer: WebGLFramebuffer | null; y: number; scissor: RowSpan | null },
+    width: number,
+    height: number,
+  ) => {
+    // Before anything is bound for this pass's own draw: a pass that
+    // renders into buffers of its own does it here, and the binding below
+    // is what re-establishes the graph's state afterwards.
+    pass.prepare?.(gl, { texture: input.texture, width, height, flipY: input.flipY });
+    gl.bindVertexArray(vao);
+
+    gl.useProgram(program);
+
+    const uFlip = gl.getUniformLocation(program, 'u_flipY');
+    if (uFlip) gl.uniform1f(uFlip, input.flipY);
+    const uSrcBand = gl.getUniformLocation(program, 'u_srcBand');
+    if (uSrcBand) gl.uniform4f(uSrcBand, input.band[0], input.band[1], input.band[2], input.band[3]);
+
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, input.texture);
+    const uSrc = gl.getUniformLocation(program, 'u_src');
+    if (uSrc) gl.uniform1i(uSrc, 0);
+    const uTexel = gl.getUniformLocation(program, 'u_texel');
+    if (uTexel) gl.uniform2f(uTexel, 1 / Math.max(1, width), 1 / Math.max(1, height));
+
+    pass.setUniforms?.(gl, program);
+
+    gl.bindFramebuffer(gl.FRAMEBUFFER, output.framebuffer);
+    // The WHOLE frame's viewport, moved so the band's first row lands on the
+    // target's first: every fragment then gets the very `v_uv` a whole render
+    // gives it, to the last bit — a band drawn through a viewport of its own
+    // interpolated coordinates a few ulps off, which was enough to flip a
+    // pixel at a warp's empty edge from inside to outside. The scissor keeps
+    // the work to the band.
+    gl.viewport(0, output.y, width, height);
+    if (output.scissor) {
+      gl.enable(gl.SCISSOR_TEST);
+      gl.scissor(0, output.scissor.y0, width, output.scissor.y1 - output.scissor.y0);
+    }
+    gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
+    if (output.scissor) gl.disable(gl.SCISSOR_TEST);
+
+    // The FIRST draw of each program is checked for a GL error, in
+    // development only. Every trap `render-core.md` records — two sampler
+    // types on one unit, an incomplete texture — is an INVALID_OPERATION
+    // the driver reports here and nowhere else, and each was found by
+    // hand. `getError` stalls the pipeline, so it is never per frame:
+    // once per program, which is when a new pass could have got it wrong.
+    if (import.meta.env.DEV && !checked.has(pass.id)) {
+      checked.add(pass.id);
+      const error = gl.getError();
+      if (error !== gl.NO_ERROR) {
+        console.error(`[render] pass "${pass.id}" left GL error 0x${error.toString(16)} on its first draw`);
+      }
+    }
   };
 
   return {
@@ -391,58 +521,70 @@ export function createRenderGraph(
         uploaded = keyed;
       }
 
-      const needed = targetsNeeded(list.length);
-      for (let i = 0; i < needed; i += 1) {
-        if (!targetAt(i as 0 | 1, width, height)) return canvas;
-      }
+      const WHOLE_SRC = [0, 0, 0, 0] as const;
+      const bands = bandPlanFor(list, width, height);
+      bandsLastDrawn = bands ? bands.bands.length : 1;
 
-      for (let i = 0; i < plan.length; i += 1) {
-        const slot: PassSlot = plan[i];
-        const pass = list[i];
-        const program = programFor(pass);
-        if (!program) continue;
-
-        const fromTex = slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null);
-        const flipY = slot.from === 'source' ? bitmapSource : 0;
-
-        // Before anything is bound for this pass's own draw: a pass that
-        // renders into buffers of its own does it here, and the binding below
-        // is what re-establishes the graph's state afterwards.
-        pass.prepare?.(gl, { texture: fromTex, width, height, flipY });
-        gl.bindVertexArray(vao);
-
-        gl.useProgram(program);
-
-        const uFlip = gl.getUniformLocation(program, 'u_flipY');
-        if (uFlip) gl.uniform1f(uFlip, flipY);
-
-        gl.activeTexture(gl.TEXTURE0);
-        gl.bindTexture(gl.TEXTURE_2D, fromTex);
-        const uSrc = gl.getUniformLocation(program, 'u_src');
-        if (uSrc) gl.uniform1i(uSrc, 0);
-        const uTexel = gl.getUniformLocation(program, 'u_texel');
-        if (uTexel) gl.uniform2f(uTexel, 1 / Math.max(1, width), 1 / Math.max(1, height));
-
-        pass.setUniforms?.(gl, program);
-
-        gl.bindFramebuffer(
-          gl.FRAMEBUFFER,
-          slot.to === 'canvas' ? null : (targets[slot.to]?.fbo ?? null),
-        );
-        gl.viewport(0, 0, width, height);
-        gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
-
-        // The FIRST draw of each program is checked for a GL error, in
-        // development only. Every trap `render-core.md` records — two sampler
-        // types on one unit, an incomplete texture — is an INVALID_OPERATION
-        // the driver reports here and nowhere else, and each was found by
-        // hand. `getError` stalls the pipeline, so it is never per frame:
-        // once per program, which is when a new pass could have got it wrong.
-        if (import.meta.env.DEV && !checked.has(pass.id)) {
-          checked.add(pass.id);
-          const error = gl.getError();
-          if (error !== gl.NO_ERROR) {
-            console.error(`[render] pass "${pass.id}" left GL error 0x${error.toString(16)} on its first draw`);
+      if (!bands) {
+        const needed = targetsNeeded(list.length);
+        for (let i = 0; i < needed; i += 1) {
+          if (!targetAt(i as 0 | 1, width, height)) return canvas;
+        }
+        for (let i = 0; i < plan.length; i += 1) {
+          const slot: PassSlot = plan[i];
+          const pass = list[i];
+          const program = programFor(pass);
+          if (!program) continue;
+          const fromTex = slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null);
+          drawPass(
+            pass,
+            program,
+            { texture: fromTex, flipY: slot.from === 'source' ? bitmapSource : 0, band: WHOLE_SRC },
+            { framebuffer: slot.to === 'canvas' ? null : (targets[slot.to]?.fbo ?? null), y: 0, scissor: null },
+            width,
+            height,
+          );
+        }
+      } else {
+        // BANDS: the targets are a band tall (plus what the passes after it
+        // read around it), never the whole frame, and the canvas is written a
+        // band at a time. The source stays whole — the first pass reads it.
+        const needed = targetsNeeded(list.length);
+        for (let i = 0; i < needed; i += 1) {
+          if (!targetAt(i as 0 | 1, width, bands.targetRows)) return canvas;
+        }
+        const allocated = bands.targetRows / height;
+        const edge = [0.5 / height, 1 - 0.5 / height] as const;
+        for (const band of bands.bands) {
+          for (let i = 0; i < plan.length; i += 1) {
+            const slot: PassSlot = plan[i];
+            const pass = list[i];
+            const program = programFor(pass);
+            if (!program) continue;
+            const region: RowSpan = band.regions[i];
+            const rows = region.y1 - region.y0;
+            if (rows <= 0) continue;
+            const readsSource = slot.from === 'source';
+            const inRegion = readsSource ? null : band.regions[i - 1];
+            drawPass(
+              pass,
+              program,
+              {
+                texture: readsSource ? sourceTex : (targets[slot.from as 0 | 1]?.tex ?? null),
+                flipY: readsSource ? bitmapSource : 0,
+                band: inRegion ? [inRegion.y0 / height, allocated - 1, edge[0], edge[1]] : WHOLE_SRC,
+              },
+              slot.to === 'canvas'
+                ? { framebuffer: null, y: 0, scissor: region }
+                : {
+                    framebuffer: targets[slot.to]?.fbo ?? null,
+                    // Frame row `region.y0` lands on the target's row 0.
+                    y: -region.y0,
+                    scissor: { y0: 0, y1: rows },
+                  },
+              width,
+              height,
+            );
           }
         }
       }

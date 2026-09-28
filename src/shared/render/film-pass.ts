@@ -37,6 +37,7 @@
  * `RenderPass.prepare`.
  */
 
+import { OWN_ROWS } from './band-plan';
 import {
   MAX_HALATION_TAPS,
   gaussianKernel,
@@ -307,6 +308,9 @@ export function makeFilmPass(
     // caches its programs by id, so a stock whose dials moved reuses the
     // program it already linked.
     id: 'film',
+    // The halation is extracted from the WHOLE input in `prepare`, so a
+    // node with a halo cannot be banded; the grain alone reads its own pixel.
+    rows: halo ? null : OWN_ROWS,
     fragment: FILM_FRAGMENT,
 
     setSourceSeconds(seconds) {

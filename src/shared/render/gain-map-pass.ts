@@ -17,6 +17,7 @@
  * The maths, and why it is in light rather than code, is `gain-map.ts`.
  */
 
+import { OWN_ROWS } from './band-plan';
 import { GLSL_VERSION, IMAGE_UV, SRGB_TRANSFER } from './glsl';
 import { isFlatField, type GainField } from './gain-map';
 import type { RenderPass } from './graph';
@@ -70,6 +71,7 @@ export function makeGainMapPass(field: GainField | null | undefined): RenderPass
   return {
     id: 'gain-map',
     fragment: FRAGMENT,
+    rows: OWN_ROWS,
     setUniforms(gl, program) {
       if (!texture) {
         texture = gl.createTexture();

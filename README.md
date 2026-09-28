@@ -1348,7 +1348,11 @@ phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
 in the run's summary; a computer still exports every pixel. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
-(`constrained` or `roomy`) overrides it.
+(`constrained` or `roomy`) overrides it. A big export is also graded in
+bands: the graphics card holds a slice of the picture at a time rather than
+two full copies of it, which on a 48-megapixel still is a few hundred
+megabytes instead of three quarters of a gigabyte — with exactly the same
+pixels (a film stock's halation still needs the whole picture at once).
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —

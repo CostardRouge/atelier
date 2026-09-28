@@ -20,6 +20,7 @@
  * sky at the bottom of the frame.
  */
 
+import { nearRows, OWN_ROWS } from './band-plan';
 import type { CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, IMAGE_UV, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
@@ -372,6 +373,8 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
   return {
     id,
     fragment: finish === 'outline' ? fragment(MAIN_OUTLINE) : fragment(MAIN_GRADE),
+    // The outline reads its neighbours a texel and a half away.
+    rows: finish === 'outline' ? nearRows(2) : OWN_ROWS,
     setUniforms(gl, program) {
       const at = (name: string) => gl.getUniformLocation(program, name);
       if (!uploaded || uploaded.gl !== gl) {

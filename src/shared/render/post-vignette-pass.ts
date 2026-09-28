@@ -6,6 +6,7 @@
  * coordinates, y down from the picture's top, to the delivered frame's.
  */
 
+import { OWN_ROWS } from './band-plan';
 import { GLSL_VERSION, IMAGE_UV, SRGB_TRANSFER } from './glsl';
 import type { RenderPass } from './graph';
 import { postVignetteTerms, type FrameAffine, type PostCropVignette } from './post-vignette';
@@ -67,6 +68,7 @@ export function makePostVignettePass(
   return {
     id: 'post-vignette',
     fragment: FRAGMENT,
+    rows: OWN_ROWS,
     setUniforms(gl, program) {
       gl.uniform3f(at(gl, program, 'u_rowU'), affine[0], affine[1], affine[2]);
       gl.uniform3f(at(gl, program, 'u_rowV'), affine[3], affine[4], affine[5]);
