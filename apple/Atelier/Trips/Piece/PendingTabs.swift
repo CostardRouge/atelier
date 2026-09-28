@@ -29,27 +29,6 @@ struct ContentTabView: View {
     }
 }
 
-// MARK: - LOOK — owned by the Look tab's task (`panels/LookTab.tsx`,
-// `PieceStylePanel.tsx`, `ShadesPanel.tsx`, `HookPicker.tsx`): the opener,
-// the trip's title style, this piece's own look, the cascade, the placement,
-// the shades. Delete when it lands.
-
-struct LookTabView: View {
-    let model: PieceEditorModel
-
-    var body: some View {
-        PieceTabPending(title: "Look",
-                        text: "The opener, the trip's title style, this piece's own look, the cascade, the placement and the shades are coming with the Look tab's own task.") {
-            if !model.isHook {
-                PieceTabFact(label: "This slide", value: "A caption and the closing card keep a fixed look.")
-            }
-            ForEach(model.hookPictureProblems.values.sorted(), id: \.self) { line in
-                PieceTabFact(label: "Opener", value: line)
-            }
-        }
-    }
-}
-
 // MARK: - PICTURE — owned by the Picture tab's task (`panels/PictureTab.tsx`,
 // `LayoutSection.tsx`, `CollageMotionSection.tsx`, `FrameStrip.tsx`, the
 // pan & zoom section): the file and its in point, the layout, the framing,
