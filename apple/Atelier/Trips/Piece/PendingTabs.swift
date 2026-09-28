@@ -9,26 +9,6 @@
 import SwiftUI
 import AtelierKit
 
-// MARK: - CONTENT — owned by the Content tab's task (`panels/ContentTab.tsx`,
-// `SlideDelivery.tsx`, `CameraPanel.tsx`): the slide's text or caption, how
-// it goes out, the day and its offer, the counter and time modes with their
-// real lines, the camera credit. Delete when it lands.
-
-struct ContentTabView: View {
-    let model: PieceEditorModel
-
-    var body: some View {
-        PieceTabPending(title: "Content",
-                        text: "The slide's words, how it goes out, its day, the counter and the camera credit are coming with the Content tab's own task.") {
-            if model.isHook, let content = model.content {
-                PieceTabFact(label: "The badge reads",
-                             value: [content.kicker, content.label, content.headline, content.counter, content.caption]
-                                .compactMap { $0 }.joined(separator: " · "))
-            }
-        }
-    }
-}
-
 // MARK: - PICTURE — owned by the Picture tab's task (`panels/PictureTab.tsx`,
 // `LayoutSection.tsx`, `CollageMotionSection.tsx`, `FrameStrip.tsx`, the
 // pan & zoom section): the file and its in point, the layout, the framing,
