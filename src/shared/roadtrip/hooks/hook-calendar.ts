@@ -23,10 +23,52 @@ import { stageLabel } from '../trip-places';
 import type { TripDoc } from '../trip-types';
 import type { HookDay, HookDayPiece, HookStage } from './hook-variant';
 
+/**
+ * The last calendars built, by the piece they leave out. Everything a calendar
+ * reads is the OTHER pieces, the legs and the trip's two dates — so while a
+ * piece is being edited (a badge dragged across the stage, a slider moved) it
+ * is the very piece left out that changes, and the calendar is the same one.
+ * It used to be rebuilt through `tripCoverage` — ~1.5 ms on a 300-piece trip —
+ * about three times per pointer move of a drag (the audit of 2026-09-22).
+ * Compared by IDENTITY: the document is updated immutably, so an untouched
+ * piece is the same object and a touched one never is.
+ */
+interface CalendarMemo {
+  startDate: string;
+  endDate: string;
+  stages: TripDoc['stages'];
+  others: readonly TripDoc['posts'][number][];
+  calendar: HookDay[];
+}
+const calendars = new Map<string, CalendarMemo>();
+const CALENDARS_KEPT = 16;
+
 export function hookCalendar(trip: TripDoc, excludePostId: string | null): HookDay[] {
+  const key = excludePostId ?? '';
+  const others = trip.posts.filter((post) => post.id !== excludePostId);
+  const held = calendars.get(key);
+  if (
+    held &&
+    held.startDate === trip.startDate &&
+    held.endDate === trip.endDate &&
+    held.stages === trip.stages &&
+    held.others.length === others.length &&
+    held.others.every((post, i) => post === others[i])
+  ) {
+    return held.calendar;
+  }
+  const calendar = buildCalendar({ ...trip, posts: others });
+  calendars.delete(key);
+  calendars.set(key, { startDate: trip.startDate, endDate: trip.endDate, stages: trip.stages, others, calendar });
+  if (calendars.size > CALENDARS_KEPT) calendars.delete(calendars.keys().next().value!);
+  return calendar;
+}
+
+/** The calendar of a trip whose `posts` are already the OTHER pieces. */
+function buildCalendar(trip: TripDoc): HookDay[] {
   const legStarts = new Set(trip.stages.map((stage) => stage.startDate));
   return tripCoverage(trip).days.map((cell) => {
-    const others = cell.posts.filter((post) => post.id !== excludePostId);
+    const others = cell.posts;
     return {
       date: cell.date,
       dayNumber: cell.dayNumber,

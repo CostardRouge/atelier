@@ -31,6 +31,28 @@ const scrubbing = (post: TripPost): TripPost => ({
 });
 
 describe('hookCalendar', () => {
+  it('is kept while only the piece left out changes — a badge dragged — and rebuilt when another does', () => {
+    const { trip, hero } = fixture();
+    const first = hookCalendar(trip, hero.id);
+    // The hero's own badge moved: a new post object, a new trip object.
+    const dragged: TripDoc = {
+      ...trip,
+      posts: trip.posts.map((p) => (p.id === hero.id ? { ...p, badge: { ...p.badge, durationSeconds: 7 } } : p)),
+    };
+    expect(hookCalendar(dragged, hero.id)).toBe(first);
+    // Another piece was published: the calendar is a new one, and says it.
+    const other = trip.posts[0];
+    const published: TripDoc = {
+      ...dragged,
+      posts: dragged.posts.map((p) => (p.id === other.id ? { ...p, publishedAt: 5 } : p)),
+    };
+    const again = hookCalendar(published, hero.id);
+    expect(again).not.toBe(first);
+    expect(again[1].pieces[0].published).toBe(true);
+    // The legs moved: rebuilt too.
+    expect(hookCalendar({ ...published, stages: [...published.stages] }, hero.id)).not.toBe(again);
+  });
+
   it('lists every day, and never counts the piece being composed as telling its own day', () => {
     const { trip, hero } = fixture();
     const cal = hookCalendar(trip, hero.id);
@@ -44,16 +66,22 @@ describe('hookCalendar', () => {
   });
 
   it('lets a published piece stand for its day over a draft, and a pictured one over a bare one', () => {
-    const { trip, hero } = fixture();
+    const { trip: base, hero } = fixture();
+    let trip = base;
     const published = trip.posts.find((p) => p.publishedAt !== null)!;
     const draft = trip.posts.find((p) => p.date === '2025-03-05' && p.publishedAt === null)!;
+    // Documents are updated IMMUTABLY, as the app does (the calendar is kept by identity).
+    const withMedia = (t: TripDoc, id: string, name: string): TripDoc => ({
+      ...t,
+      posts: t.posts.map((p) => (p.id === id ? { ...p, media: { name, size: 1, lastModified: 0 } } : p)),
+    });
     // Neither has a picture: the published one still stands.
     expect(standingPiece(hookCalendar(trip, hero.id)[4])?.id).toBe(published.id);
     // Only the draft has a picture: a flash with nothing to show helps nobody.
-    draft.media = { name: 'draft.jpg', size: 1, lastModified: 0 };
+    trip = withMedia(trip, draft.id, 'draft.jpg');
     expect(standingPiece(hookCalendar(trip, hero.id)[4])?.id).toBe(draft.id);
     // Both do: the published one's picture wins again.
-    published.media = { name: 'published.jpg', size: 1, lastModified: 0 };
+    trip = withMedia(trip, published.id, 'published.jpg');
     expect(standingPiece(hookCalendar(trip, hero.id)[4])?.media?.name).toBe('published.jpg');
     // The hero's own day has no OTHER piece, so nothing stands for it.
     expect(standingPiece(hookCalendar(trip, hero.id)[7])).toBeUndefined();
