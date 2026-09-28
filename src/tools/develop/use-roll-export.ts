@@ -298,7 +298,7 @@ export function useRollExport({
     const { roll: r, files: f, fileFor: fetchFor, interpolation: mode, proxiesOnly: onlyProxies } = latest.current;
     // Each picture through ITS look, from the document — never the live
     // stack, which follows whatever picture is open while the run goes on.
-    const cubeFor = rollCubes(mode);
+    const { cubeFor, missingIn } = rollCubes(mode);
     const targets = ids.flatMap((id) => r.pictures.filter((p) => p.id === id));
     if (targets.length === 0) return;
     setNote(null);
@@ -583,6 +583,11 @@ export function useRollExport({
             failures.push(
               `${picture.ref.name} left without ${lost === 1 ? 'its subject mask' : `${lost} subject masks`}: the model could not be loaded or did not answer`,
             );
+          }
+          // Likewise a look this device cannot resolve: the bake skips it, so
+          // the file left without it, and the run says so.
+          for (const look of await missingIn(picture.grade ?? null)) {
+            failures.push(`${picture.ref.name} left without the look ${look.name}: ${look.reason.replace(/\.$/, '')}`);
           }
           if (hdrRun && out.hdr) {
             if (out.hdr.ultra) {

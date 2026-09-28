@@ -41,11 +41,24 @@ export function loadBuiltinLut(builtinId: string): Promise<{ lut: CubeLut; name:
   return pending;
 }
 
-/** Fetch + parse a built-in by id. Rejects with a readable message. */
+/** What a built-in id this build does not ship says — the words the native app's panel uses too. */
+const GONE_BUILTIN = 'That look is no longer available.';
+
+/**
+ * Fetch + parse a built-in by id. Rejects with a readable message — the one a
+ * restored layer then SHOWS as its `missing` reason, so a network failure is
+ * reworded rather than surfacing as `Failed to fetch`.
+ */
 async function fetchBuiltin(builtinId: string): Promise<{ lut: CubeLut; name: string }> {
   const entry = BUILTIN_LUTS.find((l) => l.id === builtinId);
-  if (!entry) throw new Error('That look is no longer available.');
-  const res = await fetch(entry.url);
+  if (!entry) throw new Error(GONE_BUILTIN);
+  let res: Response;
+  try {
+    res = await fetch(entry.url);
+  } catch {
+    throw new Error(`Could not fetch ${entry.name} — check the connection; the look is kept.`);
+  }
+  if (!res.ok) throw new Error(`Could not fetch ${entry.name}.`);
   const parsed = parseCube(await res.text());
   if (!parsed) throw new Error(`Could not parse ${entry.name}.`);
   return { lut: parsed, name: entry.name };
@@ -53,41 +66,74 @@ async function fetchBuiltin(builtinId: string): Promise<{ lut: CubeLut; name: st
 
 export interface RestoredLayers {
   layers: LutLayer[];
-  /** The raw `.cube` text of every uploaded layer, and the settings of every film layer, by id. */
+  /**
+   * The stored text of every layer that carries one, by id — a film's
+   * settings, a pack reference, an old document's inlined `.cube` — including
+   * a layer that came back `missing`, so its saved form is what was read.
+   */
   customText: Record<string, string>;
 }
 
 /**
- * A stored grade's layers, parsed and ready to bake. A look that no longer
- * exists — a built-in this build dropped, an uploaded cube whose text did not
- * survive — simply does not come back, rather than being graded as identity:
- * a missing look must be visible, not silently neutral.
+ * A stored layer that cannot grade here, kept: named, in its place, its text
+ * carried so `toSaved` writes back exactly what was read, and skipped by the
+ * bake (`activeLayers`). The fallback name is used only where the document
+ * stored none.
+ */
+function unresolved(s: SavedLutLayer, reason: string): LutLayer {
+  const fallback = isFilmLayer(s)
+    ? 'Film stock'
+    : isPackLayer(s)
+      ? 'Pack look'
+      : s.source === 'custom'
+        ? 'Uploaded look'
+        : s.source.replace(/^builtin:/, '');
+  return { ...s, name: s.name || fallback, lut: identityCube(), missing: reason };
+}
+
+/**
+ * A stored grade's layers, parsed and ready to bake. EVERY stored layer comes
+ * back, in its order: one that cannot be resolved here — a built-in this build
+ * no longer ships or could not fetch, an uploaded cube whose text does not
+ * parse, film settings that do not read, a pack look this device's vault does
+ * not hold — returns as a layer carrying `missing`, an identity cube and the
+ * reason the panel shows.
  *
- * A PACK look is the one exception, and for the same reason: its bytes live
- * in the vault rather than in the document, so a device that has not imported
- * the pack yet is an ordinary state, not a broken grade. It comes back as a
- * layer carrying `missing` — named, in its place, skipped by the bake.
+ * Dropping it instead was a silent DATA LOSS, not a display choice: every host
+ * that binds a stack to a document (Develop's `use-roll-grade.ts`, Trips'
+ * `use-trip-grade.ts`) writes the stack back whenever its saved form differs
+ * from what it restored, so merely OPENING a picture rewrote its stored look
+ * without the layer, and the next sync carried the loss to the instance. A
+ * kept layer round-trips (`savedLayers`), so an open writes nothing — and a
+ * look that grades as identity with no word would read as a working grade
+ * that is wrong, so it is never silent either.
  */
 export async function restoreLayers(saved: readonly SavedLutLayer[]): Promise<RestoredLayers> {
   const customText: Record<string, string> = {};
   const layers: LutLayer[] = [];
   for (const s of saved) {
+    // Carried whatever happens below, so a layer that cannot grade still
+    // writes back the text it was read with.
+    if (typeof s.customText === 'string') customText[s.id] = s.customText;
     try {
       if (isFilmLayer(s)) {
         // Generated from its settings, never fetched — and the text goes
         // back out with it, so a revert puts the same numbers back.
         const layer = filmLayerFromSaved(s);
-        if (!layer || !s.customText) continue;
-        customText[s.id] = s.customText;
-        layers.push(layer);
+        layers.push(
+          layer && s.customText
+            ? layer
+            : unresolved(s, 'This film layer lost its settings — remove it and add the stock again.'),
+        );
       } else if (isPackLayer(s)) {
         // A purchased look: the document named it, the vault holds its bytes
-        // (`docs/lut-packs.md` §5.2). A reference that resolves to nothing
-        // here still comes back as a LAYER that says why — the one look in
-        // the suite that is kept without a cube.
+        // (`docs/lut-packs.md` §5.2). A device that has not imported the pack
+        // yet is an ordinary state, not a broken grade.
         const ref = readPackRef(s.customText);
-        if (!ref || !s.customText) continue;
-        customText[s.id] = s.customText;
+        if (!ref) {
+          layers.push(unresolved(s, 'This look’s reference could not be read.'));
+          continue;
+        }
         await loadPacks();
         const lut = await resolvePackLattice(ref);
         const name = s.name || packLookName(ref) || 'Pack look';
@@ -98,15 +144,15 @@ export async function restoreLayers(saved: readonly SavedLutLayer[]): Promise<Re
         );
       } else if (s.source === 'custom') {
         const parsed = s.customText ? parseCube(s.customText) : null;
-        if (!parsed || !s.customText) continue;
-        customText[s.id] = s.customText;
-        layers.push({ ...s, lut: parsed });
+        layers.push(parsed ? { ...s, lut: parsed } : unresolved(s, 'This uploaded look could not be read.'));
       } else {
         const { lut, name } = await loadBuiltinLut(s.source.replace(/^builtin:/, ''));
         layers.push({ ...s, name: s.name || name, lut });
       }
-    } catch {
-      // A look that no longer exists just doesn't come back.
+    } catch (err) {
+      // A built-in this build no longer ships, or could not fetch — and
+      // anything else that throws (the vault's database refusing to open).
+      layers.push(unresolved(s, err instanceof Error && err.message ? err.message : GONE_BUILTIN));
     }
   }
   return { layers, customText };
