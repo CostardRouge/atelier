@@ -136,6 +136,8 @@ struct StudioWorkbench: View {
         .toolbar(compact ? .hidden : .automatic, for: .tabBar)
         #endif
         .toolbar { toolbar }
+        // Pushed over the gallery with a bar of its own: the pill comes too.
+        .taskPill()
         .fileImporter(isPresented: Binding(get: { importing != nil }, set: { if !$0 { importing = nil } }),
                       allowedContentTypes: importing == .files ? InstrumentFileTypes.media + [.folder] : [.folder],
                       allowsMultipleSelection: importing == .files) { result in
