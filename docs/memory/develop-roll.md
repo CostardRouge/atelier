@@ -1170,3 +1170,7 @@ overhanging a cell in a horizontal scroller needs the same room.
 
 Every cell re-rendered on every tick of the open picture's sliders — a roll of hundreds of cells for one picture's change. `Cell` is `memo`, and what it is handed is kept stable: the host's four callbacks are read through a ref and handed as ONE `CellHandlers` for the strip's life (RollEditor passes inline arrows), the Winnow thumbnail as a client and an id rather than a fresh object, and the availability as its KIND alone — `use-roll-media` rebuilds that map, objects and all, on every roll change. A new prop on a cell must be stable too, or the memo quietly stops holding.
 
+## The crop's ASPECT rides a draft too (2026-09-28)
+
+The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
+
