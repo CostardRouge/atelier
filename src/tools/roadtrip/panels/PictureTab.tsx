@@ -14,6 +14,7 @@ import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import type { CollageLead, SlideCollage } from '../../../shared/roadtrip/collage';
 import LayoutSection from './LayoutSection';
 import CollageMotionSection from './CollageMotionSection';
+import PanZoomSection, { type PanZoomSectionProps } from './PanZoomSection';
 import type { PostBadge, PostSlide, TripPost } from '../../../shared/roadtrip/trip-types';
 import { shortHost } from '../../../shared/sources/source-ledger';
 import { useWinnowConnection } from '../../../shared/sources/winnow/use-connection';
@@ -64,6 +65,13 @@ interface PictureTabProps {
   /** How the open slide's picture sits in the frame, and how to change it. */
   framing: Framing;
   onFraming: (framing: Framing) => void;
+  /**
+   * Mirror the picture — its rest and every frame of its move. Absent, a
+   * flip is written through `onFraming` like any other change.
+   */
+  onFlip?: (axis: 'x' | 'y') => void;
+  /** The selected picture's pan and zoom, edited at the needle; null hides it. */
+  panZoom?: Omit<PanZoomSectionProps, 'badge'> | null;
   /** The grade, bound to the trip, to this piece, or to this one picture. */
   grade: TripGradeBinding;
   /** A reel from the linked project wears that project's grade, not this one. */
@@ -171,6 +179,8 @@ export default function PictureTab({
   patchSlide,
   framing,
   onFraming,
+  onFlip,
+  panZoom = null,
   grade,
   linkedToProject,
   develop,
@@ -426,7 +436,7 @@ export default function PictureTab({
             <Button
               size="sm"
               icon={Icons.flipHorizontal}
-              onClick={() => onFraming(flipFraming(framing, 'x'))}
+              onClick={() => (onFlip ? onFlip('x') : onFraming(flipFraming(framing, 'x')))}
               title="Mirror the picture left to right"
             >
               Horizontal
@@ -434,7 +444,7 @@ export default function PictureTab({
             <Button
               size="sm"
               icon={Icons.flipVertical}
-              onClick={() => onFraming(flipFraming(framing, 'y'))}
+              onClick={() => (onFlip ? onFlip('y') : onFraming(flipFraming(framing, 'y')))}
               title="Mirror the picture top to bottom"
             >
               Vertical
@@ -442,6 +452,10 @@ export default function PictureTab({
           </FieldRow>
         </InspectorSection>
       )}
+
+      {/* How the picture MOVES in that frame over the slide — right under the
+          framing it animates, since its rest IS that framing. */}
+      {!isCta && panZoom && <PanZoomSection {...panZoom} badge={cellBadge} />}
 
       {/* The picture's own CORRECTION, one settled row: the sentence the
           sheet writes, the way in, and the way back to as shot. Per SLIDE,

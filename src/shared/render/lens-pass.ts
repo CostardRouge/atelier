@@ -19,11 +19,15 @@
 
 import { GLSL_VERSION, SRGB_TRANSFER } from './glsl';
 import {
+  DEFAULT_LENS,
+  NO_PROFILE_TERMS,
   chromaScales,
   distortionTerms,
   isDefaultLens,
+  isIdentityProfile,
   vignetteTerms,
   type LensCorrection,
+  type LensProfileTerms,
 } from './lens';
 import type { RenderPass } from './graph';
 
@@ -40,6 +44,11 @@ uniform float u_k2;
 uniform vec2 u_chroma;     // red and blue scales; green is the reference at 1.0
 uniform float u_vigAmount;
 uniform float u_vigStart;
+// A MEASURED profile (lens.ts, LensProfileTerms), after the sliders.
+uniform vec4 u_pd;         // distortion d1..d4
+uniform vec3 u_ptr;        // red TCA  v, c, b
+uniform vec3 u_ptb;        // blue TCA v, c, b
+uniform vec3 u_pv;         // vignetting k1..k3, at the source radius
 ${SRGB_TRANSFER}
 
 // Where a corrected point at radius r came from. Mirrors lensSampleRadius in
@@ -47,6 +56,16 @@ ${SRGB_TRANSFER}
 float sampleRadius(float r) {
   float r2 = r * r;
   return r * (1.0 + u_k1 * r2 + u_k2 * r2 * r2);
+}
+
+// Mirrors profileSourceRadius, Horner's form in both.
+float profileRadius(float m) {
+  return m * (1.0 + m * (u_pd.x + m * (u_pd.y + m * (u_pd.z + m * u_pd.w))));
+}
+
+// Mirrors profileChannelRadius: a channel's radius against green's.
+float channelScale(vec3 t, float rs) {
+  return t.x + rs * (t.y + rs * t.z);
 }
 
 // Where to read one channel, at its own scale of the source radius.
@@ -64,7 +83,7 @@ void main() {
   vec2 d = (v_uv - 0.5) * u_span;
   float r = length(d);
   vec2 dir = r > 0.0 ? d / r : vec2(0.0);
-  float rs = sampleRadius(r);
+  float rs = profileRadius(sampleRadius(r));
 
   vec2 uvG = sampleUv(dir, rs, 1.0);
   // Outside the picture is EMPTY, never the edge pixel smeared outwards -- the
@@ -73,22 +92,32 @@ void main() {
   vec4 green = texture(u_src, uvG);
 
   vec3 rgb = green.rgb;
-  if (u_chroma.x != 1.0 || u_chroma.y != 1.0) {
-    vec2 uvR = sampleUv(dir, rs, u_chroma.x);
-    vec2 uvB = sampleUv(dir, rs, u_chroma.y);
+  float scaleR = u_chroma.x * channelScale(u_ptr, rs);
+  float scaleB = u_chroma.y * channelScale(u_ptb, rs);
+  if (scaleR != 1.0 || scaleB != 1.0) {
+    vec2 uvR = sampleUv(dir, rs, scaleR);
+    vec2 uvB = sampleUv(dir, rs, scaleB);
     // A channel whose own scale took it off the picture keeps green's, rather
     // than going black and painting a coloured edge of its own.
     rgb.r = outside(uvR) ? green.r : texture(u_src, uvR).r;
     rgb.b = outside(uvB) ? green.b : texture(u_src, uvB).b;
   }
 
+  float gain = 1.0;
   if (u_vigAmount != 0.0 && r > u_vigStart) {
     float t = (r - u_vigStart) / max(1e-6, 1.0 - u_vigStart);
-    // Squared, so there is no visible ring where the lift begins. A gain on
-    // LIGHT, so it is applied to the decoded value: the lens lost light at the
-    // corner, not code, and multiplying the encoded value would lift a dark
-    // corner three times as much as a bright one (vignetteEncoded, lens.ts).
-    rgb = linearToSrgb(srgbToLinear(rgb) * (1.0 + u_vigAmount * t * t));
+    // Squared, so there is no visible ring where the lift begins.
+    gain = 1.0 + u_vigAmount * t * t;
+  }
+  // The measured vignetting, at the SOURCE radius (profileVignetteGain).
+  float rs2 = rs * rs;
+  gain /= 1.0 + rs2 * (u_pv.x + rs2 * (u_pv.y + rs2 * u_pv.z));
+  if (gain != 1.0) {
+    // A gain on LIGHT, so it is applied to the decoded value: the lens lost
+    // light at the corner, not code, and multiplying the encoded value would
+    // lift a dark corner three times as much as a bright one
+    // (vignetteEncoded, lens.ts).
+    rgb = linearToSrgb(srgbToLinear(rgb) * gain);
   }
 
   outColor = vec4(rgb, green.a);
@@ -102,15 +131,20 @@ void main() {
 export function makeLensPass(
   lens: LensCorrection | null | undefined,
   aspectRatio = 1,
+  /** A measured profile, composed under the sliders — `lens.ts`, `LensProfileTerms`. */
+  profile: LensProfileTerms | null = null,
 ): RenderPass | null {
-  if (!lens || isDefaultLens(lens)) return null;
-  const { k1, k2 } = distortionTerms(lens);
-  const { red, blue } = chromaScales(lens);
-  const { amount, start } = vignetteTerms(lens);
+  const noProfile = isIdentityProfile(profile);
+  if ((!lens || isDefaultLens(lens)) && noProfile) return null;
+  const manual = lens ?? DEFAULT_LENS;
+  const { k1, k2 } = distortionTerms(manual);
+  const { red, blue } = chromaScales(manual);
+  const { amount, start } = vignetteTerms(manual);
+  const p = profile && !noProfile ? profile : NO_PROFILE_TERMS;
   // The frame in a space whose half-DIAGONAL is 1: the corner is then at radius
   // 1 whatever the shape, so the same numbers mean the same thing on a 3:2 frame
-  // and on a 4:5 crop of it. Lensfun's own convention, and the one `lens.ts`
-  // normalises to.
+  // and on a 4:5 crop of it — the unit `lens.ts` normalises to, and the one
+  // `lensfun.ts` converts a profile into.
   const ar = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
   const diagonal = Math.hypot(ar, 1);
 
@@ -125,6 +159,10 @@ export function makeLensPass(
       gl.uniform2f(at('u_chroma'), red, blue);
       gl.uniform1f(at('u_vigAmount'), amount);
       gl.uniform1f(at('u_vigStart'), start);
+      gl.uniform4f(at('u_pd'), p.distortion[0], p.distortion[1], p.distortion[2], p.distortion[3]);
+      gl.uniform3f(at('u_ptr'), p.tcaRed[0], p.tcaRed[1], p.tcaRed[2]);
+      gl.uniform3f(at('u_ptb'), p.tcaBlue[0], p.tcaBlue[1], p.tcaBlue[2]);
+      gl.uniform3f(at('u_pv'), p.vignette[0], p.vignette[1], p.vignette[2]);
     },
   };
 }

@@ -3,7 +3,12 @@ import {
   DEFAULT_LINEAR,
   DEFAULT_LUMA,
   DEFAULT_RADIAL,
+  DEFAULT_COLOUR_RANGE,
+  MASK_OPS,
+  MAX_COLOUR_SAMPLES,
   cloneMask,
+  colourRangeAt,
+  combineMask,
   defaultMask,
   describeMask,
   framePoint,
@@ -13,6 +18,8 @@ import {
   SUBJECT_MODEL,
   smoothStep01,
   type BrushMask,
+  type ColourMask,
+  type ColourSample,
   type LinearMask,
   type LumaMask,
   type RadialMask,
@@ -290,5 +297,66 @@ describe('the record', () => {
     expect(describeMask(luma({ from: 0.7, to: 1 }))).toBe('highlights');
     expect(describeMask(luma({ from: 0.3, to: 0.7 }))).toBe('midtones');
     expect(describeMask(linear({ angle: 45 }))).toBe('linear · 45°');
+  });
+});
+
+describe('combining two masks', () => {
+  it('adds as a union, subtracts and intersects as products', () => {
+    expect(combineMask(0.3, 0.8, 'add')).toBe(0.8);
+    expect(combineMask(0.8, 0.8, 'add')).toBe(0.8);
+    expect(combineMask(1, 0.25, 'subtract')).toBe(0.75);
+    expect(combineMask(0.5, 0.5, 'intersect')).toBe(0.25);
+    // Nothing combined with nothing stays nothing, whatever the op.
+    for (const op of MASK_OPS) expect(combineMask(0, 0, op)).toBe(0);
+  });
+});
+
+describe('a colour range', () => {
+  const blue: ColourSample = { x: 0.5, y: 0.2, r: 0.27, g: 0.51, b: 0.86 };
+  const range = (over: Partial<ColourMask> = {}): ColourMask => ({ kind: 'colour', samples: [blue], range: 0.5, ...over });
+
+  it('takes in the sampled colour fully, and a lighter and darker one of the same hue', () => {
+    expect(colourRangeAt(range(), 0.27, 0.51, 0.86)).toBe(1);
+    expect(colourRangeAt(range(), 0.33, 0.57, 0.92)).toBe(1);
+    expect(colourRangeAt(range(), 0.2, 0.42, 0.75)).toBeGreaterThan(0.9);
+  });
+
+  it('leaves out a red, a green, and a grey of the same brightness', () => {
+    expect(colourRangeAt(range(), 0.86, 0.24, 0.16)).toBe(0);
+    expect(colourRangeAt(range(), 0.3, 0.7, 0.25)).toBe(0);
+    expect(colourRangeAt(range({ range: 0.2 }), 0.49, 0.49, 0.49)).toBe(0);
+  });
+
+  it('widens with Refine, fades rather than cuts, and is decided by the nearest sample', () => {
+    const teal: [number, number, number] = [0.2, 0.62, 0.66];
+    const narrow = colourRangeAt(range({ range: 0.1 }), ...teal);
+    const wide = colourRangeAt(range({ range: 1 }), ...teal);
+    expect(wide).toBeGreaterThan(narrow);
+    const between = colourRangeAt(range({ range: 0.5 }), ...teal);
+    expect(between).toBeGreaterThan(0);
+    expect(between).toBeLessThan(1);
+    const both = range({ samples: [blue, { x: 0, y: 0, r: 0.86, g: 0.24, b: 0.16 }] });
+    expect(colourRangeAt(both, 0.86, 0.24, 0.16)).toBe(1);
+  });
+
+  it('covers nothing with no sample, and reads the pixel only through maskAt’s rgb', () => {
+    expect(colourRangeAt(range({ samples: [] }), 0.27, 0.51, 0.86)).toBe(0);
+    expect(maskAt(range(), 0.5, 0.5, 0.5, 1, [0.27, 0.51, 0.86])).toBe(1);
+    expect(maskAt(range(), 0.5, 0.5, 0.5, 1)).toBe(0);
+  });
+
+  it('reads back clamped and capped, compares by value and clones deeply', () => {
+    const many = Array.from({ length: 9 }, (_, i) => ({ x: i / 10, y: 2, r: 2, g: 0.5, b: -1 }));
+    const read = normaliseMask({ kind: 'colour', samples: [...many, { x: 'junk' }], range: 3 }) as ColourMask;
+    expect(read.samples).toHaveLength(MAX_COLOUR_SAMPLES);
+    expect(read.samples[0]).toEqual({ x: 0, y: 1, r: 1, g: 0.5, b: 0 });
+    expect(read.range).toBe(1);
+    expect(normaliseMask({ kind: 'colour' })).toEqual({ kind: 'colour', samples: [], range: DEFAULT_COLOUR_RANGE });
+    const copy = cloneMask(range()) as ColourMask;
+    expect(sameMask(copy, range())).toBe(true);
+    expect(copy.samples[0]).not.toBe(blue);
+    expect(sameMask(range(), range({ range: 0.6 }))).toBe(false);
+    expect(describeMask(range())).toBe('colour · 1 sample');
+    expect(defaultMask('colour')).toEqual({ kind: 'colour', samples: [], range: DEFAULT_COLOUR_RANGE });
   });
 });

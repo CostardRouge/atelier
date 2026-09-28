@@ -1,3 +1,4 @@
+import { ALL_META } from '../exif/meta-groups';
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FILM_TEXTURE } from '../film/film-texture';
 import { DEFAULT_DEVELOP } from './develop';
@@ -32,7 +33,7 @@ function sample(): RollDoc {
   );
   return {
     ...doc,
-    export: { longEdge: 2048, quality: 0.85, replace: true, hdr: true, hdrStops: 3 },
+    export: { targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off', watermark: false }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard', watermark: true }], replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false }, watermark: { text: '© {creator}', position: 'bottom-left', size: 3, opacity: 0.5, tone: 'dark' } },
   };
 }
 
@@ -58,10 +59,23 @@ describe('the roll file', () => {
     const imported = rollDocFromFile(parsed.file, 9000, 'local');
     expect(imported.id).not.toBe(original.id);
     expect(imported).toMatchObject({ sourceId: 'local', createdAt: 9000, updatedAt: 9000, name: original.name });
-    // Each picture's look travels with it.
-    expect(imported.pictures).toEqual(original.pictures);
+    // Each picture's look travels with it — under a fresh id (below).
+    const withoutId = (pictures: RollDoc['pictures']) => pictures.map((p) => ({ ...p, id: '' }));
+    expect(withoutId(imported.pictures)).toEqual(withoutId(original.pictures));
+    expect(imported.pictures[0].id).not.toBe(original.pictures[0].id);
     expect(imported.pictures[0].grade?.output).toBe('rec709-to-srgb');
     expect(imported.export).toEqual(original.export);
+  });
+
+  it('gives every picture a fresh id, so one file imported twice is two rolls that share nothing', () => {
+    const parsed = parseRollFile(serializeRollFile(toRollFile(sample(), 0)));
+    if (!parsed.ok) throw new Error(parsed.error);
+    let n = 0;
+    const first = rollDocFromFile(parsed.file, 1, 'local', () => `a${++n}`);
+    const second = rollDocFromFile(parsed.file, 2, 'local', () => `b${++n}`);
+    expect(first.pictures.map((p) => p.id)).toEqual(['a1']);
+    expect(second.pictures.map((p) => p.id)).toEqual(['b2']);
+    expect(parsed.file.pictures[0].id).toBe('p1');
   });
 
   it('hands a pre-v5 file’s one look to every picture', () => {

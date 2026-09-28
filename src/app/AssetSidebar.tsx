@@ -35,6 +35,7 @@ import {
 } from '../shared/telemetry/time-scale';
 import { useInViewport } from '../shared/lib/use-in-viewport';
 import { useObjectUrls } from '../shared/lib/use-object-urls';
+import { useDrawableFiles } from '../shared/media/use-drawable-files';
 import { readEffectiveExif, vouchedExif } from '../shared/exif/read-exif';
 import { exposureSummary } from '../shared/exif/exif-summary';
 import { captureInput } from '../shared/develop/capture-files';
@@ -327,7 +328,8 @@ export default function AssetSidebar({
     }
     return files;
   }, [viewable, viewing]);
-  const viewUrls = useObjectUrls(viewWindow);
+  // A HEIF or a JPEG XL the browser refuses is drawn through the suite's own decoder.
+  const viewUrls = useObjectUrls(useDrawableFiles(viewWindow));
   // Only while the deck is open: subscribed at rest, the whole list
   // re-rendered once per cover that landed.
   const metaVersion = useAssetMetaVersion(viewing !== null);

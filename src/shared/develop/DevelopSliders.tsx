@@ -1,4 +1,4 @@
-import SectionLegend from '../ui/SectionLegend';
+import DevelopFold from './DevelopFold';
 import { Icons } from '../ui/icons';
 import { DEVELOP_RANGES, signed, type DevelopKey, type DevelopRange, type DevelopSettings } from './develop';
 
@@ -39,21 +39,27 @@ const GROUPS: ReadonlyArray<{ legend: string; keys: readonly DevelopKey[]; hint:
 export default function DevelopSliders({
   value,
   onChange,
+  foldPrefix = '',
 }: {
   value: DevelopSettings;
   onChange: (key: DevelopKey, v: number) => void;
+  /** Keeps a LAYER's folds apart from the picture's (`layer.`). */
+  foldPrefix?: string;
 }) {
   return (
     <>
       {GROUPS.map((group) => (
-        <div key={group.legend} className="flex flex-col gap-2">
-          <SectionLegend label={group.legend}>
-            <p>{group.hint}</p>
-          </SectionLegend>
+        <DevelopFold
+          key={group.legend}
+          id={`${foldPrefix}${group.legend.toLowerCase()}`}
+          title={group.legend}
+          info={<p>{group.hint}</p>}
+          marked={group.keys.some((key) => value[key] !== 0)}
+        >
           {group.keys.map((key) => (
             <DevelopSlider key={key} k={key} value={value[key]} onChange={(v) => onChange(key, v)} />
           ))}
-        </div>
+        </DevelopFold>
       ))}
     </>
   );
@@ -73,9 +79,12 @@ export function RangeSlider({
   range,
   reset = 0,
   printed,
+  swatch,
   onChange,
 }: {
   label: string;
+  /** A colour the row is ABOUT — a mixer band's hue — drawn as a chip before the name. */
+  swatch?: string;
   value: number;
   range: DevelopRange;
   /** Where a double-click puts it — 0 for a develop's fields, 1 for a gamma. */
@@ -96,6 +105,13 @@ export function RangeSlider({
             aria-hidden="true"
             className={`inline-block w-1.5 h-1.5 rounded-full bg-accent transition-opacity ${changed ? 'opacity-100' : 'opacity-0'}`}
           />
+          {swatch && (
+            <span
+              aria-hidden="true"
+              className="inline-block w-2.5 h-2.5 rounded-full self-center border border-line"
+              style={{ background: swatch }}
+            />
+          )}
           <span className={`text-xs truncate ${changed ? 'font-semibold text-ink' : 'text-ink'}`}>{label}</span>
         </span>
         <span className="inline-flex items-baseline gap-1">

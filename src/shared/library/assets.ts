@@ -58,7 +58,7 @@ const VIDEO_EXTENSIONS = ['mp4', 'mov', 'm4v', 'webm'];
  * dropped them at the library's door.
  */
 const ENCODED_IMAGE_EXTENSIONS = [
-  'jpg', 'jpeg', 'png', 'heic', 'heif', 'hif', 'webp', 'tif', 'tiff', 'avif', 'gif',
+  'jpg', 'jpeg', 'png', 'heic', 'heif', 'hif', 'jxl', 'webp', 'tif', 'tiff', 'avif', 'gif',
 ];
 /** Camera RAW — handles are kept even though the browser can't decode them. */
 const RAW_EXTENSIONS = [
@@ -99,9 +99,35 @@ export function isRawImage(name: string): boolean {
   return RAW_EXTENSIONS.includes(splitName(name).ext);
 }
 
+/** Human label for an image file: `RAW`, `JPEG`, or the bare extension. */
+export function imageTypeLabel(name: string): string {
+  const { ext } = splitName(name);
+  if (isRawImage(name)) return 'RAW';
+  if (ext === 'jpg' || ext === 'jpeg') return 'JPEG';
+  return ext ? ext.toUpperCase() : 'image';
+}
+
 /** True where any browser draws this file without a decoder of our own. */
 export function isDrawableImage(name: string): boolean {
   return DRAWABLE_IMAGE_EXTENSIONS.includes(splitName(name).ext);
+}
+
+/**
+ * Formats this suite decodes ITSELF where the browser will not
+ * (`media/wasm-still.ts`): HEIF in all three spellings and JPEG XL. TIFF is
+ * not one — the maintainer ruled it out for now (`docs/lightroom-gaps.md` §8).
+ */
+const SHIPPED_DECODER_EXTENSIONS = ['heic', 'heif', 'hif', 'jxl'];
+
+/**
+ * True where the suite can put this file's pixels on screen in ANY browser:
+ * drawn by the browser, or decoded by a decoder shipped here. Wider than
+ * {@link isDrawableImage}, which still ranks a capture's files — a `.HIF`
+ * beside its `.ARW` stays the second choice, since the render inside the RAW
+ * is the same photograph for no decoder at all.
+ */
+export function isDecodableImage(name: string): boolean {
+  return isDrawableImage(name) || SHIPPED_DECODER_EXTENSIONS.includes(splitName(name).ext);
 }
 
 /**

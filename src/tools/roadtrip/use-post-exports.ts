@@ -4,9 +4,11 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
+import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
 import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
+import { exportEdge } from '../../shared/media/photo-frame';
 import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
 import { deliveryFor } from '../../shared/develop/delivery-source';
 import { exportPlan, type PlanItem } from '../../shared/roadtrip/export-plan';
@@ -34,6 +36,7 @@ import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 import { startTask, type TaskHandle } from '../../shared/tasks/tasks';
 import { isAbortError } from '../../shared/sources/fetch-options';
+import type { ExifData } from '../../shared/exif/exif-parser';
 
 export interface PostExportInputs {
   trip: TripDoc;
@@ -68,12 +71,12 @@ export interface PostExportInputs {
    */
   hookPictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The hook picture's exposure line, when the piece credits its camera —
-   * measured in the editor, so the PNG deck says what the stage says. The
+   * The hook picture's effective EXIF, when the piece credits its camera —
+   * read in the editor, so the PNG deck says what the stage says. The
    * video paths need nothing: they burn in `hookElements`, which already
    * carries the credit.
    */
-  exposure?: string | null;
+  exif?: ExifData | null;
   /** The badge's elements at a moment, when the opener rewrites its words. */
   hookElementsAt: ElementsAt | null;
   block: HookBlock | null;
@@ -189,7 +192,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const file = base(slide.media);
       if (!file || swap.has(file) || classifyPart(file.name) === 'video') continue;
       try {
-        const chosen = await deliveryFor(file, slide.framing, out, (line) => setExporting(line));
+        // A picture that moves needs the pixels of its CLOSEST frame, not of its rest.
+        const chosen = await deliveryFor(file, deepestFraming(slide.framing, slide.motion), out, (line) => setExporting(line));
         if (chosen.file !== file) swap.set(file, chosen.file);
       } catch {
         // Knowing nothing about a picture is never a reason to drop it: the
@@ -285,6 +289,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         // The hook's own framing, so the burned-in picture is cropped where
         // the preview showed it — the PNG deck goes through the same value.
         framing: post.badge.framing,
+        // And how it moves over the hook, on the clock the stage plays it on.
+        motion: {
+          motion: post.badge.motion ?? null,
+          seconds: inputs.hookLength,
+          openerSeconds: inputs.hook?.seconds ?? 0,
+        },
         lut: inputs.lutFor(inputs.hookSlide),
         film: inputs.filmFor(inputs.hookSlide),
         onProgress,
@@ -305,7 +315,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           ? await (async () => {
               // The hook's collage, painted: its cells decoded and graded
               // exactly as the piece export does for any collage slide.
-              const cells = await loadCollageSources(inputs.hookSlide, post.badge.collage!, inputs.resolve);
+              const cells = await loadCollageSources(inputs.hookSlide, post.badge.collage!, inputs.resolve, { maxEdge: exportEdge() });
               try {
                 return await exportHookStillVideo({
                   ...shared,
@@ -377,6 +387,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       shades: isHook ? post.badge.shades : undefined,
       block: isHook ? inputs.block : null,
       framing: slide.framing,
+      // A picture that moves in its frame moves on this slide's own clock.
+      motion: {
+        motion: slide.motion,
+        seconds: item.seconds,
+        openerSeconds: isHook ? (inputs.hook?.seconds ?? 0) : 0,
+      },
       lut: inputs.lutFor(slide),
       film: inputs.filmFor(slide),
       onProgress,
@@ -384,7 +400,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     // A collage is PAINTED, whatever its cells hold: every cell's picture
     // decoded, each graded through the slide's grade with its own develop.
     if (slide.collage) {
-      const cells = await loadCollageSources(slide, slide.collage, inputs.resolve);
+      const cells = await loadCollageSources(slide, slide.collage, inputs.resolve, { maxEdge: exportEdge() });
       try {
         return await exportHookStillVideo({
           ...shared,
@@ -472,7 +488,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           timeSeconds: inputs.timeSeconds,
           resolve,
           pictures: inputs.hookPictures,
-          exposure: inputs.exposure,
+          exif: inputs.exif,
           lutFor: inputs.lutFor,
           filmFor: inputs.filmFor,
           include: (slide) => wanted.has(slide.position),
@@ -607,7 +623,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         timeSeconds: inputs.timeSeconds,
         resolve,
         pictures: inputs.hookPictures,
-        exposure: inputs.exposure,
+        exif: inputs.exif,
         lutFor: inputs.lutFor,
         filmFor: inputs.filmFor,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),

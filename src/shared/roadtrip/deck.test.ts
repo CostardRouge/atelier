@@ -356,6 +356,26 @@ describe('deckSlides — medium and screen time', () => {
     expect(deck.map((s) => s.speed)).toEqual([2, 1, 0.5, 1]);
   });
 
+  it('delivers a photograph that moves in its frame as a video under auto', () => {
+    const p = post();
+    p.badge.motion = { keys: [{ at: 0, scale: 1.2, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.motion = { keys: [{ at: 0, scale: 1.5, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
+    const still = createPostSlide({ name: 'IMG_3.JPG', size: 1, lastModified: 1 });
+    const deck = deckSlides(trip(), { ...p, slides: [slide, still] });
+    expect(deck[0]).toMatchObject({ medium: 'video', reason: 'animated' });
+    expect(deck[0].motion).toEqual(p.badge.motion);
+    expect(deck[1]).toMatchObject({ medium: 'video', reason: 'animated' });
+    expect(deck[2]).toMatchObject({ medium: 'image', motion: null });
+  });
+
+  it('keeps a moving picture a still when the author asks for one — drawn at rest', () => {
+    const slide = createPostSlide({ name: 'IMG_2.JPG', size: 1, lastModified: 1 });
+    slide.motion = { keys: [{ at: 0, scale: 1.5, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
+    slide.medium = 'image';
+    expect(deckSlides(trip(), post({ slides: [slide] }))[1]).toMatchObject({ medium: 'image', reason: 'settled' });
+  });
+
   it('reads an odd stored speed as “as shot”', () => {
     const p = post({ media: { name: 'DJI_0001.MP4', size: 1, lastModified: 1 } });
     p.badge.videoSpeed = NaN;

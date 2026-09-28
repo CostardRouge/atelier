@@ -30,6 +30,7 @@ import { hookContextFor } from './hooks/hook-context';
 import { hookElementsAt, type ElementsAt } from './hooks/hook-elements';
 import type { HookPicture, ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
+import type { ExifData } from '../exif/exif-parser';
 
 /** What one slide is made of, bar its picture, its grade and its clock. */
 export interface SlideRender {
@@ -67,12 +68,13 @@ export function slideRender(
    */
   pictures?: ReadonlyMap<string, HookPicture>,
   /**
-   * The hook picture's exposure line, measured by the caller from its EXIF —
-   * the badge's camera credit, drawn only when the piece asks for it. Passed
-   * in for the same reason the pictures are: reading a file is not this
-   * module's job, and every surface that draws a deck must draw the same line.
+   * The hook picture's effective EXIF, READ by the caller — what the badge's
+   * camera credit is composed from, drawn only when the piece asks for it.
+   * Passed in for the same reason the pictures are: reading a file is not
+   * this module's job, and every surface that draws a deck must draw the same
+   * credit. Undefined and null both mean "the picture says nothing".
    */
-  exposure?: string | null,
+  exif?: ExifData | null,
 ): SlideRender {
   if (slide.kind === 'cta') {
     const cta = ctaLayout(trip.cta, aspect);
@@ -114,7 +116,9 @@ export function slideRender(
     referenceDate: post.badge.referenceDate,
     showPin: post.badge.showPin,
     showExif: post.badge.showExif,
-    exposure,
+    exif: exif ?? null,
+    camera: post.badge.camera ?? null,
+    cameraNames: trip.cameraNames ?? null,
     overrides: post.badge.textOverrides,
   });
 

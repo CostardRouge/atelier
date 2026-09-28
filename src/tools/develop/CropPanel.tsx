@@ -5,9 +5,9 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
-import { FieldRow, InspectorSection, RangeField } from '../../shared/ui/Inspector';
+import { FieldRow, RangeField } from '../../shared/ui/Inspector';
+import DevelopFold from '../../shared/develop/DevelopFold';
 import { Icons } from '../../shared/ui/icons';
-import SectionLegend from '../../shared/ui/SectionLegend';
 import Segmented from '../../shared/ui/Segmented';
 import type { RollBorder } from '../../shared/develop/border-layout';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
@@ -64,9 +64,10 @@ export default function CropPanel({
   const touched = !isDefaultFraming(framing) || aspect !== 'original';
   return (
     <>
-      <InspectorSection
-        id="develop.crop"
+      <DevelopFold
+        id="crop"
         title="Crop"
+        marked={touched}
         info={
           <>
             <p>
@@ -162,15 +163,19 @@ export default function CropPanel({
             Vertical
           </Button>
         </FieldRow>
-      </InspectorSection>
+      </DevelopFold>
       {verbs.length > 0 && (
-        <div className="flex flex-col gap-2 pt-3 border-t border-line">
-          <SectionLegend label="Apply crop to…">
+        <DevelopFold
+          id="crop-apply"
+          title="Apply crop to…"
+          defaultOpen={false}
+          info={
             <p>
               This format, zone, rotation and flips written onto other pictures, now, each as its own copy.
               A zone that would fall off a picture of another shape is held at its edge.
             </p>
-          </SectionLegend>
+          }
+        >
           {verbs.map((verb) => (
             <div key={verb.id} className="flex flex-col items-start gap-1">
               <button
@@ -186,7 +191,7 @@ export default function CropPanel({
               {verb.hint && <span className="font-mono text-3xs text-faint leading-relaxed">{verb.hint}</span>}
             </div>
           ))}
-        </div>
+        </DevelopFold>
       )}
       <BorderSection
         picture={picture}

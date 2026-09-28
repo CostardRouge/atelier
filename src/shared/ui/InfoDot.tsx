@@ -29,24 +29,7 @@ export default function InfoDot({
 
   return (
     <>
-      <button
-        type="button"
-        onClick={() => setOpen((o) => !o)}
-        aria-expanded={open}
-        aria-controls={id}
-        aria-label={`About ${about}`}
-        title={open ? 'Hide the note' : 'What is this?'}
-        /* The ring is 16px so it sits on the cap height of a legend; the
-           invisible ::after gives it a 32px touch target, which is what a
-           thumb actually needs. */
-        className={`relative flex-none w-4 h-4 inline-grid place-items-center align-[-0.15em] rounded-full border font-serif text-2xs leading-none cursor-pointer transition-colors after:absolute after:-inset-2 after:content-[''] ${
-          open
-            ? 'border-accent bg-accent-wash text-accent-ink'
-            : 'border-line-strong bg-transparent text-muted hover:text-accent-ink hover:border-accent'
-        }`}
-      >
-        i
-      </button>
+      <InfoDotButton about={about} open={open} controls={id} onToggle={() => setOpen((o) => !o)} />
       {open && (
         <span
           id={id}
@@ -56,5 +39,42 @@ export default function InfoDot({
         </span>
       )}
     </>
+  );
+}
+
+/**
+ * The dot alone, for a caller that places the note itself — a `FieldRow`
+ * puts it under the CONTROL's column, not beside the label.
+ */
+export function InfoDotButton({
+  about,
+  open,
+  controls,
+  onToggle,
+}: {
+  about: string;
+  open: boolean;
+  controls: string;
+  onToggle: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      onClick={onToggle}
+      aria-expanded={open}
+      aria-controls={controls}
+      aria-label={`About ${about}`}
+      title={open ? 'Hide the note' : 'What is this?'}
+      /* The ring is 16px so it sits on the cap height of a legend; the
+         invisible ::after gives it a 32px touch target, which is what a
+         thumb actually needs. */
+      className={`relative flex-none w-4 h-4 inline-grid place-items-center align-[-0.15em] rounded-full border font-serif text-2xs leading-none cursor-pointer transition-colors after:absolute after:-inset-2 after:content-[''] ${
+        open
+          ? 'border-accent bg-accent-wash text-accent-ink'
+          : 'border-line-strong bg-transparent text-muted hover:text-accent-ink hover:border-accent'
+      }`}
+    >
+      i
+    </button>
   );
 }

@@ -1320,3 +1320,39 @@ describe('migrateTripDoc — v26 → v27, the stored destination is dropped', ()
     expect(tripRouteLabel(migrateTripDoc(v26))).toBe('Perth → Cairns');
   });
 });
+
+describe('migrateTripDoc — v27 → v28, a picture may move in its frame', () => {
+  const v27 = () => {
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
+    const post = createTripPost('carousel', '2025-03-27', 'Cliffs');
+    post.slides = [createPostSlide(null)];
+    post.badge.collage = { template: 'grid-2x2', cells: [{}] } as never;
+    delete (post.badge as Partial<typeof post.badge>).motion;
+    delete (post.slides[0] as Partial<(typeof post.slides)[0]>).motion;
+    return { ...doc, version: 27, posts: [post] } as TripDoc;
+  };
+
+  it('holds every picture still — hook, slides and cells', () => {
+    const doc = migrateTripDoc(v27());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.posts[0].badge.motion).toBeNull();
+    expect(doc.posts[0].slides[0].motion).toBeNull();
+    expect(doc.posts[0].badge.collage?.cells[0].motion).toBeNull();
+  });
+
+  it('keeps a sound motion and refuses junk', () => {
+    const doc = v27();
+    doc.posts[0].badge.motion = { keys: [{ at: 0, scale: 2, x: 0, y: 0 }], easing: 'linear', start: 'slide' };
+    (doc.posts[0].slides[0] as { motion?: unknown }).motion = { keys: 'fast' };
+    const migrated = migrateTripDoc(doc);
+    expect(migrated.posts[0].badge.motion?.keys).toEqual([{ at: 0, scale: 2, x: 0, y: 0 }]);
+    expect(migrated.posts[0].slides[0].motion).toBeNull();
+  });
+
+  it('never gives a new piece a motion to inherit', () => {
+    const post = createTripPost('reel', '2025-03-27', 'Cliffs');
+    expect(post.badge.motion).toBeNull();
+    expect(createPostSlide(null).motion).toBeNull();
+    expect('motion' in hookDefaultsFrom(post.badge)).toBe(false);
+  });
+});

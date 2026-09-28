@@ -9,7 +9,9 @@ import {
   stripLayout,
   timeAtX,
   xAtTime,
+  slideMotionMarks,
 } from './deck-strip';
+import { createCollage } from './collage';
 
 // A hook of 5s, a still of 3s, a half-second clip, the closing card of 3s —
 // at 40 px a second with a 24 px floor and 2 px between cells.
@@ -129,5 +131,26 @@ describe('screenLength', () => {
   it('caps a clip to what is left after its in point', () => {
     expect(screenLength(slide, 3)).toBe(2);
     expect(screenLength({ ...slide, speed: 2 }, 3)).toBe(1);
+  });
+});
+
+describe('slideMotionMarks', () => {
+  const m = (at: number) => ({ keys: [{ at, scale: 2, x: 0, y: 0 }], easing: 'linear' as const, start: 'slide' as const });
+
+  it('marks the lead\'s frames and its rest', () => {
+    expect(slideMotionMarks({ motion: m(0), collage: null }, 4)).toEqual([0, 4]);
+    expect(slideMotionMarks({ motion: null, collage: null }, 4)).toEqual([]);
+  });
+
+  it('merges a drawn cell\'s frames and leaves a kept cell out', () => {
+    const collage = createCollage('stack-2')!;
+    const cells = [{ ...collage.cells[0], motion: m(0.5) }, { ...collage.cells[0], motion: m(0.25) }];
+    const marks = slideMotionMarks({ motion: m(0), collage: { ...collage, cells } }, 4);
+    // Cell 3 is past the two-row template: kept, not drawn, not marked.
+    expect(marks).toEqual([0, 2, 4]);
+  });
+
+  it('waits for the opener when the motion does', () => {
+    expect(slideMotionMarks({ motion: { ...m(0), start: 'after-opener' }, collage: null }, 5, 1)).toEqual([1, 5]);
   });
 });

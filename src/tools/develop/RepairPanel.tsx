@@ -1,4 +1,4 @@
-import SectionLegend from '../../shared/ui/SectionLegend';
+import DevelopFold from '../../shared/develop/DevelopFold';
 import Segmented from '../../shared/ui/Segmented';
 import Button from '../../shared/ui/Button';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
@@ -95,10 +95,12 @@ export default function RepairPanel({
   const setFeather = (feather: number) => (selected ? onSelectedChange({ feather }) : onTool({ feather }));
   const suffix = selected ? ' · this patch' : '';
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label={`Repair${patches.length ? ` · ${describePatches(patches)}` : ''}`}>
-        <p>{HINT}</p>
-      </SectionLegend>
+    <DevelopFold
+      id="repair"
+      title={`Repair${patches.length ? ` · ${describePatches(patches)}` : ''}`}
+      info={<p>{HINT}</p>}
+      marked={patches.length > 0}
+    >
       <div className="flex items-center gap-2">
         <Button
           size="sm"
@@ -223,6 +225,6 @@ export default function RepairPanel({
           </button>
         </div>
       )}
-    </div>
+    </DevelopFold>
   );
 }

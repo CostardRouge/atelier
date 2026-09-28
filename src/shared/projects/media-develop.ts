@@ -20,6 +20,15 @@ export interface SavedDevelop {
    * a develop without one restores by name alone, as every trim does.
    */
   hash?: string;
+  /**
+   * Who wrote it, when it was not the Studio: `roadtrip` is the hook's
+   * correction sent across the bridge (`hook-scene.ts`, `withHookDevelop`).
+   * A send replaces only an entry it wrote itself, and an unlink takes only
+   * that one back out; an entry the author set in the Studio carries no mark,
+   * so a Studio edit of a sent develop makes it theirs (`writeDevelop` writes
+   * none).
+   */
+  via?: 'roadtrip';
 }
 
 /** What to persist for a media — null when it is back to as shot. */
@@ -77,7 +86,11 @@ export function normaliseDevelops(raw: unknown): Record<string, SavedDevelop> {
     const v = value as Record<string, unknown>;
     const settings = developOrNull(v.settings);
     if (!settings) continue;
-    out[key] = typeof v.hash === 'string' && v.hash ? { settings, hash: v.hash } : { settings };
+    out[key] = {
+      settings,
+      ...(typeof v.hash === 'string' && v.hash ? { hash: v.hash } : {}),
+      ...(v.via === 'roadtrip' ? { via: 'roadtrip' as const } : {}),
+    };
   }
   return out;
 }

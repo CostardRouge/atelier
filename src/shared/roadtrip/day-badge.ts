@@ -43,6 +43,16 @@ import {
   type TimeAgoWords,
 } from './time-ago';
 import type { TripDoc, TripPost } from './trip-types';
+import type { ExifData } from '../exif/exif-parser';
+import { cameraFacts, factsLine, type CameraFacts } from '../exif/camera-facts';
+import {
+  FRENCH_CAMERA_WORDS,
+  cameraWordsOf,
+  defaultPlateSpec,
+  readPlateSpec,
+  type CameraPlateSpec,
+  type CameraWords,
+} from '../overlay/camera-plate';
 
 /** What the headline counts. */
 export type CounterMode =
@@ -114,6 +124,12 @@ export interface BadgeWords {
   pin: string;
   /** Everything the temporal line says — see time-ago.ts. */
   time: TimeAgoWords;
+  /**
+   * The camera plate's words — "Shot on", each fact's label. Optional: a trip
+   * written before the plate existed has none, and reads the English defaults
+   * through `cameraWordsOf`.
+   */
+  camera?: CameraWords;
 }
 
 export const DEFAULT_BADGE_WORDS: BadgeWords = {
@@ -133,6 +149,7 @@ export const FRENCH_BADGE_WORDS: BadgeWords = {
   at: 'à',
   pin: '\u25C6',
   time: { ...FRENCH_TIME_AGO_WORDS },
+  camera: { ...FRENCH_CAMERA_WORDS, tags: { ...FRENCH_CAMERA_WORDS.tags } },
 };
 
 export const WORD_FIELDS: readonly {
@@ -162,6 +179,21 @@ export interface BadgeContent {
   timing: string | null;
   /** What took it — "DJI Mini 4 Pro · 24 mm · ƒ/1.7 · 1/240 · ISO 100". */
   exif: string | null;
+  /**
+   * The camera credit COMPOSED — its facts, the author's layout and place,
+   * the trip's words — when it is more than the plain line under the badge.
+   * Absent or null, `exif` is drawn as the line it always was; present, the
+   * layout decides where and how (`overlay/camera-plate.ts`). Data, not
+   * geometry: which side it hangs from is the layout's to know.
+   */
+  plate?: CameraPlateInput | null;
+}
+
+/** Everything a camera plate is drawn from, bar where it lands. */
+export interface CameraPlateInput {
+  facts: CameraFacts;
+  spec: CameraPlateSpec;
+  words: CameraWords;
 }
 
 export interface BadgeOptions {
@@ -189,6 +221,16 @@ export interface BadgeOptions {
    * heading tape and the battery gauge hold.
    */
   exposure?: string | null;
+  /**
+   * The hook picture's effective EXIF, as the caller READ it. Given (even as
+   * null), it replaces `exposure`: the credit is then composed from facts —
+   * `camera` says which and how — rather than handed over as a finished line.
+   */
+  exif?: ExifData | null;
+  /** The piece's camera plate; absent is the legacy line under the badge. */
+  camera?: CameraPlateSpec | null;
+  /** The trip's display names for bodies, keyed by the name the file gives. */
+  cameraNames?: Readonly<Record<string, string>> | null;
   /**
    * Free text replacing a computed piece. An empty string means "computed",
    * not "blank" — clearing the field has to give the derived value back, or an
@@ -218,15 +260,28 @@ function timingFor(post: TripPost, opts: BadgeOptions): string | null {
 }
 
 /**
- * The camera line, or null. Asked for and measured are both required: the
- * toggle without a picture that says anything draws nothing, and a picture
- * that says plenty draws nothing until it is asked for. An author who wants
- * the line over a picture with no EXIF writes it as an override, like every
- * other piece.
+ * The camera credit: its line, and — when the author composed it — the plate.
+ * Asked for and measured are both required: the toggle over a picture that
+ * says nothing draws nothing, and a picture that says plenty draws nothing
+ * until it is asked for. An author who wants a credit over a picture with no
+ * EXIF writes it as an override, like every other piece, and an override is
+ * always the plain line.
  */
-function exifFor(opts: BadgeOptions): string | null {
-  if (!opts.showExif) return null;
-  return opts.exposure?.trim() || null;
+function exifFor(opts: BadgeOptions): { exif: string | null; plate: CameraPlateInput | null } {
+  if (!opts.showExif) return { exif: null, plate: null };
+  // The legacy path: a finished line handed over by the caller.
+  if (opts.exif === undefined) return { exif: opts.exposure?.trim() || null, plate: null };
+  const facts = cameraFacts(opts.exif, opts.cameraNames);
+  const spec = opts.camera ? readPlateSpec(opts.camera) : defaultPlateSpec();
+  const line = factsLine(facts, spec.fields) || null;
+  if (!line) return { exif: null, plate: null };
+  // The plain line under the badge is the PIECE it always was — same size,
+  // same place, same element — so a plate that is only that draws nothing new.
+  const plain = spec.layout === 'line' && spec.place === 'badge' && spec.size === 1;
+  return {
+    exif: line,
+    plate: plain ? null : { facts, spec, words: cameraWordsOf(opts.words.camera) },
+  };
 }
 
 /** Apply the author's free text over the derived pieces. */
@@ -236,6 +291,8 @@ function applyOverrides(
 ): BadgeContent {
   if (!overrides) return content;
   const out = { ...content };
+  // A credit the author wrote is a line of their own: it replaces the plate.
+  if (overrides.exif?.trim()) delete out.plate;
   for (const piece of [
     'kicker',
     'label',
@@ -390,6 +447,7 @@ export function badgeContent(
   const pieces = counterPieces(trip, post, opts.mode, opts.words, opts.showPin);
   if (!pieces) return null;
 
+  const credit = exifFor(opts);
   return applyOverrides(
     {
       kicker: kickerFor(trip),
@@ -398,7 +456,10 @@ export function badgeContent(
       counter: pieces.counter,
       caption: pieces.caption,
       timing: timingFor(post, opts),
-      exif: exifFor(opts),
+      exif: credit.exif,
+      // Only when there is one, so a badge without a plate is the very
+      // record it always was.
+      ...(credit.plate ? { plate: credit.plate } : {}),
     },
     opts.overrides,
   );

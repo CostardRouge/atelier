@@ -1,3 +1,4 @@
+import InfoDot from '../ui/InfoDot';
 import { useMemo, useState } from 'react';
 import { readFilmSettings, type FilmSettings } from '../film/emulsion';
 import { isFilmLayer } from '../film/film-layer';
@@ -11,7 +12,7 @@ import FilmTextureDials from './FilmTextureDials';
 import { FAVOURITES_NODE, FILM_PICK, galleryNodes, packPickId, readPackPick } from './gallery-nodes';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
 import { looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
-import { MAX_LAYER_INTENSITY } from './lut-stack';
+import { MAX_LAYER_INTENSITY, activeLayers } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
 import { useLutFavourites } from './use-lut-favourites';
@@ -97,9 +98,8 @@ export default function GradePanel({
     }
   };
 
-  const activeCount = stack.layers.filter(
-    (l) => l.enabled && l.intensity > 0,
-  ).length;
+  // A look that cannot grade here is not active, however it is switched.
+  const activeCount = activeLayers(stack.layers).length;
 
   // Conversion LUTs are authored for a Rec.709 reference display (~gamma 2.4)
   // while a browser shows ~2.2, so a look can read flatter here than intended.
@@ -276,9 +276,10 @@ export default function GradePanel({
               </IconButton>
             </div>
             {layer.missing ? (
-              /* A purchased look whose lattice this device does not hold: the
-                 layer stays, in its place, and says why rather than grading as
-                 identity (`docs/lut-packs.md` §5.2). */
+              /* A look this device cannot resolve — a pack look its vault
+                 does not hold, a built-in this build no longer ships: the
+                 layer stays, in its place, and says why rather than grading
+                 as identity (`restore-grade.ts`, `docs/lut-packs.md` §5.2). */
               <FieldRow label="Missing">
                 <span className="text-xs text-warn">{layer.missing}</span>
               </FieldRow>
@@ -296,7 +297,7 @@ export default function GradePanel({
                 />
               </FieldRow>
             )}
-            {isFilmLayer(layer) && (
+            {isFilmLayer(layer) && !layer.missing && (
               <FilmLayer
                 text={stack.customText[layer.id]}
                 onChange={(settings) => stack.setFilm(layer.id, settings)}
@@ -348,13 +349,19 @@ export default function GradePanel({
         />
       </FieldRow>
 
-      <p className="m-0 text-xs text-muted leading-relaxed">
-        {stack.layers.length > 1 && `${activeCount} of ${stack.layers.length} looks active. `}
-        Looks apply top to bottom and bake into one LUT — the preview, the stills and every
-        export grade identically. Above 100% a look extrapolates past what it was authored for.
-        A film stock goes after a conversion LUT, never before it. Its grain and halation are
-        not in the LUT: they are drawn after it, at the size the frame is delivered at.
-      </p>
+      {/* How looks combine is read once and true every time: behind the dot.
+          How many are on is a state, and stays in the open. */}
+      <div className="flex flex-wrap items-center gap-1.5 text-xs text-muted leading-relaxed">
+        {stack.layers.length > 1 && <span>{`${activeCount} of ${stack.layers.length} looks active`}</span>}
+        <InfoDot about="how looks combine">
+          <p>
+            Looks apply top to bottom and bake into one LUT — the preview, the stills and every
+            export grade identically. Above 100% a look extrapolates past what it was authored for.
+            A film stock goes after a conversion LUT, never before it. Its grain and halation are
+            not in the LUT: they are drawn after it, at the size the frame is delivered at.
+          </p>
+        </InfoDot>
+      </div>
     </div>
   );
 }

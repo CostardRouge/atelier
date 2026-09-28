@@ -80,7 +80,10 @@ Rules a later phase must keep:
   where WebKit draws all three, so a static list lies to one of them.
 - **A blocked row is dropped only when the same capture already offers a
   drawable delivered row** (`pruneUndrawable`) — the Sony case, where the HIF
-  is unreachable and the ARW's own render is the same photograph. Where
+  is unreachable and the ARW's own render is the same photograph. Since
+  2026-09-26 a HEIF or JPEG XL is NOT blocked (a shipped decoder reads it,
+  `reach: 'decoder'`, `media-pipeline.md`), but it is pruned by the same rule:
+  beside a free row it costs seconds of wasm for the same picture. Where
   nothing else is drawable the row STAYS, blocked and saying why, because it
   is then the only thing between the person and their picture; and a blocked
   row with MEASURABLY more pixels than the drawable one also stays.

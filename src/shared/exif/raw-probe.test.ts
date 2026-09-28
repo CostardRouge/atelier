@@ -237,6 +237,77 @@ describe('probeRaw', () => {
     expect(probe.preview).toEqual({ offset: 8000, length: 1200, width: 4032, height: 3024 });
   });
 
+  it('takes a JPEG XL render (a ProRAW DNG), and says it is one', () => {
+    const proraw = (jpegPixels: number) =>
+      buildTiff([
+        {
+          fields: [
+            { tag: 254, type: LONG, values: [1] },
+            { tag: 256, type: SHORT, values: [jpegPixels] },
+            { tag: 257, type: SHORT, values: [jpegPixels] },
+            { tag: 259, type: SHORT, values: [7] },
+            { tag: 262, type: SHORT, values: [6] },
+            { tag: 513, type: LONG, values: [6000] },
+            { tag: 514, type: LONG, values: [400] },
+          ],
+          subIfdIndexes: [1, 2],
+        },
+        {
+          // The sensor: LinearRaw in JPEG XL — never a preview.
+          fields: [
+            { tag: 254, type: LONG, values: [0] },
+            { tag: 256, type: SHORT, values: [8064] },
+            { tag: 257, type: SHORT, values: [6048] },
+            { tag: 259, type: SHORT, values: [52546] },
+            { tag: 262, type: SHORT, values: [34892] },
+            { tag: 273, type: LONG, values: [20000] },
+            { tag: 279, type: LONG, values: [3000] },
+          ],
+        },
+        {
+          // A full-size render, JPEG XL too.
+          fields: [
+            { tag: 254, type: LONG, values: [1] },
+            { tag: 256, type: SHORT, values: [4032] },
+            { tag: 257, type: SHORT, values: [3024] },
+            { tag: 259, type: SHORT, values: [52546] },
+            { tag: 262, type: SHORT, values: [2] },
+            { tag: 273, type: LONG, values: [9000] },
+            { tag: 279, type: LONG, values: [1500] },
+          ],
+        },
+      ]);
+    expect(probeRaw(proraw(1024))!.preview).toEqual({ offset: 9000, length: 1500, width: 4032, height: 3024, format: 'jxl' });
+    // At the same size, the JPEG — the browser draws it for nothing.
+    const [w, h] = [4032, 3024];
+    const same = buildTiff([
+      {
+        fields: [
+          { tag: 254, type: LONG, values: [1] },
+          { tag: 256, type: SHORT, values: [w] },
+          { tag: 257, type: SHORT, values: [h] },
+          { tag: 259, type: SHORT, values: [52546] },
+          { tag: 262, type: SHORT, values: [2] },
+          { tag: 273, type: LONG, values: [9000] },
+          { tag: 279, type: LONG, values: [1500] },
+        ],
+        subIfdIndexes: [1],
+      },
+      {
+        fields: [
+          { tag: 254, type: LONG, values: [1] },
+          { tag: 256, type: SHORT, values: [w] },
+          { tag: 257, type: SHORT, values: [h] },
+          { tag: 259, type: SHORT, values: [7] },
+          { tag: 262, type: SHORT, values: [6] },
+          { tag: 513, type: LONG, values: [6000] },
+          { tag: 514, type: LONG, values: [400] },
+        ],
+      },
+    ]);
+    expect(probeRaw(same)!.preview).toEqual({ offset: 6000, length: 400, width: w, height: h });
+  });
+
   it('never mistakes the sensor plane for a preview, though it is JPEG too', () => {
     // The trap this rule exists for: a DNG's CFA plane is compression 7 as
     // well, and handing those bytes to a browser gives a mosaic, not a picture.

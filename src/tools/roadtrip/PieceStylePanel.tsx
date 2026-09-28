@@ -29,7 +29,7 @@ const PRESETS: { id: AnimPreset; label: string }[] = [
 ];
 
 /** Every curve of the shared registry (`shared/motion/easing.ts`), by its own name. */
-const EASINGS = EASING_IDS.map((id) => ({
+export const EASINGS = EASING_IDS.map((id) => ({
   id,
   label: CURVES[id].overshoots
     ? `${CURVES[id].label} — overshoots`

@@ -52,6 +52,10 @@ interface LookTabProps {
   onOpenTripSettings: () => void;
   /** Opens the trip's garage, for the opener that drives its car. */
   onConfigureCar?: () => void;
+  /** The shade whose centre the stage is placing, if any. */
+  placingShade?: string | null;
+  /** Hand a shade's centre to the stage, or take it back with null. */
+  onPlaceShade?: (id: string | null) => void;
 }
 
 /**
@@ -79,6 +83,8 @@ export default function LookTab({
   patchBadge,
   onOpenTripSettings,
   onConfigureCar,
+  placingShade = null,
+  onPlaceShade,
 }: LookTabProps) {
   const pieceStyle: BadgePieceStyle = post.badge.pieceStyles[piece] ?? {};
   const setPieceStyle = (style: BadgePieceStyle) =>
@@ -329,6 +335,8 @@ export default function LookTab({
               shades={post.badge.shades}
               onChange={setShades}
               anchor={post.badge.layout.anchor}
+              placing={placingShade}
+              onPlace={onPlaceShade}
             />
           </InspectorSection>
         </>

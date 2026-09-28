@@ -446,7 +446,12 @@ every request the app makes).
 
 ## 10. Still waiting on the maintainer
 
-1. At step 5, the file store's per-file cap and per-user quota (proposed:
+1. **Answered 2026-09-24: no cap and no quota for now** (*"quota illimité,
+   pas de limites for now"*). The numbers live in WINNOW, not here —
+   `MAX_FILE_BYTES` 16 MiB and `MAX_USER_BYTES` 512 MiB in its
+   `src/lib/appFiles.ts` — so lifting them is a change to that repository;
+   Atelier keeps respecting whatever the instance declares. At step 5, the
+   file store's per-file cap and per-user quota (proposed then:
    16 MiB / 500 MiB) — only matters if the overlays ever go there. **Not what
    refused the first real push**, whatever the 400 looked like: a 65³ lattice
    is 1.65 MB encoded, and a body over the cap is refused by the client before

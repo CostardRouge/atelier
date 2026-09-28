@@ -1,9 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MAX_CORE,
   MAX_SHADES,
   SHADE_DIRECTIONS,
+  SHADE_FALLOFFS,
   SHADE_GRID,
+  centreMovable,
   createShade,
+  shadeCentre,
+  shadeCore,
+  shadeFalloff,
   directionInCell,
   followFlags,
   reachFollowsBadge,
@@ -240,6 +246,155 @@ describe('shadeGradient — bounds', () => {
         }
       }
     }
+  });
+});
+
+describe('shadeGradient — the fade has a shape (falloff, core, centre)', () => {
+  /** The alpha a gradient draws at `at`, interpolated between its stops as a canvas does. */
+  const alphaAt = (stops: { at: number; alpha: number }[], at: number) => {
+    for (let i = 1; i < stops.length; i++) {
+      const a = stops[i - 1];
+      const b = stops[i];
+      if (at <= b.at) return a.alpha + ((b.alpha - a.alpha) * (at - a.at)) / (b.at - a.at || 1);
+    }
+    return stops[stops.length - 1].alpha;
+  };
+
+  it('draws the very stops it always drew when none of the three is set', () => {
+    // A stored shade must not move by a code value the day the fields ship.
+    for (const d of SHADE_DIRECTIONS) {
+      for (const invert of [false, true]) {
+        const legacy = shadeGradient(shade({ direction: d.id, invert, reach: 0.5 }))!;
+        const soft = shadeGradient(
+          shade({ direction: d.id, invert, reach: 0.5, falloff: 'soft', core: 0 }),
+        )!;
+        expect(soft).toEqual(legacy);
+        expect(legacy.stops.length).toBeLessThanOrEqual(5);
+      }
+    }
+  });
+
+  it('reads garbage as absent', () => {
+    const legacy = shadeGradient(shade())!;
+    const junk = shadeGradient(
+      shade({ falloff: 'bouncy' as never, core: Number.NaN, center: { x: Number.NaN, y: 4 } }),
+    )!;
+    expect(junk.stops).toEqual(legacy.stops);
+    expect(shadeFalloff({ falloff: 'bouncy' as never })).toBe('soft');
+    expect(shadeCore({ core: -1 })).toBe(0);
+    expect(shadeCore({ core: 5 })).toBe(MAX_CORE);
+    expect(shadeCentre({})).toEqual({ x: 0.5, y: 0.5 });
+  });
+
+  it('holds full strength across the core — a ZONE, not a line', () => {
+    // The maintainer's report: 100 % strength and 100 % reach on a middle band
+    // was a dark stroke inside a gradient.
+    const before = shadeGradient(shade({ direction: 'middle-vertical', reach: 1, strength: 1 }))!;
+    const after = shadeGradient(
+      shade({ direction: 'middle-vertical', reach: 1, strength: 1, core: 0.5 }),
+    )!;
+    // A quarter of the frame from the centre line: a third before, full now.
+    expect(alphaAt(before.stops, 0.75)).toBeLessThan(0.5);
+    expect(alphaAt(after.stops, 0.75)).toBeCloseTo(1, 6);
+    expect(alphaAt(after.stops, 0.25)).toBeCloseTo(1, 6);
+    // And it still clears at both ends.
+    expect(after.stops[0].alpha).toBe(0);
+    expect(after.stops[after.stops.length - 1].alpha).toBe(0);
+  });
+
+  it('holds the core at the FAR end when inverted', () => {
+    const g = shadeGradient(shade({ direction: 'top', reach: 1, strength: 0.8, invert: true, core: 0.4 }))!;
+    expect(g.stops[0].alpha).toBe(0);
+    expect(alphaAt(g.stops, 0.7)).toBeCloseTo(0.8, 6);
+    expect(alphaAt(g.stops, 1)).toBeCloseTo(0.8, 6);
+  });
+
+  it('gives every falloff its own curve, all starting at strength and ending clear', () => {
+    const seen = new Set<string>();
+    for (const f of SHADE_FALLOFFS) {
+      const g = shadeGradient(shade({ direction: 'bottom', strength: 0.9, falloff: f.id, core: 0.1 }))!;
+      expect(g.stops[0].alpha).toBeCloseTo(0.9, 6);
+      expect(g.stops[g.stops.length - 1].alpha).toBeCloseTo(0, 6);
+      seen.add(JSON.stringify(g.stops.map((s) => s.alpha.toFixed(4))));
+    }
+    expect(seen.size).toBe(SHADE_FALLOFFS.length);
+  });
+
+  it('holds longer on Held than on Quick', () => {
+    const held = shadeGradient(shade({ direction: 'left', strength: 1, falloff: 'in-cubic' }))!;
+    const quick = shadeGradient(shade({ direction: 'left', strength: 1, falloff: 'out-cubic' }))!;
+    expect(alphaAt(held.stops, 0.5)).toBeGreaterThan(0.8);
+    expect(alphaAt(quick.stops, 0.5)).toBeLessThan(0.2);
+  });
+
+  it('keeps sampled stops in order, from 0 to 1, within the strength', () => {
+    for (const d of SHADE_DIRECTIONS) {
+      for (const invert of [false, true]) {
+        for (const core of [0, 0.3, MAX_CORE]) {
+          for (const f of SHADE_FALLOFFS) {
+            const g = shadeGradient(
+              shade({ direction: d.id, invert, core, falloff: f.id, strength: 0.6, reach: 0.7 }),
+            )!;
+            expect(g.stops[0].at).toBe(0);
+            expect(g.stops[g.stops.length - 1].at).toBe(1);
+            for (let i = 1; i < g.stops.length; i++) {
+              expect(g.stops[i].at).toBeGreaterThan(g.stops[i - 1].at);
+            }
+            for (const s of g.stops) {
+              expect(s.alpha).toBeGreaterThanOrEqual(0);
+              expect(s.alpha).toBeLessThanOrEqual(0.6 + 1e-9);
+            }
+          }
+        }
+      }
+    }
+  });
+
+  it('keeps a sampled band peaking exactly on its centre', () => {
+    const g = shadeGradient(shade({ direction: 'middle-horizontal', strength: 0.7, falloff: 'in-out' }))!;
+    expect(g.stops.find((s) => s.at === 0.5)!.alpha).toBeCloseTo(0.7, 6);
+  });
+
+  it('moves a band along its own axis only, the peak on the centre it was given', () => {
+    const v = shadeGradient(
+      shade({ direction: 'middle-vertical', reach: 0.6, center: { x: 0.9, y: 0.3 } }),
+    ) as LinearShade;
+    expect(v.x0).toBe(0);
+    expect((v.y0 + v.y1) / 2).toBeCloseTo(0.3, 9);
+    expect(v.y1 - v.y0).toBeCloseTo(0.6, 9);
+    const h = shadeGradient(
+      shade({ direction: 'middle-horizontal', reach: 0.6, center: { x: 0.2, y: 0.9 } }),
+    ) as LinearShade;
+    expect((h.x0 + h.x1) / 2).toBeCloseTo(0.2, 9);
+    // Past the frame's edge rather than clamped, or the peak would slide.
+    expect(h.x0).toBeLessThan(0);
+  });
+
+  it('moves a free radial anywhere, and hands it to the badge when following', () => {
+    const free = shadeGradient(shade({ direction: 'radial', center: { x: 0.3, y: 0.7 } }));
+    expect(free).toMatchObject({ kind: 'radial', cx: 0.3, cy: 0.7 });
+    const hooked = shadeGradient(
+      shade({ direction: 'radial', followHook: true, center: { x: 0.3, y: 0.1 } }),
+      block,
+    );
+    expect(hooked).toMatchObject({ cx: 0.5, cy: (block.top + block.bottom) / 2 });
+  });
+
+  it('leaves an edge and a corner where they are, whatever the centre says', () => {
+    for (const direction of ['top', 'left', 'bottom-right'] as const) {
+      expect(shadeGradient(shade({ direction, center: { x: 0.1, y: 0.1 } }))).toEqual(
+        shadeGradient(shade({ direction })),
+      );
+    }
+  });
+
+  it('says which axis of the centre the author can move', () => {
+    expect(centreMovable('middle-vertical', 'edge')).toBe('y');
+    expect(centreMovable('middle-horizontal', 'none')).toBe('x');
+    expect(centreMovable('radial', 'none')).toBe('both');
+    expect(centreMovable('radial', 'edge')).toBeNull();
+    expect(centreMovable('top', 'none')).toBeNull();
+    expect(centreMovable('bottom-left', 'none')).toBeNull();
   });
 });
 

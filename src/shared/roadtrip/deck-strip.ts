@@ -14,6 +14,9 @@
  */
 
 import { clipSlice, screenSecondsOf } from './hook-video';
+import { motionMarks } from '../media/framing-motion';
+import { collageCellCount } from './collage';
+import type { DeckSlide } from './deck';
 
 export interface StripCell {
   /** When the slide takes the screen, in piece seconds. */
@@ -167,4 +170,26 @@ export function screenLength(
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
+}
+
+/**
+ * Where a slide's pictures have frames placed, in the slide's own seconds —
+ * the lead's and every DRAWN cell's, merged and in order. The band marks them
+ * on the slide's cell so a moving slide is read at a glance, and the needle's
+ * «previous / next frame» steps through the same list.
+ */
+export function slideMotionMarks(
+  slide: Pick<DeckSlide, 'motion' | 'collage'>,
+  seconds: number,
+  openerSeconds = 0,
+): number[] {
+  const marks = motionMarks(slide.motion, seconds, openerSeconds);
+  if (slide.collage) {
+    const drawn = Math.max(0, collageCellCount(slide.collage) - 1);
+    for (const cell of slide.collage.cells.slice(0, drawn)) {
+      marks.push(...motionMarks(cell.motion, seconds, openerSeconds));
+    }
+  }
+  const sorted = marks.sort((a, b) => a - b);
+  return sorted.filter((m, i) => i === 0 || m - sorted[i - 1] > 1e-6);
 }

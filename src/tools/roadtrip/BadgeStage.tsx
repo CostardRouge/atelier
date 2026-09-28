@@ -4,6 +4,7 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
 import { stageFrameSize } from '../../shared/overlay/stage-size';
+import { stageBudget } from '../../shared/media/still-decode';
 import {
   DEFAULT_FRAMING,
   canPan,
@@ -34,7 +35,6 @@ import { moveBlock } from '../../shared/roadtrip/badge-layout';
 import {
   MAX_PREVIEW_LONG_EDGE,
   PREVIEW_LONG_EDGE,
-  boundSource,
   frameSize,
   loadBadgeSource,
   measureBadge,
@@ -196,6 +196,15 @@ interface BadgeStageProps {
   /** A drag of the opener: fractions of the frame, incremental. */
   onMoveHook?: (dx: number, dy: number) => void;
   /**
+   * A shade whose CENTRE is being placed (a band's line or a radial's pool),
+   * in frame fractions, and the axis it may move on. While given, a press
+   * anywhere on the picture moves that centre and nothing else — the badge
+   * and the framing wait — and the chrome draws where it is.
+   */
+  shadeHandle?: { x: number; y: number; axis: 'x' | 'y' | 'both' } | null;
+  /** The placed centre, in frame fractions; the axis the handle cannot move keeps its value. */
+  onMoveShadeCentre?: (x: number, y: number) => void;
+  /**
    * Several pictures in this slide's frame. `file`, `framing` and `lut` are
    * then its FIRST cell's; the others come through the three lists below, by
    * cell index (the lead first, so `collageFiles[0]` is ignored in favour of
@@ -232,6 +241,13 @@ interface BadgeStageProps {
   cellLabels?: readonly (string | null)[];
   onSourceLoaded?: (info: { width: number; height: number; duration: number }) => void;
   /**
+   * The size of each picture as decoded — the lead first, then every cell; null
+   * for one not decoded. Only their SHAPES are meant: the stage bounds a big
+   * picture's pixels, never its aspect. What a motion preset measures a pan's
+   * room against.
+   */
+  onPictureSizes?: (sizes: readonly ({ width: number; height: number } | null)[]) => void;
+  /**
    * The width the picture wants from the height it was given (height ×
    * aspect), reported on every measure. The editor caps the stage column with
    * it so a portrait frame on a wide screen does not leave the slide rail
@@ -246,7 +262,19 @@ interface BadgeStageProps {
    * because this is the only place it already exists.
    */
   onRendered?: (canvas: HTMLCanvasElement) => void;
+  /**
+   * A word in the picture's top-left corner saying what the stage shows —
+   * which card of a move, or why a gesture just did nothing — on the surface
+   * the gesture happens on, never only in the inspector (`roadtrip.md`).
+   */
+  caption?: { text: string; tone?: 'plain' | 'accent' | 'muted' } | null;
 }
+
+const CAPTION_TONES = {
+  plain: 'bg-[rgba(20,18,15,0.7)] text-on-media',
+  accent: 'bg-accent text-on-media',
+  muted: 'bg-[rgba(20,18,15,0.55)] text-on-media/80',
+} as const;
 
 /**
  * The badge over its picture, drawn through exactly the code the PNG export
@@ -284,6 +312,8 @@ export default function BadgeStage({
   onMoveBlock,
   hookRectFor = null,
   onMoveHook,
+  shadeHandle = null,
+  onMoveShadeCentre,
   collage = null,
   collageFiles,
   collageLuts,
@@ -296,8 +326,10 @@ export default function BadgeStage({
   onDropAsset,
   cellLabels,
   onSourceLoaded,
+  onPictureSizes,
   onRendered,
   onFit,
+  caption = null,
 }: BadgeStageProps) {
   // Whether anything else is competing for this screen's height — see the
   // wrapper's comment below.
@@ -328,10 +360,12 @@ export default function BadgeStage({
     if (!file) return;
 
     setLoading(true);
-    void loadBadgeSource(file, videoTimeSeconds)
-      .then(async (decoded) => {
+    // A still is decoded AT the stage's budget (`still-decode.ts`, a phone's
+    // smaller than a computer's): the full-size bitmap is never made.
+    void loadBadgeSource(file, videoTimeSeconds, { budgetPixels: stageBudget() })
+      .then((source) => {
         if (cancelled) {
-          decoded.release();
+          source.release();
           return;
         }
         // The FILE's size is what the editor is told — the exports size their
@@ -339,17 +373,13 @@ export default function BadgeStage({
         // budget: framing only reads the aspect, and grading 48 MP is what
         // made every drag over a graded still crawl.
         const natural = {
-          width: decoded.width,
-          height: decoded.height,
-          duration: 'duration' in decoded.image ? (decoded.image.duration ?? 0) : 0,
+          width: source.natural?.width ?? source.width,
+          height: source.natural?.height ?? source.height,
+          duration: 'duration' in source.image ? (source.image.duration ?? 0) : 0,
         };
-        const source = await boundSource(decoded);
-        if (cancelled) {
-          source.release();
-          return;
-        }
         sourceRef.current = source;
         onSourceLoaded?.(natural);
+        setLeadSeq((n) => n + 1);
       })
       .catch((e: unknown) => {
         if (!cancelled) setError(e instanceof Error ? e.message : String(e));
@@ -369,7 +399,18 @@ export default function BadgeStage({
   // the lead, and released together. Keyed on the files' identities: a cell
   // whose file did not change is not re-decoded when another cell's does.
   const cellSourcesRef = useRef<(BadgeSource | null)[]>([]);
+  const [leadSeq, setLeadSeq] = useState(0);
+  const onPictureSizesRef = useRef(onPictureSizes);
+  onPictureSizesRef.current = onPictureSizes;
   const [cellSeq, setCellSeq] = useState(0);
+  // Reported after either decode lands: the lead's, or a round of the cells'.
+  useEffect(() => {
+    const report = onPictureSizesRef.current;
+    if (!report) return;
+    const cells = cellSourcesRef.current;
+    const pictures = cells.length ? cells.map((src, i) => (i === 0 ? sourceRef.current : src)) : [sourceRef.current];
+    report(pictures.map((src) => (src && src.width > 0 && src.height > 0 ? { width: src.width, height: src.height } : null)));
+  }, [cellSeq, leadSeq]);
   const cellFileKey = collage
     ? (collageFiles ?? []).map((f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : '')).join('\u0001')
     : '';
@@ -393,29 +434,25 @@ export default function BadgeStage({
       setCellSeq((n) => n + 1);
       return;
     }
-    void Promise.all(
-      pending.map(async (i) => {
+    // One cell at a time, each decoded AT the stage's budget: in parallel,
+    // six 48-megapixel cells were six full-size bitmaps at the same moment.
+    void (async () => {
+      for (const i of pending) {
         const f = files[i];
-        if (!f) return;
+        if (!f || cancelled) continue;
         try {
-          const decoded = await loadBadgeSource(f, 0);
-          if (cancelled) {
-            decoded.release();
-            return;
-          }
-          const source = await boundSource(decoded);
+          const source = await loadBadgeSource(f, 0, { budgetPixels: stageBudget() });
           if (cancelled || cellSourcesRef.current !== next) {
             source.release();
-            return;
+            continue;
           }
           next[i] = source;
         } catch {
           // A cell that cannot be decoded is an empty cell, never a failed stage.
         }
-      }),
-    ).then(() => {
+      }
       if (!cancelled) setCellSeq((n) => n + 1);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -537,6 +574,10 @@ export default function BadgeStage({
   selectedCellRef.current = selectedCell;
   const collageRef = useRef(collage);
   collageRef.current = collage;
+  const shadeHandleRef = useRef(shadeHandle);
+  shadeHandleRef.current = shadeHandle;
+  const onMoveShadeCentreRef = useRef(onMoveShadeCentre);
+  onMoveShadeCentreRef.current = onMoveShadeCentre;
 
   /** The dashed outline around the selected element, on the chrome canvas. */
   const drawChrome = useCallback(() => {
@@ -600,6 +641,49 @@ export default function BadgeStage({
         ctx.restore();
       });
     }
+    // A shade's centre being placed: its line (a band) or its point (a
+    // radial), dashed like a selection, with a disc where the hand is.
+    const handle = shadeHandleRef.current;
+    if (handle) {
+      const short = Math.min(w, h);
+      const hx = handle.x * w;
+      const hy = handle.y * h;
+      ctx.save();
+      ctx.strokeStyle = 'rgba(244,240,231,0.92)';
+      ctx.lineWidth = Math.max(1.5, short * 0.003);
+      ctx.setLineDash([short * 0.014, short * 0.01]);
+      ctx.shadowColor = 'rgba(0,0,0,0.45)';
+      ctx.shadowBlur = short * 0.006;
+      ctx.beginPath();
+      if (handle.axis === 'y') {
+        ctx.moveTo(0, hy);
+        ctx.lineTo(w, hy);
+      } else if (handle.axis === 'x') {
+        ctx.moveTo(hx, 0);
+        ctx.lineTo(hx, h);
+      } else {
+        const r = short * 0.06;
+        ctx.moveTo(hx - r, hy);
+        ctx.lineTo(hx + r, hy);
+        ctx.moveTo(hx, hy - r);
+        ctx.lineTo(hx, hy + r);
+      }
+      ctx.stroke();
+      ctx.setLineDash([]);
+      const r = Math.max(7, short * 0.018);
+      // A band's disc sits mid-frame on its own line.
+      const dx = handle.axis === 'y' ? w / 2 : hx;
+      const dy = handle.axis === 'x' ? h / 2 : hy;
+      ctx.fillStyle = '#d9442a';
+      ctx.beginPath();
+      ctx.arc(dx, dy, r, 0, Math.PI * 2);
+      ctx.fill();
+      ctx.shadowBlur = 0;
+      ctx.strokeStyle = '#f4f0e7';
+      ctx.lineWidth = Math.max(1.5, r * 0.28);
+      ctx.stroke();
+      ctx.restore();
+    }
     const sel = selectedRef.current;
     if (!sel) return;
     // The opener is outlined from the rect the variant reports, elements from
@@ -654,7 +738,7 @@ export default function BadgeStage({
       if (cur.film === filmKey) return cur.grader;
     }
     cur?.grader.dispose();
-    const size = stageFrameSize(source.width, source.height);
+    const size = stageFrameSize(source.width, source.height, stageBudget());
     const grader = holdGrades(
       makeFrameGrader(lut as CubeLut, size.w, size.h, 1, [], [], film),
     );
@@ -678,7 +762,7 @@ export default function BadgeStage({
         return cur.grader;
       }
       cur?.grader.dispose();
-      const size = stageFrameSize(source.width, source.height);
+      const size = stageFrameSize(source.width, source.height, stageBudget());
       const grader = holdGrades(makeFrameGrader(cellLut, size.w, size.h));
       cellGradersRef.current.set(i, { lut: cellLut, w: source.width, h: source.height, grader });
       return grader;
@@ -776,6 +860,9 @@ export default function BadgeStage({
         media: null,
         framing: framing ?? DEFAULT_FRAMING,
         develop: null,
+        // The editor hands the stage each picture's framing AT THE NEEDLE, so
+        // the stage draws what it is given and moves nothing itself.
+        motion: null,
       };
       const items: CollageItem[] = rects.map((_, i) => {
         const source = i === 0 ? sourceRef.current : (cellSourcesRef.current[i] ?? null);
@@ -852,6 +939,12 @@ export default function BadgeStage({
 
   useEffect(() => () => releaseLater(sourceRef.current), []);
 
+  // The placing handle is chrome: turning placement on or off repaints only
+  // the chrome canvas (a moved centre repaints everything through `shades`).
+  useEffect(() => {
+    drawChrome();
+  }, [shadeHandle?.x, shadeHandle?.y, shadeHandle?.axis, drawChrome]);
+
   // --- pointing at the badge -------------------------------------------------
   const [hovering, setHovering] = useState(false);
   /** Whether the picture has any room to be dragged at its current framing. */
@@ -882,6 +975,7 @@ export default function BadgeStage({
       }
     | { kind: 'picture'; lastPx: number; lastPy: number }
     | { kind: 'hook'; lastPx: number; lastPy: number }
+    | { kind: 'shade' }
     | {
         kind: 'cell';
         i: number;
@@ -1057,13 +1151,35 @@ export default function BadgeStage({
       },
     },
   });
+  /** Writes the placed shade centre under a canvas point, on the handle's own axis. */
+  const placeShadeAt = useCallback((px: number, py: number) => {
+    const canvas = canvasRef.current;
+    const handle = shadeHandleRef.current;
+    const write = onMoveShadeCentreRef.current;
+    if (!canvas || !handle || !write) return;
+    const fx = Math.min(1, Math.max(0, px / canvas.width));
+    const fy = Math.min(1, Math.max(0, py / canvas.height));
+    write(handle.axis === 'y' ? handle.x : fx, handle.axis === 'x' ? handle.y : fy);
+  }, []);
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
-      if (!onSelect || e.button !== 0) return;
+      if (e.button !== 0) return;
       // Two fingers are the machine's pinch; the one left after it starts nothing.
       if (pinching.current) return;
       const pt = toPixels(e);
       if (!pt) return;
+      // Placing a shade's centre takes the whole picture: the author asked for
+      // it, and a press that selected the badge instead would read as the
+      // placement not working.
+      if (shadeHandleRef.current && onMoveShadeCentreRef.current) {
+        e.preventDefault();
+        drag.current = { kind: 'shade' };
+        canvasRef.current?.setPointerCapture(e.pointerId);
+        placeShadeAt(pt.px, pt.py);
+        return;
+      }
+      if (!onSelect) return;
       // Cancelling the pointerdown cancels the mousedown behind it, whose
       // default action is to move focus — onto the body, away from the field
       // the selection is about to focus.
@@ -1135,7 +1251,18 @@ export default function BadgeStage({
         canvasRef.current?.setPointerCapture(e.pointerId);
       }
     },
-    [onSelect, blockAnchor, onMoveBlock, hookRectNow, onMoveHook, onFraming, toPixels, onSelectCell, onSwapCells],
+    [
+      onSelect,
+      blockAnchor,
+      onMoveBlock,
+      hookRectNow,
+      onMoveHook,
+      onFraming,
+      toPixels,
+      onSelectCell,
+      onSwapCells,
+      placeShadeAt,
+    ],
   );
   const onPointerMove = useCallback(
     (e: React.PointerEvent) => {
@@ -1143,6 +1270,10 @@ export default function BadgeStage({
       const pt = toPixels(e);
       if (!canvas || !pt) return;
       const d = drag.current;
+      if (d?.kind === 'shade') {
+        placeShadeAt(pt.px, pt.py);
+        return;
+      }
       if (!d) {
         if (onSelect) {
           setHovering(
@@ -1222,7 +1353,19 @@ export default function BadgeStage({
       );
       onMoveBlock?.(next.x, next.y);
     },
-    [onSelect, onMoveBlock, onMoveHook, hookRectNow, onFraming, framing, toPixels, onMoveCell, onCellFraming, cellFramingAt],
+    [
+      onSelect,
+      onMoveBlock,
+      onMoveHook,
+      hookRectNow,
+      onFraming,
+      framing,
+      toPixels,
+      onMoveCell,
+      onCellFraming,
+      cellFramingAt,
+      placeShadeAt,
+    ],
   );
 
   /**
@@ -1371,7 +1514,9 @@ export default function BadgeStage({
   const onSelectCellRef = useRef(onSelectCell);
   onSelectCellRef.current = onSelectCell;
 
-  const cursor = !onSelect
+  const cursor = shadeHandle && onMoveShadeCentre
+    ? 'cursor-crosshair'
+    : !onSelect
     ? ''
     : swapping
       ? 'cursor-copy'
@@ -1451,6 +1596,16 @@ export default function BadgeStage({
           />
           {onDropAsset && (
             <DropZones zones={zones} state={dropState} collage={cellRectsRef.current.length > 0} />
+          )}
+          {caption && (
+            <span
+              role="status"
+              className={`absolute left-2 top-2 z-20 max-w-[calc(100%-1rem)] truncate rounded-full px-2.5 py-1 font-mono text-2xs tabular-nums pointer-events-none ${
+                CAPTION_TONES[caption.tone ?? 'plain']
+              }`}
+            >
+              {caption.text}
+            </span>
           )}
         </div>
         {loading && (

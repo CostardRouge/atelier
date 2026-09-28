@@ -8,6 +8,7 @@ import {
   readPresetBook,
   removePresetFromBook,
   savePresetInBook,
+  withIdentity,
 } from './preset-book';
 
 const light = (exposure: number) => ({ ...DEFAULT_DEVELOP, exposure });
@@ -87,5 +88,38 @@ describe('mergeBooks — two copies that both moved', () => {
       ['Night', 3],
     ]);
     expect(merged.mergedTripIds.sort()).toEqual(['t1', 't2']);
+  });
+});
+
+describe('the identity on the book', () => {
+  it('is read, written once, and survives a merge — the edited copy winning', () => {
+    const book = createPresetBook('b', 1);
+    expect(readPresetBook({ ...book })!.identity).toBeUndefined();
+    const signed = withIdentity(book, { creator: ' Steeve Pommier ', copyright: '' }, 2);
+    expect(signed.identity).toEqual({ creator: 'Steeve Pommier', copyright: '© {year} {creator}. All rights reserved.' });
+    expect(signed.updatedAt).toBe(2);
+    expect(withIdentity(signed, { creator: 'Steeve Pommier', copyright: '© {year} {creator}. All rights reserved.' })).toBe(signed);
+    expect(readPresetBook(JSON.parse(JSON.stringify(signed)))!.identity).toEqual(signed.identity);
+
+    const other = withIdentity(createPresetBook('s', 1), { creator: 'Other', copyright: 'x' }, 1);
+    expect(mergeBooks(signed, other).identity?.creator).toBe('Steeve Pommier');
+    expect(mergeBooks(book, other).identity?.creator).toBe('Other');
+    expect(mergeBooks(book, createPresetBook('s', 1)).identity).toBeUndefined();
+  });
+});
+
+describe('a preset that carries a look (item 6)', () => {
+  const look = { layers: [{ id: 'classic-black-and-white', source: 'builtin', name: 'B&W', customText: null, intensity: 0.8, enabled: true }], output: 'none', film: null };
+  it('is saved with its look, a look alone included, and read back from the book', () => {
+    const book = createPresetBook('b', 1);
+    const withLook = savePresetInBook(book, 'Mono', { ...DEFAULT_DEVELOP, exposure: 0.3 }, 'p1', 2, look as never);
+    expect(withLook.presets[0].look).toEqual(look);
+    const lookOnly = savePresetInBook(book, 'Just mono', null, 'p2', 2, look as never);
+    expect(lookOnly.presets.map((p) => p.name)).toEqual(['Just mono']);
+    expect(savePresetInBook(book, 'Nothing', null, 'p3', 2)).toBe(book);
+    const back = readPresetBook(JSON.parse(JSON.stringify(withLook)))!;
+    expect(back.presets[0].look?.layers[0]).toMatchObject({ id: 'classic-black-and-white', intensity: 0.8 });
+    // A book written before looks existed reads with none.
+    expect(readPresetBook({ ...book, presets: [{ id: 'x', name: 'Old', settings: { exposure: 1 } }] })!.presets[0].look).toBeUndefined();
   });
 });

@@ -16,6 +16,8 @@ import type {
   TripDoc,
   TripPost,
 } from '../../../shared/roadtrip/trip-types';
+import type { ExifData } from '../../../shared/exif/exif-parser';
+import CameraPanel from './CameraPanel';
 import SlideDelivery from './SlideDelivery';
 import { inputClass, linkButton } from './ui';
 import { DateField } from '../../../shared/ui/DateField';
@@ -40,16 +42,18 @@ interface ContentTabProps {
   /** The picture the open slide composes over, for its capture date. */
   slideFile: File | null;
   /**
-   * What took the HOOK's picture, as the badge would credit it — null while it
-   * is being read, and for a picture that records nothing. Measured in the
-   * editor from the file itself, never stored on the piece.
+   * What took the HOOK's picture — its effective EXIF, null while it is being
+   * read and for a picture that records nothing. Read in the editor from the
+   * file itself; the credit composed from it is never stored on the piece.
    */
-  exposure: string | null;
+  exif: ExifData | null;
   /** The open slide's clip length, or 0 when its picture is not one. */
   clipSeconds: number;
   /** The open clip's stretch and speed, when the slide is a clip. */
   clip?: { range: TrimRange; speed: number; onSpeed: (speed: number) => void } | null;
   onChangePost: (post: TripPost) => void;
+  /** The camera credit names a body on the TRIP, once for every piece. */
+  onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
   /** The field a stage click focuses: the piece's text on the hook, the caption elsewhere. */
@@ -84,10 +88,11 @@ export default function ContentTab({
   content,
   piece,
   slideFile,
-  exposure,
+  exif,
   clipSeconds,
   clip,
   onChangePost,
+  onChangeTrip,
   patchBadge,
   patchSlide,
   textFieldRef,
@@ -386,27 +391,6 @@ export default function ContentTab({
               Before the place
             </ToggleField>
           </FieldRow>
-          {/* The real line this picture would draw, or why it cannot — never
-              an example: a fabricated “ƒ/1.7 · 1/240” over a photograph that
-              records none of it reads as a broken feature. */}
-          <FieldRow
-            label="Camera"
-            hint={
-              exposure ? (
-                <span className="font-mono text-ink">“{exposure}”</span>
-              ) : (
-                'This picture records no camera, lens or exposure — nothing to credit. Write the line yourself on the Camera piece if you want one.'
-              )
-            }
-          >
-            <ToggleField
-              label="Credit the camera"
-              checked={post.badge.showExif}
-              onChange={(showExif) => patchBadge({ showExif })}
-            >
-              Under the badge
-            </ToggleField>
-          </FieldRow>
         </InspectorSection>
       )}
 
@@ -463,6 +447,28 @@ export default function ContentTab({
               </button>
             )}
           </FieldRow>
+        </InspectorSection>
+      )}
+
+      {isHook && (
+        <InspectorSection
+          id="piece.camera"
+          title="Camera"
+          info={
+            <p>
+              What took the picture, credited on it. Every value is read from the
+              picture itself and never stored: pick the facts, their order, a layout
+              and where it sits. A picture that records nothing credits nothing.
+            </p>
+          }
+        >
+          <CameraPanel
+            trip={trip}
+            post={post}
+            exif={exif}
+            patchBadge={patchBadge}
+            onChangeTrip={onChangeTrip}
+          />
         </InspectorSection>
       )}
     </div>

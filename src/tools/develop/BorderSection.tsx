@@ -12,9 +12,9 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import IconButton from '../../shared/ui/IconButton';
-import { FieldRow, InspectorSection, RangeField, ToggleField } from '../../shared/ui/Inspector';
+import { FieldRow, RangeField, ToggleField } from '../../shared/ui/Inspector';
+import DevelopFold from '../../shared/develop/DevelopFold';
 import { Icons } from '../../shared/ui/icons';
-import SectionLegend from '../../shared/ui/SectionLegend';
 import Segmented from '../../shared/ui/Segmented';
 import type { CropZoneApi } from './use-crop-zone';
 
@@ -123,9 +123,11 @@ export default function BorderSection({
   return (
     <>
       <DeliveredPreview picture={picture} crop={crop} border={border} size={deliveredSize} />
-      <InspectorSection
-        id="develop.border"
+      <DevelopFold
+        id="border"
         title="Borders"
+        marked={Boolean(border)}
+        defaultOpen={false}
         info={
           <>
             <p>
@@ -240,15 +242,19 @@ export default function BorderSection({
             </FieldRow>
           </>
         )}
-      </InspectorSection>
+      </DevelopFold>
       {verbs.length > 0 && (
-        <div className="flex flex-col gap-2 pt-3 border-t border-line">
-          <SectionLegend label="Apply borders to…">
+        <DevelopFold
+          id="border-apply"
+          title="Apply borders to…"
+          defaultOpen={false}
+          info={
             <p>
               This border — or none — written onto other pictures, now, each as its own copy. Their crops
               are left as they are: a roll can wear one border over crops that each differ.
             </p>
-          </SectionLegend>
+          }
+        >
           {verbs.map((verb) => (
             <div key={verb.id} className="flex flex-col items-start gap-1">
               <button
@@ -264,7 +270,7 @@ export default function BorderSection({
               {verb.hint && <span className="font-mono text-3xs text-faint leading-relaxed">{verb.hint}</span>}
             </div>
           ))}
-        </div>
+        </DevelopFold>
       )}
     </>
   );

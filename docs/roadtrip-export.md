@@ -434,7 +434,12 @@ use — the same discipline `StudioLink` already applies to the grade.
 
 5. **A new content slide's default duration** — a constant (recommended: 3s,
    `auto`), or a trip-wide number beside the other per-kind defaults. Nothing
-   blocks P2 either way; the constant is one line to replace.
+   blocks P2 either way; the constant is one line to replace. **Answered
+   2026-09-24: 3 s** — for a content slide (`DEFAULT_SLIDE_SECONDS`, already
+   3) AND for a new HOOK, which ran 5 s (a 4 s badge + the held second): the
+   badge's default is now 2 s (`DEFAULT_BADGE_DURATION`), so a new hook is 3 s;
+   a stored badge that never said its duration still reads 4 s
+   (`LEGACY_BADGE_DURATION`), and a trip's remembered defaults still win.
 6. **Cadence for a painted slide**: 30 fps (recommended, and stated in the
    panel), or offered as a choice. A clip slide keeps its source cadence
    regardless — that is `hookVariant`'s existing rule.

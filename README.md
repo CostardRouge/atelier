@@ -36,17 +36,25 @@ Today it ships ten tools, converging into a few editors:
   real time, with a before/after wipe.
 
 > **The network exceptions.** Everything above runs offline and uploads
-> nothing — no file, no photograph, no position ever leaves the machine. Two
-> *optional* features can make a request, both off by default and both stated
+> nothing — no file, no photograph, no position ever leaves the machine. Three
+> *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The Flight Map's **base map**: turning it on fetches map tiles from
->   OpenStreetMap, which reveals the viewed area to that tile server. The
->   flight path itself always draws locally.
+> - The **base map** under a flight path, in the Flight Map and the Composer:
+>   turning it on fetches map tiles from OpenStreetMap, which reveals the
+>   viewed area to that tile server. The flight path itself always draws
+>   locally.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
+> - **Lens profiles** in Develop: looking a lens up fetches the Lensfun
+>   database's file for your camera's maker from GitHub
+>   (`raw.githubusercontent.com`) — and, only when the lens is not there, the
+>   independent lens makers' files for that kind of body. Nothing about your
+>   pictures is sent; the request says only which maker's file is wanted. The
+>   answer is kept on your device, so each lens is looked up once, and the
+>   database itself never ships with the app.
 >
 > Naming a place from *coordinates* is deliberately **not** one of them: the
 > city index Trips names a deduced leg from ships with the app (see "Working
@@ -647,7 +655,8 @@ fix are each said plainly rather than quietly used.
 
 Both name a place from a **city index that ships with the app** — GeoNames'
 `cities1000` (135 000 towns), built into `public/geo/cities.json` and fetched
-from this site the first time a name is needed, never at start-up. So naming a
+from this site the first time a name is needed, never at start-up (Develop
+reads the same index to write a delivered picture's place). So naming a
 leg is **not** a third network exception: the alternative, reverse-geocoding,
 would send the coordinates of your photographs to someone else's server for a
 name, which is a far larger claim on your data than the place search's typed
@@ -683,6 +692,25 @@ no metadata, and the instance's own reading of the capture is merged under the
 file's. Like every other piece it can be replaced with free text, which is how
 a scan or a film frame gets credited at all.
 
+**The credit is composed, not only switched on.** The Content tab's **Camera**
+section picks **which facts** — body, lens, the 35 mm-equivalent and the real
+focal length, aperture, shutter, ISO, exposure compensation, a drone's height
+above take-off — and **in what order**, each listed with the value this picture
+records or "not recorded". It sets them in one of **eight layouts**, each shown
+with the picture's own numbers: *Line* (the credit as it always read), *Two
+tiers* (what took it in small capitals over the numbers), *Plate* (the numbers
+large over their labels), *Ledger* (label and value, row by row), *Caption* (an
+italic "Shot on…" over the numbers), *Viewfinder* (the exposure as a camera
+shows it, with a −2…+2 meter where the camera was argued with), *Edge bar*
+(across the top or bottom edge) and *Margin* (a column down one side). It hangs
+**under the badge** and moves with it, or sits in **a cell of its own** on the
+3×3 grid, at a size of its own. Columns are set in JetBrains Mono, whose fixed
+advance is what keeps them from ever running into each other. A DJI still names
+its body `FC8482`: the **Body** field names it once for the whole trip ("DJI
+Mini 4 Pro"), and the plate's words — "Shot on", each label — are the trip's,
+in *Words*, like the rest of the badge. A piece that never opens the section
+keeps exactly the line it drew before.
+
 **Every option shows what it would really say.** The counter modes and the
 temporal modes are listed with the line they would draw *for the post in hand* —
 "Day · 27 · of 310", "Kalbarri · 3 · of 4", "515 days ago" — or, when a mode has
@@ -714,7 +742,9 @@ lower), its ink, a panel behind it (fill, corner radius, outline) and an
 entrance and exit drawn from the engine's own animation model — fade, slide,
 scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
 has a **duration**, which is what an exit animation lands on; playing the piece
-from the band under the preview shows the entrance land and the exit leave.
+from the band under the preview shows the entrance land and the exit leave. A
+new hook is on screen for **3 s** — the badge settles in 2, the picture holds
+one more — unless the trip remembers another length for that kind of piece.
 
 **A look you like becomes the starting point.** Trip settings (the ⚙ beside the
 way back) → **New pieces** saves
@@ -746,6 +776,43 @@ appears where you asked for one: **Whole** shows the entire picture with
 **black bars** where it falls short of the frame, and a drag slides it along
 them. The preview, the PNG deck and the burned-in hook clip all draw through
 the same transform. Each picture of a carousel is framed on its own.
+
+**A picture can move in its frame.** The **Pan & zoom** section of the Picture
+tab shows the move as a row of **cards** — the frames the picture rests on,
+**Start**, the stops, **End** — each a thumbnail of what the frame will show.
+A still picture is its one card, the composition, with a dashed **Start** before
+it: tap it and the picture travels over the slide — a slow push in, a glide
+along a landscape too wide for a reel, a tour of three spots — like a camera
+over a print. There is no second editor: tap a card, and the drag, the wheel
+and the pinch that already frame a picture on the stage reframe **that card**
+and no other; a word in the picture's corner says which one it is. **End** is
+where the picture comes to rest, which is also what the PNG, the rail and the
+grid show, and what a slide opens on. **+ Stop** adds a card after the one
+picked — a copy pushed a touch closer, for you to frame — and **Remove** takes
+one off (never End). The time between cards is not placed by hand: the glides
+share the slide by how far each travels, and **Pause** is how long the view
+holds on every card; the seconds are written on the arrows. Scrubbing the band
+between two cards shows that instant, and a gesture there does nothing but say
+so — a frame is never written in silence. **Play** runs the slide from its
+first frame. **Quick move** writes Start and End in one tap over your
+composition and plays them — **Pan ← → ↑ ↓** from one edge of the picture to
+the other at the zoom you chose, **Push in** (from wider onto your framing, or
+closer onto its middle when it is already at its widest) and **Pull out** (from
+close on the middle back to your framing); a pan with no room to travel is
+greyed out, and the reason is written under the buttons. **Plan a tour…** opens
+a map of the whole picture with the window each card shows and a dot where it
+looks: tap where the view should go to add a card after the last, drag a dot to
+move that card, and pinch, scroll or slide to zoom the picked card — each card
+at its own zoom. Both are only ways of writing cards — the row shows whatever
+the picture already has, however it was written. The zoom is geometric and a point two
+cards share stays still on screen, so a push in lands on what you aimed at. On
+a hook with an opener that covers the frame (Défilé, Virée), the move can wait
+for the opener to finish. It works on a hook, on every picture of a carousel,
+on each cell of a collage and on a clip — the clip's frame is re-framed at
+every instant of the export. A slide that moves leaves as a video under Auto,
+and a still that starts close in fetches the original where its closest frame
+would upscale the proxy, not where it rests. The band marks each card's frame
+on its slide.
 
 **A slide can hold several pictures.** The Picture tab's **Layout** section
 offers grids, stacks, bentos, insets and scattered prints; the slide's own
@@ -791,7 +858,13 @@ to the badge: **Edge** gives it the reach (a top or bottom shade lands on the
 block's own edge, a radial centres on it), **Anchor** gives it the place as well
 — a badge anchored bottom-left gets its shade in that corner, and takes it along
 when it is re-anchored. They stack, so a wash from the left and a corner vignette
-can be on at once.
+can be on at once. The fade itself has a shape: a **core** holds the full
+strength over part of the reach before the fade starts — a band at full strength
+is then a dark zone, not a dark line — and a **falloff** picks how it clears
+(Soft, the classic shape; Linear; Smooth; Held, dark most of the way; Quick). A
+band or a free radial can be moved off the middle, with its sliders or by
+**placing it on the picture**: while placing, a press or a drag anywhere on the
+stage moves the band's line or the radial's centre, and nothing else.
 Darkening the picture keeps the typography clean, which a panel behind every
 line does not.
 
@@ -974,7 +1047,24 @@ same single LUT the grade already goes through, so the stage, the slide rail,
 the PNG deck and the hook clip all pick it up with nothing else to do. It
 belongs to **that slide**, like its framing: it is never inherited by the next
 picture, and ↺ puts it back to as shot. Every luminance move keeps hue and
-keeps a grey grey; only temperature and tint tint. On a JPEG or a Winnow proxy
+keeps a grey grey; only temperature and tint tint. Under the curve, the
+**colour mixer** moves eight bands of colour on their own — the hue, the
+saturation and the luminance of red, orange, yellow, green, aqua, blue,
+purple and magenta — so a blue sky can be darkened or a lawn calmed without
+touching a face; a grey is never moved, and a hue shift keeps its light.
+**Vignette** is Lightroom's post-crop one — Amount, Midpoint, Roundness,
+Feather and Highlights (a bright corner keeps its light) — shaped on the
+picture AS CROPPED, so it follows a crop that is moved or turned, and the
+file gets exactly the vignette on screen. Its
+**B&W** switch (or **V** in the Develop tool) turns the picture black and white
+and the same eight bands into eight lights in grey — a red filter's dark sky
+is blue −100 — while the colour mixer is kept for when colour comes back.
+Under it, **colour grading** has Lightroom's wheels: a colour and a light for
+the shadows, the midtones, the highlights and the whole picture — drag in a
+wheel (the angle is the hue, the distance how strongly it tints; the arrow
+keys work too), and **Balance** and **Blending** say where the ranges meet
+and how far they overlap. A wheel colours without brightening; only the
+**Light** slider under it moves the light. On a JPEG or a Winnow proxy
 the sheet says so — an 8-bit picture has nothing above white to give back;
 developing a RAW is what the next phases are for (`docs/photo-develop.md`).
 
@@ -1012,7 +1102,12 @@ project's **outro** — the same closing card the carousel export appends as its
 last slide, appended here after the footage of the reel — under the same
 rules: a resend replaces it, unlinking removes it, and an outro you composed
 yourself in the Studio is never overwritten (the panel tells you the card
-stayed behind instead).
+stayed behind instead). The hook picture's **correction** — its exposure,
+tone and colour from the Develop sheet — goes too, onto that media in the
+project, so a reel from the Studio wears the correction the badge was composed
+over; a resend replaces it, unlinking removes it, and a correction you set on
+that media in the Studio is never overwritten. The picture's crop and the
+trip's title style stay in Trips, as the panel says.
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
@@ -1056,7 +1151,31 @@ needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 filmstrip under it, and beside it the same controls as the Develop sheet in
 Trips and the Studio — the histogram, the sliders, your presets, the
 before/after wipe and zoom, and the picture's **look** (LUTs, output
-transform, grain), applied after its correction. Every setting belongs to the
+transform, grain), applied after its correction. The histogram draws the
+three channels apart, so a sky whose red alone has gone is seen; **J** — or
+a click on its *blacks* / *whites* — paints on the picture what has gone to
+white (red) and to black (blue), and the pixel under the pointer is read
+under the strip as the file will hold it (`R 212 · G 180 · B 96`, or
+*clipped to white*). The Trips and Studio sheets have the same strip and the
+same click. Under the colour sliders, **Presence** has Lightroom's three:
+**Texture** (local contrast at a small scale — pores, bark, fabric — and a
+smoothing below zero), **Clarity** (the same at a large scale, on the
+midtones only) and **Dehaze** (the haze read from the darkest channel around
+each place, in light, and taken out — or added below zero; a bright sky
+darkens with it, as haze removal does). Each looks around the pixel, so its
+scale is a share of the picture and the stage shows what the file will get;
+they are the Develop tool's, like the Detail tab, and not in the Trips and
+Studio sheets. The inspector's sections fold, like Trips' and the Studio's:
+click a section's title bar to close or open it; a closed section with
+anything set in it keeps a dot beside its name. Levels, the curve, the mixer and
+grading start closed. What you fold is remembered while the tab is open — from
+one picture to the next, and across a reload — and never written to the roll.
+The Crop tab folds the same way (Crop, Borders, Perspective, Lens, and the
+Apply-to blocks; Borders starts closed). What a setting does is explained
+behind the small **ⓘ** beside its name rather than under it, so the column
+holds the controls; what a line says about the picture right now — why it
+leaves at this size, the copyright that will be written — stays in the open.
+Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
@@ -1065,10 +1184,56 @@ as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
 picture to the next, and **Apply to N other pictures** writes it onto the rest
 of the roll, each as its own copy. **Shift-click** marks a range of the strip
 and **⌘/Ctrl-click** one picture, and the batch verbs then read the marks —
-*Apply to N selected*, *Paste to N selected*. A filmstrip cell shows the
+*Apply to N selected*, *Paste to N selected*. For more than the develop,
+**⌘⇧C** (or the ⚙ glyph above the picture) opens the picture's settings as
+**sections** — develop, look, crop, border, perspective, lens, detail, repair,
+layers — ticked like Lightroom's Copy Settings: **Copy** holds them, **⌘⇧V**
+pastes them onto the picture on screen, and *Apply to N selected / N other
+pictures* writes them across the roll; **Reset** puts the ticked sections of
+the picture on screen back to as shot — its look and its layers included —
+one ⌘Z away. A **preset** saved here can carry the picture's look too (tick
+*+ look* when naming it): the chip then dresses a picture in both. In the
+Trips and Studio sheets, where a look lives elsewhere, the same chip applies
+the numbers alone and says so. **⌘Z** undoes across the whole roll, and an
+undo that reaches another picture than the one on screen opens that picture,
+so what changed is what you see. The develop, the look, the lens and the
+detail are ticked to start — what a roll shot with one body shares — and the
+ticks are remembered. A picture's file, its RAW base, its title and caption and
+whether it leaves are never carried. A filmstrip cell shows the
 picture as it was last seen in the editor — developed and cropped — and a dot
 marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.
+
+**Layers.** The **Layers** tab (**L**) adds a develop that applies only
+somewhere: a *linear* or *radial* gradient, a band of *brightness*, a
+*colour* range, a mask *painted* by hand, a *subject* found by a model from a
+point you tap, or the *whole picture*. Every Develop slider works inside a layer, and layers add up
+from the bottom of the list to the top. A new Subject layer starts with
+**Pick** on (**P**): tap the thing you mean and the model finds it at once —
+a ring turns while it thinks, then what the tap added blinks twice — tap
+again to add to it, tap a marker to take it off. While you pick or paint, the
+mask shows by itself as its **outline**; **M** steps it to a red **fill** and
+to hidden, and the box under it keeps it shown once Pick is off. Any layer
+can take a subject **out** of itself (*Except › The subject*): darken the
+whole picture except the person, and the person's own layer alone decides
+them. The model (17 MB) is served from this site and loads the first time a
+subject is asked for; an export segments the same points on the picture it
+delivers.
+
+**Combining masks.** A layer's mask can be combined with up to four more,
+the way Lightroom does it: under **Combine**, pick **Add**, **Subtract** or
+**Intersect**, then the kind. *Add* takes in the new shape too, *Subtract*
+takes it out (a sky minus the mountain you paint over), *Intersect* keeps only
+where both are (the shadows, but only inside an ellipse). The parts apply in
+order, each with its own invert. The list at the top of the mask panel opens
+one at a time: its sliders show below it, and Paint or Pick act on it. A
+**colour range** is picked by tapping the picture. Every pixel near that
+colour is in the mask, wherever it is. Tap again to add up to five colours,
+tap a marker to remove one, and **Refine** widens or narrows the range. The
+colour is read from the picture as the layer sees it (the layers below it,
+not its own change) and stored, so the mask does not move when a slider
+does. A subject is not offered as a part: a Subject layer can carry parts of
+its own, and *Except* takes a subject out of any other layer.
 
 **Cropping.** The **Crop** tab (**C**; **A** goes back to Adjust) shows the
 whole developed picture, still, with the part you keep drawn over it and the
@@ -1085,6 +1250,22 @@ horizon. The quarter turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.
+
+**Lens profiles.** The **Lens** section of the Crop tab corrects distortion,
+fringing and vignetting by eye, and — once you allow it — from a **measured
+profile** out of [Lensfun](https://lensfun.github.io/), the open database of
+lens calibrations (CC BY-SA 3.0). The lens a picture's EXIF names is looked up
+the first time it is met and the answer is kept on your device (see "The
+network exceptions" above). A picture developed from its **sensor** gets the
+profile by itself; a camera's own JPEG, or the render inside a RAW, is only
+*offered* it (**Apply to this render**), because the body has often corrected
+it already and correcting it twice bends it the other way. The profile is
+worked out for the picture's own focal length and aperture, the way Lensfun
+itself interpolates, and stored on the picture, so the export, another device
+and a `.roll.json` draw exactly what you saw. It is calibration, not an edit: it
+is not copied to another picture, not cleared by Reset, and the sliders correct
+what it leaves. A DNG that carries its own lens correction keeps it, and the
+profile stands aside.
 
 **Crop to the view.** Zoomed in on the Adjust stage, a small **crop** pill
 appears in its top-right corner (or **⇧C**, or *Crop to this view* in the %
@@ -1123,6 +1304,14 @@ ring to heal it, or **Heal all**; a proposal is never a patch until you take
 it. Patches are numbers on the roll, never pixels: they follow the crop, the
 thumbnail and the full-size export. Under Repair, the same tab holds
 **Noise**, **Fringing** and **Sharpen**, judged honestly under the loupe.
+Sharpen has Lightroom's four: **Amount**, **Radius**, **Detail** (how much of
+a strong edge is sharpened — held back low, where a halo is born, while fine
+texture keeps its gain; 100 is the plain unsharp mask, and a picture
+sharpened before the slider existed reads 100 so it does not change) and
+**Masking** (sharpen only where the picture changes steeply, so a sky's noise
+and a cheek are left alone). **Show the mask** paints the picture white where
+it is sharpened and black where it is not, on the Detail tab only; it never
+reaches a thumbnail or an export.
 
 **Which file.** A chip above the photograph says what it is developed from
 (`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the list of the
@@ -1139,17 +1328,168 @@ device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the
 loupe, which decodes the file whole on a computer, says *as close as this
-device goes* instead. A browser cannot ask a phone how much memory a tab may
-take, so the rule is coarse: iPhone, iPad and Android count as phones, and
-`localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
+device goes* instead — for every picture, not only a RAW. A big sensor is
+decoded in **tiles**: LibRaw is asked for one band of the sensor at a time,
+and pays its own buffers for that band alone, so a 36-megapixel sensor on a
+phone never grows the decoder's heap past its first 256 MB — each tile costs
+the file read again, cheap for a DNG, a moment for a compressed ARW, and
+lands bit for bit where the whole decode would put it (a computer cuts only
+past 24 megapixels). The sensor's white is white, whatever the picture
+holds: the decoder no longer scales a frame by its own brightest pixel, so a
+RAW metered before 2026-09-25 may open a touch dark under its stored
+exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+A RAW is always
+shown from the render its camera wrote inside it, never from the browser's own
+decode of the whole file (Safari has one, and on an iPhone it was what closed
+the tab on a zoom). **Every photograph is decoded at the size it is used**,
+never whole and shrunk afterwards: its size is read from the file's header and
+the browser is asked for exactly the pixels a stage, a filmstrip cell or an
+export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
+phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
+in the run's summary; a computer still exports every pixel. A browser cannot
+ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
+iPad and Android count as phones, and `localStorage['atelier.device']`
+(`constrained` or `roomy`) overrides it.
+
+**HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
+itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
+libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a
+`.jxl` — served from this site like the RAW decoder and loaded only the first
+time such a file is met (about 2 MB each, nothing at page load). A picture is
+recognised by its bytes, not its name, and opens upright with its rotation
+applied, in Develop, Trips, the Studio, the Library's covers and its
+lightbox; a HEIF or JPEG XL original can deliver an export too. Two limits:
+these decoders cannot scale while they decode, so the whole picture exists
+once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
+profile (an iPhone's Display P3) is not applied, so its colours land a touch
+flatter than in Safari. TIFF is still not read.
+
+**ProRAW in JPEG XL.** An iPhone ProRAW saved with JPEG XL compression is a
+DNG the RAW decoder cannot read, so Atelier develops it itself: its sensor
+data is already demosaiced, its tiles are decoded by the JPEG XL decoder on
+several threads at once, and the camera's own colour matrix and white balance
+are applied exactly as the RAW decoder would — measured against it on a twin
+file, the two agree to a fraction of a code. A zoomed-in view decodes only
+the tiles under it. Two honest limits: Apple's own local tone map is not
+applied, so a ProRAW looks flatter here than in Photos (the develop is where
+you give it its contrast), and it has not yet been tried on a real iPhone
+file.
+
+**White balance in kelvin.** On the sensor, the Adjust tab starts with
+**White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,
+*Shade*, *Tungsten*, *Fluorescent*, *Flash*), a **Temperature** in kelvin and a
+**Tint**. The camera's own reading is *As shot*, read back through its own
+colour matrix, and every value becomes the multipliers the camera would have
+used under that light — so a picture shot under tungsten and set to Tungsten
+is what the camera saw, and Daylight turns it warm. It exists only on a RAW: a
+JPEG has no as-shot white to measure from, and its Temperature and Tint stay
+the relative nudge they always were (they also work on top of a kelvin
+balance). A white balance belongs to its picture, like the RAW's measured
+exposure: copy, paste, presets and *Apply to* leave it where it is.
+
+**Which pictures leave.** Every picture says whether it leaves: by default the
+ones you **edited** do, and you decide otherwise per picture — send one you did
+not touch, hold back one you did. The **Pictures** table in the Export tab
+lists the roll one row per picture (the whole row is the click, with what the
+picture would leave from and at what size), filtered by *Edited*, *Leaving* or
+*Held*; the badge at the corner of each filmstrip cell does the same without
+leaving the photograph. **P** sends or holds the picture on the stage, **U**
+puts it back on the rule (on the Layers tab, **P** and **M** belong to the
+mask instead — Pick and the mask's view). A picture you do not want to work on at all can be
+**ignored** (**M**, or a right-click / a held finger on its badge): it never
+leaves, **←/→** step over it, "apply to the other pictures" leaves it alone,
+the strip dims it or hides it, and a click still opens it. None of this is a
+rating — culling stays Winnow's. Once a picture has been exported, its row
+says when (`✓ 14:32`), and says **changed** if you edited it since — its
+develop, look, crop, geometry, repairs, layers or words; a new export size or
+quality does not count. The *Changed* filter lists the pictures that leave and
+were never exported or changed since, the status line counts them, and
+**Export N new or changed** delivers just those. The record is kept on this
+device beside the roll, not in it, so an export is never an undo step and an
+undo never forgets one.
+
+**Variants.** One frame, developed two ways — cropped square and 4:5, or in
+colour and in black and white — is two **variants** of it, Lightroom's virtual
+copies and Capture One's variants. **⌘'** (or **Add → a variant of … as
+edited**) makes a copy of the picture on the stage with everything done to
+it; **Add → … as shot** starts one bare, keeping only what belongs to the
+file (the RAW base, the lens profile). Each variant is a picture of its own
+on the roll — its develop, crop, look, title and whether it leaves — and the
+strip numbers it (`DJI_0101.JPG · 2`); the file is fetched and previewed once
+for all of them. A variant leaves into a sub-folder named after it,
+`Variant 2/DJI_0101.jpg`, so every delivered file keeps the capture's exact
+name (`Web/Variant 2/…` for a second target). Adding the same file to the roll
+twice is still refused: a variant is made from a picture already there.
+
+**Winnow's culling, where you edit.** A picture that came from a Winnow
+instance wears what you decided about it there — a flag for a **pick** or a
+**reject**, its **stars**, and a colour dot if it has a label — on its
+filmstrip cell and on its row in the Pictures table. The status line counts
+the picks and rejects and **filters the strip** on them: *picks*, *not
+rejected*, or *★★★ and up*. A filtered picture leaves the strip (the one on
+the stage stays), **←/→** step over it, and "apply to the other pictures"
+writes only to the ones still shown, so *show picks* then *Apply to N other
+pictures* develops your picks alike. The Pictures table has a *Picks* filter
+too. It is **read-only**: nothing here writes to Winnow, and nothing of it is
+kept in the roll — it is asked again when you come back to the tab, so a pick
+made in Winnow meanwhile shows up, and **Refresh** asks at once. A picture
+from this computer has no culling to show, and only *show all* or *not
+rejected* keep it in the strip.
+
+**What a file says.** A delivered JPEG carries the original's EXIF (below), and
+the **Metadata** section of the Export tab adds what is yours. Every file is
+**signed** — `Software` in its EXIF and `xmp:CreatorTool` in its XMP say
+*Atelier*, even a picture nothing else is known about; it is also how the suite
+recognises its own exports beside the originals, so it is not a switch. Give a
+**creator** once and every file carries it as `Artist` / `dc:creator`, with a
+**copyright** line (`© {year} {creator}. All rights reserved.` by default,
+`{year}` being the year the picture was TAKEN) as `Copyright` / `dc:rights`,
+over whatever the camera wrote. Both are kept with your presets, so another
+device signs the same way; nothing is written until a name is given. Each
+picture also takes its own **title** and **caption** there (`dc:title`,
+`dc:description`, and the caption as EXIF `ImageDescription`, which Lightroom
+and Capture One show as the caption) — the picture's alone, carried by no
+preset, paste or "apply to". **What leaves** is chosen for the whole roll, in
+groups — camera and lens, exposure, capture time, GPS position, maker notes and
+serials, title and caption, creator and copyright, and a **place name** — with
+three presets: *All* (the default, GPS included), *Share online* (no position,
+no serials, the town kept) and *Minimal* (your rights and the signature
+alone). The place is the town and country the picture's own GPS falls in,
+named from the same offline city index as a trip's legs (below) — nothing is
+sent anywhere — written as XMP `photoshop:City` / `photoshop:Country` even when
+the position itself stays home; a town is named within 30 km, farther out only
+the country, and the run says which pictures got no town. While every group of the
+capture is kept the camera's EXIF block is copied whole; leaving one out
+rebuilds it from the fields Atelier reads, and the panel says the maker notes
+stay behind. The file holds ONE XMP packet — an Ultra HDR export folds these
+into its own — and says its colour space: every export carries a small sRGB
+ICC profile, so a colour-managed reader (Lightroom, a print lab, a wide-gamut
+screen) reads the colours as they were meant instead of guessing.
 
 **Exporting.** The **Export** tab writes JPEGs — this picture, the marked
-ones, or the whole roll — into a folder you choose (downloaded one by one
-where the browser has no folder picker). Each is decoded at its own size,
+ones, or every picture that leaves — into a folder you choose (downloaded one
+by one where the browser has no folder picker). Each is decoded at its own size,
 developed under its own look and cropped as the stage showed it — a crop
 leaves at the picture's own density, so a small zone makes a small file, never
-one blown up to fill its aspect; the **Size** is a ceiling on the long edge and
-never upscales. Each picture leaves from the file you chose above the
+one blown up to fill its aspect; the **Size** is a ceiling and never upscales
+— a long edge, a short edge (a feed that wants 1080 px across), an area in
+megapixels, or a share of the picture. One run can write up to four
+**targets**: the full picture for the archive and a 2048 px set for the web,
+say, each with its own size, quality and **screen sharpening** (applied to
+the file after its resize, since a picture brought down to 2048 px is softer
+than it was). Each picture is rendered once and cut to every target. The
+first target writes into the folder you choose, each other one into a folder
+inside it named after the target, and every file keeps its picture's name —
+`DJI_0101.jpg` and `Web/DJI_0101.jpg` are the same photograph (a download,
+where there is no folder picker, becomes `Web-DJI_0101.jpg`). A new target
+starts from a preset — Full size, Web · 2048 px, Feed · 1080 px across,
+Mail · 2 MP, Half · 50 %. A target can carry a **watermark**: a line such as
+`© {year} {creator}` (the name set under Metadata, the year the picture was
+taken, `{title}` its own title) in a corner or along the bottom, sized as a
+share of the file's short side and drawn after the sharpening; its style is
+the roll's, and each target switches it on, so the web copy is signed and the
+archive left clean. A line that names its author before a name is set is not
+drawn, and the run says so. Each picture leaves from the file you chose above the
 photograph — its RAW when you developed it on the sensor, the camera's own
 JPEG when you picked it, else where it opened, and there the full-size
 original is fetched only where the proxy could not fill the frame asked for.
@@ -1512,7 +1852,7 @@ the Telemetry panels use, so it stays frame-accurate.
 The path always draws **offline**: MapLibre renders the track line on a plain
 backdrop with no tiles, so nothing leaves the machine. A **"Load map
 background"** toggle adds an OpenStreetMap raster layer on demand — one of the
-suite's two optional network requests (the other is the place search in Trips),
+suite's optional network requests (see "The network exceptions" above),
 surfaced explicitly because it reveals the viewed area to the tile server.
 
 MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
@@ -1531,6 +1871,10 @@ anywhere; then **play/pause** to preview the whole assembly in real time.
 
 The map can **fit the whole track** or **follow the aircraft** (centred, panning
 with it as the clip plays), with a zoom-offset slider on top of the auto-fit.
+Like the Flight Map's, it draws **offline** on a plain backdrop until you press
+**"Load map background"**, which adds the same OpenStreetMap tiles (revealing
+the viewed area to the tile server); an export burns in whichever of the two
+the preview shows.
 The readout is fully configurable — which fields show, label prefixes, text and
 background colour/opacity, corner radius, font and size — and can be toggled off.
 
@@ -1615,11 +1959,13 @@ src/
 │   │                           #   (incl. DJI video↔SRT pairing), capability-match per tool
 │   ├── telemetry/              # SRT parser, motion, cadence, cue lookup, flight-path extraction
 │   ├── exif/                   # dependency-free JPEG/TIFF EXIF reader, plus exif-cue:
-│   │                           #   a photograph read as the one telemetry cue it is worth
+│   │                           #   a photograph read as the one telemetry cue it is worth,
+│   │                           #   and camera-facts (a credit's facts, picked à la carte)
 │   ├── overlay/                # the overlay engine: element model, canvas stage,
 │   │                           #   draw/measure/hit-test, fonts, guides, burn-in export,
 │   │                           #   animation + scenes (the intro layer, pure), still-frame
-│   │                           #   (a deck settled for a still), and the
+│   │                           #   (a deck settled for a still), camera-plate (a credit's
+│   │                           #   eight layouts as text elements), and the
 │   │                           #   ElementList/ElementPanel/Timing/Scene/Guides editors
 │   ├── lut/                    # WebGL2 LUT renderer, frame grader, picker, built-ins
 │   ├── map/track-map.ts        # the one MapLibre track-map: style, line layer, OSM tiles

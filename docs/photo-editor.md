@@ -599,15 +599,20 @@ catalogue at a hundred thousand pictures (Winnow is that, and already is); and
 1. **"pixel piping"** — read as *pixel peeping*, delivered as P11's loupe, since
    denoise cannot honestly be judged otherwise (F5). If it meant the processing
    pipeline itself, it is §5 and it moves.
-2. **P3's JPEG XL answer** turns "which decoder" into "which wasm build do we
-   maintain" if the npm build refuses those files — his call when it comes.
+2. **P3's JPEG XL answer** — ANSWERED without a wasm build of our own
+   (2026-09-26): the npm LibRaw does refuse JPEG XL, but a ProRAW sensor is
+   LinearRaw, already demosaiced, so its tiles go through `jxl-oxide-wasm` and
+   dcraw's arithmetic is reproduced in `raw/linear-dng.ts` — measured against
+   LibRaw on an uncompressed twin (`docs/memory/raw.md`, «ProRAW in JPEG XL»).
+   Still unmeasured: a real ProRAW JPEG XL file from his iPhone.
 3. ~~**Whether the develop crosses the Trips/Studio bridge**~~ — **ANSWERED
    2026-09-21: it crosses.** The maintainer settled it by stating the rule
    above it: a tool is an ELEMENT the others can use, so Develop opens as a
    modal inside Trips and the Studio, and what the author did to the
    photograph travels with the photograph. Same reason the look must cross
-   whole (P7 of `roadtrip-export.md`). Built: nothing yet —
-   `docs/memory/architecture.md`, «A tool is an ELEMENT».
+   whole (P7 of `roadtrip-export.md`). Built for the hook picture on 2026-09-24
+   (`docs/memory/roadtrip.md`) — `docs/memory/architecture.md`, «A tool is an
+   ELEMENT».
 4. **The RAW-on-a-phone verdict** (decision 5 of `develop-originals.md` §7)
    still needs his iPhone.
 

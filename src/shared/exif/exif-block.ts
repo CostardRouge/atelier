@@ -9,7 +9,7 @@
  * whole file) or that has none (a WebP proxy, where the source's own answer is
  * all there is).
  *
- * Four tags are corrected on the way, and only four:
+ * These tags are corrected on the way, and only these:
  *
  * - **Orientation**, set to 1 — the delivered picture is already the way up it
  *   was looked at, and a viewer honouring the original's tag would turn it a
@@ -22,7 +22,8 @@
  *   — unreferenced, and a block was under 64 KB before this, so it stays so.
  * - **Software**, set to what wrote the file — the one mark that tells an
  *   export from the camera's own file once the rest of the block is a copy
- *   (`software-mark.ts`). Written over the camera's entry where that entry can
+ *   (`software-mark.ts`) — and the author's `Artist`, `Copyright` and
+ *   `ImageDescription` where asked (`delivery-meta.ts`). Written over the camera's entry where that entry can
  *   hold it; where it cannot, or where there is none, IFD0 is COPIED to the
  *   end of the block with the entry added and the header repointed at the
  *   copy. Every value an entry points at stays where it was, offsets being
@@ -154,10 +155,20 @@ export interface RetagOptions {
   pixelHeight?: number;
   /** What wrote the delivered file — its `Software`; left alone when not given. */
   software?: string;
+  /**
+   * The author's words over the capture's (`delivery-meta.ts`): a string
+   * writes it, null CLEARS what the capture carried, undefined leaves it.
+   */
+  artist?: string | null;
+  copyright?: string | null;
+  description?: string | null;
 }
 
+const IMAGE_DESCRIPTION = 0x010e;
 const ORIENTATION = 0x0112;
 const SOFTWARE = 0x0131;
+const ARTIST = 0x013b;
+const COPYRIGHT = 0x8298;
 const EXIF_POINTER = 0x8769;
 const PIXEL_WIDTH = 0xa002;
 const PIXEL_HEIGHT = 0xa003;
@@ -172,17 +183,21 @@ function overwrite(view: DataView, entry: { type: number; valueOffset: number },
   }
 }
 
-/** `text` as the bytes an ASCII entry holds: 7-bit, NUL-terminated. */
+const utf8 = new TextEncoder();
+
+/** `text` as the bytes an ASCII entry holds: UTF-8, NUL-terminated — `exif-build.ts` says why. */
 function asciiBytes(text: string): Uint8Array {
-  const out = new Uint8Array(text.length + 1);
-  for (let i = 0; i < text.length; i += 1) out[i] = text.charCodeAt(i) & 0x7f;
+  const encoded = utf8.encode(text);
+  const out = new Uint8Array(encoded.length + 1);
+  out.set(encoded);
   return out;
 }
 
 /**
  * Write `text` over an ASCII entry's own bytes, NUL-padded to the entry's
  * count, when the entry is an ASCII one wide enough to hold it. False when it
- * is not — the caller then has to add an entry instead.
+ * is not — the caller then has to add an entry instead. An empty `text`
+ * leaves nothing but NULs, which every reader takes for no value.
  */
 function overwriteAscii(out: Uint8Array, entry: Entry | undefined, text: string): boolean {
   if (!entry || entry.type !== ASCII) return false;
@@ -194,53 +209,59 @@ function overwriteAscii(out: Uint8Array, entry: Entry | undefined, text: string)
 }
 
 /**
- * The block with IFD0 COPIED to its end, one ASCII entry replaced or added
- * (kept in tag order, as the format asks), no IFD1, and the header pointed at
- * the copy. Entries are copied byte for byte, so an inline value stays inline
- * and a pointed one still points where it did. A directory that runs past the
- * block is left alone.
+ * The block with IFD0 COPIED to its end, the given ASCII entries replaced or
+ * added (kept in tag order, as the format asks), no IFD1, and the header
+ * pointed at the copy. Entries are copied byte for byte, so an inline value
+ * stays inline and a pointed one still points where it did. A directory that
+ * runs past the block is left alone.
  */
-function withIfd0Ascii(block: Uint8Array<ArrayBuffer>, little: boolean, tag: number, text: string): Uint8Array<ArrayBuffer> {
+function withIfd0Ascii(block: Uint8Array<ArrayBuffer>, little: boolean, adds: readonly (readonly [number, string])[]): Uint8Array<ArrayBuffer> {
   const view = new DataView(block.buffer, block.byteOffset, block.byteLength);
   const ifd0At = view.getUint32(4, little);
   const count = view.getUint16(ifd0At, little);
   if (ifd0At + 2 + count * 12 > block.length) return block;
 
+  const added = new Set(adds.map(([tag]) => tag));
   const kept: number[] = [];
   for (let i = 0; i < count; i += 1) {
     const at = ifd0At + 2 + i * 12;
-    if (view.getUint16(at, little) !== tag) kept.push(at);
+    if (!added.has(view.getUint16(at, little))) kept.push(at);
   }
-  const bytes = asciiBytes(text);
-  const inline = bytes.length <= 4;
+  const values = [...adds].sort((a, b) => a[0] - b[0]).map(([tag, text]) => ({ tag, bytes: asciiBytes(text) }));
+  const total = kept.length + values.length;
   // Word-aligned, as TIFF asks of every offset.
   const dirAt = block.length + (block.length & 1);
-  const valueAt = dirAt + 2 + (kept.length + 1) * 12 + 4;
-  const out = new Uint8Array(valueAt + (inline ? 0 : bytes.length));
+  let valueAt = dirAt + 2 + total * 12 + 4;
+  const outOf = values.reduce((n, v) => n + (v.bytes.length > 4 ? v.bytes.length + (v.bytes.length & 1) : 0), 0);
+  const out = new Uint8Array(valueAt + outOf);
   out.set(block);
   const o = new DataView(out.buffer);
   o.setUint32(4, dirAt, little);
-  o.setUint16(dirAt, kept.length + 1, little);
+  o.setUint16(dirAt, total, little);
 
   let at = dirAt + 2;
-  let placed = false;
-  const place = () => {
-    o.setUint16(at, tag, little);
+  let next = 0;
+  const place = (v: { tag: number; bytes: Uint8Array }) => {
+    o.setUint16(at, v.tag, little);
     o.setUint16(at + 2, ASCII, little);
-    o.setUint32(at + 4, bytes.length, little);
-    if (inline) out.set(bytes, at + 8);
-    else o.setUint32(at + 8, valueAt, little);
+    o.setUint32(at + 4, v.bytes.length, little);
+    if (v.bytes.length <= 4) {
+      out.set(v.bytes, at + 8);
+    } else {
+      o.setUint32(at + 8, valueAt, little);
+      out.set(v.bytes, valueAt);
+      valueAt += v.bytes.length + (v.bytes.length & 1);
+    }
     at += 12;
-    placed = true;
   };
   for (const src of kept) {
-    if (!placed && view.getUint16(src, little) > tag) place();
+    const tag = view.getUint16(src, little);
+    while (next < values.length && values[next].tag < tag) place(values[next++]);
     out.set(block.subarray(src, src + 12), at);
     at += 12;
   }
-  if (!placed) place();
+  while (next < values.length) place(values[next++]);
   o.setUint32(at, 0, little);
-  if (!inline) out.set(bytes, valueAt);
   return out;
 }
 
@@ -280,8 +301,89 @@ export function retagExifBlock(block: Uint8Array, options: RetagOptions = {}): U
   const nextAt = ifd0At + 2 + count * 12;
   if (nextAt + 4 <= out.length) view.setUint32(nextAt, 0, little);
 
-  if (options.software !== undefined && !overwriteAscii(out, ifd0.get(SOFTWARE), options.software)) {
-    return withIfd0Ascii(out, little, SOFTWARE, options.software);
+  // The text tags: overwritten where the camera's entry can hold the new
+  // words, cleared to NULs where the author asked for none, and ADDED — one
+  // copy of IFD0 for all of them — where there was no entry or too small a one.
+  const adds: [number, string][] = [];
+  const texts: [number, string | null | undefined][] = [
+    [SOFTWARE, options.software],
+    [ARTIST, options.artist],
+    [COPYRIGHT, options.copyright],
+    [IMAGE_DESCRIPTION, options.description],
+  ];
+  for (const [tag, text] of texts) {
+    if (text === undefined) continue;
+    const entry = ifd0.get(tag);
+    if (text === null || text === '') {
+      overwriteAscii(out, entry, '');
+      continue;
+    }
+    if (!overwriteAscii(out, entry, text)) adds.push([tag, text]);
   }
+  return adds.length > 0 ? withIfd0Ascii(out, little, adds) : out;
+}
+
+/** `http://ns.adobe.com/xap/1.0/\0` — the identifier an `APP1` opens with when it holds an XMP packet. */
+const XMP_ID = Array.from('http://ns.adobe.com/xap/1.0/\0', (c) => c.charCodeAt(0));
+
+/** The most an XMP packet can be in one `APP1`: the segment's `u16` less its length bytes and the identifier. */
+export const XMP_PACKET_MAX = 0xffff - 2 - XMP_ID.length;
+
+function holdsXmp(bytes: Uint8Array, segment: Segment): boolean {
+  if (segment.marker !== APP1 || segment.body + XMP_ID.length > bytes.length) return false;
+  return XMP_ID.every((b, i) => bytes[segment.body + i] === b);
+}
+
+/** The XMP packet of a JPEG's main `APP1`, as text, or null when it carries none. */
+export function readXmpPacket(jpeg: Uint8Array): string | null {
+  if (!isJpeg(jpeg)) return null;
+  for (const segment of headerSegments(jpeg)) {
+    if (holdsXmp(jpeg, segment)) return new TextDecoder().decode(jpeg.subarray(segment.body + XMP_ID.length, segment.end));
+  }
+  return null;
+}
+
+/**
+ * The same JPEG carrying `packet` as its ONE XMP: a packet already there is
+ * dropped, and the new one goes right after the EXIF `APP1` (else after a
+ * leading JFIF `APP0`, else after the `SOI`) — the order cameras write and
+ * readers expect. Throws on a packet larger than a segment holds.
+ */
+export function withXmpPacket(jpeg: Uint8Array, packet: string): Uint8Array<ArrayBuffer> {
+  if (!isJpeg(jpeg)) throw new Error('not a JPEG');
+  const body = new TextEncoder().encode(packet);
+  if (body.length > XMP_PACKET_MAX) {
+    throw new Error(`the XMP packet is ${body.length} bytes, over the ${XMP_PACKET_MAX} a segment holds`);
+  }
+  const segments = headerSegments(jpeg);
+  const existing = segments.find((s) => holdsXmp(jpeg, s)) ?? null;
+  const exif = segments.find((s) => holdsExif(jpeg, s)) ?? null;
+  const insertAt = exif ? exif.end : segments[0]?.marker === APP0 ? segments[0].end : 2;
+
+  const length = body.length + XMP_ID.length + 2;
+  const segment = new Uint8Array(length + 2);
+  segment[0] = 0xff;
+  segment[1] = APP1;
+  segment[2] = (length >> 8) & 0xff;
+  segment[3] = length & 0xff;
+  segment.set(XMP_ID, 4);
+  segment.set(body, 4 + XMP_ID.length);
+
+  // Cut the old packet out wherever it sat, then splice the new one in.
+  const without = existing
+    ? [jpeg.subarray(0, existing.start), jpeg.subarray(existing.end)]
+    : [jpeg];
+  const shift = existing && existing.start < insertAt ? existing.end - existing.start : 0;
+  const flat = new Uint8Array(without.reduce((n, p) => n + p.length, 0));
+  let at = 0;
+  for (const piece of without) {
+    flat.set(piece, at);
+    at += piece.length;
+  }
+  const cut = insertAt - shift;
+  const out = new Uint8Array(flat.length + segment.length);
+  out.set(flat.subarray(0, cut), 0);
+  out.set(segment, cut);
+  out.set(flat.subarray(cut), cut + segment.length);
   return out;
 }

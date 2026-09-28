@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { buildExifBlock } from './exif-build';
-import { EXIF_BLOCK_MAX, readExifBlock, retagExifBlock, withExifBlock } from './exif-block';
+import { EXIF_BLOCK_MAX, readExifBlock, readXmpPacket, retagExifBlock, withExifBlock, withXmpPacket } from './exif-block';
 import { parseExif } from './exif-parser';
 
 const EXIF_ID = [0x45, 0x78, 0x69, 0x66, 0x00, 0x00];
@@ -187,5 +187,63 @@ describe('retagExifBlock', () => {
       const out = retagExifBlock(sample, { software: 'Atelier' });
       expect(parseExif(withExifBlock(bareJpeg(), out).slice().buffer).software).toBe('Atelier');
     });
+  });
+});
+
+describe('retagExifBlock — the author’s text tags', () => {
+  it('writes the rights over the camera’s entries, adds the ones it had none of, and keeps the rest', () => {
+    const camera = buildExifBlock({ make: 'SONY', model: 'ILCE-7CM2', artist: 'AB', dateTimeOriginal: '2025:01:02 03:04:05' });
+    const out = retagExifBlock(camera, {
+      software: 'Atelier',
+      artist: 'Steeve Pommier',
+      copyright: '© 2025 Steeve Pommier. All rights reserved.',
+      description: 'Pinnacles, at dawn',
+    });
+    const read = parseExif(out.buffer);
+    expect(read.artist).toBe('Steeve Pommier');
+    expect(read.copyright).toBe('© 2025 Steeve Pommier. All rights reserved.');
+    expect(read.imageDescription).toBe('Pinnacles, at dawn');
+    expect(read.software).toBe('Atelier');
+    expect(read.model).toBe('ILCE-7CM2');
+    expect(read.dateTimeOriginal).toBe('2025:01:02 03:04:05');
+  });
+
+  it('clears a value the author asked to leave out, and leaves alone what it was not asked about', () => {
+    const camera = buildExifBlock({ make: 'SONY', artist: 'CAMERA OWNER', copyright: 'Sony owner' });
+    const read = parseExif(retagExifBlock(camera, { copyright: null }).buffer);
+    expect(read.copyright).toBeUndefined();
+    expect(read.artist).toBe('CAMERA OWNER');
+  });
+});
+
+describe('withXmpPacket', () => {
+  const packet = '<x:xmpmeta xmlns:x="adobe:ns:meta/">© Ünïcode</x:xmpmeta>';
+
+  it('puts ONE packet after the EXIF, read back as UTF-8', () => {
+    const jpeg = withXmpPacket(jpegWithExif(sample), packet);
+    expect(readXmpPacket(jpeg)).toBe(packet);
+    expect(parseExif(jpeg.buffer).make).toBe(parseExif(sample.buffer).make);
+    // EXIF first: its APP1 opens right after the SOI.
+    expect(jpeg[3]).toBe(0xe1);
+    expect(Array.from(jpeg.subarray(6, 12))).toEqual(EXIF_ID);
+  });
+
+  it('replaces a packet rather than adding a second one', () => {
+    const once = withXmpPacket(bareJpeg(), 'first');
+    const twice = withXmpPacket(once, packet);
+    expect(readXmpPacket(twice)).toBe(packet);
+    expect(twice.length).toBe(once.length - 'first'.length + new TextEncoder().encode(packet).length);
+    // The scan is untouched.
+    expect(Array.from(twice.subarray(twice.length - 7))).toEqual(Array.from(bareJpeg().subarray(bareJpeg().length - 7)));
+  });
+
+  it('goes after a JFIF APP0 when there is no EXIF', () => {
+    const jpeg = withXmpPacket(jfifJpeg(), packet);
+    expect(jpeg[3]).toBe(0xe0);
+    expect(readXmpPacket(jpeg)).toBe(packet);
+  });
+
+  it('finds nothing in a JPEG that carries none', () => {
+    expect(readXmpPacket(bareJpeg())).toBeNull();
   });
 });

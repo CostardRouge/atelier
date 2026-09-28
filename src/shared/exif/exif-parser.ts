@@ -32,6 +32,10 @@ export interface ExifData {
   lensModel?: string;
   software?: string;
   artist?: string;
+  /** The capture's `Copyright` line — the camera's owner setting, or an earlier export's. */
+  copyright?: string;
+  /** `ImageDescription` — a caption, or whatever a body writes there. */
+  imageDescription?: string;
   // Exposure
   iso?: number;
   /** Seconds, e.g. `0.005` for 1/200 s. */
@@ -199,15 +203,28 @@ export function nums(view: DataView, entry: Entry | undefined, little: boolean):
   return out;
 }
 
-/** ASCII value of an entry, trimmed and NUL-terminated, or undefined. */
+const utf8 = new TextDecoder('utf-8', { fatal: true });
+
+/**
+ * ASCII value of an entry, trimmed and NUL-terminated, or undefined. Read as
+ * UTF-8 where the bytes ARE UTF-8 — what this suite writes (`exif-build.ts`)
+ * and what Lightroom and exiftool write, so a `©` comes back a `©` — else
+ * byte for byte, as an older body's Latin-1 was always read here.
+ */
 function str(view: DataView, entry: Entry | undefined): string | undefined {
   if (!entry || entry.type !== 2) return undefined;
   if (entry.valueOffset + entry.count > view.byteLength) return undefined;
-  let s = '';
+  const bytes: number[] = [];
   for (let i = 0; i < entry.count; i++) {
     const c = view.getUint8(entry.valueOffset + i);
     if (c === 0) break;
-    s += String.fromCharCode(c);
+    bytes.push(c);
+  }
+  let s: string;
+  try {
+    s = utf8.decode(Uint8Array.from(bytes));
+  } catch {
+    s = String.fromCharCode(...bytes);
   }
   return s.trim() || undefined;
 }
@@ -225,11 +242,13 @@ function toDecimal(values: number[] | undefined, ref: string | undefined): numbe
 // --- Tag numbers ------------------------------------------------------------
 
 const IFD0 = {
+  imageDescription: 0x010e,
   make: 0x010f,
   model: 0x0110,
   orientation: 0x0112,
   software: 0x0131,
   artist: 0x013b,
+  copyright: 0x8298,
   exifPointer: 0x8769,
   gpsPointer: 0x8825,
 };
@@ -301,6 +320,8 @@ function readTiff(view: DataView, tiffStart: number): ExifData {
     orientation: num(view, ifd0.get(IFD0.orientation), little),
     software: str(view, ifd0.get(IFD0.software)),
     artist: str(view, ifd0.get(IFD0.artist)),
+    copyright: str(view, ifd0.get(IFD0.copyright)),
+    imageDescription: str(view, ifd0.get(IFD0.imageDescription)),
   };
 
   const exifPtr = num(view, ifd0.get(IFD0.exifPointer), little);

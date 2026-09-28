@@ -101,6 +101,17 @@ export interface WinnowAssetRow {
    * by the single-asset route; and **a companion is not always a RAW** — check
    * `group_kind`, or the extension, before calling one the sensor's file.
    */
+  /**
+   * Winnow's CULLING of this media — its verdict, its stars (0–5) and a
+   * colour label. `GRID_SELECT` joins them from `ratings` on every row of
+   * `/api/assets` and `/api/assets/{id}` (`COALESCE`d to `unrated` / 0), so
+   * they cost no request of their own. Read, never written: culling is
+   * Winnow's (`culling.ts`). Optional because a row from an older instance,
+   * or a test stub, may not carry them.
+   */
+  verdict?: string | null;
+  star?: number | null;
+  color_label?: string | null;
   group_kind?: 'raw_jpeg' | 'live_photo' | null;
   companion_id?: number | null;
   companion_ext?: string | null;

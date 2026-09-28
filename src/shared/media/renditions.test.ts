@@ -64,7 +64,7 @@ describe('renditionsOf', () => {
     expect(rows[1].assetId).toBe('winnow/12');
   });
 
-  it('drops a HEIF this browser cannot draw when the ARW beside it already can', () => {
+  it('drops a HEIF only a shipped decoder reads when the ARW beside it already draws', () => {
     // The measured Sony pair: both are 7008 × 4672, and only one is reachable.
     const input: CaptureInput = {
       open: { name: 'DSC07666.HIF', bytes: 12.6e6, here: true },
@@ -74,11 +74,18 @@ describe('renditionsOf', () => {
     expect(ids(input)).toEqual(['delivered:dsc07666.arw', 'sensor:dsc07666.arw']);
   });
 
-  it('keeps that HEIF, blocked and saying why, when nothing else is drawable', () => {
+  it('keeps that HEIF, through the shipped decoder, when nothing else is drawable', () => {
     const rows = renditionsOf({ open: { name: 'DSC07666.HIF', bytes: 12.6e6, here: true }, canDraw: chrome });
     expect(rows).toHaveLength(1);
     expect(rows[0].reach).toBe('decoder');
-    expect(rows[0].blocked).toBe('this browser does not draw HIF');
+    expect(rows[0].blocked).toBeNull();
+  });
+
+  it('keeps a format nothing here reads, blocked and saying why', () => {
+    const rows = renditionsOf({ open: { name: 'SCAN_1.TIF', bytes: 80e6, here: true }, canDraw: chrome });
+    expect(rows).toHaveLength(1);
+    expect(rows[0].reach).toBe('decoder');
+    expect(rows[0].blocked).toBe('this browser does not draw TIF');
   });
 
   it('keeps it on a browser that draws it, and then it is not blocked at all', () => {
@@ -91,14 +98,18 @@ describe('renditionsOf', () => {
     expect(rows.every((r) => r.blocked === null)).toBe(true);
   });
 
-  it('keeps a blocked row that is MEASURABLY bigger than what is drawable', () => {
+  it('keeps a costly row that is MEASURABLY bigger than what is drawable', () => {
     const rows = renditionsOf({
       open: { name: 'IMG_1.JPG', here: true, pixels: { width: 1600, height: 1200 } },
-      others: [{ name: 'IMG_1.HIF', here: true, pixels: { width: 7008, height: 4672 } }],
+      others: [
+        { name: 'IMG_1.HIF', here: true, pixels: { width: 7008, height: 4672 } },
+        { name: 'IMG_1.TIF', here: true, pixels: { width: 7008, height: 4672 } },
+      ],
       canDraw: chrome,
     });
-    expect(rows.map((r) => r.id)).toEqual(['delivered:img_1.jpg', 'delivered:img_1.hif']);
-    expect(rows[1].blocked).toBe('this browser does not draw HIF');
+    expect(rows.map((r) => r.id)).toEqual(['delivered:img_1.jpg', 'delivered:img_1.hif', 'delivered:img_1.tif']);
+    expect(rows[1]).toMatchObject({ reach: 'decoder', blocked: null });
+    expect(rows[2].blocked).toBe('this browser does not draw TIF');
   });
 
   it('orders by role, then by the pixels that were measured, unmeasured last', () => {
@@ -182,7 +193,9 @@ describe('openingRendition', () => {
   });
 
   it('never opens on the sensor, and never on a blocked row', () => {
-    const rows = renditionsOf({ open: { name: 'DSC07666.HIF', here: true }, canDraw: chrome });
+    const rows = renditionsOf({ open: { name: 'SCAN_1.TIF', here: true }, canDraw: chrome });
     expect(openingRendition(rows)).toBeNull();
+    // A HEIF opens through the decoder shipped for it.
+    expect(openingRendition(renditionsOf({ open: { name: 'DSC07666.HIF', here: true }, canDraw: chrome }))?.reach).toBe('decoder');
   });
 });

@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { useActiveAsset } from '../../shared/library/use-active-asset';
-import type { AssetKind } from '../../shared/library/assets';
+import { classifyPart, type AssetKind } from '../../shared/library/assets';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { hashedMediaRef } from '../../shared/projects/media-identity';
@@ -10,6 +10,7 @@ import {
   collageCellAt,
   collageCellCount,
   collageSettleSeconds,
+  resolveCollage,
   swapCollageCells,
   withCollageCell,
   type CollageLead,
@@ -19,7 +20,36 @@ import { normaliseCellPlace } from '../../shared/media/media-layout';
 import DevelopSheet from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
-import { normaliseFraming, type Framing } from '../../shared/media/framing';
+import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
+import {
+  KEY_SNAP_SECONDS,
+  MOTION_PRESETS,
+  applyPreset,
+  arrivalMarks,
+  deepestFraming,
+  framingOn,
+  framingWindow,
+  motionOffset,
+  stopOf,
+  flipMotion,
+  framingAtProgress,
+  hasMotion,
+  motionProgress,
+  presetProblem,
+  type FramingMotion,
+  type MotionPreset,
+  type PictureBox,
+  type TourStop,
+} from '../../shared/media/framing-motion';
+import {
+  cardAtNeedle,
+  cardLabel,
+  cardsMotion,
+  insertCard,
+  readCards,
+  removeCard,
+  writeCard,
+} from '../../shared/media/motion-cards';
 import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   applyDevelopToDay,
@@ -55,7 +85,20 @@ import {
   screenSecondsOf,
 } from '../../shared/roadtrip/hook-video';
 import { badgeSettleSeconds } from '../../shared/roadtrip/badge-layout';
-import { loopsOpenSlide, screenLength, type LoopScope } from '../../shared/roadtrip/deck-strip';
+import {
+  centreMovable,
+  resolvedDirection,
+  shadeCentre,
+  shadeFollow,
+} from '../../shared/roadtrip/shades';
+import {
+  locate,
+  loopsOpenSlide,
+  screenLength,
+  slideMotionMarks,
+  stripLayout,
+  type LoopScope,
+} from '../../shared/roadtrip/deck-strip';
 import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
@@ -79,6 +122,7 @@ import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
 import LookTab from './panels/LookTab';
 import PictureTab, { GradeScopeChips } from './panels/PictureTab';
+import type { CardThumbSource } from './panels/MotionCards';
 import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
@@ -87,7 +131,7 @@ import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
 import { frameSize } from '../../shared/roadtrip/badge-render';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import useRailThumbs from './use-rail-thumbs';
-import { useExposureLine } from '../../shared/exif/use-effective-exif';
+import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { pickable, useSlideLibrary } from './use-slide-library';
 import { useTripGrade } from './use-trip-grade';
 import PageBar from '../../shared/ui/PageBar';
@@ -148,6 +192,18 @@ interface LoadedSource {
 
 /** Shortest cut `I` / `O` may leave — the floor `clipSlice` keeps. */
 const MIN_CUT = MIN_HOOK_SECONDS / 4;
+
+/**
+ * Which card of a move the stage shows: the last (`'end'`, the composition —
+ * kept as a word so it survives a card being added before it), one by index,
+ * or none while the needle stands between two.
+ */
+type CardPick = number | 'end' | 'between';
+
+function pickOf(index: number | null, count: number): CardPick {
+  if (index === null) return 'between';
+  return index >= count - 1 ? 'end' : Math.max(0, index);
+}
 
 /**
  * Composing one post's hook: the picture, the badge over it, and the PNG that
@@ -269,8 +325,8 @@ export default function PostEditor({
     setCellBaseline(activeFileRef.current);
   }, []);
   const lead: CollageLead = useMemo(
-    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop }),
-    [slide.media, slide.framing, slide.develop],
+    () => ({ media: slide.media, framing: slide.framing, develop: slide.develop, motion: slide.motion }),
+    [slide.media, slide.framing, slide.develop, slide.motion],
   );
   const cell = collage ? collageCellAt(lead, collage, cellIndex) : null;
 
@@ -285,6 +341,7 @@ export default function PostEditor({
         media: next.lead.media,
         framing: next.lead.framing,
         develop: next.lead.develop,
+        motion: next.lead.motion,
         collage: next.collage,
       };
       if (slide.kind === 'hook') {
@@ -312,6 +369,7 @@ export default function PostEditor({
             media: patch.media !== undefined ? patch.media : lead.media,
             framing: patch.framing ?? lead.framing,
             develop: patch.develop !== undefined ? patch.develop : lead.develop,
+            motion: patch.motion !== undefined ? patch.motion : lead.motion,
           },
           collage: null,
         });
@@ -485,7 +543,7 @@ export default function PostEditor({
    * camera credit, and the line the Content tab shows beside its toggle so a
    * piece whose photograph says nothing says why rather than drawing a blank.
    */
-  const exposure = useExposureLine(hookFile);
+  const hookExif = useEffectiveExif(hookFile);
 
   const aspectPreset =
     ASPECT_PRESETS.find((a) => a.id === post.badge.aspectId) ?? ASPECT_PRESETS[0];
@@ -500,10 +558,12 @@ export default function PostEditor({
         referenceDate: post.badge.referenceDate,
         showPin: post.badge.showPin,
         showExif: post.badge.showExif,
-        exposure,
+        exif: hookExif,
+        camera: post.badge.camera ?? null,
+        cameraNames: trip.cameraNames ?? null,
         overrides: post.badge.textOverrides,
       }),
-    [trip, post, exposure],
+    [trip, post, hookExif],
   );
 
   const cta = useMemo(() => ctaLayout(trip.cta, aspect), [trip.cta, aspect]);
@@ -621,37 +681,9 @@ export default function PostEditor({
     [post, onChangePost],
   );
 
-  /**
-   * Where the OPEN slide's picture sits. The hook's lives on the badge beside
-   * its frame choice, a carousel picture's on the slide — the same split
-   * `videoTimeSeconds` already makes, because both are about one photograph
-   * rather than about the piece.
-   */
-  const setFraming = useCallback(
-    (framing: Framing) => {
-      if (slide.kind === 'hook') {
-        onChangePost({ ...post, badge: { ...post.badge, framing } });
-      } else if (slide.slideId) {
-        onChangePost({
-          ...post,
-          slides: post.slides.map((s) =>
-            s.id === slide.slideId ? { ...s, framing } : s,
-          ),
-        });
-      }
-    },
-    [slide, post, onChangePost],
-  );
-  /** The SELECTED cell's framing — the slide's own when it is cell 0. */
+  /** The SELECTED cell's framing — the slide's own when it is cell 0 — and how it moves. */
   const cellFraming = normaliseFraming(cell ? cell.framing : slide.framing);
-  const setCellFraming = useCallback(
-    (i: number, framing: Framing) => patchCell(i, { framing }),
-    [patchCell],
-  );
-  const setSelectedCellFraming = useCallback(
-    (framing: Framing) => patchCell(cellIndex, { framing }),
-    [patchCell, cellIndex],
-  );
+  const cellMotion = cell ? cell.motion : slide.motion;
 
   const patchSlide = (patch: Partial<PostSlide>) => {
     if (!slide.slideId) return;
@@ -842,6 +874,16 @@ export default function PostEditor({
   const stagePlaying = trimOpen ? clipPlaying : deck.playing;
   const togglePlay = trimOpen ? () => setClipPlaying((p) => !p) : deck.toggle;
 
+  /**
+   * Which CARD of the selected picture's move the stage shows and a gesture
+   * writes (`motion-cards.ts`): the last — `'end'`, the composition — when a
+   * slide or a cell opens, a number once one is picked, and `'between'` when
+   * the needle stopped between two of them. Declared here because the
+   * composition's own rest below depends on it.
+   */
+  const [cardPick, setCardPick] = useState<CardPick>('end');
+  useEffect(() => setCardPick('end'), [slideKey, cellIndex]);
+
   // A new slide or a newly decoded file puts the playhead where the band sent
   // it (its in point, unless a scrub landed inside the clip); an in point
   // moved by the cut puts it on the new in point.
@@ -866,7 +908,10 @@ export default function PostEditor({
   const settle = badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade);
   const clipAtRest = !stagePlaying && playhead <= clipRange.start + TRIM_EPSILON;
   const stillAtRest = !deck.playing && deck.local <= TRIM_EPSILON;
-  const composedView = isClipSlide ? clipAtRest : stillAtRest;
+  // The composition is on the stage only while its END card is the one shown:
+  // a picture that moves shows its Start, a stop or an instant otherwise, and
+  // none of those is what the hook's thumbnail may be taken from.
+  const composedView = (isClipSlide ? clipAtRest : stillAtRest) && cardPick === 'end';
   // A collage's cells have an entrance of their own on ANY slide, so a content
   // slide has a clock too: at rest it shows the cells settled, playing it
   // shows them arriving and leaving on the piece's transport.
@@ -883,6 +928,305 @@ export default function PostEditor({
         ? Math.max(settle, hook.seconds, collageSettle)
         : deck.local;
 
+  // ——— The picture's pan and zoom, edited as CARDS (`motion-cards.ts`,
+  // `docs/picture-motion-ui.md`). Paused, the stage shows the SELECTED card
+  // of the selected picture — the composition when a slide opens, which is
+  // what the hook's thumbnail is taken from — and a gesture writes that card
+  // and no other; playing, it shows the move at the needle. The band's needle
+  // FOLLOWS the cards: picking one sends it to where the view arrives on that
+  // card, a scrub picks the card it lands on, and lands "between" two of them
+  // otherwise, where the stage shows the instant and a gesture is refused and
+  // said so on the picture. A frame is never placed in silence.
+  const slideSeconds = lengths[slideIndex] ?? 0;
+  const openerSeconds = isHook ? hook.seconds : 0;
+  /** A picture's span: the slide, less what its move waits for the opener. */
+  const spanOf = useCallback(
+    (motion: FramingMotion | null) =>
+      slideSeconds - (hasMotion(motion) ? motionOffset(motion, slideSeconds, openerSeconds) : 0),
+    [slideSeconds, openerSeconds],
+  );
+  /** Where the view arrives on each card, in the slide's seconds; a still picture arrives at once. */
+  const arrivalsOf = useCallback(
+    (framing: Framing, motion: FramingMotion | null): number[] =>
+      hasMotion(motion) ? arrivalMarks(framing, motion, slideSeconds, openerSeconds) : [0],
+    [slideSeconds, openerSeconds],
+  );
+  const cellCards = useMemo(
+    () => readCards(cellFraming, cellMotion, spanOf(cellMotion)),
+    [cellFraming, cellMotion, spanOf],
+  );
+  const cellArrivals = useMemo(() => arrivalsOf(cellFraming, cellMotion), [arrivalsOf, cellFraming, cellMotion]);
+  const cardCount = cellCards.cards.length;
+  /** The picked card as an index into the row, or null between two cards. */
+  const cardIndex: number | null =
+    cardPick === 'between' ? null : cardPick === 'end' ? cardCount - 1 : Math.min(cardPick, cardCount - 1);
+  // Read by the needle's followers, which must not be rebuilt per frame.
+  const cardsLive = useRef({ arrivals: cellArrivals, count: cardCount });
+  cardsLive.current = { arrivals: cellArrivals, count: cardCount };
+  /** The card under the needle once the needle moved on its own — a scrub, a pause. */
+  const followNeedle = useCallback((local: number) => {
+    const { arrivals, count } = cardsLive.current;
+    setCardPick(pickOf(cardAtNeedle(arrivals, local, KEY_SNAP_SECONDS), count));
+  }, []);
+  // Playback stopping anywhere leaves the needle where it stopped: on a card, or between two.
+  const wasPlaying = useRef(false);
+  useEffect(() => {
+    if (wasPlaying.current && !stagePlaying) followNeedle(deck.local);
+    wasPlaying.current = stagePlaying;
+  }, [stagePlaying, deck.local, followNeedle]);
+  /** A picture's framing as the stage shows it: the move at the needle while playing, else the card in hand. */
+  const shownFraming = useCallback(
+    (framing: Framing, motion: FramingMotion | null, own: boolean): Framing => {
+      if (!hasMotion(motion)) return framing;
+      const u = motionProgress(motion, deck.local, slideSeconds, openerSeconds);
+      if (stagePlaying) return framingAtProgress(framing, motion, u);
+      // Another cell of the collage rests on its composition while this one is worked.
+      if (!own) return framing;
+      if (cardIndex === null) return framingAtProgress(framing, motion, u);
+      return readCards(framing, motion, spanOf(motion)).cards[cardIndex] ?? framing;
+    },
+    [deck.local, slideSeconds, openerSeconds, stagePlaying, cardIndex, spanOf],
+  );
+  const stageFraming = useMemo(
+    () => shownFraming(slide.framing, slide.motion, cellIndex === 0),
+    [shownFraming, slide.framing, slide.motion, cellIndex],
+  );
+  const stageCollage = useMemo(
+    () =>
+      collage && collage.cells.some((c) => hasMotion(c.motion))
+        ? {
+            ...collage,
+            cells: collage.cells.map((c, i) =>
+              hasMotion(c.motion) ? { ...c, framing: shownFraming(c.framing, c.motion, cellIndex === i + 1) } : c,
+            ),
+          }
+        : collage,
+    [collage, shownFraming, cellIndex],
+  );
+  /** A gesture on a moving slide stops it: the card it writes is the one the needle is on. */
+  const holdTheNeedle = useCallback(() => {
+    if (deck.playing) deck.setPlaying(false);
+    setClipPlaying(false);
+  }, [deck]);
+  /** Say on the picture, for a moment, why a gesture did nothing. */
+  const [refusedUntil, setRefusedUntil] = useState(0);
+  const refuse = useCallback(() => setRefusedUntil(Date.now() + 1800), []);
+  useEffect(() => {
+    if (!refusedUntil) return;
+    const t = window.setTimeout(() => setRefusedUntil(0), Math.max(0, refusedUntil - Date.now()));
+    return () => window.clearTimeout(t);
+  }, [refusedUntil]);
+  /**
+   * Write cell `i`'s framing (0 = the slide's own) as a gesture or a control
+   * left it — into the card in hand when the picture moves, as it always was
+   * when it holds still. One writer for the stage's drag, wheel and pinch and
+   * for the Picture tab's rows, so the two cannot write a card differently. A
+   * gesture between two cards writes nothing and says so; on a cell that is
+   * not the one selected it writes that cell's composition, the frame shown.
+   */
+  const placeFraming = useCallback(
+    (i: number, next: Framing) => {
+      const cur = collage ? collageCellAt(lead, collage, i) : lead;
+      const motion = cur.motion;
+      if (!hasMotion(motion)) {
+        patchCell(i, { framing: next });
+        return;
+      }
+      const framing = normaliseFraming(cur.framing);
+      const count = readCards(framing, motion, spanOf(motion)).cards.length;
+      let index: number | null;
+      if (i !== cellIndex) index = count - 1;
+      else if (stagePlaying) {
+        holdTheNeedle();
+        index = cardAtNeedle(arrivalsOf(framing, motion), deck.local, KEY_SNAP_SECONDS);
+        setCardPick(pickOf(index, count));
+      } else index = cardIndex;
+      if (index === null) {
+        refuse();
+        return;
+      }
+      const placed = writeCard(framing, motion, index, next);
+      patchCell(i, { framing: placed.framing, motion: placed.motion });
+    },
+    [collage, lead, patchCell, cellIndex, stagePlaying, holdTheNeedle, arrivalsOf, deck.local, cardIndex, spanOf, refuse],
+  );
+  /** Mirror cell `i` — its rest AND every frame of its move, whatever the needle says. */
+  const flipPicture = useCallback(
+    (i: number, axis: 'x' | 'y') => {
+      const cur = collage ? collageCellAt(lead, collage, i) : lead;
+      patchCell(i, { framing: flipFraming(normaliseFraming(cur.framing), axis), motion: flipMotion(cur.motion, axis) });
+    },
+    [collage, lead, patchCell],
+  );
+  const setCellMotion = useCallback(
+    (motion: FramingMotion | null) => patchCell(cellIndex, { motion }),
+    [patchCell, cellIndex],
+  );
+  /** Pick a card: the stage shows it, and the needle goes to where the view arrives on it. */
+  const selectCard = useCallback(
+    (i: number) => {
+      holdTheNeedle();
+      const { arrivals, count } = cardsLive.current;
+      setCardPick(pickOf(i, count));
+      deck.goTo(slideIndex, Math.min(slideSeconds, arrivals[Math.min(i, count - 1)] ?? 0));
+    },
+    [holdTheNeedle, deck, slideIndex, slideSeconds],
+  );
+  /** Write a rewritten row — a card added or taken off — and pick the card it names. */
+  const writeCards = useCallback(
+    (out: { framing: Framing; motion: FramingMotion | null; selected: number } | null) => {
+      if (!out) return;
+      holdTheNeedle();
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+      const arrivals = arrivalsOf(out.framing, out.motion);
+      setCardPick(pickOf(out.selected, arrivals.length));
+      deck.goTo(slideIndex, Math.min(slideSeconds, arrivals[Math.min(out.selected, arrivals.length - 1)] ?? 0));
+    },
+    [holdTheNeedle, patchCell, cellIndex, arrivalsOf, deck, slideIndex, slideSeconds],
+  );
+  const addCard = () =>
+    writeCards(
+      insertCard(cellFraming, cellMotion, cellCards.cards, cellCards.holdSeconds, spanOf(cellMotion), cardIndex ?? cardCount - 1),
+    );
+  const dropCard = () => {
+    if (cardIndex === null) return;
+    writeCards(removeCard(cellFraming, cellMotion, cellCards.cards, cellCards.holdSeconds, spanOf(cellMotion), cardIndex));
+  };
+  const setHold = (seconds: number) => {
+    const out = cardsMotion(cellFraming, cellMotion, cellCards.cards, seconds, spanOf(cellMotion));
+    if (out) patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+  };
+  /** The section's own play: the slide from its first frame, or a pause. */
+  const playMove = () => {
+    if (trimOpen || stagePlaying) {
+      togglePlay();
+      return;
+    }
+    deck.goTo(slideIndex, 0);
+    deck.setPlaying(true);
+  };
+  /** The section's motion writes: a starter turns the move on, on its Start; null holds still on the composition. */
+  const setMotionFromSection = (motion: FramingMotion | null) => {
+    setCellMotion(motion);
+    if (!motion) setCardPick('end');
+    else if (!hasMotion(cellMotion)) {
+      setCardPick(0);
+      deck.goTo(slideIndex, 0);
+    }
+  };
+  /** What the stage says in its corner about the selected picture's move. */
+  const stageCaption = useMemo((): { text: string; tone: 'plain' | 'accent' | 'muted' } | null => {
+    if (stagePlaying || isCta) return null;
+    // Short enough for a phone's stage: the row under it says the rest.
+    if (refusedUntil > 0) return { text: 'Tap a card to reframe it', tone: 'accent' };
+    if (!hasMotion(cellMotion)) return null;
+    const cell = collage && cellIndex > 0 ? `Cell ${cellIndex + 1} · ` : '';
+    if (cardIndex === null) {
+      const arrived = cellArrivals.filter((a) => a <= deck.local + 1e-6).length - 1;
+      const a = Math.max(0, arrived);
+      const b = Math.min(cardCount - 1, a + 1);
+      return {
+        text: `${cell}Between ${cardLabel(a, cardCount)} and ${cardLabel(b, cardCount)} · ${deck.local.toFixed(1)} s`,
+        tone: 'muted',
+      };
+    }
+    const last = cardIndex === cardCount - 1;
+    return {
+      text: `${cell}${cardLabel(cardIndex, cardCount)}${last ? ' · the composition' : ''}`,
+      tone: last ? 'plain' : 'accent',
+    };
+  }, [stagePlaying, isCta, refusedUntil, cellMotion, collage, cellIndex, cardIndex, cellArrivals, deck.local, cardCount]);
+  // Each picture's decoded shape, as the stage reports it — keyed by the FILES
+  // it was measured from, so a new picture is never measured against the last
+  // one's shape. Keyed by the slide until 2026-09-24: the stage reports only
+  // when a decode lands, so a slide showing the SAME picture as the one before
+  // (a carousel's second slide, played into) never got a report, and its
+  // cards drew black and its quick moves said "still being read" for good.
+  const picturesKey = useMemo(
+    () => cellFiles.map((f) => (f ? `${f.name}|${f.size}|${f.lastModified}` : '')).join('\u0001'),
+    [cellFiles],
+  );
+  const [pictureSizes, setPictureSizes] = useState<{
+    key: string;
+    sizes: readonly ({ width: number; height: number } | null)[];
+  }>({ key: '', sizes: [] });
+  const onPictureSizes = useCallback(
+    (sizes: readonly ({ width: number; height: number } | null)[]) => setPictureSizes({ key: picturesKey, sizes }),
+    [picturesKey],
+  );
+  /** The frame the selected picture sits in — the slide's, or its cell's — at a nominal width. */
+  const frameBox = useMemo((): { dstW: number; dstH: number } | null => {
+    const w = 1080;
+    const h = Math.round(1080 / aspect);
+    if (!collage) return { dstW: w, dstH: h };
+    const rect = resolveCollage(collage, w, h)[cellIndex];
+    return rect ? { dstW: rect.w, dstH: rect.h } : null;
+  }, [collage, cellIndex, aspect]);
+  /** The selected picture in its frame (or its cell), for a preset to measure a pan's room. */
+  const presetBox = useMemo((): PictureBox | null => {
+    const src = pictureSizes.key === picturesKey ? pictureSizes.sizes[cellIndex] : null;
+    if (!src || !frameBox) return null;
+    return { srcW: src.width, srcH: src.height, ...frameBox };
+  }, [pictureSizes, picturesKey, cellIndex, frameBox]);
+  const presets = useMemo(
+    () => MOTION_PRESETS.map((id) => ({ id, problem: presetProblem(id, cellFraming, presetBox) })),
+    [cellFraming, presetBox],
+  );
+  /** Write a one-tap move over the selected picture — Start and End — and play it. */
+  const writePreset = useCallback(
+    (preset: MotionPreset) => {
+      const out = applyPreset(preset, cellFraming, cellMotion, presetBox);
+      if (!out) return;
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+      setCardPick(0);
+      deck.goTo(slideIndex, 0);
+      deck.setPlaying(true);
+    },
+    [cellFraming, cellMotion, presetBox, patchCell, cellIndex, deck, slideIndex],
+  );
+  // The MAP of the selected picture: every card as the window it shows and
+  // the point it looks at, read out of the same row the section draws — a
+  // map is only another way of writing cards (`framing-motion.ts`).
+  const tour = useMemo(() => {
+    if (!presetBox) return null;
+    return {
+      stops: cellCards.cards.map((c) => stopOf(c, presetBox)),
+      windows: cellCards.cards.map((c) => framingWindow(c, presetBox)),
+    };
+  }, [cellCards, presetBox]);
+  /** A tap on the map: a card looking at that point, at the picked card's zoom, after the last — the new End. */
+  const mapAdd = useCallback(
+    (stop: TourStop) => {
+      if (!presetBox) return;
+      const zoom = cellCards.cards[cardIndex ?? cardCount - 1]?.scale ?? cellFraming.scale;
+      const cards = [...cellCards.cards, framingOn(cellFraming, stop, zoom, presetBox)];
+      const out = cardsMotion(cellFraming, cellMotion, cards, cellCards.holdSeconds, spanOf(cellMotion));
+      if (out) writeCards({ ...out, selected: cards.length - 1 });
+    },
+    [presetBox, cellCards, cardIndex, cardCount, cellFraming, cellMotion, spanOf, writeCards],
+  );
+  /** A card's dot dragged: it looks at the point, at its own zoom, at the instants it has. */
+  const mapMove = useCallback(
+    (index: number, stop: TourStop) => {
+      const card = cellCards.cards[index];
+      if (!presetBox || !card) return;
+      const out = writeCard(cellFraming, cellMotion, index, framingOn(cellFraming, stop, card.scale, presetBox));
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [presetBox, cellCards, cellFraming, cellMotion, patchCell, cellIndex],
+  );
+  /** The picked card's zoom, about the point it looks at — the map's pinch and the row's slider. */
+  const zoomCard = useCallback(
+    (zoom: number) => {
+      const index = cardIndex;
+      const card = index === null ? null : cellCards.cards[index];
+      if (!presetBox || !card || index === null) return;
+      holdTheNeedle();
+      const out = writeCard(cellFraming, cellMotion, index, framingOn(cellFraming, stopOf(card, presetBox), zoom, presetBox));
+      patchCell(cellIndex, { framing: out.framing, motion: out.motion });
+    },
+    [cardIndex, cellCards, presetBox, holdTheNeedle, cellFraming, cellMotion, patchCell, cellIndex],
+  );
   // The opener's ticks, heard while whichever transport is actually driving
   // the badge plays — a clip's own, or the photo transport above — off until
   // asked for. `badgeTime` already reads whichever clock applies.
@@ -1037,7 +1381,7 @@ export default function PostEditor({
     resolve,
     lutFor,
     pictures: hookPictures,
-    exposure,
+    exif: hookExif,
   });
 
   // What the OPEN picture would deliver into the deck's own 1920 frame —
@@ -1049,7 +1393,8 @@ export default function PostEditor({
   // §13.2): a still takes its original only where the proxy would upscale.
   const delivery = useDeliveryRow(
     tab === 'export' && !collage ? cellFile : null,
-    cellFraming,
+    // A picture that moves needs the pixels of its closest frame.
+    deepestFraming(cellFraming, cellMotion),
     frameSize(aspect, DECK_LONG_EDGE),
   );
 
@@ -1066,7 +1411,7 @@ export default function PostEditor({
     timeSeconds: settle,
     hook,
     hookPictures,
-    exposure,
+    exif: hookExif,
     hookElementsAt,
     resolve,
     hookFile,
@@ -1180,6 +1525,43 @@ export default function PostEditor({
   );
 
   /**
+   * A shade whose centre the stage is placing (the Look tab's "Place on the
+   * picture"). Only on the hook, only while the Look tab is the one open, and
+   * only while the shade still has a centre to move — anything else drops it,
+   * so the stage is never left taking presses for a panel nobody can see.
+   */
+  const [placingShade, setPlacingShade] = useState<string | null>(null);
+  const shadeInPlace =
+    placingShade && isHook && tab === 'look'
+      ? (post.badge.shades.find((s) => s.id === placingShade && s.enabled !== false) ?? null)
+      : null;
+  const placingAxis = shadeInPlace
+    ? centreMovable(resolvedDirection(shadeInPlace, block), shadeFollow(shadeInPlace))
+    : null;
+  const shadeHandle =
+    shadeInPlace && placingAxis ? { ...shadeCentre(shadeInPlace), axis: placingAxis } : null;
+  useEffect(() => {
+    if (placingShade && !shadeHandle) setPlacingShade(null);
+  }, [placingShade, shadeHandle]);
+  useEffect(() => setPlacingShade(null), [post.id]);
+  const placeShade = useCallback(
+    (id: string | null) => {
+      setPlacingShade(id);
+      // On a phone the inspector is a sheet over the very picture the centre
+      // is placed on: it steps aside, and the Look cell brings it back.
+      if (id && compact) setInspectorOpen(false);
+    },
+    [compact],
+  );
+  const moveShadeCentre = useCallback(
+    (x: number, y: number) =>
+      patchBadge({
+        shades: post.badge.shades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)),
+      }),
+    [patchBadge, post.badge.shades, placingShade],
+  );
+
+  /**
    * Keep a small picture of the hook beside the trip, so a day opened months
    * later shows what is sitting in it rather than a file name. Debounced and
    * taken only from the hook — the stage redraws on every frame of the badge's
@@ -1231,6 +1613,26 @@ export default function PostEditor({
   );
 
 
+  /**
+   * What the cards row draws its thumbnails from: the selected picture, in the
+   * frame it sits in. It needs the frame's shape and nothing the stage
+   * measures — the row decodes the picture itself — so a card is never dark
+   * for want of a report.
+   */
+  const cardThumb = useMemo(
+    (): CardThumbSource | null =>
+      cellFile && frameBox
+        ? {
+            file: cellFile,
+            isVideo: classifyPart(cellFile.name) === 'video',
+            videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
+            dstW: frameBox.dstW,
+            dstH: frameBox.dstH,
+          }
+        : null,
+    [cellFile, frameBox, cellIndex, slide.videoTimeSeconds],
+  );
+
   const deckStrip = (
     <DeckStrip
       slides={slides}
@@ -1241,7 +1643,13 @@ export default function PostEditor({
       aspect={aspect}
       thumbFor={railThumb}
       onTogglePlay={togglePlay}
-      onScrub={deck.scrub}
+      onScrub={(t) => {
+        deck.scrub(t);
+        // The card the needle landed on, or between two — on this slide; a
+        // scrub onto another slide opens it on its composition.
+        const at = locate(stripLayout(lengths, 1, 0, 0), t);
+        if (at.index === slideIndex) followNeedle(at.local);
+      }}
       onSelect={(i) => deck.goTo(i, 0)}
       onAdd={() => void addSlide()}
       onRemove={removeSlide}
@@ -1277,6 +1685,11 @@ export default function PostEditor({
           : null
       }
       compact={compact}
+      // Where each slide's pictures have frames placed — a moving slide is
+      // read on the band at a glance, the way a clip's frames are.
+      marksFor={(i) =>
+        slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, slides[i].kind === 'hook' ? hook.seconds : 0) : []
+      }
     />
   );
 
@@ -1450,7 +1863,9 @@ export default function PostEditor({
           the column and not the gutter `frontend.md` warns about. */}
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
-          compact ? 'flex-1 min-h-0 pb-3' : ''
+          // The clearance above the bar is the column's while the column is
+          // last; with the Picture drawer up under it, the drawer is.
+          compact ? (inspectorOpen && tab === 'picture' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
         }`}
       >
         <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
@@ -1506,24 +1921,30 @@ export default function PostEditor({
             // pointed at there.
             hookRectFor={isHook ? hookRectFor : null}
             onMoveHook={isHook && hookVariant?.moveBy ? moveHook : undefined}
-            framing={slide.framing}
+            shadeHandle={shadeHandle}
+            onMoveShadeCentre={shadeHandle ? moveShadeCentre : undefined}
+            // Each picture as it stands at the needle: the stage draws what it is
+            // given, and its gestures start from — and write — that frame.
+            framing={stageFraming}
             // The closing card carries no photograph, so there is nothing to
             // reframe there and a drag must not pretend otherwise.
-            onFraming={isCta ? undefined : setFraming}
-            collage={collage}
+            onFraming={isCta ? undefined : (f) => placeFraming(0, f)}
+            collage={stageCollage}
             collageFiles={cellFiles}
             collageLuts={collageLuts}
             collageSeconds={slide.seconds}
             selectedCell={cellIndex}
             onSelectCell={setSelectedCell}
-            onCellFraming={setCellFraming}
+            onCellFraming={placeFraming}
             onMoveCell={moveCell}
             onSwapCells={swapCells}
             onDropAsset={isCta ? undefined : dropAsset}
             cellLabels={cellLabels}
             onSourceLoaded={onSourceLoaded}
+            onPictureSizes={onPictureSizes}
             onRendered={captureThumb}
             onFit={setFitWidth}
+            caption={stageCaption}
           />
           {compact && <div className="w-full flex-none mt-2">{deckStrip}</div>}
           </div>
@@ -1542,6 +1963,12 @@ export default function PostEditor({
 
       <PanelHost
         asSheet={compact}
+        // The Picture tab is a DRAWER on a phone, never the sheet: what it
+        // sets — the framing, the cards of a move, the develop — is judged on
+        // the picture above it, and a sheet's wash over that picture is a
+        // lie about it (`frontend.md`, Develop's rule). The three other tabs
+        // are picked FROM and keep the sheet, which gives them the height.
+        compactAs={tab === 'picture' ? 'drawer' : 'sheet'}
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title={TABS.find((t) => t.id === tab)?.label ?? 'Piece'}
@@ -1586,7 +2013,8 @@ export default function PostEditor({
               content={content}
               piece={piece}
               slideFile={slideFile}
-              exposure={exposure}
+              exif={hookExif}
+              onChangeTrip={onChangeTrip}
               clipSeconds={isVideo ? duration : 0}
               clip={isClipSlide ? { range: clipRange, speed: slide.speed, onSpeed: setClipSpeed } : null}
               onChangePost={onChangePost}
@@ -1609,6 +2037,8 @@ export default function PostEditor({
               patchBadge={patchBadge}
               onOpenTripSettings={() => setTripSheet('words')}
               onConfigureCar={() => setGarageOpen(true)}
+              placingShade={shadeHandle ? placingShade : null}
+              onPlaceShade={placeShade}
             />
           )}
 
@@ -1623,8 +2053,47 @@ export default function PostEditor({
               duration={duration}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
-              framing={cellFraming}
-              onFraming={setSelectedCellFraming}
+              framing={shownFraming(cellFraming, cellMotion, true)}
+              onFraming={(f) => placeFraming(cellIndex, f)}
+              onFlip={(axis) => flipPicture(cellIndex, axis)}
+              panZoom={
+                isCta
+                  ? null
+                  : {
+                      motion: cellMotion,
+                      framing: cellFraming,
+                      openerSeconds,
+                      cards: cellCards.cards,
+                      holdSeconds: cellCards.holdSeconds,
+                      arrivals: cellArrivals,
+                      selected: cardIndex,
+                      playing: stagePlaying,
+                      thumb: cardThumb,
+                      onSelectCard: selectCard,
+                      onAddCard: addCard,
+                      onRemoveCard: dropCard,
+                      onHold: setHold,
+                      onMotion: setMotionFromSection,
+                      onPlay: playMove,
+                      presets,
+                      onPreset: writePreset,
+                      tour:
+                        tour && presetBox
+                          ? {
+                              file: cellFile,
+                              isVideo: Boolean(cellFile && classifyPart(cellFile.name) === 'video'),
+                              videoSeconds: cellIndex === 0 ? slide.videoTimeSeconds : 0,
+                              aspect: presetBox.srcW / presetBox.srcH,
+                              stops: tour.stops,
+                              windows: tour.windows,
+                              zoom: cardIndex === null ? null : (cellCards.cards[cardIndex]?.scale ?? null),
+                              onAdd: mapAdd,
+                              onMove: mapMove,
+                              onZoom: zoomCard,
+                            }
+                          : null,
+                    }
+              }
               grade={grade}
               linkedToProject={post.projectId !== null}
               develop={cellDevelop}

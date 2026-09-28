@@ -6,7 +6,7 @@ import {
   keepWindow,
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
-import type { RollPicture } from '../../shared/develop/roll-types';
+import { sameMediaRef, variantNumber, type RollPicture } from '../../shared/develop/roll-types';
 import { findMedia } from '../../shared/projects/media-identity';
 import { DEFAULT_SOURCE_ID } from '../../shared/sources/source';
 import { WinnowClient, WinnowError } from '../../shared/sources/winnow/client';
@@ -81,6 +81,23 @@ export function useRollMedia({
   // Keyed on what the pictures ARE, so an edit to a develop does not re-ask.
   const ids = useMemo(() => refKey.split('|').filter(Boolean).map((k) => k.slice(0, k.indexOf(':'))), [refKey]);
 
+  // VARIANTS of one capture (item 30) share its bytes: each picture id maps to
+  // the others holding the same file. Only pictures that HAVE a variant are
+  // compared, so a roll with none pays nothing.
+  const mates = useMemo(() => {
+    const out = new Map<string, string[]>();
+    const list = latest.current;
+    for (const v of list) {
+      if (variantNumber(v) < 2) continue;
+      const family = list.filter((p) => sameMediaRef(p.ref, v.ref)).map((p) => p.id);
+      for (const id of family) out.set(id, family.filter((other) => other !== id));
+    }
+    return out;
+    // Keyed on what the pictures ARE (`ids` follows `refKey`).
+  }, [ids]);
+  const matesRef = useRef(mates);
+  matesRef.current = mates;
+
   // --- the Library's half ---------------------------------------------------
   const [fromLibrary, setFromLibrary] = useState<ReadonlyMap<string, File>>(new Map());
   useEffect(() => {
@@ -111,7 +128,10 @@ export function useRollMedia({
   openRef.current = openId;
 
   const fetchOne = useCallback((picture: RollPicture, keep: boolean): Promise<File | null> => {
-    const running = inflight.current.get(picture.id);
+    // A variant whose twin is on its way waits for that one fetch.
+    const running = [picture.id, ...(matesRef.current.get(picture.id) ?? [])]
+      .map((id) => inflight.current.get(id))
+      .find(Boolean);
     if (running) return running;
     const sourceId = resolvableSource(picture.ref);
     if (!sourceId) return Promise.resolve(null);
@@ -163,12 +183,15 @@ export function useRollMedia({
   // of what has drifted away.
   useEffect(() => {
     const wanted = keepWindow(ids, openId, KEEP_RADIUS);
+    // A file is kept while ANY variant of it is near.
+    const near = (id: string) => wanted.has(id) || (mates.get(id) ?? []).some((m) => wanted.has(m));
     setPool((m) => {
-      if ([...m.keys()].every((id) => wanted.has(id))) return m;
-      return new Map([...m].filter(([id]) => wanted.has(id)));
+      if ([...m.keys()].every(near)) return m;
+      return new Map([...m].filter(([id]) => near(id)));
     });
+    const inHand = (id: string) => fromLibrary.has(id) || poolRef.current.has(id);
     const queue = fetchOrder(ids, openId, FETCH_RADIUS).filter(
-      (id) => !fromLibrary.has(id) && !poolRef.current.has(id) && !failuresRef.current.has(id),
+      (id) => !inHand(id) && !(mates.get(id) ?? []).some(inHand) && !failuresRef.current.has(id),
     );
     if (queue.length === 0) return;
     let alive = true;
@@ -182,13 +205,19 @@ export function useRollMedia({
     return () => {
       alive = false;
     };
-  }, [ids, openId, fromLibrary, connections, failures, fetchOne]);
+  }, [ids, openId, fromLibrary, connections, failures, fetchOne, mates]);
 
   const files = useMemo(() => {
     const out = new Map(pool);
     for (const [id, file] of fromLibrary) out.set(id, file);
+    // A variant draws from its twin's bytes.
+    for (const [id, others] of mates) {
+      if (out.has(id)) continue;
+      const twin = others.find((o) => out.has(o));
+      if (twin) out.set(id, out.get(twin)!);
+    }
     return out;
-  }, [pool, fromLibrary]);
+  }, [pool, fromLibrary, mates]);
 
   const availability = useMemo(() => {
     void connections;

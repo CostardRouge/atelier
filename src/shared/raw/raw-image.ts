@@ -158,6 +158,49 @@ export function autoBrightGain(picture: LinearRgb, clip = AUTO_BRIGHT_CLIP, stri
   return gainForWhite(whiteFromHistogram(hist, GAIN_BINS, counted, clip));
 }
 
+/** The histogram `autoBrightGainFromLibRaw` measures, and how many pixels went into it — accumulated over the bands of a tiled decode. */
+export interface GainHistogram {
+  bins: Uint32Array;
+  counted: number;
+}
+
+export function makeGainHistogram(): GainHistogram {
+  return { bins: new Uint32Array(GAIN_BINS + 1), counted: 0 };
+}
+
+/**
+ * Pixels `[p0, p1)` of the whole decode — numbered over the WHOLE plane, so a
+ * band sampled here takes the very pixels the whole plane's walk would (every
+ * `stride`-th by absolute index) — counted into `hist` through the table.
+ * `shift` is what to add to a whole-plane pixel index to find that pixel in
+ * `rgb16`, for a band decoded on its own; 0 when `rgb16` is the whole plane.
+ */
+export function countBrightness(
+  rgb16: Uint16Array,
+  table: Float32Array,
+  hist: GainHistogram,
+  p0: number,
+  p1: number,
+  stride = 4,
+  shift = 0,
+): void {
+  const { bins } = hist;
+  const first = Math.ceil(p0 / stride) * stride;
+  for (let p = first; p < p1; p += stride) {
+    const i = (p + shift) * 3;
+    const m = Math.max(table[rgb16[i]], table[rgb16[i + 1]], table[rgb16[i + 2]]);
+    const bin = m >= 1 ? GAIN_BINS : Math.max(0, Math.floor(m * GAIN_BINS));
+    bins[bin] += 1;
+    hist.counted += 1;
+  }
+}
+
+/** The gain a counted histogram answers — 1 for an empty one. */
+export function gainFromHistogram(hist: GainHistogram, clip = AUTO_BRIGHT_CLIP): number {
+  if (!hist.counted) return 1;
+  return gainForWhite(whiteFromHistogram(hist.bins, GAIN_BINS, hist.counted, clip));
+}
+
 /**
  * The same measurement straight off the 16-bit decode, through the table —
  * the whole-picture path, where no linear picture exists to measure. Equal
@@ -172,18 +215,9 @@ export function autoBrightGainFromLibRaw(
   clip = AUTO_BRIGHT_CLIP,
   stride = 4,
 ): number {
-  const pixels = width * height;
-  const hist = new Uint32Array(GAIN_BINS + 1);
-  let counted = 0;
-  for (let p = 0; p < pixels; p += stride) {
-    const i = p * 3;
-    const m = Math.max(table[rgb16[i]], table[rgb16[i + 1]], table[rgb16[i + 2]]);
-    const bin = m >= 1 ? GAIN_BINS : Math.max(0, Math.floor(m * GAIN_BINS));
-    hist[bin] += 1;
-    counted += 1;
-  }
-  if (!counted) return 1;
-  return gainForWhite(whiteFromHistogram(hist, GAIN_BINS, counted, clip));
+  const hist = makeGainHistogram();
+  countBrightness(rgb16, table, hist, 0, width * height, stride);
+  return gainFromHistogram(hist, clip);
 }
 
 /**
@@ -243,6 +277,11 @@ export function boxedSize(width: number, height: number, factor: number): { widt
  * float32 values in the same order, so the two agree to the bit. A band at a
  * time is what lets the decoder yield between rows and stop on a cancel with
  * nothing full-size ever allocated.
+ *
+ * `srcRow0` and `srcCol0` are the plane row and column `rgb16`'s first row
+ * and column ARE, for a piece of the plane decoded on its own (a tile,
+ * `raw-tiles.ts`): the samples a box reads are then found at their plane
+ * index minus them. Both 0 when `rgb16` is the whole plane.
  */
 export function boxLinearRows(
   rgb16: Uint16Array,
@@ -253,6 +292,8 @@ export function boxLinearRows(
   outWidth: number,
   y0: number,
   y1: number,
+  srcRow0 = 0,
+  srcCol0 = 0,
 ): void {
   const inv = 1 / (factor * factor);
   for (let y = y0; y < y1; y += 1) {
@@ -261,7 +302,7 @@ export function boxLinearRows(
       let g = 0;
       let b = 0;
       for (let dy = 0; dy < factor; dy += 1) {
-        let i = ((y * factor + dy) * srcWidth + x * factor) * 3;
+        let i = ((y * factor + dy - srcRow0) * srcWidth + x * factor - srcCol0) * 3;
         for (let dx = 0; dx < factor; dx += 1) {
           r += table[rgb16[i]];
           g += table[rgb16[i + 1]];
@@ -364,9 +405,13 @@ export function halfTableFromLibRaw(table: Float32Array): Uint16Array {
   return out;
 }
 
-/** Samples `[from, to)` of a whole decode, packed through `halfTable` into `out`. */
-export function packHalfSamples(rgb16: Uint16Array, halfTable: Uint16Array, out: Uint16Array, from: number, to: number): void {
-  for (let i = from; i < to; i += 1) out[i] = halfTable[rgb16[i]];
+/**
+ * Samples `[from, to)` of a whole decode, packed through `halfTable` into
+ * `out`. `shift` is what to add to a whole-plane sample index to find that
+ * sample in `rgb16` — for a band decoded on its own; 0 for the whole plane.
+ */
+export function packHalfSamples(rgb16: Uint16Array, halfTable: Uint16Array, out: Uint16Array, from: number, to: number, shift = 0): void {
+  for (let i = from; i < to; i += 1) out[i] = halfTable[rgb16[i + shift]];
 }
 
 /** The 8-bit picture of the decode AS SHOT — with its measured gain, clipped at white — for a 2D canvas. */
@@ -406,9 +451,13 @@ export function byteTableFromLibRaw(table: Float32Array, gain: number): Uint8Cla
   return out;
 }
 
-/** Pixels `[from, to)` of a whole decode as RGBA bytes through `byteTable`, into `out`. */
-export function packBytePixels(rgb16: Uint16Array, byteTable: Uint8ClampedArray, out: Uint8ClampedArray, from: number, to: number): void {
-  for (let p = from, i = from * 3, o = from * 4; p < to; p += 1, i += 3, o += 4) {
+/**
+ * Pixels `[from, to)` of a whole decode as RGBA bytes through `byteTable`,
+ * into `out`. `shift` is what to add to a whole-plane PIXEL index to find it
+ * in `rgb16` — a band decoded on its own; 0 for the whole plane.
+ */
+export function packBytePixels(rgb16: Uint16Array, byteTable: Uint8ClampedArray, out: Uint8ClampedArray, from: number, to: number, shift = 0): void {
+  for (let p = from, i = (from + shift) * 3, o = from * 4; p < to; p += 1, i += 3, o += 4) {
     out[o] = byteTable[rgb16[i]];
     out[o + 1] = byteTable[rgb16[i + 1]];
     out[o + 2] = byteTable[rgb16[i + 2]];

@@ -7,7 +7,8 @@
  * something in the browser that wrote it:
  *
  * - `id` — a fresh one on import, so the same file read twice is two rolls and
- *   never an overwrite;
+ *   never an overwrite; and each PICTURE's id with it, since the thumbnails and
+ *   working previews are keyed by picture id alone;
  * - `sourceId` — an imported roll belongs to the source that imports it;
  * - the timestamps, and the thumbnails (their own store, re-baked).
  *
@@ -18,7 +19,7 @@
  * half-read. Pure and DOM-free.
  */
 
-import { ROLL_DOC_VERSION, createRollDoc, readRollDoc, type RollDoc } from './roll-types';
+import { ROLL_DOC_VERSION, createRollDoc, newRollId, readRollDoc, type RollDoc } from './roll-types';
 
 /** Marks the file as ours; a stray `.json` is rejected on it. */
 export const ROLL_FILE_KIND = 'atelier/develop-roll';
@@ -119,11 +120,20 @@ export function parseRollFile(text: string): RollParseResult {
  * field forgotten here fails a test rather than silently dropping what the file
  * carried (the fault `applyProjectFile` once had on intros).
  */
-export function rollDocFromFile(file: RollFile, now: number = Date.now(), sourceId?: string): RollDoc {
+export function rollDocFromFile(
+  file: RollFile,
+  now: number = Date.now(),
+  sourceId?: string,
+  makeId: () => string = newRollId,
+): RollDoc {
   const doc = createRollDoc(file.name, sourceId, now);
   return {
     ...doc,
-    pictures: structuredClone(file.pictures),
+    // Fresh PICTURE ids too, not only the roll's: thumbnails and working
+    // previews are keyed by picture id alone, so the same file imported twice
+    // made two rolls overwrite each other's cells — and deleting one deleted
+    // the other's.
+    pictures: structuredClone(file.pictures).map((p) => ({ ...p, id: makeId() })),
     export: structuredClone(file.export),
   };
 }

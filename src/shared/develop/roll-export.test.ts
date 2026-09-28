@@ -10,7 +10,6 @@ import {
   describeRun,
   fixedFrameDelivery,
   exportName,
-  longEdgeChoiceId,
   pixelHeadroom,
   rollOutputSize,
 } from './roll-export';
@@ -55,13 +54,15 @@ describe('pixelHeadroom — F3 of develop-originals.md', () => {
 });
 
 describe('decodableOriginal', () => {
-  it('accepts what a browser decodes and refuses a RAW, HEIC or TIFF', () => {
+  it('accepts what a browser or a shipped decoder reads and refuses a RAW or a TIFF', () => {
     expect(decodableOriginal('a.JPG')).toBe(true);
     expect(decodableOriginal('a.png')).toBe(true);
     expect(decodableOriginal('a.webp')).toBe(true);
     expect(decodableOriginal('a.DNG')).toBe(false);
     expect(decodableOriginal('a.ARW')).toBe(false);
-    expect(decodableOriginal('a.heic')).toBe(false);
+    expect(decodableOriginal('a.heic')).toBe(true);
+    expect(decodableOriginal('a.HIF')).toBe(true);
+    expect(decodableOriginal('a.jxl')).toBe(true);
     expect(decodableOriginal('a.tif')).toBe(false);
     expect(decodableOriginal(null)).toBe(false);
   });
@@ -272,10 +273,9 @@ describe('names and sentences', () => {
     expect(exportName('.jpg')).toBe('picture.jpg');
   });
 
-  it('maps a stored long edge to a Size choice and back to source', () => {
-    expect(longEdgeChoiceId(1920)).toBe('1920');
-    expect(longEdgeChoiceId(null)).toBe('source');
-    expect(longEdgeChoiceId(1234)).toBe('source');
+  it('counts files and pictures apart once a run has several targets', () => {
+    expect(describeRun(6, 'folder', [], 0, { pictures: 3, targets: 2 })).toBe('3 pictures × 2 targets — 6 files written');
+    expect(describeRun(3, 'folder', [], 0, { pictures: 3, targets: 1 })).toBe('3 pictures written');
   });
 
   it('describes a run with its first failure', () => {

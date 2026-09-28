@@ -21,15 +21,26 @@
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { useId, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
-import InfoDot from './InfoDot';
+import { createContext, useContext, useId, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import InfoDot, { InfoDotButton } from './InfoDot';
 import { Icons } from './icons';
 
 const OPEN_KEY = 'atelier.inspector.';
 
-function readOpen(id: string, fallback: boolean): boolean {
+/** Where a fold is remembered: for good on this browser, or for this tab's session only. */
+export type FoldMemory = 'local' | 'session';
+
+function foldStore(memory: FoldMemory): Storage | null {
   try {
-    const stored = localStorage.getItem(OPEN_KEY + id);
+    return memory === 'session' ? sessionStorage : localStorage;
+  } catch {
+    return null;
+  }
+}
+
+function readOpen(id: string, fallback: boolean, memory: FoldMemory): boolean {
+  try {
+    const stored = foldStore(memory)?.getItem(OPEN_KEY + id) ?? null;
     return stored === null ? fallback : stored === '1';
   } catch {
     return fallback;
@@ -48,6 +59,24 @@ interface InspectorSectionProps {
   actions?: ReactNode;
   defaultOpen?: boolean;
   /**
+   * Where the fold is remembered: `local` (the default) keeps it on this
+   * browser; `session` keeps it for the tab's session only — the Develop
+   * inspector's, where the maintainer wanted a fold to survive a change of
+   * picture but not to become a lasting setting (2026-09-23).
+   */
+  remember?: FoldMemory;
+  /**
+   * An accent dot after the title: something in the section departs from
+   * its default. What keeps a FOLDED section from hiding an edit.
+   */
+  marked?: boolean;
+  /**
+   * `false` draws the same header with no chevron and no fold — a section too
+   * small to be worth folding (one row of verbs) still reads like its
+   * neighbours.
+   */
+  foldable?: boolean;
+  /**
    * Controlled fold, for a section whose body COSTS something while open (a
    * request to an instance): the owner decides, and nothing is remembered.
    */
@@ -63,12 +92,15 @@ export function InspectorSection({
   info,
   actions,
   defaultOpen = true,
+  remember = 'local',
+  marked = false,
+  foldable = true,
   open: controlled,
   onOpenChange,
   children,
 }: InspectorSectionProps) {
-  const [remembered, setRemembered] = useState(() => readOpen(id, defaultOpen));
-  const open = controlled ?? remembered;
+  const [remembered, setRemembered] = useState(() => readOpen(id, defaultOpen, remember));
+  const open = !foldable || (controlled ?? remembered);
   const bodyId = useId();
   const toggle = () => {
     if (controlled !== undefined) {
@@ -77,7 +109,7 @@ export function InspectorSection({
     }
     setRemembered((o) => {
       try {
-        localStorage.setItem(OPEN_KEY + id, o ? '0' : '1');
+        foldStore(remember)?.setItem(OPEN_KEY + id, o ? '0' : '1');
       } catch {
         /* storage disabled: the fold lasts the session */
       }
@@ -93,6 +125,7 @@ export function InspectorSection({
   // The title stays the real button, so the keyboard and a screen reader keep
   // one control with `aria-expanded`; its click bubbles here like any other.
   const onBandClick = (e: MouseEvent<HTMLDivElement>) => {
+    if (!foldable) return;
     const band = e.currentTarget;
     const hit = e.target as Element;
     if (hit !== band) {
@@ -106,17 +139,30 @@ export function InspectorSection({
     <section className="flex flex-col border-t border-line first:border-t-0 py-3 first:pt-1">
       <div
         onClick={onBandClick}
-        className="group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 cursor-pointer"
+        className={`group/band flex flex-wrap items-center gap-x-2 gap-y-0 min-h-7 ${foldable ? 'cursor-pointer' : ''}`}
       >
-        <button
-          type="button"
-          data-fold
-          aria-expanded={open}
-          aria-controls={bodyId}
-          className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
-        >
-          {title}
-        </button>
+        {foldable ? (
+          <button
+            type="button"
+            data-fold
+            aria-expanded={open}
+            aria-controls={bodyId}
+            className="min-w-0 p-0 border-0 bg-transparent text-left font-sans text-sm font-semibold text-ink cursor-pointer truncate select-none group-hover/band:text-accent-ink focus:outline-none focus-visible:underline"
+          >
+            {title}
+          </button>
+        ) : (
+          <span className="min-w-0 font-sans text-sm font-semibold text-ink truncate">{title}</span>
+        )}
+        {marked && (
+          <span
+            data-fold
+            role="img"
+            aria-label="changed"
+            title="Something here is set"
+            className="flex-none w-1.5 h-1.5 rounded-full bg-accent"
+          />
+        )}
         {badge && (
           <span
             data-fold
@@ -128,15 +174,17 @@ export function InspectorSection({
         {info && <InfoDot about={title.toLowerCase()}>{info}</InfoDot>}
         <span data-fold className="flex-1 self-stretch" />
         {open && actions}
-        <span
-          data-fold
-          aria-hidden="true"
-          className={`flex-none grid place-items-center w-7 h-7 -mr-1.5 rounded-[8px] text-muted group-hover/band:bg-paper-2 group-hover/band:text-ink transition-transform duration-200 ease-paper [&>svg]:w-4 [&>svg]:h-4 ${
-            open ? '' : '-rotate-90'
-          }`}
-        >
-          {Icons.down}
-        </span>
+        {foldable && (
+          <span
+            data-fold
+            aria-hidden="true"
+            className={`flex-none grid place-items-center w-7 h-7 -mr-1.5 rounded-[8px] text-muted group-hover/band:bg-paper-2 group-hover/band:text-ink transition-transform duration-200 ease-paper [&>svg]:w-4 [&>svg]:h-4 ${
+              open ? '' : '-rotate-90'
+            }`}
+          >
+            {Icons.down}
+          </span>
+        )}
       </div>
       {open && (
         <div id={bodyId} className="flex flex-col gap-2.5 pt-2.5">
@@ -147,11 +195,44 @@ export function InspectorSection({
   );
 }
 
+/**
+ * Whether a row's `hint` is FOLDED behind an ⓘ beside its label instead of
+ * standing under the control. Off everywhere by default; the Develop
+ * inspector turns it on (`FoldHints`), where the maintainer found the prose
+ * under every dial — the grain's, the look's — costing the column more than
+ * the dials (2026-09-24). A hint that says a STATE rather than explaining
+ * (`hintShown`) stays in the open either way.
+ */
+const HintsFolded = createContext(false);
+
+export function FoldHints({ children }: { children: ReactNode }) {
+  return <HintsFolded.Provider value>{children}</HintsFolded.Provider>;
+}
+
+/** The hint of a row: under the control, or behind a dot the caller draws. */
+function useRowHint(hint: ReactNode, shown: boolean, about: ReactNode) {
+  const folded = useContext(HintsFolded) && !shown && Boolean(hint);
+  const [open, setOpen] = useState(false);
+  const id = useId();
+  const dot = folded ? (
+    <InfoDotButton
+      about={typeof about === 'string' ? about.toLowerCase() : 'this setting'}
+      open={open}
+      controls={id}
+      onToggle={() => setOpen((o) => !o)}
+    />
+  ) : null;
+  const visible = hint && (!folded || open);
+  return { dot, visible, id };
+}
+
 interface FieldRowProps {
   label: ReactNode;
   children: ReactNode;
   /** A sentence under the control — what it will really do, or why it cannot. */
   hint?: ReactNode;
+  /** The hint says a STATE, not a why: never folded behind a dot (`FoldHints`). */
+  hintShown?: boolean;
   /** `start` for a control taller than one line (a list, a grid of choices). */
   align?: 'center' | 'start';
   /** Ties the label to a single input, when there is one. */
@@ -159,22 +240,27 @@ interface FieldRowProps {
 }
 
 /** A label at the left, its control at the right, on one line. */
-export function FieldRow({ label, children, hint, align = 'center', htmlFor }: FieldRowProps) {
+export function FieldRow({ label, children, hint, hintShown = false, align = 'center', htmlFor }: FieldRowProps) {
   const Label = htmlFor ? 'label' : 'span';
+  const { dot, visible, id } = useRowHint(hint, hintShown, label);
   return (
     <div
       className={`grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 gap-y-1 ${
         align === 'start' ? 'items-start' : 'items-center'
       }`}
     >
-      <Label
-        htmlFor={htmlFor}
-        className={`text-sm text-ink-soft leading-tight ${align === 'start' ? 'pt-1.5' : ''}`}
-      >
-        {label}
-      </Label>
+      <span className={`flex items-center gap-1.5 min-w-0 ${align === 'start' ? 'pt-1.5' : ''}`}>
+        <Label htmlFor={htmlFor} className="text-sm text-ink-soft leading-tight">
+          {label}
+        </Label>
+        {dot}
+      </span>
       <div className="min-w-0 flex items-center gap-2">{children}</div>
-      {hint && <div className="col-start-2 text-xs leading-relaxed text-muted [&>p]:m-0">{hint}</div>}
+      {visible && (
+        <div id={id} className="col-start-2 text-xs leading-relaxed text-muted [&>p]:m-0">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }
@@ -304,7 +390,7 @@ export function ToggleField({ checked, onChange, label, children }: ToggleFieldP
 // inspector in the suite is a `position: fixed` sheet, the one place a raw
 // breakpoint still belongs — and because these are recipe strings, not
 // components.
-const fieldClass =
+export const fieldClass =
   'w-full min-w-0 font-sans text-sm max-[820px]:text-base h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20 disabled:opacity-45';
 const selectClass =
   'w-full appearance-none font-sans text-sm max-[820px]:text-base h-[2.125rem] pl-3 pr-9 border border-line-strong rounded-control bg-surface text-ink truncate cursor-pointer focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20';
@@ -431,20 +517,30 @@ interface SwitchRowProps {
   checked: boolean;
   onChange: (checked: boolean) => void;
   hint?: ReactNode;
+  /** The hint says a STATE, not a why: never folded behind a dot (`FoldHints`). */
+  hintShown?: boolean;
 }
 
 /**
  * A setting that is on or off and needs a phrase to say so ("Letters at
  * N / E / S / W"): the phrase across the row, the switch at its end.
  */
-export function SwitchRow({ label, name, checked, onChange, hint }: SwitchRowProps) {
+export function SwitchRow({ label, name, checked, onChange, hint, hintShown = false }: SwitchRowProps) {
+  const { dot, visible, id } = useRowHint(hint, hintShown, label);
   return (
     <div className="flex flex-col gap-1">
       <div className="flex items-center gap-3">
-        <span className="flex-1 min-w-0 text-sm text-ink-soft leading-tight">{label}</span>
+        <span className="flex-1 min-w-0 flex items-center gap-1.5 text-sm text-ink-soft leading-tight">
+          <span className="min-w-0">{label}</span>
+          {dot}
+        </span>
         <ToggleField label={name ?? (typeof label === 'string' ? label : 'Toggle')} checked={checked} onChange={onChange} />
       </div>
-      {hint && <div className="text-xs leading-relaxed text-muted [&>p]:m-0">{hint}</div>}
+      {visible && (
+        <div id={id} className="text-xs leading-relaxed text-muted [&>p]:m-0">
+          {hint}
+        </div>
+      )}
     </div>
   );
 }

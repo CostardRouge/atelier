@@ -10,6 +10,8 @@ import {
   type BadgeWords,
 } from '../../shared/roadtrip/day-badge';
 import { TIME_AGO_WORD_FIELDS, type TimeAgoWords } from '../../shared/roadtrip/time-ago';
+import { CAMERA_FIELDS, type CameraField } from '../../shared/exif/camera-facts';
+import { DEFAULT_CAMERA_WORDS } from '../../shared/overlay/camera-plate';
 import { serializeTripFile, toTripFile, tripFileName } from '../../shared/roadtrip/trip-file';
 import { spanLength } from '../../shared/roadtrip/trip-days';
 import {
@@ -112,6 +114,21 @@ export default function TripSettingsModal({
     onChangeTrip({
       ...trip,
       badgeWords: { ...trip.badgeWords, time: { ...trip.badgeWords.time, ...patch } },
+    });
+
+  // What was TYPED, blanks included — a field that snapped back to its
+  // default the moment it was emptied could not be retyped. The drawing reads
+  // a blank as the default (`cameraWordsOf`).
+  const cameraWords = {
+    shotOn: trip.badgeWords.camera?.shotOn ?? DEFAULT_CAMERA_WORDS.shotOn,
+    tags: { ...DEFAULT_CAMERA_WORDS.tags, ...trip.badgeWords.camera?.tags },
+  };
+  const patchCameraWords = (patch: { shotOn?: string; tag?: [CameraField, string] }) =>
+    patchWords({
+      camera: {
+        shotOn: patch.shotOn ?? cameraWords.shotOn,
+        tags: patch.tag ? { ...cameraWords.tags, [patch.tag[0]]: patch.tag[1] } : cameraWords.tags,
+      },
     });
 
   const savedDefault = trip.hookDefaults[post.kind] ?? null;
@@ -261,6 +278,29 @@ export default function TripSettingsModal({
                       <input
                         value={trip.badgeWords.time[f.key]}
                         onChange={(e) => patchTimeWords({ [f.key]: e.target.value })}
+                        className={`${inputClass} flex-1 min-w-0 max-[820px]:text-base`}
+                      />
+                    </label>
+                  ))}
+                </div>
+                <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
+                  Camera credit
+                </span>
+                <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 max-[820px]:grid-cols-1">
+                  <label className="flex items-center gap-2.5">
+                    <span className="w-[6.5rem] flex-none text-xs text-muted">Shot on</span>
+                    <input
+                      value={cameraWords.shotOn}
+                      onChange={(e) => patchCameraWords({ shotOn: e.target.value })}
+                      className={`${inputClass} flex-1 min-w-0 max-[820px]:text-base`}
+                    />
+                  </label>
+                  {CAMERA_FIELDS.map((f) => (
+                    <label key={f.id} className="flex items-center gap-2.5">
+                      <span className="w-[6.5rem] flex-none text-xs text-muted">{f.label}</span>
+                      <input
+                        value={cameraWords.tags[f.id]}
+                        onChange={(e) => patchCameraWords({ tag: [f.id, e.target.value] })}
                         className={`${inputClass} flex-1 min-w-0 max-[820px]:text-base`}
                       />
                     </label>

@@ -10,14 +10,15 @@
  * cadence, never re-times, and its deck is settled first (see
  * `overlay/still-frame.ts`).
  *
- * Decoding is the browser's `createImageBitmap`, which is also what applies the
- * EXIF orientation — so a phone portrait arrives upright, the way the `<video>`
- * element already hands over display-oriented frames.
+ * Decoding is `still-decode.ts`'s — the browser's `createImageBitmap`, which
+ * is also what applies the EXIF orientation, asked for the size the caller
+ * needs — so a phone portrait arrives upright, the way the `<video>` element
+ * already hands over display-oriented frames.
  */
 
 import { isSilentTexture, type FilmTexture } from '../film/film-texture';
-import { isRawImage } from '../library/assets';
-import { extractRawPreview } from '../exif/raw-probe';
+import { deviceClass } from '../lib/device-class';
+import { rawDecodeEdge } from '../raw/raw-budget';
 import type { Cue } from '../telemetry/srt-parser';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
@@ -30,77 +31,35 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { TimeShift } from '../telemetry/time-format';
 import { fitRect } from './compose-layout';
-import { imageTypeLabel } from './image-meta';
+import { decodeStill, PhotoDecodeError, type StillFitArg } from './still-decode';
 import { variantOutputSize, type ExportVariant } from '../projects/export-variants';
 
 /**
- * A photo the browser refused to decode — camera RAW, or a format this engine
- * lacks. Distinguished from any other failure so the UI can say what to do
- * (develop a JPEG/TIFF) instead of showing a stack trace.
+ * A photo the browser refused to decode — `still-decode.ts` owns it now; kept
+ * exported here for the readers that always found it here.
  */
-export class PhotoDecodeError extends Error {
-  constructor(name: string) {
-    super(
-      `This browser can't decode ${imageTypeLabel(name)}, and the file carries no render of its own — export a JPEG or TIFF from your RAW developer and use that.`,
-    );
-    this.name = 'PhotoDecodeError';
-  }
+export { PhotoDecodeError };
+
+/**
+ * Decode a photo into a bitmap, upright, at the size `fit` asks — never larger
+ * than the picture (`still-decode.ts`). Throws {@link PhotoDecodeError} when
+ * the browser cannot read it: the library deliberately keeps handles it
+ * cannot decode (a RAW is still a photo you own), so this is a routine
+ * outcome, not a bug to swallow.
+ */
+export async function decodePhoto(file: File, fit: StillFitArg = {}): Promise<ImageBitmap> {
+  return (await decodeStill(file, fit)).bitmap;
 }
 
 /**
- * Decode a photo into a bitmap, upright. Throws {@link PhotoDecodeError} when
- * the browser cannot read it: the library deliberately keeps handles it cannot
- * decode (a RAW is still a photo you own), so this is a routine outcome, not a
- * bug to swallow.
+ * The longest edge a still is delivered from on this device: the GPU's cap,
+ * and on a phone the export ceiling a RAW already obeys (`raw-budget.ts`) —
+ * a 48-megapixel JPEG decoded and graded whole is what a phone's tab dies of
+ * (the audit of 2026-09-25: ~1.6 GB with a look, a layer and a sharpen). A
+ * computer's answer is the GPU's cap alone, as before.
  */
-export async function decodePhoto(file: File): Promise<ImageBitmap> {
-  return (await decodePhotoSource(file)).bitmap;
-}
-
-/** A decoded picture, and whether it is the file itself or a render inside it. */
-export interface DecodedPhoto {
-  bitmap: ImageBitmap;
-  /**
-   * True when the bytes drawn are the camera's own embedded JPEG rather than
-   * the file's own pixels — a RAW. What is on screen is then a RENDER, not the
-   * sensor's data, and every panel showing it has to say so.
-   */
-  viaRawPreview: boolean;
-}
-
-/**
- * Decode a picture, falling back to the render a RAW carries inside it.
- *
- * No browser decodes a sensor plane, but a camera writes its own JPEG into the
- * file beside it — so a DNG or an ARW draws today, with no decoder fetched and
- * no dependency added (`shared/exif/raw-probe.ts`). It is the camera's
- * rendering, not ours: highlights above white are already gone from it, and
- * that is exactly why the caller is told which it got.
- */
-export async function decodePhotoSource(file: File): Promise<DecodedPhoto> {
-  try {
-    return {
-      bitmap: await createImageBitmap(file, { imageOrientation: 'from-image' }),
-      viaRawPreview: false,
-    };
-  } catch {
-    // Only a RAW is worth a second attempt: anything else the browser refused
-    // is simply a picture it cannot read, and probing it would be wasted work.
-    if (isRawImage(file.name)) {
-      try {
-        const preview = await extractRawPreview(file);
-        if (preview) {
-          return {
-            bitmap: await createImageBitmap(preview, { imageOrientation: 'from-image' }),
-            viaRawPreview: true,
-          };
-        }
-      } catch {
-        // A malformed or previewless RAW falls through to the honest refusal.
-      }
-    }
-    throw new PhotoDecodeError(file.name);
-  }
+export function exportEdge(): number {
+  return rawDecodeEdge('export', deviceClass(), maxRenderSize());
 }
 
 /** A picture as the GPU can take it — the bitmap itself, or a copy fitted to its cap. */

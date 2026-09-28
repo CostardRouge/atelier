@@ -557,6 +557,9 @@ the README.
 
 ### 7.7 The bridge
 
+**Built 2026-09-24** (his "go"), the develop alone — the theme loss stays
+open: `withHookDevelop` in `hook-scene.ts`, rules in `roadtrip.md`.
+
 `withHook` gains the hook's develop, written into the project's
 `media.develops` under the hook media's base name — so a reel from the linked
 project wears the correction the badge was composed over. Phased **with the

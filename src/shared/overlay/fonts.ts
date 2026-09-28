@@ -3,7 +3,7 @@
  *
  * Canvas `fillText`/`measureText` only render and measure correctly with fonts
  * the document has actually loaded. The brand fonts (Space Grotesk, JetBrains
- * Mono, Instrument Serif, VT323) come from the document's font links, but we
+ * Mono, Instrument Serif, VT323) are bundled @font-face rules (main.tsx), but we
  * can't assume that finished — so we explicitly `document.fonts.load(...)`
  * each face the deck resolves to (theme included) and await
  * `document.fonts.ready` before the first measured draw and before export.

@@ -20,11 +20,13 @@ import {
   type BadgeSource,
   type CollageSources,
 } from './badge-render';
+import { exportEdge } from '../media/photo-frame';
 import { collageSettleSeconds } from './collage';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
 import { slideRender } from './slide-render';
 import type { TripDoc, TripPost } from './trip-types';
+import type { ExifData } from '../exif/exif-parser';
 
 /**
  * The long edge every still of a deck is written at. One number, exported,
@@ -65,10 +67,10 @@ export interface RenderDeckOptions {
    */
   pictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The hook picture's exposure line, when the piece credits its camera —
-   * measured where the file is (the editor), never re-read here.
+   * The hook picture's effective EXIF, when the piece credits its camera —
+   * read where the file is (the editor), never re-read here.
    */
-  exposure?: string | null;
+  exif?: ExifData | null;
   /**
    * Which slides to render. Absent renders the whole deck, which is what the
    * PNG export has always done; the piece export passes the stills only,
@@ -107,17 +109,17 @@ export async function renderDeck(
       if (slide.collage) {
         // Every cell's picture, the lead's first; each cell's cube is the
         // slide's grade baked with THAT cell's develop.
-        cells = await loadCollageSources(slide, slide.collage, opts.resolve);
+        cells = await loadCollageSources(slide, slide.collage, opts.resolve, { maxEdge: exportEdge() });
       } else {
         const file = opts.resolve(slide.media);
-        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds);
+        if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds, { maxEdge: exportEdge() });
       }
 
       const blob = await badgeToPng({
         // What this slide is made of — the badge, a caption or the trip's
         // card, each with its own framing — derived exactly as the stage and
         // the rail's thumbnails derive it.
-        ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exposure),
+        ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exif),
         source,
         // A still: the cells at rest, never leaving — no screen time is passed.
         collage: cells && slide.collage ? { collage: slide.collage, items: cells.items } : null,

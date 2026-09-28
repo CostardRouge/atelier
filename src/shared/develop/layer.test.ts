@@ -14,9 +14,21 @@ import {
   removeLayer,
   readLayers,
   sameLayers,
+  subjectLayersToSegment,
+  subjectLayersForRender,
+  exceptCandidates,
+  layerWeight,
+  MAX_MASK_PARTS,
+  addPart,
+  componentMask,
+  describePart,
+  patchPart,
+  readParts,
+  removePart,
+  withComponentMask,
   type AdjustLayer,
 } from './layer';
-import { DEFAULT_LUMA, DEFAULT_RADIAL } from '../render/mask';
+import { DEFAULT_LUMA, DEFAULT_RADIAL, SUBJECT_MODEL } from '../render/mask';
 
 const layer = (over: Partial<AdjustLayer> = {}): AdjustLayer => ({
   ...createLayer('linear', 'l1'),
@@ -59,6 +71,85 @@ describe('what draws', () => {
     const off = layer({ id: 'b', enabled: false, develop: { ...DEFAULT_DEVELOP, contrast: 20 } });
     expect(drawingLayers([on, off]).map((l) => l.id)).toEqual(['a']);
     expect(drawingLayers(null)).toEqual([]);
+  });
+});
+
+describe('which subjects the model is asked for', () => {
+  const subject = (id: string, points: [number, number][], over: Partial<AdjustLayer> = {}): AdjustLayer => ({
+    ...createLayer('subject', id),
+    ...over,
+    mask: { kind: 'subject', points, model: SUBJECT_MODEL },
+  });
+
+  it('segments a fresh subject whose sliders are still at zero', () => {
+    // The maintainer's report: a tap picked nothing until a slider moved.
+    const fresh = subject('s', [[0.5, 0.5]]);
+    expect(layerDraws(fresh)).toBe(false);
+    expect(subjectLayersToSegment([fresh]).map((l) => l.id)).toEqual(['s']);
+  });
+
+  it('skips a hidden subject, one with no point yet, and every other kind', () => {
+    const hidden = subject('h', [[0.5, 0.5]], { enabled: false });
+    const empty = subject('e', []);
+    const whole = layer({ id: 'w', mask: null, develop: { ...DEFAULT_DEVELOP, exposure: -1 } });
+    expect(subjectLayersToSegment([hidden, empty, whole])).toEqual([]);
+    expect(subjectLayersToSegment(null)).toEqual([]);
+  });
+});
+
+describe('a layer that takes a subject out of itself', () => {
+  const subject = (id: string, over: Partial<AdjustLayer> = {}): AdjustLayer => ({
+    ...createLayer('subject', id),
+    mask: { kind: 'subject', points: [[0.5, 0.5]], model: SUBJECT_MODEL },
+    ...over,
+  });
+  const whole = (over: Partial<AdjustLayer> = {}) =>
+    layer({ id: 'w', mask: null, develop: { ...DEFAULT_DEVELOP, exposure: -1 }, except: 's', ...over });
+
+  it('starts with nothing taken out, and reads back what was stored', () => {
+    expect(createLayer(null).except).toBeNull();
+    expect(normaliseLayer({ except: 's' })?.except).toBe('s');
+    expect(normaliseLayer({ except: 3 })?.except).toBeNull();
+    expect(normaliseLayer({})?.except).toBeNull();
+  });
+
+  it('counts the subtraction when comparing', () => {
+    expect(sameLayers([whole()], [whole({ except: null })])).toBe(false);
+  });
+
+  it('segments the subtracted subject even while its own layer is hidden', () => {
+    const hidden = subject('s', { enabled: false });
+    expect(subjectLayersToSegment([hidden, whole()]).map((l) => l.id)).toEqual(['s']);
+    expect(subjectLayersToSegment([hidden, whole({ enabled: false })])).toEqual([]);
+  });
+
+  it('asks a delivery only for the subjects something drawing uses', () => {
+    const parked = subject('p');
+    const cut = subject('s', { enabled: false });
+    expect(subjectLayersForRender([parked, cut, whole()]).map((l) => l.id)).toEqual(['s']);
+    const drawing = subject('d', { develop: { ...DEFAULT_DEVELOP, exposure: 1 } });
+    expect(subjectLayersForRender([drawing]).map((l) => l.id)).toEqual(['d']);
+  });
+
+  it('offers only the other subject layers', () => {
+    const s = subject('s');
+    expect(exceptCandidates([s, whole()], 'w').map((l) => l.id)).toEqual(['s']);
+    expect(exceptCandidates([s], 's')).toEqual([]);
+  });
+
+  it('forgets a subtraction whose subject is deleted', () => {
+    expect(removeLayer([subject('s'), whole()], 's')[0].except).toBeNull();
+  });
+
+  it('says what it takes out', () => {
+    expect(layerLabel(whole(), [subject('s'), whole()])).toBe('the whole picture except the subject');
+  });
+
+  it('holes the mask AFTER the invert, so the hole stays a hole', () => {
+    expect(layerWeight(1, false, 1, 1)).toBe(0);
+    expect(layerWeight(0, true, 1, 1)).toBe(0);
+    expect(layerWeight(1, false, 0, 0.5)).toBe(0.5);
+    expect(layerWeight(1, false, 0.25, 1)).toBe(0.75);
   });
 });
 
@@ -170,5 +261,70 @@ describe('what the list calls a layer', () => {
       'not shadows',
     );
     expect(layerLabel(layer({ mask: null }))).toBe('the whole picture');
+  });
+});
+
+describe('masks combined (item 16)', () => {
+  const base = () => layer({ mask: { ...DEFAULT_RADIAL } });
+
+  it('starts with no part, and a stored layer without the field reads as none', () => {
+    expect(createLayer('radial').parts).toEqual([]);
+    expect(normaliseLayer({ id: 'x', mask: { kind: 'linear' } })?.parts).toEqual([]);
+  });
+
+  it('adds a part at its default shape, caps them, and refuses a subject', () => {
+    let l = addPart(base(), 'subtract', 'brush');
+    expect(l.parts).toEqual([{ op: 'subtract', mask: { kind: 'brush', strokes: [] }, invert: false }]);
+    expect(addPart(l, 'add', 'subject')).toBe(l);
+    for (let i = 0; i < 10; i += 1) l = addPart(l, 'add', 'linear');
+    expect(l.parts).toHaveLength(MAX_MASK_PARTS);
+  });
+
+  it('reads parts back safely: junk and subjects dropped, a bad op read as add', () => {
+    const read = readParts([
+      { op: 'intersect', mask: { ...DEFAULT_LUMA }, invert: true },
+      { op: 'nope', mask: { kind: 'radial' } },
+      { op: 'add', mask: { kind: 'subject', points: [[0.5, 0.5]] } },
+      'junk',
+      { op: 'add', mask: null },
+    ]);
+    expect(read.map((p) => [p.op, p.mask.kind, p.invert])).toEqual([
+      ['intersect', 'luma', true],
+      ['add', 'radial', false],
+    ]);
+  });
+
+  it('compares, clones and names the parts', () => {
+    const a = patchPart(addPart(base(), 'intersect', 'luma'), 0, { invert: true });
+    const b = cloneLayers([a])[0];
+    expect(sameLayers([a], [b])).toBe(true);
+    expect(b.parts[0]).not.toBe(a.parts[0]);
+    expect(sameLayers([a], [patchPart(a, 0, { op: 'add' })])).toBe(false);
+    expect(layerLabel(a)).toBe('radial · 40 % ∩ not shadows');
+    expect(describePart(removePart(addPart(a, 'subtract', 'colour'), 0).parts[0])).toBe('− colour · tap one');
+  });
+
+  it('opens one component at a time for the stage to act on', () => {
+    const l = addPart(base(), 'subtract', 'brush');
+    expect(componentMask(l, null)?.kind).toBe('radial');
+    expect(componentMask(l, 0)?.kind).toBe('brush');
+    expect(componentMask(l, 3)).toBeNull();
+    const painted = withComponentMask(l, 0, { kind: 'brush', strokes: [{ points: [[0.5, 0.5]], radius: 0.1, hardness: 0.5, erase: false }] });
+    expect(painted.mask).toBe(l.mask);
+    expect(painted.parts[0].mask).toMatchObject({ kind: 'brush' });
+    expect(withComponentMask(l, 5, null)).toBe(l);
+  });
+
+  it('weighs the parts in order, each turned by its own invert, before the subject hole', () => {
+    // A radial at 1, minus a stroke at 0.75, intersected with a band at 0.5.
+    const parts = [
+      { op: 'subtract' as const, invert: false, value: 0.75 },
+      { op: 'intersect' as const, invert: true, value: 0.5 },
+    ];
+    expect(layerWeight(1, false, 0, 1, parts)).toBeCloseTo(0.125, 10);
+    // Add is the larger of the two, so adding a shape to itself changes nothing.
+    expect(layerWeight(0.4, false, 0, 1, [{ op: 'add', invert: false, value: 0.4 }])).toBe(0.4);
+    // The hole still comes last.
+    expect(layerWeight(0, true, 1, 1, [{ op: 'add', invert: false, value: 1 }])).toBe(0);
   });
 });

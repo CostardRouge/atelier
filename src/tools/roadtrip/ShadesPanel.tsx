@@ -1,18 +1,26 @@
 import type { CSSProperties } from 'react';
 import type { Anchor } from '../../shared/overlay/overlay-types';
 import {
+  MAX_CORE,
   MAX_SHADES,
   SHADE_DIRECTIONS,
+  SHADE_FALLOFFS,
   SHADE_GRID,
+  centreMovable,
   createShade,
   directionInCell,
   followFlags,
   reachFollowsBadge,
   shadeCell,
+  shadeCentre,
+  shadeCore,
+  shadeFalloff,
   shadeFollow,
+  shadeGradient,
   vignetteShade,
   type Shade,
   type ShadeDirection,
+  type ShadeFalloff,
   type ShadeFollow,
 } from '../../shared/roadtrip/shades';
 import Button from '../../shared/ui/Button';
@@ -26,6 +34,13 @@ interface ShadesPanelProps {
   onChange: (next: Shade[]) => void;
   /** The badge's grid anchor, what a shade following it is placed by. */
   anchor?: Anchor;
+  /** The shade whose centre the stage is placing, if any. */
+  placing?: string | null;
+  /**
+   * Hand a shade's centre to the stage (or take it back with null). Absent,
+   * the centre is set by its sliders alone.
+   */
+  onPlace?: (id: string | null) => void;
 }
 
 const INK = 'color-mix(in srgb, var(--color-ink) 80%, transparent)';
@@ -93,6 +108,61 @@ function GlyphButton({
 }
 
 /**
+ * A falloff's picture: the strength along a shade's run, drawn from the very
+ * stops the renderer gets for it — a sketch of the curve could drift from it.
+ */
+const FALLOFF_PATHS: Record<ShadeFalloff, string> = Object.fromEntries(
+  SHADE_FALLOFFS.map(({ id }) => {
+    const g = shadeGradient(createShade({ direction: 'left', strength: 1, reach: 1, falloff: id }));
+    const stops = g?.stops ?? [];
+    const line = stops
+      .map((s, i) => `${i ? 'L' : 'M'}${(2 + s.at * 32).toFixed(2)} ${(3 + (1 - s.alpha) * 16).toFixed(2)}`)
+      .join('');
+    return [id, line];
+  }),
+) as Record<ShadeFalloff, string>;
+
+function FalloffButton({
+  falloff,
+  pressed,
+  disabled,
+  onClick,
+  label,
+  hint,
+}: {
+  falloff: ShadeFalloff;
+  pressed: boolean;
+  disabled: boolean;
+  onClick: () => void;
+  label: string;
+  hint: string;
+}) {
+  const path = FALLOFF_PATHS[falloff];
+  return (
+    <button
+      type="button"
+      onClick={onClick}
+      disabled={disabled}
+      aria-label={label}
+      aria-pressed={pressed}
+      title={`${label} — ${hint}`}
+      className={`w-9 h-7 rounded-[6px] border bg-paper cursor-pointer disabled:opacity-45 disabled:cursor-default transition-[border-color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
+        pressed
+          ? 'border-accent text-accent shadow-[0_0_0_1px_var(--color-accent)]'
+          : 'border-line-strong text-ink-soft hover:border-muted'
+      }`}
+    >
+      <svg viewBox="0 0 36 22" className="w-full h-full" aria-hidden="true">
+        <path d={`${path}L34 19L2 19Z`} fill="currentColor" opacity="0.18" />
+        <path d={path} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
+      </svg>
+    </button>
+  );
+}
+
+const pct = (v: number) => `${Math.round(v * 100)}%`;
+
+/**
  * The stack of shades laid over a picture, as inspector rows.
  *
  * One list rather than a vignette control and a scrim control: they were the
@@ -110,7 +180,13 @@ function GlyphButton({
  * reached for constantly (a scrim under the hook, a corner vignette) would
  * otherwise each be four adjustments.
  */
-export default function ShadesPanel({ shades, onChange, anchor }: ShadesPanelProps) {
+export default function ShadesPanel({
+  shades,
+  onChange,
+  anchor,
+  placing = null,
+  onPlace,
+}: ShadesPanelProps) {
   const patch = (id: string, next: Partial<Shade>) =>
     onChange(shades.map((s) => (s.id === id ? { ...s, ...next } : s)));
 
@@ -140,6 +216,14 @@ export default function ShadesPanel({ shades, onChange, anchor }: ShadesPanelPro
         const reachLive = !reachFollowsBadge(direction, follow);
         // Absent on every shade stored before the switch existed: that is ON.
         const on = shade.enabled !== false;
+        // The fade's shape, read through the helpers so an absent field is
+        // shown as what it draws (soft, no core, the middle).
+        const falloff = shadeFalloff(shade);
+        const core = shadeCore(shade);
+        const centre = shadeCentre(shade);
+        const movable = centreMovable(direction, follow);
+        const centred =
+          (movable === 'y' || centre.x === 0.5) && (movable === 'x' || centre.y === 0.5);
         // Picking a cell by hand is placing it by hand: an anchored shade
         // stops following the anchor, but keeps landing on the badge's edge.
         const pick = (next: ShadeDirection) =>
@@ -246,6 +330,112 @@ export default function ShadesPanel({ shades, onChange, anchor }: ShadesPanelPro
                 format={(v) => `${Math.round(v * 100)}%`}
               />
             </FieldRow>
+            <FieldRow
+              label="Core"
+              hint={
+                core > 0
+                  ? `Full strength over ${pct(core)} of the ${round ? 'radius' : 'reach'}, then the fade.`
+                  : undefined
+              }
+            >
+              <RangeField
+                label={`Shade ${i + 1} core`}
+                min={0}
+                max={MAX_CORE}
+                step={0.02}
+                value={core}
+                disabled={!on}
+                onChange={(next) => patch(shade.id, { core: next })}
+                format={pct}
+              />
+            </FieldRow>
+            <FieldRow
+              label="Falloff"
+              hint={SHADE_FALLOFFS.find((f) => f.id === falloff)?.hint}
+            >
+              <div
+                className="flex flex-wrap gap-1"
+                role="group"
+                aria-label={`Shade ${i + 1} falloff`}
+              >
+                {SHADE_FALLOFFS.map((f) => (
+                  <FalloffButton
+                    key={f.id}
+                    falloff={f.id}
+                    label={f.label}
+                    hint={f.hint}
+                    pressed={f.id === falloff}
+                    disabled={!on}
+                    onClick={() => patch(shade.id, { falloff: f.id })}
+                  />
+                ))}
+              </div>
+            </FieldRow>
+            {movable && (
+              <FieldRow
+                label="Centre"
+                align="start"
+                hint={
+                  placing === shade.id ? (
+                    <p>
+                      Press or drag on the picture to move the{' '}
+                      {movable === 'both' ? 'centre' : 'band'}.
+                    </p>
+                  ) : centred ? undefined : (
+                    <button
+                      type="button"
+                      className="p-0 bg-transparent border-0 text-xs text-accent-ink underline underline-offset-2 cursor-pointer"
+                      onClick={() => patch(shade.id, { center: undefined })}
+                    >
+                      Back to the middle
+                    </button>
+                  )
+                }
+              >
+                <div className="flex flex-col gap-1.5 flex-1 min-w-0">
+                  {onPlace && (
+                    <Button
+                      size="sm"
+                      variant={placing === shade.id ? 'primary' : 'default'}
+                      aria-pressed={placing === shade.id}
+                      disabled={!on}
+                      className="self-start"
+                      onClick={() => onPlace(placing === shade.id ? null : shade.id)}
+                    >
+                      {placing === shade.id ? 'Done placing' : 'Place on the picture'}
+                    </Button>
+                  )}
+                  {movable !== 'y' && (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <RangeField
+                        label={`Shade ${i + 1} centre across`}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={centre.x}
+                        disabled={!on}
+                        onChange={(x) => patch(shade.id, { center: { ...centre, x } })}
+                        format={(v) => `${pct(v)} →`}
+                      />
+                    </div>
+                  )}
+                  {movable !== 'x' && (
+                    <div className="flex items-center gap-2 min-w-0">
+                      <RangeField
+                        label={`Shade ${i + 1} centre down`}
+                        min={0}
+                        max={1}
+                        step={0.01}
+                        value={centre.y}
+                        disabled={!on}
+                        onChange={(y) => patch(shade.id, { center: { ...centre, y } })}
+                        format={(v) => `${pct(v)} ↓`}
+                      />
+                    </div>
+                  )}
+                </div>
+              </FieldRow>
+            )}
             <FieldRow label="Invert">
               <ToggleField
                 label={`Invert shade ${i + 1}`}

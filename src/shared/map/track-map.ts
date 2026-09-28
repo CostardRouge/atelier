@@ -18,11 +18,22 @@ export const MAP_PAPER_BG = '#e8e2d4';
 /** Accent used for the track line and the aircraft marker. */
 export const MAP_ACCENT = '#d9442a';
 /**
- * The opt-in raster base layer. One of the two URLs this suite ever fetches on
- * purpose — the other is the equally opt-in place search in `geocode.ts`, kept
- * in this folder so both are auditable from one place.
+ * The opt-in raster base layer. One of the few third-party URLs this suite
+ * fetches on purpose, all opt-in and listed in `docs/memory/local-first.md` —
+ * the place search in `geocode.ts` sits beside it in this folder.
  */
 export const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
+
+/**
+ * What the base-map toggle says, in every tool that offers one: it starts OFF,
+ * and its hint names what turning it on sends and to whom.
+ */
+export const TILES_TOGGLE = {
+  off: 'Load map background',
+  on: 'Map background: on',
+  title:
+    'Fetch map tiles from OpenStreetMap — this reveals the area you are viewing to its tile server. The flight path always draws offline.',
+} as const;
 
 /** A tiles-free base style: just the paper backdrop, the track draws on top. */
 export const TRACK_MAP_STYLE: StyleSpecification = {

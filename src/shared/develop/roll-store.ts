@@ -23,24 +23,30 @@
  * - `previews` (v3) — a WORKING PREVIEW per local picture of a roll that asked
  *   for them (F5): a 2048 px JPEG to develop from while the file is away. The
  *   one place the suite keeps media bytes, by the maintainer's decision (Q2 of
- *   §9) — local pictures only, per roll, opt-in, its weight said.
+ *   §9) — local pictures only, per roll, opt-in, its weight said;
+ * - `exports` (v4, 2026-09-23) — when each picture of a roll last LEFT and as
+ *   what (`export-marks.ts`), one row per roll. This device's, like `folders`:
+ *   the files landed in a folder of this machine, and a mark on the document
+ *   would be an undo step.
  */
 
 import type { SyncRecord } from '../sources/doc-sync';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { readPresetBook, type PresetBook } from './preset-book';
 import { migrateRollDoc, type RollDoc } from './roll-types';
+import { readExportMarks, type ExportMarks } from './export-marks';
 
 const DB_NAME = 'atelier-develop';
 // Bumped only when an object store is added; a document migration runs on read.
-// v2 (2026-09-16): `folders`. v3 (same day): `previews`.
-const DB_VERSION = 3;
+// v2 (2026-09-16): `folders`. v3 (same day): `previews`. v4 (2026-09-23): `exports`.
+const DB_VERSION = 4;
 const ROLLS = 'rolls';
 const THUMBS = 'thumbs';
 const SYNC = 'sync';
 const PRESETS = 'presets';
 const FOLDERS = 'folders';
 const PREVIEWS = 'previews';
+const EXPORTS = 'exports';
 
 interface ThumbRecord {
   /** The roll picture's id. */
@@ -54,7 +60,7 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const name of [ROLLS, THUMBS, SYNC, PRESETS, FOLDERS, PREVIEWS]) {
+      for (const name of [ROLLS, THUMBS, SYNC, PRESETS, FOLDERS, PREVIEWS, EXPORTS]) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
       }
     };
@@ -333,3 +339,32 @@ export async function deleteRollPreviews(pictureIds: readonly string[]): Promise
   }
 }
 
+
+// --- export marks (v4) ------------------------------------------------------
+
+/** When each picture of a roll last left (`export-marks.ts`); `{}` when none did or storage is unusable. */
+export async function getExportMarks(rollId: string): Promise<ExportMarks> {
+  try {
+    const row = await withStore(EXPORTS, 'readonly', (s) => s.get(rollId) as IDBRequest<{ marks?: unknown } | undefined>);
+    return readExportMarks(row?.marks);
+  } catch {
+    return {};
+  }
+}
+
+export async function putExportMarks(rollId: string, marks: ExportMarks, now: number = Date.now()): Promise<boolean> {
+  try {
+    await withStore(EXPORTS, 'readwrite', (s) => s.put({ id: rollId, marks, updatedAt: now }));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+export async function deleteExportMarks(rollId: string): Promise<void> {
+  try {
+    await withStore(EXPORTS, 'readwrite', (s) => s.delete(rollId));
+  } catch {
+    /* already gone or storage unusable */
+  }
+}

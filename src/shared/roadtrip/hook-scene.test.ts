@@ -12,7 +12,10 @@ import {
   withHook,
   withoutCtaOutro,
   withoutHook,
+  withHookDevelop,
+  projectMediaKey,
 } from './hook-scene';
+import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { createShade } from './shades';
 import { createTextElement, type OverlayElement } from '../overlay/overlay-types';
@@ -219,5 +222,44 @@ describe('the call to action as the project outro', () => {
     expect(withoutCtaOutro(sent).outro).toBeNull();
     const untouched = project();
     expect(withoutCtaOutro(untouched)).toBe(untouched);
+  });
+});
+
+describe('the hook picture’s develop crosses the bridge', () => {
+  const lifted = { ...DEFAULT_DEVELOP, exposure: 1 };
+  const withMedia = (develops: ProjectDoc['media']['develops'] = {}) =>
+    project({ media: { dirHandle: null, files: [], activeId: null, trims: {}, develops } } as Partial<ProjectDoc>);
+
+  it('writes it under the media key, marked, with its hash — never a RAW base', () => {
+    const { doc, held } = withHookDevelop(withMedia(), {
+      name: 'DJI_0042.JPG',
+      hash: 'h1',
+      settings: { ...lifted, base: 'gain', rawGain: 2 },
+    });
+    expect(held).toBe(false);
+    expect(projectMediaKey('DJI_0042.JPG')).toBe('dji_0042');
+    expect(doc.media.develops.dji_0042).toEqual({ settings: { ...lifted, base: null, rawGain: null, rawWb: null }, hash: 'h1', via: 'roadtrip' });
+  });
+
+  it('replaces what it sent, and takes it back when the hook is as shot', () => {
+    const first = withHookDevelop(withMedia(), { name: 'a.jpg', settings: lifted }).doc;
+    const second = withHookDevelop(first, { name: 'a.jpg', settings: { ...lifted, exposure: 2 } }).doc;
+    expect(second.media.develops.a.settings.exposure).toBe(2);
+    const cleared = withHookDevelop(second, { name: 'a.jpg', settings: null }).doc;
+    expect(cleared.media.develops.a).toBeUndefined();
+    expect(withHookDevelop(withMedia(), { name: 'a.jpg', settings: null }).doc.media.develops).toEqual({});
+  });
+
+  it('never overwrites a develop the author set in the Studio', () => {
+    const own = withMedia({ a: { settings: { ...lifted, exposure: -1 } } });
+    const { doc, held } = withHookDevelop(own, { name: 'a.jpg', settings: lifted });
+    expect(held).toBe(true);
+    expect(doc).toBe(own);
+  });
+
+  it('an unlink takes back only what the bridge wrote', () => {
+    const doc = withMedia({ a: { settings: lifted, via: 'roadtrip' }, b: { settings: lifted } });
+    const out = withoutHook(doc);
+    expect(out.media.develops).toEqual({ b: { settings: lifted } });
   });
 });

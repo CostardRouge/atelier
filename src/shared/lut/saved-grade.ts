@@ -12,6 +12,7 @@
  */
 
 import { filmTextureKey, filmTextureOrNull, type FilmTexture } from '../film/film-texture';
+import type { LutLayer } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS, type OutputTransform } from './transfer';
 import type { SavedLutLayer } from './use-lut-stack';
 
@@ -75,6 +76,33 @@ export function gradeKey(grade: SavedGrade | null): string {
       (l.source === FILM_SOURCE || l.source === PACK_SOURCE ? `:${l.customText ?? ''}` : ''),
   );
   return [grade.output, filmTextureKey(grade.film), ...layers].join('|');
+}
+
+/**
+ * The stored form of a live stack — what `useLutStack().toSaved()` writes.
+ * Only a film, a pack or an uploaded layer carries text, read from `customText`
+ * by id; a built-in is named by its source alone.
+ *
+ * A layer that came back `missing` from `restoreLayers` is written like any
+ * other, which is the point: a host writes its stack back whenever this
+ * differs from what it restored, so restoring and saving must round-trip or
+ * an open rewrites the document.
+ */
+export function savedLayers(
+  layers: readonly LutLayer[],
+  customText: Readonly<Record<string, string>>,
+): SavedLutLayer[] {
+  return layers.map((l) => ({
+    id: l.id,
+    source: l.source,
+    name: l.name,
+    customText:
+      l.source === 'custom' || l.source === FILM_SOURCE || l.source === PACK_SOURCE
+        ? (customText[l.id] ?? null)
+        : null,
+    intensity: l.intensity,
+    enabled: l.enabled,
+  }));
 }
 
 /**
