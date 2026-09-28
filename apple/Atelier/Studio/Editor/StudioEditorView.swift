@@ -104,7 +104,14 @@ struct StudioWorkbench: View {
         case files, folder, repoint
     }
 
+    // The body in three pieces, each type-checked on its own: as ONE chain of
+    // some forty modifiers, Xcode 26's macOS compiler gave up on it.
     var body: some View {
+        lifecycle(keyed(presented))
+    }
+
+    /// The stage and inspector, their panels, pickers and sheets.
+    private var presented: some View {
         Group {
             if compact { phone } else { wide }
         }
@@ -169,6 +176,11 @@ struct StudioWorkbench: View {
         .sheet(isPresented: $editor.developOpen) {
             StudioDevelopSheet(editor: editor)
         }
+    }
+
+    /// The editor's own keys, read while no field of it types.
+    private func keyed(_ content: some View) -> some View {
+        content
         // Keys: the editor's own, read while no field of it types.
         .focusable()
         .focusEffectDisabled()
@@ -178,6 +190,11 @@ struct StudioWorkbench: View {
             return editor.handleKey(key) ? .handled : .ignored
         }
         .documentSyncLifecycle(editor.store.sync)
+    }
+
+    /// What follows the app, the library and the clip.
+    private func lifecycle(_ content: some View) -> some View {
+        content
         .onAppear {
             editor.undoManager = undoManager
             focused = true
