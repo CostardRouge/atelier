@@ -52,7 +52,13 @@ import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 
 /** The legs' located places, the author's own places, or the picked pictures' positions. */
 export type DriveStopsOn = 'places' | 'custom' | 'pictures';
-export type DriveGround = 'paper' | 'picture';
+/**
+ * What the car drives on: the paper map drawn here, the piece's own picture,
+ * or OpenStreetMap's tiles (2026-09-28) — drawn under the road in the preview
+ * and the file, where this device allows the fetch; the paper stands in
+ * until they arrive, or when they never do.
+ */
+export type DriveGround = 'paper' | 'picture' | 'tiles';
 export type DrivePath = 'curved' | 'straight';
 export type DriveAhead = 'dashed' | 'faint' | 'hidden';
 /** Prints beside the car, the picture filling the frame, the picture BEHIND the map, or nothing. */
@@ -100,6 +106,8 @@ export interface DriveOptions {
   tilt: number;
   // --- map -------------------------------------------------------------------
   ground: DriveGround;
+  /** How strongly the tiles show over the paper, on `tiles`. */
+  basemapOpacity: number;
   paperColor: string;
   inkColor: string;
   graticule: boolean;
@@ -152,6 +160,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   carSize: 1,
   tilt: 58,
   ground: 'paper',
+  basemapOpacity: 0.9,
   paperColor: '#e8e2d4',
   inkColor: '#3a332a',
   graticule: true,
@@ -188,6 +197,7 @@ export const DRIVE_LIMITS = {
   carSize: { min: 0.5, max: 2 },
   tilt: { min: 35, max: 90 },
   size: { min: 0.5, max: 1.2 },
+  basemapOpacity: { min: 0.2, max: 1 },
   labelSize: { min: 0.6, max: 1.6 },
   driveSeconds: { min: 1, max: 12 },
   delaySeconds: { min: 0, max: 2 },
@@ -248,7 +258,8 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     cardSize: clamp(Number(o.cardSize), L.cardSize.min, L.cardSize.max, d.cardSize),
     carSize: clamp(Number(o.carSize), L.carSize.min, L.carSize.max, d.carSize),
     tilt: clamp(Number(o.tilt), L.tilt.min, L.tilt.max, d.tilt),
-    ground: oneOf(o.ground, ['paper', 'picture'], d.ground),
+    ground: oneOf(o.ground, ['paper', 'picture', 'tiles'], d.ground),
+    basemapOpacity: clamp(Number(o.basemapOpacity), L.basemapOpacity.min, L.basemapOpacity.max, d.basemapOpacity),
     paperColor: hex(o.paperColor, d.paperColor),
     inkColor: hex(o.inkColor, d.inkColor),
     graticule: o.graticule !== false,

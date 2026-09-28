@@ -36,6 +36,7 @@ import {
   MAP_LIMITS,
   formatDistance,
   hopKms,
+  mapBasemap,
   mapBox,
   mapMoved,
   mapOptions,
@@ -49,6 +50,7 @@ import {
   tripPlaces,
   type MapOptions,
 } from './map-plan';
+import { BasemapStatus, enableBasemap } from './basemap-row';
 import { Group, MovedRow, resetLink } from './panel-ui';
 import StopsEditor from './stops-editor';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
@@ -365,6 +367,32 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
             A chart’s grid
           </ToggleField>
         </FieldRow>
+        <SwitchRow
+          label="The map’s background from OpenStreetMap"
+          name="OpenStreetMap background"
+          checked={o.basemap}
+          onChange={enableBasemap((basemap) => set({ basemap }))}
+          hint={
+            o.basemap
+              ? undefined
+              : 'Real geography inside the map’s box — roads, coasts, towns — in the preview and in the exported file.'
+          }
+        />
+        {o.basemap && (
+          <BasemapStatus
+            want={mapBasemap(o, ctx.aspect)}
+            ctx={ctx}
+            status={host?.pictureStatus}
+            opacity={o.basemapOpacity}
+            onOpacity={(basemapOpacity) => set({ basemapOpacity })}
+            limits={MAP_LIMITS.basemapOpacity}
+            note={
+              o.pathColor === MAP_DEFAULTS.pathColor
+                ? 'A white line reads poorly on the map’s light colours — a darker colour under Path does better.'
+                : undefined
+            }
+          />
+        )}
       </Group>
 
       <Group title="Path">
@@ -738,6 +766,9 @@ export const mapVariant: HookVariant = {
   wantsPictures(options) {
     return mapWants(mapOptions(options));
   },
+  wantsBasemap(options, ctx) {
+    return mapBasemap(mapOptions(options), ctx.aspect);
+  },
   // Pointed at and dragged on the stage like any other content. The box is
   // the MAP's — everything else the opener draws is measured from it, so
   // moving it moves the line, the dots, the names and the card together.
@@ -754,6 +785,7 @@ export const mapVariant: HookVariant = {
     if (o.stops.length === 0) return { seconds: 0 };
     const timing = mapTiming(planarHops(o.stops), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];
+    const basemap = mapBasemap(o, ctx.aspect);
     return {
       seconds: timing.total,
       // The caption names the stop the pen is at — the last one once it
@@ -771,7 +803,7 @@ export const mapVariant: HookVariant = {
             return name ? { caption: name } : {};
           }
         : undefined,
-      paint: (g, t, frame) => paintMap(g, o, timing, context, ctx.pictures, t, frame),
+      paint: (g, t, frame) => paintMap(g, o, timing, context, ctx.pictures, t, frame, basemap),
       score: o.sound && o.draw
         ? () => mapScore(timing, { kit: o.kit, pitch: o.tickPitch }, o.tickVolume)
         : undefined,

@@ -197,6 +197,22 @@ export interface HookPictureWant {
 export type HookPictureShape = 'frame' | 'own';
 
 /**
+ * A map background a variant asks the shell for: the region, and the raster
+ * it wants it as — latitude and longitude both linear, so it lays onto the
+ * openers' own projection with one affine draw (`shared/map/tile-math.ts`).
+ * Resolved into `HookContext.pictures` under `key`, like a picture; a key
+ * with no entry draws no background — not allowed on this device, not
+ * reachable, or still loading — and the variant draws its own ground instead.
+ */
+export interface HookBasemapWant {
+  /** `basemapKey(box, width, height)`. */
+  key: string;
+  box: { west: number; south: number; east: number; north: number };
+  width: number;
+  height: number;
+}
+
+/**
  * One leg of the trip, as a hook reads it — its span and its LOCATED places in
  * the order they were lived. A place with no coordinates is left out here: it
  * is a complete place, but nothing a drawing can put on a line.
@@ -403,6 +419,13 @@ export interface HookVariant {
    * decode 250 pictures for a sweep that stops twelve times.
    */
   wantsPictures?(options: HookOptions, ctx: HookContext): HookPictureWant[];
+  /**
+   * The map background this variant would draw under its map, or null — the
+   * OpenStreetMap tiles an author asked for on this piece (2026-09-28). The
+   * shell fetches them only where this DEVICE allows it; the variant never
+   * fetches, and names the raster by the key it will draw it by.
+   */
+  wantsBasemap?(options: HookOptions, ctx: HookContext): HookBasemapWant | null;
   /**
    * Where this opener's drawing sits in the frame, so the stage can let it be
    * POINTED AT and dragged like any other content. Absent, the opener is not

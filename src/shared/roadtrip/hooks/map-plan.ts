@@ -35,7 +35,8 @@
 
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
-import type { HookPictureWant } from './hook-variant';
+import { BASEMAP_FOR_EDGE, BASEMAP_MAX_PX, basemapKey, rasterSize } from '../../map/tile-math';
+import type { HookBasemapWant, HookPictureWant } from './hook-variant';
 import { hookPictureKey } from './hook-variant';
 import { readStops, stopsFromPlaces, type MapStop } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
@@ -87,6 +88,14 @@ export interface MapOptions {
   plateColor: string;
   /** A faint lat/lon grid behind the line — a chart, rather than a drawing. */
   graticule: boolean;
+  /**
+   * OpenStreetMap under the map, inside its box — in the preview and in the
+   * exported file (2026-09-28). The piece ASKS; this device's consent decides
+   * whether anything is fetched (`shared/map/osm-tiles.ts`).
+   */
+  basemap: boolean;
+  /** How strongly the tiles show. */
+  basemapOpacity: number;
   // --- path ----------------------------------------------------------------
   lineWidth: number;
   pathColor: string;
@@ -147,6 +156,8 @@ export const MAP_DEFAULTS: MapOptions = {
   plateOpacity: 0.35,
   plateColor: '#000000',
   graticule: false,
+  basemap: false,
+  basemapOpacity: 1,
   lineWidth: 1,
   pathColor: '#ffffff',
   aheadColor: '#ffffff',
@@ -188,6 +199,7 @@ export const MAP_LIMITS = {
   // Far enough to put the map in any corner, never far enough to lose it.
   offset: { min: -0.45, max: 0.45 },
   plateOpacity: { min: 0.1, max: 0.9 },
+  basemapOpacity: { min: 0.2, max: 1 },
   lineWidth: { min: 0.5, max: 2 },
   curve: { min: 0, max: 0.6 },
   dotSize: { min: 0.5, max: 2 },
@@ -232,6 +244,8 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     plateOpacity: clamp(Number(o.plateOpacity), L.plateOpacity.min, L.plateOpacity.max, d.plateOpacity),
     plateColor: hex(o.plateColor, d.plateColor),
     graticule: o.graticule === true,
+    basemap: o.basemap === true,
+    basemapOpacity: clamp(Number(o.basemapOpacity), L.basemapOpacity.min, L.basemapOpacity.max, d.basemapOpacity),
     lineWidth: clamp(Number(o.lineWidth), L.lineWidth.min, L.lineWidth.max, d.lineWidth),
     pathColor: hex(o.pathColor, d.pathColor),
     aheadColor: hex(o.aheadColor, d.aheadColor),
@@ -322,6 +336,38 @@ export function moveMap(o: MapOptions, dx: number, dy: number): MapOptions {
     offsetX: Math.min(L.max, Math.max(L.min, o.offsetX + dx)),
     offsetY: Math.min(L.max, Math.max(L.min, o.offsetY + dy)),
   };
+}
+
+/**
+ * The OpenStreetMap region under the map's box, or null when the piece does
+ * not ask for one: the box's own extent, unprojected. It does not depend on
+ * the frame's size, on where the map was dragged or on its size slider (the
+ * box's shape follows the frame's aspect alone), so moving or resizing the
+ * map never fetches again; only the stops and the frame's shape do.
+ */
+export function mapBasemap(o: MapOptions, aspect: number): HookBasemapWant | null {
+  if (!o.basemap || o.stops.length === 0 || !(aspect > 0)) return null;
+  const w = 1080;
+  const h = w / aspect;
+  const box = mapBox(w, h, { position: 'middle', align: 'center', size: 1, offsetX: 0, offsetY: 0 });
+  const { unproject } = fitProjection(o.stops, box, 8);
+  // A little over the box on every side: the padding is a fraction of the
+  // frame's width, not of the box, so a smaller map shows a hair more around
+  // its stops — the paint clips to the box and places the raster by the
+  // projection, so the overscan is never seen as an edge.
+  const over = Math.max(box.width, box.height) * 0.05;
+  const nw = unproject({ x: box.x - over, y: box.y - over });
+  const se = unproject({ x: box.x + box.width + over, y: box.y + box.height + over });
+  const region = {
+    west: Math.max(-180, nw.lon),
+    east: Math.min(180, se.lon),
+    north: Math.min(90, nw.lat),
+    south: Math.max(-90, se.lat),
+  };
+  // Sized for the deck's delivery: the box at a 1920 long edge, a little over.
+  const need = Math.max(box.width, box.height) * (BASEMAP_FOR_EDGE / Math.max(w, h)) * 1.25;
+  const size = rasterSize(region, need, BASEMAP_MAX_PX);
+  return { key: basemapKey(region, size.width, size.height), box: region, ...size };
 }
 
 /** Whether the map has been dragged away from the anchor it was placed on. */

@@ -482,7 +482,11 @@ renderer or either export moved.
   editor opens to FIND places is the shell's, like the picture chooser: one
   more optional host verb, `HookPanelHost.editStopsOnMap`, drawn by the picker
   (`tools/roadtrip/StopsMapSheet.tsx`), because it reads the town index and
-  may fetch tiles on request, and a panel never fetches.
+  may fetch tiles on request, and a panel never fetches. And the tiles can be
+  DRAWN by both map openers (same day): one more optional member,
+  `HookVariant.wantsBasemap(options, ctx)`, declares the region and the raster
+  size; the shell loads it into `ctx.pictures` under its key, so `prepare`
+  stays pure and every renderer that already had the pictures has the map.
 - **The car is a software renderer of our own, not a 3D library.** ~180
   flat-shaded faces meeting at an inked edge, every part CONVEX, so a
   painter's algorithm (back-face culling within a part, nearer centre drawn

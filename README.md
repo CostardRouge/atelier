@@ -44,7 +44,12 @@ Today it ships ten tools, converging into a few editors:
 >   and under the map Trips' openers pick their stops on: turning it on
 >   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
 >   tile server. The flight path, the stops and the towns always draw locally;
->   the choice is never remembered past the tab.
+>   the choice is never remembered past the tab. The same tiles can also be
+>   drawn **into** an Itinerary or a Virée — in the preview and in the
+>   exported file, credited «© OpenStreetMap contributors» as the licence
+>   requires — when a piece asks for them and this device has said yes: the
+>   yes is kept on the device, never in the trip, so a trip opened elsewhere
+>   fetches nothing until that device says yes too.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
@@ -928,7 +933,9 @@ width), the pictures (how they show, a beat per picture, whether the prints
 stay, their size, a pause at every stop), the car (how big it is drawn and
 how steeply the camera looks at it, per piece — the car itself is the trip's,
 below), the map (paper or the picture itself, paper and ink colours, lines of
-latitude and longitude, a vignette, where it sits and how big, dots, the stops'
+latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
+own map under the road and the car, in the preview and the file, credited
+and at a strength that lets the paper show through —, where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives), the motion (the time on the road, the five motions, a hold
 first, a beat at the end, whether the camera fits the whole route or follows
@@ -982,7 +989,12 @@ dress: the line's width and its two colours, the stops still ahead dashed,
 faint or hidden, the dots and their size, numbers on them, the names at the
 ends, where the pen is, everywhere it has been or on every stop, a north
 arrow, and the distance travelled in km or miles counting up with the pen —
-the straight-line sum of what it has drawn, never a road distance. The pen can
+the straight-line sum of what it has drawn, never a road distance. **Real
+geography** can sit inside the map's box too: switch on its OpenStreetMap
+background and the tiles for that region are fetched, laid onto the opener's
+own projection (so the stops land on their towns to the pixel) and drawn in
+the preview and the exported file, at a strength you choose, with the credit
+the licence asks for in the corner. The pen can
 be a dot or a little plane, the badge's caption can follow it from stop to
 stop, and it ticks at each arrival on the same voices as Défilé. Every opener
 runs on the same clock as the badge, in the preview and in the file.

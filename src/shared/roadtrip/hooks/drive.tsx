@@ -41,10 +41,12 @@ import {
   type DriveOptions,
   type DriveRoute,
 } from './drive-plan';
-import { driveScratch, paintDrive } from './drive-paint';
+import { driveBasemap, driveScratch, paintDrive } from './drive-paint';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
 import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
+import { allowTiles } from '../../map/osm-tiles';
+import { BasemapStatus } from './basemap-row';
 import { Group } from './panel-ui';
 import StopsEditor from './stops-editor';
 import { otherPlaces, tripPlaces } from './stops';
@@ -415,21 +417,44 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       <Group title="Map">
         <FieldRow
           label="Ground"
-          hint={o.ground === 'paper' ? 'A paper map covers the picture while the car drives.' : 'The road and the car are drawn over the piece’s own picture.'}
+          hint={
+            o.ground === 'paper'
+              ? 'A paper map covers the picture while the car drives.'
+              : o.ground === 'tiles'
+                ? 'OpenStreetMap under the road and the car — roads, coasts, towns — in the preview and in the exported file. The paper stands in until the tiles arrive.'
+                : 'The road and the car are drawn over the piece’s own picture.'
+          }
         >
           <Segmented
             size="sm"
             fill
             label="What the car drives on"
             value={o.ground}
-            onChange={(ground) => set({ ground })}
+            onChange={(ground) => {
+              // Choosing the tiles is this device's yes, given with the
+              // notice in view (`basemap-row.tsx`).
+              if (ground === 'tiles') allowTiles(true);
+              set({ ground });
+            }}
             options={[
-              { id: 'paper', label: 'Paper map' },
-              { id: 'picture', label: 'The picture' },
+              { id: 'paper', label: 'Paper' },
+              { id: 'tiles', label: 'OSM map' },
+              { id: 'picture', label: 'Picture' },
             ]}
           />
         </FieldRow>
-        {o.ground === 'paper' && (
+        {o.ground === 'tiles' && (
+          <BasemapStatus
+            want={plan ? driveBasemap(plan, o, ctx.aspect) : null}
+            ctx={ctx}
+            status={host?.pictureStatus}
+            opacity={o.basemapOpacity}
+            onOpacity={(basemapOpacity) => set({ basemapOpacity })}
+            limits={DRIVE_LIMITS.basemapOpacity}
+            note="Below full strength, the paper shows through and keeps the drive’s own colours."
+          />
+        )}
+        {o.ground !== 'picture' && (
           <FieldRow label="Paper · ink">
             <input type="color" value={o.paperColor} onChange={(e) => set({ paperColor: e.target.value })} className={swatchClass} aria-label="Paper colour" />
             <input type="color" value={o.inkColor} onChange={(e) => set({ inkColor: e.target.value })} className={swatchClass} aria-label="Ink colour" />
@@ -440,12 +465,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             )}
           </FieldRow>
         )}
-        {o.ground === 'paper' && (
+        {o.ground !== 'picture' && (
           <FieldRow label="Paper" align="start">
             <div className="flex flex-col gap-1.5">
-              <ToggleField label="Lines of latitude and longitude" checked={o.graticule} onChange={(graticule) => set({ graticule })}>
-                Latitude and longitude lines
-              </ToggleField>
+              {o.ground === 'paper' && (
+                <ToggleField label="Lines of latitude and longitude" checked={o.graticule} onChange={(graticule) => set({ graticule })}>
+                  Latitude and longitude lines
+                </ToggleField>
+              )}
               <ToggleField label="A vignette at the edges" checked={o.vignette} onChange={(vignette) => set({ vignette })}>
                 Darkened edges
               </ToggleField>
@@ -720,12 +747,19 @@ export const driveVariant: HookVariant = {
     const o = driveOptions(options);
     return driveWants(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o), o);
   },
+  wantsBasemap(options, ctx) {
+    const o = driveOptions(options);
+    if (o.ground !== 'tiles') return null;
+    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o), o);
+    return plan ? driveBasemap(plan, o, ctx.aspect) : null;
+  },
   prepare(options, ctx) {
     const o = driveOptions(options);
     const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o);
     const plan = drivePlan(route, o);
     if (!plan) return { seconds: 0 };
     const scratch = driveScratch(ctx.car ?? DEFAULT_CAR);
+    const basemap = driveBasemap(plan, o, ctx.aspect);
     // A stop's name is a place on the legs and on the author's own list — the
     // author's assertion there, the Itinerary's rule — and a day on pictures.
     const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
@@ -741,7 +775,7 @@ export const driveVariant: HookVariant = {
             return name ? { caption: name } : {};
           }
         : undefined,
-      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame),
+      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap),
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };

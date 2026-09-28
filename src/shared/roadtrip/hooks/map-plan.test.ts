@@ -1,4 +1,5 @@
 import { describe, expect, it } from 'vitest';
+import { BASEMAP_MAX_PX, basemapKey } from '../../map/tile-math';
 import type { HookPickedPicture, HookStage } from './hook-variant';
 import {
   MAP_DEFAULTS,
@@ -13,6 +14,7 @@ import {
   formatDistance,
   haversineKm,
   hopKms,
+  mapBasemap,
   mapBox,
   mapMoved,
   mapOptions,
@@ -579,5 +581,58 @@ describe('wantsLabel', () => {
   it('is a stored value like any other — an unknown one falls back', () => {
     expect(mapOptions({ labels: 'passed' }).labels).toBe('passed');
     expect(mapOptions({ labels: 'shouty' }).labels).toBe(MAP_DEFAULTS.labels);
+  });
+});
+
+describe('the map’s OpenStreetMap region', () => {
+  const stops = [
+    { id: 'a', name: 'Perth', lat: -31.95, lon: 115.86 },
+    { id: 'b', name: 'Kalbarri', lat: -27.71, lon: 114.16 },
+    { id: 'c', name: 'Exmouth', lat: -21.93, lon: 114.13 },
+  ];
+  const on = (patch: Record<string, unknown> = {}) => mapOptions({ stops, basemap: true, ...patch });
+
+  it('is nothing unless the piece asks, and nothing without a stop', () => {
+    expect(mapBasemap(mapOptions({ stops }), 9 / 16)).toBeNull();
+    expect(mapBasemap(mapOptions({ basemap: true }), 9 / 16)).toBeNull();
+  });
+
+  it('holds every stop, and fits the delivery without enlarging past the cap', () => {
+    const want = mapBasemap(on(), 9 / 16)!;
+    for (const s of stops) {
+      expect(s.lon).toBeGreaterThan(want.box.west);
+      expect(s.lon).toBeLessThan(want.box.east);
+      expect(s.lat).toBeGreaterThan(want.box.south);
+      expect(s.lat).toBeLessThan(want.box.north);
+    }
+    expect(Math.max(want.width, want.height)).toBeLessThanOrEqual(BASEMAP_MAX_PX);
+    expect(want.key).toBe(basemapKey(want.box, want.width, want.height));
+  });
+
+  it('never fetches again for a map dragged, resized or re-anchored', () => {
+    const key = mapBasemap(on(), 9 / 16)!.key;
+    expect(mapBasemap(on({ offsetX: 0.3, offsetY: -0.2 }), 9 / 16)!.key).toBe(key);
+    expect(mapBasemap(on({ size: 0.6, position: 'top', align: 'left' }), 9 / 16)!.key).toBe(key);
+    expect(mapBasemap(on({ basemapOpacity: 0.4 }), 9 / 16)!.key).toBe(key);
+  });
+
+  it('covers the box the paint draws in, at every size of the map', () => {
+    for (const size of [0.5, 1, 1.2]) {
+      const o = on({ size });
+      const box = mapBox(1080, 1920, o);
+      const { project } = fitProjection(o.stops, box, 8);
+      const want = mapBasemap(o, 1080 / 1920)!;
+      const nw = project({ lat: want.box.north, lon: want.box.west });
+      const se = project({ lat: want.box.south, lon: want.box.east });
+      expect(nw.x).toBeLessThanOrEqual(box.x + 1e-6);
+      expect(nw.y).toBeLessThanOrEqual(box.y + 1e-6);
+      expect(se.x).toBeGreaterThanOrEqual(box.x + box.width - 1e-6);
+      expect(se.y).toBeGreaterThanOrEqual(box.y + box.height - 1e-6);
+    }
+  });
+
+  it('reads its two options, clamped', () => {
+    expect(mapOptions({}).basemap).toBe(false);
+    expect(mapOptions({ basemapOpacity: 7 }).basemapOpacity).toBe(MAP_LIMITS.basemapOpacity.max);
   });
 });

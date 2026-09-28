@@ -3,7 +3,9 @@ import type { Asset } from '../../shared/library/assets';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
 import { findMedia } from '../../shared/projects/media-identity';
+import { loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
 import type {
+  HookBasemapWant,
   HookContext,
   HookLayer,
   HookPicture,
@@ -44,6 +46,8 @@ interface Held {
 }
 
 const EMPTY: ReadonlyMap<string, HookPicture> = new Map();
+/** A background is named by its region and size alone; its key says both. */
+const BASEMAP_SIG = 'basemap';
 const NO_PROBLEMS: ReadonlyMap<string, string> = new Map();
 
 /** A stable number per cube, so "the grade changed" is a string compare. */
@@ -92,6 +96,14 @@ function budgetCount(count: number): number {
  * is kept across edits while its source, the frame's shape, its share of the
  * budget and the grade are unchanged, so picking one more picture decodes
  * one more picture.
+ *
+ * **And the map backgrounds** (`HookVariant.wantsBasemap`, 2026-09-28): the
+ * OpenStreetMap region an opener asked for, stitched and laid onto its
+ * projection (`shared/map/osm-tiles.ts`), put in the same map under its own
+ * key so every renderer that already receives the pictures — the stage, the
+ * rail, the PNG deck, both video paths — draws it with no plumbing of its
+ * own. Never graded: a map is not a photograph. Never fetched unless this
+ * device allows it; the refusal is a line in `status.problems`.
  */
 export default function useHookPictures(
   layers: readonly HookLayer[],
@@ -110,6 +122,18 @@ export default function useHookPictures(
     }
     return [...byKey.values()];
   }, [layers, ctx]);
+  // The map backgrounds the openers asked for — fetched only where this
+  // DEVICE allows it (`osm-tiles.ts`), which is why the consent is part of
+  // the pass: saying yes in the panel fetches at once.
+  const basemaps = useMemo(() => {
+    const out: HookBasemapWant[] = [];
+    for (const layer of layers) {
+      const want = hookVariantById(layer.id)?.wantsBasemap?.(layer.options ?? {}, ctx);
+      if (want && !out.some((w) => w.key === want.key)) out.push(want);
+    }
+    return out;
+  }, [layers, ctx]);
+  const tilesOk = useTilesAllowed();
 
   const aspect = ctx.aspect;
   const cap = perPicturePixels(budgetCount(wants.length));
@@ -117,7 +141,8 @@ export default function useHookPictures(
   // Everything a pass reads, as one string: the effect runs when an ANSWER
   // changes, never on a new array holding the same wants.
   const wantsKey = wants.map((w) => `${w.key}@${w.atSeconds ?? ''}${w.shape === 'own' ? '~' : ''}`).join('|');
-  const passKey = `${wantsKey}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}`;
+  const basemapsKey = basemaps.map((b) => b.key).join('|');
+  const passKey = `${wantsKey}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}#${basemapsKey}#${tilesOk}`;
 
   const files = useMemo(() => {
     const out: File[] = [];
@@ -132,17 +157,17 @@ export default function useHookPictures(
   const [status, setStatus] = useState<HookPictureStatus>({ pending: 0, problems: NO_PROBLEMS });
   const held = useRef(new Map<string, Held>());
   // Read inside the pass without re-running it for a new array of the same wants.
-  const latest = useRef({ wants, files, lut });
-  latest.current = { wants, files, lut };
+  const latest = useRef({ wants, files, lut, basemaps, tilesOk });
+  latest.current = { wants, files, lut, basemaps, tilesOk };
 
   useEffect(() => {
     let cancelled = false;
     const timer = window.setTimeout(() => {
       void (async () => {
-        const { wants: list, files: pool, lut: cube } = latest.current;
+        const { wants: list, files: pool, lut: cube, basemaps: maps, tilesOk: allowed } = latest.current;
         const problems = new Map<string, string>();
         const graders = new Map<string, FrameGrader>();
-        const keep = new Set(list.map((w) => w.key));
+        const keep = new Set([...list.map((w) => w.key), ...(allowed ? maps.map((m) => m.key) : [])]);
 
         // Whatever is no longer wanted leaves the map now and is closed later.
         let changed = false;
@@ -154,14 +179,45 @@ export default function useHookPictures(
         }
         if (changed) setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
 
-        let pending = list.filter((w) => held.current.get(w.key)?.sig !== sigOf(w)).length;
-        setStatus({ pending, problems: NO_PROBLEMS });
+        // A background not allowed here is a sentence, not a wait.
+        if (!allowed) {
+          for (const map of maps) {
+            problems.set(map.key, 'The OpenStreetMap background is not allowed on this device, so nothing is fetched.');
+          }
+        }
+        const mapsToLoad = allowed ? maps.filter((m) => held.current.get(m.key)?.sig !== BASEMAP_SIG) : [];
+        let pending = list.filter((w) => held.current.get(w.key)?.sig !== sigOf(w)).length + mapsToLoad.length;
+        setStatus({ pending, problems: problems.size ? new Map(problems) : NO_PROBLEMS });
 
         function sigOf(want: HookPictureWant): string {
           return `${want.atSeconds ?? ''}#${want.shape ?? 'frame'}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}`;
         }
 
         try {
+          // The backgrounds first: a map under the pen is the bigger part of
+          // the frame, and the tiles are cached, so a second pass is cheap.
+          for (const map of mapsToLoad) {
+            if (cancelled) return;
+            try {
+              const image = await loadBasemap(map.box, map.width, map.height);
+              if (cancelled) {
+                image.close();
+                return;
+              }
+              const before = held.current.get(map.key);
+              held.current.set(map.key, {
+                sig: BASEMAP_SIG,
+                picture: { image, width: image.width, height: image.height },
+              });
+              if (before) release(before.picture);
+              setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
+            } catch (err) {
+              if (cancelled) return;
+              problems.set(map.key, err instanceof Error ? err.message : String(err));
+            }
+            pending -= 1;
+            setStatus({ pending, problems: new Map(problems) });
+          }
           for (const want of list) {
             if (cancelled) return;
             const sig = sigOf(want);

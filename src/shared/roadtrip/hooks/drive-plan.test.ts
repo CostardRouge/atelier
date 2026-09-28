@@ -30,6 +30,7 @@ import {
   type DriveOptions,
 } from './drive-plan';
 import { TICK_KITS } from './tick-kits';
+import { driveBasemap } from './drive-paint';
 
 /** Three legs across Western Australia; the middle one has one place only. */
 const STAGES: HookStage[] = [
@@ -647,5 +648,46 @@ describe('buildSchedule alone', () => {
     const s = buildSchedule([], buildPath([], 'curved'), opts());
     expect(s.total).toBe(0);
     expect(s.phases).toEqual([]);
+  });
+});
+
+describe('the drive’s OpenStreetMap region', () => {
+  const route = driveRoute(STAGES, CAL, dateOf(20), opts());
+  const planFor = (o: DriveOptions) => drivePlan(route, o)!;
+
+  it('is nothing unless the ground is the tiles', () => {
+    expect(driveBasemap(planFor(opts()), opts(), 9 / 16)).toBeNull();
+    expect(driveBasemap(planFor(opts({ ground: 'picture' })), opts({ ground: 'picture' }), 9 / 16)).toBeNull();
+  });
+
+  it('holds every stop the car drives, for the whole-route camera', () => {
+    const o = opts({ ground: 'tiles' });
+    const want = driveBasemap(planFor(o), o, 9 / 16)!;
+    for (const s of route.stops) {
+      expect(s.lon).toBeGreaterThan(want.box.west);
+      expect(s.lon).toBeLessThan(want.box.east);
+      expect(s.lat).toBeGreaterThan(want.box.south);
+      expect(s.lat).toBeLessThan(want.box.north);
+    }
+  });
+
+  it('covers every frame a following camera shows, in more detail', () => {
+    const whole = opts({ ground: 'tiles' });
+    const follow = opts({ ground: 'tiles', camera: 'follow' });
+    const a = driveBasemap(planFor(whole), whole, 9 / 16)!;
+    const b = driveBasemap(planFor(follow), follow, 9 / 16)!;
+    // The car is centred at every stop, so every stop is inside, with room.
+    for (const s of route.stops) {
+      expect(s.lon).toBeGreaterThan(b.box.west);
+      expect(s.lon).toBeLessThan(b.box.east);
+    }
+    // Zoomed in, the same kilometre takes more pixels.
+    const density = (w: typeof a) => w.height / (w.box.north - w.box.south);
+    expect(density(b)).toBeGreaterThan(density(a));
+  });
+
+  it('reads the new ground and its strength', () => {
+    expect(driveOptions({ ground: 'tiles' }).ground).toBe('tiles');
+    expect(driveOptions({ basemapOpacity: 0 }).basemapOpacity).toBe(DRIVE_LIMITS.basemapOpacity.min);
   });
 });
