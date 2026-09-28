@@ -141,6 +141,8 @@ final class StudioRecoveryTests: XCTestCase {
         XCTAssertEqual(lines[1].connect, true)
         XCTAssertEqual(lines[2].signIn, host)
         XCTAssertNil(lines[3].signIn)
+        // Asking again cures neither a fetch in flight nor a capture that is gone.
+        XCTAssertEqual(lines.map(\.retry), [false, true, true, true, false])
     }
 
     func testSeveralOutOfReachOnOneInstanceAreOneLine() {

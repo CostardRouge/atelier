@@ -160,9 +160,12 @@ public struct StudioRecoveryLine: Equatable, Sendable {
     public var signIn: String?
     /// Connecting the instance in Sources is the cure.
     public var connect: Bool
+    /// Asking again could cure it — never while it is being asked, never
+    /// once the instance said it no longer has it.
+    public var retry: Bool
 
-    public init(text: String, alarm: Bool, signIn: String? = nil, connect: Bool = false) {
-        self.text = text; self.alarm = alarm; self.signIn = signIn; self.connect = connect
+    public init(text: String, alarm: Bool, signIn: String? = nil, connect: Bool = false, retry: Bool = false) {
+        self.text = text; self.alarm = alarm; self.signIn = signIn; self.connect = connect; self.retry = retry
     }
 }
 
@@ -197,19 +200,19 @@ public func studioRecoveryLines(_ items: [StudioRecoveryItem]) -> [StudioRecover
         let verb = n == 1 ? "lives" : "live"
         let pronoun = n == 1 ? "it" : "them"
         let text = "\(recoveryCount(n)) of this project \(verb) on \(group.host), which this device is not connected to — connect it in Sources to fetch \(pronoun) back."
-        lines.append(StudioRecoveryLine(text: text, alarm: false, connect: true))
+        lines.append(StudioRecoveryLine(text: text, alarm: false, connect: true, retry: true))
     }
     for group in recoveryGroups(items, .failed) {
         let signIns = group.items.filter(\.signIn)
         if !signIns.isEmpty {
             let what = signIns.count == 1 ? signIns[0].name : recoveryCount(signIns.count)
             lines.append(StudioRecoveryLine(text: "Not signed in to \(group.host) — \(what) could not be fetched back.",
-                                            alarm: true, signIn: group.host))
+                                            alarm: true, signIn: group.host, retry: true))
         }
         for item in group.items where !item.signIn {
             let reason = item.reason.map { " — \($0)" } ?? ""
             lines.append(StudioRecoveryLine(text: "\(item.name) could not be fetched back from \(group.host)\(reason).",
-                                            alarm: true))
+                                            alarm: true, retry: true))
         }
     }
     for item in items where item.phase == .gone {
