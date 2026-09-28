@@ -16,6 +16,9 @@ struct StageZoomPill: View {
     /// Make what the zoomed view shows the crop — nil where it would change nothing.
     var cropToView: (() -> Void)?
     var large = false
+    /// False where there is no crop to make — the develop sheet's stage: the
+    /// menu then carries no dead row.
+    var offersCrop = true
     @Environment(\.palette) private var palette
 
     var body: some View {
@@ -41,9 +44,11 @@ struct StageZoomPill: View {
                 Button { zoom.setPixelView(.pixels) } label: {
                     row(zoom.pixelView == .pixels, "Pixels as pixels", "past 100 %, nothing is invented between them")
                 }
-                Divider()
-                Button { cropToView?() } label: { row(false, "Crop to this view", "what the screen shows becomes the crop · ⇧C") }
-                    .disabled(cropToView == nil)
+                if offersCrop {
+                    Divider()
+                    Button { cropToView?() } label: { row(false, "Crop to this view", "what the screen shows becomes the crop · ⇧C") }
+                        .disabled(cropToView == nil)
+                }
             } label: {
                 Text(zoom.label)
                     .font(Brand.mono(11))

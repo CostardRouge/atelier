@@ -303,8 +303,9 @@ private struct LayoutKey: Equatable {
     let scale: CGFloat
 }
 
-/// The stage render's bytes, read once per render for the readout.
-private final class StagePixels {
+/// The stage render's bytes, read once per render for the readout — the
+/// develop sheet's stage reads its own through it too (`DevelopSheetStage`).
+final class StagePixels {
     let image: CGImage
     private let data: CFData?
     private let bytesPerRow: Int
