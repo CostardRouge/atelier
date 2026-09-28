@@ -331,6 +331,26 @@ so it is written out inline, the row's y once per row. `brushAt` still goes
 through `framePoint`; the loop must keep saying the same thing, which the
 gate's brush row holds it to (0.0008).
 
+## A raster's `null` and `undefined` are two answers (2026-09-28)
+
+`makeLayerPass` reads its `raster` (and each of `partRasters`) as `undefined` =
+walk the strokes here, `null` = an EMPTY map; a subject's map is always the
+caller's, and null there means "not answered yet — draw nothing". The cache
+brought that contract, and `layerPasses` and the overlay went on handing
+`rasters.get(id) ?? null` for every kind — while `rasters` holds SUBJECTS
+only. So a painted layer left every delivered file untouched and its
+show-the-mask drew nothing, while the stage (the cache walks its own strokes)
+showed it. **Rule: nothing hands a painted mask `null`.** The one door is
+`ownRaster` (`layer-render.ts`): a map from `rasters` for a subject alone, so a
+subject map left under a layer that is painted now cannot stand in for its
+strokes either; the cache's `overlay` resolves a painted map itself (reusing
+the one `passes` just walked — the stage calls `passes` first). The render gate
+cannot see this class (it calls `makeLayerPass` with no raster), so
+`layer-render.test.ts` records the bytes each pass UPLOADS on unit 2 and holds
+the delivery to the stage's (`testing.md`). Measured headless on grey 154 with
+a −3 EV dab: file 154 → 57 inside the stroke, equal to the stage; the overlay
+189,92,83.
+
 Picking a subject on the stage — segmentation on the tap, the mask's outline
 and fill, the blink, a subject SUBTRACTED from another layer, and the export's
 own segmentation — lives in `subject-picking.md`.

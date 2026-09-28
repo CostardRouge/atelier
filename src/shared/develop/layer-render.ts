@@ -48,9 +48,11 @@ export function layerPasses(
   interpolation: Interpolation = getDefaultLutInterpolation(),
   /**
    * Alpha maps for the masks this module cannot compute — a segmented subject,
-   * resolved by `use-subject-masks.ts`. A layer asking for one that is not here
-   * yet draws NOTHING rather than everything: a subject still being thought
-   * about must not apply to the whole picture for four seconds.
+   * resolved by `use-subject-masks.ts` or `subject-rasters.ts`. A layer asking
+   * for one that is not here yet draws NOTHING rather than everything: a
+   * subject still being thought about must not apply to the whole picture for
+   * four seconds. A PAINTED mask is never looked up here: its strokes are
+   * walked by `makeLayerPass` (`ownRaster`).
    */
   rasters?: ReadonlyMap<string, BrushRaster> | null,
 ): RenderPass[] {
@@ -64,7 +66,7 @@ export function layerPasses(
       opacity: layer.opacity,
       aspectRatio,
       interpolation,
-      raster: rasters?.get(layer.id) ?? null,
+      raster: ownRaster(layer, rasters),
       except: exceptRaster(layer, rasters),
       parts: layer.parts,
       // Keyed by the LAYER's id: the graph caches programs by pass id, and two
@@ -74,6 +76,23 @@ export function layerPasses(
     });
     return pass ? [pass] : [];
   });
+}
+
+/**
+ * What a layer's OWN mask hands `makeLayerPass` as its map, whose contract is
+ * `undefined` = walk the strokes here and `null` = an EMPTY map. Only a SUBJECT
+ * takes one from `rasters` — null while its answer has not arrived, so it
+ * draws nothing. Every other kind is handed nothing: a painted mask handed
+ * `null` is delivered empty (the layer vanishes from the file while the stage,
+ * which walks its own strokes, still shows it), and `rasters` holds subjects
+ * alone, so an entry left under a layer that is painted now must never stand
+ * in for its strokes.
+ */
+function ownRaster(
+  layer: AdjustLayer,
+  rasters: ReadonlyMap<string, BrushRaster> | null | undefined,
+): BrushRaster | null | undefined {
+  return layer.mask?.kind === 'subject' ? (rasters?.get(layer.id) ?? null) : undefined;
 }
 
 /**
@@ -129,6 +148,12 @@ const OVERLAY_STRENGTH = 0.55;
 export function maskOverlayPass(
   layer: AdjustLayer | null | undefined,
   aspectRatio: number,
+  /**
+   * The layer's own map when the caller holds it — a subject's answer, or a
+   * painted mask already walked for these strokes. Null and absent mean the
+   * same here: a painted mask is walked, a subject not yet answered shows
+   * nothing. Never an EMPTY map for strokes that exist.
+   */
   raster?: BrushRaster | null,
   style: MaskOverlayStyle = 'fill',
   except: BrushRaster | null = null,
@@ -142,7 +167,9 @@ export function maskOverlayPass(
   return makeLayerPass({
     lut: RED_CUBE,
     mask: layer.mask,
-    raster: raster ?? null,
+    // `?? undefined`, not `?? null`: `makeLayerPass` reads null as an empty
+    // map, which would show a painted layer's mask as nothing at all.
+    raster: raster ?? undefined,
     except,
     parts: layer.parts,
     partRasters,
@@ -229,7 +256,11 @@ export interface LayerPassCache {
     rasters?: ReadonlyMap<string, BrushRaster> | null,
     interpolation?: Interpolation,
   ): RenderPass[];
-  /** The show-me-the-mask pass for a layer, kept the same way. */
+  /**
+   * The show-me-the-mask pass for a layer, kept the same way. `raster` is the
+   * layer's SUBJECT map (null until it arrives), like `passes`' `rasters`, and
+   * is ignored for any other kind — a painted mask's map is the cache's own.
+   */
   overlay(
     layer: AdjustLayer | null | undefined,
     aspectRatio: number,
@@ -392,9 +423,23 @@ export function makeLayerPassCache(): LayerPassCache {
         return null;
       }
       const prev = overlay?.id === layer.id ? overlay.held : null;
-      // The painted parts' maps come from the layer's own held entry when it
-      // draws, so showing the mask of a layer being painted walks nothing twice.
+      // The painted maps — the layer's own and its parts' — come from the
+      // layer's held entry when it draws, so showing the mask of a layer being
+      // painted walks nothing twice; a subject's is the caller's.
       const own = held.get(layer.id);
+      const mask = layer.mask;
+      const ownMap =
+        mask?.kind === 'brush'
+          ? own && own.strokes === mask.strokes && own.rasterAspect === aspectRatio
+            ? own.raster
+            : prev && prev.mask?.kind === 'brush' && sameMask(prev.mask, mask) && prev.aspectRatio === aspectRatio
+              ? prev.raster
+              : mask.strokes.length
+                ? rasteriseBrush(mask.strokes, aspectRatio)
+                : null
+          : mask?.kind === 'subject'
+            ? raster
+            : null;
       const parts = layer.parts ?? [];
       const partRasters = parts.map((p, i) =>
         p.mask.kind !== 'brush'
@@ -411,7 +456,7 @@ export function makeLayerPassCache(): LayerPassCache {
         prev?.pass &&
         sameParts(prev.parts, parts) &&
         prev.partRasters.every((r, i) => r === partRasters[i]) &&
-        prev.raster === raster &&
+        prev.raster === ownMap &&
         prev.style === style &&
         prev.except === except &&
         prev.invert === layer.invert &&
@@ -420,7 +465,7 @@ export function makeLayerPassCache(): LayerPassCache {
       ) {
         return prev.pass;
       }
-      const pass = maskOverlayPass(layer, aspectRatio, raster, style, except, partRasters);
+      const pass = maskOverlayPass(layer, aspectRatio, ownMap, style, except, partRasters);
       overlay = {
         id: layer.id,
         held: {
@@ -429,7 +474,7 @@ export function makeLayerPassCache(): LayerPassCache {
           partRasters,
           invert: layer.invert,
           aspectRatio,
-          raster,
+          raster: ownMap,
           style,
           except,
           pass,
