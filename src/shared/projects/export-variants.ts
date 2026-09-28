@@ -117,6 +117,31 @@ export function variantOutputSize(
 }
 
 /**
+ * The longest edge a STILL must be decoded at so that every variant in the run
+ * is drawn from at least one source pixel per output pixel, over a
+ * `frameW`×`frameH` frame — the density the still is delivered from, which is
+ * what each variant is sized against. A variant at the frame's own density
+ * asks for the whole frame; a 1080 × 1350 cut of an 8064 × 6048 still asks for
+ * 1800 px, and decoding the other 46 megapixels bought nothing but memory.
+ *
+ * A picture graded at this size and then cover-cropped is the picture graded
+ * whole and then resampled, to the rounding of a resample: a look is
+ * pointwise, and a film texture is measured as a fraction of the frame's
+ * height, so neither sees the density.
+ */
+export function stillSourceEdge(variants: readonly ExportVariant[], frameW: number, frameH: number): number {
+  const long = Math.max(frameW, frameH);
+  if (!(frameW > 0) || !(frameH > 0) || variants.length === 0) return long;
+  let need = 0;
+  for (const variant of variants) {
+    const out = variantOutputSize(variant, frameW, frameH);
+    const scale = Math.min(1, Math.max(out.w / frameW, out.h / frameH));
+    need = Math.max(need, Math.ceil(long * scale));
+  }
+  return Math.min(long, need);
+}
+
+/**
  * What a variant is rendering. A still uses the same {@link ExportVariant} —
  * an aspect to reframe into, a resolution to cap at, overlays on or off — but
  * cadence and speed are meaningless over one frame, so they take no part in

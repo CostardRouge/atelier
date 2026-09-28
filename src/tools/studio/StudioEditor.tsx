@@ -89,7 +89,7 @@ import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import { settleForStill } from '../../shared/overlay/still-frame';
 import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
 import OutroPanel from './OutroPanel';
-import { decodePhoto, exportEdge, exportPhotoVariant } from '../../shared/media/photo-frame';
+import { decodeStillForExport, deliveryFrame, exportDecodeEdge, exportPhotoVariant } from '../../shared/media/photo-frame';
 import { decodeStill, stageBudget } from '../../shared/media/still-decode';
 import type { ExifData } from '../../shared/exif/exif-parser';
 import { cueFromExif } from '../../shared/exif/exif-cue';
@@ -1266,8 +1266,10 @@ export default function StudioEditor({
   async function renderStillVariant(
     bitmap: ImageBitmap,
     variant: ExportVariant,
+    frame: { width: number; height: number },
   ): Promise<Blob> {
     const blob = await exportPhotoVariant(bitmap, variant, {
+      frame,
       elements: stageElements,
       cue: cues[0] ?? null,
       lut,
@@ -1389,9 +1391,13 @@ export default function StudioEditor({
     });
     // A still delivered from its source's ORIGINAL when the frame is worth it
     // (O2 of `docs/develop-originals.md`). Decoded here and closed with the
-    // run: the stage keeps its own bitmap, and a full-size original is tens
-    // of megabytes of it.
+    // run: the stage keeps its own bitmap. Either way the still is decoded at
+    // what the LARGEST variant draws (`stillSourceEdge`), never the whole
+    // picture for a 1080 cut, and the variants are sized against the frame it
+    // is delivered at (`runFrame`), whatever density was decoded.
     let still = photo;
+    let runFrame: { width: number; height: number } | null =
+      photo && photoNatural ? deliveryFrame(photoNatural) : null;
     let fetchedStill: ImageBitmap | null = null;
     try {
       if (photo && activeImage && photoProxy && stillFrame) {
@@ -1399,23 +1405,30 @@ export default function StudioEditor({
         if (chosen.file !== activeImage) {
           setFetchingOriginal(true);
           try {
-            fetchedStill = await decodePhoto(chosen.file, { maxEdge: exportEdge() });
+            const decoded = await decodeStillForExport(chosen.file, variants);
+            fetchedStill = decoded.bitmap;
             still = fetchedStill;
-            srcWidth = fetchedStill.width;
-            srcHeight = fetchedStill.height;
+            runFrame = decoded.frame;
           } finally {
             setFetchingOriginal(false);
           }
         }
       }
-      // The stage's copy is decoded at the stage's budget: a still that holds
-      // more is decoded again for the run, at what this device delivers from,
-      // and closed with it.
-      if (photo && activeImage && still === photo && photoNatural && photoNatural.width > photo.width) {
-        fetchedStill = await decodePhoto(activeImage, { maxEdge: exportEdge() });
-        still = fetchedStill;
-        srcWidth = fetchedStill.width;
-        srcHeight = fetchedStill.height;
+      // The stage's copy is decoded at the stage's budget: where the run
+      // needs more than it holds, the still is decoded again for the run and
+      // closed with it. A 1080 cut usually needs less, and costs no decode.
+      if (photo && activeImage && still === photo && runFrame) {
+        const need = exportDecodeEdge(variants, runFrame);
+        if (Math.max(photo.width, photo.height) < need) {
+          const decoded = await decodeStillForExport(activeImage, variants);
+          fetchedStill = decoded.bitmap;
+          still = fetchedStill;
+          runFrame = decoded.frame;
+        }
+      }
+      if (still && runFrame) {
+        srcWidth = runFrame.width;
+        srcHeight = runFrame.height;
       }
       // Editing happened on the source's proxy; delivering should not. Fetch
       // the capture once, before the first variant, and encode every variant
@@ -1470,7 +1483,7 @@ export default function StudioEditor({
           }
         };
         const blob = still
-          ? await renderStillVariant(still, variant)
+          ? await renderStillVariant(still, variant, runFrame ?? { width: still.width, height: still.height })
           : await renderClipVariant(source, variant, srcWidth, srcHeight, onProgress, controller);
         const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
         const file = new File([blob], name, { type: blob.type });

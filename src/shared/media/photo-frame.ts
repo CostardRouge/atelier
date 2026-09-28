@@ -32,7 +32,8 @@ import type { StyleTheme } from '../overlay/title-styles';
 import type { TimeShift } from '../telemetry/time-format';
 import { fitRect } from './compose-layout';
 import { decodeStill, PhotoDecodeError, type StillFitArg } from './still-decode';
-import { variantOutputSize, type ExportVariant } from '../projects/export-variants';
+import { fitStill, type PixelSize } from './still-fit';
+import { stillSourceEdge, variantOutputSize, type ExportVariant } from '../projects/export-variants';
 
 /**
  * A photo the browser refused to decode — `still-decode.ts` owns it now; kept
@@ -60,6 +61,38 @@ export async function decodePhoto(file: File, fit: StillFitArg = {}): Promise<Im
  */
 export function exportEdge(): number {
   return rawDecodeEdge('export', deviceClass(), maxRenderSize());
+}
+
+/**
+ * The frame a still is DELIVERED at on this device: its own size, within
+ * {@link exportEdge}. Every variant is sized against this frame, whatever
+ * density the pixels drawn into it were decoded at.
+ */
+export function deliveryFrame(natural: PixelSize): PixelSize {
+  return fitStill(natural, { maxEdge: exportEdge() });
+}
+
+/**
+ * The longest edge a still is decoded at for a run of `variants` delivered at
+ * `frame` — no more than the largest of them draws (`stillSourceEdge`).
+ */
+export function exportDecodeEdge(variants: readonly ExportVariant[], frame: PixelSize): number {
+  return stillSourceEdge(variants, frame.width, frame.height);
+}
+
+/**
+ * Decode a still for a run of variants: at the size the largest of them
+ * needs, never the whole picture for a 1080 cut. `frame` is what the variants
+ * are sized against — pass it to {@link exportPhotoVariant}.
+ */
+export async function decodeStillForExport(
+  file: File,
+  variants: readonly ExportVariant[],
+): Promise<{ bitmap: ImageBitmap; frame: PixelSize }> {
+  const { bitmap, natural } = await decodeStill(file, (size) =>
+    fitStill(size, { maxEdge: exportDecodeEdge(variants, deliveryFrame(size)) }),
+  );
+  return { bitmap, frame: deliveryFrame(natural) };
 }
 
 /** A picture as the GPU can take it — the bitmap itself, or a copy fitted to its cap. */
@@ -123,6 +156,12 @@ export interface PhotoRenderOptions {
   timeShift?: TimeShift | null;
   /** JPEG quality 0..1. */
   quality?: number;
+  /**
+   * The frame the variant is sized against ({@link deliveryFrame}) when the
+   * bitmap was decoded smaller than it ({@link decodeStillForExport}). Absent:
+   * the bitmap's own size, as before.
+   */
+  frame?: PixelSize | null;
 }
 
 /**
@@ -137,7 +176,8 @@ export async function exportPhotoVariant(
   const elements = variant.overlays ? settleForStill(opts.elements) : [];
   if (variant.overlays) await ensureOverlayFonts(elements, opts.theme);
 
-  const out = variantOutputSize(variant, bitmap.width, bitmap.height);
+  const frame = opts.frame ?? { width: bitmap.width, height: bitmap.height };
+  const out = variantOutputSize(variant, frame.width, frame.height);
   const canvas = document.createElement('canvas');
   canvas.width = out.w;
   canvas.height = out.h;
