@@ -76,6 +76,11 @@ final class LibraryStore {
     private(set) var selection: Set<String> = []
     /// The asset the person last put to work — the one a tool makes active.
     private(set) var activeId: String?
+    /// Bumped by every PUTTING TO WORK (`activate` — a row, a tile, `Use in`),
+    /// a second press on the active asset included, and never by an echo
+    /// (`setActive`): what a tool that keeps a working set of its own (the
+    /// Studio's project) follows, so a tap is a tap and a settle is nothing.
+    private(set) var activations = 0
     /// Covers read so far, by asset id.
     private(set) var covers: [String: LibraryCover] = [:]
     /// The last thing an add could not do, said once.
@@ -244,6 +249,11 @@ final class LibraryStore {
             guard (try? fetched.file.data.write(to: target, options: .atomic)) != nil else { continue }
             let ref = SavedMediaRef(name: fetched.file.name, size: fetched.file.size, lastModified: fetched.file.lastModified,
                                     assetId: fetched.identity.assetId, hash: fetched.identity.hash)
+            // Vouched for in the one registry every tool reads (the web's
+            // `materialize` registers too): a tool that takes this file names
+            // it by the ORIGINAL's hash, and an export finds where the
+            // capture is (`mediaOrigin`, `knownIdentity`).
+            registerMediaIdentity(ref, fetched.identity.asKnown)
             fresh.append(LibraryEntry(ref: ref, location: .session(target.path), origin: fetched.identity.origin,
                                       exif: fetched.identity.exif, originalUrl: fetched.identity.originalUrl))
         }
@@ -281,6 +291,7 @@ final class LibraryStore {
     func activate(_ id: String) {
         selection.insert(id)
         activeId = id
+        activations += 1
     }
 
     func setActive(_ id: String?) {
