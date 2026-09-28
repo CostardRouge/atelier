@@ -116,6 +116,8 @@ private struct LibraryPanel: View {
     @State private var showPhotos = false
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var dropping = false
+    /// The instance's "browse all" sheet is up.
+    @State private var browsing = false
 
     private var asSheet: Bool { variant == .sheet }
     private var host: String? { model.connection?.id }
@@ -223,6 +225,12 @@ private struct LibraryPanel: View {
                 .environment(library)
                 .environment(connections)
                 .environment(bus)
+        }
+        .sheet(isPresented: $browsing) {
+            if let connection = model.connection, let client = model.client {
+                WinnowBrowserSheet(connection: connection, client: client, library: library) { browsing = false }
+                    .presentationDetents([.large])
+            }
         }
     }
 
@@ -400,6 +408,13 @@ private struct LibraryPanel: View {
                         "\($0.label) — what \($0.publisher) has open. The arrows look at another day without moving it."
                     } ?? "A day, picked here")
                 Spacer(minLength: 0)
+                // Past the tool's day: the whole instance, by day, folder or leg.
+                Button("browse all") { browsing = true }
+                    .buttonStyle(.plain)
+                    .font(Brand.sans(12))
+                    .foregroundStyle(palette.muted)
+                    .underline()
+                    .help("Browse all of \(host ?? ""): by day, by folder, with filters")
             }
             let viewed = model.viewed
             LibraryDayStepper(

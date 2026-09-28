@@ -86,6 +86,14 @@ enum LibraryFixtures {
         case "/api/capabilities":
             return WinnowResponse.json(["api": ["version": 1], "media": ["sidecars": true],
                                         "viewer": ["id": 1, "username": "steeve", "role": "admin"]])
+        case "/api/facets":
+            return WinnowResponse.json(["media_types": [["value": "photo", "count": 2], ["value": "video", "count": 1]],
+                                        "extensions": [["value": "jpg", "count": 2], ["value": "mp4", "count": 1]],
+                                        "devices": [["value": "FC8482", "count": 3]]])
+        case "/api/sessions":
+            return WinnowResponse.json(["sessions": [["id": 7, "name": "DCIM · Kalbarri", "source_path": "/ingest/2026-02-12",
+                                                      "device_hint": "FC8482", "captured_at_min": "2026-02-12T09:41:07+00:00",
+                                                      "captured_at_max": "2026-02-12T18:02:00+00:00", "asset_count": 3]]])
         default:
             return WinnowResponse(status: 404)
         }
