@@ -158,10 +158,12 @@ final class RollRunState {
         handle?.update(patch)
     }
 
-    /// Cancel: the picture in flight finishes its files, the next never starts.
+    /// Cancel: the picture in flight finishes its files, the next never starts
+    /// — and a fetch from an instance in flight for it ends at once.
     func cancel() {
         guard running else { return }
         flag?.set()
+        work?.cancel()
         exporting = "Cancelling — the picture in hand finishes first…"
     }
 
@@ -214,18 +216,40 @@ extension RollEditor {
 
     // MARK: - the plan, said before a byte moves
 
-    /// What the run knows of one picture's files on THIS device: the file
-    /// itself, when the device can reach it. The app has no Winnow client yet,
-    /// so no picture is a proxy and none has an original to fetch.
+    /// What the run knows of one picture's files on THIS device: the file in
+    /// hand — its own, or the proxy the roll fetched from its instance — with
+    /// what that instance vouched for (`vouched`): the original behind a
+    /// proxy, the companion RAW behind a paired capture, and whether the
+    /// session already holds either (`SessionOriginals`, shared with the
+    /// lightbox), so "to fetch" turns into "in hand" the moment one is.
     func runFacts(_ p: RollPicture) -> PictureFacts {
         guard availability(p) == .ready else { return PictureFacts(file: nil) }
+        // Re-planned whenever the session holds something new.
+        _ = SessionOriginals.shared.version
+        let identity = vouched(p)
+        let origin = identity?.origin
+        let assetId = identity?.assetId
+        let proxy = origin?.fidelity == .proxy
+        var original: PictureFacts.Original?
+        if proxy, let name = origin?.name {
+            let held = assetId.map { SessionOriginals.shared.isHeld($0) } ?? false
+            original = PictureFacts.Original(name: name, bytes: origin?.bytes, held: held)
+        }
         return PictureFacts(
             file: p.ref,
-            proxy: false,
-            sensor: sensorSourceFor(p.ref, nil),
-            delivered: deliveredSourceFor(p.rendition, p.ref, nil),
-            original: nil
+            proxy: proxy,
+            sensor: heldInSession(sensorSourceFor(p.ref, origin, [], assetId)),
+            delivered: heldInSession(deliveredSourceFor(p.rendition, p.ref, origin, [], assetId)),
+            original: original
         )
+    }
+
+    /// A source the session already holds (a fetched original, a companion)
+    /// said as in hand — the kernel's `HeldOriginals` read, done here.
+    func heldInSession(_ source: SensorSource?) -> SensorSource? {
+        guard var s = source, s.held == nil, let key = s.key, SessionOriginals.shared.isHeld(key) else { return source }
+        s.held = SavedMediaRef(name: s.name, size: s.bytes ?? 0, lastModified: 0)
+        return s
     }
 
     /// The run the roll's own verb makes — the pictures that LEAVE; the
@@ -259,13 +283,18 @@ extension RollEditor {
         let border = planDraws("border", p) ? readBorder(p.carried["border"]) : nil
         let proxiesOnly = exportRun.proxiesOnly
         let settings = DeliverySettings(size: exportSettings.primary.size, pixels: proxiesOnly ? .proxies : .auto)
-        var summary = deliverySummary(src, false, nil, p.framing, ratio, border, settings)
-        let chosen = proxiesOnly ? nil : deliveredSourceFor(p.rendition, p.ref, nil)
+        // A proxy the roll fetched weighs its original, as the run will.
+        let identity = vouched(p)
+        let origin = identity?.origin
+        var summary = deliverySummary(src, origin?.fidelity == .proxy, originalOf(origin), p.framing, ratio, border, settings)
+        let chosen = proxiesOnly ? nil : heldInSession(deliveredSourceFor(p.rendition, p.ref, origin, [], identity?.assetId))
         let raw = pool.held(p.id)?.decoded.isRaw ?? false
         if let chosen, !isRawDevelop(p.develop) {
-            // The picture's own answer: the file set above the photograph, at its own size.
+            // The picture's own answer: the file set above the photograph, at
+            // its own size — measured when it is fetched, never planned from the proxy.
+            let cost = chosen.held != nil ? "" : chosen.bytes.map { " · \(formatBytes(Double($0))) to fetch" } ?? ""
             summary.from = .original
-            summary.line = "\(chosen.name) · as chosen"
+            summary.line = "\(chosen.name) · as chosen\(cost)"
             summary.reason = "delivered from the file chosen above the photograph, at its own size"
         } else if proxiesOnly && isRawDevelop(p.develop) {
             summary.reason = "proxies only for this run — its RAW base is set aside and the numbers act on the file’s render"
@@ -313,9 +342,11 @@ extension RollEditor {
         guard let doc = roll else { return }
         let chosen = ids.compactMap { id in doc.pictures.first { $0.id == id } }
         guard !chosen.isEmpty else { return }
-        var locators: [String: PictureLocator] = [:]
+        var sources: [String: PictureBytesSource] = [:]
+        var vouched: [String: WinnowIdentity] = [:]
         for p in chosen {
-            if let locator = store.locator(rollId, p.id) { locators[p.id] = locator }
+            if let source = store.bytesSource(rollId, p.id) { sources[p.id] = source }
+            if let identity = self.vouched(p) { vouched[p.id] = identity }
         }
         let input = RollExportRun.Input(
             rollId: rollId,
@@ -326,7 +357,9 @@ extension RollEditor {
             proxiesOnly: state.proxiesOnly,
             destination: destination,
             plan: renderPlan,
-            locators: locators,
+            sources: sources,
+            vouched: vouched,
+            connections: winnow.connections,
             mediaDirectory: store.mediaDirectory
         )
         let run = RollExportRun(input: input, state: state, store: store, editor: self)

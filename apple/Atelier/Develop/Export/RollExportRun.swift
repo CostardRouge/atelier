@@ -5,7 +5,11 @@
 // 1. WHERE first: the folder was picked at the click (its security scope
 //    opened here, for the whole run); Photos is asked for its permission
 //    before a pixel is rendered — "ask first, render second".
-// 2. Per picture, off the main actor: its file read and decoded; the numbers
+// 2. Per picture, the bytes it leaves from found first (`RollExportFetch`):
+//    the file in hand or fetched from its instance on the spot, its RAW's
+//    sensor or the file set above the photograph or — where the frame asks —
+//    its proxy's original, and the ORIGINAL's head for the EXIF.
+//    Then, off the main actor: its file read and decoded; the numbers
 //    it leaves with decided (a RAW base set aside under *Proxies only*, or
 //    when the RAW is out of reach — and said); rendered ONCE through the
 //    editor's own render plan at `.whole`, so the file is what the stage
@@ -39,7 +43,12 @@ struct PictureJob {
     let name: String
     /// `Variant 2` for a copy, `""` for a picture.
     let variantDir: String
-    let locator: PictureLocator?
+    /// Where its bytes are read: a locator, or a file fetched from its instance.
+    let source: PictureBytesSource?
+    /// The ORIGINAL's head, when the bytes are not the original's own.
+    let exifHead: Data?
+    /// What the instance parsed at ingest — the last resort for the EXIF.
+    let vouchedExif: ExifData?
     let mediaDirectory: URL
     let plan: DevelopRenderPlan
     let targets: [ExportTarget]
@@ -99,7 +108,11 @@ final class RollExportRun {
         let proxiesOnly: Bool
         let destination: RunDestination
         let plan: DevelopRenderPlan
-        let locators: [String: PictureLocator]
+        /// Where each picture's bytes are now: a locator, or a file the roll fetched.
+        let sources: [String: PictureBytesSource]
+        /// What an instance vouched for each picture the roll fetched.
+        let vouched: [String: WinnowIdentity]
+        let connections: ConnectionStore?
         let mediaDirectory: URL
     }
 
@@ -192,6 +205,15 @@ final class RollExportRun {
             let share = Double(i) / Double(max(1, total))
             state.say("Rendering \(step)…", progress: share, detail: "\(step) · \(original.ref.name)")
             let variantDir = variantFolder(original)
+            // Which bytes it leaves from — fetched from its instance where they must be.
+            let found = await RunFetch.resolve(original, step: step, given: input.sources[original.id],
+                                               identity: input.vouched[original.id], rollId: input.rollId,
+                                               store: store, editor: editor, connections: input.connections,
+                                               export: export, proxiesOnly: input.proxiesOnly,
+                                               say: { line in self.state.say(line) })
+            defer { RollExportRun.discard(found.temporary) }
+            if flag.isSet { break }
+            failures += found.failures
             let wanted = RollExportRun.fileName(original.ref.name, input.format)
             let name = (try? uniqueName(wanted, taken: { named.contains(RollExportRun.key(variantDir, $0)) })) ?? wanted
             named.insert(RollExportRun.key(variantDir, name))
@@ -200,7 +222,9 @@ final class RollExportRun {
                 picture: original,
                 name: name,
                 variantDir: variantDir,
-                locator: input.locators[original.id],
+                source: found.source,
+                exifHead: found.exifHead,
+                vouchedExif: found.vouchedExif,
                 mediaDirectory: input.mediaDirectory,
                 plan: input.plan,
                 targets: export.targets,
@@ -286,13 +310,16 @@ final class RollExportRun {
     nonisolated static func deliver(_ job: PictureJob, _ flag: RunCancelFlag) async -> PictureOutcome {
         var out = PictureOutcome()
         let label = job.picture.ref.name
-        guard let locator = job.locator else {
-            out.failures.append("\(label) could not be found — this device does not know where its file is; reopen its folder or drop it on the roll")
+        guard let source = job.source else {
+            // A picture of an instance that could not be fetched already said so.
+            if !RollStore.isRemote(job.picture.ref) {
+                out.failures.append("\(label) could not be found — this device does not know where its file is; reopen its folder or drop it on the roll")
+            }
             return out
         }
         let data: Data
         do {
-            data = try RollStore.bytes(of: locator, mediaDirectory: job.mediaDirectory)
+            data = try RollStore.bytes(of: source, mediaDirectory: job.mediaDirectory)
         } catch {
             out.failures.append("\(label) could not be read: \(error.localizedDescription)")
             return out
@@ -327,11 +354,15 @@ final class RollExportRun {
         await job.plan.prepare(picture: picture, decoded: decoded, budget: .whole)
         out.unrendered = job.plan.unrendered(picture: picture)
 
-        // The metadata is the ORIGINAL's: the file's own head, else what the
-        // system reads of a container the kernel does not walk (a HEIC).
-        let head = [UInt8](data.prefix(exifSliceBytes))
+        // The metadata is the ORIGINAL's: its head — the file's own, or the
+        // original's when the pixels are a proxy's — else what the system reads
+        // of a container the kernel does not walk (a HEIC), else what the
+        // instance parsed at ingest.
+        let head = [UInt8]((job.exifHead ?? data).prefix(exifSliceBytes))
         let own = parseExif(head)
-        let vouched: ExifData? = isEmptyExif(own) ? ImageIOEncoding.exifData(decoded.properties) : nil
+        let vouched: ExifData? = isEmptyExif(own)
+            ? (ImageIOEncoding.exifData(decoded.properties) ?? job.vouchedExif)
+            : nil
         let capture: ExifData? = isEmptyExif(own) ? vouched : own
 
         // The watermark's line for THIS picture: the identity, the year it was
@@ -445,6 +476,11 @@ final class RollExportRun {
     }
 
     // MARK: - names and sentences
+
+    /// Files fetched for one picture alone, gone once it is delivered.
+    nonisolated static func discard(_ urls: [URL]) {
+        for url in urls { try? FileManager.default.removeItem(at: url.deletingLastPathComponent()) }
+    }
 
     /// `DJI_0101.JPG` → `DJI_0101.jpg` (or `.heic`): EXACTLY the picture's own name.
     nonisolated static func fileName(_ refName: String, _ format: ExportFormat) -> String {
