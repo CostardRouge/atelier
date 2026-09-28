@@ -13,6 +13,7 @@
  * `passthroughPass` does.
  */
 
+import { OWN_ROWS } from './band-plan';
 import { GLSL_VERSION } from './glsl';
 import type { RenderPass } from './graph';
 import { CLIP_BLACK, CLIP_MARKS, CLIP_WHITE } from './clipping';
@@ -22,6 +23,7 @@ const glslColour = ([r, g, b]: readonly [number, number, number]) =>
 
 export const clipPass: RenderPass = {
   id: 'clipping',
+  rows: OWN_ROWS,
   fragment: `${GLSL_VERSION}
 precision highp float;
 in vec2 v_uv;

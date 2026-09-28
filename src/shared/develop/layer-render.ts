@@ -270,6 +270,15 @@ export interface LayerPassCache {
   ): RenderPass | null;
   /** The blink over one point's region, kept while it is the same raster. */
   flash(raster: BrushRaster | null, aspectRatio: number): RenderPass | null;
+  /**
+   * Bake the cubes of `layers` AHEAD of `passes`, where it is cheap to be
+   * interrupted: the Develop stage calls this while React renders a DEFERRED
+   * value, so a layer's slider bakes its 33³ cube in a render React may
+   * abandon for the next step — the global develop's deferred bake
+   * (`use-lut-stack.ts`) — rather than synchronously in the paint for every
+   * input event. `passes` then finds the cube already made. Idempotent.
+   */
+  prime(layers: readonly AdjustLayer[] | null | undefined, interpolation?: Interpolation): void;
 }
 
 interface Held {
@@ -326,6 +335,8 @@ function partRasterFor(
 
 export function makeLayerPassCache(): LayerPassCache {
   const held = new Map<string, Held>();
+  /** Cubes baked by `prime`, by layer id, with the develop they were baked from. */
+  const baked = new Map<string, { develop: DevelopSettings; interpolation: Interpolation; cube: CubeLut | null }>();
   let overlay: { id: string; held: HeldOverlay } | null = null;
   let flash: { raster: BrushRaster; aspectRatio: number; pass: RenderPass | null } | null = null;
 
@@ -338,10 +349,13 @@ export function makeLayerPassCache(): LayerPassCache {
         keep.add(layer.id);
         const prev = held.get(layer.id);
 
+        const primed = baked.get(layer.id);
         const cube =
           prev && prev.interpolation === interpolation && sameDevelop(prev.develop, layer.develop)
             ? prev.cube
-            : layerCube(layer.develop, interpolation);
+            : primed && primed.interpolation === interpolation && sameDevelop(primed.develop, layer.develop)
+              ? primed.cube
+              : layerCube(layer.develop, interpolation);
 
         let raster: BrushRaster | null;
         let strokes: readonly BrushStroke[] | null = null;
@@ -415,6 +429,20 @@ export function makeLayerPassCache(): LayerPassCache {
       }
       for (const id of held.keys()) if (!keep.has(id)) held.delete(id);
       return out;
+    },
+
+    prime(layers, interpolation = getDefaultLutInterpolation()) {
+      const drawing = drawingLayers(layers);
+      const keep = new Set<string>();
+      for (const layer of drawing) {
+        keep.add(layer.id);
+        const prev = held.get(layer.id);
+        if (prev && prev.interpolation === interpolation && sameDevelop(prev.develop, layer.develop)) continue;
+        const done = baked.get(layer.id);
+        if (done && done.interpolation === interpolation && sameDevelop(done.develop, layer.develop)) continue;
+        baked.set(layer.id, { develop: cloneDevelop(layer.develop), interpolation, cube: layerCube(layer.develop, interpolation) });
+      }
+      for (const id of baked.keys()) if (!keep.has(id)) baked.delete(id);
     },
 
     overlay(layer, aspectRatio, raster = null, style = 'fill', except = null) {

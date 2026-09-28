@@ -728,6 +728,13 @@ export default function BadgeStage({
       graderRef.current = null;
       return null;
     }
+    // A new LOOK on the same picture is swapped in place: the develop sheet's
+    // sliders bake a new cube per step, and a rebuilt grader was a new WebGL2
+    // context per step.
+    if (cur && lut && cur.lut !== lut && cur.w === source.width && cur.h === source.height && cur.grader.setLut) {
+      cur.grader.setLut(lut);
+      cur.lut = lut;
+    }
     if (cur && cur.lut === lut && cur.w === source.width && cur.h === source.height) {
       // The texture alone moved: SWAP it rather than rebuilding, or the grain
       // slider is a new WebGL2 context per step (`render-core.md`).
@@ -757,6 +764,10 @@ export default function BadgeStage({
         cur?.grader.dispose();
         cellGradersRef.current.delete(i);
         return null;
+      }
+      if (cur && cur.lut !== cellLut && cur.w === source.width && cur.h === source.height && cur.grader.setLut) {
+        cur.grader.setLut(cellLut);
+        cur.lut = cellLut;
       }
       if (cur && cur.lut === cellLut && cur.w === source.width && cur.h === source.height) {
         return cur.grader;

@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
 import { toLinear } from '../lut/transfer';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
@@ -212,6 +212,13 @@ function graderFrom(
     }
     // Compared by VALUE: the panel hands down a new object on every slider
     // step, and identity would rebuild the grader per frame of a drag.
+    // A new LOOK on the same picture is swapped in place: a develop slider
+    // bakes a new cube per step, and a rebuilt grader was a new WebGL2
+    // context per step (the audit of 2026-09-22).
+    if (cur && cur.lut !== lut && cur.w === s.width && cur.h === s.height && cur.grader.setLut) {
+      cur.grader.setLut(lut);
+      cur.lut = lut;
+    }
     const sized = cur && cur.lut === lut && cur.w === s.width && cur.h === s.height;
     if (
       sized &&
@@ -881,7 +888,12 @@ export function useDevelopPicture({
 
   // Only the layers that DRAW: a parked one must not rebuild the grader, and
   // must not cost a pass.
-  const stack = useMemo(() => drawingLayers(layers), [layers]);
+  // DEFERRED, like the global develop's bake (`use-lut-stack.ts`): a layer's
+  // slider bakes its 33³ cube per step, and done in the paint it was one
+  // synchronous bake per input event. Baked here instead, in a render React
+  // may abandon for the next step, and found by the paint already made.
+  const deferredLayers = useDeferredValue(layers);
+  const stack = useMemo(() => drawingLayers(deferredLayers), [deferredLayers]);
   // The layer whose mask is shown, from the whole list: `stack` holds only the
   // layers that draw, and a subject still at zero is the one to look at.
   const overlay = useMemo<MaskOverlay | null>(() => {
@@ -896,6 +908,8 @@ export function useDevelopPicture({
   // an opacity nudge on one layer costs one small pass and nothing else
   // (`layer-render.ts`). One per hook, like the grader it feeds.
   const stageSlot = useRef<GraderSlot>({ cache: makeLayerPassCache(), current: null });
+  // The deferred bake of the layers' cubes (see `stack` above).
+  useMemo(() => stageSlot.current.cache.prime(stack), [stack]);
   // The post-crop vignette the picture HAS, for every grader call below —
   // computed once the frame is known, further down.
   const postVignetteRef = useRef<PostVignetteInput | null>(null);

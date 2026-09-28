@@ -15,6 +15,7 @@
  * filtering — which is what `sampleBilinear` mirrors.
  */
 
+import { nearRows, OWN_ROWS } from './band-plan';
 import { GLSL_VERSION, SRGB_TRANSFER } from './glsl';
 import type { RenderPass } from './graph';
 import {
@@ -121,12 +122,22 @@ void main() {
 const at = (gl: WebGL2RenderingContext, program: WebGLProgram, name: string) => gl.getUniformLocation(program, name);
 const OPS: readonly PresenceOp[] = ['dehaze', 'clarity', 'texture'];
 
+/** The rows `geometry()` reads on each side, at this frame's size — the shader's arithmetic. */
+export function presenceReach(frac: number, width: number, height: number): number {
+  const sigma = Math.max(0.8, frac * Math.min(width, height));
+  const spacing = Math.max(1, (3 * sigma) / PRESENCE_TAPS);
+  const taps = Math.min(PRESENCE_TAPS, Math.ceil((3 * sigma) / spacing));
+  return Math.ceil(taps * spacing) + 1;
+}
+
 /** The pair of passes for one slider. */
 export function makePresencePasses(op: PresenceOp, amount: number): RenderPass[] {
   const frac = PRESENCE_SCALE[op];
   return [
     {
       id: 'presence-blur',
+      // A blur along X: a band reads its own rows.
+      rows: OWN_ROWS,
       fragment: BLUR_FRAGMENT,
       setUniforms(gl, program) {
         gl.uniform1f(at(gl, program, 'u_frac'), frac);
@@ -135,6 +146,8 @@ export function makePresencePasses(op: PresenceOp, amount: number): RenderPass[]
     },
     {
       id: 'presence-apply',
+      // Along Y, as far as the kernel reaches — the GLSL's own `geometry()`.
+      rows: nearRows((frame) => presenceReach(frac, frame.width, frame.height)),
       fragment: APPLY_FRAGMENT,
       setUniforms(gl, program) {
         gl.uniform1f(at(gl, program, 'u_frac'), frac);

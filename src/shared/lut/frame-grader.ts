@@ -49,6 +49,8 @@ export interface PassGrader extends FrameGrader {
    * rebuilt per step is a new WebGL2 context per step.
    */
   setFilm(film: FilmTexture | null): void;
+  /** The look, replaced in place — a new cube, the same context (`GraphGrader.setLut`). */
+  setLut(lut: CubeLut | null): void;
 }
 
 /**
@@ -100,6 +102,7 @@ export function makeFrameGrader(
     render: (source, sourceSeconds) => grader.render(source, sourceSeconds),
     setPasses: (next, nextBefore = []) => grader.setExtraPasses(next, nextBefore),
     setFilm: (next) => grader.setFilm(next),
+    setLut: (next) => grader.setLut(next),
     dispose: () => grader.dispose(),
   };
 }

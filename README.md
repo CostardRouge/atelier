@@ -1349,7 +1349,11 @@ phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
 in the run's summary; a computer still exports every pixel. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
-(`constrained` or `roomy`) overrides it.
+(`constrained` or `roomy`) overrides it. A big export is also graded in
+bands: the graphics card holds a slice of the picture at a time rather than
+two full copies of it, which on a 48-megapixel still is a few hundred
+megabytes instead of three quarters of a gigabyte — with exactly the same
+pixels (a film stock's halation still needs the whole picture at once).
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
@@ -1358,9 +1362,12 @@ libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a
 time such a file is met (about 2 MB each, nothing at page load). A picture is
 recognised by its bytes, not its name, and opens upright with its rotation
 applied, in Develop, Trips, the Studio, the Library's covers and its
-lightbox; a HEIF or JPEG XL original can deliver an export too. Two limits:
-these decoders cannot scale while they decode, so the whole picture exists
-once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
+lightbox; a HEIF or JPEG XL original can deliver an export too. A small
+view of a HEIF — a Library cover, a filmstrip cell — is decoded from the
+thumbnail the file carries of itself (an iPhone writes one of about 320 px),
+in milliseconds instead of the whole picture. Two limits: for anything
+bigger these decoders cannot scale while they decode, so the whole picture
+exists once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
 profile (an iPhone's Display P3) is not applied, so its colours land a touch
 flatter than in Safari. TIFF is still not read.
 

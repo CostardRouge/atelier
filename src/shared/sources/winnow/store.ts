@@ -97,8 +97,8 @@ export function toSourceInfo(c: WinnowConnection): SourceInfo {
     kind: 'winnow',
     capabilities: {
       media: true,
-      documents: caps?.documents.bucket ?? false,
-      scheduling: caps?.scheduling.reminders ?? false,
+      documents: caps?.documents?.bucket ?? false,
+      scheduling: caps?.scheduling?.reminders ?? false,
     },
   };
 }

@@ -18,8 +18,10 @@
  * perspective correction mirrored until this was measured.
  */
 
+import { warpRows } from './band-plan';
 import { GLSL_VERSION, IMAGE_UV } from './glsl';
 import {
+  applyMatrix3,
   keystoneSampleMatrix,
   toColumnMajor,
   type Keystone,
@@ -71,6 +73,14 @@ export function keystonePassFromMatrix(sample: Matrix3): RenderPass {
   const columns = toColumnMajor(sample);
   return {
     id: 'keystone',
+    // The shader's map in JavaScript: image point → where it came from.
+    rows: warpRows((u, v, flipY) => {
+      const imgY = flipY ? v : 1 - v;
+      const at = applyMatrix3(sample, u - 0.5, imgY - 0.5);
+      if (!at) return [];
+      const sy = at[1] + 0.5;
+      return [[at[0] + 0.5, flipY ? sy : 1 - sy]];
+    }),
     fragment: FRAGMENT,
     setUniforms(gl, program) {
       const loc = gl.getUniformLocation(program, 'u_sample');

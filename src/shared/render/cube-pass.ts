@@ -9,6 +9,7 @@
  * already takes exactly one `CubeLut` keeps working.
  */
 
+import { OWN_ROWS } from './band-plan';
 import type { CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
@@ -53,6 +54,7 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
   return {
     id: 'cube',
     fragment: FRAGMENT,
+    rows: OWN_ROWS,
     setUniforms(gl, program) {
       const hasLut = Boolean(lut);
       gl.uniform1i(gl.getUniformLocation(program, 'u_hasLut'), hasLut ? 1 : 0);
@@ -77,6 +79,12 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
       gl.uniform1i(gl.getUniformLocation(program, 'u_lut'), 1);
       // Put the unit back, or the NEXT pass's `u_src` binding lands on unit 1.
       gl.activeTexture(gl.TEXTURE0);
+    },
+    // A grader that swaps its LOOK in place (`GraphGrader.setLut`) replaces
+    // this pass; its cube is a texture of up to 64³ half-floats, freed here.
+    dispose(gl) {
+      if (uploaded && uploaded.gl === gl) gl.deleteTexture(uploaded.tex);
+      uploaded = null;
     },
   };
 }

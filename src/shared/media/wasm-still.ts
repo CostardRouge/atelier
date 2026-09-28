@@ -26,8 +26,12 @@ import { readPngSamples, type PngSamples } from './png-read';
 import type { PixelSize } from './still-fit';
 import type { StillFormat } from './still-format';
 
-/** A decoded still: a blob the browser draws itself, or RGBA already upright. */
-export type WasmStill = { kind: 'blob'; blob: Blob } | { kind: 'pixels'; image: ImageData };
+/**
+ * A decoded still: a blob the browser draws itself, or RGBA already upright —
+ * with the picture's OWN size beside it, since the pixels may be the smaller
+ * render a HEIF carries of itself (its thumbnail).
+ */
+export type WasmStill = { kind: 'blob'; blob: Blob } | { kind: 'pixels'; image: ImageData; natural: PixelSize };
 
 // ── JPEG XL ────────────────────────────────────────────────────────────────
 
@@ -101,7 +105,8 @@ export async function decodeJxlSamples(bytes: Uint8Array): Promise<PngSamples> {
 // ── HEIF ───────────────────────────────────────────────────────────────────
 
 interface HeifImageLike {
-  handle: number;
+  /** An embind handle; its raw pointer is `$$.ptr`, what the C calls below take. */
+  handle: { $$?: { ptr?: number } } | number;
   get_width(): number;
   get_height(): number;
   display(target: ImageData, done: (out: ImageData | null) => void): void;
@@ -113,8 +118,89 @@ interface HeifDecoderLike {
 interface HeifLib {
   HeifDecoder: new () => HeifDecoderLike;
   heif_context_free(ctx: number): void;
-  heif_image_handle_release(handle: number): void;
-  heif_image_handle_is_primary_image(handle: number): number;
+  heif_image_handle_release(handle: HeifImageLike['handle']): void;
+  heif_image_handle_is_primary_image(handle: HeifImageLike['handle']): number;
+  // The C API, raw — the JS wrapper exposes no thumbnails.
+  HEAPU8: Uint8Array;
+  HEAP32: Int32Array;
+  HEAPU32: Uint32Array;
+  _malloc(bytes: number): number;
+  _free(ptr: number): void;
+  _heif_image_handle_get_number_of_thumbnails(handle: number): number;
+  _heif_image_handle_get_list_of_thumbnail_IDs(handle: number, ids: number, count: number): number;
+  _heif_image_handle_get_thumbnail(error: number, handle: number, id: number, out: number): void;
+  _heif_image_handle_get_width(handle: number): number;
+  _heif_image_handle_get_height(handle: number): number;
+  _heif_image_handle_release(handle: number): void;
+  _heif_decode_image(error: number, handle: number, out: number, colorspace: number, chroma: number, options: number): void;
+  _heif_image_get_plane_readonly(image: number, channel: number, stride: number): number;
+  _heif_image_get_width(image: number, channel: number): number;
+  _heif_image_get_height(image: number, channel: number): number;
+  _heif_image_release(image: number): void;
+}
+
+// libheif's enum values (heif.h): RGB colourspace, interleaved RGBA, the interleaved channel.
+const HEIF_RGB = 1;
+const HEIF_RGBA = 11;
+const HEIF_INTERLEAVED = 10;
+
+/**
+ * The smallest THUMBNAIL a HEIF carries of its primary picture that is still
+ * at least `want` — decoded to RGBA, or null where there is none big enough
+ * (or the C API refuses). An iPhone writes one of ~320 px beside every
+ * picture: a Library cover of 200 px decodes that instead of the 12 or 48
+ * megapixels, which is seconds and a heap the size of the picture saved per
+ * row. libheif turns it with the file's own `irot`, like the primary.
+ */
+function heifThumbnail(lib: HeifLib, image: HeifImageLike, want: PixelSize): ImageData | null {
+  const ptr = typeof image.handle === 'number' ? image.handle : image.handle.$$?.ptr;
+  if (!ptr) return null;
+  const count = lib._heif_image_handle_get_number_of_thumbnails(ptr);
+  if (!(count > 0)) return null;
+  const ids = lib._malloc(4 * count);
+  const error = lib._malloc(16);
+  const out = lib._malloc(4);
+  const stride = lib._malloc(4);
+  const handles: number[] = [];
+  try {
+    lib._heif_image_handle_get_list_of_thumbnail_IDs(ptr, ids, count);
+    let best: { handle: number; area: number } | null = null;
+    for (let i = 0; i < count; i += 1) {
+      lib._heif_image_handle_get_thumbnail(error, ptr, lib.HEAPU32[(ids >> 2) + i], out);
+      if (lib.HEAP32[error >> 2] !== 0) continue;
+      const handle = lib.HEAPU32[out >> 2];
+      handles.push(handle);
+      const w = lib._heif_image_handle_get_width(handle);
+      const h = lib._heif_image_handle_get_height(handle);
+      if (w >= want.width && h >= want.height && (!best || w * h < best.area)) best = { handle, area: w * h };
+    }
+    if (!best) return null;
+    lib._heif_decode_image(error, best.handle, out, HEIF_RGB, HEIF_RGBA, 0);
+    if (lib.HEAP32[error >> 2] !== 0) return null;
+    const decoded = lib.HEAPU32[out >> 2];
+    try {
+      const w = lib._heif_image_get_width(decoded, HEIF_INTERLEAVED);
+      const h = lib._heif_image_get_height(decoded, HEIF_INTERLEAVED);
+      const plane = lib._heif_image_get_plane_readonly(decoded, HEIF_INTERLEAVED, stride);
+      const rowBytes = lib.HEAP32[stride >> 2];
+      if (!plane || !(w > 0) || !(h > 0)) return null;
+      const pixels = new ImageData(w, h);
+      for (let y = 0; y < h; y += 1) {
+        pixels.data.set(lib.HEAPU8.subarray(plane + y * rowBytes, plane + y * rowBytes + w * 4), y * w * 4);
+      }
+      return pixels;
+    } finally {
+      lib._heif_image_release(decoded);
+    }
+  } catch {
+    return null;
+  } finally {
+    for (const handle of handles) lib._heif_image_handle_release(handle);
+    lib._free(ids);
+    lib._free(error);
+    lib._free(out);
+    lib._free(stride);
+  }
 }
 
 /** Seconds of idleness after which the HEIF heap is let go. */
@@ -143,7 +229,7 @@ function loadHeif(): Promise<HeifLib> {
 }
 
 /** Run `work` over the parsed file, its images released and the heap scheduled for release after. */
-async function withHeif<T>(blob: Blob, work: (image: HeifImageLike) => Promise<T> | T): Promise<T> {
+async function withHeif<T>(blob: Blob, work: (image: HeifImageLike, lib: HeifLib) => Promise<T> | T): Promise<T> {
   heifBusy++;
   if (heifIdle) clearTimeout(heifIdle);
   const lib = await loadHeif();
@@ -156,7 +242,7 @@ async function withHeif<T>(blob: Blob, work: (image: HeifImageLike) => Promise<T
     const image =
       images.find((i) => lib.heif_image_handle_is_primary_image(i.handle)) ??
       images.reduce((a, b) => (b.get_width() * b.get_height() > a.get_width() * a.get_height() ? b : a));
-    return await work(image);
+    return await work(image, lib);
   } finally {
     for (const i of images) lib.heif_image_handle_release(i.handle);
     if (decoder.decoder) lib.heif_context_free(decoder.decoder);
@@ -169,17 +255,22 @@ function heifSize(blob: Blob): Promise<PixelSize> {
   return withHeif(blob, (image) => ({ width: image.get_width(), height: image.get_height() }));
 }
 
-function heifDecode(blob: Blob): Promise<WasmStill> {
-  return withHeif(
-    blob,
-    (image) =>
-      new Promise<WasmStill>((resolve, reject) => {
-        const target = new ImageData(image.get_width(), image.get_height());
-        image.display(target, (out) =>
-          out ? resolve({ kind: 'pixels', image: out }) : reject(new Error('this HEIF did not decode')),
-        );
-      }),
-  );
+function heifDecode(blob: Blob, want?: (natural: PixelSize) => PixelSize): Promise<WasmStill> {
+  return withHeif(blob, (image, lib) => {
+    const natural = { width: image.get_width(), height: image.get_height() };
+    // A small ask is answered by the render the file carries of itself.
+    const target = want?.(natural);
+    if (target && (target.width < natural.width || target.height < natural.height)) {
+      const thumb = heifThumbnail(lib, image, target);
+      if (thumb) return { kind: 'pixels', image: thumb, natural } as WasmStill;
+    }
+    return new Promise<WasmStill>((resolve, reject) => {
+      const pixels = new ImageData(natural.width, natural.height);
+      image.display(pixels, (out) =>
+        out ? resolve({ kind: 'pixels', image: out, natural }) : reject(new Error('this HEIF did not decode')),
+      );
+    });
+  });
 }
 
 // ── The door ───────────────────────────────────────────────────────────────
@@ -189,7 +280,15 @@ export function wasmStillSize(blob: Blob, format: StillFormat): Promise<PixelSiz
   return format === 'jxl' ? jxlSize(blob) : heifSize(blob);
 }
 
-/** The picture, decoded whole by the decoder shipped for its format. */
-export function decodeWasmStill(blob: Blob, format: StillFormat): Promise<WasmStill> {
-  return format === 'jxl' ? jxlDecode(blob) : heifDecode(blob);
+/**
+ * The picture, decoded by the decoder shipped for its format — whole, or for a
+ * HEIF asked for less than itself (`want`, the size a caller will draw it at),
+ * from the thumbnail the file carries when one is big enough.
+ */
+export function decodeWasmStill(
+  blob: Blob,
+  format: StillFormat,
+  want?: (natural: PixelSize) => PixelSize,
+): Promise<WasmStill> {
+  return format === 'jxl' ? jxlDecode(blob) : heifDecode(blob, want);
 }

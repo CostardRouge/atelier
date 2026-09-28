@@ -70,7 +70,7 @@ describe('holdGrades', () => {
   it('forgets the held copy when the film texture is swapped, and only where it can be', () => {
     const { grader, render } = fakeGrader();
     const setFilm = vi.fn();
-    const swappable: PassGrader = { ...grader, setPasses: vi.fn(), setFilm };
+    const swappable: PassGrader = { ...grader, setPasses: vi.fn(), setFilm, setLut: vi.fn() };
     const held = holdGrades(swappable, fakeCopy());
     const photo = picture('photo');
     held.render(photo);
@@ -84,6 +84,21 @@ describe('holdGrades', () => {
     expect(render).toHaveBeenCalledTimes(2);
     // A grader that cannot swap one does not pretend to.
     expect(holdGrades(fakeGrader().grader, fakeCopy()).setFilm).toBeUndefined();
+  });
+
+  it('forgets the held copy when the look is swapped in place', () => {
+    const { grader, render } = fakeGrader();
+    const setLut = vi.fn();
+    const held = holdGrades({ ...grader, setPasses: vi.fn(), setFilm: vi.fn(), setLut } as PassGrader, fakeCopy());
+    const photo = picture('photo');
+    held.render(photo);
+    held.render(photo);
+    expect(render).toHaveBeenCalledTimes(1);
+    held.setLut?.(null);
+    expect(setLut).toHaveBeenCalledWith(null);
+    held.render(photo);
+    expect(render).toHaveBeenCalledTimes(2);
+    expect(holdGrades(fakeGrader().grader, fakeCopy()).setLut).toBeUndefined();
   });
 
   it('grades the same element again after invalidate — a clip whose frame moved', () => {

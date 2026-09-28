@@ -53,6 +53,26 @@ export interface MaterializeOptions {
    * picture), and a task inside a task would say the same thing twice.
    */
   quiet?: boolean;
+  /**
+   * Stop the fetch in flight — the browser's Cancel, which used to close the
+   * sheet while the files went on downloading and landed in the Library after
+   * all (the audit of 2026-09-22). Joined with the task's own Cancel.
+   */
+  signal?: AbortSignal;
+}
+
+/** Either signal aborts the result — `AbortSignal.any` where the engine has it. */
+function eitherSignal(a: AbortSignal | undefined, b: AbortSignal | undefined): AbortSignal | undefined {
+  if (!a) return b;
+  if (!b) return a;
+  const any = (AbortSignal as { any?: (signals: AbortSignal[]) => AbortSignal }).any;
+  if (any) return any([a, b]);
+  const joined = new AbortController();
+  const stop = () => joined.abort();
+  if (a.aborted || b.aborted) stop();
+  a.addEventListener('abort', stop, { once: true });
+  b.addEventListener('abort', stop, { once: true });
+  return joined.signal;
 }
 
 /** `DJI_0001.MP4` → `DJI_0001`. */
@@ -210,7 +230,7 @@ export async function materialize(
   const bring = async (opts: FetchOptions = {}) => {
     for (const [i, item] of plan.entries()) {
       const file = await client.fetchFile(item.url, item.name, item.type, lastModified, {
-        signal: opts.signal,
+        signal: eitherSignal(opts.signal, options.signal),
         onProgress: i === 0 ? opts.onProgress : undefined,
       });
       // The clip and its log share one identity: they are one asset in Winnow

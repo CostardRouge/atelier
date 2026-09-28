@@ -335,6 +335,11 @@ export default function PictureWorkbench({
   const [told, tell] = useTold();
   // Read once, like the develop: the workbench is keyed per picture.
   const [framingDraft, setFramingDraft] = useState<Framing>(entry.framing ?? { ...DEFAULT_FRAMING });
+  // The aspect rides a draft too: a FREE crop's aspect moves with every
+  // pointer move of a handle, and written to the roll at once it rewrote the
+  // whole document per move (the audit of 2026-09-22). Written through at
+  // rest with the framing, like every other draft here.
+  const [aspectDraft, setAspectDraft] = useState<string>(entry.aspect);
   // The crop stays visible on every tab: the Develop viewport shows the
   // picture as it will leave, framed, while the Crop tab edits the frame.
   const [ratio, setRatio] = useState(0);
@@ -1048,6 +1053,13 @@ export default function PictureWorkbench({
     onWrite: (value) => callbacks.current.onLayers(value ?? []),
     onReseed: (value) => setLayersDraft(value ?? []),
   });
+  useWriteThrough<string>({
+    stored: entry.aspect,
+    draft: aspectDraft,
+    same: (a, b) => a === b,
+    onWrite: (value) => callbacks.current.onAspect(value ?? 'original'),
+    onReseed: (value) => setAspectDraft(value ?? 'original'),
+  });
   useWriteThrough<Framing>({
     stored: entry.framing,
     draft: isDefaultFraming(framingDraft) ? null : framingDraft,
@@ -1060,7 +1072,7 @@ export default function PictureWorkbench({
   // Delivered means graded AND framed: the strip shows the crop as well as
   // the light. Keyed on the crop too, so a drag that rests redraws the cell.
   const { source, cube, delivered } = picture;
-  const aspectRatio = pictureAspectRatio(entry.aspect, source?.width ?? 0, source?.height ?? 0);
+  const aspectRatio = pictureAspectRatio(aspectDraft, source?.width ?? 0, source?.height ?? 0);
   useEffect(() => setRatio(source ? aspectRatio : 0), [source, aspectRatio]);
   useEffect(() => setStageWidth(source?.width ?? 0), [source]);
   useEffect(() => setPictureAspect(source && source.height > 0 ? source.width / source.height : 1), [source]);
@@ -1162,16 +1174,16 @@ export default function PictureWorkbench({
     setSelectedPatchId(null);
   }, [selectedPatchId]);
   // The Crop tab's zone, measured on the decoded picture and written back as
-  // the aspect (to the roll, at once) and the framing (through its draft).
+  // the aspect and the framing, each through its draft.
   // Memoised on the source: a fresh `{ width, height }` per render recomputed
   // the zone and the view, and both canvases under them repainted — a
   // rotated, high-quality draw at device pixels — on every render.
   const cropSrc = useMemo(() => (source ? { width: source.width, height: source.height } : null), [source]);
   const crop = useCropZone({
     src: cropSrc,
-    aspect: entry.aspect,
+    aspect: aspectDraft,
     framing: framingDraft,
-    onAspect: (aspect) => callbacks.current.onAspect(aspect),
+    onAspect: setAspectDraft,
     onFraming: setFramingDraft,
   });
   useEffect(() => {
@@ -2003,7 +2015,7 @@ export default function PictureWorkbench({
             <CropPanel
               picture={picture}
               crop={crop}
-              aspect={entry.aspect}
+              aspect={aspectDraft}
               border={entry.border}
               onBorder={onBorder}
               deliveredSize={exports.openDelivery?.out ?? null}

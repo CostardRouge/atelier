@@ -21,6 +21,11 @@ import { makeFilmPass } from './film-pass';
 import { createRenderGraph, type RenderPass, type RenderPrecision, type RenderSource } from './graph';
 import { isHalfImage } from './half-image';
 
+// The banding hooks, re-exported so a gate that imports THIS module reaches the
+// very instance of the graph it renders through (a dev server that has
+// hot-reloaded `graph.ts` serves it under a second URL).
+export { bandsLastDrawnForTest, setBandingForTest } from './graph';
+
 export interface GraphGrader extends FrameGrader {
   /** What the intermediate buffers really are here — 'byte' where float16 cannot be rendered to. */
   precision: RenderPrecision;
@@ -45,6 +50,13 @@ export interface GraphGrader extends FrameGrader {
    * WebGL2 context per step (the reason `setExtraPasses` exists).
    */
   setFilm(film: FilmTexture | null): void;
+  /**
+   * The LOOK, replaced in place — a develop slider bakes a new cube on every
+   * step of a drag, and a grader rebuilt for each one was a new WebGL2
+   * context per step (the audit of 2026-09-22): the context, its programs and
+   * the uploaded source all survive; only the cube's texture is new.
+   */
+  setLut(lut: CubeLut | null): void;
 }
 
 let probedMaxSize: number | null = null;
@@ -98,11 +110,12 @@ export function makeGraphGrader(
       },
       setExtraPasses() {},
       setFilm() {},
+      setLut() {},
       dispose() {},
     };
   }
   graph.resize(width, height);
-  const cube = makeCubePass({ lut, intensity, interpolation });
+  let cube = makeCubePass({ lut, intensity, interpolation });
   let extra: readonly RenderPass[] = [];
   let pre: readonly RenderPass[] = [];
   /**
@@ -127,6 +140,10 @@ export function makeGraphGrader(
       if (filmPass) graph.releasePass(filmPass);
       filmPass = next ? makeFilmPass(next, width, height) : null;
     },
+    setLut(next) {
+      graph.releasePass(cube);
+      cube = makeCubePass({ lut: next, intensity, interpolation });
+    },
     render(source, sourceSeconds) {
       // The SOURCE instant, not a repaint's: the field re-rolls per source
       // frame quantised to `grainFps`, so a still repaints identically and a
@@ -146,6 +163,7 @@ export function makeGraphGrader(
       for (const pass of extra) graph.releasePass(pass);
       for (const pass of pre) graph.releasePass(pass);
       if (filmPass) graph.releasePass(filmPass);
+      graph.releasePass(cube);
       extra = [];
       pre = [];
       filmPass = null;

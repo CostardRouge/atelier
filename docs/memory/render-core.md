@@ -130,6 +130,8 @@ is uploaded every time, as before. **A claim about what the GPU does is not
 true until a gate row draws it** — the swap row now runs from a bitmap too,
 drawn three times, and would read a stale or empty texture as a failure.
 
+**The LOOK is swapped too (2026-09-28).** "A new look is rightly a new grader" was the one exception above, and it cost a new WebGL2 context per step of every develop slider — each step bakes a new cube. `GraphGrader.setLut` replaces the cube pass in place (the old one's texture freed through `dispose`, which the cube pass gained), `PassGrader` and `holdGrades` forward it (dropping the held copy), and the Develop stage (`graderFrom`) and the Trips stage (lead and collage cells) call it whenever only the cube moved on the same picture. The gate row: grade through one cube, swap to another, compare with a grader built fresh around the second — identical, and the swap moves the picture.
+
 ## Three rules the graph now enforces itself (2026-09-20, the audit)
 
 - **A lost context is said once and drawn around.** `render()` checks
@@ -180,3 +182,14 @@ held copy served after the swap, and a swap that quietly did nothing. It renders
 through one grader, swaps its passes, renders again, and compares against a
 grader built fresh with the second set — plus an assertion that the two sets
 draw *different* pictures, or the row would pass on a no-op. Measured identical.
+
+## Bands (2026-09-28)
+
+**Decision.** A frame of at least 12 MP (`BAND_MIN_PIXELS`, above the 4K stage so an interactive render never bands) is drawn in full-width bands of ~4 MP when EVERY pass after the first says which rows of its input it reads to write a span of rows — `RenderPass.rows`, a `RowNeed` from `band-plan.ts` (pure, tested): `OWN_ROWS` for a colour pass, `nearRows(r)` (or a function of the frame, the presence blurs) for a neighbourhood, `warpRows(map)` for the lens, the keystone and the camera warp — their shader's arithmetic in JavaScript, sampled over the band on a grid (a column every 16 px, a row every 8, 4 rows or 2 % of slack) — and an exact span for the repair (only the patches covering the band, their offset, and a heal's rings). `planBands` walks each band BACKWARDS through the chain; the first pass reads the source, which stays whole; the targets are allocated at the tallest region. **Why**: two full-size float16 targets were 16 B/px — 744 MB at 48 MP — the open item of 2026-09-20. **Measured** (planner at 8064 × 6048): 63 MB for a look + sharpen, 133 MB with a lens and clarity, 291 MB with a lens, dehaze, clarity, texture and noise reduction.
+
+**How it reads a band**: every pass fragment is linked through `bandFragment`, which routes each `texture(u_src, …)` through `_bandUv` (frame coordinate → the band target's, `u_srcBand`) and clamps y to the FRAME's edge rows (a band target is taller than its region, so CLAMP_TO_EDGE would land on stale rows). All four uniforms at zero are the identity to the bit, so a whole render is unchanged — `check-render.mjs` still passes, 48 rows. A shader that does not declare `uniform sampler2D u_src;` exactly is simply never banded.
+
+**Two traps, both measured**: (1) a band drawn through a viewport of its own interpolated `v_uv` a few ulps off the whole render — invisible except at a warp's EMPTY edge, where a pixel flipped from inside to outside and a later texture pass amplified it to 217 codes. Every band is now drawn through the WHOLE frame's viewport, offset (`y = −region.y0` into a target) and cut by a scissor: `v_uv` is identical to the bit. (2) A 33-column grid missed a stack of three warps' extreme by a few rows: a seam at a band edge. The denser grid and the slack closed it. **The gate is `scripts/check-bands.mjs`** (dev server up): one chain of 18 passes of every kind, whole against bands of 37 rows, from a canvas and a bitmap — worst 1 code, and it FAILS if fewer than ten bands were drawn, because a plan that quietly declines compares whole with whole. Run it after adding or touching a pass. A dev server that hot-reloaded `graph.ts` serves it under a second URL, so the gate reaches the banding hooks through `graph-grader.ts`.
+
+**How to apply**: a NEW pass must declare `rows`, or every chain it joins is drawn whole again (correct, just the old memory). What stays whole regardless: the source texture and the canvas, 4 B/px each, and any chain holding the film node's halation, whose `prepare` reads its whole input.
+

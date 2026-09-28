@@ -1161,3 +1161,16 @@ The filmstrip's × badge overhangs its cell by 4px, and a scroller that clips
 x clips y too — on a touch screen, where the badge is always drawn at 28px,
 its top was sliced flat. The strip pays `pt-1.5 pr-1.5` for it; any badge
 overhanging a cell in a horizontal scroller needs the same room.
+
+## A run writes each picture as it lands (2026-09-28)
+
+`exportPictures` used to render the whole run into memory — every JPEG and every second target's — and write it all at the end, then keep the files in `lastRun` until the NEXT run: gigabytes on a big roll, and on a phone where a long roll died. Each picture is now handed to `deliverFilesTo` as soon as it is rendered (its main file and its other targets' together), the counts and refusals are accumulated, and only the NAMES are kept (`RollRun.names`, for the unplugged send home, which can read them back from the folder). The folder is still picked at the click, before anything renders (`deliver-files.ts`). A cancel keeps what was already written — as it always said.
+
+## The filmstrip's cells are memoised (2026-09-28)
+
+Every cell re-rendered on every tick of the open picture's sliders — a roll of hundreds of cells for one picture's change. `Cell` is `memo`, and what it is handed is kept stable: the host's four callbacks are read through a ref and handed as ONE `CellHandlers` for the strip's life (RollEditor passes inline arrows), the Winnow thumbnail as a client and an id rather than a fresh object, and the availability as its KIND alone — `use-roll-media` rebuilds that map, objects and all, on every roll change. A new prop on a cell must be stable too, or the memo quietly stops holding.
+
+## The crop's ASPECT rides a draft too (2026-09-28)
+
+The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
+

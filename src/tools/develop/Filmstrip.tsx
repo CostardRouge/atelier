@@ -1,4 +1,4 @@
-import { useEffect, useRef, type PointerEvent as ReactPointerEvent } from 'react';
+import { memo, useEffect, useMemo, useRef, type PointerEvent as ReactPointerEvent } from 'react';
 import { describeDevelop } from '../../shared/develop/develop';
 import type { SelectionModifiers } from '../../shared/develop/roll-editor';
 import type { PictureAvailability } from '../../shared/develop/roll-media';
@@ -76,6 +76,22 @@ export default function Filmstrip({
   shows?: (picture: RollPicture) => boolean;
 }) {
   const stripRef = useRef<HTMLOListElement>(null);
+  // The cells are MEMOISED, so what they are handed must be stable: the
+  // host's callbacks are read through a ref, and every cell gets the same
+  // four functions for the life of the strip. Without this every cell
+  // re-rendered on every tick of the open picture's sliders (the audit of
+  // 2026-09-22), a roll of hundreds of cells for one picture's change.
+  const latest = useRef({ onOpen, onSelectClick, onRemove, onDeliver });
+  latest.current = { onOpen, onSelectClick, onRemove, onDeliver };
+  const handlers = useMemo<CellHandlers>(
+    () => ({
+      open: (id) => latest.current.onOpen(id),
+      selectClick: (id, mods) => latest.current.onSelectClick(id, mods),
+      remove: (picture) => latest.current.onRemove(picture),
+      deliver: (id, action) => latest.current.onDeliver(id, action),
+    }),
+    [],
+  );
   useEffect(() => {
     const cell = openId ? stripRef.current?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
     cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
@@ -92,61 +108,73 @@ export default function Filmstrip({
       // where the badge is always shown, its top was sliced flat.
       className="m-0 p-0 pt-1.5 pr-1.5 pb-1 list-none flex gap-1.5 overflow-x-auto overscroll-x-contain touch-pan-x [scrollbar-width:thin]"
     >
-      {pictures.filter((p) => p.id === openId || ((!hideIgnored || !isIgnored(p)) && shows(p))).map((p) => (
-        <Cell
-          key={p.id}
-          picture={p}
-          open={p.id === openId}
-          selected={selectedIds.has(p.id)}
-          thumb={thumbs.get(p.id) ?? null}
-          availability={availability.get(p.id)}
-          culling={culling?.get(p.id)}
-          remote={thumbs.has(p.id) ? null : remoteThumb(p)}
-          size={size}
-          onOpen={() => onOpen(p.id)}
-          onSelectClick={(mods) => onSelectClick(p.id, mods)}
-          onRemove={() => onRemove(p)}
-          onDeliver={(action) => onDeliver(p.id, action)}
-        />
-      ))}
+      {pictures.filter((p) => p.id === openId || ((!hideIgnored || !isIgnored(p)) && shows(p))).map((p) => {
+        // Handed as two values, not a fresh object per render, so the memo holds.
+        const remote = thumbs.has(p.id) ? null : remoteThumb(p);
+        return (
+          <Cell
+            key={p.id}
+            picture={p}
+            open={p.id === openId}
+            selected={selectedIds.has(p.id)}
+            thumb={thumbs.get(p.id) ?? null}
+            // The kind alone: the map is rebuilt per roll change, its objects with it.
+            availabilityKind={availability.get(p.id)?.kind ?? 'local'}
+            culling={culling?.get(p.id)}
+            remoteClient={remote?.client ?? null}
+            remoteId={remote?.id ?? null}
+            size={size}
+            handlers={handlers}
+          />
+        );
+      })}
     </ol>
   );
 }
 
-function Cell({
+/** The strip's four gestures, one set for every cell and for the strip's life. */
+interface CellHandlers {
+  open: (id: string) => void;
+  selectClick: (id: string, mods: SelectionModifiers) => void;
+  remove: (picture: RollPicture) => void;
+  deliver: (id: string, action: DeliverAction) => void;
+}
+
+const Cell = memo(function Cell({
   picture,
   open,
   selected,
   thumb,
-  availability,
+  availabilityKind,
   culling,
-  remote,
+  remoteClient,
+  remoteId,
   size,
-  onOpen,
-  onSelectClick,
-  onRemove,
-  onDeliver,
+  handlers,
 }: {
   picture: RollPicture;
   open: boolean;
   selected: boolean;
   thumb: Blob | null;
-  availability: PictureAvailability | undefined;
+  availabilityKind: PictureAvailability['kind'];
   culling: Culling | undefined;
-  remote: { client: WinnowClient; id: number } | null;
+  remoteClient: WinnowClient | null;
+  remoteId: number | null;
   size: string;
-  onOpen: () => void;
-  onSelectClick: (mods: SelectionModifiers) => void;
-  onRemove: () => void;
-  onDeliver: (action: DeliverAction) => void;
+  handlers: CellHandlers;
 }) {
+  const remote = remoteClient && remoteId !== null ? { client: remoteClient, id: remoteId } : null;
+  const onOpen = () => handlers.open(picture.id);
+  const onSelectClick = (mods: SelectionModifiers) => handlers.selectClick(picture.id, mods);
+  const onRemove = () => handlers.remove(picture);
+  const onDeliver = (action: DeliverAction) => handlers.deliver(picture.id, action);
   const url = useObjectUrl(thumb);
   const ignored = isIgnored(picture);
   // The roll's one answer (`pictureEdits`): the dot, the progress line and the
   // remove confirmation cannot disagree about what counts.
   const edits = pictureEdits(picture);
   const developed = edits.length > 0;
-  const kind = availability?.kind ?? 'local';
+  const kind = availabilityKind;
   const label = pictureLabel(picture);
   const variant = variantNumber(picture);
   const fetching = kind === 'fetching';
@@ -246,7 +274,7 @@ function Cell({
       </button>
     </li>
   );
-}
+});
 
 /** What an empty cell says, in a word or two — the stage says the rest. */
 const CELL_WORDS: Record<PictureAvailability['kind'], string> = {
