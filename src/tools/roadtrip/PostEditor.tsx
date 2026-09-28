@@ -66,7 +66,8 @@ import {
 import { countOwnGrades, pictureKeyOf } from '../../shared/roadtrip/post-grade';
 import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
 import { setHookOptions, type HookContext } from '../../shared/roadtrip/hooks/hook-variant';
-import { hookContextFor } from '../../shared/roadtrip/hooks/hook-context';
+import { hookContextFor, slideHookTiming } from '../../shared/roadtrip/hooks/hook-context';
+import { slideRender, slideSettleSeconds } from '../../shared/roadtrip/slide-render';
 import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
 import useHookPictures from './use-hook-pictures';
 import { useHookSound } from './use-hook-sound';
@@ -622,8 +623,16 @@ export default function PostEditor({
   // picture of the deck may carry a look of its own (`post-grade.ts`).
   const grade = useTripGrade(trip, post, picture, onChangeTrip, onChangePost);
   const flashLut = grade.lutFor({ ...slides[0], develop: null });
+  // Every opener of the deck asks for its pictures through ONE pass, so they
+  // share one pixel budget: any slide may hold an opener now, and three
+  // itineraries of twelve stops must not each decode as if it were alone
+  // (`docs/slide-capacities.md` §10).
+  const deckLayers = useMemo(
+    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
+    [post.badge.hook, post.slides],
+  );
   const { pictures: hookPictures, status: hookPictureStatus } = useHookPictures(
-    post.badge.hook,
+    deckLayers,
     baseHookCtx,
     lib.assets,
     flashLut,
@@ -673,6 +682,31 @@ export default function PostEditor({
         post.badge.durationSeconds,
       ),
     [hook, content, post.badge.layout, aspect, post.badge.pieceStyles, post.badge.durationSeconds],
+  );
+
+  // Every slide that is not the first composes through the one function the
+  // deck, the rail and the exports use — its own badge, opener, shades and
+  // words — so the stage cannot draw a slide the export would not deliver.
+  const openRender = useMemo(
+    () => (isHook || isCta ? null : slideRender(trip, post, slide, aspect, hookPictures, hookExif)),
+    [isHook, isCta, trip, post, slide, aspect, hookPictures, hookExif],
+  );
+  /** The opener on the OPEN slide — the piece's on the first, the slide's own elsewhere. */
+  const openHook = isHook ? hook : (openRender?.hook ?? null);
+  /** Each slide's opener length, for the band's marks: the first slide's is the piece's. */
+  const openerSecondsBySlide = useMemo(
+    () =>
+      slides.map((s) =>
+        s.kind === 'hook'
+          ? hook.seconds
+          : s.hook
+            ? resolveHook(
+                s.hook,
+                hookContextFor(trip, post, aspect, null, hookPictures, slideHookTiming(s)),
+              ).seconds
+            : 0,
+      ),
+    [slides, hook, trip, post, aspect, hookPictures],
   );
 
   const patchBadge = useCallback(
@@ -916,9 +950,12 @@ export default function PostEditor({
   // slide has a clock too: at rest it shows the cells settled, playing it
   // shows them arriving and leaving on the piece's transport.
   const collageSettle = collageSettleSeconds(collage, aspect);
+  // Another slide rests past its own opener, badge, text and cells — the rest
+  // its thumbnail and its PNG are taken at (`slideSettleSeconds`).
+  const otherRest = openRender ? slideSettleSeconds(post, slide, openRender, aspect) : collageSettle;
   const badgeTime = !isHook
     ? stillAtRest
-      ? collageSettle
+      ? otherRest
       : deck.local
     : isClipSlide
       ? clipAtRest
@@ -938,7 +975,7 @@ export default function PostEditor({
   // otherwise, where the stage shows the instant and a gesture is refused and
   // said so on the picture. A frame is never placed in silence.
   const slideSeconds = lengths[slideIndex] ?? 0;
-  const openerSeconds = isHook ? hook.seconds : 0;
+  const openerSeconds = openHook?.seconds ?? 0;
   /** A picture's span: the slide, less what its move waits for the opener. */
   const spanOf = useCallback(
     (motion: FramingMotion | null) =>
@@ -1230,9 +1267,10 @@ export default function PostEditor({
   // The opener's ticks, heard while whichever transport is actually driving
   // the badge plays — a clip's own, or the photo transport above — off until
   // asked for. `badgeTime` already reads whichever clock applies.
-  const hookScore = useMemo(() => hook.score(), [hook]);
+  // The OPEN slide's opener, wherever it sits: any slide may hold one.
+  const hookScore = useMemo(() => openHook?.score() ?? [], [openHook]);
   const [soundOn, setSoundOn] = useState(false);
-  useHookSound(hookScore, isHook && stagePlaying, badgeTime, soundOn);
+  useHookSound(hookScore, openHook !== null && stagePlaying, badgeTime, soundOn);
 
   // Space plays — the piece, or the cut while it is open — and `I` / `O` cut
   // the open clip at the playhead (Shift: back to the clip's own ends), the
@@ -1680,7 +1718,7 @@ export default function PostEditor({
         setTrimming(on);
       }}
       sound={
-        isHook && hookScore.length > 0
+        hookScore.length > 0
           ? { on: soundOn, onToggle: () => setSoundOn((on) => !on) }
           : null
       }
@@ -1688,7 +1726,7 @@ export default function PostEditor({
       // Where each slide's pictures have frames placed — a moving slide is
       // read on the band at a glance, the way a clip's frames are.
       marksFor={(i) =>
-        slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, slides[i].kind === 'hook' ? hook.seconds : 0) : []
+        slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, openerSecondsBySlide[i] ?? 0) : []
       }
     />
   );
@@ -1899,13 +1937,13 @@ export default function PostEditor({
                 : null
             }
             aspect={aspect}
-            elements={elements}
+            elements={openRender ? openRender.elements : elements}
             theme={isCta ? null : trip.theme}
             timeSeconds={badgeTime}
-            shades={isHook ? post.badge.shades : undefined}
-            block={isHook ? block : null}
-            hook={isHook ? hook : null}
-            elementsAt={isHook ? hookElementsAt : null}
+            shades={isHook ? post.badge.shades : openRender?.shades}
+            block={isHook ? block : (openRender?.block ?? null)}
+            hook={openHook}
+            elementsAt={isHook ? hookElementsAt : (openRender?.elementsAt ?? null)}
             background={isCta ? trip.cta.background : undefined}
             qr={ctaQr}
             lut={lut}

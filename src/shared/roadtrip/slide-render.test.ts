@@ -140,3 +140,95 @@ describe('slideRender', () => {
     expect(render.block).toBeNull();
   });
 });
+
+describe('slideRender — a slide holds what it holds, wherever it sits (v29)', () => {
+  const openerPost = () => {
+    const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 10, lastModified: 1 });
+    return { slide, post: post({ slides: [slide] }) };
+  };
+  const renderContent = (p: TripPost) => {
+    const doc = trip({ posts: [p] });
+    return slideRender(doc, p, deckSlides(doc, p)[1], ASPECT);
+  };
+
+  it('draws a bare content slide exactly as before: its caption, no opener, no shade', () => {
+    const { slide, post: p } = openerPost();
+    slide.caption = 'Pink Lake, 9am';
+    const render = renderContent(p);
+    expect(render.elements).toEqual(contentSlideElements('Pink Lake, 9am', ASPECT));
+    expect(render.hook).toBeNull();
+    expect(render.shades).toBeUndefined();
+    expect(render.block).toBeNull();
+    expect(render.elementsAt).toBeNull();
+  });
+
+  it('prepares a content slide’s own opener, told the slide’s own time', () => {
+    const { slide, post: p } = openerPost();
+    slide.hook = [{ id: 'badge', options: {} }];
+    slide.seconds = 5;
+    const render = renderContent(p);
+    expect(render.hook).not.toBeNull();
+    expect(render.hook!.ownsFrame).toBe(false);
+  });
+
+  it('draws a slide badge in the piece’s look, at the slide’s own place and size', () => {
+    const { slide, post: p } = openerPost();
+    slide.badge = {
+      mode: 'day',
+      timeAgo: 'off',
+      layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+      durationSeconds: 2,
+      textOverrides: { label: 'Noon', headline: '12' },
+    };
+    const render = renderContent(p);
+    const headline = render.elements.find((el) => el.id === 'piece:headline');
+    expect(headline?.text).toBe('12');
+    expect(headline?.sizeFrac).toBeCloseTo(0.06);
+    expect(render.block).not.toBeNull();
+    expect(render.elements.some((el) => el.text === 'Noon' || el.text === 'NOON')).toBe(true);
+  });
+
+  it('never credits the camera on another slide — the credit is the hook picture’s', () => {
+    const { slide, post: p } = openerPost();
+    p.badge.showExif = true;
+    slide.badge = {
+      mode: 'day',
+      timeAgo: 'off',
+      layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+      durationSeconds: 2,
+      textOverrides: {},
+    };
+    const doc = trip({ posts: [p] });
+    const exif = { make: 'DJI', model: 'FC8482', fNumber: 1.7, iso: 100 } as never;
+    const deck = deckSlides(doc, p);
+    // The same EXIF DOES credit the camera on the first slide, so the absence
+    // below is the rule and not a picture that says nothing.
+    const first = slideRender(doc, p, deck[0], ASPECT, undefined, exif);
+    expect(first.elements.some((el) => el.id === 'piece:exif')).toBe(true);
+    const render = slideRender(doc, p, deck[1], ASPECT, undefined, exif);
+    expect(render.elements.some((el) => el.id === 'piece:exif')).toBe(false);
+  });
+
+  it('draws the slide’s shades, and its free text over its caption', () => {
+    const { slide, post: p } = openerPost();
+    slide.caption = 'Leg two';
+    slide.shades = [{ id: 'sh', direction: 'bottom', reach: 0.5, strength: 0.4, color: '#000000', invert: false, followHook: false }];
+    slide.texts = [{ ...contentSlideElements('x', ASPECT)[0], id: 'free', text: 'Shark Bay' }];
+    const render = renderContent(p);
+    expect(render.shades).toHaveLength(1);
+    const ids = render.elements.map((el) => el.id);
+    expect(ids.indexOf('free')).toBeGreaterThan(ids.indexOf('caption:0'));
+  });
+
+  it('leaves the first slide’s render untouched by what another slide holds', () => {
+    const { slide, post: p } = openerPost();
+    const doc = trip({ posts: [p] });
+    const before = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
+    slide.hook = [{ id: 'map', options: {} }];
+    slide.shades = [{ id: 'sh', direction: 'top', reach: 0.5, strength: 0.4, color: '#000000', invert: false, followHook: false }];
+    const after = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
+    expect(after.elements).toEqual(before.elements);
+    expect(after.shades).toEqual(before.shades);
+    expect(after.block).toEqual(before.block);
+  });
+});

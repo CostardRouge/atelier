@@ -13,7 +13,7 @@ import {
 import { collageMediaRefs, collageSettleSeconds } from '../../shared/roadtrip/collage';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
-import { slideRender } from '../../shared/roadtrip/slide-render';
+import { slideRender, slideSettleSeconds } from '../../shared/roadtrip/slide-render';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import type { ExifData } from '../../shared/exif/exif-parser';
 
@@ -170,14 +170,20 @@ export default function useRailThumbs({
         const collageLuts = slide.collage
           ? [slide, ...slide.collage.cells].map((cell) => lutId(lutFor({ ...slide, develop: cell.develop })))
           : null;
+        // Where a slide that is not the first is drawn at rest: past its own
+        // opener, badge, text and cells. The first slide's rest reads the
+        // piece's badge and is taken below, with the rest of the effect's clock.
+        const rest = slide.kind === 'hook' ? null : slideSettleSeconds(post, slide, render, aspect);
         return {
           key: slideKey(slide),
           slide,
           file,
           render,
           lut,
+          rest,
           sig: JSON.stringify([
             render,
+            rest,
             aspect,
             lutId(lut),
             slide.videoTimeSeconds,
@@ -185,14 +191,15 @@ export default function useRailThumbs({
             slide.collage,
             collageFiles,
             collageLuts,
-            // Only the hook's cell reads them; signing every cell with them
-            // would redraw a whole carousel each time one picture lands.
-            slide.kind === 'hook' ? picturesId(pictures) : 0,
+            // Only a cell holding an opener reads them; signing every cell
+            // with them would redraw a whole carousel each time one picture
+            // lands. Any slide may hold one now, the first included.
+            slide.hook ? picturesId(pictures) : 0,
             // The opener's OWN settings and the trip's car: a folded hook
             // serialises to four scalars (its paint is a closure), so an
             // Itinerary stop moved or a Virée colour changed left the
             // signature — and the thumbnail — as they were.
-            slide.kind === 'hook' ? [post.badge.hook, trip.car] : 0,
+            slide.hook ? [slide.hook, trip.car] : 0,
           ]),
         };
       }),
@@ -261,11 +268,16 @@ export default function useRailThumbs({
               : null,
           // Past the opener too: a scrub's thumbnail mid-sweep would be
           // another day's picture standing for this one — and past a
-          // collage's own entrance on any slide.
-          timeSeconds: Math.max(
-            job.slide.kind === 'hook' ? Math.max(settle, job.render.hook?.seconds ?? 0) : 0,
-            collageSettleSeconds(job.slide.collage, aspect),
-          ),
+          // collage's own entrance, on any slide, and on a slide that is not
+          // the first, past its own badge, opener and text.
+          timeSeconds:
+            job.slide.kind === 'hook'
+              ? Math.max(
+                  settle,
+                  job.render.hook?.seconds ?? 0,
+                  collageSettleSeconds(job.slide.collage, aspect),
+                )
+              : (job.rest ?? 0),
         });
       } finally {
         grader?.dispose();

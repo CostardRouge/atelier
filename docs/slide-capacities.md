@@ -5,7 +5,8 @@ asked to start without answering §9, so the build takes the brief's own
 recommendations as its working answers and says so where each applies: a
 badge on another slide is allowed and never a default, the first slide keeps
 the name "hook", two masked modes, no deck-shape defaults, and the bridge
-still sends the first slide's opener. Built so far: **commit 1** (the model).
+still sends the first slide's opener. Built so far: **commits 1–2** (the model, and every surface
+rendering a slide by what it holds).
 
 §1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
 still lists what is his to settle.
@@ -316,7 +317,13 @@ Five commits, one task each, in this order:
    fields on the `TripDoc` itself.
 2. `slide-render.ts` branches on capacity; `hookContextFor` takes slide timing;
    `hookMoves` per slide; `deck-export.ts`'s settle generalises. No UI, and the
-   output of every existing trip is byte-identical.
+   output of every existing trip is byte-identical. **Built** — with the stage
+   too (`PostEditor` draws another slide through `slideRender`, or the preview
+   would not be the export), the rail's thumbnails, the per-slide video, the
+   band's marks and the live ticks; every opener's pictures are asked for in
+   ONE pass so they share one budget (§10). One exception to "byte-identical",
+   on purpose: a content slide's VIDEO used to burn its caption with no title
+   style while its PNG, thumbnail and stage used the trip's — it now matches.
 3. The editor: the Opener, Shades and Badge sections stop being hook-only; the
    deck band's cells show which capacities a slide holds.
 4. `OverlayElement.blend` + the curated list, in `drawOverlays` and `ElementPanel`.

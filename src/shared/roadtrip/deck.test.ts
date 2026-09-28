@@ -416,3 +416,46 @@ describe('deckSlides — the picture’s own develop', () => {
     expect(slides[2].grade).toBeNull();
   });
 });
+
+describe('deckSlides — what a content slide holds decides how it leaves (v29)', () => {
+  const withSlide = () => {
+    const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
+    return { slide, p: post({ slides: [slide] }) };
+  };
+
+  it('carries each slide’s capacities, the first slide’s from the piece', () => {
+    const { slide, p } = withSlide();
+    slide.hook = [{ id: 'map', options: {} }];
+    const [first, content] = deckSlides(trip(), p);
+    expect(first.hook).toBe(p.badge.hook);
+    expect(first.shades).toBe(p.badge.shades);
+    expect(first.badge).toBeNull();
+    expect(content.hook).toEqual([{ id: 'map', options: {} }]);
+    expect(content.texts).toEqual([]);
+  });
+
+  it('leaves as a video when its free text animates', () => {
+    const { slide, p } = withSlide();
+    slide.texts = [
+      { ...contentSlideElements('x', 4 / 5)[0], id: 't', text: 'Noon', animation: { in: { preset: 'fade', duration: 0.5 } } } as never,
+    ];
+    expect(deckSlides(trip(), p)[1].medium).toBe('video');
+  });
+
+  it('leaves as a video when it wears a badge and the piece’s badge animates', () => {
+    const { slide, p } = withSlide();
+    slide.badge = {
+      mode: 'day',
+      timeAgo: 'off',
+      layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+      durationSeconds: 2,
+      textOverrides: {},
+    };
+    expect(deckSlides(trip(), p)[1].medium).toBe('image');
+    p.badge.cascade = {
+      step: { preset: 'fade', duration: 0.4 },
+      stagger: { each: 0.1, order: 'sequence' },
+    } as never;
+    expect(deckSlides(trip(), p)[1].medium).toBe('video');
+  });
+});

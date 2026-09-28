@@ -29,7 +29,10 @@ import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
-import { hookMoves } from './hooks/hook-context';
+import { hookMoves, openerMoves, slideHookTiming } from './hooks/hook-context';
+import type { HookLayer } from './hooks/hook-variant';
+import type { Shade } from './shades';
+import type { SlideBadge } from './slide-capacities';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';
 
@@ -90,6 +93,21 @@ export interface DeckSlide {
   collage: SlideCollage | null;
   /** The author's own line over a content picture. */
   caption: string;
+  /**
+   * The opener this slide plays, or null — the piece's own on the first
+   * slide, the slide's own elsewhere (`slide-capacities.ts`). A slide's
+   * position no longer decides whether it may hold one.
+   */
+  hook: readonly HookLayer[] | null;
+  /** Darkening over the picture, under the overlays — the first slide's are the piece's. */
+  shades: readonly Shade[];
+  /**
+   * The slide's OWN badge. The first slide draws the piece's (`post.badge`)
+   * instead, so this is null there; the closing card never has one.
+   */
+  badge: SlideBadge | null;
+  /** Free text over the picture, drawn after the caption. */
+  texts: readonly OverlayElement[];
   /** What this slide is delivered as, `auto` already resolved. */
   medium: 'image' | 'video';
   /**
@@ -170,6 +188,10 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       grade: post.badge.grade ?? null,
       collage: post.badge.collage ?? null,
       caption: '',
+      hook: post.badge.hook,
+      shades: post.badge.shades,
+      badge: null,
+      texts: [],
       ...resolveSlideMedium(
         post.badge.medium,
         // An opener that plays (the scrub) moves the hook exactly as an
@@ -201,12 +223,22 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       grade: slide.grade ?? null,
       collage: slide.collage ?? null,
       caption: slide.caption,
-      // A content slide moves when its collage's cells do, or when a picture
-      // moves in its frame; when a caption gains an animation, this flag is
-      // the only thing that changes here.
+      hook: slide.hook ?? null,
+      shades: slide.shades ?? [],
+      badge: slide.badge ?? null,
+      texts: slide.texts ?? [],
+      // A content slide moves when its collage's cells do, when a picture
+      // moves in its frame, and — now that any slide may hold them — when its
+      // own opener plays or its own text and badge animate.
       ...resolveSlideMedium(
         slide.medium,
-        collageAnimates(slide.collage) || hasMotion(slide.motion) || collageCellsMove(slide.collage),
+        collageAnimates(slide.collage) ||
+          hasMotion(slide.motion) ||
+          collageCellsMove(slide.collage) ||
+          openerMoves(trip, post, slide.hook ?? null, slideHookTiming(slide)) ||
+          (slide.badge !== null && slide.badge !== undefined &&
+            hookAnimates(post.badge.pieceStyles, post.badge.cascade)) ||
+          (slide.texts ?? []).some((el) => Boolean(el.animation)),
         slide.media?.name ?? null,
       ),
       chosen: slide.medium,
@@ -233,6 +265,10 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       grade: null,
       collage: null,
       caption: '',
+      hook: null,
+      shades: [],
+      badge: null,
+      texts: [],
       // The closing card carries no picture and nothing animated, so it is a
       // still — and, inside a reel, the tail the Studio already appends, at
       // the length that outro has always used.

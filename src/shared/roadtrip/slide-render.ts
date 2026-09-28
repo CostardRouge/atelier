@@ -1,9 +1,9 @@
 /**
  * Everything `renderBadge` needs to draw ONE slide of a deck, in one place.
  *
- * A slide's picture is composed from four different things depending on what
- * the slide IS — the badge over the hook, a caption over a content picture,
- * the trip's card at the end — and every surface that draws a deck was
+ * A slide's picture is composed from what the slide HOLDS — a badge, an
+ * opener, shades, a caption, free text — or, at the end, the trip's card; and
+ * every surface that draws a deck was
  * deriving that itself: the stage, the PNG export, and now the rail's
  * thumbnails. Three copies of the same branch is how a thumbnail starts
  * showing a picture the export does not deliver, which is exactly the bug
@@ -20,13 +20,16 @@ import type { Framing } from '../media/framing';
 import type { QrDraw } from '../overlay/draw-qr';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
-import { badgeBlockExtent, badgeElements } from './badge-layout';
+import { badgeBlockExtent, badgeElements, badgeSettleSeconds, type BadgeLayout } from './badge-layout';
+import { collageSettleSeconds } from './collage';
+import { elementSettleSeconds } from '../overlay/still-frame';
 import { ctaLayout } from './cta-slide';
-import { badgeContent } from './day-badge';
+import { badgeContent, type BadgePiece, type CounterMode } from './day-badge';
+import type { TimeAgoMode } from './time-ago';
 import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from './shades';
 import { resolveHook } from './hooks/registry';
-import { hookContextFor } from './hooks/hook-context';
+import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
 import { hookElementsAt, type ElementsAt } from './hooks/hook-elements';
 import type { HookPicture, ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
@@ -37,7 +40,7 @@ export interface SlideRender {
   elements: OverlayElement[];
   /** The trip's title style; never the closing card, which is a flat card. */
   theme: StyleTheme | null;
-  /** Darkening over the picture, under the badge — the hook's alone. */
+  /** Darkening over the picture, under the overlays — any slide's own. */
   shades: readonly Shade[] | undefined;
   /** The badge block's extent, for a shade that follows the hook. */
   block: HookBlock | null;
@@ -47,10 +50,11 @@ export interface SlideRender {
   /** How this slide's picture sits in its frame. */
   framing: Framing;
   /**
-   * The piece's OPENER, prepared — the hook slide's alone, null everywhere
-   * else. It is time-parameterised rather than resolved at a moment, which is
-   * what keeps this module free of the badge's clock: the caller paints it at
-   * whatever second it is drawing.
+   * The slide's OPENER, prepared — the piece's own on the first slide, the
+   * slide's own elsewhere, null where a slide holds none. It is
+   * time-parameterised rather than resolved at a moment, which is what keeps
+   * this module free of the badge's clock: the caller paints it at whatever
+   * second it is drawing.
    */
   hook: ResolvedHook | null;
   /** The badge's elements at a moment, when the opener rewrites its words. */
@@ -95,70 +99,119 @@ export function slideRender(
     };
   }
 
-  if (slide.kind === 'content') {
-    return {
-      elements: contentSlideElements(slide.caption, aspect),
-      theme: trip.theme,
-      shades: undefined,
-      block: null,
-      background: undefined,
-      qr: null,
-      framing: slide.framing,
-      hook: null,
-      elementsAt: null,
-    };
-  }
+  // From here one path serves every slide that is a photograph. What differs
+  // is only WHERE its capacities are read: the first slide's are the piece's
+  // own (`post.badge`), every other slide's are its own (`slide-capacities.ts`).
+  // A slide's position used to decide whether it could hold an opener, a badge
+  // or shades at all; now it decides only where they are stored.
+  const isFirst = slide.kind === 'hook';
+  const spec = isFirst ? pieceBadge(post) : slideBadge(slide);
 
-  const content = badgeContent(trip, post, {
-    mode: post.badge.mode,
-    words: trip.badgeWords,
-    timeAgo: post.badge.timeAgo,
-    referenceDate: post.badge.referenceDate,
-    showPin: post.badge.showPin,
-    showExif: post.badge.showExif,
-    exif: exif ?? null,
-    camera: post.badge.camera ?? null,
-    cameraNames: trip.cameraNames ?? null,
-    overrides: post.badge.textOverrides,
-  });
+  const content = spec
+    ? badgeContent(trip, post, {
+        mode: spec.mode,
+        words: trip.badgeWords,
+        timeAgo: spec.timeAgo,
+        referenceDate: post.badge.referenceDate,
+        showPin: post.badge.showPin,
+        // The camera credit is measured from the HOOK's picture; on another
+        // slide it would credit a photograph that is not the one under it.
+        showExif: isFirst ? post.badge.showExif : false,
+        exif: isFirst ? (exif ?? null) : null,
+        camera: isFirst ? (post.badge.camera ?? null) : null,
+        cameraNames: trip.cameraNames ?? null,
+        overrides: spec.textOverrides,
+      })
+    : null;
 
   // The opener's pictures reach it here or not at all. A sweep does not need
   // them in a still — it is drawn settled, past the sweep, where the piece's
   // own picture is the frame — but an ITINERARY still shows its stops' photos
   // at rest, pinned or on a card. A caller with none (a pure test, a surface
   // that has not decoded yet) gets a map without them rather than a stand-in.
-  const hook = resolveHook(post.badge.hook, hookContextFor(trip, post, aspect, content, pictures));
+  // The first slide ALWAYS prepares one (an empty list falls back to the
+  // badge variant, as it always did); another slide only when it holds one.
+  const layers = isFirst ? post.badge.hook : slide.hook;
+  const timing = isFirst
+    ? pieceHookTiming(post)
+    : slideHookTiming({ seconds: slide.seconds, badge: slide.badge });
+  const hook = layers
+    ? resolveHook(layers, hookContextFor(trip, post, aspect, content, pictures, timing))
+    : null;
+
+  // The badge's LOOK is the piece's on every slide — its pieces' styles and
+  // its cascade — so a deck wearing a badge on three slides wears one signature.
+  const styles = post.badge.pieceStyles;
+  const cascade = post.badge.cascade;
+  const badge =
+    content && spec
+      ? badgeElements(content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
+      : [];
+  // What a slide says besides its badge: the caption, then the free text,
+  // drawn over it. The first slide has neither today, so its elements are
+  // exactly the badge's, as they always were.
+  const words = isFirst ? [] : [...contentSlideElements(slide.caption, aspect), ...slide.texts];
+  const badgeAt =
+    spec && hook
+      ? hookElementsAt(hook, content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
+      : null;
 
   return {
-    elements: content
-      ? badgeElements(
-          content,
-          post.badge.layout,
-          aspect,
-          post.badge.pieceStyles,
-          post.badge.durationSeconds,
-          post.badge.cascade,
-        )
-      : [],
+    elements: words.length ? [...badge, ...words] : badge,
     theme: trip.theme,
-    shades: post.badge.shades,
+    shades: isFirst ? post.badge.shades : slide.shades.length ? slide.shades : undefined,
     // A shade set to follow the hook ends at the badge block's own edge, so
     // the block travels with the render: handing null instead (which the PNG
     // export used to do) silently falls back to the plain reach, and the
     // gradient lands somewhere else than in the preview.
-    block: content ? badgeBlockExtent(content, post.badge.layout, aspect) : null,
+    block: content && spec ? badgeBlockExtent(content, spec.layout, aspect) : null,
     background: undefined,
     qr: null,
     framing: slide.framing,
     hook,
-    elementsAt: hookElementsAt(
-      hook,
-      content,
-      post.badge.layout,
-      aspect,
-      post.badge.pieceStyles,
-      post.badge.durationSeconds,
-      post.badge.cascade,
-    ),
+    elementsAt: badgeAt && words.length ? (t) => [...badgeAt(t), ...words] : badgeAt,
   };
+}
+
+/** What a slide's badge says and where — the part a slide may own. */
+interface BadgeSpec {
+  mode: CounterMode;
+  timeAgo: TimeAgoMode;
+  layout: BadgeLayout;
+  durationSeconds: number;
+  textOverrides: Partial<Record<BadgePiece, string>>;
+}
+
+/** The piece's own badge, which the first slide always draws. */
+function pieceBadge(post: TripPost): BadgeSpec {
+  return {
+    mode: post.badge.mode,
+    timeAgo: post.badge.timeAgo,
+    layout: post.badge.layout,
+    durationSeconds: post.badge.durationSeconds,
+    textOverrides: post.badge.textOverrides,
+  };
+}
+
+/** Another slide's own badge, or null where it draws none. */
+function slideBadge(slide: DeckSlide): BadgeSpec | null {
+  return slide.badge;
+}
+
+/**
+ * When a still of a slide that is NOT the first is taken: past its own
+ * opener, its badge's entrance (the piece's look, so the piece's timing), its
+ * free text's entrances and its collage's cells. The first slide's rest is
+ * the caller's — the stage's own clock already reads the piece's badge and
+ * opener there, and that is what the hook's thumbnail is taken from.
+ */
+export function slideSettleSeconds(
+  post: TripPost,
+  slide: DeckSlide,
+  render: Pick<SlideRender, 'hook'>,
+  aspect: number,
+): number {
+  const badge = slide.badge ? badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade) : 0;
+  const texts = slide.texts.reduce((max, el) => Math.max(max, elementSettleSeconds(el)), 0);
+  return Math.max(badge, render.hook?.seconds ?? 0, texts, collageSettleSeconds(slide.collage, aspect));
 }
