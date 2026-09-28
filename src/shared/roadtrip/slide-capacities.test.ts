@@ -4,8 +4,11 @@ import { DEFAULT_BADGE_DURATION, DEFAULT_BADGE_LAYOUT } from './badge-layout';
 import { createShade } from './shades';
 import {
   CHAPTER_MARK_SCALE,
+  SLIDE_TEXT_SIZE,
   capacitiesOf,
   chapterMark,
+  createSlideText,
+  isSlideTextId,
   fullSlideBadge,
   isChapterMark,
   readSlideBadge,
@@ -171,5 +174,34 @@ describe('capacitiesOf', () => {
     expect(capacitiesOf({ ...bare, texts: [createTextElement('  ')] }).text).toBe(false);
     expect(capacitiesOf({ ...bare, texts: [createTextElement('Noon')] }).text).toBe(true);
     expect(capacitiesOf({ ...bare, caption: 'Pink Lake' }).text).toBe(true);
+  });
+});
+
+describe('createSlideText', () => {
+  it('is a line of text in the middle of the frame, told apart by its id', () => {
+    const el = createSlideText('Shark Bay');
+    expect(el.kind).toBe('text');
+    expect(el.text).toBe('Shark Bay');
+    expect([el.anchor, el.x, el.y]).toEqual(['center', 0.5, 0.5]);
+    expect(el.sizeFrac).toBe(SLIDE_TEXT_SIZE);
+    expect(isSlideTextId(el.id)).toBe(true);
+    expect(isSlideTextId('piece:headline')).toBe(false);
+    expect(isSlideTextId('caption:0')).toBe(false);
+  });
+
+  it('keeps the badge’s glow and panel off it — those are the signature', () => {
+    const el = createSlideText();
+    expect(el.styleOverrides).toEqual(expect.arrayContaining(['legibility', 'glow']));
+    expect(el.glowAmount).toBe(0);
+    expect(el.legibility.mode).toBe('shadow');
+  });
+
+  it('survives the reader it is stored through', () => {
+    const el = createSlideText('Noon');
+    expect(readSlideTexts([el])).toEqual([el]);
+  });
+
+  it('never gives two lines the same id', () => {
+    expect(createSlideText().id).not.toBe(createSlideText().id);
   });
 });

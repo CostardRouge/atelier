@@ -67,8 +67,14 @@ import { countOwnGrades, pictureKeyOf } from '../../shared/roadtrip/post-grade';
 import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
 import { setHookOptions, type HookContext, type HookLayer } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor, slideHookTiming } from '../../shared/roadtrip/hooks/hook-context';
-import { slideBadgeContent, slideRender, slideSettleSeconds } from '../../shared/roadtrip/slide-render';
-import type { SlideBadge } from '../../shared/roadtrip/slide-capacities';
+import {
+  slideBadgeContent,
+  slideRender,
+  slideSettleSeconds,
+  textsSettleSeconds,
+} from '../../shared/roadtrip/slide-render';
+import { isSlideTextId, type SlideBadge } from '../../shared/roadtrip/slide-capacities';
+import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
 import useHookPictures from './use-hook-pictures';
 import { useHookSound } from './use-hook-sound';
@@ -578,27 +584,30 @@ export default function PostEditor({
     [isCta, cta.qr, trip.cta.ink, trip.cta.background],
   );
 
-  const hookElements = useMemo(
-    () =>
-      content
-        ? badgeElements(
-            content,
-            post.badge.layout,
-            aspect,
-            post.badge.pieceStyles,
-            post.badge.durationSeconds,
-            post.badge.cascade,
-          )
-        : [],
-    [
-      content,
-      post.badge.layout,
-      post.badge.pieceStyles,
-      post.badge.durationSeconds,
-      post.badge.cascade,
-      aspect,
-    ],
-  );
+  // The first slide's words: its badge, then its own free text over it — the
+  // elements every export of the hook and the Studio bridge burn in.
+  const hookTexts = post.badge.texts;
+  const hookElements = useMemo(() => {
+    const badge = content
+      ? badgeElements(
+          content,
+          post.badge.layout,
+          aspect,
+          post.badge.pieceStyles,
+          post.badge.durationSeconds,
+          post.badge.cascade,
+        )
+      : [];
+    return hookTexts?.length ? [...badge, ...hookTexts] : badge;
+  }, [
+    content,
+    post.badge.layout,
+    post.badge.pieceStyles,
+    post.badge.durationSeconds,
+    post.badge.cascade,
+    aspect,
+    hookTexts,
+  ]);
 
   const elements = useMemo(() => {
     if (isHook) return hookElements;
@@ -655,18 +664,8 @@ export default function PostEditor({
   // goes in too: `hookElements` above and `slideRender` (the exports, the
   // rail) both carry it, and without it a counting numeral played its pieces'
   // own entrances on the stage while the file played the cascade.
-  const hookElementsAt = useMemo(
-    () =>
-      hookElementsAtFor(
-        hook,
-        content,
-        post.badge.layout,
-        aspect,
-        post.badge.pieceStyles,
-        post.badge.durationSeconds,
-        post.badge.cascade,
-      ),
-    [
+  const hookElementsAt = useMemo(() => {
+    const at = hookElementsAtFor(
       hook,
       content,
       post.badge.layout,
@@ -674,8 +673,19 @@ export default function PostEditor({
       post.badge.pieceStyles,
       post.badge.durationSeconds,
       post.badge.cascade,
-    ],
-  );
+    );
+    // The free text rides along, or a counting numeral would hide it.
+    return at && hookTexts?.length ? (t: number) => [...at(t), ...hookTexts] : at;
+  }, [
+    hook,
+    content,
+    post.badge.layout,
+    aspect,
+    post.badge.pieceStyles,
+    post.badge.durationSeconds,
+    post.badge.cascade,
+    hookTexts,
+  ]);
 
   // Every slide that is not the first composes through the one function the
   // deck, the rail and the exports use — its own badge, opener, shades and
@@ -779,6 +789,20 @@ export default function PostEditor({
   const openBlock = isHook ? block : (openRender?.block ?? null);
   const setOpenShades = (shades: Shade[]) =>
     isHook ? patchBadge({ shades }) : patchSlide({ shades });
+  /** The open slide's free text, and where it is written. */
+  const openTexts = useMemo<readonly OverlayElement[]>(
+    () => (isHook ? (post.badge.texts ?? []) : isCta ? [] : slide.texts),
+    [isHook, isCta, post.badge.texts, slide.texts],
+  );
+  const setOpenTexts = (texts: OverlayElement[]) =>
+    isHook ? patchBadge({ texts }) : patchSlide({ texts });
+  /** Where each line sits, for the stage to drag one — keyed by its id. */
+  const movableTexts = useMemo(
+    () => new Map(openTexts.map((el) => [el.id, { x: el.x, y: el.y }])),
+    [openTexts],
+  );
+  const moveText = (id: string, x: number, y: number) =>
+    setOpenTexts(openTexts.map((el) => (el.id === id ? { ...el, x, y } : el)));
 
   /**
    * The OPEN slide's own correction — the hook's on the badge, a carousel
@@ -1015,7 +1039,7 @@ export default function PostEditor({
         ? Math.max(settle, collageSettle)
         : Math.max(0, (playhead - clipRange.start) / slide.speed)
       : stillAtRest
-        ? Math.max(settle, hook.seconds, collageSettle)
+        ? Math.max(settle, hook.seconds, collageSettle, textsSettleSeconds(hookTexts ?? []))
         : deck.local;
 
   // ——— The picture's pan and zoom, edited as CARDS (`motion-cards.ts`,
@@ -1539,7 +1563,7 @@ export default function PostEditor({
   // the picture instead of against the edge of the section.
   const [fitWidth, setFitWidth] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
-  const focusTarget = useRef<'text' | 'caption' | CtaRole | null>(null);
+  const focusTarget = useRef<'text' | 'caption' | `line:${string}` | CtaRole | null>(null);
 
   /**
    * Picking an element is a request to edit it, wherever the inspector
@@ -1566,6 +1590,10 @@ export default function PostEditor({
       // Its own field: a slide may now hold a badge beside its caption, so
       // "the text" no longer names one input.
       focusTarget.current = 'caption';
+    } else if (isSlideTextId(id)) {
+      // A line of free text: its own field, found by the id it edits.
+      setTab('content');
+      focusTarget.current = `line:${id}`;
     } else {
       const role = ctaRoleFromElementId(id)?.role;
       if (!role) return;
@@ -1605,7 +1633,11 @@ export default function PostEditor({
         ? textFieldRef.current
         : target === 'caption'
           ? captionFieldRef.current
-          : ctaFieldRefs[target]?.current ?? null;
+          : target.startsWith('line:')
+            ? document.querySelector<HTMLInputElement>(
+                `[data-text-id="${CSS.escape(target.slice('line:'.length))}"]`,
+              )
+            : ctaFieldRefs[target as CtaRole]?.current ?? null;
     if (!field) return;
     focusTarget.current = null;
     field.focus({ preventScroll: true });
@@ -2011,6 +2043,8 @@ export default function PostEditor({
             // the closing card sit at fixed positions.
             blockAnchor={openBadgeLayout}
             onMoveBlock={openBadgeLayout ? moveBlockTo : undefined}
+            movableTexts={isCta ? undefined : movableTexts}
+            onMoveText={isCta ? undefined : moveText}
             // Any slide may hold an opener, and it is pointed at where it draws.
             hookRectFor={isCta ? null : hookRectFor}
             onMoveHook={!isCta && openVariant?.moveBy ? moveHook : undefined}
@@ -2114,6 +2148,8 @@ export default function PostEditor({
               patchBadge={patchBadge}
               patchSlide={patchSlide}
               patchSlideBadge={patchSlideBadge}
+              texts={openTexts}
+              onTexts={setOpenTexts}
               textFieldRef={textFieldRef}
               captionFieldRef={captionFieldRef}
               onEditClosingCard={() => setTripSheet('cta')}

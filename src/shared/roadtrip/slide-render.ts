@@ -131,10 +131,12 @@ export function slideRender(
     content && spec
       ? badgeElements(content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
       : [];
-  // What a slide says besides its badge: the caption, then the free text,
-  // drawn over it. The first slide has neither today, so its elements are
-  // exactly the badge's, as they always were.
-  const words = isFirst ? [] : [...contentSlideElements(slide.caption, aspect), ...slide.texts];
+  // What a slide says besides its badge: the caption (a content slide's), then
+  // the free text, drawn over it. A first slide with no free text draws
+  // exactly the badge's elements, as it always did.
+  const words = isFirst
+    ? [...slide.texts]
+    : [...contentSlideElements(slide.caption, aspect), ...slide.texts];
   const badgeAt =
     spec && hook
       ? hookElementsAt(hook, content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
@@ -229,6 +231,15 @@ export function slideSettleSeconds(
   aspect: number,
 ): number {
   const badge = slide.badge ? badgeSettleSeconds(post.badge.pieceStyles, post.badge.cascade) : 0;
-  const texts = slide.texts.reduce((max, el) => Math.max(max, elementSettleSeconds(el)), 0);
-  return Math.max(badge, render.hook?.seconds ?? 0, texts, collageSettleSeconds(slide.collage, aspect));
+  return Math.max(
+    badge,
+    render.hook?.seconds ?? 0,
+    textsSettleSeconds(slide.texts),
+    collageSettleSeconds(slide.collage, aspect),
+  );
+}
+
+/** When a slide's free text has come to rest — its last line's window and entrance. */
+export function textsSettleSeconds(texts: readonly OverlayElement[]): number {
+  return texts.reduce((max, el) => Math.max(max, elementSettleSeconds(el)), 0);
 }

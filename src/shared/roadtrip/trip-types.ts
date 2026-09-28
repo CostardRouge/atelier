@@ -363,6 +363,14 @@ export interface PostBadge {
    * opener, it never fails to open. See `docs/hook-engine.md`.
    */
   hook: HookLayer[];
+  /**
+   * Free text over the first slide's picture, drawn over the badge — the same
+   * capacity every other slide has (`PostSlide.texts`). About ONE picture, so
+   * never inherited by the next piece (`hookDefaultsFrom` leaves it out).
+   * Read as `texts ?? []`: a trip opened on the branch that built v29 before
+   * this field joined it carries none.
+   */
+  texts?: OverlayElement[];
 }
 
 /**
@@ -466,6 +474,8 @@ export function defaultPostBadge(
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
     cascade: defaults?.cascade ? structuredClone(defaults.cascade) : null,
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
+    // Never inherited: words over a picture belong to that picture.
+    texts: [],
   };
 }
 
@@ -888,10 +898,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
  *
  * v28 → v29 lets ANY slide hold an opener, shades, a badge and free text
- * (`PostSlide.hook`, `.shades`, `.badge`, `.texts` — `slide-capacities.ts`).
- * Every stored slide holds none of them — `hook` and `badge` start null,
- * `shades` and `texts` empty — so nothing a trip already draws changes; the
- * first slide keeps reading its own from `PostBadge`, untouched. A value that
+ * (`PostSlide.hook`, `.shades`, `.badge`, `.texts` — `slide-capacities.ts`),
+ * and gives the first slide free text too (`PostBadge.texts`). Every stored
+ * slide holds none of them — `hook` and `badge` start null, `shades` and
+ * `texts` empty — so nothing a trip already draws changes; the first slide
+ * keeps reading its opener, badge and shades from `PostBadge`, untouched. A value that
  * IS there (a newer build, a hand edit) is read through the module's readers,
  * junk landing as none rather than a capacity nobody gave the slide.
  *
@@ -1402,6 +1413,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     // anything else into none. The first slide's own live on `PostBadge`.
     migrated.posts = (migrated.posts ?? []).map((post) => ({
       ...post,
+      badge: { ...post.badge, texts: readSlideTexts(post.badge?.texts) },
       slides: (post.slides ?? []).map((slide) => ({
         ...slide,
         hook: readSlideHook(slide.hook),

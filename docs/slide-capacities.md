@@ -5,9 +5,9 @@ asked to start without answering §9, so the build takes the brief's own
 recommendations as its working answers and says so where each applies: a
 badge on another slide is allowed and never a default, the first slide keeps
 the name "hook", two masked modes, no deck-shape defaults, and the bridge
-still sends the first slide's opener. Built so far: **commits 1–3** (the model, every surface
-rendering a slide by what it holds, and the editor giving any slide an opener, a
-badge and shades).
+still sends the first slide's opener. Built so far: **commits 1–4** (the model, every surface
+rendering a slide by what it holds, the editor giving any slide an opener, a
+badge and shades, and free text on any slide — the first included).
 
 §1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
 still lists what is his to settle.
@@ -335,6 +335,16 @@ Five commits, one task each, in this order:
    opener like the first's; a band cell says `◆ # T` for opener, badge, words.
    Driven in headless Chromium: all of it written to the slide's own record,
    the piece's own untouched, no console error.
+3b. **Free text on any slide — built, as its own commit.** The brief had folded
+   text into the model and forgotten to give it an editor. The first slide
+   gains `PostBadge.texts` (read `?? []`: v29 is this branch's, not yet
+   `main`'s, so a trip opened here before it carries none); a Text section on
+   the Content tab adds, writes, sizes and removes lines; a line is `text:`-id'd
+   (`createSlideText`), wears the trip's title style like a caption but never
+   the badge's glow or panel, is dragged on its own on the stage and focuses
+   its own field when clicked. It rides the first slide's own stage path, its
+   exports and the Studio bridge (`hookElements`, `hookElementsAt`), and every
+   rest time (`textsSettleSeconds`).
 4. `OverlayElement.blend` + the curated list, in `drawOverlays` and `ElementPanel`.
 5. `OverlayElement.knockout`, both modes, with the buffer and the mask cache.
 

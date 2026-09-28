@@ -191,7 +191,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       hook: post.badge.hook,
       shades: post.badge.shades,
       badge: null,
-      texts: [],
+      texts: post.badge.texts ?? [],
       ...resolveSlideMedium(
         post.badge.medium,
         // An opener that plays (the scrub) moves the hook exactly as an
@@ -201,7 +201,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
           collageAnimates(post.badge.collage) ||
           // A picture that moves in its frame moves the slide.
           hasMotion(post.badge.motion) ||
-          collageCellsMove(post.badge.collage),
+          collageCellsMove(post.badge.collage) ||
+          (post.badge.texts ?? []).some((el) => Boolean(el.animation)),
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,

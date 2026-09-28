@@ -13,7 +13,7 @@ import {
 import { collageMediaRefs, collageSettleSeconds } from '../../shared/roadtrip/collage';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import type { HookPicture } from '../../shared/roadtrip/hooks/hook-variant';
-import { slideRender, slideSettleSeconds } from '../../shared/roadtrip/slide-render';
+import { slideRender, slideSettleSeconds, textsSettleSeconds } from '../../shared/roadtrip/slide-render';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import type { ExifData } from '../../shared/exif/exif-parser';
 
@@ -276,6 +276,7 @@ export default function useRailThumbs({
                   settle,
                   job.render.hook?.seconds ?? 0,
                   collageSettleSeconds(job.slide.collage, aspect),
+                  textsSettleSeconds(job.slide.texts),
                 )
               : (job.rest ?? 0),
         });

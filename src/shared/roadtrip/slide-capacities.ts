@@ -222,6 +222,40 @@ export function readSlideTexts(v: unknown): OverlayElement[] {
   return out;
 }
 
+// --- free text ---------------------------------------------------------------
+
+/** The size a new line of free text starts at, as a fraction of the short side. */
+export const SLIDE_TEXT_SIZE = 0.07;
+
+/**
+ * A new line of free text, in the middle of the frame. It wears the trip's
+ * title style like a caption does — its font and weight — but never the
+ * badge's glow or panel: those are the signature, and repeating them on every
+ * line would stop the badge being one. A drop shadow keeps it legible over any
+ * picture until the author says otherwise.
+ *
+ * Its id is `text:` + a fresh id, so the stage and the inspector can tell a
+ * free line from a badge piece (`piece:`) or a caption line (`caption:`).
+ */
+export function createSlideText(value = 'Text'): OverlayElement {
+  const el = createTextElement(value);
+  el.id = `text:${el.id}`;
+  el.anchor = 'center';
+  el.x = 0.5;
+  el.y = 0.5;
+  el.sizeFrac = SLIDE_TEXT_SIZE;
+  el.color = '#ffffff';
+  el.legibility = { mode: 'shadow', color: 'rgba(0,0,0,0.7)', padFrac: 0.35 };
+  el.styleOverrides = ['legibility', 'glow'];
+  el.glowAmount = 0;
+  return el;
+}
+
+/** Whether an element id names a line of free text. */
+export function isSlideTextId(id: string): boolean {
+  return id.startsWith('text:');
+}
+
 // --- what a slide holds ------------------------------------------------------
 
 /** The four capacities, as a slide reports them — what the deck band shows. */

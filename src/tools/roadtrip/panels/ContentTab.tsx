@@ -6,7 +6,10 @@ import {
   type CounterMode,
 } from '../../../shared/roadtrip/day-badge';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
-import type { SlideBadge } from '../../../shared/roadtrip/slide-capacities';
+import { createSlideText, type SlideBadge } from '../../../shared/roadtrip/slide-capacities';
+import type { OverlayElement } from '../../../shared/overlay/overlay-types';
+import IconButton from '../../../shared/ui/IconButton';
+import { Icons } from '../../../shared/ui/icons';
 import { readCaptureDate, type CaptureDate } from '../../../shared/roadtrip/media-date';
 import { timeAgoPreviews, type TimeAgoMode } from '../../../shared/roadtrip/time-ago';
 import { postDayRange, stageAt } from '../../../shared/roadtrip/trip-coverage';
@@ -26,6 +29,7 @@ import Button from '../../../shared/ui/Button';
 import {
   FieldRow,
   InspectorSection,
+  RangeField,
   Readout,
   SelectField,
   ToggleField,
@@ -62,6 +66,9 @@ interface ContentTabProps {
   patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
   /** Write the open slide's OWN badge — another slide's words, counter and line. */
   patchSlideBadge: (patch: Partial<SlideBadge>) => void;
+  /** The open slide's lines of free text, and where they are written. */
+  texts: readonly OverlayElement[];
+  onTexts: (texts: OverlayElement[]) => void;
   /** The field a stage click on a badge piece focuses. */
   textFieldRef: RefObject<HTMLInputElement>;
   /** The field a stage click on a caption line focuses. */
@@ -104,6 +111,8 @@ export default function ContentTab({
   patchBadge,
   patchSlide,
   patchSlideBadge,
+  texts,
+  onTexts,
   textFieldRef,
   captionFieldRef,
   onEditClosingCard,
@@ -285,6 +294,71 @@ export default function ContentTab({
           />
         )}
       </InspectorSection>
+
+      {/* Free lines over the picture, on any slide but the closing card —
+          the second thing, after an opener, a slide is most often given. */}
+      {slide.kind !== 'cta' && (
+        <InspectorSection
+          id="piece.texts"
+          title="Text"
+          badge={texts.length ? String(texts.length) : undefined}
+          info={
+            <p>
+              Free lines over this picture — a place, an hour, a word. They wear the trip’s
+              title style like a caption does, never the badge’s glow or panel. Drag a line
+              on the picture to place it; hold Alt to skip the snap.
+            </p>
+          }
+        >
+          {texts.map((el, i) => {
+            const write = (patch: Partial<OverlayElement>) =>
+              onTexts(texts.map((t) => (t.id === el.id ? { ...t, ...patch } : t)));
+            return (
+              <div key={el.id} className="flex flex-col">
+                <FieldRow label={`Line ${i + 1}`}>
+                  <input
+                    data-text-id={el.id}
+                    value={el.text ?? ''}
+                    onChange={(e) => write({ text: e.target.value })}
+                    placeholder="A word over this picture"
+                    aria-label={`Line ${i + 1}`}
+                    className={`${inputClass} w-full min-w-0`}
+                  />
+                  <IconButton
+                    label={`Remove line ${i + 1}`}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onTexts(texts.filter((t) => t.id !== el.id))}
+                  >
+                    {Icons.trash}
+                  </IconButton>
+                </FieldRow>
+                <FieldRow label="Size">
+                  <RangeField
+                    label={`Line ${i + 1} size`}
+                    min={0.02}
+                    max={0.3}
+                    step={0.005}
+                    value={el.sizeFrac}
+                    onChange={(sizeFrac) => write({ sizeFrac })}
+                    format={(v) => `${Math.round(v * 100)}%`}
+                  />
+                </FieldRow>
+              </div>
+            );
+          })}
+          <FieldRow label={texts.length ? '' : 'Lines'}>
+            <Button
+              size="sm"
+              icon={Icons.plus}
+              aria-label="Add a line of text"
+              onClick={() => onTexts([...texts, createSlideText()])}
+            >
+              Text
+            </Button>
+          </FieldRow>
+        </InspectorSection>
+      )}
 
       {/* The day belongs to the PIECE, not to a slide: it is what every
           number on the badge is counted from, and it must not vanish on a

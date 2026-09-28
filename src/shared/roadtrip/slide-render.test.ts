@@ -232,3 +232,24 @@ describe('slideRender — a slide holds what it holds, wherever it sits (v29)', 
     expect(after.block).toEqual(before.block);
   });
 });
+
+describe('slideRender — free text on the first slide (v29)', () => {
+  it('draws the first slide’s own text over its badge, and nothing else changes', () => {
+    const p = post();
+    const doc = trip({ posts: [p] });
+    const before = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
+    const line = { ...contentSlideElements('x', ASPECT)[0], id: 'text:a', text: 'Day one' };
+    p.badge.texts = [line];
+    const after = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
+    expect(after.elements).toEqual([...before.elements, line]);
+    expect(after.block).toEqual(before.block);
+  });
+
+  it('reads a first slide stored before its text existed as having none', () => {
+    const p = post();
+    delete (p.badge as { texts?: unknown }).texts;
+    const doc = trip({ posts: [p] });
+    const render = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
+    expect(render.elements.every((el) => el.id.startsWith('piece:'))).toBe(true);
+  });
+});
