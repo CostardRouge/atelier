@@ -6,17 +6,18 @@
 // the author decided back on the roll's rule, › opens it. Ignored pictures
 // are folded into their own group at the bottom, a row there bringing the
 // picture back into the work — and the group opens by itself when the picture
-// on the stage is one of them. The filters are the roll's four and E4's
-// *Changed*; Winnow's *Picks* wait for the app's Winnow client.
+// on the stage is one of them. The filters are the roll's four, E4's
+// *Changed* and — where the roll has pictures on a connected instance —
+// Winnow's *Picks*, its culling read-only, with each row's mark beside the name.
 
 import CoreGraphics
 import SwiftUI
 import AtelierKit
 
-/// The table's filters: the roll's four, and E4's — what leaves and was never
-/// exported from here, or changed since.
+/// The table's filters: the roll's four, E4's — what leaves and was never
+/// exported from here, or changed since — and Winnow's picks.
 enum ExportTableFilter: String, CaseIterable, Identifiable {
-    case all, edited, leaving, held, changed
+    case all, edited, leaving, held, changed, picks
     var id: String { rawValue }
 
     var label: String {
@@ -26,16 +27,26 @@ enum ExportTableFilter: String, CaseIterable, Identifiable {
         case .leaving: return "Leaving"
         case .held: return "Held"
         case .changed: return "Changed"
+        case .picks: return "Picks"
         }
     }
 
-    func matches(_ p: RollPicture, _ marks: ExportMarks) -> Bool {
+    var hint: String {
+        switch self {
+        case .changed: return "Leaving, and never exported from this device or edited since"
+        case .picks: return "Winnow’s picks — its culling, read-only"
+        default: return "Show \(label.lowercased())"
+        }
+    }
+
+    func matches(_ p: RollPicture, _ marks: ExportMarks, _ culling: [String: Culling]) -> Bool {
         switch self {
         case .all: return matchesDeliveryFilter(p, .all)
         case .edited: return matchesDeliveryFilter(p, .edited)
         case .leaving: return matchesDeliveryFilter(p, .leaving)
         case .held: return matchesDeliveryFilter(p, .held)
         case .changed: return matchesDeliveryFilter(p, .leaving) && needsExport(p, marks)
+        case .picks: return culling[p.id]?.verdict == .pick
         }
     }
 }
@@ -65,7 +76,9 @@ struct ExportPicturesTable: View {
         let pictures = editor.pictures
         let marks = editor.exportMarks
         let lines = editor.runLines
-        let shown = pictures.filter { showing.matches($0, marks) }
+        let culling = editor.winnow.culling
+        let filters = ExportTableFilter.allCases.filter { $0 != .picks || editor.winnow.cullReachable }
+        let shown = pictures.filter { showing.matches($0, marks, culling) }
         let ignored = pictures.filter(isIgnored)
         let openIgnored = ignored.contains { $0.id == editor.openId }
         let unfolded = ignoredOpen || openIgnored
@@ -73,7 +86,7 @@ struct ExportPicturesTable: View {
         VStack(alignment: .leading, spacing: 8) {
             HStack(alignment: .firstTextBaseline) {
                 PresetChipFlow(spacing: 5) {
-                    ForEach(ExportTableFilter.allCases) { f in
+                    ForEach(filters) { f in
                         filterChip(f)
                     }
                 }
@@ -142,7 +155,7 @@ struct ExportPicturesTable: View {
         }
         .buttonStyle(.plain)
         .accessibilityAddTraits(on ? .isSelected : [])
-        .help(f == .changed ? "Leaving, and never exported from this device or edited since" : "Show \(f.label.lowercased())")
+        .help(f.hint)
     }
 
     private func row(_ p: RollPicture, lines: [String: String], marks: ExportMarks) -> some View {
@@ -153,6 +166,7 @@ struct ExportPicturesTable: View {
             mark: marks[p.id],
             state: marks[p.id] != nil ? exportState(p, marks) : nil,
             thumb: editor.pool.thumbnails[p.id],
+            culling: editor.winnow.culling[p.id],
             onAct: { editor.deliver(p.id, isIgnored(p) ? .ignore : .toggle) },
             onRule: { editor.deliver(p.id, .auto) },
             onOpen: { editor.open(p.id) }
@@ -170,6 +184,8 @@ private struct ExportPictureRow: View {
     /// E4's word, only once a picture has left from here.
     let state: ExportState?
     let thumb: CGImage?
+    /// Winnow's word on it, where Winnow answered — shown, never a target.
+    let culling: Culling?
     let onAct: () -> Void
     let onRule: () -> Void
     let onOpen: () -> Void
@@ -279,6 +295,7 @@ private struct ExportPictureRow: View {
 
     @ViewBuilder
     private var chips: some View {
+        WinnowCullMark(culling: culling)
         if picture.deliver == .yes || picture.deliver == .no {
             Text(picture.deliver == .yes ? "send" : "hold")
                 .font(Brand.mono(9))

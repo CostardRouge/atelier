@@ -66,13 +66,14 @@ final class PicturePool {
             return hit
         }
         if let running = inFlight[picture.id] { return try await running.value }
-        guard let locator = store.locator(rollId, picture.id) else { throw PictureError.noLocator }
+        // Its locator, else a file the roll fetched from its instance this session.
+        guard let source = store.bytesSource(rollId, picture.id) else { throw PictureError.noLocator }
         let media = store.mediaDirectory
         let name = picture.ref.name
         let task = Task.detached(priority: .userInitiated) { () throws -> PictureRead in
-            let data = try RollStore.bytes(of: locator, mediaDirectory: media)
+            let data = try RollStore.bytes(of: source, mediaDirectory: media)
             // A RAW's bytes are read again when its sensor is asked for, never held.
-            let reread = { try RollStore.bytes(of: locator, mediaDirectory: media) }
+            let reread = { try RollStore.bytes(of: source, mediaDirectory: media) }
             guard let decoded = PictureDecoder.decode(data, name: name, reread: reread) else { throw PictureError.undecodable }
             let head = data.prefix(exifSliceBytes)
             let parsed = parseExif(Data(head))
@@ -132,7 +133,7 @@ final class PicturePool {
             thumbnails[id] = stored
             return
         }
-        if skipBake || tried.contains(id) || store.locator(rollId, id) == nil { return }
+        if skipBake || tried.contains(id) || store.bytesSource(rollId, id) == nil { return }
         tried.insert(id)
         let previous = thumbChain
         thumbChain = Task { [weak self] in

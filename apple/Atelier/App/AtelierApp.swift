@@ -11,6 +11,8 @@ struct AtelierApp: App {
     @State private var rolls: RollStore
     /// What the pictures ARE once looked at: decodes, EXIF, thumbnails.
     @State private var pictures: PicturePool
+    /// Rolls kept on a Winnow: the gallery's groups, the open roll's sync.
+    @State private var rollDocuments: RollDocuments
     /// The personal preset book — one list of named lights.
     @State private var presets = PresetBookStore()
     /// The looks: the built-ins, the vault of purchased and uploaded looks,
@@ -23,6 +25,7 @@ struct AtelierApp: App {
         let store = RollStore()
         _rolls = State(initialValue: store)
         _pictures = State(initialValue: PicturePool(store: store))
+        _rollDocuments = State(initialValue: RollDocuments(rolls: store, connections: .shared))
     }
 
     var body: some Scene {
@@ -30,6 +33,7 @@ struct AtelierApp: App {
             RootView()
                 .environment(rolls)
                 .environment(pictures)
+                .environment(rollDocuments)
                 .environment(presets)
                 .environment(looks)
                 .font(Brand.sans(15))

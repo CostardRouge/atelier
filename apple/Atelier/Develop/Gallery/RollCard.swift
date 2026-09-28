@@ -2,8 +2,11 @@
 // thumbnails as a mosaic (what a roll is recognised by), its name, how far it
 // has got (`rollProgress`: an ignored picture is in neither number), when it
 // last moved, how many wear a look. The WHOLE card opens the roll; the rest
-// is behind its ⋯, the destructive verb behind a confirmation that says what
-// goes with it — and what does not: the files stay where they are.
+// is behind its ⋯ — Move to another source among them — the destructive verb
+// behind a confirmation that says what goes with it — and what does not: the
+// files stay where they are. A roll kept only on an instance is greyed and
+// says so; opening it mirrors it first. A card busy crossing a source says
+// what it is doing and takes no tap meanwhile.
 
 import SwiftUI
 import AtelierKit
@@ -11,22 +14,30 @@ import AtelierKit
 struct RollCard: View {
     let roll: RollDoc
     let isOpen: Bool
+    /// Kept on an instance and not yet mirrored here: opening mirrors it first.
+    var remoteOnly = false
+    /// The other sources this roll could move to.
+    var moveTargets: [SourceInfo] = []
+    /// A sentence while a move, a delete or an open is under way.
+    var busy: String?
     let compact: Bool
     let onOpen: () -> Void
     let onRename: () -> Void
     let onExport: () -> Void
     let onDelete: () -> Void
+    var onMove: (String) -> Void = { _ in }
 
     @Environment(RollStore.self) private var store
     @Environment(\.palette) private var palette
     @State private var cover: [CGImage] = []
     @State private var confirmingDelete = false
+    @State private var movingTo: SourceInfo?
 
     var body: some View {
         let progress = rollProgress(roll)
         let withLook = roll.pictures.filter { $0.grade != nil }.count
         VStack(alignment: .leading, spacing: 0) {
-            RollCover(images: cover, roll: roll)
+            RollCover(images: cover, roll: roll, remoteOnly: remoteOnly)
                 .aspectRatio(4 / 3, contentMode: .fit)
                 .background(palette.frame)
                 .clipShape(UnevenRoundedRectangle(topLeadingRadius: Brand.paperRadius, topTrailingRadius: Brand.paperRadius))
@@ -47,25 +58,20 @@ struct RollCard: View {
                             .foregroundStyle(palette.accentInk)
                             .background(palette.accentWash, in: RoundedRectangle(cornerRadius: 6))
                     }
-                    Menu {
-                        Button(isOpen ? "Resume" : "Open", action: onOpen)
-                        Button("Rename…", action: onRename)
-                        Button("Export \(rollFileExtension)", action: onExport)
-                        Divider()
-                        Button("Delete…", role: .destructive) { confirmingDelete = true }
-                    } label: {
-                        Image(systemName: "ellipsis")
-                            .frame(width: 28, height: 28)
-                            .contentShape(Rectangle())
-                    }
-                    .menuStyle(.button)
-                    .buttonStyle(.plain)
-                    .menuIndicator(.hidden)
-                    .fixedSize()
-                    .foregroundStyle(palette.muted)
-                    .accessibilityLabel("More actions for \(roll.name)")
+                    if busy == nil { menu }
                 }
                 facts(progress: progress, withLook: withLook)
+                if remoteOnly {
+                    Text("on \(label(roll.sourceId)) · not yet on this device")
+                        .font(Brand.mono(compact ? 10 : 11))
+                        .foregroundStyle(palette.faint)
+                }
+                if let busy {
+                    Text(busy)
+                        .font(Brand.mono(compact ? 10 : 11))
+                        .foregroundStyle(palette.muted)
+                        .accessibilityAddTraits(.updatesFrequently)
+                }
             }
             .padding(compact ? 10 : 14)
         }
@@ -74,8 +80,11 @@ struct RollCard: View {
             RoundedRectangle(cornerRadius: Brand.paperRadius)
                 .stroke(isOpen ? palette.accent : palette.line, lineWidth: 1)
         )
+        .opacity(remoteOnly ? 0.75 : 1)
         .contentShape(RoundedRectangle(cornerRadius: Brand.paperRadius))
-        .onTapGesture(perform: onOpen)
+        .onTapGesture {
+            if busy == nil { onOpen() }
+        }
         .accessibilityElement(children: .contain)
         .accessibilityLabel("Open \(roll.name)")
         .task(id: coverKey) { await loadCover() }
@@ -85,6 +94,48 @@ struct RollCard: View {
         } message: {
             Text("Every picture's develop and look go with it. The files stay where they are.")
         }
+        .confirmationDialog(movingTo.map { "Move “\(roll.name)” to \(label($0.id))?" } ?? "",
+                            isPresented: Binding(get: { movingTo != nil }, set: { if !$0 { movingTo = nil } }),
+                            titleVisibility: .visible) {
+            Button("Move") {
+                if let target = movingTo { onMove(target.id) }
+                movingTo = nil
+            }
+            Button("Cancel", role: .cancel) { movingTo = nil }
+        } message: {
+            Text("The roll will be kept there from now on, and reopen from any device connected to it. Its pictures never travel — only what you did to them.")
+        }
+    }
+
+    private var menu: some View {
+        Menu {
+            Button(isOpen ? "Resume" : remoteOnly ? "Open here" : "Open", action: onOpen)
+            if !remoteOnly {
+                Button("Rename…", action: onRename)
+                Button("Export \(rollFileExtension)", action: onExport)
+                    .help("The whole roll on disk — a backup, and how it reaches another machine")
+                ForEach(moveTargets, id: \.id) { target in
+                    Button("Move to \(label(target.id))…") { movingTo = target }
+                }
+            }
+            Divider()
+            Button("Delete…", role: .destructive) { confirmingDelete = true }
+        } label: {
+            Image(systemName: "ellipsis")
+                .frame(width: 28, height: 28)
+                .contentShape(Rectangle())
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .foregroundStyle(palette.muted)
+        .accessibilityLabel("More actions for \(roll.name)")
+    }
+
+    /// A source as a sentence names it — this device, or the instance's label.
+    private func label(_ id: String) -> String {
+        deviceWords(sourceLabel(id, registry: ConnectionStore.shared.registry))
     }
 
     private func facts(progress: (total: Int, developed: Int, ignored: Int), withLook: Int) -> some View {
@@ -121,12 +172,19 @@ struct RollCard: View {
 struct RollCover: View {
     let images: [CGImage]
     let roll: RollDoc
+    /// Only on an instance: its thumbnails never travel.
+    var remoteOnly = false
     @Environment(\.palette) private var palette
+
+    private var words: String {
+        if remoteOnly { return "pictures drawn once opened here" }
+        return roll.pictures.isEmpty ? "no pictures yet" : "pictures drawn once opened"
+    }
 
     var body: some View {
         GeometryReader { geo in
             if images.isEmpty {
-                Text(roll.pictures.isEmpty ? "no pictures yet" : "pictures drawn once opened")
+                Text(words)
                     .font(Brand.mono(11))
                     .foregroundStyle(palette.muted)
                     .frame(width: geo.size.width, height: geo.size.height)

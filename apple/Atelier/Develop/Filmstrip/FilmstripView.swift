@@ -10,6 +10,13 @@
 // On a touch screen, where there is no Shift, the same two gestures are the
 // cell's context menu: *Select* and *Select up to here*. A cell whose picture
 // is being opened wears the stage's task hairline on its bottom edge too.
+//
+// A picture of an instance that is not in hand yet shows the INSTANCE's own
+// thumbnail (`WinnowThumbView`, which retries), so the strip shows every
+// picture before any is fetched; one being fetched wears a spinner. And
+// Winnow's CULLING, read-only (item 33): a pick flag, the stars and a label dot
+// between the cell's top corners, and the strip narrowed by the status line's
+// filter (never the open picture).
 
 import SwiftUI
 import AtelierKit
@@ -22,7 +29,9 @@ struct FilmstripView: View {
     @State private var targeted = false
 
     private var shown: [RollPicture] {
-        editor.pictures.filter { $0.id == editor.openId || editor.showIgnored || !isIgnored($0) }
+        editor.pictures.filter { p in
+            p.id == editor.openId || ((editor.showIgnored || !isIgnored(p)) && editor.shownByCull(p))
+        }
     }
 
     var body: some View {
@@ -77,7 +86,7 @@ struct FilmstripCell: View {
     var body: some View {
         let edits = pictureEdits(picture)
         let availability = editor.availability(picture)
-        let unreachable = availability != .ready && availability != .preview
+        let unreachable = CellReach.unreachable(availability)
         let variant = variantNumber(picture)
         let label = pictureLabel(picture)
         ZStack {
@@ -90,6 +99,9 @@ struct FilmstripCell: View {
                     .clipped()
                     .opacity(unreachable ? 0.45 : 1)
                     .saturation(unreachable ? 0 : 1)
+            } else if let remote = remoteThumb(availability) {
+                WinnowThumbView(client: remote.client, id: remote.id, label: cellWords(availability))
+                    .frame(width: size, height: size)
             } else {
                 Text(cellWords(availability))
                     .font(Brand.mono(9))
@@ -97,8 +109,15 @@ struct FilmstripCell: View {
                     .multilineTextAlignment(.center)
                     .padding(3)
             }
-            // The picture's own tasks — its opening, its sensor's decode —
-            // on the cell's bottom edge, as on the stage's.
+            if case .fetching = availability {
+                ZStack {
+                    palette.frame.opacity(0.5)
+                    ProgressView().controlSize(.small).tint(palette.onMedia)
+                }
+                .allowsHitTesting(false)
+            }
+            // The picture's own tasks — its opening, its sensor's decode, its
+            // fetch — on the cell's bottom edge, as on the stage's.
             TaskEdge(scope: picture.id)
         }
         .frame(width: size, height: size)
@@ -149,6 +168,12 @@ struct FilmstripCell: View {
         }
         .overlay(alignment: .topTrailing) {
             removeBadge(label)
+        }
+        .overlay(alignment: .top) {
+            // Winnow's word, between the two top corners — not a target.
+            WinnowCullMark(culling: editor.winnow.culling[picture.id], onMedia: true)
+                .padding(.top, 4)
+                .allowsHitTesting(false)
         }
         .opacity(isIgnored(picture) && !open ? (hovering ? 0.7 : 0.35) : 1)
         .contentShape(Rectangle())
@@ -215,6 +240,14 @@ struct FilmstripCell: View {
         }
     }
 
+    /// The instance's own thumbnail, while the picture is on its way.
+    private func remoteThumb(_ a: PictureAvailability) -> (client: WinnowClient, id: Int)? {
+        switch a {
+        case .waiting, .fetching: return editor.remoteThumb(picture)
+        default: return nil
+        }
+    }
+
     /// What an empty cell says, in a word or two — the stage says the rest.
     private func cellWords(_ a: PictureAvailability) -> String {
         switch a {
@@ -232,12 +265,15 @@ struct FilmstripCell: View {
     private func helpText(_ edits: [PictureEdit]) -> String {
         let label = pictureLabel(picture)
         let variant = variantNumber(picture) > 1 ? " (a variant)" : ""
-        let what: String
+        var what: String
         if edits.isEmpty {
             what = "as shot"
         } else {
             let others = edits.filter { $0 != .develop }.map(\.rawValue)
             what = ([describeDevelop(picture.develop)] + others).joined(separator: " · ")
+        }
+        if let culling = editor.winnow.culling[picture.id], !describeCulling(culling).isEmpty {
+            what += " — Winnow: \(describeCulling(culling))"
         }
         #if os(macOS)
         let hint = " — Shift or ⌘-click to select for a batch"
@@ -323,5 +359,16 @@ struct DeliveryBadge: View {
         if ignored { return palette.lineStrong }
         if leaves { return palette.accent }
         return state == .no ? palette.inkSoft : palette.lineStrong
+    }
+}
+
+/// Which availabilities grey a cell: a picture that is in hand, or on its way,
+/// is not unreachable — one being fetched says so with its spinner.
+enum CellReach {
+    static func unreachable(_ a: PictureAvailability) -> Bool {
+        switch a {
+        case .ready, .preview, .fetching, .waiting: return false
+        case .failed, .gone, .unconnected, .local: return true
+        }
     }
 }

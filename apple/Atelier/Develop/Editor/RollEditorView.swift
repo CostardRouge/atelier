@@ -26,12 +26,16 @@ struct RollEditorView: View {
     @Environment(RollStore.self) private var store
     @Environment(PicturePool.self) private var pool
     @Environment(PresetBookStore.self) private var presets
+    /// Rolls kept on a Winnow: the open roll's sync, asked on open.
+    @Environment(RollDocuments.self) private var documents: RollDocuments?
+    @Environment(\.shellNavigate) private var navigate
     @State private var editor: RollEditor?
 
     var body: some View {
         Group {
             if let editor {
                 RollWorkbench(editor: editor)
+                    .modifier(RollSyncLifecycle(documents: documents))
             } else {
                 Color.clear
             }
@@ -42,11 +46,34 @@ struct RollEditorView: View {
                 // Every pass a picture carries, in the web's order, for the
                 // stage, the snapshot and the export alike.
                 made.installFullRenderPlan()
+                // What the roll reads from its instance — its own fetch, the
+                // culling — and the way to Sources.
+                made.attachWinnow(connections: .shared, library: .shared, toSources: { navigate(.sources) })
                 editor = made
+                if let documents {
+                    Task { await documents.opened(rollId, editor: made) }
+                }
             }
         }
-        .onDisappear { editor?.close() }
+        .onDisappear {
+            editor?.close()
+            documents?.closed(rollId)
+        }
         .darkroom()
+    }
+}
+
+/// The open roll's push on the way out — the web's unmount and hidden-tab
+/// flushes — only where the sources' bridge is there (never in a preview).
+private struct RollSyncLifecycle: ViewModifier {
+    let documents: RollDocuments?
+
+    func body(content: Content) -> some View {
+        if let documents {
+            content.documentSyncLifecycle(documents.sync)
+        } else {
+            content
+        }
     }
 }
 
@@ -61,9 +88,13 @@ struct RollWorkbench: View {
     @State private var photoItems: [PhotosPickerItem] = []
     @State private var dropping = false
     @State private var drawerFraction = 0.4
+    /// "A day on <host>…" is up.
+    @State private var pickingDay = false
     @FocusState private var focused: Bool
     /// The shell's Library — what the `Develop` verb takes the picture from.
     @Environment(LibraryStore.self) private var library: LibraryStore?
+    /// Rolls kept on a Winnow — the pill in the bar reads the open roll's record.
+    @Environment(RollDocuments.self) private var documents: RollDocuments?
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -186,6 +217,8 @@ struct RollWorkbench: View {
         // The shell's verb under a picture looked at large: `Develop` puts it
         // on THIS roll, opened on the file that was on screen.
         .publishMediaActions(developOffer)
+        // What the roll reads from its instance, the day sheet, the span published.
+        .modifier(RollWinnowSurface(editor: editor, pickingDay: $pickingDay))
     }
 
     /// `Develop` — the web's `RollEditor.tsx` verb: add the Library's active
@@ -286,8 +319,17 @@ struct RollWorkbench: View {
         ContentUnavailableView {
             Label("No pictures on this roll yet", systemImage: "photo.on.rectangle")
         } description: {
-            Text("Pick photographs in Photos, files or a folder of your own, or drop them here. The roll keeps a reference to each and its own numbers, never a copy of a file you pointed at.")
+            Text("Pick a day on your Winnow, photographs in Photos, files or a folder of your own, or drop them here. The roll keeps a reference to each and its own numbers, never a copy of a file you pointed at.")
         } actions: {
+            if let host = editor.dayHost {
+                Button("Add a day from \(host)…") { pickingDay = true }
+                    .buttonStyle(.borderedProminent)
+            }
+            let ticked = editor.tickedToAdd.count
+            if ticked > 0 {
+                Button("Add \(ticked) from the Library") { editor.addTicked() }
+                    .buttonStyle(.bordered)
+            }
             Button("Add a folder…") { importing = .folder }
                 .buttonStyle(.borderedProminent)
             Button("From Photos…") { showPhotos = true }
@@ -314,7 +356,7 @@ struct RollWorkbench: View {
 
     private var emptyText: String {
         guard let p = editor.picture else { return "No picture to develop yet." }
-        return availabilityText(p.ref.name, editor.availability(p))
+        return deviceWords(availabilityText(p.ref.name, editor.availability(p)))
     }
 
     // MARK: - the bar
@@ -332,6 +374,11 @@ struct RollWorkbench: View {
             }
         }
         ToolbarItemGroup(placement: .primaryAction) {
+            // Where a roll kept on a Winnow stands — a dot, a word only when it
+            // waits on the author; nothing at all for a roll kept here.
+            if let documents, documents.openId == editor.rollId {
+                DocumentSyncPill(sync: documents.sync)
+            }
             ControlGroup {
                 Button {
                     editor.undo()
@@ -347,6 +394,17 @@ struct RollWorkbench: View {
                 .disabled(!editor.canRedoRoll)
             }
             Menu {
+                let ticked = editor.tickedToAdd.count
+                if ticked > 0 {
+                    Button { editor.addTicked() } label: {
+                        Label("\(ticked) ticked in the Library", systemImage: "checkmark.circle")
+                    }
+                }
+                if let host = editor.dayHost {
+                    Button { pickingDay = true } label: {
+                        Label("A day on \(host)…", systemImage: "calendar")
+                    }
+                }
                 Button { showPhotos = true } label: { Label("From Photos…", systemImage: "photo.on.rectangle") }
                 Button { importing = .files } label: { Label("From Files…", systemImage: "doc") }
                 Button { importing = .folder } label: { Label("A folder…", systemImage: "folder") }

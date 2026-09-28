@@ -172,7 +172,7 @@ struct DevelopStageView: View {
             } else if editor.loading {
                 message("decoding…", ink: palette.muted)
             } else if let p = editor.picture {
-                message(availabilityText(p.ref.name, editor.availability(p)), ink: palette.muted)
+                message(deviceWords(availabilityText(p.ref.name, editor.availability(p))), ink: palette.muted)
             } else {
                 message(emptyText, ink: palette.muted)
             }

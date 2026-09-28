@@ -37,6 +37,13 @@ enum PictureLocator: Codable, Equatable {
     case folder(Data, String)
 }
 
+/// Where a picture's bytes are READ now: its locator, or a file the roll
+/// fetched from an instance for this session (never stored).
+enum PictureBytesSource {
+    case locator(PictureLocator)
+    case file(URL)
+}
+
 enum PictureError: LocalizedError {
     case noLocator
     case undecodable
@@ -61,6 +68,15 @@ final class RollStore {
     @ObservationIgnored private var marksCache: [String: ExportMarks] = [:]
     private let root: URL
     @ObservationIgnored private var pendingSaves: [String: Task<Void, Never>] = [:]
+    /// Told each time a roll's JSON LANDS on disk — the sources' bridge
+    /// (`RollDocuments`) marks a roll kept on a Winnow dirty from there, the
+    /// web's `edited` after `putRoll`.
+    @ObservationIgnored var onWritten: ((RollDoc) -> Void)?
+    /// Files the roll FETCHED from an instance for this session (roll id →
+    /// picture id → a file under the temporary folder) — never persisted,
+    /// never a locator: a remote picture is re-fetched from its ref's own
+    /// asset id (`develop-media.md`, `RollEditor+Winnow.swift`).
+    private(set) var sessionFiles: [String: [String: URL]] = [:]
 
     /// The web's `SAVE_DEBOUNCE_MS`.
     static let saveDebounceNanos: UInt64 = 800_000_000
@@ -97,7 +113,8 @@ final class RollStore {
         let urls = (try? fm.contentsOfDirectory(at: rollsDirectory, includingPropertiesForKeys: nil)) ?? []
         for url in urls {
             let name = url.lastPathComponent
-            guard name.hasSuffix(".json"), !name.hasSuffix(".locators.json"), !name.hasSuffix(".marks.json") else { continue }
+            guard name.hasSuffix(".json"), !name.hasSuffix(".locators.json"), !name.hasSuffix(".marks.json"),
+                  !name.hasSuffix(".sync.json") else { continue }
             guard let data = try? Data(contentsOf: url), let doc = readRollDoc(JSONValue.parse(data)) else { continue }
             found.append(doc)
             if let table = try? Data(contentsOf: locatorsURL(doc.id)),
@@ -163,6 +180,7 @@ final class RollStore {
         rolls.removeAll { $0.id == id }
         let table = locators[id] ?? [:]
         locators[id] = nil
+        sessionFiles[id] = nil
         marksCache[id] = nil
         let fm = FileManager.default
         try? fm.removeItem(at: rollURL(id))
@@ -187,30 +205,75 @@ final class RollStore {
         let text = doc.json.serialized(pretty: true)
         pendingSaves[doc.id] = Task { [weak self] in
             try? await Task.sleep(nanoseconds: RollStore.saveDebounceNanos)
-            guard !Task.isCancelled else { return }
-            self?.write(text, to: url)
-            self?.pendingSaves[doc.id] = nil
+            guard !Task.isCancelled, let self else { return }
+            self.pendingSaves[doc.id] = nil
+            if self.write(text, to: url) { self.onWritten?(doc) }
         }
     }
 
-    private func write(_ text: String, to url: URL) {
+    @discardableResult
+    private func write(_ text: String, to url: URL) -> Bool {
         do {
             try text.write(to: url, atomically: true, encoding: .utf8)
             if storageFailed { storageFailed = false }
+            return true
         } catch {
             storageFailed = true
+            return false
         }
     }
 
     /// Write everything still pending, now — the app is going to the background.
     func flush() {
-        for (id, task) in pendingSaves {
-            task.cancel()
-            if let doc = roll(id) {
-                write(doc.json.serialized(pretty: true), to: rollURL(id))
-            }
-        }
+        let owed = pendingSaves
         pendingSaves = [:]
+        for (id, task) in owed {
+            task.cancel()
+            guard let doc = roll(id) else { continue }
+            if write(doc.json.serialized(pretty: true), to: rollURL(id)) { onWritten?(doc) }
+        }
+    }
+
+    /// A write the debounce still holds for `id`, dropped — the document is
+    /// being replaced under it (the instance's copy taken, kept as local).
+    func discardPending(_ id: String) {
+        pendingSaves[id]?.cancel()
+        pendingSaves[id] = nil
+    }
+
+    /// A roll written to disk by someone else — the sources' mirror, a roll
+    /// created or moved THERE first — taken into memory as it is and never
+    /// written again here: a write would mark a clean mirror dirty.
+    func adopt(_ doc: RollDoc) {
+        discardPending(doc.id)
+        rolls.removeAll { $0.id == doc.id }
+        rolls.append(doc)
+        rolls.sort { $0.updatedAt > $1.updatedAt }
+    }
+
+    /// A roll whose pictures were given fresh ids — a move goes through the
+    /// portable file, as the web's `moveRoll` does: what this device keeps
+    /// under a picture's id (its locator, its export mark, its thumbnail)
+    /// follows it, old id → new.
+    func remapPictures(_ rollId: String, _ renamed: [String: String]) {
+        guard !renamed.isEmpty else { return }
+        if let table = locators[rollId] {
+            var next: [String: PictureLocator] = [:]
+            for (id, locator) in table { next[renamed[id] ?? id] = locator }
+            locators[rollId] = next
+            persistLocators(rollId)
+        }
+        let kept = marks(rollId)
+        if !kept.isEmpty {
+            var next: ExportMarks = [:]
+            for (id, mark) in kept { next[renamed[id] ?? id] = mark }
+            marksCache[rollId] = next
+            try? next.json.serialized(pretty: false).write(to: marksURL(rollId), atomically: true, encoding: .utf8)
+        }
+        let fm = FileManager.default
+        for (old, new) in renamed where old != new {
+            try? fm.moveItem(at: thumbURL(old), to: thumbURL(new))
+        }
     }
 
     private func persistLocators(_ rollId: String) {
@@ -265,15 +328,56 @@ final class RollStore {
         locators[rollId]?[pictureId]
     }
 
-    /// What can be said about a picture's bytes on this device: in hand, a
-    /// file of this machine not open right now, or kept on an instance the
-    /// app is not connected to (the app has no Winnow client yet).
+    /// What can be said about a picture's bytes from this store alone: in
+    /// hand (a locator, or a file fetched for the session), kept on an
+    /// instance, or a file of this machine not open right now. What the roll's
+    /// own fetch is doing (fetching, failed, gone) is `RollEditor+Winnow`'s.
     func availability(_ rollId: String, _ picture: RollPicture) -> PictureAvailability {
-        if locators[rollId]?[picture.id] != nil { return .ready }
-        if let assetId = picture.ref.assetId, let host = assetId.split(separator: "/").first {
-            return .unconnected(sourceId: String(host))
+        if locators[rollId]?[picture.id] != nil || sessionFiles[rollId]?[picture.id] != nil { return .ready }
+        if let host = splitAssetId(picture.ref.assetId)?.host, host != defaultSourceId {
+            return .unconnected(sourceId: host)
         }
         return .local
+    }
+
+    // MARK: - files fetched for the session
+
+    /// Where a picture's bytes are read now: its locator, else a file fetched
+    /// for the session.
+    func bytesSource(_ rollId: String, _ pictureId: String) -> PictureBytesSource? {
+        if let locator = locators[rollId]?[pictureId] { return .locator(locator) }
+        if let url = sessionFiles[rollId]?[pictureId] { return .file(url) }
+        return nil
+    }
+
+    /// The file fetched for `pictureId` this session, if any.
+    func sessionFile(_ rollId: String, _ pictureId: String) -> URL? {
+        sessionFiles[rollId]?[pictureId]
+    }
+
+    /// Hold a fetched file for pictures of a roll (a picture and its variants).
+    func holdSession(_ rollId: String, _ pictureIds: [String], _ url: URL) {
+        for id in pictureIds { sessionFiles[rollId, default: [:]][id] = url }
+    }
+
+    /// Let go of pictures' fetched files; the files a picture no longer uses
+    /// are returned, for the caller to delete when they are its own.
+    @discardableResult
+    func releaseSession(_ rollId: String, _ pictureIds: [String]) -> [URL] {
+        var dropped: [URL] = []
+        for id in pictureIds {
+            if let url = sessionFiles[rollId]?.removeValue(forKey: id) { dropped.append(url) }
+        }
+        let still = Set((sessionFiles[rollId] ?? [:]).values)
+        return dropped.filter { !still.contains($0) }
+    }
+
+    /// Every fetched file of a roll let go — the editor closed.
+    @discardableResult
+    func releaseAllSession(_ rollId: String) -> [URL] {
+        let all = Array(Set((sessionFiles[rollId] ?? [:]).values))
+        sessionFiles[rollId] = nil
+        return all
     }
 
     /// The same locator for another picture id — a VARIANT shares its file.
@@ -402,6 +506,58 @@ final class RollStore {
         if case .container(let path)? = locator, !containerCopyInUse(path) {
             try? FileManager.default.removeItem(at: mediaDirectory.appendingPathComponent(path))
         }
+    }
+
+    /// The bytes behind a locator or a session file. Blocking: call it off the main actor.
+    nonisolated static func bytes(of source: PictureBytesSource, mediaDirectory: URL) throws -> Data {
+        switch source {
+        case .locator(let locator): return try bytes(of: locator, mediaDirectory: mediaDirectory)
+        case .file(let url): return try Data(contentsOf: url)
+        }
+    }
+
+    /// Where an EXISTING picture's bytes are, from the Library's handle — a
+    /// roll created with the Library's ticked pictures already on it. A file
+    /// pointed at keeps its bookmark; a session copy of this device's (a
+    /// Photos pick) is copied into the container, the one way the roll reaches
+    /// it tomorrow; a file FETCHED from an instance is not: the roll fetches it
+    /// again from its ref's asset id (`develop-media.md`). True when a locator
+    /// was written.
+    @discardableResult
+    func locate(_ dropped: DroppedAsset, rollId: String, pictureId: String) -> Bool {
+        let locator: PictureLocator
+        switch dropped.location {
+        case .bookmark(let bookmark):
+            locator = .bookmark(bookmark)
+        case .folder(let bookmark, let path):
+            locator = .folder(bookmark, path)
+        case .session(let path):
+            if RollStore.isRemote(dropped.ref) { return false }
+            let name = "\(UUID().uuidString.lowercased())-\(RollStore.safeFileName(dropped.ref.name))"
+            guard let data = try? Data(contentsOf: URL(fileURLWithPath: path)),
+                  (try? data.write(to: mediaDirectory.appendingPathComponent(name), options: .atomic)) != nil else { return false }
+            locator = .container(name)
+        }
+        locators[rollId, default: [:]][pictureId] = locator
+        persistLocators(rollId)
+        return true
+    }
+
+    /// A ref an instance vouched for — the roll reaches its bytes by fetching.
+    nonisolated static func isRemote(_ ref: SavedMediaRef) -> Bool {
+        guard let host = splitAssetId(ref.assetId)?.host else { return false }
+        return host != defaultSourceId
+    }
+
+    /// A picture reached by its ref alone — an instance's, fetched when it is
+    /// looked at: on the roll, with no locator. One already held is found.
+    @discardableResult
+    func addRef(to rollId: String, _ ref: SavedMediaRef) -> Added {
+        guard let doc = roll(rollId) else { return .failed }
+        if let existing = doc.pictures.first(where: { sameMediaRef($0.ref, ref) }) { return .already(existing.id) }
+        let id = newRollId()
+        update(rollId) { $0 = addPictures($0, [ref]) { id } }
+        return .added(id)
     }
 
     /// The bytes behind a locator. Blocking: call it off the main actor.

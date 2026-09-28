@@ -140,6 +140,8 @@ final class RollEditor {
     let layerEdit = LayerEditState()
     /// The Repair section's state and caches — read through `repairState` (`RollEditor+Repair.swift`).
     let repairEdit = RepairEditState()
+    /// What the roll reads from a Winnow — its own fetch pool, the culling and its filter (`RollEditor+Winnow.swift`).
+    let winnow = RollWinnow()
 
     /// Pictures that LANDED, marked on this device as they were rendered —
     /// never an edit, never undone.
@@ -181,6 +183,8 @@ final class RollEditor {
         unsubscribe = []
         undoManager?.removeAllActions(withTarget: self)
         snapshotTask?.cancel()
+        // What the roll fetched for this sitting goes with it (`RollEditor+Winnow.swift`).
+        releaseWinnow()
     }
 
     // MARK: - reading
@@ -196,9 +200,9 @@ final class RollEditor {
     }
     var asShot: Bool { isDefaultDevelop(developDraft) }
 
-    /// What a picture's bytes are on this device.
+    /// What a picture's bytes are on this device — the roll's own fetch included (`RollEditor+Winnow.swift`).
     func availability(_ p: RollPicture) -> PictureAvailability {
-        store.availability(rollId, p)
+        winnowAvailability(p)
     }
 
     // MARK: - opening
@@ -223,10 +227,10 @@ final class RollEditor {
         requestRender()
     }
 
-    /// ←/→: along the strip, stepping over an ignored picture (and, later,
-    /// one Winnow's filter took off it), held at the ends.
+    /// ←/→: along the strip, stepping over an ignored picture and one
+    /// Winnow's filter took off it (`shownByCull`), held at the ends.
     func step(_ by: Int) {
-        let next = stepPicture(pictures, openId, by, skip: isIgnored)
+        let next = stepPicture(pictures, openId, by, skip: { isIgnored($0) || !self.shownByCull($0) })
         if let next, next != openId { open(next) }
     }
 
@@ -256,6 +260,22 @@ final class RollEditor {
         if openId == nil || !next.pictures.contains(where: { $0.id == openId }) {
             open(AtelierKit.openPictureId(next.pictures, nil))
         }
+    }
+
+    /// The roll was REPLACED under the editor — the instance's copy taken, or
+    /// the roll kept here as a local one (`RollDocuments`, the web's
+    /// `replaceOpen`). Not an edit: stepping back onto what it replaced would
+    /// push the losing version straight back up, so the history starts again
+    /// from it and the drafts reseed with nothing owed.
+    func restart(from doc: RollDoc) {
+        developRest?.cancel()
+        developRest = nil
+        undoManager?.removeAllActions(withTarget: self)
+        history = newHistory(doc)
+        developWrite = newWriteThrough(nil)
+        let keep = openId.flatMap { id in doc.pictures.contains { $0.id == id } ? id : nil }
+        openId = nil
+        open(AtelierKit.openPictureId(doc.pictures, keep))
     }
 
     /// The store was written directly (a file added through `RollStore`): the
