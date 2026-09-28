@@ -213,6 +213,8 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 
 **The trap, seen immediately**: select a title that lives at 0–3 s, park the playhead at 0:42, and it cannot be dragged — it is not drawn. **The remedy**: `DrawOptions.ghostId` (editor-only, never set by an export) draws the *selected* element at 35% even outside its window, and `measureOverlays` grants it a box on the same condition. So selection always keeps the element reachable, and only the selected one.
 
+**The outline measures the selected element ALONE (2026-09-28)**: a box depends on its element only (no neighbour, no stagger — it is measured without the animation's transform), so the stage passes `[selected]` to `measureOverlays`; the whole list laid every title out a second time on every played frame just to outline one. Checked in Chromium: every element kind gives the same box alone as in the list. The hit-test on a click still measures the whole list, which it needs.
+
 Timing is edited numerically for now (`TimingPanel.tsx`, studio-only — the legacy overlay page has no in-point to count from), with "From playhead" buttons, the `I`/`O` reflex. A **lane under the TrimBar** showing each timed element as a draggable bar is the natural next step; remember that bar splits into **bands, never z-index** (see the trimming entry).
 
 ## Canvas trap: an element fades in pieces (2026-08-22)

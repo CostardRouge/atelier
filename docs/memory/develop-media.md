@@ -154,3 +154,18 @@ chip and the line said `3 from their working previews`; *Stop keeping them*
 deleted the three and the stage went back to "not open". (Exporting from a
 preview was written and said at the time; it is refused since 2026-09-20.)
 
+
+## The roll's background decodes share ONE slot (2026-09-28)
+
+**Decision.** Every picture a roll bakes in the background — its filmstrip
+cells (`RollEditor`) and its working previews (`use-roll-previews.ts`) —
+decodes through `pictureThumbnail`, which queues on one module-level
+`makeDecodeQueue(1)` (`roll-thumb.ts`). **Why**: they are two loops, and
+each restarts when the other lands (a preview changes the files a cell is
+made from); a restarted loop left its predecessor's decode running and
+started the next beside it, and the two loops ran side by side, so a roll
+of big stills stacked three or four decodes at once. **Measured**: ten
+requests at once on 24 MP JPEGs, never more than one running. **How to
+apply**: a new background bake of a roll picture goes through
+`pictureThumbnail` or the same queue, never a decode of its own; the
+stage's graded snapshot is not a decode and stays outside it.

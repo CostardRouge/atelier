@@ -1346,7 +1346,11 @@ never whole and shrunk afterwards: its size is read from the file's header and
 the browser is asked for exactly the pixels a stage, a filmstrip cell or an
 export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
 phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
-in the run's summary; a computer still exports every pixel. A browser cannot
+in the run's summary; a computer still exports every pixel. A Studio export
+of a photograph decodes only what its largest variant draws: a 1080 × 1350
+post from a 48-megapixel still is decoded at 1800 px — often the picture
+already on the stage — instead of the whole file, which on a computer took an
+export of that post from thirteen seconds to under one. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
 (`constrained` or `roomy`) overrides it. A big export is also graded in

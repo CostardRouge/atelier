@@ -265,7 +265,7 @@ export async function exportOverlayVideoViaSeek(
       encoder.encode(vf, { keyFrame: i % gop === 0 });
       vf.close();
 
-      await awaitQueue(() => encoder!.encodeQueueSize, 24);
+      await awaitQueue(() => encoder!.encodeQueueSize, 24, encoder);
       onProgress?.({ phase: 'encoding', ratio: (i + 1) / frameCount });
     }
 
@@ -285,7 +285,7 @@ export async function exportOverlayVideoViaSeek(
         encoder.encode(vf, { keyFrame: (frameCount + appended) % gop === 0 });
         vf.close();
         appended++;
-        await awaitQueue(() => encoder!.encodeQueueSize, 24);
+        await awaitQueue(() => encoder!.encodeQueueSize, 24, encoder);
       }
     }
 

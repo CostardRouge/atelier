@@ -44,6 +44,7 @@ import {
 import { safeChunkMetadata } from './colour-tag';
 import { type ExportTail } from './export-tail';
 import { framePlan } from './frame-plan';
+import { awaitQueue } from './codec-queue';
 import type { TrimRange } from './trim';
 
 export interface ExportProgress {
@@ -211,7 +212,7 @@ export function isEncodeSupported(): boolean {
   return typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined';
 }
 
-interface DemuxResult {
+export interface DemuxResult {
   videoTrack: Track;
   videoSamples: Sample[];
   audioTrack: Track | null;
@@ -331,6 +332,21 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
     file.appendBuffer(mp4Buffer, true);
     file.flush();
   });
+}
+
+/**
+ * A source read and demuxed ONCE, for a run that exports it several times —
+ * every variant of a clip used to read the whole file and parse it again.
+ * The samples are only read by the pipeline, never changed, so one result
+ * serves every variant of the run.
+ */
+export async function demuxSource(source: File | ArrayBuffer): Promise<DemuxResult> {
+  const buffer = source instanceof ArrayBuffer ? source : await source.arrayBuffer();
+  return demux(buffer);
+}
+
+function isDemuxed(source: File | ArrayBuffer | DemuxResult): source is DemuxResult {
+  return typeof source === 'object' && source !== null && 'videoSamples' in source;
 }
 
 /** How far a trim's edge may miss a frame boundary and still be ON it. */
@@ -490,12 +506,8 @@ export async function pickAvcCodec(
   return 'avc1.42E01E';
 }
 
-/** Block until a codec's queue drains below `max` (simple backpressure). */
-export async function awaitQueue(getSize: () => number, max: number): Promise<void> {
-  while (getSize() > max) {
-    await new Promise((r) => setTimeout(r, 5));
-  }
-}
+/** Backpressure on a codec's queue — `codec-queue.ts`, kept exported here for its readers. */
+export { awaitQueue };
 
 /**
  * Bits per pixel per frame. ~0.12 is close to worst case for an inter-frame
@@ -539,7 +551,7 @@ export function makeExportCanvas(
  * can't decode the source codec via WebCodecs.
  */
 export async function exportProcessedVideo(
-  source: File | ArrayBuffer,
+  source: File | ArrayBuffer | DemuxResult,
   makeProcessor: (ctx: FrameContext) => FrameProcessor,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
@@ -555,9 +567,11 @@ export async function exportProcessedVideo(
 
   onProgress?.({ phase: 'demuxing', ratio: null });
   // Accept already-read bytes so callers can read the file while its handle is
-  // freshest (files opened via the folder picker can otherwise go unreadable).
-  const buffer = source instanceof ArrayBuffer ? source : await source.arrayBuffer();
-  const { videoTrack, videoSamples, audioTrack, audioSamples } = await demux(buffer);
+  // freshest (files opened via the folder picker can otherwise go unreadable),
+  // or a source already demuxed for a run of several variants.
+  const { videoTrack, videoSamples, audioTrack, audioSamples } = isDemuxed(source)
+    ? source
+    : await demuxSource(source);
   throwIfAborted();
 
   if (videoSamples.length === 0) throw new Error('No video frames found.');
@@ -866,8 +880,8 @@ export async function exportProcessedVideo(
             data: sample.data,
           }),
         );
-        await awaitQueue(() => decoder.decodeQueueSize, 24);
-        await awaitQueue(() => encoder.encodeQueueSize, 24);
+        await awaitQueue(() => decoder.decodeQueueSize, 24, decoder);
+        await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
       }
 
       await decoder.flush();
@@ -889,7 +903,7 @@ export async function exportProcessedVideo(
           emitted++;
           processed++;
           onProgress?.({ phase: 'encoding', ratio: processed / total });
-          await awaitQueue(() => encoder.encodeQueueSize, 24);
+          await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
         }
       }
 

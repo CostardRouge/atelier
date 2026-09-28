@@ -50,6 +50,7 @@ import {
   pickDirectory,
   pickFiles,
 } from '../shared/sources/file-sources';
+import { isAbortError } from '../shared/sources/fetch-options';
 import EmptyState from '../shared/ui/EmptyState';
 import { Icons } from '../shared/ui/icons';
 import IconButton from '../shared/ui/IconButton';
@@ -167,6 +168,13 @@ export default function AssetSidebar({
   const accepts = tool.accepts ?? [];
   const [dragging, setDragging] = useState(false);
   const [busy, setBusy] = useState(false);
+  // What the last add (a pick or a drop) could not do, said where it was
+  // asked — it used to be an unhandled rejection nobody saw.
+  const [addProblem, setAddProblem] = useState<string | null>(null);
+  // Only the latest add clears `busy`: a file picker that never settles (a
+  // browser with no `cancel` event, a dismissed dialog) must not leave the
+  // verbs greyed for good, so they stay usable while one is open.
+  const addRun = useRef(0);
   const [query, setQuery] = useState('');
   // Remote sources are the shell's business, not a tool's: the sidebar is
   // where files enter, whichever source they come from.
@@ -447,13 +455,23 @@ export default function AssetSidebar({
     },
   });
 
-  async function run(pick: () => Promise<File[]>) {
+  async function addFrom(read: () => Promise<File[]>) {
+    const seq = ++addRun.current;
     setBusy(true);
+    setAddProblem(null);
     try {
-      lib.addFiles(await pick());
+      lib.addFiles(await read());
+    } catch (err) {
+      if (!isAbortError(err)) {
+        setAddProblem(`Nothing was added: ${err instanceof Error ? err.message : String(err)}`);
+      }
     } finally {
-      setBusy(false);
+      if (seq === addRun.current) setBusy(false);
     }
+  }
+
+  function run(pick: () => Promise<File[]>) {
+    return addFrom(pick);
   }
 
   // Clicking a row focuses that asset: make it the tool's active item, and pull
@@ -473,12 +491,9 @@ export default function AssetSidebar({
   async function handleDrop(e: React.DragEvent) {
     e.preventDefault();
     setDragging(false);
-    setBusy(true);
-    try {
-      lib.addFiles(await filesFromDataTransfer(e.dataTransfer));
-    } finally {
-      setBusy(false);
-    }
+    // Read the transfer NOW: its items are only readable during the event.
+    const reading = filesFromDataTransfer(e.dataTransfer);
+    await addFrom(() => reading);
   }
 
   // --- Collapsed rail -------------------------------------------------------
@@ -516,11 +531,10 @@ export default function AssetSidebar({
             rather than a bare button: the rail otherwise only ever offered
             "add files", so "add a folder" needed the panel reopened first. */}
         <OverflowMenu
-          label={busy ? 'Opening…' : 'Add…'}
+          label={busy ? 'Opening…' : addProblem ? `Add… — ${addProblem}` : 'Add…'}
           icon={Icons.plus}
           variant={empty ? 'primary' : 'default'}
           size="md"
-          disabled={busy}
           items={addItems}
           align="start"
         />
@@ -715,12 +729,16 @@ export default function AssetSidebar({
             onDrop={handleDrop}
           >
             <p className="m-0 text-ink-soft">Drop files or a folder</p>
+            {addProblem && (
+              <p role="alert" className="m-0 mt-1.5 text-xs text-danger">
+                {addProblem}
+              </p>
+            )}
             <p className="m-0 mt-1.5 flex items-center justify-center gap-2">
               <button
                 type="button"
                 className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
                 onClick={() => run(pickFiles)}
-                disabled={busy}
               >
                 {busy ? 'opening…' : 'Add files'}
               </button>
@@ -729,7 +747,6 @@ export default function AssetSidebar({
                 type="button"
                 className="p-0 border-0 bg-transparent text-accent-ink font-semibold cursor-pointer underline underline-offset-[3px] decoration-[1.5px] hover:text-accent disabled:text-faint disabled:no-underline"
                 onClick={() => run(pickDirectory)}
-                disabled={busy}
               >
                 a folder
               </button>
