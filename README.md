@@ -903,8 +903,9 @@ typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
 every visit. **Virée** puts a little car on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
-through its stops, and a cartoon Land Cruiser Prado, a miniature rendered in the
-browser with its wheels turning, driving from stop to stop. The stops are the
+through its stops, and a cartoon car — a Land Cruiser Prado or a Renault
+Kadjar, a miniature rendered in the browser with its wheels turning — driving
+from stop to stop. The stops are the
 legs' located places, arriving where this day's leg ends, or the **pictures
 you pick** — each one shot with a position in its EXIF is a stop, in the order
 they were shot, a run shot at one spot one stop. At a stop with pictures the car
@@ -929,14 +930,22 @@ at every stop on the same voices, deeper where a leg begins, the seat on
 arrival, a shutter click as each print lands.
 
 **The car is the trip's, and it has a garage.** One car per journey: every
-Virée of a trip drives the same one, and it travels in the trip's backup. It is
-a Toyota Land Cruiser Prado (the J120), and the garage dresses it — a colour
-from the factory range or one of your own, a factory gloss or a matte coating
-(Raptor black, the default), and the gear: a bull bar with two spot lights, a
-roof basket carrying a solar panel on the left, an aluminium storage box and
-three jerry cans across the rear (water, petrol, water), an awning bag along
-the side, mud flaps, window visors, the spare on the tailgate, the door
-mirrors — each a switch. The car turns on a turntable while you dress it (drag
+Virée of a trip drives the same one, and it travels in the trip's backup. Two
+models: a Toyota Land Cruiser Prado (the J120, the default) and a Renault
+Kadjar (the 2018–2022 facelift). The garage dresses whichever you pick — a
+colour from that model's factory range or one of your own, a factory gloss or
+a matte coating — and its gear, each a switch. The Prado (Raptor black, matte,
+by default) takes a bull bar with two spot lights, a roof basket carrying a
+solar panel on the left, an aluminium storage box and three jerry cans across
+the rear (water, petrol, water), an awning bag along the side, mud flaps,
+window visors, the spare on the tailgate, the door mirrors. The Kadjar (navy
+blue, gloss, by default) takes two roof bars across its roof — standing on
+their own feet, or on the factory roof rails when you fit those — and its door
+mirrors; it is drawn with its own marks: the C of its daytime lights, the
+diamond in a chrome-barred grille, black cladding round the arches, a spoiler
+over the raked tailgate, two-tone wheels. Picking a model brings that car as
+it comes; the one you left keeps what you dressed it in while the garage stays
+open. The car turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own

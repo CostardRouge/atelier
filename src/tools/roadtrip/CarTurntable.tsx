@@ -1,6 +1,6 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import { describeCar, type CarSpec } from '../../shared/roadtrip/car-spec';
-import { carLight, carPalette } from '../../shared/roadtrip/hooks/car-model';
+import { carLight } from '../../shared/roadtrip/hooks/car-model';
 import { carModel } from '../../shared/roadtrip/hooks/car-registry';
 import { paintGroundShadow, paintMesh, renderOrder, type Pose } from '../../shared/roadtrip/hooks/mesh3d';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
@@ -107,7 +107,7 @@ export default function CarTurntable({ spec, className = '' }: CarTurntableProps
 
     paintGroundShadow(g, pose, carOf.length / 2, carOf.width / 2, 0.3);
     paintMesh(g, renderOrder(partsRef.current, pose, carLight(current.finish)), {
-      palette: carPalette(current.color),
+      palette: carOf.palette(current.color),
       ink: 'rgba(20,16,12,0.85)',
       outlineWidth: Math.max(0.9, (scale * carOf.length) / 78),
     });

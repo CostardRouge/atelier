@@ -23,7 +23,7 @@
 
 import { drawFramed } from '../../media/framing';
 import type { CarSpec } from '../car-spec';
-import { carLight, carPalette } from './car-model';
+import { carLight } from './car-model';
 import { carModel, type CarModel } from './car-registry';
 import { hexToRgba } from './colour';
 import {
@@ -320,7 +320,7 @@ function paintMap(
     };
     paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
     paintMesh(g, renderOrder(parts, pose, carLight(spec.finish)), {
-      palette: carPalette(spec.color),
+      palette: model.palette(spec.color),
       ink: onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)',
       outlineWidth: Math.max(0.9, carPx / 78),
     });

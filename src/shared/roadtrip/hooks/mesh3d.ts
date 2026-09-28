@@ -584,24 +584,58 @@ export function extrude(
   roles: ExtrudeRoles,
   outline = true,
 ): Part {
+  return prism(id, plan, { z: z0 }, { z: z1 }, roles, { outline });
+}
+
+/** A plane of heights over the ground, `z + dx·x + dy·y`; flat when it has no slope. */
+export interface ZPlane {
+  z: number;
+  dx?: number;
+  dy?: number;
+}
+
+/** The height of a plane above a point of the ground. */
+export function heightOn(plane: ZPlane, x: number, y: number): number {
+  return plane.z + (plane.dx ?? 0) * x + (plane.dy ?? 0) * y;
+}
+
+/**
+ * A convex plan (x, y) standing between two PLANES — `extrude` with caps that
+ * may slope: a bonnet falling toward the nose, a beltline rising toward the
+ * tail, a rail lying on a roof that is not level.
+ *
+ * Still convex, and every face still flat: each wall is a vertical quad, which
+ * is planar whatever the two heights at its ends, and each cap lies on its own
+ * plane; the solid is the plan's prism cut by two half-spaces. The one thing
+ * the caller owes is that the top stays above the bottom over the whole plan.
+ *
+ * `open(a, b)` names a wall that is not built — one buried against the block
+ * stacked beside it, for the reason `ExtrudeRoles` gives for a buried cap.
+ */
+export function prism(
+  id: string,
+  plan: readonly (readonly [number, number])[],
+  bottom: ZPlane,
+  top: ZPlane,
+  roles: ExtrudeRoles,
+  options: {
+    outline?: boolean;
+    open?: (a: readonly [number, number], b: readonly [number, number]) => boolean;
+  } = {},
+): Part {
   const faces: Face[] = [];
   const n = plan.length;
+  const low = (x: number, y: number): Vec3 => [x, y, heightOn(bottom, x, y)];
+  const high = (x: number, y: number): Vec3 => [x, y, heightOn(top, x, y)];
   for (let i = 0; i < n; i++) {
-    const [ax, ay] = plan[i];
-    const [bx, by] = plan[(i + 1) % n];
-    faces.push({
-      role: roles.side,
-      verts: [
-        [ax, ay, z0],
-        [bx, by, z0],
-        [bx, by, z1],
-        [ax, ay, z1],
-      ],
-    });
+    const a = plan[i];
+    const b = plan[(i + 1) % n];
+    if (options.open?.(a, b)) continue;
+    faces.push({ role: roles.side, verts: [low(a[0], a[1]), low(b[0], b[1]), high(b[0], b[1]), high(a[0], a[1])] });
   }
-  if (roles.top !== null) faces.push({ role: roles.top, verts: plan.map(([x, y]) => [x, y, z1] as Vec3) });
-  if (roles.bottom !== null) faces.push({ role: roles.bottom, verts: plan.map(([x, y]) => [x, y, z0] as Vec3) });
-  return solid(id, faces, outline);
+  if (roles.top !== null) faces.push({ role: roles.top, verts: plan.map(([x, y]) => high(x, y)) });
+  if (roles.bottom !== null) faces.push({ role: roles.bottom, verts: plan.map(([x, y]) => low(x, y)) });
+  return solid(id, faces, options.outline ?? true);
 }
 
 /**

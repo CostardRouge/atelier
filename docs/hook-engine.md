@@ -558,6 +558,24 @@ renderer or either export moved.
   `car-model.test.ts`; his placement is the authority, the geometry an
   approximation of it.
 
+### A second car — the Kadjar (2026-09-28)
+
+- **`kadjar-model.ts`** is the second `*-model.ts` over `mesh3d.ts`: a Renault
+  Kadjar of the facelift, navy with two roof bars by default. It changed
+  nothing in the drive: the registry line gained `short` and `palette` (each
+  model paints its own roles; `drive-paint.ts` and the turntable ask the model),
+  and `mesh3d.ts` gained `prism` — `extrude` between two PLANES, so a falling
+  bonnet, a rising beltline or a rail on a sloping roof stays one flat face —
+  with `open` for walls buried against a neighbour. `extrude` is now `prism`
+  between two level planes, byte for byte.
+- **The gear is one vocabulary, each model offers its part** (`CarLine` in
+  `car-spec.ts`: the gear it shows, its colours, how it comes). A flag a model
+  does not offer is carried and ignored; `sameCarSpec`, `gearWords` and the
+  garage ask the model which flags it means. No migration: a stored Prado lacks
+  the two new flags and nothing reads them on a Prado.
+- **`render-order.test.ts` judges every registry line**, so a third car is
+  gated the day it is listed. Rules the Kadjar measured, in `roadtrip.md`.
+
 ## 14. Itinerary — an authored map (2026-09-14, rev. 2026-09-15)
 
 The variant that answers "which of these can the author compose themselves?".

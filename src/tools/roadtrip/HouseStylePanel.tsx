@@ -1,6 +1,7 @@
 import HouseStyleControls, { type HouseStyleRow } from '../../shared/ui/HouseStyleControls';
 import { presetById } from '../../shared/overlay/title-styles';
-import { CAR_COLOURS } from '../../shared/roadtrip/car-spec';
+import { colourName } from '../../shared/roadtrip/car-spec';
+import { carModel } from '../../shared/roadtrip/hooks/car-registry';
 import {
   HOUSE_STYLE_PATH,
   houseStyleFrom,
@@ -11,7 +12,7 @@ import { POST_KINDS, type TripDoc } from '../../shared/roadtrip/trip-types';
 
 /** What each block of the style will actually say. */
 function rowsOf(style: TripHouseStyle): HouseStyleRow[] {
-  const colour = CAR_COLOURS.find((c) => c.hex.toLowerCase() === style.car.color.toLowerCase());
+  const colour = colourName(style.car.color, style.car.model);
   const looks = style.grade.layers.map((layer) => layer.name);
   return [
     {
@@ -30,7 +31,7 @@ function rowsOf(style: TripHouseStyle): HouseStyleRow[] {
       ).join(' · '),
     },
     { label: 'Grade', value: looks.length ? looks.join(' + ') : 'None' },
-    { label: 'Car', value: colour?.name ?? style.car.color },
+    { label: 'Car', value: `${carModel(style.car.model).short} · ${colour === 'Custom' ? style.car.color : colour}` },
   ];
 }
 

@@ -6,12 +6,15 @@ import {
   cylinder,
   decal,
   dot,
+  extrude,
   faceNormal,
+  heightOn,
   hexToRgb,
   lighting,
   litColor,
   outward,
   paintMesh,
+  prism,
   project,
   renderOrder,
   rotateAbout,
@@ -92,6 +95,31 @@ describe('faceNormal / outward', () => {
   it('orients a decal the way it is told', () => {
     const d = decal('d', [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], 'r', [0, 0, -1]);
     expect(faceNormal(d.faces[0].verts)).toEqual([0, 0, -1]);
+  });
+  it('stands a prism between two sloping planes, every face flat and facing out', () => {
+    const plan: [number, number][] = [[0, 0], [2, 0], [2, 3], [0, 3]];
+    const bottom = { z: 0.5, dy: 0.1 };
+    const top = { z: 2, dx: -0.2, dy: -0.3 };
+    const p = prism('p', plan, bottom, top, { side: 's', top: 't', bottom: 'b' });
+    expect(p.faces).toHaveLength(6);
+    for (const face of p.faces) {
+      const n = faceNormal(face.verts);
+      expect(dot(n, sub(centroid(face.verts), p.centre))).toBeGreaterThan(0);
+      const d = dot(n, face.verts[0]);
+      for (const v of face.verts) expect(Math.abs(dot(n, v) - d)).toBeLessThan(1e-9);
+    }
+    const cap = p.faces.find((f) => f.role === 't')!;
+    for (const [x, y, z] of cap.verts) expect(z).toBeCloseTo(heightOn(top, x, y), 12);
+  });
+
+  it('leaves out the walls it is told are buried, and is `extrude` when both planes are level', () => {
+    const plan: [number, number][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    const open = prism('o', plan, { z: 0 }, { z: 1 }, { side: 's', top: 't', bottom: null }, { open: (a, b) => a[0] === 1 && b[0] === 1 });
+    expect(open.faces).toHaveLength(4);
+    expect(open.faces.some((f) => f.verts.every((v) => v[0] === 1))).toBe(false);
+    expect(prism('e', plan, { z: 0.2 }, { z: 0.9 }, { side: 's', top: 't', bottom: 'b' })).toEqual(
+      extrude('e', plan, 0.2, 0.9, { side: 's', top: 't', bottom: 'b' }),
+    );
   });
 });
 

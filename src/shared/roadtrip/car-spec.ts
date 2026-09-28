@@ -6,19 +6,27 @@
  * car per journey, every piece of it drives the same one, and it travels in
  * the `.roadtrip.json` backup. A spec names a MODEL from the registry
  * (`hooks/car-registry.ts`), a body colour, a FINISH (factory gloss, or a
- * matte textured coating like Raptor) and the GEAR fitted — each a toggle,
- * modelled from the maintainer's own Prado.
+ * matte textured coating like Raptor) and the GEAR fitted — each a toggle.
+ *
+ * The gear is ONE vocabulary shared by every model, and each model offers its
+ * own part of it (`CarLine.gear`): the Prado's bull bar and basket, the
+ * Kadjar's rails and roof bars, the mirrors both have. A flag a model does not
+ * offer is carried and ignored, so switching models never has to rewrite the
+ * other's; every reader asks the model which flags it means.
  *
  * Pure and DOM-free: the reader never throws, a stored value is never
  * trusted, and a partial spec keeps what it says.
  */
 
-export const CAR_MODEL_IDS = ['prado-j120'] as const;
+export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2'] as const;
 export type CarModelId = (typeof CAR_MODEL_IDS)[number];
+
+/** The car a trip drives when nothing says otherwise — the maintainer's own. */
+export const DEFAULT_MODEL: CarModelId = 'prado-j120';
 
 export type CarFinish = 'gloss' | 'matte';
 
-/** Everything that can be bolted on, each a toggle. */
+/** Everything that can be bolted on, each a toggle; each model offers a part of it. */
 export interface CarGear {
   /** The tubular bar around the headlights. */
   bullBar: boolean;
@@ -40,6 +48,10 @@ export interface CarGear {
   /** The spare wheel on the tailgate. */
   spare: boolean;
   mirrors: boolean;
+  /** The two rails along the roof's edges, as the factory fits them. */
+  roofRails: boolean;
+  /** Two bars ACROSS the roof — on the rails when they are fitted, on feet of their own otherwise. */
+  roofBars: boolean;
 }
 
 export const GEAR_KEYS: readonly (keyof CarGear)[] = [
@@ -54,6 +66,8 @@ export const GEAR_KEYS: readonly (keyof CarGear)[] = [
   'visors',
   'spare',
   'mirrors',
+  'roofRails',
+  'roofBars',
 ];
 
 /** What each toggle is called on screen, in the garage's order. */
@@ -69,6 +83,8 @@ export const GEAR_LABELS: Readonly<Record<keyof CarGear, string>> = {
   visors: 'window visors',
   spare: 'spare wheel',
   mirrors: 'door mirrors',
+  roofRails: 'roof rails',
+  roofBars: 'roof bars',
 };
 
 export interface CarSpec {
@@ -85,45 +101,105 @@ export interface CarColour {
   hex: string;
   /** A preset that carries its own finish (a coating) sets it when picked. */
   finish?: CarFinish;
-  /** A word about it, shown on hover. */
+  /** A word about it, shown after its name — written to follow a dash. */
   note?: string;
 }
 
-/**
- * Named colours: the J120's factory range as it is remembered, by name
- * rather than by paint code (none is claimed), plus the maintainer's own two —
- * the dark green the car wore first and the Raptor black it wears now.
- */
-export const CAR_COLOURS: readonly CarColour[] = [
-  { id: 'ebony', name: 'Ebony black', hex: '#141416' },
-  { id: 'glacier', name: 'Glacier white', hex: '#f2f1ea' },
-  { id: 'silver', name: 'Silver pearl', hex: '#c3c5c8' },
-  { id: 'graphite', name: 'Graphite', hex: '#5a5c60' },
-  { id: 'champagne', name: 'Champagne', hex: '#b9aa8b' },
-  { id: 'dark-blue', name: 'Dark blue', hex: '#1f2b46' },
-  { id: 'merlot', name: 'Merlot', hex: '#5c1b21' },
-  { id: 'dark-green', name: 'Dark green', hex: '#1f3b2f', note: 'The car before Raptor' },
-  { id: 'raptor-black', name: 'Raptor black', hex: '#232326', finish: 'matte', note: 'A matte, textured coating' },
+/** What a model offers, and how it comes. */
+export interface CarLine {
+  /** The gear the garage offers on it, in the garage's order. */
+  gear: readonly (keyof CarGear)[];
+  /** Its named colours. */
+  colours: readonly CarColour[];
+  /** The car as it comes: its colour, its finish and the gear fitted. */
+  color: string;
+  finish: CarFinish;
+  fitted: readonly (keyof CarGear)[];
+  /** One sentence naming that car, for the verb that goes back to it. */
+  asItComes: string;
+}
+
+const PRADO_GEAR: readonly (keyof CarGear)[] = [
+  'bullBar',
+  'spotLights',
+  'rack',
+  'solar',
+  'box',
+  'jerryCans',
+  'awning',
+  'mudFlaps',
+  'visors',
+  'spare',
+  'mirrors',
 ];
 
-/** Every piece of gear on: the car as it was photographed. */
-export const DEFAULT_GEAR: Readonly<CarGear> = {
-  bullBar: true,
-  spotLights: true,
-  rack: true,
-  solar: true,
-  box: true,
-  jerryCans: true,
-  awning: true,
-  mudFlaps: true,
-  visors: true,
-  spare: true,
-  mirrors: true,
+/**
+ * Every model the document can name. The colours are each car's factory range
+ * as it is remembered, by name rather than by paint code (none is claimed),
+ * plus the maintainer's own: the Prado's dark green and Raptor black, the
+ * Kadjar's navy — which is his word for it, not Renault's.
+ */
+export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
+  'prado-j120': {
+    gear: PRADO_GEAR,
+    colours: [
+      { id: 'ebony', name: 'Ebony black', hex: '#141416' },
+      { id: 'glacier', name: 'Glacier white', hex: '#f2f1ea' },
+      { id: 'silver', name: 'Silver pearl', hex: '#c3c5c8' },
+      { id: 'graphite', name: 'Graphite', hex: '#5a5c60' },
+      { id: 'champagne', name: 'Champagne', hex: '#b9aa8b' },
+      { id: 'dark-blue', name: 'Dark blue', hex: '#1f2b46' },
+      { id: 'merlot', name: 'Merlot', hex: '#5c1b21' },
+      { id: 'dark-green', name: 'Dark green', hex: '#1f3b2f', note: 'the car before Raptor' },
+      { id: 'raptor-black', name: 'Raptor black', hex: '#232326', finish: 'matte', note: 'a matte, textured coating' },
+    ],
+    color: '#232326',
+    finish: 'matte',
+    fitted: PRADO_GEAR,
+    asItComes: 'The Prado as it was photographed: Raptor black, matte, everything fitted',
+  },
+  'kadjar-ph2': {
+    gear: ['roofRails', 'roofBars', 'mirrors'],
+    colours: [
+      { id: 'navy', name: 'Navy blue', hex: '#1d2f5e', note: 'bleu marine' },
+      { id: 'iron-blue', name: 'Iron blue', hex: '#3e4c5e', note: 'Bleu Iron' },
+      { id: 'glacier', name: 'Glacier white', hex: '#eeeeea', note: 'Blanc Glacier' },
+      { id: 'pearl', name: 'Pearl white', hex: '#e9e5da', note: 'Blanc Nacré' },
+      { id: 'platinum', name: 'Platinum grey', hex: '#b2b5b8', note: 'Gris Platine' },
+      { id: 'titanium', name: 'Titanium grey', hex: '#696c70', note: 'Gris Titanium' },
+      { id: 'star-black', name: 'Star black', hex: '#16171a', note: 'Noir Étoilé' },
+      { id: 'flame-red', name: 'Flame red', hex: '#a3161d', note: 'Rouge Flamme' },
+    ],
+    color: '#1d2f5e',
+    finish: 'gloss',
+    fitted: ['roofBars', 'mirrors'],
+    asItComes: 'The Kadjar in navy blue, gloss, with its two roof bars',
+  },
 };
 
-/** The maintainer's car: the Prado in Raptor black, fully geared. */
-export function defaultCarSpec(): CarSpec {
-  return { model: 'prado-j120', color: '#232326', finish: 'matte', gear: { ...DEFAULT_GEAR } };
+/** What a model offers — the Prado's for an id this build does not know. */
+export function carLine(model: string): CarLine {
+  return (CAR_LINES as Record<string, CarLine | undefined>)[model] ?? CAR_LINES[DEFAULT_MODEL];
+}
+
+function isModelId(value: unknown): value is CarModelId {
+  return (CAR_MODEL_IDS as readonly unknown[]).includes(value);
+}
+
+/** Every flag off but the ones named. */
+function gearWith(fitted: readonly (keyof CarGear)[]): CarGear {
+  const gear = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as CarGear;
+  for (const key of fitted) gear[key] = true;
+  return gear;
+}
+
+/** The Prado's gear as it was photographed: everything it offers, on. */
+export const DEFAULT_GEAR: Readonly<CarGear> = Object.freeze(gearWith(CAR_LINES[DEFAULT_MODEL].fitted));
+
+/** A model as it comes — by default the maintainer's car, the Prado in Raptor black, fully geared. */
+export function defaultCarSpec(model: CarModelId = DEFAULT_MODEL): CarSpec {
+  const line = CAR_LINES[model];
+  return { model, color: line.color, finish: line.finish, gear: gearWith(line.fitted) };
 }
 
 export const DEFAULT_CAR: Readonly<CarSpec> = Object.freeze(defaultCarSpec());
@@ -131,17 +207,16 @@ export const DEFAULT_CAR: Readonly<CarSpec> = Object.freeze(defaultCarSpec());
 const HEX = /^#[0-9a-f]{6}$/i;
 
 /**
- * A stored spec, read defensively: an unknown model, an unreadable colour or
- * finish, a gear flag that is not a boolean, each lands on the default —
- * never a throw, and a partial spec keeps what it says.
+ * A stored spec, read defensively: an unknown model lands on the default car,
+ * and an unreadable colour or finish, or a gear flag that is not a boolean,
+ * on what ITS model comes with — never a throw, and a partial spec keeps what
+ * it says.
  */
 export function readCarSpec(raw: unknown): CarSpec {
-  const fallback = defaultCarSpec();
-  if (!raw || typeof raw !== 'object') return fallback;
+  if (!raw || typeof raw !== 'object') return defaultCarSpec();
   const r = raw as Record<string, unknown>;
-  const model = (CAR_MODEL_IDS as readonly string[]).includes(r.model as string)
-    ? (r.model as CarModelId)
-    : fallback.model;
+  const model = isModelId(r.model) ? r.model : DEFAULT_MODEL;
+  const fallback = defaultCarSpec(model);
   const color = typeof r.color === 'string' && HEX.test(r.color) ? r.color.toLowerCase() : fallback.color;
   const finish = r.finish === 'gloss' || r.finish === 'matte' ? r.finish : fallback.finish;
   const gearIn = r.gear && typeof r.gear === 'object' ? (r.gear as Record<string, unknown>) : {};
@@ -156,7 +231,8 @@ export function readCarSpec(raw: unknown): CarSpec {
 /**
  * The gear as it is actually drawn: the spot lights need the bar to sit on,
  * the roof load needs the basket to ride in. The stored flags are left as
- * they are, so turning the bar or the basket back on restores them.
+ * they are, so turning the bar or the basket back on restores them. The roof
+ * bars need nothing: without the rails they stand on feet of their own.
  */
 export function effectiveGear(gear: CarGear): CarGear {
   return {
@@ -169,30 +245,30 @@ export function effectiveGear(gear: CarGear): CarGear {
   };
 }
 
-/** Whether two specs describe the same car, flag by flag. */
+/** Whether two specs describe the same car, flag by flag — the flags its model offers. */
 export function sameCarSpec(a: CarSpec, b: CarSpec): boolean {
   return (
     a.model === b.model &&
     a.color.toLowerCase() === b.color.toLowerCase() &&
     a.finish === b.finish &&
-    GEAR_KEYS.every((key) => a.gear[key] === b.gear[key])
+    carLine(a.model).gear.every((key) => a.gear[key] === b.gear[key])
   );
 }
 
-/** The preset a colour is, by its hex — "Custom" for any other. */
-export function colourName(color: string): string {
+/** The model's preset a colour is, by its hex — "Custom" for any other. */
+export function colourName(color: string, model: string): string {
   const hex = color.toLowerCase();
-  return CAR_COLOURS.find((c) => c.hex === hex)?.name ?? 'Custom';
+  return carLine(model).colours.find((c) => c.hex === hex)?.name ?? 'Custom';
 }
 
-/** The gear that is on, in the garage's order, as words. */
-export function gearWords(gear: CarGear): string[] {
+/** The gear that is on and drawn on this model, in the garage's order, as words. */
+export function gearWords(gear: CarGear, model: string): string[] {
   const shown = effectiveGear(gear);
-  return GEAR_KEYS.filter((key) => shown[key]).map((key) => GEAR_LABELS[key]);
+  return carLine(model).gear.filter((key) => shown[key]).map((key) => GEAR_LABELS[key]);
 }
 
 /** One line saying what the car is: the model, its colour and finish, its gear. */
 export function describeCar(spec: CarSpec, modelName: string): string {
-  const words = gearWords(spec.gear);
-  return `${modelName} · ${colourName(spec.color)}, ${spec.finish} · ${words.length ? words.join(', ') : 'no gear'}`;
+  const words = gearWords(spec.gear, spec.model);
+  return `${modelName} · ${colourName(spec.color, spec.model)}, ${spec.finish} · ${words.length ? words.join(', ') : 'no gear'}`;
 }

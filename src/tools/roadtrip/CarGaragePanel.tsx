@@ -1,15 +1,16 @@
-import type { ReactNode } from 'react';
+import { useRef, type ReactNode } from 'react';
 import {
-  CAR_COLOURS,
   GEAR_LABELS,
+  carLine,
   defaultCarSpec,
   describeCar,
   sameCarSpec,
   type CarFinish,
   type CarGear,
+  type CarModelId,
   type CarSpec,
 } from '../../shared/roadtrip/car-spec';
-import { CAR_MODELS } from '../../shared/roadtrip/hooks/car-registry';
+import { CAR_MODELS, carModel } from '../../shared/roadtrip/hooks/car-registry';
 import { FieldRow, SelectField, SwitchRow, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import CarTurntable from './CarTurntable';
@@ -25,7 +26,11 @@ const FINISHES: Array<{ id: CarFinish; label: string; hint: string }> = [
   { id: 'matte', label: 'Matte', hint: 'A textured coating: no highlight, a broad sheen instead.' },
 ];
 
-/** The gear, grouped where it sits on the car; a row that needs another is listed under it. */
+/**
+ * The gear, grouped where it sits on the car; a row that needs another is
+ * listed under it. Every model's rows are here and a model shows the ones it
+ * offers (`CarLine.gear`), so a group it has nothing in is not drawn.
+ */
 const GEAR_GROUPS: Array<{
   title: string;
   rows: Array<{ key: keyof CarGear; needs?: keyof CarGear; hint?: string }>;
@@ -45,6 +50,8 @@ const GEAR_GROUPS: Array<{
       { key: 'box', needs: 'rack', hint: 'The aluminium box, front right.' },
       { key: 'jerryCans', needs: 'rack', hint: 'Three across the rear: water, petrol, water.' },
       { key: 'awning', needs: 'rack', hint: 'Along the basket’s left side.' },
+      { key: 'roofRails', hint: 'Along the roof’s two edges, as the factory fits them.' },
+      { key: 'roofBars', hint: 'Two bars across the roof — on the rails when they are fitted, on their own feet otherwise.' },
     ],
   },
   {
@@ -83,15 +90,18 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * opener opens from the piece, where the car is looked at while the map is
  * composed. One panel, so the two can never drift.
  *
- * The model is a select over the registry (one car today; a second is a
- * registry line). The colour is a row of named swatches — the J120's factory
- * range and the maintainer's own two — plus a custom well; a preset that is a
- * COATING (Raptor) sets the finish with it, and the finish stays a choice of
- * its own after that. The gear is switches grouped by where it sits, and a
- * fitting that needs another (the spot lights the bar, the roof load the
- * basket) is listed only while that one is on: its flag stays stored, so
- * turning the basket back on brings the load back with it — `effectiveGear`
- * is what the drawing reads.
+ * The model is a select over the registry, and picking one brings that car
+ * AS IT COMES (`defaultCarSpec(model)`): a Kadjar in the Prado's Raptor black
+ * with a bull-bar flag it cannot draw is nobody's car. What was dressed on the
+ * model left behind is remembered for as long as the panel is open, so going
+ * back to it gives it back. The colour is a row of the MODEL's named swatches
+ * — its factory range and the maintainer's own — plus a custom well; a preset
+ * that is a COATING (Raptor) sets the finish with it, and the finish stays a
+ * choice of its own after that. The gear is the model's switches grouped by
+ * where they sit, and a fitting that needs another (the spot lights the bar,
+ * the roof load the basket) is listed only while that one is on: its flag
+ * stays stored, so turning the basket back on brings the load back with it —
+ * `effectiveGear` is what the drawing reads.
  *
  * The panel lays itself out by its OWN width (a container query), because its
  * two homes give it different room: past 44rem the car sits in one column
@@ -101,12 +111,24 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * one); narrower, it stacks and the host scrolls, as before.
  */
 export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps) {
-  const model = CAR_MODELS.find((m) => m.id === value.model) ?? CAR_MODELS[0];
-  const preset = CAR_COLOURS.find((c) => c.hex === value.color.toLowerCase());
-  const isDefault = sameCarSpec(value, defaultCarSpec());
+  const model = carModel(value.model);
+  const line = carLine(value.model);
+  const preset = line.colours.find((c) => c.hex === value.color.toLowerCase());
+  const isDefault = sameCarSpec(value, defaultCarSpec(value.model));
+  // What each model was dressed as when it was left, for the length of a visit.
+  const left = useRef(new Map<CarModelId, CarSpec>());
 
   const patch = (p: Partial<CarSpec>) => onChange({ ...value, ...p });
   const patchGear = (p: Partial<CarGear>) => onChange({ ...value, gear: { ...value.gear, ...p } });
+  const switchModel = (id: CarModelId) => {
+    if (id === value.model) return;
+    left.current.set(value.model, value);
+    onChange(left.current.get(id) ?? defaultCarSpec(id));
+  };
+  const groups = GEAR_GROUPS.map((group) => ({
+    ...group,
+    rows: group.rows.filter((row) => line.gear.includes(row.key) && (!row.needs || value.gear[row.needs])),
+  })).filter((group) => group.rows.length > 0);
 
   return (
     <div className="@container h-full">
@@ -124,7 +146,7 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
             <SelectField
               value={value.model}
               options={CAR_MODELS.map((m) => ({ id: m.id, label: m.name }))}
-              onChange={(id) => patch({ model: id })}
+              onChange={switchModel}
               label="Car model"
             />
           </FieldRow>
@@ -133,13 +155,11 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
             label="Colour"
             align="start"
             hint={
-              preset
-                ? `${preset.name}${preset.note ? ` — ${preset.note.charAt(0).toLowerCase()}${preset.note.slice(1)}` : ''}`
-                : 'A colour of your own.'
+              preset ? `${preset.name}${preset.note ? ` — ${preset.note}` : ''}` : 'A colour of your own.'
             }
           >
             <div className="flex flex-wrap items-center gap-1.5">
-              {CAR_COLOURS.map((c) => {
+              {line.colours.map((c) => {
                 const on = c.hex === value.color.toLowerCase();
                 return (
                   <button
@@ -176,31 +196,29 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
             />
           </FieldRow>
 
-          {GEAR_GROUPS.map((group) => (
+          {groups.map((group) => (
             <Group key={group.title} title={group.title}>
-              {group.rows
-                .filter((row) => !row.needs || value.gear[row.needs])
-                .map((row) => (
-                  <SwitchRow
-                    key={row.key}
-                    label={capitalise(GEAR_LABELS[row.key])}
-                    checked={value.gear[row.key]}
-                    onChange={(on) => patchGear({ [row.key]: on })}
-                    hint={row.hint}
-                  />
-                ))}
+              {group.rows.map((row) => (
+                <SwitchRow
+                  key={row.key}
+                  label={capitalise(GEAR_LABELS[row.key])}
+                  checked={value.gear[row.key]}
+                  onChange={(on) => patchGear({ [row.key]: on })}
+                  hint={row.hint}
+                />
+              ))}
             </Group>
           ))}
 
           <div className="pt-3 border-t border-line">
             <button
               type="button"
-              onClick={() => onChange(defaultCarSpec())}
+              onClick={() => onChange(defaultCarSpec(value.model))}
               disabled={isDefault}
-              title="The Prado as it was photographed: Raptor black, matte, everything fitted"
+              title={line.asItComes}
               className={`${linkButton} disabled:opacity-45 disabled:cursor-default disabled:no-underline`}
             >
-              Back to the default car
+              Back to the default {model.short}
             </button>
           </div>
         </div>

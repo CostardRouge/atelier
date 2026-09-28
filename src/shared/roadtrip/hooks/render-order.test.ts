@@ -21,7 +21,9 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { buildCar } from './car-model';
+import { GEAR_KEYS, type CarGear } from '../car-spec';
+import { CAR_MODELS } from './car-registry';
+import { buildKadjar } from './kadjar-model';
 import {
   cross,
   dot,
@@ -61,7 +63,7 @@ const EPSILON = 1e-3;
  * FARTHEST corner, so the bonnet sorts a little behind where its front half
  * really is. Measured over the sweep the worst part keeps 54%, against 36%
  * before the overlapping pairs were settled exactly, 20% before the hull was
- * cut, and 0% under the ordering before that.
+ * cut, and 0% under the ordering before that. The Kadjar's worst keeps 67%.
  */
 const MIN_KEPT = 0.45;
 
@@ -74,7 +76,10 @@ const MIN_CLAIM = 40;
  *
  * Measured worst pose: 1.9%, from 7.3% before the overlapping pairs were
  * settled exactly, 13.5% while the body was one box 4.6 m long with the
- * wheels modelled inside it, and 37% under the ordering before that.
+ * wheels modelled inside it, and 37% under the ordering before that. The
+ * Kadjar's worst is 0.8%, once its hull was cut at the bonnet's edges, the
+ * wings' ends and the doors: uncut, a long panel over each wheel took it to
+ * 2.9%, a hair under this line.
  */
 const TOLERANCE = 0.03;
 
@@ -309,14 +314,40 @@ function mispainted(parts: readonly Part[], pose: Pose): Verdict {
   };
 }
 
-const GEARED = buildCar();
+/** Every flag on: each model draws the part of it it offers. */
+const ALL_GEAR = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as CarGear;
+
+/**
+ * Every car in the registry fully geared — a car added there is judged here
+ * without asking — and the Kadjar as it comes, whose roof bars stand on feet
+ * of their own rather than on the rails. `solid` names the surfaces each must
+ * keep whole: the ones a report once named, or the ones a car is chosen for.
+ */
+const CARS = [
+  ...CAR_MODELS.map((model) => ({
+    name: `the ${model.short}, fully geared`,
+    parts: model.build(ALL_GEAR),
+    solid:
+      model.id === 'kadjar-ph2'
+        ? (id: string) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-') || /^roofbar-(fore|aft)$/.test(id)
+        : (id: string) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-'),
+  })),
+  {
+    name: 'the Kadjar as it comes',
+    parts: buildKadjar(),
+    solid: (id: string) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-') || /^roofbar-(fore|aft)$/.test(id),
+  },
+];
+
+/** A lamp wrapping a corner, whatever the car calls its facets. */
+const WRAP = /-wrap\d?(-|$)/;
 
 /** Twelve headings around the turntable; the shallow end of the tilt range,
  *  the garage's own default, and a near-overhead map view. */
 const HEADINGS = Array.from({ length: 12 }, (_, i) => i * 30);
 const TILTS = [35, 52, 80];
 
-describe('the car is painted in the right order', () => {
+describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, solid }) => {
   /**
    * The gate. Every part the camera can see must actually be SEEN: where a
    * part is the nearest thing to the eye, it has to be what the paint left on
@@ -362,24 +393,15 @@ describe('the car is painted in the right order', () => {
     expect(lines, lines.join('\n')).toEqual([]);
   });
 
-  // The two failures measured on the part-centre ordering this replaced. They
-  // are pinned so a future "simplification" back to a per-part sort fails here
-  // with the angle that proves it, rather than in someone's eyes weeks later.
-  it('keeps the cabin over the body’s full-length top face, nose toward the camera', () => {
-    for (const heading of [150, 180, 210]) {
-      const wrong = mispainted(GEARED, poseAt(heading, 35)).wrong.filter(
-        (w) => w.painted === 'body' && w.nearest === 'cabin',
-      );
-      expect(wrong.map((w) => `heading ${heading}°: ${w.painted} over ${w.nearest} (${w.samples})`)).toEqual([]);
-    }
-  });
-
+  // The failure measured on the part-centre ordering this replaced, pinned so
+  // a future "simplification" back to a per-part sort fails here with the
+  // angle that proves it, rather than in someone's eyes weeks later.
   it('keeps the wrap-around corner lights over the body that carries them', () => {
     const lines: string[] = [];
     for (const tilt of [35, 52, 58, 80]) {
       for (let heading = 40; heading <= 75; heading += 5) {
         for (const w of mispainted(GEARED, poseAt(heading, tilt)).wrong) {
-          if (w.nearest.endsWith('-wrap')) {
+          if (WRAP.test(w.nearest)) {
             lines.push(`heading ${heading}° tilt ${tilt}°: ${w.painted} over ${w.nearest} (${w.samples})`);
           }
         }
@@ -411,17 +433,16 @@ describe('the car is painted in the right order', () => {
 
   /**
    * The three surfaces the maintainer named, at the angles that were worst for
-   * each. They were see-through because the body was one box keyed by its far
-   * end with the wheels modelled inside it; this is what says so in numbers.
+   * each — and on the Kadjar, the roof bars it was asked for with. They were
+   * see-through because the body was one box keyed by its far end with the
+   * wheels modelled inside it; this is what says so in numbers.
    */
-  it('keeps the bonnet, the glass and the flares solid', () => {
+  it('keeps the bonnet, the glass, the flares (and the roof bars) solid', () => {
     const thin: string[] = [];
     for (const tilt of TILTS) {
       for (const heading of HEADINGS) {
         for (const part of mispainted(GEARED, poseAt(heading, tilt)).parts) {
-          const named =
-            part.id === 'body-bonnet' || part.id === 'cabin' || part.id.startsWith('flare-');
-          if (!named || part.claimed < MIN_CLAIM) continue;
+          if (!solid(part.id) || part.claimed < MIN_CLAIM) continue;
           const kept = part.kept / part.claimed;
           if (kept < 0.7) {
             thin.push(
@@ -447,7 +468,7 @@ describe('the car is painted in the right order', () => {
  * `mesh3d.ts`; here it is a test, so a new fitting that is a hoop with a hole
  * in it fails the build instead of the picture.
  */
-describe('every part of the car is convex', () => {
+describe.each(CARS)('every part of $name is convex', ({ parts: GEARED }) => {
   it('puts every vertex behind every one of its own faces', () => {
     const bad = new Set<string>();
     for (const part of GEARED) {
