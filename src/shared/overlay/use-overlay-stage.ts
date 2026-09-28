@@ -26,6 +26,7 @@ import {
 } from './draw-overlays';
 import { drawGuides } from './draw-guides';
 import { stageFrameSize } from './stage-size';
+import { stageBudget } from '../media/still-decode';
 import { snap, snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
@@ -269,7 +270,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     // and a drawing buffer of the same size — which is the whole of an
     // iPhone's budget. Everything below reads the CANVAS's size, so the
     // overlays, the hit test and the wipe all follow it.
-    const stage = stageFrameSize(frame.w, frame.h);
+    const stage = stageFrameSize(frame.w, frame.h, stageBudget());
     if (canvas.width !== stage.w) canvas.width = stage.w;
     if (canvas.height !== stage.h) canvas.height = stage.h;
     const ctx = canvas.getContext('2d');

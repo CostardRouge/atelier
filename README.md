@@ -40,9 +40,10 @@ Today it ships ten tools, converging into a few editors:
 > *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The Flight Map's **base map**: turning it on fetches map tiles from
->   OpenStreetMap, which reveals the viewed area to that tile server. The
->   flight path itself always draws locally.
+> - The **base map** under a flight path, in the Flight Map and the Composer:
+>   turning it on fetches map tiles from OpenStreetMap, which reveals the
+>   viewed area to that tile server. The flight path itself always draws
+>   locally.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
@@ -1327,12 +1328,52 @@ device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the
 loupe, which decodes the file whole on a computer, says *as close as this
-device goes* instead — for every picture, not only a RAW. A RAW is always
+device goes* instead — for every picture, not only a RAW. A big sensor is
+decoded in **tiles**: LibRaw is asked for one band of the sensor at a time,
+and pays its own buffers for that band alone, so a 36-megapixel sensor on a
+phone never grows the decoder's heap past its first 256 MB — each tile costs
+the file read again, cheap for a DNG, a moment for a compressed ARW, and
+lands bit for bit where the whole decode would put it (a computer cuts only
+past 24 megapixels). The sensor's white is white, whatever the picture
+holds: the decoder no longer scales a frame by its own brightest pixel, so a
+RAW metered before 2026-09-25 may open a touch dark under its stored
+exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed
-the tab on a zoom). A browser cannot ask a phone how much memory a tab may
-take, so the rule is coarse: iPhone, iPad and Android count as phones, and
-`localStorage['atelier.device']` (`constrained` or `roomy`) overrides it.
+the tab on a zoom). **Every photograph is decoded at the size it is used**,
+never whole and shrunk afterwards: its size is read from the file's header and
+the browser is asked for exactly the pixels a stage, a filmstrip cell or an
+export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
+phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
+in the run's summary; a computer still exports every pixel. A browser cannot
+ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
+iPad and Android count as phones, and `localStorage['atelier.device']`
+(`constrained` or `roomy`) overrides it.
+
+**HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
+itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
+libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a
+`.jxl` — served from this site like the RAW decoder and loaded only the first
+time such a file is met (about 2 MB each, nothing at page load). A picture is
+recognised by its bytes, not its name, and opens upright with its rotation
+applied, in Develop, Trips, the Studio, the Library's covers and its
+lightbox; a HEIF or JPEG XL original can deliver an export too. Two limits:
+these decoders cannot scale while they decode, so the whole picture exists
+once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
+profile (an iPhone's Display P3) is not applied, so its colours land a touch
+flatter than in Safari. TIFF is still not read.
+
+**ProRAW in JPEG XL.** An iPhone ProRAW saved with JPEG XL compression is a
+DNG the RAW decoder cannot read, so Atelier develops it itself: its sensor
+data is already demosaiced, its tiles are decoded by the JPEG XL decoder on
+several threads at once, and the camera's own colour matrix and white balance
+are applied exactly as the RAW decoder would — measured against it on a twin
+file, the two agree to a fraction of a code. A zoomed-in view decodes only
+the tiles under it. Two honest limits: Apple's own local tone map is not
+applied, so a ProRAW looks flatter here than in Photos (the develop is where
+you give it its contrast), and it has not yet been tried on a real iPhone
+file.
 
 **White balance in kelvin.** On the sensor, the Adjust tab starts with
 **White balance**: Lightroom's presets (*As shot*, *Daylight*, *Cloudy*,
@@ -1811,7 +1852,7 @@ the Telemetry panels use, so it stays frame-accurate.
 The path always draws **offline**: MapLibre renders the track line on a plain
 backdrop with no tiles, so nothing leaves the machine. A **"Load map
 background"** toggle adds an OpenStreetMap raster layer on demand — one of the
-suite's two optional network requests (the other is the place search in Trips),
+suite's optional network requests (see "The network exceptions" above),
 surfaced explicitly because it reveals the viewed area to the tile server.
 
 MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
@@ -1830,6 +1871,10 @@ anywhere; then **play/pause** to preview the whole assembly in real time.
 
 The map can **fit the whole track** or **follow the aircraft** (centred, panning
 with it as the clip plays), with a zoom-offset slider on top of the auto-fit.
+Like the Flight Map's, it draws **offline** on a plain backdrop until you press
+**"Load map background"**, which adds the same OpenStreetMap tiles (revealing
+the viewed area to the tile server); an export burns in whichever of the two
+the preview shows.
 The readout is fully configurable — which fields show, label prefixes, text and
 background colour/opacity, corner radius, font and size — and can be toggled off.
 

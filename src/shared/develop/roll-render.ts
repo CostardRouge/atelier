@@ -30,7 +30,8 @@ import { needsSubjectRasters, resolveSubjectRasters } from './subject-rasters';
 import { segmentationView } from './segment-view';
 import type { BrushRaster } from '../render/brush-raster';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
-import { decodePhoto, decodePhotoSource, fitPhotoForRender } from '../media/photo-frame';
+import { fitPhotoForRender } from '../media/photo-frame';
+import { decodeStill, stillSize } from '../media/still-decode';
 import { decodeRaw } from '../raw/raw-decoder';
 import { rawDecodeCap, rawDecodeEdge } from '../raw/raw-budget';
 import { deviceClass } from '../lib/device-class';
@@ -44,7 +45,7 @@ import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
 import { decodeEdgeFor, longEdgeFor, type ExportTarget } from './export-targets';
-import { OUTPUT_SHARPEN_AMOUNT, SHARPEN_BAND_ROWS, sharpenRows } from './output-sharpen';
+import { OUTPUT_SHARPEN_AMOUNT, sharpenBands } from './output-sharpen';
 import { watermarkLayout, type Watermark } from './watermark';
 import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
@@ -168,9 +169,9 @@ export interface RollRendered {
    */
   gradedAt: PictureSize;
   /**
-   * On the RAW path: the sensor's own pixels, and which limit the decode ran
-   * into when `source` is smaller than them — the GPU's edge cap, or a
-   * phone's own ceiling (`raw-budget.ts`). Null for a render, and for a RAW
+   * The file's own pixels — the sensor's on the RAW path — and which limit the
+   * decode ran into when `source` is smaller than them: the GPU's edge cap,
+   * or a phone's own ceiling (`raw-budget.ts`). Null when the picture was
    * decoded to what was asked.
    */
   sensor: PictureSize | null;
@@ -198,7 +199,7 @@ async function segmentFor(
 export interface MeasuredPicture extends PictureSize {
   /**
    * True when what was measured is the JPEG the camera wrote inside a RAW
-   * rather than the file's own pixels — `decodePhotoSource`'s fallback, which
+   * rather than the file's own pixels — `decodeStill`'s answer for a RAW, which
    * is the ONLY thing a browser can draw of a DNG. A delivery plan that says
    * `File 8064 px` over a 960 px render would be lying about the one number
    * the plan is for.
@@ -207,30 +208,32 @@ export interface MeasuredPicture extends PictureSize {
 }
 
 /**
- * The picture's own pixel size, decoded and closed; null when the browser
- * cannot read it. Decoded UPRIGHT, exactly as `renderRollPicture` will decode
- * it: the delivery plan is drawn from this size, and a portrait measured
- * sideways would plan a crop the render then cuts from the other axis.
- *
- * Through `decodePhotoSource`, so a RAW is measured at all (2026-09-20): a
- * plain `createImageBitmap` refuses a DNG, which left the *Delivers* row
- * saying `—` for every RAW on a disk while the run happily delivered its
- * embedded render.
+ * The picture's own pixel size, read from its HEADER (`stillSize`) — never a
+ * decode: it used to decode the whole picture to read two numbers, once per
+ * open picture for the *Delivers* row and once more per picture of an export,
+ * right before the render decoded it again. Upright, exactly as
+ * `renderRollPicture` will decode it: the delivery plan is drawn from this
+ * size, and a portrait measured sideways would plan a crop the render then
+ * cuts from the other axis. A RAW is measured by the render inside it, the
+ * only thing a browser draws of a DNG. Null when nothing reads it.
  */
 export async function measurePicture(file: File): Promise<MeasuredPicture | null> {
-  try {
-    const { bitmap, viaRawPreview } = await decodePhotoSource(file);
-    const size = { width: bitmap.width, height: bitmap.height, viaRawPreview };
-    bitmap.close();
-    return size;
-  } catch {
-    return null;
-  }
+  const size = await stillSize(file);
+  return size ? { width: size.width, height: size.height, viaRawPreview: size.viaRawPreview } : null;
 }
 
 export async function renderRollPicture(file: File, opts: RollRenderOptions): Promise<RollRendered> {
   if (opts.raw) return renderFromRaw(opts.raw, opts);
-  const bitmap = await decodePhoto(file);
+  // Decoded at what this device delivers from (`exportEdge`'s arithmetic): the GPU's cap on
+  // a computer — the file whole, as before — and on a phone the ceiling a RAW
+  // already obeys, since a 48-megapixel JPEG graded whole is ~1.6 GB there. A
+  // picture decoded under its own pixels says so in the run, like a RAW.
+  const klass = deviceClass();
+  const gpuMax = maxRenderSize();
+  const { bitmap, natural } = await decodeStill(file, { maxEdge: rawDecodeEdge('export', klass, gpuMax) });
+  const naturalEdge = Math.max(natural.width, natural.height);
+  const shrunk = naturalEdge > Math.max(bitmap.width, bitmap.height);
+  const capped = shrunk ? rawDecodeCap(naturalEdge, 'export', klass, gpuMax) : null;
   try {
     const source = { width: bitmap.width, height: bitmap.height };
     // The warps run at SOURCE density, with the look, before `drawFramed` cuts
@@ -275,7 +278,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
       const darker = darkGrader && fit ? copyOf(darkGrader.render(fit.image)) : null;
-      return { ...(await deliver(graded, source, gradedAt, opts, darker)), subjects };
+      return { ...(await deliver(graded, source, gradedAt, opts, darker)), subjects, ...(capped ? { sensor: natural, capped } : {}) };
     } finally {
       grader?.dispose();
       darkGrader?.dispose();
@@ -503,18 +506,18 @@ function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, text
 }
 
 /**
- * The output sharpening, in bands of rows read with one row either side —
- * the same pixels as the whole canvas done at once, without a second copy of
- * a 60-megapixel file in memory.
+ * The output sharpening, in bands of rows (`sharpenBands`) — the same pixels
+ * as the whole canvas done at once, without a second copy of a 60-megapixel
+ * file in memory.
  */
 function sharpenCanvas(ctx: CanvasRenderingContext2D, w: number, h: number, amount: number): void {
-  if (amount <= 0) return;
-  for (let y0 = 0; y0 < h; y0 += SHARPEN_BAND_ROWS) {
-    const y1 = Math.min(h, y0 + SHARPEN_BAND_ROWS);
-    const top = Math.max(0, y0 - 1);
-    const bottom = Math.min(h, y1 + 1);
-    const band = ctx.getImageData(0, top, w, bottom - top);
-    const done = sharpenRows(band.data, w, bottom - top, y0 - top, y1 - top, amount);
-    ctx.putImageData(new ImageData(done, w, y1 - y0), 0, y0);
-  }
+  sharpenBands(
+    {
+      read: (top, rows) => ctx.getImageData(0, top, w, rows).data,
+      write: (rows, top) => ctx.putImageData(new ImageData(rows, w), 0, top),
+    },
+    w,
+    h,
+    amount,
+  );
 }

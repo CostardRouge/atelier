@@ -15,7 +15,7 @@ import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer'
 import { textureOf, type FilmStockId } from '../film/stocks';
 import type { CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
-import { isPackLayer, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
+import { writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
 import {
   MAX_LAYER_INTENSITY,
   composeLutStack,
@@ -25,6 +25,7 @@ import {
 } from './lut-stack';
 import { missingLookReason, packLookName, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut, restoreLayers } from './restore-grade';
+import { savedLayers } from './saved-grade';
 import { uploadLookIntoVault } from './upload-pack';
 import type { OutputTransform } from './transfer';
 import type { Interpolation } from './interpolate';
@@ -423,21 +424,7 @@ export function useLutStack(): LutStack {
     [],
   );
 
-  const toSaved = useCallback(
-    (): SavedLutLayer[] =>
-      layers.map((l) => ({
-        id: l.id,
-        source: l.source,
-        name: l.name,
-        customText:
-          l.source === 'custom' || isFilmLayer(l) || isPackLayer(l)
-            ? (customText[l.id] ?? null)
-            : null,
-        intensity: l.intensity,
-        enabled: l.enabled,
-      })),
-    [layers, customText],
-  );
+  const toSaved = useCallback((): SavedLutLayer[] => savedLayers(layers, customText), [layers, customText]);
 
   return {
     layers,

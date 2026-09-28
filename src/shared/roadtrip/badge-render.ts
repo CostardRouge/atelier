@@ -10,13 +10,13 @@
  */
 
 import { isSilentTexture, type FilmTexture } from '../film/film-texture';
-import { isRawImage } from '../library/assets';
-import { extractRawPreview } from '../exif/raw-probe';
 import type { CubeLut } from '../lib/cube-parser';
 import { drawLayout, type LayoutPicture } from '../media/cell-paint';
 import { DEFAULT_FRAMING, drawFramed, type Framing } from '../media/framing';
 import { framingAt, framingOnClock, type FramingMotion, type MotionClock } from '../media/framing-motion';
-import { fitPhotoForRender, rawRenderFirst } from '../media/photo-frame';
+import { fitPhotoForRender } from '../media/photo-frame';
+import { decodeStill } from '../media/still-decode';
+import type { StillFit } from '../media/still-fit';
 import type { HalfImage } from '../render/half-image';
 import type { SavedMediaRef } from '../projects/project-types';
 import {
@@ -30,7 +30,6 @@ import {
 import type { DevelopSettings } from '../develop/develop';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
-import { MAX_STAGE_PIXELS, stageFrameSize } from '../overlay/stage-size';
 import { shadeGradient, type HookBlock, type Shade } from './shades';
 import type { ResolvedHook } from './hooks/hook-variant';
 import { seek as seekVideo } from './video-frames';
@@ -56,6 +55,13 @@ export interface BadgeSource {
    * for every 2D draw (the wipe's untouched side, the dropper, a thumbnail).
    */
   gpu?: HalfImage;
+  /**
+   * The picture's OWN upright size, when it was decoded smaller than it is
+   * (`still-decode.ts`): a stage works on a bounded copy, and the exports, the
+   * framing's headroom and the *Delivers* row still size from the file.
+   * Absent where `width`×`height` are the picture's own.
+   */
+  natural?: { width: number; height: number };
   /** Frees the decoded bitmap / detaches the video element. */
   release: () => void;
   /**
@@ -105,114 +111,32 @@ export function frameSize(aspect: number, longEdge: number): { w: number; h: num
 export async function loadBadgeSource(
   file: File,
   videoTimeSeconds = 0,
-  maxWidth?: number,
+  fit?: StillFit | null,
 ): Promise<BadgeSource> {
   if (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) {
     return loadVideoFrame(file, videoTimeSeconds);
   }
-  // A RAW: its camera's render first, never the browser's whole decode on a
-  // phone (`rawRenderFirst`, `photo-frame.ts`) — Safari demosaics a DNG
-  // natively and that is what a phone's tab died of.
-  if (isRawImage(file.name)) {
-    const raw = await rawRenderFirst(file, decodeOptions(maxWidth));
-    if (raw) {
-      return { image: raw.bitmap, width: raw.bitmap.width, height: raw.bitmap.height, release: () => raw.bitmap.close() };
-    }
-    // Neither a render nor (where allowed) the browser's decode: the refusal
-    // below, never the whole-file decode the phone was spared above.
-    throw new Error(
-      `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
-    );
-  }
+  // A still, decoded AT the size its caller works on (`still-decode.ts`): a
+  // stage's budget, a rail cell's width, an export's edge. The full-size
+  // bitmap a 48-megapixel still used to put up before being shrunk is never
+  // made. A RAW is read from its camera's render, never the browser's whole
+  // decode on a phone — Safari demosaics a DNG natively and that is what a
+  // phone's tab died of.
   try {
-    // `maxWidth` bounds the DECODE, for a caller that only needs a small
-    // picture (the slide rail's thumbnails): a 48-megapixel still is 194 MB
-    // decoded, and a carousel would put one up per cell. The WIDTH alone,
-    // because the natural size is unknown until the decode happens and the
-    // browser preserves the aspect from the one dimension given — a 9:16
-    // frame comes out under twice the cap, which is the point. It can enlarge
-    // a picture smaller than the cap; harmless at thumbnail sizes, and a
-    // browser that ignores the option simply decodes at full size.
-    const bitmap = await createImageBitmap(file, decodeOptions(maxWidth));
+    const still = await decodeStill(file, fit ?? {});
+    const { bitmap, natural } = still;
     return {
       image: bitmap,
       width: bitmap.width,
       height: bitmap.height,
+      ...(natural.width !== bitmap.width || natural.height !== bitmap.height ? { natural } : {}),
       release: () => bitmap.close(),
     };
   } catch {
-    // A RAW: no browser decodes a sensor plane, but the camera wrote its own
-    // JPEG inside the file, and that needs no decoder at all
-    // (`shared/exif/raw-probe.ts`). It is a RENDER, not the sensor's data —
-    // `pictureFidelity` is what says so where the picture is shown.
-    if (isRawImage(file.name)) {
-      try {
-        const preview = await extractRawPreview(file);
-        if (preview) {
-          const bitmap = await createImageBitmap(preview, decodeOptions(maxWidth));
-          return {
-            image: bitmap,
-            width: bitmap.width,
-            height: bitmap.height,
-            release: () => bitmap.close(),
-          };
-        }
-      } catch {
-        // A previewless or malformed RAW falls through to the honest refusal.
-      }
-    }
     throw new Error(
       `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
     );
   }
-}
-
-/**
- * How a still is decoded here: UPRIGHT, the way `decodePhoto` and every other
- * file decode in the suite does it, so a phone portrait sits the same way on
- * a badge as on the Studio stage; and, for a rail cell, bounded on its width.
- */
-function decodeOptions(maxWidth?: number): ImageBitmapOptions {
-  return maxWidth
-    ? { imageOrientation: 'from-image', resizeWidth: maxWidth, resizeQuality: 'high' }
-    : { imageOrientation: 'from-image' };
-}
-
-/**
- * A decoded STILL brought within an editor's pixel budget (`stage-size.ts`):
- * a picture already inside it — and every clip, whose element cannot be
- * resampled once for all its frames — comes back untouched; a bigger one is
- * resampled down from the decoded bitmap and the big bitmap released at once.
- *
- * An editor decodes as-is and bounds here, never through `loadBadgeSource`'s
- * `maxWidth`: that option ENLARGES a smaller picture up to the cap (right for
- * a rail cell, wrong for a preview — a 1600 px probe came back at 3840).
- *
- * Why the budget, measured on a 1600 px Trips stage: a graded 48 MP still
- * costs a 194 MB bitmap and a paint several times slower than a 4K frame's,
- * for detail no preview shows. A preview budget only — every deliverable
- * decodes the file again at its own density.
- */
-export async function boundSource(
-  source: BadgeSource,
-  budget = MAX_STAGE_PIXELS,
-): Promise<BadgeSource> {
-  if (typeof ImageBitmap === 'undefined' || !(source.image instanceof ImageBitmap)) return source;
-  const { w, h } = stageFrameSize(source.width, source.height, budget);
-  if (w === source.width && h === source.height) return source;
-  let small: ImageBitmap;
-  try {
-    small = await createImageBitmap(source.image, {
-      resizeWidth: w,
-      resizeHeight: h,
-      resizeQuality: 'high',
-    });
-  } catch {
-    // A browser without resize options keeps the picture as decoded.
-    return source;
-  }
-  source.release();
-  return { image: small, width: small.width, height: small.height, release: () => small.close() };
 }
 
 function loadVideoFrame(file: File, timeSeconds: number): Promise<BadgeSource> {
@@ -389,14 +313,14 @@ export interface CollageSources {
  * Decode every DRAWN cell's picture — the lead's included, as item 0 — from
  * the files `resolve` finds. A cell whose file is gone or cannot be decoded
  * is an empty cell, not a failed slide: losing one photograph of six must
- * never cost the piece. `maxWidth` bounds every decode, as `loadBadgeSource`
- * does for one; a collage shares the budget its consumer gives it.
+ * never cost the piece. `fit` bounds every decode, as `loadBadgeSource` does
+ * for one; a collage shares the bound its consumer gives it.
  */
 export async function loadCollageSources(
   lead: CollageLead & { videoTimeSeconds: number },
   collage: SlideCollage,
   resolve: (ref: SavedMediaRef | null) => File | null,
-  maxWidth?: number,
+  fit?: StillFit | null,
 ): Promise<CollageSources> {
   const count = collageCellCount(collage);
   const items: CollageSources['items'] = [];
@@ -406,7 +330,7 @@ export async function loadCollageSources(
     const file = resolve(cell.media);
     if (file) {
       try {
-        source = await loadBadgeSource(file, i === 0 ? lead.videoTimeSeconds : 0, maxWidth);
+        source = await loadBadgeSource(file, i === 0 ? lead.videoTimeSeconds : 0, fit);
       } catch {
         source = null;
       }

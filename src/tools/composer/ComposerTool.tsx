@@ -20,6 +20,7 @@ import {
   type LayoutKind,
 } from '../../shared/media/compose-layout';
 import { useComposerMap } from './use-composer-map';
+import { TILES_TOGGLE } from '../../shared/map/track-map';
 import { downloadBlob, outputName } from '../../shared/media/save';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useVideoTransport } from '../../shared/media/use-video-transport';
@@ -86,7 +87,8 @@ export default function ComposerTool() {
   const [inset, setInset] = useState(0.3);
   const [corner, setCorner] = useState<Corner>('br');
   const [videoFit, setVideoFit] = useState<Fit>('cover');
-  const [tilesOn, setTilesOn] = useState(true);
+  // Off until asked, like the Flight Map's: tiles are the network exception.
+  const [tilesOn, setTilesOn] = useState(false);
   const [zoomOffset, setZoomOffset] = useState(0);
   const [follow, setFollow] = useState(true);
   const [overlay, setOverlay] = useState<OverlayConfig>(DEFAULT_OVERLAY);
@@ -481,8 +483,8 @@ export default function ComposerTool() {
                 <span className="font-mono text-3xs uppercase tracking-[0.12em] text-muted">Map zoom</span>
                 <input type="range" min={-4} max={4} step={0.5} value={zoomOffset} onChange={(e) => setZoomOffset(Number(e.target.value))} className="accent-accent w-28" />
               </label>
-              <button type="button" className={chip} aria-pressed={tilesOn} onClick={() => setTilesOn((t) => !t)} title="Load OpenStreetMap tiles — the one feature that makes a network request">
-                {tilesOn ? 'Map: tiles' : 'Map: offline'}
+              <button type="button" className={chip} aria-pressed={tilesOn} onClick={() => setTilesOn((t) => !t)} title={TILES_TOGGLE.title}>
+                {tilesOn ? TILES_TOGGLE.on : TILES_TOGGLE.off}
               </button>
               <button type="button" className={chip} aria-pressed={follow} onClick={() => setFollow((f) => !f)} title="Keep the map centred on the aircraft as the clip plays">
                 {follow ? 'Follow: on' : 'Follow: off'}

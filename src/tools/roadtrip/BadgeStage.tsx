@@ -4,6 +4,7 @@ import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader } from '../../shared/lut/frame-grader';
 import { holdGrades, type HeldGrader } from '../../shared/lut/held-grader';
 import { stageFrameSize } from '../../shared/overlay/stage-size';
+import { stageBudget } from '../../shared/media/still-decode';
 import {
   DEFAULT_FRAMING,
   canPan,
@@ -34,7 +35,6 @@ import { moveBlock } from '../../shared/roadtrip/badge-layout';
 import {
   MAX_PREVIEW_LONG_EDGE,
   PREVIEW_LONG_EDGE,
-  boundSource,
   frameSize,
   loadBadgeSource,
   measureBadge,
@@ -360,10 +360,12 @@ export default function BadgeStage({
     if (!file) return;
 
     setLoading(true);
-    void loadBadgeSource(file, videoTimeSeconds)
-      .then(async (decoded) => {
+    // A still is decoded AT the stage's budget (`still-decode.ts`, a phone's
+    // smaller than a computer's): the full-size bitmap is never made.
+    void loadBadgeSource(file, videoTimeSeconds, { budgetPixels: stageBudget() })
+      .then((source) => {
         if (cancelled) {
-          decoded.release();
+          source.release();
           return;
         }
         // The FILE's size is what the editor is told — the exports size their
@@ -371,15 +373,10 @@ export default function BadgeStage({
         // budget: framing only reads the aspect, and grading 48 MP is what
         // made every drag over a graded still crawl.
         const natural = {
-          width: decoded.width,
-          height: decoded.height,
-          duration: 'duration' in decoded.image ? (decoded.image.duration ?? 0) : 0,
+          width: source.natural?.width ?? source.width,
+          height: source.natural?.height ?? source.height,
+          duration: 'duration' in source.image ? (source.image.duration ?? 0) : 0,
         };
-        const source = await boundSource(decoded);
-        if (cancelled) {
-          source.release();
-          return;
-        }
         sourceRef.current = source;
         onSourceLoaded?.(natural);
         setLeadSeq((n) => n + 1);
@@ -437,29 +434,25 @@ export default function BadgeStage({
       setCellSeq((n) => n + 1);
       return;
     }
-    void Promise.all(
-      pending.map(async (i) => {
+    // One cell at a time, each decoded AT the stage's budget: in parallel,
+    // six 48-megapixel cells were six full-size bitmaps at the same moment.
+    void (async () => {
+      for (const i of pending) {
         const f = files[i];
-        if (!f) return;
+        if (!f || cancelled) continue;
         try {
-          const decoded = await loadBadgeSource(f, 0);
-          if (cancelled) {
-            decoded.release();
-            return;
-          }
-          const source = await boundSource(decoded);
+          const source = await loadBadgeSource(f, 0, { budgetPixels: stageBudget() });
           if (cancelled || cellSourcesRef.current !== next) {
             source.release();
-            return;
+            continue;
           }
           next[i] = source;
         } catch {
           // A cell that cannot be decoded is an empty cell, never a failed stage.
         }
-      }),
-    ).then(() => {
+      }
       if (!cancelled) setCellSeq((n) => n + 1);
-    });
+    })();
     return () => {
       cancelled = true;
     };
@@ -745,7 +738,7 @@ export default function BadgeStage({
       if (cur.film === filmKey) return cur.grader;
     }
     cur?.grader.dispose();
-    const size = stageFrameSize(source.width, source.height);
+    const size = stageFrameSize(source.width, source.height, stageBudget());
     const grader = holdGrades(
       makeFrameGrader(lut as CubeLut, size.w, size.h, 1, [], [], film),
     );
@@ -769,7 +762,7 @@ export default function BadgeStage({
         return cur.grader;
       }
       cur?.grader.dispose();
-      const size = stageFrameSize(source.width, source.height);
+      const size = stageFrameSize(source.width, source.height, stageBudget());
       const grader = holdGrades(makeFrameGrader(cellLut, size.w, size.h));
       cellGradersRef.current.set(i, { lut: cellLut, w: source.width, h: source.height, grader });
       return grader;

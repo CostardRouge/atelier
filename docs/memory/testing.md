@@ -6,6 +6,10 @@ Read before writing tests, or before deciding where a piece of new logic should 
 
 **Decision.** `vitest.config.ts` sets `environment: 'node'` and `include: ['src/**/*.test.ts']`. There is no React plugin and no DOM emulation. **Why**: the suite tests the *pure* layer only; the React/canvas/WebGL glue is verified in the browser instead. **How to apply**: a `.test.tsx` or a test that needs `document` will not run under this config — that is a signal the logic under test is in the wrong module, not that the config needs changing. Extract the pure half (see `architecture.md`).
 
+## What a pass BINDS is checkable in node, through a recording WebGL2 (2026-09-28)
+
+The WebGL glue above is not all out of reach: a pass's `setUniforms(gl, program)` only calls methods, so a `Proxy` answering every UPPER_CASE key with a number (`TEXTUREn` as `TEXTURE0 + n`), recording `activeTexture` and `texImage2D`, and returning `{}` / `null` / the name for `createTexture` / `getExtension` / `getUniformLocation` shows which texels each unit receives (`recordingGl` in `develop/layer-render.test.ts`). **Why**: two builds of one shader that differ only in an uploaded map look identical to every other assertion — that is how a painted layer left every exported file blank while the render gate, which builds its passes itself, stayed green (`render-layers.md`). **How to apply**: when a caller hands a pass data the pass could also compute, pin the upload, and hold the delivery's upload to the stage's. Compare big maps with a loop, never `toEqual`, which took 8 s on one 700 000-texel map.
+
 ## Specs sit beside their source; `tests/` holds only fixtures (2026-08-20)
 
 **Fact.** Every spec lives next to the module it covers (`src/**/<name>.test.ts`). The root `tests/` directory contains a single shared fixture, `tests/fixtures/sample.srt`, referenced by the telemetry and overlay specs through a `new URL(..., import.meta.url)` path. **How to apply**: do not read the near-empty `tests/` directory as "this project has no tests" — there are ~22 spec files under `src/`. New shared sample data goes in `tests/fixtures/`; new specs go beside their module.

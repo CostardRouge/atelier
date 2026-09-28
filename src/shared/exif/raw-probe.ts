@@ -57,6 +57,8 @@ const RENDERED = new Set([1 /* white is zero — a grey render */, 2 /* RGB */, 
 
 /** Compression values whose bytes are a JPEG a browser decodes as-is. */
 const JPEG_COMPRESSION = new Set([6, 7]);
+/** JPEG XL (DNG 1.7): a render the suite's own decoder reads (`media/wasm-still.ts`). */
+const JXL_COMPRESSION = 52546;
 
 export interface RawIfd {
   /** NewSubfileType: 0 the main image, 1 a reduced-resolution preview. */
@@ -85,6 +87,8 @@ export interface RawPreview {
    * both are there this one wins.
    */
   orientation?: number;
+  /** Set to `jxl` for a JPEG XL render (DNG 1.7); absent for a JPEG. */
+  format?: 'jxl';
 }
 
 export interface RawProbe {
@@ -235,7 +239,8 @@ function pickPreview(ifds: readonly RawIfd[]): RawPreview | null {
   let best: RawPreview | null = null;
   let bestScore = 0;
   for (const ifd of ifds) {
-    if (!JPEG_COMPRESSION.has(ifd.compression ?? -1)) continue;
+    const jxl = ifd.compression === JXL_COMPRESSION;
+    if (!jxl && !JPEG_COMPRESSION.has(ifd.compression ?? -1)) continue;
     if (!RENDERED.has(ifd.photometric ?? -1)) continue;
     const { imageOffset: offset, imageLength: length } = ifd;
     if (offset === undefined || length === undefined || length <= 0) continue;
@@ -245,7 +250,9 @@ function pickPreview(ifds: readonly RawIfd[]): RawPreview | null {
     // knows the real file size, is where the pointer is checked.
     if (!Number.isFinite(offset) || !Number.isFinite(length)) continue;
     const score = ifd.width && ifd.height ? ifd.width * ifd.height : length;
-    if (score > bestScore) {
+    // At equal size a JPEG wins: the browser draws it for nothing, a JPEG XL
+    // costs a wasm decoder.
+    if (score > bestScore || (score === bestScore && best?.format === 'jxl' && !jxl)) {
       bestScore = score;
       best = {
         offset,
@@ -255,6 +262,7 @@ function pickPreview(ifds: readonly RawIfd[]): RawPreview | null {
         // Set only where the IFD states one, so a preview that says nothing
         // compares equal to what it always was.
         ...(ifd.orientation !== undefined ? { orientation: ifd.orientation } : {}),
+        ...(jxl ? { format: 'jxl' as const } : {}),
       };
     }
   }
@@ -371,6 +379,11 @@ export async function extractRawPreview(file: Blob, head?: ArrayBuffer): Promise
   if (!probe?.preview) return null;
   const { offset, length } = probe.preview;
   if (offset + length > file.size) return null;
+  if (probe.preview.format === 'jxl') {
+    const jxl = file.slice(offset, offset + length, 'image/jxl');
+    const turn = previewOrientation(probe);
+    return turn === 1 ? jxl : turnedJxl(jxl, turn);
+  }
   const slice = file.slice(offset, offset + length, 'image/jpeg');
   // A landscape capture — the overwhelming majority — keeps the byte-exact
   // lazy slice and pays nothing. Only a turned one is read into memory, and
@@ -383,6 +396,46 @@ export async function extractRawPreview(file: Blob, head?: ArrayBuffer): Promise
     return upright === bytes ? slice : new Blob([upright], { type: 'image/jpeg' });
   } catch {
     return slice;
+  }
+}
+
+/**
+ * A JPEG XL render given the capture's turn. No tag can be spliced into a
+ * JPEG XL the way `uprightJpeg` does into a JPEG, so the picture is decoded
+ * (the suite's own decoder) and drawn turned, once — a render is about to
+ * become a bitmap anyway. The render as it stands where that fails.
+ */
+async function turnedJxl(jxl: Blob, orientation: number): Promise<Blob> {
+  try {
+    const { decodeWasmStill } = await import('../media/wasm-still');
+    const still = await decodeWasmStill(jxl, 'jxl');
+    if (still.kind !== 'blob') return jxl;
+    const bitmap = await createImageBitmap(still.blob);
+    try {
+      const turned = orientation >= 5;
+      const w = turned ? bitmap.height : bitmap.width;
+      const h = turned ? bitmap.width : bitmap.height;
+      const canvas = new OffscreenCanvas(w, h);
+      const ctx = canvas.getContext('2d');
+      if (!ctx) return jxl;
+      // EXIF orientation as a canvas transform (the stored frame drawn at the origin).
+      const t: Record<number, [number, number, number, number, number, number]> = {
+        2: [-1, 0, 0, 1, w, 0],
+        3: [-1, 0, 0, -1, w, h],
+        4: [1, 0, 0, -1, 0, h],
+        5: [0, 1, 1, 0, 0, 0],
+        6: [0, 1, -1, 0, w, 0],
+        7: [0, -1, -1, 0, w, h],
+        8: [0, -1, 1, 0, 0, h],
+      };
+      ctx.setTransform(...(t[orientation] ?? [1, 0, 0, 1, 0, 0]));
+      ctx.drawImage(bitmap, 0, 0);
+      return await canvas.convertToBlob({ type: 'image/jpeg', quality: 0.95 });
+    } finally {
+      bitmap.close();
+    }
+  } catch {
+    return jxl;
   }
 }
 

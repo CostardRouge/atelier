@@ -14,8 +14,7 @@ import type { Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered } from './border-paint';
 import { cropZoneSize } from './roll-export';
-import { isRawImage } from '../library/assets';
-import { rawRenderFirst } from '../media/photo-frame';
+import { decodeStill } from '../media/still-decode';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 
 /**
@@ -64,14 +63,11 @@ export async function pictureThumbnail(
 ): Promise<Blob | null> {
   let bitmap: ImageBitmap | null = null;
   try {
-    // Upright, as every other decode in the suite (`decodePhoto`): a cell
-    // must show the picture the way the stage and the export will.
-    // A RAW from the render inside it — never a phone's whole native decode
-    // per cell of the strip (`rawRenderFirst`).
-    bitmap = isRawImage(file.name)
-      ? ((await rawRenderFirst(file, { imageOrientation: 'from-image' }))?.bitmap ?? null)
-      : await createImageBitmap(file, { imageOrientation: 'from-image' });
-    if (!bitmap) return null;
+    // Decoded AT the cell's size (`still-decode.ts`): a 48-megapixel JPEG
+    // used to put 194 MB up to become a 640 px cell, and once more for the
+    // 2048 px working preview. Upright, as every other decode in the suite; a
+    // RAW from the render inside it, never a phone's whole native decode.
+    bitmap = (await decodeStill(file, { maxEdge: longEdge })).bitmap;
     const { w, h } = thumbSize(bitmap.width, bitmap.height, longEdge);
     if (!w || !h) return null;
     const canvas = document.createElement('canvas');

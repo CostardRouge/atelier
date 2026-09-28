@@ -546,9 +546,10 @@ shared block. Rules a later phase must keep:
   fidelity half of it is `develop.md`, «A picture says its PIXELS».
 - **A RAW original is reached only through the render INSIDE it, and only
   when that render is bigger than the proxy** (2026-09-20, correcting
-  decision 4 — `develop-originals.md` §7.4). `decodableOriginal` still names
-  what a browser reads on its own (jpg/png/webp/avif/gif/bmp — no HEIC, no
-  TIFF), and a RAW now goes down its own branch: `originalPixels` answers
+  decision 4 — `develop-originals.md` §7.4). `decodableOriginal` names
+  what a browser reads on its own (jpg/png/webp/avif/gif/bmp) plus, since
+  2026-09-26, the HEIF and JPEG XL this suite decodes itself — never TIFF —,
+  and a RAW now goes down its own branch: `originalPixels` answers
   with `OriginalInfo.render`, which is null until the file's head has been
   read, and `choosePixels` refuses to act on a guess while it is. The sizes
   come from `rawSizesFrom` over a megabyte of the original's head — the read

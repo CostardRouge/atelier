@@ -2,11 +2,14 @@ import { describe, expect, it } from 'vitest';
 import {
   CONSTRAINED_EXPORT_EDGE,
   CONSTRAINED_STAGE_EDGE,
+  CONSTRAINED_TILE_PIXELS,
+  ROOMY_TILE_PIXELS,
   decodedBytes,
   decodedCacheCeiling,
   decoderIdleMs,
   rawDecodeCap,
   rawDecodeEdge,
+  rawTilePixels,
 } from './raw-budget';
 
 describe('rawDecodeEdge', () => {
@@ -57,5 +60,13 @@ describe('the rest of the budget', () => {
   it('lets a phone’s decoder go after a rest, and keeps a desktop’s', () => {
     expect(decoderIdleMs('constrained')).toBe(8000);
     expect(decoderIdleMs('roomy')).toBe(null);
+  });
+
+  it('cuts a decode into tiles past 4 megapixels on a phone and 24 on a computer', () => {
+    expect(rawTilePixels('constrained')).toBe(CONSTRAINED_TILE_PIXELS);
+    expect(rawTilePixels('roomy')).toBe(ROOMY_TILE_PIXELS);
+    // A DJI at LibRaw's half (4032 × 2268, 9.1 MP) is cut on a phone and decoded in one open on a computer.
+    expect(4032 * 2268).toBeGreaterThan(CONSTRAINED_TILE_PIXELS);
+    expect(4032 * 2268).toBeLessThan(ROOMY_TILE_PIXELS);
   });
 });

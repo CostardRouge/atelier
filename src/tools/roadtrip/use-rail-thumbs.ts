@@ -215,7 +215,7 @@ export default function useRailThumbs({
       }
       have?.source.release();
       held.current = null;
-      const source = await loadBadgeSource(job.file, job.slide.videoTimeSeconds, SOURCE_WIDTH);
+      const source = await loadBadgeSource(job.file, job.slide.videoTimeSeconds, { maxWidth: SOURCE_WIDTH });
       if (!mounted.current) {
         source.release();
         return null;
@@ -232,7 +232,7 @@ export default function useRailThumbs({
       // A collage decodes every cell at thumbnail width for this one draw;
       // the held source is for the common case of one picture per slide.
       const cells = job.slide.collage
-        ? await loadCollageSources(job.slide, job.slide.collage, resolve, SOURCE_WIDTH)
+        ? await loadCollageSources(job.slide, job.slide.collage, resolve, { maxWidth: SOURCE_WIDTH })
         : null;
       const source = cells ? null : await sourceFor(job);
       // A grader is a WebGL2 context: made for this one draw and disposed

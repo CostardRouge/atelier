@@ -52,6 +52,7 @@ export function DevelopBaseMenu({
   rungs,
   onRendition,
   onBase,
+  onRemeter = null,
   status,
   gain,
   calibration,
@@ -71,6 +72,14 @@ export function DevelopBaseMenu({
   rungs: readonly DevelopBase[];
   onRendition: (id: string) => void;
   onBase: (base: DevelopBase) => void;
+  /**
+   * Meter the sensor's exposure again: the stored gain is dropped and the
+   * next decode measures anew. Offered on the sensor once a gain is stored —
+   * a develop metered before 2026-09-25 was measured over a decoder that
+   * quietly scaled some pictures by their brightest pixel, and may open a
+   * touch dark until it is metered again.
+   */
+  onRemeter?: (() => void) | null;
   /** What is happening to get the chosen bytes on screen — fetching, decoding — or null. */
   status: string | null;
   /** The metered exposure once the sensor is decoded, as `rawGain`; null before. */
@@ -136,6 +145,18 @@ export function DevelopBaseMenu({
           rung === 'gain' ? renditionFacts(sensor, formatBytes) : '',
           hint,
           () => onBase(rung),
+        ),
+      );
+    }
+    if (onSensor && gain && onRemeter) {
+      items.push(
+        item(
+          'remeter',
+          false,
+          'Meter the exposure again',
+          '',
+          'measures the sensor’s exposure anew and stores the number — for a picture metered by an earlier decoder, or one that opens a touch dark',
+          onRemeter,
         ),
       );
     }

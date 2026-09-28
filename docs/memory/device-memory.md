@@ -130,10 +130,82 @@ the first thing to do if it still reloads is to read the device class on
 the phone (Safari's `platform` is `iPhone`) and try `roomy`'s opposite: a
 smaller `CONSTRAINED_STAGE_EDGE`. What is left on the CPU side is the plane
 itself (six bytes a pixel of LibRaw's half) and the worker's heap during the
-decode; the way past those is a tiled decode through LibRaw's own `cropbox`
-(`libraw-wasm` exposes it; each tile re-opens the file), which is the next
-step if a measurement asks for it, and the honest way to a loupe at the
-file's density on a phone.
+decode; the tiled decode below is the way past the second.
+
+## Tiles: a big decode is cut into bands LibRaw decodes one at a time (2026-09-25)
+
+**Decision.** `decodeRaw` cuts a decode whose OUTPUT is past a per-device
+budget (`raw-budget.ts`, `rawTilePixels`: 4 MP on a phone, 24 MP on a
+computer) into full-width bands of the decoded frame, each ONE `open()` of
+the file with LibRaw's `cropbox`, converted straight into the outputs at
+its place (`raw-tiles.ts` plans them, `raw-image.ts`'s row functions take
+an offset). A REGION of the frame can be asked for alone the same way
+(`RawDecodeOptions.region`, in the decoded frame at sensor resolution) —
+what a loupe at the file's density on a phone will ask for.
+
+**What it buys, measured** (renderer RSS in headless Chromium, a 24 MP
+uncompressed synthetic DNG): a WHOLE decode +599 MB, the same in six tiles
++311 MB; at HALF size +257 MB whole against +259–292 MB tiled — nothing.
+LibRaw's buffers scale with the tile (its 8-byte work image, its 6-byte
+output), but the file's copy and the unpacked sensor plane are paid whole
+by every tile (≈ 147 MB for the DJI), and the worker's 256 MB heap is the
+floor. So tiles do NOT make a phone's stage cheaper (its half decode was
+already near the floor); they make a whole-density decode — an export at the
+sensor's own pixels, a loupe window — possible on a phone at all, and keep
+the main thread's transient at one tile's plane instead of the whole.
+
+**Facts a later agent must keep** (each measured on the synthetic DNG,
+`testing.md`'s recipe, and pinned by `raw-tiles.test.ts` + the acceptance
+run in the scratchpad):
+
+- **The settings PERSIST on a LibRaw instance across `open()`s** — a tile's
+  box stayed on the next whole decode. Every open passes every key;
+  `WHOLE_CROP` (`[0,0,0xffffffff,0xffffffff]`, LibRaw's own default) is the
+  crop of a whole decode. `cropbox: null` is ignored and `[0,0,0,0]` returns
+  no picture at all.
+- **`adjustMaximumThr` is 0, everywhere.** LibRaw's default lowered the
+  white to the picture's brightest pixel whenever that sat within a quarter
+  of it — a hidden gain under `rawGain`, and one that scaled every tile by
+  ITS OWN brightest pixel (a tile was 2 363 codes off the whole). With it off
+  the sensor's white is 1.0 as `raw.md` always claimed, and a tile IS the
+  whole decode's bytes. The price: a `rawGain` stored before 2026-09-25 was
+  measured over that hidden gain, and such a picture opens up to a third
+  darker — *Meter the exposure again* in the rung menu drops the stored gain
+  and the held decodes and decodes anew (`redecode` on the stage hook).
+- **The demosaic seam is 5 px** (AHD, `userQual` 3): a tile equals the whole
+  from 5 px inside its crop and everywhere at the sensor's own edge.
+  `RAW_TILE_MARGIN` is 8, decoded and discarded; a full-width band has no
+  side seam, a region is given the margin on every side.
+- **`cropbox` is in sensor pixels, before the turn**; LibRaw turns the tile
+  as it turns the whole. `placeRect` maps a sensor rectangle to its place
+  under LibRaw's flip (0, 3, 5, 6 — dcraw's `"50132467"[orientation & 7]`),
+  measured to 0 codes per flip; a quarter-turned camera is cut from sensor
+  COLUMNS. The plan is drawn from the file's orientation tag and checked
+  against `metadata().flip` after the first open, and against each tile's
+  size — a mismatch (a file LibRaw crops on its own grid, a mirrored
+  orientation) falls back to the whole decode, said once in the console.
+- **Half size is LibRaw's to grant**: a three-colour DNG comes back whole
+  whatever was asked, so `halved` is read off the plane's size, not the
+  request.
+- A whole-density cut needs a STORED gain (the as-shot bytes are written
+  tile by tile through the gain's table); without one the decode is whole.
+  The box path measures its gain on the finished linear picture as before,
+  and the sample walk is by absolute pixel index, so a gain counted band by
+  band is the whole plane's to the last decimal.
+- **Per tile: the file read again** (its bytes are transferred to the worker
+  and gone), transferred, copied into the heap and UNPACKED again — ~20 ms
+  of `open` for an uncompressed DNG here, the demosaic of the crop alone on
+  top. Unmeasured: a compressed ARW, where the unpack is the decompression.
+
+Corrected on the way (the audit's reading of the package): `INITIAL_MEMORY`
+IS a runtime option of the Emscripten glue (`Module.INITIAL_MEMORY`) — it is
+the shipped 739-byte worker that passes none, so a worker of our own could
+start the heap smaller; but the wasm imports its memory shared with a 4 096-
+page minimum, and what iOS counts is the pages LibRaw touches, not the
+reservation. And `gamm: [1, 1]` is a no-op because the wrapper reads SIX
+entries, not because the build ignores it — a six-entry array would change
+every byte and break `raw-image.ts`'s inversion; the two-entry no-op is kept
+on purpose (`raw-decoder.ts`, `librawSettings`).
 
 ## His phone, after all of the above (2026-09-24)
 

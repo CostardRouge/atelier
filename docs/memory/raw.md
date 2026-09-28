@@ -21,19 +21,27 @@ single-threaded ffmpeg does not bite here. Re-check on a new version of the
 package: the gate for it is the probe in this file's history, a decode from
 the dev server in headless Chromium.
 
-**Its `gamm` option is IGNORED**; the output is always dcraw's default BT.709
-curve (measured: 0.5 of sensor white came back as 0.7059, every gamma setting
-gave the same bytes). `raw-image.ts` inverts that curve exactly through a
-65536-entry table — sixteen bits carry it without loss — and it is the ONE
-assumption about the decoder's output; a build that starts honouring `gamm`
-would break it, which the settings say.
+**Its `gamm` option is a NO-OP as passed**; the output is always dcraw's
+default BT.709 curve (measured: 0.5 of sensor white came back as 0.7059,
+every gamma setting gave the same bytes — because the wrapper reads a
+SIX-entry array and ignores the two-entry one the typings promise, read
+2026-09-25). `raw-image.ts` inverts that curve exactly through a 65536-entry
+table — sixteen bits carry it without loss — and it is the ONE assumption
+about the decoder's output; a six-entry `gamm` WOULD be honoured and break
+it, which the settings say. Do not "fix" the length.
 
 **Settings**: 16-bit, camera white balance, camera matrix, sRGB primaries,
 NO auto-bright, highlight mode 0 (clip at sensor saturation — everything
 between the displayed white and saturation is kept whole, and that is the
-headroom a develop reads), quality 3, half size when it fits. Measured on a
-synthetic 12-megapixel DNG: 2.2 s to open (parse + unpack), 0.6 s to
-demosaic at half size, 1.6 s whole; ~500 MB of heap for the run.
+headroom a develop reads), quality 3, half size when it fits, **the white
+never lowered to the picture's own brightest pixel** (`adjustMaximumThr: 0`,
+2026-09-25 — LibRaw's default did, silently, for any frame whose brightest
+pixel sat within a quarter of white; `device-memory.md`, «Tiles», for what it
+cost and what it costs to have turned it off), and an explicit `cropbox` on
+EVERY open, because the settings persist on the instance (`WHOLE_CROP` for a
+whole decode; a tile's rectangle otherwise). Measured on a synthetic
+12-megapixel DNG: 2.2 s to open (parse + unpack), 0.6 s to demosaic at half
+size, 1.6 s whole; ~500 MB of heap for the run.
 
 **`userFlip` is deliberately ABSENT from those settings (2026-09-22).** LibRaw's
 own default is `-1`, "use the file's flip", so `dcraw_process` turns the
@@ -54,7 +62,13 @@ built three Float32 pictures and an iPhone reloaded on every DNG), a phone
 decodes to a long edge per purpose and lets the worker go on rest and on a
 hidden tab, and a decode is held for the session at its size. `raw-image.ts`'s
 fused paths are bit-identical to the two-step ones, pinned by spec — the
-numbers in this file did not move.
+numbers in this file did not move. **Since 2026-09-25 a big decode is cut
+into TILES** (`raw-tiles.ts`, one `open()` per band through `cropbox`, bit
+for bit the whole decode's bytes) and a REGION of the frame can be decoded
+alone — `device-memory.md`, «Tiles». The wrapper applies its settings at
+`open()` only and `imageData()` processes once per open, so a tile is a
+re-open and a re-unpack of the file; LibRaw itself would re-process after
+one unpack, but the package exposes no such verb.
 
 ## The picture the GPU takes (2026-09-20)
 
@@ -335,3 +349,12 @@ exact body and lens, inside the file, in the DNG spec's own units — and
 per-channel scale it asks for. Both blobs are tiny and sit in the head the
 probe already reads, so `raw-probe.ts`'s TIFF reader is the whole of the
 parsing work.
+
+## ProRAW in JPEG XL: developed without LibRaw (2026-09-26)
+
+**Decision.** A DNG whose sensor IFD is LinearRaw (34892) compressed as JPEG XL (52546) — Apple's ProRAW with JPEG XL compression — never reaches LibRaw, whose npm build cannot read JPEG XL. `decodeRaw` asks `readLinearDng` (`raw/linear-dng.ts`, pure) first; for such a file `raw/jxl-dng.ts` decodes the tiles through `jxl-oxide-wasm` on a small WORKER POOL (`media/jxl-pool.ts` + `jxl-worker.ts`: up to 4 on a computer, 2 on a phone, let go when idle or hidden, the main thread as fallback), with a window of tiles in flight equal to the pool, and `developTile` writes each one straight into what `convert` / `encodeBoxed` take — LibRaw's 16-bit BT.709 codes at whole density, box sums otherwise — so the gain, the half-floats, the as-shot bytes and the kelvin white (`RawWhite` from the same matrices) come out of the SAME functions as a LibRaw decode. **Why it works without a wasm build of ours**: LinearRaw is already demosaiced, so what LibRaw would do is arithmetic, and the arithmetic is dcraw's — black/white to [0, 1]; `1 / AsShotNeutral` normalised so the SMALLEST multiplier is 1 and each channel clips at the sensor's white (`highlight: 0`); `rgb_cam = inverse(rows-normalised(ColorMatrix · xyz_rgb))`, the D65 matrix preferred (dcraw's `cam_xyz_coeff`); clip. A tile's samples come out of jxl-oxide as a PNG (its one way out) read by `media/png-read.ts` (inflate + unfilter, 16 bits kept — a browser decode would colour-manage and cut to 8).
+
+**Measured** in headless Chromium on a synthetic 1200 × 800 LinearRaw DNG (lossless 16-bit JXL tiles of 256², edge tiles padded, orientation 1 and 6) against its UNCOMPRESSED twin decoded by LibRaw: same `rgb_cam` and as-shot multipliers to three decimals, same sizes/turn/region, as-shot bytes within 4 codes (mean 0.18), half-floats within 0.014. Speed: ~1 µs a pixel on one thread (render 22 ms + PNG encode 28 ms + read 11 ms per 256² tile), ~0.5 µs with three workers — 12 MP boxed to the stage in 5.9 s, an 800 × 600 loupe region (20 tiles) in 0.6 s; a region reads ONLY its tiles, which is the tile decode a phone needs, given by the format. The generator is `scratchpad/gen-linear-dng.py` (not in the repo).
+
+**Also**: a JPEG XL RENDER inside a RAW is now a preview (`pickPreview`, `RawPreview.format: 'jxl'`; a JPEG of the same size wins, being free); a turned one is decoded and drawn turned once (`turnedJxl`), since no tag can be spliced into a JPEG XL. **Not applied, said in `linear-dng.ts`**: `BaselineExposure`, `ProfileGainTableMap` (Apple's local tone map — a ProRAW will look flatter than Photos shows it), `CameraCalibration`/`AnalogBalance`, `DefaultCrop`, opcode lists. **Not measured**: a real ProRAW JXL file — whether its tiles are lossy XYB (jxl-oxide then renders into the declared colour encoding, assumed linear) and whether its JXL bit depth equals `BitsPerSample` (assumed). One of his iPhone files through the Rendition Inspector settles both.
+
