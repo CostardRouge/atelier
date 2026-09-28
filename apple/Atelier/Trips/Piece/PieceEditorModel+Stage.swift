@@ -610,9 +610,11 @@ extension PieceEditorModel {
         let cube = looks.cube(flash, trip, post, develop: .some(nil))
         let interpolation = looks.interpolation
         let aspect = pieceAspect(post)
+        let held = OpenerPictureFetch.held(for: postId)
         tasks["opener"] = Task { [weak self] in
             let set = await HookPictureLoader.load(wants, aspect: aspect, cube: cube, interpolation: interpolation,
-                                                   resolve: { ref in await self?.openerURL(ref) },
+                                                   gradeKey: flashKey, held: held,
+                                                   resolve: { ref in try await self?.openerURL(ref) },
                                                    isCancelled: { Task.isCancelled })
             guard let self, !Task.isCancelled, self.openerKey == key else { return }
             self.hookPictures = set.pictures
@@ -622,13 +624,14 @@ extension PieceEditorModel {
         }
     }
 
-    /// Where an opener's picture is: the Library's file. An instance's still
-    /// fetched for these frames alone is the opener-pictures task's
-    /// (`use-hook-pictures`'s `fetchPreviewStill`) — until then a picture
-    /// the pool does not hold is reported, one line, never replaced.
-    func openerURL(_ ref: SavedMediaRef) async -> URL? {
-        guard let library, let file = library.poolFile(named: ref) else { return nil }
-        return url(for: file)
+    /// Where an opener's picture is: the Library's file, found by name then
+    /// by content; else the connected instance's editing rendition, fetched
+    /// for these frames alone and never added to the pool
+    /// (`OpenerPictureFetch`, the web's `fetchPreviewStill`); else nil, and
+    /// the picture is reported, one line, never replaced.
+    func openerURL(_ ref: SavedMediaRef) async throws -> URL? {
+        if let file = await findInPool(ref), let bytes = url(for: file) { return bytes }
+        return try await OpenerPictureFetch.previewStill(ref, scope: "piece:\(postId)")
     }
 
     /// The hook picture's EXIF — the file's own head, then what its source

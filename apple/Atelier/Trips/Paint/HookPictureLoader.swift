@@ -16,6 +16,10 @@
 //   the thirty others again at a hair smaller.
 // - Graded with the piece's look, so the flashes and the picture they land
 //   on wear the same one; an ungraded flash is better than a dark one.
+// - A picture decoded for what it still is — the same file, the same frame
+//   shape, the same share of the budget, the same look — is KEPT across
+//   passes (`HookPictureHeld`): picking one more picture decodes one more
+//   picture, never the whole set again.
 
 import AtelierKit
 import CoreGraphics
@@ -28,6 +32,34 @@ struct HookPictureSet {
     var problems: [String: String]
 
     static let empty = HookPictureSet(pictures: [:], problems: [:])
+}
+
+/// The pictures one piece's opener has decoded, each under what it was decoded
+/// FOR — the web's `held` map of `use-hook-pictures.ts`. A pass reuses an
+/// entry whose signature still matches and drops what is no longer wanted.
+final class HookPictureHeld: @unchecked Sendable {
+    private let lock = NSLock()
+    private var entries: [String: (sig: String, picture: HookPicture)] = [:]
+
+    func picture(_ key: String, sig: String) -> HookPicture? {
+        lock.lock()
+        defer { lock.unlock() }
+        guard let entry = entries[key], entry.sig == sig else { return nil }
+        return entry.picture
+    }
+
+    func keep(_ key: String, sig: String, _ picture: HookPicture) {
+        lock.lock()
+        entries[key] = (sig, picture)
+        lock.unlock()
+    }
+
+    /// Only what the pass still wants stays held.
+    func retain(_ keys: Set<String>) {
+        lock.lock()
+        entries = entries.filter { keys.contains($0.key) }
+        lock.unlock()
+    }
 }
 
 enum HookPictureLoader {
@@ -54,16 +86,26 @@ enum HookPictureLoader {
     }
 
     /// Find, decode, crop and grade every want. `cube` is the piece's look
-    /// (the hook's); nil leaves the pictures as shot.
+    /// (the hook's); nil leaves the pictures as shot. With `held`, a picture
+    /// decoded for the same file, shape, budget and look (`gradeKey` names the
+    /// look) is reused rather than decoded again. `resolve` may throw a
+    /// `HookPictureProblem` to say why a picture cannot be reached.
     static func load(_ wants: [HookPictureWant], aspect: Double, cube: CubeLut?,
                      interpolation: Interpolation = .tetrahedral,
-                     resolve: (SavedMediaRef) async -> URL?,
+                     gradeKey: String = "", held: HookPictureHeld? = nil,
+                     resolve: (SavedMediaRef) async throws -> URL?,
                      isCancelled: () -> Bool = { false }) async -> HookPictureSet {
         let cap = perPicturePixels(budgetCount(wants.count))
         let grader = cube.map { FrameGrader(lut: $0, interpolation: interpolation) }
+        held?.retain(Set(wants.map(\.key)))
         var set = HookPictureSet.empty
         for want in wants {
             if isCancelled() { break }
+            let sig = signature(want, aspect: aspect, cap: cap, grade: "\(gradeKey)#\(interpolation.rawValue)")
+            if let kept = held?.picture(want.key, sig: sig) {
+                set.pictures[want.key] = kept
+                continue
+            }
             do {
                 let image = try await decode(want, resolve: resolve)
                 let cropped = crop(image, want, aspect: aspect, cap: cap)
@@ -72,12 +114,21 @@ enum HookPictureLoader {
                     set.problems[want.key] = "\(want.ref.name): the picture could not be drawn."
                     continue
                 }
-                set.pictures[want.key] = HookBitmap.picture(cg)
+                let picture = HookBitmap.picture(cg)
+                set.pictures[want.key] = picture
+                held?.keep(want.key, sig: sig, picture)
             } catch {
                 set.problems[want.key] = describe(error, want)
             }
         }
         return set
+    }
+
+    /// What a picture was decoded FOR — a change of any of it decodes again.
+    private static func signature(_ want: HookPictureWant, aspect: Double, cap: Double, grade: String) -> String {
+        let at = want.atSeconds.map { String($0) } ?? ""
+        let shape = want.shape?.rawValue ?? "frame"
+        return "\(at)#\(shape)#\(String(format: "%.4f", aspect))#\(Int(cap.rounded()))#\(grade)"
     }
 
     /// One line a person can act on, for a picture that will not be drawn.
@@ -86,23 +137,28 @@ enum HookPictureLoader {
         return "\(want.ref.name): \(error.localizedDescription)"
     }
 
-    private struct HookPictureProblem: Error {
+    /// Why a picture will not be drawn, in the words the panel says.
+    struct HookPictureProblem: Error {
         let message: String
     }
 
     /// The picture a want names, decoded upright as codes.
-    private static func decode(_ want: HookPictureWant, resolve: (SavedMediaRef) async -> URL?) async throws -> CIImage {
+    private static func decode(_ want: HookPictureWant,
+                               resolve: (SavedMediaRef) async throws -> URL?) async throws -> CIImage {
         let name = want.ref.name
         let clip = BadgeSources.isClip(name)
-        guard let url = await resolve(want.ref) else {
+        guard let url = try await resolve(want.ref) else {
             throw HookPictureProblem(message: clip
                 ? "\(name) is a clip that is not in the Library — add it to flash its frame."
                 : "\(name) is not in the Library, and no connected instance holds it.")
         }
         do {
             // A clip's frame at the want's second, a photograph at its own
-            // density — the crop below brings either down to the budget.
-            let source = try await BadgeSources.load(url, name: name, videoSeconds: want.atSeconds ?? 0)
+            // density — the crop below brings either down to the budget. A
+            // photograph is decoded by its FILE's name: an instance's proxy
+            // of a RAW is a WebP, which the RAW's own name would misread.
+            let decodeName = clip ? name : url.lastPathComponent
+            let source = try await BadgeSources.load(url, name: decodeName, videoSeconds: want.atSeconds ?? 0)
             return source.image
         } catch {
             throw HookPictureProblem(message: clip

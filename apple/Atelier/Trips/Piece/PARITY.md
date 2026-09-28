@@ -17,7 +17,7 @@ Every sentence on screen is the web's. Nothing here was run on a device:
 this container has no Apple toolchain, so every view was written against the
 SDK and compiled by CI alone.
 
-Rows: 98 ✅ · 4 ≠ · 2 ⏳ (each tab's own table carries its rows)
+Rows: 99 ✅ · 5 ≠ · 1 ⏳ (each tab's own table carries its rows)
 
 ## The screen (`PieceEditorView.swift`, `PieceInspector.swift`)
 
@@ -90,7 +90,7 @@ Rows: 98 ✅ · 4 ≠ · 2 ⏳ (each tab's own table carries its rows)
 | A slide stores the picture's HASH, found again by name then by content | `storedRef` (`hashedMediaRef`) and `findInPool` (`findMedia`), off the main actor | ✅ |
 | The hook thumbnail kept from the stage's frame, only at rest on the END card, with its picture present, debounced 700 ms | `frameLanded` → `store.keepThumb` | ✅ |
 | The garage opened from the Virée panel (`configureCar`) | `configureCar()` → `CarGarageSheet` | ✅ |
-| The opener's pictures: the Library's file, else the instance's still fetched for these frames alone | the Library's file; a picture the pool does not hold is reported, one line | ⏳ the opener-pictures task (`use-hook-pictures`' `fetchPreviewStill`) |
+| The opener's pictures: the Library's file, else the instance's still fetched for these frames alone | `openerURL`: the Library's file by name then content, else `OpenerPictureFetch.previewStill` (`Openers/PARITY.md`) | ✅ |
 | The hook's EXIF — the file's head, then what its source vouched for | `loadHookExif` (`readEffectiveExif` + `vouchedExif`) | ✅ |
 | Pack looks resolved before a paint; baked again when the vault answers or the interpolation changes | `prepareLooks` / `lookPreferencesChanged` | ✅ |
 
