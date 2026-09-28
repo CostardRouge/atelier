@@ -163,7 +163,7 @@ Counts: **95 ✅ · 8 ≠ · 5 ⏳** — 108 rows.
 | `Apply look to…` at the head of the section (N selected / N other pictures), "done · …" said | ✅ `lookApplyVerbs` | ✅ |
 | The gallery's scene on the picture on the stage (`picture.source`, its name) | ✅ `RollEditor.lookPicture` (the decoded source, before its develop) | ✅ |
 | The texture's "a grain cell is N px here" measured on the stage's real height | ✅ `lookPreviewHeight` | ✅ |
-| The stage DRAWS the look | ⏳ the Develop render plan's (`DevelopRenderPlan`); until then the stage says "not drawn here yet: look" and the texture's dials say the stage does not draw it — `LookLibrary.resolve(_ grade:)` + `ResolvedLook.cube(develop:interpolation:)` + `FilmPass.from(grade)` are what it reads | ⏳ |
+| The stage DRAWS the look | ✅ Develop's render plan (`Develop/Render/FullDevelopRenderPlan.swift`) resolves the picture's look through `DevelopLooks` over the device's one vault (`Look/SharedVault.swift`), and the film texture through `FilmPass.from(grade)` | ✅ |
 | A preset "+ look" worn on the open picture | ✅ `wearPreset` (the shell's) | ✅ |
 
 ## The LUT instrument's picker — `LutPicker.tsx`

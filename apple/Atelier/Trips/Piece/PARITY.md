@@ -17,7 +17,7 @@ Every sentence on screen is the web's. Nothing here was run on a device:
 this container has no Apple toolchain, so every view was written against the
 SDK and compiled by CI alone.
 
-Rows: 93 ✅ · 4 ≠ · 7 ⏳
+Rows: 98 ✅ · 4 ≠ · 2 ⏳ (each tab's own table carries its rows)
 
 ## The screen (`PieceEditorView.swift`, `PieceInspector.swift`)
 
@@ -37,11 +37,11 @@ Rows: 93 ✅ · 4 ≠ · 7 ⏳
 | A strip cell is marked only while its panel is UP | `inspectorOpen && tab == cell` | ✅ |
 | The tabs are published into the SHELL's bottom bar, with its Library cell first | the editor draws its own strip and the app's tab bar hides inside it | ≠ a native tab bar is the app's navigation, not a tool's toolbar; the Library is reached through the app's own Library surface |
 | A piece that is gone (deleted, the trip replaced without it) | "This piece is gone" with what happened, never a blank editor | ✅ |
-| Content tab: the slide's words, delivery, the day, the counter and time modes, the camera credit | `ContentTabView` — a slot saying what is coming and what the badge reads now | ⏳ the Content tab's task |
-| Look tab: the opener, the title style, this piece's look, the cascade, the placement, the shades | `LookTabView` — a slot listing the opener's picture problems | ⏳ the Look tab's task |
-| Picture tab: the file and its in point, the layout, the framing, the motion cards, the develop, the format, the grade's rung | `PictureTabView` — a slot with the file line and the collage's fetch summary | ⏳ the Picture tab's task |
-| Export tab: the plan line by line, one format at a time, the Studio bridge | `ExportTabView` — a slot with the three verbs wired, so a piece can leave today | ⏳ the Export tab's task |
-| The develop SHEET over the selected cell, its apply-to verbs, its footer | `PieceDevelopSheet` — a slot; the verbs and the footer are the model's (`developApplyVerbs`, `developFooterHint`) | ⏳ the Picture tab's task |
+| Content tab: the slide's words, delivery, the day, the counter and time modes, the camera credit | `ContentTabView` — `Content/`, table in `Content/PARITY.md` | ✅ |
+| Look tab: the opener, the title style, this piece's look, the cascade, the placement, the shades | `LookTabView` — `Look/`, table in `Look/PARITY.md` | ✅ |
+| Picture tab: the file and its in point, the layout, the framing, the motion cards, the develop, the format, the grade's rung | `PictureTabView` — `Picture/`, table in `Picture/PARITY.md` | ✅ |
+| Export tab: the plan line by line, one format at a time, the Studio bridge | `ExportTabView` — `Export/`, table in `Export/PARITY.md` | ✅ |
+| The develop SHEET over the selected cell, its apply-to verbs, its footer | `PieceDevelopSheet` — `Picture/PieceDevelopSheet.swift` (its stage's wipe, zoom and clipping wait on the Develop stage taking any picture — `Picture/PARITY.md`) | ✅ |
 
 ## The header bar (`PieceHeaderBar`, `PieceExportButton`)
 
