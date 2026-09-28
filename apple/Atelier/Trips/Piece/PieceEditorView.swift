@@ -19,8 +19,9 @@
 // while the pill speaks and becomes its own progress fill while it runs. The
 // task pill is the tool's (`TripsTool`), never added here.
 //
-// Keys: Space, ← → (Shift ±0.5 s), Home/End, I/O, L, M — `+Keys`; ⌘Z / ⇧⌘Z
-// are the window's UndoManager, handed to the store by the tool.
+// Keys: Space, I/O, L, M — `+Keys`; ← → (Shift ±0.5 s) and Home/End are the
+// band's, answered while the keyboard is on it (`Band/`); ⌘Z / ⇧⌘Z are the
+// window's UndoManager, handed to the store by the tool.
 
 import SwiftUI
 import AtelierKit
@@ -203,9 +204,6 @@ struct PieceWorkbench: View {
             .focusEffectDisabled()
             .focused($focused)
             .onKeyPress(phases: [.down, .repeat]) { press in
-                if press.key == .home || press.key == .end {
-                    return model.handleKey(press.key) ? .handled : .ignored
-                }
                 guard let key = EditorKeyPress(press) else { return .ignored }
                 return model.handleKey(key) ? .handled : .ignored
             }

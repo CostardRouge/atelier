@@ -17,7 +17,7 @@ Every sentence on screen is the web's. Nothing here was run on a device:
 this container has no Apple toolchain, so every view was written against the
 SDK and compiled by CI alone.
 
-Rows: 90 ✅ · 5 ≠ · 9 ⏳
+Rows: 93 ✅ · 4 ≠ · 7 ⏳
 
 ## The screen (`PieceEditorView.swift`, `PieceInspector.swift`)
 
@@ -139,11 +139,11 @@ Rows: 90 ✅ · 5 ≠ · 9 ⏳
 | A picture still decoding holds a still's clock up to two seconds | `pendingGraceSeconds` | ✅ |
 | Pressing play at a slide's end goes where the loop would | `toggle()` | ✅ |
 | Space plays and pauses — the piece, or the cut while open; never with Shift, never repeated | `handleKey` | ✅ |
-| ← / → step to the previous / next slide, Shift ±0.5 s; Home / End | `handleKey` — the whole editor answers them, a native band being no focus stop | ≠ the web's band answers them only while the keyboard is on it |
+| ← / → step to the previous / next slide, Shift ±0.5 s; Home / End — only while the keyboard is on the band | `handleBandKey`, bound by the band itself — `Band/PARITY.md` | ✅ |
 | I / O cut the open clip at the playhead, Shift back to the clip's ends | `setStart` / `setEnd` at `minHookSeconds / 4` | ✅ |
 | M mutes the opener's ticks, only where it has a score | `soundOn` toggled | ✅ |
-| The opener's ticks HEARD while it plays | `soundOn` is kept; nothing plays it yet | ⏳ the transport task (the band's sound pill and a live score player) |
+| The opener's ticks HEARD while it plays | `PieceHookSound` (an `AVAudioPlayerNode` over the kernel's `renderBed`) — `Band/PARITY.md` | ✅ |
 | A field that types keeps every key; so does a sheet over the editor | `textEditing`, the three sheets | ✅ |
 | ⌘Z / ⇧⌘Z | the window's `UndoManager`, which `TripsStore` registers every step with | ✅ |
 | Delete / Escape | bound to nothing, as on the web: a badge piece is computed and a slide is removed from the band's menu | ✅ |
-| The band «Aiguille»: the piece sliding under a fixed needle, the cut bar, the speed and loop pills, the motion marks, the slide rail with its ⋯ | `PieceDeckBand` — play, the time, a chip per slide, add, and the ⋯ menu (move, remove, the closing card) | ⏳ the transport task |
+| The band «Aiguille»: the piece sliding under a fixed needle, the cut bar, the speed and loop pills, the motion marks, the slide rail with its ⋯ | `PieceDeckBand` (`Band/`) — the row, the strip, the rail's thumbnails, the cut — `Band/PARITY.md` | ✅ |
