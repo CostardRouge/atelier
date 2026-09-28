@@ -92,6 +92,16 @@ targets:
             CFBundleTypeRole: Viewer
             CFBundleURLSchemes:
               - atelier
+        # An export keeps running when he leaves the app
+        # (`Atelier/Tasks/BackgroundRun.swift`): on iOS 26 it becomes a
+        # continued processing task under this ONE identifier, registered
+        # at launch. [verify on device] whether continued processing needs
+        # the `processing` mode — declared because a missing one would make
+        # every request fail quietly, while a spare one costs nothing.
+        BGTaskSchedulerPermittedIdentifiers:
+          - website.steeve.atelier.export
+        UIBackgroundModes:
+          - processing
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"

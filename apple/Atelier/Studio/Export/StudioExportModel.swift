@@ -300,6 +300,7 @@ final class StudioExportModel {
         }
         let handle = TaskCenter.start("Exporting \(job.base)", scope: job.scope, progress: 0,
                                       detail: "\(count) variant\(count == 1 ? "" : "s")", cancel: stop)
+        BackgroundRun.keep(handle)
         work = Task { [weak self] in
             await self?.run(job, into: folder, flag: flag, handle: handle)
             handle.done()

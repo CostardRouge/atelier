@@ -22,6 +22,7 @@ struct AtelierApp: App {
 
     init() {
         Brand.registerFonts()
+        BackgroundRun.registerAtLaunch()
         let store = RollStore()
         _rolls = State(initialValue: store)
         _pictures = State(initialValue: PicturePool(store: store))

@@ -18,14 +18,19 @@ Where things are:
 | `TaskPill.swift` | `TaskPill`, its popover `TaskList`, and `.taskPill()` — the toolbar item every stack root and every pushed screen with its own bar carries |
 | `TaskEdge.swift` | `TaskEdge` (a media's hairline), `TaskBar` (the bar, for the edge and the list), `TaskCancelLink` (a sheet's own Cancel) |
 | `TaskFixtures.swift` | the previews' three tasks |
+| `BackgroundRun.swift` | `BackgroundRun.keep(handle)` — an export KEPT running past the foreground: iOS 26's continued processing task, `beginBackgroundTask` before it, `beginActivity` on the Mac; the words and units from the kernel's `keptRunSummary` (`Tasks/KeptRun.swift`) |
 
 Who registers a task today: the Develop roll's run (`Develop/Store/RollEditor+Run.swift`),
 the stage opening a picture (`Develop/Store/RollEditor.swift`), the stage's
 sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 (`Develop/Stage/StageLoupe.swift`, through `TaskCenter.run`), the pack import
 (`Look/PackManagerModel.swift`), the LUT studio's batch
-(`Instruments/Lut/LutStudioModel.swift`) and the Composer's export
-(`Instruments/Composer/ComposerModel.swift`) — all through `TaskCenter.start`.
+(`Instruments/Lut/LutStudioModel.swift`), the Composer's export
+(`Instruments/Composer/ComposerModel.swift`), the Studio's export
+(`Studio/Export/StudioExportModel.swift`) — all through `TaskCenter.start` —
+and Trips' three exports (`Trips/Export/TripPieceExport.swift`, through the
+registry's `startTask`). Every EXPORT among them is kept running past the
+foreground, one line at each of the five call sites (`BackgroundRun.keep`, below).
 
 ## The registry — `tasks.ts`, `use-tasks.ts` (T1)
 
@@ -98,6 +103,23 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 | Trips' three exports (`Exporting the piece`, `Exporting the slides`, `Encoding the hook`), scoped `piece:<id>` | `TripPieceExport`: one task per run under those labels and that scope, its Cancel stopping between two slides and ending the clip in flight | ✅ |
 | The Studio's export beside its own bar and Cancel (`Exporting <name>`) | `StudioExportModel`: `Exporting <name>` · `N variants`, its Cancel ending the variant in flight and keeping what was written; the instruments' exports likewise — the LUT studio's batch (`Exporting graded clips`, `i of N`, Cancel) and the Composer's (`Exporting <clip>`, Cancel) | ✅ |
 
+## Background — native only (no web twin)
+
+A browser tab has no background to keep an export in; the web's exports stop
+with the tab. What the app does instead is `BackgroundRun.swift`. Every row is
+written and compiled by CI, and NONE has run on a device: what each platform
+really grants is marked **[verify on device]**.
+
+| Web | Native | |
+| --- | --- | --- |
+| — (a tab's export stops with the tab) | An export keeps running when he leaves the app: ONE line after its task starts, `BackgroundRun.keep(handle)` — the Develop roll's run, the Studio's export, Trips' three exports, the LUT studio's batch, the Composer's export | ✅ native addition |
+| — | iOS 26+: a `BGContinuedProcessingTask` submitted while the app is on screen (`strategy .fail`), its title and subtitle the task's own label and detail, the GPU asked for where the device grants it in the background, its `progress` kept level with the kept tasks and completed by the last one to end — **[verify on device]**: the API is written from Apple's documentation as remembered, not compiled here | ✅ native addition |
+| — | Its expiration — the system's, or his Stop on the system's own UI — asks every kept task to stop through its OWN Cancel (`TaskCenter.cancel`): each ends at its safe point, what was done is kept | ✅ native addition |
+| — | iOS 17–25, and iOS 26 when the request is refused: `beginBackgroundTask`, about 30 s once the app has left the screen, then the kept tasks are cancelled the same way; held on iOS 26 too until the continued task launches | ✅ native addition |
+| — | macOS: `ProcessInfo.beginActivity(.userInitiated)` while any kept task runs — no App Nap in a hidden window, no idle sleep under an export | ✅ native addition |
+| — | Several kept exports share ONE hold and ONE progress: a kept task that ended counts whole, one with no length counts nothing yet (the system's bar holds still rather than inventing motion) — `keptRunSummary`, specs on Linux | ✅ native addition |
+| — | Whether Core Image's Metal work and `AVAssetWriter`'s hardware encoder answer in the background WITHOUT the GPU grant (an iPhone that has none, iOS 17–25): if they refuse, a kept export fails there rather than finishing — **device-only**, the first run says | ⏳ |
+
 ## One-off surfaces (T5)
 
 | Web | Native | |
@@ -106,4 +128,4 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 | The pack import: `Importing <pack>`, `i of N`, NO Cancel — the index is written last | `PackManagerModel.run`, the sheet keeping its own line | ✅ |
 | A surface beside the VERB stays; one that only repeats the pill goes | the Develop Export tab's line and Cancel, the instruments' bars and Cancel stay beside their buttons; nothing here drew a private bar the pill now repeats | ✅ |
 
-**Counts**: 44 rows — 39 ✅ (4 of them native additions), 0 ⏳, 5 ≠ (built differently on purpose).
+**Counts**: 51 rows — 45 ✅ (10 of them native additions), 1 ⏳, 5 ≠ (built differently on purpose), a row counted by its last cell. The one ⏳ is device-only: what the GPU and the encoder grant an app in the background.

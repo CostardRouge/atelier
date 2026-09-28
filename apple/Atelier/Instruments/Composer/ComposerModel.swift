@@ -203,6 +203,7 @@ final class ComposerModel {
                 Task { @MainActor in owner?.cancelExport() }
             }
         )
+        BackgroundRun.keep(handle)
         let model = self
         exportTask = Task.detached(priority: .userInitiated) {
             defer { handle.done() }

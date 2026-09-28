@@ -244,6 +244,7 @@ final class LutStudioModel {
                 Task { @MainActor in owner?.cancelExport() }
             }
         )
+        BackgroundRun.keep(handle)
         // The model is held for the run: it is what the rows report to.
         let model = self
         exportTask = Task.detached(priority: .userInitiated) {

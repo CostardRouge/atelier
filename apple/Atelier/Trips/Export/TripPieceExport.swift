@@ -166,6 +166,7 @@ final class TripPieceExport {
             Task { @MainActor in owner?.exporting = "Cancelling…" }
         })
         self.handle = handle
+        BackgroundRun.keep(handle)
         let say: @Sendable (String?, Double?) -> Void = { [weak self] line, ratio in
             var patch = TaskPatch(progress: .some(ratio))
             if let line { patch.detail = .some(line) }

@@ -141,6 +141,7 @@ final class RollRunState {
             flag.set()
             Task { @MainActor in self?.cancel() }
         })
+        BackgroundRun.keep(handle)
     }
 
     /// Hold the work so a Cancel can reach it.
