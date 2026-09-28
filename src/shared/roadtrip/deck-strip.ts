@@ -14,6 +14,7 @@
  */
 
 import { clipSlice, screenSecondsOf } from './hook-video';
+import type { TrimRange } from '../media/trim';
 import { motionMarks } from '../media/framing-motion';
 import { collageCellCount } from './collage';
 import type { DeckSlide } from './deck';
@@ -171,6 +172,99 @@ export function screenLength(
 
 function clamp(v: number, lo: number, hi: number): number {
   return Math.min(hi, Math.max(lo, v));
+}
+
+// --- resizing a slide from its cell's ends ------------------------------------
+//
+// The open slide's cell carries a grip at each end. Dragging one sets how
+// long the slide holds the screen — a still's seconds, a clip's cut — and the
+// OTHER end stays where it was on screen, the way a box is resized from one
+// side: what the finger holds follows it, nothing else moves under it.
+
+/** Which end of a cell is dragged: its start (left) or its end (right). */
+export type StripEdge = 'start' | 'end';
+
+/** How near a whole second, in px, a still's end is pulled onto it. */
+const WHOLE_SECOND_PX = 5;
+
+/**
+ * A still's length after an end of its cell moved `dx` px: outward lengthens,
+ * inward shortens, whichever end. Tenths of a second, a whole second pulling
+ * the end onto it from a few pixels away, and never past `min`..`max`.
+ */
+export function resizedStill(
+  from: number,
+  edge: StripEdge,
+  dx: number,
+  pxPerSecond: number,
+  min: number,
+  max: number,
+): number {
+  const raw = from + (edge === 'end' ? dx : -dx) / pxPerSecond;
+  const whole = Math.round(raw);
+  const snapped = Math.abs(raw - whole) * pxPerSecond <= WHOLE_SECOND_PX ? whole : Math.round(raw * 10) / 10;
+  return clamp(snapped, min, max);
+}
+
+/**
+ * A clip's cut after an end of its cell moved `dx` px. The band is drawn in
+ * SCREEN seconds, so a pixel is `speed` seconds of footage. The end moves the
+ * out point, the start the in point — keeping the out point, as the trim
+ * bar's own in handle does — on whole frames, never shorter than `minSource`
+ * of footage, never longer on screen than `maxScreen`, never past the clip.
+ */
+export function resizedClip(
+  range: TrimRange,
+  edge: StripEdge,
+  dx: number,
+  pxPerSecond: number,
+  speed: number,
+  duration: number,
+  minSource: number,
+  maxScreen: number,
+  frame: number,
+): TrimRange {
+  const footage = (dx / pxPerSecond) * speed;
+  const onFrame = (v: number) => (frame > 0 ? Math.round(v / frame) * frame : v);
+  if (edge === 'end') {
+    const lo = Math.min(duration, range.start + minSource);
+    const hi = Math.min(duration, range.start + maxScreen * speed);
+    return { start: range.start, end: clamp(onFrame(range.end + footage), lo, Math.max(lo, hi)) };
+  }
+  const lo = Math.max(0, range.end - maxScreen * speed);
+  const hi = Math.max(0, range.end - minSource);
+  return { start: clamp(onFrame(range.start + footage), Math.min(lo, hi), hi), end: range.end };
+}
+
+/**
+ * Where the strip must sit while slide `index` is resized from `edge`, so
+ * that its OTHER end stays `anchor` px from the needle — the needle being the
+ * strip's own `offset`. `anchor` is read once, when the drag starts.
+ */
+export function anchorOf(layout: StripLayout, index: number, edge: StripEdge, offset: number): number {
+  return fixedEnd(layout, index, edge) - offset;
+}
+
+export function anchoredOffset(layout: StripLayout, index: number, edge: StripEdge, anchor: number): number {
+  return fixedEnd(layout, index, edge) - anchor;
+}
+
+function fixedEnd(layout: StripLayout, index: number, edge: StripEdge): number {
+  const cell = layout.cells[index];
+  if (!cell) return 0;
+  return edge === 'end' ? cell.left : cell.left + cell.width;
+}
+
+/**
+ * How far into slide `index` the needle falls when the strip sits at
+ * `offset` — where the piece is left once a resize lets go, so nothing jumps
+ * under the needle. Clamped to the slide: an end pulled past the needle
+ * leaves it on that end.
+ */
+export function localAtOffset(layout: StripLayout, index: number, offset: number): number {
+  const cell = layout.cells[index];
+  if (!cell || !(cell.width > 0)) return 0;
+  return clamp((offset - cell.left) / cell.width, 0, 1) * cell.seconds;
 }
 
 /**

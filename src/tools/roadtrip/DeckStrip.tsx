@@ -20,6 +20,11 @@
  * target (34px pills, `md` icon buttons, a 40px play), and the ticks toggle
  * moves into ⋯ — see `pillCompact` below.
  *
+ * The open slide's cell carries a GRIP at each end: dragging one sets how long
+ * the slide holds the screen — a still's seconds, a clip's cut — with the
+ * other end held still on screen, and writes once, on release (the Content
+ * tab's *On screen* slider is the same number, and its keyboard twin).
+ *
  * The strip is laid out by `shared/roadtrip/deck-strip.ts`: a fixed number of
  * pixels a second with a floor, so a clip keeps its size wherever it sits and
  * a half-second slide is still something a finger lands on. The band claims
@@ -30,16 +35,22 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import {
+  anchorOf,
+  anchoredOffset,
   capacityMarks,
+  localAtOffset,
   locate,
+  resizedClip,
+  resizedStill,
   snapToEdge,
   stepSlide,
   stripLayout,
   timeAtX,
   xAtTime,
   type LoopScope,
+  type StripEdge,
 } from '../../shared/roadtrip/deck-strip';
-import { CLIP_SPEEDS, MIN_HOOK_SECONDS, screenSecondsOf } from '../../shared/roadtrip/hook-video';
+import { CLIP_SPEEDS, MAX_HOOK_SECONDS, MIN_HOOK_SECONDS, screenSecondsOf } from '../../shared/roadtrip/hook-video';
 import TrimBar from '../../shared/media/TrimBar';
 import type { TrimRange } from '../../shared/media/trim';
 import { formatTimecode } from '../../shared/lib/format';
@@ -97,6 +108,23 @@ interface DeckStripProps {
    * drawn as marks along its cell, so a slide that moves reads as one.
    */
   marksFor?: (i: number) => readonly number[];
+  /**
+   * The open still's length, when its cell's ends may set it: the bounds its
+   * inspector gives, and the writer — told how far into the slide the needle
+   * is left, so nothing jumps under it. A clip is resized through `clip`
+   * (its cut) instead, and the closing card never.
+   */
+  resize?: { min: number; max: number; onChange: (seconds: number, local: number) => void } | null;
+}
+
+/** A resize in progress: the end held, where the other end stays, the draft. */
+interface Sizing {
+  edge: StripEdge;
+  /** The fixed end's distance from the needle, px — read once, at the press. */
+  anchor: number;
+  seconds: number;
+  /** A clip's draft cut. */
+  range: TrimRange | null;
 }
 
 /** Shortest cut the handles may leave — the floor `clipSlice` keeps. */
@@ -159,9 +187,17 @@ export default function DeckStrip({
   sound,
   compact,
   marksFor,
+  resize,
 }: DeckStripProps) {
   const pxPerSecond = compact ? 30 : 42;
-  const layout = useMemo(() => stripLayout(lengths, pxPerSecond, MIN_CELL_PX, GAP_PX), [lengths, pxPerSecond]);
+  // While an end of the open cell is dragged, the band is drawn at the draft
+  // length; the document hears about it once, on release.
+  const [sizing, setSizing] = useState<Sizing | null>(null);
+  const drawn = useMemo(
+    () => (sizing ? lengths.map((l, i) => (i === index ? sizing.seconds : l)) : lengths),
+    [lengths, sizing, index],
+  );
+  const layout = useMemo(() => stripLayout(drawn, pxPerSecond, MIN_CELL_PX, GAP_PX), [drawn, pxPerSecond]);
   const layoutRef = useRef(layout);
   layoutRef.current = layout;
 
@@ -169,7 +205,8 @@ export default function DeckStrip({
   // the editor has caught up to — the editor hears about it once a frame.
   const [held, setHeld] = useState<number | null>(null);
   const shown = held ?? time;
-  const offset = xAtTime(layout, shown);
+  // Resizing, the strip keeps the cell's OTHER end where it was on screen.
+  const offset = sizing ? anchoredOffset(layout, index, sizing.edge, sizing.anchor) : xAtTime(layout, shown);
 
   const viewport = useRef<HTMLDivElement>(null);
   const timeRef = useRef(time);
@@ -307,6 +344,78 @@ export default function DeckStrip({
     // The band remounts when the trim bar gives it back; `scrub` reads refs.
   }, [trimming]);
 
+  // --- the open cell's ends ----------------------------------------------------
+  const sizeDrag = useRef<{
+    edge: StripEdge;
+    x0: number;
+    anchor: number;
+    from: number;
+    range: TrimRange | null;
+    moved: boolean;
+    draft: Sizing | null;
+  } | null>(null);
+
+  const onGripDown = (e: PointerEvent<HTMLSpanElement>, edge: StripEdge) => {
+    if (e.button !== 0) return;
+    // The grip is the band's too: without this the band would scrub as well.
+    e.stopPropagation();
+    cancelAnimationFrame(glide.current);
+    e.currentTarget.setPointerCapture(e.pointerId);
+    sizeDrag.current = {
+      edge,
+      x0: e.clientX,
+      anchor: anchorOf(layout, index, edge, offset),
+      from: lengths[index] ?? 0,
+      range: clip ? clip.range : null,
+      moved: false,
+      draft: null,
+    };
+  };
+
+  const onGripMove = (e: PointerEvent<HTMLSpanElement>) => {
+    const d = sizeDrag.current;
+    if (!d) return;
+    e.stopPropagation();
+    const dx = e.clientX - d.x0;
+    if (!d.moved && Math.abs(dx) < TAP_SLOP_PX) return;
+    d.moved = true;
+    let draft: Sizing | null = null;
+    if (d.range && clip) {
+      const range = resizedClip(d.range, d.edge, dx, pxPerSecond, clip.speed, clip.duration, MIN_LENGTH, MAX_HOOK_SECONDS, FRAME_STEP);
+      draft = { edge: d.edge, anchor: d.anchor, seconds: screenSecondsOf(range, clip.speed), range };
+    } else if (resize) {
+      draft = { edge: d.edge, anchor: d.anchor, seconds: resizedStill(d.from, d.edge, dx, pxPerSecond, resize.min, resize.max), range: null };
+    }
+    d.draft = draft;
+    setSizing(draft);
+  };
+
+  const onGripUp = (e: PointerEvent<HTMLSpanElement>) => {
+    const d = sizeDrag.current;
+    sizeDrag.current = null;
+    e.stopPropagation();
+    if (e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
+    setSizing(null);
+    // A tap on a grip changes nothing, and a gesture the browser took back
+    // (pointercancel) is dropped rather than half-written.
+    if (!d?.draft || e.type === 'pointercancel') return;
+    const draft = d.draft;
+    if (draft.range && clip) {
+      // The cut's own writer: an in point moved puts the playhead on it, as
+      // the trim bar's does.
+      clip.onRangeChange(draft.range);
+      return;
+    }
+    if (!resize) return;
+    const next = stripLayout(
+      lengths.map((l, i) => (i === index ? draft.seconds : l)),
+      pxPerSecond,
+      MIN_CELL_PX,
+      GAP_PX,
+    );
+    resize.onChange(draft.seconds, localAtOffset(next, index, anchoredOffset(next, index, draft.edge, draft.anchor)));
+  };
+
   const onKeyDown = (e: KeyboardEvent<HTMLDivElement>) => {
     if (e.metaKey || e.ctrlKey || e.altKey) return;
     // A focused slider owns Space in the suite's key guard, so the band plays
@@ -330,6 +439,17 @@ export default function DeckStrip({
   const ci = slide?.kind === 'content' ? index - 1 : -1;
   const contentCount = slides.filter((s) => s.kind === 'content').length;
   const hasCard = slides.some((s) => s.kind === 'cta');
+
+  // Whether the open cell wears its grips: never while the piece plays (the
+  // strip moves under the finger), never on the closing card (its length is
+  // the outro's), and on a clip only once its length is known.
+  const grips =
+    !playing &&
+    !trimming &&
+    slide?.kind !== 'cta' &&
+    (clip ? clip.duration > 0 : Boolean(resize));
+  // A finger's width on a phone, a pointer's beside a mouse.
+  const gripPx = compact ? 16 : 10;
 
   // The row's geometry on this shell. On a phone every control is a finger's
   // target: the play button a size up from the 34px pills beside it (the same
@@ -365,13 +485,14 @@ export default function DeckStrip({
   if (ci >= 0) menu.push({ id: 'remove', label: 'Remove this picture', danger: true, onSelect: onRemove });
 
   const slideLoop = loopScope === 'slide';
-  const length = lengths[index] ?? 0;
+  const length = drawn[index] ?? 0;
+  const cut = sizing?.range ?? clip?.range;
   const detail = !slide
     ? ''
-    : clip
+    : clip && cut
       ? trimming
-        ? `${formatTimecode(clip.range.start)} → ${formatTimecode(clip.range.end)} · ${seconds(screenSecondsOf(clip.range, clip.speed))} on screen${clip.speed !== 1 ? ' · no sound' : ''}`
-        : `${seconds(length)} · from ${formatTimecode(clip.range.start)}${clip.speed !== 1 ? ` · ${clip.speed}× · no sound` : ''}`
+        ? `${formatTimecode(cut.start)} → ${formatTimecode(cut.end)} · ${seconds(screenSecondsOf(cut, clip.speed))} on screen${clip.speed !== 1 ? ' · no sound' : ''}`
+        : `${seconds(length)} · from ${formatTimecode(cut.start)}${clip.speed !== 1 ? ` · ${clip.speed}× · no sound` : ''}`
       : slide.kind === 'cta'
         ? seconds(length)
         : `${seconds(length)} · ${slide.medium === 'video' ? 'video' : 'image'}`;
@@ -531,8 +652,11 @@ export default function DeckStrip({
               const label =
                 (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
                 (holds ? ` ${holds}` : '') +
-                ` ${seconds(lengths[i] ?? 0)}` +
+                ` ${seconds(drawn[i] ?? 0)}` +
                 (s.speed !== 1 ? ` · ${s.speed}×` : '');
+              const gripped = grips && i === index;
+              // Two grips never cover more than two thirds of a short cell.
+              const grip = Math.min(gripPx, Math.floor(cell.width / 3));
               return (
                 <div
                   key={s.slideId ?? s.kind}
@@ -550,7 +674,10 @@ export default function DeckStrip({
                   }}
                   aria-hidden="true"
                 >
-                  <span className="absolute left-1 right-1 top-0.5 truncate font-mono text-3xs leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]">
+                  <span
+                    className="absolute left-1 right-1 top-0.5 truncate font-mono text-3xs leading-tight text-white [text-shadow:0_1px_2px_rgba(0,0,0,0.85)]"
+                    style={gripped ? { left: grip + 3, right: grip + 3 } : undefined}
+                  >
                     {label}
                   </span>
                   {(marksFor?.(i) ?? []).map((at) => {
@@ -566,10 +693,37 @@ export default function DeckStrip({
                     );
                   })}
                   {slideLoop && i === index && (
-                    <span className="absolute right-0.5 bottom-0.5 grid place-items-center w-4 h-4 rounded-full bg-accent text-white [&>svg]:w-3 [&>svg]:h-3">
+                    <span
+                      className="absolute right-0.5 bottom-0.5 grid place-items-center w-4 h-4 rounded-full bg-accent text-white [&>svg]:w-3 [&>svg]:h-3"
+                      style={gripped ? { right: grip + 2 } : undefined}
+                    >
                       {Icons.loopOne}
                     </span>
                   )}
+                  {gripped &&
+                    (['start', 'end'] as const).map((edge) => (
+                      <span
+                        key={edge}
+                        data-grip={edge}
+                        onPointerDown={(e) => onGripDown(e, edge)}
+                        onPointerMove={onGripMove}
+                        onPointerUp={onGripUp}
+                        onPointerCancel={onGripUp}
+                        title={
+                          s.medium === 'video' && clip
+                            ? edge === 'start'
+                              ? 'Drag to move where this clip starts'
+                              : 'Drag to move where this clip ends'
+                            : 'Drag to make this slide longer or shorter'
+                        }
+                        className={`absolute inset-y-0 grid place-items-center bg-accent cursor-ew-resize touch-pan-y ${
+                          edge === 'start' ? 'left-0' : 'right-0'
+                        }`}
+                        style={{ width: grip }}
+                      >
+                        <span className="w-0.5 h-3.5 rounded-full bg-white/90" />
+                      </span>
+                    ))}
                 </div>
               );
             })}

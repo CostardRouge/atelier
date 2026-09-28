@@ -1010,7 +1010,10 @@ band** — every slide end to end on the piece's clock, a clip as wide as its cu
 and a still as wide as the seconds its inspector gives it, slid under a needle
 that never moves. Drag the band (or use the arrow keys on it) and the slide under
 the needle is the one open; ▶ or `Space` plays **the whole piece**, slide after
-slide, on the stage. `⋯` moves the open picture earlier or later, removes it, or
+slide, on the stage. The open slide's cell carries a **grip at each end**: drag
+one to make a picture hold the screen longer or shorter, or to move a clip's in
+or out point — the other end stays put, and the change is written once, when you
+let go (the Content tab's *On screen* slider is the same number). `⋯` moves the open picture earlier or later, removes it, or
 closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
 

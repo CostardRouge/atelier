@@ -108,7 +108,7 @@ import {
   stripLayout,
   type LoopScope,
 } from '../../shared/roadtrip/deck-strip';
-import { MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
+import { MAX_HOOK_SECONDS, MIN_HOOK_SECONDS } from '../../shared/roadtrip/hook-video';
 import { setEnd, setStart, TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
@@ -1815,6 +1815,23 @@ export default function PostEditor({
       // read on the band at a glance, the way a clip's frames are.
       marksFor={(i) =>
         slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, openerSecondsBySlide[i] ?? 0) : []
+      }
+      // A still's length is set from its cell's ends too: the field and the
+      // bounds of the Content tab's «On screen», and the needle left where it
+      // was in the slide. A clip goes through `clip` (its cut), the closing
+      // card has the outro's length — and a clip not yet decoded waits.
+      resize={
+        !isCta && !(slide.media && classifyPart(slide.media.name) === 'video')
+          ? {
+              min: MIN_HOOK_SECONDS,
+              max: MAX_HOOK_SECONDS,
+              onChange: (seconds, local) => {
+                if (isHook) patchBadge({ hookSeconds: seconds });
+                else patchSlide({ seconds });
+                deck.goTo(slideIndex, local);
+              },
+            }
+          : null
       }
     />
   );
