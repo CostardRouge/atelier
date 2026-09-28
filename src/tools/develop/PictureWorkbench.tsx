@@ -153,6 +153,7 @@ import { borderLayout, type RollBorder } from '../../shared/develop/border-layou
 import { zoneFromView } from '../../shared/develop/crop-rect';
 import { visibleWindow } from '../../shared/ui/pan-zoom';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
+import DeliverBar from './DeliverBar';
 import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
@@ -2052,9 +2053,7 @@ export default function PictureWorkbench({
               plan={exports.plan}
               proxiesOnly={proxiesOnly}
               onProxiesOnly={onProxiesOnly}
-              verbs={exportVerbs}
               exporting={exports.exporting}
-              note={exports.note}
               hdrRun={exports.lastRun?.hdr ?? null}
               pictures={deliveryTable}
               openExif={shotExif}
@@ -2062,8 +2061,16 @@ export default function PictureWorkbench({
               onWords={onWords}
             />
           ) : null}
+          {/* Inside the drawer's own scroll on a phone, where `sticky` pins it. */}
+          {compact && tab === 'export' && (
+            <DeliverBar verbs={exportVerbs} summary={exports.plan.summary} exporting={exports.exporting} note={exports.note} compact />
+          )}
         </div>
         </FoldHints>
+        {/* Docked: under the scrolling sections, as the tab strip is over them. */}
+        {!compact && tab === 'export' && (
+          <DeliverBar verbs={exportVerbs} summary={exports.plan.summary} exporting={exports.exporting} note={exports.note} compact={false} />
+        )}
       </PanelHost>
 
       {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}

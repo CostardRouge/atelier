@@ -260,6 +260,15 @@ with a three-state box over the rows SHOWN, so a filter then the box is a batch
 unticks. `setLeaving` writes `deliveryFor` — `auto` wherever the rule already
 answers, exactly as one row's `toggledDelivery` — so a tick never pins an
 edited picture, and it never touches an ignored one. One `update`, one undo step.
+**The verbs are PINNED** (2026-09-28, his pick "bouton + menu" from the lab
+in `MEMORY.md`): `DeliverBar.tsx` sits under the inspector's scroll the way
+the tab strip sits over it — docked, a sibling after the scroll box; in the
+phone's drawer, `sticky bottom-0` inside the drawer's own scroller (the
+drawer body scrolls, the panel does not). ONE primary verb (`roll`, else the
+first) and the rest behind an `OverflowMenu` opening upward, so the bar keeps
+one height; the run's sentence above, `exporting` and `note` under. What is
+SET (Replace, the ⓘ text) stays in the Deliver section; only what is
+TRIGGERED is pinned. Shown on the Export tab only.
 **E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
 moved to the top-right to make room); a click toggles, a right-click or a
 550 ms touch hold ignores ↔ brings back, and the click that ends a hold is

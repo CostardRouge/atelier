@@ -1416,6 +1416,12 @@ were never exported or changed since, the status line counts them, and
 device beside the roll, not in it, so an export is never an undo step and an
 undo never forgets one.
 
+The export buttons stay pinned at the bottom of the Export tab, whatever is
+scrolled above them: **Export N pictures** (the ones that leave) is the main
+button, and the menu beside it offers this picture, the filmstrip's selection
+and the new or changed ones. The run's progress and its outcome are said under
+it.
+
 **Variants.** One frame, developed two ways — cropped square and 4:5, or in
 colour and in black and white — is two **variants** of it, Lightroom's virtual
 copies and Capture One's variants. **⌘'** (or **Add → a variant of … as
