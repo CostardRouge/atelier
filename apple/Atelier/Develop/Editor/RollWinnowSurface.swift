@@ -18,7 +18,11 @@ struct RollWinnowSurface: ViewModifier {
 
     func body(content: Content) -> some View {
         content
-            .sheet(isPresented: $pickingDay) { daySheet }
+            .sheet(isPresented: $pickingDay) {
+                // Picked FROM, so a sheet (`frontend.md`); the connections handed
+                // on as the shell's Library sheet hands them.
+                daySheet.environment(ConnectionStore.shared)
+            }
             .onChange(of: editor.fetchKey, initial: true) { _, _ in editor.fetchNear() }
             .onChange(of: editor.cullKey, initial: true) { _, _ in
                 Task { await editor.askCulling(maxAge: cullFreshMs) }

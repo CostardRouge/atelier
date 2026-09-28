@@ -54,7 +54,7 @@ struct WinnowDaySheet: View {
     private var photos: [DayPhoto] {
         guard let rows, let host = connection?.id else { return [] }
         let now = nowMillis()
-        return rows.filter { $0.mediaType == .photo }.map { row in
+        return rows.filter { $0.mediaType == .photo }.map { row -> DayPhoto in
             let ref = rowMediaRef(host, row, now: now)
             return DayPhoto(row: row, ref: ref, onRoll: held.contains { sameMediaRef($0, ref) })
         }
