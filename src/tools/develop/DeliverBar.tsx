@@ -1,6 +1,15 @@
+import { useEffect, useState } from 'react';
 import Button from '../../shared/ui/Button';
 import OverflowMenu from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
+import {
+  RUN_PHASES,
+  describeTimeLeft,
+  runCounts,
+  timeLeft,
+  type RunPictureState,
+  type RunProgress,
+} from '../../shared/develop/run-progress';
 import type { ExportVerb } from './ExportPanel';
 
 /**
@@ -13,12 +22,19 @@ import type { ExportVerb } from './ExportPanel';
  * others behind a menu beside it, so the bar keeps one height whatever the
  * roll offers. What is SET (Replace, the long explanation) stays in the
  * Deliver section, which scrolls; only what is TRIGGERED is pinned, with the
- * run's own sentence above it and the run's progress and outcome under it.
+ * run's own sentence above it and the run's outcome under it.
+ *
+ * While a run goes on the bar BECOMES the run (his pick V1): a segment per
+ * picture, the one in hand named with its phase and its step in words, the
+ * time left once one picture has measured it, and a Cancel — and the editor
+ * draws it on every tab, so a picture can be worked on while the roll leaves.
  */
 export default function DeliverBar({
   verbs,
   summary,
   exporting,
+  progress,
+  onCancel,
   note,
   compact,
 }: {
@@ -26,71 +42,171 @@ export default function DeliverBar({
   /** The run's sentence (`RunPlan.summary`) — what the primary verb will deliver. */
   summary: string;
   exporting: string | null;
+  /** Where a running export stands (`run-progress.ts`); null when idle. */
+  progress: RunProgress | null;
+  onCancel: () => void;
   note: string | null;
   /** Inside the phone's drawer, whose body scrolls: stuck to its bottom edge. */
   compact: boolean;
 }) {
   const primary = verbs.find((v) => v.id === 'roll') ?? verbs[0] ?? null;
   const others = verbs.filter((v) => v !== primary);
-  const busy = exporting !== null;
+  const busy = exporting !== null || progress !== null;
   return (
     <div
       className={`flex-none flex flex-col gap-1.5 border-t border-line-strong bg-surface ${
         compact ? 'sticky bottom-0 z-10 -mx-4 px-4 pt-2 pb-2' : '-mx-3 -mb-3 px-3 pt-2.5 pb-3 rounded-b-paper'
       } shadow-[0_-10px_18px_-16px_rgba(43,33,18,0.45)]`}
     >
-      {summary && (
-        <span className="font-mono text-3xs text-ink-soft tabular-nums leading-snug line-clamp-2" title={summary}>
-          {summary}
-        </span>
-      )}
-      {primary ? (
-        <div className="flex items-stretch gap-1 min-w-0">
-          <Button
-            variant="primary"
-            icon={Icons.export}
-            onClick={primary.run}
-            disabled={busy}
-            title={primary.hint}
-            className="flex-1 min-w-0 justify-center"
-          >
-            <span className="truncate">{primary.label}</span>
-          </Button>
-          {others.length > 0 && (
-            <OverflowMenu
-              label="Other exports"
-              icon={Icons.down}
-              variant="primary"
-              size="md"
-              side="above"
-              disabled={busy}
-              items={others.map((v) => ({
-                id: v.id,
-                title: v.hint,
-                onSelect: v.run,
-                label: (
-                  <span className="flex flex-col gap-0.5">
-                    <span>{v.label}</span>
-                    {v.hint && <span className="font-mono text-3xs text-faint whitespace-normal max-w-64">{v.hint}</span>}
-                  </span>
-                ),
-              }))}
-            />
+      {progress ? (
+        <RunBar progress={progress} exporting={exporting} onCancel={onCancel} />
+      ) : (
+        <>
+          {summary && (
+            <span className="font-mono text-3xs text-ink-soft tabular-nums leading-snug line-clamp-2" title={summary}>
+              {summary}
+            </span>
           )}
+          {primary ? (
+            <div className="flex items-stretch gap-1 min-w-0">
+              <Button
+                variant="primary"
+                icon={Icons.export}
+                onClick={primary.run}
+                disabled={busy}
+                title={primary.hint}
+                className="flex-1 min-w-0 justify-center"
+              >
+                <span className="truncate">{primary.label}</span>
+              </Button>
+              {others.length > 0 && (
+                <OverflowMenu
+                  label="Other exports"
+                  icon={Icons.down}
+                  variant="primary"
+                  size="md"
+                  side="above"
+                  disabled={busy}
+                  items={others.map((v) => ({
+                    id: v.id,
+                    title: v.hint,
+                    onSelect: v.run,
+                    label: (
+                      <span className="flex flex-col gap-0.5">
+                        <span>{v.label}</span>
+                        {v.hint && <span className="font-mono text-3xs text-faint whitespace-normal max-w-64">{v.hint}</span>}
+                      </span>
+                    ),
+                  }))}
+                />
+              )}
+            </div>
+          ) : (
+            <span className="font-mono text-3xs text-faint">Open a picture to export.</span>
+          )}
+          {exporting && (
+            <p className="m-0 font-mono text-2xs text-ink-soft" role="status" aria-live="polite">
+              {exporting}
+            </p>
+          )}
+          {note && !exporting && (
+            <p className="m-0 text-xs text-ink-soft leading-snug" role="status">
+              {note}
+            </p>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+/** Past this many pictures a segment each would be thinner than a hairline: one bar instead. */
+const MAX_SEGMENTS = 48;
+
+const SEGMENT: Record<RunPictureState, string> = {
+  queued: 'bg-line',
+  active: 'bg-line-strong',
+  done: 'bg-ok',
+  failed: 'bg-danger',
+};
+
+/** The run as it goes: counts, a segment per picture, the one in hand, its phase, a Cancel. */
+function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; exporting: string | null; onCancel: () => void }) {
+  // The time left is re-read every second; nothing else in the bar needs a clock.
+  const [now, setNow] = useState(() => Date.now());
+  useEffect(() => {
+    const id = window.setInterval(() => setNow(Date.now()), 1000);
+    return () => window.clearInterval(id);
+  }, []);
+  const { total, done, failed, finished } = runCounts(progress);
+  const inHand = progress.index >= 0 && progress.index < total && progress.states[progress.index] === 'active';
+  const left = describeTimeLeft(timeLeft(progress, now));
+  const headline = progress.cancelling
+    ? 'Cancelling after this picture…'
+    : inHand
+      ? `Exporting ${progress.index + 1} of ${total}`
+      : `Preparing ${total} picture${total === 1 ? '' : 's'}…`;
+  const phaseAt = progress.phase ? RUN_PHASES.findIndex((p) => p.id === progress.phase) : -1;
+  return (
+    <div className="flex flex-col gap-1.5 min-w-0" role="status" aria-live="polite" aria-label={headline}>
+      <div className="flex items-baseline justify-between gap-2 font-mono text-2xs tabular-nums">
+        <span className="text-ink">{headline}</span>
+        {left && !progress.cancelling && <span className="text-muted">{left}</span>}
+      </div>
+      {total <= MAX_SEGMENTS ? (
+        <div className="grid gap-[2px]" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }} aria-hidden="true">
+          {progress.states.map((s, i) => (
+            <span key={progress.ids[i]} className={`relative h-1.5 rounded-[2px] overflow-hidden ${SEGMENT[s]}`}>
+              {s === 'active' && <span className="absolute inset-y-0 left-0 w-1/2 bg-accent animate-deck-load motion-reduce:animate-none" />}
+            </span>
+          ))}
         </div>
       ) : (
-        <span className="font-mono text-3xs text-faint">Open a picture to export.</span>
+        <div className="relative h-1.5 rounded-[2px] bg-line overflow-hidden" aria-hidden="true">
+          <span className="absolute inset-y-0 left-0 bg-ok transition-[width] duration-200" style={{ width: `${(finished / total) * 100}%` }} />
+        </div>
       )}
-      {busy && (
-        <p className="m-0 font-mono text-2xs text-ink-soft" role="status" aria-live="polite">
-          {exporting}
-        </p>
+      {inHand && (
+        <div className="flex items-center gap-2 min-w-0">
+          <span className="font-mono text-2xs text-ink truncate min-w-0">{progress.names[progress.index]}</span>
+          <span className="ml-auto flex-none flex gap-1" aria-label="Stage">
+            {RUN_PHASES.map((p, k) => (
+              <span
+                key={p.id}
+                aria-current={k === phaseAt ? 'step' : undefined}
+                className={`px-1.5 rounded-full border font-mono text-3xs leading-4 ${
+                  k === phaseAt
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : k < phaseAt
+                      ? 'border-transparent text-ok'
+                      : 'border-line text-faint'
+                }`}
+              >
+                {k < phaseAt ? '✓ ' : ''}
+                {p.label}
+              </span>
+            ))}
+          </span>
+        </div>
       )}
-      {note && !busy && (
-        <p className="m-0 text-xs text-ink-soft leading-snug" role="status">
-          {note}
-        </p>
-      )}
+      <div className="flex items-center gap-2 min-w-0">
+        <span className="flex-1 min-w-0 font-mono text-3xs text-ink-soft truncate" title={progress.step ?? exporting ?? undefined}>
+          {progress.step ?? exporting ?? ''}
+        </span>
+        {(done > 0 || failed > 0) && (
+          <span className="flex-none font-mono text-3xs text-muted tabular-nums">
+            {done} written{failed > 0 ? ` · ${failed} not` : ''}
+          </span>
+        )}
+        <Button size="sm" onClick={onCancel} disabled={progress.cancelling}>
+          {progress.cancelling ? 'Cancelling…' : 'Cancel'}
+        </Button>
+      </div>
+      {/* L2: the run's settings are the click's, and the Export tab is locked
+          until it ends — said here too, on whichever tab is open. */}
+      <span className="font-mono text-3xs text-faint leading-snug">
+        Settings as at {new Date(progress.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} · an edit now goes to the next export
+      </span>
     </div>
   );
 }

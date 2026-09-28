@@ -627,3 +627,14 @@ recipe, so none of `Button`'s font, height, padding or `shrink-0` fights the
 caller's), and `StageZoomControl` takes optional `items` that turn its
 percentage into that menu. The same prop is what lets a file NAME carry a menu
 (`develop-roll.md`, B2).
+
+## 2026-09-28 — A section whose controls no longer reach what they set is LOCKED, and says so
+
+`LockSections` (`shared/ui/Inspector.tsx`) makes every `InspectorSection` body
+under it inert and dim, while the BAND stays alive: a locked section still
+folds and its ⓘ still opens, because the explanation is exactly what a person
+reads while waiting. `inert` is set through a ref (`useInert`) — React 18 has
+no prop for it, the DOM does; a pointer and the keyboard both pass through,
+and a wheel still scrolls the column. The host owes the WHY in words, stuck
+at the top of the scroll (Develop's Export tab during a run): a lock nobody
+explains reads as a broken control.
