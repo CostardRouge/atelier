@@ -15,6 +15,7 @@ import { borderLayout, scaleLayout, type RollBorder } from './border-layout';
 import { drawDelivered } from './border-paint';
 import { cropZoneSize } from './roll-export';
 import { decodeStill } from '../media/still-decode';
+import { makeDecodeQueue } from '../lib/decode-queue';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 
 /**
@@ -56,11 +57,31 @@ export async function framedThumbnail(
   return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
 }
 
-export async function pictureThumbnail(
+/**
+ * ONE decode at a time for every picture a roll bakes in the background — its
+ * filmstrip cells and its working previews. They are two loops, and each
+ * restarts when the other lands (a preview changes the files a cell is made
+ * from): a restarted loop left its predecessor's decode running and started
+ * the next beside it, and the two loops ran side by side, so a roll of big
+ * stills stacked three or four decodes at once. The queue makes that one,
+ * newest first (`decode-queue.ts`), whoever asks.
+ */
+const ROLL_DECODES = makeDecodeQueue(1);
+
+export function pictureThumbnail(
   file: File,
   longEdge = THUMB_LONG_EDGE,
   quality = THUMB_QUALITY,
 ): Promise<Blob | null> {
+  return ROLL_DECODES.enqueue(() => bakeThumbnail(file, longEdge, quality));
+}
+
+/** How many roll decodes are running and waiting — for a test to read. */
+export function rollDecodesForTest(): { running: number; waiting: number } {
+  return { running: ROLL_DECODES.running(), waiting: ROLL_DECODES.waiting() };
+}
+
+async function bakeThumbnail(file: File, longEdge: number, quality: number): Promise<Blob | null> {
   let bitmap: ImageBitmap | null = null;
   try {
     // Decoded AT the cell's size (`still-decode.ts`): a 48-megapixel JPEG
