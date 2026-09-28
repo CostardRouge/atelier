@@ -7,6 +7,11 @@
 // set; a preset saved here may carry the picture's LOOK too (`+ look`). The
 // batch verbs write the same numbers onto other pictures NOW, each as its own
 // copy — the look under it stays theirs.
+//
+// Where the book is kept is said under the title, and — once a second source
+// can keep it — chosen there (the web's `PresetsPlaceRow`): "on this device",
+// or the instance with how it stands against it, and a menu to keep it
+// elsewhere; the move is the person's gesture, said when it could not be made.
 
 import SwiftUI
 import AtelierKit
@@ -18,6 +23,8 @@ struct PresetsSection: View {
     @State private var naming = false
     @State private var name = ""
     @State private var withLook = false
+    /// Why the last move could not be made.
+    @State private var moveProblem: String?
     @FocusState private var nameFocused: Bool
 
     private var canSave: Bool { !editor.asShot || editor.picture?.grade != nil }
@@ -28,9 +35,7 @@ struct PresetsSection: View {
             "A preset may carry the picture’s LOOK too (+ look); it is worn by the picture it is applied to.",
         ], defaultOpen: true) {
             VStack(alignment: .leading, spacing: 10) {
-                Text("kept \(presets.keptOn)")
-                    .font(Brand.mono(10))
-                    .foregroundStyle(palette.muted)
+                PresetsPlaceRow(presets: presets, problem: $moveProblem)
                 if !presets.presets.isEmpty {
                     PresetChipFlow(spacing: 6) {
                         ForEach(presets.presets, id: \.id) { preset in
@@ -51,6 +56,8 @@ struct PresetsSection: View {
                 }
             }
         }
+        // The first screen that reads the book asks its instance whether it moved.
+        .task { await presets.resume() }
     }
 
     private func chip(_ preset: DevelopPreset) -> some View {
@@ -128,6 +135,76 @@ struct PresetsSection: View {
         editor.savePreset(named: label, withLook: withLook && editor.picture?.grade != nil)
         name = ""
         close()
+    }
+}
+
+/// Where the book is kept: the sentence, and the way to keep it elsewhere —
+/// the menu names the place, so the sentence says only how it stands.
+struct PresetsPlaceRow: View {
+    let presets: PresetBookStore
+    @Binding var problem: String?
+    @Environment(\.palette) private var palette
+
+    var body: some View {
+        let sources = presets.sources
+        let movable = sources.count > 1
+        VStack(alignment: .leading, spacing: 4) {
+            HStack(spacing: 8) {
+                TimelineView(.periodic(from: .now, by: 30)) { context in
+                    let now = context.date.timeIntervalSince1970 * 1000
+                    Text(presets.status(now: now) ?? (movable ? "kept" : "kept \(presets.keptOn)"))
+                        .font(Brand.mono(10))
+                        .foregroundStyle(palette.muted)
+                        .lineLimit(2)
+                }
+                if movable { picker(sources) }
+                if presets.moving {
+                    Text("moving…").font(Brand.mono(10)).foregroundStyle(palette.muted)
+                }
+            }
+            if let problem {
+                Text(problem)
+                    .font(Brand.sans(12))
+                    .foregroundStyle(palette.accentInk)
+                    .fixedSize(horizontal: false, vertical: true)
+            }
+        }
+    }
+
+    private func picker(_ sources: [SourceInfo]) -> some View {
+        let here = presets.book.sourceId
+        return Menu {
+            ForEach(sources, id: \.id) { source in
+                Button {
+                    guard source.id != here else { return }
+                    problem = nil
+                    Task { problem = await presets.keepOn(source.id) }
+                } label: {
+                    if source.id == here {
+                        Label("on \(label(source.id))", systemImage: "checkmark")
+                    } else {
+                        Text("keep on \(label(source.id))")
+                    }
+                }
+            }
+        } label: {
+            Text("on \(label(here))")
+                .font(Brand.mono(10))
+                .foregroundStyle(palette.inkSoft)
+                .padding(.horizontal, 7)
+                .padding(.vertical, 2)
+                .overlay(Capsule().stroke(palette.lineStrong, lineWidth: 1))
+        }
+        .menuStyle(.button)
+        .buttonStyle(.plain)
+        .menuIndicator(.hidden)
+        .fixedSize()
+        .disabled(presets.moving)
+        .help("Keep your presets on another source — every Develop sheet reads the same book")
+    }
+
+    private func label(_ id: String) -> String {
+        id == defaultSourceId ? "this device" : id
     }
 }
 
