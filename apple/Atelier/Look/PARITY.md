@@ -31,7 +31,7 @@ Where things are:
 | `PackManagerView.swift` + `PackManagerModel.swift` + `PackRowView.swift` + `PackZip.swift` | "Your packs" |
 | `LookFixtures.swift` | preview fixtures (an in-memory vault) |
 
-Counts: **95 ✅ · 8 ≠ · 5 ⏳** — 108 rows.
+Counts: **97 ✅ · 8 ≠ · 3 ⏳** — 108 rows.
 
 ## The grade panel — `GradePanel.tsx`, `use-lut-stack.ts`, `use-roll-grade.ts`
 
@@ -92,7 +92,7 @@ Counts: **95 ✅ · 8 ≠ · 5 ⏳** — 108 rows.
 | Phone: the scene a quarter of the height (8 rem floor) | ✅ | ✅ |
 | Footer: "Baked from the same lattice the export uses — what you see here is what you get." + Close | ✅ | ✅ |
 | Escape closes; Enter takes the aimed look | ✅ `.cancelAction` / `.defaultAction` | ✅ |
-| Escape closes the credits first | ⏳ Escape closes the sheet; the ⓘ folds its credits | ⏳ |
+| Escape closes the credits first | ⏳ Escape closes the sheet (`Close` is the cancel action); the ⓘ folds its credits — a credits-first Escape waits on the gallery's own key handling | ⏳ |
 | A 16 px field on a phone so iOS does not zoom | ≠ a native field does not zoom; kept at 16 pt for the thumb | ≠ |
 
 ## The scene — `LookScene.tsx`, `look-scene.ts`
@@ -175,8 +175,8 @@ Counts: **95 ✅ · 8 ≠ · 5 ⏳** — 108 rows.
 | The gallery's scene on LUT Studio's frame | ⏳ `LutStudioModel` keeps its frame private; the gallery opens without a scene (a tap picks) | ⏳ |
 | A pack look picked there | ✅ resolved to its lattice and worn in the uploaded slot, named (the web's selection hook knows built-ins only) | ✅ |
 
-## Not yet
+## The other editors' Look tabs
 
 | Web | | |
 | --- | --- | --- |
-| Trips' and the Studio's Look tabs (the same panel on their own grade rungs) | ⏳ their screens; `GradeStackView(grade:picture:previewHeight:previewDraws:)` is the call | ⏳ |
+| Trips' and the Studio's Look tabs (the same panel on their own grade rungs) | `GradeStackView` in Trips' Picture tab (`PieceGradeSection`, on the piece's rung) and the Studio's inspector (`StudioInspector`, the project's grade) | ✅ |

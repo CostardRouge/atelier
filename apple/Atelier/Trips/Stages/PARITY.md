@@ -119,12 +119,12 @@ parser), each with a spec.
 | Seed: every chapter a tick (name, `dates · n media`, `place guessed…`, `days read at UTC`), all / none | `timelineChapterName`, `timelineChapterLine` | ✅ |
 | A link's preselection wins when it names real chapters | `seedPreselection` (`TimelineImportMode.seed(preselect:)`) | ✅ |
 | The summary: `n stages · span · destination`, each leg's line, the uncovered days, or `No dated leg is ticked…` | `importTimeline` held per change, `uncoveredSentence` | ✅ |
-| Name field (`Australie`, `Short — it is what a badge says…`); `Create trip` makes a house-styled trip and opens it; no post | `tripFromTimeline` + `applyHouseStyle`, written through the store's `DocumentStore`, `onSeeded` for the host to open it | ⏳ house style: applied only where the app bundles `house-style.json`, which `project.yml` does not yet (the gallery / new-trip task owns that bundle; a Studio file of the same name collides if copied flat) |
+| Name field (`Australie`, `Short — it is what a badge says…`); `Create trip` makes a house-styled trip and opens it; no post | `tripFromTimeline` + `applyHouseStyle(_, TripsShell.houseStyle)` — the one bundled resource the gallery's new trip reads too (`roadtrip-house-style.json`); the web commits no house style, so a seeded trip starts from the factory look on both; written through the store's `DocumentStore`, `onSeeded` for the host to open it | ✅ |
 | Complete: the diff list; `Your trip already matches the timeline — …`; `Apply n` | `diffTimeline`, `StageDiffListView`, `applyTimelineDiff` | ✅ |
 | The import's warnings listed | `imported.warnings` | ✅ |
 | Return runs the verb only when enabled; Escape cancels | `.keyboardShortcut(.defaultAction / .cancelAction)` | ✅ |
 | Opened from a timeline link (`#/roadtrip/new?source=<host>&chapters=`) | `atelier://roadtrip/new?…` / `…/<trip>/import?…` → `App/AppLinks.swift`, which hosts this sheet over the Trips stack with the link's host and chapter ids — asleep while `timelineSyncEnabled` is off, the link then landing on the ordinary screen as the web's does | ✅ |
-| A seed from the gallery's `or seed it from <instance>` | ⏳ the gallery's button (dormant behind `timelineSyncEnabled` on the web too) | ⏳ |
+| A seed from the gallery's `or seed it from <instance>` | ⏳ asleep behind `timelineSyncEnabled`, as on the web (no row while it is off); the gallery hands the creation sheet no `onSeedFrom` yet, so the switch turned on brings a link's seed back (`App/AppLinks.swift`) but not this button | ⏳ |
 
 ## Deduce (`DeduceStagesSheet.swift`)
 
@@ -160,8 +160,8 @@ parser), each with a spec.
 | The ONE proposal (label + detail), or why nothing is offered | `locatePicture` → `proposal`, else `locateSilenceWords` (all six refusals) | ✅ |
 | Accept writes through the stage editors, goes to that day and opens the touched leg | `proposal.apply` → `StagesEdit.write`; `onDone(LocatedLeg(day:stageId:))` for the host | ✅ |
 | `Cancel` / `Close` when there is nothing to accept | as on the web | ✅ |
-| Opened from `Locate it` under a picture looked at large | ⏳ the overview's media verbs and the Library call `LocatePictureSheet(store:tripId:fileURL:onDone:)` | ⏳ |
+| Opened from `Locate it` under a picture looked at large | the overview's `Locate it` verb (`TripOverviewView`) opens `LocatePictureSheet(store:tripId:fileURL:onDone:)` on the Library's active picture | ✅ |
 
 ## Counts
 
-✅ 83 · ⏳ 3 · ≠ 5 · — 1 (the overview's own)
+✅ 85 · ⏳ 1 · ≠ 5 · — 1 (the overview's own)

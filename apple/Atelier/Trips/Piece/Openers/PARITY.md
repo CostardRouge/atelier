@@ -18,7 +18,7 @@ Every sentence on screen is the web's, but for the few a gesture changes:
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 86 ✅ · 8 ≠ · 4 ⏳
+Rows: 87 ✅ · 8 ≠ · 3 ⏳
 
 ## The picker's sketches (`OpenerSketchView.swift`)
 
@@ -154,6 +154,6 @@ Rows: 86 ✅ · 8 ≠ · 4 ⏳
 
 | What | Why | |
 |---|---|---|
-| The ticks heard while the opener plays | the transport task's live score player | ⏳ |
+| The ticks heard while the opener plays | the band's `PieceHookSound` (`Band/PARITY.md`, «The opener's sound»): the kernel's `renderBed` over the score from the clock, off by default, `M` or the transport's ticks pill; never yet heard on a device | ✅ |
 | Pictures appearing one by one as a pass decodes | the model lands a pass whole (`refreshOpener`, the core's) | ⏳ |
 | Verified on a device: the fetch against a real instance, the chooser's EXIF on real files, a sketch's frame rate | nothing here runs Apple code | ⏳ |

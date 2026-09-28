@@ -50,7 +50,7 @@ Rows: 154 ✅ · 20 ≠ · 4 ⏳ — plus the deferrals gathered at the end (the
 | Reconcile id → hash → name; a rename ABSORBED once and persisted (`adoptRenames`) | ✅, the hashes read off the main actor (128 KiB per file, memoised) | ✅ |
 | Files the Library holds for the project (a global pool) | the shell's Library FEEDS the project (below), and the project keeps its own working set: its folder, plus its LOOSE files in a side table beside the document (`<id>.locators.json`) — a bookmark per file pointed at, a folder's file by the folder's bookmark and its path, a copy for a Photos pick (in a folder of its own, so it keeps its NAME and date — the ref the web and the Library call it by) | ≠ — the web's project IS the Library's selection, so opening one pours its folder into the pool and a save writes whatever is ticked there; here a project reopens tomorrow on its own table, and the Library's pool is never filled by opening one |
 | Returning to the editor resumes it | the editor is KEPT while its project is open (`liveEditor`): the playhead, the selection and the history survive a trip to the gallery | ✅ |
-| `#/studio/open/<id>` — another tool hands a project over; the route rewrites itself on arrival, a project already open is revealed, not listed again | `StudioStore.shared.openHandedOver(_:)` — opens the project by id as its card would, then `handedOver` waits for the gallery, which pushes its editor and consumes it (`takeHandOff`); the caller moves the shell with `shellNavigate(.studio)` | ✅ the seam — Trips' own call is its bridge's task |
+| `#/studio/open/<id>` — another tool hands a project over; the route rewrites itself on arrival, a project already open is revealed, not listed again | `StudioStore.shared.openHandedOver(_:)` — opens the project by id as its card would, then `handedOver` waits for the gallery, which pushes its editor and consumes it (`takeHandOff`); the caller moves the shell with `shellNavigate(.studio)` — Trips' bridge does (`PieceStudioBridge.open`), and so does a link (`atelier://studio/open/<id>`, `App/AppLinks.swift`) | ✅ |
 
 ## The gallery (`Gallery/StudioGallery.swift`, `StudioProjectCard.swift`)
 
@@ -143,7 +143,7 @@ Rows: 154 ✅ · 20 ≠ · 4 ⏳ — plus the deferrals gathered at the end (the
 | A press hit-tests and selects; a drag moves, clamped, snapped (grid or edges), Alt free | ✅ Option on a Mac | ✅ |
 | A tap (no travel) on a phone raises the inspector | ✅ | ✅ |
 | A/B: the original LEFT of the divider, any drag moves it | ✅ | ✅ |
-| A palette cell dragged onto the stage | ⏳ (`Panels/PARITY.md`) | ⏳ |
+| A palette cell dragged onto the stage | ⏳ (`Panels/PARITY.md`): the stage's drop target takes Library media only (`libraryDropDestination`) | ⏳ |
 
 ## The transport (`Stage/StudioTransportBar.swift`, `StudioTrimBar.swift`, `Editor/StudioPlayback.swift`)
 
@@ -211,7 +211,7 @@ Rows: 154 ✅ · 20 ≠ · 4 ⏳ — plus the deferrals gathered at the end (the
 | Output · File name, the media's base name as placeholder, kept in `exportPrefs.fileName` | ✅ written through the funnel (a step of undo); the field owns the keys while it types | ✅ |
 | Output · Destination: the browser's Downloads, or a folder picked once for the session (Chromium) | a folder asked for AT THE CLICK, every run — pick, then render, then write — and named after the run; a device has no Downloads | ≠ |
 | Output · *Delivers* over a still an instance handed as its proxy: the decision's line and reason, then the proxy sentence (`useDeliveryRow`) | ✅ `deliveryDecision` — the one the run takes too | ✅ |
-| — the render inside a proxy's RAW original, measured from a megabyte of its head | ⏳ no head probe here yet: the proxy delivers, and the row says so instead of the kernel's "read at export" | ⏳ |
+| — the render inside a proxy's RAW original, measured from a megabyte of its head | ⏳ the Studio's export probes no head yet (Develop's run does, `RollExportFetch` over `client.fetchHead`): the proxy delivers, and the row says so instead of the kernel's "read at export" | ⏳ |
 | — a *Delivers* row for every other media | a native addition: the largest frame the variants write, measured against the file that will be encoded (`deliversLine`) | ≠ |
 | Output · *From proxy* over a clip an instance handed as its proxy: *Render from the proxy* (For a quick look), off, its hint | ✅ wired, and reached since the Library brings an instance's media into the Studio (not yet driven against an instance) | ✅ |
 | Variants · the count as badge, + Variant in the project's format | ✅ | ✅ |
@@ -287,10 +287,8 @@ Rows: 154 ✅ · 20 ≠ · 4 ⏳ — plus the deferrals gathered at the end (the
   original where its proxy falls short, the finals home) read the identity
   the Library registered — all written against the client, none run.
 - ⏳ The render inside a proxy's RAW original, measured from its head (the
-  web's `rawRenderOf`): the app has no session cache of originals
-  (`HeldOriginals`) yet.
-- ⏳ Trips' side of the hand-off: its bridge calls
-  `StudioStore.shared.openHandedOver(_:)` then `shellNavigate(.studio)`.
+  web's `rawRenderOf`): the Studio's export does not call the head probe
+  Develop's run uses (`RollExportFetch`, the kernel's `DeliverySource`).
 - ⏳ The develop sheet's loupe — it comes with the Develop tool's.
 - ⏳ A palette cell dragged onto the stage; the outro's own stage; the lane
   under the trim bar (not on the web either).

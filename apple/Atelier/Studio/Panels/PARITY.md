@@ -55,7 +55,7 @@ Rows: 93 ✅ · 11 ≠ · 2 ⏳ — plus three deferrals that are the shell's, n
 | Shape cells draw a glyph (arrow, tape with its sight colour, battery, corners, the phone mid-turn) with the glow as a drop shadow | the web's own SVG paths, in SwiftUI `Canvas` | ✅ |
 | Dark 2rem stage, edges faded so a long readout says "there is more" | 32 pt `frame` stage, gradient mask | ✅ |
 | Hover: border takes the accent | ✅ press and hover | ✅ |
-| Drag a cell onto the frame | ⏳ the web adds by click too; a `.draggable` cell waits on the Studio stage's drop target | ⏳ |
+| Drag a cell onto the frame | ⏳ the web adds by click too; a `.draggable` cell waits on a drop target for a palette cell — the stage's takes Library media only (`libraryDropDestination`) | ⏳ |
 
 ## Elements (`ElementListView.swift`)
 
@@ -174,7 +174,7 @@ Rows: 93 ✅ · 11 ≠ · 2 ⏳ — plus three deferrals that are the shell's, n
 
 ## Deferred, and what each waits on
 
-- ⏳ Dragging a palette cell onto the stage — the Studio stage's drop target.
+- ⏳ Dragging a palette cell onto the stage — a drop target for a cell (the stage's takes Library media only).
 - ⏳ The outro's own stage — deferred on the web too.
 - ✅ Keyboard: Delete removes the selected element, Space plays — built by
   the Studio shell (`Studio/PARITY.md`, «Keys»), not by a panel.

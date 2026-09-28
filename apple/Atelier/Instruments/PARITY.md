@@ -8,8 +8,8 @@ what it waits on) · ≠ built differently on purpose (why).
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 117 ✅ · 22 ≠ · 2 ⏳ — the ⏳ are the shelf remembered across launches
-and MapKit tiles in the Composer.
+Rows: 117 ✅ · 24 ≠ · 1 ⏳ · 1 — (a row the web has none of) — the ⏳ is
+MapKit tiles in the Composer.
 
 ## The shell (`InstrumentTool.swift`, `App/RootView.swift`)
 
@@ -20,7 +20,7 @@ and MapKit tiles in the Composer.
 | The tool menu's grouped list (editors, then instruments) | iPad-regular and the Mac: the sidebar's second section, *Instruments*; a phone: the fifth tab, *More*, a list of the same rows | ✅ |
 | Each instrument's `accepts` | `InstrumentTool.accepts`, matched by the kernel's `usableAssets` | ✅ |
 | The home page's instrument cards (eyebrow, name, blurb) | `InstrumentsHome` rows (the *More* page) | ✅ |
-| Routes `#/telemetry`, `#/map`… | ≠ a sidebar selection or a pushed page; a place change resets its stack | ≠ |
+| Routes `#/telemetry`, `#/map`… | ≠ a sidebar selection or a pushed page; a place change resets its stack. A link reaches one by the web's path (`atelier://lut`, `App/AppLinks.swift`) | ≠ |
 
 ## The Library, as the instruments read it (`InstrumentShelf.swift`, `InstrumentChrome.swift`)
 
@@ -31,7 +31,7 @@ and MapKit tiles in the Composer.
 | Add files / a folder (File System Access), drag in | Files / the Finder (`fileImporter`, read in place under a security scope) and Photos (`PhotosPicker`, the original bytes copied into a temporary folder the shelf empties) | ✅ |
 | The library's checkbox SELECTION narrows a tool's set | ≠ no selection: every usable file on the shelf is the set; *Remove from the instruments* (context menu) takes one off | ≠ |
 | A repeated drop is deduped | same name + size + date ignored | ✅ |
-| The library persists folder handles across reloads | ⏳ the shelf is a session's (the web's library of loose files is too); a folder remembered per launch waits on a native Library | ⏳ |
+| The library persists folder handles across reloads | the shelf is a session's; the ONE Library remembers a folder across launches (a bookmark, `LibraryStore`), and what is put to work there while an instrument is on screen joins the shelf (`LibraryShelfBridge`) | ≠ the instruments were ported with their own shelf; the Library feeds it rather than replacing it |
 | `‹ 1/3 ›` clip stepper | `ClipStepper`, ⌘← / ⌘→ on the Mac | ✅ |
 | Transport: play/pause (Space), position, scrub, length | `InstrumentTransport` | ✅ |
 | The HEVC decode failure and its ffmpeg.wasm transcode control | ≠ none: the device decodes HEVC (`Video/VideoSource.swift`); a clip it refuses says the platform's own reason | ≠ |

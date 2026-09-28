@@ -28,7 +28,7 @@ Every sentence on screen is the web's. Nothing here was run on a device: this
 container has no Apple toolchain, so every view was written against the SDK and
 compiled by CI alone; the kernel half ran here (Linux, 24 specs green).
 
-Rows: 62 ✅ · 7 ≠ · 2 ⏳
+Rows: 64 ✅ · 7 ≠ · 0 ⏳
 
 ## The tab (`LookTab.tsx`)
 
@@ -134,9 +134,9 @@ Rows: 62 ✅ · 7 ≠ · 2 ⏳
 | A shade removed while its centre is being placed | placing stops with it | ✅ |
 | The stage draws the centre's line or cross while placing | `BadgeStageChrome.drawShadeHandle` (landed with the stage) | ✅ |
 
-## Deferred
+## Once deferred, now built
 
-| What | Waits on | |
+| What | Built as | |
 |---|---|---|
-| The variant sketches, the options panels (Défilé's stops, the Itinerary's map, Virée's drive and "Configure the car…") and the picture chooser | the openers' task, which replaces `PendingOpeners.swift`; this tab hosts all three by name and presents the chooser when the options call `\.chooseOpenerPictures` | ⏳ |
-| The core's `Trips/Piece/PARITY.md` row "Look tab … ⏳" | flipped by whoever merges the four tab tasks (the rows are adjacent) | ⏳ |
+| The variant sketches, the options panels (Défilé's stops, the Itinerary's map, Virée's drive and "Configure the car…") and the picture chooser | `OpenerPickerView` hosts them by name — `OpenerSketchView`, `OpenerOptionsView`, `OpenerPicturesSheet` (`Piece/Openers/`, its own table); `PendingOpeners.swift` is gone | ✅ |
+| The core's `Trips/Piece/PARITY.md` row "Look tab … ⏳" | flipped: `Look tab … LookTabView` reads ✅ there | ✅ |

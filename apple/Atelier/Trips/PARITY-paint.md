@@ -6,8 +6,9 @@ The web's side is `src/shared/roadtrip/trip-store.ts` + the document funnel of
 (already `Paint/CellPainter.swift`), `slide-render.ts`'s drawing half,
 `deck-export.ts`, `hook-video-export.ts`, `thumbnail.ts`,
 `src/tools/roadtrip/use-hook-pictures.ts`, `use-trip-grade.ts` (its render
-half) and `use-post-exports.ts`. The screens themselves are the next task; this
-is what they call.
+half) and `use-post-exports.ts`. The screens themselves are their own tables
+(`PARITY.md`, `Overview/`, `Piece/`, `Stages/`, `Settings/`); this is what
+they call.
 
 ✅ built · ⏳ deferred (why, and what it waits on) · — not applicable natively (why)
 
@@ -38,7 +39,7 @@ is what they call.
 | Resume on open: a clean mirror takes a newer copy silently | `DocumentSync.resume` | ✅ |
 | Keep mine / take theirs / keep as local / delete here | `DocumentSync` (the pill is `Sources/SyncPill.swift`) | ✅ |
 | Gallery: groups per source, create THERE first, delete there first | `DocumentGalleryModel<TripDoc>` (generic, landed) | ✅ |
-| `.roadtrip.json` export / import | kernel `TripFile`; the verbs are the screens' | ⏳ screens |
+| `.roadtrip.json` export / import | kernel `TripFile`, the verbs the gallery's (`TripsShell.exportFile` / `importFile`: a card's Export, the gallery's Import, a dropped file) and the trip settings' backup | ✅ |
 
 ## Painting (`Paint/`)
 
@@ -67,7 +68,7 @@ is what they call.
 | `slideRender` → what a slide is made of | kernel; `SlideRenderer.render` caches it per slide | ✅ |
 | `lutFor` / `filmFor`: the grade a picture WEARS baked with its develop; the closing card never graded | `TripSlideLooks.cube` / `film` / `grader` | ✅ |
 | A look this device cannot resolve is said | `TripSlideLooks.missingWords` (the render plan's resolver, `DevelopLooks`) | ✅ |
-| The live editing stack (strength slider's deferred bake) for the open picture | the screens' look panel | ⏳ screens |
+| The live editing stack (strength slider's deferred bake) for the open picture | ONE bake path for every picture: the Picture tab's grade panel (`PieceGradeSection` over `GradeStackView`) writes the rung, and `TripSlideLooks` bakes a cube per grade × develop × interpolation and keeps it — a strength step bakes once, at once; the web's deferral answers a JS bake stalling the input (unmeasured on a device here) | — |
 | Défilé: flash or the empty day's ink, the dip, band + track with a 13-stop edge fade, ticks, head in three shapes, its glow | `ScrubPainter` over `ScrubFrame` | ✅ |
 | Itinerary: backdrop + veil, plate, graticule clipped to the box, path ahead / drawn over their underlay, context, stems, dots + numerals, pins, names with halos, pen (dot / plane), card, strip + veil + ring, compass, distance; round caps and joins | `MapPainter` over `MapFrame` | ✅ |
 | Names measured by the canvas for the label placement | `HookPaint.labelWidth` (Core Text, label face, 600) | ✅ |
@@ -75,8 +76,8 @@ is what they call.
 | Virée's reveal: the map painted whole, laid over at a falling alpha | ONE transparency layer at `DriveFrame.alpha` | ✅ |
 | A text halo: `strokeText` under `fillText`, round joins | `PaintCanvas.strokeText` + `lineJoin` (added) | ✅ |
 | The opener's pictures: wants of `day` media, the budget split in steps, `coverCrop` / `wholeCrop` at decode, graded with the piece's look, one problem line per picture | `HookPictureLoader` | ✅ |
-| …fetched from the instance when the Library does not hold it | the resolver's job (the Library / Winnow on native) | ⏳ Library screens |
-| …kept across edits, only a changed want decoded again (`sig`) | the loader decodes the set it is given; keeping it is the screen's | ⏳ screens |
+| …fetched from the instance when the Library does not hold it | `OpenerPictureFetch.previewStill` — the connected instance's editing rendition, never added to the pool, held for the session, a task scoped to the piece | ✅ |
+| …kept across edits, only a changed want decoded again (`sig`) | `PieceEditorModel.refreshOpener`: keyed on the wants, the flash's look and the pool, what is held reused (`OpenerPictureFetch.held`) | ✅ |
 | The render gate: preview = export resampled | `AtelierTests/Trips/TripsRenderGateTests.swift` (every opener + the badge at two sizes) | ✅ |
 
 ## Deliveries (`Export/`)
@@ -98,16 +99,16 @@ is what they call.
 | `exportPiece`: the plan first, stills in one pass then clips, a failed clip costs itself, cancel keeps what was made, the note's words | `TripPieceExport.exportPiece` | ✅ |
 | `exportDeck`, `exportHookClip` and their notes | `TripPieceExport` | ✅ |
 | Every run a TASK with its line, its ratio and a real Cancel (`piece:<id>`) | `TaskRegistry` | ✅ |
-| `pixelsForStills` / `deliveryFor`: an original fetched where the proxy would be upscaled (O2 / R5) | waits on a native Winnow originals fetch | ⏳ Sources |
-| The folder asked for AT THE CLICK, then written | files land in a temporary folder the screen hands on (`fileExporter`, share sheet), then `discard()` | ⏳ screens |
+| `pixelsForStills` / `deliveryFor`: an original fetched where the proxy would be upscaled (O2 / R5) | ⏳ the fetch exists (Develop's run and the Studio's export use it) but the piece's resolver does not call it: the *Delivers* row says the proxy is what leaves (`Piece/Export/PARITY.md`) | ⏳ |
+| The folder asked for AT THE CLICK, then written | files land in a temporary folder the Export tab hands on (`PieceDelivery`: `fileMover`, `ShareLink`, Photos), then `discard()` | ✅ |
 | `undecodable` + the ffmpeg.wasm transcode offer | AVFoundation decodes HEVC | — |
 | `isEncodeSupported` | every device here has an H.264 encoder | — |
 | The combined reel (one file per deck) | not built on the web either (open item) | ⏳ web first |
 
 ## Counts
 
-Store 23 ✅ · 1 ⏳ — Painting 29 ✅ · 3 ⏳ · 2 — — Deliveries 14 ✅ · 3 ⏳ · 3 —
-(78 rows: 66 ✅, 7 ⏳, 5 —).
+Store 24 ✅ — Painting 31 ✅ · 3 — — Deliveries 15 ✅ · 2 ⏳ · 3 —
+(78 rows: 70 ✅, 2 ⏳, 6 —).
 
 Nothing here has run on a device. The gate runs on CI's macOS job; every file
 was type-checked on Linux against stubs of the Apple frameworks before it was

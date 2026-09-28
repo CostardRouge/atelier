@@ -18,7 +18,7 @@ Every sentence on screen is the web's. Nothing here was run on a device:
 this container has no Apple toolchain, so every view was written against the
 SDK, parse-checked, and compiled by CI alone.
 
-Rows: 77 ✅ · 9 ≠ · 4 ⏳
+Rows: 79 ✅ · 9 ≠ · 2 ⏳
 
 ## The screen (`TripOverviewView.swift`, `TripOverviewModel.swift`)
 
@@ -160,7 +160,7 @@ Rows: 77 ✅ · 9 ≠ · 4 ⏳
 
 | Web | Why | |
 |---|---|---|
-| The open leg's card in the right column above 1180 (`StageCard` beside the day) | the card is drawn by `StagesPanelView` (the stages task), hosted between the map and the calendar; the contract gives the overview no card of its own | ⏳ |
-| `From <instance>` / `Deduce` on the stages (timeline complete, deduce) | the stages task and task -07 | ⏳ |
+| The open leg's card in the right column above 1180 (`StageCard` beside the day) | the card is drawn by `StagesPanelView`, hosted between the map and the calendar; the panel can hand its card to a host (`showsCard: false`, `StageCardView`), and `OverviewWide` does not take it into its right column yet | ⏳ |
+| `From <instance>` / `Deduce` on the stages (timeline complete, deduce) | the Stages panel on a wide screen and the phone's legs sheet: `Deduce` (`DeduceStagesSheet`) and `From <instance>` (`TimelineImportSheet(.complete)`, asleep behind `timelineSyncEnabled` as on the web) | ✅ |
 | The dates sheet's cover panel | the shell's `TripDetailsSheet` carries it | ✅ |
 | Measured on a phone | nothing here has run on a device; the 624 pt budget of §8.1 is to be checked on his iPhone with the tab bar and the bottom bar both drawn | ⏳ |

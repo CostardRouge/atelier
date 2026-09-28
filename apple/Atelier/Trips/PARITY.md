@@ -16,7 +16,7 @@ Every sentence on screen is the web's, "this browser" read as "this device".
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 83 ✅ · 6 ≠ · 4 ⏳
+Rows: 85 ✅ · 6 ≠ · 2 ⏳
 
 ## Where you are (`TripsTool.swift`, `TripsShell.swift`, `App/Tool.swift`)
 
@@ -40,8 +40,8 @@ Rows: 83 ✅ · 6 ≠ · 4 ⏳
 | The span note after a timeline / deduce apply, with its × | `TripsShell.spanNote`, drawn over the overview and the piece, dismissed by ×; set by the sheets of task -07 | ✅ |
 | `requestPersistentStorage` | — an app's container is not evicted | ✅ |
 | The task pill in the masthead | `.taskPill()` on the gallery and on each pushed screen (the pushed screens must not add their own) | ✅ |
-| Seeding a trip from a Winnow timeline (`TimelineImportPanel` seed) | ⏳ the creation sheet draws the row when handed `onSeedFrom`; the sheet is task -07's and the switch is off | ⏳ |
-| Completing / deducing the legs from the overview | ⏳ task -07 (the overview carries the buttons) | ⏳ |
+| Seeding a trip from a Winnow timeline (`TimelineImportPanel` seed) | ⏳ asleep behind `timelineSyncEnabled`, as on the web (no row while it is off). The sheet is built (`TimelineImportSheet(.seed)`) and a link reaches it (`App/AppLinks.swift`); the gallery hands the creation sheet no `onSeedFrom` yet, so turning the switch on brings the links back but not this row | ⏳ |
+| Completing / deducing the legs from the overview | the Stages panel and the phone's legs sheet carry `Deduce` (`DeduceStagesSheet`) and `From <instance>` (`TimelineImportSheet(.complete)`, asleep behind `timelineSyncEnabled` as on the web) | ✅ |
 
 ## The gallery (`Gallery/`)
 
@@ -110,7 +110,7 @@ Rows: 83 ✅ · 6 ≠ · 4 ⏳
 | Left on starts EMPTY, Came back on today | an empty value is a `Pick a date` button; the problem line says `Pick a start date for the trip.` | ≠ a date picker cannot be empty |
 | The live `n days — badges will read “day n / N”.` or the problem, in red | `spanProblem` / `spanLength` | ✅ |
 | `Keep on` only with a second document source, with its hint | ✅ | ✅ |
-| `or seed it from` buttons, greyed with `has no timeline yet` | ✅ drawn when the shell hands a handler | ⏳ (task -07) |
+| `or seed it from` buttons, greyed with `has no timeline yet` | ✅ drawn when the shell hands a handler | ⏳ the gallery hands none yet — asleep behind `timelineSyncEnabled` on the web too (the row above) |
 | A new trip wears the committed house style | `applyHouseStyle(_, readHouseStyle(bundle's roadtrip-house-style.json))` — nil, the factory look, while the web commits none | ✅ |
 | A remote trip is pushed on creation; nothing kept if refused, and said | `gallery.createOn(_, verb: "created")` | ✅ |
 | Creating opens the trip | `store.adoptCreated` + the path | ✅ |
@@ -118,7 +118,7 @@ Rows: 83 ✅ · 6 ≠ · 4 ⏳
 | BEFORE saving: legs removed, legs trimmed, pieces outside the calendar (kept) | `spanImpact`, only when the span moved | ✅ |
 | The cover panel inside the dates sheet | ✅ | ✅ |
 | Save: new span, legs brought inside (`applyTripDetails`), cover pruned, stamped | `TripsStore.saveDetails(_:)` — one undo step | ✅ |
-| The open day follows when it leaves the trip | ⏳ the overview's, after `saveDetails` (it owns the day) | ⏳ |
+| The open day follows when it leaves the trip | the overview's `saveDetails` (it owns the day): a day a shorter span dropped moves to the trip's first | ✅ |
 | `All of it stays editable.` + ⓘ | `DevelopInfoDot` + `DevelopNote`, the web's three paragraphs | ✅ |
 | Enter saves from any field, Escape cancels | `.defaultAction` / `.cancelAction` shortcuts; Return in the name field | ✅ |
 | Two date fields side by side, one per line on a phone | `ViewThatFits` | ✅ |
@@ -154,13 +154,11 @@ Rows: 83 ✅ · 6 ≠ · 4 ⏳
 ## Deferred, gathered
 
 - The timeline seed from the creation sheet (behind the kernel's
-  `timelineSyncEnabled`, off — the web draws no row either). The link routes
-  are built (`App/AppLinks.swift`) and asleep behind the same switch.
-- The open day following a shorter span (the overview's, over `saveDetails`).
+  `timelineSyncEnabled`, off — the web draws no row either): the gallery
+  hands the sheet no `onSeedFrom`. The link routes are built
+  (`App/AppLinks.swift`) and asleep behind the same switch.
 - A bundled house style: the web commits none. When it does, bundle
   `src/shared/roadtrip/house-style.json` into the app as
   `roadtrip-house-style.json` (the Studio's twin has the same file name, so it
   cannot keep its own) — `TripsShell.houseStyle` reads it with the kernel's
   `readHouseStyle`.
-- `PARITY-paint.md`'s `.roadtrip.json export / import — ⏳ screens` row is
-  answered by this gallery.

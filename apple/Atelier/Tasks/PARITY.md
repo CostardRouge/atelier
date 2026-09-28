@@ -67,8 +67,8 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 | (the sweep runs regardless) | under Reduce Motion a STILL quarter in the MIDDLE of the bar — never at its start, where it would read as a quarter done | ✅ native addition |
 | On the Develop viewport's bottom edge, scoped to the picture | `DevelopStageView`, scoped to the open picture | ✅ |
 | — | the same hairline on a filmstrip cell whose picture is being opened | ✅ native addition |
-| On the lightbox's deck (`MediaLightbox`'s `taskScope`) | ⏳ the app has no lightbox yet — the Library task draws `TaskEdge` on its deck | ⏳ |
-| On the Trips badge stage (`piece:<id>`) | ⏳ Trips is not built | ⏳ |
+| On the lightbox's deck (`MediaLightbox`'s `taskScope`) | `MediaLightbox`: `TaskEdge(scope: taskScope)` over the deck while its picture is fetched | ✅ |
+| On the Trips badge stage (`piece:<id>`) | `BadgeStageView`: `TaskEdge(scope: "piece:<id>")`, the scope the piece's exports register under | ✅ |
 | A modal sheet carries its OWN cancel: the masthead is behind it | `TaskCancelLink(scope:)` — `cancel` while a task of that media can stop, `cancelling…` once pressed; a sheet with a bar of its own may carry `.taskPill()` instead | ✅ |
 
 ## Fetches — `tracked.ts` (T2)
@@ -79,7 +79,7 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 | A cancelled fetch rejects with an `AbortError` named `<label> was cancelled` (`isAbortError`) | `CancellationError`, Swift's own and what the transport already throws; `TaskCenter.cancelledSentence(label)` for the words | ≠ |
 | An outer signal (an export's) ends the fetch too | a caller's own cancellation reaches the work (`withTaskCancellationHandler`) | ✅ |
 | `quiet: true` for a caller that is a task already | by construction: a caller already under a task does not call `tracked` / `start` (the run's own RAW decode) | ✅ |
-| Where a fetch task starts: `materialize`, `fetchSourceFile`, `deliveryFor`, `useCaptureView.load`, the roll export's original, the Studio's capture | ⏳ the app fetches no media from an instance yet — the Library's browser and a roll's own fetch call `tracked` when they land | ⏳ |
+| Where a fetch task starts: `materialize`, `fetchSourceFile`, `deliveryFor`, `useCaptureView.load`, the roll export's original, the Studio's capture | `TaskCenter.tracked` at every one: the Library's browser, instance tab and a piece's Library (`materializeTaskLabel`), a roll's own fetch (`RollEditor+Winnow`), the lightboxes' capture files (`LibraryLightboxes`, `MediaLightbox`), the roll export's originals and companions (`RollExportFetch`), the Studio's capture and its recovery (`StudioExportModel`, `StudioStore+Recovery`), an opener's pictures (`OpenerPictureFetch`) | ✅ |
 
 ## Decodes — `use-develop-picture.ts`, `raw-decoder.ts` (T3)
 
@@ -95,8 +95,8 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 | Web | Native | |
 | --- | --- | --- |
 | The roll's run is ONE task — `Exporting <file>` / `Exporting N pictures`, a picture at a time (`i/N · name`), a Cancel that stops BETWEEN two pictures and keeps what was rendered, said in the note | `RollRunState` + `RollExportRun`, now through `TaskCenter.start`; the pill says it wherever he walks | ✅ |
-| Trips' three exports (`Exporting the piece`, `Exporting the slides`, `Encoding the hook`), scoped `piece:<id>` | ⏳ Trips is not built | ⏳ |
-| The Studio's export beside its own bar and Cancel (`Exporting <name>`) | ⏳ the Studio is not built · the instruments' exports are tasks already: the LUT studio's batch (`Exporting graded clips`, `i of N`, Cancel) and the Composer's (`Exporting <clip>`, Cancel) | ⏳ |
+| Trips' three exports (`Exporting the piece`, `Exporting the slides`, `Encoding the hook`), scoped `piece:<id>` | `TripPieceExport`: one task per run under those labels and that scope, its Cancel stopping between two slides and ending the clip in flight | ✅ |
+| The Studio's export beside its own bar and Cancel (`Exporting <name>`) | `StudioExportModel`: `Exporting <name>` · `N variants`, its Cancel ending the variant in flight and keeping what was written; the instruments' exports likewise — the LUT studio's batch (`Exporting graded clips`, `i of N`, Cancel) and the Composer's (`Exporting <clip>`, Cancel) | ✅ |
 
 ## One-off surfaces (T5)
 
@@ -106,4 +106,4 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
 | The pack import: `Importing <pack>`, `i of N`, NO Cancel — the index is written last | `PackManagerModel.run`, the sheet keeping its own line | ✅ |
 | A surface beside the VERB stays; one that only repeats the pill goes | the Develop Export tab's line and Cancel, the instruments' bars and Cancel stay beside their buttons; nothing here drew a private bar the pill now repeats | ✅ |
 
-**Counts**: 44 rows — 34 ✅ (4 of them native additions), 5 ⏳, 5 ≠ (built differently on purpose).
+**Counts**: 44 rows — 39 ✅ (4 of them native additions), 0 ⏳, 5 ≠ (built differently on purpose).

@@ -70,7 +70,7 @@ Where things are:
 | A phone: a SHEET at its tallest rest, opened from the bottom bar's cell — ONE bottom menu, the Library's cell FIRST on every screen | the `TabView`'s first item, a cell that opens `LibrarySheet` (`.large`) and is never the selected tab | ✅ |
 | The bar is drawn on every tool screen, so the Library is always one tap away | a phone's editor HIDES the tab bar (Develop's workbench): `LibraryButton` in its own bar opens the same sheet (`\.openLibrary`) | ≠ one bottom menu is the tab bar; an editor with a docked drawer has no room for a second |
 | The sheet closes when the tool or the layout changes | it lives on the phone's `TabView`, and a verb that moves to a tool closes it (`shellNavigate`) | ✅ |
-| A tool's SECTIONS in the thumb zone (`SectionRail`) | not the Library's: a tool's sections are its drawer's strip (`Develop/Inspector/InspectorDrawer.swift`) | ⏳ each tool's own screens |
+| A tool's SECTIONS in the thumb zone (`SectionRail`) | each tool's OWN bar in the thumb zone: Develop's and the Studio's drawer strips (`InspectorDrawer`, `StudioInspectorDrawer`), the Trips piece's drawer (`PieceInspectorDrawer`), the trip overview's Stages · Trip cells (`OverviewPhone`) | ≠ the tab bar is the ONE bottom menu and hides inside an editor, so the shell draws no second bar for a tool to publish into |
 | The instrument pages read the one Library | an asset put to work while an instrument is on screen is handed to the instruments' shelf (`LibraryShelfBridge`) | ≠ the instruments were ported with their own shelf; the bridge feeds it rather than rewriting them |
 
 ## The panel — `AssetSidebar.tsx`
@@ -130,7 +130,7 @@ Where things are:
 | "Add N to library": one row after another, `2/12 · DJI_0101.JPG`; a failure stops and keeps what landed | `WinnowBrowserModel.add()` — each row a task scoped to it, landing in the pool at once | ✅ |
 | — | the sheet's own Cancel beside the progress (`TaskCancelLink`), since the pill is behind it; a Cancel keeps what arrived and says so | ✅ native addition (`tasks.md`: a modal sheet carries its own Cancel) |
 | The place remembered per instance (view, filters, month, the open day / folder / leg, the fidelity) under `atelier.sources.winnow.browse.v1`; the ticks never | `WinnowBrowserMemory`, the kernel's `readBrowseState` / `writeBrowseState` | ✅ |
-| Forgetting a connection forgets its place (`forgetBrowseState`) | `WinnowBrowserMemory.forget(_:)` | ⏳ `ConnectionStore.forget` (Sources/) should call it — not edited here |
+| Forgetting a connection forgets its place (`forgetBrowseState`) | `WinnowBrowserMemory.forget(_:)`, called by `ConnectionStore.forget` | ✅ |
 | `reconnect` → `#/connect?instance=` | → Sources proposing the instance's address (`AppLinks.propose`): filled in, "A link asked to connect …", Allow or Not now | ✅ |
 | Esc cancels, Enter adds | `.cancelAction`, `.defaultAction` | ✅ |
 | Under 820 px ONE pane at a time, with a way back (`‹ <month>`, `‹ folders`, `‹ legs`) | `compact` | ✅ |
@@ -189,7 +189,7 @@ Where things are:
 | Develop's editor verb `Develop` (on <roll>): add the picture — one already on the roll is OPENED, never added twice — opened on the file that was on screen, a RAW base set aside | `RollWorkbench.developOffer` → `RollEditor.addFromLibrary(_:rendition:)` | ✅ |
 | Develop's gallery verb `Develop` (starts a new roll with this picture) | `RollGallery.developOffer` | ≠ also carries the file on screen onto the new roll (the web's gallery drops the view) |
 | A Library file put on a roll by what it IS: bookmark, folder + path, or — a session copy — copied into the container, its ref (hash, asset id) kept | `RollStore.add(_:to:)`, `addPicture(to:url:ref:)`, `addPicture(to:data:ref:)` | ✅ |
-| Trips publishes its piece's / its overview's day (`MediaScope`) and its three verbs; a collage cell takes a drop | the API is here (`.publishMediaScope`, `.publishMediaActions`, `.libraryDropDestination`, `.followsActiveAsset`) | ⏳ Trips' screens |
+| Trips publishes its piece's / its overview's day (`MediaScope`) and its three verbs; a collage cell takes a drop | `TripOverviewView` publishes the selected day and its verbs, `PieceEditorView` the piece's day and follows the active asset; the badge stage takes a drag onto the cell it is over (`PieceDropZonesView`, the kernel's `DropZones`, the drag registry naming the cell) | ✅ |
 | The Studio reads the active clip or still (`useActiveAsset(STUDIO_KINDS)`) | `.followsActiveAsset(Tool.studio.accepts)` on the editor; what is put to work while it is on screen (`activations`) joins the project and opens (`StudioLibraryLink`, `StudioEditor.take`) | ≠ the project keeps a working set of its own (below) |
 | The Studio's stage takes a Library drag | `.libraryDropDestination(onAsset:onFiles:)` on the editor — an instance's tile fetched first | ✅ |
 | The Studio's instance media lost to a reload | fetched back from the ref's `assetId` when the project opens — from the pool when it still holds the capture, else from its instance when connected, else said (`StudioStore+Recovery.swift`) | ✅ |
@@ -221,5 +221,5 @@ here a project keeps its own working set, a phone keeps every tab's stack
 alive, and the Library settling its active asset (an echo, a removal) or a
 tap made for Develop must never add a clip to a project.
 
-**Counts**: 102 rows — 85 ✅ (7 of them native additions), 4 ⏳, 13 ≠ (built
+**Counts**: 102 rows — 87 ✅ (7 of them native additions), 1 ⏳, 14 ≠ (built
 differently on purpose).

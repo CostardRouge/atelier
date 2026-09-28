@@ -36,7 +36,7 @@ row marked ≠ follows from that one fact.
 | `isConnection` leniency (no id, no base URL, no auth mode → dropped) | `readStoredConnections`, plus `local` and duplicates refused | ✅ |
 | `putWinnowConnection` replaces by id | ✅ — ≠ it keeps the row's PLACE; the web appends, so its sources screen can swap which instance is first | ≠ |
 | `removeWinnowConnection` | `forget` — the token leaves the Keychain too | ✅ |
-| `forgetBrowseState(id)` on remove | ⏳ the Winnow browser (calendar, sessions, day list) is not ported; its remembered month goes with it when it is | ⏳ |
+| `forgetBrowseState(id)` on remove | `forget` calls `WinnowBrowserMemory.forget(id)` — the kernel's `forgetBrowseState` over the Library browser's remembered place | ✅ |
 | `setRemoteSources` mirror | `registry` computed from the list | ✅ |
 | `useWinnowConnection` — the FIRST connection | `first`, `firstClient` (multi-instance deferred by the maintainer) | ✅ |
 | `useSourceHealth` — the probe IS the refresh, `refreshedAt` stamped | `check(id)`, `checkAll()` | ✅ |
@@ -76,7 +76,7 @@ row marked ≠ follows from that one fact.
 | three IndexedDB stores + a `sync` store per kind | ONE generic `DocumentStore<D>`: `<kind folder>/<id>.json` + `<id>.sync.json` + `<id>.thumb.jpg` | ✅ |
 | the record never on the document; `dirtyAt` survives a crash | the sidecar, written on every record change | ✅ |
 | `trip-remote` / `project-remote` / `roll-remote` | `DocumentRemote<D>` over `StoredDocument` (wire mapping per kind); `RollDoc` and `ProjectDoc` conform | ✅ |
-| `TripDoc` | ⏳ the trip document is not ported to the kernel yet; it conforms in one extension when it is | ⏳ |
+| `TripDoc` | conforms in one extension (`Trips/Store/TripDocument.swift`), kind `trip` | ✅ |
 | `useDocumentSync`: edited → dirty, push after `REMOTE_IDLE_MS`, forced "Save now", held states wait, outcome onto the LIVE record | `DocumentSync<D>` | ✅ |
 | push on unmount and on a hidden tab | `documentSyncLifecycle` — on leaving the screen or the foreground, inside an iOS background task | ✅ |
 | `resume` (`afterPull`), `adopt`, `clear` | ✅ | ✅ |
@@ -92,9 +92,9 @@ row marked ≠ follows from that one fact.
 
 | | |
 |---|---|
-| ⏳ Develop's `RollStore` | left untouched (another pass rebuilds the Develop shell). It plugs in with no change to this folder: a `DocumentSync<RollDoc>(store: DocumentStore(root: RollStore's root), connections: .shared)` whose `current` is the open roll, `beforeFlush` = `RollStore.flush()`, `onReplace` / `onDeleted` updating `rolls`; `sync.edited(doc)` after each debounced write lands; `await sync.resume(doc)` on open; `.documentSyncLifecycle(sync)` and `DocumentSyncPill(sync:)` in the editor's toolbar; `DocumentGalleryModel<RollDoc>` behind `RollsView` for the groups, create-on, delete-there and move. The files are the same (`rolls/<id>.json`, pretty JSON), and `RollStore.delete` must also remove `<id>.sync.json` and `<id>.thumb.jpg` (`DocumentStore.delete` does). |
-| ⏳ Trips, Studio | their stores are not built; each is a `DocumentStore` + `DocumentSync` + `DocumentGalleryModel` of its kind |
-| ⏳ the Winnow browser (`WinnowBrowser.tsx`, the Library's instance tab), `WinnowThumb`, `resolve-media.ts`'s re-fetch by asset id, `SendFinalsPanel` | media surfaces, not this layer: the client, the transport (progress, cancel, the streamed upload) and `ConnectionStore.firstClient` are what they call |
-| ✅ the task pill for a transfer | `TaskCenter.tracked(label, scope:, bytes:) { try await client… }` — the web's `trackedFetch`: `WinnowTransfer.$progress` set around the call, the bar against the answer's length else the known weight else a sweep, its Cancel cancelling the request (`../Tasks/`). The media surfaces that fetch (the browser, a roll's own fetch) call it when they land |
+| ✅ Develop's rolls | `Develop/Store/RollDocuments.swift`: a `DocumentSync<RollDoc>` over `RollStore`'s own files (`rolls/<id>.json`), the open roll its `current`, every write `RollStore` lands marking it dirty (`onWritten`), resumed on open, `.documentSyncLifecycle` and `DocumentSyncPill` in the editor's bar; `DocumentGalleryModel<RollDoc>` behind `RollGallery` for the groups, create-on, delete-there (the sync record removed with the roll) and move |
+| ✅ Trips, Studio | `TripsStore` + `TripsShell.gallery`, `StudioStore` — each a `DocumentStore` + `DocumentSync` + `DocumentGalleryModel` of its kind |
+| ✅ the Winnow browser (`WinnowBrowser.tsx`, the Library's instance tab), `WinnowThumb`, `resolve-media.ts`'s re-fetch by asset id, `SendFinalsPanel` | media surfaces over this layer: `Library/WinnowBrowserSheet` + `LibraryInstanceModel`, `Library/WinnowThumbView`, the re-fetch in `StudioStore+Recovery` and a piece's Library (`PieceLibrary`), the finals in `Studio/Export/StudioFinalsPanel` — each calling the client, the transport and `ConnectionStore.firstClient` |
+| ✅ the task pill for a transfer | `TaskCenter.tracked(label, scope:, bytes:) { try await client… }` — the web's `trackedFetch`: `WinnowTransfer.$progress` set around the call, the bar against the answer's length else the known weight else a sweep, its Cancel cancelling the request (`../Tasks/`). Every media surface that fetches calls it (`../Tasks/PARITY.md`, «Fetches») |
 
-**Counts**: 62 rows — 50 ✅ (4 of them native-only), 6 ⏳, 6 ≠ (built differently on purpose).
+**Counts**: 62 rows — 55 ✅ (4 of them native-only), 1 ⏳, 6 ≠ (built differently on purpose) — the "Wired into the tools" table carries its mark in its first cell.
