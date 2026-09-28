@@ -40,9 +40,10 @@ Today it ships ten tools, converging into a few editors:
 > *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The Flight Map's **base map**: turning it on fetches map tiles from
->   OpenStreetMap, which reveals the viewed area to that tile server. The
->   flight path itself always draws locally.
+> - The **base map** under a flight path, in the Flight Map and the Composer:
+>   turning it on fetches map tiles from OpenStreetMap, which reveals the
+>   viewed area to that tile server. The flight path itself always draws
+>   locally.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
@@ -1851,7 +1852,7 @@ the Telemetry panels use, so it stays frame-accurate.
 The path always draws **offline**: MapLibre renders the track line on a plain
 backdrop with no tiles, so nothing leaves the machine. A **"Load map
 background"** toggle adds an OpenStreetMap raster layer on demand — one of the
-suite's two optional network requests (the other is the place search in Trips),
+suite's optional network requests (see "The network exceptions" above),
 surfaced explicitly because it reveals the viewed area to the tile server.
 
 MapLibre is a heavier dependency, so it's **dynamically imported** (JS *and*
@@ -1870,6 +1871,10 @@ anywhere; then **play/pause** to preview the whole assembly in real time.
 
 The map can **fit the whole track** or **follow the aircraft** (centred, panning
 with it as the clip plays), with a zoom-offset slider on top of the auto-fit.
+Like the Flight Map's, it draws **offline** on a plain backdrop until you press
+**"Load map background"**, which adds the same OpenStreetMap tiles (revealing
+the viewed area to the tile server); an export burns in whichever of the two
+the preview shows.
 The readout is fully configurable — which fields show, label prefixes, text and
 background colour/opacity, corner radius, font and size — and can be toggled off.
 
