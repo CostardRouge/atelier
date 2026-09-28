@@ -16,6 +16,7 @@ import {
   type TelemetryFieldKey,
 } from './overlay-types';
 import { resolveElementStyle, type StyleTheme, type ThemableKey } from './title-styles';
+import { BLEND_MODES, type BlendMode } from './blend';
 import Button from '../ui/Button';
 import {
   FieldRow,
@@ -942,6 +943,22 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
           </div>
         </FieldRow>
       )}
+
+      {/* How it mixes with the picture under it (`blend.ts`) — the same on the
+          stage and in every export, since both draw on one canvas. */}
+      <FieldRow label="Blend">
+        <NativeSelect
+          label="Blend"
+          value={element.blend ?? 'normal'}
+          onChange={(e) => change({ blend: e.target.value as BlendMode })}
+        >
+          {BLEND_MODES.map((mode) => (
+            <option key={mode.id} value={mode.id} title={mode.hint}>
+              {mode.label}
+            </option>
+          ))}
+        </NativeSelect>
+      </FieldRow>
 
       {/* Legibility */}
       <div className="flex flex-col gap-2.5">

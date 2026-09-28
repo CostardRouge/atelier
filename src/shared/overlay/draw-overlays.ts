@@ -19,6 +19,7 @@ import { tapeFadeAlpha, tapeTicks } from './heading-tape';
 import { smoothHeading } from '../telemetry/heading-smooth';
 import type { Anchor, LabelPlacement, OverlayElement } from './overlay-types';
 import { isHidden, transformAt, type Transform } from './animation';
+import { compositeFor } from './blend';
 import { tipAngle } from './rotate-device';
 import {
   findScene,
@@ -1646,6 +1647,12 @@ export function drawOverlays(
     ctx.save();
     elementAlpha = tf.alpha;
     ctx.globalAlpha = tf.alpha;
+    // How it mixes with the picture under it. Set inside this element's own
+    // save/restore, so it never leaks onto the next one — and every surface
+    // draws picture and overlays on ONE canvas, so it blends the same in the
+    // preview, the Studio and every export (`blend.ts`).
+    const composite = compositeFor(el.blend);
+    if (composite) ctx.globalCompositeOperation = composite;
     applyTransform(ctx, el, tf, videoWidth, videoHeight);
 
     if (el.kind === 'heading-arrow') {

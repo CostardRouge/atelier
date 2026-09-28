@@ -5,9 +5,10 @@ asked to start without answering §9, so the build takes the brief's own
 recommendations as its working answers and says so where each applies: a
 badge on another slide is allowed and never a default, the first slide keeps
 the name "hook", two masked modes, no deck-shape defaults, and the bridge
-still sends the first slide's opener. Built so far: **commits 1–4** (the model, every surface
+still sends the first slide's opener. Built so far: **commits 1–5** (the model, every surface
 rendering a slide by what it holds, the editor giving any slide an opener, a
-badge and shades, and free text on any slide — the first included).
+badge and shades, free text on any slide — the first included — and blend
+modes).
 
 §1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
 still lists what is his to settle.
@@ -346,6 +347,17 @@ Five commits, one task each, in this order:
    exports and the Studio bridge (`hookElements`, `hookElementsAt`), and every
    rest time (`textsSettleSeconds`).
 4. `OverlayElement.blend` + the curated list, in `drawOverlays` and `ElementPanel`.
+   **Built** (`shared/overlay/blend.ts`): normal · multiply · screen · overlay ·
+   soft light · difference · luminosity, set inside each element's own
+   `save()/restore()`. Checked before building that EVERY surface draws the
+   picture and its overlays on one canvas — the Trips stage, the Studio's
+   preview (`use-overlay-stage.ts`), every export (`export-variant.ts`,
+   `export-overlay*.ts`, `photo-frame.ts`, `frame-grab.ts`) — so a blend is the
+   same everywhere with nothing to keep in step. A Trips line also gained its
+   own INK (`withLineInk`: value + pinned `color`, back to the trip's in one
+   click), since a blend with no say over the colour is half a tool. Proved on
+   the real stage by reading pixels: white letters over the dark ground read
+   255 plain, 15 under multiply, 240 under difference.
 5. `OverlayElement.knockout`, both modes, with the buffer and the mask cache.
 
 Commits 1–3 deliver the maintainer's "several openers, several maps"; 4–5

@@ -18,6 +18,7 @@
  */
 
 import { createTextElement, type Anchor, type OverlayElement } from '../overlay/overlay-types';
+import { isBlendMode } from '../overlay/blend';
 import { DEFAULT_BADGE_DURATION, type BadgeLayout } from './badge-layout';
 import { BADGE_PIECES, COUNTER_MODES, type BadgePiece, type CounterMode } from './day-badge';
 import { createShade, type Shade } from './shades';
@@ -216,6 +217,9 @@ export function readSlideTexts(v: unknown): OverlayElement[] {
     const base = createTextElement(raw.text);
     const el: OverlayElement = { ...base, ...(raw as Partial<OverlayElement>), kind: 'text' };
     if (typeof el.id !== 'string' || !el.id || seen.has(el.id)) el.id = base.id;
+    // A blend this build does not know draws plainly anyway (`compositeFor`);
+    // dropping it keeps the panel from showing a choice it cannot name.
+    if (el.blend !== undefined && !isBlendMode(el.blend)) delete el.blend;
     seen.add(el.id);
     out.push(el);
   }
@@ -249,6 +253,24 @@ export function createSlideText(value = 'Text'): OverlayElement {
   el.styleOverrides = ['legibility', 'glow'];
   el.glowAmount = 0;
   return el;
+}
+
+/**
+ * A line's own INK, or back to the trip's. Departing from the title style is
+ * two moves, the rule the badge's pieces follow: write the value AND pin the
+ * key in `styleOverrides`, or a theme would paint over it. Null unpins it, so
+ * the line follows the trip's ink again.
+ */
+export function withLineInk(el: OverlayElement, color: string | null): OverlayElement {
+  const pinned = (el.styleOverrides ?? []).filter((key) => key !== 'color');
+  return color === null
+    ? { ...el, styleOverrides: pinned }
+    : { ...el, color, styleOverrides: [...pinned, 'color'] };
+}
+
+/** Whether a line wears its own ink rather than the trip's. */
+export function hasOwnInk(el: OverlayElement): boolean {
+  return el.styleOverrides?.includes('color') ?? false;
 }
 
 /** Whether an element id names a line of free text. */

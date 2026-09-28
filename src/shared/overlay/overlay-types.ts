@@ -12,6 +12,7 @@
 import type { SpeedUnit } from '../telemetry/motion';
 import type { TimeFormatOptions } from '../telemetry/time-format';
 import type { ElementAnimation, TimeWindow } from './animation';
+import type { BlendMode } from './blend';
 export type { SpeedUnit, TimeFormatOptions };
 
 /**
@@ -288,6 +289,14 @@ export interface OverlayElement {
    * can hold back everything outside itself while it runs.
    */
   sceneId?: string;
+
+  // --- compositing ----------------------------------------------------------
+
+  /**
+   * How the element's pixels mix with the picture under it (`blend.ts`).
+   * Absent is `normal` — what every element stored before this existed draws.
+   */
+  blend?: BlendMode;
 
   // --- appearance extensions (title styles) --------------------------------
 

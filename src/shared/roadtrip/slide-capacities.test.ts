@@ -8,7 +8,9 @@ import {
   capacitiesOf,
   chapterMark,
   createSlideText,
+  hasOwnInk,
   isSlideTextId,
+  withLineInk,
   fullSlideBadge,
   isChapterMark,
   readSlideBadge,
@@ -203,5 +205,37 @@ describe('createSlideText', () => {
 
   it('never gives two lines the same id', () => {
     expect(createSlideText().id).not.toBe(createSlideText().id);
+  });
+});
+
+describe('readSlideTexts — blend', () => {
+  it('keeps a blend it knows and drops one it does not', () => {
+    const [known, unknown] = readSlideTexts([
+      { kind: 'text', text: 'a', id: 'a', blend: 'screen' },
+      { kind: 'text', text: 'b', id: 'b', blend: 'hue-shift' },
+    ]);
+    expect(known.blend).toBe('screen');
+    expect('blend' in unknown).toBe(false);
+  });
+});
+
+describe('withLineInk', () => {
+  it('writes the ink AND pins it, so a title style cannot paint over it', () => {
+    const el = withLineInk(createSlideText('Dune'), '#7a2f18');
+    expect(el.color).toBe('#7a2f18');
+    expect(hasOwnInk(el)).toBe(true);
+    expect(el.styleOverrides).toEqual(expect.arrayContaining(['legibility', 'glow', 'color']));
+  });
+
+  it('gives the trip’s ink back, keeping every other departure', () => {
+    const own = withLineInk(createSlideText('Dune'), '#7a2f18');
+    const back = withLineInk(own, null);
+    expect(hasOwnInk(back)).toBe(false);
+    expect(back.styleOverrides).toEqual(expect.arrayContaining(['legibility', 'glow']));
+  });
+
+  it('never pins the key twice', () => {
+    const twice = withLineInk(withLineInk(createSlideText(), '#000000'), '#ffffff');
+    expect(twice.styleOverrides?.filter((k) => k === 'color')).toHaveLength(1);
   });
 });
