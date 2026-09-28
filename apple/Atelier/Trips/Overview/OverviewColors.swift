@@ -54,8 +54,8 @@ enum OverviewLegTint {
     private static let fallback = Color(hex: 0xB6AD9C)
 
     /// The kernel's tints, converted once — `stageTint` cycles through them.
-    private static let tints: [Color] = stageTints.map { css in
-        guard let rgb = oklchToSRGB(css) else { return fallback }
+    private static let tints: [Color] = stageTints.map { css -> Color in
+        guard let rgb = OverviewLegTint.oklchToSRGB(css) else { return OverviewLegTint.fallback }
         return Color(.sRGB, red: rgb.r, green: rgb.g, blue: rgb.b, opacity: 1)
     }
 
