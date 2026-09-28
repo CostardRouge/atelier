@@ -59,10 +59,12 @@ export interface LutLayer {
   enabled: boolean;
   /**
    * Why this layer cannot grade on this device, when it cannot: a purchased
-   * look whose lattice is not in this browser's vault (`pack-vault.ts`). The
-   * layer STAYS — switched on, in its place, named — and is skipped by the
-   * bake, because a look that silently graded as identity, or quietly
-   * vanished from the stack, would read as a working grade that is wrong.
+   * look whose lattice is not in this browser's vault (`pack-vault.ts`), a
+   * built-in this build no longer ships, a stored text that does not read
+   * (`restore-grade.ts`). The layer STAYS — switched on, in its place,
+   * named — and is skipped by the bake, because a look that silently graded
+   * as identity, or quietly vanished from the stack, would read as a working
+   * grade that is wrong.
    * `lut` then holds an identity cube so every reader stays total.
    */
   missing?: string;
