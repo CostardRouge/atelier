@@ -5,8 +5,11 @@ against `src/tools/studio/` (`StudioTool.tsx`, `ProjectGallery.tsx`,
 `NewProjectModal.tsx`, `StudioEditor.tsx`, `ProjectSettingsModal.tsx`) and the
 shared pieces it wires (`src/shared/media/TrimBar.tsx`, `use-video-transport`,
 `use-video-scrub`, `use-overlay-stage`, `frame-grab.ts`, `DevelopSheet`). The
-panels INSIDE the inspector are `Panels/PARITY.md`'s; the Export tab is one
-placeholder (`PendingExport.swift`) the export task replaces.
+panels INSIDE the inspector are `Panels/PARITY.md`'s; the Export tab —
+Output · Variants · Export and the finals home, against the Export tab of
+`StudioEditor.tsx` and `handleExport`, `export-variant.ts`, `photo-frame.ts`'s
+`exportPhotoVariant`, `export-tail.ts`, `delivery-source.ts` and
+`SendFinalsPanel.tsx` — is `Export/`'s, its table below.
 ✅ built · ⏳ deferred (why, and what it waits on) · ≠ built differently on
 purpose (why).
 
@@ -16,12 +19,18 @@ the wipe, the notices, the cadence and shift drafts, the save states, the
 import words — `StudioEditingTests`, 33 cases) and `Media/FrameGrab.swift`
 (`frameGrabName`, the web's spec ported), over what was already there
 (`Trim.swift`, `Reconcile.swift`, `MediaDevelop.swift`, `History.swift`,
-`ProjectFile.swift`, `ExportVariants.swift`, `OverlayGeometry.swift`).
+`ProjectFile.swift`, `ExportVariants.swift`, `OverlayGeometry.swift`). The
+Export tab's words and numbers are `Projects/StudioExport.swift`
+(`StudioExportTests`, 15 cases); its run is held by a GATE on macOS
+(`AtelierTests/Studio/StudioExportGateTests.swift`): a two-second clip painted
+there, exported at two variants through the very path the tab runs, each file
+read back for its size, length and cadence and for the burnt-in element's own
+pixels, plus a trimmed cut and a still.
 
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 108 ✅ · 10 ≠ · 9 ⏳ — plus the deferrals gathered at the end.
+Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the Export tab alone: 29 ✅ · 6 ≠ · 1 ⏳).
 
 ## Documents (`Store/StudioStore.swift`)
 
@@ -179,7 +188,48 @@ Rows: 108 ✅ · 10 ≠ · 9 ⏳ — plus the deferrals gathered at the end.
 | Style: one Title style section | ✅ | ✅ |
 | Grade: the media's DEVELOP settled row first, then the grade stack | ✅ `DevelopSettledRow` + `GradeStackView` (the still handed to the look gallery's scene) | ✅ |
 | Info: the media's facts and the telemetry under the playhead | ✅ `InfoPanelView` | ✅ |
-| Export: Output · Variants · Export (+ Send the finals home) | ⏳ the export task — one placeholder listing the variants and their file names, read-only | ⏳ |
+| Export: Output · Variants · Export (+ Send the finals home) | ✅ `Export/StudioExportPanel.swift` — its own table below | ✅ |
+
+## The Export tab (`Export/StudioExportPanel.swift`, `StudioVariantRow.swift`, `StudioFinalsPanel.swift`, `StudioExportModel.swift`, `StudioVariantExport.swift`)
+
+| Web (`StudioEditor.tsx`'s Export tab and the modules it drives) | Native | |
+|---|---|---|
+| Output · File name, the media's base name as placeholder, kept in `exportPrefs.fileName` | ✅ written through the funnel (a step of undo); the field owns the keys while it types | ✅ |
+| Output · Destination: the browser's Downloads, or a folder picked once for the session (Chromium) | a folder asked for AT THE CLICK, every run — pick, then render, then write — and named after the run; a device has no Downloads | ≠ |
+| Output · *Delivers* over a still an instance handed as its proxy: the decision's line and reason, then the proxy sentence (`useDeliveryRow`) | ✅ `deliveryDecision` — the one the run takes too | ✅ |
+| — the render inside a proxy's RAW original, measured from a megabyte of its head | ⏳ no head probe here yet: the proxy delivers, and the row says so instead of the kernel's "read at export" | ⏳ |
+| — a *Delivers* row for every other media | a native addition: the largest frame the variants write, measured against the file that will be encoded (`deliversLine`), and the sentence that instances do not reach the Studio yet | ≠ |
+| Output · *From proxy* over a clip an instance handed as its proxy: *Render from the proxy* (For a quick look), off, its hint | ✅ wired — unreachable until the Library brings an instance's media into the Studio | ✅ |
+| Variants · the count as badge, + Variant in the project's format | ✅ | ✅ |
+| Variant N, remove (never the last) | ✅ | ✅ |
+| Format: Source frame, then every preset as `9:16 — Reels · TikTok · Shorts` | ✅ (a stored id this build does not know stays on screen) | ✅ |
+| Resolution: Source · 1080p · 720p; the shortfall in danger (+ "Turn off From proxy…") | ✅ `resolutionShortfall` + `shortfallHint` (a stored short side stays on screen) | ✅ |
+| Frame rate (a clip): `Source (29.97 fps)` then the choices; frames duplicated above the source, said | ✅ | ✅ |
+| Speed (a clip): Normal · N× · `— real time`; a re-timed row's length and silence, said | ✅ `deliveredSpeedChoices` + `speedHint` | ✅ |
+| Overlays: Burn the overlays in, `W×H · file name` beside it | ✅ — and a line saying the outro rides a burnt-in variant only | ✅ |
+| The row being rendered counts up (`rendering… 12 s`), one timer for the run | ✅ `TimelineView` on that row alone | ✅ |
+| What a row cost (`✓ 367 KB · 16 s · 0.2× realtime`), dropped when its settings change and when another media opens | ✅ kept WITH the variant that produced it, shown only while the row still is that variant | ✅ |
+| Export needs WebCodecs (a note where the browser has none) | AVFoundation encodes on every device | ≠ |
+| The button: Export JPEG / 3 JPEGs / MP4 / 2 MP4s, its tooltip | ✅ `studioExportVerb` / `studioExportHelp` | ✅ |
+| The preview paused before a run | ✅ | ✅ |
+| The run as a task: `Exporting <base>`, `N variants`, a bar over the variants, a Cancel | ✅ `TaskCenter`, on the editor's pill; the detail names each variant's FILE where the web names its id | ✅ |
+| The line over the bar: Fetching the original from … / Variant 2/3 · 46% / Exporting… 46%, and Cancel | ✅ `studioExportProgressLine` | ✅ |
+| A clip's capture fetched ONCE before the first variant (unless from the proxy), a task of its own with its bytes; a failure fails the run | ✅ wired over the connection's client — unreachable until instance media reach the Studio | ✅ |
+| A still's original fetched only where its proxy cannot fill the largest frame; a failed fetch costs the pixels, never the delivery | ✅ wired — unreachable likewise | ✅ |
+| A clip variant (`exportVariantVideo`): graded per SOURCE frame at the source's density (the grain's clock), cover-cropped into the variant's frame, the overlays on the source clock with the trim's in point as origin, the cut, the cadence resampled, the speed, a grained clip at more bits, the clip's sound copied | ✅ `StudioVariantExport.video` over `exportProcessedVideo` — held by the gate | ✅ |
+| The outro appended as the pipeline's tail, at the variant's frame and cadence, on a burnt-in variant only | ✅ `StudioVariantExport.outroTail` — the gate reads the card after the footage | ✅ |
+| The seek fallback for a clip the browser cannot decode (`exportOverlayVideoViaSeek`) | nothing to fall back from: AVFoundation decodes HEVC | ≠ |
+| A still variant (`exportPhotoVariant`): graded at its own density, cover-cropped, its SETTLED deck with its one cue, a JPEG at 0.92 | ✅ `StudioVariantExport.still` — held by the gate | ✅ |
+| — the still's metadata | the ORIGINAL's EXIF stamped on it (`stampExif`: the block copied whole, signed `Atelier`, an sRGB profile) — the maintainer's rule for a delivered picture; the web's Studio still leaves bare | ≠ |
+| Each file delivered as it finishes, replacing a file of that name | ✅ into the chosen folder | ✅ |
+| What a variant cost measured around the whole of it, delivery included; the trimmed length as the ratio's divisor; none for a still | ✅ | ✅ |
+| Cancel: the encode in flight ends, no later variant starts, the run does not say Exported | ✅ — and says what it kept (`studioExportCancelledNote`) | ✅ |
+| `✓ Exported` and the run's total (`describeExportRun`) | ✅ + the folder's name | ✅ |
+| The error, in its own words | ✅ ("browser" read as "device") | ✅ |
+| Sound or a look the file could not carry as asked | said under the run (`onAudioSkipped`, a look that will not grade here); the web's Studio passes no such callback | ≠ |
+| Send the finals home (`SendFinalsPanel`): only after a finished run, only to the instance the media came from | ✅ `StudioFinalsPanel` — wired, unreachable until instance media reach the Studio | ✅ |
+| — not connected any more; a viewer account; the files and their weight; a foreign capture and a file over the upload limit refused before a byte moves; the notes | ✅ `finalsPlan` + `canWriteBack`, the web's sentences | ✅ |
+| — one request per file with its capture's id, then one reconcile; `✓ N files sent and linked to capture #…`; `N sent, then: …` + Sign in there | ✅ each upload a task with its bytes and a Cancel on the pill | ✅ |
 
 ## Project settings (`Inspector/ProjectSettingsSheet.swift`)
 
@@ -212,14 +262,16 @@ Rows: 108 ✅ · 10 ≠ · 9 ⏳ — plus the deferrals gathered at the end.
 
 ## Deferred, and what each waits on
 
-- ⏳ The Export tab — the export task, over `Video/VideoExport.swift`
-  (`PendingExport.swift` says what it reads).
-- ⏳ Sending the finals home to Winnow — after the export.
-- ⏳ An instance's media in the project — the Library task.
+- ⏳ An instance's media in the project — the Library task. The Export tab's
+  three paths that need one (a clip's capture fetched before the first
+  variant, a still's original where its proxy falls short, the finals sent
+  home) are wired to `mediaOrigin` / `knownIdentity` and the connection's
+  client, and wake when that lands.
+- ⏳ The render inside a proxy's RAW original, measured from its head (the
+  web's `rawRenderOf`): the app has no session cache of originals
+  (`HeldOriginals`) yet.
 - ⏳ The hand-off from Trips (`#/studio/open/<id>`).
 - ⏳ The develop sheet's eyedropper, wipe, zoom and clipboard.
 - ⏳ A palette cell dragged onto the stage; the outro's own stage; the lane
   under the trim bar (not on the web either).
-- ⏳ The task pill (`.taskPill()`, landed on the branch after this work
-  started) on the editor's own navigation bar.
 - ⏳ Running any of it on a device.

@@ -12,7 +12,8 @@
 // - Grade: the open media's DEVELOP as a settled row first (correction before
 //   look, on screen as in the cube), then the grade stack;
 // - Info: the media's facts and the telemetry under the playhead;
-// - Export: the export task's panel (`PendingExport.swift`).
+// - Export: Output · Variants · Export and the finals home
+//   (`Export/StudioExportPanel.swift`).
 //
 // Picking an element — here or on the stage — brings its settings into view
 // (`ScrollViewReader`), the web's `scrollIntoView({block: 'nearest'})`.
