@@ -43,9 +43,21 @@ enum Tool: String, CaseIterable, Identifiable {
     var screen: some View {
         switch self {
         case .develop: RollGallery()
-        case .trips: PlannedToolView(tool: .trips)
+        case .trips: TripsTool()
         case .studio: StudioGallery()
         case .sources: SourcesView()
+        }
+    }
+
+    /// The tool inside its navigation stack, its root carrying the task pill.
+    /// Trips keeps its OWN stack — its path is where you are (`TripsRoute`),
+    /// and a stack nested in another is not supported — so it is not wrapped
+    /// a second time.
+    @MainActor @ViewBuilder
+    var stack: some View {
+        switch self {
+        case .trips: TripsTool()
+        default: NavigationStack { screen.taskPill() }
         }
     }
 }

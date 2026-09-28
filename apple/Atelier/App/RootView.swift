@@ -23,6 +23,15 @@ enum ShellPlace: Hashable {
         case .instrument(let instrument): instrument.screen
         }
     }
+
+    /// The place inside its navigation stack (`Tool.stack`: Trips keeps its own).
+    @MainActor @ViewBuilder
+    var stack: some View {
+        switch self {
+        case .tool(let tool): tool.stack
+        case .instrument(let instrument): NavigationStack { instrument.screen.taskPill() }
+        }
+    }
 }
 
 /// A tab of the phone's bar: a tool, or the instruments' list.
@@ -68,7 +77,7 @@ struct RootView: View {
     private var tabs: some View {
         TabView(selection: $tab) {
             ForEach(Tool.allCases) { tool in
-                NavigationStack { tool.screen.taskPill() }
+                tool.stack
                     .tabItem { Label(tool.title, systemImage: tool.symbol) }
                     .tag(ShellTab.tool(tool))
             }
@@ -104,7 +113,7 @@ struct RootView: View {
         } detail: {
             // A new place is a new stack: a page pushed inside one tool never
             // survives the move to another.
-            NavigationStack { place.screen.taskPill() }
+            place.stack
                 .id(place)
         }
     }
