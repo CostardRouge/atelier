@@ -254,6 +254,21 @@ is one. Each row says the RUN PLAN's own line for that picture — so
 for the *Delivers* sentence — and the old read-only "picture by picture" list
 is gone, the table being that list made operable. The table is built by
 `RollEditor` (it holds the roll) and handed to `ExportPanel` as a node.
+**Tick all** (2026-09-28, his ask — row by row was too slow): a head row
+with a three-state box over the rows SHOWN, so a filter then the box is a batch
+(every Pick, every Edited); a click ticks all unless all already leave, then
+unticks. `setLeaving` writes `deliveryFor` — `auto` wherever the rule already
+answers, exactly as one row's `toggledDelivery` — so a tick never pins an
+edited picture, and it never touches an ignored one. One `update`, one undo step.
+**The verbs are PINNED** (2026-09-28, his pick "bouton + menu" from the lab
+in `MEMORY.md`): `DeliverBar.tsx` sits under the inspector's scroll the way
+the tab strip sits over it — docked, a sibling after the scroll box; in the
+phone's drawer, `sticky bottom-0` inside the drawer's own scroller (the
+drawer body scrolls, the panel does not). ONE primary verb (`roll`, else the
+first) and the rest behind an `OverflowMenu` opening upward, so the bar keeps
+one height; the run's sentence above, `exporting` and `note` under. What is
+SET (Replace, the ⓘ text) stays in the Deliver section; only what is
+TRIGGERED is pinned. Shown on the Export tab only.
 **E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
 moved to the top-right to make room); a click toggles, a right-click or a
 550 ms touch hold ignores ↔ brings back, and the click that ends a hold is

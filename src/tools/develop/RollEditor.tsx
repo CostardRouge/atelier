@@ -44,6 +44,7 @@ import {
   isEdited,
   isIgnored,
   setDelivery,
+  setLeaving,
   toggledDelivery,
   patchPicture,
   setPictureWords,
@@ -621,6 +622,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     },
     [update],
   );
+  const handleDeliverAll = useCallback(
+    (ids: readonly string[], leave: boolean) => {
+      update((r) => setLeaving(r, ids, leave));
+      setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} ${leave ? 'will be exported' : 'stay out of the export'}`);
+    },
+    [update],
+  );
   const handleExportSettings = useCallback(
     (patch: Partial<RollExport>) => update((r) => ({ ...r, export: { ...r.export, ...patch }, updatedAt: Date.now() })),
     [update],
@@ -1098,6 +1106,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   lines={exports.lines}
                   thumbs={thumbs}
                   onDeliver={handleDeliver}
+                  onDeliverAll={handleDeliverAll}
                   onOpen={onOpenPicture}
                   marks={exportMarks}
                   culling={culling.reachable ? culling.byPicture : undefined}

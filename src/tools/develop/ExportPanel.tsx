@@ -2,7 +2,6 @@ import type { DeliverySummary } from '../../shared/develop/roll-export';
 import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
 import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
-import Button from '../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
@@ -16,7 +15,6 @@ const WATERMARK_POSITION_OPTIONS: readonly { id: WatermarkPosition; label: strin
   { id: 'top-right', label: 'Top right' },
   { id: 'top-left', label: 'Top left' },
 ];
-import { Icons } from '../../shared/ui/icons';
 import { hdrSupport } from '../../shared/hdr/hdr-display';
 import { formatBytes } from '../../shared/lib/format';
 import { heldCeilingBytes } from '../../shared/sources/original-cache';
@@ -56,7 +54,8 @@ export interface ExportVerb {
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,
  * the JPEG quality), what the RUN will deliver picture by picture, the
  * *This picture* line for the one in hand — the calculator of
- * `docs/develop-originals.md` in one sentence — and the verbs.
+ * `docs/develop-originals.md` in one sentence. The verbs are not here: they
+ * are pinned under the tab's scroll (`DeliverBar`), always in sight.
  *
  * Which PIXELS a picture leaves from is no longer asked here (2026-09-21,
  * `docs/capture-renditions.md` §13.2): the picture's own rendition, chosen
@@ -75,9 +74,7 @@ export default function ExportPanel({
   plan,
   proxiesOnly,
   onProxiesOnly,
-  verbs,
   exporting,
-  note,
   hdrRun = null,
   pictures = null,
   openExif = null,
@@ -93,9 +90,7 @@ export default function ExportPanel({
   /** *Proxies only, for this run* — a run-time choice, never on the roll. */
   proxiesOnly: boolean;
   onProxiesOnly: (on: boolean) => void;
-  verbs: readonly ExportVerb[];
   exporting: string | null;
-  note: string | null;
   /** The last run's HDR outcome — the one part of the run the panel still shows. */
   hdrRun?: RollRun['hdr'];
   /** Which pictures leave, one row each (`DeliveryTable`) — the editor builds it, since it holds the roll. */
@@ -376,7 +371,9 @@ export default function ExportPanel({
           <>
             <p>
               Into a folder you choose, or downloaded one by one where the browser has no folder
-              picker. A picture that is not in the Library is skipped and said.
+              picker. A picture that is not in the Library is skipped and said. The export buttons
+              stay pinned at the bottom of this tab: the main one exports the pictures that leave,
+              its menu this picture, the filmstrip’s selection, or only what is new or changed.
             </p>
             <p>
               A picture leaves under its own name, so the name it wants is often one the folder
@@ -405,26 +402,6 @@ export default function ExportPanel({
               : 'A name already in the folder is numbered — DJI_0101-1.jpg.'
           }
         />
-        <div className="flex flex-col items-start gap-2">
-          {verbs.map((verb) => (
-            <div key={verb.id} className="flex flex-col items-start gap-0.5">
-              <Button size="sm" icon={Icons.export} onClick={verb.run} disabled={exporting !== null} title={verb.hint}>
-                {verb.label}
-              </Button>
-              {verb.hint && <span className="font-mono text-3xs text-faint leading-relaxed">{verb.hint}</span>}
-            </div>
-          ))}
-          {exporting && (
-            <p className="m-0 font-mono text-2xs text-ink-soft" role="status" aria-live="polite">
-              {exporting}
-            </p>
-          )}
-          {note && !exporting && (
-            <p className="m-0 text-xs text-ink-soft" role="status">
-              {note}
-            </p>
-          )}
-        </div>
       </InspectorSection>
     </>
   );

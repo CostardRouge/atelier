@@ -24,6 +24,7 @@ import {
   matchesDeliveryFilter,
   patchPicture,
   setDelivery,
+  setLeaving,
   setPictureWords,
   toggledDelivery,
   pictureEdits,
@@ -260,6 +261,22 @@ describe('delivery — which pictures leave', () => {
     expect(toggledDelivery({ ...bare, deliver: 'yes' })).toBe('auto');
     // Ignored → back into the work on the rule.
     expect(toggledDelivery({ ...ed, deliver: 'ignore' })).toBe('auto');
+  });
+
+  it('ticks and unticks a set, pinning only what the rule would answer otherwise', () => {
+    // p1 edited, p2 bare, p3 bare and ignored.
+    const doc = setDelivery(
+      patchPicture(roll(['a', 'b', 'c']), 'p1', { develop: { ...DEFAULT_DEVELOP, exposure: 1 } }),
+      ['p3'],
+      'ignore',
+    );
+    const all = setLeaving(doc, ['p1', 'p2', 'p3'], true, 5);
+    expect(all.pictures.map((p) => p.deliver ?? 'auto')).toEqual(['auto', 'yes', 'ignore']);
+    expect(all.pictures.map(delivers)).toEqual([true, true, false]);
+    const none = setLeaving(all, ['p1', 'p2', 'p3'], false, 6);
+    expect(none.pictures.map((p) => p.deliver ?? 'auto')).toEqual(['no', 'auto', 'ignore']);
+    // Nothing to change: the same roll back.
+    expect(setLeaving(all, ['p1', 'p2'], true)).toBe(all);
   });
 
   it('filters the table, leaving an ignored picture to its own group', () => {

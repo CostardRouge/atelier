@@ -1399,8 +1399,9 @@ ones you **edited** do, and you decide otherwise per picture — send one you di
 not touch, hold back one you did. The **Pictures** table in the Export tab
 lists the roll one row per picture (the whole row is the click, with what the
 picture would leave from and at what size), filtered by *Edited*, *Leaving* or
-*Held*; the badge at the corner of each filmstrip cell does the same without
-leaving the photograph. **P** sends or holds the picture on the stage, **U**
+*Held*, and a box at its head ticks or unticks every row shown at once — a
+filter first makes it a batch (every *Picks*, every *Edited*); the badge at the
+corner of each filmstrip cell does the same without leaving the photograph. **P** sends or holds the picture on the stage, **U**
 puts it back on the rule (on the Layers tab, **P** and **M** belong to the
 mask instead — Pick and the mask's view). A picture you do not want to work on at all can be
 **ignored** (**M**, or a right-click / a held finger on its badge): it never
@@ -1414,6 +1415,12 @@ were never exported or changed since, the status line counts them, and
 **Export N new or changed** delivers just those. The record is kept on this
 device beside the roll, not in it, so an export is never an undo step and an
 undo never forgets one.
+
+The export buttons stay pinned at the bottom of the Export tab, whatever is
+scrolled above them: **Export N pictures** (the ones that leave) is the main
+button, and the menu beside it offers this picture, the filmstrip's selection
+and the new or changed ones. The run's progress and its outcome are said under
+it.
 
 **Variants.** One frame, developed two ways — cropped square and 4:5, or in
 colour and in black and white — is two **variants** of it, Lightroom's virtual
