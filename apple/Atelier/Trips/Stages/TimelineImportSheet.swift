@@ -337,7 +337,7 @@ struct TimelineImportSheet: View {
 
     private func seed() {
         guard canSeed, let imported, let doc = tripFromTimeline(name, imported) else { return }
-        let styled = applyHouseStyle(doc, SeedHouseStyle.bundled)
+        let styled = applyHouseStyle(doc, TripsShell.houseStyle)
         _ = store.documents.put(styled)
         store.reload()
         onSeeded(styled)
@@ -351,18 +351,6 @@ struct TimelineImportSheet: View {
         onApplied(result.trip, result.spanWidened)
         onClose()
     }
-}
-
-/// The house style a new trip starts from — the web's committed
-/// `src/shared/roadtrip/house-style.json`, read from the bundle once. Nil
-/// while the app does not bundle it: a seeded trip then starts from the
-/// factory look, which is what the web gives when the file is empty.
-private enum SeedHouseStyle {
-    static let bundled: TripHouseStyle? = {
-        guard let url = Bundle.main.url(forResource: "house-style", withExtension: "json"),
-              let data = try? Data(contentsOf: url) else { return nil }
-        return readHouseStyle(JSONValue.parse(data))
-    }()
 }
 
 #Preview("Timeline — seed") {

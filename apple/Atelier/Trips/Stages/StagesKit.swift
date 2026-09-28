@@ -34,30 +34,18 @@ enum StagesColor {
         return Color(.sRGB, red: c.red, green: c.green, blue: c.blue, opacity: 1)
     }
 
-    /// The five rungs of a told day (`heatmap-ramp.ts`): nothing · drafted ·
-    /// published once · twice · more. Rung 0 is the paper's own second tone.
+    /// The five rungs of a told day — the tool's one ramp
+    /// (`Trips/HeatmapRamp.swift`), so the ruler and the calendar agree.
     static func rung(_ level: Int, _ palette: Palette) -> Color {
-        switch level {
-        case ...0: return palette.paper2
-        case 1: return Color(light: 0xF4CDBD, dark: 0x3F231B)
-        case 2: return Color(light: 0xEB9878, dark: 0x7A3624)
-        case 3: return Color(light: 0xE26A45, dark: 0xD4583A)
-        default: return Color(light: 0xD9442A, dark: 0xEF5638)
-        }
+        palette.heatmapLevel(level)
     }
 
-    /// Each day's rung, from the trip's coverage — the grid's `levelOf`:
-    /// 0 nothing told, 1 drafted only, 2 published once, 3 twice, 4 more.
+    /// Each day's rung, from the trip's coverage — the calendar's own
+    /// `CalendarRungs.level(of:)`, the web's `levelOf`.
     static func rungs(_ trip: TripDoc) -> [IsoDate: Int] {
         var out: [IsoDate: Int] = [:]
         for cell in tripCoverage(trip).days {
-            if cell.posts.isEmpty {
-                out[cell.date] = 0
-            } else if cell.published == 0 {
-                out[cell.date] = 1
-            } else {
-                out[cell.date] = min(2 + cell.published - 1, 4)
-            }
+            out[cell.date] = CalendarRungs.level(of: cell)
         }
         return out
     }
