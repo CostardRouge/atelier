@@ -1406,6 +1406,17 @@ export default function PictureWorkbench({
     };
   }, [cropView, setCropView]);
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Adjust';
+  const deliverBar = (inDrawer: boolean) => (
+    <DeliverBar
+      verbs={exportVerbs}
+      summary={exports.plan.summary}
+      exporting={exports.exporting}
+      progress={exports.progress}
+      onCancel={exports.cancel}
+      note={exports.note}
+      compact={inDrawer}
+    />
+  );
 
   /**
    * The points the author picked for the OPEN subject layer, drawn on the
@@ -2062,15 +2073,13 @@ export default function PictureWorkbench({
             />
           ) : null}
           {/* Inside the drawer's own scroll on a phone, where `sticky` pins it. */}
-          {compact && tab === 'export' && (
-            <DeliverBar verbs={exportVerbs} summary={exports.plan.summary} exporting={exports.exporting} note={exports.note} compact />
-          )}
+          {compact && (tab === 'export' || exports.progress) && deliverBar(true)}
         </div>
         </FoldHints>
-        {/* Docked: under the scrolling sections, as the tab strip is over them. */}
-        {!compact && tab === 'export' && (
-          <DeliverBar verbs={exportVerbs} summary={exports.plan.summary} exporting={exports.exporting} note={exports.note} compact={false} />
-        )}
+        {/* Docked: under the scrolling sections, as the tab strip is over them.
+            A run in flight keeps it on EVERY tab: the roll leaves while a
+            picture is worked on, and the bar is where that is seen. */}
+        {!compact && (tab === 'export' || exports.progress) && deliverBar(false)}
       </PanelHost>
 
       {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}

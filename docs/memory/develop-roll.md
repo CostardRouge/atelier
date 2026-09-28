@@ -268,7 +268,26 @@ drawer body scrolls, the panel does not). ONE primary verb (`roll`, else the
 first) and the rest behind an `OverflowMenu` opening upward, so the bar keeps
 one height; the run's sentence above, `exporting` and `note` under. What is
 SET (Replace, the ⓘ text) stays in the Deliver section; only what is
-TRIGGERED is pinned. Shown on the Export tab only.
+TRIGGERED is pinned. Shown on the Export tab — and on EVERY tab while a run
+goes on.
+**The run is SEEN picture by picture** (2026-09-28, his pick V1 + V4; lab in
+`MEMORY.md`): `shared/develop/run-progress.ts` (pure, tested) holds each
+picture's state (`queued · active · done · failed`), the phase of the one in
+hand (`Fetch · Develop · Write`, three words over the run's dozen step
+sentences) and the step in words. `use-roll-export` drives it through ONE
+`say(phase, words)` that also feeds the one-line status and the task pill's
+detail, so the three never disagree; a picture that did not leave (skipped,
+refused by the folder, broken) is `failed`, one written with a warning is
+`done`. V1: while a run goes on the Deliver bar IS the run — a segment per
+picture (one bar past 48, thinner than a hairline otherwise), the active
+segment a SWEEP (its length is unknown, `tasks.md`), the name and the phase
+chips, the time left, a Cancel. The time left is MEASURED — the mean of the
+pictures this run finished — and absent until one has, never a guess from a
+file size. V4: each filmstrip cell carries its state at its CENTRE (the one
+spot no badge owns), pointer-transparent so a cell still opens its picture,
+and the run's task is SCOPED (`runScope(roll.id)`) so a `TaskEdge` draws its
+hairline along the strip's top. A Cancel from the bar or the pill shows at
+once (`cancelling`), the picture in hand letting go when it can.
 **E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
 moved to the top-right to make room); a click toggles, a right-click or a
 550 ms touch hold ignores ↔ brings back, and the click that ends a hold is

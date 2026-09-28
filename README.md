@@ -1419,8 +1419,15 @@ undo never forgets one.
 The export buttons stay pinned at the bottom of the Export tab, whatever is
 scrolled above them: **Export N pictures** (the ones that leave) is the main
 button, and the menu beside it offers this picture, the filmstrip's selection
-and the new or changed ones. The run's progress and its outcome are said under
-it.
+and the new or changed ones. While an export runs, that bar becomes the run
+and stays on whichever tab you are working in: a segment per picture (green
+when written, red when it could not be), the picture in hand with its stage —
+*Fetch*, *Develop*, *Write* — and what it is doing in words, the time left once
+a first picture has measured it, and **Cancel**, which stops at the next
+picture and keeps what was written. The filmstrip is the queue at the same
+time: a picture still to go is veiled, the one in hand turns, a written one
+shows ✓ and one that could not leave shows !, and a hairline along the strip's
+top fills as the run goes.
 
 **Variants.** One frame, developed two ways — cropped square and 4:5, or in
 colour and in black and white — is two **variants** of it, Lightroom's virtual

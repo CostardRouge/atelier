@@ -94,7 +94,8 @@ import {
   type PictureSection,
 } from '../../shared/develop/picture-sections';
 import { exportState, needsExport } from '../../shared/develop/export-marks';
-import { useRollExport } from './use-roll-export';
+import { runScope, useRollExport } from './use-roll-export';
+import TaskEdge from '../../shared/ui/TaskEdge';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
@@ -1268,8 +1269,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   )}
                 </p>
               )}
+              {/* V4: the strip is the run's queue — each cell marked, and the
+                  run's own hairline along its top (`TaskEdge`, the run's scope). */}
+              <div className="relative">
+                <TaskEdge scope={runScope(roll.id)} edge="top" />
               <Filmstrip
                 pictures={roll.pictures}
+                run={exports.progress}
                 openId={openId}
                 selectedIds={visibleSelected}
                 thumbs={thumbs}
@@ -1284,6 +1290,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 culling={culling.byPicture}
                 shows={filtering ? shownByCull : undefined}
               />
+              </div>
             </div>
           </div>
         </div>

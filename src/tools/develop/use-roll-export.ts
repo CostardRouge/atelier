@@ -9,7 +9,7 @@ import {
   type PictureSize,
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
-import { delivers, variantFolder, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
+import { delivers, pictureLabel, variantFolder, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
 import type { Interpolation } from '../../shared/lut/interpolate';
 import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
@@ -70,6 +70,20 @@ import { deliveredSourceFor, fetchSourceFile, sensorSourceFor } from '../../shar
 import { trackedFetch } from '../../shared/tasks/tracked';
 import { startTask } from '../../shared/tasks/tasks';
 import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/run-plan';
+import {
+  atStep,
+  cancelRun,
+  enterPicture,
+  finishPicture,
+  startRun,
+  type RunPhase,
+  type RunProgress,
+} from '../../shared/develop/run-progress';
+
+/** The task scope of a roll's export run — what the filmstrip's edge draws (`TaskEdge`). */
+export function runScope(rollId: string): string {
+  return `develop-run:${rollId}`;
+}
 
 /**
  * What the last run wrote, and each file's own capture on its instance.
@@ -97,6 +111,10 @@ export interface RollRun {
 export interface RollExports {
   /** A running export's progress line, or null when idle. */
   exporting: string | null;
+  /** Where a running export stands, picture by picture — null when idle (`run-progress.ts`). */
+  progress: RunProgress | null;
+  /** Stop the running export at the next picture, ending a fetch or a decode in flight. */
+  cancel: () => void;
   /** The last run's outcome, in a sentence. */
   note: string | null;
   lastRun: RollRun | null;
@@ -162,6 +180,10 @@ export function useRollExport({
   onDelivered?: (pictures: readonly RollPicture[], at: number) => void;
 }): RollExports {
   const [exporting, setExporting] = useState<string | null>(null);
+  const [progress, setProgress] = useState<RunProgress | null>(null);
+  // The running export's Cancel, for the Deliver bar — the task pill holds its own.
+  const controllerRef = useRef<AbortController | null>(null);
+  const cancel = useCallback(() => controllerRef.current?.abort(), []);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
   // Who signs the files (`exif/delivery-meta.ts`), read when a run STARTS —
@@ -329,11 +351,35 @@ export function useRollExport({
     // its bar, a Cancel that stops BETWEEN two pictures — and ends a fetch or
     // a RAW decode in flight — and keeps what was rendered (his question 2).
     const controller = new AbortController();
+    controllerRef.current = controller;
     const task = startTask({
       label: targets.length === 1 ? `Exporting ${targets[0].ref.name}` : `Exporting ${targets.length} pictures`,
+      scope: runScope(r.id),
       progress: 0,
       cancel: () => controller.abort(),
     });
+    // Where the run stands picture by picture (`run-progress.ts`): the Deliver
+    // bar's segments and the filmstrip's marks. A Cancel from anywhere — the
+    // bar, the pill — is said at once, before the picture in hand lets go.
+    let progressNow = startRun(
+      targets.map((t) => ({ id: t.id, name: pictureLabel(t) })),
+      Date.now(),
+    );
+    const show = (next: RunProgress) => {
+      progressNow = controller.signal.aborted ? cancelRun(next) : next;
+      setProgress(progressNow);
+    };
+    show(progressNow);
+    controller.signal.addEventListener('abort', () => show(progressNow));
+    let at = { i: 0, count: '' };
+    // One step of the picture in hand: its phase, its words — for the bar,
+    // the pill's detail and the one-line status alike.
+    const say = (phase: RunPhase, words: string) => {
+      setExporting(`${words} ${at.count}…`);
+      task.update({ detail: `${at.count} · ${words}` });
+      show(atStep(progressNow, phase, words));
+    };
+    const finish = (ok: boolean) => show(finishPicture(progressNow, at.i, ok, Date.now()));
     // Each picture is WRITTEN as soon as it is rendered, and let go: a run
     // used to hold every JPEG — and every second target's — until the last
     // picture was done, which on a phone is where a long roll ran out of
@@ -368,14 +414,17 @@ export function useRollExport({
       for (const [i, picture] of targets.entries()) {
         if (controller.signal.aborted) break;
         const step = `${i + 1}/${targets.length}`;
+        at = { i, count: step };
         task.update({ progress: i / targets.length, detail: `${step} · ${picture.ref.name}` });
+        show(enterPicture(progressNow, i));
         let file = f.get(picture.id) ?? null;
         if (!file) {
-          setExporting(`Fetching ${step}…`);
+          say('fetch', `Fetching ${picture.ref.name}`);
           file = await fetchFor(picture);
         }
         if (!file) {
           failures.push(`${picture.ref.name} could not be found — not in the Library, and no connected instance holds it`);
+          finish(false);
           continue;
         }
         // A working preview is a 2048 px stand-in, never a deliverable: a
@@ -386,10 +435,11 @@ export function useRollExport({
           failures.push(
             `${picture.ref.name} was left out: only its ${WORKING_PREVIEW_EDGE} px working preview is in hand — reopen the roll’s folder and export again`,
           );
+          finish(false);
           continue;
         }
         try {
-          setExporting(`Measuring ${step}…`);
+          say('fetch', `Measuring ${picture.ref.name}`);
           const origin = mediaOrigin(file);
           const identity = knownIdentity(file);
           let source = file;
@@ -410,7 +460,7 @@ export function useRollExport({
               const sensor = sensorSourceFor(file, origin, beside, identity?.assetId ?? null);
               let rawFile: File | null = null;
               if (sensor) {
-                if (!sensor.held) setExporting(`Fetching ${sensor.name} ${step}${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}…`);
+                if (!sensor.held) say('fetch', `Fetching ${sensor.name}${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}`);
                 rawFile = await fetchSourceFile(sensor, identity?.assetId ?? null, controller.signal).catch(() => null);
               }
               if (controller.signal.aborted) break;
@@ -424,7 +474,7 @@ export function useRollExport({
           // "proxies only".
           const chosen = !raw && !onlyProxies ? deliveredSourceFor(picture.rendition, file, origin, beside, identity?.assetId ?? null) : null;
           if (chosen) {
-            if (!chosen.held) setExporting(`Fetching ${chosen.name} ${step}${chosen.bytes ? ` · ${formatBytes(chosen.bytes)}` : ''}…`);
+            if (!chosen.held) say('fetch', `Fetching ${chosen.name}${chosen.bytes ? ` · ${formatBytes(chosen.bytes)}` : ''}`);
             try {
               source = await fetchSourceFile(chosen, identity?.assetId ?? null, controller.signal);
             } catch {
@@ -458,7 +508,7 @@ export function useRollExport({
           let rawHead: Uint8Array | null = null;
           let originalRender: PictureSize | null = null;
           if (size && undecided && !onlyProxies && isProxyOverRaw(origin)) {
-            setExporting(`Reading the RAW’s head ${step}…`);
+            say('fetch', 'Reading the RAW’s head');
             const probed = await rawRenderOf(origin!, identity?.assetId ?? null);
             originalRender = probed.render;
             rawHead = probed.head;
@@ -480,9 +530,7 @@ export function useRollExport({
               if (held) {
                 source = held;
               } else {
-                setExporting(
-                  `Fetching the original ${step}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}…`,
-                );
+                say('fetch', `Fetching ${origin.name ?? 'the original'}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}`);
                 const fetchOriginal = origin.fetchOriginal;
                 source = await trackedFetch(
                   { label: `Fetching ${origin.name ?? 'the original'}`, scope: identity?.assetId ?? null, bytes: origin.bytes ?? null, signal: controller.signal },
@@ -504,14 +552,14 @@ export function useRollExport({
           if (originalFile) {
             head = new Uint8Array(await originalFile.slice(0, EXIF_SLICE_BYTES).arrayBuffer());
           } else if (!head && origin?.fetchOriginalHead) {
-            setExporting(`Reading the original’s EXIF ${step}…`);
+            say('fetch', 'Reading the original’s EXIF');
             head = await origin
               .fetchOriginalHead(EXIF_SLICE_BYTES)
               .then((buffer) => new Uint8Array(buffer))
               .catch(() => null);
           }
 
-          setExporting(raw ? `Decoding the RAW ${step}…` : `Rendering ${step}…`);
+          say('develop', raw ? 'Decoding the RAW' : 'Rendering');
           // A RAW develop whose RAW is out of reach renders its numbers on the
           // render WITHOUT the base: the gain belongs to the sensor's range.
           const develop = raw ? picture.develop : picture.develop && isRawDevelop(picture.develop) ? withoutBase(picture.develop) : picture.develop;
@@ -583,7 +631,7 @@ export function useRollExport({
             calibration,
             hdr,
             stamp,
-            onSubjects: () => setExporting(`Finding the subject ${step}…`),
+            onSubjects: () => say('develop', 'Finding the subject'),
           });
           // A subject layer the model did not answer draws nothing — in the
           // file as on the stage — so the run says which picture left without it.
@@ -651,7 +699,7 @@ export function useRollExport({
             };
           });
           renderedCount += 1;
-          setExporting(`Writing ${step}…`);
+          say('write', `Writing ${name}`);
           const delivery = await deliverFilesTo(target, [variantDir ? { file: main, folder: variantDir } : main, ...others], {
             replace: r.export.replace,
           });
@@ -662,7 +710,9 @@ export function useRollExport({
           }
           // What LANDED is what gets marked: a file the folder refused was not delivered.
           const mainName = variantDir ? `${variantDir}/${name}` : name;
-          if (delivery.method !== 'folder' || !delivery.failed.includes(mainName)) landed.push(picture);
+          const ok = delivery.method !== 'folder' || !delivery.failed.includes(mainName);
+          if (ok) landed.push(picture);
+          finish(ok);
           names.push(mainName);
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
@@ -670,6 +720,7 @@ export function useRollExport({
           // Cancelled mid-picture: that picture is not a failure to list.
           if (controller.signal.aborted) break;
           failures.push(`${picture.ref.name}: ${err instanceof Error ? err.message : String(err)}`);
+          finish(false);
         }
       }
       const cancelled = controller.signal.aborted;
@@ -695,9 +746,11 @@ export function useRollExport({
     } finally {
       task.done();
       setExporting(null);
+      setProgress(null);
+      if (controllerRef.current === controller) controllerRef.current = null;
     }
   }, []);
 
   const measuredOpen = openFile && openSize && openSize.file === openFile ? openSize.size : null;
-  return { exporting, note, lastRun, openDelivery, openSize: measuredOpen, plan, lines, exportPictures };
+  return { exporting, progress, cancel, note, lastRun, openDelivery, openSize: measuredOpen, plan, lines, exportPictures };
 }
