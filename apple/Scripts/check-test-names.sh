@@ -20,6 +20,15 @@ if [ -n "$hits" ]; then
   echo "$hits"
   fail=1
 fi
+# - A kernel type that shares its name with an Apple framework's is picked
+#   from the FRAMEWORK in any app file importing it: `DocumentGroup` is
+#   SwiftUI's scene there. Write the kernel's qualified.
+shadowed=$(grep -rnE '(^|[^.A-Za-z0-9_])DocumentGroup<' Atelier || true)
+if [ -n "$shadowed" ]; then
+  echo "An unqualified DocumentGroup< in the app — SwiftUI's scene wins; write AtelierKit.DocumentGroup:"
+  echo "$shadowed"
+  fail=1
+fi
 kernel=Packages/AtelierKit/Sources
 types() { grep -rhoE "^$1(final )?(struct|enum|class|protocol|typealias|actor) [A-Za-z_][A-Za-z0-9_]*" "$2" | awk '{print $NF}' | sort -u; }
 funcs() { grep -rhoE "^$1(func|let|var) [A-Za-z_][A-Za-z0-9_]*" "$2" | awk '{print $NF}' | sort -u; }
@@ -29,5 +38,5 @@ if [ -n "$twins" ]; then
   echo "$twins"
   fail=1
 fi
-[ $fail -eq 0 ] && echo "no spec calls an unqualified record(, no app/kernel twin names"
+[ $fail -eq 0 ] && echo "no spec calls an unqualified record(, no app/kernel twin names, no shadowed kernel type"
 exit $fail

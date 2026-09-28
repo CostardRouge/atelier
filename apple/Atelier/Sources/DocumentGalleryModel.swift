@@ -46,7 +46,7 @@ final class DocumentGalleryModel<D: StoredDocument> {
 
     var remoteSourceIds: [String] { documentSources.map(\.id).filter(isRemoteSource) }
 
-    var groups: [DocumentGroup<D>] {
+    var groups: [AtelierKit.DocumentGroup<D>] {
         guard let docs else { return [] }
         return groupDocuments(docs, id: { $0.id }, sourceId: { $0.sourceId }, remoteSourceIds: remoteSourceIds,
                               remoteLists: remoteLists)

@@ -196,7 +196,7 @@ struct StudioGallery: View {
 
     // MARK: - one source
 
-    private func section(_ group: DocumentGroup<ProjectDoc>) -> some View {
+    private func section(_ group: AtelierKit.DocumentGroup<ProjectDoc>) -> some View {
         let known = gallery.connections.registry.sourceById(group.id)
         let count = group.items.count + group.remoteOnly.count
         let moveTargets = gallery.documentSources.filter { $0.id != group.id }
@@ -242,7 +242,7 @@ struct StudioGallery: View {
         return gallery.busy[id]
     }
 
-    private func sectionHeader(_ group: DocumentGroup<ProjectDoc>, label: String, known: Bool,
+    private func sectionHeader(_ group: AtelierKit.DocumentGroup<ProjectDoc>, label: String, known: Bool,
                                count: Int) -> some View {
         HStack(spacing: 0) {
             Eyebrow("source: \(label)")
