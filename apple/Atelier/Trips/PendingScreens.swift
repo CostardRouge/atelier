@@ -7,20 +7,6 @@
 
 import SwiftUI
 
-// MARK: - PIECE — owned by the piece editor task (`Trips/Piece/*`): the badge
-// stage, the deck, the four tabs, the export. Delete when it lands.
-
-struct PieceEditorView: View {
-    let store: TripsStore
-    let tripId: String
-    let postId: String
-
-    var body: some View {
-        PendingTripsScreen(title: "Piece",
-                           text: "The piece editor — the stage, the deck and its four tabs — is coming with its own task.")
-    }
-}
-
 // MARK: - the stand-ins' shared face
 
 struct PendingTripsScreen: View {
