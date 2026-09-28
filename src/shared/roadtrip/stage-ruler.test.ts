@@ -1,12 +1,15 @@
 import { describe, expect, it } from 'vitest';
 import {
+  DAY_LABEL_MIN,
   MIN_DAY,
   MIN_TICK_GAP,
+  WEEKDAY_LABEL_MIN,
   STAGE_TINTS,
   dayAtOffset,
   dayOffset,
   laneCount,
   rulerBars,
+  rulerDayLabels,
   rulerDayWidth,
   rulerGaps,
   rulerMonths,
@@ -189,5 +192,25 @@ describe('rulerTicks', () => {
 
   it('has nothing to draw for a trip with no span', () => {
     expect(rulerTicks({ startDate: 'nope', endDate: '2025-02-10' }, 20)).toEqual([]);
+  });
+});
+
+describe('rulerDayLabels', () => {
+  it('writes nothing until a day is wide enough to carry its date', () => {
+    expect(rulerDayLabels(trip([]), DAY_LABEL_MIN - 1)).toEqual([]);
+  });
+
+  it('writes the date, and leaves the first day and a first of the month to the month label', () => {
+    const labels = rulerDayLabels(trip([]), DAY_LABEL_MIN);
+    expect(labels[0]).toEqual({ offset: 1, text: '29' });
+    // 2025-02-01 is offset 4: its month's label stands there.
+    expect(labels.some((l) => l.offset === 0 || l.offset === 4)).toBe(false);
+    expect(labels).toHaveLength(12);
+  });
+
+  it("adds the weekday in the calendar's own two letters once there is room", () => {
+    const labels = rulerDayLabels(trip([]), WEEKDAY_LABEL_MIN);
+    expect(labels[0]).toEqual({ offset: 1, text: 'We 29' });
+    expect(labels.find((l) => l.offset === 5)?.text).toBe('Su 2');
   });
 });

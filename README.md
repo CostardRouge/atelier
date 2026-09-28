@@ -556,11 +556,21 @@ a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
 
 They live on a **ruler between the map and the months** — a video editor's
-timeline scaled to days. It details the **months on screen**: the one you
+timeline scaled to days. It opens on the **months on screen**: the one you
 have scrolled to and its two neighbours, so the legs of a quarter at a time
 get the width a pointer can grab (about nine pixels a day on a year-long
 trip) while the map above keeps the whole year in view — scroll the calendar
-and the ruler follows. Each leg is a bar: drag either edge to change when it began or ended,
+and the ruler follows. When the legs are too many or too short to read,
+**zoom the ruler**: scroll the wheel or pinch the trackpad over it (two
+fingers on a touch screen), or press − and + beside the legend. The day under
+the pointer stays where it is while the window closes in — down to a single
+week across, where every leg says its name and every day its date and
+weekday — or opens out to as many days as still leave a leg's edge
+grabbable; the percentage between − and + goes back to the three months, and
+the zoom is kept as the calendar moves on. A sideways swipe or shift-wheel
+travels along the trip at that zoom. The window is **marked on the year map**
+by a vermilion bar under the weeks it covers, which shrinks as you zoom in and
+grows as you zoom out, and its dates are written beside the legend. Each leg is a bar: drag either edge to change when it began or ended,
 drag its middle to slide it whole, and every move snaps to a day while a pin
 follows the pointer saying the date it would land on and how long the leg
 would then be. A run of days no leg covers offers a `+` that adds one over
