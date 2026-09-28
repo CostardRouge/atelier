@@ -1,7 +1,9 @@
 // The editor's side of the complete pixel path (`FullDevelopRenderPlan`):
-// installing it, hearing what each render drew from, and the RAW LADDER the
-// fidelity chip offers — the web's `PictureWorkbench.tsx` around `onBase`,
-// `onRawDecoded` and the chip's rows.
+// installing it, hearing what each render drew from, and the fidelity chip's
+// menu — the LIST OF THE CAPTURE'S FILES with the RAW ladder nested under the
+// sensor (`RollEditor+Renditions.swift` knows the files) — the web's
+// `PictureWorkbench.tsx` around `onBase`, `onRendition`, `onRawDecoded` and
+// the chip's rows.
 //
 // Rules kept (`raw.md`):
 // - `proxy` is the ABSENCE of a base: going back to it takes the base, its
@@ -89,39 +91,57 @@ extension RollEditor {
         if shownBase != .proxy, let facts = sourceFacts[id] {
             return FidelityPixels(width: facts.width, height: facts.height, viaRawPreview: false, full: facts.full)
         }
-        guard let size = decodedSize else { return nil }
+        guard let size = decodedSize, let p = picture else { return nil }
         let decoded = pool.held(id)?.decoded
-        let full = decoded?.raw?.sensor.map { PixelSize(width: Int($0.width.rounded()), height: Int($0.height.rounded())) }
         return FidelityPixels(width: Int(size.width), height: Int(size.height),
-                              viaRawPreview: decoded?.viaRawPreview ?? false, full: full)
+                              viaRawPreview: decoded?.viaRawPreview ?? false, full: fullPixels(p, decoded))
     }
 
-    /// The chip's rows and ladder for the open picture: the render inside
-    /// its RAW and its sensor with the rungs its file can reach — nothing
-    /// for a picture that is not a RAW here (the name stays text).
+    /// The chip's menu for the open picture — every file of its capture
+    /// (`captureRows`: the proxy, what the camera delivered, the sensor), the
+    /// one on screen, and the sensor's rungs where a RAW is reachable at all:
+    /// in hand, beside it in its folder, or on its instance. With nothing to
+    /// choose the chip draws the name as text.
     var baseChip: BaseChipModel {
-        guard let p = picture, let raw = openRaw else { return BaseChipModel() }
-        let measured = decodedSize.map { PixelSize(width: Int($0.width), height: Int($0.height)) }
-        let sensor = raw.sensor.map { PixelSize(width: Int($0.width.rounded()), height: Int($0.height.rounded())) }
-        let rows = renditionsOf(captureInput(CaptureFacts(file: p.ref, measured: measured, sensor: sensor)))
+        guard let p = draftedPicture else { return BaseChipModel() }
+        let rows = captureRows(p)
+        let opening = openingRendition(rows)
+        let chosen = renditionById(rows, p.rendition)
+        let current: String?
+        if let chosen, chosen.role != .sensor, chosen.blocked == nil {
+            current = chosen.id
+        } else {
+            current = opening?.id
+        }
+        guard let sensor = sensorSource(p) else {
+            return BaseChipModel(rows: rows, current: current)
+        }
+        let calibration = sensorCalibration(p, sensor)
+        let rungs = rungsFor(calibration)
         let wantsRaw = isRawDevelop(developDraft)
         let drawn = sourceFacts[p.id]?.onSensor == true
+        // A rung the file cannot reach is never left standing: the top one it has.
+        let asked = developBase(developDraft)
+        let rung = rungs.contains(asked) ? asked : (rungs.last ?? .gain)
         return BaseChipModel(
             rows: rows,
-            current: rows.first { $0.role != .sensor }?.id,
-            base: wantsRaw ? developBase(developDraft) : .proxy,
-            rungs: raw.rungs,
+            current: current,
+            base: wantsRaw ? rung : .proxy,
+            rungs: rungs,
             status: wantsRaw && !drawn ? "decoding the sensor’s data…" : nil,
             gain: wantsRaw ? developDraft.rawGain : nil,
-            calibration: raw.calibration?.summary
+            calibration: calibration?.summary
         )
     }
 
     // MARK: - the ladder
 
-    /// Climb to a rung, or come back to the proxy — the web's `onBase`.
+    /// Climb to a rung, or come back to the proxy — the web's `onBase`. The
+    /// sensor may be the file in hand, a RAW beside it, or one its instance
+    /// holds (fetched as the stage asks for it, `stageFile`); the file set
+    /// above the photograph stays stored under the rung.
     func setBase(_ next: DevelopBase) {
-        guard picture != nil else { return }
+        guard let p = draftedPicture else { return }
         var d = developDraft
         if next == .proxy {
             guard isRawDevelop(d) else { return }
@@ -131,7 +151,7 @@ extension RollEditor {
             setDevelopDraft(d)
             return
         }
-        guard openRaw != nil else { return }
+        guard openRaw != nil || sensorSource(p) != nil else { return }
         let climbing = !isRawDevelop(d)
         d.base = next
         setDevelopDraft(d)

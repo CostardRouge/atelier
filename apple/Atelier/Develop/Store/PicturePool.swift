@@ -10,6 +10,13 @@
 // stage once it rests (`snapshot`), so a cell is the picture as last SEEN in
 // the editor. They are kept on disk beside the rolls (`RollStore.thumbURL`)
 // so the gallery's cover mosaic reads them without a decode.
+//
+// The stage may read ANOTHER file of the picture's capture than its own —
+// the file set above the photograph, or the RAW its sensor is developed from
+// (`ShownFile`, `RollEditor+Renditions.swift`): that decode is kept under its
+// own key beside the picture's, and `held` answers with whichever the stage
+// read last, so everything that asks "what is on screen" (the RAW ladder, the
+// camera's line under `I`, the as-shot statistics) reads the file shown.
 
 import CoreGraphics
 import CoreImage
@@ -40,6 +47,9 @@ final class PicturePool {
 
     private let store: RollStore
     @ObservationIgnored private var reads: [String: PictureRead] = [:]
+    /// The key the STAGE last read each picture under — its own id, or the
+    /// id and the capture file it showed instead.
+    @ObservationIgnored private var current: [String: String] = [:]
     @ObservationIgnored private var order: [String] = []
     @ObservationIgnored private var inFlight: [String: Task<PictureRead, Error>] = [:]
     /// Tried once per picture per visit, so a file that cannot be decoded is
@@ -56,20 +66,38 @@ final class PicturePool {
 
     // MARK: - decoding
 
-    /// The picture's bytes decoded, from the pool or from its file. Throws
+    /// The picture's bytes decoded, from the pool or from its file — or,
+    /// with `shown`, another file of its capture (read under its own name, so
+    /// a RAW beside a JPEG decodes as the RAW it is). `stage` marks the read
+    /// the stage draws: what `held` answers from then on. Throws
     /// `PictureError.noLocator` when this device does not know where the file is.
-    func read(_ rollId: String, _ picture: RollPicture) async throws -> PictureRead {
+    func read(_ rollId: String, _ picture: RollPicture, shown: ShownFile? = nil,
+              stage: Bool = false) async throws -> PictureRead {
         // A variant shares its file: the pool is keyed on the FILE's locator
         // owner, which is the picture's own id (each variant carries a copy).
-        if let hit = reads[picture.id] {
-            touch(picture.id)
+        let key = shown.map { "\(picture.id)|\($0.key)" } ?? picture.id
+        if let hit = reads[key] {
+            touch(key)
+            if stage { adopt(picture.id, key, hit) }
             return hit
         }
-        if let running = inFlight[picture.id] { return try await running.value }
+        if let running = inFlight[key] {
+            let read = try await running.value
+            if stage { adopt(picture.id, key, read) }
+            return read
+        }
         // Its locator, else a file the roll fetched from its instance this session.
-        guard let source = store.bytesSource(rollId, picture.id) else { throw PictureError.noLocator }
+        let source: PictureBytesSource
+        let name: String
+        if let shown {
+            source = shown.source
+            name = shown.name
+        } else {
+            guard let own = store.bytesSource(rollId, picture.id) else { throw PictureError.noLocator }
+            source = own
+            name = picture.ref.name
+        }
         let media = store.mediaDirectory
-        let name = picture.ref.name
         let task = Task.detached(priority: .userInitiated) { () throws -> PictureRead in
             let data = try RollStore.bytes(of: source, mediaDirectory: media)
             // A RAW's bytes are read again when its sensor is asked for, never held.
@@ -80,13 +108,17 @@ final class PicturePool {
             let stats = PictureRenderer.shared.rgbaBytes(decoded.image, longEdge: histogramSampleEdge).map { measureSource($0) }
             return PictureRead(decoded: decoded, exif: isEmptyExif(parsed) ? nil : parsed, stats: stats)
         }
-        inFlight[picture.id] = task
-        defer { inFlight[picture.id] = nil }
+        inFlight[key] = task
+        defer { inFlight[key] = nil }
         let read = try await task.value
-        reads[picture.id] = read
-        touch(picture.id)
-        if let e = read.exif { exif[picture.id] = e }
-        if let s = read.stats { stats[picture.id] = s }
+        reads[key] = read
+        touch(key)
+        if stage {
+            adopt(picture.id, key, read)
+        } else if (current[picture.id] ?? picture.id) == key {
+            if let e = read.exif { exif[picture.id] = e }
+            if let s = read.stats { stats[picture.id] = s }
+        }
         while order.count > PicturePool.keep {
             let old = order.removeFirst()
             reads[old] = nil
@@ -94,9 +126,16 @@ final class PicturePool {
         return read
     }
 
-    /// The decoded picture already in hand, if it is.
+    /// What the stage read for a picture is what the picture's facts are read from.
+    private func adopt(_ pictureId: String, _ key: String, _ read: PictureRead) {
+        current[pictureId] = key
+        exif[pictureId] = read.exif
+        stats[pictureId] = read.stats
+    }
+
+    /// The decoded picture the stage shows, if it is in hand.
     func held(_ pictureId: String) -> PictureRead? {
-        reads[pictureId]
+        reads[current[pictureId] ?? pictureId]
     }
 
     private func touch(_ id: String) {
@@ -107,8 +146,10 @@ final class PicturePool {
     /// A picture taken off the roll: its decode, its facts, its thumbnail.
     func forget(_ ids: [String]) {
         for id in ids {
-            reads[id] = nil
-            order.removeAll { $0 == id }
+            let mine = { (key: String) in key == id || key.hasPrefix("\(id)|") }
+            for key in reads.keys where mine(key) { reads[key] = nil }
+            order.removeAll(where: mine)
+            current[id] = nil
             thumbnails[id] = nil
             exif[id] = nil
             stats[id] = nil

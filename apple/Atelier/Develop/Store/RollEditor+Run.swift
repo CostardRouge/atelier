@@ -230,6 +230,8 @@ extension RollEditor {
         let origin = identity?.origin
         let assetId = identity?.assetId
         let proxy = origin?.fidelity == .proxy
+        // The files beside it the stage was handed too — a folder's DNG is in hand.
+        let beside = captureSiblings(p).map(\.ref)
         var original: PictureFacts.Original?
         if proxy, let name = origin?.name {
             let held = assetId.map { SessionOriginals.shared.isHeld($0) } ?? false
@@ -238,8 +240,8 @@ extension RollEditor {
         return PictureFacts(
             file: p.ref,
             proxy: proxy,
-            sensor: heldInSession(sensorSourceFor(p.ref, origin, [], assetId)),
-            delivered: heldInSession(deliveredSourceFor(p.rendition, p.ref, origin, [], assetId)),
+            sensor: heldInSession(sensorSourceFor(p.ref, origin, beside, assetId)),
+            delivered: heldInSession(deliveredSourceFor(p.rendition, p.ref, origin, beside, assetId)),
             original: original
         )
     }
@@ -287,7 +289,8 @@ extension RollEditor {
         let identity = vouched(p)
         let origin = identity?.origin
         var summary = deliverySummary(src, origin?.fidelity == .proxy, originalOf(origin), p.framing, ratio, border, settings)
-        let chosen = proxiesOnly ? nil : heldInSession(deliveredSourceFor(p.rendition, p.ref, origin, [], identity?.assetId))
+        let beside = captureSiblings(p).map(\.ref)
+        let chosen = proxiesOnly ? nil : heldInSession(deliveredSourceFor(p.rendition, p.ref, origin, beside, identity?.assetId))
         let raw = pool.held(p.id)?.decoded.isRaw ?? false
         if let chosen, !isRawDevelop(p.develop) {
             // The picture's own answer: the file set above the photograph, at

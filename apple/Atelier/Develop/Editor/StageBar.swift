@@ -55,15 +55,16 @@ struct StageBar: View {
     private var name: some View {
         HStack(alignment: .firstTextBaseline, spacing: 8) {
             if let picture = editor.picture {
-                // The name and what its bytes are; on a RAW, the render inside
-                // it and its sensor with the rungs its file can reach (the
-                // render plan honours them — `RollEditor+Render`). Anything
-                // else has no row to choose, and the chip draws the name as TEXT.
+                // The name and what its bytes are, as the menu of the
+                // capture's FILES: the proxy, what the camera delivered, the
+                // sensor with the rungs its file can reach — in hand, beside it
+                // in its folder, or on its instance (`RollEditor+Renditions`).
+                // With nothing to choose the chip draws the name as TEXT.
                 let model = editor.baseChip
                 DevelopBaseChip(name: pictureLabel(picture), chip: editor.fidelityChip, rows: model.rows,
                                 current: model.current, base: model.base, rungs: model.rungs,
                                 status: model.status, gain: model.gain, calibration: model.calibration,
-                                onRendition: { _ in editor.setBase(.proxy) }, onBase: { editor.setBase($0) })
+                                onRendition: { editor.setRendition($0) }, onBase: { editor.setBase($0) })
             }
             if let told = editor.told {
                 Text("· \(told)")

@@ -7,12 +7,18 @@
 //    fetched ON THE SPOT from the instance its ref names, for this picture
 //    alone (a picture far from the open one is not kept).
 // 2. A picture developed on its RAW leaves from the SENSOR's data: the file
-//    itself when it is the RAW, else the proxy's own original or the
-//    capture's companion, fetched once and held for the session
-//    (`SessionOriginals`, shared with the lightbox). Out of reach, the render
-//    leaves instead — `deliver` says so.
+//    itself when it is the RAW, a RAW beside it in its folder (a sibling, in
+//    hand — the same siblings the stage was handed, `CaptureSiblings.forRun`),
+//    else the proxy's own original or the capture's companion, fetched once
+//    and held for the session (`SessionOriginals`, shared with the lightbox).
+//    Out of reach, the render leaves instead — `deliver` says so.
 // 3. Below the sensor, the file set above the photograph (`RollPicture.
-//    rendition`) is the picture's own answer, fetched and held the same way.
+//    rendition`) is the picture's own answer, a sibling or fetched and held
+//    the same way.
+//
+// A capture file that is not the picture's own is decoded under ITS OWN name
+// (`sourceName`): a companion ARW read as the HIF it stands beside would be
+// decoded as no RAW at all, and its base set aside.
 // 4. Where nothing above decided, `Auto`'s arithmetic still does: a proxy's
 //    original is fetched only where the proxy could not fill the LARGEST
 //    target's frame — a RAW original through the render inside it, its size
@@ -32,6 +38,9 @@ import AtelierKit
 /// The bytes one picture leaves from, and what they are vouched for with.
 struct RunPictureSource {
     var source: PictureBytesSource?
+    /// The name the source's own file goes by, when it is not the picture's
+    /// (a sibling, a fetched original or companion) — what it is decoded as.
+    var sourceName: String?
     /// The ORIGINAL's head, when the source is not the original itself.
     var exifHead: Data?
     /// What the instance parsed at ingest — the last resort for the EXIF.
@@ -54,6 +63,7 @@ enum RunFetch {
         connections: ConnectionStore?,
         export: RollExport,
         proxiesOnly: Bool,
+        siblings: [CaptureSiblingFile] = [],
         say: (String) -> Void
     ) async -> RunPictureSource {
         var out = RunPictureSource()
@@ -94,13 +104,22 @@ enum RunFetch {
 
         // 2. A RAW develop leaves from the sensor's data.
         var decided = false
-        if isRawDevelop(picture.develop), let sensor = sensorSourceFor(picture.ref, origin, [], assetId) {
+        let beside = siblings.map(\.ref)
+        if isRawDevelop(picture.develop), let sensor = sensorSourceFor(picture.ref, origin, beside, assetId) {
             switch sensor.reach {
-            case .file, .sibling:
+            case .file:
+                decided = true
+            case .sibling:
+                if let file = sibling(sensor.name, siblings) {
+                    out.source = file.source
+                    out.sourceName = file.ref.name
+                    return out
+                }
                 decided = true
             case .original, .companion:
                 if let url = await fetchCapture(sensor, identity: identity, client: client, step: step, say: say) {
                     out.source = .file(url)
+                    out.sourceName = sensor.name
                     return out
                 }
                 // Out of reach: `deliver` says the render left instead.
@@ -108,13 +127,21 @@ enum RunFetch {
         }
 
         // 3. The file set above the photograph.
-        if !decided, let chosen = deliveredSourceFor(picture.rendition, picture.ref, origin, [], assetId) {
+        if !decided, let chosen = deliveredSourceFor(picture.rendition, picture.ref, origin, beside, assetId) {
             switch chosen.reach {
-            case .file, .sibling:
+            case .file:
+                decided = true
+            case .sibling:
+                if let file = sibling(chosen.name, siblings) {
+                    out.source = file.source
+                    out.sourceName = file.ref.name
+                    return out
+                }
                 decided = true
             case .original, .companion:
                 if let url = await fetchCapture(chosen, identity: identity, client: client, step: step, say: say) {
                     out.source = .file(url)
+                    out.sourceName = chosen.name
                     return out
                 }
                 if Task.isCancelled { return out }
@@ -145,6 +172,7 @@ enum RunFetch {
                                           fetch: .original)
                 if let url = await fetchCapture(wanted, identity: identity, client: client, step: step, say: say) {
                     out.source = .file(url)
+                    out.sourceName = name
                     out.exifHead = nil
                     return out
                 }
@@ -200,6 +228,12 @@ enum RunFetch {
         } catch {
             return nil
         }
+    }
+
+    /// The sibling a source names, by its file name.
+    private static func sibling(_ name: String, _ siblings: [CaptureSiblingFile]) -> CaptureSiblingFile? {
+        let wanted = name.lowercased()
+        return siblings.first { $0.ref.name.lowercased() == wanted }
     }
 
     /// The instance an asset id names, as a client — only a connected one.

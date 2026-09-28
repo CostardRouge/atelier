@@ -297,13 +297,16 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
 
     func unrendered(picture p: RollPicture) -> [String] {
         var out: [String] = []
-        // A RAW develop on a file that is not a RAW here: its numbers are
-        // drawn, its material cannot be.
+        // A RAW develop with no RAW drawn: its numbers are drawn, its
+        // material cannot be. The sensor may be ANOTHER file of the capture
+        // than the picture's own (a DNG beside its JPEG, a companion) — what
+        // the last stage render drew from says whether it was reached.
         if let d = p.develop, isRawDevelop(d) {
             lock.lock()
             let cannot = refused.contains(p.id)
+            let reached = told[p.id]?.onSensor == true
             lock.unlock()
-            if !isRawImage(p.ref.name) {
+            if !isRawImage(p.ref.name) && !reached {
                 out.append("RAW base")
             } else if cannot {
                 out.append("RAW base (this device’s decoder refused the sensor)")

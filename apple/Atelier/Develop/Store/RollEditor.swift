@@ -146,6 +146,9 @@ final class RollEditor {
     let repairEdit = RepairEditState()
     /// What the roll reads from a Winnow — its own fetch pool, the culling and its filter (`RollEditor+Winnow.swift`).
     let winnow = RollWinnow()
+    /// The capture's files each picture is made of — its siblings, its
+    /// original, its companion — and which one the stage reads (`RollEditor+Renditions.swift`).
+    let renditions = RollRenditions()
 
     /// Pictures that LANDED, marked on this device as they were rendered —
     /// never an edit, never undone.
@@ -636,7 +639,11 @@ final class RollEditor {
         let wantsBefore = compareOn || holding
         let clipping = self.clipping
         let gain = pic.develop?.rawGain.map { "\($0)" } ?? ""
-        let key = "\(pic.id)|\(pic.aspect)|\(pic.framing?.json.serialized() ?? "")|\(pic.develop?.base?.rawValue ?? "")|\(gain)"
+        // Which of the capture's files the stage reads — its own, the one set
+        // above the photograph, or the RAW its develop stands on.
+        let shown = stageFile(pic)
+        let file = shown?.key ?? ""
+        let key = "\(pic.id)|\(pic.aspect)|\(pic.framing?.json.serialized() ?? "")|\(pic.develop?.base?.rawValue ?? "")|\(gain)|\(file)"
         let needsBefore = wantsBefore && (beforeKey != key || before == nil)
         let border = StageGround.border(of: pic, tab: tab, tool: activeTool, plan: plan)
         if stage == nil { loading = true }
@@ -651,7 +658,8 @@ final class RollEditor {
             defer { opening?.done() }
             guard let self else { return }
             do {
-                let read = try await self.pool.read(rollId, pic)
+                let read = try await self.pool.read(rollId, pic, shown: shown, stage: true)
+                self.noteStageRead(pic, shown: shown, read)
                 let decoded = read.decoded
                 // What the render needs that is had asynchronously (a pack
                 // look's lattice), fetched before the render asks for it.
@@ -798,7 +806,7 @@ final class RollEditor {
         if shownBase == .proxy, let read = pool.held(p.id), read.decoded.systemDeveloped {
             return "RAW · system developer · \(read.decoded.width) × \(read.decoded.height)"
         }
-        return pictureFidelity(FidelityFile(name: p.ref.name), shownBase, shownPixels).chip
+        return pictureFidelity(shownFidelityFile(p), shownBase, shownPixels).chip
     }
 
     /// What the bytes on screen can give back. A RAW with no render of its own
@@ -810,6 +818,6 @@ final class RollEditor {
         if shownBase == .proxy, let read = pool.held(p.id), read.decoded.systemDeveloped {
             return "the sensor’s data, demosaiced by the system’s RAW developer at its defaults — the file carries no render of its own"
         }
-        return pictureFidelity(FidelityFile(name: p.ref.name), shownBase, shownPixels).note
+        return pictureFidelity(shownFidelityFile(p), shownBase, shownPixels).note
     }
 }

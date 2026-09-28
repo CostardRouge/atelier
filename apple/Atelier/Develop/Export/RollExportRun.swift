@@ -67,6 +67,10 @@ struct PictureJob {
     /// The run's clock (ms) and this year — a picture nobody dated is signed with it.
     let now: Double
     let year: Int
+    /// The name the source's own file goes by when it is another file of the
+    /// capture (a sibling, a fetched original or companion): what it is
+    /// decoded as — never the picture's, which may be another format.
+    var sourceName: String? = nil
 }
 
 /// What one picture came to.
@@ -205,11 +209,13 @@ final class RollExportRun {
             let share = Double(i) / Double(max(1, total))
             state.say("Rendering \(step)…", progress: share, detail: "\(step) · \(original.ref.name)")
             let variantDir = variantFolder(original)
-            // Which bytes it leaves from — fetched from its instance where they must be.
+            // Which bytes it leaves from — a file beside it in its folder, or
+            // fetched from its instance where they must be.
+            let siblings = await CaptureSiblings.forRun(original, rollId: input.rollId, store: store, editor: editor)
             let found = await RunFetch.resolve(original, step: step, given: input.sources[original.id],
                                                identity: input.vouched[original.id], rollId: input.rollId,
                                                store: store, editor: editor, connections: input.connections,
-                                               export: export, proxiesOnly: input.proxiesOnly,
+                                               export: export, proxiesOnly: input.proxiesOnly, siblings: siblings,
                                                say: { line in self.state.say(line) })
             defer { RollExportRun.discard(found.temporary) }
             if flag.isSet { break }
@@ -238,7 +244,8 @@ final class RollExportRun {
                 folder: folder,
                 replace: export.replace,
                 now: now,
-                year: year
+                year: year,
+                sourceName: found.sourceName
             )
             let outcome = await Task.detached(priority: .userInitiated) { await RollExportRun.deliver(job, flag) }.value
             if outcome.cancelled { break }
@@ -324,7 +331,8 @@ final class RollExportRun {
             out.failures.append("\(label) could not be read: \(error.localizedDescription)")
             return out
         }
-        guard let decoded = PictureDecoder.decode(data, name: label) else {
+        // Decoded as the file it is: a companion ARW is a RAW whatever the picture's own name.
+        guard let decoded = PictureDecoder.decode(data, name: job.sourceName ?? label) else {
             out.failures.append("\(label) is in a format this device cannot decode")
             return out
         }
