@@ -233,6 +233,10 @@ function graderFrom(
     }
     const ar = s.width / s.height;
     const cache = slot.cache;
+    // The layers BEFORE the overlay: the overlay takes a painted mask's map
+    // from the entry `passes` has just refreshed, so a stroke drawn while its
+    // mask is shown is walked once, not twice.
+    const layerList = cache.passes(stack, ar, rasters);
     const overlayPass = overlay
       ? cache.overlay(overlay.layer, ar, rasters?.get(overlay.layer.id) ?? null, overlay.style, overlayExcept)
       : null;
@@ -252,7 +256,7 @@ function graderFrom(
     const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
     const passes = [
       ...geometryPasses(geometry, ar),
-      ...cache.passes(stack, ar, rasters),
+      ...layerList,
       ...post,
       // The post-crop vignette after the sharpen — an effect on the finished
       // picture, shaped in its delivered frame.
