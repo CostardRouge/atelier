@@ -31,6 +31,23 @@ import { formatBytes } from '../shared/lib/format';
 import useDialogKeys from '../shared/ui/use-dialog-keys';
 import WinnowThumb from '../shared/sources/winnow/WinnowThumb';
 import { Icons } from '../shared/ui/icons';
+import { useInViewport } from '../shared/lib/use-in-viewport';
+
+/** Tiles mounted per batch of the grid. */
+const ROWS_STEP = 240;
+
+/** The end of the grid: once it nears the viewport, one more batch is mounted. */
+function MoreRows({ onVisible }: { onVisible: () => void }) {
+  const [ref, inView] = useInViewport<HTMLDivElement>();
+  // Once per sentinel, whatever re-renders it before the next batch lands.
+  const fired = useRef(false);
+  useEffect(() => {
+    if (!inView || fired.current) return;
+    fired.current = true;
+    onVisible();
+  }, [inView, onVisible]);
+  return <div ref={ref} className="col-span-full h-px" aria-hidden />;
+}
 
 interface WinnowBrowserProps {
   connection: WinnowConnection;
@@ -102,6 +119,8 @@ function shortDate(iso: string | null): string {
  * original on request, with its weight shown so the cost is a choice.
  */
 export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrowserProps) {
+  /** The add in flight, so the sheet's Cancel can stop it. */
+  const adding = useRef<AbortController | null>(null);
   const client = useMemo(
     () => new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth }),
     [connection.baseUrl, connection.auth],
@@ -147,6 +166,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   );
 
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
+  // The grid renders a batch at a time, and the next as its end nears: a
+  // chapter of two thousand media mounted two thousand tiles at once (the
+  // audit of 2026-09-22). Back to one batch whenever the list is replaced.
+  const [shownRows, setShownRows] = useState(ROWS_STEP);
+  useEffect(() => setShownRows(ROWS_STEP), [rows]);
   const [checked, setChecked] = useState<ReadonlySet<number>>(() => new Set());
   const [fidelity, setFidelity] = useState<Fidelity>(remembered?.fidelity ?? 'proxy');
   const [problem, setProblem] = useState<{ text: string; login?: string } | null>(null);
@@ -353,7 +377,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
   // Escape closes the sheet; Enter runs its one action, on exactly the
   // condition the button carries — nothing ticked, nothing to fetch.
   useDialogKeys({
-    onCancel: onClose,
+    onCancel: close,
     onConfirm: picked.length && progress === null ? () => void add() : null,
   });
 
@@ -391,20 +415,31 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
     if (!picked.length) return;
     setProblem(null);
     const files: File[] = [];
+    const controller = new AbortController();
+    adding.current = controller;
     try {
       for (const [i, row] of picked.entries()) {
+        if (controller.signal.aborted) break;
         setProgress(`${i + 1}/${picked.length} · ${row.filename}`);
-        files.push(...(await materialize(client, connection.id, row, { fidelity })));
+        files.push(...(await materialize(client, connection.id, row, { fidelity, signal: controller.signal })));
       }
       onAdd(files);
-      onClose();
+      if (!controller.signal.aborted) onClose();
     } catch (err) {
-      setProblem(explain(err, client));
+      // Cancelled: what landed before is kept, like a cancelled export's.
+      if (!controller.signal.aborted) setProblem(explain(err, client));
       // Whatever landed before the failure is still worth having.
       if (files.length) onAdd(files);
     } finally {
+      adding.current = null;
       setProgress(null);
     }
+  }
+
+  /** The sheet's way out: it also STOPS an add in flight, rather than letting it land later. */
+  function close() {
+    adding.current?.abort();
+    onClose();
   }
 
   // The way out of the pictures when only one pane is on screen (<820px).
@@ -448,7 +483,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
       aria-modal="true"
       aria-label={`Add from ${connection.id}`}
       onPointerDown={(e) => {
-        if (e.target === e.currentTarget) onClose();
+        if (e.target === e.currentTarget) close();
       }}
     >
       <div className="w-full max-w-[56rem] h-[min(90dvh,52rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:gap-3 max-[820px]:p-4 max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
@@ -461,7 +496,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           <button
             type="button"
             onClick={() => {
-              onClose();
+              close();
               navigate(`/connect?instance=${encodeURIComponent(connection.baseUrl)}`);
             }}
             className="p-0 border-0 bg-transparent text-xs text-faint cursor-pointer underline underline-offset-[3px] hover:text-ink"
@@ -732,7 +767,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                   <p className="m-0 text-xs text-muted">Nothing here matches these filters.</p>
                 ) : (
                   <div className="flex-1 min-h-0 overflow-auto grid grid-cols-[repeat(auto-fill,minmax(120px,1fr))] auto-rows-max gap-2 content-start pr-1">
-                    {rows.map((r) => {
+                    {rows.slice(0, shownRows).map((r) => {
                       const on = checked.has(r.id);
                       return (
                         <label
@@ -766,6 +801,11 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
                         </label>
                       );
                     })}
+                    {shownRows < rows.length && (
+                      // Keyed by the count: the sentinel is one-shot, so each
+                      // batch mounts a fresh one at the new end of the grid.
+                      <MoreRows key={shownRows} onVisible={() => setShownRows((n) => n + ROWS_STEP)} />
+                    )}
                   </div>
                 )}
               </>
@@ -795,7 +835,7 @@ export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrow
           </div>
           <div className="flex items-center gap-3 gap-y-2 flex-wrap justify-end ml-auto max-[560px]:w-full">
             {progress && <span className="font-mono text-2xs text-muted max-[560px]:w-full">{progress}</span>}
-            <button type="button" onClick={onClose} className="p-0 border-0 bg-transparent text-sm text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink">
+            <button type="button" onClick={close} className="p-0 border-0 bg-transparent text-sm text-muted cursor-pointer underline underline-offset-[3px] hover:text-ink">
               Cancel
             </button>
             <button

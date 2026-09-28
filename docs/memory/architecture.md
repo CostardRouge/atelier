@@ -255,3 +255,8 @@ make, model or lens on purpose).
   a number where no reader looks. An XMP packet is its own job.
 - `parseExif` takes `ArrayBufferLike` since, so a `Uint8Array`'s `.buffer` goes
   in without a cast and the writer is read back by the reader in one line.
+
+## Long lists: one observer, batches, and a Cancel that stops (2026-09-28)
+
+`useInViewport` shares ONE `IntersectionObserver` across every element that asks (a callback per target) instead of one per row — a Library of two thousand files had two thousand. `WinnowBrowser`'s grid mounts its tiles 240 at a time and the next batch when a sentinel at its end nears the view (keyed by the count, fired once), back to one batch when the list is replaced — not a full virtualisation, which the grid's auto-fill columns make dear, but it keeps a 2 000-media chapter from mounting every tile at once. And its Cancel (the button, Escape, a click outside, "reconnect") now ABORTS an add in flight through `MaterializeOptions.signal`, joined with the task's own Cancel: before, the sheet closed while the downloads went on and landed in the Library afterwards. What landed before the Cancel is kept, like a cancelled export's. Driven headless against a stub: 240 tiles mounted of 1 000, 1 000 after scrolling to the end; one proxy asked and nothing added after a Cancel.
+
