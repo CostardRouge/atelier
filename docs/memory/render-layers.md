@@ -338,3 +338,8 @@ own segmentation — lives in `subject-picking.md`.
 
 Combining masks (a layer's PARTS) and the colour range live in
 `mask-parts.md`.
+
+## A layer's cube is baked DEFERRED (2026-09-28)
+
+A layer's develop slider bakes its 33³ cube on every step, and the bake ran synchronously inside the stage's paint — once per input event — while the global develop's bake has always run under `useDeferredValue` (`use-lut-stack.ts`). The Develop stage now reads its layers through `useDeferredValue` and calls `LayerPassCache.prime` from a `useMemo` over them, so the bake happens during a render React may abandon for the next step; `passes` then finds the cube already made (keyed by `sameDevelop`, never served for a develop that moved since — `layer-prime.test.ts` counts the bakes). The cost: the stage's layers may trail the slider by a frame under load, exactly as the global develop does.
+
