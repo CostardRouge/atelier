@@ -63,35 +63,6 @@ struct PieceDevelopSheet: View {
     }
 }
 
-// MARK: - EXPORT — owned by the Export tab's task (`panels/ExportTab.tsx`,
-// `StudioLink.tsx`): the plan line by line, the Delivers row, one format at a
-// time, the Studio bridge. The three verbs are wired below so a piece can
-// leave before it lands. Delete when it lands.
-
-struct ExportTabView: View {
-    let model: PieceEditorModel
-
-    var body: some View {
-        PieceTabPending(title: "Export",
-                        text: "The plan line by line, one format at a time and the Studio bridge are coming with the Export tab's own task.") {
-            if let line = model.exports.exporting {
-                PieceTabFact(label: "Running", value: line)
-            } else if let note = model.exports.note {
-                PieceTabFact(label: "Last export", value: note)
-            }
-            HStack(spacing: 10) {
-                Button("Export the piece") { model.exportPiece() }
-                Button("All slides as PNGs") { model.exportDeck() }
-                if model.isHook || model.slides.first?.kind == .hook {
-                    Button("The hook as a video") { model.exportHookClip() }
-                }
-            }
-            .buttonStyle(DevelopPillButtonStyle())
-            .disabled(model.exports.exporting != nil)
-        }
-    }
-}
-
 // MARK: - THE BAND — owned by the transport task (`DeckStrip.tsx`,
 // `use-deck-transport.ts`'s band, the cut, the speed and loop pills, the
 // sound, the motion marks): «Aiguille», the piece under a fixed needle. The

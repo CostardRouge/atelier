@@ -209,6 +209,8 @@ final class PieceEditorModel {
 
     /// The piece's exports — the header's one button and the Export tab's.
     let exports = TripPieceExport()
+    /// Where their files go — a folder picked at the click, or the share sheet.
+    let delivery = PieceDelivery()
 
     // MARK: - bookkeeping
 

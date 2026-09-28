@@ -235,6 +235,8 @@ struct PieceWorkbench: View {
     /// An export finished: its files are handed on — moved where the person
     /// says — and the run's folder let go.
     private func handOn() {
+        // A folder picked at the click, or the share sheet (`PieceDelivery`).
+        if model.handOnDelivered() { return }
         let files = model.exports.delivered.map(\.url)
         if !files.isEmpty { moving = files }
     }
@@ -314,7 +316,7 @@ struct PieceExportButton: View {
         let running = model.exports.exporting != nil
         let fraction = min(1, max(0, model.exports.progress ?? 0))
         Button {
-            if !running { model.exportPiece() }
+            if !running { model.requestExport(.piece(imagesOnly: false)) }
         } label: {
             face(running ? palette.ink : palette.onMedia)
                 .frame(minWidth: folds ? 34 : 97, minHeight: 34)
