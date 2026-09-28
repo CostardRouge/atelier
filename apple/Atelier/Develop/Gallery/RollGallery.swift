@@ -36,8 +36,10 @@ struct RollGallery: View {
     @State private var importTarget = defaultSourceId
     @State private var choosingImportSource = false
     @State private var notice: String?
-    /// The roll pushed onto the stack — set by a card, by a new roll, by a drop.
+    /// The roll pushed onto the stack — set by a card, by a new roll, by a drop, by a link.
     @State private var opened: String?
+    /// The picture a link named on that roll (`App/AppLinks.swift`).
+    @State private var linkedPicture: LinkedPicture?
     /// The roll last opened here: its card says `open`, its verb `Resume`.
     @State private var lastOpened: String?
     @State private var exporting: RollFileDocument?
@@ -79,7 +81,10 @@ struct RollGallery: View {
             .task { await documents?.refresh() }
             .refreshable { await documents?.refresh() }
             .navigationDestination(item: $opened) { id in
-                RollEditorView(rollId: id)
+                // Keyed by the roll: a link naming another roll while one is
+                // open makes a new editor, never the last one's state.
+                RollEditorView(rollId: id, linked: linkedPicture)
+                    .id(id)
             }
             .sheet(isPresented: $creating) { newRollSheet }
             .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
@@ -102,6 +107,21 @@ struct RollGallery: View {
                 if closed { opened = nil }
             }
             .publishMediaActions(developOffer)
+            // `atelier://develop/<roll>/<picture>` — taken once, here.
+            .onChange(of: AppLinks.shared.developRequest, initial: true) { _, _ in
+                if let request = AppLinks.shared.takeDevelopRequest() { follow(request) }
+            }
+    }
+
+    /// A link's roll, pushed on its picture — the web's route effect: a roll
+    /// this device does not hold, or no roll, is the gallery.
+    private func follow(_ request: DevelopLinkRequest) {
+        guard let ref = request.route.ref, let roll = rollFromRef(ref, store.rolls, id: { $0.id }) else {
+            opened = nil
+            return
+        }
+        linkedPicture = request.route.pictureId.map { LinkedPicture(id: $0, serial: request.serial) }
+        open(roll.id)
     }
 
     private var page: some View {

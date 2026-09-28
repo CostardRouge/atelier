@@ -16,7 +16,7 @@ Every sentence on screen is the web's, "this browser" read as "this device".
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 82 ✅ · 6 ≠ · 5 ⏳
+Rows: 83 ✅ · 6 ≠ · 4 ⏳
 
 ## Where you are (`TripsTool.swift`, `TripsShell.swift`, `App/Tool.swift`)
 
@@ -28,8 +28,8 @@ Rows: 82 ✅ · 6 ≠ · 5 ⏳
 | Opening a trip from the gallery lands on no particular day (the overview chooses) | `open(_:)` pushes `.trip(id, day: nil)` and forgets the day held for it | ✅ |
 | A tool switch returns to the gallery with the trip still open ("Resume") | the path lives in `TripsShell.shared`: coming back to Trips finds the screen you left, on the phone's tab bar and in the Mac's sidebar alike | ≠ what a native tab does, and the same on every platform |
 | `/roadtrip/home` redirect, `isWithinRoute`, the consumed-link guard | — a path value has no stray states to redirect from | ✅ |
-| A link to a trip this device no longer has → home | the pill's "Delete here" (`onDeleted`) empties the path; a replaced trip leaves a piece it no longer holds (`onReplaced`) | ✅ |
-| `/roadtrip/new?source=` and `/roadtrip/<trip>/import?source=` links (Winnow's verbs) | ⏳ universal links on the same enum — wait on the timeline sheets (task -07) and the kernel's `timelineSyncEnabled`, off today | ⏳ |
+| A link to a trip this device no longer has → home | `atelier://roadtrip/<trip>/<day>/<piece>` (`App/AppLinks.swift` → `TripsShell.follow`): the trip by its reference (a rename keeps the link), on the day, the piece pushed when the trip holds it; a trip not here is the gallery. The pill's "Delete here" (`onDeleted`) empties the path; a replaced trip leaves a piece it no longer holds (`onReplaced`) | ✅ |
+| `/roadtrip/new?source=` and `/roadtrip/<trip>/import?source=` links (Winnow's verbs) | `atelier://roadtrip/new?source=…&chapters=…`, `atelier://roadtrip/<trip>/import?source=…`, read by the kernel's `parseRoadtripPath` and decided by `timelineLinkLanding`. The switch is OFF as on the web, so a link is consumed and lands on the ordinary screen (the gallery, or the trip) and no instance is asked; turned on, a host not connected goes to Sources and comes back, a connected one opens `TimelineImportSheet` over the ordinary screen | ✅ |
 | Only the shell knows documents and persistence | `TripsStore` (landed) + `TripsShell`; `TripsTool` puts both in the environment | ✅ |
 | One store for the tool | `TripsShell.shared.store` — one `TripsStore` for the whole app | ✅ |
 | ⌘Z / the history control | the window's `UndoManager` handed to the store at the stack's root, so every step of the trip's history is native | ✅ |
@@ -153,8 +153,9 @@ Rows: 82 ✅ · 6 ≠ · 5 ⏳
 
 ## Deferred, gathered
 
-- The Winnow link routes and the timeline seed (task -07, behind the kernel's
-  `timelineSyncEnabled`, off).
+- The timeline seed from the creation sheet (behind the kernel's
+  `timelineSyncEnabled`, off — the web draws no row either). The link routes
+  are built (`App/AppLinks.swift`) and asleep behind the same switch.
 - The open day following a shorter span (the overview's, over `saveDetails`).
 - A bundled house style: the web commits none. When it does, bundle
   `src/shared/roadtrip/house-style.json` into the app as

@@ -17,6 +17,11 @@
 // (`deviceWords`) and the one fix a native client has for a refused
 // credential — a new token, pasted with Reconnect — where the web links to
 // the instance's sign-in page.
+//
+// A LINK may propose a host (`?instance=`, `App/AppLinks.swift`): the address
+// is filled in and the form says a link asked for it, and nothing is sent
+// until Allow. Allow or Not now then land where the link said (`?return=`, a
+// path of ours only), else the Studio — the web's `after`.
 
 import SwiftUI
 import AtelierKit
@@ -31,6 +36,8 @@ struct SourcesView: View {
     @State private var forgetting: WinnowConnection?
     @State private var address = ""
     @State private var tokenFocus = 0
+    /// The links the app answers — what one asked of this screen.
+    @State private var links = AppLinks.shared
 
     var body: some View {
         ScrollViewReader { proxy in
@@ -47,7 +54,8 @@ struct SourcesView: View {
                             }
                         }
                     }
-                    ConnectView(address: $address, tokenFocus: tokenFocus, onConnected: recount)
+                    ConnectView(address: $address, tokenFocus: tokenFocus, proposal: links.sourcesProposal,
+                                onConnected: connected, onNotNow: notNow)
                         .id("connect")
                 }
                 .frame(maxWidth: 736, alignment: .leading)
@@ -74,6 +82,10 @@ struct SourcesView: View {
         }
         .task { await askAgain() }
         .refreshable { await askAgain() }
+        // The web's `setRaw(proposed)`: a link's address fills the form.
+        .onChange(of: links.sourcesProposal, initial: true) { _, proposal in
+            if let proposal { address = proposal.proposed }
+        }
         .confirmationDialog(
             forgetting.map { "Forget \($0.id)?" } ?? "",
             isPresented: Binding(get: { forgetting != nil }, set: { if !$0 { forgetting = nil } }),
@@ -88,6 +100,19 @@ struct SourcesView: View {
         } message: { conn in
             Text(deviceWords(forgetWarning(conn.id, counts[conn.id] ?? noDocs)))
         }
+    }
+
+    /// Allowed: counted again, and a link that asked goes on where it said.
+    private func connected() {
+        recount()
+        if let proposal = links.sourcesProposal { links.answer(proposal) }
+    }
+
+    /// A link's proposal declined: the form empties and the link's landing is followed.
+    private func notNow() {
+        guard let proposal = links.sourcesProposal else { return }
+        address = ""
+        links.answer(proposal)
     }
 
     private func askAgain() async {

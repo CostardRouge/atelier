@@ -123,7 +123,7 @@ parser), each with a spec.
 | Complete: the diff list; `Your trip already matches the timeline — …`; `Apply n` | `diffTimeline`, `StageDiffListView`, `applyTimelineDiff` | ✅ |
 | The import's warnings listed | `imported.warnings` | ✅ |
 | Return runs the verb only when enabled; Escape cancels | `.keyboardShortcut(.defaultAction / .cancelAction)` | ✅ |
-| Opened from a timeline link (`#/roadtrip/new?source=<host>&chapters=`) | ⏳ the universal-link route is the shell's; the sheet takes the host and the chapter ids it names | ⏳ |
+| Opened from a timeline link (`#/roadtrip/new?source=<host>&chapters=`) | `atelier://roadtrip/new?…` / `…/<trip>/import?…` → `App/AppLinks.swift`, which hosts this sheet over the Trips stack with the link's host and chapter ids — asleep while `timelineSyncEnabled` is off, the link then landing on the ordinary screen as the web's does | ✅ |
 | A seed from the gallery's `or seed it from <instance>` | ⏳ the gallery's button (dormant behind `timelineSyncEnabled` on the web too) | ⏳ |
 
 ## Deduce (`DeduceStagesSheet.swift`)
@@ -164,4 +164,4 @@ parser), each with a spec.
 
 ## Counts
 
-✅ 82 · ⏳ 4 · ≠ 5 · — 1 (the overview's own)
+✅ 83 · ⏳ 3 · ≠ 5 · — 1 (the overview's own)

@@ -9,7 +9,9 @@
 // The address is validated as it is typed (`ConnectDraft` → the kernel's
 // `normalizeBaseUrl`); Allow makes ONE request, `/api/capabilities`, and
 // nothing is stored unless it answers. A 401 is the instance refusing the
-// token, said as that with a way to the instance to make another.
+// token, said as that with a way to the instance to make another. A link's
+// proposal (`?instance=`) is said as one — "A link asked to connect …" — and
+// only a link's form carries Not now.
 
 import SwiftUI
 import AtelierKit
@@ -21,7 +23,11 @@ struct ConnectView: View {
     @Binding var address: String
     /// Bumped by a row's Reconnect: the token field takes the focus.
     var tokenFocus: Int = 0
+    /// What a link asked of this form (`?instance=`, `?return=`), if one did.
+    var proposal: SourcesLink? = nil
     var onConnected: () -> Void = {}
+    /// Not now — offered only to a link's proposal.
+    var onNotNow: () -> Void = {}
 
     @State private var token = ""
     @State private var busy = false
@@ -58,10 +64,12 @@ struct ConnectView: View {
                 HStack(spacing: 12) {
                     allowButton(draft, already: already)
                     oneRequest
+                    notNowButton
                 }
                 VStack(alignment: .leading, spacing: 8) {
                     allowButton(draft, already: already)
                     oneRequest
+                    notNowButton
                 }
             }
 
@@ -109,7 +117,11 @@ struct ConnectView: View {
                 .font(Brand.sans(12))
                 .foregroundStyle(palette.danger)
         } else if let id = draft.sourceId {
-            Text("Will be listed as source “\(id)”." + (already != nil ? " Already connected — allowing again refreshes what it can do." : ""))
+            let asked: Bool = !(proposal?.proposed ?? "").isEmpty
+            let lead: String = asked
+                ? "A link asked to connect \(id). Check the address before allowing it."
+                : "Will be listed as source “\(id)”."
+            Text(lead + (already != nil ? " Already connected — allowing again refreshes what it can do." : ""))
                 .font(Brand.sans(12))
                 .foregroundStyle(palette.faint)
                 .fixedSize(horizontal: false, vertical: true)
@@ -134,6 +146,15 @@ struct ConnectView: View {
             .buttonStyle(SourceButtonStyle(kind: .solid))
             .disabled(draft.baseUrl == nil || busy)
             .keyboardShortcut(.defaultAction)
+    }
+
+    /// The web's Not now: shown only when a link asked, it lands where the link said.
+    @ViewBuilder
+    private var notNowButton: some View {
+        if proposal?.sentByLink == true {
+            Button("Not now", action: onNotNow)
+                .buttonStyle(SourceButtonStyle(kind: .ghost))
+        }
     }
 
     private var oneRequest: some View {
@@ -204,6 +225,13 @@ private extension View {
 
 #Preview {
     ConnectView(address: .constant("https://winnow.steeve.website"))
+        .padding()
+        .environment(ConnectionStore.preview())
+}
+
+#Preview("Proposed by a link") {
+    ConnectView(address: .constant("https://winnow.steeve.website"),
+                proposal: SourcesLink(proposed: "https://winnow.steeve.website", back: "/roadtrip/home"))
         .padding()
         .environment(ConnectionStore.preview())
 }

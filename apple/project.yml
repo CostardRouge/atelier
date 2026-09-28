@@ -83,6 +83,15 @@ targets:
           - UIInterfaceOrientationLandscapeRight
         NSPhotoLibraryAddUsageDescription: Atelier saves the pictures you export to your photo library.
         ITSAppUsesNonExemptEncryption: false
+        # The links the app answers (`Atelier/App/AppLinks.swift`): the web's
+        # hash routes under `atelier://` — `atelier://studio/open/<id>`,
+        # `atelier://roadtrip/<trip>/<day>/<piece>`, `atelier://develop/<roll>`,
+        # `atelier://connect?instance=…&return=…`, Winnow's timeline links.
+        CFBundleURLTypes:
+          - CFBundleURLName: website.steeve.atelier
+            CFBundleTypeRole: Viewer
+            CFBundleURLSchemes:
+              - atelier
     settings:
       base:
         TARGETED_DEVICE_FAMILY: "1,2"
@@ -135,6 +144,15 @@ targets:
         LSApplicationCategoryType: public.app-category.photography
         NSPhotoLibraryAddUsageDescription: Atelier saves the pictures you export to your photo library.
         ITSAppUsesNonExemptEncryption: false
+        # The links the app answers (`Atelier/App/AppLinks.swift`): the web's
+        # hash routes under `atelier://` — `atelier://studio/open/<id>`,
+        # `atelier://roadtrip/<trip>/<day>/<piece>`, `atelier://develop/<roll>`,
+        # `atelier://connect?instance=…&return=…`, Winnow's timeline links.
+        CFBundleURLTypes:
+          - CFBundleURLName: website.steeve.atelier
+            CFBundleTypeRole: Viewer
+            CFBundleURLSchemes:
+              - atelier
     settings:
       base:
         CODE_SIGN_ENTITLEMENTS: Support/Atelier-macOS.entitlements

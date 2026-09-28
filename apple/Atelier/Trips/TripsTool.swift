@@ -16,6 +16,8 @@
 // - the two banners over every screen: a refused local write (the edits
 //   stay on screen), and the note a timeline or deduce sheet leaves when a
 //   trip's dates grew to hold a leg, with its dismiss;
+// - a link's place (`App/AppLinks.swift`, `TripsShell.follow`): the path is
+//   set, and this stack follows it;
 // - the task pill on the gallery's bar and on each pushed screen's own bar.
 //   The pushed screens (`PendingScreens.swift`'s contract) must not add it a
 //   second time.
@@ -39,6 +41,9 @@ struct TripsTool: View {
         .environment(shell)
         .environment(shell.store)
         .documentSyncLifecycle(shell.store.sync)
+        // A Winnow link's timeline import (`App/AppLinks.swift`), asleep while
+        // `timelineSyncEnabled` is off.
+        .timelineLinkSheet()
         .onAppear { shell.store.undoManager = undoManager }
         .onChange(of: undoManager) { _, manager in shell.store.undoManager = manager }
     }

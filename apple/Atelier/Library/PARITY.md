@@ -131,7 +131,7 @@ Where things are:
 | — | the sheet's own Cancel beside the progress (`TaskCancelLink`), since the pill is behind it; a Cancel keeps what arrived and says so | ✅ native addition (`tasks.md`: a modal sheet carries its own Cancel) |
 | The place remembered per instance (view, filters, month, the open day / folder / leg, the fidelity) under `atelier.sources.winnow.browse.v1`; the ticks never | `WinnowBrowserMemory`, the kernel's `readBrowseState` / `writeBrowseState` | ✅ |
 | Forgetting a connection forgets its place (`forgetBrowseState`) | `WinnowBrowserMemory.forget(_:)` | ⏳ `ConnectionStore.forget` (Sources/) should call it — not edited here |
-| `reconnect` → `#/connect?instance=` | → Sources (`shellNavigate`) | ≠ the native Sources screen has no pre-filled connect route |
+| `reconnect` → `#/connect?instance=` | → Sources proposing the instance's address (`AppLinks.propose`): filled in, "A link asked to connect …", Allow or Not now | ✅ |
 | Esc cancels, Enter adds | `.cancelAction`, `.defaultAction` | ✅ |
 | Under 820 px ONE pane at a time, with a way back (`‹ <month>`, `‹ folders`, `‹ legs`) | `compact` | ✅ |
 
@@ -221,5 +221,5 @@ here a project keeps its own working set, a phone keeps every tab's stack
 alive, and the Library settling its active asset (an echo, a removal) or a
 tap made for Develop must never add a clip to a project.
 
-**Counts**: 102 rows — 84 ✅ (7 of them native additions), 4 ⏳, 14 ≠ (built
+**Counts**: 102 rows — 85 ✅ (7 of them native additions), 4 ⏳, 13 ≠ (built
 differently on purpose).

@@ -23,6 +23,9 @@ import AtelierKit
 
 struct RollEditorView: View {
     let rollId: String
+    /// The picture a link named (`App/AppLinks.swift`): opened with the roll,
+    /// and opened again when a later link names one on this roll.
+    var linked: LinkedPicture? = nil
     @Environment(RollStore.self) private var store
     @Environment(PicturePool.self) private var pool
     @Environment(PresetBookStore.self) private var presets
@@ -42,7 +45,7 @@ struct RollEditorView: View {
         }
         .onAppear {
             if editor == nil {
-                let made = RollEditor(store: store, pool: pool, presets: presets, rollId: rollId)
+                let made = RollEditor(store: store, pool: pool, presets: presets, rollId: rollId, openId: linked?.id)
                 // Every pass a picture carries, in the web's order, for the
                 // stage, the snapshot and the export alike.
                 made.installFullRenderPlan()
@@ -58,6 +61,10 @@ struct RollEditorView: View {
         .onDisappear {
             editor?.close()
             documents?.closed(rollId)
+        }
+        .onChange(of: linked) { _, next in
+            guard let next, let editor else { return }
+            editor.open(AtelierKit.openPictureId(editor.pictures, next.id))
         }
         .darkroom()
     }

@@ -18,7 +18,6 @@ struct WinnowBrowserSheet: View {
     let onClose: () -> Void
 
     @Environment(\.palette) private var palette
-    @Environment(\.shellNavigate) private var navigate
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -80,7 +79,9 @@ struct WinnowBrowserSheet: View {
             Spacer(minLength: 8)
             Button("reconnect") {
                 onClose()
-                navigate(.sources)
+                // The web's `#/connect?instance=<its address>`: Sources opens
+                // with the address filled in and says a link asked for it.
+                AppLinks.shared.propose(SourcesLink(proposed: model.connection.baseUrl, back: ""))
             }
             .buttonStyle(.plain)
             .font(Brand.sans(12))

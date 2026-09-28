@@ -14,6 +14,12 @@
 // on (`MediaPublications`). On a wide screen it is docked at the left of the
 // place (`LibraryDock`); on a phone it is the bottom bar's FIRST cell, which
 // opens it as a sheet rather than switching tab (`frontend.md`).
+//
+// The LINKS are the shell's too (`AppLinks.swift`): a URL the system hands
+// the app (`atelier://…`, the web's hash routes) moves the shell to its place
+// — the tab on a phone, the sidebar's selection elsewhere — and the tool
+// takes the rest of it (a roll, a trip's day and piece, a project handed
+// over, a host proposed on Sources).
 
 import SwiftUI
 import AtelierKit
@@ -65,6 +71,10 @@ struct RootView: View {
     @State private var libraryOpen = false
     /// The window's width — what decides whether the docked Library rests as its rail.
     @State private var windowWidth: CGFloat = 1280
+    /// The links the app answers, and the moves they ask of the shell.
+    @State private var links = AppLinks.shared
+    /// The phone's More stack — an instrument a link named is pushed on it.
+    @State private var morePath: [InstrumentTool] = []
 
     var body: some View {
         shell
@@ -87,6 +97,27 @@ struct RootView: View {
                 guard instrumentOnScreen, let id, let asset = library.asset(id) else { return }
                 LibraryShelfBridge.hand(asset, from: library)
             }
+            .onOpenURL { url in links.open(url) }
+            // A link reaches the window already open rather than a new one.
+            .handlesExternalEvents(preferring: ["*"], allowing: ["*"])
+            .onChange(of: links.move) { _, move in
+                if let move { go(move.place) }
+            }
+    }
+
+    /// A link's move: the place, on the phone's tab bar and in the sidebar
+    /// alike; an instrument is pushed on the phone's More list; the Library's
+    /// sheet goes down so the place is what is seen.
+    private func go(_ next: ShellPlace) {
+        libraryOpen = false
+        place = next
+        switch next {
+        case .tool(let tool):
+            tab = .tool(tool)
+        case .instrument(let instrument):
+            tab = .more
+            morePath = [instrument]
+        }
     }
 
     private var instrumentOnScreen: Bool {
@@ -126,7 +157,7 @@ struct RootView: View {
                     .tabItem { Label(tool.title, systemImage: tool.symbol) }
                     .tag(ShellTab.tool(tool))
             }
-            NavigationStack { InstrumentsHome().taskPill() }
+            NavigationStack(path: $morePath) { InstrumentsHome().taskPill() }
                 .tabItem { Label("More", systemImage: "ellipsis.circle") }
                 .tag(ShellTab.more)
         }

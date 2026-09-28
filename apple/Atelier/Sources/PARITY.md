@@ -66,8 +66,8 @@ row marked ≠ follows from that one fact.
 | "One request is made — /api/capabilities — and nothing is stored unless it answers." | ✅ | ✅ |
 | "That Winnow does not know you yet. Sign in there…" | ≠ "did not accept this token… Open <host>" | ≠ |
 | the token field | ✅ (native only), with where the token is kept | ✅ |
-| `?instance=` — a link PROPOSES a host, "A link asked to connect … Check the address" | ⏳ no URL scheme or universal link is registered for the app yet; the proposal stays a decision (Allow) when it is | ⏳ |
-| `?return=` landing + "Not now" | ⏳ same | ⏳ |
+| `?instance=` — a link PROPOSES a host, "A link asked to connect … Check the address" | `atelier://connect?instance=…` / `atelier://sources?…` (`App/AppLinks.swift`, the kernel's `parseAppLink`): the address filled in, the form's line says a link asked; nothing is sent until Allow. The Library's `reconnect` proposes its host the same way | ✅ |
+| `?return=` landing + "Not now" | Allow and Not now land on `?return=` — a path of ours only (`sourcesLanding`: never `//…` nor an absolute URL) — else the Studio, the web's `AFTER_CONNECT`; Not now drawn only for a link | ✅ |
 
 ## Documents kept on an instance (`DocumentStore.swift`, `DocumentSync.swift`, `DocumentGalleryModel.swift`)
 
@@ -97,4 +97,4 @@ row marked ≠ follows from that one fact.
 | ⏳ the Winnow browser (`WinnowBrowser.tsx`, the Library's instance tab), `WinnowThumb`, `resolve-media.ts`'s re-fetch by asset id, `SendFinalsPanel` | media surfaces, not this layer: the client, the transport (progress, cancel, the streamed upload) and `ConnectionStore.firstClient` are what they call |
 | ✅ the task pill for a transfer | `TaskCenter.tracked(label, scope:, bytes:) { try await client… }` — the web's `trackedFetch`: `WinnowTransfer.$progress` set around the call, the bar against the answer's length else the known weight else a sweep, its Cancel cancelling the request (`../Tasks/`). The media surfaces that fetch (the browser, a roll's own fetch) call it when they land |
 
-**Counts**: 62 rows — 48 ✅ (4 of them native-only), 8 ⏳, 6 ≠ (built differently on purpose).
+**Counts**: 62 rows — 50 ✅ (4 of them native-only), 6 ⏳, 6 ≠ (built differently on purpose).
