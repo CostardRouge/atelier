@@ -40,11 +40,16 @@ struct StageGeometry: Equatable {
     var inset: CGFloat
     /// The Looking zoom — a transform about the box's centre, gone at the fit.
     var view: ViewState
+    /// The delivered CANVAS round the frame — its border (`StageGround`) — in
+    /// units of the frame, (1, 1) or nil for none. The frame is what every
+    /// point here is about; the canvas only decides how small it is fitted,
+    /// so the whole file shows at the fit.
+    var canvas: CGSize?
 
     init(source: CGSize, framing: Framing = .default, aspect: String = "original",
-         viewport: CGSize, inset: CGFloat = 12, view: ViewState = .fitted) {
+         viewport: CGSize, inset: CGFloat = 12, view: ViewState = .fitted, canvas: CGSize? = nil) {
         self.source = source; self.framing = framing; self.aspect = aspect
-        self.viewport = viewport; self.inset = inset; self.view = view
+        self.viewport = viewport; self.inset = inset; self.view = view; self.canvas = canvas
     }
 
     // MARK: - the three boxes
@@ -63,12 +68,30 @@ struct StageGeometry: Equatable {
     }
 
     /// The frame fitted inside the box less its inset, at the fit — the
-    /// `content` every `PanZoom` function measures against.
+    /// `content` every `PanZoom` function measures against. With a border
+    /// (`canvas`), the CANVAS is what fits the room and the frame is its
+    /// share of it.
     var fitted: CGSize {
         let room = Size(Double(max(0, viewport.width - inset * 2)), Double(max(0, viewport.height - inset * 2)))
         let f = frame
-        let c = containedSize(Size(Double(f.width), Double(f.height)), room)
-        return CGSize(width: c.width, height: c.height)
+        let k = canvasScale
+        let whole = Size(Double(f.width * k.width), Double(f.height * k.height))
+        let c = containedSize(whole, room)
+        return CGSize(width: CGFloat(c.width) / k.width, height: CGFloat(c.height) / k.height)
+    }
+
+    /// The canvas over the frame, never below 1 on either axis.
+    private var canvasScale: CGSize {
+        guard let canvas else { return CGSize(width: 1, height: 1) }
+        return CGSize(width: max(1, canvas.width), height: max(1, canvas.height))
+    }
+
+    /// The fitted canvas — the frame on its border — at the fit, centred on
+    /// the frame as `FullDevelopRenderPlan.bordered` centres it.
+    var fittedCanvas: CGSize {
+        let fit = fitted
+        let k = canvasScale
+        return CGSize(width: fit.width * k.width, height: fit.height * k.height)
     }
 
     /// Where the frame is drawn now, in view points: the fitted frame moved by

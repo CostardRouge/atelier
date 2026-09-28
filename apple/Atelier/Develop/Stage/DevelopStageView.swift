@@ -13,6 +13,8 @@
 // the fit a drag across the picture wipes; zoomed, a drag pans and the
 // divider's handle still wipes. `\` or the pill holds the picture as shot.
 //
+// Under the picture, its BORDER where it has one (`StageGround`: the render
+// plan's own `bordered` canvas, the crop centred on it), off the Crop tab.
 // Over the picture: the tool's overlay (`StageOverlaySlot`), then the chips —
 // `after` / `before · after` / `before`, what this stage does NOT draw yet,
 // the facts under `I`, and `◐ hold for before` — and the open picture's
@@ -40,6 +42,9 @@ struct DevelopStageView: View {
             ZStack {
                 palette.frame
                 if let stage = editor.stage {
+                    if let ground = editor.stageGround, geometry.canvas != nil {
+                        groundLayer(ground, geometry)
+                    }
                     pictureLayer(stage, geometry)
                     if editor.comparing && editor.wipe > 0 {
                         divider(geometry)
@@ -95,7 +100,9 @@ struct DevelopStageView: View {
             aspect: whole ? "original" : (picture?.aspect ?? "original"),
             viewport: size,
             inset: 12,
-            view: zoom.view
+            view: zoom.view,
+            // The border round the crop, fitted with it (`StageGround`).
+            canvas: whole ? nil : editor.stageGround?.canvas
         )
     }
 
@@ -127,6 +134,22 @@ struct DevelopStageView: View {
         .animation(zoom.settling ? .easeOut(duration: 0.22) : nil, value: zoom.view)
         .opacity(editor.loading ? 0.6 : 1)
         .accessibilityLabel("The picture, corrected")
+    }
+
+    /// The picture's BORDER — the delivered canvas under the crop, centred on
+    /// it and moved by the same zoom, so the crop lands on its own place in it.
+    private func groundLayer(_ ground: StageGround, _ geometry: StageGeometry) -> some View {
+        let canvas = geometry.fittedCanvas
+        return Image(decorative: ground.image, scale: 1, orientation: .up)
+            .resizable()
+            .interpolation(.high)
+            .frame(width: canvas.width, height: canvas.height)
+            .scaleEffect(zoom.view.scale)
+            .offset(x: zoom.view.x, y: zoom.view.y)
+            .animation(zoom.settling ? .easeOut(duration: 0.22) : nil, value: zoom.view)
+            .opacity(editor.loading ? 0.6 : 1)
+            .allowsHitTesting(false)
+            .accessibilityHidden(true)
     }
 
     /// The divider, where the picture is — held inside the box so its handle

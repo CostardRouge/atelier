@@ -29,10 +29,11 @@
 // delivered frame by `looking`, and the Layers tab's show-the-mask wash and
 // blink, read from its seam (`LayerLooking`) and drawn LAST in `after`; a
 // snapshot, the histogram and an export never see them. The border is drawn
-// in every DELIVERY (the export's run cuts its file from it) and never on the
-// stage, whose geometry has no border canvas — the Crop tab's delivered
-// preview shows it there. What this plan does not draw it SAYS
-// (`unrendered`), in the inspector's words.
+// in every DELIVERY (the export's run cuts its file from it); a preview
+// render stays the crop, and the stage lays the same `bordered` canvas UNDER
+// it (`Stage/StageGround.swift`) — the Crop tab's delivered preview shows it
+// there. What this plan does not draw it SAYS (`unrendered`), in the
+// inspector's words.
 
 import AtelierKit
 import CoreImage

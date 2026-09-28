@@ -36,6 +36,8 @@ private struct RenderedStage {
     let before: CGImage?
     let histogram: Histogram?
     let size: CGSize
+    /// The crop on its border, where the stage draws one (`StageGround`).
+    let ground: StageGround?
 }
 
 /// A key the ACTIVE TOOL answers (the crop's `X`, the mask's `P` / `M`, the
@@ -105,6 +107,8 @@ final class RollEditor {
 
     private(set) var stage: CGImage?
     private(set) var before: CGImage?
+    /// The delivered canvas round the stage's crop — its border — or nil.
+    private(set) var stageGround: StageGround?
     private(set) var histogram: Histogram?
     private(set) var stageSize: CGSize = .zero
     private(set) var loading = false
@@ -220,6 +224,7 @@ final class RollEditor {
         renderGeneration += 1
         stage = nil
         before = nil
+        stageGround = nil
         beforeKey = nil
         histogram = nil
         decodedSize = nil
@@ -617,6 +622,7 @@ final class RollEditor {
         guard let pic = stagePicture else {
             stage = nil
             before = nil
+            stageGround = nil
             histogram = nil
             decodedSize = nil
             loading = false
@@ -632,6 +638,7 @@ final class RollEditor {
         let gain = pic.develop?.rawGain.map { "\($0)" } ?? ""
         let key = "\(pic.id)|\(pic.aspect)|\(pic.framing?.json.serialized() ?? "")|\(pic.develop?.base?.rawValue ?? "")|\(gain)"
         let needsBefore = wantsBefore && (beforeKey != key || before == nil)
+        let border = StageGround.border(of: pic, tab: tab, tool: activeTool, plan: plan)
         if stage == nil { loading = true }
         // Opening a picture is a TASK on its edge and in the pill past 400 ms
         // (`tasks.md` T3): the decode, a pack look's lattice and the first
@@ -660,11 +667,19 @@ final class RollEditor {
                     if needsBefore {
                         beforeImage = renderer.cgImage(plan.renderBefore(picture: pic, decoded: decoded, budget: .stage))
                     }
+                    // The border round the crop, from the pixels shown — the
+                    // render plan's own border code, so stage = export.
+                    var ground: StageGround?
+                    if let border, let image {
+                        ground = StageGround.make(image, border: border)
+                    }
                     return RenderedStage(image: image, before: beforeImage, histogram: histogram,
-                                         size: CGSize(width: image?.width ?? 0, height: image?.height ?? 0))
+                                         size: CGSize(width: image?.width ?? 0, height: image?.height ?? 0),
+                                         ground: ground)
                 }.value
                 if generation == self.renderGeneration && pic.id == self.openId {
                     self.stage = out.image
+                    self.stageGround = out.ground
                     if needsBefore {
                         self.before = out.before
                         self.beforeKey = key
@@ -680,6 +695,7 @@ final class RollEditor {
                 if generation == self.renderGeneration && pic.id == self.openId {
                     self.stage = nil
                     self.before = nil
+                    self.stageGround = nil
                     self.histogram = nil
                     self.loading = false
                     self.problem = self.availability(pic) == .ready ? error.localizedDescription : nil
@@ -699,7 +715,8 @@ final class RollEditor {
         snapshotTask = Task { [weak self] in
             try? await Task.sleep(nanoseconds: 700_000_000)
             guard !Task.isCancelled, let self, self.openId == id, let image = self.stage else { return }
-            self.pool.snapshot(id, from: image)
+            // As delivered: on its border where it has one.
+            self.pool.snapshot(id, from: self.stageGround?.image ?? image)
         }
     }
 
