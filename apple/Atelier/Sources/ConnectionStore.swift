@@ -299,6 +299,9 @@ final class ConnectionStore {
         probeTasks[id] = nil
         missingTokens.remove(id)
         save()
+        // The instance's place in the Library's browser goes with it (the
+        // web's `forgetBrowseState`, called where a connection is forgotten).
+        WinnowBrowserMemory.forget(id)
     }
 
     // MARK: asking where each one stands
