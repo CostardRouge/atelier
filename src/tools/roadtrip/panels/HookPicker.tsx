@@ -19,6 +19,7 @@
 
 import { useCallback, useMemo, useState } from 'react';
 import {
+  DEFAULT_HOOK_ID,
   setHookOptions,
   setHookVariant,
   type HookContext,
@@ -45,6 +46,13 @@ interface HookPickerProps {
    * picker has no trip to write to, and the variant's panel says so instead.
    */
   onConfigureCar?: () => void;
+  /**
+   * The picker is choosing a slide's OWN opener rather than the piece's. The
+   * badge variant draws nothing beyond the badge, and on such a slide the
+   * badge is a capacity of its own — so its card reads as what it is there,
+   * NONE, and picking it clears the slide's opener instead of writing one.
+   */
+  slideOpener?: boolean;
 }
 
 interface ChooseRequest {
@@ -59,8 +67,10 @@ export default function HookPicker({
   pictureStatus,
   onChange,
   onConfigureCar,
+  slideOpener = false,
 }: HookPickerProps) {
-  const currentId = layers[0]?.id ?? '';
+  // A slide with no opener is showing the NONE card, the badge variant's.
+  const currentId = layers[0]?.id ?? (slideOpener ? DEFAULT_HOOK_ID : '');
   const current: HookVariant | undefined = HOOK_VARIANTS.find((v) => v.id === currentId);
   const Panel = current?.Panel;
 
@@ -89,12 +99,13 @@ export default function HookPicker({
           const active = variant.id === currentId;
           const unmet = hookUnmet(variant, ctx);
           const Sketch = variant.Sketch;
+          const none = slideOpener && variant.id === DEFAULT_HOOK_ID;
           return (
             <button
               key={variant.id}
               type="button"
               disabled={!!unmet}
-              onClick={() => onChange(setHookVariant(layers, variant))}
+              onClick={() => onChange(none ? [] : setHookVariant(layers, variant))}
               aria-pressed={active}
               className={`flex items-center gap-3 px-3 py-2 rounded-paper border text-left transition-colors ${
                 unmet
@@ -105,16 +116,16 @@ export default function HookPicker({
               }`}
             >
               <span className="flex-none w-[4.6rem] h-[2.2rem] grid place-items-center rounded-[4px] bg-frame overflow-hidden">
-                {Sketch ? <Sketch /> : null}
+                {Sketch && !none ? <Sketch /> : null}
               </span>
               <span className="min-w-0">
-                <span className="block font-semibold text-sm">{variant.name}</span>
+                <span className="block font-semibold text-sm">{none ? 'None' : variant.name}</span>
                 <span
                   className={`block text-2xs truncate ${
                     unmet ? 'text-accent-ink' : 'text-muted'
                   }`}
                 >
-                  {unmet ?? variant.tagline}
+                  {unmet ?? (none ? 'The picture, and whatever this slide says over it' : variant.tagline)}
                 </span>
               </span>
             </button>

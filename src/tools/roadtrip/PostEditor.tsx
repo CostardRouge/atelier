@@ -65,9 +65,10 @@ import {
 } from '../../shared/roadtrip/badge-layout';
 import { countOwnGrades, pictureKeyOf } from '../../shared/roadtrip/post-grade';
 import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
-import { setHookOptions, type HookContext } from '../../shared/roadtrip/hooks/hook-variant';
+import { setHookOptions, type HookContext, type HookLayer } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor, slideHookTiming } from '../../shared/roadtrip/hooks/hook-context';
-import { slideRender, slideSettleSeconds } from '../../shared/roadtrip/slide-render';
+import { slideBadgeContent, slideRender, slideSettleSeconds } from '../../shared/roadtrip/slide-render';
+import type { SlideBadge } from '../../shared/roadtrip/slide-capacities';
 import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
 import useHookPictures from './use-hook-pictures';
 import { useHookSound } from './use-hook-sound';
@@ -91,6 +92,7 @@ import {
   resolvedDirection,
   shadeCentre,
   shadeFollow,
+  type Shade,
 } from '../../shared/roadtrip/shades';
 import {
   locate,
@@ -648,27 +650,6 @@ export default function PostEditor({
     () => resolveHook(post.badge.hook, hookCtx),
     [post.badge.hook, hookCtx],
   );
-  /**
-   * The opener as CONTENT on the stage: where its drawing sits, and what a
-   * drag of it writes. Both come from the variant (`frameBox` / `moveBy`),
-   * so an opener that does not offer them simply is not grabbable — the
-   * badge does not; Défilé offers its tape, the Itinerary its map.
-   */
-  const hookVariant = hookVariantById(post.badge.hook[0]?.id ?? '');
-  const hookOptions = post.badge.hook[0]?.options ?? {};
-  const hookRectFor = useMemo(
-    () =>
-      hookVariant?.frameBox
-        ? (frame: { width: number; height: number }) =>
-            hookVariant.frameBox?.(hookOptions, hookCtx, frame) ?? null
-        : null,
-    [hookVariant, hookOptions, hookCtx],
-  );
-  const moveHook = (dx: number, dy: number) => {
-    if (!hookVariant?.moveBy) return;
-    patchBadge({ hook: setHookOptions(post.badge.hook, hookVariant.moveBy(hookOptions, dx, dy)) });
-  };
-
   // Only an opener that rewrites the badge's words gets elements per frame;
   // every other piece keeps the ones built above, once per edit. The cascade
   // goes in too: `hookElements` above and `slideRender` (the exports, the
@@ -738,6 +719,66 @@ export default function PostEditor({
       slides: post.slides.map((s) => (s.id === slide.slideId ? { ...s, ...patch } : s)),
     });
   };
+
+  // --- what the OPEN slide holds, wherever it sits ----------------------------
+  // A slide's position no longer decides whether it may hold an opener, a
+  // badge or shades (`slide-capacities.ts`). The first slide reads and writes
+  // them on the piece's badge, as it always did; every other slide on its own
+  // record. Everything below edits "the open slide's" and never asks which.
+
+  /** The open slide's opener: the piece's on the first slide, its own elsewhere. */
+  const openLayers = useMemo(
+    () => (isHook ? post.badge.hook : isCta ? [] : [...(slide.hook ?? [])]),
+    [isHook, isCta, post.badge.hook, slide.hook],
+  );
+  const setOpenLayers = (layers: HookLayer[]) =>
+    isHook ? patchBadge({ hook: layers }) : patchSlide({ hook: layers.length ? layers : null });
+  /** What the open slide's badge says — its fields' placeholder, its opener's context. */
+  const openContent = useMemo(
+    () => (isHook ? content : slideBadgeContent(trip, post, slide)),
+    [isHook, content, trip, post, slide],
+  );
+  /** What the open slide's opener is prepared against: its own time, the deck's pictures. */
+  const openCtx = useMemo<HookContext>(
+    () =>
+      isHook
+        ? hookCtx
+        : hookContextFor(trip, post, aspect, openContent, hookPictures, slideHookTiming(slide)),
+    [isHook, hookCtx, trip, post, aspect, openContent, hookPictures, slide],
+  );
+  /**
+   * The opener as CONTENT on the stage: where its drawing sits, and what a
+   * drag of it writes. Both come from the variant (`frameBox` / `moveBy`),
+   * so an opener that does not offer them simply is not grabbable — the
+   * badge does not; Défilé offers its tape, the Itinerary its map.
+   */
+  const openVariant = hookVariantById(openLayers[0]?.id ?? '');
+  const openOptions = openLayers[0]?.options ?? {};
+  const hookRectFor = useMemo(
+    () =>
+      openVariant?.frameBox
+        ? (frame: { width: number; height: number }) =>
+            openVariant.frameBox?.(openOptions, openCtx, frame) ?? null
+        : null,
+    [openVariant, openOptions, openCtx],
+  );
+  const moveHook = (dx: number, dy: number) => {
+    if (!openVariant?.moveBy) return;
+    setOpenLayers(setHookOptions(openLayers, openVariant.moveBy(openOptions, dx, dy)));
+  };
+
+  /** The open slide's badge placement, or null where it draws none. */
+  const openBadgeLayout = isHook ? post.badge.layout : (slide.badge?.layout ?? null);
+  /** Write the open slide's own badge (never the piece's — that is `patchBadge`). */
+  const patchSlideBadge = (patch: Partial<SlideBadge>) => {
+    if (!slide.badge) return;
+    patchSlide({ badge: { ...slide.badge, ...patch } });
+  };
+  /** The open slide's shades, and where a shade that follows the badge ends. */
+  const openShades = isHook ? post.badge.shades : isCta ? [] : slide.shades;
+  const openBlock = isHook ? block : (openRender?.block ?? null);
+  const setOpenShades = (shades: Shade[]) =>
+    isHook ? patchBadge({ shades }) : patchSlide({ shades });
 
   /**
    * The OPEN slide's own correction — the hook's on the badge, a carousel
@@ -1478,6 +1519,7 @@ export default function PostEditor({
 
   // --- the fields a click on the stage lands in -----------------------------
   const textFieldRef = useRef<HTMLInputElement>(null);
+  const captionFieldRef = useRef<HTMLInputElement>(null);
   const ctaHeadlineRef = useRef<HTMLInputElement>(null);
   const ctaBodyRef = useRef<HTMLTextAreaElement>(null);
   const ctaUrlRef = useRef<HTMLInputElement>(null);
@@ -1497,7 +1539,7 @@ export default function PostEditor({
   // the picture instead of against the edge of the section.
   const [fitWidth, setFitWidth] = useState<number | null>(null);
   const [focusSeq, setFocusSeq] = useState(0);
-  const focusTarget = useRef<'text' | CtaRole | null>(null);
+  const focusTarget = useRef<'text' | 'caption' | CtaRole | null>(null);
 
   /**
    * Picking an element is a request to edit it, wherever the inspector
@@ -1521,7 +1563,9 @@ export default function PostEditor({
       focusTarget.current = 'text';
     } else if (captionLineFromElementId(id) !== null) {
       setTab('content');
-      focusTarget.current = 'text';
+      // Its own field: a slide may now hold a badge beside its caption, so
+      // "the text" no longer names one input.
+      focusTarget.current = 'caption';
     } else {
       const role = ctaRoleFromElementId(id)?.role;
       if (!role) return;
@@ -1557,7 +1601,11 @@ export default function PostEditor({
     const target = focusTarget.current;
     if (!target) return;
     const field =
-      target === 'text' ? textFieldRef.current : ctaFieldRefs[target]?.current ?? null;
+      target === 'text'
+        ? textFieldRef.current
+        : target === 'caption'
+          ? captionFieldRef.current
+          : ctaFieldRefs[target]?.current ?? null;
     if (!field) return;
     focusTarget.current = null;
     field.focus({ preventScroll: true });
@@ -1569,10 +1617,10 @@ export default function PostEditor({
     setSelectedId(null);
   }, [slideIndex]);
 
-  const moveBlockTo = useCallback(
-    (x: number, y: number) => patchBadge({ layout: { ...post.badge.layout, x, y } }),
-    [patchBadge, post.badge.layout],
-  );
+  const moveBlockTo = (x: number, y: number) =>
+    isHook
+      ? patchBadge({ layout: { ...post.badge.layout, x, y } })
+      : patchSlideBadge({ layout: { ...slide.badge!.layout, x, y } });
 
   /**
    * A shade whose centre the stage is placing (the Look tab's "Place on the
@@ -1582,18 +1630,18 @@ export default function PostEditor({
    */
   const [placingShade, setPlacingShade] = useState<string | null>(null);
   const shadeInPlace =
-    placingShade && isHook && tab === 'look'
-      ? (post.badge.shades.find((s) => s.id === placingShade && s.enabled !== false) ?? null)
+    placingShade && !isCta && tab === 'look'
+      ? (openShades.find((s) => s.id === placingShade && s.enabled !== false) ?? null)
       : null;
   const placingAxis = shadeInPlace
-    ? centreMovable(resolvedDirection(shadeInPlace, block), shadeFollow(shadeInPlace))
+    ? centreMovable(resolvedDirection(shadeInPlace, openBlock), shadeFollow(shadeInPlace))
     : null;
   const shadeHandle =
     shadeInPlace && placingAxis ? { ...shadeCentre(shadeInPlace), axis: placingAxis } : null;
   useEffect(() => {
     if (placingShade && !shadeHandle) setPlacingShade(null);
   }, [placingShade, shadeHandle]);
-  useEffect(() => setPlacingShade(null), [post.id]);
+  useEffect(() => setPlacingShade(null), [post.id, slideIndex]);
   const placeShade = useCallback(
     (id: string | null) => {
       setPlacingShade(id);
@@ -1603,13 +1651,8 @@ export default function PostEditor({
     },
     [compact],
   );
-  const moveShadeCentre = useCallback(
-    (x: number, y: number) =>
-      patchBadge({
-        shades: post.badge.shades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)),
-      }),
-    [patchBadge, post.badge.shades, placingShade],
-  );
+  const moveShadeCentre = (x: number, y: number) =>
+    setOpenShades(openShades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)));
 
   /**
    * Keep a small picture of the hook beside the trip, so a day opened months
@@ -1963,14 +2006,14 @@ export default function PostEditor({
             selectedId={selectedId}
             onSelect={selectElement}
             onActivate={activateElement}
-            // Only the hook's block has somewhere to be written back to; a
-            // caption and the closing card sit at fixed positions.
-            blockAnchor={isHook ? post.badge.layout : null}
-            onMoveBlock={isHook ? moveBlockTo : undefined}
-            // The opener draws on the hook slide alone, so it can only be
-            // pointed at there.
-            hookRectFor={isHook ? hookRectFor : null}
-            onMoveHook={isHook && hookVariant?.moveBy ? moveHook : undefined}
+            // A badge — the piece's on the first slide, a slide's own
+            // elsewhere — has somewhere to be written back to; a caption and
+            // the closing card sit at fixed positions.
+            blockAnchor={openBadgeLayout}
+            onMoveBlock={openBadgeLayout ? moveBlockTo : undefined}
+            // Any slide may hold an opener, and it is pointed at where it draws.
+            hookRectFor={isCta ? null : hookRectFor}
+            onMoveHook={!isCta && openVariant?.moveBy ? moveHook : undefined}
             shadeHandle={shadeHandle}
             onMoveShadeCentre={shadeHandle ? moveShadeCentre : undefined}
             // Each picture as it stands at the needle: the stage draws what it is
@@ -2046,7 +2089,7 @@ export default function PostEditor({
         {/* The piece in hand, rendered ONCE above the body: the Content and
             Look tabs both edit it, and two copies of the same six chips read
             as two different controls. A click on the stage picks one too. */}
-        {isHook && (tab === 'content' || tab === 'look') && (
+        {(isHook || slide.badge) && (tab === 'content' || tab === 'look') && (
           <div className="flex-none">
             <FieldRow label="Piece" hint="Or click it on the picture.">
               <PiecePicker piece={piece} onPiece={selectPiece} />
@@ -2060,7 +2103,7 @@ export default function PostEditor({
               trip={trip}
               post={post}
               slide={slide}
-              content={content}
+              content={openContent}
               piece={piece}
               slideFile={slideFile}
               exif={hookExif}
@@ -2070,7 +2113,9 @@ export default function PostEditor({
               onChangePost={onChangePost}
               patchBadge={patchBadge}
               patchSlide={patchSlide}
+              patchSlideBadge={patchSlideBadge}
               textFieldRef={textFieldRef}
+              captionFieldRef={captionFieldRef}
               onEditClosingCard={() => setTripSheet('cta')}
             />
           )}
@@ -2079,8 +2124,13 @@ export default function PostEditor({
             <LookTab
               trip={trip}
               post={post}
-              isHook={isHook}
-              hookCtx={hookCtx}
+              slide={slide}
+              hookCtx={openCtx}
+              layers={openLayers}
+              onLayers={setOpenLayers}
+              shades={openShades}
+              onShades={setOpenShades}
+              onSlideBadge={(badge) => patchSlide({ badge })}
               hookPictureStatus={hookPictureStatus}
               piece={piece}
               onChangeTrip={onChangeTrip}

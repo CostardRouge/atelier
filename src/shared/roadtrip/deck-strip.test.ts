@@ -10,8 +10,11 @@ import {
   timeAtX,
   xAtTime,
   slideMotionMarks,
+  capacityMarks,
 } from './deck-strip';
 import { createCollage } from './collage';
+import { deckSlides } from './deck';
+import { createPostSlide, createTripDoc, createTripPost } from './trip-types';
 
 // A hook of 5s, a still of 3s, a half-second clip, the closing card of 3s —
 // at 40 px a second with a 24 px floor and 2 px between cells.
@@ -152,5 +155,36 @@ describe('slideMotionMarks', () => {
 
   it('waits for the opener when the motion does', () => {
     expect(slideMotionMarks({ motion: { ...m(0), start: 'after-opener' }, collage: null }, 5, 1)).toEqual([1, 5]);
+  });
+});
+
+describe('capacityMarks', () => {
+  const slides = (edit: (slide: ReturnType<typeof createPostSlide>) => void) => {
+    const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
+    edit(slide);
+    const doc = createTripDoc('Australia', '2025-03-01', '2025-03-10');
+    const post = { ...createTripPost('carousel', '2025-03-05', ''), slides: [slide] };
+    return deckSlides(doc, post);
+  };
+
+  it('says nothing for the first slide or a bare one', () => {
+    const [first, bare] = slides(() => {});
+    expect(capacityMarks(first)).toBe('');
+    expect(capacityMarks(bare)).toBe('');
+  });
+
+  it('marks an opener, a badge and words, in that order', () => {
+    const [, held] = slides((slide) => {
+      slide.hook = [{ id: 'map', options: {} }];
+      slide.badge = {
+        mode: 'day',
+        timeAgo: 'off',
+        layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+        durationSeconds: 2,
+        textOverrides: {},
+      };
+      slide.caption = 'Leg two';
+    });
+    expect(capacityMarks(held)).toBe('◆#T');
   });
 });

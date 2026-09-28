@@ -5,7 +5,8 @@ import {
   type BadgePiece,
   type CounterMode,
 } from '../../../shared/roadtrip/day-badge';
-import { hookAnimates, type DeckSlide } from '../../../shared/roadtrip/deck';
+import type { DeckSlide } from '../../../shared/roadtrip/deck';
+import type { SlideBadge } from '../../../shared/roadtrip/slide-capacities';
 import { readCaptureDate, type CaptureDate } from '../../../shared/roadtrip/media-date';
 import { timeAgoPreviews, type TimeAgoMode } from '../../../shared/roadtrip/time-ago';
 import { postDayRange, stageAt } from '../../../shared/roadtrip/trip-coverage';
@@ -35,7 +36,10 @@ interface ContentTabProps {
   trip: TripDoc;
   post: TripPost;
   slide: DeckSlide;
-  /** The badge's words for this post, or null when the trip cannot be counted. */
+  /**
+   * What the OPEN slide's badge says — the piece's on the first slide, the
+   * slide's own elsewhere — or null when it draws none or cannot be counted.
+   */
   content: BadgeContent | null;
   /** The piece in hand — chosen above the tabs, or by a click on the stage. */
   piece: BadgePiece;
@@ -56,8 +60,12 @@ interface ContentTabProps {
   onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
-  /** The field a stage click focuses: the piece's text on the hook, the caption elsewhere. */
+  /** Write the open slide's OWN badge — another slide's words, counter and line. */
+  patchSlideBadge: (patch: Partial<SlideBadge>) => void;
+  /** The field a stage click on a badge piece focuses. */
   textFieldRef: RefObject<HTMLInputElement>;
+  /** The field a stage click on a caption line focuses. */
+  captionFieldRef: RefObject<HTMLInputElement>;
   /** The closing card belongs to the trip; a click on it opens that sheet. */
   onEditClosingCard: () => void;
 }
@@ -95,10 +103,28 @@ export default function ContentTab({
   onChangeTrip,
   patchBadge,
   patchSlide,
+  patchSlideBadge,
   textFieldRef,
+  captionFieldRef,
   onEditClosingCard,
 }: ContentTabProps) {
   const isHook = slide.kind === 'hook';
+  /**
+   * The badge this slide's words are written to: the piece's on the first
+   * slide, the slide's own elsewhere, none where the slide draws no badge.
+   * Only what one slide may say differently goes through it — the marker and
+   * the "read on" day stay the piece's, the camera credit the hook's alone.
+   */
+  const badge: {
+    mode: CounterMode;
+    timeAgo: TimeAgoMode;
+    textOverrides: Partial<Record<BadgePiece, string>>;
+    write: (patch: Partial<Pick<PostBadge, 'mode' | 'timeAgo' | 'textOverrides'>>) => void;
+  } | null = isHook
+    ? { ...post.badge, write: patchBadge }
+    : slide.badge
+      ? { ...slide.badge, write: patchSlideBadge }
+      : null;
 
   // --- the day the picture was actually taken -------------------------------
   // Every number the badge draws is a subtraction from the day the piece is
@@ -148,7 +174,7 @@ export default function ContentTab({
       })),
     [trip, post],
   );
-  const activeCounter = counterOptions.find((m) => m.id === post.badge.mode) ?? null;
+  const activeCounter = counterOptions.find((m) => m.id === badge?.mode) ?? null;
   const counterReason = activeCounter?.text === null ? activeCounter.otherwise : null;
 
   /** What the temporal line actually says, so the panel shows it rather than
@@ -165,7 +191,7 @@ export default function ContentTab({
       })),
     [post.date, reference, trip.badgeWords.time],
   );
-  const timeLine = timeOptions.find((p) => p.id === post.badge.timeAgo)?.text ?? null;
+  const timeLine = timeOptions.find((p) => p.id === badge?.timeAgo)?.text ?? null;
 
   const slideName =
     slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
@@ -193,9 +219,9 @@ export default function ContentTab({
           </>
         }
       >
-        {isHook && (
+        {badge && (
           <FieldRow
-            label="Text"
+            label={isHook ? 'Text' : 'Badge text'}
             hint={
               !content ? (
                 <span className="text-danger" role="alert">
@@ -207,14 +233,14 @@ export default function ContentTab({
           >
             <input
               ref={textFieldRef}
-              value={post.badge.textOverrides[piece] ?? ''}
+              value={badge.textOverrides[piece] ?? ''}
               placeholder={content?.[piece] ?? '(nothing here)'}
               onChange={(e) =>
-                patchBadge({
-                  textOverrides: { ...post.badge.textOverrides, [piece]: e.target.value },
+                badge.write({
+                  textOverrides: { ...badge.textOverrides, [piece]: e.target.value },
                 })
               }
-              aria-label="Text"
+              aria-label={isHook ? 'Text' : 'Badge text'}
               className={`${inputClass} w-full`}
             />
           </FieldRow>
@@ -223,7 +249,7 @@ export default function ContentTab({
         {slide.kind === 'content' && (
           <FieldRow label="Caption">
             <input
-              ref={textFieldRef}
+              ref={captionFieldRef}
               value={slide.caption}
               onChange={(e) => patchSlide({ caption: e.target.value })}
               placeholder="A line over this picture — optional"
@@ -246,7 +272,10 @@ export default function ContentTab({
         {slide.kind !== 'cta' && (
           <SlideDelivery
             slide={slide}
-            animated={isHook && hookAnimates(post.badge.pieceStyles, post.badge.cascade)}
+            // Whether something on the slide moves, as the deck itself resolved
+            // it: `animated` / `settled` are exactly the two reasons that say so,
+            // whatever moves — a badge piece, an opener, text, a picture.
+            animated={slide.reason === 'animated' || slide.reason === 'settled'}
             clipSeconds={clipSeconds}
             clip={clip}
             onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
@@ -339,7 +368,7 @@ export default function ContentTab({
         )}
       </InspectorSection>
 
-      {isHook && (
+      {badge && (
         <InspectorSection
           id="piece.counter"
           title="Counter"
@@ -356,7 +385,7 @@ export default function ContentTab({
               counterReason ? (
                 <>
                   {counterReason}{' '}
-                  {post.badge.mode === 'day-range'
+                  {badge.mode === 'day-range'
                     ? 'It counts the single day above meanwhile.'
                     : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
                 </>
@@ -367,14 +396,15 @@ export default function ContentTab({
           >
             <SelectField
               label="Counter"
-              value={post.badge.mode}
-              onChange={(mode) => patchBadge({ mode })}
+              value={badge.mode}
+              onChange={(mode) => badge.write({ mode })}
               options={counterOptions.map((o) => ({
                 id: o.id,
                 label: `${o.label} · ${o.text ?? o.otherwise}`,
               }))}
             />
           </FieldRow>
+          {isHook && (
           <FieldRow
             label="Marker"
             hint={
@@ -391,10 +421,11 @@ export default function ContentTab({
               Before the place
             </ToggleField>
           </FieldRow>
+          )}
         </InspectorSection>
       )}
 
-      {isHook && (
+      {badge && (
         <InspectorSection
           id="piece.time"
           title="Time"
@@ -410,9 +441,9 @@ export default function ContentTab({
             hint={
               timeLine ? (
                 <span className="font-mono text-ink">“{timeLine}”</span>
-              ) : post.badge.timeAgo === 'off' ? (
+              ) : badge.timeAgo === 'off' ? (
                 'No line about when. The trip’s name is on the badge either way.'
-              ) : post.badge.timeAgo === 'anniversary' ? (
+              ) : badge.timeAgo === 'anniversary' ? (
                 'Not the anniversary on that day, so the line is left out. Nothing claims a date it is not.'
               ) : (
                 'Nothing true to say about that gap yet, so the line is left out.'
@@ -421,14 +452,15 @@ export default function ContentTab({
           >
             <SelectField
               label="Time"
-              value={post.badge.timeAgo}
-              onChange={(timeAgo) => patchBadge({ timeAgo })}
+              value={badge.timeAgo}
+              onChange={(timeAgo) => badge.write({ timeAgo })}
               options={timeOptions.map((o) => ({
                 id: o.id,
                 label: o.text ? `${o.label} · ${o.text}` : o.label,
               }))}
             />
           </FieldRow>
+          {isHook && (
           <FieldRow label="Read on">
             <DateField
               value={post.badge.referenceDate ?? todayIso()}
@@ -447,6 +479,7 @@ export default function ContentTab({
               </button>
             )}
           </FieldRow>
+          )}
         </InspectorSection>
       )}
 

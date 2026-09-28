@@ -24,7 +24,7 @@ import { badgeBlockExtent, badgeElements, badgeSettleSeconds, type BadgeLayout }
 import { collageSettleSeconds } from './collage';
 import { elementSettleSeconds } from '../overlay/still-frame';
 import { ctaLayout } from './cta-slide';
-import { badgeContent, type BadgePiece, type CounterMode } from './day-badge';
+import { badgeContent, type BadgeContent, type BadgePiece, type CounterMode } from './day-badge';
 import type { TimeAgoMode } from './time-ago';
 import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from './shades';
@@ -106,23 +106,7 @@ export function slideRender(
   // or shades at all; now it decides only where they are stored.
   const isFirst = slide.kind === 'hook';
   const spec = isFirst ? pieceBadge(post) : slideBadge(slide);
-
-  const content = spec
-    ? badgeContent(trip, post, {
-        mode: spec.mode,
-        words: trip.badgeWords,
-        timeAgo: spec.timeAgo,
-        referenceDate: post.badge.referenceDate,
-        showPin: post.badge.showPin,
-        // The camera credit is measured from the HOOK's picture; on another
-        // slide it would credit a photograph that is not the one under it.
-        showExif: isFirst ? post.badge.showExif : false,
-        exif: isFirst ? (exif ?? null) : null,
-        camera: isFirst ? (post.badge.camera ?? null) : null,
-        cameraNames: trip.cameraNames ?? null,
-        overrides: spec.textOverrides,
-      })
-    : null;
+  const content = slideBadgeContent(trip, post, slide, exif);
 
   // The opener's pictures reach it here or not at all. A sweep does not need
   // them in a still — it is drawn settled, past the sweep, where the piece's
@@ -171,6 +155,39 @@ export function slideRender(
     hook,
     elementsAt: badgeAt && words.length ? (t) => [...badgeAt(t), ...words] : badgeAt,
   };
+}
+
+/**
+ * What a slide's badge SAYS — the piece's own on the first slide, the slide's
+ * own elsewhere, null where the slide draws none (or on the closing card).
+ * Exported for the editor, whose fields show the computed words as their
+ * placeholder: one function, so a field never suggests what the badge does not
+ * draw.
+ */
+export function slideBadgeContent(
+  trip: TripDoc,
+  post: TripPost,
+  slide: DeckSlide,
+  exif?: ExifData | null,
+): BadgeContent | null {
+  if (slide.kind === 'cta') return null;
+  const isFirst = slide.kind === 'hook';
+  const spec = isFirst ? pieceBadge(post) : slideBadge(slide);
+  if (!spec) return null;
+  return badgeContent(trip, post, {
+    mode: spec.mode,
+    words: trip.badgeWords,
+    timeAgo: spec.timeAgo,
+    referenceDate: post.badge.referenceDate,
+    showPin: post.badge.showPin,
+    // The camera credit is measured from the HOOK's picture; on another slide
+    // it would credit a photograph that is not the one under it.
+    showExif: isFirst ? post.badge.showExif : false,
+    exif: isFirst ? (exif ?? null) : null,
+    camera: isFirst ? (post.badge.camera ?? null) : null,
+    cameraNames: trip.cameraNames ?? null,
+    overrides: spec.textOverrides,
+  });
 }
 
 /** What a slide's badge says and where — the part a slide may own. */

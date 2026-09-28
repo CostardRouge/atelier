@@ -5,8 +5,9 @@ asked to start without answering §9, so the build takes the brief's own
 recommendations as its working answers and says so where each applies: a
 badge on another slide is allowed and never a default, the first slide keeps
 the name "hook", two masked modes, no deck-shape defaults, and the bridge
-still sends the first slide's opener. Built so far: **commits 1–2** (the model, and every surface
-rendering a slide by what it holds).
+still sends the first slide's opener. Built so far: **commits 1–3** (the model, every surface
+rendering a slide by what it holds, and the editor giving any slide an opener, a
+badge and shades).
 
 §1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
 still lists what is his to settle.
@@ -325,7 +326,15 @@ Five commits, one task each, in this order:
    on purpose: a content slide's VIDEO used to burn its caption with no title
    style while its PNG, thumbnail and stage used the trip's — it now matches.
 3. The editor: the Opener, Shades and Badge sections stop being hook-only; the
-   deck band's cells show which capacities a slide holds.
+   deck band's cells show which capacities a slide holds. **Built** — the Look
+   tab gives another slide the opener picker (its badge card reads **None**
+   there, since it draws nothing extra), a Badge row (Off · Chapter mark · Full,
+   then placement and duration) and its own Shades; the Content tab writes that
+   badge's words, counter and temporal line (the marker, the "read on" day and
+   the camera stay the piece's); the stage drags another slide's badge and
+   opener like the first's; a band cell says `◆ # T` for opener, badge, words.
+   Driven in headless Chromium: all of it written to the slide's own record,
+   the piece's own untouched, no console error.
 4. `OverlayElement.blend` + the curated list, in `drawOverlays` and `ElementPanel`.
 5. `OverlayElement.knockout`, both modes, with the buffer and the mask cache.
 

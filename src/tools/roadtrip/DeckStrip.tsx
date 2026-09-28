@@ -30,6 +30,7 @@
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
 import type { DeckSlide } from '../../shared/roadtrip/deck';
 import {
+  capacityMarks,
   locate,
   snapToEdge,
   stepSlide,
@@ -526,8 +527,10 @@ export default function DeckStrip({
               // height inside it.
               const frame = Math.max(12, Math.round((video ? CELL_PX : CELL_PX - 2) * aspect));
               const rule = video ? 'rgba(0,0,0,0.55)' : 'var(--color-paper)';
+              const holds = capacityMarks(s);
               const label =
                 (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
+                (holds ? ` ${holds}` : '') +
                 ` ${seconds(lengths[i] ?? 0)}` +
                 (s.speed !== 1 ? ` · ${s.speed}×` : '');
               return (
