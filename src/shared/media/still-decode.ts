@@ -251,20 +251,22 @@ async function decodeBlob(blob: Blob, fit: StillFitArg): Promise<{ bitmap: Image
   const format = await formatOf(blob);
   if (format) {
     const { decodeWasmStill } = await import('./wasm-still');
-    const still = await decodeWasmStill(blob, format);
+    const still = await decodeWasmStill(blob, format, (natural) => targetFor(natural, fit));
     // A JPEG XL comes back as a PNG, which the browser sizes like any file.
     if (still.kind === 'blob') return decodeBlob(still.blob, fit);
-    const size = { width: still.image.width, height: still.image.height };
-    const target = targetFor(size, fit);
+    // The pixels may be the file's own thumbnail: sized from the PICTURE's size.
+    const { natural } = still;
+    const have = { width: still.image.width, height: still.image.height };
+    const target = targetFor(natural, fit);
     const bitmap =
-      target.width === size.width && target.height === size.height
+      target.width >= have.width && target.height >= have.height
         ? await createImageBitmap(still.image)
         : await createImageBitmap(still.image, {
             resizeWidth: target.width,
             resizeHeight: target.height,
             resizeQuality: 'high',
           });
-    return { bitmap, natural: size };
+    return { bitmap, natural };
   }
   // The header reader refused: the decoder itself is asked once, whole, and
   // the result bounded after — the old path, for a format an `<img>` will not

@@ -1361,9 +1361,12 @@ libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a
 time such a file is met (about 2 MB each, nothing at page load). A picture is
 recognised by its bytes, not its name, and opens upright with its rotation
 applied, in Develop, Trips, the Studio, the Library's covers and its
-lightbox; a HEIF or JPEG XL original can deliver an export too. Two limits:
-these decoders cannot scale while they decode, so the whole picture exists
-once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
+lightbox; a HEIF or JPEG XL original can deliver an export too. A small
+view of a HEIF — a Library cover, a filmstrip cell — is decoded from the
+thumbnail the file carries of itself (an iPhone writes one of about 320 px),
+in milliseconds instead of the whole picture. Two limits: for anything
+bigger these decoders cannot scale while they decode, so the whole picture
+exists once, briefly, before it is shrunk to the size asked for; and a HEIF's colour
 profile (an iPhone's Display P3) is not applied, so its colours land a touch
 flatter than in Safari. TIFF is still not read.
 
