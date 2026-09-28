@@ -51,7 +51,14 @@ struct TripGallery: View {
     private var store: TripsStore { shell.store }
     private var gallery: DocumentGalleryModel<TripDoc> { shell.gallery }
 
+    // The body in two pieces, each type-checked on its own (the Studio
+    // editor's lesson: a long chain of modifiers is refused whole).
     var body: some View {
+        presenting(page)
+    }
+
+    /// The page, its bar and what it reads when it appears.
+    private var page: some View {
         ScrollView {
             VStack(alignment: .leading, spacing: 20) {
                 if !compact { heading }
@@ -78,55 +85,73 @@ struct TripGallery: View {
         .task(id: coverKey) {
             await covers.load(coverIds, from: store.thumbs, version: store.thumbsVersion)
         }
-        .sheet(isPresented: $creating) {
-            // The seed row waits on the timeline sheet (map task -07) and on
-            // the kernel's `timelineSyncEnabled`, off today: without a handler
-            // it is not drawn.
-            TripDetailsSheet(sources: gallery.documentSources, seedSources: shell.seedSources, onSeedFrom: nil,
-                             onCancel: { creating = false },
-                             onSubmit: { details in
-                                 creating = false
-                                 Task { await shell.create(details) }
-                             })
-        }
-        .sheet(isPresented: Binding(get: { covering != nil }, set: { if !$0 { covering = nil } })) {
-            if let covering {
-                TripCoverSheet(trip: shell.current(covering), thumbs: store.thumbs, version: store.thumbsVersion,
-                               onCancel: { self.covering = nil },
-                               onSave: { cover in
-                                   self.covering = nil
-                                   Task { await shell.setCover(covering, cover) }
-                               })
+    }
+
+    /// The sheets, the file panels and the import question.
+    private func presenting(_ content: some View) -> some View {
+        content
+            .sheet(isPresented: $creating) { creationSheet }
+            .sheet(isPresented: coveringShown) { coverSheet }
+            // The two file panels each on a view of their own: panels
+            // chained on ONE view answer only the last.
+            .background {
+                Color.clear
+                    .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
+                        guard case .success(let url) = result else { return }
+                        let target = importTarget
+                        Task { await shell.importFile(url, to: target) }
+                    }
             }
-        }
-        // The two file panels each on a view of their own: panels chained on
-        // ONE view answer only the last.
-        .background {
-            Color.clear
-                .fileImporter(isPresented: $importing, allowedContentTypes: [.json]) { result in
-                    guard case .success(let url) = result else { return }
-                    let target = importTarget
-                    Task { await shell.importFile(url, to: target) }
-                }
-        }
-        .background {
-            Color.clear
-                .fileExporter(isPresented: Binding(get: { exporting != nil }, set: { if !$0 { exporting = nil } }),
-                              document: exporting, contentType: .json,
-                              defaultFilename: exporting?.fileName ?? tripFileName("trip")) { _ in
-                    exporting = nil
-                }
-        }
-        .confirmationDialog("Import a trip file", isPresented: $choosingImportSource, titleVisibility: .visible) {
-            ForEach(gallery.documentSources, id: \.id) { source in
-                Button(source.id == defaultSourceId ? "This device (local)" : source.label) {
-                    importTarget = source.id
-                    importing = true
-                }
+            .background {
+                Color.clear
+                    .fileExporter(isPresented: exportingShown, document: exporting, contentType: .json,
+                                  defaultFilename: exporting?.fileName ?? tripFileName("trip")) { _ in
+                        exporting = nil
+                    }
             }
-            Button("Cancel", role: .cancel) {}
-        } message: {
-            Text("Creates a new trip from an exported \(tripFileExtension) backup — it never overwrites one you already have.")
+            .confirmationDialog("Import a trip file", isPresented: $choosingImportSource,
+                                titleVisibility: .visible) {
+                ForEach(gallery.documentSources, id: \.id) { source in
+                    Button(source.id == defaultSourceId ? "This device (local)" : source.label) {
+                        importTarget = source.id
+                        importing = true
+                    }
+                }
+                Button("Cancel", role: .cancel) {}
+            } message: {
+                Text("Creates a new trip from an exported \(tripFileExtension) backup — it never overwrites one you already have.")
+            }
+    }
+
+    private var coveringShown: Binding<Bool> {
+        Binding(get: { covering != nil }, set: { if !$0 { covering = nil } })
+    }
+
+    private var exportingShown: Binding<Bool> {
+        Binding(get: { exporting != nil }, set: { if !$0 { exporting = nil } })
+    }
+
+    /// The seed row waits on the timeline sheet (map task -07) and on the
+    /// kernel's `timelineSyncEnabled`, off today: without a handler it is not
+    /// drawn.
+    private var creationSheet: some View {
+        TripDetailsSheet(sources: gallery.documentSources, seedSources: shell.seedSources, onSeedFrom: nil,
+                         onCancel: { creating = false },
+                         onSubmit: { details in
+                             creating = false
+                             Task { await shell.create(details) }
+                         })
+    }
+
+    @ViewBuilder
+    private var coverSheet: some View {
+        if let trip = covering {
+            TripCoverSheet(trip: shell.current(trip), thumbs: store.thumbs, version: store.thumbsVersion,
+                           onCancel: { covering = nil },
+                           onSave: { cover in
+                               covering = nil
+                               Task { await shell.setCover(trip, cover) }
+                           })
         }
     }
 

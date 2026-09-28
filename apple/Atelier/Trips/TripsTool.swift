@@ -107,8 +107,13 @@ private struct TripsBanners: ViewModifier {
                     .overlay(RoundedRectangle(cornerRadius: Brand.controlRadius).stroke(palette.line, lineWidth: 1))
                 }
             }
-            .padding(.horizontal, shell.store.storageFailed || (shell.spanNote != nil && !shell.path.isEmpty) ? 12 : 0)
+            .padding(.horizontal, showsAny ? 12 : 0)
         }
+    }
+
+    private var showsAny: Bool {
+        if shell.store.storageFailed { return true }
+        return shell.spanNote != nil && !shell.path.isEmpty
     }
 }
 
