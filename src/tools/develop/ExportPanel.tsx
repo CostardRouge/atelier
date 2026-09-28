@@ -2,11 +2,12 @@ import type { DeliverySummary } from '../../shared/develop/roll-export';
 import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
 import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
-import { FieldRow, InspectorSection, RangeField, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, LockSections, RangeField, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
 import { targetFolder } from '../../shared/develop/export-targets';
 import { captureYear } from '../../shared/exif/delivery-meta';
+import { Icons } from '../../shared/ui/icons';
 
 const WATERMARK_POSITION_OPTIONS: readonly { id: WatermarkPosition; label: string }[] = [
   { id: 'bottom-right', label: 'Bottom right' },
@@ -75,6 +76,7 @@ export default function ExportPanel({
   proxiesOnly,
   onProxiesOnly,
   exporting,
+  lockedSince = null,
   hdrRun = null,
   pictures = null,
   openExif = null,
@@ -91,6 +93,13 @@ export default function ExportPanel({
   proxiesOnly: boolean;
   onProxiesOnly: (on: boolean) => void;
   exporting: string | null;
+  /**
+   * When the running export started, or null when none runs. Its settings
+   * were taken at that click, so while it goes on this tab is LOCKED and says
+   * so (L2 of the 2026-09-28 lab): a control that no longer reaches what is
+   * running must not look as if it did. Retouching stays free.
+   */
+  lockedSince?: number | null;
   /** The last run's HDR outcome — the one part of the run the panel still shows. */
   hdrRun?: RollRun['hdr'];
   /** Which pictures leave, one row each (`DeliveryTable`) — the editor builds it, since it holds the roll. */
@@ -111,298 +120,314 @@ export default function ExportPanel({
   const marked = settings.targets.flatMap((t, i) => (t.watermark ? [i === 0 ? 'the chosen folder' : `${targetFolder(t.name, i)}/`] : []));
   return (
     <>
-      <InspectorSection
-        id="develop.export"
-        title="Export"
-        info={
-          <>
-            <p>
-              Each picture is decoded at its own size, developed under its own look, cropped as the
-              Crop tab shows it and written as a JPEG. A size is a ceiling — a long edge, a short
-              edge, an area in megapixels or a share of the picture — and a picture is never
-              upscaled to reach it.
-            </p>
-            <p>
-              One run can write several <strong>targets</strong>: the full picture for the archive
-              and a 2048 px set for the web, say. Each picture is rendered once and cut to every
-              target. The first writes into the folder you choose; each other one into a folder
-              inside it, named after the target — the files keep their pictures’ own names, so{' '}
-              <code>DJI_0101.jpg</code> and <code>Web/DJI_0101.jpg</code> are the same photograph.
-              A browser with no folder picker downloads instead, and there the target’s name goes
-              before the file’s (<code>Web-DJI_0101.jpg</code>). <strong>Sharpen</strong> is for a
-              screen, applied to the file after its resize: a picture brought down to 2048 px is
-              softer than it was at its own size, and how much to bring back depends on the size.
-            </p>
-            <p>
-              A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
-              hour it was taken — whatever its pixels were taken from, so a file developed on a proxy
-              still reads like the capture. Only a few tags are corrected: the way up, the size, the
-              thumbnail, which would otherwise show the picture before you developed it — and what
-              the Metadata section below writes.
-            </p>
-            <p>
-              Which pixels a picture leaves from is the picture’s own answer, chosen above the
-              photograph: its RAW when it is developed on the sensor, the file it was set to, else
-              where it opens — and a proxy’s full-size original is still fetched where the proxy
-              could not fill the frame asked for. <strong>Delivers</strong> says what that means for
-              the run before anything is fetched; <strong>Proxies only</strong> makes every picture
-              leave from what is in hand, for this run alone — a RAW base is set aside and said.
-              Fetched files are kept for this session only, up to {formatBytes(heldCeilingBytes())} on
-              this device; past that the ones least recently used are let go and fetched again when
-              a picture needs them.
-            </p>
-            <p>
-              A picture developed on its <strong>RAW</strong> leaves from the sensor’s data, and the
-              export climbs to the top rung of calibration its own file carries — the gain map and
-              the rectilinear warp the body was measured for. It never crosses from the proxy to
-              the sensor by itself: numbers nobody has seen on the sensor’s data are never applied
-              to it at the door.
-            </p>
-            <p>
-              A <strong>RAW</strong> original is a special case for PIXELS too: no browser decodes a sensor plane,
-              so all that can be taken from one is the render its camera wrote inside it — which on
-              a DJI is 960 × 540, smaller than the proxy. Its real size is read from the file’s head
-              before anything is fetched, and the LARGER of that render and the proxy delivers. The
-              whole RAW is pulled only when its render genuinely has more pixels than the proxy and
-              the frame needs them. To deliver from the sensor itself, climb the picture’s own
-              ladder — the chip above the photograph.
-            </p>
-          </>
-        }
-      >
-        <ExportTargets targets={settings.targets} onTargets={(targets) => onSettings({ targets })} />
-        <FieldRow label="Delivers" align="start">
-          {/* The run's sentence. Every picture's own line is in the Pictures
-              table below, where it is also where a picture is sent or held. */}
-          <div className="flex flex-col gap-1 min-w-0 pt-1">
-            <span className="font-mono text-sm tabular-nums leading-snug text-ink">{plan.summary}</span>
-          </div>
-        </FieldRow>
-        <SwitchRow
-          label="Proxies only, for this run"
-          name="Proxies only for this run"
-          checked={proxiesOnly}
-          onChange={onProxiesOnly}
-          hint={
-            proxiesOnly
-              ? 'Every picture leaves from what is in hand; a RAW base is set aside and the run says so. The roll is untouched.'
-              : 'Writes nothing on the roll — for a run on a slow connection, or from a phone.'
-          }
-        />
-        <FieldRow
-          label="This picture"
-          align="start"
-          hintShown
-          hint={delivery?.reason ?? (delivery ? undefined : 'measured once the picture is in the Library')}
-        >
-          {/* The calculator's sentence wraps rather than truncates: its end is the verdict. */}
-          <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
-            {delivery ? delivery.line : '—'}
+      {lockedSince !== null && (
+        // Stuck to the top of the tab's scroll: the lock must be read where
+        // the dimmed control is, and the tab is usually scrolled to the table.
+        <p className="sticky top-0 z-10 m-0 flex items-start gap-2 rounded-control border border-line bg-paper-2 px-2.5 py-2 text-xs leading-snug text-ink-soft shadow-[0_8px_14px_-12px_rgba(43,33,18,0.45)]" role="status">
+          <span className="flex-none inline-flex pt-px text-muted" aria-hidden="true">
+            {Icons.clock}
           </span>
-        </FieldRow>
-      </InspectorSection>
-
-      <InspectorSection
-        id="develop.watermark"
-        title="Watermark"
-        info={
-          <>
-            <p>
-              A line of text drawn on the file, in a corner or along the bottom edge. The style is the
-              roll’s; each target above says whether it carries it, so the copy that goes online can
-              be signed and the one kept for the archive left clean.
-            </p>
-            <p>
-              The line is a template: <code>{'{creator}'}</code> is the name set under Metadata,{' '}
-              <code>{'{year}'}</code> the year the picture was TAKEN, <code>{'{title}'}</code> the
-              picture’s own. A line that names its author before a name is set is not drawn. Its
-              size is a share of the file’s short side, so a 1080 px copy and the full picture carry
-              the same mark, and it is drawn after the screen sharpening.
-            </p>
-          </>
-        }
-      >
-        <FieldRow label="Line">
-          <TextField
-            label="Watermark line"
-            value={settings.watermark.text}
-            placeholder={DEFAULT_WATERMARK.text}
-            onChange={(text) => onSettings({ watermark: { ...settings.watermark, text } })}
-          />
-        </FieldRow>
-        <FieldRow label="Reads" align="start">
-          <span className={`font-mono text-sm leading-snug pt-1 ${markPreview ? 'text-ink' : 'text-muted'}`}>
-            {markPreview || (settings.watermark.text.includes('{creator}') && !identity.creator ? 'nothing yet — set a creator under Metadata' : 'nothing — the line is empty')}
+          <span>
+            Locked while exporting — this run uses the settings as they were at{' '}
+            {new Date(lockedSince).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}. Retouching stays
+            free; a picture edited now is named when the run ends.
           </span>
-        </FieldRow>
-        <FieldRow label="Where">
-          <SelectField
-            label="Watermark position"
-            value={settings.watermark.position}
-            options={WATERMARK_POSITION_OPTIONS}
-            onChange={(position) => onSettings({ watermark: { ...settings.watermark, position } })}
-          />
-        </FieldRow>
-        <FieldRow label="Size">
-          <RangeField
-            label="Watermark size"
-            min={WATERMARK_LIMITS.size.min}
-            max={WATERMARK_LIMITS.size.max}
-            step={0.5}
-            value={settings.watermark.size}
-            onChange={(size) => onSettings({ watermark: { ...settings.watermark, size } })}
-            format={(v) => `${v.toFixed(1)} %`}
-          />
-        </FieldRow>
-        <FieldRow label="Opacity">
-          <RangeField
-            label="Watermark opacity"
-            min={WATERMARK_LIMITS.opacity.min}
-            max={WATERMARK_LIMITS.opacity.max}
-            step={0.05}
-            value={settings.watermark.opacity}
-            onChange={(opacity) => onSettings({ watermark: { ...settings.watermark, opacity } })}
-            format={(v) => `${Math.round(v * 100)} %`}
-          />
-        </FieldRow>
-        <FieldRow label="Tone">
-          <Segmented
-            size="sm"
-            label="Watermark tone"
-            value={settings.watermark.tone}
-            onChange={(tone) => onSettings({ watermark: { ...settings.watermark, tone: tone as WatermarkTone } })}
-            options={[
-              { id: 'light', label: 'Light' },
-              { id: 'dark', label: 'Dark' },
-            ]}
-          />
-        </FieldRow>
-        <FieldRow label="Drawn on" align="start">
-          <span className="font-mono text-2xs leading-snug text-muted pt-1">
-            {marked.length ? marked.join(' · ') : 'no target yet — switch it on under a target above'}
-          </span>
-        </FieldRow>
-      </InspectorSection>
-
-      {pictures && (
+        </p>
+      )}
+      <LockSections locked={lockedSince !== null}>
         <InspectorSection
-          id="develop.pictures"
-          title="Pictures"
+          id="develop.export"
+          title="Export"
           info={
             <>
               <p>
-                Which pictures leave. By default the ones you EDITED do; a click on a row gives the
-                other answer — send a picture you did not touch, hold back one you did — and{' '}
-                <strong>↺</strong> puts it back on the rule. <kbd>P</kbd> does the same on the picture on
-                the stage, <kbd>U</kbd> puts it back on the rule.
+                Each picture is decoded at its own size, developed under its own look, cropped as the
+                Crop tab shows it and written as a JPEG. A size is a ceiling — a long edge, a short
+                edge, an area in megapixels or a share of the picture — and a picture is never
+                upscaled to reach it.
               </p>
               <p>
-                An <strong>ignored</strong> picture (<kbd>M</kbd>) is out of the roll’s work: it never
-                leaves, the arrows step over it, “apply to the others” leaves it alone. It is folded at
-                the bottom; a click there brings it back.
+                One run can write several <strong>targets</strong>: the full picture for the archive
+                and a 2048 px set for the web, say. Each picture is rendered once and cut to every
+                target. The first writes into the folder you choose; each other one into a folder
+                inside it, named after the target — the files keep their pictures’ own names, so{' '}
+                <code>DJI_0101.jpg</code> and <code>Web/DJI_0101.jpg</code> are the same photograph.
+                A browser with no folder picker downloads instead, and there the target’s name goes
+                before the file’s (<code>Web-DJI_0101.jpg</code>). <strong>Sharpen</strong> is for a
+                screen, applied to the file after its resize: a picture brought down to 2048 px is
+                softer than it was at its own size, and how much to bring back depends on the size.
+              </p>
+              <p>
+                A picture leaves carrying the ORIGINAL’s EXIF — its position, its body, its lens, the
+                hour it was taken — whatever its pixels were taken from, so a file developed on a proxy
+                still reads like the capture. Only a few tags are corrected: the way up, the size, the
+                thumbnail, which would otherwise show the picture before you developed it — and what
+                the Metadata section below writes.
+              </p>
+              <p>
+                Which pixels a picture leaves from is the picture’s own answer, chosen above the
+                photograph: its RAW when it is developed on the sensor, the file it was set to, else
+                where it opens — and a proxy’s full-size original is still fetched where the proxy
+                could not fill the frame asked for. <strong>Delivers</strong> says what that means for
+                the run before anything is fetched; <strong>Proxies only</strong> makes every picture
+                leave from what is in hand, for this run alone — a RAW base is set aside and said.
+                Fetched files are kept for this session only, up to {formatBytes(heldCeilingBytes())} on
+                this device; past that the ones least recently used are let go and fetched again when
+                a picture needs them.
+              </p>
+              <p>
+                A picture developed on its <strong>RAW</strong> leaves from the sensor’s data, and the
+                export climbs to the top rung of calibration its own file carries — the gain map and
+                the rectilinear warp the body was measured for. It never crosses from the proxy to
+                the sensor by itself: numbers nobody has seen on the sensor’s data are never applied
+                to it at the door.
+              </p>
+              <p>
+                A <strong>RAW</strong> original is a special case for PIXELS too: no browser decodes a sensor plane,
+                so all that can be taken from one is the render its camera wrote inside it — which on
+                a DJI is 960 × 540, smaller than the proxy. Its real size is read from the file’s head
+                before anything is fetched, and the LARGER of that render and the proxy delivers. The
+                whole RAW is pulled only when its render genuinely has more pixels than the proxy and
+                the frame needs them. To deliver from the sensor itself, climb the picture’s own
+                ladder — the chip above the photograph.
               </p>
             </>
           }
         >
-          {pictures}
+          <ExportTargets targets={settings.targets} onTargets={(targets) => onSettings({ targets })} />
+          <FieldRow label="Delivers" align="start">
+            {/* The run's sentence. Every picture's own line is in the Pictures
+                table below, where it is also where a picture is sent or held. */}
+            <div className="flex flex-col gap-1 min-w-0 pt-1">
+              <span className="font-mono text-sm tabular-nums leading-snug text-ink">{plan.summary}</span>
+            </div>
+          </FieldRow>
+          <SwitchRow
+            label="Proxies only, for this run"
+            name="Proxies only for this run"
+            checked={proxiesOnly}
+            onChange={onProxiesOnly}
+            hint={
+              proxiesOnly
+                ? 'Every picture leaves from what is in hand; a RAW base is set aside and the run says so. The roll is untouched.'
+                : 'Writes nothing on the roll — for a run on a slow connection, or from a phone.'
+            }
+          />
+          <FieldRow
+            label="This picture"
+            align="start"
+            hintShown
+            hint={delivery?.reason ?? (delivery ? undefined : 'measured once the picture is in the Library')}
+          >
+            {/* The calculator's sentence wraps rather than truncates: its end is the verdict. */}
+            <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
+              {delivery ? delivery.line : '—'}
+            </span>
+          </FieldRow>
         </InspectorSection>
-      )}
 
-      <MetadataSection
-        identity={identity}
-        onIdentity={(next) => void setDeliveryIdentity(next)}
-        openExif={openExif}
-        picture={picture}
-        onWords={onWords}
-        choice={settings.metadata}
-        onChoice={(metadata) => onSettings({ metadata })}
-      />
-
-      <InspectorSection
-        id="develop.hdr"
-        title="HDR"
-        info={
-          <>
-            <p>
-              An <strong>Ultra HDR JPEG</strong> is an ordinary JPEG — every viewer shows it — carrying a small
-              second picture, the <strong>gain map</strong>: how much brighter each pixel may go on a display with
-              headroom. A viewer that reads gain maps (a phone, a recent browser on an HDR screen) lifts the
-              highlights; everything else shows the base.
-            </p>
-            <p>
-              The map is measured, never invented: the picture is developed again, darker by the stops asked, and
-              where the SDR ran out at white the sensor’s own highlights are what the map carries. Only a picture{' '}
-              <strong>developed on its RAW</strong> has them — an 8-bit render holds nothing above white and leaves
-              as a plain JPEG, said in the run. The file is read back and its map checked against the rendition
-              before it is called Ultra HDR.
-            </p>
-          </>
-        }
-      >
-        <SwitchRow
-          label="Deliver Ultra HDR JPEG"
-          name="Ultra HDR"
-          checked={settings.hdr}
-          onChange={(hdr) => onSettings({ hdr })}
-          hintShown
-          hint={<p>{hdrSupport().line}</p>}
-        />
-        {settings.hdr && (
-          <FieldRow label="Reach" hint="how far above white the map may reach — the RAW is developed this much darker to find what is there">
-            <SelectField
-              label="HDR reach"
-              value={String(settings.hdrStops)}
-              options={HDR_STOPS}
-              onChange={(id) => onSettings({ hdrStops: Number(id) })}
+        <InspectorSection
+          id="develop.watermark"
+          title="Watermark"
+          info={
+            <>
+              <p>
+                A line of text drawn on the file, in a corner or along the bottom edge. The style is the
+                roll’s; each target above says whether it carries it, so the copy that goes online can
+                be signed and the one kept for the archive left clean.
+              </p>
+              <p>
+                The line is a template: <code>{'{creator}'}</code> is the name set under Metadata,{' '}
+                <code>{'{year}'}</code> the year the picture was TAKEN, <code>{'{title}'}</code> the
+                picture’s own. A line that names its author before a name is set is not drawn. Its
+                size is a share of the file’s short side, so a 1080 px copy and the full picture carry
+                the same mark, and it is drawn after the screen sharpening.
+              </p>
+            </>
+          }
+        >
+          <FieldRow label="Line">
+            <TextField
+              label="Watermark line"
+              value={settings.watermark.text}
+              placeholder={DEFAULT_WATERMARK.text}
+              onChange={(text) => onSettings({ watermark: { ...settings.watermark, text } })}
             />
           </FieldRow>
-        )}
-        {hdrRun && !exporting && (
-          <p className="m-0 font-mono text-2xs text-ink-soft" role="status">
-            {describeHdrRun(hdrRun)}
-          </p>
-        )}
-      </InspectorSection>
+          <FieldRow label="Reads" align="start">
+            <span className={`font-mono text-sm leading-snug pt-1 ${markPreview ? 'text-ink' : 'text-muted'}`}>
+              {markPreview || (settings.watermark.text.includes('{creator}') && !identity.creator ? 'nothing yet — set a creator under Metadata' : 'nothing — the line is empty')}
+            </span>
+          </FieldRow>
+          <FieldRow label="Where">
+            <SelectField
+              label="Watermark position"
+              value={settings.watermark.position}
+              options={WATERMARK_POSITION_OPTIONS}
+              onChange={(position) => onSettings({ watermark: { ...settings.watermark, position } })}
+            />
+          </FieldRow>
+          <FieldRow label="Size">
+            <RangeField
+              label="Watermark size"
+              min={WATERMARK_LIMITS.size.min}
+              max={WATERMARK_LIMITS.size.max}
+              step={0.5}
+              value={settings.watermark.size}
+              onChange={(size) => onSettings({ watermark: { ...settings.watermark, size } })}
+              format={(v) => `${v.toFixed(1)} %`}
+            />
+          </FieldRow>
+          <FieldRow label="Opacity">
+            <RangeField
+              label="Watermark opacity"
+              min={WATERMARK_LIMITS.opacity.min}
+              max={WATERMARK_LIMITS.opacity.max}
+              step={0.05}
+              value={settings.watermark.opacity}
+              onChange={(opacity) => onSettings({ watermark: { ...settings.watermark, opacity } })}
+              format={(v) => `${Math.round(v * 100)} %`}
+            />
+          </FieldRow>
+          <FieldRow label="Tone">
+            <Segmented
+              size="sm"
+              label="Watermark tone"
+              value={settings.watermark.tone}
+              onChange={(tone) => onSettings({ watermark: { ...settings.watermark, tone: tone as WatermarkTone } })}
+              options={[
+                { id: 'light', label: 'Light' },
+                { id: 'dark', label: 'Dark' },
+              ]}
+            />
+          </FieldRow>
+          <FieldRow label="Drawn on" align="start">
+            <span className="font-mono text-2xs leading-snug text-muted pt-1">
+              {marked.length ? marked.join(' · ') : 'no target yet — switch it on under a target above'}
+            </span>
+          </FieldRow>
+        </InspectorSection>
 
-      <InspectorSection
-        id="develop.deliver"
-        title="Deliver"
-        info={
-          <>
-            <p>
-              Into a folder you choose, or downloaded one by one where the browser has no folder
-              picker. A picture that is not in the Library is skipped and said. The export buttons
-              stay pinned at the bottom of this tab: the main one exports the pictures that leave,
-              its menu this picture, the filmstrip’s selection, or only what is new or changed.
-            </p>
-            <p>
-              A picture leaves under its own name, so the name it wants is often one the folder
-              already holds. <strong>Replace</strong> off writes <code>-1</code>, <code>-2</code>
-              beside what is there and says how many; on, the file of that name is overwritten —
-              and a folder that ignores capitals, as macOS does, reads <code>DJI_0101.jpg</code> and{' '}
-              <code>DJI_0101.JPG</code> as one file. A download never asks: the browser numbers a
-              repeat by itself.
-            </p>
-            <p>
-              Sending the pictures home to your Winnow is not offered: its upload files them into the
-              incoming as new captures rather than into the Gallery, so they would be neither where
-              you keep them nor linked to their original.
-            </p>
-          </>
-        }
-      >
-        <SwitchRow
-          label="Replace a file of the same name"
-          name="Replace files of the same name"
-          checked={settings.replace}
-          onChange={(replace) => onSettings({ replace })}
-          hint={
-            settings.replace
-              ? 'What the folder holds under that name is overwritten.'
-              : 'A name already in the folder is numbered — DJI_0101-1.jpg.'
-          }
+        {pictures && (
+          <InspectorSection
+            id="develop.pictures"
+            title="Pictures"
+            info={
+              <>
+                <p>
+                  Which pictures leave. By default the ones you EDITED do; a click on a row gives the
+                  other answer — send a picture you did not touch, hold back one you did — and{' '}
+                  <strong>↺</strong> puts it back on the rule. <kbd>P</kbd> does the same on the picture on
+                  the stage, <kbd>U</kbd> puts it back on the rule.
+                </p>
+                <p>
+                  An <strong>ignored</strong> picture (<kbd>M</kbd>) is out of the roll’s work: it never
+                  leaves, the arrows step over it, “apply to the others” leaves it alone. It is folded at
+                  the bottom; a click there brings it back.
+                </p>
+              </>
+            }
+          >
+            {pictures}
+          </InspectorSection>
+        )}
+
+        <MetadataSection
+          identity={identity}
+          onIdentity={(next) => void setDeliveryIdentity(next)}
+          openExif={openExif}
+          picture={picture}
+          onWords={onWords}
+          choice={settings.metadata}
+          onChoice={(metadata) => onSettings({ metadata })}
         />
-      </InspectorSection>
+
+        <InspectorSection
+          id="develop.hdr"
+          title="HDR"
+          info={
+            <>
+              <p>
+                An <strong>Ultra HDR JPEG</strong> is an ordinary JPEG — every viewer shows it — carrying a small
+                second picture, the <strong>gain map</strong>: how much brighter each pixel may go on a display with
+                headroom. A viewer that reads gain maps (a phone, a recent browser on an HDR screen) lifts the
+                highlights; everything else shows the base.
+              </p>
+              <p>
+                The map is measured, never invented: the picture is developed again, darker by the stops asked, and
+                where the SDR ran out at white the sensor’s own highlights are what the map carries. Only a picture{' '}
+                <strong>developed on its RAW</strong> has them — an 8-bit render holds nothing above white and leaves
+                as a plain JPEG, said in the run. The file is read back and its map checked against the rendition
+                before it is called Ultra HDR.
+              </p>
+            </>
+          }
+        >
+          <SwitchRow
+            label="Deliver Ultra HDR JPEG"
+            name="Ultra HDR"
+            checked={settings.hdr}
+            onChange={(hdr) => onSettings({ hdr })}
+            hintShown
+            hint={<p>{hdrSupport().line}</p>}
+          />
+          {settings.hdr && (
+            <FieldRow label="Reach" hint="how far above white the map may reach — the RAW is developed this much darker to find what is there">
+              <SelectField
+                label="HDR reach"
+                value={String(settings.hdrStops)}
+                options={HDR_STOPS}
+                onChange={(id) => onSettings({ hdrStops: Number(id) })}
+              />
+            </FieldRow>
+          )}
+          {hdrRun && !exporting && (
+            <p className="m-0 font-mono text-2xs text-ink-soft" role="status">
+              {describeHdrRun(hdrRun)}
+            </p>
+          )}
+        </InspectorSection>
+
+        <InspectorSection
+          id="develop.deliver"
+          title="Deliver"
+          info={
+            <>
+              <p>
+                Into a folder you choose, or downloaded one by one where the browser has no folder
+                picker. A picture that is not in the Library is skipped and said. The export buttons
+                stay pinned at the bottom of this tab: the main one exports the pictures that leave,
+                its menu this picture, the filmstrip’s selection, or only what is new or changed.
+              </p>
+              <p>
+                A picture leaves under its own name, so the name it wants is often one the folder
+                already holds. <strong>Replace</strong> off writes <code>-1</code>, <code>-2</code>
+                beside what is there and says how many; on, the file of that name is overwritten —
+                and a folder that ignores capitals, as macOS does, reads <code>DJI_0101.jpg</code> and{' '}
+                <code>DJI_0101.JPG</code> as one file. A download never asks: the browser numbers a
+                repeat by itself.
+              </p>
+              <p>
+                Sending the pictures home to your Winnow is not offered: its upload files them into the
+                incoming as new captures rather than into the Gallery, so they would be neither where
+                you keep them nor linked to their original.
+              </p>
+            </>
+          }
+        >
+          <SwitchRow
+            label="Replace a file of the same name"
+            name="Replace files of the same name"
+            checked={settings.replace}
+            onChange={(replace) => onSettings({ replace })}
+            hint={
+              settings.replace
+                ? 'What the folder holds under that name is overwritten.'
+                : 'A name already in the folder is numbered — DJI_0101-1.jpg.'
+            }
+          />
+        </InspectorSection>
+      </LockSections>
     </>
   );
 }

@@ -288,6 +288,20 @@ spot no badge owns), pointer-transparent so a cell still opens its picture,
 and the run's task is SCOPED (`runScope(roll.id)`) so a `TaskEdge` draws its
 hairline along the strip's top. A Cancel from the bar or the pill shows at
 once (`cancelling`), the picture in hand letting go when it can.
+**A run LOCKS what it no longer reads, and nothing else** (2026-09-28, his
+pick L2). The run renders from the roll, its export settings and the
+identity as they were at the click, so an edit cannot reach a file in flight
+— the risk was never corruption, it was a control that LOOKS as if it acted
+on the run. So while a run goes on: the Export tab's section bodies are inert
+and dim (`LockSections`, `frontend.md`) under a sticky notice naming the
+click's time; which pictures leave is refused from its other doors too (`P`,
+`U`, `M`, the strip's badge, tick-all — `LOCKED_DELIVERY`, said in the status
+line); retouching stays FREE, the whole point of a non-blocking run. At the
+end, the pictures edited meanwhile are NAMED first in the note
+(`editedDuringRun`, the export marks' own fingerprint, so the sentence and
+the table's `changed` cannot disagree) and "Export new or changed" sends
+them. Rejected: locking a queued picture's retouching (L3 — it blocks the
+very pictures one wants to fix) and a blocking window (V3).
 **E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
 moved to the top-right to make room); a click toggles, a right-click or a
 550 ms touch hold ignores ↔ brings back, and the click that ends a hold is

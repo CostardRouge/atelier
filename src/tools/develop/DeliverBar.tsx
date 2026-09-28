@@ -202,6 +202,11 @@ function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; expo
           {progress.cancelling ? 'Cancelling…' : 'Cancel'}
         </Button>
       </div>
+      {/* L2: the run's settings are the click's, and the Export tab is locked
+          until it ends — said here too, on whichever tab is open. */}
+      <span className="font-mono text-3xs text-faint leading-snug">
+        Settings as at {new Date(progress.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} · an edit now goes to the next export
+      </span>
     </div>
   );
 }

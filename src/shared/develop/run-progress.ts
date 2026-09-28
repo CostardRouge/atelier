@@ -12,6 +12,9 @@
  * Pure and DOM-free; the export hook (`use-roll-export.ts`) drives it.
  */
 
+import { exportKey } from './export-marks';
+import { pictureLabel, type RollPicture } from './roll-types';
+
 /** One picture of a run. `failed` is a picture that did not leave — skipped, refused or broken. */
 export type RunPictureState = 'queued' | 'active' | 'done' | 'failed';
 
@@ -128,4 +131,26 @@ export function describeTimeLeft(seconds: number | null): string | null {
   if (seconds < 5) return 'almost done';
   if (seconds < 90) return `about ${Math.round(seconds / 5) * 5} s left`;
   return `about ${Math.round(seconds / 60)} min left`;
+}
+
+/**
+ * The pictures of a run that were EDITED while it went on (L2 of the lab):
+ * the run renders from the roll as it was at the click, so their files are
+ * from before — measured with the export marks' own fingerprint, so what is
+ * said here is exactly what the table will call `changed` afterwards.
+ */
+export function editedDuringRun(sent: readonly RollPicture[], now: readonly RollPicture[]): RollPicture[] {
+  const current = new Map(now.map((p) => [p.id, p]));
+  return sent.filter((p) => {
+    const later = current.get(p.id);
+    return later !== undefined && exportKey(later) !== exportKey(p);
+  });
+}
+
+/** The run's first sentence when a picture moved under it — or null when none did. */
+export function describeEditedDuring(pictures: readonly RollPicture[]): string | null {
+  if (pictures.length === 0) return null;
+  const who = pictures.length === 1 ? pictureLabel(pictures[0]) : `${pictures.length} pictures`;
+  const were = pictures.length === 1 ? 'was' : 'were';
+  return `${who} ${were} edited during the export and left as ${pictures.length === 1 ? 'it was' : 'they were'} at the click — Export new or changed sends ${pictures.length === 1 ? 'it' : 'them'} again.`;
 }

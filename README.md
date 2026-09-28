@@ -1429,6 +1429,14 @@ time: a picture still to go is veiled, the one in hand turns, a written one
 shows ✓ and one that could not leave shows !, and a hairline along the strip's
 top fills as the run goes.
 
+An export works from the roll **as it was when you pressed the button**. While
+it runs, the Export tab is locked and dimmed under a line that says so — its
+settings, and which pictures leave (the **P** / **U** / **M** keys and the
+strip's badges say they are locked too), would only apply to the next export.
+Developing, cropping and every other edit stay free: a picture you change
+while the roll leaves is named when the run ends, its row says **changed**,
+and **Export new or changed** sends it again.
+
 **Variants.** One frame, developed two ways — cropped square and 4:5, or in
 colour and in black and white — is two **variants** of it, Lightroom's virtual
 copies and Capture One's variants. **⌘'** (or **Add → a variant of … as

@@ -21,7 +21,7 @@
  * and a card per block would be the boxes-in-boxes the audit removed.
  */
 
-import { createContext, useContext, useId, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
+import { createContext, useContext, useId, useLayoutEffect, useRef, useState, type CSSProperties, type MouseEvent, type ReactNode, type SelectHTMLAttributes } from 'react';
 import InfoDot, { InfoDotButton } from './InfoDot';
 import { Icons } from './icons';
 
@@ -102,6 +102,9 @@ export function InspectorSection({
   const [remembered, setRemembered] = useState(() => readOpen(id, defaultOpen, remember));
   const open = !foldable || (controlled ?? remembered);
   const bodyId = useId();
+  const locked = useContext(SectionsLocked);
+  const bodyRef = useInert<HTMLDivElement>(locked);
+  const actionsRef = useInert<HTMLSpanElement>(locked);
   const toggle = () => {
     if (controlled !== undefined) {
       onOpenChange?.(!controlled);
@@ -173,7 +176,11 @@ export function InspectorSection({
         )}
         {info && <InfoDot about={title.toLowerCase()}>{info}</InfoDot>}
         <span data-fold className="flex-1 self-stretch" />
-        {open && actions}
+        {open && actions && (
+          <span ref={actionsRef} className={`contents ${locked ? '[&>*]:opacity-45' : ''}`}>
+            {actions}
+          </span>
+        )}
         {foldable && (
           <span
             data-fold
@@ -187,7 +194,12 @@ export function InspectorSection({
         )}
       </div>
       {open && (
-        <div id={bodyId} className="flex flex-col gap-2.5 pt-2.5">
+        <div
+          ref={bodyRef}
+          id={bodyId}
+          aria-disabled={locked || undefined}
+          className={`flex flex-col gap-2.5 pt-2.5 ${locked ? 'opacity-45 select-none' : ''}`}
+        >
           {children}
         </div>
       )}
@@ -204,6 +216,29 @@ export function InspectorSection({
  * (`hintShown`) stays in the open either way.
  */
 const HintsFolded = createContext(false);
+
+/**
+ * Sections whose BODY is locked — what a host sets while a run it started
+ * goes on from settings taken at the click (Develop's Export tab during an
+ * export, L2 of the 2026-09-28 lab): a control that looks live but no longer
+ * reaches what is running is a lie, so the body goes inert and dim. The band
+ * stays alive — a section still folds, its ⓘ still opens — and the host says
+ * WHY above them; a lock nobody explains reads as a bug.
+ */
+const SectionsLocked = createContext(false);
+
+export function LockSections({ locked, children }: { locked: boolean; children: ReactNode }) {
+  return <SectionsLocked.Provider value={locked}>{children}</SectionsLocked.Provider>;
+}
+
+/** An element made inert while `locked` — React 18 has no `inert` prop, the DOM does. */
+function useInert<T extends HTMLElement>(locked: boolean) {
+  const ref = useRef<T>(null);
+  useLayoutEffect(() => {
+    if (ref.current) ref.current.inert = locked;
+  });
+  return ref;
+}
 
 export function FoldHints({ children }: { children: ReactNode }) {
   return <HintsFolded.Provider value>{children}</HintsFolded.Provider>;

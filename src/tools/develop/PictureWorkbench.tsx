@@ -2065,6 +2065,7 @@ export default function PictureWorkbench({
               proxiesOnly={proxiesOnly}
               onProxiesOnly={onProxiesOnly}
               exporting={exports.exporting}
+              lockedSince={exports.progress?.startedAt ?? null}
               hdrRun={exports.lastRun?.hdr ?? null}
               pictures={deliveryTable}
               openExif={shotExif}

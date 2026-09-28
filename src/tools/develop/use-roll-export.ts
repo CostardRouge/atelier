@@ -73,6 +73,8 @@ import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/r
 import {
   atStep,
   cancelRun,
+  describeEditedDuring,
+  editedDuringRun,
   enterPicture,
   finishPicture,
   startRun,
@@ -730,13 +732,16 @@ export function useRollExport({
       }
       // A cancelled run keeps what it rendered: written as it went, and said as such.
       latest.current.onDelivered?.(landed, Date.now());
-      setNote(
+      // What moved under the run is said FIRST: it is the one line that asks
+      // for something, and the marks will call those pictures `changed`.
+      const moved = describeEditedDuring(editedDuringRun(landed, latest.current.roll.pictures));
+      const outcome =
         (cancelled ? `Cancelled after ${renderedCount} of ${targets.length} — ` : '') +
-          describeRun(written.count, method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...written.errors], written.renamed, {
-            pictures: renderedCount,
-            targets: r.export.targets.length,
-          }),
-      );
+        describeRun(written.count, method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...written.errors], written.renamed, {
+          pictures: renderedCount,
+          targets: r.export.targets.length,
+        });
+      setNote(moved ? `${moved} ${outcome}` : outcome);
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
