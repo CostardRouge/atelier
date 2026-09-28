@@ -99,68 +99,81 @@ brought along).
 
 ```
 apple/
-  project.yml                 the Xcode project, generated from this — never edit the .xcodeproj
-  Support/                    the macOS entitlements; the Info.plists are generated here too
-  Packages/AtelierKit/        the KERNEL: pure Swift, no Apple framework, tested on Linux
-    Sources/AtelierKit/       one file per web module (Transfer, Curves, Develop, CubeLut, LutStack,
-                              Framing, Telemetry, Histogram, Roll, JSONValue)
-    Tests/AtelierKitTests/    the web app's specs, ported one for one
+  project.yml                 the Xcode project, generated from this — never edit the .xcodeproj;
+                              bundles the web's own public/luts, lut-thumbs, reference and geo/cities.json
+                              as folder references (never a copy under apple/)
+  Support/                    the entitlements; the Info.plists are generated here too
+  Scripts/                    linux-toolchain.sh (the kernel's compiler in a Linux container),
+                              check-test-names.sh (names only macOS would refuse — run before a push)
+  Packages/AtelierKit/        the KERNEL: pure Swift, Foundation only, tested on Linux and macOS —
+    Sources/AtelierKit/       every DOM-free module of ../src/shared and the tools' pure logic, one
+                              file per web module, grouped as the web groups them (Develop, Lut, Film,
+                              Render, Raw, Lens, HDR, Exif, Media, Library, Sources, Projects, Overlay,
+                              Roadtrip, Roadtrip/Hooks, Audio, Telemetry, Tasks, History, UI, Lib)
+    Tests/AtelierKitTests/    the web app's specs, ported one for one (4,300+)
   Atelier/                    the app, one source tree for both targets (#if os(...) where they differ)
-    App/                      @main, the shell (tab bar on iOS, sidebar on the Mac), the four tools
-    Theme/                    Studio Papier as SwiftUI tokens, and the darkroom
-    Render/                   PictureRenderer — decode, crop, cap, the kernel's cube through Core Image, encode
-    Develop/                  RollStore (the roll on disk + where each picture's bytes are), RollEditor,
-                              RollsView, RollView (stage + filmstrip + inspector), the three panels
-    Resources/                the app icon set, rasterised from ../public/icons/*.svg; the four brand
-                              faces (OFL TTFs from google/fonts) registered at launch by `Brand`
+    App/                      @main, the shell (tab bar + More on iOS, sidebar on the Mac), the tools
+    Theme/                    Studio Papier as SwiftUI tokens, the darkroom, the four brand faces
+    Render/                   the render GRAPH: Core Image kernels (Kernels/*.metal, compiled at build
+                              time), the passes in the web's order, FrameGrader, PictureRenderer
+    Paint/                    a canvas-2D API over Core Graphics + Core Text, and the overlay painter
+    Video/                    the one AVFoundation export pipeline, thumbnails, stills from a clip
+    Develop/                  the Develop tool — store, stage, inspector, every tab, the render plan
+    Studio/                   the Studio — gallery, editor, stage, the overlay panels, export
+    Trips/                    Trips — store, painters, gallery, overview, stages, settings, the piece editor
+    Library/                  the shell's Library, its instance tab and the lightbox
+    Look/                     looks: the vault on disk (SharedVault), the gallery, the grade panel
+    Sources/                  Winnow connections, the transport, document store + sync, the pill
+    Tasks/                    TaskCenter, the progress pill and a media's edge
+    Instruments/              DJI Telemetry, Flight Map, Photo EXIF, Compare A/B, LUT studio, Composer
+  AtelierTests/               the RENDER GATE: every Core Image kernel held to its kernel twin on a real
+                              Metal device (CI's macOS runner), plus the painters, exports and stores
 ```
 
-## Run-sheet — what is built, in commits, and what comes next
+Every screen family carries a `PARITY.md` beside its views: the web's
+behaviours one row each, ✅ built · ≠ built differently on purpose · ⏳ deferred
+and why.
 
-One commit = one task, sized in commits and never in days (`../MEMORY.md`).
-Everything below the line is what feature parity with the web app still needs,
-in the order that pays first; stop the run wherever you want.
+## Run-sheet — what is built, and what comes next
+
+One commit = one task, sized in commits and never in days (`../MEMORY.md`);
+`git log` on this branch is the detailed record. Stop the run wherever you want.
 
 ### Built
 
-| # | Commit | Delivers | Verified by |
-|---|---|---|---|
-| 1 | Port the suite's kernel to Swift | `AtelierKit`: transfer curves, tone curves + levels, the develop maths, `.cube` parsing + trilinear/tetrahedral sampling, the LUT stack bake, the framing transform, DJI telemetry (SRT, motion, time scale), histogram + Auto, the roll document + file, `JSONValue` | the web's specs ported: `swift test` green on Linux and macOS |
-| 2 | Apple CI | `swift test` on ubuntu (`swift:5.10`) and on macOS, `xcodebuild` for iOS and macOS unsigned | the workflow itself |
-| 3 | Follow main's roll v6 | export targets (four size modes, a cap that never upscales), delivery states, words, variants, `pictureEdits`, fresh picture ids on import; mixer / mono / grading / rawWb CARRIED on the develop | specs |
-| 4 | App skeleton | XcodeGen project, two targets, the shell, Studio Papier + darkroom tokens, the icon set, honest placeholders for Trips · Studio · Sources | both targets build on CI |
-| 5 | Develop v0 | rolls (list, new, rename, delete), import from Photos and Files, the stage on a pixel budget, hold-to-compare, histogram + info stack under `I`, the eleven sliders written through, Auto tone / Auto colour, aspect + straighten + mirror, JPEG/HEIC export with the original's EXIF through the file exporter or into Photos | builds on CI; NOT yet run on a device |
+| Area | Delivers | Verified by |
+|---|---|---|
+| Kernel | every DOM-free module of the web ported with its spec: develop, curves, levels, mixer, grading, B&W, presence, detail, repair, layers + masks, crop, border, keystone, lens + Lensfun, RAW calibration, HDR gain map + Ultra HDR, film stocks + grain, LUTs + packs + vault, EXIF read/write, renditions, the roll, the Studio project, the trip (v1→v28), the openers' plans, the overlay engine, telemetry, audio voices, the Winnow client, document sync, history | 4,300+ specs green on Linux and macOS on every push |
+| Render graph | the web's float16 multi-pass graph as Core Image kernels: tetrahedral cube, gain map, camera warp, lens, keystone, repair, chroma, denoise, defringe, presence, sharpen, layers, subject masks (Vision), post-crop vignette, film, clipping | the render gate: each kernel against its twin on a real Metal device |
+| Develop | rolls, filmstrip + batch, every Adjust section, Crop (zone, borders, perspective, lens), Layers + masks, Repair + dust, the Look tab, the full pixel path (RAW through `CIRAWFilter` on the web's calibration ladder), the export run (targets, metadata, watermark, Ultra HDR, Photos or a folder), rolls + presets + pictures on a Winnow | builds; the render plan's order and the export path in the gate |
+| Studio | gallery, editor, stage (preview = export), transport, trim, every overlay panel, the Library's media, lost instance media fetched back, the Export tab through the one video pipeline, finals home | builds; two real H.264 exports in the gate |
+| Trips | the trip store + sync + thumbnails, every opener painter (Défilé, the Itinerary, Virée's software-3D car), the badge, the deliveries, the gallery, the new-trip / dates / cover sheets, the overview (calendar of months, year map, day strip, adjust on the calendar), the stages and the itinerary from a Winnow, ⚙ Trip and the garage, the piece editor (stage, the band «Aiguille», Content · Look · Picture · Export, the openers' panels and picture chooser, the Studio bridge) | builds; each opener and the badge painted at two sizes in the gate |
+| Library, Sources, Tasks | local files by bookmark, an instance's day as a live view, drag into a tool, one lightbox; Winnow connections, `If-Match` sync, the sync pill; the progress pill and a media's edge | builds; the transport and stores in the gate |
+| Instruments | DJI Telemetry, Flight Map (MapKit opt-in), Photo EXIF, Compare A/B, LUT studio, Composer, the legacy overlay page as a pointer | builds |
 
 ### Next, in order
 
-| # | Commit | Delivers | Why this order |
+| # | Commit(s) | Delivers | Why |
 |---|---|---|---|
-| 6 | First run on a device | what the simulator and the phone say about #5 — the RAW decode through `CIRAWFilter`, the export's EXIF read back in Lightroom / Preview, the Photos and Files paths, the darkroom at night | nothing above has been SEEN; every later commit builds on this one's findings |
-| 7 | Port `mixer.ts`, `grading.ts`, `raw/white-balance.ts` | the four carried develop stages RENDERED, so a roll developed on the web looks the same here | today the stage says "not rendered here yet" on such a picture |
-| 8 | Tetrahedral sampling | a Metal (or CIKernel) colour cube sampled the way the web's shader does | the one measured gap in "preview = the web" |
-| 9 | The crop stage | the classic crop: the zone drawn over the whole picture under a veil, pinch/drag, `crop-rect.ts` ported | v0 has aspect + straighten + mirror only |
-| 10 | The rest of the picture | border, keystone, lens (+ Lensfun profile), detail, vignette, repair, layers + masks, film texture — each a render pass, in the web's order (`picture-geometry.ts`) | today carried, not rendered; the biggest block, one pass per commit |
-| 11 | Looks | the built-in LUTs (`../public/luts`, 37 MB — a picked subset or fetched on demand, a decision for the maintainer), the personal vault, film stocks; `RollGrade` rendered | `composeLutStack` already takes layers; only the sources are missing |
-| 12 | Batch and undo | Shift/⌘-click selection, copy / paste / apply-to by sections, the preset book, a document undo stack | the web's time-savers |
-| 13 | Export as the web does it | every target of the roll into sub-folders, the roll's export run with progress and Cancel, the metadata groups, the watermark, Ultra HDR from a RAW | v0 writes the first target of one picture |
-| 14 | The partial hash | `partial-hash.ts` ported, so a picture matches across devices and a Winnow by CONTENT | today matched by name and size |
-| 15 | Sources: a Winnow | connect, the document bucket with `If-Match`, rolls kept there and pulled here, pictures fetched by asset id | the web's `shared/sources/winnow` client, its wire shape already checked against Winnow's code |
-| 16 | Background and the Live Activity | the export run as a `BGContinuedProcessingTask` with a Live Activity — the honest face of "background" from the design canvas | the reason the native app was asked for |
-| 17 | Studio | AVFoundation decode/encode, the telemetry overlay engine (a large port: `shared/overlay/`), HEVC and 10-bit in and out | the capability leap the brief promised |
-| 18 | Trips | the trip document, the calendar, the openers (a large port: `shared/roadtrip/`) — or never, both clients sharing Winnow documents | gains least from native, per the brief |
+| 1 | First run on a device | what the simulator, the iPhone and the Mac say: the RAW decode through `CIRAWFilter`, the export's EXIF read back in Lightroom / Preview, the Photos and Files paths, the darkroom at night, every SwiftUI API marked "guessed" in the `PARITY.md` files and the agents' reports | nothing above has been SEEN; everything after builds on this one's findings |
+| 2 | Measure against the web | the same roll, trip and project opened in both apps, pixels compared (the render gate compares kernels, not whole pictures); `rawGain` on the system's demosaic | preview = the web is claimed kernel by kernel only |
+| 3 | Background and the Live Activity | the export runs as a `BGContinuedProcessingTask` with a Live Activity — the honest face of "background" from the design canvas | the reason the native app was asked for |
+| 4 | The ⏳ rows | what each `PARITY.md` still lists, each with its reason | mostly SwiftUI limits (a pinch's live centre) and web-first items |
 
 ### Known gaps in what is built, recorded rather than left to be found
 
-- `CIColorCubeWithColorSpace` samples the cube trilinearly; the web samples
-  tetrahedrally. On a develop-only cube every grey stays grey either way; the
-  difference is bounded by a lattice cell and shows only on an asymmetric look (#8).
-- A develop carrying a mixer, black and white, grading or a RAW white balance is
-  shown WITHOUT them, and the stage says so (#7). The export says it too.
+- **Nothing has run on a device or a simulator.** The app is written from a
+  Linux container; CI's macOS runner is its only compiler and the render gate its
+  only eye.
 - The RAW path is Apple's developer, not LibRaw: the sensor is demosaiced by
-  `CIRAWFilter` with its own defaults, so a RAW's `base: gain` and `rawGain`
-  from the web do not mean the same pixels here yet. Unmeasured (#6).
+  `CIRAWFilter` at its plainest, the graph applying the DNG's own opcodes, so a
+  web develop's `rawGain` lands on other pixels here. Unmeasured.
+- Colour management is OFF in the render context (as in Chrome): a Display P3
+  photo is read as sRGB codes and looks slightly flatter than a colour-managed
+  viewer shows it.
 - A Photos pick has no persistent handle without library permission, so its
-  bytes are COPIED into the app's container; a file picked in Files or the
-  Finder is remembered by a security-scoped bookmark and never copied.
-- Nothing has run on a device or in a simulator: the app was written from a
-  Linux container with no Swift toolchain, and CI is its first compile.
+  bytes are COPIED into the app's container; a file picked in Files or the Finder
+  is remembered by a security-scoped bookmark and never copied.
+- The audio bed is rendered at time zero (`AVAssetWriter` records the AAC
+  priming in its edit list, which the web's muxer cannot), and sync is claimed
+  only once a native export is decoded back — not yet done.
