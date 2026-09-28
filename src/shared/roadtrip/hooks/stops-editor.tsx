@@ -17,6 +17,7 @@
 import { useState } from 'react';
 import PlaceSearchField from '../../map/PlaceSearchField';
 import Button from '../../ui/Button';
+import { Icons } from '../../ui/icons';
 import { FieldRow, NumberField } from '../../ui/Inspector';
 import { formatCoords } from '../trip-places';
 import { newId } from '../trip-types';
@@ -66,6 +67,8 @@ export interface StopsEditorProps {
   pictureHint: string | null;
   /** Said under the row when `pictureHint` is null. */
   picturesOffHint?: string;
+  /** The opener's name, for the big map's title. */
+  title?: string;
 }
 
 export default function StopsEditor({
@@ -77,6 +80,7 @@ export default function StopsEditor({
   host,
   pictureHint,
   picturesOffHint = 'This opener shows no picture right now, so nothing a stop holds is drawn.',
+  title,
 }: StopsEditorProps) {
   const [selectedId, selectStop] = useState<string | null>(() => lastSelectedStop);
   const setSelectedId = (id: string | null) => {
@@ -123,8 +127,29 @@ export default function StopsEditor({
       }
     : null;
 
+  // The big map is the shell's (it reads the town index, and may fetch tiles
+  // when asked); the result replaces the list the way any edit here does.
+  const openMap = host?.editStopsOnMap
+    ? async () => {
+        const next = await host.editStopsOnMap?.(stops, { title });
+        if (!next) return;
+        onChange(next);
+        if (lastSelectedStop && !next.some((stop) => stop.id === lastSelectedStop)) setSelectedId(null);
+      }
+    : null;
+
   return (
     <div className="flex flex-col gap-2">
+      {openMap && (
+        <Button
+          size="sm"
+          variant={stops.length === 0 ? 'primary' : 'default'}
+          icon={Icons.map}
+          onClick={() => void openMap()}
+        >
+          {stops.length === 0 ? 'Pick them on a map…' : 'Open the map…'}
+        </Button>
+      )}
       <MapField
         stops={stops}
         places={free}
@@ -136,8 +161,9 @@ export default function StopsEditor({
         onMove={(id, at) => onChange(patchStop(stops, id, at))}
       />
       <p className="m-0 text-2xs text-faint">
-        Click the map to drop a stop, drag one to move it, click a hollow ring to take one
-        of the trip’s own places. Nothing here is fetched — no tiles, no basemap.
+        {openMap
+          ? 'The big map is for finding places — tap one, two, three. This small one is the drawing as it goes out: click to drop a stop, drag one to move it, a hollow ring is one of the trip’s own places.'
+          : 'Click the map to drop a stop, drag one to move it, click a hollow ring to take one of the trip’s own places. Nothing here is fetched — no tiles, no basemap.'}
       </p>
 
       {stops.length === 0 && places.length > 1 && (

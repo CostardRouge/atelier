@@ -172,6 +172,10 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **Trap.** MapLibre adds `.maplibregl-map` to its container, and that stylesheet — loaded *after* Tailwind — sets `position: relative`, overriding an `absolute inset-0` container and dropping it to `height: 0`. The symptom is a black map with the overlays still visible. **Remedy**: give the map container a real height as a flex child (`flex-1 min-h-0`), never rely on absolute positioning, and call `map.resize()` once the style loads as insurance against a 0-size measurement during the async (dynamic-import) mount.
 
+## A MapLibre Marker belongs to MapLibre's transform; its text needs a glyph server (2026-09-28)
+
+**Traps, measured on Trips' picking map.** MapLibre positions a `Marker` by writing its element's `style.transform`, so assigning `style.cssText` to restyle it (a selection, a new number) throws the marker to the map's corner until the next move — size the element once and draw into CHILDREN. A `symbol` layer's text needs a `glyphs` URL, which is a request to a font server: a tiles-free map writes names as HTML over the canvas, pointer-transparent, laid out from `map.project` per frame (`shared/map/pick-map.ts`, `labelTowns`). The map's `click` fires for a press on a marker too; filter by the event target. And the map element takes `blockNativeZoom`, like any surface answering a pinch.
+
 ## MapLibre is dynamically imported, JS *and* CSS (2026-08-20)
 
 **Decision.** `use-flight-map.ts` and `use-composer-map.ts` import MapLibre lazily. **Why**: it is a heavy dependency and only two tools use it; static import would put it in the main bundle for everyone. **How to apply**: keep the import inside the hook, and keep the "map failed to load" state — the caller shows a fallback instead of a broken pane. The live-position marker uses inline styles so it never depends on the CSS scanner picking up dynamically-built class names.

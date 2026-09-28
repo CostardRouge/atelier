@@ -224,6 +224,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             free={otherPlaces(stages, o.stops)}
             curve={o.path === 'curved' ? 0.12 : 0}
             host={host}
+            title="Virée"
             pictureHint={
               o.pictures === 'none'
                 ? null

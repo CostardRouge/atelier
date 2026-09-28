@@ -40,10 +40,11 @@ Today it ships ten tools, converging into a few editors:
 > *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The **base map** under a flight path, in the Flight Map and the Composer:
->   turning it on fetches map tiles from OpenStreetMap, which reveals the
->   viewed area to that tile server. The flight path itself always draws
->   locally.
+> - The **base map** under a flight path, in the Flight Map and the Composer,
+>   and under the map Trips' openers pick their stops on: turning it on
+>   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
+>   tile server. The flight path, the stops and the towns always draw locally;
+>   the choice is never remembered past the tab.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
@@ -956,9 +957,18 @@ switch far down the list is seen on the car the moment it flips.
 your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
-from stop to stop, waiting at each for as long as you ask. There are no tiles
-and no basemap: the picking map is the very projection the export draws, run
-backwards, so what you point at is what goes out. Each stop can carry **one
+from stop to stop, waiting at each for as long as you ask. The small map in
+the panel is the very projection the export draws, run backwards, so what you
+point at is what goes out. To **find** places, **Pick them on a map…** opens a
+big one: pan, zoom and pinch it, and every tap is the next stop, joined to the
+one before as you go — one, two, three. A tap near a town takes the town and
+its name (a switch turns that off, to drop a stop exactly where you tap), a
+hollow ring is one of the trip's own places, a numbered stop is dragged to
+move it, a place can be searched for and added, and a stop you dropped with no
+name is offered the nearest town's (never given it). The towns come from the
+city index the app ships, so the map needs no network; the OpenStreetMap
+background is the optional one above, off until you turn it on. Nothing is
+written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one
 picture**, and how they are shown is the point of it: **pinned** beside their
 own dot as the pen lands (several on screen at once, on paper or bare, with a
 stem down to the dot), on a **card** under the map captioned with the stop's

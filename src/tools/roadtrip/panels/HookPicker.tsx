@@ -13,8 +13,8 @@
  *
  * The picker is also the variant panel's HOST: a panel may not open the
  * Library or ask an instance itself (`hook-variant.ts`), so the things it may
- * ask for — the picture chooser, how its pictures are loading — are handed
- * down from here, and the chooser is drawn here.
+ * ask for — the picture chooser, how its pictures are loading, the big
+ * picking map — are handed down from here, and the sheets are drawn here.
  */
 
 import { useCallback, useMemo, useState } from 'react';
@@ -28,10 +28,13 @@ import {
   type HookPickedPicture,
   type HookPictureStatus,
   type HookShelf,
+  type HookStopsChoice,
   type HookVariant,
 } from '../../../shared/roadtrip/hooks/hook-variant';
 import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registry';
+import { tripPlaces, type MapStop } from '../../../shared/roadtrip/hooks/stops';
 import HookPicturesModal from '../HookPicturesModal';
+import StopsMapSheet from '../StopsMapSheet';
 
 interface HookPickerProps {
   /** The piece's stored layers; the picker writes the first and only the first. */
@@ -52,6 +55,12 @@ interface HookPickerProps {
    * picker has no trip to write to, and the variant's panel says so instead.
    */
   onConfigureCar?: () => void;
+}
+
+interface StopsRequest {
+  stops: readonly MapStop[];
+  choice: HookStopsChoice;
+  resolve: (stops: MapStop[] | null) => void;
 }
 
 interface ChooseRequest {
@@ -80,13 +89,23 @@ export default function HookPicker({
       ),
     [],
   );
+  const [placing, setPlacing] = useState<StopsRequest | null>(null);
+  const editStopsOnMap = useCallback(
+    (stops: readonly MapStop[], choice: HookStopsChoice = {}) =>
+      new Promise<MapStop[] | null>((resolve) => setPlacing({ stops, choice, resolve })),
+    [],
+  );
   const host = useMemo<HookPanelHost>(
-    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar }),
-    [choosePictures, pictureStatus, onConfigureCar],
+    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar, editStopsOnMap }),
+    [choosePictures, pictureStatus, onConfigureCar, editStopsOnMap],
   );
   const settle = (picked: HookPickedPicture[] | null) => {
     choosing?.resolve(picked);
     setChoosing(null);
+  };
+  const settleStops = (stops: MapStop[] | null) => {
+    placing?.resolve(stops);
+    setPlacing(null);
   };
 
   return (
@@ -150,6 +169,16 @@ export default function HookPicker({
           keepsLater={choosing.choice.keepsLater}
           onCancel={() => settle(null)}
           onConfirm={(picked) => settle(picked)}
+        />
+      )}
+
+      {placing && (
+        <StopsMapSheet
+          stops={placing.stops}
+          places={tripPlaces(ctx.stages)}
+          title={placing.choice.title}
+          onCancel={() => settleStops(null)}
+          onDone={(stops) => settleStops(stops)}
         />
       )}
     </div>

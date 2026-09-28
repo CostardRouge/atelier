@@ -141,6 +141,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           free={free}
           curve={o.curve}
           host={host}
+          title="Itinerary"
           pictureHint={o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.'}
           picturesOffHint="The pictures are switched off below, so nothing a stop holds is drawn."
         />

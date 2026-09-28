@@ -27,6 +27,7 @@
 import type { ComponentType } from 'react';
 import type { SavedMediaRef } from '../../projects/project-types';
 import type { CarSpec } from '../car-spec';
+import type { MapStop } from './stops';
 import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
@@ -311,6 +312,22 @@ export interface HookPanelHost {
    * write the trip itself; absent, the panel says where the car is set.
    */
   configureCar?(): void;
+  /**
+   * Open the big picking map on these stops — pan, zoom, tap to add, drag to
+   * move, towns to take a name from — and resolve the stops as the author
+   * left them, or null when they cancelled. The shell's, like the chooser:
+   * the map reads the shipped town index and may fetch tiles when asked, and
+   * a panel never fetches.
+   */
+  editStopsOnMap?(stops: readonly MapStop[], choice?: HookStopsChoice): Promise<MapStop[] | null>;
+}
+
+/** How a variant wants the picking map to open. */
+export interface HookStopsChoice {
+  /** The opener's name, for the sheet's title. */
+  title?: string;
+  /** Stops may hold a picture here; the sheet keeps them either way. */
+  pictures?: boolean;
 }
 
 /** How a variant wants the chooser to open. */
