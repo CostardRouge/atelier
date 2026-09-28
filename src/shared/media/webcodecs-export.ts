@@ -212,7 +212,7 @@ export function isEncodeSupported(): boolean {
   return typeof VideoEncoder !== 'undefined' && typeof VideoFrame !== 'undefined';
 }
 
-interface DemuxResult {
+export interface DemuxResult {
   videoTrack: Track;
   videoSamples: Sample[];
   audioTrack: Track | null;
@@ -332,6 +332,21 @@ export function demux(buffer: ArrayBuffer): Promise<DemuxResult> {
     file.appendBuffer(mp4Buffer, true);
     file.flush();
   });
+}
+
+/**
+ * A source read and demuxed ONCE, for a run that exports it several times —
+ * every variant of a clip used to read the whole file and parse it again.
+ * The samples are only read by the pipeline, never changed, so one result
+ * serves every variant of the run.
+ */
+export async function demuxSource(source: File | ArrayBuffer): Promise<DemuxResult> {
+  const buffer = source instanceof ArrayBuffer ? source : await source.arrayBuffer();
+  return demux(buffer);
+}
+
+function isDemuxed(source: File | ArrayBuffer | DemuxResult): source is DemuxResult {
+  return typeof source === 'object' && source !== null && 'videoSamples' in source;
 }
 
 /** How far a trim's edge may miss a frame boundary and still be ON it. */
@@ -536,7 +551,7 @@ export function makeExportCanvas(
  * can't decode the source codec via WebCodecs.
  */
 export async function exportProcessedVideo(
-  source: File | ArrayBuffer,
+  source: File | ArrayBuffer | DemuxResult,
   makeProcessor: (ctx: FrameContext) => FrameProcessor,
   onProgress?: (p: ExportProgress) => void,
   signal?: AbortSignal,
@@ -552,9 +567,11 @@ export async function exportProcessedVideo(
 
   onProgress?.({ phase: 'demuxing', ratio: null });
   // Accept already-read bytes so callers can read the file while its handle is
-  // freshest (files opened via the folder picker can otherwise go unreadable).
-  const buffer = source instanceof ArrayBuffer ? source : await source.arrayBuffer();
-  const { videoTrack, videoSamples, audioTrack, audioSamples } = await demux(buffer);
+  // freshest (files opened via the folder picker can otherwise go unreadable),
+  // or a source already demuxed for a run of several variants.
+  const { videoTrack, videoSamples, audioTrack, audioSamples } = isDemuxed(source)
+    ? source
+    : await demuxSource(source);
   throwIfAborted();
 
   if (videoSamples.length === 0) throw new Error('No video frames found.');

@@ -31,6 +31,7 @@ import {
   drawRotatedFrame,
   exportProcessedVideo,
   makeExportCanvas,
+  type DemuxResult,
   type ExportOptions,
   type ExportProgress,
   type FrameProcessor,
@@ -162,7 +163,7 @@ export function outroTail(
 }
 
 export async function exportVariantVideo(
-  file: File,
+  file: File | DemuxResult,
   variant: ExportVariant,
   opts: VariantRenderOptions,
   onProgress?: (p: ExportProgress) => void,

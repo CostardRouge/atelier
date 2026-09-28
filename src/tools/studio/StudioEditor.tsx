@@ -61,7 +61,7 @@ import {
   pickWritableDirectory,
   writeItems,
 } from '../../shared/sources/write-files';
-import { DecodeUnsupportedError } from '../../shared/media/webcodecs-export';
+import { DecodeUnsupportedError, demuxSource, type DemuxResult } from '../../shared/media/webcodecs-export';
 import {
   FRAME_RATE_CHOICES,
   SPEED_CHOICES,
@@ -1285,6 +1285,7 @@ export default function StudioEditor({
   /** One variant of a clip, through WebCodecs — with the seek fallback. */
   async function renderClipVariant(
     source: File | null,
+    demuxed: DemuxResult | null,
     variant: ExportVariant,
     srcWidth: number,
     srcHeight: number,
@@ -1310,7 +1311,7 @@ export default function StudioEditor({
       outro,
     };
     try {
-      return await exportVariantVideo(source, variant, opts, onProgress, controller.signal);
+      return await exportVariantVideo(demuxed ?? source, variant, opts, onProgress, controller.signal);
     } catch (err) {
       // Source-geometry variants keep the codec-agnostic seek fallback
       // (playable-but-undecodable HEVC); reframed ones cannot.
@@ -1455,6 +1456,17 @@ export default function StudioEditor({
           setFetchingOriginal(false);
         }
       }
+      // Several variants of a clip read and demux its file ONCE: each used to
+      // read the whole file and parse it again. One variant keeps the old path.
+      let demuxed: DemuxResult | null = null;
+      if (!still && source && variants.length > 1) {
+        try {
+          demuxed = await demuxSource(source);
+        } catch {
+          // Each variant then reads it itself, and says what went wrong.
+          demuxed = null;
+        }
+      }
       for (let i = 0; i < variants.length; i += 1) {
         // Checked per variant, not only inside the encoder: a still renders in
         // one pass and never looks at the signal, so a cancelled run of five
@@ -1484,7 +1496,7 @@ export default function StudioEditor({
         };
         const blob = still
           ? await renderStillVariant(still, variant, runFrame ?? { width: still.width, height: still.height })
-          : await renderClipVariant(source, variant, srcWidth, srcHeight, onProgress, controller);
+          : await renderClipVariant(source, demuxed, variant, srcWidth, srcHeight, onProgress, controller);
         const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
         const file = new File([blob], name, { type: blob.type });
         await deliver(file);
