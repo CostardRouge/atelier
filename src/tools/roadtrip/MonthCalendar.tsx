@@ -23,6 +23,7 @@ import {
   type WeekRow,
   type WeekSpan,
 } from '../../shared/roadtrip/month-grid';
+import type { LoupeStore } from '../../shared/roadtrip/loupe';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
 import { daysBetween, formatIsoDate, isWithin, todayIso, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageAt, type DayCell } from '../../shared/roadtrip/trip-coverage';
@@ -80,6 +81,8 @@ interface MonthCalendarProps {
   columns?: number;
   /** Drawn between the map and the scroller — the wide screen's stage ruler. */
   between?: ReactNode;
+  /** The stage ruler's window, which the map marks under its weeks. */
+  loupe?: LoupeStore;
   /**
    * Something drawn INSIDE the scroller after the blocks — a hint, a spacer
    * — so it scrolls away with them rather than eating the calendar's height.
@@ -148,6 +151,7 @@ export default function MonthCalendar({
   onVisible,
   columns = 1,
   between,
+  loupe,
   tail,
   gutter = 0,
 }: MonthCalendarProps) {
@@ -319,6 +323,7 @@ export default function MonthCalendar({
             days={days}
             blocks={blocks}
             span={span}
+            loupe={loupe}
             onJump={(i) => jumpTo(i)}
             onScrub={scrollToWeek}
           />

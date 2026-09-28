@@ -1,13 +1,26 @@
-import { useState } from 'react';
+import { useMemo, useState } from 'react';
+import {
+  baseDays,
+  clampDays,
+  loupeLimits,
+  loupeScale,
+  loupeSpan,
+  monthsAround,
+  type LoupeStore,
+} from '../../shared/roadtrip/loupe';
 import { startStageAt } from '../../shared/roadtrip/stage-edit';
 import { rulerBars, rulerGaps, stageTint } from '../../shared/roadtrip/stage-ruler';
-import { formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { addDays, formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
 import SectionLegend from '../../shared/ui/SectionLegend';
+import StageZoomControl from '../../shared/ui/StageZoomControl';
+import { stepZoom, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
+import { useElementWidth } from '../../shared/ui/use-element-width';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import PlacesEditor from './PlacesEditor';
 import StageRuler from './StageRuler';
+import { useLoupe } from './use-loupe';
 import { Icons } from '../../shared/ui/icons';
 import IconButton from '../../shared/ui/IconButton';
 import Button from '../../shared/ui/Button';
@@ -16,12 +29,13 @@ import { DateRangeField } from '../../shared/ui/DateField';
 interface StagesPanelProps {
   trip: TripDoc;
   /**
-   * The days the ruler draws: the loupe's window on a long trip, nothing on
-   * a short one (the whole trip). The header names it.
+   * The first day of the month the calendar shows, on a long trip: the
+   * ruler's window opens on it and its two neighbours (100%) and follows it
+   * to another month. Absent on a short trip, whose 100% is the whole trip.
    */
-  span?: { startDate: IsoDate; endDate: IsoDate };
-  /** Move that window by whole weeks — a sideways scroll over the ruler. */
-  onPanSpan?: (weeks: number) => void;
+  month?: IsoDate;
+  /** Where the ruler publishes its window, for the year map to draw it too. */
+  loupe?: LoupeStore;
   /** The open leg's card is drawn elsewhere (a wide screen's right column). */
   hideCard?: boolean;
   /** The grid's rung for a day (0..4), drawn as a strip on the ruler. */
@@ -185,8 +199,8 @@ export function StageCard({
  */
 export default function StagesPanel({
   trip,
-  span,
-  onPanSpan,
+  month,
+  loupe,
   hideCard = false,
   rungAt,
   selectedId,
@@ -208,12 +222,40 @@ export default function StagesPanel({
   const selectedIndex = trip.stages.findIndex((s) => s.id === selectedId);
   const selected = selectedIndex >= 0 ? trip.stages[selectedIndex] : null;
 
+  // The ruler's ZOOM is how many days its box shows (`loupe.ts`), made here
+  // because the − / + sit in this header — and measured here, once, on the
+  // ruler's own box, so the pill's limits are the ones the track is drawn to.
+  // 100% is the three months around the one on screen (the whole trip on a
+  // short one); the scale is kept as the months go by.
+  const [rulerBox, rulerWidth] = useElementWidth<HTMLDivElement>();
+  const total = spanLength(trip.startDate, trip.endDate) ?? 1;
+  const limits = useMemo(() => loupeLimits(total, rulerWidth), [total, rulerWidth]);
+  const around = month ? monthsAround(trip.startDate, month) : null;
+  const base = baseDays(total, around, limits);
+  const [scale, setScale] = useState(1);
+  const days = clampDays(base / scale, limits);
+  const shownScale = loupeScale(base, days);
+  const zoomable = limits.max > limits.min;
+  const zoom: ZoomControls = {
+    scale: shownScale,
+    label: zoomLabel(shownScale),
+    canZoomIn: days > limits.min + 1e-6,
+    canZoomOut: days < limits.max - 1e-6,
+    zoomIn: () => setScale(stepZoom(shownScale, 1, loupeScale(base, limits.max))),
+    zoomOut: () => setScale(stepZoom(shownScale, -1, loupeScale(base, limits.max))),
+    reset: () => setScale(1),
+  };
+
   function add() {
     // The first day no leg covers, else the trip's end: a new leg starts where
     // the story has a hole, and the ruler's own `+` does the same per gap.
-    // Inside the loupe when there is one: a leg added off-screen is a leg
-    // the author cannot see appear.
-    const drawn = span ? { ...trip, startDate: span.startDate, endDate: span.endDate } : trip;
+    // Inside the ruler's window: a leg added off-screen is a leg the author
+    // cannot see appear.
+    const view = loupe?.get();
+    const shown = view ? loupeSpan(total, view) : null;
+    const first = shown ? addDays(trip.startDate, shown.first) : null;
+    const last = shown ? addDays(trip.startDate, shown.last) : null;
+    const drawn = first && last ? { ...trip, startDate: first, endDate: last } : trip;
     const gap = rulerGaps(drawn, rulerBars(drawn))[0];
     const result = startStageAt(trip, gap ? gap.startDate : drawn.endDate);
     onChange(result.stages);
@@ -231,14 +273,8 @@ export default function StagesPanel({
       aria-label="Stages"
     >
       <div className="flex items-center gap-3">
-        <span className="flex-1">
-          <SectionLegend
-            label={
-              span
-                ? `On screen · ${formatIsoDate(span.startDate)} → ${formatIsoDate(span.endDate)} · ${spanLength(span.startDate, span.endDate)} days`
-                : `Stages · ${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`
-            }
-          >
+        <span className="flex-1 min-w-0 flex items-center gap-3">
+          <SectionLegend label={`Stages · ${trip.stages.length} leg${trip.stages.length === 1 ? '' : 's'}`}>
             <p>
               A stage is a leg of the trip and the days you were on it. A badge can name
               it, count the days you stayed, or say which day of the stop a picture is.
@@ -250,13 +286,20 @@ export default function StagesPanel({
             <p>
               On the track: tap a leg to edit it and go to its first day · tap anywhere
               else to open that day · hold a leg, or either of its edges, then drag to
-              move its dates{span ? ' · the track follows the months the calendar shows' : ''}.
+              move its dates.
               <span className="max-[600px]:hidden">
                 {' '}
                 Right-click a day on the calendar to start or end a stage there.
               </span>
             </p>
+            <p>
+              Too many legs to read? Scroll or pinch over the track to zoom it — fewer
+              days, wider legs, down to a week across — or use − and +; the percentage
+              goes back to the three months around the one on screen. Swipe sideways
+              to travel along the trip.{month ? ' The track follows the calendar to the month on screen, and the map above marks the days it shows.' : ''}
+            </p>
           </SectionLegend>
+          <LoupeReadout trip={trip} total={total} loupe={loupe} mapped={Boolean(month)} />
         </span>
         {/* The timeline of a connected Winnow proposes what this list lacks —
             a diff the author accepts leg by leg, never a sync. */}
@@ -284,6 +327,9 @@ export default function StagesPanel({
               Deduce
             </Button>
           ))}
+        {/* The zoom's buttons: nothing here is gesture-only, and a mouse
+            with no wheel still reaches every scale. */}
+        {zoomable && <StageZoomControl zoom={zoom} hint="scroll or pinch over the track" className="flex-none" />}
         <Button variant="primary" onClick={add} icon={Icons.plus}>
           Stage
         </Button>
@@ -306,8 +352,14 @@ export default function StagesPanel({
           ruler.learn();
           onChange(stages);
         }}
-        span={span}
-        onPan={span ? onPanSpan : undefined}
+        boxRef={rulerBox}
+        width={rulerWidth}
+        days={days}
+        limits={limits}
+        base={base}
+        onScale={setScale}
+        month={month}
+        loupe={loupe}
       />
 
       {trip.stages.length === 0 ? (
@@ -327,7 +379,7 @@ export default function StagesPanel({
             Tap a leg to edit it and go to its first day · tap anywhere else on
             the track to open that day · hold a leg, or either of its edges,
             then drag to move its dates
-            {span ? ' · the track follows the months the calendar shows' : ''}
+            {zoomable ? ' · scroll or pinch over the track to zoom it' : ''}
             {/* A gesture a phone does not have, hidden where there is none —
                 the calendar's own hint above does the same. */}
             <span className="max-[600px]:hidden">
@@ -352,5 +404,43 @@ export default function StagesPanel({
         />
       )}
     </section>
+  );
+}
+
+/**
+ * The days the ruler's window shows, said beside the legend and kept current
+ * as it travels and zooms — read from the ruler's publication so only this
+ * line re-renders per frame. On a long trip it wears the accent bar the year
+ * map draws the same window with. Nothing when the window is the whole trip:
+ * the heading already says those dates.
+ */
+function LoupeReadout({
+  trip,
+  total,
+  loupe,
+  mapped,
+}: {
+  trip: TripDoc;
+  total: number;
+  loupe?: LoupeStore;
+  mapped: boolean;
+}) {
+  const view = useLoupe(loupe);
+  if (!view) return null;
+  const { first, last } = loupeSpan(total, view);
+  if (first === 0 && last === total - 1) return null;
+  const start = addDays(trip.startDate, first);
+  const end = addDays(trip.startDate, last);
+  if (!start || !end) return null;
+  return (
+    <span
+      className="min-w-0 flex items-center gap-1.5 font-mono text-2xs text-muted tabular-nums"
+      title="The days the stage ruler shows"
+    >
+      {mapped && <span className="flex-none w-3 h-[3px] rounded-full bg-accent" aria-hidden="true" />}
+      <span className="truncate">
+        {formatIsoDate(start)} → {formatIsoDate(end)} · {last - first + 1} days
+      </span>
+    </span>
   );
 }

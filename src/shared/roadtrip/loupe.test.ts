@@ -1,98 +1,137 @@
 import { describe, expect, it } from 'vitest';
+import { MIN_DAY } from './stage-ruler';
 import {
-  DEFAULT_LOUPE_DAYS,
   MIN_LOUPE_DAYS,
-  defaultLoupe,
-  loupeContaining,
-  loupeIsWhole,
-  loupeLength,
-  moveLoupe,
-  panWeeks,
-  resizeLoupe,
+  baseDays,
+  centreLoupe,
+  clampLoupe,
+  createLoupeStore,
+  holdDay,
+  loupeLimits,
+  loupeScale,
+  loupeSpan,
+  monthsAround,
+  zoomLoupe,
 } from './loupe';
 
-describe('panWeeks', () => {
-  it('turns a week of track into a week, carrying the rest', () => {
-    expect(panWeeks(0, 150, 20)).toEqual({ weeks: 1, carry: 10 });
-    expect(panWeeks(10, 130, 20)).toEqual({ weeks: 1, carry: 0 });
+describe('loupeLimits', () => {
+  it('goes from a week to as many days as fit at the ruler floor', () => {
+    expect(loupeLimits(345, 900)).toEqual({ min: MIN_LOUPE_DAYS, max: 900 / MIN_DAY });
   });
-  it('moves back on a negative scroll, and nothing under a week', () => {
-    expect(panWeeks(0, -290, 20)).toEqual({ weeks: -2, carry: -10 });
-    expect(panWeeks(0, 100, 20)).toEqual({ weeks: 0, carry: 100 });
+  it('never shows more than the trip, nor asks for more days than it has', () => {
+    expect(loupeLimits(40, 900)).toEqual({ min: MIN_LOUPE_DAYS, max: 40 });
+    expect(loupeLimits(5, 900)).toEqual({ min: 5, max: 5 });
   });
-  it('lets a reversal eat the carry before it moves the other way', () => {
-    expect(panWeeks(100, -120, 20)).toEqual({ weeks: 0, carry: -20 });
-  });
-  it('moves nothing before the ruler has a width', () => {
-    expect(panWeeks(50, 500, 0)).toEqual({ weeks: 0, carry: 0 });
+  it('limits nothing but the trip while the box is unmeasured', () => {
+    expect(loupeLimits(345, 0)).toEqual({ min: MIN_LOUPE_DAYS, max: 345 });
   });
 });
 
-const year = { startDate: '2025-01-01', endDate: '2025-12-31' };
-const week = { startDate: '2026-09-01', endDate: '2026-09-08' };
+describe('zoomLoupe', () => {
+  const limits = loupeLimits(345, 900);
 
-describe('defaultLoupe', () => {
-  it('opens eight weeks holding the focus, with context before it', () => {
-    const l = defaultLoupe(year, '2025-08-02');
-    expect(loupeLength(l)).toBe(DEFAULT_LOUPE_DAYS);
-    expect(l.start <= '2025-08-02' && l.end >= '2025-08-02').toBe(true);
-    // Two weeks before, pulled back to that Monday.
-    expect(l.start).toBe('2025-07-14');
+  it('keeps the day under the hand where it was', () => {
+    const before = { from: 100, days: 90 };
+    for (const at of [0, 0.25, 0.5, 0.9, 1]) {
+      const after = zoomLoupe(345, before, 30, at, limits);
+      expect(after.days).toBe(30);
+      expect(after.from + at * after.days).toBeCloseTo(before.from + at * before.days, 9);
+    }
   });
-  it('starts at the trip when the focus is near its start, and never leaves the trip at its end', () => {
-    expect(defaultLoupe(year, '2025-01-03').start).toBe('2025-01-01');
-    const late = defaultLoupe(year, '2025-12-30');
-    expect(late.end).toBe('2025-12-31');
-    expect(loupeLength(late)).toBe(DEFAULT_LOUPE_DAYS);
+
+  it('holds the anchor across a whole burst of small notches, in and back out', () => {
+    let loupe = { from: 120, days: 92 };
+    const under = loupe.from + 0.4 * loupe.days;
+    for (let i = 0; i < 60; i += 1) loupe = zoomLoupe(345, loupe, loupe.days * 0.97, 0.4, limits);
+    for (let i = 0; i < 60; i += 1) loupe = zoomLoupe(345, loupe, loupe.days / 0.97, 0.4, limits);
+    expect(loupe.from + 0.4 * loupe.days).toBeCloseTo(under, 6);
   });
-  it('is the whole trip when the trip is shorter than the window', () => {
-    const l = defaultLoupe(week, '2026-09-03');
-    expect(l).toEqual({ start: week.startDate, end: week.endDate });
-    expect(loupeIsWhole(week, l)).toBe(true);
+
+  it('stops at a week and at the floor, never past', () => {
+    expect(zoomLoupe(345, { from: 0, days: 10 }, 2, 0.5, limits).days).toBe(MIN_LOUPE_DAYS);
+    expect(zoomLoupe(345, { from: 0, days: 100 }, 400, 0.5, limits).days).toBe(limits.max);
   });
-  it('falls back to the trip start for a focus outside the trip', () => {
-    expect(defaultLoupe(year, '2030-01-01').start).toBe('2025-01-01');
+
+  it('slides back inside the trip at its edges rather than showing days it does not have', () => {
+    const out = zoomLoupe(345, { from: 300, days: 45 }, 120, 1, limits);
+    expect(out.from + out.days).toBe(345);
+    expect(zoomLoupe(345, { from: 0, days: 20 }, 80, 0, limits).from).toBe(0);
   });
 });
 
-describe('moveLoupe', () => {
-  const l = { start: '2025-03-01', end: '2025-04-25' };
-  it('keeps its width and stops at the trip edges', () => {
-    const moved = moveLoupe(year, l, 10);
-    expect(loupeLength(moved)).toBe(loupeLength(l));
-    expect(moved.start).toBe('2025-03-11');
-    expect(moveLoupe(year, l, -100).start).toBe('2025-01-01');
-    expect(moveLoupe(year, l, 1000).end).toBe('2025-12-31');
+describe('clampLoupe and centreLoupe', () => {
+  const limits = loupeLimits(100, 900);
+  it('slides a window back in rather than shrinking it', () => {
+    expect(clampLoupe(100, { from: 90, days: 30 }, limits)).toEqual({ from: 70, days: 30 });
+    expect(clampLoupe(100, { from: -5, days: 30 }, limits)).toEqual({ from: 0, days: 30 });
+  });
+  it('centres on a day offset, inside the trip', () => {
+    expect(centreLoupe(100, 20, 50, limits)).toEqual({ from: 40, days: 20 });
+    expect(centreLoupe(100, 20, 2, limits)).toEqual({ from: 0, days: 20 });
   });
 });
 
-describe('resizeLoupe', () => {
-  const l = { start: '2025-03-01', end: '2025-04-25' };
-  it('moves one edge and clamps it to the trip', () => {
-    expect(resizeLoupe(year, l, 'start', '2025-03-10').start).toBe('2025-03-10');
-    expect(resizeLoupe(year, l, 'end', '2026-06-01').end).toBe('2025-12-31');
+describe('holdDay', () => {
+  it('leaves a window that already shows the day', () => {
+    const loupe = { from: 10, days: 14 };
+    expect(holdDay(100, loupe, 10)).toBe(loupe);
+    expect(holdDay(100, loupe, 23)).toBe(loupe);
   });
-  it('never shrinks under the minimum', () => {
-    const narrow = resizeLoupe(year, l, 'start', '2025-04-25');
-    expect(loupeLength(narrow)).toBe(MIN_LOUPE_DAYS);
-    const narrowEnd = resizeLoupe(year, l, 'end', '2025-03-01');
-    expect(loupeLength(narrowEnd)).toBe(MIN_LOUPE_DAYS);
+  it('slides the shortest way, a day of room kept beyond it', () => {
+    expect(holdDay(100, { from: 10, days: 14 }, 30)).toEqual({ from: 18, days: 14 });
+    expect(holdDay(100, { from: 10, days: 14 }, 4)).toEqual({ from: 3, days: 14 });
+  });
+  it('never leaves the trip, and ignores a day off it', () => {
+    expect(holdDay(100, { from: 50, days: 14 }, 99)).toEqual({ from: 86, days: 14 });
+    const loupe = { from: 50, days: 14 };
+    expect(holdDay(100, loupe, 120)).toBe(loupe);
   });
 });
 
-describe('loupeContaining', () => {
-  const l = { start: '2025-03-01', end: '2025-04-25' };
-  it('is unchanged while the date is inside', () => {
-    expect(loupeContaining(year, l, '2025-04-01')).toBe(l);
+describe('monthsAround and baseDays', () => {
+  it('is the month before, the month and the month after, from the trip start', () => {
+    // 2025-07-10 → June 1 … August 31: 30 + 31 + 31 days.
+    expect(monthsAround('2025-06-15', '2025-07-10')).toEqual({ from: -14, days: 92 });
   });
-  it('slides the shortest way to hold a date outside, keeping its width', () => {
-    const later = loupeContaining(year, l, '2025-05-10');
-    expect(later.end).toBe('2025-05-10');
-    expect(loupeLength(later)).toBe(loupeLength(l));
-    const earlier = loupeContaining(year, l, '2025-02-01');
-    expect(earlier.start).toBe('2025-02-01');
+  it('crosses a year', () => {
+    expect(monthsAround('2025-01-01', '2025-01-20')).toEqual({ from: -31, days: 90 });
   });
-  it('ignores a date off the trip', () => {
-    expect(loupeContaining(year, l, '2030-01-01')).toBe(l);
+  it('calls 100% the three months, or the trip, or what fits', () => {
+    const around = { from: 0, days: 92 };
+    expect(baseDays(345, around, loupeLimits(345, 900))).toBe(92);
+    expect(baseDays(40, around, loupeLimits(40, 900))).toBe(40);
+    expect(baseDays(345, around, loupeLimits(345, 480))).toBe(80);
+    expect(baseDays(20, null, loupeLimits(20, 900))).toBe(20);
+  });
+  it('reads the scale against it', () => {
+    expect(loupeScale(92, 46)).toBe(2);
+    expect(loupeScale(92, 92)).toBe(1);
+  });
+});
+
+describe('loupeSpan', () => {
+  it('names every day the window shows even in part', () => {
+    expect(loupeSpan(100, { from: 10, days: 14 })).toEqual({ first: 10, last: 23 });
+    expect(loupeSpan(100, { from: 10.5, days: 14 })).toEqual({ first: 10, last: 24 });
+    expect(loupeSpan(100, { from: 90, days: 30 })).toEqual({ first: 90, last: 99 });
+  });
+});
+
+describe('createLoupeStore', () => {
+  it('tells its listeners of a real change only', () => {
+    const store = createLoupeStore();
+    let calls = 0;
+    const stop = store.subscribe(() => {
+      calls += 1;
+    });
+    store.set({ from: 1, days: 10 });
+    store.set({ from: 1, days: 10 });
+    expect(calls).toBe(1);
+    expect(store.get()).toEqual({ from: 1, days: 10 });
+    store.set(null);
+    expect(calls).toBe(2);
+    stop();
+    store.set({ from: 2, days: 10 });
+    expect(calls).toBe(2);
   });
 });
