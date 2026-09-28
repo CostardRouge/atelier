@@ -584,7 +584,8 @@ export default function PostEditor({
     [isCta, cta.qr, trip.cta.ink, trip.cta.background],
   );
 
-  // The first slide's words: its badge, then its own free text over it — the
+  // The first slide's words: its own free text, then its badge over it (a
+  // masked line must not mask the signature — `slide-render.ts`) — the
   // elements every export of the hook and the Studio bridge burn in.
   const hookTexts = post.badge.texts;
   const hookElements = useMemo(() => {
@@ -598,7 +599,7 @@ export default function PostEditor({
           post.badge.cascade,
         )
       : [];
-    return hookTexts?.length ? [...badge, ...hookTexts] : badge;
+    return hookTexts?.length ? [...hookTexts, ...badge] : badge;
   }, [
     content,
     post.badge.layout,
@@ -675,7 +676,7 @@ export default function PostEditor({
       post.badge.cascade,
     );
     // The free text rides along, or a counting numeral would hide it.
-    return at && hookTexts?.length ? (t: number) => [...at(t), ...hookTexts] : at;
+    return at && hookTexts?.length ? (t: number) => [...hookTexts, ...at(t)] : at;
   }, [
     hook,
     content,

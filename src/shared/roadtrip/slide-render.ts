@@ -132,8 +132,9 @@ export function slideRender(
       ? badgeElements(content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
       : [];
   // What a slide says besides its badge: the caption (a content slide's), then
-  // the free text, drawn over it. A first slide with no free text draws
-  // exactly the badge's elements, as it always did.
+  // the free text — drawn UNDER the badge, so a line that masks the picture
+  // (`knockout.ts`) never masks the signature with it. A first slide with no
+  // free text draws exactly the badge's elements, as it always did.
   const words = isFirst
     ? [...slide.texts]
     : [...contentSlideElements(slide.caption, aspect), ...slide.texts];
@@ -143,7 +144,7 @@ export function slideRender(
       : null;
 
   return {
-    elements: words.length ? [...badge, ...words] : badge,
+    elements: words.length ? [...words, ...badge] : badge,
     theme: trip.theme,
     shades: isFirst ? post.badge.shades : slide.shades.length ? slide.shades : undefined,
     // A shade set to follow the hook ends at the badge block's own edge, so
@@ -155,7 +156,7 @@ export function slideRender(
     qr: null,
     framing: slide.framing,
     hook,
-    elementsAt: badgeAt && words.length ? (t) => [...badgeAt(t), ...words] : badgeAt,
+    elementsAt: badgeAt && words.length ? (t) => [...words, ...badgeAt(t)] : badgeAt,
   };
 }
 

@@ -1,14 +1,14 @@
 # Slide capacities — an opener, a badge and masked text on any slide
 
-**Status (2026-09-28): being built, commit by commit (§11).** The maintainer
+**Status (2026-09-28): built, all six commits (§11).** The maintainer
 asked to start without answering §9, so the build takes the brief's own
 recommendations as its working answers and says so where each applies: a
 badge on another slide is allowed and never a default, the first slide keeps
 the name "hook", two masked modes, no deck-shape defaults, and the bridge
-still sends the first slide's opener. Built so far: **commits 1–5** (the model, every surface
+still sends the first slide's opener. Built: **commits 1–6** (the model, every surface
 rendering a slide by what it holds, the editor giving any slide an opener, a
-badge and shades, free text on any slide — the first included — and blend
-modes).
+badge and shades, free text on any slide — the first included — blend modes,
+and masked text).
 
 §1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
 still lists what is his to settle.
@@ -244,7 +244,10 @@ designed rather than discovered:
   which ships a PNG with holes in it and an MP4 with black ones. So the picture,
   the opener and the shades are painted into a buffer, the glyphs are erased
   from *that*, and the buffer is composited over the background fill
-  `renderBadge` already lays down.
+  `renderBadge` already lays down. *(As built, commit 6: no buffer. That ground
+  is FLAT on every surface, so erasing down to it and painting the letters in
+  its colour are the same pixels — the punch is its bare letters in the
+  author's ground colour, `#100f0d` by default, which is `renderBadge`'s.)*
 
 Both need `measureOverlays` to keep returning the glyphs' own boxes, so a click
 on the stage still lands on masked type.
@@ -359,6 +362,17 @@ Five commits, one task each, in this order:
    the real stage by reading pixels: white letters over the dark ground read
    255 plain, 15 under multiply, 240 under difference.
 5. `OverlayElement.knockout`, both modes, with the buffer and the mask cache.
+   **Built** (`shared/overlay/knockout.ts`, one `KnockoutRows` panel shared by
+   the Trips line and the Studio's element panel): the wash is cut in a scratch
+   buffer at video coordinates before the element's own animation transform,
+   and a frame larger than the 4096 px scratch is cut at a reduced scale and
+   laid back full size (softer letter edges, never plain letters); the punch
+   needed no buffer (§7). No mask cache: re-cutting is one fill, the glyphs and
+   one `drawImage` per paint. A masked text does not blend, and a mask on an
+   instrument is ignored. Building it moved one thing the brief had not
+   foreseen: **a slide's words now draw UNDER its badge**, because a first-slide
+   wash covered the signature — measured on the stage, with the badge's white
+   read back on top of a red wash after the change.
 
 Commits 1–3 deliver the maintainer's "several openers, several maps"; 4–5
 deliver the note's second half. Either half can ship without the other.

@@ -19,6 +19,7 @@
 
 import { createTextElement, type Anchor, type OverlayElement } from '../overlay/overlay-types';
 import { isBlendMode } from '../overlay/blend';
+import { readKnockout } from '../overlay/knockout';
 import { DEFAULT_BADGE_DURATION, type BadgeLayout } from './badge-layout';
 import { BADGE_PIECES, COUNTER_MODES, type BadgePiece, type CounterMode } from './day-badge';
 import { createShade, type Shade } from './shades';
@@ -220,6 +221,13 @@ export function readSlideTexts(v: unknown): OverlayElement[] {
     // A blend this build does not know draws plainly anyway (`compositeFor`);
     // dropping it keeps the panel from showing a choice it cannot name.
     if (el.blend !== undefined && !isBlendMode(el.blend)) delete el.blend;
+    // A mask is read the same way: junk or a mode this build lacks draws the
+    // letters plainly, so it is not kept to be shown as a choice.
+    if (el.knockout !== undefined) {
+      const knockout = readKnockout(el.knockout);
+      if (knockout) el.knockout = knockout;
+      else delete el.knockout;
+    }
     seen.add(el.id);
     out.push(el);
   }

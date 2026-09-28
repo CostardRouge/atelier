@@ -188,6 +188,24 @@ describe('slideRender — a slide holds what it holds, wherever it sits (v29)', 
     expect(render.elements.some((el) => el.text === 'Noon' || el.text === 'NOON')).toBe(true);
   });
 
+  it('draws a slide’s words under its badge, so a masked line cannot hide the signature', () => {
+    const { slide, post: p } = openerPost();
+    slide.caption = 'Leg two';
+    slide.texts = [{ ...contentSlideElements('x', ASPECT)[0], id: 'text:a', text: 'Shark Bay' }];
+    slide.badge = {
+      mode: 'day',
+      timeAgo: 'off',
+      layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+      durationSeconds: 2,
+      textOverrides: {},
+    };
+    const ids = renderContent(p).elements.map((el) => el.id);
+    expect(ids).toEqual(expect.arrayContaining(['caption:0', 'text:a']));
+    const firstPiece = ids.findIndex((id) => id.startsWith('piece:'));
+    expect(firstPiece).toBeGreaterThan(ids.indexOf('text:a'));
+    expect(firstPiece).toBeGreaterThan(ids.indexOf('caption:0'));
+  });
+
   it('never credits the camera on another slide — the credit is the hook picture’s', () => {
     const { slide, post: p } = openerPost();
     p.badge.showExif = true;
@@ -234,14 +252,14 @@ describe('slideRender — a slide holds what it holds, wherever it sits (v29)', 
 });
 
 describe('slideRender — free text on the first slide (v29)', () => {
-  it('draws the first slide’s own text over its badge, and nothing else changes', () => {
+  it('draws the first slide’s own text UNDER its badge — a mask never hides the signature — and nothing else changes', () => {
     const p = post();
     const doc = trip({ posts: [p] });
     const before = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
     const line = { ...contentSlideElements('x', ASPECT)[0], id: 'text:a', text: 'Day one' };
     p.badge.texts = [line];
     const after = slideRender(doc, p, deckSlides(doc, p)[0], ASPECT);
-    expect(after.elements).toEqual([...before.elements, line]);
+    expect(after.elements).toEqual([line, ...before.elements]);
     expect(after.block).toEqual(before.block);
   });
 

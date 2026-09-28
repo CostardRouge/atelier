@@ -13,6 +13,7 @@ import {
   type SlideBadge,
 } from '../../../shared/roadtrip/slide-capacities';
 import { BLEND_MODES, type BlendMode } from '../../../shared/overlay/blend';
+import KnockoutRows from '../../../shared/overlay/KnockoutRows';
 import type { OverlayElement } from '../../../shared/overlay/overlay-types';
 import IconButton from '../../../shared/ui/IconButton';
 import { Icons } from '../../../shared/ui/icons';
@@ -350,41 +351,54 @@ export default function ContentTab({
                     format={(v) => `${Math.round(v * 100)}%`}
                   />
                 </FieldRow>
-                <FieldRow
-                  label="Blend"
-                  hint={BLEND_MODES.find((m) => m.id === (el.blend ?? 'normal'))?.hint}
-                >
-                  <SelectField
-                    label={`Line ${i + 1} blend`}
-                    value={el.blend ?? 'normal'}
-                    onChange={(blend: BlendMode) => write({ blend })}
-                    options={BLEND_MODES.map((m) => ({ id: m.id, label: m.label }))}
-                  />
-                </FieldRow>
-                <FieldRow label="Ink">
-                  <input
-                    type="color"
-                    aria-label={`Line ${i + 1} ink`}
-                    value={el.color.startsWith('#') ? el.color : '#ffffff'}
-                    onChange={(e) =>
-                      onTexts(texts.map((t) => (t.id === el.id ? withLineInk(t, e.target.value) : t)))
-                    }
-                    className="h-7 w-10 rounded-control border border-line-strong bg-paper cursor-pointer"
-                  />
-                  {hasOwnInk(el) ? (
-                    <button
-                      type="button"
-                      onClick={() =>
-                        onTexts(texts.map((t) => (t.id === el.id ? withLineInk(t, null) : t)))
-                      }
-                      className={`flex-none ${linkButton}`}
+                <KnockoutRows
+                  label={`Line ${i + 1}`}
+                  value={el.knockout}
+                  onChange={(knockout) => write({ knockout })}
+                />
+                {/* A masked line is bare letters in the mask's own colour: a
+                    blend or an ink would change nothing it draws. */}
+                {!el.knockout && (
+                  <>
+                    <FieldRow
+                      label="Blend"
+                      hint={BLEND_MODES.find((m) => m.id === (el.blend ?? 'normal'))?.hint}
                     >
-                      The trip’s
-                    </button>
-                  ) : (
-                    <Readout muted>the trip’s</Readout>
-                  )}
-                </FieldRow>
+                      <SelectField
+                        label={`Line ${i + 1} blend`}
+                        value={el.blend ?? 'normal'}
+                        onChange={(blend: BlendMode) => write({ blend })}
+                        options={BLEND_MODES.map((m) => ({ id: m.id, label: m.label }))}
+                      />
+                    </FieldRow>
+                    <FieldRow label="Ink">
+                      <input
+                        type="color"
+                        aria-label={`Line ${i + 1} ink`}
+                        value={el.color.startsWith('#') ? el.color : '#ffffff'}
+                        onChange={(e) =>
+                          onTexts(
+                            texts.map((t) => (t.id === el.id ? withLineInk(t, e.target.value) : t)),
+                          )
+                        }
+                        className="h-7 w-10 rounded-control border border-line-strong bg-paper cursor-pointer"
+                      />
+                      {hasOwnInk(el) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onTexts(texts.map((t) => (t.id === el.id ? withLineInk(t, null) : t)))
+                          }
+                          className={`flex-none ${linkButton}`}
+                        >
+                          The trip’s
+                        </button>
+                      ) : (
+                        <Readout muted>the trip’s</Readout>
+                      )}
+                    </FieldRow>
+                  </>
+                )}
               </div>
             );
           })}

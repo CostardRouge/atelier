@@ -13,6 +13,7 @@ import type { SpeedUnit } from '../telemetry/motion';
 import type { TimeFormatOptions } from '../telemetry/time-format';
 import type { ElementAnimation, TimeWindow } from './animation';
 import type { BlendMode } from './blend';
+import type { Knockout } from './knockout';
 export type { SpeedUnit, TimeFormatOptions };
 
 /**
@@ -297,6 +298,12 @@ export interface OverlayElement {
    * Absent is `normal` — what every element stored before this existed draws.
    */
   blend?: BlendMode;
+  /**
+   * A text that MASKS the picture instead of sitting on it (`knockout.ts`):
+   * the photograph read only through the letters, or the letters cut out of
+   * it. Absent draws the text on the picture, as every element always did.
+   */
+  knockout?: Knockout;
 
   // --- appearance extensions (title styles) --------------------------------
 
