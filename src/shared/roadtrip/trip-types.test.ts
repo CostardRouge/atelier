@@ -1356,3 +1356,76 @@ describe('migrateTripDoc — v27 → v28, a picture may move in its frame', () =
     expect('motion' in hookDefaultsFrom(post.badge)).toBe(false);
   });
 });
+
+describe('migrateTripDoc — v28 → v29, any slide may hold an opener, a badge, shades and text', () => {
+  const v28 = () => {
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
+    const post = createTripPost('carousel', '2025-03-27', 'Three drives');
+    post.slides = [createPostSlide(null), createPostSlide(null)];
+    for (const slide of post.slides) {
+      const bare = slide as Partial<typeof slide>;
+      delete bare.hook;
+      delete bare.shades;
+      delete bare.badge;
+      delete bare.texts;
+    }
+    return { ...doc, version: 28, posts: [post] } as TripDoc;
+  };
+
+  it('gives every stored slide none of them, and leaves the first slide’s own untouched', () => {
+    const before = v28();
+    const hookBefore = structuredClone(before.posts[0].badge.hook);
+    const doc = migrateTripDoc(before);
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    for (const slide of doc.posts[0].slides) {
+      expect(slide.hook).toBeNull();
+      expect(slide.shades).toEqual([]);
+      expect(slide.badge).toBeNull();
+      expect(slide.texts).toEqual([]);
+    }
+    expect(doc.posts[0].badge.hook).toEqual(hookBefore);
+  });
+
+  it('keeps sound capacities and turns junk into none', () => {
+    const doc = v28();
+    const [a, b] = doc.posts[0].slides as unknown as Record<string, unknown>[];
+    a.hook = [{ id: 'map', options: { stops: [] } }];
+    a.badge = { mode: 'stage-day', layout: { anchor: 'top-right', x: 0.9, y: 0.1, sizeFrac: 0.06 } };
+    a.texts = [{ kind: 'text', text: 'Leg 2', id: 't1' }];
+    a.shades = [{ id: 'sh', direction: 'bottom', reach: 0.5, strength: 0.4, color: '#000000' }];
+    b.hook = 'map';
+    b.badge = 'mark';
+    b.texts = [{ kind: 'battery' }];
+    b.shades = 'dark';
+    const migrated = migrateTripDoc(doc);
+    const [ma, mb] = migrated.posts[0].slides;
+    expect(ma.hook).toEqual([{ id: 'map', options: { stops: [] } }]);
+    expect(ma.badge?.mode).toBe('stage-day');
+    expect(ma.badge?.layout.anchor).toBe('top-right');
+    expect(ma.texts.map((el) => el.text)).toEqual(['Leg 2']);
+    expect(ma.shades).toHaveLength(1);
+    expect(mb.hook).toBeNull();
+    expect(mb.badge).toBeNull();
+    expect(mb.texts).toEqual([]);
+    expect(mb.shades).toEqual([]);
+  });
+
+  it('never gives a new slide a capacity to inherit', () => {
+    const slide = createPostSlide(null);
+    expect(slide.hook).toBeNull();
+    expect(slide.badge).toBeNull();
+    expect(slide.shades).toEqual([]);
+    expect(slide.texts).toEqual([]);
+  });
+
+  it('gives a duplicated piece’s slide shades their own identity', () => {
+    const post = createTripPost('carousel', '2025-03-27', 'Drives');
+    const slide = createPostSlide(null);
+    slide.shades = [createShade()];
+    post.slides = [slide];
+    const copy = duplicateTripPost(post);
+    expect(copy.slides[0].shades).toHaveLength(1);
+    expect(copy.slides[0].shades[0].id).not.toBe(slide.shades[0].id);
+    expect(copy.slides[0].shades[0].strength).toBe(slide.shades[0].strength);
+  });
+});

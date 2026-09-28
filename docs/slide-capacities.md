@@ -1,7 +1,14 @@
 # Slide capacities — an opener, a badge and masked text on any slide
 
-**A proposal, not a set of decisions.** §1–§3 are traced to files and are fact;
-§4 onwards awaits the maintainer, and §9 lists what to settle first.
+**Status (2026-09-28): being built, commit by commit (§11).** The maintainer
+asked to start without answering §9, so the build takes the brief's own
+recommendations as its working answers and says so where each applies: a
+badge on another slide is allowed and never a default, the first slide keeps
+the name "hook", two masked modes, no deck-shape defaults, and the bridge
+still sends the first slide's opener. Built so far: **commit 1** (the model).
+
+§1–§3 are traced to files and are fact; §4 onwards was the proposal, and §9
+still lists what is his to settle.
 
 Read it before touching `shared/roadtrip/slide-render.ts`, `deck.ts`,
 `trip-types.ts`'s `PostBadge` / `PostSlide`, or before adding anything to
@@ -134,18 +141,26 @@ interface PostSlide {
 ```
 
 `SlideBadge` is deliberately **not** a second `PostBadge`: the picture half is
-the slide's own already, and the placement half (`layout`, `pieceStyles`,
-`cascade`) is the piece's signature. It is the words and the scale:
+the slide's own already, and the look (`pieceStyles`, `cascade`, the trip's
+theme) is the piece's signature. As built (`shared/roadtrip/slide-capacities.ts`)
+it is what ONE slide can say differently — its counter, its words, where it
+sits and how big, how long it lives:
 
 ```ts
 interface SlideBadge {
   mode: CounterMode;
-  textOverrides: Partial<Record<BadgePiece, string>>;
-  /** 1 is the piece's own badge; a chapter mark is ~0.36. */
-  scale: number;
+  timeAgo: TimeAgoMode;
+  /** `sizeFrac` IS the scale: a chapter mark is the piece's × 0.36. */
+  layout: BadgeLayout;
   durationSeconds: number;
+  textOverrides: Partial<Record<BadgePiece, string>>;
 }
 ```
+
+There is no separate `scale`: `BadgeLayout.sizeFrac` already is the numeral's
+size, so a chapter mark is a smaller layout, not a second knob. The camera
+credit is left out on purpose — it is measured from the hook's picture, and on
+another slide it would credit a photograph that is not the one under it.
 
 On `OverlayElement`, two optional fields, absent meaning exactly what every
 stored element means today:
@@ -295,7 +310,10 @@ is built, not after.
 
 Five commits, one task each, in this order:
 
-1. `PostSlide` gains the four fields + v29 + `trip-file.ts`'s four places; no UI.
+1. `PostSlide` gains the four fields + v29; no UI. **Built.** `trip-file.ts`
+   needed no line after all: the fields live inside a POST, and posts travel
+   whole (`portablePost` is a `structuredClone`) — the four-places rule is for
+   fields on the `TripDoc` itself.
 2. `slide-render.ts` branches on capacity; `hookContextFor` takes slide timing;
    `hookMoves` per slide; `deck-export.ts`'s settle generalises. No UI, and the
    output of every existing trip is byte-identical.
