@@ -121,6 +121,9 @@ function shortDate(iso: string | null): string {
 export default function WinnowBrowser({ connection, onAdd, onClose }: WinnowBrowserProps) {
   /** The add in flight, so the sheet's Cancel can stop it. */
   const adding = useRef<AbortController | null>(null);
+  // Unmounted by any other way out (a route change, the shell closing the
+  // sheet) is a Cancel too: the downloads must not land in the Library later.
+  useEffect(() => () => adding.current?.abort(), []);
   const client = useMemo(
     () => new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth }),
     [connection.baseUrl, connection.auth],
