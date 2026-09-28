@@ -130,6 +130,8 @@ is uploaded every time, as before. **A claim about what the GPU does is not
 true until a gate row draws it** — the swap row now runs from a bitmap too,
 drawn three times, and would read a stale or empty texture as a failure.
 
+**The LOOK is swapped too (2026-09-28).** "A new look is rightly a new grader" was the one exception above, and it cost a new WebGL2 context per step of every develop slider — each step bakes a new cube. `GraphGrader.setLut` replaces the cube pass in place (the old one's texture freed through `dispose`, which the cube pass gained), `PassGrader` and `holdGrades` forward it (dropping the held copy), and the Develop stage (`graderFrom`) and the Trips stage (lead and collage cells) call it whenever only the cube moved on the same picture. The gate row: grade through one cube, swap to another, compare with a grader built fresh around the second — identical, and the swap moves the picture.
+
 ## Three rules the graph now enforces itself (2026-09-20, the audit)
 
 - **A lost context is said once and drawn around.** `render()` checks

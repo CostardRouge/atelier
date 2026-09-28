@@ -80,6 +80,12 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
       // Put the unit back, or the NEXT pass's `u_src` binding lands on unit 1.
       gl.activeTexture(gl.TEXTURE0);
     },
+    // A grader that swaps its LOOK in place (`GraphGrader.setLut`) replaces
+    // this pass; its cube is a texture of up to 64³ half-floats, freed here.
+    dispose(gl) {
+      if (uploaded && uploaded.gl === gl) gl.deleteTexture(uploaded.tex);
+      uploaded = null;
+    },
   };
 }
 

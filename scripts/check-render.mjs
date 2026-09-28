@@ -681,6 +681,31 @@ const out = await page.evaluate(async () => {
     greyBitmap.close();
 
     results.swap = { swapped, built, swappedBitmap, again, canSwap: Boolean(reused.setPasses) };
+
+    // The LOOK swapped in place (`setLut`), from a bitmap the graph keeps:
+    // grade through one cube, swap to another, and compare with a grader
+    // built fresh around the second. A develop slider does this per step.
+    const warm = { title: 'warm', size: 2, domainMin: [0, 0, 0], domainMax: [1, 1, 1],
+      data: new Float32Array([0.2, 0, 0, 1, 0, 0, 0.2, 1, 0, 1, 1, 0, 0.2, 0, 1, 1, 0, 1, 0.2, 1, 1, 1, 1, 1]) };
+    const cool = { title: 'cool', size: 2, domainMin: [0, 0, 0], domainMax: [1, 1, 1],
+      data: new Float32Array([0, 0, 0.3, 1, 0, 0.3, 0, 1, 0.3, 1, 1, 0.3, 0, 0, 1, 1, 0, 1, 0, 1, 1, 1, 1, 1]) };
+    const bmp = await createImageBitmap(grey);
+    const readPx = (canvas) => {
+      const o = document.createElement('canvas'); o.width = W; o.height = H;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(canvas, 0, 0);
+      return [...oc.getImageData(W >> 1, H >> 1, 1, 1).data.slice(0, 3)];
+    };
+    const looked = holdGrades(makeFrameGrader(warm, W, H, 1));
+    const before = readPx(looked.render(bmp));
+    looked.setLut(cool);
+    const after = readPx(looked.render(bmp));
+    looked.dispose();
+    const freshCool = holdGrades(makeFrameGrader(cool, W, H, 1));
+    const answer = readPx(freshCool.render(bmp));
+    freshCool.dispose();
+    bmp.close();
+    results.lookSwap = { before, after, answer, canSwap: Boolean(looked.setLut) };
   }
 
   // --- a picture past the GPU's edge cap: fitted, graded, and not black ----
@@ -1657,6 +1682,17 @@ if (!swap.canSwap) {
     bad += 1;
     console.log('  FAIL  the two pass sets draw the same picture, so this proves nothing');
   }
+}
+{
+  const look = out.lookSwap;
+  const off = Math.max(...look.after.map((v, i) => Math.abs(v - look.answer[i])));
+  const moved = Math.max(...look.before.map((v, i) => Math.abs(v - look.answer[i])));
+  const ok = look.canSwap && off <= 1 && moved > 10;
+  if (!ok) bad += 1;
+  console.log(
+    `  ${ok ? 'ok  ' : 'FAIL'}  a look swapped in place reads ${JSON.stringify(look.after)}, a fresh grader ` +
+      `${JSON.stringify(look.answer)}; before the swap ${JSON.stringify(look.before)}`,
+  );
 }
 
 const fit = out.fit;

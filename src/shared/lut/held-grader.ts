@@ -22,6 +22,7 @@
  */
 
 import type { FilmTexture } from '../film/film-texture';
+import type { CubeLut } from '../lib/cube-parser';
 import type { FrameGrader, GradeSource, PassGrader } from './frame-grader';
 import type { RenderPass } from '../render/graph';
 
@@ -52,6 +53,8 @@ export interface HeldGrader extends FrameGrader {
    * graded through the texture that just left.
    */
   setFilm?: (film: FilmTexture | null) => void;
+  /** Change the look under the held grade — and forget the held copy, graded through the old one. */
+  setLut?: (lut: CubeLut | null) => void;
 }
 
 function isCanvas(source: GradeSource): source is RasterSurface {
@@ -116,6 +119,7 @@ export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster)
   let copyTried = false;
   const swappable = (inner as Partial<PassGrader>).setPasses;
   const filmable = (inner as Partial<PassGrader>).setFilm;
+  const lookable = (inner as Partial<PassGrader>).setLut;
 
   return {
     ...(swappable
@@ -135,6 +139,15 @@ export function holdGrades(inner: FrameGrader, copy: CopyPicture = copyToRaster)
             // The held copy wears the texture that just left — and on a still
             // it is the ONLY thing the grain slider could move, so without
             // this the slider is inert on the one surface it is tuned on.
+            graded = null;
+            held = null;
+          },
+        }
+      : {}),
+    ...(lookable
+      ? {
+          setLut(lut: CubeLut | null) {
+            lookable.call(inner, lut);
             graded = null;
             held = null;
           },

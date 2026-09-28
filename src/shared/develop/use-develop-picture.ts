@@ -212,6 +212,13 @@ function graderFrom(
     }
     // Compared by VALUE: the panel hands down a new object on every slider
     // step, and identity would rebuild the grader per frame of a drag.
+    // A new LOOK on the same picture is swapped in place: a develop slider
+    // bakes a new cube per step, and a rebuilt grader was a new WebGL2
+    // context per step (the audit of 2026-09-22).
+    if (cur && cur.lut !== lut && cur.w === s.width && cur.h === s.height && cur.grader.setLut) {
+      cur.grader.setLut(lut);
+      cur.lut = lut;
+    }
     const sized = cur && cur.lut === lut && cur.w === s.width && cur.h === s.height;
     if (
       sized &&
