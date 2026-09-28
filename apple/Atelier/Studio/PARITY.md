@@ -34,7 +34,7 @@ twin, the rules Trips and Develop keep for their re-fetch).
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 147 ✅ · 19 ≠ · 7 ⏳ — plus the deferrals gathered at the end (the Export tab alone: 29 ✅ · 6 ≠ · 1 ⏳).
+Rows: 154 ✅ · 20 ≠ · 4 ⏳ — plus the deferrals gathered at the end (the Export tab alone: 29 ✅ · 6 ≠ · 1 ⏳).
 
 ## Documents (`Store/StudioStore.swift`)
 
@@ -263,16 +263,21 @@ Rows: 147 ✅ · 19 ≠ · 7 ⏳ — plus the deferrals gathered at the end (the
 |---|---|---|
 | Opened from the Grade tab's settled row, over a photo or the clip's frame at that instant | ✅ | ✅ |
 | The preview: the draft develop FIRST, then the look, one cube; the film after it | ✅ | ✅ |
-| Histogram of what is shown | ✅ | ✅ |
+| Histogram of what is shown — the picture as delivered, never the clipping painted on it | ✅ `DevelopSheetPicture.histogram` | ✅ |
 | Auto tone / colour, measured on the picture AS SHOT | ✅ | ✅ |
 | Light · white balance · curve · levels · mixer · grading | ✅ the Develop panels themselves | ✅ |
 | Presets: the personal book as chips, Save… | ✅ `PresetBookStore` | ✅ |
 | Apply to the N other media, each under its own hash | ✅ | ✅ |
-| Done writes the media's develop (hash-stamped); Cancel drops the draft; nil when as shot | ✅ | ✅ |
-| The eyedropper (white balance on a pixel) | ⏳ the sheet's picture has no pick gesture yet | ⏳ |
-| The before/after wipe and the zoom (to 4000 %) | ⏳ the sheet's picture is a still preview | ⏳ |
-| The session clipboard (copy / paste a develop) | ⏳ | ⏳ |
-| The fidelity chip / renditions (a RAW's sensor) | ⏳ the Studio's media are what the file draws; RAW develop stays Develop's | ⏳ |
+| Done writes the media's develop (hash-stamped); Cancel drops the draft; nil when as shot; Enter / Escape | ✅ `.defaultAction` / `.cancelAction` | ✅ |
+| The picture side is the ONE sheet every host draws (`DevelopSheet.tsx` + the workbench blocks) | ✅ the shared `Develop/Sheet/` — `DevelopSheetFrame` over `DevelopSheetPicture`, the Studio adapting its picture (the stage's own decode), its draft and its grade (`DevelopSheetLook`: the draft develop, then the project's look, one cube, the film after) | ✅ |
+| The eyedropper: one click reads the picture AS SHOT through the viewport's own draw, `whiteBalanceFor`, "picked grey · temperature n, tint n" | ✅ `DevelopSheetStage` over `StageGeometry.pointAt`, the wipe and the pan standing down while it is armed | ✅ |
+| The before/after wipe (before LEFT, after RIGHT, no split is 0), ◐ hold for before | ✅ `DevelopSheetStage`; `\` holds too | ✅ |
+| Always comparing | `A/B` in the bar, remembered on this device, suspended while the dropper is armed | ≠ the Develop stage's switch in the sheet too |
+| The view zoom to 4000 % — wheel, pinch, `Z`, the arrows pan once zoomed; smooth ↔ pixels past 1:1 | ✅ `LookingZoom` + `StageZoomPill` (no crop row), a double tap, the Mac's wheel | ✅ |
+| The loupe past the stage's 1:1 | "the stage’s pixels, magnified" said on the picture instead | ⏳ the Develop tool has none yet either |
+| J paints the clipping; the pixel under the pointer said under the histogram | ✅ `J` or the histogram's end words; `readoutOf` into the `ReadoutStore` | ✅ |
+| The session clipboard (Copy · Paste · As shot in the header; ⌘C / ⌘V) — one clipboard for every host | ✅ `DevelopSheetBar` + `DevelopSheetKeys` over `copyDevelop` / `pasteDevelop` | ✅ |
+| The fidelity chip and its note — what the picture is, with its pixels (`pictureFidelity`), computed by the sheet | ✅ a still's decoded pixels, a clip's frame unmeasured as on the web; the renditions menu stays the Develop tool's, as on the web | ✅ |
 
 ## Deferred, and what each waits on
 
@@ -286,7 +291,7 @@ Rows: 147 ✅ · 19 ≠ · 7 ⏳ — plus the deferrals gathered at the end (the
   (`HeldOriginals`) yet.
 - ⏳ Trips' side of the hand-off: its bridge calls
   `StudioStore.shared.openHandedOver(_:)` then `shellNavigate(.studio)`.
-- ⏳ The develop sheet's eyedropper, wipe, zoom and clipboard.
+- ⏳ The develop sheet's loupe — it comes with the Develop tool's.
 - ⏳ A palette cell dragged onto the stage; the outro's own stage; the lane
   under the trim bar (not on the web either).
 - ⏳ Running any of it on a device.

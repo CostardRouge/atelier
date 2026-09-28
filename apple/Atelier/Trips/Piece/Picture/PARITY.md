@@ -16,7 +16,7 @@ here was run on a device: this container has no Apple toolchain, so every
 view was written against the SDK, parsed here (`swiftc -parse`) and compiled
 by CI alone.
 
-Rows: 89 ✅ · 4 ≠ · 5 ⏳
+Rows: 95 ✅ · 6 ≠ · 2 ⏳
 
 ## Files
 
@@ -33,7 +33,7 @@ Rows: 89 ✅ · 4 ≠ · 5 ⏳
 | `PieceTourMap.swift` | the map, and the Mac's wheel over it |
 | `PieceFormatSection.swift` | Format |
 | `PieceGradeSection.swift` | Grade and the rung chips (`PieceGradeScopeChips`) |
-| `PieceDevelopSheet.swift` | the develop sheet (`PieceDevelopSheet(model:)`) |
+| `PieceDevelopSheet.swift` | the develop sheet (`PieceDevelopSheet(model:)`): the cell's decode, the draft, the grade and the column — its picture side (the bar, the stage, the caption, the keys) is the shared `Develop/Sheet/` |
 
 ## The Picture section (`PiecePictureFileSection`)
 
@@ -138,18 +138,23 @@ Rows: 89 ✅ · 4 ≠ · 5 ⏳
 | The preview: the draft develop FIRST, then the look the picture wears on its rung, and its grain; the stage keeps the stored value until Done | `LookLibrary.resolve(gradeShown)` → one cube + `FilmPass`, off the main actor, the latest winning | ✅ |
 | Done writes the selected cell (as shot written as none); Cancel drops the draft; Enter / Escape | `setDevelop`, `.defaultAction` / `.cancelAction` | ✅ |
 | The footer: "writes to cell 2 of the hook" / "writes to slide 3", then what was just done | `developFooterHint` + the told line | ✅ |
-| Histogram of what the preview shows | `DevelopHistogramView` | ✅ |
-| Auto tone / Auto colour, measured on the picture AS SHOT | `DevelopAutoSection` over `measureSource` | ✅ |
-| The grey dropper: tap something grey, the white balance solved AS SHOT | a tap on the preview while armed → `whiteBalanceFor` on a 5 × 5 patch | ✅ |
+| Histogram of what the preview shows — the picture as delivered, never the clipping painted on it | `DevelopHistogramView` over `DevelopSheetPicture.histogram` | ✅ |
+| Auto tone / Auto colour, measured on the picture AS SHOT | `DevelopAutoSection` over the sheet's `measureSource` | ✅ |
+| The grey dropper: "click something grey", one click reads the picture AS SHOT through the viewport's own draw (a zoom or a pan cannot misplace it), `whiteBalanceFor`, "picked grey · temperature n, tint n", then put down; the wipe and the pan stand down while it is armed | `DevelopSheetStage`: a tap through `StageGeometry.pointAt` → a 5 × 5 patch of the source → `whiteBalanceFor`; "tap something grey" on a phone | ✅ |
 | The sliders, white balance, levels, curve, mixer (and B&W), grading wheels | the Develop panels, `trips.` folds | ✅ |
-| Copy / Paste / As shot — the session's clipboard shared with every host | `copyDevelop` / `pasteDevelop`, subscribed | ✅ |
+| Copy / Paste / As shot in the header — the session's clipboard shared with every host, Paste enabled the moment any host copies | `DevelopSheetBar` over `copyDevelop` / `pasteDevelop`, the listener on `DevelopSheetPicture`; ⌘C / ⌘V (`DevelopSheetKeys`: the Edit menu on the Mac, the keyboard's chords on an iPad) | ✅ |
 | Presets: the person's own book, a chip writes a COPY; Save… names the draft | `PresetBookStore`, an alert for the name | ✅ |
 | Apply to n other slides / n pictures of this day — a COPY now, Done still writes this one | `developApplyVerbs`, "done · apply to …" | ✅ |
 | The Look under it: the rung chips in its header, the host's grade panel on that rung | `PieceGradeScopeChips` + `GradeStackView` | ✅ |
-| The fidelity chip — what the picture is, with its pixels (`pictureFidelity`) | — | ⏳ the Develop tool's `DevelopBaseChip` reads a roll picture's facts; a Library file's (`FidelityFile` + the measured pixels) is not gathered for a Trips picture yet — the Studio's sheet has none either |
-| The caption under the picture (`DevelopCaption`, the develop's own lines) | — | ⏳ with the fidelity chip: it is the same facts' reader |
-| The before/after wipe, the view zoom to 4000 %, pixels/smooth, the loupe | the picture fitted in its box | ⏳ the Develop tool's stage (`DevelopStageView`, `LookingZoom`, the loupe) is bound to a `RollEditor`; waits on a stage that takes any source |
-| J paints the clipping; the readout under the pointer | — | ⏳ the same stage |
+| The fidelity chip — what the picture is, with its pixels (`pictureFidelity`), computed by the SHEET from the file and what it measured, never by the host | `DevelopSheetPicture.fidelity`: a still's own decode (its pixels, the camera's render inside a RAW, the sensor's size), a clip's frame unmeasured as on the web; a RAW with no render of its own is named the system's demosaic, as the Develop tool names it | ✅ |
+| The caption under the picture (`DevelopCaption`): the develop's sentence, the fidelity's note, the gesture that applies now ("drag across the picture to compare…", "nothing changes the picture yet") | `DevelopSheetCaption` — "pinch or double-tap to look closer" on a phone, "wheel or pinch" on the Mac | ✅ |
+| The before/after wipe: before LEFT, after RIGHT, no split is 0; a drag across the picture at the fit, the handle when zoomed; `after` / `before · after` / `before`; ◐ hold for before | `DevelopSheetStage`, the Develop stage's rules over `DevelopSheetPicture` (`wipe`, `holding`, `before` rendered once as shot); `\` holds too | ✅ |
+| Always comparing | `A/B` in the bar, remembered on this device (`atelier.develop.sheet.compare`), suspended while the dropper is armed and the divider back where it was | ≠ the Develop stage's switch in the sheet too — one way of looking in every Develop screen |
+| The view zoom to 4000 % — wheel, pinch, `Z`, the arrows pan once zoomed; one preview pixel per device pixel a LANDMARK; `smooth` / `pixels` past 1:1, the device's preference shared with the Develop tool | `LookingZoom` + `StageZoomPill` (Fit · 100 % · Smooth · Pixels as pixels under the `%`, no crop row), a double tap, the Mac's wheel through `WheelCatcher`; `atelier.develop.pixelView` | ✅ |
+| The zoom pill only above 820px; the pixels pill only while magnifying | the pill at every width, smooth ↔ pixels under its `%` | ≠ the Develop stage's rule: a label of fixed width, nothing inserted, and the pill answers where a pinch cannot |
+| The loupe: past the stage's 1:1 the file decoded whole and drawn at its own density | "the stage’s pixels, magnified" said on the picture instead | ⏳ the Develop tool has no loupe yet either (`LookingZoom`); the sheet takes it the day the stage does |
+| J paints the clipping on the picture (the histogram's end words are the switch); the pixel under the pointer said under the histogram, "before ·" on the left of the divider | `J` (`DevelopSheetKeys`) or the end words → `toggleClipping`, painted by `ClippingPass` over what is SHOWN only; `onContinuousHover` → `readoutOf` → the `ReadoutStore` the histogram's middle line listens to | ✅ |
+| The picture beside the column on a wide sheet; on a phone the picture takes 38 % of the height and the column scrolls under it | `DevelopSheetFrame`, split at 820 points measured on the sheet itself | ✅ |
 | A preset that carries a look | — | ⏳ the web's sheet does not offer it either (the roll's editor does) |
 
 ## Format (`PieceFormatSection`)
