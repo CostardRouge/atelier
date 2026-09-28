@@ -11,8 +11,9 @@
 // scroll wheel and trackpad (`WheelCatcher`) — while SwiftUI's own pinch,
 // drag and double tap call the same three verbs. Past the stage's 1:1 the
 // picture is drawn smooth or as pixels (`pixelView`, the web's
-// `atelier.develop.pixelView`); the loupe that decodes the file whole there
-// is not built yet, and the pill says the stage's pixels are what is magnified.
+// `atelier.develop.pixelView`), and the LOUPE renders the file whole there
+// and draws it over the stage (`StageLoupe`) — past the file's own 1:1 the
+// same choice applies to it.
 
 import CoreGraphics
 import Foundation

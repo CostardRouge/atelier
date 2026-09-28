@@ -21,7 +21,8 @@ Where things are:
 
 Who registers a task today: the Develop roll's run (`Develop/Store/RollEditor+Run.swift`),
 the stage opening a picture (`Develop/Store/RollEditor.swift`), the stage's
-sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the pack import
+sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the stage's loupe
+(`Develop/Stage/StageLoupe.swift`, through `TaskCenter.run`), the pack import
 (`Look/PackManagerModel.swift`), the LUT studio's batch
 (`Instruments/Lut/LutStudioModel.swift`) and the Composer's export
 (`Instruments/Composer/ComposerModel.swift`) — all through `TaskCenter.start`.
@@ -87,7 +88,7 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the pack import
 | The stage's decode of a render: `Opening <file>`, a sweep, no Cancel (the browser's decode cannot stop), scoped to the picture | `RollEditor.startRender` while the stage holds no picture yet: the decode, a pack look's lattice and the first render as ONE task; a later render (a slider's step) is none | ✅ |
 | `decodeRaw`: `Opening <file>` · `the sensor’s data`, a sweep, scoped | `FullDevelopRenderPlan.sensorDecode` on the stage's budget, once per decode it holds (an export's is under the run's task) | ✅ |
 | Its Cancel drops the decoder's turn, takes the picture back to its render (`base: null`) and says so | no Cancel: `CIRAWFilter` cannot be stopped half-way, and a button that does nothing is worse than none — the chip's `decoding the sensor’s data…` and its proxy row stay the way back | ≠ |
-| The loupe's decode, `Looking closer at <file>` · `the file at its own density`, with a Cancel | ⏳ the loupe is not built (Develop's `PARITY.md`: the stage says "the stage's pixels, magnified") | ⏳ |
+| The loupe's decode, `Looking closer at <file>` · `the file at its own density`, with a Cancel | `StageLoupe` through `TaskCenter.run`, scoped to the picture: a render cannot stop half-way, so its Cancel lets it finish and throws it away (`loupe · cancelled`), as the web's lets the browser finish a bitmap | ✅ |
 
 ## Exports — `use-roll-export.ts`, `use-post-exports.ts`, `StudioEditor.tsx` (T4)
 
@@ -105,4 +106,4 @@ sensor decode (`Develop/Render/FullDevelopRenderPlan.swift`), the pack import
 | The pack import: `Importing <pack>`, `i of N`, NO Cancel — the index is written last | `PackManagerModel.run`, the sheet keeping its own line | ✅ |
 | A surface beside the VERB stays; one that only repeats the pill goes | the Develop Export tab's line and Cancel, the instruments' bars and Cancel stay beside their buttons; nothing here drew a private bar the pill now repeats | ✅ |
 
-**Counts**: 44 rows — 33 ✅ (4 of them native additions), 6 ⏳, 5 ≠ (built differently on purpose).
+**Counts**: 44 rows — 34 ✅ (4 of them native additions), 5 ⏳, 5 ≠ (built differently on purpose).

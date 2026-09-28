@@ -15,6 +15,8 @@
 //
 // Under the picture, its BORDER where it has one (`StageGround`: the render
 // plan's own `bordered` canvas, the crop centred on it), off the Crop tab.
+// Past the stage's 1:1, the LOUPE (`StageLoupe`) draws the file at its own
+// density over the picture, and its chip says where it stands.
 // Over the picture: the tool's overlay (`StageOverlaySlot`), then the chips —
 // `after` / `before · after` / `before`, what this stage does NOT draw yet,
 // the facts under `I`, and `◐ hold for before` — and the open picture's
@@ -35,6 +37,8 @@ struct DevelopStageView: View {
     @State private var pinchStart: Double?
     @State private var dragLast: CGSize?
     @State private var pixels: StagePixels?
+    /// Past the stage's 1:1, the file at its own density (`StageLoupe`).
+    @State private var loupe = StageLoupe()
 
     var body: some View {
         GeometryReader { geo in
@@ -46,6 +50,9 @@ struct DevelopStageView: View {
                         groundLayer(ground, geometry)
                     }
                     pictureLayer(stage, geometry)
+                    if !editor.holding, let file = loupe.shown(over: stage) {
+                        loupeLayer(file, geometry)
+                    }
                     if editor.comparing && editor.wipe > 0 {
                         divider(geometry)
                     }
@@ -78,7 +85,15 @@ struct DevelopStageView: View {
         .onChange(of: editor.openId) { _, _ in
             zoom.reset()
             editor.readoutStore.set(nil)
+            loupe.drop()
         }
+        // The loupe follows the view past the stage's 1:1, the picture and
+        // each render the stage lands.
+        .onChange(of: LoupeKey(wanted: loupeWanted, picture: editor.openId,
+                               stage: editor.stage.map { ObjectIdentifier($0) }), initial: true) { _, key in
+            loupe.sync(wanted: key.wanted, editor: editor)
+        }
+        .onDisappear { loupe.drop() }
         // The Crop tab raises its tool; the open picture's lens is looked up.
         .modifier(CropTabHooks(editor: editor))
         // The clipping (J) is painted by the render plan over what the stage
@@ -134,6 +149,35 @@ struct DevelopStageView: View {
         .animation(zoom.settling ? .easeOut(duration: 0.22) : nil, value: zoom.view)
         .opacity(editor.loading ? 0.6 : 1)
         .accessibilityLabel("The picture, corrected")
+    }
+
+    /// The loupe is asked for: the view past the stage's 1:1, the crop's
+    /// whole-picture stage not up.
+    private var loupeWanted: Bool {
+        zoom.magnifying && editor.stage != nil && !editor.activeTool.showsWholePicture
+    }
+
+    /// The LOUPE — the file's own pixels over the stage's, under the same
+    /// zoom, on the AFTER side of the wipe. Short of the file's own 1:1 it is
+    /// drawn smooth; past it, as the % menu says (`pixelView`).
+    private func loupeLayer(_ file: CGImage, _ geometry: StageGeometry) -> some View {
+        let fit = geometry.fitted
+        let onScreen = CGFloat(zoom.view.scale) * fit.width * displayScale
+        let pastFile = onScreen > CGFloat(file.width) + 0.5
+        let interpolation: Image.Interpolation = pastFile && zoom.pixelView == .pixels ? .none : .high
+        let kept = max(0, fit.width * CGFloat(1 - editor.shownWipe))
+        return Image(decorative: file, scale: 1, orientation: .up)
+            .resizable()
+            .interpolation(interpolation)
+            .frame(width: fit.width, height: fit.height)
+            .mask(alignment: .trailing) {
+                Rectangle().frame(width: kept)
+            }
+            .scaleEffect(zoom.view.scale)
+            .offset(x: zoom.view.x, y: zoom.view.y)
+            .animation(zoom.settling ? .easeOut(duration: 0.22) : nil, value: zoom.view)
+            .allowsHitTesting(false)
+            .accessibilityLabel("The picture at the file’s own density")
     }
 
     /// The picture's BORDER — the delivered canvas under the crop, centred on
@@ -224,8 +268,9 @@ struct DevelopStageView: View {
                         StageChip(text: "not drawn here: \(editor.unrendered.joined(separator: ", "))", tone: palette.warn)
                     }
                     Spacer(minLength: 0)
-                    if zoom.magnifying {
-                        StageChip(text: "the stage’s pixels, magnified")
+                    // Past the stage's own pixels: what the loupe shows, or why not.
+                    if let words = loupe.words {
+                        StageChip(text: words)
                     }
                 }
                 .allowsHitTesting(false)
@@ -315,6 +360,13 @@ struct DevelopStageView: View {
         let painted = editor.clipping && !isBefore
         editor.readoutStore.set(StageReadout(readout: readoutOf(rgb.0, rgb.1, rgb.2, clipping: painted), before: isBefore))
     }
+}
+
+/// What the loupe follows — the view past the stage's 1:1, the picture, the render.
+private struct LoupeKey: Equatable {
+    let wanted: Bool
+    let picture: String?
+    let stage: ObjectIdentifier?
 }
 
 /// What decides the stage's boxes — the zoom is re-laid out when it moves.

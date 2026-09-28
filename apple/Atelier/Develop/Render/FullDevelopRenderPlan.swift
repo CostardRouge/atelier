@@ -32,8 +32,11 @@
 // in every DELIVERY (the export's run cuts its file from it); a preview
 // render stays the crop, and the stage lays the same `bordered` canvas UNDER
 // it (`Stage/StageGround.swift`) — the Crop tab's delivered preview shows it
-// there. What this plan does not draw it SAYS (`unrendered`), in the
-// inspector's words.
+// there. The LOUPE's render (`RenderBudget.loupe`, `Stage/StageLoupe.swift`)
+// is the file whole like a delivery and LOOKED at like the stage — no border,
+// the stage's held subjects and ways of looking, a RAW's sensor decoded once
+// at its own density and held until the loupe lets go (`releaseLoupe`). What
+// this plan does not draw it SAYS (`unrendered`), in the inspector's words.
 
 import AtelierKit
 import CoreImage
@@ -81,6 +84,11 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
     private let cubes = CubeCache(capacity: 8)
     /// The stage's sensor decodes, rendered once into half floats.
     private let sensors = SensorCache()
+    /// The LOUPE's sensor decode — the file at its own density, rendered
+    /// once into half floats and held while the loupe looks
+    /// (`releaseLoupe`), never beside the stage's in one ceiling: the
+    /// loupe's whole sensor would push the stage's own decode out.
+    private var loupeSensor: (key: String, decode: SensorDecode)?
     /// The stage's layer passes, kept while nothing they were built from moved.
     private let stageLayers = LayerStack()
     private let lock = NSLock()
@@ -124,6 +132,13 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         return sharpenMask
     }
 
+    /// The loupe let go of the file — its held sensor decode goes with it.
+    func releaseLoupe() {
+        lock.lock()
+        loupeSensor = nil
+        lock.unlock()
+    }
+
     // MARK: - DevelopRenderPlan
 
     /// A pack look's lattice from the vault, before the render asks for it.
@@ -165,8 +180,10 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         let w = Double(made.source.extent.width)
         let h = Double(made.source.extent.height)
         var framed = FullDevelopRenderPlan.frame(graded, width: w, height: h, aspect: p.aspect, framing: p.framing)
-        // A delivery is the crop ON ITS BORDER; what is looked at is the crop.
-        if !budget.isPreview {
+        // A delivery is the crop ON ITS BORDER; what is looked at is the crop
+        // (the stage lays the border under it, `StageGround`; the loupe is
+        // drawn over the crop alone).
+        if !budget.isPreview && !budget.isLoupe {
             framed = FullDevelopRenderPlan.bordered(framed, p.border, context: context)
         }
         // Cut at the render's scale, then brought to what is delivered — once.
@@ -199,8 +216,11 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
     /// order, before the crop. What `render` draws, and what the gate reads
     /// the order from.
     func assemble(_ p: RollPicture, _ d: DecodedPicture, _ budget: RenderBudget, asShot: Bool = false) -> Assembly {
-        let preview = budget.isPreview
+        // The loupe is looked at like the stage — the subjects the stage
+        // holds, its ways of looking — and never tells or asks anything.
+        let preview = budget.isPreview || budget.isLoupe
         let stage = budget == .stage && !asShot
+        let looked = stage || (budget.isLoupe && !asShot)
         let source = self.source(p, d, budget)
         // What the stage drew from is what the editor is told — never an
         // export's decode of the same picture at another size.
@@ -232,7 +252,7 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         let ar = sw > 0 && sh > 0 ? sw / sh : 1
 
         // The passes, in the web's order.
-        let sharpenView = stage ? stageSharpenMask() : false
+        let sharpenView = looked ? stageSharpenMask() : false
         let family = GeometryFamilyPasses(picture: p, sourceWidth: sw, sourceHeight: sh,
                                           calibration: source.calibration, onSensor: source.onSensor)
         let detail = DetailPasses.make(for: p, aspectRatio: ar, decodeScale: source.fileScale,
@@ -249,9 +269,10 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         // The Layers tab keeps the open picture's subjects itself, found in
         // the file's frame: they stand where that is this frame too — never
         // over a camera warp the tab's view does not bend by.
+        // The loupe takes them too; the tab's wash and blink stay the stage's.
         let seam = stage ? layerLooking : nil
-        if let seam, !source.onSensor || source.calibration.warp == nil {
-            maps.merge(seam.subjects) { _, theirs in theirs }
+        if let kept = looked ? layerLooking : nil, !source.onSensor || source.calibration.warp == nil {
+            maps.merge(kept.subjects) { _, theirs in theirs }
         }
         let layers: [RenderPass]
         if drawingLayers(p.layers).isEmpty {
@@ -332,7 +353,7 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         lock.lock()
         let refusedBefore = refused.contains(p.id)
         lock.unlock()
-        if budget.isPreview && refusedBefore { return asDecoded }
+        if isLooked(budget) && refusedBefore { return asDecoded }
         let decoded = sensorDecode(p, d, raw, budget, measure: dev.rawGain == nil)
         lock.lock()
         if decoded == nil { refused.insert(p.id) } else { refused.remove(p.id) }
@@ -352,6 +373,7 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         let held = budget == .stage
         let key = "\(p.id)|\(raw.name)|\(raw.fileSize)|\(ObjectIdentifier(d).hashValue)|\(Int((edge ?? 0).rounded()))"
         if held, let hit = sensors.get(key), hit.gain != nil || !measure { return hit }
+        if budget.isLoupe { return loupeDecode(key, raw, edge: edge, measure: measure) }
         // The stage's demosaic is the dearest thing it does: a TASK of its
         // own on the picture's edge (`tasks.md` T3, the web's `decodeRaw`) —
         // with no Cancel, since the system's RAW developer cannot be stopped
@@ -365,6 +387,28 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         return decode
     }
 
+    /// The loupe's sensor decode: once per file and edge, into half floats,
+    /// held until the loupe lets go. Under the loupe's own task
+    /// (`StageLoupe`), so it starts none of its own.
+    private func loupeDecode(_ key: String, _ raw: RawAccess, edge: Double?, measure: Bool) -> SensorDecode? {
+        lock.lock()
+        let hit = loupeSensor
+        lock.unlock()
+        if let hit, hit.key == key, hit.decode.gain != nil || !measure { return hit.decode }
+        guard let data = try? raw.reread() else { return nil }
+        guard let decode = SensorDecoder.decode(data, hint: raw.hint, maxEdge: edge, materialize: true,
+                                                measure: measure, context: context) else { return nil }
+        lock.lock()
+        loupeSensor = (key, decode)
+        lock.unlock()
+        return decode
+    }
+
+    /// Whether `budget` is only LOOKED at — the stage, a cell, the loupe.
+    private func isLooked(_ budget: RenderBudget) -> Bool {
+        budget.isPreview || budget.isLoupe
+    }
+
     /// The long edge a sensor is decoded at for `budget`, or nil for whole:
     /// the stage's own edge (`stageEdge`, held once decoded), else what the
     /// budget renders at, within this device's ceiling for its purpose.
@@ -373,7 +417,7 @@ final class FullDevelopRenderPlan: DevelopRenderPlan, @unchecked Sendable {
         if budget == .stage {
             return SensorDecoder.stageEdge(sensorWidth: sensorW, sensorHeight: sensorH, klass: device)
         }
-        let purpose: RawPurpose = budget.isPreview ? .stage : .export
+        let purpose: RawPurpose = budget.isLoupe ? .loupe : (budget.isPreview ? .stage : .export)
         let scale = FullDevelopRenderPlan.renderScale(budget, width: sensorW, height: sensorH, aspect: p.aspect,
                                                       framing: p.framing)
         let wanted = min(long * scale, rawDecodeEdge(purpose, device, .infinity))

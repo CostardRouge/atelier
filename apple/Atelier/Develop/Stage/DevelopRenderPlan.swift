@@ -17,6 +17,10 @@ import AtelierKit
 struct RenderBudget: Equatable {
     /// A cap on the delivered frame's long edge; nil renders it whole.
     var longEdge: Int?
+    /// The LOUPE's: the file at its own density, LOOKED at past the stage's
+    /// 1:1 (`StageLoupe`) — whole like a delivery, never delivered: no border,
+    /// the stage's ways of looking, its held subjects.
+    var isLoupe = false
 
     /// One 4K frame, never the media's own density (`device-memory.md`).
     static let stage = RenderBudget(longEdge: PictureRenderer.stageLongEdge)
@@ -24,6 +28,8 @@ struct RenderBudget: Equatable {
     static let thumbnail = RenderBudget(longEdge: PictureRenderer.thumbnailLongEdge)
     /// The picture at its own density — what a delivered file is made from.
     static let whole = RenderBudget(longEdge: nil)
+    /// The picture at its own density under the loupe.
+    static let loupe = RenderBudget(longEdge: nil, isLoupe: true)
 }
 
 protocol DevelopRenderPlan {
