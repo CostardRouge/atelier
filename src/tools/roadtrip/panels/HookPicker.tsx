@@ -13,38 +13,54 @@
  *
  * The picker is also the variant panel's HOST: a panel may not open the
  * Library or ask an instance itself (`hook-variant.ts`), so the things it may
- * ask for — the picture chooser, how its pictures are loading — are handed
- * down from here, and the chooser is drawn here.
+ * ask for — the picture chooser, how its pictures are loading, the big
+ * picking map — are handed down from here, and the sheets are drawn here.
  */
 
 import { useCallback, useMemo, useState } from 'react';
 import {
   setHookOptions,
-  setHookVariant,
+  switchHookVariant,
   type HookContext,
   type HookLayer,
   type HookPanelHost,
   type HookPictureChoice,
   type HookPickedPicture,
   type HookPictureStatus,
+  type HookShelf,
+  type HookStopsChoice,
   type HookVariant,
 } from '../../../shared/roadtrip/hooks/hook-variant';
 import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registry';
+import { tripPlaces, type MapStop } from '../../../shared/roadtrip/hooks/stops';
 import HookPicturesModal from '../HookPicturesModal';
+import StopsMapSheet from '../StopsMapSheet';
 
 interface HookPickerProps {
   /** The piece's stored layers; the picker writes the first and only the first. */
   layers: HookLayer[];
+  /**
+   * What the openers not on the card were given (`PostBadge.hookShelf`) — a
+   * switch sets the current one's aside and takes the chosen one's back.
+   */
+  shelf?: HookShelf;
   /** What the variants were prepared against — also what an option panel reads. */
   ctx: HookContext;
   /** How the opener's pictures are coming along, for its panel to say. */
   pictureStatus?: HookPictureStatus;
-  onChange: (layers: HookLayer[]) => void;
+  /** The shelf is passed only when a switch changed it. */
+  onChange: (layers: HookLayer[], shelf?: HookShelf) => void;
   /**
    * Opens the trip's garage — the car every Virée drives. Absent where the
    * picker has no trip to write to, and the variant's panel says so instead.
    */
   onConfigureCar?: () => void;
+}
+
+interface StopsRequest {
+  stops: readonly MapStop[];
+  choice: HookStopsChoice;
+  resolve: (stops: MapStop[] | null) => void;
 }
 
 interface ChooseRequest {
@@ -55,6 +71,7 @@ interface ChooseRequest {
 
 export default function HookPicker({
   layers,
+  shelf,
   ctx,
   pictureStatus,
   onChange,
@@ -72,13 +89,23 @@ export default function HookPicker({
       ),
     [],
   );
+  const [placing, setPlacing] = useState<StopsRequest | null>(null);
+  const editStopsOnMap = useCallback(
+    (stops: readonly MapStop[], choice: HookStopsChoice = {}) =>
+      new Promise<MapStop[] | null>((resolve) => setPlacing({ stops, choice, resolve })),
+    [],
+  );
   const host = useMemo<HookPanelHost>(
-    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar }),
-    [choosePictures, pictureStatus, onConfigureCar],
+    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar, editStopsOnMap }),
+    [choosePictures, pictureStatus, onConfigureCar, editStopsOnMap],
   );
   const settle = (picked: HookPickedPicture[] | null) => {
     choosing?.resolve(picked);
     setChoosing(null);
+  };
+  const settleStops = (stops: MapStop[] | null) => {
+    placing?.resolve(stops);
+    setPlacing(null);
   };
 
   return (
@@ -94,7 +121,10 @@ export default function HookPicker({
               key={variant.id}
               type="button"
               disabled={!!unmet}
-              onClick={() => onChange(setHookVariant(layers, variant))}
+              onClick={() => {
+                const next = switchHookVariant(layers, shelf, variant, current);
+                onChange(next.hook, next.shelf);
+              }}
               aria-pressed={active}
               className={`flex items-center gap-3 px-3 py-2 rounded-paper border text-left transition-colors ${
                 unmet
@@ -139,6 +169,16 @@ export default function HookPicker({
           keepsLater={choosing.choice.keepsLater}
           onCancel={() => settle(null)}
           onConfirm={(picked) => settle(picked)}
+        />
+      )}
+
+      {placing && (
+        <StopsMapSheet
+          stops={placing.stops}
+          places={tripPlaces(ctx.stages)}
+          title={placing.choice.title}
+          onCancel={() => settleStops(null)}
+          onDone={(stops) => settleStops(stops)}
         />
       )}
     </div>

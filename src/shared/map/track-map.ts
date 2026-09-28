@@ -31,9 +31,17 @@ export const OSM_TILES = 'https://tile.openstreetmap.org/{z}/{x}/{y}.png';
 export const TILES_TOGGLE = {
   off: 'Load map background',
   on: 'Map background: on',
+  // Said by every surface that offers tiles — the flight map, the Composer and
+  // Trips' picking map — so it names what they all keep: their own drawing.
   title:
-    'Fetch map tiles from OpenStreetMap — this reveals the area you are viewing to its tile server. The flight path always draws offline.',
+    'Fetch map tiles from OpenStreetMap — this reveals the area you are viewing to its tile server. Everything drawn over it works offline.',
 } as const;
+
+/**
+ * The credit the tiles owe OpenStreetMap, written wherever they are shown —
+ * MapLibre's own attribution control is off in every surface of the suite.
+ */
+export const OSM_CREDIT = '© OpenStreetMap contributors';
 
 /** A tiles-free base style: just the paper backdrop, the track draws on top. */
 export const TRACK_MAP_STYLE: StyleSpecification = {
@@ -68,8 +76,11 @@ export function addTrackLine(map: MlMap, track: readonly TrackPoint[]): void {
   });
 }
 
-/** Add or remove the opt-in OpenStreetMap raster layer, kept beneath the track. */
-export function setTiles(map: MlMap, on: boolean): void {
+/**
+ * Add or remove the opt-in OpenStreetMap raster layer, kept beneath `before` —
+ * the track line by default; a surface drawing other layers names its lowest.
+ */
+export function setTiles(map: MlMap, on: boolean, before = 'track-line'): void {
   if (on) {
     if (!map.getSource('osm')) {
       map.addSource('osm', {
@@ -77,9 +88,9 @@ export function setTiles(map: MlMap, on: boolean): void {
         tiles: [OSM_TILES],
         tileSize: 256,
         maxzoom: 19,
-        attribution: '© OpenStreetMap contributors',
+        attribution: OSM_CREDIT,
       });
-      map.addLayer({ id: 'osm', type: 'raster', source: 'osm' }, 'track-line');
+      map.addLayer({ id: 'osm', type: 'raster', source: 'osm' }, map.getLayer(before) ? before : undefined);
     }
   } else {
     if (map.getLayer('osm')) map.removeLayer('osm');

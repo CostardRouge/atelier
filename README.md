@@ -40,10 +40,16 @@ Today it ships ten tools, converging into a few editors:
 > *optional* features can make a request, all off by default and all stated
 > where you turn them on:
 >
-> - The **base map** under a flight path, in the Flight Map and the Composer:
->   turning it on fetches map tiles from OpenStreetMap, which reveals the
->   viewed area to that tile server. The flight path itself always draws
->   locally.
+> - The **base map** under a flight path, in the Flight Map and the Composer,
+>   and under the map Trips' openers pick their stops on: turning it on
+>   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
+>   tile server. The flight path, the stops and the towns always draw locally;
+>   the choice is never remembered past the tab. The same tiles can also be
+>   drawn **into** an Itinerary or a Virée — in the preview and in the
+>   exported file, credited «© OpenStreetMap contributors» as the licence
+>   requires — when a piece asks for them and this device has said yes: the
+>   yes is kept on the device, never in the trip, so a trip opened elsewhere
+>   fetches nothing until that device says yes too.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
 >   and coordinates back. Every place can be typed by hand instead, so the
@@ -888,7 +894,10 @@ signature that makes a post recognisable in a feed.
 
 **The opener.** The badge is one way to open a piece; the Look tab's first
 section picks another from cards — a card you cannot feed (a route with no
-located place) is greyed with the reason, never hidden. **Badge** is the plain
+located place) is greyed with the reason, never hidden. Switching is never a
+loss: the opener you leave keeps everything you gave it — an Itinerary's stops,
+Virée's picked pictures, every setting — and switching back finds it exactly as
+it was, after a reload too. **Badge** is the plain
 one. **Défilé** runs the trip past before landing on the day: a measuring tape
 of the whole trip sweeps to the day you are telling, decelerating like a
 mechanism coming to rest; every stop flashes a real picture as the head lands on
@@ -915,9 +924,13 @@ every visit. **Virée** puts a little car on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
 through its stops, and a cartoon Land Cruiser Prado, a miniature rendered in the
 browser with its wheels turning, driving from stop to stop. The stops are the
-legs' located places, arriving where this day's leg ends, or the **pictures
-you pick** — each one shot with a position in its EXIF is a stop, in the order
-they were shot, a run shot at one spot one stop. At a stop with pictures the car
+legs' located places, arriving where this day's leg ends; **your own places**,
+put on a map with the very editor the Itinerary uses — any place, on a leg or
+not, in your order, each able to hold a picture the car halts to show; or the
+**pictures you pick** — each one shot with a position in its EXIF is a stop, in
+the order they were shot, a run shot at one spot one stop. Your places follow
+you from one opener to the other: the stops picked for an Itinerary are the ones
+Virée drives when you switch, and back. At a stop with pictures the car
 halts and they pop as **prints** beside it, piled like a stack on the map, or
 fill the frame, or take the paper's place behind the road while it halts; a
 picture without a position rides with the stop before it, or with the end of
@@ -930,7 +943,9 @@ width), the pictures (how they show, a beat per picture, whether the prints
 stay, their size, a pause at every stop), the car (how big it is drawn and
 how steeply the camera looks at it, per piece — the car itself is the trip's,
 below), the map (paper or the picture itself, paper and ink colours, lines of
-latitude and longitude, a vignette, where it sits and how big, dots, the stops'
+latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
+own map under the road and the car, in the preview and the file, credited
+and at a strength that lets the paper show through —, where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives), the motion (the time on the road, the five motions, a hold
 first, a beat at the end, whether the camera fits the whole route or follows
@@ -955,13 +970,22 @@ settings as its Car section, where every switch writes at once. On a wide
 screen both show the car beside its choices, which scroll on their own, so a
 switch far down the list is seen on the car the moment it flips.
 
-**Itinerary** is the one you compose yourself: pick the
-stops on a map — click to drop one where you like, drag it to move it, take
+**Itinerary** is the one you compose yourself (and the editor Virée borrows for
+your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
-from stop to stop, waiting at each for as long as you ask. There are no tiles
-and no basemap: the picking map is the very projection the export draws, run
-backwards, so what you point at is what goes out. Each stop can carry **one
+from stop to stop, waiting at each for as long as you ask. The small map in
+the panel is the very projection the export draws, run backwards, so what you
+point at is what goes out. To **find** places, **Pick them on a map…** opens a
+big one: pan, zoom and pinch it, and every tap is the next stop, joined to the
+one before as you go — one, two, three. A tap near a town takes the town and
+its name (a switch turns that off, to drop a stop exactly where you tap), a
+hollow ring is one of the trip's own places, a numbered stop is dragged to
+move it, a place can be searched for and added, and a stop you dropped with no
+name is offered the nearest town's (never given it). The towns come from the
+city index the app ships, so the map needs no network; the OpenStreetMap
+background is the optional one above, off until you turn it on. Nothing is
+written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one
 picture**, and how they are shown is the point of it: **pinned** beside their
 own dot as the pen lands (several on screen at once, on paper or bare, with a
 stem down to the dot), on a **card** under the map captioned with the stop's
@@ -975,7 +999,12 @@ dress: the line's width and its two colours, the stops still ahead dashed,
 faint or hidden, the dots and their size, numbers on them, the names at the
 ends, where the pen is, everywhere it has been or on every stop, a north
 arrow, and the distance travelled in km or miles counting up with the pen —
-the straight-line sum of what it has drawn, never a road distance. The pen can
+the straight-line sum of what it has drawn, never a road distance. **Real
+geography** can sit inside the map's box too: switch on its OpenStreetMap
+background and the tiles for that region are fetched, laid onto the opener's
+own projection (so the stops land on their towns to the pixel) and drawn in
+the preview and the exported file, at a strength you choose, with the credit
+the licence asks for in the corner. The pen can
 be a dot or a little plane, the badge's caption can follow it from stop to
 stop, and it ticks at each arrival on the same voices as Défilé. Every opener
 runs on the same clock as the badge, in the preview and in the file.
