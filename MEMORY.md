@@ -24,7 +24,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 
 ## Direction in five lines
 
-- **Local-first, no server, no account**: files are read in the browser and never uploaded. Every feature must hold this line; the documented exception is the Flight Map's opt-in OpenStreetMap base layer, off by default and surfaced explicitly (README, "The one network exception"). The full list of requests the app actually makes is in `local-first.md` — it is longer than that callout.
+- **Local-first, no server, no account**: files are read in the browser and never uploaded. Every feature must hold this line; the documented exception is the opt-in OpenStreetMap base layer under a flight path (Flight Map and Composer alike), off by default and surfaced explicitly (README, "The one network exception"). The full list of requests the app actually makes is in `local-first.md` — it is longer than that callout.
 - **A suite converging into one Studio**: a thin shell (`src/app/`) plus self-contained tools (`src/tools/*`) over a generic core (`src/shared/*`), all listed in one registry (`src/app/tools.tsx`) — and, since 2026-08-20, an agreed plan to merge the tools into a single `/studio` editor (phases and decisions in `studio.md`).
 - **Capture-oriented**: photo and video across devices (DJI, Apple, Sony), with DJI flight telemetry as the founding case.
 - **The browser is the runtime today, not forever**: pure logic is kept DOM-free so a native shell (Tauri, bundled ffmpeg) can reuse it — `shared/sources/file-sources.ts` is meant to be the only brick that changes.

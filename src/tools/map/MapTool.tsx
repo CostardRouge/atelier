@@ -7,6 +7,7 @@ import { formatHeading, formatGroundSpeed, motionAt } from '../../shared/telemet
 import { extractTrack, parsePosition } from '../../shared/telemetry/flight-path';
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { useFlightMap } from './use-flight-map';
+import { TILES_TOGGLE } from '../../shared/map/track-map';
 
 /** Asset kinds the flight map understands — it needs telemetry (the GPS). */
 const MAP_KINDS = ['video+telemetry', 'telemetry'] as const;
@@ -139,9 +140,9 @@ export default function MapTool() {
               onClick={() => setTilesOn((on) => !on)}
               aria-pressed={tilesOn}
               className="ml-auto flex-none inline-flex items-center gap-1.5 h-[2.1rem] px-[0.9rem] rounded-full border text-xs font-semibold transition-colors aria-pressed:border-accent aria-pressed:text-accent-ink aria-pressed:bg-accent-wash border-line-strong bg-paper text-ink-soft hover:border-faint hover:text-ink"
-              title="Load OpenStreetMap tiles — the only feature that makes a network request"
+              title={TILES_TOGGLE.title}
             >
-              {tilesOn ? 'Map background: on' : 'Load map background'}
+              {tilesOn ? TILES_TOGGLE.on : TILES_TOGGLE.off}
             </button>
           </>
         )}
