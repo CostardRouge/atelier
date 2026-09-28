@@ -86,7 +86,6 @@ struct OverviewLegsSheet: View {
         NavigationStack {
             LegsSheetView(store: model.store, tripId: model.tripId, selection: $model.selection)
                 .environment(\.adjustLegOnCalendar, AdjustLegOnCalendarAction { id in model.startAdjust(id) })
-                .safeAreaInset(edge: .bottom, spacing: 0) { adjustRow }
                 .navigationTitle("Stages")
                 #if os(iOS)
                 .navigationBarTitleDisplayMode(.inline)
@@ -111,31 +110,6 @@ struct OverviewLegsSheet: View {
             Text(OverviewWords.count(count, "leg"))
                 .font(Brand.mono(10))
                 .foregroundStyle(palette.muted)
-        }
-    }
-
-    /// The open leg's «Adjust on the calendar»: its dates dragged cell by
-    /// cell, one day = one cell, instead of a ruler a phone cannot aim at.
-    @ViewBuilder
-    private var adjustRow: some View {
-        if let trip = model.trip, let id = model.openLegId(trip),
-           let stage = trip.stages.first(where: { $0.id == id }) {
-            let label = stageLabel(stage)
-            let index = trip.stages.firstIndex { $0.id == id } ?? 0
-            HStack(spacing: 10) {
-                Circle().fill(OverviewLegTint.color(index)).frame(width: 9, height: 9)
-                Text(label.isEmpty ? "Unnamed stage" : label)
-                    .font(Brand.sans(13))
-                    .foregroundStyle(palette.inkSoft)
-                    .lineLimit(1)
-                Spacer(minLength: 4)
-                Button("Adjust on the calendar") { model.startAdjust(id) }
-                    .buttonStyle(OverviewInkButtonStyle(fill: false))
-            }
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
-            .background(palette.surface)
-            .overlay(alignment: .top) { Hairline() }
         }
     }
 }

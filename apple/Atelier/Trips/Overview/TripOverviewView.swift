@@ -31,7 +31,11 @@ struct TripOverviewView: View {
 
     @State private var model: TripOverviewModel
     @State private var thumbs = OverviewThumbs()
+    /// The picture «Situer cette photo» reads, its security scope held while
+    /// the sheet is up.
+    @State private var locating: LocatingPicture?
     @Environment(\.palette) private var palette
+    @Environment(LibraryStore.self) private var library: LibraryStore?
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
     #endif
@@ -84,13 +88,19 @@ struct TripOverviewView: View {
     private func mediaOffer(_ trip: TripDoc?, _ selected: IsoDate?) -> MediaActions? {
         guard let trip, let selected else { return nil }
         let actions = OverviewActions(model: model, openPiece: openPiece)
-        let verbs = postKinds.map { kind in
+        var verbs = postKinds.map { kind in
             MediaAction(id: kind.id.rawValue, label: kind.label, hint: "\(kind.hint) — from this picture") { _ in
                 actions.start(kind.id, on: selected)
             }
         }
+        // «Situer cette photo»: the picture's own date and position, one edit
+        // to the leg of its day (`LocatePictureSheet`).
+        verbs.append(MediaAction(id: "locate", label: "Locate it",
+                                 hint: "Read where and when this picture was taken, and put it on its day's leg") { _ in
+            locateActivePicture()
+        })
         return MediaActions(key: "trips-overview:\(trip.id):\(selected)",
-                            heading: "start a piece on \(formatIsoDate(selected))",
+                            heading: "start a piece on \(formatIsoDate(selected)) · or locate it",
                             actions: verbs)
     }
 
@@ -164,6 +174,24 @@ struct TripOverviewView: View {
                                      onSubmit: { model.saveDetails($0) })
                 }
             }
+            .sheet(item: $locating, onDismiss: { locating?.opened.close() }) { item in
+                LocatePictureSheet(store: store, tripId: tripId, fileURL: item.opened.url) { leg in
+                    item.opened.close()
+                    locating = nil
+                    guard let leg else { return }
+                    if let date = leg.day { model.selectDate(date) }
+                    model.selection.stageId = leg.stageId
+                }
+            }
+    }
+
+    /// Open the Library's active picture for «Situer cette photo»: its file
+    /// is opened here (a folder's scope must stay up while the sheet reads it)
+    /// and closed when the sheet goes.
+    private func locateActivePicture() {
+        guard let library, let asset = library.activeAsset, let dropped = library.dropped(asset),
+              let opened = try? LibraryFiles.open(dropped.location) else { return }
+        locating = LocatingPicture(opened: opened)
     }
 
     /// The hooks the screen draws: the open day's pieces, and in the Pictures
@@ -281,4 +309,10 @@ extension EnvironmentValues {
         TripOverviewView(store: TripOverviewFixtures.store(), tripId: TripOverviewFixtures.tripId,
                          day: .constant("2025-03-02"), openPiece: { _, _ in })
     }
+}
+
+/// A picture being located, its file held open for the sheet.
+struct LocatingPicture: Identifiable {
+    let id = UUID()
+    let opened: OpenedFile
 }

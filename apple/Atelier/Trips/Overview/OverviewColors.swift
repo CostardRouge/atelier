@@ -37,9 +37,8 @@ enum CalendarRungs {
 
 /// A leg's tint, by its index in the trip's stages.
 enum OverviewLegTint {
-    /// The kernel's tint for leg `index`, as a colour. A string this parser
-    /// cannot read falls back to the line token's grey, never to a colour
-    /// the kernel did not name.
+    /// The kernel's tint for leg `index`, as a colour; the line token's grey
+    /// only if the kernel named none.
     static func color(_ index: Int) -> Color {
         let n = tints.count
         guard n > 0 else { return fallback }
@@ -53,51 +52,12 @@ enum OverviewLegTint {
 
     private static let fallback = Color(hex: 0xB6AD9C)
 
-    /// The kernel's tints, converted once — `stageTint` cycles through them.
-    private static let tints: [Color] = stageTints.map { css -> Color in
-        guard let rgb = OverviewLegTint.oklchToSRGB(css) else { return OverviewLegTint.fallback }
-        return Color(.sRGB, red: rgb.r, green: rgb.g, blue: rgb.b, opacity: 1)
-    }
-
-    /// `oklch(L% C H)` → sRGB codes in 0…1 (Björn Ottosson's OKLab matrices),
-    /// clipped to the gamut. Nil for anything else.
-    static func oklchToSRGB(_ css: String) -> (r: Double, g: Double, b: Double)? {
-        let s = css.trimmingCharacters(in: .whitespaces).lowercased()
-        guard s.hasPrefix("oklch("), s.hasSuffix(")") else { return nil }
-        let inner = s.dropFirst(6).dropLast()
-        let parts = inner.split(whereSeparator: { $0 == " " || $0 == "," }).map(String.init)
-        guard parts.count >= 3 else { return nil }
-        let lightness: Double
-        if parts[0].hasSuffix("%") {
-            guard let v = Double(parts[0].dropLast()) else { return nil }
-            lightness = v / 100
-        } else {
-            guard let v = Double(parts[0]) else { return nil }
-            lightness = v
-        }
-        guard let chroma = Double(parts[1]),
-              let hue = Double(parts[2].replacingOccurrences(of: "deg", with: "")) else { return nil }
-        let radians = hue * .pi / 180
-        let a = chroma * cos(radians)
-        let b = chroma * sin(radians)
-
-        let lPrime = lightness + 0.3963377774 * a + 0.2158037573 * b
-        let mPrime = lightness - 0.1055613458 * a - 0.0638541728 * b
-        let sPrime = lightness - 0.0894841775 * a - 1.2914855480 * b
-        let l = lPrime * lPrime * lPrime
-        let m = mPrime * mPrime * mPrime
-        let sc = sPrime * sPrime * sPrime
-
-        let rLin = 4.0767416621 * l - 3.3077115913 * m + 0.2309699292 * sc
-        let gLin = -1.2684380046 * l + 2.6097574011 * m - 0.3413193965 * sc
-        let bLin = -0.0041960863 * l - 0.7034186147 * m + 1.7076147010 * sc
-        return (encode(rLin), encode(gLin), encode(bLin))
-    }
-
-    /// Linear light → an sRGB code, clipped.
-    private static func encode(_ linear: Double) -> Double {
-        let x = min(1, max(0, linear))
-        return x <= 0.0031308 ? 12.92 * x : 1.055 * pow(x, 1 / 2.4) - 0.055
+    /// The kernel's tints, converted once by the kernel's own oklch → sRGB
+    /// (`stageTintSrgb`, shared with the stages' ruler) — `stageTint` cycles
+    /// through them.
+    private static let tints: [Color] = stageTints.indices.map { index -> Color in
+        let rgb = stageTintSrgb(index)
+        return Color(.sRGB, red: rgb.red, green: rgb.green, blue: rgb.blue, opacity: 1)
     }
 }
 

@@ -153,7 +153,7 @@ Rows: 77 ✅ · 9 ≠ · 4 ⏳
 |---|---|---|
 | The selected day is the media scope (the Library's instance tab lists it), `browse`, within the trip's dates | `.publishMediaScope(MediaScope(… intent: .browse, within:))` | ✅ |
 | Under any picture looked at large: `start a piece on <date>` — Reel / Carousel / Single photo, one tap makes the piece on the OPEN day and opens it | `.publishMediaActions`, keyed on the trip and the day | ✅ |
-| `· or locate it` and the `Locate it` verb («Situer cette photo») | ⏳ the heading drops the words until the verb exists: its panel (`LocatePicturePanel`) is task -07's, reading the active picture's EXIF against the gazetteer | ⏳ |
+| `· or locate it` and the `Locate it` verb («Situer cette photo») | ✅ the verb under any picture looked at large opens `LocatePictureSheet` (the stages task) on the Library's active picture, its file held open while the sheet reads it; an accepted edit selects the day and the leg | ✅ |
 | A dropped Library picture on a day cell | — the web's overview takes no drop (only the piece's stage and a place do) | ✅ |
 
 ## Deferred
