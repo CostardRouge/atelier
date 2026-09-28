@@ -210,7 +210,9 @@ public func placeholderTitle(_ span: DaySpan) -> String {
 /// What is known of the nearest day with media on one side — the web's `Neighbour`.
 public enum NeighbourDay: Equatable, Sendable {
     case asking
-    case none
+    /// The edge of what the instance holds — the web's `none` (renamed: a
+    /// `.none` case is read as `Optional.none` wherever the enum is optional).
+    case nothing
     case failed
     case day(date: String, count: Int)
 }
@@ -236,7 +238,7 @@ public func edgeCardWords(_ side: WalkSide, _ next: NeighbourDay, host: String) 
                              line: "\(arrow) \(libraryDayName(date)) · \(count) file\(count == 1 ? "" : "s")")
     case .asking:
         return EdgeCardWords(title: "The \(way) day", facts: "asking…", line: "looking for the \(way) day with media…")
-    case .none:
+    case .nothing:
         return EdgeCardWords(title: "No \(way) day", facts: "the edge of what it holds",
                              line: "\(host) holds nothing \(side == .after ? "after" : "before") this day")
     case .failed:

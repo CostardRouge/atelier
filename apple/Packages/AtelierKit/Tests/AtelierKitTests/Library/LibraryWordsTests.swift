@@ -168,7 +168,7 @@ final class LibraryRowWordsTests: XCTestCase {
                        "← Tue 10 Feb 2026 · 12 files")
         XCTAssertEqual(edgeCardWords(.before, .asking, host: host),
                        EdgeCardWords(title: "The previous day", facts: "asking…", line: "looking for the previous day with media…"))
-        XCTAssertEqual(edgeCardWords(.after, .none, host: host),
+        XCTAssertEqual(edgeCardWords(.after, .nothing, host: host),
                        EdgeCardWords(title: "No next day", facts: "the edge of what it holds",
                                      line: "winnow.example holds nothing after this day"))
         XCTAssertEqual(edgeCardWords(.before, .failed, host: host),
