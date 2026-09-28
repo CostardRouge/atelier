@@ -30,6 +30,8 @@ struct RollGallery: View {
     @State private var exporting: RollFileDocument?
     @State private var renaming: RollDoc?
     @State private var newName = ""
+    /// The shell's Library — what the `Develop` verb starts a roll from.
+    @Environment(LibraryStore.self) private var library: LibraryStore?
 
     private var compact: Bool {
         #if os(iOS)
@@ -107,6 +109,31 @@ struct RollGallery: View {
             }
             Button("Cancel", role: .cancel) { renaming = nil }
         }
+        .publishMediaActions(developOffer)
+    }
+
+    /// `Develop` under a picture looked at large — the web's D10: a NEW roll
+    /// from that one picture, named as the New-roll sheet would name it, kept
+    /// on this device, opened at once.
+    private var developOffer: MediaActions? {
+        guard let library else { return nil }
+        return MediaActions(
+            key: "new-roll",
+            heading: "starts a new roll with this picture",
+            actions: [
+                MediaAction(id: "new-roll", label: "Develop", hint: "a new roll from this picture, opened at once") { view in
+                    guard let asset = library.activeAsset, asset.kind == .photo, let dropped = library.dropped(asset) else {
+                        notice = "Only a photograph can start a roll."
+                        return
+                    }
+                    let doc = store.create(name: defaultRollName())
+                    if case .added(let id) = store.add(dropped, to: doc.id), let rendition = view?.rendition {
+                        store.update(doc.id) { roll in roll = patchPicture(roll, id) { $0.rendition = rendition } }
+                    }
+                    open(doc.id)
+                },
+            ]
+        )
     }
 
     private func open(_ id: String) {

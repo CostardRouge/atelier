@@ -62,6 +62,8 @@ struct RollWorkbench: View {
     @State private var dropping = false
     @State private var drawerFraction = 0.4
     @FocusState private var focused: Bool
+    /// The shell's Library — what the `Develop` verb takes the picture from.
+    @Environment(LibraryStore.self) private var library: LibraryStore?
 
     #if os(iOS)
     @Environment(\.horizontalSizeClass) private var sizeClass
@@ -181,6 +183,31 @@ struct RollWorkbench: View {
         // The crop stage takes the keys once pressed (its arrows nudge the
         // zone); leaving the Crop tab takes it away, and the keys come back here.
         .onChange(of: editor.tab) { old, _ in if old == .crop { focused = true } }
+        // The shell's verb under a picture looked at large: `Develop` puts it
+        // on THIS roll, opened on the file that was on screen.
+        .publishMediaActions(developOffer)
+    }
+
+    /// `Develop` — the web's `RollEditor.tsx` verb: add the Library's active
+    /// picture to this roll (a picture already on it is opened, never added
+    /// twice), carrying the rendition that was being looked at.
+    private var developOffer: MediaActions? {
+        guard let library else { return nil }
+        let name = editor.roll?.name ?? ""
+        return MediaActions(
+            key: "develop:\(editor.rollId)",
+            heading: "on \(name.isEmpty ? "this roll" : name)",
+            actions: [
+                MediaAction(id: "develop", label: "Develop",
+                            hint: "add this picture to the roll and open it on the file you are looking at — one already on the roll is opened, never added twice") { view in
+                    guard let asset = library.activeAsset, asset.kind == .photo, let dropped = library.dropped(asset) else {
+                        editor.notice = "only a photograph can be developed"
+                        return
+                    }
+                    editor.addFromLibrary(dropped, rendition: view?.rendition)
+                },
+            ]
+        )
     }
 
     /// What the one file importer is asked for.
@@ -296,6 +323,13 @@ struct RollWorkbench: View {
     private var toolbar: some ToolbarContent {
         ToolbarItem(placement: .principal) {
             RollTitle(editor: editor, compact: compact)
+        }
+        // A phone's editor hides the tab bar, whose first cell is the
+        // Library: the editor's own bar carries the way to it.
+        if compact {
+            ToolbarItem(placement: .navigation) {
+                LibraryButton()
+            }
         }
         ToolbarItemGroup(placement: .primaryAction) {
             ControlGroup {

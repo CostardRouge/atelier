@@ -18,6 +18,8 @@ struct FilmstripView: View {
     @Bindable var editor: RollEditor
     let compact: Bool
     @Environment(\.palette) private var palette
+    /// A Library picture or a file is over the strip.
+    @State private var targeted = false
 
     private var shown: [RollPicture] {
         editor.pictures.filter { $0.id == editor.openId || editor.showIgnored || !isIgnored($0) }
@@ -44,6 +46,18 @@ struct FilmstripView: View {
                 withAnimation(.easeOut(duration: 0.2)) { proxy.scrollTo(id, anchor: .center) }
             }
         }
+        // Where a picture dragged out of the Library LANDS: added to the roll —
+        // fetched first when an instance still holds it — or opened when the
+        // roll already has it; files from Files or the Finder land as on the editor.
+        .overlay {
+            if targeted {
+                RoundedRectangle(cornerRadius: Brand.controlRadius)
+                    .strokeBorder(palette.accent, style: StrokeStyle(lineWidth: 2, dash: [6, 4]))
+                    .allowsHitTesting(false)
+            }
+        }
+        .libraryDropDestination(isTargeted: $targeted, onAsset: { item in editor.addDragged(item) },
+                                onFiles: { urls in editor.addFiles(urls) })
         .accessibilityLabel("Pictures on this roll")
     }
 }

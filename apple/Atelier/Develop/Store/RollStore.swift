@@ -315,8 +315,17 @@ final class RollStore {
     /// container, because nothing else lets the roll reach it again tomorrow.
     @discardableResult
     func addPicture(to rollId: String, data: Data, name: String, modified: Date = Date()) -> Added {
-        guard let doc = roll(rollId) else { return .failed }
         let ref = SavedMediaRef(name: name, size: data.count, lastModified: modified.timeIntervalSince1970 * 1000)
+        return addPicture(to: rollId, data: data, ref: ref)
+    }
+
+    /// The same, for a file whose ref is already known — the Library's, with
+    /// its content hash or the source's asset id — so the roll names the
+    /// media by what it IS rather than by its name alone.
+    @discardableResult
+    func addPicture(to rollId: String, data: Data, ref: SavedMediaRef) -> Added {
+        guard let doc = roll(rollId) else { return .failed }
+        let name = ref.name
         let path = "\(UUID().uuidString.lowercased())-\(RollStore.safeFileName(name))"
         if let existing = doc.pictures.first(where: { sameMediaRef($0.ref, ref) }) {
             if locators[rollId]?[existing.id] != nil { return .already(existing.id) }
@@ -340,10 +349,17 @@ final class RollStore {
     /// bookmark, never copied — the file stays theirs, where it is.
     @discardableResult
     func addPicture(to rollId: String, url: URL) -> Added {
+        addPicture(to: rollId, url: url, ref: nil)
+    }
+
+    /// The same, the file named by the ref the Library already holds for it
+    /// (its hash computed there), else by its name, size and date.
+    @discardableResult
+    func addPicture(to rollId: String, url: URL, ref known: SavedMediaRef?) -> Added {
         guard let doc = roll(rollId) else { return .failed }
         let scoped = url.startAccessingSecurityScopedResource()
         defer { if scoped { url.stopAccessingSecurityScopedResource() } }
-        let ref = RollStore.mediaRef(of: url)
+        let ref = known ?? RollStore.mediaRef(of: url)
         guard let bookmark = RollStore.makeBookmark(url) else { return .failed }
         return add(rollId, doc, ref, .bookmark(bookmark))
     }
