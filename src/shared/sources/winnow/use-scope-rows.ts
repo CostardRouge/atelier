@@ -59,8 +59,11 @@ export function useScopeRows(
     setProblem(null);
     if (!enabled || !client || !connectionId || !from || !to) return;
     let cancelled = false;
+    // Aborted on the way out: a span changed mid-walk must stop downloading
+    // the old span's pages, not merely ignore them when they land.
+    const controller = new AbortController();
     client
-      .allAssets({ dateFrom: from, dateTo: to, ...(half ? { half } : {}) }, ROW_CAP)
+      .allAssets({ dateFrom: from, dateTo: to, ...(half ? { half } : {}) }, ROW_CAP, controller.signal)
       .then((all) => {
         if (!cancelled) setRows(all);
       })
@@ -75,6 +78,7 @@ export function useScopeRows(
       });
     return () => {
       cancelled = true;
+      controller.abort();
     };
   }, [client, connectionId, from, to, enabled, half, generation]);
 
