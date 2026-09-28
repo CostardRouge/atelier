@@ -20,12 +20,11 @@
 //   from moved, keeping each layer's cube while its develop is the same and a
 //   painted map while its strokes are.
 //
-// One deliberate difference from the web, recorded: there a painted mask's map
-// is rasterised by the pass only when the caller says nothing (`undefined`),
-// and `layerPasses` (the export) and the overlay hand it `null` — so a painted
-// layer drew nothing in a delivered file and in show-the-mask. Here a painted
-// mask with no map handed over is rasterised from its strokes, which is what
+// A painted mask with no map handed over is rasterised from its strokes, as
 // the pass's own contract describes; a map the caller holds is used as given.
+// The web does the same since `7f2586f` (its `ownRaster`): before it, the
+// export and the overlay handed a painted mask `null`, so a painted layer
+// drew nothing in a delivered file there, while it always drew here.
 
 import Foundation
 
