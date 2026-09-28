@@ -431,6 +431,10 @@ shared block. Rules a later phase must keep:
   identity (`creator` + a copyright TEMPLATE, `exif/delivery-meta.ts`) lives on
   the PRESET BOOK (`PresetBook.identity`), because the book is the one personal
   document every device already finds; `mergeBooks` keeps the edited copy's.
+  A RUN reads it ONCE, at the click, with the roll and its export settings
+  (2026-09-28): it used to be read per picture, so a creator changed while a
+  run went on signed one folder two ways. Anything a delivered file carries
+  that is not on the roll snapshot is taken in that same destructuring.
   No default name — the site is public, so his name is nobody's default; the
   template's `{year}` is the CAPTURE year (`captureYear`, the export's own
   when unknown). Written over the camera's `Artist`/`Copyright` (an in-camera

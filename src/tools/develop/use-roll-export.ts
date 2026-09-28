@@ -164,8 +164,9 @@ export function useRollExport({
   const [exporting, setExporting] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<RollRun | null>(null);
-  // Who signs the files (`exif/delivery-meta.ts`), read at the moment a run
-  // stamps each one — the book it lives in may still be loading at mount.
+  // Who signs the files (`exif/delivery-meta.ts`), read when a run STARTS —
+  // the book it lives in may still be loading at mount, and a change made
+  // during a run must not sign one folder two ways.
   const identity = useDeliveryIdentity();
   const latest = useRef({ roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity, onDelivered });
   latest.current = { roll, files, fileFor, interpolation, siblingsOf, proxiesOnly, identity, onDelivered };
@@ -299,7 +300,10 @@ export function useRollExport({
   }
 
   const exportPictures = useCallback(async (ids: readonly string[]) => {
-    const { roll: r, files: f, fileFor: fetchFor, interpolation: mode, proxiesOnly: onlyProxies } = latest.current;
+    // Everything a file carries is taken AT THE CLICK — the roll, its export
+    // settings and who signs them — so an edit made while the run goes on
+    // reaches the next export and never half of this one's folder.
+    const { roll: r, files: f, fileFor: fetchFor, interpolation: mode, proxiesOnly: onlyProxies, identity: signer } = latest.current;
     // Each picture through ITS look, from the document — never the live
     // stack, which follows whatever picture is open while the run goes on.
     const { cubeFor, missingIn } = rollCubes(mode);
@@ -531,7 +535,7 @@ export function useRollExport({
           const stamped: { account: ExifAccount } = { account: 'none' };
           const stamp = async (jpeg: Blob, delivered: PictureSize) => {
             const exif = exportExifBlock(head, origin?.exif ?? null, delivered, {
-              identity: latest.current.identity,
+              identity: signer,
               title: picture.title,
               caption: picture.caption,
               keep: r.export.metadata,
@@ -548,7 +552,7 @@ export function useRollExport({
             const capture = head ? exifOf(head) : null;
             const year = captureYear(capture?.dateTimeOriginal ?? origin?.exif?.dateTimeOriginal, new Date().getFullYear());
             const text = resolveWatermarkText(r.export.watermark.text, {
-              creator: latest.current.identity?.creator ?? null,
+              creator: signer?.creator ?? null,
               year,
               title: picture.title ?? null,
             });
