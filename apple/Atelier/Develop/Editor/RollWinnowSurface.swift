@@ -4,8 +4,9 @@
 // refs or the connections move), Winnow's culling is asked when the refs
 // change and again when the app comes back to the foreground after a minute
 // (the web's return to the tab), the day sheet is presented, the roll
-// publishes the day it is on for the Library's instance tab, and the preset
-// book's instance is asked whether it moved.
+// publishes the day it is on for the Library's instance tab, the looks' vault
+// reads the connections again (a pack look is fetched from its instance), and
+// the preset book's instance is asked whether it moved.
 
 import SwiftUI
 import AtelierKit
@@ -27,8 +28,13 @@ struct RollWinnowSurface: ViewModifier {
                 if phase == .active { Task { await editor.askCulling(maxAge: cullFreshMs) } }
             }
             .publishMediaScope(editor.mediaScope)
-            // The preset book's instance is asked on the first look at it.
-            .task { await editor.presets.resume() }
+            .task {
+                // The vault reads the connections again, so a pack look this
+                // device lacks is fetched from the instance it is kept on;
+                // the preset book's instance is asked on the first look at it.
+                LookLibrary.shared.refreshHosts()
+                await editor.presets.resume()
+            }
     }
 
     /// The sheet opens on the open picture's day, else the last picture's.

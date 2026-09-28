@@ -12,9 +12,9 @@ Where things are:
 
 | Folder | Holds |
 | --- | --- |
-| `Store/` | `RollStore` (rolls + locators + marks + thumbnails on disk), `PresetBookStore`, `PicturePool` (decodes, EXIF, as-shot stats, thumbnails), `RollEditor` (+ `Batch`, `Keys`, `Adding`, `Export`, `Run` — the Export tab's state, plan and verbs) |
+| `Store/` | `RollStore` (rolls + locators + marks + thumbnails on disk, the session's fetched files), `RollDocuments` (rolls kept on a Winnow: the gallery's groups and verbs, the open roll's sync), `PresetBookStore` (the book, kept here or on a Winnow), `PicturePool` (decodes, EXIF, as-shot stats, thumbnails), `RollEditor` (+ `Batch`, `Keys`, `Adding`, `Export`, `Run` — the Export tab's state, plan and verbs —, `Winnow` — the roll's own fetch, the culling, a day, the Library's ticks, the span published) |
 | `Gallery/` | `RollGallery`, `RollCard`, `NewRollSheet` |
-| `Editor/` | `RollEditorView` (the screen), `StageBar`, `ProgressLine`, `SettingsSheet`, `ShortcutsSheet`, `EditorCommands` |
+| `Editor/` | `RollEditorView` (the screen), `StageBar`, `ProgressLine` (+ `RollCullLine`), `SettingsSheet`, `ShortcutsSheet`, `EditorCommands`, `WinnowDaySheet`, `RollWinnowSurface` (what the open roll does with its instance, as one modifier) |
 | `Filmstrip/` | `FilmstripView`, its cell and delivery badge |
 | `Layers/` | `LayersTab` (+ `LayerListSection`), `MaskSection` (+ `MaskShapeControls`), `MaskStageOverlay`, `LayerLooking` (the tab's own render, the seam a plan reads, the colour a layer sees); the state and verbs are `Store/RollEditor+Layers.swift` |
 | `Stage/` | `DevelopStageView`, `StageGeometry`, `LookingZoom`, `DevelopRenderPlan`, `DevelopTool` (+ the overlay slot, the eyedropper), `StageZoomPill`, `StageFacts`, `WheelCatcher` |
@@ -24,9 +24,9 @@ Where things are:
 | `Crop/` | the Crop tab: `CropStageOverlay` (the zone on the stage) + `CropZoomPill`, `CropTabSections` → `CropSection`, `CropApplyFold`, `DeliveredPreview` + `BorderSection`, `PerspectiveSection`, `LensSection` (+ `LensProfileBlock`), `CropSession`, `LensfunStore`; the verbs in `Store/RollEditor+Crop.swift` |
 | `Repair/` | the Detail tab's repair: `RepairSection` (heal · clone · dust), `RepairStageOverlay` (the tool on the stage) + `RepairMarksOverlay` (the idle slot's rings), `RepairHandles` / `RepairLookingLayer` / `DustMapLayer` (`RepairRings.swift`), `RepairLooking` (the repaired picture, the map, the field read off the decode); the state and verbs in `Store/RollEditor+Repair.swift` |
 | `Panels/` | the Adjust sections (their own task) |
-| `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `DeliveredFile`) |
+| `Export/` | the Export tab (`ExportTab` and one file per section) and the RUN (`RollExportRun`, `RollExportFetch` — which bytes a picture leaves from, fetched from its instance where they must be —, `DeliveredFile`) |
 
-Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers table: 36 ✅ · 4 ⏳ of 40; the Repair table: 24 ✅ · 2 ⏳ of 26).
+Counts: **271 ✅ · 15 ⏳ · 4 part-built** — 290 table rows, a row counted by its last cell (✅ alone, ⏳ alone, or both) (the Layers table: 37 ✅ · 3 ⏳ of 40; the Repair table: 25 ✅ · 1 ⏳ of 26). What waited on the app's Winnow client is built: rolls kept on a Winnow, the roll's own fetch, Winnow's culling, a day from the instance, the Library's ticks, the preset book kept there, the export fetching originals and companions — all written against the kernel's stub-tested plumbing, none of it driven against a real instance.
 
 ## The gallery — `RollGallery.tsx`, `NewRollModal.tsx`
 
@@ -40,13 +40,16 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | ⋯ menu: Open / Resume · Rename… · Export `.roll.json` · Delete… | ✅ (Rename is native's addition; the web renames on the editor's title, which is built too) |
 | Delete behind a confirmation: "Every picture's develop and look go with it. The files stay where they are." — thumbnails, locators and marks pruned with it | ✅ |
 | New roll sheet: a name to replace (`Roll · 15 Sep`), selected on entry, Enter creates, Escape cancels; the roll opens at once | ✅ |
-| "Keep on" a second source in the sheet | ⏳ the app's Winnow client (Sources task) |
-| "Start with the photos ticked in the Library" | ⏳ the app has no Library yet; pictures are added from the editor's Add menu |
-| Import a `.roll.json` → a NEW roll, fresh ids for the roll AND every picture (`readRollFile` + `rollDocFromFile`); every refusal said in the web's words (`RollFileError.message`) | ✅ |
+| "Keep on" a second source in the sheet — asked only when a second source can keep rolls; a roll kept on an instance is written THERE first, nothing kept here if it refused (said) | ✅ `RollDocuments.create` over `DocumentGalleryModel.createOn` |
+| "Start with the photos ticked in the Library" — on whenever something is ticked; "Nothing ticked in the Library — add pictures once it is open" | ✅ the Library's selection, its locators taken over (`RollStore.locate`); an instance's picture goes on by its ref and is fetched when looked at |
+| Import a `.roll.json` → a NEW roll, fresh ids for the roll AND every picture (`readRollFile` + `rollDocFromFile`); every refusal said in the web's words (`RollFileError.message`); asked WHERE only when a second source can keep rolls | ✅ |
 | The dashed New-roll tile completing the grid, and a drop of a `.roll.json` on it | ✅ |
 | Empty state: "No rolls yet" + Start the first one / or import a roll file | ✅ |
-| Rolls kept on a Winnow: remote-only greyed cards, mirror on open, Move to…, the sync pill, absent-source notes | ⏳ the app's Winnow client (Sources task; the kernel's `DocSync` / `DocumentGallery` are ready) |
-| The Library's "Develop" verb (a new roll from a picture looked at large) | ⏳ the app has no Library/lightbox yet |
+| Rolls kept on a Winnow: each instance's list beside the mirrors (`checking…`, why it could not answer, Sign in), remote-only greyed cards (`on <host> · not yet on this device`, `pictures drawn once opened here`) that MIRROR on open, the card saying `opening…` / `deleting on …` / `moving to …` | ✅ `RollDocuments` over `DocumentGalleryModel` — the local cards read `RollStore`'s memory, which may hold an edit the debounce has not written |
+| Move to… another source from a card's ⋯, behind "The roll will be kept there from now on…": the target written and acknowledged first, the origin's copy deleted after | ✅ through the portable file like the web's `moveRoll`, so the pictures get fresh ids — what this device keeps under a picture's id (locator, export mark, thumbnail) follows them (`RollStore.remapPictures`) |
+| Delete a roll kept there: deleted there with the revision held, refused while the instance cannot be reached | ✅ |
+| Absent-source notes: an instance whose bucket does not keep rolls is SAID once re-asked, never left out in silence | ✅ `AbsentSourceNotes` |
+| The Library's "Develop" verb (a new roll from a picture looked at large) | ✅ the gallery publishes it (`publishMediaActions`); a new LOCAL roll, opened at once, on the file that was on screen |
 
 ## The editor — `RollEditor.tsx`, `DevelopTool.tsx`
 
@@ -68,17 +71,20 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | Add: from Photos (copied into the container), from Files (bookmark), a folder (ONE bookmark + each picture's path), a drop (files or a folder) | ✅ |
 | A picture already on the roll is FOUND AGAIN (its bytes now in hand), never added twice; the status says `found N again · added M` | ✅ (`relink`, variants included) |
 | A folder read as the Library reads a capture: a RAW yielding to its JPEG (`photoFiles`) | ✅ |
-| Add a day from a Winnow (`WinnowDaySheet`) | ⏳ the app's Winnow client |
+| Add a day from a Winnow (`WinnowDaySheet`): ‹ day › (the platform's date field), photographs only, everything the roll does not hold ticked, what it holds shown "on the roll", Tick all / none, `Add N to the roll`; refs from the rows (`rowMediaRef`), the bytes fetched when looked at; the Add menu's `A day on <host>…` and the empty roll's `Add a day from <host>…` | ✅ one request per day (400 rows), in the Add menu only while an instance is connected |
 | The roll's folders remembered and reopened with one click | ✅ per picture (a folder bookmark in its locator); the status line offers "Add their folder again" |
 | Working previews (a 2048 px copy of each local picture, opt-in) | ⏳ not needed yet: a Photos pick is copied whole; a bookmarked file is reachable while its volume is |
-| Pictures fetched from their instance near the open one (`use-roll-media.ts`) | ⏳ the app's Winnow client; such a picture says `not connected` |
-| Winnow's culling read live and filtered on (`use-roll-culling.ts`) | ⏳ the app's Winnow client |
+| Pictures fetched from their instance near the open one (`use-roll-media.ts`): the open picture then its neighbours, one at a time, nearest first, only a CONNECTED instance, what drifts out of the keep window let go; the roll's OWN pool — a session file, never a locator, never kept past the sitting — the Library's session copy used first; a failure kept per picture and said once, nothing retried on its own; a variant drawing from its twin's bytes | ✅ `RollEditor+Winnow` over the kernel's `RollFetchPlan` (`resolvableSourceOf`, `rollMates`, `rollFetchQueue`, `rollAvailability`); each fetch a task scoped to the picture (the stage's and the cell's hairline) with a Cancel — a cancel is kept as a failure, so the next step does not fetch it straight back |
+| Winnow's culling read live and filtered on (`use-roll-culling.ts`): the rows the refs name, 200 ids a request, again when the app comes back after a minute; never stored on the roll, never written | ✅ the kernel's `CullingReads`; the session's answers shared by every roll |
+| A Winnow picture from the Library (a drop, the `Develop` verb) goes on by its ref — never copied into the roll's container | ✅ `RollStore.addRef` — the roll finds it in the Library, else fetches it again from its asset id |
 | Take a picture off the roll; through a confirmation when it carries edits, naming them | ✅ |
 | Variants: ⌘' (as edited) and "as shot" from the Add menu; a variant shares its file (locator) and wears the source's thumbnail until its own | ✅ |
-| The Library's ticks as "Add N from the Library" | ⏳ no Library yet |
+| The Library's ticks as "Add N from the Library": only what the roll does not hold, `added N · N already on the roll` / `already on the roll: that picture` | ✅ the Add menu's `N ticked in the Library`, and the empty roll's button |
 | Empty roll: "No pictures on this roll yet" + Add a folder / Photos / Files | ✅ |
 | Drop veil: "Drop photographs or their folder: pictures already on the roll are found again, the others are added." | ✅ |
-| The sync pill / history control in the header | ✅ history · ⏳ the pill (Sources task) |
+| The sync pill / history control in the header | ✅ history · the pill (`DocumentSyncPill`) for a roll kept on an instance, nothing for one kept here; its verbs — Save now, Keep mine, Take theirs, Keep here as local, Delete here — a copy replaced under the editor restarting its history (`RollEditor.restart`) |
+| LOCAL NOW, REMOTE ON IDLE: every write `RollStore` lands marks the open roll dirty, the push follows after the idle delay, on leaving, and in the background; opening asks the instance whether it moved (a clean mirror takes a newer copy silently, a dirty one is the pill's conflict); a roll written while not open goes dirty on disk and is pushed when next opened | ✅ `RollDocuments` over `DocumentSync` (`RollStore.onWritten`) |
+| The roll publishes its span to the Library (native: the web's Develop publishes none) | ✅ the open picture's day (`pictureDay`), the roll's own span shaded around it, `browse` — the instance tab lists that day beside the stage |
 | Route-addressed (`#/develop/<roll>/<picture>`) | ⏳ native navigation pushes the roll; the open picture is the editor's state, not restored across launches |
 
 ## The status line — `RollEditor.tsx`
@@ -92,9 +98,9 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | `· N with a look` | ✅ |
 | `· N selected` + Clear | ✅ |
 | `· N from this device, not open` + reopen | ✅ |
-| `· N on <host>, not connected` | ✅ said · ⏳ the link to Sources |
-| fetching / could not be fetched / no longer on | ⏳ the app's Winnow client |
-| Culling line and its filter | ⏳ the app's Winnow client |
+| `· N on <host>, not connected — Sources` | ✅ the link opens the Sources tab (`shellNavigate`) |
+| `· fetching N from <host>` · `N could not be fetched — <problem> Sign in Try again` · `N no longer on <host>` | ✅ |
+| `· Winnow 3 picks, 1 rejected` (`asking…`, `nothing culled`, the problem) + the strip's filter (show all · picks · not rejected · ★ and up) + `(N shown)` + Refresh | ✅ `RollCullLine` |
 | The editor's last word (`notice`) | ✅ |
 | Hidden on a phone while the drawer is up | ✅ |
 
@@ -106,13 +112,13 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | A plain click opens; Shift REPLACES the selection with the range from the anchor, ⌘ toggles one and becomes the anchor (`selectionAfterClick`) | ✅ Mac (modifier flags) · ✅ touch as the cell's menu: Select / Select up to here |
 | A checkmark on a selected cell, never a second ring | ✅ |
 | The edited dot (`pictureEdits`), a variant's number | ✅ |
-| Words in an empty cell by availability (`not open`, `not connected`, …); an unreachable picture greyed with a `!` | ✅ |
+| Words in an empty cell by availability (`not open`, `not connected`, …); an unreachable picture (failed, gone, not connected, not open) greyed with a `!` — one waiting or being fetched is not | ✅ |
 | Thumbnails: stored, else baked AS SHOT one decode at a time, once per visit; the open one redrawn AS DELIVERED 700 ms after it rests; kept on disk for the gallery | ✅ |
-| The instance's own thumbnail for a remote cell | ⏳ the app's Winnow client |
+| The instance's own thumbnail for a remote cell waiting or being fetched (`WinnowThumbView`, which retries), a spinner while fetched | ✅ |
 | × to take a picture off: on hover on the Mac, always on a touch screen, overhanging its cell (the strip pays the room) | ✅ |
 | Ignored cells dimmed, or left out (never the open one) | ✅ |
 | The delivery badge: filled = the author's call, dashed = the roll's rule; a picture on the rule that stays out shows it only under the pointer (always on touch); a tap sends ↔ holds, its menu (right-click / a held finger) ignores ↔ brings back, sends, holds, back to the rule | ✅ |
-| Culling marks | ⏳ the app's Winnow client |
+| Culling marks between the top corners (a pick flag, the stars, a label dot), Winnow's word in the help; the strip narrowed by the filter, never the open picture; ←/→ step over what it hides | ✅ `WinnowCullMark` |
 | Drag to reorder | ⏳ not on the web either (`lightroom-gaps.md` item 29) |
 
 ## The stage — `DevelopViewport.tsx`, `use-develop-picture.ts`
@@ -125,7 +131,7 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | A RAW opens on the camera's render INSIDE it (`rawRenderFirst`, its orientation given back), the system's own demosaic only where it carries none; a develop on a rung above the proxy is drawn from the SENSOR (`CIRAWFilter`, linear, sRGB-encoded, sensor white at 1), the gain map and the camera warp at their rungs, the exposure measured once and stored, the stage's decode held as half floats, a phone's edges from `rawDecodeEdge` | ✅ `RawSource` · ⏳ Apple's demosaic is not LibRaw's: a web develop's stored `rawGain` lands on other pixels here (unmeasured on a device) |
 | A RAW's white balance in Kelvin (`rawWb.matrix`) applied first inside the cube | ✅ `developLinear` |
 | Everything at SOURCE density before the crop; the budget scales the whole source (a preview within twice its cap), a framing zoomed in is drawn from the pixels it magnifies and brought down once cut | ✅ `budgetScale` / `renderScale` |
-| The look: built-in LUTs by the web's ids (`builtin:<id>`, the bundle's `luts/` — a folder reference to `public/luts/`), film stocks generated from their settings, an old inlined `.cube`, pack looks from the vault on this device; a look that cannot grade here SAID, never neutral | ✅ `DevelopLooks` (+ `DiskPackStore`) · ⏳ a pack look this device does not hold is not fetched from its instance (the vault's hosts wait on the Sources screen) |
+| The look: built-in LUTs by the web's ids (`builtin:<id>`, the bundle's `luts/` — a folder reference to `public/luts/`), film stocks generated from their settings, an old inlined `.cube`, pack looks from the vault — a lattice this device lacks fetched from the instance the pack is kept on; a look that cannot grade here SAID, never neutral | ✅ `DevelopLooks` over the shared vault, whose hosts are read again as the editor opens (`LookLibrary.refreshHosts`) |
 | The border drawn round the crop in every DELIVERY (colour, or the crop blurred on a tiny copy) | ✅ in exports · ⏳ not on the stage: its geometry has no border canvas; the Crop tab's delivered preview shows it |
 | Subject layers: segmented off the main thread (Vision), the stage drawing without a subject until it lands, a delivery segmenting its own | ✅ one `SubjectMasks` shared with the Layers tab; the tab's wash and blink drawn LAST (`LayerLooking`) |
 | What is not drawn is SAID ("not drawn here: …"): a RAW base on a file that is not a RAW, a refused sensor, a look this build or vault lacks, a subject Vision cannot answer | ✅ `unrendered` |
@@ -147,7 +153,7 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | `I`: the facts in the bottom-left corner — `captureLine` on top, marked with the accent, a hairline, then `developLines`, layers, detail, vignette, repair, the fidelity note | ✅ |
 | The pixel under the pointer read under the histogram (`ReadoutStore`, only its line re-renders) | ✅ on a pointer (Mac, iPad) |
 | `J` paints the clipping on the delivered frame's own pixels, the stage only (never the histogram, a snapshot or a file); the readout reads a mark as the clip it marks, and never on the before side | ✅ `DevelopRenderPlan.looking` + `ClippingPass` |
-| States: decoding…, a decoder's refusal, a picture not on this device (`availabilityText`) | ✅ |
+| States: decoding…, a decoder's refusal, a picture not on this device, being fetched, waiting its turn, what its instance answered, gone there, on an instance not connected (`availabilityText`, in this device's words) | ✅ |
 | The grey dropper: the tool takes the pointer whole, "click / tap something grey", solves `whiteBalanceFor` on the source AS SHOT at the tapped pixel, then puts itself down | ✅ `EyedropperOverlay` |
 | An overlay SLOT the active tool fills (`DevelopTool`: none · crop · mask · repair · eyedropper) with the view ↔ source transform (`StageGeometry`) | ✅ |
 | Crop zone / mask marks / repair rings drawn on the stage | ✅ the crop's zone (`CropStageOverlay`, table «The Crop tab») · the mask's marks, handles and brush (`MaskStageOverlay`) · the repair's rings, handles, proposed spots and map (`RepairStageOverlay`, `RepairMarksOverlay`, table «Repair») |
@@ -191,14 +197,14 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | The lens profile: looked up from the picture's EXIF whatever tab is open; applied by itself on the SENSOR to a picture that never decided; only offered on a camera render (`Apply to this render`); Remove writes the web's `null` | ✅ `lookUpOpenLens` + `LensProfileBlock` |
 | Lensfun, the third network exception: consent on the DEVICE (`atelier.lensfun`), one host, the maker's file then the independents', an ephemeral session, only the ANSWER kept (`lens-profiles.json`), a miss believed for a month, every state said (not allowed · looking · offline · camera / lens not in Lensfun · the picture says nothing) | ✅ `LensfunStore` over the kernel's `lookUpLens` |
 | "On the sensor" | ✅ read as the app's own RAW decode (`CIRAWFilter`) — the web's is LibRaw's; the same picture, another developer (`native-app.md`) |
-| The stage DRAWS the keystone, the lens and its profile | ⏳ the integration task's passes behind `DevelopRenderPlan`; until then the stage says "not drawn here yet: perspective, lens" |
+| The stage DRAWS the keystone, the lens and its profile | ✅ `FullDevelopRenderPlan` (camera warp → lens → keystone, `GeometryFamilyPasses.shape`), the stage, the snapshot and the export alike |
 
 ## The stage bar
 
 | Control | |
 | --- | --- |
 | The picture's NAME with its fidelity chip (`DevelopBaseChip`) | ✅ name + chip |
-| The name as the menu of the capture's files and the RAW rungs | ✅ a RAW in hand: its render and its sensor with the rungs its file reaches (`rungsFor`), the measured exposure stored once (`RollEditor+Render`) · ⏳ a capture's OTHER files (a proxy's original, a companion, a folder's sibling) — the renditions task |
+| The name as the menu of the capture's files and the RAW rungs | ✅ a RAW in hand: its render and its sensor with the rungs its file reaches (`rungsFor`), the measured exposure stored once (`RollEditor+Render`) · ⏳ a capture's OTHER files on the chip and on the stage (a proxy's original, a companion, a folder's sibling) — the renditions task; what the instance vouched for is at hand now (`RollEditor.vouched`), and the EXPORT already leaves from them (table «The run») |
 | `· copied` said beside the name, gone after a moment | ✅ |
 | ONE well: Copy · Paste · Reset (a ghost), then Settings (⌘⇧C) · A/B · ? | ✅ |
 | The clipboard's three step aside on the crop | ✅ |
@@ -214,7 +220,7 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | Phone: a DOCKED DRAWER under the stage (never a sheet), rests 0.28 / 0.4 / 0.6 of the column, dragged or tapped on its head, closed under its floor; edge to edge, rounded top; the five sections as its own strip at the bottom; the app's tab bar hidden inside the editor | ✅ |
 | Adjust: histogram · Auto (+ pick grey) · white balance (a RAW) · light & colour · presence · levels · curve · mixer · grading · vignette · presets · apply to… · the look | ✅ wired (`Panels/`; the look `Look/DevelopLookSection` over the shared grade panel, `../Look/`) |
 | Presets: chips write a COPY; × removes; Save current as… (+ look); the book on this device (`presets.json` beside the rolls) | ✅ |
-| Keep the preset book on a Winnow | ⏳ the app's Winnow client |
+| Keep the preset book on a Winnow: the place row (`kept`, the pill's sentence, `on <place>` / `keep on <place>` once a second source keeps `presets`, `moving…`, a refusal said); LOCAL NOW, REMOTE ON IDLE; asked on the first look; a 412 merged by name (`mergeBooks`) and pushed again, never shown; a book gone there kept here; onto an instance holding this account's book, the two merged onto that row | ✅ `PresetBookStore` (`presets.sync.json` beside the book) |
 | Apply to N selected / Paste to N selected / Apply to N others (the develop's numbers, never the material) | ✅ |
 | Apply look / crop / borders to… | ✅ look (at the head of the Look section, where the web draws them) · crop and borders (`CropApplyFold`, folded, the web's words) |
 | Detail: repair · detail | ✅ repair (`Repair/`, table «Repair» below) · detail (`Panels/`) |
@@ -233,13 +239,14 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | Size: Full size · Long edge · Short edge · Megapixels · Percentage; a mode switch re-expresses the size (`convertSize`); the number committed on Return or leaving the field, clamped (`readSize`) | ✅ |
 | Quality 50–100 % · Sharpen Off / Low / Standard / High ("for a screen, after the resize") · Watermark, per target | ✅ |
 | Also write: the five presets, a repeated name numbered | ✅ |
-| Delivers: the run's sentence over the pictures that leave (`planRun`), before a byte moves | ✅ |
+| Delivers: the run's sentence over the pictures that leave (`planRun`), before a byte moves — a fetched proxy a proxy, its original and companion named with their weight, "in hand" once the session holds them | ✅ `runFacts` |
 | *Proxies only, for this run* — never on the roll | ✅ kept per roll for the app's session (`RollRunState`), not reset with the editor as the web's is |
 | This picture: the calculator's line (`deliverySummary`, the first target) and its reason; what the stage does not draw said | ✅ |
 | Watermark: the line (a template, drafted, written on leaving), Reads (the line on the picture in hand, or why nothing), Where, Size, Opacity, Tone, Drawn on | ✅ |
 | Pictures: one 48 pt row per picture, the whole row the target (send ↔ hold; an ignored one back into the work), ↺ back to the rule, › open, the plan's line, the thumbnail, `send` / `hold` chips, E4's `changed` / `✓ time` | ✅ |
 | Pictures: filters All · Edited · Leaving · Held · Changed, `N of M leave`, the ignored folded and unfolding by themselves for the open picture | ✅ |
-| Pictures: Winnow's *Picks* filter and culling marks | ⏳ the app's Winnow client |
+| Pictures: Winnow's *Picks* filter (offered where the roll has pictures on a connected instance) and each row's culling mark | ✅ |
+| This picture: a fetched proxy weighed against its original; the file chosen above the photograph with `· N to fetch` until the session holds it | ✅ `openDelivery` reads what the instance vouched for |
 | Metadata: Leaves — All · Share online · Minimal (+ Custom); the seven groups one row each and the Signature locked among them; the one cost said (copied whole vs rebuilt) | ✅ |
 | Creator and copyright from the preset book's identity, drafted and written on leaving; the copyright read on this picture's capture year | ✅ |
 | The picture's title and caption, drafted, one undo step per field, written to the picture they were typed under; "Kept on the picture, not written" when the group is off | ✅ |
@@ -272,7 +279,9 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | A RAW base set aside under *Proxies only*, or when the RAW is out of reach — said | ✅ |
 | What the render plan does not draw yet (the look, the layers…) said per run | ✅ |
 | A RAW decoded under its sensor's pixels (the GPU's cap, a phone's ceiling) said | ⏳ the system's RAW developer decodes whole; nothing is capped to say |
-| A proxy's original, a companion RAW or the file set above the photograph fetched from an instance | ⏳ the app's Winnow client |
+| A picture not in hand fetched on the spot for the run alone, and deleted once delivered | ✅ `RollExportFetch` |
+| A proxy's original, a companion RAW or the file set above the photograph fetched from an instance — a RAW develop from the sensor's data, else the chosen file, else `Auto` (the original only where the proxy cannot fill the LARGEST target, a RAW original through the render inside it, measured from a megabyte of its head); held for the session (`SessionOriginals`, shared with the lightbox); *Proxies only* skips them | ✅ `RollExportFetch` · each fetch a task; the run's Cancel ends a fetch in flight |
+| The EXIF is the ORIGINAL's whatever the pixels came from: its own head, else the original's first quarter megabyte, else what Winnow parsed at ingest | ✅ |
 | The run warning when the chosen folder is the one the pictures came from | ⏳ in the web's memory, not in its code |
 
 ## Layers — `LayersPanel.tsx`, `MaskPanel.tsx`, the mask half of `PictureWorkbench.tsx`, `use-subject-masks.ts`
@@ -317,7 +326,7 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | Show-the-mask: the layer's own pass with a one-colour cube (`LayerPasses.overlay`), outline or wash | ✅ on the Layers tab's own render |
 | The region a tap added blinks twice, 90 ms a beat; nothing under reduced motion | ✅ |
 | A subject segmented on the TAP, from the picture as its geometry bends it, one run at a time, the last good map kept, cached per picture + frame + points | ✅ on Apple's Vision (`SubjectMasks`), not MediaPipe — its differences are that file's header |
-| The layers drawn on the stage with no layer open, in the filmstrip, the histogram and the export | ⏳ the integration task: `LayerStack` / `LayerPasses.build` behind `DevelopRenderPlan`, reading `LayerEditState.looking` for the subject maps, the wash and the blink (this tab's own render then stands down: `planDrawsLayers`) |
+| The layers drawn on the stage with no layer open, in the filmstrip, the histogram and the export | ✅ `FullDevelopRenderPlan` (`LayerPasses.build`, the subjects injected), reading `LayerEditState.looking` for the maps, the wash and the blink; this tab's own render stands down (`planDrawsLayers`) |
 | Apply layers to other pictures | ✅ the sections picker's `Layers` section (the shell's) |
 
 ## Repair — `RepairPanel.tsx`, the repair half of `PictureWorkbench.tsx`, `DevelopViewport.tsx`'s rings
@@ -346,8 +355,8 @@ Counts: **241 ✅ · 32 ⏳ · 8 part-built** — 281 table rows (the Layers tab
 | The spots as dotted rings with a `+`, each healed by its own tap from its cleanest neighbour (`dustPatch`, with the next patch's feather) or said: `that spot sits where no neighbour can be borrowed from — place a patch by hand`; a spot the crop left out not offered | ✅ |
 | The MAP in the picture's place, white on black as a share of the threshold (`dustVeil`), drawn through the stage's framing and zoom so a ring lands on the mark it names | ✅ `DustMapLayer` (one affine map from the source to the view) |
 | Nothing of the scan kept on the roll; the field let go when the scan is turned off or the picture changes | ✅ |
-| The repair DRAWN by the stage's plan — the stage, the filmstrip cell, the histogram, the export | ⏳ the integration task: `DetailPasses.make(detail:repair:…)` behind `DevelopRenderPlan`. Meanwhile the Detail tab draws the repaired picture itself (`RepairLooking`: the patches on the source at the stage's budget, then the stage's own plan), live under a drag, to the right of the divider off the tool — and stands down the moment the plan draws the repair (`planDrawsRepair`) |
-| The divider's left half shows the patches too (the web's split lives in the cube) | ⏳ the same integration: until then the stage's own before has no patch |
+| The repair DRAWN by the stage's plan — the stage, the filmstrip cell, the histogram, the export | ✅ `FullDevelopRenderPlan` (`DetailPasses.before`, first on the source); the Detail tab's own render (`RepairLooking`) stands down (`planDrawsRepair`) and survives for a live drag |
+| The divider's left half shows the patches too (the web's split lives in the cube) | ⏳ the stage's before is its own render of the picture AS SHOT (`asShotForCompare` strips the repair with every other correction); the web's split sits in the cube, so its before half keeps what runs ahead of it — a decision on what "before" holds, not a missing pass |
 | `N patches · …` in the facts (`I`) | ✅ (the shell's `factLines`) |
 | Apply the repair to other pictures, copy and paste it | ✅ the sections picker's `Repair` section (the shell's) |
 

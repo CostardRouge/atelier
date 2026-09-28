@@ -6,7 +6,7 @@ deferred (why, and what it waits on). The views are pure: each takes a
 the shell (`RollEditor` and its successor) owns the store, the stage and the
 keys that belong to the workbench rather than to one section (J, V, ⌘Z).
 
-Counts: **98 ✅ · 7 ⏳** table rows (the list at the foot adds two notes).
+Counts: **101 ✅ · 4 ⏳** table rows (the list at the foot adds two notes).
 
 ## `DevelopSection` — `DevelopFold.tsx` over `InspectorSection` (`shared/ui/Inspector.tsx`)
 
@@ -95,7 +95,7 @@ Counts: **98 ✅ · 7 ⏳** table rows (the list at the foot adds two notes).
 | Reset {channel} (when moved) · Reset mixer | ✅ |
 | B&W: title B&W mix, always marked, eight lights (`withMonoValue`), Reset mix | ✅ |
 | Colour mixer kept while B&W is on | ✅ (the kernel's `mono` / `mixer` are separate records) |
-| V switches the treatment | ⏳ the workbench's key — the shell binds it (help says "(V)") |
+| V switches the treatment | ✅ the shell binds it (`RollEditor+Keys`, `toggleMono`) |
 
 ## `DevelopGradingSection` — `DevelopGrading.tsx`
 
@@ -134,7 +134,7 @@ Counts: **98 ✅ · 7 ⏳** table rows (the list at the foot adds two notes).
 | Every value through `wbMatrix`, stored as `rawWb` with its matrix | ✅ |
 | `as shot 6506 K, tint +10` line; As shot link | ✅ |
 | No camera white from the decoder: the section SAYS so, and names a stored `rawWb` with As shot | ✅ native addition — `CIRAWFilter` hands out no `cam_mul`/`rgb_cam` yet |
-| The stored matrix actually rendered | ⏳ the stage's job (`DevelopSettings.unrenderedStages` still lists `rawWb`) |
+| The stored matrix actually rendered | ✅ applied FIRST inside the cube (`developLinear`) by the render plan; a stored `rawWb` with no usable matrix is the one thing `unrenderedStages` still says |
 
 ## `DevelopBaseChip` — `DevelopBaseMenu` in `DevelopBase.tsx`
 
@@ -180,7 +180,7 @@ Counts: **98 ✅ · 7 ⏳** table rows (the list at the foot adds two notes).
 | `blacks 2.1 %` / `blacks —`, `whites …` in the info / accent ink | ✅ |
 | The two ends as the clipping switch, underlined while on, `(J)` in the help | ✅ |
 | The pixel under the pointer between them, `before · ` on the left of the wipe, a clip in its ink | ✅ (`ReadoutStore`, its own subscribed line) |
-| J toggles the clipping | ⏳ the workbench's key — the shell binds it to the same callback |
+| J toggles the clipping | ✅ the shell binds it (`RollEditor+Keys`, `.clipping`) |
 | Accessible description | ✅ |
 
 ## Deferred, in one list
