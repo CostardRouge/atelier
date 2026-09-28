@@ -670,7 +670,10 @@ export default function PostEditor({
   };
 
   // Only an opener that rewrites the badge's words gets elements per frame;
-  // every other piece keeps the ones built above, once per edit.
+  // every other piece keeps the ones built above, once per edit. The cascade
+  // goes in too: `hookElements` above and `slideRender` (the exports, the
+  // rail) both carry it, and without it a counting numeral played its pieces'
+  // own entrances on the stage while the file played the cascade.
   const hookElementsAt = useMemo(
     () =>
       hookElementsAtFor(
@@ -680,8 +683,17 @@ export default function PostEditor({
         aspect,
         post.badge.pieceStyles,
         post.badge.durationSeconds,
+        post.badge.cascade,
       ),
-    [hook, content, post.badge.layout, aspect, post.badge.pieceStyles, post.badge.durationSeconds],
+    [
+      hook,
+      content,
+      post.badge.layout,
+      aspect,
+      post.badge.pieceStyles,
+      post.badge.durationSeconds,
+      post.badge.cascade,
+    ],
   );
 
   // Every slide that is not the first composes through the one function the
