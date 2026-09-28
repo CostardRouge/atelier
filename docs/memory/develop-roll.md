@@ -1161,3 +1161,8 @@ The filmstrip's × badge overhangs its cell by 4px, and a scroller that clips
 x clips y too — on a touch screen, where the badge is always drawn at 28px,
 its top was sliced flat. The strip pays `pt-1.5 pr-1.5` for it; any badge
 overhanging a cell in a horizontal scroller needs the same room.
+
+## A run writes each picture as it lands (2026-09-28)
+
+`exportPictures` used to render the whole run into memory — every JPEG and every second target's — and write it all at the end, then keep the files in `lastRun` until the NEXT run: gigabytes on a big roll, and on a phone where a long roll died. Each picture is now handed to `deliverFilesTo` as soon as it is rendered (its main file and its other targets' together), the counts and refusals are accumulated, and only the NAMES are kept (`RollRun.names`, for the unplugged send home, which can read them back from the folder). The folder is still picked at the click, before anything renders (`deliver-files.ts`). A cancel keeps what was already written — as it always said.
+

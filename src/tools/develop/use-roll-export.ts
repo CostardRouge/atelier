@@ -72,17 +72,21 @@ import { startTask } from '../../shared/tasks/tasks';
 import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/run-plan';
 
 /**
- * What the last run rendered, and each file's own capture on its instance.
+ * What the last run wrote, and each file's own capture on its instance.
  *
  * Recorded, not shown: sending the finals home is unplugged (`ExportPanel`),
  * because Winnow's upload route files an upload into the incoming as a new
  * capture instead of into the Gallery, and ignores the `original_asset_id`
  * that would link it to the picture it was developed from. The bookkeeping
- * stays so re-plugging it is one element, not a second pass over the loop.
+ * stays so re-plugging it is one element, not a second pass over the loop —
+ * but as NAMES, not the files: holding every rendered JPEG until the next
+ * run was gigabytes on a big roll (the audit of 2026-09-22), and a send home
+ * can read them back from the folder they were written to.
  */
 export interface RollRun {
-  files: File[];
-  /** Each file's own capture on its instance, parallel to `files`. */
+  /** The files' names in the chosen folder (`Variant 2/…` for a copy). */
+  names: string[];
+  /** Each file's own capture on its instance, parallel to `names`. */
   assetIds: (string | null)[];
   /** The one instance the run's pictures came from, when they came from one. */
   sourceId: string | null;
@@ -326,15 +330,16 @@ export function useRollExport({
       progress: 0,
       cancel: () => controller.abort(),
     });
-    const rendered: File[] = [];
-    // The other targets' files, each bound for its own sub-folder under the
-    // SAME name as the picture's file in the chosen folder.
-    const foldered: FolderedFile[] = [];
-    // The picture each file was rendered from, parallel to `rendered`.
-    const renderedFrom: RollPicture[] = [];
-    // And the sub-folder it goes to, parallel too: '' for a picture, `Variant
-    // 2` for a copy (item 30), whose file keeps the capture's exact name.
-    const renderedFolder: string[] = [];
+    // Each picture is WRITTEN as soon as it is rendered, and let go: a run
+    // used to hold every JPEG — and every second target's — until the last
+    // picture was done, which on a phone is where a long roll ran out of
+    // memory (the audit of 2026-09-22). What stays is a count and the names.
+    let renderedCount = 0;
+    const names: string[] = [];
+    // The pictures whose main file LANDED — what gets marked delivered.
+    const landed: RollPicture[] = [];
+    const written = { count: 0, renamed: 0, errors: [] as string[] };
+    const method: 'folder' | 'download' = target.kind === 'folder' ? 'folder' : 'download';
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];
@@ -627,22 +632,29 @@ export function useRollExport({
           const inDir = (n: string) => `${variantDir}/${n}`.toLowerCase();
           const name = uniqueName(exportName(picture.ref.name), (c) => named.has(inDir(c)));
           named.add(inDir(name));
-          rendered.push(
-            new File([blob], name, {
-              type: 'image/jpeg',
-              // The capture's own instant, never the moment it was rendered.
-              lastModified: file.lastModified,
-            }),
-          );
-          out.outputs.slice(1).forEach((o, k) => {
+          // The capture's own instant, never the moment it was rendered.
+          const main = new File([blob], name, { type: 'image/jpeg', lastModified: file.lastModified });
+          const others: FolderedFile[] = out.outputs.slice(1).map((o, k) => {
             const targetDir = targetFolder(r.export.targets[k + 1].name, k + 1);
-            foldered.push({
+            return {
               folder: variantDir ? `${targetDir}/${variantDir}` : targetDir,
               file: new File([o.blob], name, { type: 'image/jpeg', lastModified: file.lastModified }),
-            });
+            };
           });
-          renderedFrom.push(picture);
-          renderedFolder.push(variantDir);
+          renderedCount += 1;
+          setExporting(`Writing ${step}…`);
+          const delivery = await deliverFilesTo(target, [variantDir ? { file: main, folder: variantDir } : main, ...others], {
+            replace: r.export.replace,
+          });
+          written.count += delivery.written;
+          if (delivery.method === 'folder') {
+            written.renamed += delivery.renamed;
+            written.errors.push(...delivery.errors);
+          }
+          // What LANDED is what gets marked: a file the folder refused was not delivered.
+          const mainName = variantDir ? `${variantDir}/${name}` : name;
+          if (delivery.method !== 'folder' || !delivery.failed.includes(mainName)) landed.push(picture);
+          names.push(mainName);
           assetIds.push(identity?.assetId ?? null);
           if (origin) sourceIds.add(origin.sourceId);
         } catch (err) {
@@ -652,40 +664,23 @@ export function useRollExport({
         }
       }
       const cancelled = controller.signal.aborted;
-      if (rendered.length === 0) {
+      if (renderedCount === 0) {
         setNote(cancelled ? 'Export cancelled — nothing was written.' : (failures[0] ?? 'Nothing could be rendered.'));
         return;
       }
-      // A cancelled run keeps what it rendered: written, and said as such.
-      setExporting('Writing…');
-      task.update({ label: 'Writing the pictures', progress: 0, detail: null });
-      const mains = rendered.map((file, i) => (renderedFolder[i] ? { file, folder: renderedFolder[i] } : file));
-      const delivery = await deliverFilesTo(target, [...mains, ...foldered], {
-        replace: r.export.replace,
-        onProgress: (done, total) => {
-          setExporting(`Writing ${done}/${total}…`);
-          task.update({ progress: done / total, detail: `${done} of ${total}` });
-        },
-      });
-      const errors = delivery.method === 'folder' ? delivery.errors : [];
-      // What LANDED is what gets marked: a file the folder refused was not delivered.
-      const refused = new Set(delivery.method === 'folder' ? delivery.failed : []);
-      latest.current.onDelivered?.(
-        renderedFrom.filter((_, i) => !refused.has(renderedFolder[i] ? `${renderedFolder[i]}/${rendered[i].name}` : rendered[i].name)),
-        Date.now(),
-      );
-      const renamed = delivery.method === 'folder' ? delivery.renamed : 0;
+      // A cancelled run keeps what it rendered: written as it went, and said as such.
+      latest.current.onDelivered?.(landed, Date.now());
       setNote(
-        (cancelled ? `Cancelled after ${rendered.length} of ${targets.length} — ` : '') +
-          describeRun(delivery.written, delivery.method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...errors], renamed, {
-            pictures: rendered.length,
+        (cancelled ? `Cancelled after ${renderedCount} of ${targets.length} — ` : '') +
+          describeRun(written.count, method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...written.errors], written.renamed, {
+            pictures: renderedCount,
             targets: r.export.targets.length,
           }),
       );
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
       const sourceId = sourceIds.size === 1 ? [...sourceIds][0] : null;
-      setLastRun({ files: rendered, assetIds, sourceId, hdr: hdrRun });
+      setLastRun({ names, assetIds, sourceId, hdr: hdrRun });
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'The pictures could not be exported.');
     } finally {
