@@ -212,7 +212,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 
 - UI foundations copy **Winnow's recipes** (one `.btn`, Tailwind's named sizes, in-repo SVG `Icons` at stroke 1.7, shared empty/loading/confirm) — the maintainer wants the two projects to look alike; the tool switcher stays a **dropdown**, never segments, because the tool list will keep growing — `frontend.md`.
 
-- A session that changes code reports this project's state to its fiche, `projets/atelier/README.md`, in the private `second-brain` repo: the register is that folder and `PROJETS.md` there is generated from it, never Claude's memory and never `git log`. A cloud session that has no checkout of it attaches it itself (`add_repo`, 2026-09-23), because a week of sessions left the state only in chat; the fallback block goes into the PR description under `### Registre`, and no `second-brain` token is ever put in this repo. — CLAUDE.md rule 3.
+- A session that changes code reports this project's state to its fiche, `projets/atelier/README.md`, in the private `second-brain` repo: the register is that folder and `PROJETS.md` there is generated from it, never Claude's memory and never `git log`. A cloud session that has no checkout of it attaches it itself (`add_repo`, 2026-09-23), because a week of sessions left the state only in chat; the fallback block goes into the PR description under `### Registre`, and no `second-brain` token is ever put in this repo. Since 2026-09-28 a register PR carries the fiche alone: `PROJETS.md` is regenerated on `main` by its workflow, because every branch that committed it put all the other register PRs in conflict (nine at once). — CLAUDE.md rule 3.
 
 ## Open items (dated; remove when done)
 
