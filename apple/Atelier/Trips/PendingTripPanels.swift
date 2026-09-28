@@ -47,31 +47,3 @@ struct LegsSheetView: View {
                            text: "The legs sheet is coming with its own task.")
     }
 }
-
-// MARK: - TRIP SETTINGS — owned by the trip settings task
-// (`Trips/Settings/*`): the words, the closing card, the new-piece defaults,
-// the car's garage and its turntable, the backup. Delete when it lands.
-
-/// ⚙ Trip, opened from the piece editor on `section` when one is asked.
-struct TripSettingsSheet: View {
-    let store: TripsStore
-    let tripId: String
-    var section: String?
-
-    var body: some View {
-        PendingTripsScreen(title: "Trip",
-                           text: "The trip's settings — its words, the closing card, the defaults and the car — are coming with their own task.")
-    }
-}
-
-/// The garage the Virée opener opens from a piece: a DRAFT of the trip's car,
-/// written on Done.
-struct CarGarageSheet: View {
-    let store: TripsStore
-    let tripId: String
-
-    var body: some View {
-        PendingTripsScreen(title: "Garage",
-                           text: "The car's garage and its turntable are coming with their own task.")
-    }
-}
