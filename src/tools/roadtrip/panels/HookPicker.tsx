@@ -20,13 +20,14 @@
 import { useCallback, useMemo, useState } from 'react';
 import {
   setHookOptions,
-  setHookVariant,
+  switchHookVariant,
   type HookContext,
   type HookLayer,
   type HookPanelHost,
   type HookPictureChoice,
   type HookPickedPicture,
   type HookPictureStatus,
+  type HookShelf,
   type HookVariant,
 } from '../../../shared/roadtrip/hooks/hook-variant';
 import { HOOK_VARIANTS, hookUnmet } from '../../../shared/roadtrip/hooks/registry';
@@ -35,11 +36,17 @@ import HookPicturesModal from '../HookPicturesModal';
 interface HookPickerProps {
   /** The piece's stored layers; the picker writes the first and only the first. */
   layers: HookLayer[];
+  /**
+   * What the openers not on the card were given (`PostBadge.hookShelf`) — a
+   * switch sets the current one's aside and takes the chosen one's back.
+   */
+  shelf?: HookShelf;
   /** What the variants were prepared against — also what an option panel reads. */
   ctx: HookContext;
   /** How the opener's pictures are coming along, for its panel to say. */
   pictureStatus?: HookPictureStatus;
-  onChange: (layers: HookLayer[]) => void;
+  /** The shelf is passed only when a switch changed it. */
+  onChange: (layers: HookLayer[], shelf?: HookShelf) => void;
   /**
    * Opens the trip's garage — the car every Virée drives. Absent where the
    * picker has no trip to write to, and the variant's panel says so instead.
@@ -55,6 +62,7 @@ interface ChooseRequest {
 
 export default function HookPicker({
   layers,
+  shelf,
   ctx,
   pictureStatus,
   onChange,
@@ -94,7 +102,10 @@ export default function HookPicker({
               key={variant.id}
               type="button"
               disabled={!!unmet}
-              onClick={() => onChange(setHookVariant(layers, variant))}
+              onClick={() => {
+                const next = switchHookVariant(layers, shelf, variant);
+                onChange(next.hook, next.shelf);
+              }}
               aria-pressed={active}
               className={`flex items-center gap-3 px-3 py-2 rounded-paper border text-left transition-colors ${
                 unmet

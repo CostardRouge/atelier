@@ -7,6 +7,7 @@ import {
   readOptions,
   setHookOptions,
   setHookVariant,
+  switchHookVariant,
   type HookContext,
   type HookRender,
   type HookVariant,
@@ -225,5 +226,60 @@ describe('choosing a variant', () => {
     expect(setHookOptions([], { stops: 8 })).toEqual([
       { id: DEFAULT_HOOK_ID, options: { stops: 8 } },
     ]);
+  });
+
+  describe('keeping what the other openers were given', () => {
+    const map: HookVariant = {
+      id: 'map',
+      name: 'Itinerary',
+      tagline: '',
+      defaults: { stops: [], curve: 0.18 },
+      needs: {},
+      owns: 'frame',
+      prepare: () => ({ seconds: 0 }),
+    };
+    const drawn = [{ id: 'map', options: { stops: [{ id: 'a', lat: 1, lon: 2 }], curve: 0.3 } }];
+
+    it('sets the current opener aside and starts the new one from its defaults the first time', () => {
+      const next = switchHookVariant(drawn, undefined, scrub);
+      expect(next.hook).toEqual([{ id: 'scrub', options: { mode: 'from-start', stops: 12 } }]);
+      expect(next.shelf).toEqual({ map: drawn[0].options });
+    });
+
+    it('takes an opener back off the shelf exactly as it was left', () => {
+      const away = switchHookVariant(drawn, undefined, scrub);
+      const tuned = [{ id: 'scrub', options: { mode: 'run-up', stops: 6 } }];
+      const back = switchHookVariant(tuned, away.shelf, map);
+      expect(back.hook).toEqual(drawn);
+      // The active opener is never on the shelf too — one copy of a fact.
+      expect(back.shelf).toEqual({ scrub: { mode: 'run-up', stops: 6 } });
+    });
+
+    it('keeps the shelf and the settings when the card already chosen is clicked', () => {
+      const shelf = { scrub: { stops: 3 } };
+      const next = switchHookVariant(drawn, shelf, map);
+      expect(next.hook).toEqual(drawn);
+      expect(next.shelf).toBe(shelf);
+    });
+
+    it('does not shelve an opener that has nothing to come back to', () => {
+      const next = switchHookVariant(defaultHookLayers(), undefined, map);
+      expect(next.shelf).toEqual({});
+    });
+
+    it('never shares an object with the shelf or the document it came from', () => {
+      const away = switchHookVariant(drawn, undefined, scrub);
+      expect(away.shelf.map).not.toBe(drawn[0].options);
+      const back = switchHookVariant(away.hook, away.shelf, map);
+      expect(back.hook[0].options).not.toBe(away.shelf.map);
+    });
+
+    it('leaves the rest of a stack where it was', () => {
+      const stack = [...drawn, { id: 'route', options: { opacity: 0.6 } }];
+      expect(switchHookVariant(stack, undefined, scrub).hook[1]).toEqual({
+        id: 'route',
+        options: { opacity: 0.6 },
+      });
+    });
   });
 });

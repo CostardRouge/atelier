@@ -43,7 +43,7 @@ import {
 } from './badge-layout';
 import type { CameraPlateSpec } from '../overlay/camera-plate';
 import { createShade, vignetteShade, type Shade } from './shades';
-import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
+import { defaultHookLayers, type HookLayer, type HookShelf } from './hooks/hook-variant';
 import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
@@ -355,6 +355,14 @@ export interface PostBadge {
    * opener, it never fails to open. See `docs/hook-engine.md`.
    */
   hook: HookLayer[];
+  /**
+   * What the openers this piece is NOT drawing were given, by variant id
+   * (`switchHookVariant`), so trying Virée after an Itinerary never throws
+   * the Itinerary's stops away. Optional and additive: absent is an empty
+   * shelf, so no document migrates. It belongs to THIS piece — a look saved
+   * for the next piece (`hookDefaultsFrom`) and the house style never carry it.
+   */
+  hookShelf?: HookShelf;
 }
 
 /**

@@ -410,7 +410,9 @@ export interface HookVariant {
 /**
  * Choose a variant. Re-selecting the one already there keeps its settings —
  * a click on the card you are on must not silently reset the panel under it —
- * while a real change starts from that variant's own defaults.
+ * while a real change starts from that variant's own defaults. The picker goes
+ * through {@link switchHookVariant}, which also keeps the settings of the
+ * variant left behind.
  *
  * Only the first layer is written: the stack is storage, not UI (see D3).
  */
@@ -424,6 +426,58 @@ export function setHookVariant(
     return [{ id: current.id, options: { ...current.options } }, ...rest];
   }
   return [{ id: variant.id, options: { ...variant.defaults } }, ...rest];
+}
+
+/**
+ * The settings of the openers a piece is NOT drawing, by variant id — set
+ * aside when the author switches away, taken back when they switch back.
+ *
+ * Without it a switch was a one-way door: an Itinerary's twelve stops were
+ * gone the moment Virée was tried beside it, and trying things is exactly
+ * what the picker is for. The active opener's options live in its layer and
+ * NEVER here too — one copy of a fact — so a variant leaves the shelf the
+ * moment it is chosen and goes back on it when another is.
+ */
+export type HookShelf = Readonly<Record<string, HookOptions>>;
+
+/** What a switch writes: the layers, and the shelf beside them. */
+export interface HookSwitch {
+  hook: HookLayer[];
+  shelf: HookShelf;
+}
+
+/**
+ * Choose a variant, keeping what the others were given.
+ *
+ * The card already chosen keeps its settings (`setHookVariant`'s rule); a real
+ * change shelves the current opener's options and takes the chosen one's off
+ * the shelf, or starts from its defaults the first time. An opener with no
+ * options at all (the badge) is not shelved: there is nothing to come back to.
+ */
+export function switchHookVariant(
+  layers: readonly HookLayer[] | undefined,
+  shelf: HookShelf | undefined,
+  variant: HookVariant,
+): HookSwitch {
+  const current = layers?.[0];
+  const stored = shelf ?? {};
+  if (current?.id === variant.id) {
+    return { hook: setHookVariant(layers, variant), shelf: stored };
+  }
+  const next: Record<string, HookOptions> = { ...stored };
+  if (current && Object.keys(current.options ?? {}).length > 0) {
+    next[current.id] = structuredClone(current.options);
+  }
+  const kept = next[variant.id];
+  delete next[variant.id];
+  const rest = (layers ?? []).slice(1);
+  return {
+    hook: [
+      { id: variant.id, options: kept ? structuredClone(kept) : { ...variant.defaults } },
+      ...rest,
+    ],
+    shelf: next,
+  };
 }
 
 /** Write the first layer's options, leaving any others alone. */

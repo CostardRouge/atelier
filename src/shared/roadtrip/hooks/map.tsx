@@ -106,10 +106,22 @@ function pictureLine(
   };
 }
 
+/**
+ * The stop last selected, kept past the panel's unmount: the panel is
+ * unmounted whenever another tab of the inspector opens, and coming back to
+ * find the stop being edited deselected read as work lost. A stop's id is a
+ * UUID, so the one remembered id can never select a stop of another piece.
+ */
+let lastSelectedStop: string | null = null;
+
 function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   const o = mapOptions(options);
   const set = (patch: Partial<MapOptions>) => onChange({ ...o, ...patch });
-  const [selectedId, setSelectedId] = useState<string | null>(null);
+  const [selectedId, selectStop] = useState<string | null>(() => lastSelectedStop);
+  const setSelectedId = (id: string | null) => {
+    lastSelectedStop = id;
+    selectStop(id);
+  };
   /** What the last pick did, when it did more than the stop it was asked from. */
   const [spread, setSpread] = useState<string | null>(null);
 

@@ -878,7 +878,10 @@ signature that makes a post recognisable in a feed.
 
 **The opener.** The badge is one way to open a piece; the Look tab's first
 section picks another from cards — a card you cannot feed (a route with no
-located place) is greyed with the reason, never hidden. **Badge** is the plain
+located place) is greyed with the reason, never hidden. Switching is never a
+loss: the opener you leave keeps everything you gave it — an Itinerary's stops,
+Virée's picked pictures, every setting — and switching back finds it exactly as
+it was, after a reload too. **Badge** is the plain
 one. **Défilé** runs the trip past before landing on the day: a measuring tape
 of the whole trip sweeps to the day you are telling, decelerating like a
 mechanism coming to rest; every stop flashes a real picture as the head lands on

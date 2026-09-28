@@ -165,9 +165,13 @@ only how its words are set — and the style belongs to every slide.
 - **An unmet variant is disabled, with its reason in place of the tagline**, in
   the accent ink — never hidden.
 - **Re-selecting the current card keeps its settings**; choosing another starts
-  from that variant's `defaults`. Both writers (`setHookVariant`,
-  `setHookOptions`) replace the FIRST layer only, so a stored stack keeps what
-  sits behind it even though no UI builds one yet.
+  from that variant's `defaults` the first time, and from what it was left with
+  every time after (2026-09-28, `switchHookVariant`: the options of the opener
+  left behind go on `PostBadge.hookShelf`, keyed by variant id, and come back
+  off it — a switch used to throw an Itinerary's stops away). The writers
+  (`setHookVariant`, `switchHookVariant`, `setHookOptions`) replace the FIRST
+  layer only, so a stored stack keeps what sits behind it even though no UI
+  builds one yet.
 - **The trip-wide default needed no second picker.** ⚙&nbsp;Trip → New pieces
   already saves the whole look through `hookDefaultsFrom`, which carries `hook`
   since phase 1 — a second place to choose the same thing is the fault this
