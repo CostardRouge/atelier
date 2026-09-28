@@ -213,7 +213,7 @@ export async function encodeFrames(opts: EncodeFramesOptions): Promise<Blob> {
       }
       done += 1;
       opts.onProgress?.({ phase: 'encoding', ratio: done / plan.length });
-      await awaitQueue(() => encoder.encodeQueueSize, 24);
+      await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
     }
 
     await encoder.flush();

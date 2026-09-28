@@ -44,6 +44,7 @@ import {
 import { safeChunkMetadata } from './colour-tag';
 import { type ExportTail } from './export-tail';
 import { framePlan } from './frame-plan';
+import { awaitQueue } from './codec-queue';
 import type { TrimRange } from './trim';
 
 export interface ExportProgress {
@@ -490,12 +491,8 @@ export async function pickAvcCodec(
   return 'avc1.42E01E';
 }
 
-/** Block until a codec's queue drains below `max` (simple backpressure). */
-export async function awaitQueue(getSize: () => number, max: number): Promise<void> {
-  while (getSize() > max) {
-    await new Promise((r) => setTimeout(r, 5));
-  }
-}
+/** Backpressure on a codec's queue — `codec-queue.ts`, kept exported here for its readers. */
+export { awaitQueue };
 
 /**
  * Bits per pixel per frame. ~0.12 is close to worst case for an inter-frame
@@ -866,8 +863,8 @@ export async function exportProcessedVideo(
             data: sample.data,
           }),
         );
-        await awaitQueue(() => decoder.decodeQueueSize, 24);
-        await awaitQueue(() => encoder.encodeQueueSize, 24);
+        await awaitQueue(() => decoder.decodeQueueSize, 24, decoder);
+        await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
       }
 
       await decoder.flush();
@@ -889,7 +886,7 @@ export async function exportProcessedVideo(
           emitted++;
           processed++;
           onProgress?.({ phase: 'encoding', ratio: processed / total });
-          await awaitQueue(() => encoder.encodeQueueSize, 24);
+          await awaitQueue(() => encoder.encodeQueueSize, 24, encoder);
         }
       }
 
