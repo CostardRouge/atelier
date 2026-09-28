@@ -28,6 +28,17 @@
 //   throttle an export in a hidden window and the Mac does not idle to sleep
 //   under it; ended with the last kept task.
 //
+// The LIVE ACTIVITY (iOS; `apple/Shared/ExportActivity.swift`, drawn by the
+// `apple/Widgets/` extension) is started with the run while the app is on
+// screen — the one moment ActivityKit takes a request from the app —, fed
+// from the same summary at most once a second (and every 20 s with nothing
+// new, so that only a SUSPENDED app lets it go stale), and ended with the
+// run's last words: left a few minutes when the run ended while he was away,
+// gone at once when he is looking at the app. It is NOT started beside iOS
+// 26's continued task (`activityBesideSystemUI`): the system draws its own
+// progress UI for that one, from the same title, subtitle and progress. Every
+// ActivityKit call is guarded by `areActivitiesEnabled`.
+//
 // The helper WATCHES `TaskCenter.shared.running` (Observation) and reads the
 // kernel's registry itself for the truth — a task kept a moment before the
 // center's coalesced refresh is still found —, so a kept task that ends,
@@ -54,6 +65,10 @@
 //   known to be interrupted when an app leaves the screen. If they refuse, a
 //   kept export FAILS in the background rather than stalling — the first run
 //   on a device says which.
+// - That the system shows its own progress UI for a continued task (Apple's
+//   documentation: continued processing tasks "will present UI while in
+//   progress"), which is why our Live Activity stands down beside one; if it
+//   does not, `activityBesideSystemUI = true` shows ours there too.
 
 import Foundation
 import Observation
@@ -61,6 +76,7 @@ import AtelierKit
 #if os(iOS)
 import UIKit
 import BackgroundTasks
+import ActivityKit
 import os
 #endif
 
@@ -94,6 +110,9 @@ final class BackgroundRun {
                     .error("the continued processing task could not be registered")
             }
         }
+        #endif
+        #if os(iOS)
+        Task { @MainActor in BackgroundRun.shared.endLeftovers() }
         #endif
     }
 
@@ -186,8 +205,19 @@ final class BackgroundRun {
         active = false
         kept = []
         #if os(iOS)
-        completeContinued(keptRunClosing(labels.map { $0.label }, end: end), whole: end != .stopped)
-        endLegacy()
+        let words = keptRunClosing(labels.map { $0.label }, end: end)
+        completeContinued(words, whole: end != .stopped)
+        // The seconds go once the Live Activity has its last words — and
+        // never later than a second from now: at an expiration the system
+        // does not wait.
+        let held = seconds
+        seconds = nil
+        endActivity(words, end: end) { held?.end() }
+        if let held {
+            DispatchQueue.main.asyncAfter(deadline: .now() + 1) {
+                MainActor.assumeIsolated { held.end() }
+            }
+        }
         #elseif os(macOS)
         if let activityToken { ProcessInfo.processInfo.endActivity(activityToken) }
         activityToken = nil
@@ -198,7 +228,10 @@ final class BackgroundRun {
     private func hold(_ summary: KeptRunSummary) {
         #if os(iOS)
         beginLegacy()
-        if UIApplication.shared.applicationState == .active { submitContinued(summary) }
+        if UIApplication.shared.applicationState == .active {
+            submitContinued(summary)
+            startActivity(summary)
+        }
         #elseif os(macOS)
         activityToken = ProcessInfo.processInfo.beginActivity(options: .userInitiated,
                                                               reason: "Atelier: \(summary.title)")
@@ -209,6 +242,7 @@ final class BackgroundRun {
     private func report(_ summary: KeptRunSummary) {
         #if os(iOS)
         mirrorContinued(summary)
+        pushActivity(activityState(summary))
         #endif
     }
 
@@ -220,26 +254,45 @@ final class BackgroundRun {
     #if os(iOS)
     // MARK: - iOS 17–25: the seconds after leaving the screen
 
-    private var legacy: UIBackgroundTaskIdentifier = .invalid
+    /// The seconds `beginBackgroundTask` bought — ended exactly once.
+    @MainActor
+    private final class Seconds {
+        var id: UIBackgroundTaskIdentifier = .invalid
 
-    private func beginLegacy() {
-        guard legacy == .invalid else { return }
-        legacy = UIApplication.shared.beginBackgroundTask(withName: "Atelier: exporting") {
-            // Called on the main thread, shortly before the time runs out.
-            MainActor.assumeIsolated { BackgroundRun.shared.legacyExpired() }
+        func end() {
+            guard id != .invalid else { return }
+            UIApplication.shared.endBackgroundTask(id)
+            id = .invalid
         }
     }
 
-    private func legacyExpired() {
-        // Once the continued task runs, it is the one holding the time.
-        if continued == nil { expire() }
-        endLegacy()
+    /// The seconds the running run holds.
+    private var seconds: Seconds?
+
+    private func beginLegacy() {
+        guard seconds == nil else { return }
+        let held = Seconds()
+        held.id = UIApplication.shared.beginBackgroundTask(withName: "Atelier: exporting") {
+            // Called on the main thread, shortly before the time runs out.
+            MainActor.assumeIsolated { BackgroundRun.shared.legacyExpired(held) }
+        }
+        seconds = held
+    }
+
+    private func legacyExpired(_ held: Seconds) {
+        // Once the continued task runs it is the one holding the time, and
+        // seconds a closed run still holds are simply let go.
+        if held === seconds, continued == nil, active {
+            expire()  // close() lets these seconds go after the last words
+        } else {
+            held.end()
+            if held === seconds { seconds = nil }
+        }
     }
 
     private func endLegacy() {
-        guard legacy != .invalid else { return }
-        UIApplication.shared.endBackgroundTask(legacy)
-        legacy = .invalid
+        seconds?.end()
+        seconds = nil
     }
 
     // MARK: - iOS 26: the continued processing task
@@ -339,6 +392,144 @@ final class BackgroundRun {
         }
         #endif
         continued = nil
+    }
+
+    // MARK: - the Live Activity
+
+    /// Our own Live Activity beside iOS 26's continued task too. Off: the
+    /// system draws its own progress UI for a continued task, and two faces
+    /// of one export on the Lock Screen are one too many. [verify on device]
+    static let activityBesideSystemUI = false
+    /// How long a run that ended while he was away stays on the Lock Screen.
+    private static let lingerSeconds: TimeInterval = 5 * 60
+    /// An activity the app stopped feeding goes stale after this long…
+    private static let staleAfter: TimeInterval = 60
+    /// …so a running one is fed at least this often, even with nothing new.
+    private static let heartbeatSeconds: TimeInterval = 20
+
+    private var activity: Activity<ExportActivityAttributes>?
+    /// The state owed to the activity, and the one it last received.
+    private var owed: ExportActivityAttributes.ContentState?
+    private var sent: ExportActivityAttributes.ContentState?
+    private var sentAt = Date.distantPast
+    private var pendingSend: Task<Void, Never>?
+    private var heartbeat: Task<Void, Never>?
+
+    private var activitiesEnabled: Bool { ActivityAuthorizationInfo().areActivitiesEnabled }
+
+    private func activityState(_ summary: KeptRunSummary) -> ExportActivityAttributes.ContentState {
+        let several = summary.total > 1
+        return ExportActivityAttributes.ContentState(
+            title: summary.title, detail: summary.detail, progress: summary.progress, phase: .running,
+            done: several ? summary.done : nil, total: several ? summary.total : nil)
+    }
+
+    /// Start the run's activity — in the foreground only, and not where the
+    /// system already shows the continued task.
+    private func startActivity(_ summary: KeptRunSummary) {
+        guard activity == nil, activitiesEnabled else { return }
+        if continuedAsked, !Self.activityBesideSystemUI { return }
+        let state = activityState(summary)
+        let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(Self.staleAfter))
+        do {
+            activity = try Activity.request(attributes: ExportActivityAttributes(startedAt: Date()),
+                                            content: content, pushType: nil)
+            owed = state
+            sent = state
+            sentAt = Date()
+            beat()
+        } catch {
+            log.error("the Live Activity was refused: \(error.localizedDescription, privacy: .public)")
+        }
+    }
+
+    /// Feed the activity what the run says now — at most once a second.
+    private func pushActivity(_ state: ExportActivityAttributes.ContentState) {
+        guard activity != nil else { return }
+        owed = state
+        guard state != sent, pendingSend == nil else { return }
+        let wait = 1 - Date().timeIntervalSince(sentAt)
+        if wait <= 0 {
+            sendActivity()
+            return
+        }
+        pendingSend = Task { @MainActor in
+            try? await Task.sleep(nanoseconds: UInt64(wait * 1_000_000_000))
+            guard !Task.isCancelled else { return }
+            let run = BackgroundRun.shared
+            run.pendingSend = nil
+            run.sendActivity()
+        }
+    }
+
+    private func sendActivity() {
+        guard let activity, let state = owed, activitiesEnabled else { return }
+        sent = state
+        sentAt = Date()
+        let content = ActivityContent(state: state, staleDate: Date().addingTimeInterval(Self.staleAfter))
+        Task { await activity.update(content) }
+    }
+
+    /// Keep a running activity fresh while nothing moves (a long step with no
+    /// length), so that only a SUSPENDED app lets it go stale.
+    private func beat() {
+        heartbeat?.cancel()
+        heartbeat = Task { @MainActor in
+            while !Task.isCancelled {
+                try? await Task.sleep(nanoseconds: UInt64(BackgroundRun.heartbeatSeconds * 1_000_000_000))
+                let run = BackgroundRun.shared
+                guard !Task.isCancelled, run.activity != nil else { return }
+                if Date().timeIntervalSince(run.sentAt) >= BackgroundRun.heartbeatSeconds { run.sendActivity() }
+            }
+        }
+    }
+
+    /// The run's last words: left on the Lock Screen a few minutes when it
+    /// ended while he was away, gone at once when he is looking at the app —
+    /// then `after`, whatever happened.
+    private func endActivity(_ words: (title: String, detail: String), end: KeptRunEnd,
+                             then after: @escaping () -> Void) {
+        pendingSend?.cancel()
+        pendingSend = nil
+        heartbeat?.cancel()
+        heartbeat = nil
+        let last = owed
+        owed = nil
+        sent = nil
+        guard let activity else {
+            after()
+            return
+        }
+        self.activity = nil
+        guard activitiesEnabled else {
+            after()
+            return
+        }
+        let finished = end == .finished
+        // "1 of 3 done" says something only of a run the system cut short.
+        let counted = end == .stopped && labels.count > 1
+        let state = ExportActivityAttributes.ContentState(
+            title: words.title, detail: words.detail,
+            progress: finished ? 1 : last?.progress,
+            phase: finished ? .finished : .stopped,
+            done: counted ? ended : nil, total: counted ? labels.count : nil)
+        let away = UIApplication.shared.applicationState != .active
+        let policy: ActivityUIDismissalPolicy = away
+            ? .after(Date().addingTimeInterval(Self.lingerSeconds))
+            : .immediate
+        Task { @MainActor in
+            await activity.end(ActivityContent(state: state, staleDate: nil), dismissalPolicy: policy)
+            after()
+        }
+    }
+
+    /// An activity of a run this process never saw end — the app was killed
+    /// under it — says nothing true any more: gone at once.
+    private func endLeftovers() {
+        guard activitiesEnabled else { return }
+        for leftover in Activity<ExportActivityAttributes>.activities where leftover.id != activity?.id {
+            Task { await leftover.end(nil, dismissalPolicy: .immediate) }
+        }
     }
     #endif
 }

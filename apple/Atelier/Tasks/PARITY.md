@@ -18,7 +18,8 @@ Where things are:
 | `TaskPill.swift` | `TaskPill`, its popover `TaskList`, and `.taskPill()` — the toolbar item every stack root and every pushed screen with its own bar carries |
 | `TaskEdge.swift` | `TaskEdge` (a media's hairline), `TaskBar` (the bar, for the edge and the list), `TaskCancelLink` (a sheet's own Cancel) |
 | `TaskFixtures.swift` | the previews' three tasks |
-| `BackgroundRun.swift` | `BackgroundRun.keep(handle)` — an export KEPT running past the foreground: iOS 26's continued processing task, `beginBackgroundTask` before it, `beginActivity` on the Mac; the words and units from the kernel's `keptRunSummary` (`Tasks/KeptRun.swift`) |
+| `BackgroundRun.swift` | `BackgroundRun.keep(handle)` — an export KEPT running past the foreground: iOS 26's continued processing task, `beginBackgroundTask` before it, `beginActivity` on the Mac, and the export's Live Activity; the words and units from the kernel's `keptRunSummary` (`Tasks/KeptRun.swift`) |
+| `apple/Shared/ExportActivity.swift` · `apple/Widgets/` | the Live Activity's attributes, compiled into the app AND the `Atelier-Widgets` extension, which draws its Lock Screen, banner and Dynamic Island faces |
 
 Who registers a task today: the Develop roll's run (`Develop/Store/RollEditor+Run.swift`),
 the stage opening a picture (`Develop/Store/RollEditor.swift`), the stage's
@@ -103,12 +104,14 @@ foreground, one line at each of the five call sites (`BackgroundRun.keep`, below
 | Trips' three exports (`Exporting the piece`, `Exporting the slides`, `Encoding the hook`), scoped `piece:<id>` | `TripPieceExport`: one task per run under those labels and that scope, its Cancel stopping between two slides and ending the clip in flight | ✅ |
 | The Studio's export beside its own bar and Cancel (`Exporting <name>`) | `StudioExportModel`: `Exporting <name>` · `N variants`, its Cancel ending the variant in flight and keeping what was written; the instruments' exports likewise — the LUT studio's batch (`Exporting graded clips`, `i of N`, Cancel) and the Composer's (`Exporting <clip>`, Cancel) | ✅ |
 
-## Background — native only (no web twin)
+## Background and the Live Activity — native only (no web twin)
 
 A browser tab has no background to keep an export in; the web's exports stop
-with the tab. What the app does instead is `BackgroundRun.swift`. Every row is
-written and compiled by CI, and NONE has run on a device: what each platform
-really grants is marked **[verify on device]**.
+with the tab. What the app does instead is `BackgroundRun.swift`, and on iOS
+the export's Live Activity (`apple/Shared/`, `apple/Widgets/`) — the design
+canvas's «the Live Activity's three states». Every row is written and compiled
+by CI, and NONE has run on a device: what each platform really grants is
+marked **[verify on device]**.
 
 | Web | Native | |
 | --- | --- | --- |
@@ -118,6 +121,11 @@ really grants is marked **[verify on device]**.
 | — | iOS 17–25, and iOS 26 when the request is refused: `beginBackgroundTask`, about 30 s once the app has left the screen, then the kept tasks are cancelled the same way; held on iOS 26 too until the continued task launches | ✅ native addition |
 | — | macOS: `ProcessInfo.beginActivity(.userInitiated)` while any kept task runs — no App Nap in a hidden window, no idle sleep under an export | ✅ native addition |
 | — | Several kept exports share ONE hold and ONE progress: a kept task that ended counts whole, one with no length counts nothing yet (the system's bar holds still rather than inventing motion) — `keptRunSummary`, specs on Linux | ✅ native addition |
+| — | The export's LIVE ACTIVITY (iOS 17+, the `Atelier-Widgets` extension): the Lock Screen card and its banner, the Dynamic Island's compact pair and expanded face, the ring as its minimal face — ink on paper with the vermilion bar, the accent's night value on the island's black (the three colours copied from `Theme.swift`, the extension being unable to import the app) — **[verify on device]**: nothing of it has been seen | ✅ native addition |
+| — | Its words are the task's own (label, detail, `N running`, `2 of 3 done`); a length nobody measured is a still quarter in the middle and the time elapsed, counted by the system — a Live Activity cannot animate a sweep, and never draws an invented fill | ✅ native addition |
+| — | Started with the run while the app is on screen (the one moment ActivityKit takes a request), fed at most once a second, ended with the run's last words — `Finished`, `Cancelled — what was done is kept` or `Stopped in the background — …` —, left five minutes when the run ended while he was away, gone at once when he is looking; every ActivityKit call guarded by `areActivitiesEnabled` | ✅ native addition |
+| — | An activity the app stopped feeding (suspended, killed) goes STALE after a minute and says so rather than showing a frozen bar — a running one is fed every 20 s even with nothing new; one left by a killed run is ended at the next launch | ✅ native addition |
+| — | Not started beside iOS 26's continued task, whose progress the system draws itself from the same title, subtitle and progress (`activityBesideSystemUI` shows both) — **[verify on device]**: that the system's UI is there as documented | ✅ native addition |
 | — | Whether Core Image's Metal work and `AVAssetWriter`'s hardware encoder answer in the background WITHOUT the GPU grant (an iPhone that has none, iOS 17–25): if they refuse, a kept export fails there rather than finishing — **device-only**, the first run says | ⏳ |
 
 ## One-off surfaces (T5)
@@ -128,4 +136,4 @@ really grants is marked **[verify on device]**.
 | The pack import: `Importing <pack>`, `i of N`, NO Cancel — the index is written last | `PackManagerModel.run`, the sheet keeping its own line | ✅ |
 | A surface beside the VERB stays; one that only repeats the pill goes | the Develop Export tab's line and Cancel, the instruments' bars and Cancel stay beside their buttons; nothing here drew a private bar the pill now repeats | ✅ |
 
-**Counts**: 51 rows — 45 ✅ (10 of them native additions), 1 ⏳, 5 ≠ (built differently on purpose), a row counted by its last cell. The one ⏳ is device-only: what the GPU and the encoder grant an app in the background.
+**Counts**: 56 rows — 50 ✅ (15 of them native additions), 1 ⏳, 5 ≠ (built differently on purpose), a row counted by its last cell. The one ⏳ is device-only: what the GPU and the encoder grant an app in the background.
