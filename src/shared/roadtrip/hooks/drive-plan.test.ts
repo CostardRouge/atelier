@@ -274,6 +274,61 @@ describe('driveRoute on pictures', () => {
   });
 });
 
+describe('driveRoute on your own places', () => {
+  const stop = (id: string, name: string, lat: number, lon: number, picture?: HookPickedPicture) => ({
+    id,
+    name,
+    lat,
+    lon,
+    ...(picture ? { picture } : {}),
+  });
+  // Places no leg names: the author put them on the map.
+  const MINE = [
+    stop('a', 'Monkey Mia', -25.79, 113.72, pic('dolphin.jpg', 20)),
+    stop('b', ' Shark Bay ', -25.93, 113.54),
+    stop('c', 'Hamelin Pool', -26.4, 114.17),
+  ];
+
+  it('reads the stops and the third source from a stored record', () => {
+    const o = driveOptions({ stopsOn: 'custom', stops: [...MINE, { id: 'x', name: 'nowhere' }] });
+    expect(o.stopsOn).toBe('custom');
+    expect(o.stops.map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('drives them in the author’s order, named as written, off every leg', () => {
+    const route = driveRoute(STAGES, CAL, dateOf(5), opts({ stopsOn: 'custom', stops: MINE }));
+    expect(route.stops.map((s) => s.name)).toEqual(['Monkey Mia', 'Shark Bay', 'Hamelin Pool']);
+    expect(route.stops.every((s) => s.leg === null)).toBe(true);
+    expect(route.currentLeg).toBeNull();
+    expect(route.named).toBe(true);
+  });
+
+  it('shows a stop’s own picture there, even one shot after the piece’s day', () => {
+    const route = driveRoute(STAGES, CAL, dateOf(5), opts({ stopsOn: 'custom', stops: MINE }));
+    expect(route.stops[0].pictures.map((p) => p.want.ref.name)).toEqual(['dolphin.jpg']);
+    expect(route.leftOut.after).toBe(0);
+  });
+
+  it('puts a picked picture with a position on the nearest stop, and counts one without', () => {
+    const picked = [pic('pool.jpg', 3, { lat: -26.39, lon: 114.16 }), pic('blind.jpg', 3)];
+    const route = driveRoute(STAGES, CAL, dateOf(5), opts({ stopsOn: 'custom', stops: MINE, picked }));
+    expect(route.stops[2].pictures.map((p) => p.want.ref.name)).toEqual(['pool.jpg']);
+    expect(route.leftOut.unlocated).toBe(1);
+  });
+
+  it('shows no picture at all when the pictures are off', () => {
+    const route = driveRoute(STAGES, CAL, dateOf(5), opts({ stopsOn: 'custom', stops: MINE, pictures: 'none' }));
+    expect(route.stops.every((s) => s.pictures.length === 0)).toBe(true);
+    expect(driveWants(route, opts({ pictures: 'none' }))).toEqual([]);
+  });
+
+  it('draws nothing with no stop', () => {
+    const route = driveRoute(STAGES, CAL, dateOf(5), opts({ stopsOn: 'custom', stops: [] }));
+    expect(route.stops).toEqual([]);
+    expect(drivePlan(route, opts({ stopsOn: 'custom' }))).toBeNull();
+  });
+});
+
 describe('driveWants', () => {
   it('asks for every picture once, whole for cards and to the frame for a fill', () => {
     const route = driveRoute(STAGES, calendar(30, [3]), dateOf(8), opts({ picked: [pic('a.jpg', 4, { lat: -27.7, lon: 114.2 })] }));

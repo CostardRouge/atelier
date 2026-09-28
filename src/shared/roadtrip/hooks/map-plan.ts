@@ -35,20 +35,26 @@
 
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
-import type { HookPickedPicture, HookPictureWant, HookStage } from './hook-variant';
+import type { HookPictureWant } from './hook-variant';
 import { hookPictureKey } from './hook-variant';
+import { readStops, stopsFromPlaces, type MapStop } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 
-/** One place on the itinerary, with the picture the author gave it. */
-export interface MapStop {
-  /** Stable across edits — the React key, and what a reorder moves. */
-  id: string;
-  name: string;
-  lat: number;
-  lon: number;
-  /** The one picture this stop shows, or nothing. */
-  picture?: HookPickedPicture;
-}
+// The stop model and its edits are shared with Virée since 2026-09-28; the
+// names the Itinerary grew them under stay importable from here.
+export {
+  MAP_MAX_STOPS,
+  addStop,
+  assignPictures,
+  moveStop,
+  otherPlaces,
+  patchStop,
+  readStops,
+  removeStop,
+  stopsFromPlaces,
+  tripPlaces,
+  type MapStop,
+} from './stops';
 
 /** How a stop's picture is presented. */
 export type MapMedia = 'off' | 'pin' | 'card' | 'backdrop' | 'strip';
@@ -196,13 +202,6 @@ export const MAP_LIMITS = {
   tickVolume: { min: 0, max: 2 },
 } as const;
 
-/**
- * The most stops one itinerary draws. Past this the dots merge, every picture
- * is a decode, and the hook would be a slideshow rather than an opener. Extra
- * stops are dropped on read rather than silently half-drawn.
- */
-export const MAP_MAX_STOPS = 24;
-
 const HEX = /^#[0-9a-f]{6}$/i;
 
 function clamp(n: number, min: number, max: number, fallback: number): number {
@@ -215,51 +214,6 @@ function oneOf<T extends string>(value: unknown, allowed: readonly T[], fallback
 
 function hex(value: unknown, fallback: string): string {
   return typeof value === 'string' && HEX.test(value) ? value.toLowerCase() : fallback;
-}
-
-/**
- * A stored picture reference, read defensively: it travels in `.roadtrip.json`
- * and may have been written by a newer build. Anything that cannot name a file
- * again is dropped — a stop then simply has no picture, which is a state the
- * paint already draws.
- */
-function readPicture(raw: unknown): HookPickedPicture | undefined {
-  if (!raw || typeof raw !== 'object') return undefined;
-  const p = raw as Record<string, unknown>;
-  const ref = p.ref as Record<string, unknown> | undefined;
-  if (!ref || typeof ref !== 'object' || typeof ref.name !== 'string' || !ref.name) return undefined;
-  const date = typeof p.date === 'string' ? p.date : '';
-  const takenAt = Number(p.takenAt);
-  return {
-    ref: ref as unknown as HookPickedPicture['ref'],
-    date,
-    ...(Number.isFinite(takenAt) ? { takenAt } : {}),
-  };
-}
-
-/** Stored stops, read through the same discipline as the rest of the options. */
-export function readStops(raw: unknown): MapStop[] {
-  if (!Array.isArray(raw)) return [];
-  const out: MapStop[] = [];
-  for (const row of raw) {
-    if (!row || typeof row !== 'object') continue;
-    const s = row as Record<string, unknown>;
-    const lat = Number(s.lat);
-    const lon = Number(s.lon);
-    // A place with no coordinates is a complete place everywhere else in this
-    // tool; it simply cannot be a point on a map.
-    if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
-    if (Math.abs(lat) > 90 || Math.abs(lon) > 180) continue;
-    out.push({
-      id: typeof s.id === 'string' && s.id ? s.id : `stop${out.length}`,
-      name: typeof s.name === 'string' ? s.name : '',
-      lat,
-      lon,
-      picture: readPicture(s.picture),
-    });
-    if (out.length >= MAP_MAX_STOPS) break;
-  }
-  return out;
 }
 
 /** A stored options record, read through the defaults and clamped. */
@@ -776,103 +730,6 @@ export function stopPictureKey(stop: MapStop): string | null {
 }
 
 /**
- * The trip's own located places that are NOT already stops, for the faint
- * context layer and for the panel's "add a place" chips. Matched on position
- * rather than on name: the same place typed twice is one place.
- */
-export function otherPlaces(
-  stages: readonly HookStage[] | undefined,
-  stops: readonly MapStop[],
-): { name: string; lat: number; lon: number }[] {
-  const out: { name: string; lat: number; lon: number }[] = [];
-  for (const stage of stages ?? []) {
-    for (const place of stage.places) {
-      if (samePlace(stops, place) || out.some((seen) => near(seen, place))) continue;
-      out.push({ name: place.name, lat: place.lat, lon: place.lon });
-    }
-  }
-  return out;
-}
-
-function near(a: LatLon, b: LatLon): boolean {
-  return Math.abs(a.lat - b.lat) < 1e-6 && Math.abs(a.lon - b.lon) < 1e-6;
-}
-
-function samePlace(stops: readonly MapStop[], place: LatLon): boolean {
-  return stops.some((stop) => near(stop, place));
-}
-
-// ---------------------------------------------------------------------------
-// Editing the itinerary — pure, so the panel only draws
-// ---------------------------------------------------------------------------
-
-/** A stop added at the end. The name is the author's to write. */
-export function addStop(
-  stops: readonly MapStop[],
-  at: LatLon & { name?: string },
-  id: string,
-): MapStop[] {
-  if (stops.length >= MAP_MAX_STOPS) return [...stops];
-  return [...stops, { id, name: at.name ?? '', lat: at.lat, lon: at.lon }];
-}
-
-/** One stop changed in place; everything else, including its picture, kept. */
-export function patchStop(
-  stops: readonly MapStop[],
-  id: string,
-  patch: Partial<Omit<MapStop, 'id'>>,
-): MapStop[] {
-  return stops.map((stop) => (stop.id === id ? { ...stop, ...patch } : stop));
-}
-
-export function removeStop(stops: readonly MapStop[], id: string): MapStop[] {
-  return stops.filter((stop) => stop.id !== id);
-}
-
-/** A stop moved one place earlier or later. Out of range is a no-op, not a wrap. */
-export function moveStop(stops: readonly MapStop[], id: string, delta: number): MapStop[] {
-  const from = stops.findIndex((stop) => stop.id === id);
-  const to = from + delta;
-  if (from < 0 || to < 0 || to >= stops.length) return [...stops];
-  const out = [...stops];
-  const [moved] = out.splice(from, 1);
-  out.splice(to, 0, moved);
-  return out;
-}
-
-/**
- * The pictures the chooser came back with, landing on the stops.
- *
- * The first goes to the stop the author asked from. The rest fill the stops
- * AFTER it that have none — never one that already holds a picture, so a
- * generous pick can never quietly undo earlier work, and never a stop before
- * the one asked from, which would edit behind the author's back. Anything left
- * over is reported by the panel rather than dropped in silence.
- */
-export function assignPictures(
-  stops: readonly MapStop[],
-  index: number,
-  picked: readonly HookPickedPicture[],
-): { stops: MapStop[]; used: number } {
-  const out = stops.map((stop) => ({ ...stop }));
-  if (index < 0 || index >= out.length) return { stops: out, used: 0 };
-  if (picked.length === 0) {
-    // An empty pick is "this stop shows nothing" — the way to take a picture
-    // off a stop from inside the chooser.
-    delete out[index].picture;
-    return { stops: out, used: 0 };
-  }
-  out[index].picture = picked[0];
-  let used = 1;
-  for (let i = index + 1; i < out.length && used < picked.length; i++) {
-    if (out[i].picture) continue;
-    out[i].picture = picked[used];
-    used += 1;
-  }
-  return { stops: out, used };
-}
-
-/**
  * A stored `route` opener, read as an itinerary — the migration that retires
  * the Route trace (2026-09-15).
  *
@@ -937,28 +794,4 @@ export function mapFromRoute(
     if (carried[key] === undefined) delete carried[key];
   }
   return mapOptions(carried);
-}
-
-/** The trip's own located places as an itinerary — the one-click start. */
-export function stopsFromPlaces(
-  places: readonly { name: string; lat: number; lon: number }[],
-  makeId: (index: number) => string,
-): MapStop[] {
-  return places
-    .slice(0, MAP_MAX_STOPS)
-    .map((place, i) => ({ id: makeId(i), name: place.name, lat: place.lat, lon: place.lon }));
-}
-
-/** Every located place of the trip, in the order it was lived. */
-export function tripPlaces(
-  stages: readonly HookStage[] | undefined,
-): { name: string; lat: number; lon: number }[] {
-  const out: { name: string; lat: number; lon: number }[] = [];
-  for (const stage of stages ?? []) {
-    for (const place of stage.places) {
-      if (out.some((seen) => near(seen, place))) continue;
-      out.push({ name: place.name, lat: place.lat, lon: place.lon });
-    }
-  }
-  return out;
 }

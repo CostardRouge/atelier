@@ -282,4 +282,51 @@ describe('choosing a variant', () => {
       });
     });
   });
+
+  describe('handing the stops over between map openers', () => {
+    const itinerary: HookVariant = {
+      id: 'map',
+      name: 'Itinerary',
+      tagline: '',
+      defaults: { stops: [], curve: 0.18 },
+      sharedStops: { key: 'stops' },
+      needs: {},
+      owns: 'frame',
+      prepare: () => ({ seconds: 0 }),
+    };
+    const drive: HookVariant = {
+      id: 'drive',
+      name: 'Virée',
+      tagline: '',
+      defaults: { stopsOn: 'places', stops: [], tilt: 58 },
+      sharedStops: { key: 'stops', fresh: { stopsOn: 'custom' } },
+      needs: {},
+      owns: 'frame',
+      prepare: () => ({ seconds: 0 }),
+    };
+    const list = [{ id: 'a', name: 'Kalbarri', lat: -27.7, lon: 114.2 }];
+    const onMap = [{ id: 'map', options: { stops: list, curve: 0.3 } }];
+
+    it('gives the chosen opener the list, and its first-time settings for it', () => {
+      const next = switchHookVariant(onMap, undefined, drive, itinerary);
+      expect(next.hook[0].options).toEqual({ stopsOn: 'custom', stops: list, tilt: 58 });
+      expect(next.hook[0].options.stops).not.toBe(list);
+    });
+
+    it('keeps what the chosen opener was left with, all but the list', () => {
+      const shelf = { drive: { stopsOn: 'places', stops: [], tilt: 40 } };
+      const next = switchHookVariant(onMap, shelf, drive, itinerary);
+      expect(next.hook[0].options).toEqual({ stopsOn: 'places', stops: list, tilt: 40 });
+    });
+
+    it('hands nothing over from an empty list, so it cannot wipe the other one', () => {
+      const onDrive = [{ id: 'drive', options: { stopsOn: 'places', stops: [] } }];
+      const next = switchHookVariant(onDrive, { map: onMap[0].options }, itinerary, drive);
+      expect(next.hook[0].options).toEqual(onMap[0].options);
+    });
+
+    it('hands nothing to or from an opener that keeps no stops', () => {
+      expect(switchHookVariant(onMap, undefined, scrub, itinerary).hook[0].options).toEqual(scrub.defaults);
+    });
+  });
 });

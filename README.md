@@ -908,9 +908,13 @@ every visit. **Virée** puts a little car on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
 through its stops, and a cartoon Land Cruiser Prado, a miniature rendered in the
 browser with its wheels turning, driving from stop to stop. The stops are the
-legs' located places, arriving where this day's leg ends, or the **pictures
-you pick** — each one shot with a position in its EXIF is a stop, in the order
-they were shot, a run shot at one spot one stop. At a stop with pictures the car
+legs' located places, arriving where this day's leg ends; **your own places**,
+put on a map with the very editor the Itinerary uses — any place, on a leg or
+not, in your order, each able to hold a picture the car halts to show; or the
+**pictures you pick** — each one shot with a position in its EXIF is a stop, in
+the order they were shot, a run shot at one spot one stop. Your places follow
+you from one opener to the other: the stops picked for an Itinerary are the ones
+Virée drives when you switch, and back. At a stop with pictures the car
 halts and they pop as **prints** beside it, piled like a stack on the map, or
 fill the frame, or take the paper's place behind the road while it halts; a
 picture without a position rides with the stop before it, or with the end of
@@ -948,8 +952,8 @@ settings as its Car section, where every switch writes at once. On a wide
 screen both show the car beside its choices, which scroll on their own, so a
 switch far down the list is seen on the car the moment it flips.
 
-**Itinerary** is the one you compose yourself: pick the
-stops on a map — click to drop one where you like, drag it to move it, take
+**Itinerary** is the one you compose yourself (and the editor Virée borrows for
+your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
 from stop to stop, waiting at each for as long as you ask. There are no tiles

@@ -364,6 +364,16 @@ export interface HookVariant {
    * Absent = every option is look.
    */
   contentKeys?: readonly string[];
+  /**
+   * Where this variant keeps the author's own stops (`stops.ts`), when it has
+   * any. A switch between two variants that both declare it hands the list
+   * over (`switchHookVariant`), so the places picked for an Itinerary are
+   * the ones Virée drives, and back: one list followed from opener to opener
+   * rather than two that drift. `fresh` is what else the receiving variant
+   * sets the first time it is chosen with a list — Virée switching its road
+   * onto them.
+   */
+  sharedStops?: { key: string; fresh?: HookOptions };
   needs: HookNeeds;
   owns: 'frame' | 'layer';
   prepare(options: HookOptions, ctx: HookContext): HookRender;
@@ -453,11 +463,18 @@ export interface HookSwitch {
  * change shelves the current opener's options and takes the chosen one's off
  * the shelf, or starts from its defaults the first time. An opener with no
  * options at all (the badge) is not shelved: there is nothing to come back to.
+ *
+ * `from` is the variant being left, when the caller knows it: if both declare
+ * `sharedStops` and the one left holds a non-empty list, the chosen one takes
+ * THAT list — the most recent the author edited — over whatever it was left
+ * with. An empty list hands nothing over, so a Virée that never used its own
+ * places cannot wipe an Itinerary's.
  */
 export function switchHookVariant(
   layers: readonly HookLayer[] | undefined,
   shelf: HookShelf | undefined,
   variant: HookVariant,
+  from?: HookVariant,
 ): HookSwitch {
   const current = layers?.[0];
   const stored = shelf ?? {};
@@ -470,14 +487,17 @@ export function switchHookVariant(
   }
   const kept = next[variant.id];
   delete next[variant.id];
+  const options: Record<string, unknown> = kept ? structuredClone(kept) : { ...variant.defaults };
+  const handed =
+    from && from.id === current?.id && from.sharedStops && variant.sharedStops
+      ? current?.options?.[from.sharedStops.key]
+      : undefined;
+  if (Array.isArray(handed) && handed.length > 0 && variant.sharedStops) {
+    options[variant.sharedStops.key] = structuredClone(handed);
+    if (!kept) Object.assign(options, variant.sharedStops.fresh);
+  }
   const rest = (layers ?? []).slice(1);
-  return {
-    hook: [
-      { id: variant.id, options: kept ? structuredClone(kept) : { ...variant.defaults } },
-      ...rest,
-    ],
-    shelf: next,
-  };
+  return { hook: [{ id: variant.id, options }, ...rest], shelf: next };
 }
 
 /** Write the first layer's options, leaving any others alone. */

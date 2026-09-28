@@ -474,7 +474,11 @@ renderer or either export moved.
   lifted out of the route and Défilé when the drive wanted them: `geo.ts`
   (projection, great-circle, distance format, name placement, and a
   re-centrable `projectionFor`), `picked.ts` (the picked list's reading,
-  shot order, `partitionPicked`, `sampleEvenly`).
+  shot order, `partitionPicked`, `sampleEvenly`) and, since 2026-09-28,
+  `stops.ts` + `stops-editor.tsx` — the Itinerary's own stops and the editor
+  that picks them, which Virée drives on `stopsOn: 'custom'` («Your map»),
+  handed from one opener to the other on a switch through the one optional
+  contract member that needed (`HookVariant.sharedStops`).
 - **The car is a software renderer of our own, not a 3D library.** ~180
   flat-shaded faces meeting at an inked edge, every part CONVEX, so a
   painter's algorithm (back-face culling within a part, nearer centre drawn
@@ -607,8 +611,8 @@ more often than the opener is placed.
 **What the house style needed (2026-09-15).** A trip's look can leave the trip
 as the one every new trip starts from (`house-style.ts`), and an opener's
 options mix HOW it draws with WHAT it was given for one piece. So
-`HookVariant.contentKeys` (optional) names the latter — `picked` for Défilé
-and Virée, `stops` for the Itinerary — and the house style puts them back to
+`HookVariant.contentKeys` (optional) names the latter — `picked` for Défilé,
+`picked` and `stops` for Virée, `stops` for the Itinerary — and the house style puts them back to
 `defaults`. A test fails any variant whose defaults hold a list it does not
 declare: a list in an opener's options is always something picked.
 

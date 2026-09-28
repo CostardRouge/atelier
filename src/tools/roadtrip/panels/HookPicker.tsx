@@ -103,7 +103,7 @@ export default function HookPicker({
               type="button"
               disabled={!!unmet}
               onClick={() => {
-                const next = switchHookVariant(layers, shelf, variant);
+                const next = switchHookVariant(layers, shelf, variant, current);
                 onChange(next.hook, next.shelf);
               }}
               aria-pressed={active}

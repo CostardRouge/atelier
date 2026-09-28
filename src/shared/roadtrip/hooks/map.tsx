@@ -13,36 +13,27 @@
  * contact strip along the edge (`map-paint.ts`). What no mode does is stand
  * anything in for a stop with no picture: an empty stop looks empty.
  *
- * Arithmetic and options: `map-plan.ts`. Drawing: `map-paint.ts`. The picking
- * surface: `map-field.tsx`. This file is the variant's face — what it needs,
+ * Arithmetic and options: `map-plan.ts`. Drawing: `map-paint.ts`. The stops,
+ * and the editor that picks them, are shared with Virée: `stops.ts`,
+ * `stops-editor.tsx`. This file is the variant's face — what it needs,
  * what it cannot do, and its panel.
  */
 
-import { useState } from 'react';
-import PlaceSearchField from '../../map/PlaceSearchField';
-import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import {
   FieldRow,
-  NumberField,
   RangeField,
   SelectField,
   SwitchRow,
   ToggleField,
   swatchClass,
 } from '../../ui/Inspector';
-import { formatCoords } from '../trip-places';
-import { newId } from '../trip-types';
 import { EASINGS, EASING_IDS } from './easing';
 import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
-import MapField from './map-field';
 import { paintMap } from './map-paint';
 import {
   MAP_DEFAULTS,
   MAP_LIMITS,
-  MAP_MAX_STOPS,
-  addStop,
-  assignPictures,
   formatDistance,
   hopKms,
   mapBox,
@@ -52,17 +43,14 @@ import {
   mapTiming,
   mapWants,
   moveMap,
-  moveStop,
   otherPlaces,
-  patchStop,
   planarHops,
-  removeStop,
   stopPictureKey,
-  stopsFromPlaces,
   tripPlaces,
   type MapOptions,
 } from './map-plan';
 import { Group, MovedRow, resetLink } from './panel-ui';
+import StopsEditor from './stops-editor';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
 export { MAP_DEFAULTS, mapOptions, type MapOptions, type MapStop } from './map-plan';
@@ -80,9 +68,6 @@ function MapSketch() {
     </svg>
   );
 }
-
-const searchInputClass =
-  'font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent';
 
 /** One line about the pictures: how many are coming, and what cannot be drawn. */
 function pictureLine(
@@ -106,30 +91,13 @@ function pictureLine(
   };
 }
 
-/**
- * The stop last selected, kept past the panel's unmount: the panel is
- * unmounted whenever another tab of the inspector opens, and coming back to
- * find the stop being edited deselected read as work lost. A stop's id is a
- * UUID, so the one remembered id can never select a stop of another piece.
- */
-let lastSelectedStop: string | null = null;
-
 function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   const o = mapOptions(options);
   const set = (patch: Partial<MapOptions>) => onChange({ ...o, ...patch });
-  const [selectedId, selectStop] = useState<string | null>(() => lastSelectedStop);
-  const setSelectedId = (id: string | null) => {
-    lastSelectedStop = id;
-    selectStop(id);
-  };
-  /** What the last pick did, when it did more than the stop it was asked from. */
-  const [spread, setSpread] = useState<string | null>(null);
 
   const places = tripPlaces(ctx.stages);
   const free = otherPlaces(ctx.stages, o.stops);
   const timing = mapTiming(planarHops(o.stops), o);
-  const selected = o.stops.find((stop) => stop.id === selectedId) ?? null;
-  const selectedIndex = selected ? o.stops.findIndex((stop) => stop.id === selected.id) : -1;
   const withPictures = o.stops.filter((stop) => stop.picture).length;
   const keys = o.stops.flatMap((stop) => {
     const key = stopPictureKey(stop);
@@ -137,35 +105,6 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   });
   const line = o.media === 'off' ? null : pictureLine(keys, host?.pictureStatus);
   const totalKm = hopKms(o.stops).reduce((sum, km) => sum + km, 0);
-  const full = o.stops.length >= MAP_MAX_STOPS;
-
-  const setStops = (stops: MapOptions['stops']) => set({ stops });
-
-  // The picture chooser is the shell's — a panel may not open the Library or
-  // ask an instance itself (`hook-variant.ts`).
-  const choose = host?.choosePictures
-    ? async (index: number) => {
-        const stop = o.stops[index];
-        if (!stop) return;
-        // Including the piece's own day: an itinerary's stops are as often the
-        // day being told as the days before it, unlike a sweep's run-up. And a
-        // stop is the author's, so a picture from later in the trip is kept.
-        const picked = await host.choosePictures?.(stop.picture ? [stop.picture] : [], {
-          includeThisDay: true,
-          keepsLater: true,
-        });
-        if (!picked) return;
-        const next = assignPictures(o.stops, index, picked);
-        setStops(next.stops);
-        setSpread(
-          picked.length > 1
-            ? next.used < picked.length
-              ? `${next.used} of ${picked.length} kept pictures landed on stops — the rest had nowhere free to go.`
-              : `${next.used} pictures landed on this stop and the ${next.used - 1} after it that had none.`
-            : null,
-        );
-      }
-    : null;
 
   // What the itinerary will really do for this piece — the counter modes'
   // rule: the real reading, or the reason there is none.
@@ -195,200 +134,16 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
       )}
 
       <Group title="Stops">
-        <MapField
+        <StopsEditor
           stops={o.stops}
-          places={free}
-          selectedId={selectedId}
+          onChange={(stops) => set({ stops })}
+          places={places}
+          free={free}
           curve={o.curve}
-          onSelect={setSelectedId}
-          onDrop={(at) => {
-            if (full) return;
-            const id = newId();
-            setStops(addStop(o.stops, at, id));
-            setSelectedId(id);
-          }}
-          onAdopt={(place) => {
-            if (full) return;
-            const id = newId();
-            setStops(addStop(o.stops, place, id));
-            setSelectedId(id);
-          }}
-          onMove={(id, at) => setStops(patchStop(o.stops, id, at))}
+          host={host}
+          pictureHint={o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.'}
+          picturesOffHint="The pictures are switched off below, so nothing a stop holds is drawn."
         />
-        <p className="m-0 text-2xs text-faint">
-          Click the map to drop a stop, drag one to move it, click a hollow ring to take one
-          of the trip’s own places. Nothing here is fetched — no tiles, no basemap.
-        </p>
-
-        {o.stops.length === 0 && places.length > 1 && (
-          <Button
-            size="sm"
-            variant="primary"
-            onClick={() => setStops(stopsFromPlaces(places, () => newId()))}
-          >
-            Take the trip’s {places.length} places
-          </Button>
-        )}
-
-        {free.length > 0 && !full && (
-          <div className="flex flex-wrap gap-1.5">
-            {free.slice(0, 12).map((place) => (
-              <button
-                key={`${place.lat},${place.lon},${place.name}`}
-                type="button"
-                onClick={() => {
-                  const id = newId();
-                  setStops(addStop(o.stops, place, id));
-                  setSelectedId(id);
-                }}
-                className="px-2 py-0.5 border border-line rounded-full bg-paper text-2xs text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink"
-              >
-                + {place.name || 'Unnamed place'}
-              </button>
-            ))}
-          </div>
-        )}
-
-        {o.stops.length > 0 && (
-          <ul className="m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden">
-            {o.stops.map((stop, index) => (
-              <li key={stop.id} className="border-b border-line last:border-b-0">
-                <button
-                  type="button"
-                  onClick={() => setSelectedId(stop.id === selectedId ? null : stop.id)}
-                  aria-pressed={stop.id === selectedId}
-                  className={`w-full flex items-center gap-2 px-2 py-1.5 border-0 text-left cursor-pointer ${
-                    stop.id === selectedId ? 'bg-accent-wash' : 'bg-paper hover:bg-surface'
-                  }`}
-                >
-                  <span className="flex-none w-5 h-5 grid place-items-center rounded-full bg-frame font-mono text-3xs text-on-media">
-                    {index + 1}
-                  </span>
-                  <span className="min-w-0 flex-1 truncate text-xs text-ink">
-                    {stop.name.trim() || <span className="text-muted">Unnamed stop</span>}
-                  </span>
-                  <span className="flex-none font-mono text-3xs text-faint">
-                    {stop.picture ? 'photo' : '—'}
-                  </span>
-                </button>
-              </li>
-            ))}
-          </ul>
-        )}
-        {full && (
-          <p className="m-0 text-2xs text-muted">
-            {MAP_MAX_STOPS} stops is as many as one opener draws — past that the dots merge
-            and every picture is another decode.
-          </p>
-        )}
-
-        {selected && (
-          <div className="flex flex-col gap-2 p-2 border border-line rounded-paper bg-paper">
-            <PlaceSearchField
-              value={selected.name}
-              onChange={(name) => setStops(patchStop(o.stops, selected.id, { name }))}
-              onPick={(result) =>
-                setStops(
-                  patchStop(o.stops, selected.id, {
-                    name: result.name,
-                    lat: result.lat,
-                    lon: result.lon,
-                  }),
-                )
-              }
-              placeholder="Kalbarri"
-              label={`Name of stop ${selectedIndex + 1}`}
-              inputClassName={searchInputClass}
-            />
-            {/*
-              One coordinate a row: two number fields sharing the inspector's
-              22rem control column truncated both of them at six decimals.
-              These are the keyboard twin of dragging the stop on the map.
-            */}
-            <FieldRow label="Latitude">
-              <NumberField
-                label="Latitude"
-                value={selected.lat}
-                min={-90}
-                max={90}
-                step={0.0001}
-                unit="°N"
-                onChange={(lat) => setStops(patchStop(o.stops, selected.id, { lat }))}
-              />
-            </FieldRow>
-            <FieldRow label="Longitude" hint={formatCoords(selected)}>
-              <NumberField
-                label="Longitude"
-                value={selected.lon}
-                min={-180}
-                max={180}
-                step={0.0001}
-                unit="°E"
-                onChange={(lon) => setStops(patchStop(o.stops, selected.id, { lon }))}
-              />
-            </FieldRow>
-            <FieldRow
-              label="Picture"
-              align="start"
-              hint={
-                selected.picture
-                  ? selected.picture.ref.name
-                  : o.media === 'off'
-                    ? 'The pictures are switched off below, so nothing a stop holds is drawn.'
-                    : 'One picture, shown as the pen reaches this stop.'
-              }
-            >
-              <div className="flex flex-wrap items-center gap-2">
-                {choose ? (
-                  <Button size="sm" onClick={() => void choose(selectedIndex)}>
-                    {selected.picture ? 'Change…' : 'Pick…'}
-                  </Button>
-                ) : (
-                  <span className="text-xs text-muted">The picture chooser is not available here.</span>
-                )}
-                {selected.picture && (
-                  <button
-                    type="button"
-                    onClick={() =>
-                      setStops(o.stops.map((s) => (s.id === selected.id ? { ...s, picture: undefined } : s)))
-                    }
-                    className={resetLink}
-                  >
-                    Remove picture
-                  </button>
-                )}
-              </div>
-            </FieldRow>
-            <div className="flex items-center gap-2">
-              <Button
-                size="sm"
-                disabled={selectedIndex <= 0}
-                onClick={() => setStops(moveStop(o.stops, selected.id, -1))}
-              >
-                ↑ Earlier
-              </Button>
-              <Button
-                size="sm"
-                disabled={selectedIndex < 0 || selectedIndex >= o.stops.length - 1}
-                onClick={() => setStops(moveStop(o.stops, selected.id, 1))}
-              >
-                ↓ Later
-              </Button>
-              <button
-                type="button"
-                onClick={() => {
-                  setStops(removeStop(o.stops, selected.id));
-                  setSelectedId(null);
-                }}
-                className={`${resetLink} ml-auto text-danger hover:text-danger`}
-              >
-                Remove stop
-              </button>
-            </div>
-          </div>
-        )}
-
-        {spread && <p className="m-0 text-2xs text-muted">{spread}</p>}
         {line && (
           <p
             className={`m-0 text-xs ${line.danger ? 'text-danger' : 'text-muted'}`}
@@ -967,6 +722,8 @@ export const mapVariant: HookVariant = {
   tagline: 'Places you pick, joined on a map',
   defaults: { ...MAP_DEFAULTS },
   contentKeys: ['stops'],
+  // The list follows the author to Virée and back (`switchHookVariant`).
+  sharedStops: { key: 'stops' },
   // `stages` for the trip's own places — as landmarks to adopt and as the
   // faint context layer. `media: 'day'` is what makes the shell resolve and
   // decode the pictures the stops name (`use-hook-pictures.ts`).
