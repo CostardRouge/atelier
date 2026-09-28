@@ -7,24 +7,6 @@
 
 import SwiftUI
 
-// MARK: - OVERVIEW — owned by the overview task (`Trips/Overview/*`): the
-// heading, the month calendar, the day strip and panel, the stages. Delete
-// when it lands.
-
-struct TripOverviewView: View {
-    let store: TripsStore
-    let tripId: String
-    /// The open day, written back to the route so Back lands on it.
-    @Binding var day: String?
-    /// Opens a piece of this trip.
-    var openPiece: (_ postId: String, _ day: String?) -> Void
-
-    var body: some View {
-        PendingTripsScreen(title: store.trip(tripId)?.name ?? "Trip",
-                           text: "The trip's calendar, its days, its stages and its pieces are coming with their own task.")
-    }
-}
-
 // MARK: - PIECE — owned by the piece editor task (`Trips/Piece/*`): the badge
 // stage, the deck, the four tabs, the export. Delete when it lands.
 
