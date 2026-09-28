@@ -53,7 +53,7 @@ export interface PackHost {
  */
 export function packHosts(): PackHost[] {
   return listWinnowConnections()
-    .filter((c) => c.capabilities?.documents.bucket)
+    .filter((c) => c.capabilities?.documents?.bucket)
     .filter((c) => (c.capabilities?.documents.kinds ?? []).includes(PACK_KIND))
     .filter((c) => hasFileBucket(c.capabilities))
     .map((c) => ({

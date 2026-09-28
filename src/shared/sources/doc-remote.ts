@@ -37,7 +37,7 @@ export function isRemoteSource(sourceId: string): boolean {
 export function remoteFor(sourceId: string, kind?: string): RemoteSource | null {
   if (!isRemoteSource(sourceId)) return null;
   const conn = getWinnowConnection(sourceId);
-  if (!conn || !conn.capabilities?.documents.bucket) return null;
+  if (!conn || !conn.capabilities?.documents?.bucket) return null;
   if (kind !== undefined && !bucketHolds(conn.capabilities, kind)) return null;
   return {
     sourceId,
