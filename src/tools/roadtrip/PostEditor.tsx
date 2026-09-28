@@ -65,7 +65,7 @@ import {
 } from '../../shared/roadtrip/badge-layout';
 import { countOwnGrades, pictureKeyOf } from '../../shared/roadtrip/post-grade';
 import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
-import { setHookOptions, type HookContext, type HookLayer } from '../../shared/roadtrip/hooks/hook-variant';
+import { setHookOptions, type HookContext, type HookLayer, type HookShelf } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor, slideHookTiming } from '../../shared/roadtrip/hooks/hook-context';
 import {
   slideBadgeContent,
@@ -742,8 +742,17 @@ export default function PostEditor({
     () => (isHook ? post.badge.hook : isCta ? [] : [...(slide.hook ?? [])]),
     [isHook, isCta, post.badge.hook, slide.hook],
   );
-  const setOpenLayers = (layers: HookLayer[]) =>
-    isHook ? patchBadge({ hook: layers }) : patchSlide({ hook: layers.length ? layers : null });
+  /** What the open slide's other openers were given (`switchHookVariant`). */
+  const openShelf = isHook
+    ? post.badge.hookShelf
+    : isCta
+      ? undefined
+      : post.slides.find((s) => s.id === slide.slideId)?.hookShelf;
+  /** The shelf is written only when a switch changed it, as the piece's always was. */
+  const setOpenLayers = (layers: HookLayer[], shelf?: HookShelf) =>
+    isHook
+      ? patchBadge(shelf ? { hook: layers, hookShelf: shelf } : { hook: layers })
+      : patchSlide({ hook: layers.length ? layers : null, ...(shelf ? { hookShelf: shelf } : {}) });
   /** What the open slide's badge says — its fields' placeholder, its opener's context. */
   const openContent = useMemo(
     () => (isHook ? content : slideBadgeContent(trip, post, slide)),
@@ -2181,6 +2190,7 @@ export default function PostEditor({
               slide={slide}
               hookCtx={openCtx}
               layers={openLayers}
+              shelf={openShelf}
               onLayers={setOpenLayers}
               shades={openShades}
               onShades={setOpenShades}

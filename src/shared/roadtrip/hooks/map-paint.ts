@@ -33,7 +33,8 @@
 import { roundedRect, tile } from '../../media/cell-paint';
 import { drawFramed } from '../../media/framing';
 import { hexToRgba } from './colour';
-import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
+import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
+import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { placeLabels } from './geo';
 
 /** A box a name may not be placed on — a pinned picture's tile. */
@@ -96,6 +97,8 @@ export function paintMap(
   pictures: ReadonlyMap<string, HookPicture> | undefined,
   t: number,
   frame: FrameBox,
+  /** The OpenStreetMap region the piece asked for, drawn when the shell has it. */
+  basemap: HookBasemapWant | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0 || o.stops.length === 0) return;
@@ -122,6 +125,16 @@ export function paintMap(
 
   if (o.media === 'backdrop') paintBackdrop(g, o, media, pictureOf, w, h);
   if (o.plate) paintPlate(g, o, box, u, w);
+  const tiles = basemap ? pictures?.get(basemap.key) : undefined;
+  if (basemap && tiles) {
+    // Inside the map's own box, rounded like the plate: an inset map, the
+    // picture around it untouched.
+    g.save();
+    roundedRect(g, box.x, box.y, box.width, box.height, 14 * u);
+    g.clip();
+    drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity);
+    g.restore();
+  }
   if (o.graticule) paintGraticule(g, o, box, project, u);
 
   // --- the path ------------------------------------------------------------
@@ -325,6 +338,9 @@ export function paintMap(
     g.fillStyle = o.pathColor;
     g.fillText(text, x, y);
   }
+
+  // The licence's credit, last, on the map it is owed for.
+  if (basemap && tiles) paintOsmCredit(g, box, u);
 
   g.restore();
 }

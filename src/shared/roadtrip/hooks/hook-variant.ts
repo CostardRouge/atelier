@@ -27,6 +27,7 @@
 import type { ComponentType } from 'react';
 import type { SavedMediaRef } from '../../projects/project-types';
 import type { CarSpec } from '../car-spec';
+import type { MapStop } from './stops';
 import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
@@ -196,6 +197,22 @@ export interface HookPictureWant {
 export type HookPictureShape = 'frame' | 'own';
 
 /**
+ * A map background a variant asks the shell for: the region, and the raster
+ * it wants it as — latitude and longitude both linear, so it lays onto the
+ * openers' own projection with one affine draw (`shared/map/tile-math.ts`).
+ * Resolved into `HookContext.pictures` under `key`, like a picture; a key
+ * with no entry draws no background — not allowed on this device, not
+ * reachable, or still loading — and the variant draws its own ground instead.
+ */
+export interface HookBasemapWant {
+  /** `basemapKey(box, width, height)`. */
+  key: string;
+  box: { west: number; south: number; east: number; north: number };
+  width: number;
+  height: number;
+}
+
+/**
  * One leg of the trip, as a hook reads it — its span and its LOCATED places in
  * the order they were lived. A place with no coordinates is left out here: it
  * is a complete place, but nothing a drawing can put on a line.
@@ -311,6 +328,22 @@ export interface HookPanelHost {
    * write the trip itself; absent, the panel says where the car is set.
    */
   configureCar?(): void;
+  /**
+   * Open the big picking map on these stops — pan, zoom, tap to add, drag to
+   * move, towns to take a name from — and resolve the stops as the author
+   * left them, or null when they cancelled. The shell's, like the chooser:
+   * the map reads the shipped town index and may fetch tiles when asked, and
+   * a panel never fetches.
+   */
+  editStopsOnMap?(stops: readonly MapStop[], choice?: HookStopsChoice): Promise<MapStop[] | null>;
+}
+
+/** How a variant wants the picking map to open. */
+export interface HookStopsChoice {
+  /** The opener's name, for the sheet's title. */
+  title?: string;
+  /** Stops may hold a picture here; the sheet keeps them either way. */
+  pictures?: boolean;
 }
 
 /** How a variant wants the chooser to open. */
@@ -364,6 +397,16 @@ export interface HookVariant {
    * Absent = every option is look.
    */
   contentKeys?: readonly string[];
+  /**
+   * Where this variant keeps the author's own stops (`stops.ts`), when it has
+   * any. A switch between two variants that both declare it hands the list
+   * over (`switchHookVariant`), so the places picked for an Itinerary are
+   * the ones Virée drives, and back: one list followed from opener to opener
+   * rather than two that drift. `fresh` is what else the receiving variant
+   * sets the first time it is chosen with a list — Virée switching its road
+   * onto them.
+   */
+  sharedStops?: { key: string; fresh?: HookOptions };
   needs: HookNeeds;
   owns: 'frame' | 'layer';
   prepare(options: HookOptions, ctx: HookContext): HookRender;
@@ -376,6 +419,13 @@ export interface HookVariant {
    * decode 250 pictures for a sweep that stops twelve times.
    */
   wantsPictures?(options: HookOptions, ctx: HookContext): HookPictureWant[];
+  /**
+   * The map background this variant would draw under its map, or null — the
+   * OpenStreetMap tiles an author asked for on this piece (2026-09-28). The
+   * shell fetches them only where this DEVICE allows it; the variant never
+   * fetches, and names the raster by the key it will draw it by.
+   */
+  wantsBasemap?(options: HookOptions, ctx: HookContext): HookBasemapWant | null;
   /**
    * Where this opener's drawing sits in the frame, so the stage can let it be
    * POINTED AT and dragged like any other content. Absent, the opener is not
@@ -410,7 +460,9 @@ export interface HookVariant {
 /**
  * Choose a variant. Re-selecting the one already there keeps its settings —
  * a click on the card you are on must not silently reset the panel under it —
- * while a real change starts from that variant's own defaults.
+ * while a real change starts from that variant's own defaults. The picker goes
+ * through {@link switchHookVariant}, which also keeps the settings of the
+ * variant left behind.
  *
  * Only the first layer is written: the stack is storage, not UI (see D3).
  */
@@ -424,6 +476,68 @@ export function setHookVariant(
     return [{ id: current.id, options: { ...current.options } }, ...rest];
   }
   return [{ id: variant.id, options: { ...variant.defaults } }, ...rest];
+}
+
+/**
+ * The settings of the openers a piece is NOT drawing, by variant id — set
+ * aside when the author switches away, taken back when they switch back.
+ *
+ * Without it a switch was a one-way door: an Itinerary's twelve stops were
+ * gone the moment Virée was tried beside it, and trying things is exactly
+ * what the picker is for. The active opener's options live in its layer and
+ * NEVER here too — one copy of a fact — so a variant leaves the shelf the
+ * moment it is chosen and goes back on it when another is.
+ */
+export type HookShelf = Readonly<Record<string, HookOptions>>;
+
+/** What a switch writes: the layers, and the shelf beside them. */
+export interface HookSwitch {
+  hook: HookLayer[];
+  shelf: HookShelf;
+}
+
+/**
+ * Choose a variant, keeping what the others were given.
+ *
+ * The card already chosen keeps its settings (`setHookVariant`'s rule); a real
+ * change shelves the current opener's options and takes the chosen one's off
+ * the shelf, or starts from its defaults the first time. An opener with no
+ * options at all (the badge) is not shelved: there is nothing to come back to.
+ *
+ * `from` is the variant being left, when the caller knows it: if both declare
+ * `sharedStops` and the one left holds a non-empty list, the chosen one takes
+ * THAT list — the most recent the author edited — over whatever it was left
+ * with. An empty list hands nothing over, so a Virée that never used its own
+ * places cannot wipe an Itinerary's.
+ */
+export function switchHookVariant(
+  layers: readonly HookLayer[] | undefined,
+  shelf: HookShelf | undefined,
+  variant: HookVariant,
+  from?: HookVariant,
+): HookSwitch {
+  const current = layers?.[0];
+  const stored = shelf ?? {};
+  if (current?.id === variant.id) {
+    return { hook: setHookVariant(layers, variant), shelf: stored };
+  }
+  const next: Record<string, HookOptions> = { ...stored };
+  if (current && Object.keys(current.options ?? {}).length > 0) {
+    next[current.id] = structuredClone(current.options);
+  }
+  const kept = next[variant.id];
+  delete next[variant.id];
+  const options: Record<string, unknown> = kept ? structuredClone(kept) : { ...variant.defaults };
+  const handed =
+    from && from.id === current?.id && from.sharedStops && variant.sharedStops
+      ? current?.options?.[from.sharedStops.key]
+      : undefined;
+  if (Array.isArray(handed) && handed.length > 0 && variant.sharedStops) {
+    options[variant.sharedStops.key] = structuredClone(handed);
+    if (!kept) Object.assign(options, variant.sharedStops.fresh);
+  }
+  const rest = (layers ?? []).slice(1);
+  return { hook: [{ id: variant.id, options }, ...rest], shelf: next };
 }
 
 /** Write the first layer's options, leaving any others alone. */

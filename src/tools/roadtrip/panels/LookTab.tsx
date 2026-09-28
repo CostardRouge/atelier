@@ -11,6 +11,7 @@ import type {
   HookContext,
   HookLayer,
   HookPictureStatus,
+  HookShelf,
 } from '../../../shared/roadtrip/hooks/hook-variant';
 import type { BadgeLayout } from '../../../shared/roadtrip/badge-layout';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
@@ -61,9 +62,14 @@ interface LookTabProps {
   slide: DeckSlide;
   /** What the open slide's opener was prepared against — the picker hands it on. */
   hookCtx: HookContext;
-  /** The open slide's opener, and where a choice is written. */
+  /**
+   * The open slide's opener, what its other openers were given
+   * (`PostBadge.hookShelf` on the first slide, its own elsewhere), and where
+   * a choice is written — the shelf only when a switch changed it.
+   */
   layers: readonly HookLayer[];
-  onLayers: (layers: HookLayer[]) => void;
+  shelf?: HookShelf;
+  onLayers: (layers: HookLayer[], shelf?: HookShelf) => void;
   /** The open slide's shades, and where they are written. */
   shades: readonly Shade[];
   onShades: (shades: Shade[]) => void;
@@ -105,6 +111,7 @@ export default function LookTab({
   slide,
   hookCtx,
   layers,
+  shelf,
   onLayers,
   shades,
   onShades,
@@ -153,6 +160,7 @@ export default function LookTab({
         >
           <HookPicker
             layers={[...layers]}
+            shelf={shelf}
             ctx={hookCtx}
             pictureStatus={hookPictureStatus}
             onChange={onLayers}

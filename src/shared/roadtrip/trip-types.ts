@@ -43,7 +43,7 @@ import {
 } from './badge-layout';
 import type { CameraPlateSpec } from '../overlay/camera-plate';
 import { createShade, vignetteShade, type Shade } from './shades';
-import { defaultHookLayers, type HookLayer } from './hooks/hook-variant';
+import { defaultHookLayers, type HookLayer, type HookShelf } from './hooks/hook-variant';
 import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
@@ -364,13 +364,21 @@ export interface PostBadge {
    */
   hook: HookLayer[];
   /**
-   * Free text over the first slide's picture, drawn over the badge — the same
+   * Free text over the first slide's picture, drawn under the badge — the same
    * capacity every other slide has (`PostSlide.texts`). About ONE picture, so
    * never inherited by the next piece (`hookDefaultsFrom` leaves it out).
    * Read as `texts ?? []`: a trip opened on the branch that built v29 before
    * this field joined it carries none.
    */
   texts?: OverlayElement[];
+  /**
+   * What the openers this piece is NOT drawing were given, by variant id
+   * (`switchHookVariant`), so trying Virée after an Itinerary never throws
+   * the Itinerary's stops away. Optional and additive: absent is an empty
+   * shelf, so no document migrates. It belongs to THIS piece — a look saved
+   * for the next piece (`hookDefaultsFrom`) and the house style never carry it.
+   */
+  hookShelf?: HookShelf;
 }
 
 /**
@@ -517,6 +525,12 @@ export interface PostSlide {
    * (`slide-capacities.ts`): a day with three drives wants three itineraries.
    */
   hook: HookLayer[] | null;
+  /**
+   * What this slide's openers not on it were given — `PostBadge.hookShelf`'s
+   * twin, so trying another opener here never throws a map's stops away.
+   * Optional and additive, like the piece's: absent is an empty shelf.
+   */
+  hookShelf?: HookShelf;
   /** Darkening over the picture, under the overlays — see `PostBadge.shades`. */
   shades: Shade[];
   /**
