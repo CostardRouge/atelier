@@ -1,0 +1,24 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<plist version="1.0">
+<dict>
+	<!-- Sandboxed, like every Mac App Store app: a picture is read only where
+	     the person pointed (the open panel, a drop), remembered through an
+	     app-scoped bookmark, and written back only where they said. -->
+	<key>com.apple.security.app-sandbox</key>
+	<true/>
+	<key>com.apple.security.files.user-selected.read-write</key>
+	<true/>
+	<key>com.apple.security.files.bookmarks.app-scope</key>
+	<true/>
+	<!-- Outgoing requests: a connected Winnow (Sources), and the instruments'
+	     map background — MapKit's tiles, off by default and loaded only once
+	     the person turns it on (`local-first.md`). Nothing else. Without it a
+	     sandboxed Mac draws MapKit as an empty grid. -->
+	<key>com.apple.security.network.client</key>
+	<true/>
+	<!-- "Save to Photos" on the Mac. -->
+	<key>com.apple.security.personal-information.photos-library</key>
+	<true/>
+</dict>
+</plist>

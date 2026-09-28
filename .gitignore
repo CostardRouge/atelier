@@ -149,3 +149,17 @@ dist
 # Environment files — the real values live outside git (CI / hosting secrets)
 .env.*
 !.env.example
+
+# The native app (apple/): the Xcode project is generated from apple/project.yml
+# by XcodeGen, SwiftPM keeps its build under .build, Xcode its own under
+# DerivedData — none of it is source.
+apple/*.xcodeproj
+apple/*.xcworkspace
+apple/**/.build/
+apple/**/.swiftpm/
+apple/DerivedData/
+apple/Support/Info-*.plist
+xcuserdata/
+
+# Agent worktrees the cloud harness creates inside the checkout (one per parallel subagent)
+.claude/worktrees/

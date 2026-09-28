@@ -1,0 +1,86 @@
+name: Apple
+
+# The native app's gate. The kernel (`apple/Packages/AtelierKit`) is pure Swift
+# and is tested on Linux — the platform this project is written from, where no
+# Xcode exists — and again on macOS, where Foundation is Apple's own. The app
+# itself only builds on a macOS runner; the repository is public, so the runner
+# is free. The macOS build then runs the RENDER GATE (`apple/AtelierTests`):
+# every Core Image kernel, compiled into the app's metallib, held to its pure
+# twin in the kernel — this job is the first compiler the Metal ever meets.
+# Nothing here runs for a change that leaves `apple/` alone.
+on:
+  push:
+    branches: [main]
+    paths: ['apple/**', '.github/workflows/apple.yml']
+  pull_request:
+    paths: ['apple/**', '.github/workflows/apple.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: apple-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  kernel-linux:
+    name: AtelierKit · swift test (Linux)
+    runs-on: ubuntu-latest
+    container: swift:5.10
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Names XCTestCase shadows on macOS
+        run: apple/Scripts/check-test-names.sh
+
+      - name: Test the kernel
+        run: swift test --package-path apple/Packages/AtelierKit
+
+  kernel-macos:
+    name: AtelierKit · swift test (macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Toolchain
+        run: swift --version && xcodebuild -version
+
+      - name: Test the kernel
+        run: swift test --package-path apple/Packages/AtelierKit
+
+  app:
+    name: Atelier · xcodebuild (iOS + macOS)
+    runs-on: macos-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Install XcodeGen
+        run: brew install xcodegen
+
+      - name: Generate the Xcode project
+        working-directory: apple
+        run: xcodegen generate
+
+      - name: Build for iOS
+        working-directory: apple
+        run: >
+          xcodebuild build -project Atelier.xcodeproj -scheme Atelier-iOS
+          -destination 'generic/platform=iOS' -configuration Debug
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet
+
+      - name: Build for macOS
+        working-directory: apple
+        run: >
+          xcodebuild build -project Atelier.xcodeproj -scheme Atelier-macOS
+          -destination 'platform=macOS' -configuration Debug
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO -quiet
+
+      # Not `-quiet`: the gate's rows, its skips and their reasons (a runner
+      # with no Metal device) belong in the log.
+      - name: Run the render gate on macOS
+        working-directory: apple
+        run: >
+          xcodebuild test -project Atelier.xcodeproj -scheme Atelier-macOS
+          -destination 'platform=macOS' -configuration Debug
+          CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO
