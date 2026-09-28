@@ -17,8 +17,11 @@
 // Opening is the web's `openProject`: ask the instance first (`resume`), list
 // the project's folder again (its bookmark is `media.dirHandle`) and its loose
 // files, reconcile the saved refs id → hash → name, and ABSORB a rename once
-// (`adoptRenames`, persisted) rather than re-detecting it forever. The shell
-// only knows documents; the editor only knows clips.
+// (`adoptRenames`, persisted) rather than re-detecting it forever — then find
+// what it names on an instance again, from the Library or from the instance
+// itself (`StudioStore+Recovery.swift`). Another tool hands a project over
+// through `openHandedOver` (the web's `#/studio/open/<id>`). The shell only
+// knows documents; the editor only knows clips.
 
 import Foundation
 import Observation
@@ -79,6 +82,10 @@ final class StudioStore {
     private(set) var storageFailed = false
     /// The open project was deleted under the editor (the pill's "Delete here").
     private(set) var closedByDelete = false
+    /// A project another tool handed over (`openHandedOver`), opened and
+    /// waiting for the gallery to push its editor — consumed on arrival, as
+    /// the web's `#/studio/open/<id>` rewrites itself.
+    private(set) var handedOver: String?
 
     /// The editor of the open project, kept while the project is open so that
     /// coming back from the gallery resumes where it was (the playhead, the
@@ -209,7 +216,37 @@ final class StudioStore {
         let library = StudioLibrary(projectId: opened.id, entries: gathered.entries, scopes: gathered.scopes)
         adopt(StudioOpenProject(doc: opened, reconciliation: reconciliation, generation: nextGeneration,
                                 library: library))
+        // What it names on an instance and this device lost with the last
+        // session: taken from the Library, else fetched back — now, when it
+        // is opened, and only from an instance connected here.
+        recoverRemoteMedia()
         return true
+    }
+
+    // MARK: - a project handed over by another tool
+
+    /// The seam another tool hands a project over by — the web's
+    /// `#/studio/open/<id>`, which Trips navigates to after sending a badge
+    /// into a project. Opens the project with that id exactly as its card
+    /// would (its instance asked first, its media found again, a rename
+    /// absorbed), and leaves it waiting in `handedOver` for the gallery to
+    /// push its editor; a project already open is revealed, never listed
+    /// again. False when no project here has that id. The caller then moves
+    /// the shell to the Studio (`shellNavigate(.studio)`); neither tool reaches
+    /// into the other's state.
+    @discardableResult
+    func openHandedOver(_ projectId: String) async -> Bool {
+        guard let doc = stored(projectId) ?? gallery.docs?.first(where: { $0.id == projectId }) else { return false }
+        guard await openProject(doc) else { return false }
+        handedOver = projectId
+        return true
+    }
+
+    /// The project handed over, taken once by the screen that shows it.
+    func takeHandOff() -> String? {
+        let id = handedOver
+        handedOver = nil
+        return id
     }
 
     /// A project kept there and not here yet: pull, mirror, then open.
@@ -262,8 +299,11 @@ final class StudioStore {
     /// Drop the missing media from the open project's known list, so it stops
     /// asking — no folder listed again, no permission asked.
     func forgetMissing() {
+        // What is being fetched back, refused or out of reach is not missing
+        // on purpose: it stays on the list (`StudioStore+Recovery.swift`).
         guard var current = open, let reconciliation = current.reconciliation,
-              let pruned = forgetMissingMedia(current.doc.media, reconciliation) else { return }
+              let pruned = forgetMissingMedia(current.doc.media, reconciliation,
+                                              keeping: current.library.recovery) else { return }
         current.doc.media = pruned.media
         current.doc.updatedAt = nowMillis()
         current.reconciliation = pruned.reconciliation
@@ -336,6 +376,14 @@ final class StudioStore {
 
     private var nextGeneration: Int { (open?.generation ?? 0) + 1 }
 
+    /// A reconciliation counted again for the open project — still the one
+    /// whose media `library` holds, or nothing.
+    func setReconciliation(_ reconciliation: Reconciliation?, for library: StudioLibrary) {
+        guard var current = open, current.library === library else { return }
+        current.reconciliation = reconciliation
+        open = current
+    }
+
     private func adopt(_ project: StudioOpenProject) {
         liveEditor?.close()
         liveEditor = nil
@@ -388,7 +436,7 @@ final class StudioStore {
     private func deleteSidecars(_ id: String, _ loose: [PictureLocator]) {
         try? FileManager.default.removeItem(at: locatorsURL(id))
         for case .container(let path) in loose {
-            try? FileManager.default.removeItem(at: StudioMediaFiles.containerDirectory.appendingPathComponent(path))
+            StudioMediaFiles.removeCopy(StudioMediaFiles.containerDirectory.appendingPathComponent(path))
         }
     }
 }

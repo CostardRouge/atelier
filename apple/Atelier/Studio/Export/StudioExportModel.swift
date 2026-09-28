@@ -12,9 +12,10 @@
 //    before the first variant, unless *Render from the proxy* is on — a task
 //    of its own, cancellable. A still's original is fetched only where the
 //    proxy could not fill the largest frame the variants ask for, and a fetch
-//    that fails costs the extra pixels, never the delivery. (Instances do not
-//    reach the Studio yet — the Library brings them — so today every file is
-//    one on this device and nothing is fetched.)
+//    that fails costs the extra pixels, never the delivery. An instance's
+//    media reaches the Studio through the Library, its file registered with
+//    the capture's identity (`mediaOrigin`, `knownIdentity`) — a file the
+//    person opened from this device has none, and nothing is fetched for it.
 // 4. Every variant in turn through ONE pipeline (`StudioVariantExport`),
 //    each written into the folder as it lands under `variantFileName`, a
 //    file of that name replaced; what it cost measured around the whole of it,

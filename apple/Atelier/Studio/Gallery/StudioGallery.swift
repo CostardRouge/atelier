@@ -122,6 +122,12 @@ struct StudioGallery: View {
         .onChange(of: studio.closedByDelete) { _, closed in
             if closed { opened = nil }
         }
+        // A project another tool handed over (`openHandedOver`, the web's
+        // `#/studio/open/<id>`): its editor pushed, the request consumed.
+        .onChange(of: studio.handedOver, initial: true) { _, id in
+            guard id != nil, let taken = studio.takeHandOff() else { return }
+            opened = taken
+        }
     }
 
     /// With one source there is nothing to ask: the file dialog opens at once.

@@ -56,6 +56,7 @@ Where things are:
 | `removeFile(file)` (the telemetry page detaching a sidecar) · `clear()` | `removeFile(_:)`, `clear()` — no caller yet (the instruments keep their own shelf) | ✅ |
 | `toggle`, `select(ids, on)`, "all / none" per tab | `toggle`, `select(_:on:)`, the filter row's ALL / NONE | ✅ |
 | `activeId`, `setActive`; a click activates AND selects | `activate(_:)`, `setActive(_:)` | ✅ |
+| — | `activations`: bumped by every putting to work (`activate`), a second tap on the active row included, never by an echo — what a tool keeping its own working set follows (the Studio) | ✅ native addition |
 | `useActiveAsset(kinds)`: the usable selection, the effective active one echoed back, its cover asked, ‹ › | `activeState(_:)`, `.followsActiveAsset(_:)`, `stepActive(_:by:)` | ✅ |
 
 ## Where it lives — `App.tsx`, `frontend.md`
@@ -105,6 +106,7 @@ Where things are:
 | — | the row's fetch as a hairline on the tile's edge (`TaskEdge`, scope `<host>/<id>`) | ✅ native addition |
 | A click means what the TOOL says (`MediaScope.intent`): `pick` fetches and activates, else it opens large | `looks` | ✅ |
 | One picture per click: the PROXY, its `.srt` alongside, vouched for with the original's hash, dated at the CAPTURE; one already in the pool is activated, never fetched twice | `pick(_:)` over the kernel's `materialize(fidelity: .proxy)` | ✅ |
+| `materialize` REGISTERS each file's identity (`registerMediaIdentity`), so every tool reads its origin, its original's hash and URL (`mediaOrigin`, `knownIdentity`) | `addFetched` registers each file as it lands in the pool | ✅ |
 | The fetch is a task with its bytes and a Cancel (`trackedFetch`) | `TaskCenter.tracked(materializeTaskLabel(row, .proxy), scope:)` | ✅ |
 | Multi-instance: the FIRST connection only, deferred ("on verra ça après") | `connections.first` / `firstClient` | ⏳ his call; the agreed shape is a tab per instance |
 
@@ -188,20 +190,36 @@ Where things are:
 | Develop's gallery verb `Develop` (starts a new roll with this picture) | `RollGallery.developOffer` | ≠ also carries the file on screen onto the new roll (the web's gallery drops the view) |
 | A Library file put on a roll by what it IS: bookmark, folder + path, or — a session copy — copied into the container, its ref (hash, asset id) kept | `RollStore.add(_:to:)`, `addPicture(to:url:ref:)`, `addPicture(to:data:ref:)` | ✅ |
 | Trips publishes its piece's / its overview's day (`MediaScope`) and its three verbs; a collage cell takes a drop | the API is here (`.publishMediaScope`, `.publishMediaActions`, `.libraryDropDestination`, `.followsActiveAsset`) | ⏳ Trips' screens |
-| The Studio reads the active clip or still (`useActiveAsset(STUDIO_KINDS)`) | the Studio takes media from Files / Photos into its own `StudioLibrary` today | ⏳ the Studio's screens (see below) |
+| The Studio reads the active clip or still (`useActiveAsset(STUDIO_KINDS)`) | `.followsActiveAsset(Tool.studio.accepts)` on the editor; what is put to work while it is on screen (`activations`) joins the project and opens (`StudioLibraryLink`, `StudioEditor.take`) | ≠ the project keeps a working set of its own (below) |
+| The Studio's stage takes a Library drag | `.libraryDropDestination(onAsset:onFiles:)` on the editor — an instance's tile fetched first | ✅ |
+| The Studio's instance media lost to a reload | fetched back from the ref's `assetId` when the project opens — from the pool when it still holds the capture, else from its instance when connected, else said (`StudioStore+Recovery.swift`) | ✅ |
+| — | the Studio publishes its open media's capture day as the scope (`14 Mar 2025 · Studio`, measured or absent) | ✅ native addition: the web's Studio publishes none |
 
-### How the Studio takes a Library asset (not wired here)
+### How the Studio takes a Library asset
 
-Put `.followsActiveAsset(Tool.studio.accepts)` on the editor, and on
-`library.activeState(Tool.studio.accepts).active` changing, hand every file of
-it (`assetFiles(asset.parts)`, each through `library.entry(for:)`) to
-`StudioLibrary`: a `.bookmark` location as `add(urls: [resolved])`, a
-`.folder(bookmark, path)` as the same `.folder` locator its folder listing
-already records, a `.session` copy as `add(receivedCopy:)` — then
-`setActive(asset.id)` (the ids agree: both group by `buildAssets`). The same
-resolution behind `.libraryDropDestination(onAsset:)` on the stage takes a
-drag. Keeping the Library's `ref` (hash, asset id) is what lets
-`ProjectMedia` name the clip by content.
+The editor carries `.followsActiveAsset(Tool.studio.accepts)`, and on the
+Library's `activations` moving while it is ON SCREEN it takes the asset
+ACTIVATED (never the first usable one the Library would fall back on):
+every file of it (`assetFiles(asset.parts)`, each through
+`library.entry(for:)`) goes to `StudioLibrary.adopt` — a `.bookmark` as
+`add(urls: [resolved])`, a `.folder(bookmark, path)` as that same `.folder`
+locator, a `.session` Photos copy as `add(receivedCopy:ref:)` (copied into
+the container under its own name and date), a `.session` file an instance
+handed over (its ref carries an `assetId`) held for the session only
+(`addFetched`, a link beside the pool's copy, fetched back next launch) —
+then `setActive(asset.id)`: the ids agree, both group by `buildAssets`. The
+Library's `ref` (hash, asset id) is kept, which is what lets `ProjectMedia`
+name the clip by content; and the identity `addFetched` registered is what
+wakes the Studio's capture fetch, a still's original and the finals home.
+The same path takes a drag onto the stage. The other way, the media on the
+stage is set back as the Library's active one whenever the Library's
+selection holds it.
 
-**Counts**: 96 rows — 78 ✅ (5 of them native additions), 5 ⏳, 13 ≠ (built
+Following the gesture rather than `activeId` is the one departure: the web's
+project IS the Library's selection, so its Studio shows whatever is active;
+here a project keeps its own working set, a phone keeps every tab's stack
+alive, and the Library settling its active asset (an echo, a removal) or a
+tap made for Develop must never add a clip to a project.
+
+**Counts**: 102 rows — 84 ✅ (7 of them native additions), 4 ⏳, 14 ≠ (built
 differently on purpose).

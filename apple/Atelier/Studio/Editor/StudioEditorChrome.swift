@@ -10,6 +10,10 @@
 // - the banners: a rename absorbed on open is SAID; missing media is
 //   informational (paper, no alarm) and offers to forget it, a CHANGED file is
 //   worth attention (the danger ink) — both offer to point at the folder;
+//   media the project keeps on an INSTANCE is the recovery's to say — being
+//   fetched back, out of reach (connect it in Sources), refused (its reason,
+//   a sign-in), or gone — with "Try again", and the folder banner counts
+//   only the rest (`StudioStore+Recovery.swift`);
 // - the header: ‹ n/N › through the project's media, its name, what is on the
 //   stage (size · codec · cadence, or size · type), and a "no telemetry" /
 //   "no exif" chip only once the file has actually been read.
@@ -172,9 +176,13 @@ struct StudioMediaBanners: View {
     @Bindable var editor: StudioEditor
     let onRepoint: () -> Void
     @Environment(\.palette) private var palette
+    @Environment(\.shellNavigate) private var navigate
+    @Environment(\.openURL) private var openURL
 
     var body: some View {
         let rec = editor.reconciliation
+        let recovery = editor.library.recovery
+        let missing = missingOutsideRecovery(rec, recovery)
         VStack(alignment: .leading, spacing: 8) {
             if editor.store.storageFailed {
                 banner(alarm: true) {
@@ -184,7 +192,10 @@ struct StudioMediaBanners: View {
             if let renamed = renamedMediaNotice(rec?.renamed ?? 0) {
                 banner(alarm: false) { Text(renamed) }
             }
-            if let trouble = mediaTroubleNotice(missing: rec?.missing ?? 0, changed: rec?.changed ?? 0) {
+            ForEach(Array(studioRecoveryLines(recovery).enumerated()), id: \.offset) { _, line in
+                banner(alarm: line.alarm) { recoveryLine(line) }
+            }
+            if let trouble = mediaTroubleNotice(missing: missing, changed: rec?.changed ?? 0) {
                 banner(alarm: trouble.needsAttention) {
                     VStack(alignment: .leading, spacing: 8) {
                         Text(trouble.text)
@@ -203,6 +214,35 @@ struct StudioMediaBanners: View {
                 banner(alarm: true) { Text(notice) }
             }
         }
+    }
+
+    /// One line of the recovery, and the verb that would cure it.
+    private func recoveryLine(_ line: StudioRecoveryLine) -> some View {
+        VStack(alignment: .leading, spacing: 8) {
+            Text(line.text)
+            if line.retry || line.connect || line.signIn != nil {
+                HStack(spacing: 16) {
+                    if let host = line.signIn, let url = signInURL(host) {
+                        Button("Sign in there") { openURL(url) }
+                            .buttonStyle(DevelopLinkButtonStyle(active: true))
+                    }
+                    if line.connect {
+                        Button("Open Sources") { navigate(.sources) }
+                            .buttonStyle(DevelopLinkButtonStyle(active: true))
+                    }
+                    if line.retry {
+                        Button("Try again") { editor.store.recoverRemoteMedia() }
+                            .buttonStyle(DevelopLinkButtonStyle())
+                    }
+                }
+            }
+        }
+    }
+
+    private func signInURL(_ host: String) -> URL? {
+        let connections = ConnectionStore.shared
+        guard let connection = connections.connection(host) else { return nil }
+        return URL(string: connections.client(for: connection).loginUrl())
     }
 
     private func banner<Content: View>(alarm: Bool, @ViewBuilder content: () -> Content) -> some View {

@@ -13,11 +13,21 @@
 //   every open;
 // - a file pointed at in Files or the Finder: a bookmark, never a copy;
 // - a Photos pick, which has no persistent handle without library
-//   permission: its bytes COPIED into `Application Support/Atelier/studio-media/`.
+//   permission: its bytes COPIED into `Application Support/Atelier/studio-media/`,
+//   each in a folder of its own so the file keeps its NAME — the name is
+//   what the project saves, what groups a clip with its `.srt`, and what the
+//   same media is called in the Library and on the web;
+// - a file FETCHED from an instance (through the Library): held for the
+//   session only, linked into a temporary folder emptied at the next launch,
+//   and fetched back from its ref's `assetId` when the project next opens —
+//   a byte cache of fetched proxies was declined (`architecture.md`, «A remote
+//   ref is re-FETCHED, never cached»).
 //
-// The last two are the project's LOOSE files, kept in a side table beside the
-// document (`projects/<id>.locators.json`, `StudioStore`), exactly as Develop
-// keeps its pictures' (`RollStore`'s `PictureLocator`, reused).
+// The pointed-at files and the Photos copies are the project's LOOSE files,
+// kept in a side table beside the document (`projects/<id>.locators.json`,
+// `StudioStore`), exactly as Develop keeps its pictures' (`RollStore`'s
+// `PictureLocator`, reused). A fetched file has no locator: its ref is the
+// address.
 
 import Foundation
 import AtelierKit
@@ -27,8 +37,11 @@ struct StudioMediaEntry {
     let ref: SavedMediaRef
     let url: URL
     /// How to find it again next launch — nil for a file of the project's own
-    /// folder, which is listed again rather than remembered one by one.
+    /// folder, which is listed again rather than remembered one by one, and
+    /// for a fetched file, which is fetched again.
     let locator: PictureLocator?
+    /// Fetched from an instance and held for this session only.
+    var fetched = false
 }
 
 /// A file read as the kernel's partial hash reads it: a size and two slices,
@@ -88,19 +101,81 @@ enum StudioMediaFiles {
         }
     }
 
-    /// Copy a received file (a Photos pick) into the container, under a name
-    /// no other copy can take. Returns its locator and where it now is.
-    static func copyIntoContainer(_ source: URL) -> (locator: PictureLocator, url: URL)? {
+    /// Copy a received file (a Photos pick, a Library session copy) into the
+    /// container, in a folder no other copy can take, under `name` — its own
+    /// name unless told — and dated `modified` (ms) when given, so the copy
+    /// reads back as the very ref it was taken as. Returns its locator and
+    /// where it now is.
+    static func copyIntoContainer(_ source: URL, name: String? = nil,
+                                  modified: Double? = nil) -> (locator: PictureLocator, url: URL)? {
         let fm = FileManager.default
-        try? fm.createDirectory(at: containerDirectory, withIntermediateDirectories: true)
-        let path = "\(UUID().uuidString.lowercased())-\(RollStore.safeFileName(source.lastPathComponent))"
+        let folder = UUID().uuidString.lowercased()
+        let kept = keptName(name ?? source.lastPathComponent)
+        let path = "\(folder)/\(kept)"
         let target = containerDirectory.appendingPathComponent(path)
         do {
+            try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
             try fm.copyItem(at: source, to: target)
         } catch {
             return nil
         }
+        if let modified { stamp(target, modified) }
         return (.container(path), target)
+    }
+
+    /// A container copy leaves with the folder it was given (a copy made
+    /// before copies kept their names sits at the container's top, alone).
+    static func removeCopy(_ url: URL) {
+        let fm = FileManager.default
+        try? fm.removeItem(at: url)
+        let parent = url.deletingLastPathComponent().standardizedFileURL
+        let roots = [containerDirectory.standardizedFileURL.path, sessionDirectory.standardizedFileURL.path]
+        if !roots.contains(parent.path) { try? fm.removeItem(at: parent) }
+    }
+
+    // MARK: - a fetched file, for the session
+
+    /// Where this launch holds the files it took from the Library's fetches —
+    /// the last launch's emptied the first time it is asked for.
+    static let sessionDirectory: URL = {
+        let root = FileManager.default.temporaryDirectory.appendingPathComponent("Atelier-Studio", isDirectory: true)
+        try? FileManager.default.removeItem(at: root)
+        return root.appendingPathComponent(UUID().uuidString, isDirectory: true)
+    }()
+
+    /// A file the Library fetched, held for this session under the project's
+    /// own name for it: LINKED where the volume allows (no second copy of a
+    /// clip), copied otherwise — either way the Library removing its own
+    /// copy leaves this one. Nil when it could not be held.
+    static func holdForSession(_ source: URL, name: String, modified: Double) -> URL? {
+        let fm = FileManager.default
+        let target = sessionDirectory.appendingPathComponent(UUID().uuidString, isDirectory: true)
+            .appendingPathComponent(keptName(name))
+        do {
+            try fm.createDirectory(at: target.deletingLastPathComponent(), withIntermediateDirectories: true)
+            do {
+                try fm.linkItem(at: source, to: target)
+            } catch {
+                try fm.copyItem(at: source, to: target)
+            }
+        } catch {
+            return nil
+        }
+        stamp(target, modified)
+        return target
+    }
+
+    /// A file name the file system takes as it is: only a separator is replaced.
+    private static func keptName(_ name: String) -> String {
+        let cleaned = name.replacingOccurrences(of: "/", with: "_")
+        return cleaned.isEmpty ? "media" : cleaned
+    }
+
+    /// Date a file at `ms` since the epoch, so its ref reads back unchanged.
+    private static func stamp(_ url: URL, _ ms: Double) {
+        guard ms.isFinite, ms > 0 else { return }
+        let date = Date(timeIntervalSince1970: ms / 1000)
+        try? FileManager.default.setAttributes([.modificationDate: date], ofItemAtPath: url.path)
     }
 
     /// Refs carrying their partial content hash — the identity Winnow shares —

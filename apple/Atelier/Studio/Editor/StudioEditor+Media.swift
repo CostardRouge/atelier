@@ -97,6 +97,9 @@ extension StudioEditor {
     // MARK: - stepping through the working set
 
     func setActive(_ id: String?) {
+        // A choice of the person's: the media the project was saved on is no
+        // longer awaited.
+        awaitingActive = nil
         if id == activeId { return }
         activeId = id
         loadActive()
@@ -112,16 +115,45 @@ extension StudioEditor {
     }
 
     /// The library changed under the editor (a file added, a folder
-    /// re-pointed): the open media stays open if it is still here.
+    /// re-pointed, a media fetched back): the open media stays open if it is
+    /// still here — loaded afresh only when ITS files changed (its `.srt`
+    /// arrived, a missing file was found) — and the media the project was
+    /// saved on opens the moment it is back, unless the person moved on.
     func mediaChanged() {
         let list = clips
-        if activeId == nil || !list.contains(where: { $0.id == activeId }) {
+        if let wanted = awaitingActive, list.contains(where: { $0.id == wanted }) {
+            awaitingActive = nil
+            if wanted != activeId {
+                activeId = wanted
+                loadActive()
+            }
+        } else if activeId == nil || !list.contains(where: { $0.id == activeId }) {
             activeId = list.first?.id
             loadActive()
-        } else if source == nil && stage.image == nil {
+        } else if activeFilesKey != loadedFiles {
             loadActive()
         }
         scheduleSave()
+    }
+
+    /// Back on screen: what landed while the editor was away — a media
+    /// fetched back, the one the project was saved on — is taken up as if it
+    /// had been seen live. Nothing when nothing moved.
+    func catchUpMedia() {
+        let list = clips
+        let awaitedIsBack = awaitingActive.map { id in list.contains { $0.id == id } } ?? false
+        let openIsGone = activeId.map { id in !list.contains { $0.id == id } } ?? !list.isEmpty
+        let filesMoved = activeFilesKey != loadedFiles
+        if awaitedIsBack || openIsGone || filesMoved { mediaChanged() }
+    }
+
+    /// The open media's files and whether this device reaches each — what
+    /// `loadActive` read, compared when the library changes.
+    var activeFilesKey: String {
+        guard let asset = active else { return "" }
+        return assetFiles(asset.parts).map { ref in
+            fileIdentity(ref) + (library.url(for: ref) == nil ? "?" : "")
+        }.joined(separator: "|")
     }
 
     /// Open whatever is active: its facts, its frames, its telemetry, its hash.
@@ -146,6 +178,7 @@ extension StudioEditor {
         srtRead = false
         activeHash = nil
         range = fullRange(0)
+        loadedFiles = activeFilesKey
         guard let asset = active else {
             playback.load(nil)
             refreshLook()
@@ -185,8 +218,11 @@ extension StudioEditor {
             }.value
             // EXIF is read from the head of the file, independently of the
             // decode: a RAW that cannot be drawn still says what it was shot at.
+            // A proxy an instance handed over carries none of its own, so what
+            // the instance parsed at ingest is merged UNDER it (`read-exif.ts`).
+            let vouched = vouchedExif(mediaOrigin(ref), knownIdentity(ref)?.exif)
             let exif = await Task.detached(priority: .utility) { () -> ExifData in
-                readEffectiveExif(InstrumentImages.head(url, count: exifSliceBytes), nil).exif
+                readEffectiveExif(InstrumentImages.head(url, count: exifSliceBytes), vouched).exif
             }.value
             guard let self, !Task.isCancelled, self.active?.id == id else { return }
             self.photoExif = exif

@@ -15,8 +15,12 @@
 // project bar under it holds undo / redo, the sync pill of a project kept on
 // an instance, the local save state (a dot and a word, the word only where it
 // waits on the author on a phone) and the format chip that opens the settings.
-// Media come in from Photos, Files or a folder (the Add menu, a drop), and
-// every key the web binds is read here: Space plays (a field keeps it),
+// Media come in from the shell's LIBRARY — what is put to work there while
+// the editor is up joins the project and opens, a picture dragged out of it
+// lands on the stage, an instance's fetched on the way (`StudioLibraryLink`)
+// — and from Photos, Files or a folder (the Add menu, a drop). On a phone,
+// whose editor hides the tab bar, the bar carries the way to the Library.
+// Every key the web binds is read here: Space plays (a field keeps it),
 // `I` / `O` cut, ← → step, ⌫ removes the selected element, ⌘Z / ⇧⌘Z are the
 // window's UndoManager.
 
@@ -81,6 +85,7 @@ struct StudioWorkbench: View {
     @Environment(\.palette) private var palette
     @Environment(\.undoManager) private var undoManager
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(LibraryStore.self) private var pool: LibraryStore?
     @State private var drawerFraction = 0.4
     @State private var importing: ImportKind?
     @State private var showPhotos = false
@@ -108,6 +113,7 @@ struct StudioWorkbench: View {
     // some forty modifiers, Xcode 26's macOS compiler gave up on it.
     var body: some View {
         lifecycle(keyed(presented))
+            .studioLibraryLink(editor)
     }
 
     /// The stage and inspector, their panels, pickers and sheets.
@@ -132,10 +138,13 @@ struct StudioWorkbench: View {
         }
         .background(palette.paper)
         .overlay { if dropping { dropVeil } }
-        .dropDestination(for: URL.self) { urls, _ in
+        // A picture dragged out of the Library (an instance's fetched on the
+        // way), or files and folders from Files or the Finder.
+        .libraryDropDestination(isTargeted: $dropping, onAsset: { item in
+            if let pool { editor.takeDragged(item, from: pool) }
+        }, onFiles: { urls in
             editor.library.add(urls: urls)
-            return true
-        } isTargeted: { dropping = $0 }
+        })
         .navigationTitle(editor.edit.name)
         #if os(iOS)
         .navigationBarTitleDisplayMode(.inline)
@@ -198,6 +207,8 @@ struct StudioWorkbench: View {
         .onAppear {
             editor.undoManager = undoManager
             focused = true
+            // A media fetched back while the gallery was on screen.
+            editor.catchUpMedia()
         }
         .onChange(of: undoManager) { _, manager in editor.undoManager = manager }
         .onChange(of: editor.library.assets) { _, _ in editor.mediaChanged() }
@@ -285,6 +296,13 @@ struct StudioWorkbench: View {
         ToolbarItem(placement: .principal) {
             StudioProjectTitle(editor: editor, compact: compact)
         }
+        // A phone's editor hides the tab bar, whose first cell is the
+        // Library: the editor's own bar carries the way to it.
+        if compact {
+            ToolbarItem(placement: .navigation) {
+                LibraryButton()
+            }
+        }
         ToolbarItem(placement: .primaryAction) {
             Menu {
                 Button { showPhotos = true } label: { Label("From Photos…", systemImage: "photo.on.rectangle") }
@@ -306,7 +324,7 @@ struct StudioWorkbench: View {
     private var dropVeil: some View {
         ZStack {
             palette.frame.opacity(0.55)
-            Text("Drop clips, their .srt, photos or their folder: they join this project's media.")
+            Text("Drop clips, their .srt, photos or their folder — or a picture from the Library: they join this project's media.")
                 .font(Brand.sans(16))
                 .foregroundStyle(palette.onMedia)
                 .multilineTextAlignment(.center)
@@ -319,7 +337,10 @@ struct StudioWorkbench: View {
 
     private var emptyText: String {
         if editor.clips.isEmpty {
-            return "No media in this project yet — add clips or photos with +, or point to the media folder from the menu."
+            if editor.library.recovery.contains(where: { $0.phase == .fetching }) {
+                return "Fetching this project's media back from its instance…"
+            }
+            return "No media in this project yet — put a clip or a photo to work in the Library, add one with +, or point to the media folder from the menu."
         }
         if let problem = editor.photoProblem { return problem }
         if let failure = editor.playback.failure { return failure }

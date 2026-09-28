@@ -25,12 +25,16 @@ Export tab's words and numbers are `Projects/StudioExport.swift`
 (`AtelierTests/Studio/StudioExportGateTests.swift`): a two-second clip painted
 there, exported at two variants through the very path the tab runs, each file
 read back for its size, length and cadence and for the burnt-in element's own
-pixels, plus a trimmed cut and a still.
+pixels, plus a trimmed cut and a still. What the project takes from the
+shell's LIBRARY — which of its instance media this device lost and how that
+is said, what a save keeps meanwhile, the capture day it publishes — is
+`Projects/StudioRecovery.swift` (`StudioRecoveryTests`, 12 cases; no web
+twin, the rules Trips and Develop keep for their re-fetch).
 
 Nothing here was run on a device: this container has no Apple toolchain, so
 every view was written against the SDK and compiled by CI alone.
 
-Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the Export tab alone: 29 ✅ · 6 ≠ · 1 ⏳).
+Rows: 147 ✅ · 19 ≠ · 7 ⏳ — plus the deferrals gathered at the end (the Export tab alone: 29 ✅ · 6 ≠ · 1 ⏳).
 
 ## Documents (`Store/StudioStore.swift`)
 
@@ -44,9 +48,9 @@ Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the
 | Opening asks the instance first (`resume`) | ✅ | ✅ |
 | The folder handle (`media.dirHandle`) re-listed on open | its security-scoped BOOKMARK is `media.dirHandle`, listed again recursively on open | ✅ |
 | Reconcile id → hash → name; a rename ABSORBED once and persisted (`adoptRenames`) | ✅, the hashes read off the main actor (128 KiB per file, memoised) | ✅ |
-| Files the Library holds for the project (a global pool) | the project's LOOSE files: a side table of locators beside the document (`<id>.locators.json`) — a bookmark per file pointed at, a copy for a Photos pick | ≠ — a phone has no global pool to lean on; the per-project table is what reopens tomorrow |
+| Files the Library holds for the project (a global pool) | the shell's Library FEEDS the project (below), and the project keeps its own working set: its folder, plus its LOOSE files in a side table beside the document (`<id>.locators.json`) — a bookmark per file pointed at, a folder's file by the folder's bookmark and its path, a copy for a Photos pick (in a folder of its own, so it keeps its NAME and date — the ref the web and the Library call it by) | ≠ — the web's project IS the Library's selection, so opening one pours its folder into the pool and a save writes whatever is ticked there; here a project reopens tomorrow on its own table, and the Library's pool is never filled by opening one |
 | Returning to the editor resumes it | the editor is KEPT while its project is open (`liveEditor`): the playhead, the selection and the history survive a trip to the gallery | ✅ |
-| `#/studio/open/<id>` — the hand-off from Trips | ⏳ Trips' native bridge; `StudioStore.shared.openProject(_:)` is the seam it will call | ⏳ |
+| `#/studio/open/<id>` — another tool hands a project over; the route rewrites itself on arrival, a project already open is revealed, not listed again | `StudioStore.shared.openHandedOver(_:)` — opens the project by id as its card would, then `handedOver` waits for the gallery, which pushes its editor and consumes it (`takeHandOff`); the caller moves the shell with `shellNavigate(.studio)` | ✅ the seam — Trips' own call is its bridge's task |
 
 ## The gallery (`Gallery/StudioGallery.swift`, `StudioProjectCard.swift`)
 
@@ -100,13 +104,23 @@ Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the
 | The clip header: ‹ n/N ›, name, size · codec · cadence (or size · type), no telemetry / no exif chip once read | ✅ | ✅ |
 | Unreadable `.srt`; a clip that cannot play; a look that will not grade here | ✅ under the stage | ✅ |
 
-## Media (`Store/StudioLibrary.swift`, `Editor/StudioEditor+Media.swift`)
+## Media (`Store/StudioLibrary.swift`, `Store/StudioStore+Recovery.swift`, `Editor/StudioEditor+Media.swift`, `Editor/StudioEditor+Library.swift`, `Editor/StudioLibraryLink.swift`)
 
 | Web | Native | |
 |---|---|---|
 | Clips + stills + their `.srt`, grouped by base name (`useActiveAsset(STUDIO_KINDS)`) | ✅ the kernel's `buildAssets` + `usableAssets(studioKinds)` | ✅ |
-| Added from the Library sidebar | the Add menu: Photos, Files, a folder; a drop on the editor | ≠ — no sidebar pool (above) |
-| An instance's media (the Library's Winnow tab) | ⏳ the Library task | ⏳ |
+| The Library's active asset IS the open media (`useActiveAsset(STUDIO_KINDS)`): a click on a row opens it | `.followsActiveAsset(Tool.studio.accepts)`; what is PUT TO WORK in the Library while the editor is on screen (a row, a tile, `Use in Studio`, an instance pick — the Library's `activations`, a second tap on the active row included) joins the project and opens (`StudioEditor.take`, `StudioLibraryLink`) | ≠ — follows the gesture, never the Library's own settle: on a phone every tab's stack stays alive, and opening a project does not take whatever the Library last had active |
+| — each file of the capture by what its location IS | a bookmark through `add(urls:)`; a folder's file with its folder's locator (`.folder(bookmark, path)`); a Photos copy into the container under its name and date (`add(receivedCopy:ref:)`); an instance's file for the SESSION (`addFetched`) — its ref kept as the Library holds it (the original's hash, the asset id) | ✅ |
+| ‹ › echoes the open media back to the Library (`lib.setActive`), whose row wears the ring | the media on the stage is the Library's active one whenever the Library's selection holds it | ✅ |
+| A picture dragged out of the Library onto the stage | `.libraryDropDestination` on the editor — an instance's tile fetched first — beside files and folders from Files or the Finder; "could not be brought from …" when it fails | ✅ |
+| The Library one tap away on a phone | the editor hides the tab bar: `LibraryButton` in its own bar | ✅ |
+| An instance's media (the Library's Winnow tab), vouched with the original's hash | ✅ the Library registers every fetched file's identity (`registerMediaIdentity`), so the project names it by content, a develop is guarded by the ORIGINAL's hash, and the Export tab's three instance paths wake | ✅ |
+| — lost to a reload: the pool is empty and the project says "missing" | re-found when the project OPENS (`StudioStore+Recovery.swift`, the kernel's `Projects/StudioRecovery.swift`): from the Library when it still holds the capture, else fetched back from the ref's `assetId` — only from an instance connected here, one capture at a time, each a task scoped to it with its bytes and a Cancel, into the pool then the project; the media the project was saved on opens when it lands | ≠ — the web's Studio does not fetch back (Trips and Develop do, `architecture.md`); a byte cache stays declined — a fetched file is the session's |
+| — what the recovery says | `Fetching 2 media files back from host…`; out of reach (`… which this device is not connected to — connect it in Sources`, Open Sources); refused (its reason, `Not signed in to host`, Sign in there); `host no longer has …`; Try again; the folder banner counts only the rest (`missingOutsideRecovery`) and "Remove missing" leaves them | ✅ native words |
+| — a save meanwhile | keeps every ref the recovery still speaks for (`filesKeepingRecovery`): a clip being fetched back, refused or out of reach never falls off the project | ≠ — the web's save writes the working set alone, and drops what the reload lost |
+| The Studio's media scope (the Library's instance tab lists a day the tool publishes) | the open media's capture day, MEASURED or absent — its log's first timestamp, a still's EXIF, else a fetched file's capture instant, never a local file's mtime — published as `14 Mar 2025 · Studio`, a tile still opening large (`studioMediaScope`) | ≠ — the web's Studio publishes none; its instance tab asks for a day by hand |
+| A still's EXIF: the file's, with what its source vouched for merged under it (`read-exif.ts`) | ✅ `vouchedExif(mediaOrigin, knownIdentity.exif)` — a Winnow proxy's exposure, position and altitude readable at last | ✅ |
+| Added from Photos, Files or a folder in the editor | the Add menu and a drop on the editor, as before — beside the Library | ✅ |
 | ‹ › steps through the working set; navigation, never an edit | ✅ | ✅ |
 | A clip's facts from the container | ✅ `VideoSource.open` | ✅ |
 | The `.srt` parsed at scale 1, the cadence measured, re-timed on a change | ✅ | ✅ |
@@ -198,8 +212,8 @@ Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the
 | Output · Destination: the browser's Downloads, or a folder picked once for the session (Chromium) | a folder asked for AT THE CLICK, every run — pick, then render, then write — and named after the run; a device has no Downloads | ≠ |
 | Output · *Delivers* over a still an instance handed as its proxy: the decision's line and reason, then the proxy sentence (`useDeliveryRow`) | ✅ `deliveryDecision` — the one the run takes too | ✅ |
 | — the render inside a proxy's RAW original, measured from a megabyte of its head | ⏳ no head probe here yet: the proxy delivers, and the row says so instead of the kernel's "read at export" | ⏳ |
-| — a *Delivers* row for every other media | a native addition: the largest frame the variants write, measured against the file that will be encoded (`deliversLine`), and the sentence that instances do not reach the Studio yet | ≠ |
-| Output · *From proxy* over a clip an instance handed as its proxy: *Render from the proxy* (For a quick look), off, its hint | ✅ wired — unreachable until the Library brings an instance's media into the Studio | ✅ |
+| — a *Delivers* row for every other media | a native addition: the largest frame the variants write, measured against the file that will be encoded (`deliversLine`) | ≠ |
+| Output · *From proxy* over a clip an instance handed as its proxy: *Render from the proxy* (For a quick look), off, its hint | ✅ wired, and reached since the Library brings an instance's media into the Studio (not yet driven against an instance) | ✅ |
 | Variants · the count as badge, + Variant in the project's format | ✅ | ✅ |
 | Variant N, remove (never the last) | ✅ | ✅ |
 | Format: Source frame, then every preset as `9:16 — Reels · TikTok · Shorts` | ✅ (a stored id this build does not know stays on screen) | ✅ |
@@ -214,8 +228,8 @@ Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the
 | The preview paused before a run | ✅ | ✅ |
 | The run as a task: `Exporting <base>`, `N variants`, a bar over the variants, a Cancel | ✅ `TaskCenter`, on the editor's pill; the detail names each variant's FILE where the web names its id | ✅ |
 | The line over the bar: Fetching the original from … / Variant 2/3 · 46% / Exporting… 46%, and Cancel | ✅ `studioExportProgressLine` | ✅ |
-| A clip's capture fetched ONCE before the first variant (unless from the proxy), a task of its own with its bytes; a failure fails the run | ✅ wired over the connection's client — unreachable until instance media reach the Studio | ✅ |
-| A still's original fetched only where its proxy cannot fill the largest frame; a failed fetch costs the pixels, never the delivery | ✅ wired — unreachable likewise | ✅ |
+| A clip's capture fetched ONCE before the first variant (unless from the proxy), a task of its own with its bytes; a failure fails the run | ✅ wired over the connection's client — reached through the Library (not yet driven against an instance) | ✅ |
+| A still's original fetched only where its proxy cannot fill the largest frame; a failed fetch costs the pixels, never the delivery | ✅ wired — reached likewise | ✅ |
 | A clip variant (`exportVariantVideo`): graded per SOURCE frame at the source's density (the grain's clock), cover-cropped into the variant's frame, the overlays on the source clock with the trim's in point as origin, the cut, the cadence resampled, the speed, a grained clip at more bits, the clip's sound copied | ✅ `StudioVariantExport.video` over `exportProcessedVideo` — held by the gate | ✅ |
 | The outro appended as the pipeline's tail, at the variant's frame and cadence, on a burnt-in variant only | ✅ `StudioVariantExport.outroTail` — the gate reads the card after the footage | ✅ |
 | The seek fallback for a clip the browser cannot decode (`exportOverlayVideoViaSeek`) | nothing to fall back from: AVFoundation decodes HEVC | ≠ |
@@ -227,7 +241,7 @@ Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the
 | `✓ Exported` and the run's total (`describeExportRun`) | ✅ + the folder's name | ✅ |
 | The error, in its own words | ✅ ("browser" read as "device") | ✅ |
 | Sound or a look the file could not carry as asked | said under the run (`onAudioSkipped`, a look that will not grade here); the web's Studio passes no such callback | ≠ |
-| Send the finals home (`SendFinalsPanel`): only after a finished run, only to the instance the media came from | ✅ `StudioFinalsPanel` — wired, unreachable until instance media reach the Studio | ✅ |
+| Send the finals home (`SendFinalsPanel`): only after a finished run, only to the instance the media came from | ✅ `StudioFinalsPanel` — wired, reached through the Library (not yet driven against an instance) | ✅ |
 | — not connected any more; a viewer account; the files and their weight; a foreign capture and a file over the upload limit refused before a byte moves; the notes | ✅ `finalsPlan` + `canWriteBack`, the web's sentences | ✅ |
 | — one request per file with its capture's id, then one reconcile; `✓ N files sent and linked to capture #…`; `N sent, then: …` + Sign in there | ✅ each upload a task with its bytes and a Cancel on the pill | ✅ |
 
@@ -262,15 +276,16 @@ Rows: 138 ✅ · 16 ≠ · 9 ⏳ — plus the deferrals gathered at the end (the
 
 ## Deferred, and what each waits on
 
-- ⏳ An instance's media in the project — the Library task. The Export tab's
-  three paths that need one (a clip's capture fetched before the first
-  variant, a still's original where its proxy falls short, the finals sent
-  home) are wired to `mediaOrigin` / `knownIdentity` and the connection's
-  client, and wake when that lands.
+- ⏳ Driving an instance's media end to end against a real instance: the
+  Library feeds the project, the recovery fetches back, and the Export tab's
+  three instance paths (a clip's capture before the first variant, a still's
+  original where its proxy falls short, the finals home) read the identity
+  the Library registered — all written against the client, none run.
 - ⏳ The render inside a proxy's RAW original, measured from its head (the
   web's `rawRenderOf`): the app has no session cache of originals
   (`HeldOriginals`) yet.
-- ⏳ The hand-off from Trips (`#/studio/open/<id>`).
+- ⏳ Trips' side of the hand-off: its bridge calls
+  `StudioStore.shared.openHandedOver(_:)` then `shellNavigate(.studio)`.
 - ⏳ The develop sheet's eyedropper, wipe, zoom and clipboard.
 - ⏳ A palette cell dragged onto the stage; the outro's own stage; the lane
   under the trim bar (not on the web either).

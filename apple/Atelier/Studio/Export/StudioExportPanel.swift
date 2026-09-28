@@ -8,8 +8,9 @@
 //   frame the variants write, measured against the file that will be
 //   encoded, never upscaled — and, over a clip an instance handed over as its
 //   proxy, *Render from the proxy* (off: the capture is fetched before the
-//   first variant). Instances do not reach the Studio yet — the Library
-//   brings them — and the row says so rather than leaving a gap;
+//   first variant). An instance's media reaches the Studio through the
+//   Library, vouched for with its capture's identity, which is what wakes
+//   those rows;
 // - Variants (`StudioVariantRow.swift`);
 // - Export: the button that counts what it will write, the run's line over
 //   its bar and its Cancel (the variant in flight ends, what was written
@@ -108,7 +109,7 @@ struct StudioDeliversRow: View {
     let model: StudioExportModel
     @Environment(\.palette) private var palette
 
-    static let localHint = "The largest frame the variants write, from this file on this device at its own density. A variant never upscales — a row that asks for more says what it really gets. Media an instance hands over, and the capture fetched behind its proxy, reach the Studio with the Library; until then nothing is fetched."
+    static let localHint = "The largest frame the variants write, from this file on this device at its own density. A variant never upscales — a row that asks for more says what it really gets."
 
     /// Over a proxy whose original is a RAW, this device does not read the
     /// render inside it (the web measures a megabyte of its head) — said, so

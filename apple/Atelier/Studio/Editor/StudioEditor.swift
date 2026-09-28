@@ -70,6 +70,13 @@ final class StudioEditor {
 
     /// The media open on the stage (by asset id); written by `setActive` alone.
     var activeId: String?
+    /// The media the project was saved on, while it is still on its way back
+    /// from its instance: opened when it lands, unless the person has moved
+    /// to another meanwhile (`mediaChanged`).
+    @ObservationIgnored var awaitingActive: String?
+    /// The open media's files as they were when it was loaded — a change (its
+    /// `.srt` arriving, a file found again) is what loads it afresh.
+    @ObservationIgnored var loadedFiles = ""
     /// The clip's telemetry as parsed, rates derived against the file's own seconds.
     var rawCues: [Cue] = []
     /// The cadence measured from the clip's own telemetry.
@@ -144,6 +151,7 @@ final class StudioEditor {
         let clips = open.library.clips
         let saved = open.doc.media.activeId
         activeId = saved.flatMap { id in clips.first { $0.id == id }?.id } ?? clips.first?.id
+        awaitingActive = saved != nil && activeId != saved ? saved : nil
         store.pendingSave = { [weak self] in await self?.flushSave() }
         store.discardPendingSave = { [weak self] in self?.dropPendingSave() }
     }
@@ -597,12 +605,15 @@ final class StudioEditor {
             if let i = asset.parts.image { parts.append(i) }
         }
         let entries = parts.compactMap { ref in library.url(for: ref).map { StudioMediaEntry(ref: ref, url: $0, locator: nil) } }
-        let files = await Task.detached(priority: .utility) { StudioMediaFiles.hashed(entries) }.value
+        let working = await Task.detached(priority: .utility) { StudioMediaFiles.hashed(entries) }.value
         let image = stage.image
         let thumbnail = await Task.detached(priority: .utility) { image.flatMap { StudioEditor.thumbnailJPEG($0) } }.value
         // Built on the stored copy even when another project has opened
         // meanwhile (a save owed at the moment the editor was left).
         guard let base = store.stored(projectId) else { return }
+        // A media on its way back from its instance, refused or out of reach
+        // keeps its ref: this device not having it yet is no reason to drop it.
+        let files = filesKeepingRecovery(working, saved: base.media.files, library.recovery)
         let duration = playback.duration > 0 ? playback.duration : nil
         let doc = edit.applied(to: base, files: files, activeId: active?.id, thumbnail: thumbnail,
                                duration: duration, now: nowMillis())
