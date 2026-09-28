@@ -45,7 +45,7 @@ import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
 import { decodeEdgeFor, longEdgeFor, type ExportTarget } from './export-targets';
-import { OUTPUT_SHARPEN_AMOUNT, SHARPEN_BAND_ROWS, sharpenRows } from './output-sharpen';
+import { OUTPUT_SHARPEN_AMOUNT, sharpenBands } from './output-sharpen';
 import { watermarkLayout, type Watermark } from './watermark';
 import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
@@ -506,18 +506,18 @@ function drawWatermark(ctx: CanvasRenderingContext2D, w: number, h: number, text
 }
 
 /**
- * The output sharpening, in bands of rows read with one row either side —
- * the same pixels as the whole canvas done at once, without a second copy of
- * a 60-megapixel file in memory.
+ * The output sharpening, in bands of rows (`sharpenBands`) — the same pixels
+ * as the whole canvas done at once, without a second copy of a 60-megapixel
+ * file in memory.
  */
 function sharpenCanvas(ctx: CanvasRenderingContext2D, w: number, h: number, amount: number): void {
-  if (amount <= 0) return;
-  for (let y0 = 0; y0 < h; y0 += SHARPEN_BAND_ROWS) {
-    const y1 = Math.min(h, y0 + SHARPEN_BAND_ROWS);
-    const top = Math.max(0, y0 - 1);
-    const bottom = Math.min(h, y1 + 1);
-    const band = ctx.getImageData(0, top, w, bottom - top);
-    const done = sharpenRows(band.data, w, bottom - top, y0 - top, y1 - top, amount);
-    ctx.putImageData(new ImageData(done, w, y1 - y0), 0, y0);
-  }
+  sharpenBands(
+    {
+      read: (top, rows) => ctx.getImageData(0, top, w, rows).data,
+      write: (rows, top) => ctx.putImageData(new ImageData(rows, w), 0, top),
+    },
+    w,
+    h,
+    amount,
+  );
 }

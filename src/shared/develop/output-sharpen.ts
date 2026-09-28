@@ -14,8 +14,9 @@
  * Three strengths; none has a radius to set, because the radius that suits a
  * screen is one output pixel whatever the target.
  *
- * Pure and DOM-free: the renderer reads the canvas in BANDS of rows
- * (`sharpenRows`), so a large file never needs a second full-size buffer.
+ * Pure and DOM-free: the renderer walks the canvas in BANDS of rows
+ * (`sharpenBands` over `sharpenRows`), so a large file never needs a second
+ * full-size buffer.
  */
 
 import type { OutputSharpen } from './export-targets';
@@ -37,7 +38,8 @@ const luma = (d: Uint8ClampedArray, i: number) => 0.2126 * d[i] + 0.7152 * d[i +
  * Rows `[from, to)` of an RGBA buffer `w` wide and `h` tall, sharpened, as a
  * new buffer of `(to − from) × w × 4` bytes. Neighbours outside the buffer are
  * its edge repeated, so a band read with one row either side of what it
- * writes gives the same pixels as the whole picture done at once. Alpha is
+ * writes gives the same pixels as the whole picture done at once — provided
+ * those two rows are the ORIGINAL ones (`sharpenBands` sees to it). Alpha is
  * copied.
  */
 export function sharpenRows(
@@ -89,3 +91,35 @@ export function sharpenRows(
 
 /** The rows a band is processed in: small enough that a 60 MP file never holds a second copy of itself. */
 export const SHARPEN_BAND_ROWS = 256;
+
+/** Where `sharpenBands` reads rows from and writes them back to — a canvas, or a buffer in a spec. */
+export interface RowSurface {
+  /** `rows` rows from `top` down, as RGBA bytes the caller may overwrite. */
+  read(top: number, rows: number): Uint8ClampedArray;
+  /** Rows written back from `top` down. */
+  write(rows: Uint8ClampedArray<ArrayBuffer>, top: number): void;
+}
+
+/**
+ * A `w × h` surface sharpened IN PLACE, band by band — byte for byte the
+ * whole picture done at once. The walk writes each band back before reading
+ * the next, so the row above a band is already sharpened on the surface by
+ * then: the ORIGINAL of that one row is carried over from the band before and
+ * put back under the kernel. The row below is not written yet. What is held
+ * at once: one band read, one band sharpened, one row.
+ */
+export function sharpenBands(surface: RowSurface, w: number, h: number, amount: number, bandRows = SHARPEN_BAND_ROWS): void {
+  if (amount <= 0) return;
+  const stride = w * 4;
+  const step = Math.max(1, Math.floor(bandRows));
+  let above: Uint8ClampedArray | null = null;
+  for (let y0 = 0; y0 < h; y0 += step) {
+    const y1 = Math.min(h, y0 + step);
+    const top = Math.max(0, y0 - 1);
+    const bottom = Math.min(h, y1 + 1);
+    const band = surface.read(top, bottom - top);
+    if (above) band.set(above, 0);
+    above = band.slice((y1 - 1 - top) * stride, (y1 - top) * stride);
+    surface.write(sharpenRows(band, w, bottom - top, y0 - top, y1 - top, amount), y0);
+  }
+}

@@ -35,8 +35,16 @@ target (`readTargets(raw.targets, legacy)`), so an old roll exports as it did.
 - **Screen sharpening is the TARGET's, after the resize** (`output-sharpen.ts`):
   a 3×3 binomial unsharp on luma, the delta added to R, G, B alike (no
   fringe), a soft threshold of 2 codes so a flat sky's noise stays; levels
-  0.4 / 0.8 / 1.3. It runs in BANDS of 256 rows read with one row either side
-  — a spec holds band = whole — so a 60 MP file never holds a second copy.
+  0.4 / 0.8 / 1.3. It runs in BANDS of 256 rows read with one row either side,
+  so a 60 MP file never holds a second copy. **The walk is IN PLACE, and that
+  is its trap** (fixed 2026-09-28): a band is written back before the next is
+  read, so the row above band N is already sharpened on the canvas — reading
+  it from there put a one-row seam every 256 rows of every sharpened export.
+  `sharpenBands` carries the ORIGINAL last row of each band over (one row of
+  memory); the row below is never written yet. The spec drives that walk
+  itself over a buffer with bands of 1–256 rows and asserts it byte-identical
+  to the whole picture — a spec of `sharpenRows` alone over original rows
+  proved nothing about the loop. The native Swift port reads the original row.
   The HDR rendition's darker canvas is sharpened the same, or the gain map
   would disagree at every edge. The picture's own sharpen (`detail.ts`) is
   judged at the picture's density and cannot know the size a target asks.

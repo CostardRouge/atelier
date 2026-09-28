@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { OUTPUT_SHARPEN_AMOUNT, sharpenRows } from './output-sharpen';
+import { OUTPUT_SHARPEN_AMOUNT, sharpenBands, sharpenRows } from './output-sharpen';
 
 /** A w × h RGBA picture from a grey level per pixel. */
 function grey(w: number, h: number, at: (x: number, y: number) => number): Uint8ClampedArray {
@@ -49,5 +49,47 @@ describe('output sharpening', () => {
     const band = pic.slice(1 * w * 4, 5 * w * 4);
     const part = sharpenRows(band, w, 4, 1, 3, 1);
     expect([...part]).toEqual([...whole.slice(2 * w * 4, 4 * w * 4)]);
+  });
+
+  it('sharpens a surface IN PLACE band by band to the whole picture, byte for byte', () => {
+    // Taller than several bands and not a multiple of any, with detail on every row.
+    const W = 9;
+    const H = 23;
+    const pic = grey(W, H, (x, y) => (x * 37 + y * 53 + x * y * 11) % 256);
+    for (const level of ['low', 'standard', 'high'] as const) {
+      const whole = sharpenRows(pic, W, H, 0, H, OUTPUT_SHARPEN_AMOUNT[level]);
+      for (const bandRows of [1, 2, 3, 4, 5, 7, 22, 23, 256]) {
+        // The canvas's contract: a read is a copy, a write lands before the next read.
+        const surface = pic.slice();
+        let most = 0;
+        sharpenBands(
+          {
+            read: (top, rows) => {
+              most = Math.max(most, rows);
+              return surface.slice(top * W * 4, (top + rows) * W * 4);
+            },
+            write: (rows, top) => surface.set(rows, top * W * 4),
+          },
+          W,
+          H,
+          OUTPUT_SHARPEN_AMOUNT[level],
+          bandRows,
+        );
+        expect([...surface], `${level}, bands of ${bandRows}`).toEqual([...whole]);
+        // Never more than a band and its two neighbours held at once.
+        expect(most).toBeLessThanOrEqual(Math.min(H, bandRows + 2));
+      }
+    }
+  });
+
+  it('leaves the surface untouched when off', () => {
+    const pic = grey(w, h, (x, y) => (x * 37 + y * 53) % 255);
+    let reads = 0;
+    const read = () => {
+      reads += 1;
+      return pic;
+    };
+    sharpenBands({ read, write: () => {} }, w, h, OUTPUT_SHARPEN_AMOUNT.off, 2);
+    expect(reads).toBe(0);
   });
 });
