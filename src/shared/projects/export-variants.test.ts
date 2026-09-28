@@ -7,6 +7,7 @@ import {
   variantSuffix,
   type ExportVariant,
   resolutionShortfall,
+  stillSourceEdge,
 } from './export-variants';
 
 const variant = (over: Partial<ExportVariant> = {}): ExportVariant => ({
@@ -161,5 +162,33 @@ describe('resolutionShortfall', () => {
 
   it('says nothing before the source has produced its dimensions', () => {
     expect(resolutionShortfall(v({ resolution: 1080 }), 0, 0)).toBeNull();
+  });
+});
+
+describe('stillSourceEdge', () => {
+  it('a variant at the frame\'s own density asks for the whole frame', () => {
+    expect(stillSourceEdge([variant()], 8064, 6048)).toBe(8064);
+  });
+
+  it('a 1080 cut of a big still asks for the edge that draws it 1:1', () => {
+    // 4:5 at 1080 → 1080 × 1350, cover-cropped from 8064 × 6048: the height
+    // binds, 1350 / 6048 of the frame, so 8064 × that = 1800.
+    const edge = stillSourceEdge([variant({ aspectId: '4:5', resolution: 1080 })], 8064, 6048);
+    expect(edge).toBe(1800);
+    const out = variantOutputSize(variant({ aspectId: '4:5', resolution: 1080 }), 8064, 6048);
+    const scale = edge / 8064;
+    expect(Math.round(6048 * scale)).toBeGreaterThanOrEqual(out.h);
+    expect(Math.round(8064 * scale)).toBeGreaterThanOrEqual(out.w);
+  });
+
+  it('the largest variant of the run decides', () => {
+    const run = [variant({ resolution: 720 }), variant({ resolution: 1080 })];
+    expect(stillSourceEdge(run, 6000, 4000)).toBe(1620);
+    expect(stillSourceEdge([...run, variant()], 6000, 4000)).toBe(6000);
+  });
+
+  it('never more than the frame, and the frame when there is nothing to size', () => {
+    expect(stillSourceEdge([variant({ resolution: 1080 })], 1200, 800)).toBe(1200);
+    expect(stillSourceEdge([], 6000, 4000)).toBe(6000);
   });
 });

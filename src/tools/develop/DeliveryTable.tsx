@@ -65,6 +65,7 @@ export default function DeliveryTable({
   lines,
   thumbs,
   onDeliver,
+  onDeliverAll,
   onOpen,
   marks = {},
   culling,
@@ -75,6 +76,8 @@ export default function DeliveryTable({
   lines: ReadonlyMap<string, string>;
   thumbs: ReadonlyMap<string, Blob>;
   onDeliver: (id: string, action: DeliverAction) => void;
+  /** Tick (`true`) or untick every picture of `ids` at once — the head box, over the rows shown. */
+  onDeliverAll?: (ids: readonly string[], leave: boolean) => void;
   onOpen: (id: string) => void;
   /** When each picture last left from this device (`export-marks.ts`, E4). */
   marks?: ExportMarks;
@@ -91,6 +94,13 @@ export default function DeliveryTable({
   const openIgnored = ignored.some((p) => p.id === openId);
   const unfolded = ignoredOpen || openIgnored;
   const leaving = pictures.filter(delivers).length;
+  // The head box speaks for the rows SHOWN, so a filter then a tick is a
+  // batch (every Pick, every Edited…); an ignored picture is never in it.
+  const batch = shown.filter((p) => !isIgnored(p));
+  const batchOn = batch.filter(delivers).length;
+  const allOn = batch.length > 0 && batchOn === batch.length;
+  const mixed = batchOn > 0 && !allOn;
+  const tickAll = () => onDeliverAll?.(batch.map((p) => p.id), !allOn);
 
   return (
     <div className="flex flex-col gap-2 min-w-0">
@@ -114,6 +124,43 @@ export default function DeliveryTable({
         </span>
       </div>
       <div className="flex flex-col border-t border-line">
+        {onDeliverAll && batch.length > 1 && (
+          <div
+            role="checkbox"
+            aria-checked={mixed ? 'mixed' : allOn}
+            aria-label={allOn ? 'Hold back every picture shown' : 'Send every picture shown'}
+            tabIndex={0}
+            onClick={tickAll}
+            onKeyDown={(e) => {
+              if (e.key === ' ' || e.key === 'Enter') {
+                e.preventDefault();
+                tickAll();
+              }
+            }}
+            title={allOn ? 'Hold back every picture shown' : 'Send every picture shown'}
+            className="flex items-center gap-2 min-h-10 px-1 border-b border-line cursor-pointer select-none hover:bg-paper focus-visible:outline-2 focus-visible:outline-accent"
+          >
+            <span
+              aria-hidden="true"
+              className={`flex-none grid place-items-center w-5 h-5 rounded-[5px] border-2 ${
+                allOn || mixed ? 'bg-accent border-accent text-white' : 'border-line-strong'
+              }`}
+            >
+              {allOn ? (
+                <span className="inline-flex text-xs">{Icons.check}</span>
+              ) : mixed ? (
+                <span className="block w-2.5 h-0.5 rounded-full bg-current" />
+              ) : null}
+            </span>
+            <span className="font-sans text-3xs font-semibold uppercase tracking-wider text-muted">
+              {allOn ? 'Untick all' : 'Tick all'}
+              {active !== 'all' && <span className="normal-case font-normal tracking-normal"> · {filters.find((f) => f.id === active)?.label}</span>}
+            </span>
+            <span className="ml-auto font-mono text-3xs text-faint tabular-nums">
+              {batchOn} / {batch.length}
+            </span>
+          </div>
+        )}
         {shown.map((p) => (
           <Row key={p.id} picture={p} open={p.id === openId} line={lines.get(p.id)} thumb={thumbs.get(p.id) ?? null} marks={marks} culling={culling?.get(p.id)} onDeliver={onDeliver} onOpen={onOpen} />
         ))}

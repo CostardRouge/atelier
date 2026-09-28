@@ -787,6 +787,37 @@ export function toggledDelivery(p: RollPicture): DeliverState {
   return leaving === isEdited(p) ? 'auto' : leaving ? 'yes' : 'no';
 }
 
+/**
+ * The state that makes a picture leave (or stay), stored as `auto` wherever
+ * the rule already says it — the batch twin of `toggledDelivery`, so ticking
+ * a whole table pins only the pictures the rule would have answered otherwise.
+ */
+export function deliveryFor(p: RollPicture, leave: boolean): DeliverState {
+  return leave === isEdited(p) ? 'auto' : leave ? 'yes' : 'no';
+}
+
+/**
+ * "Tick all" / "untick all" over several pictures (the Pictures table's head
+ * box): each takes `deliveryFor`, an ignored one is left out of the work and
+ * untouched. The same roll back when nothing changes.
+ */
+export function setLeaving(
+  roll: RollDoc,
+  ids: readonly string[],
+  leave: boolean,
+  now: number = Date.now(),
+): RollDoc {
+  let changed = false;
+  const pictures = roll.pictures.map((p) => {
+    if (!ids.includes(p.id) || isIgnored(p)) return p;
+    const next = deliveryFor(p, leave);
+    if (deliverState(p) === next) return p;
+    changed = true;
+    return { ...p, deliver: next };
+  });
+  return changed ? { ...roll, pictures, updatedAt: now } : roll;
+}
+
 /** The Export tab's table filters. An ignored picture answers none of them: it has a group of its own. */
 export type DeliveryFilter = 'all' | 'edited' | 'leaving' | 'held';
 

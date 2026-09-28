@@ -812,3 +812,30 @@ describe('bucketHolds — which document kinds an instance keeps', () => {
     expect(bucketHolds(null, 'trip')).toBe(false);
   });
 });
+
+describe('a list read can be aborted', () => {
+  it('hands the signal to every page, and asks for no page once it is aborted', async () => {
+    const controller = new AbortController();
+    const seen: (AbortSignal | null | undefined)[] = [];
+    const fetchImpl = vi.fn<FetchLike>(async (_url, init) => {
+      seen.push(init?.signal);
+      // The walk is abandoned while the second page is on its way.
+      if (seen.length === 2) controller.abort();
+      return ok({ assets: [{ id: seen.length }], next_cursor: `c${seen.length}` });
+    });
+    const walk = client(fetchImpl).allAssets({ dateFrom: '2026-01-01', dateTo: '2026-01-01' }, 2000, controller.signal);
+    await expect(walk).rejects.toMatchObject({ name: 'AbortError' });
+    expect(fetchImpl).toHaveBeenCalledTimes(2);
+    expect(seen.every((s) => s === controller.signal)).toBe(true);
+  });
+
+  it('the calendar, the sessions and the timeline carry the signal too', async () => {
+    const controller = new AbortController();
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ days: [], sessions: [], chapters: [] }));
+    const c = client(fetchImpl);
+    await c.calendar('2026-01-01', '2026-01-31', {}, controller.signal);
+    await c.sessions({}, controller.signal);
+    await c.timeline({}, controller.signal);
+    for (const call of fetchImpl.mock.calls) expect(call[1]?.signal).toBe(controller.signal);
+  });
+});

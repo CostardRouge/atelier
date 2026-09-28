@@ -326,7 +326,7 @@ The rule is **the larger of `window.innerHeight` and `visualViewport.height`, an
 
 **The exception, named rather than left to be re-derived (2026-09-22): a surface whose ONLY gesture is looking.** The look gallery's scene (`LookScene.tsx`) carries `usePictureZoom` and the ± pill over the photograph, and that does not reopen the decision above: what the pill cost on the two editor stages was the picture's own FRAMING gestures, and a scene has none — it is an inspection surface, like the lightbox and the develop viewport, which both drive it already. The test for the next one is that question, never the surface's size: *does this picture answer a gesture of its own?* If it does, the pill takes it away. The scene's ceiling is `usePictureZoom`'s new `ceiling` option at the lightbox's 8×, not a develop's 4000 %: what is on screen there is a 720p raster (`SCENE_PIXELS`), and magnifying a preview pixel says nothing about a look. It keeps the develop sheet's wipe grammar too — at the fit a press anywhere places the divider, zoomed only the `[data-wipe-handle]` strip does — through the same `claim`/`onTakeover` pair, because a second grammar for the same two gestures is how they stop being learnable.
 
-**The primitive stays, for the zones it was really for** (rev. 2026-09-22: the zones stopped zooming on 2026-09-13 for the loupe, so `use-stage-zoom.ts` had no consumer and was DELETED; `stage-zoom.ts` survives for `ZoomControls`, `zoomLabel`, `STAGE_ZOOM_STEP`, `wheelZooms` and the scroll-anchoring arithmetic `zoom-anchor.test.ts` still guards, in case a scrolling zone zooms again): `shared/ui/stage-zoom.ts` + `StageZoomControl.tsx`, with the pill driving the lightbox and the Develop stages. The scale is applied as **layout size** — a zone multiplies its own unit — never a CSS `transform`: a transformed element still measures unscaled, so the scroll box would not know it had anything to scroll. Panning is then native scrolling, and every pointer handler keeps working untouched, because the zones map pointers through `getBoundingClientRect()`.
+**The primitive stays, for the zones it was really for** (rev. 2026-09-22: the zones stopped zooming on 2026-09-13 for the loupe, so `use-stage-zoom.ts` had no consumer and was DELETED; `stage-zoom.ts` survives for `ZoomControls`, `zoomLabel`, `STAGE_ZOOM_STEP`, `wheelZooms` and the scroll-anchoring arithmetic `zoom-anchor.test.ts` still guards, in case a scrolling zone zooms again; rev. 2026-09-28: one does — Trips' stage ruler, whose zoom is its window's LENGTH in days, anchored in `loupe.ts`'s day arithmetic rather than in `scrollAfterZoom` and read through `useZoomGestures`, `roadtrip.md` «The stage ruler zooms again»): `shared/ui/stage-zoom.ts` + `StageZoomControl.tsx`, with the pill driving the lightbox and the Develop stages. The scale is applied as **layout size** — a zone multiplies its own unit — never a CSS `transform`: a transformed element still measures unscaled, so the scroll box would not know it had anything to scroll. Panning is then native scrolling, and every pointer handler keeps working untouched, because the zones map pointers through `getBoundingClientRect()`.
 
 **Range: 25% to 1600%**, a quarter of the fit up to sixteen times it, in ×1.25 steps that land exactly on 100% when they cross it. The zone's own floor is what really stops a zoom-out (the ruler will not draw a day under 6px, the grid a cell under 4).
 
@@ -631,3 +631,14 @@ recipe, so none of `Button`'s font, height, padding or `shrink-0` fights the
 caller's), and `StageZoomControl` takes optional `items` that turn its
 percentage into that menu. The same prop is what lets a file NAME carry a menu
 (`develop-roll.md`, B2).
+
+## 2026-09-28 — A section whose controls no longer reach what they set is LOCKED, and says so
+
+`LockSections` (`shared/ui/Inspector.tsx`) makes every `InspectorSection` body
+under it inert and dim, while the BAND stays alive: a locked section still
+folds and its ⓘ still opens, because the explanation is exactly what a person
+reads while waiting. `inert` is set through a ref (`useInert`) — React 18 has
+no prop for it, the DOM does; a pointer and the keyboard both pass through,
+and a wheel still scrolls the column. The host owes the WHY in words, stuck
+at the top of the scroll (Develop's Export tab during a run): a lock nobody
+explains reads as a broken control.

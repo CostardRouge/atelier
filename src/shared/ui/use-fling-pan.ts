@@ -29,9 +29,9 @@ export interface FlingPanOptions {
  * A surface panned sideways by a finger, with the throw a phone expects.
  *
  * Why it exists rather than a `touch-action` and the browser's own scrolling:
- * the stage ruler's sideways travel is not a scroll box at all past a certain
- * length — it moves the loupe's WINDOW over the trip, a week at a time — so
- * the pixels have to be read and answered here.
+ * the stage ruler's sideways travel moves the loupe's WINDOW over the trip
+ * (`loupe.ts`), which a pinch and a zoom also write, and a leg on it is picked
+ * up by a still hold — so the pixels have to be read and answered here.
  *
  * **What was broken and is the rule now.** A pan that only set
  * `touch-action: pan-y` and read `pointermove` lost the gesture to the

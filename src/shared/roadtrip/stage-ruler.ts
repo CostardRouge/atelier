@@ -193,6 +193,45 @@ export function rulerTicks(
   return out;
 }
 
+/** A day's own date under the scale, once a day is wide enough to carry it. */
+export interface RulerDayLabel {
+  /** Day offset of the day it names — drawn centred on that day. */
+  offset: number;
+  text: string;
+}
+
+/** Narrowest a day may be and still carry its date under the scale. */
+export const DAY_LABEL_MIN = 22;
+/** Narrowest a day may be and carry its weekday beside the date. */
+export const WEEKDAY_LABEL_MIN = 44;
+
+const WEEKDAYS = ['Su', 'Mo', 'Tu', 'We', 'Th', 'Fr', 'Sa'];
+
+/**
+ * The days' own dates, for a track zoomed in far enough to write them: the
+ * number while a day is `DAY_LABEL_MIN` wide, the weekday too past
+ * `WEEKDAY_LABEL_MIN` — the calendar's own two letters, so a week reads the
+ * same on both. Never on a first of the month nor on the trip's first day,
+ * where the month's label already stands.
+ */
+export function rulerDayLabels(
+  trip: Pick<TripDoc, 'startDate' | 'endDate'>,
+  dayWidth: number,
+): RulerDayLabel[] {
+  const total = spanLength(trip.startDate, trip.endDate);
+  const start = parseIsoDate(trip.startDate);
+  if (total === null || start === null || !(dayWidth >= DAY_LABEL_MIN)) return [];
+  const weekday = dayWidth >= WEEKDAY_LABEL_MIN;
+  const out: RulerDayLabel[] = [];
+  for (let i = 1; i < total; i += 1) {
+    const d = new Date(start + i * 86_400_000);
+    const date = d.getUTCDate();
+    if (date === 1) continue;
+    out.push({ offset: i, text: weekday ? `${WEEKDAYS[d.getUTCDay()]} ${date}` : String(date) });
+  }
+  return out;
+}
+
 /**
  * Narrowest a day may be drawn at 100%. A bar thinner than this cannot be
  * grabbed by an edge, so it is the BASE the zoom multiplies, not a clamp

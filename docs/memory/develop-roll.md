@@ -254,6 +254,54 @@ is one. Each row says the RUN PLAN's own line for that picture — so
 for the *Delivers* sentence — and the old read-only "picture by picture" list
 is gone, the table being that list made operable. The table is built by
 `RollEditor` (it holds the roll) and handed to `ExportPanel` as a node.
+**Tick all** (2026-09-28, his ask — row by row was too slow): a head row
+with a three-state box over the rows SHOWN, so a filter then the box is a batch
+(every Pick, every Edited); a click ticks all unless all already leave, then
+unticks. `setLeaving` writes `deliveryFor` — `auto` wherever the rule already
+answers, exactly as one row's `toggledDelivery` — so a tick never pins an
+edited picture, and it never touches an ignored one. One `update`, one undo step.
+**The verbs are PINNED** (2026-09-28, his pick "bouton + menu" from the lab
+in `MEMORY.md`): `DeliverBar.tsx` sits under the inspector's scroll the way
+the tab strip sits over it — docked, a sibling after the scroll box; in the
+phone's drawer, `sticky bottom-0` inside the drawer's own scroller (the
+drawer body scrolls, the panel does not). ONE primary verb (`roll`, else the
+first) and the rest behind an `OverflowMenu` opening upward, so the bar keeps
+one height; the run's sentence above, `exporting` and `note` under. What is
+SET (Replace, the ⓘ text) stays in the Deliver section; only what is
+TRIGGERED is pinned. Shown on the Export tab — and on EVERY tab while a run
+goes on.
+**The run is SEEN picture by picture** (2026-09-28, his pick V1 + V4; lab in
+`MEMORY.md`): `shared/develop/run-progress.ts` (pure, tested) holds each
+picture's state (`queued · active · done · failed`), the phase of the one in
+hand (`Fetch · Develop · Write`, three words over the run's dozen step
+sentences) and the step in words. `use-roll-export` drives it through ONE
+`say(phase, words)` that also feeds the one-line status and the task pill's
+detail, so the three never disagree; a picture that did not leave (skipped,
+refused by the folder, broken) is `failed`, one written with a warning is
+`done`. V1: while a run goes on the Deliver bar IS the run — a segment per
+picture (one bar past 48, thinner than a hairline otherwise), the active
+segment a SWEEP (its length is unknown, `tasks.md`), the name and the phase
+chips, the time left, a Cancel. The time left is MEASURED — the mean of the
+pictures this run finished — and absent until one has, never a guess from a
+file size. V4: each filmstrip cell carries its state at its CENTRE (the one
+spot no badge owns), pointer-transparent so a cell still opens its picture,
+and the run's task is SCOPED (`runScope(roll.id)`) so a `TaskEdge` draws its
+hairline along the strip's top. A Cancel from the bar or the pill shows at
+once (`cancelling`), the picture in hand letting go when it can.
+**A run LOCKS what it no longer reads, and nothing else** (2026-09-28, his
+pick L2). The run renders from the roll, its export settings and the
+identity as they were at the click, so an edit cannot reach a file in flight
+— the risk was never corruption, it was a control that LOOKS as if it acted
+on the run. So while a run goes on: the Export tab's section bodies are inert
+and dim (`LockSections`, `frontend.md`) under a sticky notice naming the
+click's time; which pictures leave is refused from its other doors too (`P`,
+`U`, `M`, the strip's badge, tick-all — `LOCKED_DELIVERY`, said in the status
+line); retouching stays FREE, the whole point of a non-blocking run. At the
+end, the pictures edited meanwhile are NAMED first in the note
+(`editedDuringRun`, the export marks' own fingerprint, so the sentence and
+the table's `changed` cannot disagree) and "Export new or changed" sends
+them. Rejected: locking a queued picture's retouching (L3 — it blocks the
+very pictures one wants to fix) and a blocking window (V3).
 **E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
 moved to the top-right to make room); a click toggles, a right-click or a
 550 ms touch hold ignores ↔ brings back, and the click that ends a hold is
@@ -416,6 +464,10 @@ shared block. Rules a later phase must keep:
   identity (`creator` + a copyright TEMPLATE, `exif/delivery-meta.ts`) lives on
   the PRESET BOOK (`PresetBook.identity`), because the book is the one personal
   document every device already finds; `mergeBooks` keeps the edited copy's.
+  A RUN reads it ONCE, at the click, with the roll and its export settings
+  (2026-09-28): it used to be read per picture, so a creator changed while a
+  run went on signed one folder two ways. Anything a delivered file carries
+  that is not on the roll snapshot is taken in that same destructuring.
   No default name — the site is public, so his name is nobody's default; the
   template's `{year}` is the CAPTURE year (`captureYear`, the export's own
   when unknown). Written over the camera's `Artist`/`Copyright` (an in-camera

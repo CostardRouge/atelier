@@ -44,6 +44,7 @@ import {
   isEdited,
   isIgnored,
   setDelivery,
+  setLeaving,
   toggledDelivery,
   patchPicture,
   setPictureWords,
@@ -93,7 +94,8 @@ import {
   type PictureSection,
 } from '../../shared/develop/picture-sections';
 import { exportState, needsExport } from '../../shared/develop/export-marks';
-import { useRollExport } from './use-roll-export';
+import { runScope, useRollExport } from './use-roll-export';
+import TaskEdge from '../../shared/ui/TaskEdge';
 import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
@@ -125,6 +127,9 @@ interface RollEditorProps {
   /** The sync pill, for a roll kept on an instance. */
   headerExtra?: ReactNode;
 }
+
+/** Said when a delivery state is asked for while a run goes on (L2). */
+const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs — it goes on with the ones it started with';
 
 /**
  * The Develop tool's editor over a roll (D6 of `docs/develop-tool.md`): the
@@ -603,10 +608,19 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, border: RollBorder | null) => update((r) => copyBorderTo(r, [id], border)),
     [update],
   );
+  // Which pictures leave is an Export-tab setting, locked while a run goes on
+  // (L2): the table is inert, and the keys and the strip's badges — the same
+  // setting reached from elsewhere — refuse too, and say why. Read through a
+  // ref: the run is known only once `useRollExport` has been called below.
+  const exportRunning = useRef(false);
   // The delivery keys, answered from the roll as it stands (the state depends on
   // whether the picture is edited), and said in the status line.
   const handleDeliver = useCallback(
     (id: string, action: DeliverAction) => {
+      if (exportRunning.current) {
+        setNotice(LOCKED_DELIVERY);
+        return;
+      }
       const picture = latest.current.pictures.find((p) => p.id === id);
       if (!picture) return;
       const next =
@@ -618,6 +632,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           ? `${pictureLabel(picture)} ignored — the arrows step over it`
           : `${pictureLabel(picture)} ${delivers(after) ? 'will be exported' : 'stays out of the export'}${next === 'auto' ? ' (the roll’s rule)' : ''}`,
       );
+    },
+    [update],
+  );
+  const handleDeliverAll = useCallback(
+    (ids: readonly string[], leave: boolean) => {
+      if (exportRunning.current) {
+        setNotice(LOCKED_DELIVERY);
+        return;
+      }
+      update((r) => setLeaving(r, ids, leave));
+      setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} ${leave ? 'will be exported' : 'stay out of the export'}`);
     },
     [update],
   );
@@ -648,6 +673,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     onDelivered: recordExported,
   });
   const { exportPictures } = exports;
+  exportRunning.current = exports.progress !== null;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
     const verbs: ExportVerb[] = [
@@ -1098,6 +1124,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   lines={exports.lines}
                   thumbs={thumbs}
                   onDeliver={handleDeliver}
+                  onDeliverAll={handleDeliverAll}
                   onOpen={onOpenPicture}
                   marks={exportMarks}
                   culling={culling.reachable ? culling.byPicture : undefined}
@@ -1259,8 +1286,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   )}
                 </p>
               )}
+              {/* V4: the strip is the run's queue — each cell marked, and the
+                  run's own hairline along its top (`TaskEdge`, the run's scope). */}
+              <div className="relative">
+                <TaskEdge scope={runScope(roll.id)} edge="top" />
               <Filmstrip
                 pictures={roll.pictures}
+                run={exports.progress}
                 openId={openId}
                 selectedIds={visibleSelected}
                 thumbs={thumbs}
@@ -1275,6 +1307,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 culling={culling.byPicture}
                 shows={filtering ? shownByCull : undefined}
               />
+              </div>
             </div>
           </div>
         </div>

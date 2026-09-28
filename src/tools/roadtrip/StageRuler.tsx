@@ -1,5 +1,23 @@
-import { useCallback, useEffect, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { panWeeks } from '../../shared/roadtrip/loupe';
+import {
+  useCallback,
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type KeyboardEvent,
+  type PointerEvent,
+  type RefObject,
+} from 'react';
+import {
+  centreLoupe,
+  clampLoupe,
+  holdDay,
+  monthsAround,
+  zoomLoupe,
+  type Loupe,
+  type LoupeLimits,
+  type LoupeStore,
+} from '../../shared/roadtrip/loupe';
 import {
   insertStageInOrder,
   resizeStage,
@@ -11,6 +29,7 @@ import {
   dayOffset,
   laneCount,
   rulerBars,
+  rulerDayLabels,
   rulerDayWidth,
   rulerGaps,
   rulerMonths,
@@ -20,6 +39,7 @@ import {
 } from '../../shared/roadtrip/stage-ruler';
 import {
   addDays,
+  daysBetween,
   formatIsoDate,
   spanLength,
   type IsoDate,
@@ -27,8 +47,8 @@ import {
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
 import { LONG_PRESS_MS, pressIntent } from '../../shared/ui/press-intent';
-import { useElementWidth } from '../../shared/ui/use-element-width';
 import { useFlingPan } from '../../shared/ui/use-fling-pan';
+import { useZoomGestures } from '../../shared/ui/use-zoom-gestures';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 
 interface StageRulerProps {
@@ -41,24 +61,31 @@ interface StageRulerProps {
   /** Another day was asked for — a click on the track, or an arrow key. */
   onScrub: (date: IsoDate) => void;
   onChange: (stages: TripStage[]) => void;
-  /**
-   * The days the track draws — the loupe's window on a long trip, the whole
-   * trip on a short one. Geometry is read against it; the EDITS still write
-   * the real stage dates and clamp to the real trip, so a leg dragged to the
-   * window's edge stops there only because the window does.
-   */
-  span?: { startDate: IsoDate; endDate: IsoDate };
   /** The grid's rung for a day (0..4): a strip of told-days under the head. */
   rungAt?: (date: IsoDate) => number;
   /**
-   * Scroll the SPAN itself, by whole weeks: a sideways wheel over the track,
-   * or a swipe anywhere on it. Given only when a loupe drives the span — a
-   * short trip's track is the whole trip and has nowhere to go.
-   *
-   * It answers with the weeks it REALLY moved, so a swipe thrown at the end
-   * of the trip stops at the edge instead of gliding on against nothing.
+   * The box the track scrolls in. The PANEL measures it (`width`), because
+   * its zoom pill needs the very limits the track is drawn to — two
+   * measurements of one box is how a drawn day and a zoom's floor start
+   * disagreeing (`roadtrip.md`).
    */
-  onPan?: (weeks: number) => number | void;
+  boxRef: RefObject<HTMLDivElement>;
+  width: number;
+  /** How many days the box shows — the zoom, already inside `limits`. */
+  days: number;
+  limits: LoupeLimits;
+  /** The days 100% shows: what a scale is read against. */
+  base: number;
+  /** The hand asked for a scale — the wheel, a trackpad pinch, two fingers. */
+  onScale: (scale: number) => void;
+  /**
+   * The first day of the month the calendar shows. The window re-centres on
+   * its three months when another month comes on screen, keeping its zoom;
+   * absent — a short trip, one block of weeks — it starts where the trip does.
+   */
+  month?: IsoDate;
+  /** Where the window is published, for the year map and the panel's header. */
+  loupe?: LoupeStore;
 }
 
 /**
@@ -73,6 +100,8 @@ const AXIS = 20;
 const RUNG = 10;
 const RUNG_GAP = 6;
 const HANDLE = 10;
+/** After two fingers lift, a throw left over from the first of them is not a swipe. */
+const AFTER_PINCH_MS = 250;
 
 interface Drag {
   id: string;
@@ -109,6 +138,15 @@ interface Pin {
  * Every gesture snaps to whole days, because a leg has no hours, and a pin
  * follows the pointer saying the date it would land on.
  *
+ * **The track is the whole trip, and the box shows a WINDOW of it** — the
+ * loupe (`loupe.ts`). Its zoom is how many days that window holds: the
+ * wheel, a trackpad pinch or two fingers change it about the point under the
+ * hand, the panel's − / + about the middle, and a leg too short to read at
+ * three months gets the width to say its name (the maintainer's report,
+ * 2026-09-28). The window follows the calendar to the month on screen and
+ * keeps the open day in view; the year map draws it, so a zoom is seen
+ * shrinking or growing the window there.
+ *
  * **Three gestures, told apart by what the hand does, not by where it is.**
  * A TAP opens what it landed on — a day anywhere on the track, a leg on its
  * bar (which also goes to the day it began: the ruler and the calendar are
@@ -124,7 +162,8 @@ interface Pin {
  * The track is the trip: a leg cannot be dragged past the trip's edges, and
  * what a drag writes is the stage's two dates — the same fields the date
  * inputs below edit, so the two never disagree. Nothing is drag-only: a
- * focused edge, bar or playhead moves with the arrow keys.
+ * focused edge, bar or playhead moves with the arrow keys, and the zoom has
+ * its buttons.
  */
 export default function StageRuler({
   trip,
@@ -133,59 +172,125 @@ export default function StageRuler({
   onOpenStage,
   onScrub,
   onChange,
-  span,
   rungAt,
-  onPan,
+  boxRef,
+  width,
+  days,
+  limits,
+  base,
+  onScale,
+  month,
+  loupe,
 }: StageRulerProps) {
-  // Everything the track MEASURES is measured against the span drawn; the
-  // real trip is what the edits clamp to.
-  const drawn = { startDate: span?.startDate ?? trip.startDate, endDate: span?.endDate ?? trip.endDate, stages: trip.stages };
-  const total = spanLength(drawn.startDate, drawn.endDate);
-  // The track fits its box: a day is the box's share of the span, floored at
-  // the width an edge can be grabbed at, and the box scrolls past that.
-  const [scroller, width] = useElementWidth<HTMLDivElement>();
+  const total = spanLength(trip.startDate, trip.endDate);
   const track = useRef<HTMLDivElement | null>(null);
   const drag = useRef<Drag | null>(null);
   const [pin, setPin] = useState<Pin | null>(null);
   // A drag ends in a click on the same button; this swallows that click so
   // sliding a leg does not also open it.
   const swallowClick = useRef(false);
-  // What a scroll left short of a week, carried to the next one.
-  const carry = useRef(0);
-  const dayWRef = useRef(0);
-  const onPanRef = useRef(onPan);
-  onPanRef.current = onPan;
+  // The window the hand last ASKED for. It runs ahead of the render during a
+  // wheel burst or a pinch — several notches land before React draws once —
+  // so every gesture reads this and never the props: a document lags the
+  // hand (`frontend.md`, «Two uses, one hand»).
+  const live = useRef<Loupe>({ from: 0, days });
+  // The scale the track was last LAID OUT at. A scroll read against another
+  // scale is not the window, and a window asked at another scale cannot be
+  // scrolled to until the render that lays it out.
+  const laid = useRef<{ days: number; dayW: number } | null>(null);
+  const pinching = useRef(false);
+  const pinchEnded = useRef(0);
+  const cursorRef = useRef(cursorDate);
+  cursorRef.current = cursorDate;
+  const dayW = rulerDayWidth(width, days, 1);
 
   /**
-   * A sideways scroll of `px` over the track. A track too wide for its box (a
-   * loupe widened past the 6px a day needs) scrolls in its box first; what the
-   * box cannot take moves the loupe, a week per week of track.
-   *
-   * It answers false only when the track positively could not move — the
-   * trip's own edge — so a thrown swipe stops there rather than gliding on.
-   * Pixels that have not yet added up to a week are not an edge: they are
-   * carried, and the glide must keep feeding them.
+   * Put the window somewhere: the track scrolls there when it is laid out at
+   * that scale (otherwise the render asked for will), and the year map and
+   * the header hear of it.
    */
-  const panBy = (px: number): boolean => {
-    const el = scroller.current;
-    let box = 0;
-    let rest = px;
-    if (el) {
-      const before = el.scrollLeft;
-      el.scrollLeft = before + px;
-      box = el.scrollLeft - before;
-      rest -= box;
+  const place = useCallback(
+    (next: Loupe) => {
+      live.current = next;
+      const el = boxRef.current;
+      const at = laid.current;
+      if (el && at && Math.abs(at.days - next.days) < 1e-9) el.scrollLeft = next.from * at.dayW;
+      loupe?.set(next);
+    },
+    [boxRef, loupe],
+  );
+
+  // A new scale, or a box that changed width. A zoom from the hand has
+  // already placed the window where the pointer holds it; a zoom from the
+  // pill, or a resize, keeps the window's middle still.
+  useLayoutEffect(() => {
+    if (total === null) return;
+    const now = live.current;
+    const next =
+      Math.abs(now.days - days) < 1e-9 ? clampLoupe(total, now, limits) : zoomLoupe(total, now, days, 0.5, limits);
+    laid.current = { days: next.days, dayW };
+    place(next);
+  }, [days, dayW, total, limits, place]);
+
+  // Another month came on screen: the window centres on its three months —
+  // exactly them at 100% — keeping its zoom, and keeps the open day when it
+  // is in that month. Keyed on the month alone: an edit never moves it.
+  useLayoutEffect(() => {
+    if (total === null) return;
+    const around = month ? monthsAround(trip.startDate, month) : null;
+    let next = around ? centreLoupe(total, live.current.days, around.from + around.days / 2, limits) : live.current;
+    const cursor = cursorRef.current;
+    const day = cursor ? daysBetween(trip.startDate, cursor) : null;
+    if (cursor && day !== null && (!month || cursor.slice(0, 7) === month.slice(0, 7))) {
+      next = holdDay(total, next, day);
     }
-    // No loupe (a short trip): the box is the whole of it, so its own end is
-    // the edge.
-    if (!onPanRef.current) return box !== 0;
-    const step = panWeeks(carry.current, rest, dayWRef.current);
-    carry.current = step.carry;
-    if (step.weeks === 0) return true;
-    return onPanRef.current(step.weeks) !== 0 || box !== 0;
+    place(next);
+  }, [month, trip.startDate, total]);
+
+  // The open day moved: the window slides the shortest way to show it.
+  useLayoutEffect(() => {
+    if (total === null || !cursorDate) return;
+    const day = daysBetween(trip.startDate, cursorDate);
+    if (day === null) return;
+    const next = holdDay(total, live.current, day);
+    if (next !== live.current) place(next);
+  }, [cursorDate]);
+
+  // Nothing to draw once the ruler is gone: the map's window goes with it.
+  useEffect(() => () => loupe?.set(null), [loupe]);
+
+  /**
+   * The track scrolled — a trackpad, a scrollbar, the keyboard, or our own
+   * write coming back. Read into the window unless a zoom is on its way (its
+   * render scrolls the track itself) or the read is our write rounded to the
+   * pixel, where the window asked for stays the truth.
+   */
+  const onScroll = () => {
+    const el = boxRef.current;
+    const at = laid.current;
+    if (!el || !at || total === null) return;
+    if (Math.abs(live.current.days - at.days) > 1e-9) return;
+    const from = el.scrollLeft / at.dayW;
+    if (Math.abs(from - live.current.from) * at.dayW < 1) return;
+    live.current = { from, days: at.days };
+    loupe?.set(live.current);
   };
-  const panByRef = useRef(panBy);
-  panByRef.current = panBy;
+
+  /**
+   * Travel `px` along the track, at the scale the window is ASKED at. False
+   * only when it could not move at all — the trip's own edge — so a thrown
+   * swipe stops there rather than gliding on against nothing.
+   */
+  const travel = (px: number): boolean => {
+    if (total === null || !(width > 0)) return false;
+    const now = live.current;
+    const next = clampLoupe(total, { from: now.from + (px * now.days) / width, days: now.days }, limits);
+    if (Math.abs(next.from - now.from) < 1e-9) return false;
+    place(next);
+    return true;
+  };
+  const travelRef = useRef(travel);
+  travelRef.current = travel;
 
   /** A press on a leg that has not been picked up yet gives it up. */
   const cancelPress = () => {
@@ -199,20 +304,18 @@ export default function StageRuler({
    * The whole track is swiped sideways, and a throw keeps going — the head,
    * the scale, the lanes and the legs alike. The two narrow bands this
    * replaces (head and scale) were the only places a finger could move the
-   * loupe from, they lost the gesture to the browser one frame in, and
+   * track from, they lost the gesture to the browser one frame in, and
    * everything between them answered a swipe by dragging a leg.
    */
   const panSurface = useFlingPan({
-    // Late-bound on purpose: `panBy` reads the geometry of the render the
-    // gesture is happening in, never the one the surface was bound in.
-    onPan: (px) => panByRef.current(px),
+    // Late-bound on purpose: `travel` reads the window of the render the
+    // gesture is happening in, never the one the surface was bound in. Two
+    // fingers are a pinch, whose own centre pans the track: the first
+    // finger's swipe stands down, and so does the throw it would end in.
+    onPan: (px) =>
+      pinching.current || performance.now() - pinchEnded.current < AFTER_PINCH_MS ? false : travelRef.current(px),
     holding: () => drag.current?.active === true,
-    onSettle: () => {
-      cancelPress();
-      // A new gesture starts from nothing: pixels a wheel or an older swipe
-      // left short of a week are not part of this one.
-      carry.current = 0;
-    },
+    onSettle: cancelPress,
   });
   const trackRef = useCallback(
     (node: HTMLDivElement | null) => {
@@ -222,41 +325,60 @@ export default function StageRuler({
     [panSurface],
   );
 
-  // A trackpad's sideways swipe, or shift + a mouse wheel. Native and
-  // non-passive, because it is `preventDefault` that keeps the browser from
-  // reading a horizontal swipe at the loupe's edge as Back.
-  useEffect(() => {
-    const el = scroller.current;
-    if (!el) return;
-    const wheel = (e: WheelEvent) => {
-      if (!onPanRef.current || e.ctrlKey || e.metaKey) return;
-      // Windows turns shift + wheel into deltaY; macOS already into deltaX.
-      const dx = e.deltaX !== 0 ? e.deltaX : e.shiftKey ? e.deltaY : 0;
-      if (Math.abs(dx) <= Math.abs(e.shiftKey ? 0 : e.deltaY)) return;
-      e.preventDefault();
-      panByRef.current(e.deltaMode === 1 ? dx * 16 : e.deltaMode === 2 ? dx * el.clientWidth : dx);
-    };
-    el.addEventListener('wheel', wheel, { passive: false });
-    return () => el.removeEventListener('wheel', wheel);
-  }, [scroller, total]);
+  // The zoom, read by the suite's one reading of the hand: a bare wheel and a
+  // trackpad pinch (a ⌘/ctrl-wheel) zoom about the pointer — the ruler has no
+  // other use for a vertical wheel —, a sideways sweep or a shift-wheel
+  // travels, and two fingers pinch and travel by their centre. One pointer is
+  // left to the legs and the swipe (`drag: null`).
+  useZoomGestures({
+    ref: boxRef,
+    wheel: 'any',
+    enabled: total !== null && limits.max > limits.min,
+    active: total !== null,
+    target: {
+      scaleAt: () => base / live.current.days,
+      zoomTo: (scale, anchor) => {
+        const el = boxRef.current;
+        if (!el || total === null || !(scale > 0)) return;
+        const r = el.getBoundingClientRect();
+        const at = r.width > 0 ? (anchor.x - r.left) / r.width : 0.5;
+        const now = live.current;
+        const next = zoomLoupe(total, now, base / scale, at, limits);
+        if (next.days === now.days && next.from === now.from) return;
+        live.current = next;
+        onScale(base / next.days);
+      },
+      panBy: (dx, dy, _at, by) => {
+        // Windows turns a shift-wheel into a vertical delta; macOS into a sideways one.
+        travelRef.current(-(by === 'wheel' && Math.abs(dy) > Math.abs(dx) ? dy : dx));
+      },
+      drag: () => null,
+      onTakeover: cancelPress,
+      onPinch: (on) => {
+        pinching.current = on;
+        if (!on) pinchEnded.current = performance.now();
+      },
+    },
+  });
 
   if (total === null) return null;
 
-  const bars = rulerBars(drawn);
-  const gaps = rulerGaps(drawn, bars);
-  const months = rulerMonths(drawn);
+  const bars = rulerBars(trip);
+  const gaps = rulerGaps(trip, bars);
+  const months = rulerMonths(trip);
   const lanes = Math.max(1, laneCount(bars));
-  const dayW = rulerDayWidth(width, total, 1);
-  const ticks = rulerTicks(drawn, dayW);
+  const ticks = rulerTicks(trip, dayW);
+  const dayLabels = rulerDayLabels(trip, dayW);
   const trackW = dayW * total;
-  dayWRef.current = dayW;
+  // The box shows part of the trip: there is somewhere for a swipe to go.
+  const travels = days < total - 1e-9;
   // The rung strip: what was told each day, on the grid's own ramp, so the
   // ruler says the same thing as the calendar above about every day it draws.
   const rungs = rungAt ? RUNG + RUNG_GAP : 0;
   const lanesTop = HEAD + rungs;
   const lanesH = lanes * BAR + (lanes - 1) * LANE_GAP;
   const bodyH = lanesTop + lanesH;
-  const playAt = cursorDate ? dayOffset(drawn, cursorDate) : null;
+  const playAt = cursorDate ? dayOffset(trip, cursorDate) : null;
 
   const update = (next: TripStage) => {
     const current = trip.stages.find((s) => s.id === next.id);
@@ -264,10 +386,10 @@ export default function StageRuler({
     onChange(trip.stages.map((s) => (s.id === next.id ? next : s)));
   };
 
-  const applyDelta = (d: Pick<Drag, 'mode' | 'origin'>, days: number) => {
-    if (d.mode === 'move') return shiftStage(trip, d.origin, days);
+  const applyDelta = (d: Pick<Drag, 'mode' | 'origin'>, delta: number) => {
+    if (d.mode === 'move') return shiftStage(trip, d.origin, delta);
     const edge = d.mode === 'start' ? d.origin.startDate : d.origin.endDate;
-    const date = addDays(edge, days);
+    const date = addDays(edge, delta);
     return date ? resizeStage(trip, d.origin, d.mode, date) : d.origin;
   };
 
@@ -332,9 +454,9 @@ export default function StageRuler({
       if (intent === 'pending') return;
       activate(d);
     }
-    const days = Math.round((e.clientX - d.originX) / dayW);
-    if (days !== 0) d.moved = true;
-    const next = applyDelta(d, days);
+    const delta = Math.round((e.clientX - d.originX) / dayW);
+    if (delta !== 0) d.moved = true;
+    const next = applyDelta(d, delta);
     update(next);
     setPin({ x: e.clientX, y: d.y, text: pinText(d.mode, next) });
   };
@@ -356,8 +478,8 @@ export default function StageRuler({
     const on = e.key === 'ArrowRight';
     if (!back && !on) return;
     e.preventDefault();
-    const days = (e.shiftKey ? 7 : 1) * (back ? -1 : 1);
-    update(applyDelta({ mode, origin: stage }, days));
+    const step = (e.shiftKey ? 7 : 1) * (back ? -1 : 1);
+    update(applyDelta({ mode, origin: stage }, step));
   };
 
   /** The day under a viewport x, read against the track's own box. */
@@ -365,7 +487,7 @@ export default function StageRuler({
     const el = track.current;
     if (!el) return null;
     const rect = el.getBoundingClientRect();
-    return dayAtOffset(drawn, (clientX - rect.left) / dayW);
+    return dayAtOffset(trip, (clientX - rect.left) / dayW);
   };
 
   /**
@@ -394,7 +516,8 @@ export default function StageRuler({
   // gesture that must not fall out of scrolling a calendar sideways.
   return (
     <div
-      ref={scroller}
+      ref={boxRef}
+      onScroll={onScroll}
       className="overflow-x-auto overscroll-x-contain pb-1"
       aria-label="Stage timeline"
     >
@@ -416,7 +539,7 @@ export default function StageRuler({
         <div
           className="absolute inset-0 cursor-pointer"
           onClick={(e) => pickDay(e.clientX)}
-          title={onPan ? 'Tap to open a day · swipe sideways to move the loupe' : undefined}
+          title="Tap to open a day · scroll or pinch to zoom · swipe sideways to travel along the trip"
           aria-hidden="true"
         />
         <div
@@ -428,7 +551,7 @@ export default function StageRuler({
             screen it wears a faint rail under the lanes. It takes no pointer —
             the whole track answers the swipe now — and a mouse has the
             wheel. */}
-        {onPan && (
+        {travels && (
           <div
             className="absolute left-0 right-0 rounded-[6px] pointer-events-none pointer-coarse:bg-ink/[0.06]"
             style={{ top: bodyH, height: AXIS + 6 }}
@@ -438,7 +561,7 @@ export default function StageRuler({
 
         {rungAt &&
           Array.from({ length: total }, (_, i) => {
-            const date = dayAtOffset(drawn, i);
+            const date = dayAtOffset(trip, i);
             if (!date) return null;
             return (
               <span
@@ -489,6 +612,18 @@ export default function StageRuler({
             style={{ left: t.offset * dayW, top: bodyH + 4, height: t.strong ? 6 : 3 }}
             aria-hidden="true"
           />
+        ))}
+        {/* Zoomed in far enough, each day says its date — and its weekday
+            wider still — on the line the month names sit on (`rulerDayLabels`). */}
+        {dayLabels.map((l) => (
+          <span
+            key={l.offset}
+            className="absolute -translate-x-1/2 font-mono text-3xs leading-none text-faint whitespace-nowrap pointer-events-none"
+            style={{ left: (l.offset + 0.5) * dayW, top: bodyH + 10 }}
+            aria-hidden="true"
+          >
+            {l.text}
+          </span>
         ))}
 
         {gaps.map((gap) =>
@@ -558,7 +693,7 @@ export default function StageRuler({
                 if (!back && !on) return;
                 e.preventDefault();
                 const next = addDays(cursorDate, (e.shiftKey ? 7 : 1) * (back ? -1 : 1));
-                const at = next ? dayOffset(drawn, next) : null;
+                const at = next ? dayOffset(trip, next) : null;
                 if (next && at !== null) onScrub(next);
               }}
               className="absolute p-0 border-0 bg-transparent cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[3px]"
@@ -682,7 +817,10 @@ function Bar({
         className="absolute inset-0 w-full p-0 border-0 bg-transparent text-left cursor-grab active:cursor-grabbing touch-pan-y select-none focus:outline-none focus-visible:ring-2 focus-visible:ring-ink rounded-[10px]"
         style={{ paddingLeft: HANDLE + 4, paddingRight: HANDLE + 4 }}
       >
-        <span className="block truncate text-xs leading-none">
+        {/* Sticky to the box's left edge: zoomed into the middle of a long
+            leg, its bar runs past both edges and would otherwise name
+            nothing on screen. Still truncated where the bar is short. */}
+        <span className="sticky inline-block max-w-full truncate align-middle text-xs leading-none" style={{ left: HANDLE + 4 }}>
           <span className={`font-semibold ${label ? 'text-ink' : 'text-muted'}`}>
             {label || 'Unnamed stage'}
           </span>

@@ -822,8 +822,8 @@ export class WinnowClient {
     return res;
   }
 
-  private async json<T>(url: string): Promise<T> {
-    const res = await this.request(url, { headers: { Accept: 'application/json' } });
+  private async json<T>(url: string, signal?: AbortSignal): Promise<T> {
+    const res = await this.request(url, { headers: { Accept: 'application/json' }, ...(signal ? { signal } : {}) });
     try {
       return (await res.json()) as T;
     } catch {
@@ -843,11 +843,12 @@ export class WinnowClient {
     from: string,
     to: string,
     filter: FilterQuery = {},
+    signal?: AbortSignal,
   ): Promise<WinnowCalendar> {
     const raw = await this.json<{
       days?: WinnowCalendarDay[];
       bounds?: { min: string | null; max: string | null } | null;
-    }>(this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter) }));
+    }>(this.url('/api/assets/calendar', { from, to, collapse: 1, ...filterParams(filter) }), signal);
     // A filter that matches nothing still answers with a bounds OBJECT whose
     // fields are null. Collapse it to null here, once, rather than making
     // every reader defend against a half-empty span.
@@ -873,9 +874,10 @@ export class WinnowClient {
    * least one of its assets matches the filters, so the list narrows with the
    * same choices as the calendar. Ignored folders stay hidden, as in Winnow.
    */
-  async sessions(filter: FilterQuery = {}): Promise<WinnowSession[]> {
+  async sessions(filter: FilterQuery = {}, signal?: AbortSignal): Promise<WinnowSession[]> {
     const raw = await this.json<{ sessions?: WinnowSession[] }>(
       this.url('/api/sessions', { sort: 'captured', sort_dir: 'desc', ...filterParams(filter) }),
+      signal,
     );
     return raw.sessions ?? [];
   }
@@ -892,9 +894,10 @@ export class WinnowClient {
    * caller says so. Rows the normaliser cannot read are dropped rather than
    * half-shown.
    */
-  async timeline(filter: FilterQuery = {}): Promise<WinnowChapter[]> {
+  async timeline(filter: FilterQuery = {}, signal?: AbortSignal): Promise<WinnowChapter[]> {
     const raw = await this.json<{ chapters?: unknown[] }>(
       this.url('/api/assets/timeline', filterParams(filter)),
+      signal,
     );
     return (raw.chapters ?? [])
       .map(chapterFromWire)
@@ -946,7 +949,7 @@ export class WinnowClient {
    * shooting order. Collapsed: a RAW+JPEG pair is one row, the displayed
    * primary — and Winnow's proxy exists for it whichever half that is.
    */
-  assets(query: AssetQuery): Promise<AssetPage> {
+  assets(query: AssetQuery, signal?: AbortSignal): Promise<AssetPage> {
     return this.json(
       this.url('/api/assets', {
         date_from: query.dateFrom,
@@ -960,6 +963,7 @@ export class WinnowClient {
         collapse: 1,
         sort_dir: 'asc',
       }),
+      signal,
     );
   }
 
@@ -967,13 +971,16 @@ export class WinnowClient {
    * Every row of a query, following `next_cursor` until the page is short.
    * A busy day is 300 media and one page is 200: stopping at the first page
    * would silently show a day two-thirds full. `cap` bounds a runaway query —
-   * nobody adds 2 000 pictures to a library by hand.
+   * nobody adds 2 000 pictures to a library by hand. `signal` ends the walk:
+   * the page in flight is aborted and no further page is asked for — a span
+   * changed mid-walk used to keep downloading every page of the old one.
    */
-  async allAssets(query: AssetQuery, cap = 2000): Promise<WinnowAssetRow[]> {
+  async allAssets(query: AssetQuery, cap = 2000, signal?: AbortSignal): Promise<WinnowAssetRow[]> {
     const rows: WinnowAssetRow[] = [];
     let cursor: string | null = null;
     do {
-      const page: AssetPage = await this.assets({ ...query, cursor });
+      signal?.throwIfAborted();
+      const page: AssetPage = await this.assets({ ...query, cursor }, signal);
       rows.push(...page.assets);
       cursor = page.next_cursor;
     } while (cursor && rows.length < cap);

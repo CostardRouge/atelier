@@ -562,11 +562,21 @@ a badge name a place, say "3 days in Kalbarri", or count which day of a stop a
 picture is — and an optional marker sets the place off from the rest.
 
 They live on a **ruler between the map and the months** — a video editor's
-timeline scaled to days. It details the **months on screen**: the one you
+timeline scaled to days. It opens on the **months on screen**: the one you
 have scrolled to and its two neighbours, so the legs of a quarter at a time
 get the width a pointer can grab (about nine pixels a day on a year-long
 trip) while the map above keeps the whole year in view — scroll the calendar
-and the ruler follows. Each leg is a bar: drag either edge to change when it began or ended,
+and the ruler follows. When the legs are too many or too short to read,
+**zoom the ruler**: scroll the wheel or pinch the trackpad over it (two
+fingers on a touch screen), or press − and + beside the legend. The day under
+the pointer stays where it is while the window closes in — down to a single
+week across, where every leg says its name and every day its date and
+weekday — or opens out to as many days as still leave a leg's edge
+grabbable; the percentage between − and + goes back to the three months, and
+the zoom is kept as the calendar moves on. A sideways swipe or shift-wheel
+travels along the trip at that zoom. The window is **marked on the year map**
+by a vermilion bar under the weeks it covers, which shrinks as you zoom in and
+grows as you zoom out, and its dates are written beside the legend. Each leg is a bar: drag either edge to change when it began or ended,
 drag its middle to slide it whole, and every move snaps to a day while a pin
 follows the pointer saying the date it would land on and how long the leg
 would then be. A run of days no leg covers offers a `+` that adds one over
@@ -1375,7 +1385,11 @@ never whole and shrunk afterwards: its size is read from the file's header and
 the browser is asked for exactly the pixels a stage, a filmstrip cell or an
 export needs. A phone's stage works to 2560 × 1440 (a computer's to 4K), and a
 phone exports a big JPEG at 4096 px on the long edge, like a RAW, and says so
-in the run's summary; a computer still exports every pixel. A browser cannot
+in the run's summary; a computer still exports every pixel. A Studio export
+of a photograph decodes only what its largest variant draws: a 1080 × 1350
+post from a 48-megapixel still is decoded at 1800 px — often the picture
+already on the stage — instead of the whole file, which on a computer took an
+export of that post from thirteen seconds to under one. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
 (`constrained` or `roomy`) overrides it. A big export is also graded in
@@ -1428,8 +1442,9 @@ ones you **edited** do, and you decide otherwise per picture — send one you di
 not touch, hold back one you did. The **Pictures** table in the Export tab
 lists the roll one row per picture (the whole row is the click, with what the
 picture would leave from and at what size), filtered by *Edited*, *Leaving* or
-*Held*; the badge at the corner of each filmstrip cell does the same without
-leaving the photograph. **P** sends or holds the picture on the stage, **U**
+*Held*, and a box at its head ticks or unticks every row shown at once — a
+filter first makes it a batch (every *Picks*, every *Edited*); the badge at the
+corner of each filmstrip cell does the same without leaving the photograph. **P** sends or holds the picture on the stage, **U**
 puts it back on the rule (on the Layers tab, **P** and **M** belong to the
 mask instead — Pick and the mask's view). A picture you do not want to work on at all can be
 **ignored** (**M**, or a right-click / a held finger on its badge): it never
@@ -1443,6 +1458,27 @@ were never exported or changed since, the status line counts them, and
 **Export N new or changed** delivers just those. The record is kept on this
 device beside the roll, not in it, so an export is never an undo step and an
 undo never forgets one.
+
+The export buttons stay pinned at the bottom of the Export tab, whatever is
+scrolled above them: **Export N pictures** (the ones that leave) is the main
+button, and the menu beside it offers this picture, the filmstrip's selection
+and the new or changed ones. While an export runs, that bar becomes the run
+and stays on whichever tab you are working in: a segment per picture (green
+when written, red when it could not be), the picture in hand with its stage —
+*Fetch*, *Develop*, *Write* — and what it is doing in words, the time left once
+a first picture has measured it, and **Cancel**, which stops at the next
+picture and keeps what was written. The filmstrip is the queue at the same
+time: a picture still to go is veiled, the one in hand turns, a written one
+shows ✓ and one that could not leave shows !, and a hairline along the strip's
+top fills as the run goes.
+
+An export works from the roll **as it was when you pressed the button**. While
+it runs, the Export tab is locked and dimmed under a line that says so — its
+settings, and which pictures leave (the **P** / **U** / **M** keys and the
+strip's badges say they are locked too), would only apply to the next export.
+Developing, cropping and every other edit stay free: a picture you change
+while the roll leaves is named when the run ends, its row says **changed**,
+and **Export new or changed** sends it again.
 
 **Variants.** One frame, developed two ways — cropped square and 4:5, or in
 colour and in black and white — is two **variants** of it, Lightroom's virtual
