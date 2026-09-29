@@ -1066,3 +1066,13 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
   is SET (the plan, Delivers, the transcode offer, the Studio link); the plan
   is computed by `PostEditor` once, for the tab and the bar alike. The header's
   `Export` stays as a shortcut to the same primary.
+- **The run is seen slide by slide** (V1 + V4, the shared model in
+  `shared/tasks/run-progress.ts`, `tasks.md`): one unit per slide keyed by its
+  deck POSITION (the id `DeckStrip`'s `runAt` looks up), phases Render → Write
+  for a still, Encode → Write for a clip (the encode carries its measured
+  ratio). The bar is drawn on EVERY tab while `exports.run` is set; on a phone
+  it rides the open sheet or drawer, and a closed panel leaves the header's
+  fill, the deck marks and the masthead pill. The header's fill is
+  `runFraction` — stages, never time. Each file is written by `writeOne` as
+  it is made (no reel held in memory, "done" means on disk), and the closing
+  note counts written / failed-to-write / could-not-render.

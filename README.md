@@ -1068,7 +1068,12 @@ already in swipe order. The button is pinned at the bottom of the Export tab, an
 its menu offers every slide as a still, the open slide as a PNG and the hook as a
 video; the header's **Export** does the same as the pinned button from any tab. The
 looks are taken when you press it: a look changed while a reel encodes waits for
-the next export. The order is
+the next export. While it runs the pinned bar becomes the run, and stays on every
+tab — a segment per slide, the slide in hand with its stage (Render or Encode,
+then Write) and how far an encode has gone, the time left once one slide has
+measured it, and a Cancel that keeps what was written — while the deck band
+marks each slide waiting, in hand, ✓ or !. Each file is written the moment it is
+made. The order is
 yours, and so is the time: under the picture, at every width, the deck is **one
 band** — every slide end to end on the piece's clock, a clip as wide as its cut
 and a still as wide as the seconds its inspector gives it, slid under a needle

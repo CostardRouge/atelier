@@ -58,6 +58,8 @@ import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
+import RunMark from '../../shared/ui/RunMark';
+import type { RunUnitState } from '../../shared/tasks/run-progress';
 
 /** The open slide's clip, when it is one. */
 export interface StripClip {
@@ -115,6 +117,12 @@ interface DeckStripProps {
    * (its cut) instead, and the closing card never.
    */
   resize?: { min: number; max: number; onChange: (seconds: number, local: number) => void } | null;
+  /**
+   * Slide `i`'s place in a running export, or null outside one — the band
+   * becomes the run's queue (his pick V4, as Develop's filmstrip): a veil on
+   * what waits, a ring and a measured fill on the slide in hand, ✓ or !.
+   */
+  runAt?: (i: number) => { state: RunUnitState; ratio: number | null } | null;
 }
 
 /** A resize in progress: the end held, where the other end stays, the draft. */
@@ -188,6 +196,7 @@ export default function DeckStrip({
   compact,
   marksFor,
   resize,
+  runAt,
 }: DeckStripProps) {
   const pxPerSecond = compact ? 30 : 42;
   // While an end of the open cell is dragged, the band is drawn at the draft
@@ -700,6 +709,10 @@ export default function DeckStrip({
                       {Icons.loopOne}
                     </span>
                   )}
+                  {(() => {
+                    const run = runAt?.(i);
+                    return run ? <RunMark state={run.state} ratio={run.ratio} /> : null;
+                  })()}
                   {gripped &&
                     (['start', 'end'] as const).map((edge) => (
                       <span

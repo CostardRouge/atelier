@@ -1857,6 +1857,14 @@ export default function PostEditor({
       marksFor={(i) =>
         slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, openerSecondsBySlide[i] ?? 0) : []
       }
+      // A running export draws its queue on the band: each slide's place in
+      // the run, keyed by its deck position — the run's own unit id.
+      runAt={(i) => {
+        const run = exports.run;
+        const at = run && slides[i] ? run.ids.indexOf(String(slides[i].position)) : -1;
+        if (!run || at < 0) return null;
+        return { state: run.states[at], ratio: at === run.index ? run.ratio : null };
+      }}
       // A still's length is set from its cell's ends too: the field and the
       // bounds of the Content tab's «On screen», and the needle left where it
       // was in the slide. A clip goes through `clip` (its cut), the closing
@@ -2333,16 +2341,16 @@ export default function PostEditor({
         </div>
         {/* The verbs, pinned under the scroll the way the tab strip sits over
             it — and, while a run goes on, the run itself, on every tab. */}
-        {tab === 'export' && (
+        {(tab === 'export' || exports.run) && (
           <DeliverBar
             verbs={exportVerbs}
             primary="piece"
             summary={exportPlanNow.files ? `${describePlan(exportPlanNow)} · into the folder you pick` : (exportPlanNow.blockers[0] ?? '')}
             exporting={exports.exporting}
-            progress={null}
-            onCancel={() => {}}
+            progress={exports.run}
+            onCancel={exports.cancel}
             note={exports.note}
-            placement={compact ? 'sheet' : 'panel'}
+            placement={compact ? (tab === 'picture' ? 'drawer' : 'sheet') : 'panel'}
             unitWord="slide"
             empty={exportPlanNow.blockers[0] ?? 'Nothing in this piece can be written yet.'}
           />
