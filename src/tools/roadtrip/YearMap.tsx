@@ -20,6 +20,12 @@ interface YearMapProps {
    * the weeks: it shrinks as the ruler zooms in and grows as it zooms out.
    */
   loupe?: LoupeStore;
+  /**
+   * Paper over the weeks outside the frame — right when the frame is what the
+   * calendar shows. The map view frames only the open day's week, and a year
+   * veiled but for one week would hide the very rhythm the band is for.
+   */
+  veil?: boolean;
   /** A month was tapped: bring it to the top. */
   onJump: (index: number) => void;
   /** The frame was dragged: put this (fractional) week at the top. */
@@ -45,7 +51,7 @@ const DRAG_SLOP = 4;
  * drag aims at a position, with a 40px band to catch. Nothing here is a
  * target smaller than a month.
  */
-export default function YearMap({ startDate, endDate, days, blocks, span, loupe, onJump, onScrub }: YearMapProps) {
+export default function YearMap({ startDate, endDate, days, blocks, span, loupe, veil = true, onJump, onScrub }: YearMapProps) {
   const weeks = useMemo(() => heatmapWeeks(startDate, endDate), [startDate, endDate]);
   const levels = useMemo(() => new Map(days.map((d) => [d.date, levelOf(d)])), [days]);
   const [boxRef, width] = useElementWidth<HTMLDivElement>();
@@ -154,16 +160,20 @@ export default function YearMap({ startDate, endDate, days, blocks, span, loupe,
         {frame && (
           <>
             {/* Paper over what the calendar is NOT showing, the frame around what it is. */}
-            <span
-              className="absolute -top-0.5 left-0 bottom-[-2px] bg-paper/65 pointer-events-none"
-              style={{ width: Math.max(0, frame.left) }}
-              aria-hidden="true"
-            />
-            <span
-              className="absolute -top-0.5 right-0 bottom-[-2px] bg-paper/65 pointer-events-none"
-              style={{ left: Math.max(0, frame.right) }}
-              aria-hidden="true"
-            />
+            {veil && (
+              <>
+                <span
+                  className="absolute -top-0.5 left-0 bottom-[-2px] bg-paper/65 pointer-events-none"
+                  style={{ width: Math.max(0, frame.left) }}
+                  aria-hidden="true"
+                />
+                <span
+                  className="absolute -top-0.5 right-0 bottom-[-2px] bg-paper/65 pointer-events-none"
+                  style={{ left: Math.max(0, frame.right) }}
+                  aria-hidden="true"
+                />
+              </>
+            )}
             <span
               data-frame
               className="absolute -top-0.5 bottom-[-2px] border-[1.5px] border-ink rounded-[3px] pointer-events-none"
