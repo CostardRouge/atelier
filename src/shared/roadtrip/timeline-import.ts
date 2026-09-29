@@ -17,6 +17,10 @@
  *   what the timeline has that the trip does not (and the reverse) and
  *   `applyTimelineDiff` changes only the entries the author accepted. Nothing
  *   the author touched is overwritten silently.
+ * - **A reconcile only ADDS to a stage it met.** Its places are merged, never
+ *   replaced; its span grows to hold the chapter and never shrinks; an empty
+ *   incoming name keeps the author's. Taking something away from a leg is the
+ *   ruler's job, or an explicit `dropped` row's.
  * - **Empty means derived.** A chapter whose title is only its route yields a
  *   stage with an EMPTY name, so the label keeps deriving when a place is
  *   edited; a place's region is carried on the place and the stage's own stays
@@ -326,11 +330,13 @@ export type DiffKind =
 
 /**
  * How an incoming leg was paired with a stage. `id` is the fast path; the
- * other two are what keep the diff right when ids are useless (a nightly
+ * others are what keep the diff right when ids are useless (a nightly
  * re-clustering regenerates them) — near-matches presented as such rather
- * than as duplicates.
+ * than as duplicates. `contained` is the last resort: the chapter falls
+ * inside a longer stage the author drew, which it then COMPLETES — the case
+ * of a deduced region meeting a hand-made leg that already covers it.
  */
-export type MatchedBy = 'id' | 'span' | 'place';
+export type MatchedBy = 'id' | 'span' | 'place' | 'contained';
 
 export type ChangedField = 'name' | 'span' | 'places';
 
@@ -343,6 +349,13 @@ export interface DiffEntry {
   /** The trip's own stage; null for `add`. */
   existing: TripStage | null;
   matchedBy: MatchedBy | null;
+  /**
+   * What the matched stage becomes if the entry is accepted — the merge, not
+   * the incoming leg — so a panel describes what will really be written.
+   * Null for `add` and `dropped`.
+   */
+  outcome: TripStage | null;
+  /** Where `outcome` differs from `existing`. */
   changes: ChangedField[];
 }
 
@@ -358,10 +371,47 @@ function spansOverlap(a: TripStage, b: TripStage): boolean {
   return a.startDate <= b.endDate && b.startDate <= a.endDate;
 }
 
+function placeKey(place: TripPlace): string {
+  return place.name.trim().toLowerCase();
+}
+
 function placeNames(stage: TripStage): string[] {
-  return (stage.places ?? [])
-    .map((p) => p.name.trim().toLowerCase())
-    .filter((n) => n.length > 0);
+  return (stage.places ?? []).map(placeKey).filter((n) => n.length > 0);
+}
+
+/** The shortest span, then the earliest, then the id — never the first found. */
+function tightest(a: TripStage, b: TripStage): number {
+  const length = (s: TripStage) => daysBetween(s.startDate, s.endDate) ?? Infinity;
+  return length(a) - length(b) || bySpan(a, b) || a.id.localeCompare(b.id);
+}
+
+function contains(outer: TripStage, inner: TripStage): boolean {
+  return outer.startDate <= inner.startDate && inner.endDate <= outer.endDate;
+}
+
+/**
+ * The stage an accepted match writes: the existing one, ADDED to. Its places
+ * come first, as the author ordered them, then the incoming ones it does not
+ * already name (compared on the lower-cased name); its span grows to hold the
+ * chapter and never shrinks; the incoming name wins only when it says
+ * something, since an empty one means "derive" and not "erase". Id, region
+ * and every other field of the stage are the author's and are kept.
+ */
+function mergedStage(existing: TripStage, incoming: TripStage): TripStage {
+  const known = new Set(placeNames(existing));
+  const added = (incoming.places ?? []).filter((place) => {
+    const key = placeKey(place);
+    if (!key || known.has(key)) return false;
+    known.add(key);
+    return true;
+  });
+  return {
+    ...existing,
+    name: incoming.name.trim() ? incoming.name : existing.name,
+    startDate: incoming.startDate < existing.startDate ? incoming.startDate : existing.startDate,
+    endDate: incoming.endDate > existing.endDate ? incoming.endDate : existing.endDate,
+    places: [...(existing.places ?? []), ...added],
+  };
 }
 
 function changesBetween(existing: TripStage, incoming: TripStage): ChangedField[] {
@@ -391,13 +441,15 @@ export function diffTimeline(
 
   const pair = (incoming: TripStage, existing: TripStage, matchedBy: MatchedBy) => {
     unmatched.delete(existing);
-    const changes = changesBetween(existing, incoming);
+    const outcome = mergedStage(existing, incoming);
+    const changes = changesBetween(existing, outcome);
     entries.push({
       key: `chapter:${incoming.origin!.chapterId}`,
       kind: changes.length ? 'changed' : 'unchanged',
       incoming,
       existing,
       matchedBy,
+      outcome,
       changes,
     });
   };
@@ -417,12 +469,21 @@ export function diffTimeline(
     if (bySpanMatch) pair(incoming, bySpanMatch, 'span');
     else stillPending.push(incoming);
   }
+  const lastPending: TripStage[] = [];
   for (const incoming of stillPending) {
     const name = firstPlaceName(incoming);
     const byPlace = name
       ? [...unmatched].find((s) => firstPlaceName(s) === name && spansOverlap(s, incoming))
       : undefined;
     if (byPlace) pair(incoming, byPlace, 'place');
+    else lastPending.push(incoming);
+  }
+  // The fourth pass: a chapter lying inside a longer stage completes it. Of
+  // several such stages the TIGHTEST is the one it belongs to — the most
+  // specific leg, never whichever the iteration reached first.
+  for (const incoming of lastPending) {
+    const holder = [...unmatched].filter((s) => contains(s, incoming)).sort(tightest)[0];
+    if (holder) pair(incoming, holder, 'contained');
     else {
       entries.push({
         key: `chapter:${incoming.origin!.chapterId}`,
@@ -430,6 +491,7 @@ export function diffTimeline(
         incoming,
         existing: null,
         matchedBy: null,
+        outcome: null,
         changes: [],
       });
     }
@@ -442,6 +504,7 @@ export function diffTimeline(
       incoming: null,
       existing,
       matchedBy: null,
+      outcome: null,
       changes: [],
     });
   }
@@ -457,8 +520,10 @@ export interface AppliedDiff {
 
 /**
  * Apply the entries the author ticked, and only those. An accepted `changed`
- * takes the timeline's name, span and places onto the SAME stage (its id and
- * the region the author typed survive); an accepted `unchanged` only stamps
+ * writes the entry's `outcome` onto the SAME stage — the timeline's places
+ * merged into the author's, the span grown, a name only where the timeline
+ * gave one (its id and the region the author typed survive); an accepted
+ * `unchanged` only stamps
  * the origin onto a stage that was matched without one, so the next diff
  * finds it by id. Posts, words, theme, call to action and hook defaults are
  * never touched — a source has no opinion about them.
@@ -486,16 +551,17 @@ export function applyTimelineDiff(
       case 'changed':
       case 'unchanged': {
         const incoming = entry.incoming!;
+        const outcome = entry.outcome!;
         stages = stages.map((s) =>
           s.id === entry.existing!.id
             ? {
                 ...s,
                 ...(entry.kind === 'changed'
                   ? {
-                      name: incoming.name,
-                      startDate: incoming.startDate,
-                      endDate: incoming.endDate,
-                      places: structuredClone(incoming.places),
+                      name: outcome.name,
+                      startDate: outcome.startDate,
+                      endDate: outcome.endDate,
+                      places: structuredClone(outcome.places),
                     }
                   : {}),
                 origin: { ...incoming.origin!, importedAt: now },

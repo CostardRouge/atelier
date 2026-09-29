@@ -65,12 +65,20 @@ const note = 'text-2xs text-faint leading-snug';
 // one machine was being driven.
 const KEY = 'atelier.roadtrip.deduce';
 
-type Stored = Pick<SegmentOptions, 'radiusKm' | 'minNights' | 'shortLegs' | 'bridgeBlind' | 'interpolateMoves'>;
+type Stored = Pick<
+  SegmentOptions,
+  'radiusKm' | 'minNights' | 'shortLegs' | 'bridgeBlind' | 'interpolateMoves'
+> & {
+  /** Write the region's name as each chapter's name; off, the label derives. */
+  nameByRegion: boolean;
+};
+
+const DEFAULT_STORED: Stored = { ...DEFAULT_SEGMENT, nameByRegion: false };
 
 function readStored(): Stored {
   try {
     const raw = localStorage.getItem(KEY);
-    if (!raw) return DEFAULT_SEGMENT;
+    if (!raw) return DEFAULT_STORED;
     const saved = JSON.parse(raw) as Partial<Stored>;
     return {
       radiusKm:
@@ -84,9 +92,10 @@ function readStored(): Stored {
       shortLegs: saved.shortLegs === 'merge' ? 'merge' : 'list',
       bridgeBlind: saved.bridgeBlind !== false,
       interpolateMoves: saved.interpolateMoves === true,
+      nameByRegion: saved.nameByRegion === true,
     };
   } catch {
-    return DEFAULT_SEGMENT;
+    return DEFAULT_STORED;
   }
 }
 
@@ -157,11 +166,18 @@ export default function DeduceStagesPanel({
   // ONE pass over the days: the proposals, and the producer's own doubt about
   // some of them. Deriving the two separately would mean segmenting twice and
   // is exactly how the marks and the rows start disagreeing.
-  const { entries, held } = useMemo<{ entries: DiffEntry[]; held: Set<string> }>(() => {
-    if (!track || cities === null) return { entries: [], held: new Set() };
+  const { entries, held, halts, chapters } = useMemo<{
+    entries: DiffEntry[];
+    held: Set<string>;
+    halts: number;
+    chapters: number;
+  }>(() => {
+    if (!track || cities === null) return { entries: [], held: new Set(), halts: 0, chapters: 0 };
 
+    // The radius finds the HALTS; the regions they lie in make the chapters,
+    // which are what is proposed (`group-legs.ts`).
     const { legs } = segmentTrack(track.points, opts);
-    const proposed = trackChapters(legs, cities);
+    const proposed = trackChapters(legs, cities, { nameByRegion: opts.nameByRegion });
     const imported = importTimeline(chaptersOf(proposed), {
       sourceId: connection.id,
       importedAt: Date.now(),
@@ -171,6 +187,8 @@ export default function DeduceStagesPanel({
       entries: diffTimeline(trip, imported, connection.id),
       // `diffTimeline` keys an incoming leg `chapter:<its chapter id>`.
       held: new Set([...doubtful(proposed)].map((id) => `chapter:${id}`)),
+      halts: legs.length,
+      chapters: proposed.length,
     };
   }, [track, cities, opts, trip, connection.id]);
 
@@ -194,7 +212,7 @@ export default function DeduceStagesPanel({
   /** The word a row carries under its sentence, when it carries one. */
   function noteFor(entry: DiffEntry): string | null {
     if (!held.has(entry.key)) return null;
-    return 'left unticked — a short stop, or placed only from guessed positions';
+    return 'left unticked — only short stops, or placed only from guessed positions';
   }
 
   return (
@@ -237,7 +255,8 @@ export default function DeduceStagesPanel({
             {/* --- what this trip really holds, before any proposal -------- */}
             <p className="m-0 font-mono text-xs text-muted tabular-nums">
               {totalDays} day{totalDays === 1 ? '' : 's'} · {placed} placed · {blind} with media
-              and no position
+              and no position · {chapters} chapter{chapters === 1 ? '' : 's'}, {halts} halt
+              {halts === 1 ? '' : 's'}
               {cities.length === 0 && ' · no city index, so legs arrive unnamed'}
             </p>
 
@@ -320,6 +339,21 @@ export default function DeduceStagesPanel({
                   <span className="block text-sm">Invent the days of a move</span>
                   <span className={note}>
                     A guess between two places — off, and what it makes is marked.
+                  </span>
+                </span>
+              </label>
+
+              <label className="flex items-start gap-2.5 cursor-pointer">
+                <input
+                  type="checkbox"
+                  className="mt-[3px] w-[15px] h-[15px] accent-ink flex-none"
+                  checked={opts.nameByRegion}
+                  onChange={(e) => change({ nameByRegion: e.target.checked })}
+                />
+                <span className="min-w-0">
+                  <span className="block text-sm">Name each chapter after its region</span>
+                  <span className={note}>
+                    Off, a leg is called by its places — Perth → Broome — and follows them.
                   </span>
                 </span>
               </label>

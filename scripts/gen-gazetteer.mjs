@@ -21,16 +21,28 @@
  * GeoNames is licensed **CC BY 4.0**, so the attribution travels inside the
  * generated file and must not be stripped.
  *
+ * Each city also carries its REGION — the first administrative subdivision,
+ * GeoNames' `admin1` (Western Australia, Northern Territory…). It is what a
+ * deduced trip groups its halts into CHAPTERS by, and what a chapter is
+ * offered as a name. The dump carries only the region's CODE, and a code is
+ * enough to group by; naming needs GeoNames' `admin1CodesASCII.txt`. Note the
+ * key is `<country>.<code>` and never the code alone: GeoNames numbers
+ * Australia's states `01`…`08`, so `08` means Western Australia only once the
+ * country is attached — and the second Perth in the file, in Tasmania, is why
+ * the key must never be the city's own name either.
+ *
  * Usage, either way round — the output is identical:
  *
- *     node scripts/gen-gazetteer.mjs                  # npm's mirror of the dump
- *     node scripts/gen-gazetteer.mjs ~/cities1000.txt # a dump you already have
+ *     node scripts/gen-gazetteer.mjs                              # npm mirrors
+ *     node scripts/gen-gazetteer.mjs ~/cities1000.txt             # your dump
+ *     node scripts/gen-gazetteer.mjs ~/cities1000.txt ~/admin1CodesASCII.txt
  *
- * With no argument it reads the `cities-with-1000` package from the npm
- * registry, which ships GeoNames' `cities1000.txt` verbatim. That path exists
- * because some networks reach npm and not `download.geonames.org` — an agent
+ * With no argument it reads two npm packages instead: `cities-with-1000`,
+ * which ships `cities1000.txt` verbatim, and `cities.json`, whose
+ * `admin1.json` is the same region table as JSON. That path exists because
+ * some networks reach npm and not `download.geonames.org` — an agent
  * container being one of them. Nothing is installed and nothing is added to
- * `package.json`: the tarball is fetched, unpacked in memory and forgotten.
+ * `package.json`: each tarball is fetched, unpacked in memory and forgotten.
  */
 
 import { gunzipSync } from 'node:zlib';
@@ -44,9 +56,14 @@ const OUT = join(ROOT, 'public', 'geo', 'cities.json');
 const MIRROR = 'https://registry.npmjs.org/cities-with-1000/-/cities-with-1000-1.0.4.tgz';
 const MIRROR_ENTRY = 'package/cities1000.txt';
 
+// Pinned, like the dump above: a region table that moved under a regenerate
+// would rename a chapter the author already accepted.
+const ADMIN1_MIRROR = 'https://registry.npmjs.org/cities.json/-/cities.json-1.1.64.tgz';
+const ADMIN1_ENTRY = 'package/admin1.json';
+
 const ATTRIBUTION =
   'Data from GeoNames (https://www.geonames.org), licensed CC BY 4.0. ' +
-  'Built from the cities1000 dump by scripts/gen-gazetteer.mjs.';
+  'Built from the cities1000 dump and the admin1 region table by scripts/gen-gazetteer.mjs.';
 
 /**
  * The one file we want out of a gzipped tar, read without a dependency.
@@ -84,14 +101,38 @@ function readFromTar(buffer, wanted) {
   return null;
 }
 
-async function dumpFromMirror() {
-  process.stderr.write(`Fetching ${MIRROR}\n`);
-  const res = await fetch(MIRROR);
-  if (!res.ok) throw new Error(`npm answered ${res.status} for the cities dump`);
+async function fromTarball(url, wanted, what) {
+  process.stderr.write(`Fetching ${url}\n`);
+  const res = await fetch(url);
+  if (!res.ok) throw new Error(`npm answered ${res.status} for ${what}`);
   const tar = gunzipSync(Buffer.from(await res.arrayBuffer()));
-  const entry = readFromTar(tar, MIRROR_ENTRY);
-  if (!entry) throw new Error(`no ${MIRROR_ENTRY} inside the tarball`);
+  const entry = readFromTar(tar, wanted);
+  if (!entry) throw new Error(`no ${wanted} inside the tarball for ${what}`);
   return entry.toString('utf8');
+}
+
+/**
+ * The region table, `<country>.<code>` → name. Read in either of its two
+ * shapes: GeoNames' own `admin1CodesASCII.txt` (tab-separated: code, name,
+ * ascii name, geoname id) or `cities.json`'s `admin1.json` (an array of
+ * `{ code, name }`). Both carry the same GeoNames rows.
+ */
+function readRegionNames(text) {
+  const names = new Map();
+  const trimmed = text.trimStart();
+  if (trimmed.startsWith('[')) {
+    for (const row of JSON.parse(trimmed)) {
+      if (row && typeof row.code === 'string' && typeof row.name === 'string') {
+        names.set(row.code, row.name.trim());
+      }
+    }
+  } else {
+    for (const line of text.split('\n')) {
+      const [code, name] = line.split('\t');
+      if (code && name) names.set(code.trim(), name.trim());
+    }
+  }
+  return names;
 }
 
 /**
@@ -111,6 +152,8 @@ const LAT = 4;
 const LON = 5;
 const FEATURE_CODE = 7;
 const COUNTRY = 8;
+/** `admin1` — a region CODE, meaningful only with the country in front. */
+const ADMIN1 = 10;
 const POPULATION = 14;
 
 /** `PPLX` — a district or suburb, named only when nothing else is near. */
@@ -146,7 +189,10 @@ function parseDump(text) {
     // Four decimals is ~11 m. A leg is named from a centroid compared at tens
     // of kilometres, so more digits would be bytes spent on nothing.
     const section = (cols[FEATURE_CODE] ?? '').trim() === SECTION ? 1 : 0;
-    cities.push([name, country, round4(lat), round4(lon), population, section]);
+    const admin1 = (cols[ADMIN1] ?? '').trim();
+    // The region KEY for now; `main` swaps it for an index into one table.
+    const regionKey = country && admin1 ? `${country}.${admin1}` : '';
+    cities.push([name, country, round4(lat), round4(lon), population, section, regionKey]);
   }
 
   return { cities, skipped };
@@ -157,13 +203,32 @@ function round4(value) {
 }
 
 async function main() {
-  const given = process.argv[2];
-  const text = given ? readFileSync(given, 'utf8') : await dumpFromMirror();
+  const [dumpPath, regionsPath] = process.argv.slice(2);
+  const text = dumpPath
+    ? readFileSync(dumpPath, 'utf8')
+    : await fromTarball(MIRROR, MIRROR_ENTRY, 'the cities dump');
+  const regionText = regionsPath
+    ? readFileSync(regionsPath, 'utf8')
+    : await fromTarball(ADMIN1_MIRROR, ADMIN1_ENTRY, 'the region table');
 
   const { cities, skipped } = parseDump(text);
   if (cities.length < 100_000) {
     throw new Error(`only ${cities.length} cities parsed — the dump looks wrong`);
   }
+
+  const regionNames = readRegionNames(regionText);
+  if (regionNames.size < 1_000) {
+    throw new Error(`only ${regionNames.size} regions read — the region table looks wrong`);
+  }
+
+  // ONE table of regions, each city pointing into it by index: "Western
+  // Australia" is written once, not 448 times. A key the table does not name
+  // keeps an empty name — it still GROUPS, it just offers no word.
+  const keys = [...new Set(cities.map((c) => c[6]).filter(Boolean))].sort();
+  const indexOf = new Map(keys.map((key, i) => [key, i]));
+  const regions = keys.map((key) => [key, regionNames.get(key) ?? '']);
+  for (const city of cities) city[6] = city[6] ? indexOf.get(city[6]) : -1;
+  const unnamed = regions.filter(([, name]) => !name).length;
 
   // Sorted by name so the committed file has a stable order: a regenerated
   // index must diff as the rows that actually changed, not as a reshuffle.
@@ -172,11 +237,14 @@ async function main() {
   mkdirSync(dirname(OUT), { recursive: true });
   writeFileSync(
     OUT,
-    JSON.stringify({ attribution: ATTRIBUTION, count: cities.length, cities }),
+    JSON.stringify({ attribution: ATTRIBUTION, count: cities.length, regions, cities }),
   );
 
   const mb = (statSync(OUT).size / 1e6).toFixed(1);
   process.stderr.write(`${cities.length} cities → public/geo/cities.json (${mb} MB)\n`);
+  process.stderr.write(
+    `${regions.length} regions, ${unnamed} of them with no name in the table\n`,
+  );
   if (skipped) process.stderr.write(`${skipped} rows skipped as unusable\n`);
 }
 

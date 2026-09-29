@@ -368,6 +368,120 @@ describe('diffTimeline — re-running an import is a proposal', () => {
   });
 });
 
+describe('diffTimeline — a chapter inside a longer stage completes it', () => {
+  const handDrawn = (): TripDoc => {
+    const trip = createTripDoc('Australie', '2025-11-01', '2025-11-30');
+    trip.stages = [
+      createTripStage('Coral coast', '', '2025-11-01', '2025-11-20', [createTripPlace('Perth')]),
+    ];
+    return trip;
+  };
+  const kalbarri = () =>
+    importTimeline(
+      [
+        chapter({
+          id: 'k',
+          startDate: '2025-11-05',
+          endDate: '2025-11-08',
+          places: [{ name: 'Kalbarri' }],
+        }),
+      ],
+      options,
+    );
+
+  it('meets it, and proposes to add the places only — never the span, never the name', () => {
+    const [entry] = diffTimeline(handDrawn(), kalbarri(), SOURCE);
+    expect(entry.matchedBy).toBe('contained');
+    expect(entry.kind).toBe('changed');
+    expect(entry.changes).toEqual(['places']);
+    expect(entry.outcome?.name).toBe('Coral coast');
+    expect(entry.outcome?.places.map((p) => p.name)).toEqual(['Perth', 'Kalbarri']);
+    expect(entry.outcome).toMatchObject({ startDate: '2025-11-01', endDate: '2025-11-20' });
+  });
+
+  it('picks the TIGHTEST stage holding it, whatever order the trip lists them in', () => {
+    const trip = handDrawn();
+    trip.stages.unshift(createTripStage('Whole trip', '', '2025-11-01', '2025-11-30'));
+    trip.stages.push(createTripStage('Gorges', '', '2025-11-04', '2025-11-10'));
+    const [entry] = diffTimeline(trip, kalbarri(), SOURCE);
+    expect(entry.existing?.name).toBe('Gorges');
+  });
+
+  it('is the LAST resort: a stage of the same span is met by span first', () => {
+    const trip = handDrawn();
+    trip.stages.push(createTripStage('', '', '2025-11-05', '2025-11-08'));
+    const entries = diffTimeline(trip, kalbarri(), SOURCE);
+    expect(entries.find((e) => e.incoming)?.matchedBy).toBe('span');
+  });
+
+  it('offers only a link when the stage already names every place', () => {
+    const trip = handDrawn();
+    trip.stages[0].places.push(createTripPlace('kalbarri '));
+    const [entry] = diffTimeline(trip, kalbarri(), SOURCE);
+    expect(entry.matchedBy).toBe('contained');
+    expect(entry.kind).toBe('unchanged');
+  });
+
+  it('writes the merge onto the same stage, keeping its span and stamping the origin', () => {
+    const trip = handDrawn();
+    const entries = diffTimeline(trip, kalbarri(), SOURCE);
+    const after = applyTimelineDiff(trip, entries, [entries[0].key], 4).trip;
+    expect(after.stages).toHaveLength(1);
+    const [stage] = after.stages;
+    expect(stage.id).toBe(trip.stages[0].id);
+    expect(stage.name).toBe('Coral coast');
+    expect(stage).toMatchObject({ startDate: '2025-11-01', endDate: '2025-11-20' });
+    expect(stage.places.map((p) => p.name)).toEqual(['Perth', 'Kalbarri']);
+    expect(stage.places[0].id).toBe(trip.stages[0].places[0].id);
+    expect(stage.origin).toEqual({ sourceId: SOURCE, chapterId: 'k', importedAt: 4 });
+  });
+});
+
+describe('diffTimeline — a reconcile only adds to a stage it met', () => {
+  const seeded = (): TripDoc =>
+    tripFromTimeline('Australie', importTimeline(australia(), options))!;
+
+  it('keeps a place the author added by hand, and appends what the timeline gained', () => {
+    const trip = seeded();
+    trip.stages[1].places.push(createTripPlace('Murchison River'));
+    const chapters = australia();
+    chapters[1].places = [{ name: 'Kalbarri' }, { name: 'Shark Bay' }];
+    const entries = diffTimeline(trip, importTimeline(chapters, options), SOURCE);
+    const changed = entries.find((e) => e.kind === 'changed')!;
+    // The label derives from the route's two ends, so a new last place moves it too.
+    expect(changed.changes).toEqual(['name', 'places']);
+    const after = applyTimelineDiff(trip, entries, [changed.key]).trip.stages[1];
+    expect(after.places.map((p) => p.name)).toEqual(['Kalbarri', 'Murchison River', 'Shark Bay']);
+  });
+
+  it('never shrinks a span: a shorter chapter proposes nothing', () => {
+    const chapters = australia();
+    chapters[1].endDate = '2025-11-06';
+    const entries = diffTimeline(seeded(), importTimeline(chapters, options), SOURCE);
+    const kalbarri = entries.find((e) => e.incoming?.origin?.chapterId === '2')!;
+    expect(kalbarri.kind).toBe('unchanged');
+    expect(kalbarri.outcome).toMatchObject({ startDate: '2025-11-05', endDate: '2025-11-08' });
+  });
+
+  it('keeps the name the author gave when the timeline gives none', () => {
+    const trip = createTripDoc('Australie', '2025-11-01', '2025-11-30');
+    trip.stages = [
+      createTripStage('Gorges', '', '2025-11-05', '2025-11-08', [createTripPlace('Kalbarri')]),
+    ];
+    const chapters = [
+      chapter({
+        id: 'k',
+        startDate: '2025-11-05',
+        endDate: '2025-11-08',
+        places: [{ name: 'Kalbarri' }],
+      }),
+    ];
+    const [entry] = diffTimeline(trip, importTimeline(chapters, options), SOURCE);
+    expect(entry.kind).toBe('unchanged');
+    expect(entry.outcome?.name).toBe('Gorges');
+  });
+});
+
 describe('applyTimelineDiff — only what was accepted, and nothing else', () => {
   const seeded = (): TripDoc => {
     const trip = tripFromTimeline('Australie', importTimeline(australia(), options))!;

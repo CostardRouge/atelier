@@ -8,20 +8,26 @@ const city = (
   population = 1000,
   section = false,
   country = 'AU',
-): GazetteerCity => ({ name, country, lat, lon, population, section });
+  regionKey = '',
+  region = '',
+): GazetteerCity => ({ name, country, lat, lon, population, section, regionKey, region });
 
 const KALBARRI = city('Kalbarri', -27.7105, 114.165, 2602);
 const BROOME = city('Broome', -17.9554, 122.2392, 5314);
 const PERTH = city('Perth', -31.9522, 115.8614, 1896548);
 
 describe('parseGazetteer', () => {
-  it('reads the committed shape', () => {
+  it('reads the committed shape, regions resolved through the one table', () => {
     const cities = parseGazetteer({
       attribution: 'Data from GeoNames…',
       count: 2,
+      regions: [
+        ['AU.03', 'Northern Territory'],
+        ['AU.08', 'Western Australia'],
+      ],
       cities: [
-        ['Kalbarri', 'AU', -27.7105, 114.165, 2602, 0],
-        ['Cable Beach', 'AU', -17.961, 122.2127, 8529, 1],
+        ['Kalbarri', 'AU', -27.7105, 114.165, 2602, 0, 1],
+        ['Cable Beach', 'AU', -17.961, 122.2127, 8529, 1, 1],
       ],
     });
     expect(cities).toEqual([
@@ -32,6 +38,8 @@ describe('parseGazetteer', () => {
         lon: 114.165,
         population: 2602,
         section: false,
+        regionKey: 'AU.08',
+        region: 'Western Australia',
       },
       {
         name: 'Cable Beach',
@@ -40,8 +48,54 @@ describe('parseGazetteer', () => {
         lon: 122.2127,
         population: 8529,
         section: true,
+        regionKey: 'AU.08',
+        region: 'Western Australia',
       },
     ]);
+  });
+
+  it('keys a region on the country AND the code, never on a name', () => {
+    // GeoNames has two Perths: Western Australia's and Tasmania's. Same name,
+    // same country, different region — the case the key exists for.
+    const [wa, tas] = parseGazetteer({
+      regions: [
+        ['AU.06', 'Tasmania'],
+        ['AU.08', 'Western Australia'],
+      ],
+      cities: [
+        ['Perth', 'AU', -31.9522, 115.8614, 1896548, 0, 1],
+        ['Perth', 'AU', -41.5667, 147.1667, 2907, 0, 0],
+      ],
+    });
+    expect(wa.regionKey).toBe('AU.08');
+    expect(tas.regionKey).toBe('AU.06');
+  });
+
+  it('keeps a region it cannot NAME, because a key still groups', () => {
+    const [city] = parseGazetteer({
+      regions: [['BA.00', '']],
+      cities: [['Somewhere', 'BA', 44, 18, 2000, 0, 0]],
+    });
+    expect(city).toMatchObject({ regionKey: 'BA.00', region: '' });
+  });
+
+  it('reads a city with no region, or an index it cannot resolve, as regionless', () => {
+    const cities = parseGazetteer({
+      regions: [['AU.08', 'Western Australia']],
+      cities: [
+        ['Nowhere', 'AU', -30, 120, 1000, 0, -1],
+        ['Past the end', 'AU', -30, 121, 1000, 0, 9],
+        ['Not an index', 'AU', -30, 122, 1000, 0, 'AU.08'],
+      ],
+    });
+    for (const city of cities) expect(city).toMatchObject({ regionKey: '', region: '' });
+  });
+
+  it('still loads a file from before regions existed', () => {
+    const [city] = parseGazetteer({
+      cities: [['Kalbarri', 'AU', -27.7105, 114.165, 2602, 0]],
+    });
+    expect(city).toMatchObject({ name: 'Kalbarri', regionKey: '', region: '' });
   });
 
   it('drops a row it cannot read rather than failing the whole index', () => {
