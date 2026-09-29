@@ -56,20 +56,30 @@ export function describe(entry: DiffEntry): string {
         ? `“${stageLabel(existing!)}” · unchanged`
         : `“${stageLabel(existing!) || 'an unnamed leg'}” matches one of these legs — link it, so the next run finds it`;
     case 'changed': {
+      // What will be WRITTEN — the merge — not the incoming leg on its own.
+      const outcome = entry.outcome ?? incoming!;
       const parts: string[] = [];
       if (entry.changes.includes('name')) {
-        parts.push(`now called “${stageLabel(incoming!) || 'nothing'}”`);
+        parts.push(`now called “${stageLabel(outcome) || 'nothing'}”`);
       }
       if (entry.changes.includes('span')) {
-        parts.push(`now ${spanText(incoming!.startDate, incoming!.endDate)}`);
+        parts.push(`now ${spanText(outcome.startDate, outcome.endDate)}`);
       }
       if (entry.changes.includes('places')) {
-        parts.push(`route now ${routeOf(incoming!) || 'no place'}`);
+        parts.push(`route now ${routeOf(outcome) || 'no place'}`);
       }
       return `“${stageLabel(existing!) || 'an unnamed leg'}” · ${parts.join(' · ')}`;
     }
   }
 }
+
+/** How a near-match is said on its row; an id match says nothing. */
+const matchWords: Record<Exclude<DiffEntry['matchedBy'], null>, string> = {
+  id: '',
+  span: 'matched by span',
+  place: 'matched by place',
+  contained: 'falls inside it',
+};
 
 /** An entry already linked and identical: shown, never actionable. */
 export function isInert(entry: DiffEntry): boolean {
@@ -146,7 +156,7 @@ export default function StageDiffList({
                 }`}
               >
                 {e.kind === 'unchanged' && !inert ? 'link' : e.kind}
-                {e.matchedBy && e.matchedBy !== 'id' && ` · matched by ${e.matchedBy}`}
+                {e.matchedBy && e.matchedBy !== 'id' && ` · ${matchWords[e.matchedBy]}`}
               </span>
               {describe(e)}
               {note && (
