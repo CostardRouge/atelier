@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  carryRange,
   clampPlayhead,
   clampRange,
   exportTrim,
@@ -141,5 +142,43 @@ describe('saveTrim / restoreTrim', () => {
   it('tolerates the wobble between a probed and a decoded duration', () => {
     const saved = saveTrim({ start: 5, end: 12 }, 15)!;
     expect(restoreTrim(saved, 15.02, 0.04)).toEqual({ start: 5, end: 12 });
+  });
+});
+
+describe('carryRange', () => {
+  const PROXY = 12.34;
+  const RUSH = 12.37;
+
+  it('is identity on one clock', () => {
+    const r = { start: 1, end: 5 };
+    expect(carryRange(r, PROXY, PROXY)).toBe(r);
+  });
+
+  it('keeps seconds as they are, and the end of the clip the end of the clip', () => {
+    expect(carryRange({ start: 1, end: PROXY }, PROXY, RUSH)).toEqual({ start: 1, end: RUSH });
+    expect(carryRange({ start: 1, end: RUSH }, RUSH, PROXY)).toEqual({ start: 1, end: PROXY });
+    expect(carryRange({ start: 1, end: 5 }, PROXY, RUSH)).toEqual({ start: 1, end: 5 });
+  });
+
+  it('round-trips a trim saved on the proxy through the rush and back', () => {
+    const onProxy = { start: 2, end: PROXY };
+    const saved = saveTrim(onProxy, PROXY);
+    const onRush = carryRange(restoreTrim(saved, PROXY), PROXY, RUSH);
+    expect(onRush).toEqual({ start: 2, end: RUSH });
+    // Saved back against the proxy's clock, the 30 ms the rush adds is no trim.
+    expect(saveTrim(carryRange(onRush, RUSH, PROXY), PROXY)).toEqual({ start: 2, end: PROXY, duration: PROXY });
+    expect(saveTrim(carryRange(fullRange(RUSH), RUSH, PROXY), PROXY)).toBeNull();
+  });
+
+  it('stays a valid range when the other clock is shorter than its in point', () => {
+    const r = carryRange({ start: 12.36, end: RUSH }, RUSH, 12.3, 0.04);
+    expect(r.end).toBeCloseTo(12.3);
+    expect(r.end - r.start).toBeGreaterThanOrEqual(0.04 - 1e-9);
+  });
+
+  it('carries nothing before either clock is known', () => {
+    const r = { start: 1, end: 5 };
+    expect(carryRange(r, 0, RUSH)).toBe(r);
+    expect(carryRange(r, PROXY, 0)).toBe(r);
   });
 });

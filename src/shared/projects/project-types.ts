@@ -142,6 +142,16 @@ export interface ProjectMedia {
    * develop set for THIS footage means nothing under another media.
    */
   develops: Record<string, SavedDevelop>;
+  /**
+   * Which FILE of each media the stage works from, where it is not the one
+   * the media opens on — the rush behind a clip's proxy, the camera's JPEG or
+   * a RAW companion's render behind a still's (`media-rendition.ts`). Keyed
+   * by base name like the trims, holding a rendition id (`delivered:<name>`);
+   * only the media switched away from their proxy have an entry. Optional and
+   * additive: absent is "every media on its proxy", which is what every
+   * project before 2026-09-29 was. Bound, never portable — it names a file.
+   */
+  renditions?: Record<string, string>;
 }
 
 export interface ProjectDoc {

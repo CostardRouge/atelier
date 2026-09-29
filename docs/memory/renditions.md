@@ -128,6 +128,8 @@ Rules a later phase must keep:
 
 ## The build record lives beside this file
 
+The STUDIO's stage is a consumer too since 2026-09-29: a clip or a still switches between its proxy and the capture's files (no sensor row), stored per media in the project — `studio.md`, «The stage switches between the capture's files». `canStageDraw` is how a VIDEO becomes a rendition: `renditionsOf`'s default `canDraw` knows pictures only.
+
 What each phase of `docs/capture-renditions.md` built, the rules it fixed and
 what the browser runs proved is `renditions-build.md` (R1b onwards, one
 section per phase). This file keeps the vocabulary, the measurements and the

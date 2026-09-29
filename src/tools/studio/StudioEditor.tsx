@@ -17,6 +17,7 @@ import { isEncodeSupported } from '../../shared/media/webcodecs-export';
 import { useVideoScrub } from '../../shared/media/use-video-scrub';
 import TrimBar from '../../shared/media/TrimBar';
 import {
+  carryRange,
   clampPlayhead,
   exportTrim,
   fullRange,
@@ -49,8 +50,10 @@ import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
+import { readRenditions, writeRendition } from '../../shared/projects/media-rendition';
+import { fetchHeld } from '../../shared/sources/held-fetch';
 import { trackedFetch } from '../../shared/tasks/tracked';
-import { fileIdentity } from '../../shared/library/assets';
+import { fileIdentity, imageTypeLabel } from '../../shared/library/assets';
 import { startTask } from '../../shared/tasks/tasks';
 import {
   atStep,
@@ -102,6 +105,8 @@ import { ensureFontFaces, overlayFontFaces } from '../../shared/overlay/fonts';
 import { settleForStill } from '../../shared/overlay/still-frame';
 import { createOutroCard, type OutroCard } from '../../shared/overlay/outro-card';
 import OutroPanel from './OutroPanel';
+import StageRenditionMenu from './StageRenditionMenu';
+import { useStageRendition } from './use-stage-rendition';
 import { decodeStillForExport, deliveryFrame, exportDecodeEdge, exportPhotoVariant } from '../../shared/media/photo-frame';
 import { decodeStill, stageBudget } from '../../shared/media/still-decode';
 import type { ExifData } from '../../shared/exif/exif-parser';
@@ -385,6 +390,32 @@ export default function StudioEditor({
   // stored develop. While the sheet is open its draft rides `lutStack.composed`,
   // which only the sheet paints from — the stage keeps the stored value.
   const lut = lutStack.composeWith(activeDevelop);
+
+  // --- which file of the media is on the stage -----------------------------
+  // A Winnow media opens on its proxy; a choice stored per media (keyed by
+  // base name like the trims) brings another of the capture's files onto the
+  // stage — the rush behind a clip's 720p proxy, the camera's JPEG or a RAW
+  // companion's render behind a still's WebP (`media-rendition.ts`). The
+  // export delivers from that file when it is the one on the stage.
+  const [renditions, setRenditions] = useState<Record<string, string>>(() =>
+    readRenditions(project.media.renditions),
+  );
+  const activeMeta = useAssetMeta(activeId);
+  const stageRendition = useStageRendition({
+    file: activeFile,
+    stored: activeId ? (renditions[activeId] ?? null) : null,
+    measured:
+      activeMeta?.width && activeMeta?.height ? { width: activeMeta.width, height: activeMeta.height } : null,
+    onChoose: (id) => {
+      if (activeId) setRenditions((prev) => writeRendition(prev, activeId, id));
+    },
+  });
+  /** The file the stage draws: the Library's, or the one chosen once it has landed. */
+  const stageFile = stageRendition.file;
+  const stageVideo = activeVideo ? stageFile : null;
+  const stageImage = activeImage ? stageFile : null;
+  /** True while the stage draws a file other than the one the Library holds. */
+  const stageOnOther = !!stageFile && !stageRendition.onLibraryFile;
   // The trim bar's gestures are spelled out under it until one has been used.
   const trim = useLearnedGesture('studio.trim');
   const [loop, setLoop] = useState(false);
@@ -507,21 +538,21 @@ export default function StudioEditor({
   const [photoExif, setPhotoExif] = useState<ExifData | null>(null);
 
   useEffect(() => {
-    if (!activeImage) {
+    if (!stageImage) {
       setPhoto(null);
       setPhotoNatural(null);
       setPhotoError(null);
-      setPhotoExif(null);
       return;
     }
     let cancelled = false;
     setPhotoError(null);
-    setPhotoExif(null);
     // Decoded AT the stage's budget, never whole: a 48-megapixel photograph
     // held open for as long as it is the active media was 194 MB, rescaled
     // into the 4K stage on every redraw. The export decodes the file again at
-    // its own density (`handleExport`).
-    void decodeStill(activeImage, { budgetPixels: stageBudget() })
+    // its own density (`handleExport`). It is the file ON THE STAGE — the
+    // proxy, or the capture's file chosen above it — and the picture it
+    // replaces stays up until this one is decoded.
+    void decodeStill(stageImage, { budgetPixels: stageBudget() })
       .then(({ bitmap, natural }) => {
         if (cancelled) {
           bitmap.close();
@@ -536,11 +567,22 @@ export default function StudioEditor({
         setPhotoNatural(null);
         setPhotoError(err.message);
       });
-    // EXIF is read from the head of the file, independently of the decode: a
-    // RAW the browser cannot draw still tells us what it was shot at. What the
-    // source that handed the file over parsed at ingest fills the gaps, under
-    // whatever the bytes still say (`read-exif.ts`) — a Winnow photo proxy is
-    // a WebP with no EXIF at all.
+    return () => {
+      cancelled = true;
+    };
+  }, [stageImage]);
+
+  // EXIF is read from the head of the file, independently of the decode: a
+  // RAW the browser cannot draw still tells us what it was shot at. What the
+  // source that handed the file over parsed at ingest fills the gaps, under
+  // whatever the bytes still say (`read-exif.ts`) — a Winnow photo proxy is
+  // a WebP with no EXIF at all. Read off the MEDIA, never the file on the
+  // stage: every file of one capture was shot at the same instant, and the
+  // readouts must not move when the stage switches between them.
+  useEffect(() => {
+    setPhotoExif(null);
+    if (!activeImage) return;
+    let cancelled = false;
     void readEffectiveExif(activeImage).then((read) => {
       if (!cancelled) setPhotoExif(read.exif);
     });
@@ -566,7 +608,9 @@ export default function StudioEditor({
 
   // If the active clip can't be decoded (often HEVC), the user can transcode it
   // to H.264 in-browser; once ready, the preview and export use that instead.
-  const activeTranscode = useTranscode(activeVideo);
+  // Of the file ON THE STAGE: a rush chosen above its proxy may be the HEVC
+  // the proxy was made to avoid.
+  const activeTranscode = useTranscode(stageVideo);
   // Where the active clip came from. A remote source hands over its editing
   // rendition by default, and only it knows how to fetch the capture.
   const origin = mediaOrigin(activeVideo);
@@ -574,8 +618,10 @@ export default function StudioEditor({
     origin?.fidelity === 'proxy' && typeof origin.fetchOriginal === 'function'
       ? origin
       : null;
-  /** True when the export will go and get the capture first. */
-  const willFetchOriginal = !!proxyWithOriginal && !renderFromProxy;
+  /** True when the export delivers from the capture — the one on the stage, or one it fetches first. */
+  const deliversCapture = !!proxyWithOriginal && !renderFromProxy;
+  /** True when the export will go and get the capture first: it is not already on the stage. */
+  const willFetchOriginal = deliversCapture && !stageOnOther;
   // A PHOTO's own source. Until now `origin` was read off the clip alone and
   // the note said "photos never take this path — a photo's original is often
   // a RAW no browser decodes". O2 of `docs/develop-originals.md` reverses
@@ -588,14 +634,18 @@ export default function StudioEditor({
   // where the proxy could not fill the frame the variants ask for, and the
   // *Delivers* row says so. A clip keeps `renderFromProxy` — its proxy is
   // always the wrong thing to deliver, a still's often is not.
+  // Only while the stage draws that proxy: a file of the capture chosen above
+  // it IS the choice, and the export delivers from it as it stands.
   const photoProxy =
-    photoOrigin?.fidelity === 'proxy' && typeof photoOrigin.fetchOriginal === 'function' ? photoOrigin : null;
+    !stageOnOther && photoOrigin?.fidelity === 'proxy' && typeof photoOrigin.fetchOriginal === 'function'
+      ? photoOrigin
+      : null;
   // Where the finals of the active media would go home to — a clip or a
   // still, whichever is open — and the identity the source vouched for it.
   const finalsMedia = activeVideo ?? activeImage ?? null;
   const finalsOrigin = mediaOrigin(finalsMedia);
   const finalsIdentity = finalsMedia ? knownIdentity(finalsMedia) : null;
-  const activeSource = activeTranscode.transcoded ?? activeVideo;
+  const activeSource = activeTranscode.transcoded ?? stageVideo;
   const activeUrl = useObjectUrl(activeSource);
 
   useEffect(() => {
@@ -689,17 +739,38 @@ export default function StudioEditor({
   }, [realtimeRate]);
   const previewRate = previewSpeed === 'realtime' ? realtimeRate : previewSpeed;
 
-  // Probe the active clip's container for codec + fps (best-effort).
+  // Probe the container ON THE STAGE for codec + fps (best-effort): the rush
+  // chosen above a proxy is rarely the proxy's codec or cadence.
   useEffect(() => {
-    if (!activeVideo) return;
+    if (!stageVideo) return;
     let cancelled = false;
-    probeContainer(activeVideo).then((info) => {
+    probeContainer(stageVideo).then((info) => {
       if (!cancelled) setActiveInfo(info);
     });
     return () => {
       cancelled = true;
     };
-  }, [activeVideo]);
+  }, [stageVideo]);
+
+  // A switch of FILE under the same media keeps the playhead: the proxy and
+  // the rush share their seconds, and landing back on 0:00 would lose the
+  // frame the person switched files to look at. Read off the element while it
+  // still holds the file it is about to leave — the new `src` has not been
+  // committed yet — and spent on the new file's `loadedmetadata`.
+  const resumeAt = useRef<number | null>(null);
+  const shownSource = useRef<{ media: string | null; file: File | null }>({ media: null, file: null });
+  if (shownSource.current.file !== activeSource) {
+    const before = shownSource.current;
+    const at = videoRef.current?.currentTime ?? 0;
+    resumeAt.current = before.file && activeSource && before.media === activeId && at > 0 ? at : null;
+    shownSource.current = { media: activeId, file: activeSource };
+  }
+  // The stage video's own frame, once its metadata says it: what the header
+  // states while a rush is on the stage, and what the export encodes from it.
+  const [stageDims, setStageDims] = useState<{ width: number; height: number } | null>(null);
+  useEffect(() => {
+    setStageDims(null);
+  }, [activeSource]);
 
   // Transport, with a first-frame prime: a tiny seek forces a decode +
   // 'seeked', which the stage repaints from, so the canvas shows the clip
@@ -715,6 +786,17 @@ export default function StudioEditor({
       resumeAcrossMedia: true,
       rate: previewRate,
       onLoadedMetadata: (v) => {
+        if (v.videoWidth && v.videoHeight) setStageDims({ width: v.videoWidth, height: v.videoHeight });
+        const resume = resumeAt.current;
+        resumeAt.current = null;
+        if (resume !== null) {
+          try {
+            v.currentTime = Math.min(resume, Number.isFinite(v.duration) ? v.duration : resume);
+            return;
+          } catch {
+            /* fall through to the prime */
+          }
+        }
         if (v.currentTime === 0) {
           try {
             v.currentTime = Math.min(0.001, (v.duration || 1) / 2);
@@ -730,6 +812,17 @@ export default function StudioEditor({
   // that far from each other, and it is the arrow-key step.
   const frameStep = minTrimLength(activeInfo.fps);
 
+  // The ONE clock a trim is saved against and guarded by: the Library file's.
+  // A rush on the stage shares the proxy's seconds but rarely its exact
+  // length, and the 50 ms guard would read that as another take — so the
+  // trim keeps its own clock and is carried onto the stage's (`carryRange`).
+  // With the Library's file on the stage the two are one and nothing moves.
+  const trimClock = stageOnOther && activeMeta?.duration && activeMeta.duration > 0 ? activeMeta.duration : duration;
+  /** A stored trim as the stage's handles show it. */
+  function trimOnStage(saved: SavedTrim | undefined): TrimRange {
+    return carryRange(restoreTrim(saved, trimClock, frameStep), trimClock, duration, frameStep);
+  }
+
   // Open each clip on the range that belongs to it. `restoreTrim` refuses a
   // saved range whose media has a different duration — same file name, other
   // take — and falls back to the whole clip.
@@ -738,7 +831,7 @@ export default function StudioEditor({
       setRange(fullRange(duration));
       return;
     }
-    const next = restoreTrim(trims[activeId], duration, frameStep);
+    const next = trimOnStage(trims[activeId]);
     setRange(next);
     // A clip that reopens trimmed opens ON its in point, not on a frame it no
     // longer keeps.
@@ -757,7 +850,7 @@ export default function StudioEditor({
     setRange(next);
     if (!activeId) return;
     setTrims((prev) => {
-      const saved = saveTrim(next, duration);
+      const saved = saveTrim(carryRange(next, duration, trimClock, frameStep), trimClock);
       if (!saved) {
         if (!prev[activeId]) return prev;
         const rest = { ...prev };
@@ -1021,6 +1114,7 @@ export default function StudioEditor({
       timeScale,
       trims,
       develops,
+      renditions,
       exportFileName,
       variants,
       lutLayers: lutStack.layers,
@@ -1040,6 +1134,7 @@ export default function StudioEditor({
       timeScale,
       trims,
       develops,
+      renditions,
       exportFileName,
       variants,
       lutStack.layers,
@@ -1077,6 +1172,7 @@ export default function StudioEditor({
       setTimeScale(step.timeScale);
       setTrims(step.trims);
       setDevelops(step.develops);
+      setRenditions(step.renditions);
       setExportFileName(step.exportFileName);
       setVariants(step.variants);
       // The live stack, not the saved one: `restore` re-fetches every built-in
@@ -1089,7 +1185,7 @@ export default function StudioEditor({
       // opens; a restored trim has to reach them here, or the bar would keep
       // showing the cut it just stepped away from.
       if (activeId && duration > 0) {
-        setRange(restoreTrim(step.trims[activeId], duration, frameStep));
+        setRange(trimOnStage(step.trims[activeId]));
       }
     },
   });
@@ -1206,6 +1302,7 @@ export default function StudioEditor({
           activeId,
           trims,
           develops,
+          renditions,
         },
         thumbnail: await bakeThumbnail(),
         durationSeconds: durationRef.current || docRef.current.durationSeconds,
@@ -1242,6 +1339,7 @@ export default function StudioEditor({
     activeId,
     trims,
     develops,
+    renditions,
     lutStack.layers,
     lutStack.output,
     // The texture is written (`lutFilm`) and undone like the layers, so it
@@ -1397,8 +1495,15 @@ export default function StudioEditor({
     if (!active || exporting || runVariants.length === 0) return;
     if (!activeVideo && !photo) return;
     const meta = lib.getMeta(active.id);
-    let srcWidth = photoNatural?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
-    let srcHeight = photoNatural?.height ?? meta?.height ?? videoRef.current?.videoHeight ?? 0;
+    // A rush the person put on the stage is in hand: the export encodes it
+    // as it stands, at its own frame, and fetches nothing. "Render from the
+    // proxy" still means the proxy — the Library's file, which every browser
+    // decodes.
+    const fromStageRush = !isPhoto && stageOnOther && !renderFromProxy;
+    const stageW = stageDims?.width ?? videoRef.current?.videoWidth;
+    const stageH = stageDims?.height ?? videoRef.current?.videoHeight;
+    let srcWidth = photoNatural?.width ?? (fromStageRush ? stageW : meta?.width) ?? videoRef.current?.videoWidth ?? 0;
+    let srcHeight = photoNatural?.height ?? (fromStageRush ? stageH : meta?.height) ?? videoRef.current?.videoHeight ?? 0;
     if (!srcWidth || !srcHeight) {
       setExportError(
         isPhoto
@@ -1431,7 +1536,11 @@ export default function StudioEditor({
     const editAtClick = edit;
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
     // decode it directly, where the HEVC original would fail.
-    let source = activeTranscode.transcoded ?? activeVideo;
+    let source = fromStageRush
+      ? (activeTranscode.transcoded ?? stageVideo)
+      : stageOnOther
+        ? activeVideo
+        : (activeTranscode.transcoded ?? activeVideo);
     const base = exportFileName.trim() || active.baseName;
     // The run as a TASK too (`tasks.md`, T4): the panel's own bar and Cancel
     // stay, and the masthead's pill says the same wherever the person walks.
@@ -1445,7 +1554,7 @@ export default function StudioEditor({
     // The run, variant by variant: a clip is encoded then written, a still
     // rendered then written; a clip whose capture is fetched first says so on
     // its first variant, the one that waits for it.
-    const fetchesCapture = !photo && Boolean(proxyWithOriginal?.fetchOriginal) && !renderFromProxy;
+    const fetchesCapture = !photo && !stageOnOther && Boolean(proxyWithOriginal?.fetchOriginal) && !renderFromProxy;
     const units: RunUnit[] = runVariants.map((v, i) => ({
       id: v.id,
       name: `${active.baseName} · Variant ${variants.indexOf(v) + 1} · ${variantSize(v)}`,
@@ -1491,10 +1600,10 @@ export default function StudioEditor({
       // The stage's copy is decoded at the stage's budget: where the run
       // needs more than it holds, the still is decoded again for the run and
       // closed with it. A 1080 cut usually needs less, and costs no decode.
-      if (photo && activeImage && still === photo && runFrame) {
+      if (photo && stageImage && still === photo && runFrame) {
         const need = exportDecodeEdge(runVariants, runFrame);
         if (Math.max(photo.width, photo.height) < need) {
-          const decoded = await decodeStillForExport(activeImage, runVariants);
+          const decoded = await decodeStillForExport(stageImage, runVariants);
           fetchedStill = decoded.bitmap;
           still = fetchedStill;
           runFrame = decoded.frame;
@@ -1508,20 +1617,25 @@ export default function StudioEditor({
       // the capture once, before the first variant, and encode every variant
       // from it — at ITS dimensions, which is what makes a 1080 variant
       // actually 1080. Photos never take this path: `origin` is read off the
-      // clip, and a photo's original is often a RAW no browser decodes.
+      // clip, and a photo's original is often a RAW no browser decodes. Nor
+      // does a rush already on the stage: it is the source above.
       if (fetchesCapture && proxyWithOriginal?.fetchOriginal) {
         say('fetch', `Fetching ${proxyWithOriginal.name ?? 'the capture'} from ${proxyWithOriginal.sourceId}`);
         // A task of its own — the capture's name and weight, on its edge,
-        // cancellable from the pill — beside the export's own Cancel.
+        // cancellable from the pill — beside the export's own Cancel. Held
+        // for the session once it lands, and JOINED if the stage is already
+        // bringing it (`held-fetch.ts`): the next export, and a switch of the
+        // stage to the rush, cost no second crossing.
         const fetchOriginal = proxyWithOriginal.fetchOriginal;
-        source = await trackedFetch(
-          {
-            label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
-            scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
-            bytes: proxyWithOriginal.bytes ?? null,
-          },
-          (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
-        );
+        const key = activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null;
+        const init = {
+          label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
+          scope: key,
+          bytes: proxyWithOriginal.bytes ?? null,
+        };
+        source = key
+          ? await fetchHeld(key, init, fetchOriginal, controller.signal)
+          : await trackedFetch({ ...init, signal: controller.signal }, (opts) => fetchOriginal(opts));
         srcWidth = proxyWithOriginal.width ?? srcWidth;
         srcHeight = proxyWithOriginal.height ?? srcHeight;
       }
@@ -1686,15 +1800,20 @@ export default function StudioEditor({
 
   // --- derived ------------------------------------------------------------
 
-  const activeMeta = useAssetMeta(activeId);
   // A decoded still knows its own size exactly (and upright); the library's
   // metadata is the fallback, and the only source for a RAW nothing can decode.
   // What is ON THE STAGE — a remote source's proxy, when that is what was
   // added. The header badge and the frame's aspect describe this, and must
   // keep describing it: claiming the capture's size for a picture the user is
   // not looking at is the same lie in the other direction.
-  const srcW = photoNatural?.width ?? activeMeta?.width;
-  const srcH = photoNatural?.height ?? activeMeta?.height;
+  //
+  // A rush switched onto the stage is what the person IS looking at, so it
+  // is its frame the badge states — the source's word for it until the
+  // element has measured it.
+  const rushW = stageOnOther && !isPhoto ? (stageDims?.width ?? proxyWithOriginal?.width ?? undefined) : undefined;
+  const rushH = stageOnOther && !isPhoto ? (stageDims?.height ?? proxyWithOriginal?.height ?? undefined) : undefined;
+  const srcW = photoNatural?.width ?? rushW ?? activeMeta?.width;
+  const srcH = photoNatural?.height ?? rushH ?? activeMeta?.height;
   // What the EXPORT will encode, which is a different file when it fetches the
   // capture first. Only the variant maths uses this: a variant measured
   // against the proxy would promise 1080 from a file it is not going to use.
@@ -1703,8 +1822,23 @@ export default function StudioEditor({
   // it will really encode cannot give.
   const bestStillW = photoProxy ? (photoProxy.width ?? srcW) : srcW;
   const bestStillH = photoProxy ? (photoProxy.height ?? srcH) : srcH;
-  const exportW = isPhoto ? bestStillW : willFetchOriginal ? (proxyWithOriginal?.width ?? srcW) : srcW;
-  const exportH = isPhoto ? bestStillH : willFetchOriginal ? (proxyWithOriginal?.height ?? srcH) : srcH;
+  // A clip delivers from its capture (fetched, or on the stage already)
+  // unless the proxy was asked for — and that is the Library's file, whatever
+  // the stage shows.
+  const exportW = isPhoto
+    ? bestStillW
+    : deliversCapture
+      ? (proxyWithOriginal?.width ?? srcW)
+      : stageOnOther
+        ? (activeMeta?.width ?? srcW)
+        : srcW;
+  const exportH = isPhoto
+    ? bestStillH
+    : deliversCapture
+      ? (proxyWithOriginal?.height ?? srcH)
+      : stageOnOther
+        ? (activeMeta?.height ?? srcH)
+        : srcH;
   /**
    * The biggest frame the variants will write, from that best source — the
    * frame the *Delivers* row asks its question against. A Studio variant
@@ -1723,14 +1857,16 @@ export default function StudioEditor({
   }, [isPhoto, bestStillW, bestStillH, variants]);
   // Measured only while the Export tab is up: measuring decodes, and a
   // 48-megapixel decode is not worth a sentence nobody is looking at.
-  const stillDelivery = useDeliveryRow(isPhoto && tab === 'export' ? activeImage : null, null, stillFrame);
+  // Of the file on the stage: a capture's file chosen above the proxy is what
+  // the still leaves from, and the row says what it holds.
+  const stillDelivery = useDeliveryRow(isPhoto && tab === 'export' ? stageImage : null, null, stillFrame);
   const activeRes = srcW && srcH ? `${srcW}×${srcH}` : null;
   // The stage draws at source resolution, so the guides' notion of "this
   // frame" is the media's own aspect — undefined until the probe lands.
   const frameAspect = srcW && srcH ? srcW / srcH : undefined;
   const activeDetail = (
     isPhoto
-      ? [activeRes, activeMeta?.imageType ?? null]
+      ? [activeRes, stageOnOther && stageImage ? imageTypeLabel(stageImage.name) : (activeMeta?.imageType ?? null)]
       : [activeRes, activeInfo.codec, activeInfo.fps ? `${activeInfo.fps} fps` : null]
   )
     .filter(Boolean)
@@ -1919,9 +2055,13 @@ export default function StudioEditor({
 
       {developOpen && active && activeFile && (
         <DevelopSheet
-          file={activeFile}
+          // The picture on the stage — a rush or a camera file chosen above
+          // the proxy included — so the sheet judges the pixels the stage
+          // shows. The develop itself is the MEDIA's, keyed and hash-guarded
+          // by the Library's file whatever is on screen.
+          file={stageFile ?? activeFile}
           videoTimeSeconds={developAt}
-          title={activeFile.name}
+          title={(stageFile ?? activeFile).name}
           stack={lutStack}
           value={activeDevelop}
           onDone={(next) => {
@@ -2053,6 +2193,16 @@ export default function StudioEditor({
           >
             {active.baseName}
           </span>
+          {/* Which of the capture's files is on the stage — the proxy, the
+              rush, the camera's JPEG — and the others one click away. Drawn
+              only where there is something to switch to. */}
+          <StageRenditionMenu
+            baseName={active.baseName}
+            rows={stageRendition.rows}
+            current={stageRendition.current}
+            fetching={stageRendition.fetching}
+            onChoose={stageRendition.choose}
+          />
           {activeDetail && (
             <span className="font-mono text-xs tracking-[0.02em] text-muted flex-none">
               {activeDetail}
@@ -2312,16 +2462,36 @@ export default function StudioEditor({
           )}
 
           {photoError && <p className={notice}>{photoError}</p>}
+          {stageRendition.error && <p className={noticeMuted}>{stageRendition.error}</p>}
 
           {activeError && (
             <div className={`${notice} flex flex-col gap-3`}>
-              <p className="m-0">
-                This clip failed to decode for preview. DJI footage is often
-                HEVC/H.265. Transcode it to H.264 to edit and export here (or
-                try Safari, which decodes HEVC best). Overlays still preview
-                over the last frame.
-              </p>
-              <TranscodeControl state={activeTranscode} />
+              {stageOnOther && stageFile ? (
+                <p className="m-0">
+                  {stageFile.name} does not decode in this browser — DJI rushes
+                  are often HEVC/H.265, which is why the source made an H.264
+                  proxy. Go back to the proxy, transcode this file to H.264
+                  here (slow for a long 4K rush), or try Safari, which decodes
+                  HEVC best.
+                </p>
+              ) : (
+                <p className="m-0">
+                  This clip failed to decode for preview. DJI footage is often
+                  HEVC/H.265. Transcode it to H.264 to edit and export here (or
+                  try Safari, which decodes HEVC best). Overlays still preview
+                  over the last frame.
+                </p>
+              )}
+              {stageOnOther && stageRendition.rows[0]?.role === 'proxy' ? (
+                <div className="flex flex-wrap items-start gap-3">
+                  <Button size="sm" onClick={() => stageRendition.choose('proxy')}>
+                    Back to the proxy
+                  </Button>
+                  <TranscodeControl state={activeTranscode} />
+                </div>
+              ) : (
+                <TranscodeControl state={activeTranscode} />
+              )}
             </div>
           )}
           {active && activeSrt && !hasTelemetry && (
@@ -2613,11 +2783,15 @@ export default function StudioEditor({
                           <Readout muted>Downloads</Readout>
                         )}
                       </FieldRow>
-                      {photoProxy && (
+                      {(photoProxy || (isPhoto && stageOnOther)) && (
                         <FieldRow
                           label="Delivers"
                           align="start"
-                          hint={`${stillDelivery?.reason ? `${stillDelivery.reason}. ` : stillDelivery ? '' : 'Measured once the picture is decoded. '}You are editing on ${photoProxy.sourceId}’s proxy: the full-size original is fetched only where the proxy could not fill the frame your variants ask for, and kept for this session. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself.`}
+                          hint={`${stillDelivery?.reason ? `${stillDelivery.reason}. ` : stillDelivery ? '' : 'Measured once the picture is decoded. '}${
+                            photoProxy
+                              ? `You are editing on ${photoProxy.sourceId}’s proxy: the full-size original is fetched only where the proxy could not fill the frame your variants ask for, and kept for this session. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself.`
+                              : `The stage shows ${stageFile?.name ?? 'the file chosen'}, and the still leaves from it as it stands — pick the proxy above the stage to go back.`
+                          }`}
                         >
                           <span
                             className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
@@ -2630,13 +2804,23 @@ export default function StudioEditor({
                         <FieldRow
                           label="From proxy"
                           hint={
-                            <>
-                              You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
-                              {srcH ? ` (${srcH}p)` : ''}
-                              {willFetchOriginal
-                                ? ' — the export fetches the original first, so the deliverables are full quality.'
-                                : ' — and delivering from it: faster, nothing large crosses the network, proxy quality.'}
-                            </>
+                            stageOnOther ? (
+                              <>
+                                The stage shows {stageFile?.name ?? 'the original'}
+                                {srcH ? ` (${srcH}p)` : ''}
+                                {renderFromProxy
+                                  ? ` — and the export delivers from ${proxyWithOriginal.sourceId}’s proxy${activeMeta?.height ? ` (${activeMeta.height}p)` : ''}: faster, proxy quality.`
+                                  : ' — in hand, so the export encodes from it and fetches nothing.'}
+                              </>
+                            ) : (
+                              <>
+                                You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
+                                {srcH ? ` (${srcH}p)` : ''}
+                                {willFetchOriginal
+                                  ? ' — the export fetches the original first, so the deliverables are full quality.'
+                                  : ' — and delivering from it: faster, nothing large crosses the network, proxy quality.'}
+                              </>
+                            )
                           }
                         >
                           <ToggleField

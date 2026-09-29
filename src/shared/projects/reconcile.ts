@@ -122,7 +122,7 @@ export function adoptRenames(
   }
   if (!renames.size) return null;
 
-  // Base name → new base name, for the two keyed-by-base-name structures.
+  // Base name → new base name, for every structure keyed by base name.
   const baseRenames = new Map<string, string>();
   for (const [oldName, actual] of renames) {
     baseRenames.set(fileBaseName(oldName).toLowerCase(), fileBaseName(actual.name));
@@ -150,6 +150,10 @@ export function adoptRenames(
   // picture under its new name, and its hash is what found the rename.
   const develops: ProjectMedia['develops'] = {};
   for (const [id, dev] of Object.entries(media.develops ?? {})) develops[rebase(id)] = dev;
+  // The fourth: which file of the media the stage works from. Its value
+  // names the capture's file on its SOURCE, which a local rename leaves be.
+  const renditions: Record<string, string> = {};
+  for (const [id, rendition] of Object.entries(media.renditions ?? {})) renditions[rebase(id)] = rendition;
 
   return {
     ...media,
@@ -157,5 +161,6 @@ export function adoptRenames(
     activeId: media.activeId === null ? null : rebase(media.activeId),
     trims,
     develops,
+    ...(media.renditions ? { renditions } : {}),
   };
 }

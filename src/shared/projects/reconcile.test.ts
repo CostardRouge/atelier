@@ -134,6 +134,7 @@ describe('adoptRenames', () => {
         activeId: 'DJI_0001',
         trims: { DJI_0001: { start: 1, end: 2, duration: 10 } },
         develops: { DJI_0001: { settings: { ...DEFAULT_DEVELOP, exposure: 0.5 }, hash: 'abc' } },
+        renditions: { DJI_0001: 'delivered:dji_0001.mp4' },
       }),
       r,
     );
@@ -147,6 +148,15 @@ describe('adoptRenames', () => {
     // The third base-name key travels with the other two.
     expect(Object.keys(adopted?.develops ?? {})).toEqual(['sunset']);
     expect(adopted?.develops.sunset.settings.exposure).toBe(0.5);
+    // And the fourth: the file the stage works from keeps naming the source's
+    // file, which a local rename does not touch.
+    expect(adopted?.renditions).toEqual({ sunset: 'delivered:dji_0001.mp4' });
+  });
+
+  it('adds no rendition map to a project that never had one', () => {
+    const saved = { ...ref('a.mp4'), hash: 'h' };
+    const r = reconcileMedia([saved], [{ ...ref('b.mp4'), hash: 'h' }]);
+    expect(adoptRenames(media({ files: [saved], activeId: 'a' }), r)).not.toHaveProperty('renditions');
   });
 
   it('leaves an untouched clip alone while renaming its neighbour', () => {
