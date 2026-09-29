@@ -1,19 +1,15 @@
-import { useMemo, useState } from 'react';
 import type { OverlayElement } from '../../../shared/overlay/overlay-types';
 import TranscodeControl from '../../../shared/media/TranscodeControl';
-import { useAvcEncodeSupport } from '../../../shared/media/use-encode-support';
 import { useTranscode } from '../../../shared/media/use-transcode';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
-import { describePlan, exportPlan } from '../../../shared/roadtrip/export-plan';
+import { describePlan, type PieceExportPlan } from '../../../shared/roadtrip/export-plan';
 import type { TripDoc, TripGrade, TripPost } from '../../../shared/roadtrip/trip-types';
 import StudioLink from '../StudioLink';
 import type { GradeScope } from '../use-trip-grade';
 import { reasonSentence } from './SlideDelivery';
 import { note } from './ui';
-import Button from '../../../shared/ui/Button';
 import type { DeliverySummary } from '../../../shared/develop/roll-export';
-import { FieldRow, InspectorSection, ToggleField } from '../../../shared/ui/Inspector';
-import { Icons } from '../../../shared/ui/icons';
+import { FieldRow, InspectorSection } from '../../../shared/ui/Inspector';
 
 interface ExportTabProps {
   trip: TripDoc;
@@ -26,18 +22,13 @@ interface ExportTabProps {
   hookFile: File | null;
   /** True when the hook's picture is a clip — which SOURCE, not which medium. */
   hookIsVideo: boolean;
-  /** How long the burned-in hook clip runs, already clamped to the clip. */
-  hookLength: number;
-  /** True when the Library holds a slide's picture — the plan needs to know. */
-  hasPicture: (slide: DeckSlide) => boolean;
-  /** A running export's progress line, or null when idle. */
-  exporting: string | null;
-  exportNote: string | null;
+  /**
+   * What the piece's primary export will write, slide by slide — computed by
+   * the editor, which also draws the pinned bar that presses it.
+   */
+  plan: PieceExportPlan;
   /** A clip the last export could not decode here; the transcode is offered for it. */
   undecodable: File | null;
-  onExportPiece: (imagesOnly: boolean) => void;
-  onExportDeck: () => void;
-  onExportHookClip: () => void;
   /**
    * What the OPEN picture would deliver into the deck's frame, or null when
    * nothing is measured. Said, never chosen: a picture from an instance
@@ -66,9 +57,12 @@ interface ExportTabProps {
  *
  * The panel leads with the PLAN — one line per slide, its format and why —
  * because the deck already decided every format on the Content tab and this
- * is where the author checks it before pressing anything. Under it, the one
- * primary export, then the per-format escapes and the bridge that sends the
- * badge into a Studio project.
+ * is where the author checks it before pressing anything. The verbs are not
+ * here (2026-09-29, Develop's grammar): they are pinned under the tab's scroll
+ * (`DeliverBar`, drawn by the editor), the primary one and a menu holding
+ * every slide as a still, the open slide as a PNG and the hook as a video —
+ * what used to be a switch the header's Export never read, and a section of
+ * its own. What stays is what is SET, and the bridge to a Studio project.
  *
  * All of it is about the PIECE, so all of it shows whichever slide is open.
  */
@@ -80,14 +74,8 @@ export default function ExportTab({
   aspect,
   hookFile,
   hookIsVideo,
-  hookLength,
-  hasPicture,
-  exporting,
-  exportNote,
+  plan,
   undecodable,
-  onExportPiece,
-  onExportDeck,
-  onExportHookClip,
   delivery,
   onChangePost,
   grade,
@@ -103,18 +91,6 @@ export default function ExportTab({
   // photograph with an animated badge is a video now, and a clip the author
   // set to Image is not. The deck decides; this panel delivers.
   const hookIsVideoSlide = slides[0]?.medium === 'video';
-  // Whether H.264 can really be encoded here, not merely whether the API
-  // exists: a browser with the object and no codec would otherwise be told
-  // "1 clip" and hit the platform's own error on the press.
-  const canEncode = useAvcEncodeSupport();
-
-  // The one override the export keeps. It is not a mode: it is what a browser
-  // with no encoder can still do, and what a contact sheet of a reel is.
-  const [imagesOnly, setImagesOnly] = useState(false);
-  const plan = useMemo(
-    () => exportPlan(trip, post, { canEncode, hasPicture, imagesOnly }),
-    [trip, post, canEncode, hasPicture, imagesOnly],
-  );
 
   return (
     <div className="flex flex-col">
@@ -135,10 +111,31 @@ export default function ExportTab({
               4:5 already falls short, at ×1.25. Fetched originals are kept for this session
               only. <em>Delivers</em> says what the open picture will really give.
             </p>
+            <p>
+              The export buttons are pinned at the bottom of this tab: the piece, and in their
+              menu every slide as a still (what a browser with no video encoder can still
+              write, or a contact sheet of a reel), the open slide as a PNG, and the hook as a
+              video.{' '}
+              {hookIsVideoSlide
+                ? hookIsVideo
+                  ? slides[0].speed !== 1
+                    ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                    : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
+                  : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
+                : hookFile
+                  ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
+                  : 'Give the hook a picture from the Library first'}
+              {graded || ownGrades > 0
+                ? ownGrades > 0
+                  ? `, and each picture goes through the grade it wears — ${
+                      ownGrades === 1 ? 'one of them has a look of its own' : `${ownGrades} of them have a look of their own`
+                    }.`
+                  : `, and every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
+                : '; nothing is graded — no grade is set.'}
+            </p>
           </>
         }
       >
-        {exportNote && <p className={note}>{exportNote}</p>}
         {/* A sentence that says "transcode it first" must offer the transcode
             where it is read, or it is a dead end. Once done, the next export
             reads the H.264 by itself. */}
@@ -196,70 +193,6 @@ export default function ExportTab({
           </span>
         </FieldRow>
 
-        <FieldRow label="As images">
-          <ToggleField label="Everything as images" checked={imagesOnly} onChange={setImagesOnly}>
-            Every slide as a still
-          </ToggleField>
-        </FieldRow>
-        <FieldRow label="">
-          {/* Always "the piece": the file COUNT is what the badge says, and a
-              deck of three whose two clips are blocked is still the piece. */}
-          <Button
-            variant="primary"
-            icon={Icons.export}
-            onClick={() => onExportPiece(imagesOnly)}
-            disabled={exporting !== null || plan.files === 0}
-          >
-            {exporting ?? 'Export the piece'}
-          </Button>
-        </FieldRow>
-      </InspectorSection>
-
-      <InspectorSection
-        id="piece.export.formats"
-        title="One format at a time"
-        info={
-          <p>
-            {hookIsVideoSlide
-              ? hookIsVideo
-                ? slides[0].speed !== 1
-                  ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
-                  : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
-                : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
-              : hookFile
-                ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
-                : 'Give the hook a picture from the Library first'}
-            {graded || ownGrades > 0
-              ? ownGrades > 0
-                ? `, and each picture goes through the grade it wears — ${
-                    ownGrades === 1
-                      ? 'one of them has a look of its own'
-                      : `${ownGrades} of them have a look of their own`
-                  }.`
-                : `, and every picture goes through ${
-                    gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'
-                  } grade.`
-              : '; nothing is graded — no grade is set.'}
-          </p>
-        }
-      >
-        <FieldRow label="Stills">
-          <Button size="sm" icon={Icons.download} onClick={onExportDeck} disabled={exporting !== null}>
-            {slides.length === 1 ? 'The slide as a PNG' : `All ${slides.length} slides as PNGs`}
-          </Button>
-        </FieldRow>
-        {hookIsVideoSlide && (
-          <FieldRow label="Hook">
-            <Button
-              size="sm"
-              icon={Icons.download}
-              onClick={onExportHookClip}
-              disabled={exporting !== null || !canEncode}
-            >
-              As a video · {hookLength.toFixed(1)}s
-            </Button>
-          </FieldRow>
-        )}
       </InspectorSection>
 
       <InspectorSection

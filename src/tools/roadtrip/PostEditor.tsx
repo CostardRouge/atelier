@@ -147,6 +147,9 @@ import PageBar from '../../shared/ui/PageBar';
 import { buttonClass } from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import PanelHost from '../../shared/ui/PanelHost';
+import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
+import { describePlan, exportPlan } from '../../shared/roadtrip/export-plan';
+import { useAvcEncodeSupport } from '../../shared/media/use-encode-support';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -1551,6 +1554,35 @@ export default function PostEditor({
     onStart: () => setTab('export'),
   });
 
+  // What the primary export will write, slide by slide — the tab lists it,
+  // the pinned bar says it in one line and presses it. Whether H.264 can
+  // really be encoded here, not merely whether the API exists: a browser
+  // with the object and no codec would otherwise be told "1 clip".
+  const canEncode = useAvcEncodeSupport();
+  const exportPlanNow = useMemo(() => exportPlan(trip, post, { canEncode, hasPicture }), [trip, post, canEncode, hasPicture]);
+  // The piece's verbs: the piece as the deck says, and in the menu every
+  // slide as a still — the switch the header's Export never read, now a verb
+  // it cannot miss —, the open slide as a PNG, and the hook as a video.
+  const exportVerbs = useMemo<ExportVerb[]>(() => {
+    const verbs: ExportVerb[] = [];
+    if (exportPlanNow.files > 0) {
+      verbs.push({ id: 'piece', label: 'Export the piece', hint: describePlan(exportPlanNow), run: () => void exports.exportPiece() });
+    }
+    verbs.push({
+      id: 'stills',
+      label: 'Every slide as a still',
+      hint: `${slides.length} PNG${slides.length === 1 ? '' : 's'} — what a browser with no video encoder can still write, or a contact sheet of a reel`,
+      run: () => void exports.exportPiece(true),
+    });
+    if (slides.length > 1) {
+      verbs.push({ id: 'slide', label: 'This slide as a PNG', hint: `the slide open on the stage, numbered as in the deck`, run: () => void exports.exportDeck(slide.position) });
+    }
+    if (slides[0]?.medium === 'video' && canEncode) {
+      verbs.push({ id: 'hook', label: 'The hook as a video', hint: `MP4 · ${hookLength.toFixed(1)} s · 1080`, run: () => void exports.exportHookClip() });
+    }
+    return verbs;
+  }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength]);
+
   // --- the fields a click on the stage lands in -----------------------------
   const textFieldRef = useRef<HTMLInputElement>(null);
   const captionFieldRef = useRef<HTMLInputElement>(null);
@@ -2289,14 +2321,8 @@ export default function PostEditor({
               aspect={aspect}
               hookFile={hookFile}
               hookIsVideo={hookIsVideo}
-              hookLength={hookLength}
-              hasPicture={hasPicture}
-              exporting={exports.exporting}
-              exportNote={exports.note}
+              plan={exportPlanNow}
               undecodable={exports.undecodable}
-              onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
-              onExportDeck={() => void exports.exportDeck()}
-              onExportHookClip={() => void exports.exportHookClip()}
               delivery={delivery}
               onChangePost={onChangePost}
               grade={grade.hookGrade}
@@ -2305,6 +2331,22 @@ export default function PostEditor({
             />
           )}
         </div>
+        {/* The verbs, pinned under the scroll the way the tab strip sits over
+            it — and, while a run goes on, the run itself, on every tab. */}
+        {tab === 'export' && (
+          <DeliverBar
+            verbs={exportVerbs}
+            primary="piece"
+            summary={exportPlanNow.files ? `${describePlan(exportPlanNow)} · into the folder you pick` : (exportPlanNow.blockers[0] ?? '')}
+            exporting={exports.exporting}
+            progress={null}
+            onCancel={() => {}}
+            note={exports.note}
+            placement={compact ? 'sheet' : 'panel'}
+            unitWord="slide"
+            empty={exportPlanNow.blockers[0] ?? 'Nothing in this piece can be written yet.'}
+          />
+        )}
       </PanelHost>
     </div>
 

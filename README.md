@@ -1060,9 +1060,15 @@ it as you like, each with its own optional caption, and close on the trip's
 **call-to-action card** — headline, sentence, link and a **QR code**, edited
 once in the trip's own settings and appended to every deck that asks for it. A
 reel or a single photo is the same model with a deck of one, so a piece can be
-re-cut into a carousel without being rebuilt. Export writes the whole deck as numbered PNGs into a
+re-cut into a carousel without being rebuilt. **Export the piece** writes every slide in the
+format the deck says it is — a still as a PNG, what moves as an MP4 — into a
 folder you pick (or downloads them one by one where the folder picker is not
-available), named so a file listing is already in swipe order. The order is
+available), slide after slide in deck order and named so a file listing is
+already in swipe order. The button is pinned at the bottom of the Export tab, and
+its menu offers every slide as a still, the open slide as a PNG and the hook as a
+video; the header's **Export** does the same as the pinned button from any tab. The
+looks are taken when you press it: a look changed while a reel encodes waits for
+the next export. The order is
 yours, and so is the time: under the picture, at every width, the deck is **one
 band** — every slide end to end on the piece's clock, a clip as wide as its cut
 and a still as wide as the seconds its inspector gives it, slid under a needle

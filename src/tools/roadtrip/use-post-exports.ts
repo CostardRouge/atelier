@@ -118,7 +118,8 @@ export interface PostExports {
   undecodable: File | null;
   /** The piece's ONE primary export: every slide in the format it is. */
   exportPiece: (imagesOnly?: boolean) => Promise<void>;
-  exportDeck: () => Promise<void>;
+  /** Every slide as a PNG — or only the slide at `position`. */
+  exportDeck: (position?: number) => Promise<void>;
   exportHookClip: () => Promise<void>;
 }
 
@@ -622,7 +623,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * order on disk; where the picker is unavailable each slide is downloaded
    * in turn, which is the only thing a non-Chromium browser can do.
    */
-  async function exportDeck() {
+  async function exportDeck(position?: number) {
     const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
@@ -631,7 +632,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const signal = beginTask('Exporting the slides');
     setExporting('Choosing the pixels…');
     try {
-      const resolve = await pixelsForStills(deckSlides(inputs.trip, inputs.post));
+      const resolve = await pixelsForStills(deckSlides(inputs.trip, inputs.post).filter((s) => position === undefined || s.position === position));
       setExporting('Rendering…');
       const rendered = await renderDeck({
         signal,
@@ -645,13 +646,14 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         exif: inputs.exif,
         lutFor: looks.lutFor,
         filmFor: looks.filmFor,
+        include: position === undefined ? undefined : (slide) => slide.position === position,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
       });
       if (!rendered.length) {
         setNote(signal.aborted ? 'Export cancelled — nothing was written.' : 'Nothing could be rendered — check the pictures are loaded.');
         return;
       }
-      const short = inputs.slideCount - rendered.length;
+      const short = (position === undefined ? inputs.slideCount : 1) - rendered.length;
       setExporting('Writing…');
       const res = await deliverFilesTo(
         target,
@@ -660,7 +662,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       );
       setNote(
         `${res.written} slide${res.written === 1 ? '' : 's'} ${res.method === 'folder' ? 'written' : 'downloaded'}` +
-          (signal.aborted ? ` · cancelled after ${rendered.length} of ${inputs.slideCount}` : short ? ` · ${short} could not be rendered` : '') +
+          (signal.aborted ? ` · cancelled after ${rendered.length} of ${position === undefined ? inputs.slideCount : 1}` : short ? ` · ${short} could not be rendered` : '') +
           (res.method === 'folder' && res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
       );
     } catch (err) {

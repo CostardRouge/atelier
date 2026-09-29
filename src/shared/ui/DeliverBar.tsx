@@ -11,6 +11,15 @@ import {
   type RunProgress,
 } from '../tasks/run-progress';
 
+export type DeliverPlacement = 'panel' | 'sheet' | 'drawer';
+
+/** Each placement's bleed: the bar reaches the host's edges and sits on its bottom. */
+const PLACEMENT: Record<DeliverPlacement, string> = {
+  panel: '-mx-3 -mb-3 px-3 pt-2.5 pb-3 rounded-b-paper',
+  sheet: 'sticky bottom-0 z-10 -mx-3 -mb-3 px-3 pt-2 pb-3',
+  drawer: 'sticky bottom-0 z-10 -mx-4 px-4 pt-2 pb-2',
+};
+
 /** One export verb: what it renders, and how many. */
 export interface ExportVerb {
   id: string;
@@ -45,7 +54,7 @@ export default function DeliverBar({
   progress,
   onCancel,
   note,
-  compact,
+  placement,
   unitWord,
   settingsLine,
   empty = 'Nothing to export yet.',
@@ -60,8 +69,12 @@ export default function DeliverBar({
   progress: RunProgress | null;
   onCancel: () => void;
   note: ReactNode;
-  /** Inside a phone's drawer, whose body scrolls: stuck to its bottom edge. */
-  compact: boolean;
+  /**
+   * Where the host draws it: under a docked inspector's scroll (`panel`, the
+   * inspector padded `p-3`), or stuck to the bottom of a phone's scrolling
+   * `sheet` (padded `px-3 pb-3`) or `drawer` (padded `px-4`).
+   */
+  placement: DeliverPlacement;
   /** What one unit of this tool's run is called — `picture`, `slide`, `variant`. */
   unitWord: string;
   /** Said under a running bar: whose settings the run uses. */
@@ -74,9 +87,7 @@ export default function DeliverBar({
   const busy = exporting !== null || progress !== null;
   return (
     <div
-      className={`flex-none flex flex-col gap-1.5 border-t border-line-strong bg-surface ${
-        compact ? 'sticky bottom-0 z-10 -mx-4 px-4 pt-2 pb-2' : '-mx-3 -mb-3 px-3 pt-2.5 pb-3 rounded-b-paper'
-      } shadow-[0_-10px_18px_-16px_rgba(43,33,18,0.45)]`}
+      className={`flex-none flex flex-col gap-1.5 border-t border-line-strong bg-surface ${PLACEMENT[placement]} shadow-[0_-10px_18px_-16px_rgba(43,33,18,0.45)]`}
     >
       {progress ? (
         <RunBar progress={progress} exporting={exporting} onCancel={onCancel} unitWord={unitWord} settingsLine={settingsLine ?? null} />

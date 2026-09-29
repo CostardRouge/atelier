@@ -1058,4 +1058,11 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
   `renderSlideVideo` — where it used to render every still, then encode the
   clips. A still costs one decode either way; what it buys is a run that can
   be followed left to right on the deck strip.
-
+- **The verbs are PINNED** (`DeliverBar`, `placement` `panel` docked, `sheet`
+  or `drawer` on a phone): the piece is the primary; the menu holds every
+  slide as a still (the old "As images" SWITCH, which the header's Export
+  never read — a verb cannot be missed), the open slide as a PNG
+  (`exportDeck(position)`) and the hook as a video. The Export tab keeps what
+  is SET (the plan, Delivers, the transcode offer, the Studio link); the plan
+  is computed by `PostEditor` once, for the tab and the bar alike. The header's
+  `Export` stays as a shortcut to the same primary.

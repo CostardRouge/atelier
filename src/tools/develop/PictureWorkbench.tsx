@@ -1414,7 +1414,7 @@ export default function PictureWorkbench({
       progress={exports.progress}
       onCancel={exports.cancel}
       note={exports.note}
-      compact={inDrawer}
+      placement={inDrawer ? 'drawer' : 'panel'}
       primary="roll"
       unitWord="picture"
       empty="Open a picture to export."
