@@ -594,9 +594,10 @@ renderer or either export moved.
 
 ### Boats, and a vehicle per piece (2026-09-29)
 
-- **Three boats in the registry** (`kind: 'boat'`): the Whitsundays day
+- **Four boats in the registry** (`kind: 'boat'`): the Whitsundays day
   cruiser and the Alison Maree over one `buildCatamaran` (`boat-parts.ts`),
-  the Viper over `hullPart` and its own benches. Modelled in METRES; the map
+  the Viper and the Solar Whisper over `hullPart` and their own benches, posts
+  and roof. Modelled in METRES; the map
   draws every vehicle at one length, and `render-order.test.ts` scales each to
   ~280 px (`scaleFor`) so the oracle's thresholds mean the same thing.
 - **`convexHull` / `hullSolid`** (`mesh3d.ts`): a convex part from its
@@ -613,6 +614,9 @@ renderer or either export moved.
 - **A boat leaves a wake** (`paintWake`, `wakeStrength` in `drive-plan.ts`):
   two arms at the Kelvin angle and the churn between, laid on the water plane
   through the pose, growing while the phase is `run`, settling at a halt.
+  `CarModel.wake` scales it per boat (`reach`: the arms' length and their
+  strength together) — 1.5 behind the Viper's jets, 0.35 behind the Solar
+  Whisper, which glides.
 
 ## 14. Itinerary — an authored map (2026-09-14, rev. 2026-09-15)
 

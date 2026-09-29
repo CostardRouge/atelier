@@ -179,7 +179,7 @@ describe('sameCarSpec', () => {
 
 describe('the boats', () => {
   it('offer no gear, come in gloss, and say so without a gear clause', () => {
-    for (const id of ['whitsunday-cruiser', 'viper-jet', 'alison-maree'] as const) {
+    for (const id of ['whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const) {
       expect(CAR_LINES[id].gear, id).toEqual([]);
       expect(defaultCarSpec(id).finish).toBe('gloss');
     }

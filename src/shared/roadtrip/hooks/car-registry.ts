@@ -4,9 +4,9 @@
  *
  * Two cars: the Toyota Land Cruiser Prado of the J120 series (`car-model.ts`),
  * the maintainer's own, and the Renault Kadjar of the facelift
- * (`kadjar-model.ts`). Three boats: the Whitsundays day cruiser, the Viper
- * and the Alison Maree (`*-model.ts` over `boat-parts.ts`). Another is one
- * more `*-model.ts` over `mesh3d.ts`, one line here and one `CarLine` in
+ * (`kadjar-model.ts`). Four boats: the Whitsundays day cruiser, the Viper,
+ * the Alison Maree and the Solar Whisper (`*-model.ts` over `boat-parts.ts`).
+ * Another is one more `*-model.ts` over `mesh3d.ts`, one line here and one `CarLine` in
  * `car-spec.ts` (what it offers and how it comes); its parts must stay
  * CONVEX, or the painter's ordering breaks, and `render-order.test.ts` judges
  * every line of this list. Pure and DOM-free.
@@ -16,6 +16,7 @@ import { CAR_LENGTH, CAR_WIDTH, WHEEL_RADIUS, buildCar, carPalette } from './car
 import { KADJAR_LENGTH, KADJAR_WIDTH, KADJAR_WHEEL_RADIUS, buildKadjar, kadjarPalette } from './kadjar-model';
 import { ALISON_LENGTH, ALISON_WIDTH, alisonPalette, buildAlisonMaree } from './alison-maree-model';
 import { VIPER_LENGTH, VIPER_WIDTH, buildViper, viperPalette } from './viper-model';
+import { WHISPER_LENGTH, WHISPER_WIDTH, buildSolarWhisper, whisperPalette } from './solar-whisper-model';
 import { CRUISER_LENGTH, CRUISER_WIDTH, buildCruiser, cruiserPalette } from './whitsunday-cruiser-model';
 import { DEFAULT_MODEL, type CarGear, type CarModelId } from '../car-spec';
 import type { Part } from './mesh3d';
@@ -35,6 +36,8 @@ export interface CarModel {
   width: number;
   /** What a turn of the wheels covers; a boat has none, so nothing reads it. */
   wheelRadius: number;
+  /** How much water a boat throws behind it, 1 by default: faint for one that glides, long for a jet. */
+  wake?: number;
   build(gear: CarGear): Part[];
   /** Its colours by role, given the author's body colour. */
   palette(bodyColor: string): Record<string, string>;
@@ -86,6 +89,8 @@ export const CAR_MODELS: readonly CarModel[] = [
     length: VIPER_LENGTH,
     width: VIPER_WIDTH,
     wheelRadius: 1,
+    // The fastest boat in the Whitsundays throws the longest wake.
+    wake: 1.5,
     build: buildViper,
     palette: viperPalette,
   },
@@ -100,6 +105,20 @@ export const CAR_MODELS: readonly CarModel[] = [
     wheelRadius: 1,
     build: buildAlisonMaree,
     palette: alisonPalette,
+  },
+  {
+    id: 'solar-whisper',
+    kind: 'boat',
+    name: 'Solar Whisper',
+    short: 'Solar Whisper',
+    series: 'Electric · Daintree River, to the crocodiles',
+    length: WHISPER_LENGTH,
+    width: WHISPER_WIDTH,
+    wheelRadius: 1,
+    // Electric and silent: it glides, and barely marks the river.
+    wake: 0.35,
+    build: buildSolarWhisper,
+    palette: whisperPalette,
   },
 ];
 

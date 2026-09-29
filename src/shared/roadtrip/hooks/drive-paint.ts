@@ -392,7 +392,7 @@ function paintMap(
     if (model.kind === 'boat') {
       // A boat sits IN the water: a faint shadow, and the wake it leaves while
       // it runs — growing as it gets under way, settling once it halts.
-      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, moment.since), Math.max(1, carPx / 55));
+      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, moment.since), Math.max(1, carPx / 55), model.wake ?? 1);
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.12 : 0.2);
     } else {
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);

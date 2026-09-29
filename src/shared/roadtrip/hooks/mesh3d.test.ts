@@ -314,4 +314,32 @@ describe('paintWake', () => {
     paintWake(still.g, pose(), 14, 4, 0, 2);
     expect(still.ops).toEqual([]);
   });
+
+  it('reaches as far as the boat throws water, and fades with it below one', () => {
+    const extentOf = (reach: number) => {
+      const xs: number[] = [];
+      const g = {
+        save() {},
+        restore() {},
+        beginPath() {},
+        closePath() {},
+        moveTo(_x: number, y: number) {
+          xs.push(y);
+        },
+        lineTo(_x: number, y: number) {
+          xs.push(y);
+        },
+        fill() {},
+        stroke() {},
+        set lineCap(_v: string) {},
+        set fillStyle(_v: string) {},
+        set strokeStyle(_v: string) {},
+        set lineWidth(_v: number) {},
+      } as unknown as CanvasRenderingContext2D;
+      paintWake(g, pose({ tilt: Math.PI / 2 }), 10, 3, 1, 1, reach);
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(extentOf(1.5)).toBeGreaterThan(extentOf(1));
+    expect(extentOf(0.35)).toBeLessThan(extentOf(1));
+  });
 });

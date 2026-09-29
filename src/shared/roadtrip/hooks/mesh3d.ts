@@ -774,7 +774,9 @@ export function cylinder(
  * churned water down the middle, white, fading with distance. Laid on the
  * water plane through the pose's own projection, so it foreshortens and
  * turns with the boat; `strength` 0..1 lets it grow as the boat gets under way
- * and settle when it halts. No blur and no composite, only strokes.
+ * and settle when it halts, and `reach` is how much water the boat throws —
+ * short and faint for one that glides, long for a jet boat. No blur and no
+ * composite, only strokes.
  */
 export function paintWake(
   g: MeshCtx,
@@ -783,11 +785,13 @@ export function paintWake(
   width: number,
   strength: number,
   lineWidth: number,
+  reach = 1,
 ): void {
+  strength *= Math.min(1, reach);
   if (strength <= 0.01) return;
   const at = (x: number, y: number) => project(toWorld([x, y, 0], pose), pose);
   const stern = -length / 2;
-  const reach = length * 1.3;
+  const run = length * 1.3 * reach;
   const spread = Math.tan((19.5 * Math.PI) / 180);
   const steps = 8;
   g.save();
@@ -798,8 +802,8 @@ export function paintWake(
     const t1 = (i + 1) / steps;
     const half0 = (width * 0.42) * (1 - t0 * 0.7);
     const half1 = (width * 0.42) * (1 - t1 * 0.7);
-    const y0 = stern - reach * 0.7 * t0;
-    const y1 = stern - reach * 0.7 * t1;
+    const y0 = stern - run * 0.7 * t0;
+    const y1 = stern - run * 0.7 * t1;
     const a = at(-half0, y0);
     const b = at(half0, y0);
     const c = at(half1, y1);
@@ -819,8 +823,8 @@ export function paintWake(
     for (let i = 0; i < steps; i++) {
       const t0 = i / steps;
       const t1 = (i + 1) / steps;
-      const p = at(side * (width * 0.45 + reach * t0 * spread), stern - reach * t0);
-      const q = at(side * (width * 0.45 + reach * t1 * spread), stern - reach * t1);
+      const p = at(side * (width * 0.45 + run * t0 * spread), stern - run * t0);
+      const q = at(side * (width * 0.45 + run * t1 * spread), stern - run * t1);
       g.beginPath();
       g.moveTo(p.x, p.y);
       g.lineTo(q.x, q.y);

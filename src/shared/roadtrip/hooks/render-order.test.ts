@@ -334,6 +334,7 @@ const SOLID: Record<string, (id: string) => boolean> = {
   'prado-j120': (id) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-'),
   'kadjar-ph2': KADJAR_SOLID,
   'viper-jet': (id) => id === 'hull' || id === 'console',
+  'solar-whisper': (id) => id === 'hull' || id.startsWith('roof-') || id.startsWith('bench-'),
 };
 /** A catamaran keeps its hulls, its saloon and its wheelhouse. */
 const CAT_SOLID = (id: string) => id.startsWith('hull-') || id === 'saloon' || id === 'wheelhouse';

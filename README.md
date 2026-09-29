@@ -973,16 +973,20 @@ mirrors; it is drawn with its own marks: the C of its daytime lights, the
 diamond in a chrome-barred grille, black cladding round the arches, a spoiler
 over the raked tailgate, two-tone wheels. Picking a model brings that car as
 it comes; the one you left keeps what you dressed it in while the garage stays
-open. Three boats join them: the **Whitsundays day cruiser**
+open. Four boats join them: the **Whitsundays day cruiser**
 (a motor catamaran with a shaded upper deck, the ordinary boat out to
 Whitehaven), the **Viper** (Airlie Beach's jet boat to the outer reef — six
-rows of belted benches, the helm console, two waterjets at the transom) and the
+rows of belted benches, the helm console, two waterjets at the transom), the
 **Alison Maree** (the Bremer Bay catamaran that takes you out to the canyon's
-orcas — a glass wheelhouse and a big open upper deck). Their liveries are
-guesses you can repaint. A trip can drive a boat, but a piece usually borrows
-one: the Virée panel's **Vehicle** row keeps the trip's car or picks any other
-model for that piece alone, in a paint of its own, and a boat leaves a wake that
-grows as it gets under way and settles when it halts. The car turns on a turntable while you dress it (drag
+orcas — a glass wheelhouse and a big open upper deck) and the **Solar
+Whisper** (the Daintree River's silent electric boat to the crocodiles — a long
+narrow hull, benches along both edges so every seat has the water, a roof tiled
+with solar panels, the croc cam's screen under its front edge, two electric
+outboards). Their liveries are guesses you can repaint. A trip can drive a
+boat, but a piece usually borrows one: the Virée panel's **Vehicle** row keeps
+the trip's car or picks any other model for that piece alone, in a paint of its
+own, and a boat leaves a wake that grows as it gets under way and settles when
+it halts — long behind the Viper, barely a ripple behind the Solar Whisper. The car turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own

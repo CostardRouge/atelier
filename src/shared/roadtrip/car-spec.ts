@@ -15,8 +15,8 @@
  * other's; every reader asks the model which flags it means.
  *
  * A "car" here is whatever the Virée drives, and since 2026-09-29 that
- * includes three BOATS — the Whitsundays day cruiser, the Viper, the Alison
- * Maree — which offer no gear and wear their hull colour as the body's. A
+ * includes four BOATS — the Whitsundays day cruiser, the Viper, the Alison
+ * Maree, the Solar Whisper — which offer no gear and wear their hull colour as the body's. A
  * trip may drive one, but a piece usually borrows one for a day on the water
  * (`vehicleFor`).
  *
@@ -24,7 +24,7 @@
  * trusted, and a partial spec keeps what it says.
  */
 
-export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree'] as const;
+export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const;
 export type CarModelId = (typeof CAR_MODEL_IDS)[number];
 
 /** The car a trip drives when nothing says otherwise — the maintainer's own. */
@@ -221,6 +221,19 @@ export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
     finish: 'gloss',
     fitted: [],
     asItComes: 'The Alison Maree in white, with its navy line',
+  },
+  'solar-whisper': {
+    gear: [],
+    colours: [
+      { id: 'white', name: 'White', hex: '#f3f3ef', note: 'a guess — repaint it to what it wears' },
+      { id: 'rainforest', name: 'Rainforest green', hex: '#2f5b3c' },
+      { id: 'sand', name: 'Sand', hex: '#e2d6bb' },
+      { id: 'navy', name: 'Navy', hex: '#1d2f5e' },
+    ],
+    color: '#f3f3ef',
+    finish: 'gloss',
+    fitted: [],
+    asItComes: 'The Solar Whisper in white, its roof tiled with solar panels',
   },
 };
 
