@@ -108,6 +108,7 @@ function loadTowns() {
 export default function StopsMapSheet({ stops, places, title, onCancel, onDone }: StopsMapSheetProps) {
   const [draft, setDraft] = useState<MapStop[]>(() => stops.map((stop) => ({ ...stop })));
   const [selectedId, setSelectedId] = useState<string | null>(null);
+  const listRef = useRef<HTMLDivElement | null>(null);
   const [tilesOn, setTilesOn] = useState(sessionTiles);
   const [snap, setSnap] = useState(sessionSnap);
   const [mapState, setMapState] = useState<'loading' | 'ready' | 'error'>('loading');
@@ -149,7 +150,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
   const add = useCallback(
     (at: Place) => {
       if (latest.current.draft.length >= MAP_MAX_STOPS) {
-        say(`${MAP_MAX_STOPS} stops is as many as one opener draws.`);
+        say(`${MAP_MAX_STOPS} stops is as many as one opener holds.`);
         return;
       }
       // Functional: two taps inside one render must both land.
@@ -395,6 +396,14 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
     relabel.current();
   }, [draft, selectedId, mapState]);
 
+  // The row of the stop just added or picked on the map is brought into view:
+  // the list runs under the map, and the twenty-fifth tap lands below it.
+  useEffect(() => {
+    if (!selectedId) return;
+    const row = listRef.current?.querySelector<HTMLElement>(`[data-stop-row="${CSS.escape(selectedId)}"]`);
+    row?.scrollIntoView({ block: 'nearest' });
+  }, [selectedId, draft.length]);
+
   // --- the opt-in background ---------------------------------------------------
   useEffect(() => {
     sessionTiles = tilesOn;
@@ -544,19 +553,25 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
           </div>
 
           <aside className="flex-none w-[21rem] flex flex-col min-h-0 border-l border-line max-[820px]:w-full max-[820px]:border-l-0 max-[820px]:border-t max-[820px]:max-h-[40%]">
-            <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-2">
+            <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-2">
               {draft.length === 0 ? (
                 <p className="m-0 text-sm text-muted">
                   Tap the map: every tap is the next stop, joined to the one before. A tap near a
                   town takes its name; a hollow ring is one of the trip’s own places.
                 </p>
               ) : (
-                <ol className="m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden">
+                // `flex-none` is load-bearing: a column-flex child that clips
+                // (`overflow-hidden`, for the rounded border) has a minimum
+                // height of 0, so it SHRANK to the scroller and cut its rows
+                // off instead of letting the scroller scroll — measured on a
+                // 25-stop list, where nothing past the 20th could be reached.
+                <ol className="flex-none m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden">
                   {draft.map((stop, index) => {
                     const on = stop.id === selectedId;
                     return (
                       <li
                         key={stop.id}
+                        data-stop-row={stop.id}
                         className={`flex items-center gap-1.5 px-2 py-1 border-b border-line last:border-b-0 ${on ? 'bg-accent-wash' : 'bg-paper'}`}
                       >
                         <button

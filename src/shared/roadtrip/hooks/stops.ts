@@ -27,11 +27,16 @@ export interface MapStop {
 }
 
 /**
- * The most stops one opener draws. Past this the dots merge, every picture
- * is a decode, and the hook would be a slideshow rather than an opener. Extra
- * stops are dropped on read rather than silently half-drawn.
+ * The most stops one opener holds — a GUARD, not a taste. It was 24 (the
+ * Itinerary's «past that the dots merge»), and a real itinerary up the east
+ * coast of Australia met it at Agnes Water (2026-09-29, the maintainer: «why
+ * only 24 places max?»): whether dots merge is the author's to judge on the
+ * stage, and every picture's decode is already shared out by one budget
+ * (`picture-budget.ts`). What remains is what the drawing can carry: a stop's
+ * NUMBER is written inside its dot, and two digits are what a dot holds. Past
+ * it a stored list is cut on read rather than half-drawn.
  */
-export const MAP_MAX_STOPS = 24;
+export const MAP_MAX_STOPS = 99;
 
 /**
  * A stored picture reference, read defensively: it travels in `.roadtrip.json`
