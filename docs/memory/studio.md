@@ -363,3 +363,22 @@ Unlike Trips and Develop, which hold ONE document in state and hand it back thro
   SET — Output, Variants — and a *Send home* section for the finals, which is
   a panel and too tall for a pinned bar. Without WebCodecs the bar says so in
   its summary and still offers the frame capture (a canvas, not an encoder).
+- **The run is seen variant by variant** (V1 + V4, `shared/tasks/run-progress.ts`,
+  `tasks.md`): one unit per variant, Encode → Write for a clip (the first
+  preceded by *Fetch original* when the capture is pulled), Render → Write
+  for a still; the rows are the queue (waiting · the stage with its % and
+  clock · ✓ what it cost · ! not written) and the stage wears a `TaskEdge`
+  for its media's tasks. The bar is drawn on EVERY tab while a run goes on.
+- **A run belongs to the CLIP it started on, not to the one open**
+  (`runClip`): switching clips used to blank the feedback (an `activeId`
+  effect cleared it) while the run went on. Now the bar follows the run, the
+  note names the clip when another is open, *Send home* is offered only on
+  its own clip (`finalsOrigin` is the OPEN clip's), and the rows are marked
+  only there.
+- **A variant's figure is keyed by what produced it** (`statKey`: clip +
+  the variant's settings minus its id + the cut), never erased by an edit:
+  `updateVariant → forgetStats` used to wipe the figure of a row edited
+  mid-run, and the run then wrote it back under the new settings. A row
+  shows its figure while its settings are those, and again if they return.
+  A cancel keeps what was written and says `Cancelled after N of M`.
+

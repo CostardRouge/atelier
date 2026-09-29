@@ -458,7 +458,13 @@ Chromium — straight into a **destination folder** you pick once, stills
 included. The export button is pinned at the bottom of the Export tab —
 **Export 3 MP4s** renders every variant, and its menu renders one variant alone
 or captures the frame under the playhead — so it is never scrolled out of sight
-under a long list of rows.
+under a long list of rows. While a run goes on, that bar becomes the run on
+every tab — a segment per variant, the one in hand with its stage (fetching the
+capture, encoding with its percentage, writing), the time left once a variant has
+measured it, and a Cancel that keeps what was written — the rows say which variant
+waits, which is in hand and what each finished one cost, and the stage wears a
+thin progress line. Switch to another clip meanwhile and the bar goes on
+following the run, naming the clip it is for.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),

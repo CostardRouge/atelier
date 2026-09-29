@@ -52,6 +52,19 @@ import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity
 import { trackedFetch } from '../../shared/tasks/tracked';
 import { fileIdentity } from '../../shared/library/assets';
 import { startTask } from '../../shared/tasks/tasks';
+import {
+  atStep,
+  cancelRun,
+  enterUnit,
+  finishUnit,
+  runFraction,
+  runStateOf,
+  startRun,
+  type RunPhase,
+  type RunProgress,
+  type RunUnit,
+} from '../../shared/tasks/run-progress';
+import TaskEdge from '../../shared/ui/TaskEdge';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
@@ -154,6 +167,22 @@ import Segmented from '../../shared/ui/Segmented';
  * same day is the point.
  */
 const STUDIO_KINDS = ['video+telemetry', 'video', 'photo'] as const;
+
+/** A variant's stages in an export run (`run-progress.ts`). */
+const STILL_PHASES: RunPhase[] = [
+  { id: 'render', label: 'Render' },
+  { id: 'write', label: 'Write' },
+];
+const CLIP_PHASES: RunPhase[] = [
+  { id: 'encode', label: 'Encode' },
+  { id: 'write', label: 'Write' },
+];
+
+/** What a measured figure is true of: this clip, these settings, this cut. */
+function statKey(clipId: string, variant: ExportVariant, cut: TrimRange | null): string {
+  // The row's id is not a setting: two rows asking the same thing cost the same.
+  return `${clipId}|${JSON.stringify({ ...variant, id: undefined })}|${cut ? `${cut.start}-${cut.end}` : ''}`;
+}
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
@@ -403,8 +432,6 @@ export default function StudioEditor({
 
   // Export state.
   const [exporting, setExporting] = useState(false);
-  const [exportRatio, setExportRatio] = useState(0);
-  const [exportStep, setExportStep] = useState<{ index: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   /**
    * Render the deliverables from the editing proxy instead of fetching the
@@ -414,8 +441,6 @@ export default function StudioEditor({
    * through the tunnel right now.
    */
   const [renderFromProxy, setRenderFromProxy] = useState(false);
-  /** Pulling the capture down happens before the first variant; say so. */
-  const [fetchingOriginal, setFetchingOriginal] = useState(false);
   const [exportDone, setExportDone] = useState(false);
   /**
    * The deliverables of the last run, kept so they can be sent back to the
@@ -431,7 +456,11 @@ export default function StudioEditor({
   );
   // What each variant cost, last time it rendered — size, wall clock, speed.
   // Session-only state on purpose: it measures this machine today, not the
-  // composition, so it has no business in the project document.
+  // composition, so it has no business in the project document. Keyed by
+  // the clip, the variant's settings and the cut (`statKey`): a figure is only
+  // true of what produced it, so a row shows it while its settings are those
+  // and hides it the moment one changes — without erasing it, which is what
+  // made an edit during a run wipe the figure the run then wrote back.
   const [variantStats, setVariantStats] = useState<Record<string, ExportStat>>({});
   const [runStats, setRunStats] = useState<ExportStat[]>([]);
   // The variant being rendered right now, with the clock it started on, so its
@@ -441,6 +470,16 @@ export default function StudioEditor({
   );
   const [liveElapsed, setLiveElapsed] = useState(0);
   const exportAbort = useRef<AbortController | null>(null);
+  // Where the run stands variant by variant (`run-progress.ts`, his pick V1 +
+  // V4 from the Studio lab): the pinned bar's segments, the rows' marks, the
+  // masthead pill. It belongs to the CLIP it was started on (`runClip`), not
+  // to the one open: the bar follows the run across a clip switch, and the
+  // run's figures and finals stay that clip's.
+  const [run, setRun] = useState<RunProgress | null>(null);
+  const runNow = useRef<RunProgress | null>(null);
+  const [runClip, setRunClip] = useState<{ id: string; name: string } | null>(null);
+  /** How the last run ended when it did not end whole — a cancel keeps what it wrote. */
+  const [runEnd, setRunEnd] = useState<string | null>(null);
 
   // Tick the in-flight variant's timer. One interval for the whole export, not
   // one per row, and none at all when nothing is rendering.
@@ -590,16 +629,13 @@ export default function StudioEditor({
     // Mount-only by design: the editor is keyed by project.id.
   }, []);
 
-  // Reset export feedback and stale codec info when the active clip changes.
-  // The stats go too: another clip renders to another size in another time,
-  // and leaving the old figures under the rows would attribute them to it.
+  // Stale codec info goes when the active clip changes. The export's feedback
+  // does NOT: it belongs to the clip the run was started on (`runClip`) and is
+  // shown as that clip's — a switch mid-run used to blank the bar while the
+  // run went on. The per-row figures are keyed by clip, so they need no reset.
   useEffect(() => {
     setActiveInfo({});
-    setExportDone(false);
-    setExportError(null);
-    setVariantStats({});
-    setRunStats([]);
-    setLastRun([]);
+    if (!exportAbort.current) setExportError(null);
   }, [activeId]);
 
   // Parse the active clip's telemetry — clips without an .srt just get no cues.
@@ -1279,7 +1315,6 @@ export default function StudioEditor({
       theme,
       timeShift,
     });
-    setExportRatio(1);
     return blob;
   }
 
@@ -1373,15 +1408,18 @@ export default function StudioEditor({
     // resume-across-clips ref) honest, so nothing restarts on its own.
     videoRef.current?.pause();
     setExporting(true);
-    setExportRatio(0);
     setExportError(null);
     setExportDone(false);
     setRunStats([]);
     setLastRun([]);
+    setRunClip({ id: active.id, name: active.baseName });
+    setRunEnd(null);
     const measured: ExportStat[] = [];
     const rendered: File[] = [];
     const controller = new AbortController();
     exportAbort.current = controller;
+    const clipId = active.id;
+    const cut = trimmed ? range : null;
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
     // decode it directly, where the HEVC original would fail.
     let source = activeTranscode.transcoded ?? activeVideo;
@@ -1395,6 +1433,31 @@ export default function StudioEditor({
       detail: `${runVariants.length} variant${runVariants.length === 1 ? '' : 's'}`,
       cancel: () => controller.abort(),
     });
+    // The run, variant by variant: a clip is encoded then written, a still
+    // rendered then written; a clip whose capture is fetched first says so on
+    // its first variant, the one that waits for it.
+    const fetchesCapture = !photo && Boolean(proxyWithOriginal?.fetchOriginal) && !renderFromProxy;
+    const units: RunUnit[] = runVariants.map((v, i) => ({
+      id: v.id,
+      name: `${active.baseName} · Variant ${variants.indexOf(v) + 1} · ${variantSize(v)}`,
+      phases: photo
+        ? STILL_PHASES
+        : i === 0 && fetchesCapture
+          ? [{ id: 'fetch', label: 'Fetch original' }, ...CLIP_PHASES]
+          : CLIP_PHASES,
+    }));
+    const showRun = (next: RunProgress | null) => {
+      runNow.current = next && controller.signal.aborted ? cancelRun(next) : next;
+      setRun(runNow.current);
+      if (runNow.current) exportTask.update({ progress: runFraction(runNow.current) });
+    };
+    const say = (phase: string, words: string, ratio: number | null = null) => {
+      if (runNow.current) showRun(atStep(runNow.current, phase, words, ratio));
+      exportTask.update({ detail: words });
+    };
+    showRun(startRun(units, Date.now()));
+    controller.signal.addEventListener('abort', () => showRun(runNow.current));
+    showRun(enterUnit(runNow.current!, 0));
     // A still delivered from its source's ORIGINAL when the frame is worth it
     // (O2 of `docs/develop-originals.md`). Decoded here and closed with the
     // run: the stage keeps its own bitmap. Either way the still is decoded at
@@ -1409,15 +1472,11 @@ export default function StudioEditor({
       if (photo && activeImage && photoProxy && stillFrame) {
         const chosen = await deliveryFor(activeImage, null, stillFrame);
         if (chosen.file !== activeImage) {
-          setFetchingOriginal(true);
-          try {
-            const decoded = await decodeStillForExport(chosen.file, runVariants);
-            fetchedStill = decoded.bitmap;
-            still = fetchedStill;
-            runFrame = decoded.frame;
-          } finally {
-            setFetchingOriginal(false);
-          }
+          say('render', `Fetching the original from ${photoProxy.sourceId}…`);
+          const decoded = await decodeStillForExport(chosen.file, runVariants);
+          fetchedStill = decoded.bitmap;
+          still = fetchedStill;
+          runFrame = decoded.frame;
         }
       }
       // The stage's copy is decoded at the stage's budget: where the run
@@ -1441,25 +1500,21 @@ export default function StudioEditor({
       // from it — at ITS dimensions, which is what makes a 1080 variant
       // actually 1080. Photos never take this path: `origin` is read off the
       // clip, and a photo's original is often a RAW no browser decodes.
-      if (proxyWithOriginal?.fetchOriginal && !renderFromProxy) {
-        setFetchingOriginal(true);
-        try {
-          // A task of its own — the capture's name and weight, on its edge,
-          // cancellable from the pill — beside the export's own Cancel.
-          const fetchOriginal = proxyWithOriginal.fetchOriginal;
-          source = await trackedFetch(
-            {
-              label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
-              scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
-              bytes: proxyWithOriginal.bytes ?? null,
-            },
-            (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
-          );
-          srcWidth = proxyWithOriginal.width ?? srcWidth;
-          srcHeight = proxyWithOriginal.height ?? srcHeight;
-        } finally {
-          setFetchingOriginal(false);
-        }
+      if (fetchesCapture && proxyWithOriginal?.fetchOriginal) {
+        say('fetch', `Fetching ${proxyWithOriginal.name ?? 'the capture'} from ${proxyWithOriginal.sourceId}`);
+        // A task of its own — the capture's name and weight, on its edge,
+        // cancellable from the pill — beside the export's own Cancel.
+        const fetchOriginal = proxyWithOriginal.fetchOriginal;
+        source = await trackedFetch(
+          {
+            label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
+            scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
+            bytes: proxyWithOriginal.bytes ?? null,
+          },
+          (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
+        );
+        srcWidth = proxyWithOriginal.width ?? srcWidth;
+        srcHeight = proxyWithOriginal.height ?? srcHeight;
       }
       // Several variants of a clip read and demux its file ONCE: each used to
       // read the whole file and parse it again. One variant keeps the old path.
@@ -1479,9 +1534,8 @@ export default function StudioEditor({
         // breaking, so a cancelled run does not then report "✓ Exported".
         if (controller.signal.aborted) return;
         const variant = runVariants[i];
-        setExportStep({ index: i + 1, total: runVariants.length });
-        setExportRatio(0);
-        exportTask.update({ progress: i / runVariants.length, detail: `${i + 1} of ${runVariants.length} · ${variant.id}` });
+        if (i > 0) showRun(enterUnit(runNow.current!, i));
+        say(still ? 'render' : 'encode', still ? `Rendering ${variantSize(variant)}` : `Encoding ${variantSize(variant)}`, still ? null : 0);
         // Time the whole variant, delivery included: writing a 400 MB file to
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
@@ -1495,8 +1549,7 @@ export default function StudioEditor({
           if (p.phase === 'encoding' && p.ratio != null) {
             if (p.ratio < 1 && p.ratio - reported < 0.005) return;
             reported = p.ratio;
-            setExportRatio(p.ratio);
-            exportTask.update({ progress: (i + p.ratio) / runVariants.length });
+            say('encode', `Encoding ${variantSize(variant)} · ${Math.round(p.ratio * 100)}%`, p.ratio);
           }
         };
         const blob = still
@@ -1504,6 +1557,7 @@ export default function StudioEditor({
           : await renderClipVariant(source, demuxed, variant, srcWidth, srcHeight, onProgress, controller);
         const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
         const file = new File([blob], name, { type: blob.type });
+        say('write', `Writing ${name}`);
         await deliver(file);
         rendered.push(file);
         const stat: ExportStat = {
@@ -1517,11 +1571,10 @@ export default function StudioEditor({
             : (trimmed ? trimDuration(range) : durationRef.current) || null,
         };
         measured.push(stat);
-        setVariantStats((prev) => ({ ...prev, [variant.id]: stat }));
+        setVariantStats((prev) => ({ ...prev, [statKey(clipId, variant, cut)]: stat }));
         setRunStats([...measured]);
+        showRun(finishUnit(runNow.current!, i, true, Date.now()));
       }
-      setLastRun(rendered);
-      setExportDone(true);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setExportError((err as Error).message || 'Export failed');
@@ -1530,44 +1583,39 @@ export default function StudioEditor({
       exportTask.done();
       fetchedStill?.close();
       setExporting(false);
-      setExportStep(null);
       setLiveExport(null);
       exportAbort.current = null;
+      runNow.current = null;
+      setRun(null);
+      // What left, said once the run is over — kept with the clip it was cut
+      // from, never the one open.
+      if (rendered.length > 0) {
+        setLastRun(rendered);
+        setExportDone(true);
+      }
+      if (controller.signal.aborted) {
+        setRunEnd(
+          rendered.length > 0
+            ? `Cancelled after ${rendered.length} of ${runVariants.length} — what was written stays.`
+            : 'Export cancelled — nothing was written.',
+        );
+      }
     }
   }
 
-  /**
-   * Drop a variant's measurement (all of them with no id). A figure is only
-   * true of the settings that produced it: leaving "38 MB · 41 s" under a row
-   * whose resolution just changed would credit the new setting with the old
-   * run. The run summary goes with it, for the same reason.
-   */
-  function forgetStats(id?: string) {
-    setVariantStats((prev) => {
-      if (!id) return Object.keys(prev).length ? {} : prev;
-      if (!prev[id]) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setRunStats([]);
-    setExportDone(false);
-  }
-
+  // An edit to a variant no longer erases its figure: the figure is keyed by
+  // the settings that produced it (`statKey`), so the row hides it while they
+  // differ — and a run in flight keeps the figures it is writing.
   function updateVariant(id: string, patch: Partial<ExportVariant>) {
     setVariants((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
-    forgetStats(id);
   }
   function addVariant() {
     // A new row starts from the project's destination format — the reason the
     // format lives in the settings.
     setVariants((prev) => [...prev, createVariant(aspectId)]);
-    setRunStats([]);
-    setExportDone(false);
   }
   function removeVariant(id: string) {
     setVariants((prev) => (prev.length > 1 ? prev.filter((v) => v.id !== id) : prev));
-    forgetStats(id);
   }
 
   function cancelExport() {
@@ -1713,17 +1761,18 @@ export default function StudioEditor({
   const exportSummary = !exportSupported
     ? 'Export needs WebCodecs (try Chrome/Edge/Safari) — editing works everywhere.'
     : `${variants.length} ${fileWord}${variants.length === 1 ? '' : 's'} · ${variants.map(variantSize).join(', ')} · into ${destDir ? destDir.name : 'Downloads'}`;
-  const exportLine = exporting
-    ? fetchingOriginal
-      ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}…`
-      : `${exportStep && exportStep.total > 1 ? `Variant ${exportStep.index}/${exportStep.total} · ` : 'Exporting… '}${Math.round(exportRatio * 100)}%`
-    : null;
+  // The run's rows are marked only on the clip it runs for: the variants are
+  // the project's, the run is one clip's.
+  const runHere = run !== null && runClip?.id === activeId;
+  const resultsHere = runClip?.id === activeId;
   const exportNote =
-    (exportDone && runStats.length > 0) || exportError ? (
+    (exportDone && runStats.length > 0) || exportError || runEnd ? (
       <div className="flex flex-col gap-1.5">
+        {runEnd && <span className="text-xs text-ink-soft">{runEnd}</span>}
         {exportDone && runStats.length > 0 && (
           <span className="inline-flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink-soft">
             <span className="inline-flex self-center text-ok">{Icons.check}</span>
+            {!resultsHere && runClip ? `${runClip.name} · ` : ''}
             {describeExportRun(runStats)}
           </span>
         )}
@@ -2065,6 +2114,9 @@ export default function StudioEditor({
               preload="auto"
               onError={() => setActiveError(true)}
             />
+            {/* This media's own tasks along the stage's edge — its capture
+                being fetched, a run of its variants (V1 + V4). */}
+            {finalsMedia && <TaskEdge scope={knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)} />}
           </div>
 
           {activeUrl && (
@@ -2584,7 +2636,8 @@ export default function StudioEditor({
                       // A variant never upscales, so asking for more than the
                       // source holds silently delivers less. Say which.
                       const short = exportW && exportH ? resolutionShortfall(v, exportW, exportH) : null;
-                      const stats = variantStats[v.id];
+                      const stats = variantStats[statKey(activeId ?? '', v, trimmed ? range : null)];
+                      const state = runHere ? runStateOf(run, v.id) : null;
                       const fileName = variantFileName(
                         exportFileName.trim() || active.baseName,
                         v,
@@ -2707,13 +2760,27 @@ export default function StudioEditor({
                               {fileName}
                             </span>
                           </FieldRow>
-                          {/* What this row cost last time it rendered — the
-                              figure sits with the settings that produced it. */}
-                          {liveExport?.id === v.id ? (
-                            <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-accent-ink" role="status">
-                              <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
-                              rendering… {formatElapsed(liveElapsed)}
+                          {/* The row is the run's queue while it goes on (V4):
+                              waiting, in hand with its stage and its fill, or
+                              not written. Once done — and outside a run — it
+                              says what it cost, with the settings that paid. */}
+                          {state === 'queued' ? (
+                            <div className="font-mono text-2xs text-faint">waiting…</div>
+                          ) : state === 'active' && run ? (
+                            <div className="flex flex-col gap-1" role="status">
+                              <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-accent-ink">
+                                <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
+                                {(run.phases[run.index] ?? []).find((ph) => ph.id === run.phase)?.label.toLowerCase() ?? 'rendering'}
+                                {run.ratio !== null ? ` · ${Math.round(run.ratio * 100)}%` : '…'} · {formatElapsed(liveElapsed)}
+                              </div>
+                              {run.ratio !== null && (
+                                <span className="h-[3px] rounded-full bg-line overflow-hidden" aria-hidden="true">
+                                  <span className="block h-full bg-accent transition-[width] duration-200" style={{ width: `${run.ratio * 100}%` }} />
+                                </span>
+                              )}
                             </div>
+                          ) : state === 'failed' ? (
+                            <div className="font-mono text-2xs text-danger">! not written</div>
                           ) : (
                             stats && (
                               <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-ink-soft">
@@ -2730,7 +2797,7 @@ export default function StudioEditor({
                   {/* A clip that came from a Winnow can send its finals home.
                       Only offered for what was just rendered, only to the
                       instance it came from. */}
-                  {exportDone && lastRun.length > 0 && finalsOrigin && (
+                  {exportDone && resultsHere && lastRun.length > 0 && finalsOrigin && (
                     <InspectorSection id="studio.export.home" title="Send home">
                       <SendFinalsPanel
                         files={lastRun}
@@ -2742,13 +2809,15 @@ export default function StudioEditor({
                 </>
               )}
             </div>
-            {tab === 'export' && (
+            {/* The verbs, pinned — and, while a run goes on, the run itself,
+                on every tab and whichever clip is open. */}
+            {(tab === 'export' || run) && (
               <DeliverBar
                 verbs={exportVerbs}
                 primary="all"
                 summary={exportSummary}
-                exporting={exportLine ?? (grabbing ? 'Capturing the frame…' : null)}
-                progress={null}
+                exporting={exporting && !run ? 'Preparing…' : grabbing ? 'Capturing the frame…' : null}
+                progress={run}
                 onCancel={cancelExport}
                 note={exportNote}
                 placement={compact ? 'sheet' : 'panel'}
