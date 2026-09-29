@@ -464,7 +464,10 @@ capture, encoding with its percentage, writing), the time left once a variant ha
 measured it, and a Cancel that keeps what was written — the rows say which variant
 waits, which is in hand and what each finished one cost, and the stage wears a
 thin progress line. Switch to another clip meanwhile and the bar goes on
-following the run, naming the clip it is for.
+following the run, naming the clip it is for. The output and the variants are locked
+while it runs; the overlays, the style and the grade are not, and an edit made
+meanwhile is named when the run ends, since the files are as the project was at
+the click.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),

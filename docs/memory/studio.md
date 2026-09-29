@@ -381,4 +381,11 @@ Unlike Trips and Develop, which hold ONE document in state and hand it back thro
   mid-run, and the run then wrote it back under the new settings. A row
   shows its figure while its settings are those, and again if they return.
   A cancel keeps what was written and says `Cancelled after N of M`.
+- **L2 — Output and Variants are the run's; the overlays, the style, the
+  grade stay free.** Both sections sit under `LockSections` + `RunLockNotice`
+  while `run` is set, and the bar says whose settings it uses. The run
+  already rendered from the click's closures; what is new is SAYING it:
+  `editNow` (a ref to the history's `edit` slice) is compared with `sameSlice`
+  to the click's at the end, variants and file name left out, and a move
+  opens the note with "The project was edited during the export…".
 
