@@ -1,8 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { deckSlides } from '../deck';
-import { createTripDoc, createTripPost, type TripDoc, type TripPost } from '../trip-types';
+import { createPostSlide, createTripDoc, createTripPost, type TripDoc, type TripPost } from '../trip-types';
 import { hookCalendar, standingPiece } from './hook-calendar';
-import { hookContextFor, hookMoves } from './hook-context';
+import { hookContextFor, hookMoves, openerMoves, slideHookTiming } from './hook-context';
 import { hookElementsAt } from './hook-elements';
 import { resolveHook } from './registry';
 import { DEFAULT_BADGE_LAYOUT } from '../badge-layout';
@@ -164,5 +164,66 @@ describe('the scrub through the shared context', () => {
     const headline = (t: number) => at?.(t).find((el) => el.id === 'piece:headline')?.text;
     expect(headline(0)).toBe('1');
     expect(headline(scrub.seconds + 1)).toBe('8');
+  });
+});
+
+describe('an opener on another slide (v29)', () => {
+  const withSlideOpener = (post: TripPost, id: string): TripPost => {
+    const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
+    slide.hook = [{ id, options: {} }];
+    slide.seconds = 6;
+    return { ...post, slides: [slide] };
+  };
+
+  it('is told the SLIDE’s screen time, and no counter when the slide draws no badge', () => {
+    const { trip, hero } = fixture();
+    const p = withSlideOpener(hero, 'scrub');
+    const timing = slideHookTiming(p.slides[0]);
+    expect(timing.screenSeconds).toBe(6);
+    expect(timing.durationSeconds).toBe(6);
+    expect(timing.counterMode).toBeUndefined();
+    const ctx = hookContextFor(trip, p, 1, null, undefined, timing);
+    expect(ctx.screenSeconds).toBe(6);
+    expect(ctx.counterMode).toBeUndefined();
+    expect(ctx.date).toBe(p.date);
+  });
+
+  it('is told the slide badge’s counter and life when it has one', () => {
+    const { hero } = fixture();
+    const p = withSlideOpener(hero, 'scrub');
+    p.slides[0].badge = {
+      mode: 'stage-day',
+      timeAgo: 'off',
+      layout: { ...DEFAULT_BADGE_LAYOUT },
+      durationSeconds: 1.5,
+      textOverrides: {},
+    };
+    const timing = slideHookTiming(p.slides[0]);
+    expect(timing.counterMode).toBe('stage-day');
+    expect(timing.durationSeconds).toBe(1.5);
+  });
+
+  it('makes a content slide leave as a video when its own opener plays', () => {
+    const { trip, hero } = fixture();
+    const p = withSlideOpener(hero, 'scrub');
+    expect(openerMoves(trip, p, p.slides[0].hook, slideHookTiming(p.slides[0]))).toBe(true);
+    const [, content] = deckSlides(trip, p);
+    expect(content.medium).toBe('video');
+    expect(content.reason).toBe('animated');
+  });
+
+  it('keeps a content slide with no opener, or the badge variant alone, a still', () => {
+    const { trip, hero } = fixture();
+    const bare = { ...hero, slides: [createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 })] };
+    expect(deckSlides(trip, bare)[1].medium).toBe('image');
+    const badgeOnly = withSlideOpener(hero, 'badge');
+    expect(openerMoves(trip, badgeOnly, badgeOnly.slides[0].hook, slideHookTiming(badgeOnly.slides[0]))).toBe(false);
+    expect(deckSlides(trip, badgeOnly)[1].medium).toBe('image');
+  });
+
+  it('never moves the first slide for another slide’s opener', () => {
+    const { trip, hero } = fixture();
+    const p = withSlideOpener(hero, 'scrub');
+    expect(hookMoves(trip, p)).toBe(false);
   });
 });

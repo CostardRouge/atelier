@@ -295,7 +295,9 @@ deck back** while it plays, fading the telemetry HUD in when it ends — the HUD
 Every element, intro or not, can now be given a **window** (appears at, disappears
 at — both settable from the playhead) and an **entrance and exit**: fade, slide
 in four directions, scale, typewriter or wipe, each with its own duration and
-curve. Windows count from the clip's **in point**, so trimming the head never
+curve. It can **blend** with the footage under it (multiply, screen, overlay,
+soft light, difference, luminosity), and a text or a readout can **mask** it —
+the picture seen only through the letters, or the letters cut out of it. Windows count from the clip's **in point**, so trimming the head never
 eats the intro that plays over it. While you are editing an element that is not
 on screen at the playhead, it stays drawn as a ghost so it can still be selected
 and dragged. The phone pictogram is drawn into the video like everything else —
@@ -1056,9 +1058,32 @@ band** — every slide end to end on the piece's clock, a clip as wide as its cu
 and a still as wide as the seconds its inspector gives it, slid under a needle
 that never moves. Drag the band (or use the arrow keys on it) and the slide under
 the needle is the one open; ▶ or `Space` plays **the whole piece**, slide after
-slide, on the stage. `⋯` moves the open picture earlier or later, removes it, or
+slide, on the stage. The open slide's cell carries a **grip at each end**: drag
+one to make a picture hold the screen longer or shorter, or to move a clip's in
+or out point — the other end stays put, and the change is written once, when you
+let go (the Content tab's *On screen* slider is the same number). `⋯` moves the open picture earlier or later, removes it, or
 closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
+
+**Any slide can hold what the hook holds.** Being first is what makes a slide
+the hook; what it *carries* is each slide's own. Open a content slide and the
+Look tab offers it an **opener** of its own — three legs in one day can be
+three itineraries in one carousel, a Virée halfway through is a second reason
+to keep swiping — plus its own **shades**, and a **badge**: *Off*, a **chapter
+mark** (the piece's badge at about a third of its size, in a corner, its
+words rewritable for that slide — `NOON · 12`) or *Full*. The badge keeps the piece's look on
+every slide it sits on, so a deck still wears one signature. The Content tab
+gives every slide but the closing card free **Text** lines: type, drag one on
+the picture, size it, give it its own ink or the trip's. A line can **blend**
+with the picture under it (multiply, screen, overlay, soft light, difference,
+luminosity) or **mask** it: *Picture in the letters* lays a wash of your
+colour and strength over the frame and lets the photograph show only through
+the type; *Letters cut out* takes the letters out of the picture down to a
+flat ground. A slide's words sit under its badge, so a mask never hides the
+signature. On the band, a cell marks what its slide holds — `◆` an opener,
+`#` a badge, `T` words. The stage, the rail, the PNGs, the videos and the
+Studio bridge all draw a slide from the one function, so what you see is what
+leaves.
 
 **A slide can be a video, and it plays on the stage.** Put a clip on the hook
 or on any content slide and it plays when the piece reaches it; **Cut** on the
@@ -1169,9 +1194,10 @@ trip's title style stay in Trips, as the panel says.
 
 Currently in place: the trip, its days and stages, the grid, day-keyed posts,
 the badge — words, temporal line, per-piece styling, animation and picture
-treatments — the deck through to its PNGs, clips that play, trim and re-time
-on any slide and leave as video, the located places a stage went through, and
-the bridge into the Studio.
+treatments — the deck through to its PNGs, an opener, a badge, shades and
+blended or masked text on any slide, clips that play, trim and re-time on any
+slide and leave as video, the located places a stage went through, and the
+bridge into the Studio.
 A portable `.json` export of a trip is the phase that follows.
 
 ## Develop tool

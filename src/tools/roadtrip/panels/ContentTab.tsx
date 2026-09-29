@@ -5,7 +5,18 @@ import {
   type BadgePiece,
   type CounterMode,
 } from '../../../shared/roadtrip/day-badge';
-import { hookAnimates, type DeckSlide } from '../../../shared/roadtrip/deck';
+import type { DeckSlide } from '../../../shared/roadtrip/deck';
+import {
+  createSlideText,
+  hasOwnInk,
+  withLineInk,
+  type SlideBadge,
+} from '../../../shared/roadtrip/slide-capacities';
+import { BLEND_MODES, type BlendMode } from '../../../shared/overlay/blend';
+import KnockoutRows from '../../../shared/overlay/KnockoutRows';
+import type { OverlayElement } from '../../../shared/overlay/overlay-types';
+import IconButton from '../../../shared/ui/IconButton';
+import { Icons } from '../../../shared/ui/icons';
 import { readCaptureDate, type CaptureDate } from '../../../shared/roadtrip/media-date';
 import { timeAgoPreviews, type TimeAgoMode } from '../../../shared/roadtrip/time-ago';
 import { postDayRange, stageAt } from '../../../shared/roadtrip/trip-coverage';
@@ -25,6 +36,7 @@ import Button from '../../../shared/ui/Button';
 import {
   FieldRow,
   InspectorSection,
+  RangeField,
   Readout,
   SelectField,
   ToggleField,
@@ -35,7 +47,10 @@ interface ContentTabProps {
   trip: TripDoc;
   post: TripPost;
   slide: DeckSlide;
-  /** The badge's words for this post, or null when the trip cannot be counted. */
+  /**
+   * What the OPEN slide's badge says — the piece's on the first slide, the
+   * slide's own elsewhere — or null when it draws none or cannot be counted.
+   */
   content: BadgeContent | null;
   /** The piece in hand — chosen above the tabs, or by a click on the stage. */
   piece: BadgePiece;
@@ -56,8 +71,15 @@ interface ContentTabProps {
   onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
   patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
-  /** The field a stage click focuses: the piece's text on the hook, the caption elsewhere. */
+  /** Write the open slide's OWN badge — another slide's words, counter and line. */
+  patchSlideBadge: (patch: Partial<SlideBadge>) => void;
+  /** The open slide's lines of free text, and where they are written. */
+  texts: readonly OverlayElement[];
+  onTexts: (texts: OverlayElement[]) => void;
+  /** The field a stage click on a badge piece focuses. */
   textFieldRef: RefObject<HTMLInputElement>;
+  /** The field a stage click on a caption line focuses. */
+  captionFieldRef: RefObject<HTMLInputElement>;
   /** The closing card belongs to the trip; a click on it opens that sheet. */
   onEditClosingCard: () => void;
 }
@@ -95,10 +117,30 @@ export default function ContentTab({
   onChangeTrip,
   patchBadge,
   patchSlide,
+  patchSlideBadge,
+  texts,
+  onTexts,
   textFieldRef,
+  captionFieldRef,
   onEditClosingCard,
 }: ContentTabProps) {
   const isHook = slide.kind === 'hook';
+  /**
+   * The badge this slide's words are written to: the piece's on the first
+   * slide, the slide's own elsewhere, none where the slide draws no badge.
+   * Only what one slide may say differently goes through it — the marker and
+   * the "read on" day stay the piece's, the camera credit the hook's alone.
+   */
+  const badge: {
+    mode: CounterMode;
+    timeAgo: TimeAgoMode;
+    textOverrides: Partial<Record<BadgePiece, string>>;
+    write: (patch: Partial<Pick<PostBadge, 'mode' | 'timeAgo' | 'textOverrides'>>) => void;
+  } | null = isHook
+    ? { ...post.badge, write: patchBadge }
+    : slide.badge
+      ? { ...slide.badge, write: patchSlideBadge }
+      : null;
 
   // --- the day the picture was actually taken -------------------------------
   // Every number the badge draws is a subtraction from the day the piece is
@@ -148,7 +190,7 @@ export default function ContentTab({
       })),
     [trip, post],
   );
-  const activeCounter = counterOptions.find((m) => m.id === post.badge.mode) ?? null;
+  const activeCounter = counterOptions.find((m) => m.id === badge?.mode) ?? null;
   const counterReason = activeCounter?.text === null ? activeCounter.otherwise : null;
 
   /** What the temporal line actually says, so the panel shows it rather than
@@ -165,7 +207,7 @@ export default function ContentTab({
       })),
     [post.date, reference, trip.badgeWords.time],
   );
-  const timeLine = timeOptions.find((p) => p.id === post.badge.timeAgo)?.text ?? null;
+  const timeLine = timeOptions.find((p) => p.id === badge?.timeAgo)?.text ?? null;
 
   const slideName =
     slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Picture ${slide.position}`;
@@ -193,9 +235,9 @@ export default function ContentTab({
           </>
         }
       >
-        {isHook && (
+        {badge && (
           <FieldRow
-            label="Text"
+            label={isHook ? 'Text' : 'Badge text'}
             hint={
               !content ? (
                 <span className="text-danger" role="alert">
@@ -207,14 +249,14 @@ export default function ContentTab({
           >
             <input
               ref={textFieldRef}
-              value={post.badge.textOverrides[piece] ?? ''}
+              value={badge.textOverrides[piece] ?? ''}
               placeholder={content?.[piece] ?? '(nothing here)'}
               onChange={(e) =>
-                patchBadge({
-                  textOverrides: { ...post.badge.textOverrides, [piece]: e.target.value },
+                badge.write({
+                  textOverrides: { ...badge.textOverrides, [piece]: e.target.value },
                 })
               }
-              aria-label="Text"
+              aria-label={isHook ? 'Text' : 'Badge text'}
               className={`${inputClass} w-full`}
             />
           </FieldRow>
@@ -223,7 +265,7 @@ export default function ContentTab({
         {slide.kind === 'content' && (
           <FieldRow label="Caption">
             <input
-              ref={textFieldRef}
+              ref={captionFieldRef}
               value={slide.caption}
               onChange={(e) => patchSlide({ caption: e.target.value })}
               placeholder="A line over this picture — optional"
@@ -246,7 +288,10 @@ export default function ContentTab({
         {slide.kind !== 'cta' && (
           <SlideDelivery
             slide={slide}
-            animated={isHook && hookAnimates(post.badge.pieceStyles, post.badge.cascade)}
+            // Whether something on the slide moves, as the deck itself resolved
+            // it: `animated` / `settled` are exactly the two reasons that say so,
+            // whatever moves — a badge piece, an opener, text, a picture.
+            animated={slide.reason === 'animated' || slide.reason === 'settled'}
             clipSeconds={clipSeconds}
             clip={clip}
             onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
@@ -256,6 +301,119 @@ export default function ContentTab({
           />
         )}
       </InspectorSection>
+
+      {/* Free lines over the picture, on any slide but the closing card —
+          the second thing, after an opener, a slide is most often given. */}
+      {slide.kind !== 'cta' && (
+        <InspectorSection
+          id="piece.texts"
+          title="Text"
+          badge={texts.length ? String(texts.length) : undefined}
+          info={
+            <p>
+              Free lines over this picture — a place, an hour, a word. They wear the trip’s
+              title style like a caption does, never the badge’s glow or panel. Drag a line
+              on the picture to place it; hold Alt to skip the snap.
+            </p>
+          }
+        >
+          {texts.map((el, i) => {
+            const write = (patch: Partial<OverlayElement>) =>
+              onTexts(texts.map((t) => (t.id === el.id ? { ...t, ...patch } : t)));
+            return (
+              <div key={el.id} className="flex flex-col">
+                <FieldRow label={`Line ${i + 1}`}>
+                  <input
+                    data-text-id={el.id}
+                    value={el.text ?? ''}
+                    onChange={(e) => write({ text: e.target.value })}
+                    placeholder="A word over this picture"
+                    aria-label={`Line ${i + 1}`}
+                    className={`${inputClass} w-full min-w-0`}
+                  />
+                  <IconButton
+                    label={`Remove line ${i + 1}`}
+                    size="sm"
+                    variant="ghost"
+                    onClick={() => onTexts(texts.filter((t) => t.id !== el.id))}
+                  >
+                    {Icons.trash}
+                  </IconButton>
+                </FieldRow>
+                <FieldRow label="Size">
+                  <RangeField
+                    label={`Line ${i + 1} size`}
+                    min={0.02}
+                    max={0.3}
+                    step={0.005}
+                    value={el.sizeFrac}
+                    onChange={(sizeFrac) => write({ sizeFrac })}
+                    format={(v) => `${Math.round(v * 100)}%`}
+                  />
+                </FieldRow>
+                <KnockoutRows
+                  label={`Line ${i + 1}`}
+                  value={el.knockout}
+                  onChange={(knockout) => write({ knockout })}
+                />
+                {/* A masked line is bare letters in the mask's own colour: a
+                    blend or an ink would change nothing it draws. */}
+                {!el.knockout && (
+                  <>
+                    <FieldRow
+                      label="Blend"
+                      hint={BLEND_MODES.find((m) => m.id === (el.blend ?? 'normal'))?.hint}
+                    >
+                      <SelectField
+                        label={`Line ${i + 1} blend`}
+                        value={el.blend ?? 'normal'}
+                        onChange={(blend: BlendMode) => write({ blend })}
+                        options={BLEND_MODES.map((m) => ({ id: m.id, label: m.label }))}
+                      />
+                    </FieldRow>
+                    <FieldRow label="Ink">
+                      <input
+                        type="color"
+                        aria-label={`Line ${i + 1} ink`}
+                        value={el.color.startsWith('#') ? el.color : '#ffffff'}
+                        onChange={(e) =>
+                          onTexts(
+                            texts.map((t) => (t.id === el.id ? withLineInk(t, e.target.value) : t)),
+                          )
+                        }
+                        className="h-7 w-10 rounded-control border border-line-strong bg-paper cursor-pointer"
+                      />
+                      {hasOwnInk(el) ? (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            onTexts(texts.map((t) => (t.id === el.id ? withLineInk(t, null) : t)))
+                          }
+                          className={`flex-none ${linkButton}`}
+                        >
+                          The trip’s
+                        </button>
+                      ) : (
+                        <Readout muted>the trip’s</Readout>
+                      )}
+                    </FieldRow>
+                  </>
+                )}
+              </div>
+            );
+          })}
+          <FieldRow label={texts.length ? '' : 'Lines'}>
+            <Button
+              size="sm"
+              icon={Icons.plus}
+              aria-label="Add a line of text"
+              onClick={() => onTexts([...texts, createSlideText()])}
+            >
+              Text
+            </Button>
+          </FieldRow>
+        </InspectorSection>
+      )}
 
       {/* The day belongs to the PIECE, not to a slide: it is what every
           number on the badge is counted from, and it must not vanish on a
@@ -339,7 +497,7 @@ export default function ContentTab({
         )}
       </InspectorSection>
 
-      {isHook && (
+      {badge && (
         <InspectorSection
           id="piece.counter"
           title="Counter"
@@ -356,7 +514,7 @@ export default function ContentTab({
               counterReason ? (
                 <>
                   {counterReason}{' '}
-                  {post.badge.mode === 'day-range'
+                  {badge.mode === 'day-range'
                     ? 'It counts the single day above meanwhile.'
                     : 'Stages are edited on the trip’s Overview; the day of the trip is counted meanwhile.'}
                 </>
@@ -367,14 +525,15 @@ export default function ContentTab({
           >
             <SelectField
               label="Counter"
-              value={post.badge.mode}
-              onChange={(mode) => patchBadge({ mode })}
+              value={badge.mode}
+              onChange={(mode) => badge.write({ mode })}
               options={counterOptions.map((o) => ({
                 id: o.id,
                 label: `${o.label} · ${o.text ?? o.otherwise}`,
               }))}
             />
           </FieldRow>
+          {isHook && (
           <FieldRow
             label="Marker"
             hint={
@@ -391,10 +550,11 @@ export default function ContentTab({
               Before the place
             </ToggleField>
           </FieldRow>
+          )}
         </InspectorSection>
       )}
 
-      {isHook && (
+      {badge && (
         <InspectorSection
           id="piece.time"
           title="Time"
@@ -410,9 +570,9 @@ export default function ContentTab({
             hint={
               timeLine ? (
                 <span className="font-mono text-ink">“{timeLine}”</span>
-              ) : post.badge.timeAgo === 'off' ? (
+              ) : badge.timeAgo === 'off' ? (
                 'No line about when. The trip’s name is on the badge either way.'
-              ) : post.badge.timeAgo === 'anniversary' ? (
+              ) : badge.timeAgo === 'anniversary' ? (
                 'Not the anniversary on that day, so the line is left out. Nothing claims a date it is not.'
               ) : (
                 'Nothing true to say about that gap yet, so the line is left out.'
@@ -421,14 +581,15 @@ export default function ContentTab({
           >
             <SelectField
               label="Time"
-              value={post.badge.timeAgo}
-              onChange={(timeAgo) => patchBadge({ timeAgo })}
+              value={badge.timeAgo}
+              onChange={(timeAgo) => badge.write({ timeAgo })}
               options={timeOptions.map((o) => ({
                 id: o.id,
                 label: o.text ? `${o.label} · ${o.text}` : o.label,
               }))}
             />
           </FieldRow>
+          {isHook && (
           <FieldRow label="Read on">
             <DateField
               value={post.badge.referenceDate ?? todayIso()}
@@ -447,6 +608,7 @@ export default function ContentTab({
               </button>
             )}
           </FieldRow>
+          )}
         </InspectorSection>
       )}
 
