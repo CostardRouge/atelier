@@ -58,6 +58,8 @@ import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
+import RunMark from '../../shared/ui/RunMark';
+import type { RunUnitState } from '../../shared/tasks/run-progress';
 
 /** The open slide's clip, when it is one. */
 export interface StripClip {
@@ -115,6 +117,14 @@ interface DeckStripProps {
    * (its cut) instead, and the closing card never.
    */
   resize?: { min: number; max: number; onChange: (seconds: number, local: number) => void } | null;
+  /**
+   * Slide `i`'s place in a running export, or null outside one — the band
+   * becomes the run's queue (his pick V4, as Develop's filmstrip): a veil on
+   * what waits, a ring and a measured fill on the slide in hand, ✓ or !.
+   */
+  runAt?: (i: number) => { state: RunUnitState; ratio: number | null } | null;
+  /** An export is running: the deck's order is its, so nothing is added, removed or moved. */
+  orderLocked?: boolean;
 }
 
 /** A resize in progress: the end held, where the other end stays, the draft. */
@@ -188,6 +198,8 @@ export default function DeckStrip({
   compact,
   marksFor,
   resize,
+  runAt,
+  orderLocked = false,
 }: DeckStripProps) {
   const pxPerSecond = compact ? 30 : 42;
   // While an end of the open cell is dragged, the band is drawn at the draft
@@ -458,11 +470,12 @@ export default function DeckStrip({
   const pill = `${pillBase} ${compact ? pillCompact : pillWide}`;
   const iconSize = compact ? 'md' : 'sm';
 
+  const lockedWhy = orderLocked ? 'Locked while exporting — the run follows the deck’s order' : undefined;
   const menu: OverflowItem[] = [];
   if (ci >= 0) {
     menu.push(
-      { id: 'earlier', label: 'Move earlier', disabled: ci === 0, onSelect: () => onMove(ci, ci - 1) },
-      { id: 'later', label: 'Move later', disabled: ci >= contentCount - 1, onSelect: () => onMove(ci, ci + 1) },
+      { id: 'earlier', label: 'Move earlier', disabled: ci === 0 || orderLocked, title: lockedWhy, onSelect: () => onMove(ci, ci - 1) },
+      { id: 'later', label: 'Move later', disabled: ci >= contentCount - 1 || orderLocked, title: lockedWhy, onSelect: () => onMove(ci, ci + 1) },
     );
   }
   // On a phone the ticks toggle lives here rather than on the row: a clip
@@ -477,12 +490,12 @@ export default function DeckStrip({
     });
   }
   if (!includeCta) {
-    menu.push({ id: 'cta-on', label: 'Close with the call to action', onSelect: () => onIncludeCta(true) });
+    menu.push({ id: 'cta-on', label: 'Close with the call to action', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(true) });
   } else {
     menu.push({ id: 'cta-edit', label: hasCard ? 'Edit the closing card…' : 'Write the closing card…', onSelect: onEditClosingCard });
-    menu.push({ id: 'cta-off', label: 'End on the last picture', onSelect: () => onIncludeCta(false) });
+    menu.push({ id: 'cta-off', label: 'End on the last picture', disabled: orderLocked, title: lockedWhy, onSelect: () => onIncludeCta(false) });
   }
-  if (ci >= 0) menu.push({ id: 'remove', label: 'Remove this picture', danger: true, onSelect: onRemove });
+  if (ci >= 0) menu.push({ id: 'remove', label: 'Remove this picture', danger: true, disabled: orderLocked, title: lockedWhy, onSelect: onRemove });
 
   const slideLoop = loopScope === 'slide';
   const length = drawn[index] ?? 0;
@@ -596,7 +609,7 @@ export default function DeckStrip({
           </button>
         )}
         <OverflowMenu label={`More for ${slide ? slideName(slide) : 'this slide'}`} items={menu} side="above" size={iconSize} />
-        <IconButton size={iconSize} variant="ghost" label="Add the active picture to this piece" title="Add the active picture to this piece" onClick={onAdd}>
+        <IconButton size={iconSize} variant="ghost" label="Add the active picture to this piece" title={lockedWhy ?? 'Add the active picture to this piece'} disabled={orderLocked} onClick={onAdd}>
           {Icons.plus}
         </IconButton>
       </div>
@@ -700,6 +713,10 @@ export default function DeckStrip({
                       {Icons.loopOne}
                     </span>
                   )}
+                  {(() => {
+                    const run = runAt?.(i);
+                    return run ? <RunMark state={run.state} ratio={run.ratio} /> : null;
+                  })()}
                   {gripped &&
                     (['start', 'end'] as const).map((edge) => (
                       <span

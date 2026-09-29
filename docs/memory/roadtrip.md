@@ -1043,6 +1043,50 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
 
 `hookCalendar` — what every opener reads of the trip — was rebuilt through `tripCoverage` (~1.5 ms on a 300-piece trip, measured) about three times per pointer move of a badge drag. It reads only the OTHER pieces, the legs and the trip's two dates, and the piece being edited is exactly the one it leaves out, so it is now kept (16 entries, by the piece left out) and served while those are the same OBJECTS. That rests on the rule the whole tool already follows: **a trip is updated immutably** — an untouched piece keeps its identity, a touched one never does. Mutating a piece in place (only a test ever did) would serve a stale calendar. `prepare()` itself was measured at 2–13 µs per opener and left alone.
 
+## The piece's export wears Develop's grammar (2026-09-29, his pick from the Trips lab)
+
+- **The piece is taken AT THE CLICK.** Every export verb freezes the looks
+  before its first `await` (`shared/roadtrip/frozen-looks.ts`, tested): the
+  documents were already the click's render, but `lutFor` / `filmFor` answer
+  from the LIVE grade stack, so a look nudged while a reel encoded reached the
+  slides not yet rendered. Each slide and each collage cell (with its own
+  develop, the way the renderers ask) is answered once; an unforeseen
+  question falls back to live rather than to no look. Without this the lock
+  below would lie.
+- **Slides leave in DECK ORDER, one at a time** — a still through
+  `renderDeck` with `include` on its one position, a clip through
+  `renderSlideVideo` — where it used to render every still, then encode the
+  clips. A still costs one decode either way; what it buys is a run that can
+  be followed left to right on the deck strip.
+- **The verbs are PINNED** (`DeliverBar`, `placement` `panel` docked, `sheet`
+  or `drawer` on a phone): the piece is the primary; the menu holds every
+  slide as a still (the old "As images" SWITCH, which the header's Export
+  never read — a verb cannot be missed), the open slide as a PNG
+  (`exportDeck(position)`) and the hook as a video. The Export tab keeps what
+  is SET (the plan, Delivers, the transcode offer, the Studio link); the plan
+  is computed by `PostEditor` once, for the tab and the bar alike. The header's
+  `Export` stays as a shortcut to the same primary.
+- **The run is seen slide by slide** (V1 + V4, the shared model in
+  `shared/tasks/run-progress.ts`, `tasks.md`): one unit per slide keyed by its
+  deck POSITION (the id `DeckStrip`'s `runAt` looks up), phases Render → Write
+  for a still, Encode → Write for a clip (the encode carries its measured
+  ratio). The bar is drawn on EVERY tab while `exports.run` is set; on a phone
+  it rides the open sheet or drawer, and a closed panel leaves the header's
+  fill, the deck marks and the masthead pill. The header's fill is
+  `runFraction` — stages, never time. Each file is written by `writeOne` as
+  it is made (no reel held in memory, "done" means on disk), and the closing
+  note counts written / failed-to-write / could-not-render.
+- **L2 — the Export tab and the deck ORDER are the run's; retouching is
+  free.** The tab sits under `LockSections` + `RunLockNotice` and shows the
+  plan held at the run's start (the live one would already list a still
+  turned into a clip); `addSlide` / `removeSlide` / `moveSlideTo` / the
+  closing-card switch refuse while `exports.run` is set, and `DeckStrip`
+  greys them (`orderLocked`) — a unit is a slide by POSITION, so a move
+  mid-run would rename every file after it. What changed under the run is
+  named first in the closing note (`shared/roadtrip/run-edits.ts`, tested):
+  a slide by its `deckSlides` entry, the hook also by its whole badge, and
+  "the look" when what dresses every slide moved (both grades, the theme,
+  the badge words, the camera names, the closing card).
 
 ## A MAP view of the overview — BUILT 2026-09-29
 

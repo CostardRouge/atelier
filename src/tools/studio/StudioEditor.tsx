@@ -52,6 +52,19 @@ import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity
 import { trackedFetch } from '../../shared/tasks/tracked';
 import { fileIdentity } from '../../shared/library/assets';
 import { startTask } from '../../shared/tasks/tasks';
+import {
+  atStep,
+  cancelRun,
+  enterUnit,
+  finishUnit,
+  runFraction,
+  runStateOf,
+  startRun,
+  type RunPhase,
+  type RunProgress,
+  type RunUnit,
+} from '../../shared/tasks/run-progress';
+import TaskEdge from '../../shared/ui/TaskEdge';
 import SendFinalsPanel from '../../shared/sources/winnow/SendFinalsPanel';
 import { readEffectiveExif } from '../../shared/exif/read-exif';
 import { downloadBlob } from '../../shared/media/save';
@@ -134,13 +147,15 @@ import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 import PageBar, { barPill } from '../../shared/ui/PageBar';
 import Button from '../../shared/ui/Button';
+import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import { Icons } from '../../shared/ui/icons';
 import { useSurface } from '../../shared/ui/use-surface';
-import { FieldRow, InspectorSection, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, LockSections, Readout, SelectField, ToggleField } from '../../shared/ui/Inspector';
+import RunLockNotice, { runClock } from '../../shared/ui/RunLockNotice';
 import { deliveryFor } from '../../shared/develop/delivery-source';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import IconButton from '../../shared/ui/IconButton';
@@ -153,6 +168,22 @@ import Segmented from '../../shared/ui/Segmented';
  * same day is the point.
  */
 const STUDIO_KINDS = ['video+telemetry', 'video', 'photo'] as const;
+
+/** A variant's stages in an export run (`run-progress.ts`). */
+const STILL_PHASES: RunPhase[] = [
+  { id: 'render', label: 'Render' },
+  { id: 'write', label: 'Write' },
+];
+const CLIP_PHASES: RunPhase[] = [
+  { id: 'encode', label: 'Encode' },
+  { id: 'write', label: 'Write' },
+];
+
+/** What a measured figure is true of: this clip, these settings, this cut. */
+function statKey(clipId: string, variant: ExportVariant, cut: TrimRange | null): string {
+  // The row's id is not a setting: two rows asking the same thing cost the same.
+  return `${clipId}|${JSON.stringify({ ...variant, id: undefined })}|${cut ? `${cut.start}-${cut.end}` : ''}`;
+}
 
 type PanelTab = 'overlay' | 'style' | 'grade' | 'info' | 'export';
 
@@ -402,8 +433,6 @@ export default function StudioEditor({
 
   // Export state.
   const [exporting, setExporting] = useState(false);
-  const [exportRatio, setExportRatio] = useState(0);
-  const [exportStep, setExportStep] = useState<{ index: number; total: number } | null>(null);
   const [exportError, setExportError] = useState<string | null>(null);
   /**
    * Render the deliverables from the editing proxy instead of fetching the
@@ -413,8 +442,6 @@ export default function StudioEditor({
    * through the tunnel right now.
    */
   const [renderFromProxy, setRenderFromProxy] = useState(false);
-  /** Pulling the capture down happens before the first variant; say so. */
-  const [fetchingOriginal, setFetchingOriginal] = useState(false);
   const [exportDone, setExportDone] = useState(false);
   /**
    * The deliverables of the last run, kept so they can be sent back to the
@@ -430,7 +457,11 @@ export default function StudioEditor({
   );
   // What each variant cost, last time it rendered — size, wall clock, speed.
   // Session-only state on purpose: it measures this machine today, not the
-  // composition, so it has no business in the project document.
+  // composition, so it has no business in the project document. Keyed by
+  // the clip, the variant's settings and the cut (`statKey`): a figure is only
+  // true of what produced it, so a row shows it while its settings are those
+  // and hides it the moment one changes — without erasing it, which is what
+  // made an edit during a run wipe the figure the run then wrote back.
   const [variantStats, setVariantStats] = useState<Record<string, ExportStat>>({});
   const [runStats, setRunStats] = useState<ExportStat[]>([]);
   // The variant being rendered right now, with the clock it started on, so its
@@ -440,6 +471,16 @@ export default function StudioEditor({
   );
   const [liveElapsed, setLiveElapsed] = useState(0);
   const exportAbort = useRef<AbortController | null>(null);
+  // Where the run stands variant by variant (`run-progress.ts`, his pick V1 +
+  // V4 from the Studio lab): the pinned bar's segments, the rows' marks, the
+  // masthead pill. It belongs to the CLIP it was started on (`runClip`), not
+  // to the one open: the bar follows the run across a clip switch, and the
+  // run's figures and finals stay that clip's.
+  const [run, setRun] = useState<RunProgress | null>(null);
+  const runNow = useRef<RunProgress | null>(null);
+  const [runClip, setRunClip] = useState<{ id: string; name: string } | null>(null);
+  /** How the last run ended when it did not end whole — a cancel keeps what it wrote. */
+  const [runEnd, setRunEnd] = useState<string | null>(null);
 
   // Tick the in-flight variant's timer. One interval for the whole export, not
   // one per row, and none at all when nothing is rendering.
@@ -589,16 +630,13 @@ export default function StudioEditor({
     // Mount-only by design: the editor is keyed by project.id.
   }, []);
 
-  // Reset export feedback and stale codec info when the active clip changes.
-  // The stats go too: another clip renders to another size in another time,
-  // and leaving the old figures under the rows would attribute them to it.
+  // Stale codec info goes when the active clip changes. The export's feedback
+  // does NOT: it belongs to the clip the run was started on (`runClip`) and is
+  // shown as that clip's — a switch mid-run used to blank the bar while the
+  // run went on. The per-row figures are keyed by clip, so they need no reset.
   useEffect(() => {
     setActiveInfo({});
-    setExportDone(false);
-    setExportError(null);
-    setVariantStats({});
-    setRunStats([]);
-    setLastRun([]);
+    if (!exportAbort.current) setExportError(null);
   }, [activeId]);
 
   // Parse the active clip's telemetry — clips without an .srt just get no cues.
@@ -1011,6 +1049,11 @@ export default function StudioEditor({
     ],
   );
 
+  // The composition as it is NOW, for a run that took it at the click and asks
+  // at its end whether it moved meanwhile (L2).
+  const editNow = useRef(edit);
+  editNow.current = edit;
+
   const history = useHistory({
     value: edit,
     isSame: sameSlice,
@@ -1278,7 +1321,6 @@ export default function StudioEditor({
       theme,
       timeShift,
     });
-    setExportRatio(1);
     return blob;
   }
 
@@ -1346,9 +1388,13 @@ export default function StudioEditor({
     }
   }
 
-  /** Render every requested variant in turn; each downloads as it finishes. */
-  async function handleExport() {
-    if (!active || exporting || variants.length === 0) return;
+  /**
+   * Render the variants in turn — every one, or `only` those (the pinned
+   * bar's menu offers each alone); each is written as it finishes.
+   */
+  async function handleExport(only?: readonly ExportVariant[]) {
+    const runVariants = only ?? variants;
+    if (!active || exporting || runVariants.length === 0) return;
     if (!activeVideo && !photo) return;
     const meta = lib.getMeta(active.id);
     let srcWidth = photoNatural?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
@@ -1368,15 +1414,21 @@ export default function StudioEditor({
     // resume-across-clips ref) honest, so nothing restarts on its own.
     videoRef.current?.pause();
     setExporting(true);
-    setExportRatio(0);
     setExportError(null);
     setExportDone(false);
     setRunStats([]);
     setLastRun([]);
+    setRunClip({ id: active.id, name: active.baseName });
+    setRunEnd(null);
     const measured: ExportStat[] = [];
     const rendered: File[] = [];
     const controller = new AbortController();
     exportAbort.current = controller;
+    const clipId = active.id;
+    const cut = trimmed ? range : null;
+    // The composition the run renders — this render's, whatever is edited
+    // while it goes on (L2: retouching stays free, the export tab is locked).
+    const editAtClick = edit;
     // Prefer the transcoded H.264 (if one was made for preview): WebCodecs can
     // decode it directly, where the HEVC original would fail.
     let source = activeTranscode.transcoded ?? activeVideo;
@@ -1387,9 +1439,34 @@ export default function StudioEditor({
       label: `Exporting ${base}`,
       scope: finalsMedia ? (knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)) : null,
       progress: 0,
-      detail: `${variants.length} variant${variants.length === 1 ? '' : 's'}`,
+      detail: `${runVariants.length} variant${runVariants.length === 1 ? '' : 's'}`,
       cancel: () => controller.abort(),
     });
+    // The run, variant by variant: a clip is encoded then written, a still
+    // rendered then written; a clip whose capture is fetched first says so on
+    // its first variant, the one that waits for it.
+    const fetchesCapture = !photo && Boolean(proxyWithOriginal?.fetchOriginal) && !renderFromProxy;
+    const units: RunUnit[] = runVariants.map((v, i) => ({
+      id: v.id,
+      name: `${active.baseName} · Variant ${variants.indexOf(v) + 1} · ${variantSize(v)}`,
+      phases: photo
+        ? STILL_PHASES
+        : i === 0 && fetchesCapture
+          ? [{ id: 'fetch', label: 'Fetch original' }, ...CLIP_PHASES]
+          : CLIP_PHASES,
+    }));
+    const showRun = (next: RunProgress | null) => {
+      runNow.current = next && controller.signal.aborted ? cancelRun(next) : next;
+      setRun(runNow.current);
+      if (runNow.current) exportTask.update({ progress: runFraction(runNow.current) });
+    };
+    const say = (phase: string, words: string, ratio: number | null = null) => {
+      if (runNow.current) showRun(atStep(runNow.current, phase, words, ratio));
+      exportTask.update({ detail: words });
+    };
+    showRun(startRun(units, Date.now()));
+    controller.signal.addEventListener('abort', () => showRun(runNow.current));
+    showRun(enterUnit(runNow.current!, 0));
     // A still delivered from its source's ORIGINAL when the frame is worth it
     // (O2 of `docs/develop-originals.md`). Decoded here and closed with the
     // run: the stage keeps its own bitmap. Either way the still is decoded at
@@ -1404,24 +1481,20 @@ export default function StudioEditor({
       if (photo && activeImage && photoProxy && stillFrame) {
         const chosen = await deliveryFor(activeImage, null, stillFrame);
         if (chosen.file !== activeImage) {
-          setFetchingOriginal(true);
-          try {
-            const decoded = await decodeStillForExport(chosen.file, variants);
-            fetchedStill = decoded.bitmap;
-            still = fetchedStill;
-            runFrame = decoded.frame;
-          } finally {
-            setFetchingOriginal(false);
-          }
+          say('render', `Fetching the original from ${photoProxy.sourceId}…`);
+          const decoded = await decodeStillForExport(chosen.file, runVariants);
+          fetchedStill = decoded.bitmap;
+          still = fetchedStill;
+          runFrame = decoded.frame;
         }
       }
       // The stage's copy is decoded at the stage's budget: where the run
       // needs more than it holds, the still is decoded again for the run and
       // closed with it. A 1080 cut usually needs less, and costs no decode.
       if (photo && activeImage && still === photo && runFrame) {
-        const need = exportDecodeEdge(variants, runFrame);
+        const need = exportDecodeEdge(runVariants, runFrame);
         if (Math.max(photo.width, photo.height) < need) {
-          const decoded = await decodeStillForExport(activeImage, variants);
+          const decoded = await decodeStillForExport(activeImage, runVariants);
           fetchedStill = decoded.bitmap;
           still = fetchedStill;
           runFrame = decoded.frame;
@@ -1436,30 +1509,26 @@ export default function StudioEditor({
       // from it — at ITS dimensions, which is what makes a 1080 variant
       // actually 1080. Photos never take this path: `origin` is read off the
       // clip, and a photo's original is often a RAW no browser decodes.
-      if (proxyWithOriginal?.fetchOriginal && !renderFromProxy) {
-        setFetchingOriginal(true);
-        try {
-          // A task of its own — the capture's name and weight, on its edge,
-          // cancellable from the pill — beside the export's own Cancel.
-          const fetchOriginal = proxyWithOriginal.fetchOriginal;
-          source = await trackedFetch(
-            {
-              label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
-              scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
-              bytes: proxyWithOriginal.bytes ?? null,
-            },
-            (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
-          );
-          srcWidth = proxyWithOriginal.width ?? srcWidth;
-          srcHeight = proxyWithOriginal.height ?? srcHeight;
-        } finally {
-          setFetchingOriginal(false);
-        }
+      if (fetchesCapture && proxyWithOriginal?.fetchOriginal) {
+        say('fetch', `Fetching ${proxyWithOriginal.name ?? 'the capture'} from ${proxyWithOriginal.sourceId}`);
+        // A task of its own — the capture's name and weight, on its edge,
+        // cancellable from the pill — beside the export's own Cancel.
+        const fetchOriginal = proxyWithOriginal.fetchOriginal;
+        source = await trackedFetch(
+          {
+            label: `Fetching ${proxyWithOriginal.name ?? 'the capture'}`,
+            scope: activeVideo ? (knownIdentity(activeVideo)?.assetId ?? null) : null,
+            bytes: proxyWithOriginal.bytes ?? null,
+          },
+          (opts) => fetchOriginal({ ...opts, signal: controller.signal }),
+        );
+        srcWidth = proxyWithOriginal.width ?? srcWidth;
+        srcHeight = proxyWithOriginal.height ?? srcHeight;
       }
       // Several variants of a clip read and demux its file ONCE: each used to
       // read the whole file and parse it again. One variant keeps the old path.
       let demuxed: DemuxResult | null = null;
-      if (!still && source && variants.length > 1) {
+      if (!still && source && runVariants.length > 1) {
         try {
           demuxed = await demuxSource(source);
         } catch {
@@ -1467,16 +1536,15 @@ export default function StudioEditor({
           demuxed = null;
         }
       }
-      for (let i = 0; i < variants.length; i += 1) {
+      for (let i = 0; i < runVariants.length; i += 1) {
         // Checked per variant, not only inside the encoder: a still renders in
         // one pass and never looks at the signal, so a cancelled run of five
         // stills would otherwise write all five. Returning rather than
         // breaking, so a cancelled run does not then report "✓ Exported".
         if (controller.signal.aborted) return;
-        const variant = variants[i];
-        setExportStep({ index: i + 1, total: variants.length });
-        setExportRatio(0);
-        exportTask.update({ progress: i / variants.length, detail: `${i + 1} of ${variants.length} · ${variant.id}` });
+        const variant = runVariants[i];
+        if (i > 0) showRun(enterUnit(runNow.current!, i));
+        say(still ? 'render' : 'encode', still ? `Rendering ${variantSize(variant)}` : `Encoding ${variantSize(variant)}`, still ? null : 0);
         // Time the whole variant, delivery included: writing a 400 MB file to
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
@@ -1490,8 +1558,7 @@ export default function StudioEditor({
           if (p.phase === 'encoding' && p.ratio != null) {
             if (p.ratio < 1 && p.ratio - reported < 0.005) return;
             reported = p.ratio;
-            setExportRatio(p.ratio);
-            exportTask.update({ progress: (i + p.ratio) / variants.length });
+            say('encode', `Encoding ${variantSize(variant)} · ${Math.round(p.ratio * 100)}%`, p.ratio);
           }
         };
         const blob = still
@@ -1499,6 +1566,7 @@ export default function StudioEditor({
           : await renderClipVariant(source, demuxed, variant, srcWidth, srcHeight, onProgress, controller);
         const name = variantFileName(base, variant, isPhoto ? 'photo' : 'video');
         const file = new File([blob], name, { type: blob.type });
+        say('write', `Writing ${name}`);
         await deliver(file);
         rendered.push(file);
         const stat: ExportStat = {
@@ -1512,11 +1580,10 @@ export default function StudioEditor({
             : (trimmed ? trimDuration(range) : durationRef.current) || null,
         };
         measured.push(stat);
-        setVariantStats((prev) => ({ ...prev, [variant.id]: stat }));
+        setVariantStats((prev) => ({ ...prev, [statKey(clipId, variant, cut)]: stat }));
         setRunStats([...measured]);
+        showRun(finishUnit(runNow.current!, i, true, Date.now()));
       }
-      setLastRun(rendered);
-      setExportDone(true);
     } catch (err) {
       if ((err as Error).name !== 'AbortError') {
         setExportError((err as Error).message || 'Export failed');
@@ -1525,44 +1592,52 @@ export default function StudioEditor({
       exportTask.done();
       fetchedStill?.close();
       setExporting(false);
-      setExportStep(null);
       setLiveExport(null);
       exportAbort.current = null;
+      runNow.current = null;
+      setRun(null);
+      // What left, said once the run is over — kept with the clip it was cut
+      // from, never the one open.
+      if (rendered.length > 0) {
+        setLastRun(rendered);
+        setExportDone(true);
+      }
+      // What the run did not deliver, said first: a retouch made while it ran
+      // is not in its files, and a cancel keeps what it wrote.
+      const moved = !sameSlice(
+        { ...editAtClick, variants: null, exportFileName: null },
+        { ...editNow.current, variants: null, exportFileName: null },
+      );
+      setRunEnd(
+        [
+          moved && rendered.length > 0
+            ? 'The project was edited during the export — the files are as it was at the click; export again to send the change.'
+            : null,
+          controller.signal.aborted
+            ? rendered.length > 0
+              ? `Cancelled after ${rendered.length} of ${runVariants.length} — what was written stays.`
+              : 'Export cancelled — nothing was written.'
+            : null,
+        ]
+          .filter(Boolean)
+          .join(' ') || null,
+      );
     }
   }
 
-  /**
-   * Drop a variant's measurement (all of them with no id). A figure is only
-   * true of the settings that produced it: leaving "38 MB · 41 s" under a row
-   * whose resolution just changed would credit the new setting with the old
-   * run. The run summary goes with it, for the same reason.
-   */
-  function forgetStats(id?: string) {
-    setVariantStats((prev) => {
-      if (!id) return Object.keys(prev).length ? {} : prev;
-      if (!prev[id]) return prev;
-      const next = { ...prev };
-      delete next[id];
-      return next;
-    });
-    setRunStats([]);
-    setExportDone(false);
-  }
-
+  // An edit to a variant no longer erases its figure: the figure is keyed by
+  // the settings that produced it (`statKey`), so the row hides it while they
+  // differ — and a run in flight keeps the figures it is writing.
   function updateVariant(id: string, patch: Partial<ExportVariant>) {
     setVariants((prev) => prev.map((v) => (v.id === id ? { ...v, ...patch } : v)));
-    forgetStats(id);
   }
   function addVariant() {
     // A new row starts from the project's destination format — the reason the
     // format lives in the settings.
     setVariants((prev) => [...prev, createVariant(aspectId)]);
-    setRunStats([]);
-    setExportDone(false);
   }
   function removeVariant(id: string) {
     setVariants((prev) => (prev.length > 1 ? prev.filter((v) => v.id !== id) : prev));
-    forgetStats(id);
   }
 
   function cancelExport() {
@@ -1666,6 +1741,66 @@ export default function StudioEditor({
   // The clip's own cadence, when the container probe produced one — used to
   // label "Source fps" and to warn when a variant asks for more than exists.
   const sourceFps = activeInfo.fps && activeInfo.fps > 0 ? activeInfo.fps : null;
+
+  // The export's verbs, PINNED under the inspector's scroll (2026-09-29, his
+  // pick S1 from the Studio lab, Develop's grammar): every variant is the
+  // button, each variant alone and a frame capture are the menu. What is SET
+  // — the output, the variants — stays in the tab's sections, which scroll.
+  const fileWord = isPhoto ? 'JPEG' : 'MP4';
+  const variantSize = (v: ExportVariant) => {
+    const dims = exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
+    return dims ? `${dims.w}×${dims.h}` : v.aspectId === 'source' ? 'source frame' : v.aspectId;
+  };
+  const exportVerbs: ExportVerb[] = [];
+  if (active && exportSupported) {
+    exportVerbs.push({
+      id: 'all',
+      label: variants.length > 1 ? `Export ${variants.length} ${fileWord}s` : `Export the ${fileWord}`,
+      hint: isPhoto
+        ? 'Render every variant as a JPEG, one after the other'
+        : 'Render every variant (H.264 MP4), one after the other',
+      run: () => void handleExport(),
+    });
+    if (variants.length > 1) {
+      variants.forEach((v, i) =>
+        exportVerbs.push({
+          id: `only-${v.id}`,
+          label: `Variant ${i + 1} alone`,
+          hint: `${variantSize(v)} · ${variantFileName(exportFileName.trim() || active.baseName, v, isPhoto ? 'photo' : 'video')}`,
+          run: () => void handleExport([v]),
+        }),
+      );
+    }
+  }
+  if (active && !isPhoto) {
+    exportVerbs.push({
+      id: 'frame',
+      label: 'Capture this frame',
+      hint: 'The frame under the playhead as a JPEG, overlays and look burned in',
+      run: () => void handleGrabFrame(),
+    });
+  }
+  const exportSummary = !exportSupported
+    ? 'Export needs WebCodecs (try Chrome/Edge/Safari) — editing works everywhere.'
+    : `${variants.length} ${fileWord}${variants.length === 1 ? '' : 's'} · ${variants.map(variantSize).join(', ')} · into ${destDir ? destDir.name : 'Downloads'}`;
+  // The run's rows are marked only on the clip it runs for: the variants are
+  // the project's, the run is one clip's.
+  const runHere = run !== null && runClip?.id === activeId;
+  const resultsHere = runClip?.id === activeId;
+  const exportNote =
+    (exportDone && runStats.length > 0) || exportError || runEnd ? (
+      <div className="flex flex-col gap-1.5">
+        {runEnd && <span className="text-xs text-ink-soft">{runEnd}</span>}
+        {exportDone && runStats.length > 0 && (
+          <span className="inline-flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink-soft">
+            <span className="inline-flex self-center text-ok">{Icons.check}</span>
+            {!resultsHere && runClip ? `${runClip.name} · ` : ''}
+            {describeExportRun(runStats)}
+          </span>
+        )}
+        {exportError && <span className="text-xs text-danger">{exportError}</span>}
+      </div>
+    ) : null;
 
   // What the outro's preview composes for: the project's destination format —
   // the card recomposes per variant frame at export, like every overlay.
@@ -2001,6 +2136,9 @@ export default function StudioEditor({
               preload="auto"
               onError={() => setActiveError(true)}
             />
+            {/* This media's own tasks along the stage's edge — its capture
+                being fetched, a run of its variants (V1 + V4). */}
+            {finalsMedia && <TaskEdge scope={knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)} />}
           </div>
 
           {activeUrl && (
@@ -2429,316 +2567,295 @@ export default function StudioEditor({
 
               {tab === 'export' && (
                 <>
-                  <InspectorSection id="studio.export.output" title="Output">
-                    <FieldRow label="File name">
-                      <input
-                        type="text"
-                        value={exportFileName}
-                        onChange={(e) => setExportFileName(e.target.value)}
-                        placeholder={active.baseName}
-                        aria-label="File name"
-                        className="w-full font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
-                      />
-                    </FieldRow>
-                    <FieldRow
-                      label="Destination"
-                      hint={canWriteToDisk() ? undefined : 'Downloads — folder writing needs Chromium.'}
-                    >
-                      {canWriteToDisk() ? (
-                        <>
-                          <Readout muted={!destDir}>{destDir ? destDir.name : 'Downloads'}</Readout>
-                          <span className="flex-1" />
-                          {destDir && (
-                            <Button size="sm" variant="ghost" onClick={() => setDestDir(null)}>
-                              Downloads
-                            </Button>
-                          )}
-                          <Button
-                            size="sm"
-                            onClick={() => {
-                              void pickWritableDirectory()
-                                .then(setDestDir)
-                                .catch(() => undefined);
-                            }}
-                          >
-                            {destDir ? 'Change…' : 'Folder…'}
-                          </Button>
-                        </>
-                      ) : (
-                        <Readout muted>Downloads</Readout>
-                      )}
-                    </FieldRow>
-                    {photoProxy && (
-                      <FieldRow
-                        label="Delivers"
-                        align="start"
-                        hint={`${stillDelivery?.reason ? `${stillDelivery.reason}. ` : stillDelivery ? '' : 'Measured once the picture is decoded. '}You are editing on ${photoProxy.sourceId}’s proxy: the full-size original is fetched only where the proxy could not fill the frame your variants ask for, and kept for this session. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself.`}
-                      >
-                        <span
-                          className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
-                        >
-                          {stillDelivery ? stillDelivery.line : '—'}
-                        </span>
+                  {run && (
+                    <RunLockNotice since={run.startedAt}>
+                      The overlays, the style and the grade stay free; an edit made now is said when
+                      the run ends and goes to the next export.
+                    </RunLockNotice>
+                  )}
+                  <LockSections locked={run !== null}>
+                    <InspectorSection id="studio.export.output" title="Output">
+                      <FieldRow label="File name">
+                        <input
+                          type="text"
+                          value={exportFileName}
+                          onChange={(e) => setExportFileName(e.target.value)}
+                          placeholder={active.baseName}
+                          aria-label="File name"
+                          className="w-full font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-paper text-ink focus:outline-none focus:border-accent focus:ring-2 focus:ring-accent/20"
+                        />
                       </FieldRow>
-                    )}
-                    {proxyWithOriginal && (
                       <FieldRow
-                        label="From proxy"
-                        hint={
+                        label="Destination"
+                        hint={canWriteToDisk() ? undefined : 'Downloads — folder writing needs Chromium.'}
+                      >
+                        {canWriteToDisk() ? (
                           <>
-                            You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
-                            {srcH ? ` (${srcH}p)` : ''}
-                            {willFetchOriginal
-                              ? ' — the export fetches the original first, so the deliverables are full quality.'
-                              : ' — and delivering from it: faster, nothing large crosses the network, proxy quality.'}
-                          </>
-                        }
-                      >
-                        <ToggleField
-                          label="Render from the proxy"
-                          checked={renderFromProxy}
-                          onChange={setRenderFromProxy}
-                        >
-                          For a quick look
-                        </ToggleField>
-                      </FieldRow>
-                    )}
-                  </InspectorSection>
-
-                  <InspectorSection
-                    id="studio.export.variants"
-                    title="Variants"
-                    badge={String(variants.length)}
-                    actions={
-                      <Button size="sm" variant="ghost" icon={Icons.plus} onClick={addVariant}>
-                        Variant
-                      </Button>
-                    }
-                  >
-                    {variants.map((v, index) => {
-                      const dims = exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
-                      // A variant never upscales, so asking for more than the
-                      // source holds silently delivers less. Say which.
-                      const short = exportW && exportH ? resolutionShortfall(v, exportW, exportH) : null;
-                      const stats = variantStats[v.id];
-                      const fileName = variantFileName(
-                        exportFileName.trim() || active.baseName,
-                        v,
-                        isPhoto ? 'photo' : 'video',
-                      );
-                      return (
-                        <div key={v.id} className="flex flex-col gap-2 pl-3 border-l-2 border-line">
-                          <div className="flex items-center gap-2">
-                            <span className="flex-1 min-w-0 text-sm font-medium text-ink">Variant {index + 1}</span>
-                            <IconButton
+                            <Readout muted={!destDir}>{destDir ? destDir.name : 'Downloads'}</Readout>
+                            <span className="flex-1" />
+                            {destDir && (
+                              <Button size="sm" variant="ghost" onClick={() => setDestDir(null)}>
+                                Downloads
+                              </Button>
+                            )}
+                            <Button
                               size="sm"
-                              variant="ghost"
-                              label="Remove this variant"
-                              onClick={() => removeVariant(v.id)}
-                              disabled={variants.length <= 1}
+                              onClick={() => {
+                                void pickWritableDirectory()
+                                  .then(setDestDir)
+                                  .catch(() => undefined);
+                              }}
                             >
-                              {Icons.close}
-                            </IconButton>
-                          </div>
-                          <FieldRow label="Format">
-                            <SelectField
-                              label="Variant format"
-                              value={v.aspectId}
-                              onChange={(aspectId) => updateVariant(v.id, { aspectId })}
-                              options={[
-                                { id: 'source', label: 'Source frame' },
-                                ...ASPECT_PRESETS.map((a) => ({ id: a.id, label: `${a.id} — ${a.label}` })),
-                              ]}
-                            />
-                          </FieldRow>
-                          <FieldRow
-                            label="Resolution"
-                            hint={
-                              short ? (
-                                <span className="text-danger">
-                                  {short.asked}p was asked for; this source delivers {short.delivered}p.
-                                  {proxyWithOriginal && renderFromProxy
-                                    ? ' Turn off “From proxy” to export from the original.'
-                                    : ''}
-                                </span>
-                              ) : undefined
-                            }
+                              {destDir ? 'Change…' : 'Folder…'}
+                            </Button>
+                          </>
+                        ) : (
+                          <Readout muted>Downloads</Readout>
+                        )}
+                      </FieldRow>
+                      {photoProxy && (
+                        <FieldRow
+                          label="Delivers"
+                          align="start"
+                          hint={`${stillDelivery?.reason ? `${stillDelivery.reason}. ` : stillDelivery ? '' : 'Measured once the picture is decoded. '}You are editing on ${photoProxy.sourceId}’s proxy: the full-size original is fetched only where the proxy could not fill the frame your variants ask for, and kept for this session. A RAW is reached only through the render inside it, measured first — develop it on its RAW for the sensor itself.`}
+                        >
+                          <span
+                            className={`font-mono text-sm tabular-nums leading-snug pt-1 ${stillDelivery ? 'text-ink' : 'text-muted'}`}
                           >
-                            <SelectField
-                              label="Variant resolution"
-                              value={String(v.resolution)}
-                              onChange={(r) =>
-                                updateVariant(v.id, {
-                                  resolution: (r === 'source' ? 'source' : Number(r)) as VariantResolution,
-                                })
-                              }
-                              options={[
-                                { id: 'source', label: 'Source' },
-                                { id: '1080', label: '1080p' },
-                                { id: '720', label: '720p' },
-                              ]}
-                            />
-                          </FieldRow>
-                          {/* A cadence and a speed are about a sequence of
-                              frames; a still has one, so both rows leave. */}
-                          {!isPhoto && (
-                            <FieldRow
-                              label="Frame rate"
-                              hint={
-                                sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps
-                                  ? `${v.frameRate} fps from ${sourceFps} — frames are duplicated, not interpolated: no new motion.`
-                                  : undefined
-                              }
-                            >
+                            {stillDelivery ? stillDelivery.line : '—'}
+                          </span>
+                        </FieldRow>
+                      )}
+                      {proxyWithOriginal && (
+                        <FieldRow
+                          label="From proxy"
+                          hint={
+                            <>
+                              You are editing on {proxyWithOriginal.sourceId}&apos;s proxy
+                              {srcH ? ` (${srcH}p)` : ''}
+                              {willFetchOriginal
+                                ? ' — the export fetches the original first, so the deliverables are full quality.'
+                                : ' — and delivering from it: faster, nothing large crosses the network, proxy quality.'}
+                            </>
+                          }
+                        >
+                          <ToggleField
+                            label="Render from the proxy"
+                            checked={renderFromProxy}
+                            onChange={setRenderFromProxy}
+                          >
+                            For a quick look
+                          </ToggleField>
+                        </FieldRow>
+                      )}
+                    </InspectorSection>
+
+                    <InspectorSection
+                      id="studio.export.variants"
+                      title="Variants"
+                      badge={String(variants.length)}
+                      actions={
+                        <Button size="sm" variant="ghost" icon={Icons.plus} onClick={addVariant}>
+                          Variant
+                        </Button>
+                      }
+                    >
+                      {variants.map((v, index) => {
+                        const dims = exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
+                        // A variant never upscales, so asking for more than the
+                        // source holds silently delivers less. Say which.
+                        const short = exportW && exportH ? resolutionShortfall(v, exportW, exportH) : null;
+                        const stats = variantStats[statKey(activeId ?? '', v, trimmed ? range : null)];
+                        const state = runHere ? runStateOf(run, v.id) : null;
+                        const fileName = variantFileName(
+                          exportFileName.trim() || active.baseName,
+                          v,
+                          isPhoto ? 'photo' : 'video',
+                        );
+                        return (
+                          <div key={v.id} className="flex flex-col gap-2 pl-3 border-l-2 border-line">
+                            <div className="flex items-center gap-2">
+                              <span className="flex-1 min-w-0 text-sm font-medium text-ink">Variant {index + 1}</span>
+                              <IconButton
+                                size="sm"
+                                variant="ghost"
+                                label="Remove this variant"
+                                onClick={() => removeVariant(v.id)}
+                                disabled={variants.length <= 1}
+                              >
+                                {Icons.close}
+                              </IconButton>
+                            </div>
+                            <FieldRow label="Format">
                               <SelectField
-                                label="Variant frame rate"
-                                value={String(v.frameRate)}
-                                onChange={(f) =>
-                                  updateVariant(v.id, {
-                                    frameRate: (f === 'source' ? 'source' : Number(f)) as ExportFrameRate,
-                                  })
-                                }
+                                label="Variant format"
+                                value={v.aspectId}
+                                onChange={(aspectId) => updateVariant(v.id, { aspectId })}
                                 options={[
-                                  { id: 'source', label: `Source${sourceFps ? ` (${sourceFps} fps)` : ''}` },
-                                  ...FRAME_RATE_CHOICES.map((f) => ({ id: String(f), label: `${f} fps` })),
+                                  { id: 'source', label: 'Source frame' },
+                                  ...ASPECT_PRESETS.map((a) => ({ id: a.id, label: `${a.id} — ${a.label}` })),
                                 ]}
                               />
                             </FieldRow>
-                          )}
-                          {!isPhoto && (
                             <FieldRow
-                              label="Speed"
+                              label="Resolution"
                               hint={
-                                variantIsRetimed(v) ? (
-                                  <>
-                                    {resolveSpeed(v.speed)}× speed
-                                    {duration > 0
-                                      ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
+                                short ? (
+                                  <span className="text-danger">
+                                    {short.asked}p was asked for; this source delivers {short.delivered}p.
+                                    {proxyWithOriginal && renderFromProxy
+                                      ? ' Turn off “From proxy” to export from the original.'
                                       : ''}
-                                    , delivered without audio: a copied track would drift against a
-                                    re-timed picture.
-                                  </>
+                                  </span>
                                 ) : undefined
                               }
                             >
                               <SelectField
-                                label="Variant speed"
-                                value={String(resolveSpeed(v.speed))}
-                                onChange={(sp) => updateVariant(v.id, { speed: Number(sp) })}
-                                options={speedChoices.map((sp) => ({
-                                  id: String(sp),
-                                  label: `${sp === 1 ? 'Normal' : `${sp}×`}${sp !== 1 && sp === realtimeRate ? ' — real time' : ''}`,
-                                }))}
+                                label="Variant resolution"
+                                value={String(v.resolution)}
+                                onChange={(r) =>
+                                  updateVariant(v.id, {
+                                    resolution: (r === 'source' ? 'source' : Number(r)) as VariantResolution,
+                                  })
+                                }
+                                options={[
+                                  { id: 'source', label: 'Source' },
+                                  { id: '1080', label: '1080p' },
+                                  { id: '720', label: '720p' },
+                                ]}
                               />
                             </FieldRow>
-                          )}
-                          <FieldRow label="Overlays">
-                            <ToggleField
-                              label="Burn the overlays in"
-                              checked={v.overlays}
-                              onChange={(overlays) => updateVariant(v.id, { overlays })}
-                            />
-                            <span className="flex-1 min-w-0 text-right font-mono text-2xs tabular-nums text-muted truncate" title={fileName}>
-                              {dims ? `${dims.w}×${dims.h} · ` : ''}
-                              {fileName}
-                            </span>
-                          </FieldRow>
-                          {/* What this row cost last time it rendered — the
-                              figure sits with the settings that produced it. */}
-                          {liveExport?.id === v.id ? (
-                            <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-accent-ink" role="status">
-                              <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
-                              rendering… {formatElapsed(liveElapsed)}
-                            </div>
-                          ) : (
-                            stats && (
-                              <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-ink-soft">
-                                <span className="inline-flex text-ok">{Icons.check}</span>
-                                {describeExportStat(stats)}
+                            {/* A cadence and a speed are about a sequence of
+                                frames; a still has one, so both rows leave. */}
+                            {!isPhoto && (
+                              <FieldRow
+                                label="Frame rate"
+                                hint={
+                                  sourceFps && v.frameRate !== 'source' && v.frameRate > sourceFps
+                                    ? `${v.frameRate} fps from ${sourceFps} — frames are duplicated, not interpolated: no new motion.`
+                                    : undefined
+                                }
+                              >
+                                <SelectField
+                                  label="Variant frame rate"
+                                  value={String(v.frameRate)}
+                                  onChange={(f) =>
+                                    updateVariant(v.id, {
+                                      frameRate: (f === 'source' ? 'source' : Number(f)) as ExportFrameRate,
+                                    })
+                                  }
+                                  options={[
+                                    { id: 'source', label: `Source${sourceFps ? ` (${sourceFps} fps)` : ''}` },
+                                    ...FRAME_RATE_CHOICES.map((f) => ({ id: String(f), label: `${f} fps` })),
+                                  ]}
+                                />
+                              </FieldRow>
+                            )}
+                            {!isPhoto && (
+                              <FieldRow
+                                label="Speed"
+                                hint={
+                                  variantIsRetimed(v) ? (
+                                    <>
+                                      {resolveSpeed(v.speed)}× speed
+                                      {duration > 0
+                                        ? ` — ${formatDuration(retimedDuration(duration, v.speed))} instead of ${formatDuration(duration)}`
+                                        : ''}
+                                      , delivered without audio: a copied track would drift against a
+                                      re-timed picture.
+                                    </>
+                                  ) : undefined
+                                }
+                              >
+                                <SelectField
+                                  label="Variant speed"
+                                  value={String(resolveSpeed(v.speed))}
+                                  onChange={(sp) => updateVariant(v.id, { speed: Number(sp) })}
+                                  options={speedChoices.map((sp) => ({
+                                    id: String(sp),
+                                    label: `${sp === 1 ? 'Normal' : `${sp}×`}${sp !== 1 && sp === realtimeRate ? ' — real time' : ''}`,
+                                  }))}
+                                />
+                              </FieldRow>
+                            )}
+                            <FieldRow label="Overlays">
+                              <ToggleField
+                                label="Burn the overlays in"
+                                checked={v.overlays}
+                                onChange={(overlays) => updateVariant(v.id, { overlays })}
+                              />
+                              <span className="flex-1 min-w-0 text-right font-mono text-2xs tabular-nums text-muted truncate" title={fileName}>
+                                {dims ? `${dims.w}×${dims.h} · ` : ''}
+                                {fileName}
+                              </span>
+                            </FieldRow>
+                            {/* The row is the run's queue while it goes on (V4):
+                                waiting, in hand with its stage and its fill, or
+                                not written. Once done — and outside a run — it
+                                says what it cost, with the settings that paid. */}
+                            {state === 'queued' ? (
+                              <div className="font-mono text-2xs text-faint">waiting…</div>
+                            ) : state === 'active' && run ? (
+                              <div className="flex flex-col gap-1" role="status">
+                                <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-accent-ink">
+                                  <span className="w-[7px] h-[7px] rounded-full bg-accent animate-pulse-dot" />
+                                  {(run.phases[run.index] ?? []).find((ph) => ph.id === run.phase)?.label.toLowerCase() ?? 'rendering'}
+                                  {run.ratio !== null ? ` · ${Math.round(run.ratio * 100)}%` : '…'} · {formatElapsed(liveElapsed)}
+                                </div>
+                                {run.ratio !== null && (
+                                  <span className="h-[3px] rounded-full bg-line overflow-hidden" aria-hidden="true">
+                                    <span className="block h-full bg-accent transition-[width] duration-200" style={{ width: `${run.ratio * 100}%` }} />
+                                  </span>
+                                )}
                               </div>
-                            )
-                          )}
-                        </div>
-                      );
-                    })}
-                  </InspectorSection>
-
-                  <InspectorSection id="studio.export.run" title="Export">
-                    {!exportSupported && (
-                      <p className="m-0 text-xs text-muted">
-                        Export needs WebCodecs (try Chrome/Edge/Safari) — editing works everywhere.
-                      </p>
-                    )}
-                    {exporting ? (
-                      <div className="flex flex-col gap-2" role="status">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none">
-                            {fetchingOriginal
-                              ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}… `
-                              : exportStep && exportStep.total > 1
-                                ? `Variant ${exportStep.index}/${exportStep.total} · `
-                                : 'Exporting… '}
-                            {!fetchingOriginal && `${Math.round(exportRatio * 100)}%`}
-                          </span>
-                          <progress data-export className="flex-1 h-2 accent-accent" value={exportRatio} max={1} />
-                        </div>
-                        <Button size="sm" variant="ghost" onClick={cancelExport} className="self-start">
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        {exportDone && runStats.length > 0 && (
-                          <div className="flex flex-col gap-0.5 px-3 py-2 rounded-control bg-ok-wash border border-ok-line" role="status">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ok">
-                              {Icons.check} Exported
-                            </span>
-                            <span className="font-mono text-xs tabular-nums text-ink-soft">
-                              {describeExportRun(runStats)}
-                            </span>
+                            ) : state === 'failed' ? (
+                              <div className="font-mono text-2xs text-danger">! not written</div>
+                            ) : (
+                              stats && (
+                                <div className="flex items-center gap-1.5 font-mono text-2xs tabular-nums text-ink-soft">
+                                  <span className="inline-flex text-ok">{Icons.check}</span>
+                                  {describeExportStat(stats)}
+                                </div>
+                              )
+                            )}
                           </div>
-                        )}
-                        {/* A clip that came from a Winnow can send its finals
-                            home. Only offered for what was just rendered, only
-                            to the instance it came from. */}
-                        {exportDone && lastRun.length > 0 && finalsOrigin && (
-                          <SendFinalsPanel
-                            files={lastRun}
-                            sourceId={finalsOrigin.sourceId}
-                            assetId={finalsIdentity?.assetId ?? null}
-                          />
-                        )}
-                        {exportError && (
-                          <span className="text-xs text-danger" role="status">
-                            {exportError}
-                          </span>
-                        )}
-                        <Button
-                          variant="primary"
-                          icon={Icons.export}
-                          onClick={handleExport}
-                          disabled={!active || !exportSupported}
-                          title={
-                            isPhoto
-                              ? 'Render every variant as a JPEG, one after the other'
-                              : 'Render every variant (H.264 MP4), one after the other'
-                          }
-                        >
-                          Export{' '}
-                          {isPhoto
-                            ? variants.length > 1
-                              ? `${variants.length} JPEGs`
-                              : 'JPEG'
-                            : variants.length > 1
-                              ? `${variants.length} MP4s`
-                              : 'MP4'}
-                        </Button>
-                      </>
-                    )}
-                  </InspectorSection>
+                        );
+                      })}
+                    </InspectorSection>
+                  </LockSections>
+
+                  {/* A clip that came from a Winnow can send its finals home.
+                      Only offered for what was just rendered, only to the
+                      instance it came from. */}
+                  {exportDone && resultsHere && lastRun.length > 0 && finalsOrigin && (
+                    <InspectorSection id="studio.export.home" title="Send home">
+                      <SendFinalsPanel
+                        files={lastRun}
+                        sourceId={finalsOrigin.sourceId}
+                        assetId={finalsIdentity?.assetId ?? null}
+                      />
+                    </InspectorSection>
+                  )}
                 </>
               )}
             </div>
+            {/* The verbs, pinned — and, while a run goes on, the run itself,
+                on every tab and whichever clip is open. */}
+            {(tab === 'export' || run) && (
+              <DeliverBar
+                verbs={exportVerbs}
+                primary="all"
+                summary={exportSummary}
+                exporting={exporting && !run ? 'Preparing…' : grabbing ? 'Capturing the frame…' : null}
+                progress={run}
+                onCancel={cancelExport}
+                settingsLine={run ? `The project as at ${runClock(run.startedAt)} · an edit now goes to the next export` : null}
+                note={exportNote}
+                placement={compact ? 'sheet' : 'panel'}
+                unitWord="variant"
+                empty="Open a clip or a photo to export."
+              />
+            )}
           </PanelHost>
         )}
       </div>

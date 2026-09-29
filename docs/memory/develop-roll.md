@@ -261,7 +261,7 @@ unticks. `setLeaving` writes `deliveryFor` — `auto` wherever the rule already
 answers, exactly as one row's `toggledDelivery` — so a tick never pins an
 edited picture, and it never touches an ignored one. One `update`, one undo step.
 **The verbs are PINNED** (2026-09-28, his pick "bouton + menu" from the lab
-in `MEMORY.md`): `DeliverBar.tsx` sits under the inspector's scroll the way
+in `MEMORY.md`): `DeliverBar` (`shared/ui/` since 2026-09-29, when Trips and the Studio took it) sits under the inspector's scroll the way
 the tab strip sits over it — docked, a sibling after the scroll box; in the
 phone's drawer, `sticky bottom-0` inside the drawer's own scroller (the
 drawer body scrolls, the panel does not). ONE primary verb (`roll`, else the
@@ -271,7 +271,7 @@ SET (Replace, the ⓘ text) stays in the Deliver section; only what is
 TRIGGERED is pinned. Shown on the Export tab — and on EVERY tab while a run
 goes on.
 **The run is SEEN picture by picture** (2026-09-28, his pick V1 + V4; lab in
-`MEMORY.md`): `shared/develop/run-progress.ts` (pure, tested) holds each
+`MEMORY.md`): `shared/tasks/run-progress.ts` (pure, tested; generic since 2026-09-29 — see `tasks.md`) holds each
 picture's state (`queued · active · done · failed`), the phase of the one in
 hand (`Fetch · Develop · Write`, three words over the run's dozen step
 sentences) and the step in words. `use-roll-export` drives it through ONE
@@ -298,7 +298,7 @@ click's time; which pictures leave is refused from its other doors too (`P`,
 `U`, `M`, the strip's badge, tick-all — `LOCKED_DELIVERY`, said in the status
 line); retouching stays FREE, the whole point of a non-blocking run. At the
 end, the pictures edited meanwhile are NAMED first in the note
-(`editedDuringRun`, the export marks' own fingerprint, so the sentence and
+(`editedDuringRun`, `shared/develop/run-edits.ts`, the export marks' own fingerprint, so the sentence and
 the table's `changed` cannot disagree) and "Export new or changed" sends
 them. Rejected: locking a queued picture's retouching (L3 — it blocks the
 very pictures one wants to fix) and a blocking window (V3).

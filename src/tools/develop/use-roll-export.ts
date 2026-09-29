@@ -73,14 +73,21 @@ import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/r
 import {
   atStep,
   cancelRun,
-  describeEditedDuring,
-  editedDuringRun,
-  enterPicture,
-  finishPicture,
+  enterUnit,
+  finishUnit,
   startRun,
   type RunPhase,
   type RunProgress,
-} from '../../shared/develop/run-progress';
+} from '../../shared/tasks/run-progress';
+import { describeEditedDuring, editedDuringRun } from '../../shared/develop/run-edits';
+
+/** A roll picture's stages: getting its bytes (and measuring them), developing them, writing the file. */
+type DevelopPhase = 'fetch' | 'develop' | 'write';
+const DEVELOP_PHASES: readonly RunPhase[] = [
+  { id: 'fetch', label: 'Fetch' },
+  { id: 'develop', label: 'Develop' },
+  { id: 'write', label: 'Write' },
+];
 
 /** The task scope of a roll's export run — what the filmstrip's edge draws (`TaskEdge`). */
 export function runScope(rollId: string): string {
@@ -364,7 +371,7 @@ export function useRollExport({
     // bar's segments and the filmstrip's marks. A Cancel from anywhere — the
     // bar, the pill — is said at once, before the picture in hand lets go.
     let progressNow = startRun(
-      targets.map((t) => ({ id: t.id, name: pictureLabel(t) })),
+      targets.map((t) => ({ id: t.id, name: pictureLabel(t), phases: DEVELOP_PHASES })),
       Date.now(),
     );
     const show = (next: RunProgress) => {
@@ -376,12 +383,12 @@ export function useRollExport({
     let at = { i: 0, count: '' };
     // One step of the picture in hand: its phase, its words — for the bar,
     // the pill's detail and the one-line status alike.
-    const say = (phase: RunPhase, words: string) => {
+    const say = (phase: DevelopPhase, words: string) => {
       setExporting(`${words} ${at.count}…`);
       task.update({ detail: `${at.count} · ${words}` });
       show(atStep(progressNow, phase, words));
     };
-    const finish = (ok: boolean) => show(finishPicture(progressNow, at.i, ok, Date.now()));
+    const finish = (ok: boolean) => show(finishUnit(progressNow, at.i, ok, Date.now()));
     // Each picture is WRITTEN as soon as it is rendered, and let go: a run
     // used to hold every JPEG — and every second target's — until the last
     // picture was done, which on a phone is where a long roll ran out of
@@ -418,7 +425,7 @@ export function useRollExport({
         const step = `${i + 1}/${targets.length}`;
         at = { i, count: step };
         task.update({ progress: i / targets.length, detail: `${step} · ${picture.ref.name}` });
-        show(enterPicture(progressNow, i));
+        show(enterUnit(progressNow, i));
         let file = f.get(picture.id) ?? null;
         if (!file) {
           say('fetch', `Fetching ${picture.ref.name}`);

@@ -153,7 +153,8 @@ import { borderLayout, type RollBorder } from '../../shared/develop/border-layou
 import { zoneFromView } from '../../shared/develop/crop-rect';
 import { visibleWindow } from '../../shared/ui/pan-zoom';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
-import DeliverBar from './DeliverBar';
+import DeliverBar from '../../shared/ui/DeliverBar';
+import { runClock } from '../../shared/ui/RunLockNotice';
 import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
@@ -1414,7 +1415,15 @@ export default function PictureWorkbench({
       progress={exports.progress}
       onCancel={exports.cancel}
       note={exports.note}
-      compact={inDrawer}
+      placement={inDrawer ? 'drawer' : 'panel'}
+      primary="roll"
+      unitWord="picture"
+      empty="Open a picture to export."
+      settingsLine={
+        exports.progress
+          ? `Settings as at ${runClock(exports.progress.startedAt)} · an edit now goes to the next export`
+          : null
+      }
     />
   );
 

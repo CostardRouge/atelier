@@ -170,3 +170,19 @@ Five questions of the brief, answered by building: pill not modal (1); a
 cancelled fetch holds nothing and a cancelled export keeps what it rendered
 (2); the masthead at every width, the dot alone on a phone (3); module state,
 so a task survives a route change (4); no ceiling, the popover lists them (5).
+
+## Runs seen unit by unit — one model, one bar, one mark (2026-09-29)
+
+**Decision.** Develop's export grammar (the pinned `DeliverBar`, V1 + V4, L2 —
+`develop-roll.md`) is ONE set of shared pieces, because Trips and the Studio
+took it the day after: `shared/tasks/run-progress.ts` (pure, tested) is a run
+of UNITS — a roll picture, a piece's slide, a clip's variant — each naming its
+OWN phases (a still is Render · Write, a clip Fetch · Encode · Write), with a
+step that may carry a MEASURED `ratio` (an encode knows how far it is, a
+decode does not); `runFraction` counts the whole in stages, never in time, for
+a header's fill. `shared/ui/DeliverBar.tsx` takes the tool's `unitWord`, its
+primary verb and its `settingsLine`; `shared/ui/RunMark.tsx` is the cell mark a
+tool's strip wears; `shared/ui/RunLockNotice.tsx` is the sticky line over a
+locked Export tab (`LockSections`), `runClock` the time both say. **How to apply**: a new tool with a multi-file export
+drives the model through one `say(phase, words, ratio)` feeding the bar, the
+task pill and its status line alike, and never draws a fourth kind of bar.

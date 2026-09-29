@@ -456,7 +456,19 @@ for the run. That is how you tell what a setting costs on *your* machine; the
 figures live for the session and clear as soon as the setting that produced
 them changes. Files land in the browser's downloads by default, or — on
 Chromium — straight into a **destination folder** you pick once, stills
-included.
+included. The export button is pinned at the bottom of the Export tab —
+**Export 3 MP4s** renders every variant, and its menu renders one variant alone
+or captures the frame under the playhead — so it is never scrolled out of sight
+under a long list of rows. While a run goes on, that bar becomes the run on
+every tab — a segment per variant, the one in hand with its stage (fetching the
+capture, encoding with its percentage, writing), the time left once a variant has
+measured it, and a Cancel that keeps what was written — the rows say which variant
+waits, which is in hand and what each finished one cost, and the stage wears a
+thin progress line. Switch to another clip meanwhile and the bar goes on
+following the run, naming the clip it is for. The output and the variants are locked
+while it runs; the overlays, the style and the grade are not, and an edit made
+meanwhile is named when the run ends, since the files are as the project was at
+the click.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),
@@ -1085,9 +1097,22 @@ it as you like, each with its own optional caption, and close on the trip's
 **call-to-action card** — headline, sentence, link and a **QR code**, edited
 once in the trip's own settings and appended to every deck that asks for it. A
 reel or a single photo is the same model with a deck of one, so a piece can be
-re-cut into a carousel without being rebuilt. Export writes the whole deck as numbered PNGs into a
+re-cut into a carousel without being rebuilt. **Export the piece** writes every slide in the
+format the deck says it is — a still as a PNG, what moves as an MP4 — into a
 folder you pick (or downloads them one by one where the folder picker is not
-available), named so a file listing is already in swipe order. The order is
+available), slide after slide in deck order and named so a file listing is
+already in swipe order. The button is pinned at the bottom of the Export tab, and
+its menu offers every slide as a still, the open slide as a PNG and the hook as a
+video; the header's **Export** does the same as the pinned button from any tab. The
+looks are taken when you press it: a look changed while a reel encodes waits for
+the next export. While it runs the pinned bar becomes the run, and stays on every
+tab — a segment per slide, the slide in hand with its stage (Render or Encode,
+then Write) and how far an encode has gone, the time left once one slide has
+measured it, and a Cancel that keeps what was written — while the deck band
+marks each slide waiting, in hand, ✓ or !. Each file is written the moment it is
+made. While it runs, the Export tab and the deck's order are locked — the run
+follows them — but every slide stays free to retouch, and the run names what was
+edited meanwhile when it ends. The order is
 yours, and so is the time: under the picture, at every width, the deck is **one
 band** — every slide end to end on the piece's clock, a clip as wide as its cut
 and a still as wide as the seconds its inspector gives it, slid under a needle

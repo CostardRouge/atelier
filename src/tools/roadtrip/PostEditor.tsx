@@ -147,6 +147,10 @@ import PageBar from '../../shared/ui/PageBar';
 import { buttonClass } from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import PanelHost from '../../shared/ui/PanelHost';
+import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
+import { runClock } from '../../shared/ui/RunLockNotice';
+import { describePlan, exportPlan, type PieceExportPlan } from '../../shared/roadtrip/export-plan';
+import { useAvcEncodeSupport } from '../../shared/media/use-encode-support';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -855,7 +859,11 @@ export default function PostEditor({
     return verbs;
   }, [otherSlides, otherPieces, post, trip, picture, onChangePost, onChangeTrip]);
 
+  // The deck's ORDER is the run's while an export goes on (L2): its units are
+  // slides by position, and a slide added, removed or moved mid-run would
+  // shift every file name after it. Retouching a slide stays free.
   async function addSlide() {
+    if (exports.run) return;
     const ref = activeFile ? await hashedMediaRef(activeFile) : null;
     onChangePost({ ...post, slides: [...post.slides, createPostSlide(ref)] });
     // Land on what was just added, which is where the author is looking.
@@ -863,7 +871,7 @@ export default function PostEditor({
   }
 
   function removeSlide() {
-    if (!slide.slideId) return;
+    if (!slide.slideId || exports.run) return;
     onChangePost({
       ...post,
       slides: post.slides.filter((s) => s.id !== slide.slideId),
@@ -872,7 +880,7 @@ export default function PostEditor({
   }
 
   function moveSlideTo(from: number, to: number) {
-    if (to < 0 || to >= post.slides.length || from === to) return;
+    if (to < 0 || to >= post.slides.length || from === to || exports.run) return;
     onChangePost({ ...post, slides: moveItem(post.slides, from, to) });
     // Follow the slide that moved, so the stage keeps showing what was dragged.
     setSelected(to + 1);
@@ -1551,6 +1559,42 @@ export default function PostEditor({
     onStart: () => setTab('export'),
   });
 
+  // What the primary export will write, slide by slide — the tab lists it,
+  // the pinned bar says it in one line and presses it. Whether H.264 can
+  // really be encoded here, not merely whether the API exists: a browser
+  // with the object and no codec would otherwise be told "1 clip".
+  const canEncode = useAvcEncodeSupport();
+  const exportPlanNow = useMemo(() => exportPlan(trip, post, { canEncode, hasPicture }), [trip, post, canEncode, hasPicture]);
+  // While a run goes on the locked Export tab shows the plan it RUNS, taken
+  // when it started — the live one would already list a retouch (a still
+  // turned into a clip) the files will not carry.
+  const runPlan = useRef<PieceExportPlan | null>(null);
+  if (!exports.run) runPlan.current = null;
+  else runPlan.current ??= exportPlanNow;
+  const shownPlan = runPlan.current ?? exportPlanNow;
+  // The piece's verbs: the piece as the deck says, and in the menu every
+  // slide as a still — the switch the header's Export never read, now a verb
+  // it cannot miss —, the open slide as a PNG, and the hook as a video.
+  const exportVerbs = useMemo<ExportVerb[]>(() => {
+    const verbs: ExportVerb[] = [];
+    if (exportPlanNow.files > 0) {
+      verbs.push({ id: 'piece', label: 'Export the piece', hint: describePlan(exportPlanNow), run: () => void exports.exportPiece() });
+    }
+    verbs.push({
+      id: 'stills',
+      label: 'Every slide as a still',
+      hint: `${slides.length} PNG${slides.length === 1 ? '' : 's'} — what a browser with no video encoder can still write, or a contact sheet of a reel`,
+      run: () => void exports.exportPiece(true),
+    });
+    if (slides.length > 1) {
+      verbs.push({ id: 'slide', label: 'This slide as a PNG', hint: `the slide open on the stage, numbered as in the deck`, run: () => void exports.exportDeck(slide.position) });
+    }
+    if (slides[0]?.medium === 'video' && canEncode) {
+      verbs.push({ id: 'hook', label: 'The hook as a video', hint: `MP4 · ${hookLength.toFixed(1)} s · 1080`, run: () => void exports.exportHookClip() });
+    }
+    return verbs;
+  }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength]);
+
   // --- the fields a click on the stage lands in -----------------------------
   const textFieldRef = useRef<HTMLInputElement>(null);
   const captionFieldRef = useRef<HTMLInputElement>(null);
@@ -1790,7 +1834,10 @@ export default function PostEditor({
       onRemove={removeSlide}
       onMove={moveSlideTo}
       includeCta={post.includeCta}
-      onIncludeCta={(on) => onChangePost({ ...post, includeCta: on })}
+      onIncludeCta={(on) => {
+        if (!exports.run) onChangePost({ ...post, includeCta: on });
+      }}
+      orderLocked={exports.run !== null}
       onEditClosingCard={() => setTripSheet('cta')}
       clip={
         isClipSlide
@@ -1825,6 +1872,14 @@ export default function PostEditor({
       marksFor={(i) =>
         slides[i] ? slideMotionMarks(slides[i], lengths[i] ?? 0, openerSecondsBySlide[i] ?? 0) : []
       }
+      // A running export draws its queue on the band: each slide's place in
+      // the run, keyed by its deck position — the run's own unit id.
+      runAt={(i) => {
+        const run = exports.run;
+        const at = run && slides[i] ? run.ids.indexOf(String(slides[i].position)) : -1;
+        if (!run || at < 0) return null;
+        return { state: run.states[at], ratio: at === run.index ? run.ratio : null };
+      }}
       // A still's length is set from its cell's ends too: the field and the
       // bounds of the Content tab's «On screen», and the needle left where it
       // was in the slide. A clip goes through `clip` (its cut), the closing
@@ -2289,22 +2344,36 @@ export default function PostEditor({
               aspect={aspect}
               hookFile={hookFile}
               hookIsVideo={hookIsVideo}
-              hookLength={hookLength}
-              hasPicture={hasPicture}
-              exporting={exports.exporting}
-              exportNote={exports.note}
+              plan={shownPlan}
               undecodable={exports.undecodable}
-              onExportPiece={(imagesOnly) => void exports.exportPiece(imagesOnly)}
-              onExportDeck={() => void exports.exportDeck()}
-              onExportHookClip={() => void exports.exportHookClip()}
               delivery={delivery}
               onChangePost={onChangePost}
               grade={grade.hookGrade}
               gradeScope={grade.hookScope}
               ownGrades={countOwnGrades(post)}
+              lockedSince={exports.run?.startedAt ?? null}
             />
           )}
         </div>
+        {/* The verbs, pinned under the scroll the way the tab strip sits over
+            it — and, while a run goes on, the run itself, on every tab. */}
+        {(tab === 'export' || exports.run) && (
+          <DeliverBar
+            verbs={exportVerbs}
+            primary="piece"
+            summary={exportPlanNow.files ? `${describePlan(exportPlanNow)} · into the folder you pick` : (exportPlanNow.blockers[0] ?? '')}
+            exporting={exports.exporting}
+            progress={exports.run}
+            onCancel={exports.cancel}
+            note={exports.note}
+            placement={compact ? (tab === 'picture' ? 'drawer' : 'sheet') : 'panel'}
+            unitWord="slide"
+            settingsLine={
+              exports.run ? `The piece as at ${runClock(exports.run.startedAt)} · an edit now goes to the next export` : null
+            }
+            empty={exportPlanNow.blockers[0] ?? 'Nothing in this piece can be written yet.'}
+          />
+        )}
       </PanelHost>
     </div>
 
