@@ -305,11 +305,15 @@ export default function RoadTripTool() {
     navigate(roadtripPath(tripRef(doc)));
   }, []);
 
-  /** Move within the open trip without losing where you were. */
+  /**
+   * Move within the open trip without losing where you were. `replace`
+   * rewrites the current step instead of adding one — a drag along the map
+   * view's year strip walks many days and must leave ONE way back.
+   */
   const go = useCallback(
-    (date: IsoDate | null, postId: string | null = null) => {
+    (date: IsoDate | null, postId: string | null = null, options?: { replace?: boolean }) => {
       if (!open) return;
-      navigate(roadtripPath(tripRef(open), date, postId));
+      navigate(roadtripPath(tripRef(open), date, postId), options);
     },
     [open],
   );
@@ -443,7 +447,7 @@ export default function RoadTripTool() {
           key={open.id}
           trip={open}
           selectedDate={route.date}
-          onSelectDate={(date) => go(date)}
+          onSelectDate={(date, options) => go(date, null, options)}
           onShowTrips={() => navigate(HOME_ROUTE)}
           onChange={handleChange}
           onOpenPost={(post) => go(post.date, post.id)}
