@@ -7,6 +7,7 @@ import { loadClipMeta } from '../../shared/media/video-metadata';
 import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
 import { deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
+import { freezeLooks } from '../../shared/roadtrip/frozen-looks';
 import { slideRender } from '../../shared/roadtrip/slide-render';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { exportEdge } from '../../shared/media/photo-frame';
@@ -247,6 +248,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   async function exportHookClip() {
     const { hookFile, hookIsVideo, hookInfo, post, trip } = inputs;
     if (!hookFile) return;
+    // The looks as they are at the click, before anything awaits (`frozen-looks.ts`).
+    const looks = freezeLooks([inputs.hookSlide], inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     if (!isEncodeSupported()) {
       setNote(
@@ -296,8 +299,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           seconds: inputs.hookLength,
           openerSeconds: inputs.hook?.seconds ?? 0,
         },
-        lut: inputs.lutFor(inputs.hookSlide),
-        film: inputs.filmFor(inputs.hookSlide),
+        lut: looks.lutFor(inputs.hookSlide),
+        film: looks.filmFor(inputs.hookSlide),
         onProgress,
         signal,
       };
@@ -323,7 +326,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
                   collage: {
                     render: { collage: post.badge.collage!, items: cells.items, seconds: inputs.hookLength },
                     luts: cells.items.map((cell) =>
-                      inputs.lutFor({ ...inputs.hookSlide, develop: cell.develop }),
+                      looks.lutFor({ ...inputs.hookSlide, develop: cell.develop }),
                     ),
                     aspect: inputs.aspect,
                   },
@@ -374,6 +377,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    */
   async function renderSlideVideo(
     item: PlanItem,
+    looks: Pick<PostExportInputs, 'lutFor' | 'filmFor'>,
     onProgress: (p: ExportProgress) => void,
     onAudioSkipped?: (reason: string) => void,
     signal?: AbortSignal,
@@ -401,8 +405,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         seconds: item.seconds,
         openerSeconds: opener?.seconds ?? 0,
       },
-      lut: inputs.lutFor(slide),
-      film: inputs.filmFor(slide),
+      lut: looks.lutFor(slide),
+      film: looks.filmFor(slide),
       onProgress,
     };
     // A collage is PAINTED, whatever its cells hold: every cell's picture
@@ -414,7 +418,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           ...shared,
           collage: {
             render: { collage: slide.collage, items: cells.items, seconds: item.seconds },
-            luts: cells.items.map((cell) => inputs.lutFor({ ...slide, develop: cell.develop })),
+            luts: cells.items.map((cell) => looks.lutFor({ ...slide, develop: cell.develop })),
             aspect,
           },
           seconds: item.seconds,
@@ -456,6 +460,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * cannot be written says why instead of failing silently in the middle.
    */
   async function exportPiece(imagesOnly = false) {
+    // The piece as it is AT THE CLICK, before anything awaits: the documents
+    // are this render's, and the looks are asked now (`frozen-looks.ts`) —
+    // the grade stack answers live, and a look nudged mid-run used to reach
+    // the slides not yet rendered.
+    const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
     setUndecodable(null);
@@ -480,49 +489,50 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const signal = beginTask('Exporting the piece');
     setExporting('Rendering…');
     try {
-      // The stills go through the deck renderer in one pass, so a carousel of
-      // photographs costs one decode each and not one per call.
+      // Which pixels each still leaves from, decided once for all of them.
       const stills = items.filter((i) => i.medium === 'image');
+      let resolve = inputs.resolve;
       if (stills.length) {
-        const wanted = new Set(stills.map((i) => i.position));
         setExporting('Choosing the pixels…');
-        const resolve = await pixelsForStills(stills.map((i) => i.slide));
-        const out = await renderDeck({
-          signal,
-          trip: inputs.trip,
-          post: inputs.post,
-          aspect: inputs.aspect,
-          longEdge: DECK_LONG_EDGE,
-          timeSeconds: inputs.timeSeconds,
-          resolve,
-          pictures: inputs.hookPictures,
-          exif: inputs.exif,
-          lutFor: inputs.lutFor,
-          filmFor: inputs.filmFor,
-          include: (slide) => wanted.has(slide.position),
-          // One job for the whole piece: the stills are its first items.
-          onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / items.length),
-        });
-        rendered.push(...out);
+        resolve = await pixelsForStills(stills.map((i) => i.slide));
       }
 
-      // A clip that fails must not cost the slides that already rendered:
-      // each one is caught, and what went wrong is said with the delivery
-      // rather than instead of it.
+      // In DECK ORDER, one slide at a time: the files land in swipe order and
+      // a run can be followed slide by slide (it used to render every still
+      // first, then encode the clips). A still costs one decode either way.
+      // A slide that fails must not cost the ones already made: each is
+      // caught, and what went wrong is said with the delivery.
       const failures: string[] = [];
-      const clips = items.filter((i) => i.medium === 'video');
-      for (const [i, item] of clips.entries()) {
-        // Cancelled between two clips: what rendered is still written below.
+      for (const [i, item] of items.entries()) {
+        // Cancelled between two slides: what rendered is still written below.
         if (signal.aborted) break;
+        if (item.medium === 'image') {
+          setExporting(`Rendering ${i + 1}/${items.length}…`, i / items.length);
+          const out = await renderDeck({
+            signal,
+            trip: inputs.trip,
+            post: inputs.post,
+            aspect: inputs.aspect,
+            longEdge: DECK_LONG_EDGE,
+            timeSeconds: inputs.timeSeconds,
+            resolve,
+            pictures: inputs.hookPictures,
+            exif: inputs.exif,
+            lutFor: looks.lutFor,
+            filmFor: looks.filmFor,
+            include: (slide) => slide.position === item.position,
+          });
+          rendered.push(...out);
+          continue;
+        }
         try {
           const blob = await renderSlideVideo(
             item,
+            looks,
             (p) =>
               setExporting(
-                p.ratio === null
-                  ? `${p.phase}…`
-                  : `Encoding ${i + 1}/${clips.length} · ${Math.round(p.ratio * 100)}%…`,
-                (items.length - clips.length + i + (p.ratio ?? 0)) / items.length,
+                p.ratio === null ? `${p.phase}…` : `Encoding ${i + 1}/${items.length} · ${Math.round(p.ratio * 100)}%…`,
+                (i + (p.ratio ?? 0)) / items.length,
               ),
             // Not a failure — the file is delivered — but a departure from what
             // was composed, reported with the delivery like one.
@@ -613,6 +623,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * in turn, which is the only thing a non-Chromium browser can do.
    */
   async function exportDeck() {
+    const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
     const target = await askTarget();
@@ -632,8 +643,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         resolve,
         pictures: inputs.hookPictures,
         exif: inputs.exif,
-        lutFor: inputs.lutFor,
-        filmFor: inputs.filmFor,
+        lutFor: looks.lutFor,
+        filmFor: looks.filmFor,
         onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
       });
       if (!rendered.length) {

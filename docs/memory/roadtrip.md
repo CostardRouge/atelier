@@ -1043,3 +1043,19 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
 
 `hookCalendar` — what every opener reads of the trip — was rebuilt through `tripCoverage` (~1.5 ms on a 300-piece trip, measured) about three times per pointer move of a badge drag. It reads only the OTHER pieces, the legs and the trip's two dates, and the piece being edited is exactly the one it leaves out, so it is now kept (16 entries, by the piece left out) and served while those are the same OBJECTS. That rests on the rule the whole tool already follows: **a trip is updated immutably** — an untouched piece keeps its identity, a touched one never does. Mutating a piece in place (only a test ever did) would serve a stale calendar. `prepare()` itself was measured at 2–13 µs per opener and left alone.
 
+## The piece's export wears Develop's grammar (2026-09-29, his pick from the Trips lab)
+
+- **The piece is taken AT THE CLICK.** Every export verb freezes the looks
+  before its first `await` (`shared/roadtrip/frozen-looks.ts`, tested): the
+  documents were already the click's render, but `lutFor` / `filmFor` answer
+  from the LIVE grade stack, so a look nudged while a reel encoded reached the
+  slides not yet rendered. Each slide and each collage cell (with its own
+  develop, the way the renderers ask) is answered once; an unforeseen
+  question falls back to live rather than to no look. Without this the lock
+  below would lie.
+- **Slides leave in DECK ORDER, one at a time** — a still through
+  `renderDeck` with `include` on its one position, a clip through
+  `renderSlideVideo` — where it used to render every still, then encode the
+  clips. A still costs one decode either way; what it buys is a run that can
+  be followed left to right on the deck strip.
+
