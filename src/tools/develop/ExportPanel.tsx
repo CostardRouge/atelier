@@ -43,13 +43,7 @@ function describeHdrRun(hdr: RollRun['hdr']): string | null {
   return head + reach + check;
 }
 
-/** One export verb: what it renders, and how many. */
-export interface ExportVerb {
-  id: string;
-  label: string;
-  hint?: string;
-  run: () => void;
-}
+export type { ExportVerb } from '../../shared/ui/DeliverBar';
 
 /**
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,

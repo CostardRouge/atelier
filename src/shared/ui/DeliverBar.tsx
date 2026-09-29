@@ -1,55 +1,75 @@
-import { useEffect, useState } from 'react';
-import Button from '../../shared/ui/Button';
-import OverflowMenu from '../../shared/ui/OverflowMenu';
-import { Icons } from '../../shared/ui/icons';
+import { useEffect, useState, type ReactNode } from 'react';
+import Button from './Button';
+import OverflowMenu from './OverflowMenu';
+import { Icons } from './icons';
 import {
-  RUN_PHASES,
   describeTimeLeft,
+  phaseIndex,
   runCounts,
   timeLeft,
-  type RunPictureState,
+  type RunUnitState,
   type RunProgress,
-} from '../../shared/develop/run-progress';
-import type { ExportVerb } from './ExportPanel';
+} from '../tasks/run-progress';
+
+/** One export verb: what it renders, and how many. */
+export interface ExportVerb {
+  id: string;
+  label: string;
+  hint?: string;
+  run: () => void;
+}
 
 /**
- * The Export tab's verbs, PINNED at the bottom of the inspector the way the
- * tab strip is pinned at its top (2026-09-28, his pick "bouton + menu"): the
- * Pictures table alone is taller than a screen on a real roll, so the verbs at
- * the end of the last section were out of sight nearly all the time.
+ * An editor's export verbs, PINNED at the bottom of its inspector the way the
+ * tab strip is pinned at its top (2026-09-28, his pick "bouton + menu" in
+ * Develop; Trips and the Studio took the same bar on 2026-09-29): the verbs
+ * at the end of a long Export tab were out of sight nearly all the time.
  *
- * ONE primary verb — what leaves (`roll`), else the picture in hand — and the
- * others behind a menu beside it, so the bar keeps one height whatever the
- * roll offers. What is SET (Replace, the long explanation) stays in the
- * Deliver section, which scrolls; only what is TRIGGERED is pinned, with the
- * run's own sentence above it and the run's outcome under it.
+ * ONE primary verb and the others behind a menu beside it, so the bar keeps
+ * one height whatever the document offers. What is SET stays in the tab's
+ * sections, which scroll; only what is TRIGGERED is pinned, with the run's
+ * own sentence above it and the run's outcome under it.
  *
  * While a run goes on the bar BECOMES the run (his pick V1): a segment per
- * picture, the one in hand named with its phase and its step in words, the
- * time left once one picture has measured it, and a Cancel — and the editor
- * draws it on every tab, so a picture can be worked on while the roll leaves.
+ * unit — a picture, a slide, a variant —, the one in hand named with its own
+ * stages and its step in words, a measured fill where the step knows how far
+ * it is (an encode) and a sweep where it does not, the time left once one
+ * unit has measured it, and a Cancel. The host draws it on every tab while a
+ * run goes on, so the document can be worked on while it leaves.
  */
 export default function DeliverBar({
   verbs,
+  primary: primaryId,
   summary,
   exporting,
   progress,
   onCancel,
   note,
   compact,
+  unitWord,
+  settingsLine,
+  empty = 'Nothing to export yet.',
 }: {
   verbs: readonly ExportVerb[];
-  /** The run's sentence (`RunPlan.summary`) — what the primary verb will deliver. */
+  /** Which verb is the button; the first when unnamed or absent. */
+  primary?: string;
+  /** What the primary verb will deliver, in one line. */
   summary: string;
   exporting: string | null;
   /** Where a running export stands (`run-progress.ts`); null when idle. */
   progress: RunProgress | null;
   onCancel: () => void;
-  note: string | null;
-  /** Inside the phone's drawer, whose body scrolls: stuck to its bottom edge. */
+  note: ReactNode;
+  /** Inside a phone's drawer, whose body scrolls: stuck to its bottom edge. */
   compact: boolean;
+  /** What one unit of this tool's run is called — `picture`, `slide`, `variant`. */
+  unitWord: string;
+  /** Said under a running bar: whose settings the run uses. */
+  settingsLine?: string | null;
+  /** Said where no verb is offered. */
+  empty?: string;
 }) {
-  const primary = verbs.find((v) => v.id === 'roll') ?? verbs[0] ?? null;
+  const primary = verbs.find((v) => v.id === primaryId) ?? verbs[0] ?? null;
   const others = verbs.filter((v) => v !== primary);
   const busy = exporting !== null || progress !== null;
   return (
@@ -59,7 +79,7 @@ export default function DeliverBar({
       } shadow-[0_-10px_18px_-16px_rgba(43,33,18,0.45)]`}
     >
       {progress ? (
-        <RunBar progress={progress} exporting={exporting} onCancel={onCancel} />
+        <RunBar progress={progress} exporting={exporting} onCancel={onCancel} unitWord={unitWord} settingsLine={settingsLine ?? null} />
       ) : (
         <>
           {summary && (
@@ -102,7 +122,7 @@ export default function DeliverBar({
               )}
             </div>
           ) : (
-            <span className="font-mono text-3xs text-faint">Open a picture to export.</span>
+            <span className="font-mono text-3xs text-faint">{empty}</span>
           )}
           {exporting && (
             <p className="m-0 font-mono text-2xs text-ink-soft" role="status" aria-live="polite">
@@ -110,9 +130,9 @@ export default function DeliverBar({
             </p>
           )}
           {note && !exporting && (
-            <p className="m-0 text-xs text-ink-soft leading-snug" role="status">
+            <div className="m-0 text-xs text-ink-soft leading-snug" role="status">
               {note}
-            </p>
+            </div>
           )}
         </>
       )}
@@ -120,18 +140,30 @@ export default function DeliverBar({
   );
 }
 
-/** Past this many pictures a segment each would be thinner than a hairline: one bar instead. */
+/** Past this many units a segment each would be thinner than a hairline: one bar instead. */
 const MAX_SEGMENTS = 48;
 
-const SEGMENT: Record<RunPictureState, string> = {
+const SEGMENT: Record<RunUnitState, string> = {
   queued: 'bg-line',
   active: 'bg-line-strong',
   done: 'bg-ok',
   failed: 'bg-danger',
 };
 
-/** The run as it goes: counts, a segment per picture, the one in hand, its phase, a Cancel. */
-function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; exporting: string | null; onCancel: () => void }) {
+/** The run as it goes: counts, a segment per unit, the one in hand, its stage, a Cancel. */
+function RunBar({
+  progress,
+  exporting,
+  onCancel,
+  unitWord,
+  settingsLine,
+}: {
+  progress: RunProgress;
+  exporting: string | null;
+  onCancel: () => void;
+  unitWord: string;
+  settingsLine: string | null;
+}) {
   // The time left is re-read every second; nothing else in the bar needs a clock.
   const [now, setNow] = useState(() => Date.now());
   useEffect(() => {
@@ -142,11 +174,12 @@ function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; expo
   const inHand = progress.index >= 0 && progress.index < total && progress.states[progress.index] === 'active';
   const left = describeTimeLeft(timeLeft(progress, now));
   const headline = progress.cancelling
-    ? 'Cancelling after this picture…'
+    ? `Cancelling after this ${unitWord}…`
     : inHand
       ? `Exporting ${progress.index + 1} of ${total}`
-      : `Preparing ${total} picture${total === 1 ? '' : 's'}…`;
-  const phaseAt = progress.phase ? RUN_PHASES.findIndex((p) => p.id === progress.phase) : -1;
+      : `Preparing ${total} ${unitWord}${total === 1 ? '' : 's'}…`;
+  const phases = inHand ? (progress.phases[progress.index] ?? []) : [];
+  const phaseAt = phaseIndex(progress);
   return (
     <div className="flex flex-col gap-1.5 min-w-0" role="status" aria-live="polite" aria-label={headline}>
       <div className="flex items-baseline justify-between gap-2 font-mono text-2xs tabular-nums">
@@ -157,7 +190,13 @@ function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; expo
         <div className="grid gap-[2px]" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }} aria-hidden="true">
           {progress.states.map((s, i) => (
             <span key={progress.ids[i]} className={`relative h-1.5 rounded-[2px] overflow-hidden ${SEGMENT[s]}`}>
-              {s === 'active' && <span className="absolute inset-y-0 left-0 w-1/2 bg-accent animate-deck-load motion-reduce:animate-none" />}
+              {s === 'active' &&
+                (progress.ratio !== null ? (
+                  // A step that knows how far it is FILLS; one that does not sweeps.
+                  <span className="absolute inset-y-0 left-0 bg-accent transition-[width] duration-200" style={{ width: `${progress.ratio * 100}%` }} />
+                ) : (
+                  <span className="absolute inset-y-0 left-0 w-1/2 bg-accent animate-deck-load motion-reduce:animate-none" />
+                ))}
             </span>
           ))}
         </div>
@@ -167,10 +206,10 @@ function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; expo
         </div>
       )}
       {inHand && (
-        <div className="flex items-center gap-2 min-w-0">
+        <div className="flex flex-col gap-1 min-w-0">
           <span className="font-mono text-2xs text-ink truncate min-w-0">{progress.names[progress.index]}</span>
-          <span className="ml-auto flex-none flex gap-1" aria-label="Stage">
-            {RUN_PHASES.map((p, k) => (
+          <span className="flex flex-wrap gap-1" aria-label="Stage">
+            {phases.map((p, k) => (
               <span
                 key={p.id}
                 aria-current={k === phaseAt ? 'step' : undefined}
@@ -195,18 +234,14 @@ function RunBar({ progress, exporting, onCancel }: { progress: RunProgress; expo
         </span>
         {(done > 0 || failed > 0) && (
           <span className="flex-none font-mono text-3xs text-muted tabular-nums">
-            {done} written{failed > 0 ? ` · ${failed} not` : ''}
+            {done} done{failed > 0 ? ` · ${failed} not` : ''}
           </span>
         )}
         <Button size="sm" onClick={onCancel} disabled={progress.cancelling}>
           {progress.cancelling ? 'Cancelling…' : 'Cancel'}
         </Button>
       </div>
-      {/* L2: the run's settings are the click's, and the Export tab is locked
-          until it ends — said here too, on whichever tab is open. */}
-      <span className="font-mono text-3xs text-faint leading-snug">
-        Settings as at {new Date(progress.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} · an edit now goes to the next export
-      </span>
+      {settingsLine && <span className="font-mono text-3xs text-faint leading-snug">{settingsLine}</span>}
     </div>
   );
 }
