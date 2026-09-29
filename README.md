@@ -455,7 +455,10 @@ for the run. That is how you tell what a setting costs on *your* machine; the
 figures live for the session and clear as soon as the setting that produced
 them changes. Files land in the browser's downloads by default, or — on
 Chromium — straight into a **destination folder** you pick once, stills
-included.
+included. The export button is pinned at the bottom of the Export tab —
+**Export 3 MP4s** renders every variant, and its menu renders one variant alone
+or captures the frame under the playhead — so it is never scrolled out of sight
+under a long list of rows.
 
 **Title styles.** The Style tab adopts a named look as the project's theme —
 *Or ciné* (optical-print gold serif), *Pixel CRT* (terminal red on phosphor),

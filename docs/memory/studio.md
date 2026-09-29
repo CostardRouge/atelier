@@ -352,3 +352,14 @@ Unlike Trips and Develop, which hold ONE document in state and hand it back thro
 **Three things the diff cannot say.** (1) The grade goes back through a new `LutStack.revert`, which puts the LIVE layers back synchronously and **by reference** — `restore` re-fetches every built-in cube, and the await would land as a second, phantom step, while a copied array reads as a fresh edit and costs the step just taken. (2) That same async restore is why the editor passes `ready: seeded`, flipped when the one-shot `lutStack.restore` settles: without it a graded project OPENED on an undo that stripped its grade. (3) The trim handles are live state derived from `trims` only when a clip opens, so a restore re-derives `range` for the open media — otherwise the bar keeps showing the cut it just stepped away from — and the selection drops when the element it names is no longer on the frame. The keyboard stands down while the Develop sheet or the settings modal is up: each holds its own draft, and its Cancel is what steps that work back.
 
 **Verified** in headless Chromium against the IndexedDB document: an element removed and stepped back, the redo still offered afterwards (the test that proves a restore is not itself recorded), a built-in look added and stepped off the stack, ⌘Z outside a field stepping the document while a press inside one took only the field's own letters back, and a graded project reopened with nothing to undo.
+
+## 2026-09-29 — The export wears Develop's grammar (his pick from the Studio lab)
+
+- **The verbs are PINNED** (S1, `shared/ui/DeliverBar`, `placement` `panel`
+  docked, `sheet` on a phone): every variant is the button (`Export N MP4s`,
+  `Export the JPEG`), the menu holds each variant ALONE (`handleExport(only)`,
+  which renders the run's own `runVariants` everywhere the whole list used to
+  be read) and *Capture this frame* for a clip. The Export tab keeps what is
+  SET — Output, Variants — and a *Send home* section for the finals, which is
+  a panel and too tall for a pinned bar. Without WebCodecs the bar says so in
+  its summary and still offers the frame capture (a canvas, not an encoder).

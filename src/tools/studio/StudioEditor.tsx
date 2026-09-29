@@ -134,6 +134,7 @@ import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 import PageBar, { barPill } from '../../shared/ui/PageBar';
 import Button from '../../shared/ui/Button';
+import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -1346,9 +1347,13 @@ export default function StudioEditor({
     }
   }
 
-  /** Render every requested variant in turn; each downloads as it finishes. */
-  async function handleExport() {
-    if (!active || exporting || variants.length === 0) return;
+  /**
+   * Render the variants in turn — every one, or `only` those (the pinned
+   * bar's menu offers each alone); each is written as it finishes.
+   */
+  async function handleExport(only?: readonly ExportVariant[]) {
+    const runVariants = only ?? variants;
+    if (!active || exporting || runVariants.length === 0) return;
     if (!activeVideo && !photo) return;
     const meta = lib.getMeta(active.id);
     let srcWidth = photoNatural?.width ?? meta?.width ?? videoRef.current?.videoWidth ?? 0;
@@ -1387,7 +1392,7 @@ export default function StudioEditor({
       label: `Exporting ${base}`,
       scope: finalsMedia ? (knownIdentity(finalsMedia)?.assetId ?? fileIdentity(finalsMedia)) : null,
       progress: 0,
-      detail: `${variants.length} variant${variants.length === 1 ? '' : 's'}`,
+      detail: `${runVariants.length} variant${runVariants.length === 1 ? '' : 's'}`,
       cancel: () => controller.abort(),
     });
     // A still delivered from its source's ORIGINAL when the frame is worth it
@@ -1406,7 +1411,7 @@ export default function StudioEditor({
         if (chosen.file !== activeImage) {
           setFetchingOriginal(true);
           try {
-            const decoded = await decodeStillForExport(chosen.file, variants);
+            const decoded = await decodeStillForExport(chosen.file, runVariants);
             fetchedStill = decoded.bitmap;
             still = fetchedStill;
             runFrame = decoded.frame;
@@ -1419,9 +1424,9 @@ export default function StudioEditor({
       // needs more than it holds, the still is decoded again for the run and
       // closed with it. A 1080 cut usually needs less, and costs no decode.
       if (photo && activeImage && still === photo && runFrame) {
-        const need = exportDecodeEdge(variants, runFrame);
+        const need = exportDecodeEdge(runVariants, runFrame);
         if (Math.max(photo.width, photo.height) < need) {
-          const decoded = await decodeStillForExport(activeImage, variants);
+          const decoded = await decodeStillForExport(activeImage, runVariants);
           fetchedStill = decoded.bitmap;
           still = fetchedStill;
           runFrame = decoded.frame;
@@ -1459,7 +1464,7 @@ export default function StudioEditor({
       // Several variants of a clip read and demux its file ONCE: each used to
       // read the whole file and parse it again. One variant keeps the old path.
       let demuxed: DemuxResult | null = null;
-      if (!still && source && variants.length > 1) {
+      if (!still && source && runVariants.length > 1) {
         try {
           demuxed = await demuxSource(source);
         } catch {
@@ -1467,16 +1472,16 @@ export default function StudioEditor({
           demuxed = null;
         }
       }
-      for (let i = 0; i < variants.length; i += 1) {
+      for (let i = 0; i < runVariants.length; i += 1) {
         // Checked per variant, not only inside the encoder: a still renders in
         // one pass and never looks at the signal, so a cancelled run of five
         // stills would otherwise write all five. Returning rather than
         // breaking, so a cancelled run does not then report "✓ Exported".
         if (controller.signal.aborted) return;
-        const variant = variants[i];
-        setExportStep({ index: i + 1, total: variants.length });
+        const variant = runVariants[i];
+        setExportStep({ index: i + 1, total: runVariants.length });
         setExportRatio(0);
-        exportTask.update({ progress: i / variants.length, detail: `${i + 1} of ${variants.length} · ${variant.id}` });
+        exportTask.update({ progress: i / runVariants.length, detail: `${i + 1} of ${runVariants.length} · ${variant.id}` });
         // Time the whole variant, delivery included: writing a 400 MB file to
         // a folder is part of what the user waited for.
         const startedAt = Date.now();
@@ -1491,7 +1496,7 @@ export default function StudioEditor({
             if (p.ratio < 1 && p.ratio - reported < 0.005) return;
             reported = p.ratio;
             setExportRatio(p.ratio);
-            exportTask.update({ progress: (i + p.ratio) / variants.length });
+            exportTask.update({ progress: (i + p.ratio) / runVariants.length });
           }
         };
         const blob = still
@@ -1666,6 +1671,65 @@ export default function StudioEditor({
   // The clip's own cadence, when the container probe produced one — used to
   // label "Source fps" and to warn when a variant asks for more than exists.
   const sourceFps = activeInfo.fps && activeInfo.fps > 0 ? activeInfo.fps : null;
+
+  // The export's verbs, PINNED under the inspector's scroll (2026-09-29, his
+  // pick S1 from the Studio lab, Develop's grammar): every variant is the
+  // button, each variant alone and a frame capture are the menu. What is SET
+  // — the output, the variants — stays in the tab's sections, which scroll.
+  const fileWord = isPhoto ? 'JPEG' : 'MP4';
+  const variantSize = (v: ExportVariant) => {
+    const dims = exportW && exportH ? variantOutputSize(v, exportW, exportH) : null;
+    return dims ? `${dims.w}×${dims.h}` : v.aspectId === 'source' ? 'source frame' : v.aspectId;
+  };
+  const exportVerbs: ExportVerb[] = [];
+  if (active && exportSupported) {
+    exportVerbs.push({
+      id: 'all',
+      label: variants.length > 1 ? `Export ${variants.length} ${fileWord}s` : `Export the ${fileWord}`,
+      hint: isPhoto
+        ? 'Render every variant as a JPEG, one after the other'
+        : 'Render every variant (H.264 MP4), one after the other',
+      run: () => void handleExport(),
+    });
+    if (variants.length > 1) {
+      variants.forEach((v, i) =>
+        exportVerbs.push({
+          id: `only-${v.id}`,
+          label: `Variant ${i + 1} alone`,
+          hint: `${variantSize(v)} · ${variantFileName(exportFileName.trim() || active.baseName, v, isPhoto ? 'photo' : 'video')}`,
+          run: () => void handleExport([v]),
+        }),
+      );
+    }
+  }
+  if (active && !isPhoto) {
+    exportVerbs.push({
+      id: 'frame',
+      label: 'Capture this frame',
+      hint: 'The frame under the playhead as a JPEG, overlays and look burned in',
+      run: () => void handleGrabFrame(),
+    });
+  }
+  const exportSummary = !exportSupported
+    ? 'Export needs WebCodecs (try Chrome/Edge/Safari) — editing works everywhere.'
+    : `${variants.length} ${fileWord}${variants.length === 1 ? '' : 's'} · ${variants.map(variantSize).join(', ')} · into ${destDir ? destDir.name : 'Downloads'}`;
+  const exportLine = exporting
+    ? fetchingOriginal
+      ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}…`
+      : `${exportStep && exportStep.total > 1 ? `Variant ${exportStep.index}/${exportStep.total} · ` : 'Exporting… '}${Math.round(exportRatio * 100)}%`
+    : null;
+  const exportNote =
+    (exportDone && runStats.length > 0) || exportError ? (
+      <div className="flex flex-col gap-1.5">
+        {exportDone && runStats.length > 0 && (
+          <span className="inline-flex items-baseline gap-1.5 font-mono text-xs tabular-nums text-ink-soft">
+            <span className="inline-flex self-center text-ok">{Icons.check}</span>
+            {describeExportRun(runStats)}
+          </span>
+        )}
+        {exportError && <span className="text-xs text-danger">{exportError}</span>}
+      </div>
+    ) : null;
 
   // What the outro's preview composes for: the project's destination format —
   // the card recomposes per variant frame at export, like every overlay.
@@ -2663,82 +2727,35 @@ export default function StudioEditor({
                     })}
                   </InspectorSection>
 
-                  <InspectorSection id="studio.export.run" title="Export">
-                    {!exportSupported && (
-                      <p className="m-0 text-xs text-muted">
-                        Export needs WebCodecs (try Chrome/Edge/Safari) — editing works everywhere.
-                      </p>
-                    )}
-                    {exporting ? (
-                      <div className="flex flex-col gap-2" role="status">
-                        <div className="flex items-center gap-3">
-                          <span className="font-mono text-xs tracking-[0.04em] text-ink-soft flex-none">
-                            {fetchingOriginal
-                              ? `Fetching the original from ${proxyWithOriginal?.sourceId ?? 'the source'}… `
-                              : exportStep && exportStep.total > 1
-                                ? `Variant ${exportStep.index}/${exportStep.total} · `
-                                : 'Exporting… '}
-                            {!fetchingOriginal && `${Math.round(exportRatio * 100)}%`}
-                          </span>
-                          <progress data-export className="flex-1 h-2 accent-accent" value={exportRatio} max={1} />
-                        </div>
-                        <Button size="sm" variant="ghost" onClick={cancelExport} className="self-start">
-                          Cancel
-                        </Button>
-                      </div>
-                    ) : (
-                      <>
-                        {exportDone && runStats.length > 0 && (
-                          <div className="flex flex-col gap-0.5 px-3 py-2 rounded-control bg-ok-wash border border-ok-line" role="status">
-                            <span className="inline-flex items-center gap-1.5 text-xs font-semibold text-ok">
-                              {Icons.check} Exported
-                            </span>
-                            <span className="font-mono text-xs tabular-nums text-ink-soft">
-                              {describeExportRun(runStats)}
-                            </span>
-                          </div>
-                        )}
-                        {/* A clip that came from a Winnow can send its finals
-                            home. Only offered for what was just rendered, only
-                            to the instance it came from. */}
-                        {exportDone && lastRun.length > 0 && finalsOrigin && (
-                          <SendFinalsPanel
-                            files={lastRun}
-                            sourceId={finalsOrigin.sourceId}
-                            assetId={finalsIdentity?.assetId ?? null}
-                          />
-                        )}
-                        {exportError && (
-                          <span className="text-xs text-danger" role="status">
-                            {exportError}
-                          </span>
-                        )}
-                        <Button
-                          variant="primary"
-                          icon={Icons.export}
-                          onClick={handleExport}
-                          disabled={!active || !exportSupported}
-                          title={
-                            isPhoto
-                              ? 'Render every variant as a JPEG, one after the other'
-                              : 'Render every variant (H.264 MP4), one after the other'
-                          }
-                        >
-                          Export{' '}
-                          {isPhoto
-                            ? variants.length > 1
-                              ? `${variants.length} JPEGs`
-                              : 'JPEG'
-                            : variants.length > 1
-                              ? `${variants.length} MP4s`
-                              : 'MP4'}
-                        </Button>
-                      </>
-                    )}
-                  </InspectorSection>
+                  {/* A clip that came from a Winnow can send its finals home.
+                      Only offered for what was just rendered, only to the
+                      instance it came from. */}
+                  {exportDone && lastRun.length > 0 && finalsOrigin && (
+                    <InspectorSection id="studio.export.home" title="Send home">
+                      <SendFinalsPanel
+                        files={lastRun}
+                        sourceId={finalsOrigin.sourceId}
+                        assetId={finalsIdentity?.assetId ?? null}
+                      />
+                    </InspectorSection>
+                  )}
                 </>
               )}
             </div>
+            {tab === 'export' && (
+              <DeliverBar
+                verbs={exportVerbs}
+                primary="all"
+                summary={exportSummary}
+                exporting={exportLine ?? (grabbing ? 'Capturing the frame…' : null)}
+                progress={null}
+                onCancel={cancelExport}
+                note={exportNote}
+                placement={compact ? 'sheet' : 'panel'}
+                unitWord="variant"
+                empty="Open a clip or a photo to export."
+              />
+            )}
           </PanelHost>
         )}
       </div>
