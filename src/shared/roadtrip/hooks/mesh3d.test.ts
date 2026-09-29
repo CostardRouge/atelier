@@ -6,14 +6,17 @@ import {
   cylinder,
   decal,
   dot,
+  convexHull,
   extrude,
   faceNormal,
   heightOn,
+  hullSolid,
   hexToRgb,
   lighting,
   litColor,
   outward,
   paintMesh,
+  paintWake,
   prism,
   project,
   renderOrder,
@@ -24,6 +27,7 @@ import {
   type Face,
   type Part,
   type Pose,
+  type Vec3,
 } from './mesh3d';
 
 const TOP_DOWN = Math.PI / 2;
@@ -244,5 +248,70 @@ describe('paintMesh', () => {
     paintMesh(g, faces, { palette: { body: '#ffffff' }, ink: '#000000', outlineWidth: 2 });
     expect(calls.length).toBe(faces.length);
     expect(strokes.filter((s) => s === '#000000').length).toBe(faces.filter((f) => f.outline).length);
+  });
+});
+
+describe('convexHull / hullSolid', () => {
+  it('finds a cube’s six square faces, never their triangles, and drops what lies inside or along an edge', () => {
+    const corners: Vec3[] = [];
+    for (const x of [0, 1]) for (const y of [0, 1]) for (const z of [0, 1]) corners.push([x, y, z]);
+    // A point inside, and one halfway along an edge: neither is a corner.
+    const faces = convexHull([...corners, [0.5, 0.5, 0.5], [0.5, 0, 0], [1, 1, 1]]);
+    expect(faces).toHaveLength(6);
+    for (const f of faces) expect(f).toHaveLength(4);
+  });
+
+  it('winds every face outward and colours it by its normal, leaving out the ones told to go', () => {
+    const pts: Vec3[] = [
+      [0, 0, 0],
+      [2, 0, 0],
+      [2, 3, 0],
+      [0, 3, 0],
+      [0.5, 0.5, 1],
+      [1.5, 0.5, 1],
+      [1.5, 2.5, 1],
+      [0.5, 2.5, 1],
+    ];
+    const part = hullSolid('frustum', pts, (n) => (n[2] > 0.9 ? 'top' : n[2] < -0.9 ? null : 'side'));
+    expect(part.faces).toHaveLength(5);
+    expect(part.faces.filter((f) => f.role === 'top')).toHaveLength(1);
+    for (const face of part.faces) {
+      expect(dot(faceNormal(face.verts), sub(centroid(face.verts), part.centre))).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('paintWake', () => {
+  const recorder = () => {
+    const ops: string[] = [];
+    const fake = {
+      save() {},
+      restore() {},
+      beginPath() {},
+      closePath() {},
+      moveTo() {},
+      lineTo() {},
+      fill() {
+        ops.push('fill');
+      },
+      stroke() {
+        ops.push('stroke');
+      },
+      set lineCap(_v: string) {},
+      set fillStyle(_v: string) {},
+      set strokeStyle(_v: string) {},
+      set lineWidth(_v: number) {},
+    };
+    return { g: fake as unknown as CanvasRenderingContext2D, ops };
+  };
+
+  it('draws the churn and two fading arms under way, and nothing at rest', () => {
+    const moving = recorder();
+    paintWake(moving.g, pose({ tilt: Math.PI / 3 }), 14, 4, 1, 2);
+    expect(moving.ops.filter((o) => o === 'fill')).toHaveLength(8);
+    expect(moving.ops.filter((o) => o === 'stroke')).toHaveLength(16);
+    const still = recorder();
+    paintWake(still.g, pose(), 14, 4, 0, 2);
+    expect(still.ops).toEqual([]);
   });
 });

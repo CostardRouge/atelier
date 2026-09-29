@@ -14,11 +14,17 @@
  * offer is carried and ignored, so switching models never has to rewrite the
  * other's; every reader asks the model which flags it means.
  *
+ * A "car" here is whatever the Virée drives, and since 2026-09-29 that
+ * includes three BOATS — the Whitsundays day cruiser, the Viper, the Alison
+ * Maree — which offer no gear and wear their hull colour as the body's. A
+ * trip may drive one, but a piece usually borrows one for a day on the water
+ * (`vehicleFor`).
+ *
  * Pure and DOM-free: the reader never throws, a stored value is never
  * trusted, and a partial spec keeps what it says.
  */
 
-export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2'] as const;
+export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree'] as const;
 export type CarModelId = (typeof CAR_MODEL_IDS)[number];
 
 /** The car a trip drives when nothing says otherwise — the maintainer's own. */
@@ -175,6 +181,47 @@ export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
     fitted: ['roofBars', 'mirrors'],
     asItComes: 'The Kadjar in navy blue, gloss, with its two roof bars',
   },
+  // The boats' liveries are guesses: none of their operators says what colour
+  // they are, so each comes in the colour a boat of its kind most often wears.
+  'whitsunday-cruiser': {
+    gear: [],
+    colours: [
+      { id: 'white', name: 'White', hex: '#f4f4f1', note: 'what the day fleet mostly wears' },
+      { id: 'sand', name: 'Sand', hex: '#e6d9bd' },
+      { id: 'navy', name: 'Navy', hex: '#1d2f5e' },
+      { id: 'charcoal', name: 'Charcoal', hex: '#34373b' },
+    ],
+    color: '#f4f4f1',
+    finish: 'gloss',
+    fitted: [],
+    asItComes: 'The day cruiser in white, with its teal line',
+  },
+  'viper-jet': {
+    gear: [],
+    colours: [
+      { id: 'black', name: 'Black', hex: '#1d1f23', note: 'a guess — repaint it to what it wears' },
+      { id: 'white', name: 'White', hex: '#f2f2ee' },
+      { id: 'grey', name: 'Grey', hex: '#6b6f75' },
+      { id: 'red', name: 'Red', hex: '#b3261e' },
+      { id: 'yellow', name: 'Yellow', hex: '#f0bf2c' },
+    ],
+    color: '#1d1f23',
+    finish: 'gloss',
+    fitted: [],
+    asItComes: 'The Viper in black, with a red line',
+  },
+  'alison-maree': {
+    gear: [],
+    colours: [
+      { id: 'white', name: 'White', hex: '#f3f4f2', note: 'a guess — repaint it to what it wears' },
+      { id: 'navy', name: 'Navy', hex: '#1d2f5e' },
+      { id: 'grey', name: 'Grey', hex: '#8a8f95' },
+    ],
+    color: '#f3f4f2',
+    finish: 'gloss',
+    fitted: [],
+    asItComes: 'The Alison Maree in white, with its navy line',
+  },
 };
 
 /** What a model offers — the Prado's for an id this build does not know. */
@@ -267,8 +314,27 @@ export function gearWords(gear: CarGear, model: string): string[] {
   return carLine(model).gear.filter((key) => shown[key]).map((key) => GEAR_LABELS[key]);
 }
 
-/** One line saying what the car is: the model, its colour and finish, its gear. */
+/** One line saying what the car is: the model, its colour and finish, its gear — if it offers any. */
 export function describeCar(spec: CarSpec, modelName: string): string {
+  const head = `${modelName} · ${colourName(spec.color, spec.model)}, ${spec.finish}`;
+  if (carLine(spec.model).gear.length === 0) return head;
   const words = gearWords(spec.gear, spec.model);
-  return `${modelName} · ${colourName(spec.color, spec.model)}, ${spec.finish} · ${words.length ? words.join(', ') : 'no gear'}`;
+  return `${head} · ${words.length ? words.join(', ') : 'no gear'}`;
+}
+
+/** What a piece's Virée drives: its own pick if it made one. */
+export type VehicleChoice = 'trip' | CarModelId;
+export const VEHICLE_CHOICES: readonly VehicleChoice[] = ['trip', ...CAR_MODEL_IDS];
+
+/**
+ * The vehicle a PIECE drives. The trip has one car (`TripDoc.car`), but a day
+ * on the water borrows a boat: `choice` names the model the piece picked,
+ * `color` its own paint (empty: as it comes). The trip's car stands for itself
+ * — as it is dressed in the garage — whether the piece left the choice to the
+ * trip or picked that very model.
+ */
+export function vehicleFor(choice: string, color: string, tripCar: CarSpec): CarSpec {
+  if (!isModelId(choice) || choice === tripCar.model) return tripCar;
+  const spec = defaultCarSpec(choice);
+  return HEX.test(color) ? { ...spec, color: color.toLowerCase() } : spec;
 }

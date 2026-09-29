@@ -4,17 +4,18 @@
  *
  * A paper map of the trip so far (no tiles, nothing fetched: the projection
  * is the route trace's own), the road as a curve through the stops, and a
- * cartoon Land Cruiser Prado — a miniature rendered by `mesh3d.ts`, wheels
- * turning — driving it. The stops are the legs' located places, the places the
+ * cartoon vehicle — the trip's car, wheels turning, or a boat a piece borrows
+ * for its day on the water, a wake behind it — a miniature rendered by
+ * `mesh3d.ts`, driving it. The stops are the legs' located places, the places the
  * author puts on the map themselves (the Itinerary's own editor, shared), or
  * the picked pictures' own positions; at a stop with pictures the car halts and they pop
  * as prints beside it, or fill the frame; when it arrives the map can fade
  * and leave the piece's own picture under the badge. It ticks at every stop
  * on the shared kits, with a shutter as each print lands.
  *
- * The arithmetic is `drive-plan.ts`, the drawing `drive-paint.ts`, the car
- * `car-model.ts`; this file is the variant's face — what it needs, its
- * sketch, and its options.
+ * The arithmetic is `drive-plan.ts`, the drawing `drive-paint.ts`, the
+ * vehicles `car-registry.ts`; this file is the variant's face — what it
+ * needs, its sketch, and its options.
  */
 
 import Button from '../../ui/Button';
@@ -27,8 +28,8 @@ import {
   ToggleField,
   swatchClass,
 } from '../../ui/Inspector';
-import { DEFAULT_CAR, describeCar } from '../car-spec';
-import { carModel } from './car-registry';
+import { DEFAULT_CAR, carLine, describeCar, vehicleFor, type VehicleChoice } from '../car-spec';
+import { CAR_MODELS, carModel, vehicleLabel } from './car-registry';
 import {
   DRIVE_DEFAULTS,
   DRIVE_LIMITS,
@@ -119,6 +120,13 @@ function leftOutLine(route: DriveRoute, o: DriveOptions): string | null {
   return `Left out: ${parts.join(', ')}${why}`;
 }
 
+/** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
+function paintHint(model: string, color: string): string {
+  const preset = carLine(model).colours.find((c) => c.hex === color);
+  if (!preset) return 'A colour of this piece’s own.';
+  return preset.note ? `${preset.name} — ${preset.note}` : preset.name;
+}
+
 function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const o = driveOptions(options);
   const set = (patch: Partial<DriveOptions>) => onChange({ ...o, ...patch });
@@ -129,7 +137,10 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const wants = driveWants(route, o);
   const status = host?.pictureStatus;
   const line = pictureLine(wants.map((w) => w.key), status);
-  const car = ctx.car ?? DEFAULT_CAR;
+  const tripCar = ctx.car ?? DEFAULT_CAR;
+  // `vehicleFor` hands back the trip's own spec when the piece borrows nothing.
+  const car = vehicleFor(o.vehicle, o.vehicleColor, tripCar);
+  const borrowed = car !== tripCar;
   const shown = route.stops.reduce((n, s) => n + s.pictures.length, 0);
   const located = stages.reduce((n, s) => n + s.places.length, 0);
   const pickedLocated = o.picked.filter((p) => p.coords).length;
@@ -379,9 +390,61 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Car">
+      <Group title="Vehicle">
+        <FieldRow
+          label="Drives"
+          hint={
+            borrowed
+              ? 'This piece only: the trip keeps its car, and its other pieces drive it.'
+              : 'The trip’s car, as it is dressed in the garage.'
+          }
+        >
+          <SelectField
+            value={borrowed ? car.model : 'trip'}
+            options={[
+              { id: 'trip', label: `The trip’s ${carModel(tripCar.model).short}` },
+              ...CAR_MODELS.filter((m) => m.id !== tripCar.model).map((m) => ({ id: m.id, label: vehicleLabel(m) })),
+            ]}
+            onChange={(vehicle) => set({ vehicle: vehicle as VehicleChoice, vehicleColor: '' })}
+            label="Vehicle"
+          />
+        </FieldRow>
         <p className="m-0 text-xs text-ink-soft">{describeCar(car, carModel(car.model).name)}</p>
-        {host?.configureCar ? (
+        {borrowed ? (
+          <FieldRow
+            label="Paint"
+            align="start"
+            hint={paintHint(car.model, car.color)}
+          >
+            <div className="flex flex-wrap items-center gap-1.5">
+              {carLine(car.model).colours.map((c) => {
+                const on = c.hex === car.color;
+                return (
+                  <button
+                    key={c.id}
+                    type="button"
+                    aria-label={c.name}
+                    aria-pressed={on}
+                    title={c.note ? `${c.name} — ${c.note}` : c.name}
+                    onClick={() => set({ vehicleColor: c.hex === carLine(car.model).color ? '' : c.hex })}
+                    className={`flex-none w-7 h-7 p-0 rounded-full border-2 cursor-pointer transition-[box-shadow,border-color] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
+                      on ? 'border-accent shadow-[0_0_0_2px_var(--color-surface)_inset]' : 'border-line-strong hover:border-muted'
+                    }`}
+                    style={{ background: c.hex }}
+                  />
+                );
+              })}
+              <input
+                type="color"
+                value={car.color}
+                onChange={(e) => set({ vehicleColor: e.target.value.toLowerCase() })}
+                aria-label="A paint of this piece’s own"
+                title="A paint of this piece’s own"
+                className={swatchClass}
+              />
+            </div>
+          </FieldRow>
+        ) : host?.configureCar ? (
           <div>
             <Button size="sm" onClick={() => host.configureCar?.()}>
               Configure the car…
@@ -392,7 +455,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
         <FieldRow label="Size">
           <RangeField
-            label="Car size"
+            label="Vehicle size"
             min={DRIVE_LIMITS.carSize.min}
             max={DRIVE_LIMITS.carSize.max}
             step={0.05}
@@ -737,7 +800,8 @@ export const driveVariant: HookVariant = {
   name: 'Virée',
   tagline: 'A little car drives the map from stop to stop, showing pictures',
   defaults: { ...DRIVE_DEFAULTS },
-  contentKeys: ['picked', 'stops'],
+  // The vehicle too: the boat a piece borrowed is that day's, not a look.
+  contentKeys: ['picked', 'stops', 'vehicle', 'vehicleColor'],
   // An Itinerary's stops, handed over on a switch, are driven at once the
   // first time — the author came for their places, not the legs'.
   sharedStops: { key: 'stops', fresh: { stopsOn: 'custom' } },
@@ -758,7 +822,7 @@ export const driveVariant: HookVariant = {
     const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o);
     const plan = drivePlan(route, o);
     if (!plan) return { seconds: 0 };
-    const scratch = driveScratch(ctx.car ?? DEFAULT_CAR);
+    const scratch = driveScratch(vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR));
     const basemap = driveBasemap(plan, o, ctx.aspect);
     // A stop's name is a place on the legs and on the author's own list — the
     // author's assertion there, the Itinerary's rule — and a day on pictures.

@@ -21,7 +21,7 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { GEAR_KEYS, type CarGear } from '../car-spec';
+import { GEAR_KEYS, carLine, type CarGear } from '../car-spec';
 import { CAR_MODELS } from './car-registry';
 import { buildKadjar } from './kadjar-model';
 import {
@@ -39,8 +39,13 @@ import {
   type Vec3,
 } from './mesh3d';
 
-/** Pixels per model unit — the car lands about 280px long, as on a phone. */
+/**
+ * Pixels per model unit — the car lands about 280px long, as on a phone. A
+ * boat, modelled in its own metres, is drawn at the size a car is (the map
+ * draws every vehicle at one length), so a longer model gets fewer pixels.
+ */
 const SCALE = 60;
+const scaleFor = (length: number) => SCALE * Math.min(1, 4.6 / length);
 
 /** The sampling grid, in pixels. Fine enough to see a 20px blemish. */
 const STEP = 2;
@@ -83,11 +88,11 @@ const MIN_CLAIM = 40;
  */
 const TOLERANCE = 0.03;
 
-const poseAt = (headingDeg: number, tiltDeg: number): Pose => ({
+const poseAt = (headingDeg: number, tiltDeg: number, scale = SCALE): Pose => ({
   fx: Math.sin((headingDeg * Math.PI) / 180),
   fy: Math.cos((headingDeg * Math.PI) / 180),
   tilt: (tiltDeg * Math.PI) / 180,
-  scale: SCALE,
+  scale,
   x: 0,
   y: 0,
   spins: {},
@@ -323,19 +328,28 @@ const ALL_GEAR = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unkn
  * of their own rather than on the rails. `solid` names the surfaces each must
  * keep whole: the ones a report once named, or the ones a car is chosen for.
  */
+const KADJAR_SOLID = (id: string) =>
+  id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-') || /^roofbar-(fore|aft)$/.test(id);
+const SOLID: Record<string, (id: string) => boolean> = {
+  'prado-j120': (id) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-'),
+  'kadjar-ph2': KADJAR_SOLID,
+  'viper-jet': (id) => id === 'hull' || id === 'console',
+};
+/** A catamaran keeps its hulls, its saloon and its wheelhouse. */
+const CAT_SOLID = (id: string) => id.startsWith('hull-') || id === 'saloon' || id === 'wheelhouse';
+
 const CARS = [
   ...CAR_MODELS.map((model) => ({
-    name: `the ${model.short}, fully geared`,
+    name: `the ${model.short}${carLine(model.id).gear.length ? ', fully geared' : ''}`,
     parts: model.build(ALL_GEAR),
-    solid:
-      model.id === 'kadjar-ph2'
-        ? (id: string) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-') || /^roofbar-(fore|aft)$/.test(id)
-        : (id: string) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-'),
+    scale: scaleFor(model.length),
+    solid: SOLID[model.id] ?? CAT_SOLID,
   })),
   {
     name: 'the Kadjar as it comes',
     parts: buildKadjar(),
-    solid: (id: string) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-') || /^roofbar-(fore|aft)$/.test(id),
+    scale: scaleFor(4.49),
+    solid: KADJAR_SOLID,
   },
 ];
 
@@ -347,7 +361,7 @@ const WRAP = /-wrap\d?(-|$)/;
 const HEADINGS = Array.from({ length: 12 }, (_, i) => i * 30);
 const TILTS = [35, 52, 80];
 
-describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, solid }) => {
+describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, solid, scale }) => {
   /**
    * The gate. Every part the camera can see must actually be SEEN: where a
    * part is the nearest thing to the eye, it has to be what the paint left on
@@ -358,7 +372,7 @@ describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, sol
     const buried: string[] = [];
     for (const tilt of TILTS) {
       for (const heading of HEADINGS) {
-        for (const part of mispainted(GEARED, poseAt(heading, tilt)).parts) {
+        for (const part of mispainted(GEARED, poseAt(heading, tilt, scale)).parts) {
           if (part.claimed < MIN_CLAIM) continue;
           const kept = part.kept / part.claimed;
           if (kept < MIN_KEPT) {
@@ -377,7 +391,7 @@ describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, sol
     const lines: string[] = [];
     for (const tilt of TILTS) {
       for (const heading of HEADINGS) {
-        const { wrong, bad, covered } = mispainted(GEARED, poseAt(heading, tilt));
+        const { wrong, bad, covered } = mispainted(GEARED, poseAt(heading, tilt, scale));
         const share = bad / covered;
         if (share > TOLERANCE) {
           lines.push(
@@ -400,7 +414,7 @@ describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, sol
     const lines: string[] = [];
     for (const tilt of [35, 52, 58, 80]) {
       for (let heading = 40; heading <= 75; heading += 5) {
-        for (const w of mispainted(GEARED, poseAt(heading, tilt)).wrong) {
+        for (const w of mispainted(GEARED, poseAt(heading, tilt, scale)).wrong) {
           if (WRAP.test(w.nearest)) {
             lines.push(`heading ${heading}° tilt ${tilt}°: ${w.painted} over ${w.nearest} (${w.samples})`);
           }
@@ -420,8 +434,9 @@ describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, sol
   it('stays within a few moves of farthest-first', () => {
     for (const tilt of TILTS) {
       for (const heading of HEADINGS) {
-        const faces = renderOrder(GEARED, poseAt(heading, tilt));
-        expect(faces.length).toBeGreaterThan(80);
+        const faces = renderOrder(GEARED, poseAt(heading, tilt, scale));
+        // Enough faces to mean something: a car shows over eighty, a boat's fewer, larger panels over thirty.
+        expect(faces.length).toBeGreaterThan(30);
         let moved = 0;
         for (let i = 1; i < faces.length; i++) {
           if (faces[i].depth > faces[i - 1].depth + 1e-9) moved += 1;
@@ -441,7 +456,7 @@ describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, sol
     const thin: string[] = [];
     for (const tilt of TILTS) {
       for (const heading of HEADINGS) {
-        for (const part of mispainted(GEARED, poseAt(heading, tilt)).parts) {
+        for (const part of mispainted(GEARED, poseAt(heading, tilt, scale)).parts) {
           if (!solid(part.id) || part.claimed < MIN_CLAIM) continue;
           const kept = part.kept / part.claimed;
           if (kept < 0.7) {
@@ -456,7 +471,7 @@ describe.each(CARS)('$name is painted in the right order', ({ parts: GEARED, sol
   });
 
   it('paints the same sequence twice for the same pose', () => {
-    const roles = () => renderOrder(GEARED, poseAt(56, 52)).map((f) => `${f.role}:${f.depth.toFixed(6)}`);
+    const roles = () => renderOrder(GEARED, poseAt(56, 52, scale)).map((f) => `${f.role}:${f.depth.toFixed(6)}`);
     expect(roles()).toEqual(roles());
   });
 });

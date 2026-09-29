@@ -10,7 +10,7 @@ import {
   type CarModelId,
   type CarSpec,
 } from '../../shared/roadtrip/car-spec';
-import { CAR_MODELS, carModel } from '../../shared/roadtrip/hooks/car-registry';
+import { CAR_MODELS, carModel, vehicleLabel } from '../../shared/roadtrip/hooks/car-registry';
 import { FieldRow, SelectField, SwitchRow, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import CarTurntable from './CarTurntable';
@@ -145,7 +145,7 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
           <FieldRow label="Model" hint={model.series}>
             <SelectField
               value={value.model}
-              options={CAR_MODELS.map((m) => ({ id: m.id, label: m.name }))}
+              options={CAR_MODELS.map((m) => ({ id: m.id, label: vehicleLabel(m) }))}
               onChange={switchModel}
               label="Car model"
             />

@@ -13,6 +13,7 @@ import {
   gearWords,
   readCarSpec,
   sameCarSpec,
+  vehicleFor,
 } from './car-spec';
 
 describe('the default car', () => {
@@ -173,5 +174,39 @@ describe('sameCarSpec', () => {
     const k = defaultCarSpec('kadjar-ph2');
     expect(sameCarSpec(k, { ...k, gear: { ...k.gear, bullBar: true } })).toBe(true);
     expect(sameCarSpec(k, { ...k, gear: { ...k.gear, roofRails: true } })).toBe(false);
+  });
+});
+
+describe('the boats', () => {
+  it('offer no gear, come in gloss, and say so without a gear clause', () => {
+    for (const id of ['whitsunday-cruiser', 'viper-jet', 'alison-maree'] as const) {
+      expect(CAR_LINES[id].gear, id).toEqual([]);
+      expect(defaultCarSpec(id).finish).toBe('gloss');
+    }
+    expect(describeCar(defaultCarSpec('viper-jet'), 'Viper')).toBe('Viper · Black, gloss');
+    expect(describeCar(defaultCarSpec('alison-maree'), 'Alison Maree')).toBe('Alison Maree · White, gloss');
+  });
+
+  it('may be a trip’s own vehicle, read back like any other', () => {
+    const spec = defaultCarSpec('alison-maree');
+    expect(readCarSpec(spec)).toEqual(spec);
+  });
+});
+
+describe('vehicleFor', () => {
+  const trip = { ...defaultCarSpec(), color: '#1f3b2f' };
+
+  it('drives the trip’s car, as it is dressed, unless the piece borrowed another', () => {
+    expect(vehicleFor('trip', '', trip)).toBe(trip);
+    expect(vehicleFor('garbage', '#ffffff', trip)).toBe(trip);
+    // Picking the trip's own model is the trip's car, dressing and all.
+    expect(vehicleFor('prado-j120', '#ffffff', trip)).toBe(trip);
+  });
+
+  it('borrows a model as it comes, in the piece’s own paint when it has one', () => {
+    expect(vehicleFor('viper-jet', '', trip)).toEqual(defaultCarSpec('viper-jet'));
+    expect(vehicleFor('viper-jet', '#F0BF2C', trip).color).toBe('#f0bf2c');
+    expect(vehicleFor('viper-jet', 'yellow', trip).color).toBe(defaultCarSpec('viper-jet').color);
+    expect(vehicleFor('kadjar-ph2', '', trip).model).toBe('kadjar-ph2');
   });
 });

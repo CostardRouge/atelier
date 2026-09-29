@@ -592,6 +592,28 @@ renderer or either export moved.
 - **`render-order.test.ts` judges every registry line**, so a third car is
   gated the day it is listed. Rules the Kadjar measured, in `roadtrip.md`.
 
+### Boats, and a vehicle per piece (2026-09-29)
+
+- **Three boats in the registry** (`kind: 'boat'`): the Whitsundays day
+  cruiser and the Alison Maree over one `buildCatamaran` (`boat-parts.ts`),
+  the Viper over `hullPart` and its own benches. Modelled in METRES; the map
+  draws every vehicle at one length, and `render-order.test.ts` scales each to
+  ~280 px (`scaleFor`) so the oracle's thresholds mean the same thing.
+- **`convexHull` / `hullSolid`** (`mesh3d.ts`): a convex part from its
+  corners, coplanar runs merged into ONE polygon (a panel inked with its
+  triangulation would show the diagonals), each face's role chosen from its
+  normal. A hull is a pointed deck plan over a narrower, shorter waterline;
+  `waterTaper` sets where the waterline narrows so each bow face is flat, and
+  no sheer, since a rising deck bends each side into two faces.
+- **A piece borrows a vehicle**: `DriveOptions.vehicle` (`'trip'` or a model)
+  and `vehicleColor`, resolved by `vehicleFor(choice, color, trip.car)` — the
+  trip's car stands for itself, dressed as in the garage, whether left to the
+  trip or picked by model; a borrowed one comes as it comes in the piece's
+  paint. Both keys are `contentKeys`: the boat of one day is not a look.
+- **A boat leaves a wake** (`paintWake`, `wakeStrength` in `drive-plan.ts`):
+  two arms at the Kelvin angle and the churn between, laid on the water plane
+  through the pose, growing while the phase is `run`, settling at a halt.
+
 ## 14. Itinerary — an authored map (2026-09-14, rev. 2026-09-15)
 
 The variant that answers "which of these can the author compose themselves?".

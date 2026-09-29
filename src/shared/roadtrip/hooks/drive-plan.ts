@@ -35,6 +35,7 @@
  * without changing the route's shape. Pure and DOM-free.
  */
 
+import { VEHICLE_CHOICES, type VehicleChoice } from '../car-spec';
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
@@ -97,10 +98,16 @@ export interface DriveOptions {
   /** Leave the cards on the map once the car has gone. */
   cardsStay: boolean;
   cardSize: number;
-  // --- car ---------------------------------------------------------------------
+  // --- vehicle -----------------------------------------------------------------
   // The car itself — model, colour, finish, gear — is the TRIP's (`TripDoc.car`)
-  // and reaches the variant through `HookContext.car`; a piece keeps only how
-  // big it is drawn and how the camera looks at it.
+  // and reaches the variant through `HookContext.car`. A piece may borrow
+  // another vehicle for its day — a boat to the reef — as a model and a paint
+  // of its own (`vehicleFor`); otherwise it keeps only how big the car is drawn
+  // and how the camera looks at it.
+  /** `trip`: the trip's car, as dressed in its garage; else a model this piece drives. */
+  vehicle: VehicleChoice;
+  /** The borrowed vehicle's paint, `#rrggbb`; empty: as it comes. */
+  vehicleColor: string;
   carSize: number;
   /** The camera's elevation over the map, degrees; 90 looks straight down. */
   tilt: number;
@@ -157,6 +164,8 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   pauseEverywhere: false,
   cardsStay: true,
   cardSize: 1,
+  vehicle: 'trip',
+  vehicleColor: '',
   carSize: 1,
   tilt: 58,
   ground: 'paper',
@@ -256,6 +265,8 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     pauseEverywhere: o.pauseEverywhere === true,
     cardsStay: o.cardsStay !== false,
     cardSize: clamp(Number(o.cardSize), L.cardSize.min, L.cardSize.max, d.cardSize),
+    vehicle: oneOf(o.vehicle, VEHICLE_CHOICES, d.vehicle),
+    vehicleColor: hex(o.vehicleColor, ''),
     carSize: clamp(Number(o.carSize), L.carSize.min, L.carSize.max, d.carSize),
     tilt: clamp(Number(o.tilt), L.tilt.min, L.tilt.max, d.tilt),
     ground: oneOf(o.ground, ['paper', 'picture', 'tiles'], d.ground),
@@ -685,6 +696,16 @@ export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03)
 // --- the schedule ---------------------------------------------------------------
 
 export type PhaseKind = 'hold' | 'run' | 'halt' | 'arrive' | 'reveal';
+
+/**
+ * How much wake a boat leaves: none before it sets off, growing over its
+ * first moments under way, settling over a beat once it halts or arrives.
+ */
+export function wakeStrength(phase: PhaseKind, since: number): number {
+  if (phase === 'hold') return 0;
+  if (phase === 'run') return Math.min(1, since / 0.4);
+  return Math.max(0, 1 - since / 0.8);
+}
 
 export interface Phase {
   kind: PhaseKind;

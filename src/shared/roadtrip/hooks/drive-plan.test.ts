@@ -16,6 +16,7 @@ import {
   catmullRom,
   driveOptions,
   drivePlan,
+  wakeStrength,
   driveRoute,
   driveScore,
   driveWants,
@@ -123,6 +124,17 @@ describe('driveOptions', () => {
     expect(o.spare).toBeUndefined();
     expect(o.rack).toBeUndefined();
     expect(o.mirrors).toBeUndefined();
+  });
+
+  it('drives the trip’s car unless the piece borrowed a vehicle, and reads that one’s paint defensively', () => {
+    expect(driveOptions({}).vehicle).toBe('trip');
+    expect(driveOptions({}).vehicleColor).toBe('');
+    const boat = driveOptions({ vehicle: 'viper-jet', vehicleColor: '#F0BF2C' });
+    expect(boat.vehicle).toBe('viper-jet');
+    expect(boat.vehicleColor).toBe('#f0bf2c');
+    const junk = driveOptions({ vehicle: 'titanic', vehicleColor: 'teal' });
+    expect(junk.vehicle).toBe('trip');
+    expect(junk.vehicleColor).toBe('');
   });
 
   it('reads a picked picture with its position', () => {
@@ -689,5 +701,17 @@ describe('the drive’s OpenStreetMap region', () => {
   it('reads the new ground and its strength', () => {
     expect(driveOptions({ ground: 'tiles' }).ground).toBe('tiles');
     expect(driveOptions({ basemapOpacity: 0 }).basemapOpacity).toBe(DRIVE_LIMITS.basemapOpacity.min);
+  });
+});
+
+describe('wakeStrength', () => {
+  it('leaves no wake before setting off, grows one under way, and lets it settle at a halt', () => {
+    expect(wakeStrength('hold', 3)).toBe(0);
+    expect(wakeStrength('run', 0)).toBe(0);
+    expect(wakeStrength('run', 0.2)).toBeCloseTo(0.5, 9);
+    expect(wakeStrength('run', 5)).toBe(1);
+    expect(wakeStrength('halt', 0)).toBe(1);
+    expect(wakeStrength('halt', 0.4)).toBeCloseTo(0.5, 9);
+    expect(wakeStrength('arrive', 2)).toBe(0);
   });
 });

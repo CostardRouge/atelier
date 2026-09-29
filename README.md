@@ -922,9 +922,10 @@ typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
 every visit. **Virée** puts a little car on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
-through its stops, and a cartoon car — a Land Cruiser Prado or a Renault
-Kadjar, a miniature rendered in the browser with its wheels turning — driving
-from stop to stop. The stops are the
+through its stops, and a cartoon vehicle — the trip's car, a Land Cruiser
+Prado or a Renault Kadjar with its wheels turning, or a boat a piece borrows for
+a day on the water, leaving a wake — a miniature rendered in the browser,
+driving from stop to stop. The stops are the
 legs' located places, arriving where this day's leg ends; **your own places**,
 put on a map with the very editor the Itinerary uses — any place, on a leg or
 not, in your order, each able to hold a picture the car halts to show; or the
@@ -970,7 +971,16 @@ mirrors; it is drawn with its own marks: the C of its daytime lights, the
 diamond in a chrome-barred grille, black cladding round the arches, a spoiler
 over the raked tailgate, two-tone wheels. Picking a model brings that car as
 it comes; the one you left keeps what you dressed it in while the garage stays
-open. The car turns on a turntable while you dress it (drag
+open. Three boats join them: the **Whitsundays day cruiser**
+(a motor catamaran with a shaded upper deck, the ordinary boat out to
+Whitehaven), the **Viper** (Airlie Beach's jet boat to the outer reef — six
+rows of belted benches, the helm console, two waterjets at the transom) and the
+**Alison Maree** (the Bremer Bay catamaran that takes you out to the canyon's
+orcas — a glass wheelhouse and a big open upper deck). Their liveries are
+guesses you can repaint. A trip can drive a boat, but a piece usually borrows
+one: the Virée panel's **Vehicle** row keeps the trip's car or picks any other
+model for that piece alone, in a paint of its own, and a boat leaves a wake that
+grows as it gets under way and settles when it halts. The car turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own
