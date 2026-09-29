@@ -1,8 +1,10 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
+import { describeKeyTarget, targetOwnsSpace } from '../media/transport-keys';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { useIsCompact } from '../ui/use-layout-mode';
+import { useLocalFlag } from '../ui/use-local-flag';
 import { usePixelView } from '../ui/use-pixel-view';
 import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
 import type { DevelopSettings } from './develop';
@@ -22,6 +24,7 @@ import DevelopHistogram from './DevelopHistogram';
 import DevelopMixer from './DevelopMixer';
 import DevelopGrading from './DevelopGrading';
 import DevelopSliders from './DevelopSliders';
+import DevelopTransport from './DevelopTransport';
 import DevelopViewport, { DevelopCaption } from './DevelopViewport';
 import { useDevelopDraft, useTold } from './use-develop-draft';
 import { useDevelopPicture } from './use-develop-picture';
@@ -123,6 +126,10 @@ export default function DevelopSheet({
   // The clipping view and the readout ride the shared strip: seeing what has
   // clipped is a way of looking, not a panel (§4.2).
   const [clipping, setClipping] = useState(false);
+  // The before/after split as a SWITCH, the Develop tool's own `A/B` — and
+  // its own preference, so the machine remembers one answer for every
+  // Develop screen, like the pixel view.
+  const [compareOn, setCompareOn] = useLocalFlag('atelier.develop.compare', true);
   // The loupe too: the modal hosts gain RENDERING, never panels (§4.2), and
   // the file's own pixels under a magnified view are rendering.
   const picture = useDevelopPicture({
@@ -135,7 +142,11 @@ export default function DevelopSheet({
     loupe: true,
     pixelView,
     clipping,
+    compare: compareOn,
   });
+  // The dropper holds the split while it is armed; the pill says so rather
+  // than claiming a divider nobody can see.
+  const compareHeld = compareOn && picture.picking;
 
   const done = () => onDone(draft.result());
   // While a preset is being named, Enter belongs to that field's own form.
@@ -157,6 +168,29 @@ export default function DevelopSheet({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
+  }, []);
+
+  // Space is the SHEET's while it is open: it plays and pauses a clip, and on
+  // a photograph it does nothing — above all it must not reach the tool
+  // behind the modal, whose own transport (the Studio's clip, the Trips deck)
+  // is bound on the same window and would play unseen. Taken in the CAPTURE
+  // phase, ahead of those listeners, which all stand down on
+  // `defaultPrevented`; a control the keyboard is on keeps its press.
+  const clipRef = useRef(picture.video);
+  clipRef.current = picture.video;
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+      if (targetOwnsSpace(describeKeyTarget(e.target))) return;
+      e.preventDefault();
+      const v = clipRef.current;
+      if (e.repeat || !v) return;
+      if (v.paused) void v.play().catch(() => {});
+      else v.pause();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
   }, []);
 
   return (
@@ -184,6 +218,32 @@ export default function DevelopSheet({
             {chip && <span className={developPillClass}>{chip}</span>}
             <span className="flex-1" />
             <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+            {/* The compare as a switch, the Develop tool's `A/B` with the
+                Studio's colours — one wipe control across the suite. Kept at
+                the zoom pill's height, in the row a phone wraps to. */}
+            {picture.source && (
+              <button
+                type="button"
+                className={`flex-none inline-flex items-center justify-center h-[2.125rem] px-2.5 rounded-full border font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors ${
+                  compareHeld
+                    ? 'border-line-strong border-dashed bg-paper-2 text-faint'
+                    : compareOn
+                      ? 'border-accent bg-accent-wash text-accent-ink'
+                      : 'border-line-strong bg-surface text-muted hover:border-accent hover:text-accent-ink'
+                }`}
+                onClick={() => setCompareOn(!compareOn)}
+                aria-pressed={compareOn}
+                title={
+                  compareHeld
+                    ? 'Before / after — held while the dropper is armed; the divider comes back where it was'
+                    : compareOn
+                      ? 'Before / after — the divider is on, and a drag across the picture places it'
+                      : 'Before / after — off: the whole picture is shown corrected'
+                }
+              >
+                A/B
+              </button>
+            )}
           </div>
           {/* In the header, never over the picture (the lightbox's rule); under
               820px there is none — the pinch is the gesture there. */}
@@ -241,6 +301,9 @@ export default function DevelopSheet({
               // column scrolls under it.
               className="flex-1 max-[820px]:flex-none max-[820px]:h-[calc(var(--app-h)*0.38)]"
             />
+            {/* A clip is judged MOVING: the grade on a still frame is half of
+                it. Viewing only — where it is paused is written nowhere. */}
+            {picture.video && <DevelopTransport video={picture.video} className="flex-none" />}
             <DevelopCaption draft={draft.draft} note={caption} picture={picture} />
           </div>
 

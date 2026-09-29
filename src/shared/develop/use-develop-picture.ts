@@ -75,6 +75,11 @@ function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
 }
 
 
+/** A clip's source is its `<video>` element (`badge-render.ts`); a still's is a bitmap or a canvas. */
+function isVideoElement(image: CanvasImageSource): image is HTMLVideoElement {
+  return typeof HTMLVideoElement !== 'undefined' && image instanceof HTMLVideoElement;
+}
+
 /**
  * Where the loupe is: `same` when the file holds no more than the stage
  * already shows, `capped` when THIS DEVICE holds no more — a phone's RAW is
@@ -355,6 +360,13 @@ export interface DevelopFrame {
 export interface DevelopPicture {
   /** The decoded picture, within the stage budget; null while decoding. */
   source: BadgeSource | null;
+  /**
+   * The CLIP's own element when the picture is a clip, else null — what a
+   * host's transport plays, pauses and seeks. The stage follows it by itself:
+   * a frame presented, a seek landed, a pause (`useDevelopPicture`, «a clip
+   * plays»). Muted, like every decoder element in the suite.
+   */
+  video: HTMLVideoElement | null;
   /** Why it could not be decoded, in the decoder's words. */
   problem: string | null;
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -707,7 +719,9 @@ export function useDevelopPicture({
    *
    * Turning it off does not FORGET where the divider was — it stops splitting
    * (`shownWipe` goes to 0, the whole picture delivered) and puts the line
-   * back exactly where it was when it comes on again.
+   * back exactly where it was when it comes on again. A divider that was
+   * never placed (at 0, no split) comes back in the middle, so turning the
+   * compare on always shows one.
    */
   compare?: boolean;
 }): DevelopPicture {
@@ -985,7 +999,14 @@ export function useDevelopPicture({
     return delivered1 ? frameSize(delivered1.w / delivered1.h, Math.max(whole.w, whole.h)) : whole;
   }, [source, delivered1]);
 
-  useEffect(() => {
+  // A CLIP's element, when the source is one: the same object at every frame,
+  // so what it shows moves without anything React can see.
+  const video = source && isVideoElement(source.image) ? source.image : null;
+  // The stage's paint, as a function the clip's frame loop can call too: a
+  // playing clip repaints once per frame it presents, without a React render
+  // per frame of the whole workbench. The effect below calls it when an input
+  // moves; the loop further down calls it when only the frame did.
+  const paintStage = () => {
     const canvas = canvasRef.current;
     if (!canvas || !source || !canvasSize) return;
     const { w, h } = canvasSize;
@@ -998,7 +1019,10 @@ export function useDevelopPicture({
     const grader = holding
       ? null
       : graderFor(cube, source, geometry, stack, overlay, subjectMasks, detail, pixelScale, repair, film, gainField, flashMask, clipping, sharpenMask);
-    const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
+    // A clip is graded AT its instant: the held grade is keyed on it, or a
+    // playing clip would be served the first frame's grade for ever — and
+    // the film's grain re-rolls on it (`held-grader.ts`).
+    const graded = grader ? grader.render(source.gpu ?? source.image, video ? video.currentTime : undefined) : source.image;
     const layout = delivered1 && framing ? scaleLayout(delivered1, w / delivered1.w) : null;
     if (layout && framing) {
       ctx.clearRect(0, 0, w, h);
@@ -1024,6 +1048,11 @@ export function useDevelopPicture({
         ctx.drawImage(source.image, 0, 0, sx, source.height, 0, 0, x, h);
       }
     }
+  };
+  const paintRef = useRef(paintStage);
+  paintRef.current = paintStage;
+  useEffect(() => {
+    paintRef.current();
   }, [
     source,
     canvasSize,
@@ -1054,10 +1083,80 @@ export function useDevelopPicture({
     graderFor,
   ]);
 
+  // --- a clip plays ----------------------------------------------------------
+  // Whoever plays or seeks the element (the sheet's transport, Space), the
+  // stage follows: one paint per frame the video PRESENTS while it plays
+  // (`requestVideoFrameCallback`, an animation frame where there is none),
+  // one when a seek lands, one when it stops. `restedFrame` moves only when the
+  // picture comes to REST on another frame — a pause, a seek while paused —
+  // so the histogram and Auto's as-shot read measure the frame on screen
+  // without a React render per frame of playback.
+  const [restedFrame, setRestedFrame] = useState(0);
+  useEffect(() => {
+    if (!video) return;
+    let alive = true;
+    let rvfc = 0;
+    let raf = 0;
+    const byFrame = typeof video.requestVideoFrameCallback === 'function';
+    const stop = () => {
+      if (rvfc) video.cancelVideoFrameCallback(rvfc);
+      if (raf) cancelAnimationFrame(raf);
+      rvfc = 0;
+      raf = 0;
+    };
+    const next = () => {
+      if (byFrame) rvfc = video.requestVideoFrameCallback(tick);
+      else raf = requestAnimationFrame(tick);
+    };
+    const tick = () => {
+      rvfc = 0;
+      raf = 0;
+      if (!alive || video.paused) return;
+      paintRef.current();
+      next();
+    };
+    const onPlay = () => {
+      stop();
+      next();
+    };
+    const onRest = () => {
+      stop();
+      paintRef.current();
+      setRestedFrame((n) => n + 1);
+    };
+    const onSeeked = () => {
+      paintRef.current();
+      if (video.paused) setRestedFrame((n) => n + 1);
+    };
+    video.addEventListener('play', onPlay);
+    video.addEventListener('pause', onRest);
+    video.addEventListener('ended', onRest);
+    video.addEventListener('seeked', onSeeked);
+    if (!video.paused) next();
+    return () => {
+      alive = false;
+      stop();
+      video.removeEventListener('play', onPlay);
+      video.removeEventListener('pause', onRest);
+      video.removeEventListener('ended', onRest);
+      video.removeEventListener('seeked', onSeeked);
+    };
+  }, [video]);
+
+  // A/B turned ON with the divider at the far left would change nothing on
+  // screen — the press would look dead. It opens on the middle then, the
+  // Studio's own A/B; a divider the author already placed stays where it was.
+  const compareWas = useRef(compare);
+  useEffect(() => {
+    if (compare && !compareWas.current) setWipe((w) => (w > 0 ? w : 0.5));
+    compareWas.current = compare;
+  }, [compare]);
+
   // The histogram, read off a small copy of the graded picture one frame
   // after it changes — so a slider step paints first and measures second, and
   // a burst of steps measures once. Keyed on the picture and the cube only:
-  // the wipe and "hold for before" do not change what is delivered.
+  // the wipe and "hold for before" do not change what is delivered. A clip
+  // that comes to rest on another frame (`restedFrame`) is measured again.
   const [histogram, setHistogram] = useState<Histogram | null>(null);
   const sampleRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -1081,7 +1180,9 @@ export function useDevelopPicture({
       if (!ctx) return;
       try {
         const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, gainField);
-        const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
+        const graded = grader
+          ? grader.render(source.gpu ?? source.image, video ? video.currentTime : undefined)
+          : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
       } catch {
@@ -1097,11 +1198,12 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, graderFor]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, graderFor, video, restedFrame]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
-  // author has already dialled in.
+  // author has already dialled in. A clip's is the frame it RESTS on: Auto
+  // measures what is on screen when it is pressed.
   const [stats, setStats] = useState<SourceStats | null>(null);
   const statsRef = useRef<HTMLCanvasElement | null>(null);
   useEffect(() => {
@@ -1128,7 +1230,7 @@ export function useDevelopPicture({
       // leaves Auto without an answer rather than breaking the panel.
       setStats(null);
     }
-  }, [source]);
+  }, [source, restedFrame]);
 
   // --- the eyedropper -------------------------------------------------------
   const setPicking = setPickingState;
@@ -1767,6 +1869,7 @@ export function useDevelopPicture({
 
   return {
     source,
+    video,
     problem,
     canvasRef,
     canvasSize,

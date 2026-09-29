@@ -198,6 +198,8 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **Consequence: a window handler must respect `defaultPrevented`.** A control with a Space binding of its own (Trips' deck band, which answers the key because a keyboard-focused `role="slider"` owns it) now shares the press with the window listener, which would toggle a second time. Both window handlers — `use-video-transport.ts` and Trips' `PostEditor` — return early on `e.defaultPrevented`; React's handler runs first, so the flag is set by the time they see it.
 
+**A MODAL claims Space in the CAPTURE phase (2026-09-29).** The host's window listener stays mounted under a modal and was registered first, so a bubble-phase listener in the modal runs SECOND — the Develop sheet over a Trips slide or a Studio clip let Space play the piece behind it, unseen. `DevelopSheet` binds `keydown` on `window` with `capture: true`, applies the same `targetOwnsSpace` guard, and `preventDefault`s every press it takes (toggling its own clip, or nothing on a photograph), which the hosts' `defaultPrevented` check turns into a stand-down. Any future modal with a transport does the same; a transport it draws passes `spaceToggles: false` so the key has one owner.
+
 **Trap.** The listener is mounted once (deps `[spaceToggles]`) and calls `togglePlay` through a ref refreshed on every render. Re-wiring it on `resetKey` like the media listeners looked equivalent and is not: Compare's `togglePlay` closes over `aIsVideo`/`bIsVideo` state, and a stale closure would toggle the wrong pair after a swap.
 
 ## ⌘Z is the third window-bound key, and the one that may repeat (2026-09-15, rev. 2026-09-16)
