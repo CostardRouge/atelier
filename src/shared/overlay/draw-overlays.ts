@@ -19,6 +19,8 @@ import { tapeFadeAlpha, tapeTicks } from './heading-tape';
 import { smoothHeading } from '../telemetry/heading-smooth';
 import type { Anchor, LabelPlacement, OverlayElement } from './overlay-types';
 import { isHidden, transformAt, type Transform } from './animation';
+import { compositeFor } from './blend';
+import { canMask, glyphsOf, readKnockout, washFill, type Knockout } from './knockout';
 import { tipAngle } from './rotate-device';
 import {
   findScene,
@@ -1017,17 +1019,22 @@ interface Scratch {
 }
 
 /**
- * Two scratch canvases the grain is composed in — the noise field and the mask
- * cut out of it — reused across elements and frames so a full-resolution
- * export doesn't allocate a pair per readout per frame. They only ever grow;
- * callers draw the sub-rect they asked for.
+ * Scratch canvases reused across elements and frames so a full-resolution
+ * export doesn't allocate one per element per frame: the two the grain is
+ * composed in (the noise field and the mask cut out of it), and the one a
+ * masked text's wash is cut in (`paintWash`). They only ever grow; callers
+ * draw the sub-rect they asked for.
  */
-const scratches: Record<'grain' | 'mask', Scratch | null> = { grain: null, mask: null };
+const scratches: Record<'grain' | 'mask' | 'knock', Scratch | null> = {
+  grain: null,
+  mask: null,
+  knock: null,
+};
 
 /** Refuse to build a grain buffer bigger than this (a runaway glow radius). */
 const MAX_SCRATCH = 4096;
 
-function getScratch(key: 'grain' | 'mask', w: number, h: number): Scratch | null {
+function getScratch(key: keyof typeof scratches, w: number, h: number): Scratch | null {
   if (w > MAX_SCRATCH || h > MAX_SCRATCH) return null;
   const held = scratches[key];
   if (held && held.w >= w && held.h >= h) return held;
@@ -1587,6 +1594,60 @@ function drawScrim(
 }
 
 /**
+ * A masked text's WASH: a colour over the whole frame with the letters taken
+ * out of it, so the picture reads only through the type (`knockout.ts`).
+ *
+ * Cut in a buffer of its own — fill, then erase the glyphs with
+ * `destination-out`, then lay the result over the frame. Erasing on the frame
+ * itself would take the picture with the letters. A frame bigger than a
+ * buffer may be (a full-size photograph) is cut at a reduced scale and laid
+ * back at full size: the letters' edges soften a little, but the picture still
+ * reads through them, where drawing the letters plainly would make the file
+ * disagree with the preview. Called with `ctx` still untransformed by the
+ * element's animation — the buffer takes it instead, so a wash that zooms in
+ * grows its letters, never its frame.
+ */
+function paintWash(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  knock: Knockout,
+  tf: Transform,
+  cue: Cue | null,
+  vw: number,
+  vh: number,
+  theme: StyleTheme | null,
+  timeSeconds: number,
+  timeShift: TimeShift | null | undefined,
+): void {
+  const scale = Math.min(1, MAX_SCRATCH / Math.max(vw, vh));
+  const bw = Math.max(1, Math.round(vw * scale));
+  const bh = Math.max(1, Math.round(vh * scale));
+  const buf = getScratch('knock', bw, bh);
+  if (!buf) return;
+  const b = buf.ctx;
+  b.save();
+  b.setTransform(1, 0, 0, 1, 0, 0);
+  b.globalAlpha = 1;
+  b.globalCompositeOperation = 'source-over';
+  b.clearRect(0, 0, bw, bh);
+  b.fillStyle = washFill(knock);
+  b.fillRect(0, 0, bw, bh);
+  b.setTransform(scale, 0, 0, scale, 0, 0);
+  b.globalCompositeOperation = 'destination-out';
+  applyTransform(b, el, tf, vw, vh);
+  // The glyphs erase at full strength; the element's own fade is applied once,
+  // when the cut wash is laid over the frame.
+  const held = elementAlpha;
+  elementAlpha = 1;
+  const glyphs = glyphsOf(el, '#000000');
+  const lay = layoutElement(b, glyphs, cue, vw, vh, theme, timeShift);
+  if (lay) drawTextElement(b, lay, timeSeconds, tf.reveal, tf.revealSteps, el.id);
+  elementAlpha = held;
+  b.restore();
+  ctx.drawImage(buf.canvas, 0, 0, bw, bh, 0, 0, vw, vh);
+}
+
+/**
  * Apply an element's animation to `ctx`. Scaling happens around the element's
  * ANCHOR point, not its box centre: a title anchored bottom-left grows from
  * that corner and stays pinned there, which is what placing it there meant.
@@ -1646,6 +1707,23 @@ export function drawOverlays(
     ctx.save();
     elementAlpha = tf.alpha;
     ctx.globalAlpha = tf.alpha;
+    // A text that masks the picture (`knockout.ts`). Only words can: the
+    // drawn instruments below have no glyphs to cut with.
+    const knock = canMask(el) ? readKnockout(el.knockout) : null;
+    // How it mixes with the picture under it. Set inside this element's own
+    // save/restore, so it never leaks onto the next one — and every surface
+    // draws picture and overlays on ONE canvas, so it blends the same in the
+    // preview, the Studio and every export (`blend.ts`). A masked text does not
+    // blend: the mask is its look, and a blended punch would stop reading as
+    // a hole.
+    const composite = knock ? null : compositeFor(el.blend);
+    if (composite) ctx.globalCompositeOperation = composite;
+    if (knock?.mode === 'wash') {
+      paintWash(ctx, el, knock, tf, cue, videoWidth, videoHeight, theme, timeSeconds, opts?.timeShift);
+      elementAlpha = 1;
+      ctx.restore();
+      continue;
+    }
     applyTransform(ctx, el, tf, videoWidth, videoHeight);
 
     if (el.kind === 'heading-arrow') {
@@ -1661,9 +1739,12 @@ export function drawOverlays(
       // always starts upright rather than mid-tip.
       drawRotateDevice(ctx, el, videoWidth, videoHeight, theme, elapsed - (win?.start ?? 0));
     } else {
+      // A punch is its letters in the ground's colour: every surface lays a
+      // flat ground before the picture, so painting that colour and erasing
+      // down to the ground are the same pixels (`knockout.ts`).
       const lay = layoutElement(
         ctx,
-        el,
+        knock ? glyphsOf(el, knock.color) : el,
         cue,
         videoWidth,
         videoHeight,

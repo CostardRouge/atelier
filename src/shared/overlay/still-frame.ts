@@ -42,3 +42,16 @@ export function settleForStill(
     return settled;
   });
 }
+
+/**
+ * When an element has COME TO REST on a clock: its window open and its
+ * entrance played. What a surface that draws a still at a moment (rather than
+ * through `settleForStill`) waits for — a Trips slide is one, because its
+ * badge and its opener are drawn at a time. Exits are not counted: a still
+ * wants the element settled, not gone.
+ */
+export function elementSettleSeconds(el: OverlayElement): number {
+  const start = Math.max(0, el.window?.start ?? 0);
+  const entrance = el.animation?.in;
+  return entrance ? start + Math.max(0, entrance.delay ?? 0) + Math.max(0, entrance.duration) : start;
+}

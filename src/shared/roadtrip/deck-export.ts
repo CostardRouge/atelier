@@ -24,7 +24,7 @@ import { exportEdge } from '../media/photo-frame';
 import { collageSettleSeconds } from './collage';
 import { deckSlides, slideFileName, type DeckSlide } from './deck';
 import type { HookPicture } from './hooks/hook-variant';
-import { slideRender } from './slide-render';
+import { slideRender, slideSettleSeconds } from './slide-render';
 import type { TripDoc, TripPost } from './trip-types';
 import type { ExifData } from '../exif/exif-parser';
 
@@ -115,23 +115,25 @@ export async function renderDeck(
         if (file) source = await loadBadgeSource(file, slide.videoTimeSeconds, { maxEdge: exportEdge() });
       }
 
+      // What this slide is made of — its badge, its opener, its shades, its
+      // words, or the trip's card — derived exactly as the stage and the
+      // rail's thumbnails derive it.
+      const render = slideRender(trip, post, slide, aspect, opts.pictures, opts.exif);
       const blob = await badgeToPng({
-        // What this slide is made of — the badge, a caption or the trip's
-        // card, each with its own framing — derived exactly as the stage and
-        // the rail's thumbnails derive it.
-        ...slideRender(trip, post, slide, aspect, opts.pictures, opts.exif),
+        ...render,
         source,
         // A still: the cells at rest, never leaving — no screen time is passed.
         collage: cells && slide.collage ? { collage: slide.collage, items: cells.items } : null,
         collageLuts: cells
           ? cells.items.map((item) => opts.lutFor?.({ ...slide, develop: item.develop }) ?? null)
           : undefined,
-        // Settled: past the badge's entrances on the hook, and past the cells'
-        // own entrance on any slide that holds a collage.
-        timeSeconds: Math.max(
-          slide.kind === 'hook' ? opts.timeSeconds : 0,
-          collageSettleSeconds(slide.collage, aspect),
-        ),
+        // Settled: past the badge's entrances on the hook — the caller's
+        // clock, where the stage is — and past every other slide's own opener,
+        // badge, text and cells.
+        timeSeconds:
+          slide.kind === 'hook'
+            ? Math.max(opts.timeSeconds, collageSettleSeconds(slide.collage, aspect))
+            : slideSettleSeconds(post, slide, render, aspect),
         width: w,
         height: h,
         lut: opts.lutFor?.(slide) ?? null,

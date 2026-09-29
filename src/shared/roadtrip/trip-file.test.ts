@@ -18,6 +18,7 @@ import {
 } from './trip-file';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_CAR, defaultCarSpec } from './car-spec';
+import { createTextElement } from '../overlay/overlay-types';
 
 const trip = (): TripDoc => {
   const doc = createTripDoc('Australie', '2025-07-01', '2025-07-10');
@@ -303,5 +304,57 @@ describe('the file kind', () => {
   it('is stable — a stray .json is rejected on it', () => {
     expect(TRIP_FILE_KIND).toBe('atelier/road-trip');
     expect(toTripFile(trip()).kind).toBe(TRIP_FILE_KIND);
+  });
+});
+
+describe('the trip file — a slide’s capacities (v29)', () => {
+  it('carries a slide’s opener, badge, shades and text through the file and an import', () => {
+    const doc = trip();
+    const slide = createPostSlide(null);
+    slide.hook = [{ id: 'map', options: { stops: [] } }];
+    slide.badge = {
+      mode: 'stage-day',
+      timeAgo: 'off',
+      layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+      durationSeconds: 2,
+      textOverrides: { label: 'Leg' },
+    };
+    slide.shades = [
+      { id: 'sh', direction: 'bottom', reach: 0.5, strength: 0.4, color: '#000000', invert: false, followHook: false },
+    ];
+    slide.texts = [{ ...createTextElement('Pink Lake, 9am'), id: 't1' }];
+    doc.posts[0].slides = [slide];
+
+    const file = roundTrip(doc);
+    const [back] = file.posts[0].slides;
+    expect(back.hook).toEqual(slide.hook);
+    expect(back.badge).toEqual(slide.badge);
+    expect(back.shades[0].id).toBe('sh');
+    expect(back.texts.map((el) => el.text)).toEqual(['Pink Lake, 9am']);
+
+    const imported = tripDocFromFile(file, 1);
+    expect(imported.posts[0].slides[0].badge?.textOverrides).toEqual({ label: 'Leg' });
+    expect(imported.posts[0].slides[0].hook?.[0].id).toBe('map');
+  });
+
+  it('opens a file written before v29 with every slide bare', () => {
+    const doc = trip();
+    doc.posts[0].slides = [createPostSlide(null)];
+    const old = JSON.parse(serializeTripFile(toTripFile(doc)));
+    old.version = 28;
+    for (const s of old.posts[0].slides) {
+      delete s.hook;
+      delete s.shades;
+      delete s.badge;
+      delete s.texts;
+    }
+    const result = parseTripFile(JSON.stringify(old));
+    expect(result.ok).toBe(true);
+    if (!result.ok) return;
+    const [bare] = result.file.posts[0].slides;
+    expect(bare.hook).toBeNull();
+    expect(bare.badge).toBeNull();
+    expect(bare.shades).toEqual([]);
+    expect(bare.texts).toEqual([]);
   });
 });

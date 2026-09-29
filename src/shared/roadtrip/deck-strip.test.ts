@@ -10,8 +10,16 @@ import {
   timeAtX,
   xAtTime,
   slideMotionMarks,
+  capacityMarks,
+  anchorOf,
+  anchoredOffset,
+  localAtOffset,
+  resizedClip,
+  resizedStill,
 } from './deck-strip';
 import { createCollage } from './collage';
+import { deckSlides } from './deck';
+import { createPostSlide, createTripDoc, createTripPost } from './trip-types';
 
 // A hook of 5s, a still of 3s, a half-second clip, the closing card of 3s —
 // at 40 px a second with a 24 px floor and 2 px between cells.
@@ -152,5 +160,113 @@ describe('slideMotionMarks', () => {
 
   it('waits for the opener when the motion does', () => {
     expect(slideMotionMarks({ motion: { ...m(0), start: 'after-opener' }, collage: null }, 5, 1)).toEqual([1, 5]);
+  });
+});
+
+describe('capacityMarks', () => {
+  const slides = (edit: (slide: ReturnType<typeof createPostSlide>) => void) => {
+    const slide = createPostSlide({ name: 'DJI_0002.JPG', size: 1, lastModified: 1 });
+    edit(slide);
+    const doc = createTripDoc('Australia', '2025-03-01', '2025-03-10');
+    const post = { ...createTripPost('carousel', '2025-03-05', ''), slides: [slide] };
+    return deckSlides(doc, post);
+  };
+
+  it('says nothing for the first slide or a bare one', () => {
+    const [first, bare] = slides(() => {});
+    expect(capacityMarks(first)).toBe('');
+    expect(capacityMarks(bare)).toBe('');
+  });
+
+  it('marks an opener, a badge and words, in that order', () => {
+    const [, held] = slides((slide) => {
+      slide.hook = [{ id: 'map', options: {} }];
+      slide.badge = {
+        mode: 'day',
+        timeAgo: 'off',
+        layout: { anchor: 'top-left', x: 0.07, y: 0.07, sizeFrac: 0.06 },
+        durationSeconds: 2,
+        textOverrides: {},
+      };
+      slide.caption = 'Leg two';
+    });
+    expect(capacityMarks(held)).toBe('◆#T');
+  });
+});
+
+describe('resizedStill', () => {
+  it('lengthens from either end when that end goes outward', () => {
+    expect(resizedStill(3, 'end', 40, 40, 1, 30)).toBe(4);
+    expect(resizedStill(3, 'start', -40, 40, 1, 30)).toBe(4);
+    expect(resizedStill(3, 'start', 40, 40, 1, 30)).toBe(2);
+  });
+
+  it('moves in tenths, and a whole second pulls the end onto it', () => {
+    expect(resizedStill(3, 'end', 20, 40, 1, 30)).toBe(3.5);
+    expect(resizedStill(3, 'end', 4, 40, 1, 30)).toBe(3);
+    expect(resizedStill(3, 'end', 8, 40, 1, 30)).toBe(3.2);
+  });
+
+  it('never leaves the bounds the inspector gives', () => {
+    expect(resizedStill(3, 'end', 5000, 40, 1, 30)).toBe(30);
+    expect(resizedStill(3, 'start', 5000, 40, 1, 30)).toBe(1);
+  });
+});
+
+describe('resizedClip', () => {
+  const range = { start: 2, end: 5 };
+  const clip = (edge: 'start' | 'end', dx: number, speed = 1) =>
+    resizedClip(range, edge, dx, 40, speed, 10, 0.25, 30, 0);
+
+  it('moves the out point from the end and the in point from the start', () => {
+    expect(clip('end', 40)).toEqual({ start: 2, end: 6 });
+    expect(clip('start', 40)).toEqual({ start: 3, end: 5 });
+    expect(clip('start', -40)).toEqual({ start: 1, end: 5 });
+  });
+
+  it('reads a pixel as footage at the clip’s speed', () => {
+    expect(clip('end', 40, 2)).toEqual({ start: 2, end: 7 });
+  });
+
+  it('stays inside the clip and never shorter than the floor', () => {
+    expect(clip('end', 5000)).toEqual({ start: 2, end: 10 });
+    expect(clip('end', -5000)).toEqual({ start: 2, end: 2.25 });
+    expect(clip('start', 5000)).toEqual({ start: 4.75, end: 5 });
+    expect(clip('start', -5000)).toEqual({ start: 0, end: 5 });
+  });
+
+  it('keeps a screen time the inspector would allow', () => {
+    const long = resizedClip({ start: 0, end: 10 }, 'end', 50000, 40, 1, 120, 0.25, 30, 0);
+    expect(long.end).toBe(30);
+  });
+
+  it('lands on whole frames', () => {
+    const r = resizedClip(range, 'start', 10, 40, 1, 10, 0.25, 30, 1 / 30);
+    expect(Math.abs(r.start * 30 - Math.round(r.start * 30))).toBeLessThan(1e-9);
+  });
+});
+
+describe('resizing keeps the other end still', () => {
+  // The needle 48px into the 3s still (cell 1: left 202, 120px wide).
+  const offset = 250;
+
+  it('leaves everything before a cell in place when its end is dragged', () => {
+    const anchor = anchorOf(layout, 1, 'end', offset);
+    const grown = stripLayout([5, 4, 0.5, 3], 40, 24, 2);
+    expect(anchoredOffset(grown, 1, 'end', anchor)).toBe(offset);
+    expect(localAtOffset(grown, 1, offset)).toBeCloseTo(1.2);
+  });
+
+  it('holds the cell’s end still when its start is dragged, and the needle goes deeper in', () => {
+    const anchor = anchorOf(layout, 1, 'start', offset);
+    const grown = stripLayout([5, 4, 0.5, 3], 40, 24, 2);
+    const moved = anchoredOffset(grown, 1, 'start', anchor);
+    expect(moved - offset).toBe(40);
+    expect(localAtOffset(grown, 1, moved)).toBeCloseTo(2.2);
+  });
+
+  it('leaves the needle on the end an edge was pulled past', () => {
+    expect(localAtOffset(layout, 1, 100)).toBe(0);
+    expect(localAtOffset(layout, 1, 400)).toBe(3);
   });
 });

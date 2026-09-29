@@ -16,6 +16,9 @@ import {
   type TelemetryFieldKey,
 } from './overlay-types';
 import { resolveElementStyle, type StyleTheme, type ThemableKey } from './title-styles';
+import { BLEND_MODES, type BlendMode } from './blend';
+import { canMask } from './knockout';
+import KnockoutRows from './KnockoutRows';
 import Button from '../ui/Button';
 import {
   FieldRow,
@@ -940,6 +943,31 @@ export default function ElementPanel({ element, onChange, theme }: ElementPanelP
               </button>
             ))}
           </div>
+        </FieldRow>
+      )}
+
+      {/* Words can MASK the picture instead of sitting on it (`knockout.ts`);
+          a masked element draws bare letters in the mask's colour, so its
+          blend is not offered while it is on. */}
+      {canMask(element) && (
+        <KnockoutRows value={element.knockout} onChange={(knockout) => change({ knockout })} />
+      )}
+
+      {/* How it mixes with the picture under it (`blend.ts`) — the same on the
+          stage and in every export, since both draw on one canvas. */}
+      {!(canMask(element) && element.knockout) && (
+        <FieldRow label="Blend">
+          <NativeSelect
+            label="Blend"
+            value={element.blend ?? 'normal'}
+            onChange={(e) => change({ blend: e.target.value as BlendMode })}
+          >
+            {BLEND_MODES.map((mode) => (
+              <option key={mode.id} value={mode.id} title={mode.hint}>
+                {mode.label}
+              </option>
+            ))}
+          </NativeSelect>
         </FieldRow>
       )}
 

@@ -6,7 +6,8 @@ import { classifyPart } from '../../shared/library/assets';
 import { loadClipMeta } from '../../shared/media/video-metadata';
 import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
-import { contentSlideElements, deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
+import { deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
+import { slideRender } from '../../shared/roadtrip/slide-render';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { exportEdge } from '../../shared/media/photo-frame';
 import { DECK_LONG_EDGE, renderDeck } from '../../shared/roadtrip/deck-export';
@@ -363,9 +364,13 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    *
    * The four cases collapse into two calls: a clip goes through the Studio's
    * export (audio copied, trimmed to the slide's own in point and length), a
-   * still is painted frame by frame. What differs between the hook and a
-   * content picture is only which elements are burned in and whether the
-   * shades apply — the hook owns those, a content picture carries its caption.
+   * still is painted frame by frame. The first slide burns in what the stage
+   * drew for it — the piece's badge, its opener with its pictures — and every
+   * other slide is composed by the one function the deck, the rail and the
+   * stage share (`slideRender`): its own badge, opener, shades and words, in
+   * the trip's title style. That last point is a repair: a content slide's
+   * video used to draw its caption with NO title style while its PNG, its
+   * thumbnail and the stage all used the trip's.
    */
   async function renderSlideVideo(
     item: PlanItem,
@@ -377,21 +382,24 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const { slide } = item;
     const isHook = slide.kind === 'hook';
     const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
+    const own = isHook ? null : slideRender(trip, post, slide, aspect, inputs.hookPictures, inputs.exif);
+    const opener = own ? own.hook : inputs.hook;
     const shared = {
       signal,
       variant,
-      elements: isHook ? inputs.hookElements : contentSlideElements(slide.caption, aspect),
-      hook: isHook ? inputs.hook : null,
-      elementsAt: isHook ? inputs.hookElementsAt : null,
-      theme: isHook ? trip.theme : null,
-      shades: isHook ? post.badge.shades : undefined,
-      block: isHook ? inputs.block : null,
+      elements: own ? own.elements : inputs.hookElements,
+      hook: opener,
+      elementsAt: own ? own.elementsAt : inputs.hookElementsAt,
+      theme: trip.theme,
+      shades: own ? own.shades : post.badge.shades,
+      block: own ? own.block : inputs.block,
       framing: slide.framing,
-      // A picture that moves in its frame moves on this slide's own clock.
+      // A picture that moves in its frame moves on this slide's own clock,
+      // and waits for the slide's own opener wherever the slide sits.
       motion: {
         motion: slide.motion,
         seconds: item.seconds,
-        openerSeconds: isHook ? (inputs.hook?.seconds ?? 0) : 0,
+        openerSeconds: opener?.seconds ?? 0,
       },
       lut: inputs.lutFor(slide),
       film: inputs.filmFor(slide),

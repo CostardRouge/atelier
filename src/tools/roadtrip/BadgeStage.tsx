@@ -31,7 +31,7 @@ import {
 } from '../../shared/roadtrip/collage';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../shared/overlay/title-styles';
-import { moveBlock } from '../../shared/roadtrip/badge-layout';
+import { moveBlock, pieceFromElementId } from '../../shared/roadtrip/badge-layout';
 import {
   MAX_PREVIEW_LONG_EDGE,
   PREVIEW_LONG_EDGE,
@@ -176,11 +176,18 @@ interface BadgeStageProps {
   onActivate?: (id: string) => void;
   /**
    * The badge block's anchor, when this slide has one to move. Dragging any
-   * element moves the whole block; absent (a caption, the closing card) a
-   * click selects and nothing moves.
+   * of the badge's PIECES moves the whole block; a caption, a line of free
+   * text and the closing card are not the block — a slide may now hold a badge
+   * beside them, so "any element" no longer means "the badge".
    */
   blockAnchor?: { x: number; y: number } | null;
   onMoveBlock?: (x: number, y: number) => void;
+  /**
+   * The slide's lines of free text, by id, where each sits — the ones a drag
+   * moves, one at a time, where it is written back with `onMoveText`.
+   */
+  movableTexts?: ReadonlyMap<string, { x: number; y: number }>;
+  onMoveText?: (id: string, x: number, y: number) => void;
   /**
    * Where the OPENER's own drawing sits (`HookVariant.frameBox`), asked for
    * at the stage's own pixel size. Given one, the opener is content like any
@@ -310,6 +317,8 @@ export default function BadgeStage({
   onActivate,
   blockAnchor = null,
   onMoveBlock,
+  movableTexts,
+  onMoveText,
   hookRectFor = null,
   onMoveHook,
   shadeHandle = null,
@@ -957,7 +966,7 @@ export default function BadgeStage({
   }, [shadeHandle?.x, shadeHandle?.y, shadeHandle?.axis, drawChrome]);
 
   // --- pointing at the badge -------------------------------------------------
-  const [hovering, setHovering] = useState(false);
+  const [hovering, setHovering] = useState<'grab' | 'point' | null>(null);
   /** Whether the picture has any room to be dragged at its current framing. */
   const [pannable, setPannable] = useState(false);
   const framingRef = useRef(framing);
@@ -986,6 +995,7 @@ export default function BadgeStage({
       }
     | { kind: 'picture'; lastPx: number; lastPy: number }
     | { kind: 'hook'; lastPx: number; lastPy: number }
+    | { kind: 'text'; id: string; startPx: number; startPy: number; start: { x: number; y: number } }
     | { kind: 'shade' }
     | {
         kind: 'cell';
@@ -1199,7 +1209,12 @@ export default function BadgeStage({
       if (id) {
         onSelect(id);
         press.current = { id, x: e.clientX, y: e.clientY };
-        if (blockAnchor && onMoveBlock) {
+        const text = movableTexts?.get(id);
+        if (text && onMoveText) {
+          // A line of free text moves on its own, never the badge with it.
+          drag.current = { kind: 'text', id, startPx: pt.px, startPy: pt.py, start: text };
+          canvasRef.current?.setPointerCapture(e.pointerId);
+        } else if (pieceFromElementId(id) && blockAnchor && onMoveBlock) {
           drag.current = {
             kind: 'block',
             startPx: pt.px,
@@ -1266,6 +1281,8 @@ export default function BadgeStage({
       onSelect,
       blockAnchor,
       onMoveBlock,
+      movableTexts,
+      onMoveText,
       hookRectNow,
       onMoveHook,
       onFraming,
@@ -1287,8 +1304,20 @@ export default function BadgeStage({
       }
       if (!d) {
         if (onSelect) {
+          // What a press here would do: move something (a badge piece, a line
+          // of free text, a movable opener) or only select it.
+          const id = hitTest(boxesRef.current, pt.px, pt.py);
           setHovering(
-            hitTest(boxesRef.current, pt.px, pt.py) !== null || inRect(hookRectNow(), pt.px, pt.py),
+            id
+              ? (movableTexts?.has(id) && onMoveText) ||
+                (pieceFromElementId(id) && blockAnchor && onMoveBlock)
+                ? 'grab'
+                : 'point'
+              : inRect(hookRectNow(), pt.px, pt.py)
+                ? onMoveHook
+                  ? 'grab'
+                  : 'point'
+                : null,
           );
         }
         return;
@@ -1334,6 +1363,18 @@ export default function BadgeStage({
         d.lastPy = pt.py;
         return;
       }
+      if (d.kind === 'text') {
+        // Absolute from where the press began, like the block: the element's
+        // stored position cannot go stale under a re-render mid-drag.
+        const next = moveBlock(
+          d.start,
+          (pt.px - d.startPx) / canvas.width,
+          (pt.py - d.startPy) / canvas.height,
+          !e.altKey,
+        );
+        onMoveText?.(d.id, next.x, next.y);
+        return;
+      }
       if (d.kind === 'picture') {
         const source = sourceRef.current;
         if (!source || !onFraming) return;
@@ -1366,7 +1407,10 @@ export default function BadgeStage({
     },
     [
       onSelect,
+      blockAnchor,
       onMoveBlock,
+      movableTexts,
+      onMoveText,
       onMoveHook,
       hookRectNow,
       onFraming,
@@ -1534,7 +1578,7 @@ export default function BadgeStage({
       : collage
         ? 'cursor-grab active:cursor-grabbing'
         : hovering
-      ? blockAnchor
+      ? hovering === 'grab'
         ? 'cursor-grab active:cursor-grabbing'
         : 'cursor-pointer'
       : onFraming && pannable
@@ -1589,7 +1633,7 @@ export default function BadgeStage({
             onPointerMove={onPointerMove}
             onPointerUp={onPointerUp}
             onPointerCancel={onPointerUp}
-            onPointerLeave={() => setHovering(false)}
+            onPointerLeave={() => setHovering(null)}
             // Accepted on ENTER as well as over: the browser decides whether a
             // drop is allowed from whichever of the two came last, and a quick
             // flick released as it arrives never sees a `dragover` — measured,

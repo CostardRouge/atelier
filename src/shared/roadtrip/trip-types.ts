@@ -49,6 +49,14 @@ import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
 import { readCascade, type BadgeCascade } from './badge-layout';
 import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
+import type { OverlayElement } from '../overlay/overlay-types';
+import {
+  readSlideBadge,
+  readSlideHook,
+  readSlideShades,
+  readSlideTexts,
+  type SlideBadge,
+} from './slide-capacities';
 import {
   DEFAULT_TIME_AGO_WORDS,
   FRENCH_TIME_AGO_WORDS,
@@ -62,7 +70,7 @@ import {
   type CounterMode,
 } from './day-badge';
 
-export const TRIP_DOC_VERSION = 28;
+export const TRIP_DOC_VERSION = 29;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -356,6 +364,14 @@ export interface PostBadge {
    */
   hook: HookLayer[];
   /**
+   * Free text over the first slide's picture, drawn under the badge — the same
+   * capacity every other slide has (`PostSlide.texts`). About ONE picture, so
+   * never inherited by the next piece (`hookDefaultsFrom` leaves it out).
+   * Read as `texts ?? []`: a trip opened on the branch that built v29 before
+   * this field joined it carries none.
+   */
+  texts?: OverlayElement[];
+  /**
    * What the openers this piece is NOT drawing were given, by variant id
    * (`switchHookVariant`), so trying Virée after an Itinerary never throws
    * the Itinerary's stops away. Optional and additive: absent is an empty
@@ -466,6 +482,8 @@ export function defaultPostBadge(
     pieceStyles: defaults ? structuredClone(defaults.pieceStyles) : {},
     cascade: defaults?.cascade ? structuredClone(defaults.cascade) : null,
     hook: defaults?.hook ? structuredClone(defaults.hook) : defaultHookLayers(),
+    // Never inherited: words over a picture belong to that picture.
+    texts: [],
   };
 }
 
@@ -501,6 +519,31 @@ export interface PostSlide {
   medium: SlideMedium;
   /** How long it is on screen when it is delivered as a video. */
   seconds: number;
+  /**
+   * An OPENER on this slide — the same list `PostBadge.hook` holds — or null
+   * for none. A slide's position no longer decides what it may hold
+   * (`slide-capacities.ts`): a day with three drives wants three itineraries.
+   */
+  hook: HookLayer[] | null;
+  /**
+   * What this slide's openers not on it were given — `PostBadge.hookShelf`'s
+   * twin, so trying another opener here never throws a map's stops away.
+   * Optional and additive, like the piece's: absent is an empty shelf.
+   */
+  hookShelf?: HookShelf;
+  /** Darkening over the picture, under the overlays — see `PostBadge.shades`. */
+  shades: Shade[];
+  /**
+   * This slide's own badge — a chapter mark by default — or null for none.
+   * Its look is the piece's badge's; only its words, place and size are its
+   * own (`SlideBadge`).
+   */
+  badge: SlideBadge | null;
+  /**
+   * Free text over the picture, drawn after the caption. Text elements only:
+   * a slide's text is words, never a reading the picture cannot back.
+   */
+  texts: OverlayElement[];
 }
 
 export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
@@ -517,6 +560,12 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
+    // A new slide holds its picture and nothing else: an opener, a badge, a
+    // shade or a line of text is a choice, never a default.
+    hook: null,
+    shades: [],
+    badge: null,
+    texts: [],
   };
 }
 
@@ -747,7 +796,12 @@ export function duplicateTripPost(post: TripPost, suffix = ' (copy)'): TripPost 
       ...structuredClone(post.badge),
       shades: post.badge.shades.map((shade) => ({ ...shade, id: newId() })),
     },
-    slides: post.slides.map((slide) => ({ ...structuredClone(slide), id: newId() })),
+    slides: post.slides.map((slide) => ({
+      ...structuredClone(slide),
+      id: newId(),
+      // Fresh like the badge's own, so no two pieces share a shade's identity.
+      shades: (slide.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
+    })),
     projectId: null,
     publishedAt: null,
     createdAt: Date.now(),
@@ -856,6 +910,15 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * duration (an exit animation had nothing to land on without it), the picture
  * backdrop, the place marker and the reference day. A post that had the
  * boolean on lands on `auto` — the intent kept, the untrue anniversary dropped.
+ *
+ * v28 → v29 lets ANY slide hold an opener, shades, a badge and free text
+ * (`PostSlide.hook`, `.shades`, `.badge`, `.texts` — `slide-capacities.ts`),
+ * and gives the first slide free text too (`PostBadge.texts`). Every stored
+ * slide holds none of them — `hook` and `badge` start null, `shades` and
+ * `texts` empty — so nothing a trip already draws changes; the first slide
+ * keeps reading its opener, badge and shades from `PostBadge`, untouched. A value that
+ * IS there (a newer build, a hand edit) is read through the module's readers,
+ * junk landing as none rather than a capacity nobody gave the slide.
  *
  * v27 → v28 lets a picture MOVE in its frame over its slide (`motion` on the
  * hook, on each slide and on each collage cell): a pan and a zoom whose rest
@@ -1354,6 +1417,23 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
         ...slide,
         motion: readMotion(slide.motion),
         collage: readCollage(slide.collage),
+      })),
+    }));
+  }
+
+  if (migrated.version < 29) {
+    // Any slide may hold an opener, shades, a badge and free text. Every
+    // stored slide holds none; the readers keep what is sound and turn
+    // anything else into none. The first slide's own live on `PostBadge`.
+    migrated.posts = (migrated.posts ?? []).map((post) => ({
+      ...post,
+      badge: { ...post.badge, texts: readSlideTexts(post.badge?.texts) },
+      slides: (post.slides ?? []).map((slide) => ({
+        ...slide,
+        hook: readSlideHook(slide.hook),
+        shades: readSlideShades(slide.shades),
+        badge: readSlideBadge(slide.badge),
+        texts: readSlideTexts(slide.texts),
       })),
     }));
   }
