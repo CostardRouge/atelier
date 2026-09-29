@@ -1003,7 +1003,8 @@ from stop to stop, waiting at each for as long as you ask. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
 big one: pan, zoom and pinch it, and every tap is the next stop, joined to the
-one before as you go — one, two, three. A tap near a town takes the town and
+one before as you go — one, two, three, up to 99 (a stop's number is written
+inside its dot, and two digits are what a dot holds). A tap near a town takes the town and
 its name (a switch turns that off, to drop a stop exactly where you tap), a
 hollow ring is one of the trip's own places, a numbered stop is dragged to
 move it, a place can be searched for and added, and a stop you dropped with no

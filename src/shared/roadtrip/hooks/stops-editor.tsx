@@ -215,8 +215,8 @@ export default function StopsEditor({
       )}
       {full && (
         <p className="m-0 text-2xs text-muted">
-          {MAP_MAX_STOPS} stops is as many as one opener draws — past that the dots merge and
-          every picture is another decode.
+          {MAP_MAX_STOPS} stops is as many as one opener holds — a stop’s number is written inside
+          its dot, and two digits are what a dot holds.
         </p>
       )}
 

@@ -256,6 +256,10 @@ The kind chip (`video+srt`, `video`, `photo`, …) is back to its original full-
 
 **How to apply**: a tile grid that scrolls pins its rows in pixels (`auto-rows-[74px]`, `max-[820px]:auto-rows-[104px]`) and the tile fills the row (`w-full h-full`); add `shrink-0` so a short sheet scrolls the strip instead of squeezing it. Then the only way the grid can answer "too many pictures" is to scroll, which is what it is for. A grid with no definite height of its own (`WinnowScopeGrid` in the library column) is not exposed and was left alone. **Verified** in headless Chromium at 390×844 against a throwaway page mounting the real `BottomSheet` chain — rebuild it rather than eyeballing; iOS Safari, where it was reported, could not be run here.
 
+## A clipping child of a column-flex SCROLLER shrinks instead of scrolling (2026-09-29)
+
+**Trap, measured on Trips' picking map.** A scroller that is itself `flex flex-col` (for its `gap`) shrinks its children to fit before it ever overflows, and a child's floor is its `min-height: auto` — the CONTENT size, unless the child clips: `overflow-hidden` (there for a rounded border) makes that floor 0. So a list with rounded corners SHRANK to the scroller's height and cut its rows off, and the scroller had nothing to scroll: past the twentieth stop nothing could be reached, while a four-stop test saw no fault. **Remedy**: `flex-none` on any clipping child of a column-flex scroller (or give the scroller block flow). **How to test**: fill the list past its box — the fault never shows below the fold.
+
 ## `max-h-full` measures nothing in a `flex-1 min-h-0` chain (2026-09-07)
 
 **The bug**: `WinnowLightbox`'s picture came out cropped and its clip drew square. The media sat in a `grid place-items-center h-full overflow-hidden` box whose parent was a `flex-1 min-h-0` row, and carried `max-w-full max-h-full`. A percentage height needs a **definite** height on the containing block; a flex item sized by `flex-1` inside `min-h-0` has none until layout is done, so `h-full` fell back to content height and `max-h-100%` capped nothing — the picture drew at its natural size and the `overflow-hidden` cut it.
