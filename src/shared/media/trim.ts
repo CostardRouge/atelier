@@ -179,3 +179,27 @@ export function restoreTrim(
   }
   return clampRange(saved, duration, minLength);
 }
+
+/**
+ * A range carried from one RENDITION's clock onto another's (2026-09-29) — a
+ * source's proxy and the rush it was cut from, both on the Studio's stage.
+ *
+ * The two share their seconds: the export has always cut the fetched rush
+ * with the in/out points set on the proxy. They rarely share their exact
+ * LENGTH — an AAC track's priming, a re-mux — and a trim guarded to 50 ms
+ * (`restoreTrim`) would read a few tens of milliseconds as another take. So a
+ * trim is saved and guarded against ONE clock, the media's own file, and
+ * carried here onto the file the stage shows: seconds as they are, and the
+ * END of the clip stays the end of the clip, so a range kept to the last
+ * frame on one is not a trim on the other. The same clock is identity.
+ */
+export function carryRange(
+  range: TrimRange,
+  from: number,
+  to: number,
+  minLength = 0.1,
+): TrimRange {
+  if (from === to || from <= 0 || to <= 0) return range;
+  const end = range.end >= from - TRIM_EPSILON ? to : range.end;
+  return clampRange({ start: range.start, end }, to, minLength);
+}

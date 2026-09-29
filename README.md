@@ -147,6 +147,22 @@ read “—”, free text and the grade still work. Stepping to the next clip wi
 ‹ › hands playback over rather than stopping it: if you were watching, the
 next one picks up as soon as it is ready.
 
+**Which file is on the stage.** A clip or a photo fetched from a Winnow opens
+on its **proxy** — a 720p H.264, a 2048 px WebP: light, quick to scrub,
+decodable everywhere. A chip beside the media's name says so (`Proxy ▾`), and
+its menu lists the capture's other files with their pixels and weight — the
+rush itself behind a clip, the camera's JPEG behind a still, and the render
+inside a RAW the instance paired with it — the same list as Develop's, minus
+the sensor. Pick one and it is fetched (the chip shows `↓` and the proxy stays
+up meanwhile), kept for the session, and put on the stage at its own
+resolution, the playhead and the trim where they were; the chip then names its
+type (`MP4`, `JPEG`, `DNG render`). The choice is remembered per media in the
+project, so reopening it brings the same file back, and the export delivers
+from the file on the stage without fetching it again — *Render from the proxy*
+still means the proxy. A rush this browser cannot decode (often HEVC) says so,
+with **Back to the proxy** beside the transcode. Picking the proxy again stops
+a download still on its way.
+
 **Photographs are edited on the same stage.** A photo is not a second kind of
 project: it is a media a project can hold beside its clips, so a rush and a
 frame you shot the same afternoon sit under the same ‹ › and share the same
