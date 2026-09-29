@@ -17,6 +17,8 @@ const KALBARRI: GazetteerCity = {
   lon: 114.165,
   population: 2602,
   section: false,
+  regionKey: '',
+  region: '',
 };
 
 const PERTH: GazetteerCity = {
@@ -26,6 +28,8 @@ const PERTH: GazetteerCity = {
   lon: 115.8614,
   population: 1896548,
   section: false,
+  regionKey: '',
+  region: '',
 };
 
 const CITIES = [KALBARRI, PERTH];

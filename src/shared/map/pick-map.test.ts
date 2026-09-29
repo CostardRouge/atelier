@@ -19,6 +19,8 @@ const city = (name: string, lat: number, lon: number, population: number, sectio
   lon,
   population,
   section,
+  regionKey: '',
+  region: '',
 });
 
 const INDEX = [

@@ -9,6 +9,8 @@ const city = (name: string, country: string, lat: number, lon: number, populatio
   lon,
   population,
   section: false,
+  regionKey: '',
+  region: '',
 });
 
 const index = [

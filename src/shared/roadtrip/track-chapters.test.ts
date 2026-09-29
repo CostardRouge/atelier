@@ -13,6 +13,8 @@ const KALBARRI: GazetteerCity = {
   lon: 114.165,
   population: 2602,
   section: false,
+  regionKey: 'AU.08',
+  region: 'Western Australia',
 };
 
 const leg = (extra: Partial<TrackLeg> = {}): TrackLeg => ({
