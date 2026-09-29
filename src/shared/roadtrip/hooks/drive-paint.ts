@@ -23,7 +23,7 @@
 
 import { drawFramed } from '../../media/framing';
 import type { CarSpec } from '../car-spec';
-import { carLight, carPalette } from './car-model';
+import { carLight } from './car-model';
 import { carModel, type CarModel } from './car-registry';
 import { hexToRgba } from './colour';
 import {
@@ -40,6 +40,7 @@ import {
   type DriveOptions,
   type DrivePlan,
   type View,
+  wakeStrength,
 } from './drive-plan';
 import {
   BASEMAP_FOR_EDGE,
@@ -51,7 +52,7 @@ import {
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
 import { formatDistance, placeLabels } from './geo';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
-import { paintGroundShadow, paintMesh, renderOrder, type Part, type Pose } from './mesh3d';
+import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
@@ -388,9 +389,16 @@ function paintMap(
       y: p.y,
       spins,
     };
-    paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
+    if (model.kind === 'boat') {
+      // A boat sits IN the water: a faint shadow, and the wake it leaves while
+      // it runs — growing as it gets under way, settling once it halts.
+      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, moment.since), Math.max(1, carPx / 55), model.wake ?? 1);
+      paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.12 : 0.2);
+    } else {
+      paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
+    }
     paintMesh(g, renderOrder(parts, pose, carLight(spec.finish)), {
-      palette: carPalette(spec.color),
+      palette: model.palette(spec.color),
       ink: onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)',
       outlineWidth: Math.max(0.9, carPx / 78),
     });

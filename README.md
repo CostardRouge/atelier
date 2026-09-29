@@ -924,8 +924,10 @@ typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
 every visit. **Virée** puts a little car on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
-through its stops, and a cartoon Land Cruiser Prado, a miniature rendered in the
-browser with its wheels turning, driving from stop to stop. The stops are the
+through its stops, and a cartoon vehicle — the trip's car, a Land Cruiser
+Prado or a Renault Kadjar with its wheels turning, or a boat a piece borrows for
+a day on the water, leaving a wake — a miniature rendered in the browser,
+driving from stop to stop. The stops are the
 legs' located places, arriving where this day's leg ends; **your own places**,
 put on a map with the very editor the Itinerary uses — any place, on a leg or
 not, in your order, each able to hold a picture the car halts to show; or the
@@ -956,14 +958,35 @@ at every stop on the same voices, deeper where a leg begins, the seat on
 arrival, a shutter click as each print lands.
 
 **The car is the trip's, and it has a garage.** One car per journey: every
-Virée of a trip drives the same one, and it travels in the trip's backup. It is
-a Toyota Land Cruiser Prado (the J120), and the garage dresses it — a colour
-from the factory range or one of your own, a factory gloss or a matte coating
-(Raptor black, the default), and the gear: a bull bar with two spot lights, a
-roof basket carrying a solar panel on the left, an aluminium storage box and
-three jerry cans across the rear (water, petrol, water), an awning bag along
-the side, mud flaps, window visors, the spare on the tailgate, the door
-mirrors — each a switch. The car turns on a turntable while you dress it (drag
+Virée of a trip drives the same one, and it travels in the trip's backup. Two
+models: a Toyota Land Cruiser Prado (the J120, the default) and a Renault
+Kadjar (the 2018–2022 facelift). The garage dresses whichever you pick — a
+colour from that model's factory range or one of your own, a factory gloss or
+a matte coating — and its gear, each a switch. The Prado (Raptor black, matte,
+by default) takes a bull bar with two spot lights, a roof basket carrying a
+solar panel on the left, an aluminium storage box and three jerry cans across
+the rear (water, petrol, water), an awning bag along the side, mud flaps,
+window visors, the spare on the tailgate, the door mirrors. The Kadjar (navy
+blue, gloss, by default) takes two roof bars across its roof — standing on
+their own feet, or on the factory roof rails when you fit those — and its door
+mirrors; it is drawn with its own marks: the C of its daytime lights, the
+diamond in a chrome-barred grille, black cladding round the arches, a spoiler
+over the raked tailgate, two-tone wheels. Picking a model brings that car as
+it comes; the one you left keeps what you dressed it in while the garage stays
+open. Four boats join them: the **Whitsundays day cruiser**
+(a motor catamaran with a shaded upper deck, the ordinary boat out to
+Whitehaven), the **Viper** (Airlie Beach's jet boat to the outer reef — six
+rows of belted benches, the helm console, two waterjets at the transom), the
+**Alison Maree** (the Bremer Bay catamaran that takes you out to the canyon's
+orcas — a glass wheelhouse and a big open upper deck) and the **Solar
+Whisper** (the Daintree River's silent electric boat to the crocodiles — a long
+narrow hull, benches along both edges so every seat has the water, a roof tiled
+with solar panels, the croc cam's screen under its front edge, two electric
+outboards). Their liveries are guesses you can repaint. A trip can drive a
+boat, but a piece usually borrows one: the Virée panel's **Vehicle** row keeps
+the trip's car or picks any other model for that piece alone, in a paint of its
+own, and a boat leaves a wake that grows as it gets under way and settles when
+it halts — long behind the Viper, barely a ripple behind the Solar Whisper. The car turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own

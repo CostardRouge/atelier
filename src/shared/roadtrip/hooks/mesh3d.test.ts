@@ -6,12 +6,18 @@ import {
   cylinder,
   decal,
   dot,
+  convexHull,
+  extrude,
   faceNormal,
+  heightOn,
+  hullSolid,
   hexToRgb,
   lighting,
   litColor,
   outward,
   paintMesh,
+  paintWake,
+  prism,
   project,
   renderOrder,
   rotateAbout,
@@ -21,6 +27,7 @@ import {
   type Face,
   type Part,
   type Pose,
+  type Vec3,
 } from './mesh3d';
 
 const TOP_DOWN = Math.PI / 2;
@@ -92,6 +99,31 @@ describe('faceNormal / outward', () => {
   it('orients a decal the way it is told', () => {
     const d = decal('d', [[0, 0, 0], [1, 0, 0], [1, 1, 0], [0, 1, 0]], 'r', [0, 0, -1]);
     expect(faceNormal(d.faces[0].verts)).toEqual([0, 0, -1]);
+  });
+  it('stands a prism between two sloping planes, every face flat and facing out', () => {
+    const plan: [number, number][] = [[0, 0], [2, 0], [2, 3], [0, 3]];
+    const bottom = { z: 0.5, dy: 0.1 };
+    const top = { z: 2, dx: -0.2, dy: -0.3 };
+    const p = prism('p', plan, bottom, top, { side: 's', top: 't', bottom: 'b' });
+    expect(p.faces).toHaveLength(6);
+    for (const face of p.faces) {
+      const n = faceNormal(face.verts);
+      expect(dot(n, sub(centroid(face.verts), p.centre))).toBeGreaterThan(0);
+      const d = dot(n, face.verts[0]);
+      for (const v of face.verts) expect(Math.abs(dot(n, v) - d)).toBeLessThan(1e-9);
+    }
+    const cap = p.faces.find((f) => f.role === 't')!;
+    for (const [x, y, z] of cap.verts) expect(z).toBeCloseTo(heightOn(top, x, y), 12);
+  });
+
+  it('leaves out the walls it is told are buried, and is `extrude` when both planes are level', () => {
+    const plan: [number, number][] = [[0, 0], [1, 0], [1, 1], [0, 1]];
+    const open = prism('o', plan, { z: 0 }, { z: 1 }, { side: 's', top: 't', bottom: null }, { open: (a, b) => a[0] === 1 && b[0] === 1 });
+    expect(open.faces).toHaveLength(4);
+    expect(open.faces.some((f) => f.verts.every((v) => v[0] === 1))).toBe(false);
+    expect(prism('e', plan, { z: 0.2 }, { z: 0.9 }, { side: 's', top: 't', bottom: 'b' })).toEqual(
+      extrude('e', plan, 0.2, 0.9, { side: 's', top: 't', bottom: 'b' }),
+    );
   });
 });
 
@@ -216,5 +248,98 @@ describe('paintMesh', () => {
     paintMesh(g, faces, { palette: { body: '#ffffff' }, ink: '#000000', outlineWidth: 2 });
     expect(calls.length).toBe(faces.length);
     expect(strokes.filter((s) => s === '#000000').length).toBe(faces.filter((f) => f.outline).length);
+  });
+});
+
+describe('convexHull / hullSolid', () => {
+  it('finds a cube’s six square faces, never their triangles, and drops what lies inside or along an edge', () => {
+    const corners: Vec3[] = [];
+    for (const x of [0, 1]) for (const y of [0, 1]) for (const z of [0, 1]) corners.push([x, y, z]);
+    // A point inside, and one halfway along an edge: neither is a corner.
+    const faces = convexHull([...corners, [0.5, 0.5, 0.5], [0.5, 0, 0], [1, 1, 1]]);
+    expect(faces).toHaveLength(6);
+    for (const f of faces) expect(f).toHaveLength(4);
+  });
+
+  it('winds every face outward and colours it by its normal, leaving out the ones told to go', () => {
+    const pts: Vec3[] = [
+      [0, 0, 0],
+      [2, 0, 0],
+      [2, 3, 0],
+      [0, 3, 0],
+      [0.5, 0.5, 1],
+      [1.5, 0.5, 1],
+      [1.5, 2.5, 1],
+      [0.5, 2.5, 1],
+    ];
+    const part = hullSolid('frustum', pts, (n) => (n[2] > 0.9 ? 'top' : n[2] < -0.9 ? null : 'side'));
+    expect(part.faces).toHaveLength(5);
+    expect(part.faces.filter((f) => f.role === 'top')).toHaveLength(1);
+    for (const face of part.faces) {
+      expect(dot(faceNormal(face.verts), sub(centroid(face.verts), part.centre))).toBeGreaterThan(0);
+    }
+  });
+});
+
+describe('paintWake', () => {
+  const recorder = () => {
+    const ops: string[] = [];
+    const fake = {
+      save() {},
+      restore() {},
+      beginPath() {},
+      closePath() {},
+      moveTo() {},
+      lineTo() {},
+      fill() {
+        ops.push('fill');
+      },
+      stroke() {
+        ops.push('stroke');
+      },
+      set lineCap(_v: string) {},
+      set fillStyle(_v: string) {},
+      set strokeStyle(_v: string) {},
+      set lineWidth(_v: number) {},
+    };
+    return { g: fake as unknown as CanvasRenderingContext2D, ops };
+  };
+
+  it('draws the churn and two fading arms under way, and nothing at rest', () => {
+    const moving = recorder();
+    paintWake(moving.g, pose({ tilt: Math.PI / 3 }), 14, 4, 1, 2);
+    expect(moving.ops.filter((o) => o === 'fill')).toHaveLength(8);
+    expect(moving.ops.filter((o) => o === 'stroke')).toHaveLength(16);
+    const still = recorder();
+    paintWake(still.g, pose(), 14, 4, 0, 2);
+    expect(still.ops).toEqual([]);
+  });
+
+  it('reaches as far as the boat throws water, and fades with it below one', () => {
+    const extentOf = (reach: number) => {
+      const xs: number[] = [];
+      const g = {
+        save() {},
+        restore() {},
+        beginPath() {},
+        closePath() {},
+        moveTo(_x: number, y: number) {
+          xs.push(y);
+        },
+        lineTo(_x: number, y: number) {
+          xs.push(y);
+        },
+        fill() {},
+        stroke() {},
+        set lineCap(_v: string) {},
+        set fillStyle(_v: string) {},
+        set strokeStyle(_v: string) {},
+        set lineWidth(_v: number) {},
+      } as unknown as CanvasRenderingContext2D;
+      paintWake(g, pose({ tilt: Math.PI / 2 }), 10, 3, 1, 1, reach);
+      return Math.max(...xs) - Math.min(...xs);
+    };
+    expect(extentOf(1.5)).toBeGreaterThan(extentOf(1));
+    expect(extentOf(0.35)).toBeLessThan(extentOf(1));
   });
 });

@@ -584,24 +584,148 @@ export function extrude(
   roles: ExtrudeRoles,
   outline = true,
 ): Part {
+  return prism(id, plan, { z: z0 }, { z: z1 }, roles, { outline });
+}
+
+/** A plane of heights over the ground, `z + dx·x + dy·y`; flat when it has no slope. */
+export interface ZPlane {
+  z: number;
+  dx?: number;
+  dy?: number;
+}
+
+/** The height of a plane above a point of the ground. */
+export function heightOn(plane: ZPlane, x: number, y: number): number {
+  return plane.z + (plane.dx ?? 0) * x + (plane.dy ?? 0) * y;
+}
+
+/**
+ * A convex plan (x, y) standing between two PLANES — `extrude` with caps that
+ * may slope: a bonnet falling toward the nose, a beltline rising toward the
+ * tail, a rail lying on a roof that is not level.
+ *
+ * Still convex, and every face still flat: each wall is a vertical quad, which
+ * is planar whatever the two heights at its ends, and each cap lies on its own
+ * plane; the solid is the plan's prism cut by two half-spaces. The one thing
+ * the caller owes is that the top stays above the bottom over the whole plan.
+ *
+ * `open(a, b)` names a wall that is not built — one buried against the block
+ * stacked beside it, for the reason `ExtrudeRoles` gives for a buried cap.
+ */
+export function prism(
+  id: string,
+  plan: readonly (readonly [number, number])[],
+  bottom: ZPlane,
+  top: ZPlane,
+  roles: ExtrudeRoles,
+  options: {
+    outline?: boolean;
+    open?: (a: readonly [number, number], b: readonly [number, number]) => boolean;
+  } = {},
+): Part {
   const faces: Face[] = [];
   const n = plan.length;
+  const low = (x: number, y: number): Vec3 => [x, y, heightOn(bottom, x, y)];
+  const high = (x: number, y: number): Vec3 => [x, y, heightOn(top, x, y)];
   for (let i = 0; i < n; i++) {
-    const [ax, ay] = plan[i];
-    const [bx, by] = plan[(i + 1) % n];
-    faces.push({
-      role: roles.side,
-      verts: [
-        [ax, ay, z0],
-        [bx, by, z0],
-        [bx, by, z1],
-        [ax, ay, z1],
-      ],
-    });
+    const a = plan[i];
+    const b = plan[(i + 1) % n];
+    if (options.open?.(a, b)) continue;
+    faces.push({ role: roles.side, verts: [low(a[0], a[1]), low(b[0], b[1]), high(b[0], b[1]), high(a[0], a[1])] });
   }
-  if (roles.top !== null) faces.push({ role: roles.top, verts: plan.map(([x, y]) => [x, y, z1] as Vec3) });
-  if (roles.bottom !== null) faces.push({ role: roles.bottom, verts: plan.map(([x, y]) => [x, y, z0] as Vec3) });
-  return solid(id, faces, outline);
+  if (roles.top !== null) faces.push({ role: roles.top, verts: plan.map(([x, y]) => high(x, y)) });
+  if (roles.bottom !== null) faces.push({ role: roles.bottom, verts: plan.map(([x, y]) => low(x, y)) });
+  return solid(id, faces, options.outline ?? true);
+}
+
+/**
+ * The convex hull of a cloud of points, as flat polygons wound outward — for
+ * a shape that is easier to state as corners than as walls: a boat's hull, its
+ * waterline narrower than its deck and its bow raked past its forefoot.
+ *
+ * Every coplanar run is ONE polygon, never its triangulation: the ink is
+ * stroked once per face, and a flat panel crossed by the diagonals it was
+ * computed from would draw them. Brute force over triples, which a part of a
+ * few dozen points affords at build time; points in a line along an edge are
+ * dropped, so no face carries a vertex that is not a corner.
+ */
+export function convexHull(points: readonly Vec3[], eps = 1e-6): Vec3[][] {
+  const pts: Vec3[] = [];
+  for (const p of points) if (!pts.some((q) => Math.hypot(p[0] - q[0], p[1] - q[1], p[2] - q[2]) < eps)) pts.push(p);
+  const planes: { n: Vec3; d: number }[] = [];
+  for (let i = 0; i < pts.length; i++) {
+    for (let j = i + 1; j < pts.length; j++) {
+      for (let k = j + 1; k < pts.length; k++) {
+        const c = cross(sub(pts[j], pts[i]), sub(pts[k], pts[i]));
+        const len = Math.hypot(c[0], c[1], c[2]);
+        if (len < eps) continue;
+        let n: Vec3 = [c[0] / len, c[1] / len, c[2] / len];
+        let d = dot(n, pts[i]);
+        let above = false;
+        let below = false;
+        for (const p of pts) {
+          const s = dot(n, p) - d;
+          if (s > eps) above = true;
+          else if (s < -eps) below = true;
+          if (above && below) break;
+        }
+        if (above && below) continue;
+        if (above) {
+          n = [-n[0], -n[1], -n[2]];
+          d = -d;
+        }
+        if (!planes.some((q) => Math.abs(q.d - d) < eps && Math.hypot(q.n[0] - n[0], q.n[1] - n[1], q.n[2] - n[2]) < eps)) {
+          planes.push({ n, d });
+        }
+      }
+    }
+  }
+  return planes.map(({ n, d }) => {
+    const on = pts.filter((p) => Math.abs(dot(n, p) - d) < eps * 10);
+    const c = centroid(on);
+    const u = normalise(sub(on[0], c));
+    const w = cross(n, u);
+    let ring = [...on].sort(
+      (a, b) =>
+        Math.atan2(dot(sub(a, c), w), dot(sub(a, c), u)) - Math.atan2(dot(sub(b, c), w), dot(sub(b, c), u)),
+    );
+    // A point lying on the edge between its neighbours is no corner.
+    for (let changed = true; changed && ring.length > 3; ) {
+      changed = false;
+      for (let i = 0; i < ring.length; i++) {
+        const prev = ring[(i + ring.length - 1) % ring.length];
+        const next = ring[(i + 1) % ring.length];
+        const x = cross(sub(ring[i], prev), sub(next, ring[i]));
+        if (Math.hypot(x[0], x[1], x[2]) < eps) {
+          ring = ring.filter((_, j) => j !== i);
+          changed = true;
+          break;
+        }
+      }
+    }
+    return ring;
+  });
+}
+
+/**
+ * A convex part from its corners, each face's colour role chosen from its
+ * outward normal — a deck up, a hull round, what never shows below.
+ */
+export function hullSolid(
+  id: string,
+  points: readonly Vec3[],
+  roleOf: string | ((normal: Vec3) => string | null),
+  outline = true,
+): Part {
+  const faces: Face[] = [];
+  for (const verts of convexHull(points)) {
+    const role = typeof roleOf === 'string' ? roleOf : roleOf(faceNormal(verts));
+    if (role !== null) faces.push({ role, verts });
+  }
+  // The centre of the corners, not of the faces kept: a face left out must not
+  // tip `outward` over the ones that stay.
+  const centre = centroid(points);
+  return { id, faces: outward(faces, centre), centre, outline };
 }
 
 /**
@@ -642,6 +766,73 @@ export function cylinder(
   faces.push({ role: roles.cap, verts: near });
   faces.push({ role: roles.cap, verts: far });
   return solid(id, faces, outline, spin ? { pivot: centre, axis } : undefined);
+}
+
+/**
+ * The wake a boat leaves on the map: two arms spreading from its quarters at
+ * the Kelvin angle (19.5°, what any displacement hull draws behind it) and the
+ * churned water down the middle, white, fading with distance. Laid on the
+ * water plane through the pose's own projection, so it foreshortens and
+ * turns with the boat; `strength` 0..1 lets it grow as the boat gets under way
+ * and settle when it halts, and `reach` is how much water the boat throws —
+ * short and faint for one that glides, long for a jet boat. No blur and no
+ * composite, only strokes.
+ */
+export function paintWake(
+  g: MeshCtx,
+  pose: Pose,
+  length: number,
+  width: number,
+  strength: number,
+  lineWidth: number,
+  reach = 1,
+): void {
+  strength *= Math.min(1, reach);
+  if (strength <= 0.01) return;
+  const at = (x: number, y: number) => project(toWorld([x, y, 0], pose), pose);
+  const stern = -length / 2;
+  const run = length * 1.3 * reach;
+  const spread = Math.tan((19.5 * Math.PI) / 180);
+  const steps = 8;
+  g.save();
+  g.lineCap = 'round';
+  // The churn: a band from the transom narrowing away, drawn as fading slices.
+  for (let i = 0; i < steps; i++) {
+    const t0 = i / steps;
+    const t1 = (i + 1) / steps;
+    const half0 = (width * 0.42) * (1 - t0 * 0.7);
+    const half1 = (width * 0.42) * (1 - t1 * 0.7);
+    const y0 = stern - run * 0.7 * t0;
+    const y1 = stern - run * 0.7 * t1;
+    const a = at(-half0, y0);
+    const b = at(half0, y0);
+    const c = at(half1, y1);
+    const d = at(-half1, y1);
+    g.beginPath();
+    g.moveTo(a.x, a.y);
+    g.lineTo(b.x, b.y);
+    g.lineTo(c.x, c.y);
+    g.lineTo(d.x, d.y);
+    g.closePath();
+    g.fillStyle = `rgba(255,255,255,${(0.42 * strength * (1 - t0)).toFixed(3)})`;
+    g.fill();
+  }
+  // The two arms, in pieces so each can fade.
+  g.lineWidth = lineWidth;
+  for (const side of [-1, 1] as const) {
+    for (let i = 0; i < steps; i++) {
+      const t0 = i / steps;
+      const t1 = (i + 1) / steps;
+      const p = at(side * (width * 0.45 + run * t0 * spread), stern - run * t0);
+      const q = at(side * (width * 0.45 + run * t1 * spread), stern - run * t1);
+      g.beginPath();
+      g.moveTo(p.x, p.y);
+      g.lineTo(q.x, q.y);
+      g.strokeStyle = `rgba(255,255,255,${(0.8 * strength * (1 - t0)).toFixed(3)})`;
+      g.stroke();
+    }
+  }
+  g.restore();
 }
 
 /**
