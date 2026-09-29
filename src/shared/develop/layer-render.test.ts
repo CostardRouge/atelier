@@ -4,7 +4,8 @@ import { createLayer, type AdjustLayer } from './layer';
 import { exceptRaster, layerPasses, makeLayerPassCache, maskOverlayPass } from './layer-render';
 import { rasteriseBrush, type BrushRaster } from '../render/brush-raster';
 import type { RenderPass } from '../render/graph';
-import type { BrushStroke } from '../render/mask';
+import { DEFAULT_SHADE, type BrushStroke, type ShadeMask } from '../render/mask';
+import { rasteriseShade } from '../render/shade-raster';
 
 const stroke: BrushStroke = { points: [[0.3, 0.3], [0.6, 0.5]], radius: 0.15, hardness: 0.5, erase: false };
 
@@ -111,6 +112,41 @@ describe('layerPasses — the delivery', () => {
     expect(sameMap(ownMapOf(layerPasses([subject], 1.5, undefined, new Map())[0]), EMPTY)).toBe(true);
     const answer: BrushRaster = { data: new Uint8Array([0, 255, 255, 0]), width: 2, height: 2 };
     expect(sameMap(ownMapOf(layerPasses([subject], 1.5, undefined, new Map([[subject.id, answer]]))[0]), answer)).toBe(true);
+  });
+});
+
+describe('a SHADE layer — its map is made from its shape, never the caller’s', () => {
+  const mask: ShadeMask = { ...DEFAULT_SHADE, direction: 'radial', reach: 0.7, center: { x: 0.3, y: 0.6 } };
+  const shaded = layer({ mask });
+  const made = rasteriseShade(mask, 1.5)!;
+
+  /** The map a pass binds on `unit`. */
+  function mapOn(pass: RenderPass | null | undefined, unit: number) {
+    const { gl, uploads } = recordingGl();
+    pass?.setUniforms?.(gl, {} as WebGLProgram);
+    return uploads.get(unit);
+  }
+
+  it('is delivered whatever the rasters hold — nothing, none, or a stale map under its id', () => {
+    const stale: BrushRaster = { data: new Uint8Array(4).fill(255), width: 2, height: 2 };
+    for (const rasters of [undefined, null, new Map<string, BrushRaster>(), new Map([[shaded.id, stale]])]) {
+      const [pass] = layerPasses([shaded], 1.5, undefined, rasters);
+      expect(sameMap(ownMapOf(pass), made)).toBe(true);
+    }
+  });
+
+  it('binds on the stage what the file binds, and shows it as the mask', () => {
+    const [staged] = makeLayerPassCache().passes([shaded], 1.5);
+    expect(sameMap(ownMapOf(staged), made)).toBe(true);
+    expect(sameMap(ownMapOf(maskOverlayPass(shaded, 1.5, null)), made)).toBe(true);
+    expect(sameMap(ownMapOf(makeLayerPassCache().overlay(shaded, 1.5)), made)).toBe(true);
+  });
+
+  it('binds a shade PART on its own unit, through the delivery and the stage alike', () => {
+    const withPart = layer({ parts: [{ op: 'subtract', invert: false, mask }] });
+    // Part 0 is component 1, on unit 4.
+    expect(sameMap(mapOn(layerPasses([withPart], 1.5)[0], 4), made)).toBe(true);
+    expect(sameMap(mapOn(makeLayerPassCache().passes([withPart], 1.5)[0], 4), made)).toBe(true);
   });
 });
 

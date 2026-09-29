@@ -26,6 +26,7 @@ import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, IMAGE_UV, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
 import { REC709_LUMA, colourReach, lumaOf, type Mask, type MaskOp } from './mask';
 import { rasteriseBrush, type BrushRaster } from './brush-raster';
+import { rasteriseShade } from './shade-raster';
 import { createCubeTexture } from './cube-pass';
 import type { RenderPass } from './graph';
 
@@ -33,7 +34,7 @@ import type { RenderPass } from './graph';
  * What `u_k<i>` means. 0 is "no mask", which covers the whole picture; −1 is a
  * part slot left empty, skipped rather than combined.
  */
-const KIND = { off: -1, none: 0, linear: 1, radial: 2, luma: 3, brush: 4, subject: 4, colour: 5 } as const;
+const KIND = { off: -1, none: 0, linear: 1, radial: 2, luma: 3, brush: 4, subject: 4, shade: 4, colour: 5 } as const;
 
 /** What `u_op<i>` means — `combineMask`'s three, in this order. */
 const OP = { add: 0, subtract: 1, intersect: 2 } as const;
@@ -107,10 +108,11 @@ uniform int u_op${i};
 uniform int u_cn${i};                  // colour: how many samples
 uniform vec3 u_co${i}[${COLOUR_SLOTS}];  // colour: each sample, in the opponent space
 uniform float u_rg${i};                // colour: the reach
-// The RASTER kinds -- a painted mask (brush-raster.ts) and a segmented
-// subject -- share one branch, because by the time they reach here they are
-// the same thing: an alpha map in image order. Bound even when unused, for the
-// same reason the cube is: an unset sampler defaults to unit 0.
+// The RASTER kinds -- a painted mask (brush-raster.ts), a segmented subject
+// and a shade (shade-raster.ts) -- share one branch, because by the time they
+// reach here they are the same thing: an alpha map in image order. Bound even
+// when unused, for the same reason the cube is: an unset sampler defaults to
+// unit 0.
 uniform sampler2D u_tx${i};
 float maskValue${i}(vec2 img, vec3 rgb, float luma) {
   if (u_k${i} == ${KIND.none}) return 1.0;
@@ -223,7 +225,9 @@ export interface LayerPassOptions {
    * here when the caller says nothing (`undefined`); a caller that already
    * holds the raster for these very strokes (`layer-render.ts`'s cache) hands
    * it over so an opacity nudge does not walk a million texels again. `null`
-   * is an empty map. Ignored for every other kind.
+   * is an empty map. Ignored for every other kind — a SHADE's map included,
+   * which is a function of its shape alone and made here (`rasteriseShade`,
+   * memoised).
    */
   raster?: BrushRaster | null;
   /**
@@ -312,7 +316,9 @@ function componentOf(
           : null
       : mask?.kind === 'subject'
         ? (given ?? null)
-        : null;
+        : mask?.kind === 'shade'
+          ? rasteriseShade(mask, aspectRatio)
+          : null;
   return {
     kind: mask ? KIND[mask.kind] : KIND.none,
     op: OP[op],

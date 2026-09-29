@@ -15,6 +15,7 @@ import {
   type Mask,
   type MaskKind,
   type MaskOp,
+  type ShadeMask,
 } from '../../shared/render/mask';
 import {
   MAX_MASK_PARTS,
@@ -30,11 +31,23 @@ import {
   type AdjustLayer,
 } from '../../shared/develop/layer';
 import { isDefaultDevelop } from '../../shared/develop/develop';
+import { developLinkClass } from '../../shared/develop/develop-classes';
+import {
+  MAX_CORE,
+  SHADE_FALLOFFS,
+  centreAxis,
+  isRoundShade,
+  shadeCentre,
+  shadeCore,
+  shadeFalloff,
+} from '../../shared/shades/shade-shape';
+import { ShadeDirectionPicker, ShadeFalloffPicker } from '../../shared/shades/ShadePickers';
 
 const KIND_OPTIONS: readonly { id: string; label: string }[] = [
   { id: 'none', label: 'Whole' },
   { id: 'linear', label: 'Linear' },
   { id: 'radial', label: 'Radial' },
+  { id: 'shade', label: 'Shade' },
   { id: 'luma', label: 'Brightness' },
   { id: 'colour', label: 'Colour' },
   { id: 'brush', label: 'Painted' },
@@ -63,7 +76,10 @@ const PAINT_HINT =
   'With Paint on, a drag across the picture lays a stroke; the before/after wipe waits until it is off. Erase takes coverage away, and only from what is already there — a stroke painted after an eraser comes back, because strokes apply in the order they were made. Size and Softness are set before a stroke, not after: each stroke keeps the ones it was painted with, which is what lets a soft edge and a hard one live in the same mask.';
 
 const HINT =
-  'Feather is the width of the transition, measured against half the picture’s diagonal — so it means the same on a wide frame and on a square crop of it. A linear mask reads 0.5 exactly on its line, and its angle is a compass bearing: 0 covers the top, 90 the right. A radial mask is FULL inside its ellipse and fades outward, so the shape is what is affected rather than the middle of a ramp. Invert applies the layer everywhere the mask is not.';
+  'Feather is the width of the transition, measured against half the picture’s diagonal — so it means the same on a wide frame and on a square crop of it. A linear mask reads 0.5 exactly on its line, and its angle is a compass bearing: 0 covers the top, 90 the right. A radial mask is FULL inside its ellipse and fades outward, so the shape is what is affected rather than the middle of a ramp. A shade is the shape a Trips shade draws — see its own note. Invert applies the layer everywhere the mask is not.';
+
+const SHADE_HINT =
+  'The shape a shade draws in Trips, here weighing this layer’s develop instead of painting a colour: full where a Trips shade is at full strength, clear where it clears, and the layer’s opacity is its strength. Pick where it comes from on the grid — an edge, a corner, or in the centre a radial and the two middle bands. Reach is how far the fade travels (a radius for the round ones, against the picture’s shorter side so a radial stays a circle); Core holds the full effect over part of it before the fade starts, which is what makes a zone rather than a line; Falloff is the curve of the fade. A band or a radial can be moved: Place on the picture, then press or drag where it should sit. Invert here is the shade’s own — clear at the anchor and full at the far end of the reach, the core held there.';
 
 /** What the painting and picking controls report about the open subject. */
 export interface SubjectStatus {
@@ -81,7 +97,10 @@ export interface SubjectStatus {
  * piece of work rather than a control, and "show the mask" plus these sliders
  * already place one accurately. A PAINTED mask, a SUBJECT and a COLOUR are the
  * exceptions: there is no number that means "here" or "this blue", so they
- * take the pointer — and the pointer acts on the component OPEN here.
+ * take the pointer — and the pointer acts on the component OPEN here. So
+ * does a SHADE's centre, placed by a press on the picture the way Trips
+ * places it; its other numbers are set with the very pickers Trips uses
+ * (`shared/shades/ShadePickers.tsx`).
  *
  * The maths is `shared/render/mask.ts`.
  */
@@ -236,7 +255,10 @@ export default function MaskPanel({
         />
       )}
 
-      {mask && (
+      {/* A shade carries its OWN invert (dark at the far end of the reach),
+          drawn with its controls. This one — the complement — stays
+          reachable only where it is on, so it can be turned off. */}
+      {mask && (mask.kind !== 'shade' || invert) && (
         <label className="flex items-center gap-1.5 font-mono text-3xs text-faint">
           <input type="checkbox" checked={invert} onChange={(e) => setInvert(e.target.checked)} />
           {open === null ? 'invert — apply everywhere the mask is not' : 'invert this part before it combines'}
@@ -413,6 +435,10 @@ function ShapeControls({
         </>
       )}
 
+      {mask?.kind === 'shade' && (
+        <ShadeControls mask={mask} setMask={setMask} placing={painting} onPlacing={onPainting} />
+      )}
+
       {mask?.kind === 'luma' && (
         <>
           <RangeSlider
@@ -573,6 +599,123 @@ function ShapeControls({
           </span>
         </>
       )}
+    </>
+  );
+}
+
+const pct = (v: number) => `${Math.round(v * 100)} %`;
+
+/** Where a shape is darkest when it is not inverted, in a word. */
+function anchorWord(direction: ShadeMask['direction']): string {
+  if (direction === 'radial') return 'centre';
+  if (direction === 'middle-vertical' || direction === 'middle-horizontal') return 'middle';
+  return isRoundShade(direction) ? 'corner' : 'edge';
+}
+
+/**
+ * A SHADE's own controls: Trips' pickers for where it comes from and how it
+ * fades, and the reach, the core and the centre as this inspector's sliders.
+ * No strength and no colour — the layer's opacity is the strength, its
+ * develop what lands.
+ */
+function ShadeControls({
+  mask,
+  setMask,
+  placing,
+  onPlacing,
+}: {
+  mask: ShadeMask;
+  setMask: (mask: Mask) => void;
+  /** The stage is placing this shade's centre. */
+  placing: boolean;
+  onPlacing: (on: boolean) => void;
+}) {
+  const patch = (next: Partial<ShadeMask>) => setMask({ ...mask, ...next });
+  const round = isRoundShade(mask.direction);
+  const falloff = shadeFalloff(mask);
+  const core = shadeCore(mask);
+  const centre = shadeCentre(mask);
+  const axis = centreAxis(mask.direction);
+  const centred = (axis === 'y' || centre.x === 0.5) && (axis === 'x' || centre.y === 0.5);
+  return (
+    <>
+      <SectionLegend label="Shade">
+        <p>{SHADE_HINT}</p>
+      </SectionLegend>
+      <ShadeDirectionPicker
+        direction={mask.direction}
+        label="Shade mask"
+        onPick={(direction) => {
+          patch({ direction });
+          // An edge or a corner is its own position: nothing left to place.
+          if (placing && !centreAxis(direction)) onPlacing(false);
+        }}
+      />
+      <RangeSlider
+        label={round ? 'Radius' : 'Reach'}
+        value={mask.reach}
+        range={{ min: 0, max: 1, step: 0.01, unit: '' }}
+        reset={0.55}
+        printed={pct(mask.reach)}
+        onChange={(reach) => patch({ reach })}
+      />
+      <RangeSlider
+        label="Core"
+        value={core}
+        range={{ min: 0, max: MAX_CORE, step: 0.01, unit: '' }}
+        reset={0}
+        printed={pct(core)}
+        onChange={(next) => patch({ core: next })}
+      />
+      <div className="flex flex-col gap-1">
+        <span className="text-xs text-ink">Falloff</span>
+        <ShadeFalloffPicker falloff={falloff} label="Shade mask" onPick={(next) => patch({ falloff: next })} />
+        <span className="font-mono text-3xs text-faint">{SHADE_FALLOFFS.find((f) => f.id === falloff)?.hint}</span>
+      </div>
+      {axis && (
+        <>
+          <div className="flex flex-wrap items-center gap-1">
+            <Button size="sm" variant={placing ? 'primary' : 'ghost'} aria-pressed={placing} onClick={() => onPlacing(!placing)}>
+              {placing ? 'Placing' : 'Place on the picture'}
+            </Button>
+            <span className="flex-1" />
+            {!centred && (
+              <button type="button" className={developLinkClass} onClick={() => patch({ center: undefined })}>
+                Back to the middle
+              </button>
+            )}
+          </div>
+          {axis !== 'y' && (
+            <RangeSlider
+              label="Across"
+              value={centre.x}
+              range={{ min: 0, max: 1, step: 0.01, unit: '' }}
+              reset={0.5}
+              printed={pct(centre.x)}
+              onChange={(x) => patch({ center: { ...centre, x } })}
+            />
+          )}
+          {axis !== 'x' && (
+            <RangeSlider
+              label="Down"
+              value={centre.y}
+              range={{ min: 0, max: 1, step: 0.01, unit: '' }}
+              reset={0.5}
+              printed={pct(centre.y)}
+              onChange={(y) => patch({ center: { ...centre, y } })}
+            />
+          )}
+          {placing && (
+            <span className="font-mono text-3xs text-faint">
+              press or drag on the picture to move the {axis === 'both' ? 'centre' : 'band'}
+            </span>
+          )}
+        </>
+      )}
+      <label className="flex items-center gap-1.5 font-mono text-3xs text-faint">
+        <input type="checkbox" checked={mask.invert} onChange={(e) => patch({ invert: e.target.checked })} />
+        invert — clear at the {anchorWord(mask.direction)}, full at the far end of the {round ? 'radius' : 'reach'}
+      </label>
     </>
   );
 }

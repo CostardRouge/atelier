@@ -359,6 +359,58 @@ own segmentation — lives in `subject-picking.md`.
 Combining masks (a layer's PARTS) and the colour range live in
 `mask-parts.md`.
 
+## A SHADE mask: Trips' shade shape, weighing a develop (2026-09-29)
+
+**Decision (the maintainer's ask, "the same shape system that we have in
+trips", and his pick of three options).** Develop's layers gained a `shade`
+mask kind — Trips' shade SHAPE (3×3 direction grid, reach, core, falloff,
+centre, invert), not Trips' colour stack. Rejected: a per-picture stack of
+coloured shades painted over the photograph (a new pass and a roll version for
+what a layer already does), and both. The geometry moved to
+`shared/shades/shade-shape.ts` and the grid + falloff pickers to
+`shared/shades/ShadePickers.tsx`; `shared/roadtrip/shades.ts` keeps only what a
+Trips shade alone has (colour, strength, `enabled`, following the badge) and
+re-exports the rest, and its 487-line spec passed unchanged across the move.
+
+- **A shade mask IS a Trips shade at strength 1**: `maskAt` reads
+  `shapeGradient(mask, 1)` through `gradientAt`, which evaluates a
+  `ShadeGradient` exactly as a canvas fills it (a linear projects in PIXELS,
+  a radial measures against the SHORTER side, stops held past the ends).
+  `shade-raster.test.ts` holds the two to 1e-12 for every direction. The
+  layer's opacity is the strength and its develop what lands; no colour.
+- **Its `invert` is the SHADE's, not the complement.** A Trips shade inverted
+  holds its core at the FAR end; `1 − m` would hold a CLEAR zone at the anchor
+  and make "Core" lie. So the mask carries its own `invert`, drawn with its
+  controls, and the layer's generic invert checkbox is shown for a shade only
+  while it is on (so it can be turned off).
+- **The GPU takes it as an alpha map, through the RASTER branch** (`KIND.shade
+  = 4`, beside brush and subject): a stop list per component slot would cost
+  ~35 vec2 × 5 slots against WebGL2's guaranteed 224 fragment vectors. No
+  shader change. `rasteriseShade` (512 on the long edge — a shade is smooth by
+  construction; a brush needs 1024) is memoised on the shape and the aspect
+  (8 entries), ~10 ms for a radial, one profile copied for an edge or a band.
+- **A shade's map is NEVER the caller's**: `componentOf` ignores `raster` /
+  `partRasters` for this kind and makes it from the shape, so the
+  null-means-empty contract that once blanked every delivered painted layer
+  (above) cannot reach it. `layer-render.test.ts` holds the delivery, the
+  stage cache, both overlays and a shade PART (unit 4) to the same bytes; the
+  render gate has a `shade` row (off-centre radial with a core, 0.0020 against
+  `maskAt`, canvas = bitmap).
+- **Placing the centre** rides the paint seam (`layerPaint`, gesture `drag`):
+  a press and a drag write `placedCentre` on the axis the shape moves along
+  (a band one, a radial both); `P` and *Place on the picture* toggle it, and it
+  is offered only while the direction has a centre (an edge or a corner is its
+  own position). The outline shows by itself while placing, as while painting.
+- Default: from the TOP at reach 0.55 — a darkened sky, the linear mask's own
+  default, at a new Trips shade's reach. A shade is also a PART kind, so Add
+  of two shades is Trips' stacked shades (as a `max`, not an over-composite).
+
+Driven headless (grey 154, −2 EV): from the top 85 → 112 → 144 → 154 down the
+middle; a radial placed by a drag at (0.27, 0.72) reads 85 there and 154 at
+the middle, and the roll stores `{kind:'shade', direction:'radial', …,
+center}`. Trips' Look tab driven too: the shared grid picks a corner and it is
+stored. Not driven: a phone.
+
 ## A layer's cube is baked DEFERRED (2026-09-28)
 
 A layer's develop slider bakes its 33³ cube on every step, and the bake ran synchronously inside the stage's paint — once per input event — while the global develop's bake has always run under `useDeferredValue` (`use-lut-stack.ts`). The Develop stage now reads its layers through `useDeferredValue` and calls `LayerPassCache.prime` from a `useMemo` over them, so the bake happens during a render React may abandon for the next step; `passes` then finds the cube already made (keyed by `sameDevelop`, never served for a develop that moved since — `layer-prime.test.ts` counts the bakes). The cost: the stage's layers may trail the slider by a frame under load, exactly as the global develop does.
