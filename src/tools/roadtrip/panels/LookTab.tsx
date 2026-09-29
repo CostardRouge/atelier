@@ -111,9 +111,10 @@ export default function LookTab({
         >
           <HookPicker
             layers={post.badge.hook}
+            shelf={post.badge.hookShelf}
             ctx={hookCtx}
             pictureStatus={hookPictureStatus}
-            onChange={(hook) => patchBadge({ hook })}
+            onChange={(hook, hookShelf) => patchBadge(hookShelf ? { hook, hookShelf } : { hook })}
             onConfigureCar={onConfigureCar}
           />
         </InspectorSection>

@@ -5,8 +5,9 @@
  * A paper map of the trip so far (no tiles, nothing fetched: the projection
  * is the route trace's own), the road as a curve through the stops, and a
  * cartoon Land Cruiser Prado — a miniature rendered by `mesh3d.ts`, wheels
- * turning — driving it. The stops are the legs' located places or the picked
- * pictures' own positions; at a stop with pictures the car halts and they pop
+ * turning — driving it. The stops are the legs' located places, the places the
+ * author puts on the map themselves (the Itinerary's own editor, shared), or
+ * the picked pictures' own positions; at a stop with pictures the car halts and they pop
  * as prints beside it, or fill the frame; when it arrives the map can fade
  * and leave the piece's own picture under the badge. It ticks at every stop
  * on the shared kits, with a shutter as each print lands.
@@ -40,11 +41,15 @@ import {
   type DriveOptions,
   type DriveRoute,
 } from './drive-plan';
-import { driveScratch, paintDrive } from './drive-paint';
+import { driveBasemap, driveScratch, paintDrive } from './drive-paint';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
 import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
+import { allowTiles } from '../../map/osm-tiles';
+import { BasemapStatus } from './basemap-row';
 import { Group } from './panel-ui';
+import StopsEditor from './stops-editor';
+import { otherPlaces, tripPlaces } from './stops';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
 export { DRIVE_DEFAULTS, driveOptions, type DriveOptions } from './drive-plan';
@@ -95,12 +100,23 @@ function leftOutLine(route: DriveRoute, o: DriveOptions): string | null {
   const parts = [
     l.after > 0 && `${l.after} shot after this piece’s day`,
     l.outside > 0 && `${l.outside} shot outside the trip`,
-    l.unlocated > 0 && `${l.unlocated} with no position and no stop to ride with`,
+    l.unlocated > 0 &&
+      (o.stopsOn === 'custom'
+        ? `${l.unlocated} picked with no position`
+        : `${l.unlocated} with no position and no stop to ride with`),
     l.homeless > 0 && `${l.homeless} with no position on a day no driven leg covers`,
     l.crowded > 0 && `${l.crowded} past the ${MAX_PICTURES_PER_STOP} a stop can show`,
   ].filter(Boolean);
   if (!parts.length) return null;
-  return `Left out: ${parts.join(', ')}${o.stopsOn === 'pictures' && l.unlocated > 0 ? ' — a picture needs a position in its EXIF to be a stop.' : '.'}`;
+  const why =
+    l.unlocated === 0
+      ? '.'
+      : o.stopsOn === 'pictures'
+        ? ' — a picture needs a position in its EXIF to be a stop.'
+        : o.stopsOn === 'custom'
+          ? ' — a picked picture needs a position in its EXIF to find its nearest stop; give it to a stop instead.'
+          : '.';
+  return `Left out: ${parts.join(', ')}${why}`;
 }
 
 function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
@@ -117,6 +133,10 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const shown = route.stops.reduce((n, s) => n + s.pictures.length, 0);
   const located = stages.reduce((n, s) => n + s.places.length, 0);
   const pickedLocated = o.picked.filter((p) => p.coords).length;
+  const places = tripPlaces(stages);
+  // The caption can follow the car wherever a stop's name is a PLACE: the
+  // legs' own, or the author's. A picture stop is named after its day.
+  const namesArePlaces = o.stopsOn !== 'pictures';
 
   // What the drive WILL do for this piece — the counter modes' rule: the real
   // line, or the reason there is none.
@@ -125,7 +145,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       ? o.picked.length
         ? 'None of the picked pictures carries a position, so there is nothing to drive between.'
         : 'No picture picked yet — choose them below; each one shot with a position becomes a stop.'
-      : located === 0
+      : o.stopsOn === 'custom'
+        ? 'No stop yet — click the map below, take the trip’s own places, or search for one.'
+        : located === 0
         ? 'No leg of this trip has a place with coordinates, so there is no road to drive. Look the places up in the trip’s legs, or drive between picked pictures instead.'
         : 'No leg with a located place lies on or before this day.'
     : `${route.stops.length} ${route.stops.length === 1 ? 'stop' : 'stops'}${
@@ -133,7 +155,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           ? route.currentLeg === null
             ? ' across every leg'
             : `, arriving where leg ${route.currentLeg} ends${route.stops[route.stops.length - 1].name ? ` — ${route.stops[route.stops.length - 1].name}` : ''}`
-          : ', in the order the pictures were shot'
+          : o.stopsOn === 'custom'
+            ? `, in your order${route.stops[route.stops.length - 1].name ? `, arriving at ${route.stops[route.stops.length - 1].name}` : ''}`
+            : ', in the order the pictures were shot'
       } · ${
         o.pictures === 'none' ? 'no picture shown' : shown === 0 ? 'no picture to show' : `${shown} ${shown === 1 ? 'picture' : 'pictures'} on the way`
       }${plan ? ` · ${plan.seconds.toFixed(1)}s` : ''}${
@@ -174,7 +198,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           hint={
             o.stopsOn === 'places'
               ? 'The legs’ places with coordinates, the trip so far, arriving where this day’s leg ends. A place gets coordinates when you look it up in the trip’s legs.'
-              : `Each picked picture shot with a position is a stop, in the order they were shot; one without rides with the stop before it.${pickedLocated ? ` ${pickedLocated} of ${o.picked.length} picked carry one.` : ''}`
+              : o.stopsOn === 'custom'
+                ? 'The places you put on the map below, in your order — any place, on the trip’s legs or not. The car halts at a stop that holds a picture.'
+                : `Each picked picture shot with a position is a stop, in the order they were shot; one without rides with the stop before it.${pickedLocated ? ` ${pickedLocated} of ${o.picked.length} picked carry one.` : ''}`
           }
         >
           <Segmented
@@ -184,11 +210,31 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             value={o.stopsOn}
             onChange={(stopsOn) => set({ stopsOn })}
             options={[
-              { id: 'places', label: 'Legs’ places' },
-              { id: 'pictures', label: 'Picked pictures' },
+              // Three in a 200px column: the words are short, the hint under
+              // the control says the rest.
+              { id: 'places', label: 'Legs' },
+              { id: 'custom', label: 'Your map' },
+              { id: 'pictures', label: 'Photos' },
             ]}
           />
         </FieldRow>
+        {o.stopsOn === 'custom' && (
+          <StopsEditor
+            stops={o.stops}
+            onChange={(stops) => set({ stops })}
+            places={places}
+            free={otherPlaces(stages, o.stops)}
+            curve={o.path === 'curved' ? 0.12 : 0}
+            host={host}
+            title="Virée"
+            pictureHint={
+              o.pictures === 'none'
+                ? null
+                : 'Shown when the car halts here, before any picked picture shot nearby.'
+            }
+            picturesOffHint="The pictures are set to None below, so the car drives past without showing any."
+          />
+        )}
         <FieldRow label="Path">
           <Segmented
             size="sm"
@@ -371,21 +417,44 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       <Group title="Map">
         <FieldRow
           label="Ground"
-          hint={o.ground === 'paper' ? 'A paper map covers the picture while the car drives.' : 'The road and the car are drawn over the piece’s own picture.'}
+          hint={
+            o.ground === 'paper'
+              ? 'A paper map covers the picture while the car drives.'
+              : o.ground === 'tiles'
+                ? 'OpenStreetMap under the road and the car — roads, coasts, towns — in the preview and in the exported file. The paper stands in until the tiles arrive.'
+                : 'The road and the car are drawn over the piece’s own picture.'
+          }
         >
           <Segmented
             size="sm"
             fill
             label="What the car drives on"
             value={o.ground}
-            onChange={(ground) => set({ ground })}
+            onChange={(ground) => {
+              // Choosing the tiles is this device's yes, given with the
+              // notice in view (`basemap-row.tsx`).
+              if (ground === 'tiles') allowTiles(true);
+              set({ ground });
+            }}
             options={[
-              { id: 'paper', label: 'Paper map' },
-              { id: 'picture', label: 'The picture' },
+              { id: 'paper', label: 'Paper' },
+              { id: 'tiles', label: 'OSM map' },
+              { id: 'picture', label: 'Picture' },
             ]}
           />
         </FieldRow>
-        {o.ground === 'paper' && (
+        {o.ground === 'tiles' && (
+          <BasemapStatus
+            want={plan ? driveBasemap(plan, o, ctx.aspect) : null}
+            ctx={ctx}
+            status={host?.pictureStatus}
+            opacity={o.basemapOpacity}
+            onOpacity={(basemapOpacity) => set({ basemapOpacity })}
+            limits={DRIVE_LIMITS.basemapOpacity}
+            note="Below full strength, the paper shows through and keeps the drive’s own colours."
+          />
+        )}
+        {o.ground !== 'picture' && (
           <FieldRow label="Paper · ink">
             <input type="color" value={o.paperColor} onChange={(e) => set({ paperColor: e.target.value })} className={swatchClass} aria-label="Paper colour" />
             <input type="color" value={o.inkColor} onChange={(e) => set({ inkColor: e.target.value })} className={swatchClass} aria-label="Ink colour" />
@@ -396,12 +465,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             )}
           </FieldRow>
         )}
-        {o.ground === 'paper' && (
+        {o.ground !== 'picture' && (
           <FieldRow label="Paper" align="start">
             <div className="flex flex-col gap-1.5">
-              <ToggleField label="Lines of latitude and longitude" checked={o.graticule} onChange={(graticule) => set({ graticule })}>
-                Latitude and longitude lines
-              </ToggleField>
+              {o.ground === 'paper' && (
+                <ToggleField label="Lines of latitude and longitude" checked={o.graticule} onChange={(graticule) => set({ graticule })}>
+                  Latitude and longitude lines
+                </ToggleField>
+              )}
               <ToggleField label="A vignette at the edges" checked={o.vignette} onChange={(vignette) => set({ vignette })}>
                 Darkened edges
               </ToggleField>
@@ -445,7 +516,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               ? undefined
               : o.stopsOn === 'places'
                 ? 'The places’ own names, as written in the legs. A name that would sit on another, or on a print, is left out.'
-                : 'The day each stop was shot on. A name that would sit on another, or on a print, is left out.'
+                : o.stopsOn === 'custom'
+                  ? 'The names you gave the stops. A name that would sit on another, or on a print, is left out.'
+                  : 'The day each stop was shot on. A name that would sit on another, or on a print, is left out.'
           }
         >
           <SelectField
@@ -585,7 +658,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             />
           </FieldRow>
         )}
-        {o.stopsOn === 'places' && (
+        {namesArePlaces && (
           <SwitchRow
             label="The badge’s place follows the car"
             name="Caption follows the car"
@@ -664,12 +737,21 @@ export const driveVariant: HookVariant = {
   name: 'Virée',
   tagline: 'A little car drives the map from stop to stop, showing pictures',
   defaults: { ...DRIVE_DEFAULTS },
-  contentKeys: ['picked'],
+  contentKeys: ['picked', 'stops'],
+  // An Itinerary's stops, handed over on a switch, are driven at once the
+  // first time — the author came for their places, not the legs'.
+  sharedStops: { key: 'stops', fresh: { stopsOn: 'custom' } },
   needs: { coverage: true, stages: true, places: true, media: 'day' },
   owns: 'frame',
   wantsPictures(options, ctx) {
     const o = driveOptions(options);
     return driveWants(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o), o);
+  },
+  wantsBasemap(options, ctx) {
+    const o = driveOptions(options);
+    if (o.ground !== 'tiles') return null;
+    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o), o);
+    return plan ? driveBasemap(plan, o, ctx.aspect) : null;
   },
   prepare(options, ctx) {
     const o = driveOptions(options);
@@ -677,7 +759,10 @@ export const driveVariant: HookVariant = {
     const plan = drivePlan(route, o);
     if (!plan) return { seconds: 0 };
     const scratch = driveScratch(ctx.car ?? DEFAULT_CAR);
-    const follows = o.captionFollows && o.stopsOn === 'places' && route.stops.some((s) => s.name);
+    const basemap = driveBasemap(plan, o, ctx.aspect);
+    // A stop's name is a place on the legs and on the author's own list — the
+    // author's assertion there, the Itinerary's rule — and a day on pictures.
+    const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
     return {
       seconds: plan.seconds,
       // The badge's place reads the last stop the car passed, while it drives;
@@ -690,7 +775,7 @@ export const driveVariant: HookVariant = {
             return name ? { caption: name } : {};
           }
         : undefined,
-      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame),
+      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap),
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };

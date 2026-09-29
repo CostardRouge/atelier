@@ -9,9 +9,9 @@ import {
   enumerateDays,
   formatIsoDate,
   isWithin,
-  toIsoDate,
   type IsoDate,
 } from '../../shared/roadtrip/trip-days';
+import { createLoupeStore } from '../../shared/roadtrip/loupe';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { stageLabel, tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import {
@@ -47,7 +47,7 @@ import { Icons } from '../../shared/ui/icons';
 import Button from '../../shared/ui/Button';
 import MonthCalendar, { type AdjustLeg, type DayPicture } from './MonthCalendar';
 import Segmented from '../../shared/ui/Segmented';
-import type { MonthBlock } from '../../shared/roadtrip/month-grid';
+import { isShortTrip, type MonthBlock } from '../../shared/roadtrip/month-grid';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import IconButton from '../../shared/ui/IconButton';
 import DayStrip from './DayStrip';
@@ -547,19 +547,19 @@ export default function TripOverview({
     });
   }, [view, visibleKey, trip.posts]);
   const windowThumbs = useDayThumbs(windowPosts);
-  // The days the ruler details on a wide screen: the month on screen and its
-  // two neighbours, clamped to the trip — the loupe, read from the scroll.
-  const spanOnScreen = useMemo(() => {
-    // No month key (a short trip's one block of weeks): the ruler details the whole trip.
-    if (!visibleKey || visibleKey === 'weeks') return undefined;
-    const [y, m] = visibleKey.split('-').map(Number);
-    const start = toIsoDate(Date.UTC(y, m - 2, 1));
-    const end = toIsoDate(Date.UTC(y, m + 1, 0));
-    return {
-      startDate: start < trip.startDate ? trip.startDate : start,
-      endDate: end > trip.endDate ? trip.endDate : end,
-    };
-  }, [visibleKey, trip.startDate, trip.endDate]);
+  // The month the wide screen's ruler opens its window on — its two
+  // neighbours with it make 100% — and follows to another month: the one the
+  // calendar reports on screen, or the open day's until it has reported.
+  // None on a short trip, whose one block of weeks is the whole trip.
+  const monthOnScreen = useMemo(() => {
+    if (visibleKey === 'weeks' || isShortTrip(trip.startDate, trip.endDate)) return undefined;
+    if (visibleKey) return `${visibleKey}-01`;
+    return selected ? `${selected.slice(0, 7)}-01` : undefined;
+  }, [visibleKey, selected, trip.startDate, trip.endDate]);
+  // The ruler's window, published for the year map to draw beside the
+  // calendar's own frame — through a store, so a scroll of the ruler redraws
+  // the map's bar and not this whole screen.
+  const [loupe] = useState(createLoupeStore);
   const pictures = useMemo(() => {
     if (view !== 'pictures') return undefined;
     const out = new Map<IsoDate, DayPicture>();
@@ -672,7 +672,8 @@ export default function TripOverview({
   const stagesPanel = (
     <StagesPanel
       trip={trip}
-      span={spanOnScreen}
+      month={monthOnScreen}
+      loupe={loupe}
       hideCard={expanded}
       rungAt={rungAt}
       selectedId={selectedStageId}
@@ -1045,6 +1046,7 @@ export default function TripOverview({
             pictures={pictures}
             onVisible={onVisible}
             columns={expanded ? 3 : 2}
+            loupe={loupe}
             between={<div className="flex-none pb-3">{stagesPanel}</div>}
             tail={!expanded ? <div className="pt-4">{dayPanel}</div> : undefined}
           />

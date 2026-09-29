@@ -6,15 +6,17 @@
  * Three readings decide what the car may claim, each a refusal to say more
  * than the document holds:
  *
- * - **The stops are either the legs' LOCATED places or the pictures' own
- *   positions.** On places, the road is the trip so far — every leg up to
- *   the one this day belongs to, in the order they were lived — and the car
- *   arrives at the end of that leg: it marks the LEG, never a spot the dates
- *   cannot justify — the rule the retired route trace fixed. On pictures, a
- *   photo whose EXIF says where it was shot IS a stop, in the order they were
- *   shot; a photo without
- *   a position rides along with the stop before it, never on a spot of its
- *   own.
+ * - **The stops are the legs' LOCATED places, the author's OWN places, or
+ *   the pictures' own positions.** On places, the road is the trip so far —
+ *   every leg up to the one this day belongs to, in the order they were
+ *   lived — and the car arrives at the end of that leg: it marks the LEG,
+ *   never a spot the dates cannot justify — the rule the retired route trace
+ *   fixed. On the author's own (`custom`, 2026-09-28), the road is the list
+ *   they put on the map, in their order, the Itinerary's stops (`stops.ts`):
+ *   a stop there is their assertion, so it may be any place, on a leg or not.
+ *   On pictures, a photo whose EXIF says where it was shot IS a stop, in the
+ *   order they were shot; a photo without a position rides along with the
+ *   stop before it, never on a spot of its own.
  * - **A picture is shown where the document can put it.** With a position:
  *   at its own stop, or at the nearest place. Without: at the end of the leg
  *   its day belongs to — the leg is dated, the place is not, so the end of
@@ -45,10 +47,18 @@ import {
   type HookStage,
 } from './hook-variant';
 import { partitionPicked, readPicked, sampleEvenly } from './picked';
+import { readStops, type MapStop } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 
-export type DriveStopsOn = 'places' | 'pictures';
-export type DriveGround = 'paper' | 'picture';
+/** The legs' located places, the author's own places, or the picked pictures' positions. */
+export type DriveStopsOn = 'places' | 'custom' | 'pictures';
+/**
+ * What the car drives on: the paper map drawn here, the piece's own picture,
+ * or OpenStreetMap's tiles (2026-09-28) — drawn under the road in the preview
+ * and the file, where this device allows the fetch; the paper stands in
+ * until they arrive, or when they never do.
+ */
+export type DriveGround = 'paper' | 'picture' | 'tiles';
 export type DrivePath = 'curved' | 'straight';
 export type DriveAhead = 'dashed' | 'faint' | 'hidden';
 /** Prints beside the car, the picture filling the frame, the picture BEHIND the map, or nothing. */
@@ -61,7 +71,13 @@ export type DrivePosition = 'top' | 'middle' | 'bottom';
 export interface DriveOptions {
   // --- road ------------------------------------------------------------------
   stopsOn: DriveStopsOn;
-  /** The pictures the author picked — stops on `pictures`, shown at the places on `places`. */
+  /**
+   * The author's own places, in their order — the road on `custom`. The same
+   * list, and the same editor, as the Itinerary's stops; a stop's picture is
+   * shown when the car halts there.
+   */
+  stops: MapStop[];
+  /** The pictures the author picked — stops on `pictures`, shown at the places on `places` and `custom`. */
   picked: HookPickedPicture[];
   /** On `places`: the pictures of the days already told ride along, at the end of their leg. */
   includePieces: boolean;
@@ -90,6 +106,8 @@ export interface DriveOptions {
   tilt: number;
   // --- map -------------------------------------------------------------------
   ground: DriveGround;
+  /** How strongly the tiles show over the paper, on `tiles`. */
+  basemapOpacity: number;
   paperColor: string;
   inkColor: string;
   graticule: boolean;
@@ -111,7 +129,7 @@ export interface DriveOptions {
   camera: DriveCamera;
   /** On `follow`: the share of the route's extent the view spans. */
   followZoom: number;
-  /** Rewrite the badge's place with the stop the car is at, on `places`. */
+  /** Rewrite the badge's place with the stop the car is at, on `places` and `custom`. */
   captionFollows: boolean;
   // --- sound -----------------------------------------------------------------
   sound: boolean;
@@ -125,6 +143,7 @@ export interface DriveOptions {
 
 export const DRIVE_DEFAULTS: DriveOptions = {
   stopsOn: 'places',
+  stops: [],
   picked: [],
   includePieces: true,
   path: 'curved',
@@ -141,6 +160,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   carSize: 1,
   tilt: 58,
   ground: 'paper',
+  basemapOpacity: 0.9,
   paperColor: '#e8e2d4',
   inkColor: '#3a332a',
   graticule: true,
@@ -177,6 +197,7 @@ export const DRIVE_LIMITS = {
   carSize: { min: 0.5, max: 2 },
   tilt: { min: 35, max: 90 },
   size: { min: 0.5, max: 1.2 },
+  basemapOpacity: { min: 0.2, max: 1 },
   labelSize: { min: 0.6, max: 1.6 },
   driveSeconds: { min: 1, max: 12 },
   delaySeconds: { min: 0, max: 2 },
@@ -220,7 +241,8 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
   const d = DRIVE_DEFAULTS;
   const L = DRIVE_LIMITS;
   return {
-    stopsOn: oneOf(o.stopsOn, ['places', 'pictures'], d.stopsOn),
+    stopsOn: oneOf(o.stopsOn, ['places', 'custom', 'pictures'], d.stopsOn),
+    stops: readStops(o.stops),
     picked: readPicked(o.picked),
     includePieces: o.includePieces !== false,
     path: oneOf(o.path, ['curved', 'straight'], d.path),
@@ -236,7 +258,8 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     cardSize: clamp(Number(o.cardSize), L.cardSize.min, L.cardSize.max, d.cardSize),
     carSize: clamp(Number(o.carSize), L.carSize.min, L.carSize.max, d.carSize),
     tilt: clamp(Number(o.tilt), L.tilt.min, L.tilt.max, d.tilt),
-    ground: oneOf(o.ground, ['paper', 'picture'], d.ground),
+    ground: oneOf(o.ground, ['paper', 'picture', 'tiles'], d.ground),
+    basemapOpacity: clamp(Number(o.basemapOpacity), L.basemapOpacity.min, L.basemapOpacity.max, d.basemapOpacity),
     paperColor: hex(o.paperColor, d.paperColor),
     inkColor: hex(o.inkColor, d.inkColor),
     graticule: o.graticule !== false,
@@ -278,7 +301,7 @@ export interface DriveStop extends GeoPoint {
   /** The place's own name, or `Day N` for a picture stop — never invented. */
   name: string;
   kind: 'place' | 'picture';
-  /** 0-based leg index on `places`; null for a picture stop. */
+  /** 0-based leg index on `places`; null for a picture stop or one of the author's own. */
   leg: number | null;
   /** The first stop of a leg (places), or of a day (pictures): the deeper tick. */
   accent: boolean;
@@ -322,6 +345,20 @@ function wantOf(picture: HookPickedPicture | { ref: HookPickedPicture['ref']; at
   };
 }
 
+/** The stop nearest `p`, great-circle. `stops` is never empty where this is asked. */
+function nearestStop(stops: readonly DriveStop[], p: GeoPoint): DriveStop {
+  let best = stops[0];
+  let bestKm = Infinity;
+  for (const stop of stops) {
+    const km = haversineKm(stop, p);
+    if (km < bestKm) {
+      bestKm = km;
+      best = stop;
+    }
+  }
+  return best;
+}
+
 /** The stops on the legs' places: the trip so far, ending where this day's leg ends. */
 function placeStops(
   stages: readonly HookStage[],
@@ -358,18 +395,7 @@ function placeStops(
     });
     return found;
   };
-  const nearest = (p: GeoPoint): DriveStop => {
-    let best = stops[0];
-    let bestKm = Infinity;
-    for (const stop of stops) {
-      const km = haversineKm(stop, p);
-      if (km < bestKm) {
-        bestKm = km;
-        best = stop;
-      }
-    }
-    return best;
-  };
+  const nearest = (p: GeoPoint): DriveStop => nearestStop(stops, p);
   const place = (picture: HookPickedPicture | { ref: HookPickedPicture['ref']; date: string; atSeconds?: number; coords?: undefined }) => {
     if (picture.coords) {
       nearest(picture.coords).pictures.push(wantOf(picture));
@@ -453,6 +479,36 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
   return { stops: kept, leftOut, currentLeg: null, named: kept.some((s) => s.name) };
 }
 
+/**
+ * The stops on the author's own places, in their order. A stop's own picture
+ * is shown there whatever day it was shot — the author put it there, the
+ * Itinerary's rule. A picked picture with a position joins the nearest stop;
+ * one without has nowhere the document can put it, and is counted.
+ */
+function customStops(calendar: readonly HookDay[], date: string, o: DriveOptions): DriveRoute {
+  const leftOut = { ...EMPTY_LEFT_OUT };
+  const stops: DriveStop[] = o.stops.map((stop, i) => ({
+    lat: stop.lat,
+    lon: stop.lon,
+    name: stop.name.trim(),
+    kind: 'place',
+    leg: null,
+    accent: i === 0,
+    pictures: o.pictures !== 'none' && stop.picture ? [wantOf(stop.picture)] : [],
+  }));
+  if (stops.length && o.pictures !== 'none') {
+    const split = partitionPicked(calendar, date, o.picked);
+    leftOut.after = split.after;
+    leftOut.outside = split.outside;
+    for (const picture of split.inReach) {
+      if (picture.coords) nearestStop(stops, picture.coords).pictures.push(wantOf(picture));
+      else leftOut.unlocated += 1;
+    }
+  }
+  crowd(stops, leftOut);
+  return { stops, leftOut, currentLeg: null, named: stops.some((s) => s.name) };
+}
+
 /** Trim each stop to what it can show, counting the rest. */
 function crowd(stops: DriveStop[], leftOut: LeftOut): void {
   for (const stop of stops) {
@@ -473,7 +529,9 @@ export function driveRoute(
   date: string,
   o: DriveOptions,
 ): DriveRoute {
-  return o.stopsOn === 'pictures' ? pictureStops(calendar, date, o) : placeStops(stages, calendar, date, o);
+  if (o.stopsOn === 'pictures') return pictureStops(calendar, date, o);
+  if (o.stopsOn === 'custom') return customStops(calendar, date, o);
+  return placeStops(stages, calendar, date, o);
 }
 
 /** The pictures a route draws, once each, in the shape the style wants. */

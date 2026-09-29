@@ -1,10 +1,12 @@
 import { useMemo, useRef } from 'react';
+import type { LoupeStore } from '../../shared/roadtrip/loupe';
 import { heatmapWeeks, type IsoDate } from '../../shared/roadtrip/trip-days';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
 import type { MonthBlock, WeekSpan } from '../../shared/roadtrip/month-grid';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import { HEATMAP_LEVELS as LEVELS } from './heatmap-ramp';
 import { levelOf } from './DayHeatmap';
+import { useLoupe } from './use-loupe';
 
 interface YearMapProps {
   startDate: IsoDate;
@@ -13,6 +15,11 @@ interface YearMapProps {
   blocks: readonly MonthBlock[];
   /** The weeks the calendar below is showing, fractional — framed here, the rest dimmed. */
   span: WeekSpan | null;
+  /**
+   * The stage ruler's window (a wide screen's), marked by an accent bar under
+   * the weeks: it shrinks as the ruler zooms in and grows as it zooms out.
+   */
+  loupe?: LoupeStore;
   /** A month was tapped: bring it to the top. */
   onJump: (index: number) => void;
   /** The frame was dragged: put this (fractional) week at the top. */
@@ -38,7 +45,7 @@ const DRAG_SLOP = 4;
  * drag aims at a position, with a 40px band to catch. Nothing here is a
  * target smaller than a month.
  */
-export default function YearMap({ startDate, endDate, days, blocks, span, onJump, onScrub }: YearMapProps) {
+export default function YearMap({ startDate, endDate, days, blocks, span, loupe, onJump, onScrub }: YearMapProps) {
   const weeks = useMemo(() => heatmapWeeks(startDate, endDate), [startDate, endDate]);
   const levels = useMemo(() => new Map(days.map((d) => [d.date, levelOf(d)])), [days]);
   const [boxRef, width] = useElementWidth<HTMLDivElement>();
@@ -184,6 +191,7 @@ export default function YearMap({ startDate, endDate, days, blocks, span, onJump
           })}
         </div>
       </div>
+      {loupe && <LoupeBar loupe={loupe} lead={Math.max(0, lead)} column={column} width={gridWidth} />}
       <div className="relative h-3" aria-hidden="true">
         {blocks.map((b, i) => {
           const s = spans[i];
@@ -199,6 +207,33 @@ export default function YearMap({ startDate, endDate, days, blocks, span, onJump
           );
         })}
       </div>
+    </div>
+  );
+}
+
+/**
+ * The stage ruler's window, under the weeks it covers: a day offset `d` sits
+ * `(lead + d) / 7` columns in, the map's own Monday-first arithmetic, so the
+ * bar lines up with the columns above it. Its own component and its own
+ * subscription: the ruler moves it on every scroll and zoom frame, and only
+ * this bar redraws for it — never the 350 cells.
+ *
+ * Accent, and under the grid rather than a second frame over it: the ink
+ * frame is the CALENDAR's, and two outlines that close fuse into one lumpy
+ * line (`roadtrip.md`, the mobile border fix).
+ */
+function LoupeBar({ loupe, lead, column, width }: { loupe: LoupeStore; lead: number; column: number; width: number }) {
+  const view = useLoupe(loupe);
+  if (!view || !(width > 0)) return <div className="h-[7px]" aria-hidden="true" />;
+  const left = Math.max(0, Math.min(width, ((lead + view.from) / 7) * column));
+  const right = Math.max(left, Math.min(width, ((lead + view.from + view.days) / 7) * column - GAP));
+  return (
+    <div className="relative h-[7px]" aria-hidden="true">
+      <span
+        data-loupe
+        className="absolute top-[3px] h-[3px] rounded-full bg-accent"
+        style={{ left, width: Math.max(3, right - left) }}
+      />
     </div>
   );
 }

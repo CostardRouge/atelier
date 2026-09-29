@@ -605,8 +605,14 @@ catalogue at a hundred thousand pictures (Winnow is that, and already is); and
    dcraw's arithmetic is reproduced in `raw/linear-dng.ts` — measured against
    LibRaw on an uncompressed twin (`docs/memory/raw.md`, «ProRAW in JPEG XL»).
    Still unmeasured: a real ProRAW JPEG XL file from his iPhone.
-3. **Whether the develop crosses the Trips/Studio bridge** (§7.7 of
-   `photo-develop.md`, P8 there) is still open and is not touched here.
+3. ~~**Whether the develop crosses the Trips/Studio bridge**~~ — **ANSWERED
+   2026-09-21: it crosses.** The maintainer settled it by stating the rule
+   above it: a tool is an ELEMENT the others can use, so Develop opens as a
+   modal inside Trips and the Studio, and what the author did to the
+   photograph travels with the photograph. Same reason the look must cross
+   whole (P7 of `roadtrip-export.md`). Built for the hook picture on 2026-09-24
+   (`docs/memory/roadtrip.md`) — `docs/memory/architecture.md`, «A tool is an
+   ELEMENT».
 4. **The RAW-on-a-phone verdict** (decision 5 of `develop-originals.md` §7)
    still needs his iPhone.
 

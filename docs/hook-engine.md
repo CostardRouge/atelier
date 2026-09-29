@@ -165,9 +165,13 @@ only how its words are set — and the style belongs to every slide.
 - **An unmet variant is disabled, with its reason in place of the tagline**, in
   the accent ink — never hidden.
 - **Re-selecting the current card keeps its settings**; choosing another starts
-  from that variant's `defaults`. Both writers (`setHookVariant`,
-  `setHookOptions`) replace the FIRST layer only, so a stored stack keeps what
-  sits behind it even though no UI builds one yet.
+  from that variant's `defaults` the first time, and from what it was left with
+  every time after (2026-09-28, `switchHookVariant`: the options of the opener
+  left behind go on `PostBadge.hookShelf`, keyed by variant id, and come back
+  off it — a switch used to throw an Itinerary's stops away). The writers
+  (`setHookVariant`, `switchHookVariant`, `setHookOptions`) replace the FIRST
+  layer only, so a stored stack keeps what sits behind it even though no UI
+  builds one yet.
 - **The trip-wide default needed no second picker.** ⚙&nbsp;Trip → New pieces
   already saves the whole look through `hookDefaultsFrom`, which carries `hook`
   since phase 1 — a second place to choose the same thing is the fault this
@@ -470,7 +474,19 @@ renderer or either export moved.
   lifted out of the route and Défilé when the drive wanted them: `geo.ts`
   (projection, great-circle, distance format, name placement, and a
   re-centrable `projectionFor`), `picked.ts` (the picked list's reading,
-  shot order, `partitionPicked`, `sampleEvenly`).
+  shot order, `partitionPicked`, `sampleEvenly`) and, since 2026-09-28,
+  `stops.ts` + `stops-editor.tsx` — the Itinerary's own stops and the editor
+  that picks them, which Virée drives on `stopsOn: 'custom'` («Your map»),
+  handed from one opener to the other on a switch through the one optional
+  contract member that needed (`HookVariant.sharedStops`). The big map the
+  editor opens to FIND places is the shell's, like the picture chooser: one
+  more optional host verb, `HookPanelHost.editStopsOnMap`, drawn by the picker
+  (`tools/roadtrip/StopsMapSheet.tsx`), because it reads the town index and
+  may fetch tiles on request, and a panel never fetches. And the tiles can be
+  DRAWN by both map openers (same day): one more optional member,
+  `HookVariant.wantsBasemap(options, ctx)`, declares the region and the raster
+  size; the shell loads it into `ctx.pictures` under its key, so `prepare`
+  stays pure and every renderer that already had the pictures has the map.
 - **The car is a software renderer of our own, not a 3D library.** ~180
   flat-shaded faces meeting at an inked edge, every part CONVEX, so a
   painter's algorithm (back-face culling within a part, nearer centre drawn
@@ -621,8 +637,8 @@ more often than the opener is placed.
 **What the house style needed (2026-09-15).** A trip's look can leave the trip
 as the one every new trip starts from (`house-style.ts`), and an opener's
 options mix HOW it draws with WHAT it was given for one piece. So
-`HookVariant.contentKeys` (optional) names the latter — `picked` for Défilé
-and Virée, `stops` for the Itinerary — and the house style puts them back to
+`HookVariant.contentKeys` (optional) names the latter — `picked` for Défilé,
+`picked` and `stops` for Virée, `stops` for the Itinerary — and the house style puts them back to
 `defaults`. A test fails any variant whose defaults hold a list it does not
 declare: a list in an opener's options is always something picked.
 

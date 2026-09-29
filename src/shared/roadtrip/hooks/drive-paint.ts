@@ -32,6 +32,7 @@ import {
   applyView,
   cardPlacement,
   graticuleStep,
+  planBounds,
   scaleBar,
   viewAt,
   wantsStopLabel,
@@ -40,8 +41,16 @@ import {
   type DrivePlan,
   type View,
 } from './drive-plan';
+import {
+  BASEMAP_FOR_EDGE,
+  BASEMAP_MAX_PX,
+  MERCATOR_MAX_LAT,
+  basemapKey,
+  rasterSize,
+} from '../../map/tile-math';
+import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
 import { formatDistance, placeLabels } from './geo';
-import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
+import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { paintGroundShadow, paintMesh, renderOrder, type Part, type Pose } from './mesh3d';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
@@ -81,6 +90,54 @@ export function driveBox(w: number, h: number, position: DriveOptions['position'
   return { x, y, width, height };
 }
 
+/**
+ * The OpenStreetMap region a drive's frame shows, or null unless its ground
+ * is `tiles`. Measured on a nominal frame of the piece's shape — the box, the
+ * car's margin and the camera are all fractions of the frame, so the region
+ * is the same at every size: the whole route as the camera frames it, or,
+ * when the camera follows the car, the route with half a frame around it,
+ * every place the view can reach. Sized so a 1920 delivery is not enlarged.
+ */
+export function driveBasemap(plan: DrivePlan, o: DriveOptions, aspect: number): HookBasemapWant | null {
+  if (o.ground !== 'tiles' || !(aspect > 0)) return null;
+  const w = 1080;
+  const h = w / aspect;
+  const view = viewAt(plan, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7, o, plan.at(0));
+  if (!(view.scale > 0)) return null;
+  let x0: number;
+  let x1: number;
+  let y0: number;
+  let y1: number;
+  if (o.camera === 'follow') {
+    const b = planBounds(plan);
+    const hw = w / 2 / view.scale;
+    const hh = h / 2 / view.scale;
+    x0 = b.x0 - hw;
+    x1 = b.x1 + hw;
+    y0 = b.y0 - hh;
+    y1 = b.y1 + hh;
+  } else {
+    x0 = -view.tx / view.scale;
+    x1 = (w - view.tx) / view.scale;
+    y0 = -view.ty / view.scale;
+    y1 = (h - view.ty) / view.scale;
+  }
+  const { geo } = plan;
+  if (!(geo.scale > 0) || !(geo.k > 1e-6)) return null;
+  const lonOf = (x: number) => ((x - PLAN_SIZE / 2) / geo.scale + geo.midX) / geo.k;
+  const latOf = (y: number) => -((y - PLAN_SIZE / 2) / geo.scale + geo.midY);
+  const region = {
+    west: Math.max(-180, lonOf(x0)),
+    east: Math.min(180, lonOf(x1)),
+    north: Math.min(MERCATOR_MAX_LAT, latOf(y0)),
+    south: Math.max(-MERCATOR_MAX_LAT, latOf(y1)),
+  };
+  if (!(region.east > region.west) || !(region.north > region.south)) return null;
+  const need = Math.max(x1 - x0, y1 - y0) * view.scale * (BASEMAP_FOR_EDGE / Math.max(w, h));
+  const size = rasterSize(region, need, BASEMAP_MAX_PX);
+  return { key: basemapKey(region, size.width, size.height), box: region, ...size };
+}
+
 export function paintDrive(
   g: HookCtx2D,
   plan: DrivePlan,
@@ -89,6 +146,8 @@ export function paintDrive(
   scratch: DriveScratch,
   t: number,
   frame: FrameBox,
+  /** The OpenStreetMap region, on a `tiles` ground — drawn when the shell has it. */
+  basemap: HookBasemapWant | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
@@ -96,18 +155,18 @@ export function paintDrive(
   if (moment.mapAlpha <= 0) return;
 
   if (moment.mapAlpha >= 1) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap);
     return;
   }
   // The reveal: the whole map at a falling alpha over the picture beneath.
   const buffer = bufferFor(scratch, w, h);
   const bg = buffer?.getContext('2d') as HookCtx2D | null;
   if (!buffer || !bg) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap);
     return;
   }
   bg.clearRect(0, 0, w, h);
-  paintMap(bg, plan, o, pictures, scratch, t, moment, frame);
+  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap);
   g.save();
   g.globalAlpha = moment.mapAlpha;
   g.drawImage(buffer, 0, 0);
@@ -138,6 +197,7 @@ function paintMap(
   t: number,
   moment: DriveMoment,
   frame: FrameBox,
+  basemap: HookBasemapWant | null,
 ): void {
   const { width: w, height: h } = frame;
   const u = w / 1080;
@@ -145,7 +205,10 @@ function paintMap(
   const box = driveBox(w, h, o.position, o.size);
   const view = viewAt(plan, box, carPx * 0.7, o, moment);
   const at = (p: { x: number; y: number }) => applyView(view, p);
-  const onPaper = o.ground === 'paper';
+  // Tiles are drawn over the paper, so everything on them is inked as on
+  // paper: OpenStreetMap's own palette is a light one.
+  const onPaper = o.ground !== 'picture';
+  const tiles = o.ground === 'tiles' && basemap ? pictures?.get(basemap.key) : undefined;
   const ink = onPaper ? o.inkColor : '#ffffff';
   const halo = onPaper ? o.paperColor : 'rgba(0,0,0,0.55)';
   const lw = o.lineWidth;
@@ -175,8 +238,15 @@ function paintMap(
   if (onPaper) {
     g.fillStyle = o.paperColor;
     g.fillRect(0, 0, w, h);
+    if (tiles && basemap) {
+      const { geo } = plan;
+      const project = (p: { lat: number; lon: number }) =>
+        at(geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2));
+      drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity);
+    }
     if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);
-    if (o.graticule) paintGraticule(g, plan, view, o, u, frame);
+    // The tiles carry their own lines; a graticule over them is noise.
+    if (o.graticule && !tiles) paintGraticule(g, plan, view, o, u, frame);
     if (o.vignette) {
       const r = Math.hypot(w, h) / 2;
       const grad = g.createRadialGradient(w / 2, h / 2, r * 0.45, w / 2, h / 2, r * 1.02);
@@ -371,6 +441,10 @@ function paintMap(
     g.fillStyle = ink;
     g.fillText(text, x, y);
   }
+
+  // The licence's credit, wherever the tiles are seen — under a picture that
+  // fills the frame, which hides the map with it.
+  if (tiles) paintOsmCredit(g, { x: 0, y: 0, width: w, height: h }, u);
 
   // A picture filling the frame while the car halts: over everything of the map.
   if (o.pictures === 'fill') for (const { pop, rise } of showing) fullFrame(rise, pop);
