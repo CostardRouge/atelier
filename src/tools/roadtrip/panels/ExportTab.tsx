@@ -9,7 +9,8 @@ import type { GradeScope } from '../use-trip-grade';
 import { reasonSentence } from './SlideDelivery';
 import { note } from './ui';
 import type { DeliverySummary } from '../../../shared/develop/roll-export';
-import { FieldRow, InspectorSection } from '../../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, LockSections } from '../../../shared/ui/Inspector';
+import RunLockNotice from '../../../shared/ui/RunLockNotice';
 
 interface ExportTabProps {
   trip: TripDoc;
@@ -50,6 +51,8 @@ interface ExportTabProps {
    * anti-fabrication rule every mode in this tool follows.
    */
   ownGrades: number;
+  /** When the running export took the piece — its sections are locked (L2) — or null when idle. */
+  lockedSince?: number | null;
 }
 
 /**
@@ -81,6 +84,7 @@ export default function ExportTab({
   grade,
   gradeScope,
   ownGrades,
+  lockedSince = null,
 }: ExportTabProps) {
   const graded = grade.layers.some((l) => l.enabled && l.intensity > 0);
   // The in-browser transcode for a clip this browser cannot decode — the
@@ -94,138 +98,145 @@ export default function ExportTab({
 
   return (
     <div className="flex flex-col">
-      <InspectorSection
-        id="piece.export.plan"
-        title="What goes out"
-        badge={describePlan(plan)}
-        info={
-          <>
-            <p>
-              Each slide leaves in the format it IS — decided on the Content tab, not here.
-              Files are numbered in swipe order, so a deck mixing a clip and two photographs
-              still uploads in the right one.
-            </p>
-            <p>
-              A picture from your Winnow leaves from its full-size original only where the
-              proxy in the Library could not fill the frame — a landscape proxy cropped to
-              4:5 already falls short, at ×1.25. Fetched originals are kept for this session
-              only. <em>Delivers</em> says what the open picture will really give.
-            </p>
-            <p>
-              The export buttons are pinned at the bottom of this tab: the piece, and in their
-              menu every slide as a still (what a browser with no video encoder can still
-              write, or a contact sheet of a reel), the open slide as a PNG, and the hook as a
-              video.{' '}
-              {hookIsVideoSlide
-                ? hookIsVideo
-                  ? slides[0].speed !== 1
-                    ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
-                    : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
-                  : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
-                : hookFile
-                  ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
-                  : 'Give the hook a picture from the Library first'}
-              {graded || ownGrades > 0
-                ? ownGrades > 0
-                  ? `, and each picture goes through the grade it wears — ${
-                      ownGrades === 1 ? 'one of them has a look of its own' : `${ownGrades} of them have a look of their own`
-                    }.`
-                  : `, and every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
-                : '; nothing is graded — no grade is set.'}
-            </p>
-          </>
-        }
-      >
-        {/* A sentence that says "transcode it first" must offer the transcode
-            where it is read, or it is a dead end. Once done, the next export
-            reads the H.264 by itself. */}
-        {undecodable && (
-          <div className={`${note} flex flex-col gap-2`}>
-            <span>
-              {transcode.status === 'done'
-                ? `${undecodable.name} is transcoded to H.264 — export again and it is what goes out.`
-                : `${undecodable.name} cannot be decoded for export here (DJI footage is often HEVC/H.265). Transcode it to H.264 in the browser, then export again.`}
-            </span>
-            {transcode.status !== 'done' && <TranscodeControl state={transcode} />}
-          </div>
-        )}
-
-        <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
-          {plan.items.map((item) => (
-            <li key={`${item.kind}-${item.position}`} className="grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 items-baseline">
-              <span className="font-mono text-xs tabular-nums text-muted">
-                {String(item.position).padStart(2, '0')} ·{' '}
-                {item.medium === 'video'
-                  ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` ${item.speed}×` : ''}`
-                  : 'still'}
-              </span>
-              <span
-                className={`min-w-0 truncate text-sm ${item.blocker ? 'text-faint line-through' : 'text-ink'}`}
-                title={`${item.name}${item.silent ? ' · silent' : ''}`}
-              >
-                {item.name}
-                {item.silent && <span className="text-muted"> · silent</span>}
-              </span>
-            </li>
-          ))}
-        </ul>
-
-        {/* The hook's own reason, spelled out: it is the line an author
-            changes most, and a word in a column does not explain itself. */}
-        {plan.items[0] && (
-          <p className="m-0 text-xs text-muted">
-            {reasonSentence(plan.items[0].reason, plan.items[0].seconds, plan.items[0].speed)}
-          </p>
-        )}
-        {plan.blockers.map((b) => (
-          <p key={b} className="m-0 text-xs text-danger">
-            {b}
-          </p>
-        ))}
-
-        <FieldRow
-          label="Delivers"
-          align="start"
-          hint={delivery?.reason ?? (delivery ? undefined : 'measured for the picture on screen, once it is in the Library')}
+      {lockedSince !== null && (
+        <RunLockNotice since={lockedSince}>
+          Retouching stays free; a slide edited now is named when the run ends, and the deck’s order waits for it.
+        </RunLockNotice>
+      )}
+      <LockSections locked={lockedSince !== null}>
+        <InspectorSection
+          id="piece.export.plan"
+          title="What goes out"
+          badge={describePlan(plan)}
+          info={
+            <>
+              <p>
+                Each slide leaves in the format it IS — decided on the Content tab, not here.
+                Files are numbered in swipe order, so a deck mixing a clip and two photographs
+                still uploads in the right one.
+              </p>
+              <p>
+                A picture from your Winnow leaves from its full-size original only where the
+                proxy in the Library could not fill the frame — a landscape proxy cropped to
+                4:5 already falls short, at ×1.25. Fetched originals are kept for this session
+                only. <em>Delivers</em> says what the open picture will really give.
+              </p>
+              <p>
+                The export buttons are pinned at the bottom of this tab: the piece, and in their
+                menu every slide as a still (what a browser with no video encoder can still
+                write, or a contact sheet of a reel), the open slide as a PNG, and the hook as a
+                video.{' '}
+                {hookIsVideoSlide
+                  ? hookIsVideo
+                    ? slides[0].speed !== 1
+                      ? `The hook’s clip starts on its in point and plays at ${slides[0].speed}×, so the badge animates in on the first frame at its own pace. A re-timed clip goes out without sound`
+                      : 'The hook’s clip starts on its in point, so the badge animates in on the first frame. Audio is copied through'
+                    : 'The hook is painted over its photograph, frame by frame, so its entrance plays. It comes out silent — there is no track to copy'
+                  : hookFile
+                    ? 'The hook goes out as an image: nothing on it moves. Give it an animation on the Look tab, or set the slide to Video to hold it as a card'
+                    : 'Give the hook a picture from the Library first'}
+                {graded || ownGrades > 0
+                  ? ownGrades > 0
+                    ? `, and each picture goes through the grade it wears — ${
+                        ownGrades === 1 ? 'one of them has a look of its own' : `${ownGrades} of them have a look of their own`
+                      }.`
+                    : `, and every picture goes through ${gradeScope === 'post' ? 'this piece’s own' : 'the trip’s'} grade.`
+                  : '; nothing is graded — no grade is set.'}
+              </p>
+            </>
+          }
         >
-          <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
-            {delivery ? delivery.line : '—'}
-          </span>
-        </FieldRow>
+          {/* A sentence that says "transcode it first" must offer the transcode
+              where it is read, or it is a dead end. Once done, the next export
+              reads the H.264 by itself. */}
+          {undecodable && (
+            <div className={`${note} flex flex-col gap-2`}>
+              <span>
+                {transcode.status === 'done'
+                  ? `${undecodable.name} is transcoded to H.264 — export again and it is what goes out.`
+                  : `${undecodable.name} cannot be decoded for export here (DJI footage is often HEVC/H.265). Transcode it to H.264 in the browser, then export again.`}
+              </span>
+              {transcode.status !== 'done' && <TranscodeControl state={transcode} />}
+            </div>
+          )}
 
-      </InspectorSection>
+          <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
+            {plan.items.map((item) => (
+              <li key={`${item.kind}-${item.position}`} className="grid grid-cols-[5.75rem_minmax(0,1fr)] gap-x-3 items-baseline">
+                <span className="font-mono text-xs tabular-nums text-muted">
+                  {String(item.position).padStart(2, '0')} ·{' '}
+                  {item.medium === 'video'
+                    ? `${item.seconds.toFixed(1)}s${item.speed !== 1 ? ` ${item.speed}×` : ''}`
+                    : 'still'}
+                </span>
+                <span
+                  className={`min-w-0 truncate text-sm ${item.blocker ? 'text-faint line-through' : 'text-ink'}`}
+                  title={`${item.name}${item.silent ? ' · silent' : ''}`}
+                >
+                  {item.name}
+                  {item.silent && <span className="text-muted"> · silent</span>}
+                </span>
+              </li>
+            ))}
+          </ul>
 
-      <InspectorSection
-        id="piece.export.studio"
-        title="Studio"
-        info={
-          <>
-            <p>
-              Link the Studio project this clip is graded in and the badge can be sent
-              there as an intro scene — with the trip&rsquo;s closing card as the project&rsquo;s
-              outro when this piece closes on it. One export then carries the grade, the
-              telemetry, the hook and the end card, with nothing left to join afterwards.
+          {/* The hook's own reason, spelled out: it is the line an author
+              changes most, and a word in a column does not explain itself. */}
+          {plan.items[0] && (
+            <p className="m-0 text-xs text-muted">
+              {reasonSentence(plan.items[0].reason, plan.items[0].seconds, plan.items[0].speed)}
             </p>
-            <p>
-              Sending again replaces the last one and touches nothing else. The shades
-              stay here: a Studio scene has one flat scrim rather than a gradient, so the
-              strongest shade&rsquo;s colour and strength cross over and its shape does not.
+          )}
+          {plan.blockers.map((b) => (
+            <p key={b} className="m-0 text-xs text-danger">
+              {b}
             </p>
-          </>
-        }
-      >
-        <StudioLink
-          post={post}
-          elements={hookElements}
-          shades={post.badge.shades}
-          cta={trip.cta}
-          aspect={aspect}
-          file={hookFile}
-          onChangePost={onChangePost}
-          grade={grade}
-          gradeScope={gradeScope}
-        />
-      </InspectorSection>
+          ))}
+
+          <FieldRow
+            label="Delivers"
+            align="start"
+            hint={delivery?.reason ?? (delivery ? undefined : 'measured for the picture on screen, once it is in the Library')}
+          >
+            <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
+              {delivery ? delivery.line : '—'}
+            </span>
+          </FieldRow>
+
+        </InspectorSection>
+
+        <InspectorSection
+          id="piece.export.studio"
+          title="Studio"
+          info={
+            <>
+              <p>
+                Link the Studio project this clip is graded in and the badge can be sent
+                there as an intro scene — with the trip&rsquo;s closing card as the project&rsquo;s
+                outro when this piece closes on it. One export then carries the grade, the
+                telemetry, the hook and the end card, with nothing left to join afterwards.
+              </p>
+              <p>
+                Sending again replaces the last one and touches nothing else. The shades
+                stay here: a Studio scene has one flat scrim rather than a gradient, so the
+                strongest shade&rsquo;s colour and strength cross over and its shape does not.
+              </p>
+            </>
+          }
+        >
+          <StudioLink
+            post={post}
+            elements={hookElements}
+            shades={post.badge.shades}
+            cta={trip.cta}
+            aspect={aspect}
+            file={hookFile}
+            onChangePost={onChangePost}
+            grade={grade}
+            gradeScope={gradeScope}
+          />
+        </InspectorSection>
+      </LockSections>
     </div>
   );
 }

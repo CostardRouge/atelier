@@ -154,6 +154,7 @@ import { zoneFromView } from '../../shared/develop/crop-rect';
 import { visibleWindow } from '../../shared/ui/pan-zoom';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
 import DeliverBar from '../../shared/ui/DeliverBar';
+import { runClock } from '../../shared/ui/RunLockNotice';
 import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
@@ -1420,7 +1421,7 @@ export default function PictureWorkbench({
       empty="Open a picture to export."
       settingsLine={
         exports.progress
-          ? `Settings as at ${new Date(exports.progress.startedAt).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })} · an edit now goes to the next export`
+          ? `Settings as at ${runClock(exports.progress.startedAt)} · an edit now goes to the next export`
           : null
       }
     />

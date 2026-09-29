@@ -1076,3 +1076,14 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
   `runFraction` — stages, never time. Each file is written by `writeOne` as
   it is made (no reel held in memory, "done" means on disk), and the closing
   note counts written / failed-to-write / could-not-render.
+- **L2 — the Export tab and the deck ORDER are the run's; retouching is
+  free.** The tab sits under `LockSections` + `RunLockNotice` and shows the
+  plan held at the run's start (the live one would already list a still
+  turned into a clip); `addSlide` / `removeSlide` / `moveSlideTo` / the
+  closing-card switch refuse while `exports.run` is set, and `DeckStrip`
+  greys them (`orderLocked`) — a unit is a slide by POSITION, so a move
+  mid-run would rename every file after it. What changed under the run is
+  named first in the closing note (`shared/roadtrip/run-edits.ts`, tested):
+  a slide by its `deckSlides` entry, the hook also by its whole badge, and
+  "the look" when what dresses every slide moved (both grades, the theme,
+  the badge words, the camera names, the closing card).

@@ -182,6 +182,7 @@ step that may carry a MEASURED `ratio` (an encode knows how far it is, a
 decode does not); `runFraction` counts the whole in stages, never in time, for
 a header's fill. `shared/ui/DeliverBar.tsx` takes the tool's `unitWord`, its
 primary verb and its `settingsLine`; `shared/ui/RunMark.tsx` is the cell mark a
-tool's strip wears. **How to apply**: a new tool with a multi-file export
+tool's strip wears; `shared/ui/RunLockNotice.tsx` is the sticky line over a
+locked Export tab (`LockSections`), `runClock` the time both say. **How to apply**: a new tool with a multi-file export
 drives the model through one `say(phase, words, ratio)` feeding the bar, the
 task pill and its status line alike, and never draws a fourth kind of bar.

@@ -1073,7 +1073,9 @@ tab — a segment per slide, the slide in hand with its stage (Render or Encode,
 then Write) and how far an encode has gone, the time left once one slide has
 measured it, and a Cancel that keeps what was written — while the deck band
 marks each slide waiting, in hand, ✓ or !. Each file is written the moment it is
-made. The order is
+made. While it runs, the Export tab and the deck's order are locked — the run
+follows them — but every slide stays free to retouch, and the run names what was
+edited meanwhile when it ends. The order is
 yours, and so is the time: under the picture, at every width, the deck is **one
 band** — every slide end to end on the piece's clock, a clip as wide as its cut
 and a still as wide as the seconds its inspector gives it, slid under a needle

@@ -8,6 +8,7 @@ import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
 import { deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
 import { freezeLooks } from '../../shared/roadtrip/frozen-looks';
+import { describePieceEdits, editedDuringExport } from '../../shared/roadtrip/run-edits';
 import { slideRender } from '../../shared/roadtrip/slide-render';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { exportEdge } from '../../shared/media/photo-frame';
@@ -277,7 +278,19 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     setRun(runNow.current);
     if (runNow.current) setProgress(runFraction(runNow.current));
   };
+  // The piece as the run was given it, and as it is now: what changed in
+  // between is named when the run ends (`run-edits.ts`, L2) — the files are
+  // the click's, and a retouch made meanwhile is not in them.
+  const latest = useRef(inputs);
+  latest.current = inputs;
+  const sent = useRef<{ trip: TripDoc; post: TripPost; positions: number[] } | null>(null);
+  const withEdits = (text: string) => {
+    const at = sent.current;
+    const edits = at ? describePieceEdits(editedDuringExport(at, latest.current, at.positions)) : null;
+    return edits ? `${edits} ${text}` : text;
+  };
   const beginRun = (units: readonly RunUnit[]) => {
+    sent.current = { trip: inputs.trip, post: inputs.post, positions: units.map((u) => Number(u.id)) };
     showRun(startRun(units, Date.now()));
     task.current?.controller.signal.addEventListener('abort', () => showRun(runNow.current));
   };
@@ -440,7 +453,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       finish(0, true);
       // A clip that went out without the ticks it was composed with says so
       // with the delivery, rather than being discovered on a phone later.
-      setNote(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`);
+      setNote(withEdits(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`));
     } catch (err) {
       const failure = explainFailure(err, 'The clip could not be encoded.');
       setNote(isAbortError(err) ? 'Encoding cancelled — nothing was written.' : failure.note);
@@ -655,11 +668,13 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       }
       // A cancelled run keeps what it made and says so (his question 2).
       setNote(
-        closingNote(plan.items.length - written.current.count, [
-          ...(signal.aborted ? [`cancelled after ${made} of ${items.length}`] : []),
-          ...plan.blockers,
-          ...failures,
-        ]),
+        withEdits(
+          closingNote(plan.items.length - written.current.count, [
+            ...(signal.aborted ? [`cancelled after ${made} of ${items.length}`] : []),
+            ...plan.blockers,
+            ...failures,
+          ]),
+        ),
       );
     } catch (err) {
       setNote(explainFailure(err, 'The piece could not be exported.').note);
@@ -734,7 +749,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         setNote(signal.aborted ? 'Export cancelled — nothing was written.' : 'Nothing could be rendered — check the pictures are loaded.');
         return;
       }
-      setNote(closingNote(slides.length - written.current.count, signal.aborted ? [`cancelled after ${made} of ${slides.length}`] : []));
+      setNote(withEdits(closingNote(slides.length - written.current.count, signal.aborted ? [`cancelled after ${made} of ${slides.length}`] : [])));
     } catch (err) {
       setNote(explainFailure(err, 'The slides could not be exported.').note);
     } finally {
