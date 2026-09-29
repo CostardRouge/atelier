@@ -98,3 +98,18 @@ screen — match `/16-bit/i`, not the source string.
 **Trap, measured.** The anchor probe's position-encoded gradient reads a stage exactly, but through H.264 it does not: a source clip that is itself compressed, then a ×2 zoom, leaves ~24 code values across the measured span, and ±2 codes of compression noise read as a zoom error — the SAME static frame measured 0.106 against 0.094, and a moving export looked wrong at 0.5 s and 1 s while every frame was right. Seeking a `<video>` adds its own imprecision on top. **How to apply**: to prove a per-frame framing on a clip, encode a target of two black bars on white (`VideoEncoder` + `mp4-muxer` in-page, as in «Real encodes»), read each frame where the pipeline draws it — a probe `hook` whose `paint(ctx, t)` scans one row for the dark runs, before the encoder — and compare the bars' spacing with `framingAt` at that `t`; a gradient is for a canvas, never for a decoded frame. Use the static-framing export as the control when a number looks off: if the control is off by the same amount, the measure is wrong, not the pipeline.
 
 **Trap: `preview_start` reads the MAIN checkout's `.claude/launch.json`, not a worktree's.** A config added in a worktree is never seen (the tool answered with the main file's port 5173, in use by the maintainer's own server). Add a temporary entry to the main file whose `runtimeArgs` are `["--prefix", "<worktree>", "run", "dev", "--", "--port", "<free>", "--strictPort"]`, and restore that file afterwards — another port is another origin, so it opens on an empty IndexedDB and never touches his trips.
+
+## A shared component mounted alone, over a clip made in the page (2026-09-29)
+
+**Recipe, headless in this container** (the stub recipe's browser and dev
+server): load `/atelier/` for the CSS, then in `page.evaluate` import the
+component by URL (`/atelier/src/shared/develop/DevelopSheet.tsx`) and React by
+the EXACT URL the transformed module imports — fetch the module's text and
+read `/atelier/node_modules/.vite/deps/react.js?v=…` out of it; an import
+without the `?v=` is a second React and every hook throws. `react-dom_client.js`
+is CJS pre-bundled, so `createRoot` may sit on `.default`. Wrap in
+`LayoutModeProvider` for the phone layout — without it `useIsCompact()` is
+false at any width. There is no ffmpeg here: a clip is a canvas recorded by
+`MediaRecorder` (`video/webm;codecs=vp8`), which headless Chromium decodes —
+and whose `duration` is `Infinity` until played to its end. Draw something
+that says WHEN it is (a bar crossing the frame) and read the stage canvas.

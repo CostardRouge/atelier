@@ -491,3 +491,51 @@ from an instance carries NO type (`materialize` hands an original over with
 name decides first (`classifyPart`); the type is consulted only where the
 name says nothing. The same trap already bit `loadBadgeSource`, which tests
 the extension beside the type — keep every "is this a clip?" test on both.
+
+## The sheet plays a clip, and wears the A/B (2026-09-29, the maintainer's ask)
+
+*"In the develop modal that would be nice to have the possibility to play/pause
+a video and also have the a/b compare feature too."* Both are in
+`DevelopSheet` only; the Develop tool opens no clips.
+
+- **The stage follows its own element.** For a clip `BadgeSource.image` IS the
+  `<video>` (`badge-render.ts`), so `useDevelopPicture` exposes it as
+  `video` and drives the paint itself: the stage paint is a function held in a
+  ref (`paintStage`), called by the old effect when an input moves and, while
+  the element plays, once per PRESENTED frame (`requestVideoFrameCallback`,
+  measured firing on the detached decoder element in headless Chromium;
+  rAF where it is absent, not driven), plus on `seeked` / `pause` / `ended`. No React render
+  per frame of the workbench: `restedFrame` is bumped only when the clip comes
+  to REST on another frame, and is what re-runs the histogram and Auto's
+  as-shot `stats` — so Auto measures the frame on screen, never mid-play.
+- **The grade is keyed on the instant.** `grader.render(image, currentTime)`
+  for a clip: `holdGrades` holds by source identity + seconds, and the element
+  is the same object at every frame, so without the seconds a playing clip is
+  served the first frame's grade for ever (and the grain would never re-roll).
+- **The transport is the suite's** (`DevelopTransport.tsx` over
+  `useVideoTransport` + `useVideoScrub`, `spaceToggles: false`). Two fixes it
+  needed in the shared hook: an element handed over ALREADY loaded fires no
+  `loadedmetadata`, so the hook now reads `duration`/`currentTime` when it
+  finds `readyState ≥ 1` (a tool that sets a new `src` finds HAVE_NOTHING and
+  is unchanged); and `durationchange` is listened to, because a
+  browser-recorded WebM says `Infinity` until played to its end. Viewing only:
+  where the clip is paused is written nowhere, the host's moment stays its own.
+- **Space is the sheet's while it is open** — the capture-phase rule in
+  `frontend.md`. On a photograph it does nothing, which also fixed the Trips
+  deck / Studio clip playing unseen behind the modal.
+- **A/B is the tool's own switch**, same word, same three states (dashed while
+  the dropper holds it), and the SAME preference (`atelier.develop.compare`,
+  `useLocalFlag`, default on): one answer per machine for every Develop screen,
+  like the pixel view. **Turning it ON with the divider never placed (0) opens
+  it on the middle** — the Studio's A/B does, and a press that changes nothing
+  on screen reads as dead. That rule lives in `useDevelopPicture`, so the tool
+  has it too; a divider already placed is still remembered where it was.
+
+Verified headless (recipe in `testing.md`): a WebM with a bar crossing it
+played (bar 38 → 172 → 286 px, clock and ▶/❚❚ following), Space paused it with
+0 presses reaching a window listener standing in for the host, A/B off → on put
+the split at 0.5 (left 52 as shot, right 88 at +1.5 EV) and both halves moved
+while playing, the clip learned its length at its end and a scrub to 0.5 s
+landed; at 390 px under `LayoutModeProvider` the A/B sits in the wrapped row
+beside the clipboard verbs; a PNG kept its grade (64 → 90), no transport,
+Space swallowed. Not driven on the maintainer's machine or on H.264/HEVC.

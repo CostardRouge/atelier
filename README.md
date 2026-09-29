@@ -227,7 +227,12 @@ on one settled row — `As shot`, or `+0.7 EV · highlights −40` — and
 **Develop…** opens the same sheet Trips uses over the active photo *or clip*:
 exposure in stops, brightness, contrast, highlights, shadows, whites, blacks,
 temperature, tint, saturation, vibrance, with the grade stack underneath and a
-wipe to the untouched frame. A clip opens on the frame under the playhead. The
+wipe to the untouched frame, which **A/B** in the sheet's header turns on and
+off (one choice for every Develop screen, remembered by the browser; turned on,
+it opens on the middle). A clip opens on the frame under the playhead and
+**plays there**: ▶ or Space runs it graded while the sliders move, the bar
+under it scrubs, the histogram and Auto read the frame it stops on, and where
+it is paused is written nowhere — the Studio's own playhead stays put. The
 correction bakes as the **first** stage of the same single LUT, so the stage,
 the still export, every video variant and the frame grab all carry it. It is
 kept **per media** in the project, keyed like the trims and guarded by the
@@ -1129,7 +1134,10 @@ whites, blacks, temperature, tint, saturation and vibrance, with the trip's
 look underneath so a correction and a grade are set in one place. The picture
 on the sheet is exactly what the piece will deliver — the correction, then the
 look, then the output transform — and a drag across it wipes to the untouched
-frame (hold the corner chip to see it whole). The correction bakes into the
+frame (hold the corner chip to see it whole; **A/B** in the header turns the
+wipe off and on). A clip slide **plays** in the sheet — ▶ or Space, a bar to
+scrub — so a correction is judged moving; the piece behind the sheet does not
+play along. The correction bakes into the
 same single LUT the grade already goes through, so the stage, the slide rail,
 the PNG deck and the hook clip all pick it up with nothing else to do. It
 belongs to **that slide**, like its framing: it is never inherited by the next

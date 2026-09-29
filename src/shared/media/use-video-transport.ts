@@ -173,11 +173,27 @@ export function useVideoTransport(
       // a rejection (a browser that disagrees) just leaves it paused.
       if (resumeAcrossMedia && wasPlaying) void v.play().catch(() => {});
     };
+    // A file whose header does not state its length (a browser-recorded WebM
+    // says Infinity) learns it later — often only once played to the end.
+    const onDuration = () => {
+      if (Number.isFinite(v.duration)) setDuration(v.duration);
+    };
     v.addEventListener('play', onPlay);
     v.addEventListener('pause', onPause);
     v.addEventListener('ended', onPause);
     v.addEventListener('timeupdate', onTime);
     v.addEventListener('loadedmetadata', onMeta);
+    v.addEventListener('durationchange', onDuration);
+    // An element handed over ALREADY loaded (the Develop sheet's, decoded
+    // and seeked before its transport mounts) fires no `loadedmetadata`
+    // again: read what it already knows, or the clock says 0 of 0 for good.
+    // A tool that sets a new `src` finds it at HAVE_NOTHING here and waits.
+    if (v.readyState >= 1) {
+      setDuration(Number.isFinite(v.duration) ? v.duration : 0);
+      setTime(v.currentTime);
+      v.playbackRate = rateRef.current;
+      if (!v.paused) onPlay();
+    }
     return () => {
       stopWatch();
       v.removeEventListener('play', onPlay);
@@ -185,6 +201,7 @@ export function useVideoTransport(
       v.removeEventListener('ended', onPause);
       v.removeEventListener('timeupdate', onTime);
       v.removeEventListener('loadedmetadata', onMeta);
+      v.removeEventListener('durationchange', onDuration);
     };
     // Listeners close over the tool's latest callbacks; re-wiring is driven by
     // the media (resetKey), not by callback identity.
