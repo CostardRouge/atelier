@@ -7,6 +7,8 @@ import { loadClipMeta } from '../../shared/media/video-metadata';
 import { deepestFraming } from '../../shared/media/framing-motion';
 import { downloadBlob } from '../../shared/media/save';
 import { deckSlides, type DeckSlide } from '../../shared/roadtrip/deck';
+import { freezeLooks } from '../../shared/roadtrip/frozen-looks';
+import { describePieceEdits, editedDuringExport } from '../../shared/roadtrip/run-edits';
 import { slideRender } from '../../shared/roadtrip/slide-render';
 import { frameSize, loadCollageSources } from '../../shared/roadtrip/badge-render';
 import { exportEdge } from '../../shared/media/photo-frame';
@@ -36,6 +38,17 @@ import { deliverFilesTo, pickDeliveryTarget, type DeliveryTarget } from '../../s
 import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 import { startTask, type TaskHandle } from '../../shared/tasks/tasks';
+import {
+  atStep,
+  cancelRun,
+  enterUnit,
+  finishUnit,
+  runFraction,
+  startRun,
+  type RunPhase,
+  type RunProgress,
+  type RunUnit,
+} from '../../shared/tasks/run-progress';
 import { isAbortError } from '../../shared/sources/fetch-options';
 import type { ExifData } from '../../shared/exif/exif-parser';
 
@@ -98,8 +111,15 @@ export interface PostExports {
   /** A running export's progress line, or null when idle. */
   exporting: string | null;
   /**
-   * How far the running export is through the WHOLE job, 0–1, or null while
-   * a step has no measure (opening, writing). The header's button draws this
+   * Where a running export stands slide by slide (`run-progress.ts`) — the
+   * Deliver bar's segments and the deck strip's marks; null when idle.
+   */
+  run: RunProgress | null;
+  /** Stop the running export at the next slide, ending an encode in flight. */
+  cancel: () => void;
+  /**
+   * How far the running export is through the WHOLE job, 0–1, counted in
+   * the run's stages (`runFraction`) — never a time. The header's button draws this
    * as its own fill and a number of fixed width, while the sentence above
    * goes to its tooltip — a label that changes length every percent made the
    * whole bar jump.
@@ -117,8 +137,25 @@ export interface PostExports {
   undecodable: File | null;
   /** The piece's ONE primary export: every slide in the format it is. */
   exportPiece: (imagesOnly?: boolean) => Promise<void>;
-  exportDeck: () => Promise<void>;
+  /** Every slide as a PNG — or only the slide at `position`. */
+  exportDeck: (position?: number) => Promise<void>;
   exportHookClip: () => Promise<void>;
+}
+
+/** A still is rendered then written; what moves is encoded then written. */
+const STILL_PHASES: readonly RunPhase[] = [
+  { id: 'render', label: 'Render' },
+  { id: 'write', label: 'Write' },
+];
+const CLIP_PHASES: readonly RunPhase[] = [
+  { id: 'encode', label: 'Encode' },
+  { id: 'write', label: 'Write' },
+];
+
+/** A slide as one unit of a run: named as the deck strip names it, with its file. */
+function slideUnit(slide: DeckSlide, name: string, moving: boolean): RunUnit {
+  const which = slide.kind === 'hook' ? 'Hook' : slide.kind === 'cta' ? 'Closing card' : `Slide ${slide.position}`;
+  return { id: String(slide.position), name: `${which} · ${name}`, phases: moving ? CLIP_PHASES : STILL_PHASES };
 }
 
 /**
@@ -230,6 +267,68 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     setProgress(ratio);
     if (line !== null) task.current?.handle.update({ progress: ratio, detail: line });
   };
+  // Where the run stands slide by slide (`run-progress.ts`): the bar's
+  // segments, the deck's marks, and the header's fill counted in stages. A
+  // Cancel from anywhere — the bar, the pill — is shown at once.
+  const [run, setRun] = useState<RunProgress | null>(null);
+  const runNow = useRef<RunProgress | null>(null);
+  const showRun = (next: RunProgress | null) => {
+    const signal = task.current?.controller.signal;
+    runNow.current = next && signal?.aborted ? cancelRun(next) : next;
+    setRun(runNow.current);
+    if (runNow.current) setProgress(runFraction(runNow.current));
+  };
+  // The piece as the run was given it, and as it is now: what changed in
+  // between is named when the run ends (`run-edits.ts`, L2) — the files are
+  // the click's, and a retouch made meanwhile is not in them.
+  const latest = useRef(inputs);
+  latest.current = inputs;
+  const sent = useRef<{ trip: TripDoc; post: TripPost; positions: number[] } | null>(null);
+  const withEdits = (text: string) => {
+    const at = sent.current;
+    const edits = at ? describePieceEdits(editedDuringExport(at, latest.current, at.positions)) : null;
+    return edits ? `${edits} ${text}` : text;
+  };
+  const beginRun = (units: readonly RunUnit[]) => {
+    sent.current = { trip: inputs.trip, post: inputs.post, positions: units.map((u) => Number(u.id)) };
+    showRun(startRun(units, Date.now()));
+    task.current?.controller.signal.addEventListener('abort', () => showRun(runNow.current));
+  };
+  /** One step of the slide in hand: the bar, the pill, the header, the line. */
+  const say = (phase: string, words: string, ratio: number | null = null) => {
+    if (!runNow.current) return;
+    const next = atStep(runNow.current, phase, words, ratio);
+    setLine(words);
+    showRun(next);
+    task.current?.handle.update({ progress: runFraction(next), detail: words });
+  };
+  const enter = (i: number) => runNow.current && showRun(enterUnit(runNow.current, i));
+  const finish = (i: number, ok: boolean) => runNow.current && showRun(finishUnit(runNow.current, i, ok, Date.now()));
+  const cancel = () => task.current?.controller.abort();
+
+  /**
+   * Write ONE file where the run lands, as soon as it is made — a reel of
+   * clips no longer waits in memory for the last one, and a slide counts as
+   * done when it is on disk. The counts feed the run's closing sentence.
+   */
+  const written = useRef({ count: 0, errors: [] as string[], method: 'folder' as 'folder' | 'download' });
+  async function writeOne(target: DeliveryTarget, name: string, blob: Blob): Promise<boolean> {
+    const res = await deliverFilesTo(target, [new File([blob], name)], { replace: true });
+    written.current.method = res.method;
+    written.current.count += res.written;
+    if (res.method === 'folder') written.current.errors.push(...res.errors);
+    return res.written > 0;
+  }
+  /** The run's closing sentence, from what was written and what was not. */
+  function closingNote(short: number, blockers: readonly string[]): string {
+    const w = written.current;
+    return (
+      `${w.count} file${w.count === 1 ? '' : 's'} ${w.method === 'folder' ? 'written' : 'downloaded'}` +
+      (w.errors.length ? ` · ${w.errors.length} failed to write` : '') +
+      (short > 0 ? ` · ${short} could not be written` : '') +
+      (blockers.length ? ` — ${blockers[0]}` : '')
+    );
+  }
   const [note, setNote] = useState<string | null>(null);
   const [undecodable, setUndecodable] = useState<File | null>(null);
 
@@ -247,6 +346,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   async function exportHookClip() {
     const { hookFile, hookIsVideo, hookInfo, post, trip } = inputs;
     if (!hookFile) return;
+    // The looks as they are at the click, before anything awaits (`frozen-looks.ts`).
+    const looks = freezeLooks([inputs.hookSlide], inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     if (!isEncodeSupported()) {
       setNote(
@@ -264,10 +365,12 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     setNote(null);
     setUndecodable(null);
     const signal = beginTask('Encoding the hook');
-    setExporting('Encoding…', 0);
+    beginRun([slideUnit(inputs.hookSlide, hookFile.name, true)]);
+    enter(0);
+    say('encode', 'Encoding the hook', 0);
     let audioSkipped: string | null = null;
     const onProgress = (p: ExportProgress) =>
-      setExporting(p.ratio === null ? `${p.phase}…` : `Encoding ${Math.round(p.ratio * 100)}%…`, p.ratio);
+      say('encode', p.ratio === null ? `${p.phase}…` : `Encoding the hook · ${Math.round(p.ratio * 100)}%`, p.ratio);
     try {
       // The stage measures the hook's clip while it shows it; a piece opened
       // on another slide has not shown it yet, so the size is read from the
@@ -296,8 +399,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           seconds: inputs.hookLength,
           openerSeconds: inputs.hook?.seconds ?? 0,
         },
-        lut: inputs.lutFor(inputs.hookSlide),
-        film: inputs.filmFor(inputs.hookSlide),
+        lut: looks.lutFor(inputs.hookSlide),
+        film: looks.filmFor(inputs.hookSlide),
         onProgress,
         signal,
       };
@@ -323,7 +426,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
                   collage: {
                     render: { collage: post.badge.collage!, items: cells.items, seconds: inputs.hookLength },
                     luts: cells.items.map((cell) =>
-                      inputs.lutFor({ ...inputs.hookSlide, develop: cell.develop }),
+                      looks.lutFor({ ...inputs.hookSlide, develop: cell.develop }),
                     ),
                     aspect: inputs.aspect,
                   },
@@ -345,16 +448,19 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
               },
             });
       const name = hookVideoName(trip.name, post.title.trim() || `day-${post.date}`, variant);
+      say('write', `Downloading ${name}`);
       downloadBlob(blob, name);
+      finish(0, true);
       // A clip that went out without the ticks it was composed with says so
       // with the delivery, rather than being discovered on a phone later.
-      setNote(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`);
+      setNote(withEdits(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`));
     } catch (err) {
       const failure = explainFailure(err, 'The clip could not be encoded.');
       setNote(isAbortError(err) ? 'Encoding cancelled — nothing was written.' : failure.note);
       if (failure.undecodable) setUndecodable(hookFile);
     } finally {
       setExporting(null);
+      showRun(null);
       endTask();
     }
   }
@@ -374,6 +480,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    */
   async function renderSlideVideo(
     item: PlanItem,
+    looks: Pick<PostExportInputs, 'lutFor' | 'filmFor'>,
     onProgress: (p: ExportProgress) => void,
     onAudioSkipped?: (reason: string) => void,
     signal?: AbortSignal,
@@ -401,8 +508,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         seconds: item.seconds,
         openerSeconds: opener?.seconds ?? 0,
       },
-      lut: inputs.lutFor(slide),
-      film: inputs.filmFor(slide),
+      lut: looks.lutFor(slide),
+      film: looks.filmFor(slide),
       onProgress,
     };
     // A collage is PAINTED, whatever its cells hold: every cell's picture
@@ -414,7 +521,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           ...shared,
           collage: {
             render: { collage: slide.collage, items: cells.items, seconds: item.seconds },
-            luts: cells.items.map((cell) => inputs.lutFor({ ...slide, develop: cell.develop })),
+            luts: cells.items.map((cell) => looks.lutFor({ ...slide, develop: cell.develop })),
             aspect,
           },
           seconds: item.seconds,
@@ -456,6 +563,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * cannot be written says why instead of failing silently in the middle.
    */
   async function exportPiece(imagesOnly = false) {
+    // The piece as it is AT THE CLICK, before anything awaits: the documents
+    // are this render's, and the looks are asked now (`frozen-looks.ts`) —
+    // the grade stack answers live, and a look nudged mid-run used to reach
+    // the slides not yet rendered.
+    const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
     setUndecodable(null);
@@ -476,88 +588,99 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     if (!target) return;
 
     const items = plan.items.filter((i) => i.blocker === null);
-    const rendered: { name: string; blob: Blob }[] = [];
     const signal = beginTask('Exporting the piece');
-    setExporting('Rendering…');
+    written.current = { count: 0, errors: [], method: 'folder' };
+    beginRun(items.map((item) => slideUnit(item.slide, item.name, item.medium === 'video')));
+    setExporting('Preparing…');
+    let made = 0;
     try {
-      // The stills go through the deck renderer in one pass, so a carousel of
-      // photographs costs one decode each and not one per call.
+      // Which pixels each still leaves from, decided once for all of them.
       const stills = items.filter((i) => i.medium === 'image');
+      let resolve = inputs.resolve;
       if (stills.length) {
-        const wanted = new Set(stills.map((i) => i.position));
         setExporting('Choosing the pixels…');
-        const resolve = await pixelsForStills(stills.map((i) => i.slide));
-        const out = await renderDeck({
-          signal,
-          trip: inputs.trip,
-          post: inputs.post,
-          aspect: inputs.aspect,
-          longEdge: DECK_LONG_EDGE,
-          timeSeconds: inputs.timeSeconds,
-          resolve,
-          pictures: inputs.hookPictures,
-          exif: inputs.exif,
-          lutFor: inputs.lutFor,
-          filmFor: inputs.filmFor,
-          include: (slide) => wanted.has(slide.position),
-          // One job for the whole piece: the stills are its first items.
-          onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / items.length),
-        });
-        rendered.push(...out);
+        resolve = await pixelsForStills(stills.map((i) => i.slide));
       }
 
-      // A clip that fails must not cost the slides that already rendered:
-      // each one is caught, and what went wrong is said with the delivery
-      // rather than instead of it.
+      // In DECK ORDER, one slide at a time, each WRITTEN as soon as it is
+      // made: the files land in swipe order, a run is followed slide by slide
+      // on the deck, and a reel of clips never waits in memory for the last.
+      // A slide that fails must not cost the ones already made: each is
+      // caught, and what went wrong is said with the delivery.
       const failures: string[] = [];
-      const clips = items.filter((i) => i.medium === 'video');
-      for (const [i, item] of clips.entries()) {
-        // Cancelled between two clips: what rendered is still written below.
+      for (const [i, item] of items.entries()) {
+        // Cancelled between two slides: what was written stays written.
         if (signal.aborted) break;
-        try {
-          const blob = await renderSlideVideo(
-            item,
-            (p) =>
-              setExporting(
-                p.ratio === null
-                  ? `${p.phase}…`
-                  : `Encoding ${i + 1}/${clips.length} · ${Math.round(p.ratio * 100)}%…`,
-                (items.length - clips.length + i + (p.ratio ?? 0)) / items.length,
-              ),
-            // Not a failure — the file is delivered — but a departure from what
-            // was composed, reported with the delivery like one.
-            (reason) => failures.push(`${item.name}: ${reason}`),
+        enter(i);
+        let file: { name: string; blob: Blob } | null = null;
+        if (item.medium === 'image') {
+          say('render', `Rendering ${item.name}`);
+          const out = await renderDeck({
             signal,
-          );
-          rendered.push({ name: item.name, blob });
-        } catch (err) {
-          if (isAbortError(err)) break;
-          const failure = explainFailure(err, `${item.name} could not be encoded.`);
-          if (failure.note) failures.push(failure.note);
-          // The first clip this browser cannot decode gets the transcode
-          // offered; a second would be the same codec from the same camera.
-          if (failure.undecodable) {
-            setUndecodable((cur) => cur ?? inputs.resolve(item.slide.media));
+            trip: inputs.trip,
+            post: inputs.post,
+            aspect: inputs.aspect,
+            longEdge: DECK_LONG_EDGE,
+            timeSeconds: inputs.timeSeconds,
+            resolve,
+            pictures: inputs.hookPictures,
+            exif: inputs.exif,
+            lutFor: looks.lutFor,
+            filmFor: looks.filmFor,
+            include: (slide) => slide.position === item.position,
+          });
+          file = out[0] ?? null;
+        } else {
+          try {
+            const blob = await renderSlideVideo(
+              item,
+              looks,
+              (p) => say('encode', p.ratio === null ? `${p.phase}…` : `Encoding ${item.name} · ${Math.round(p.ratio * 100)}%`, p.ratio),
+              // Not a failure — the file is delivered — but a departure from what
+              // was composed, reported with the delivery like one.
+              (reason) => failures.push(`${item.name}: ${reason}`),
+              signal,
+            );
+            file = { name: item.name, blob };
+          } catch (err) {
+            if (isAbortError(err)) break;
+            const failure = explainFailure(err, `${item.name} could not be encoded.`);
+            if (failure.note) failures.push(failure.note);
+            // The first clip this browser cannot decode gets the transcode
+            // offered; a second would be the same codec from the same camera.
+            if (failure.undecodable) {
+              setUndecodable((cur) => cur ?? inputs.resolve(item.slide.media));
+            }
           }
         }
+        if (!file) {
+          finish(i, false);
+          continue;
+        }
+        made += 1;
+        say('write', `Writing ${file.name}`);
+        finish(i, await writeOne(target, file.name, file.blob));
       }
 
-      if (!rendered.length) {
+      if (!made) {
         setNote(signal.aborted ? 'Export cancelled — nothing was written.' : (failures[0] ?? 'Nothing could be rendered — check the pictures are loaded.'));
         return;
       }
       // A cancelled run keeps what it made and says so (his question 2).
-      setExporting('Writing…');
-      const short = plan.items.length - rendered.length;
-      await deliver(target, rendered, short, [
-        ...(signal.aborted ? [`cancelled after ${rendered.length} of ${items.length}`] : []),
-        ...plan.blockers,
-        ...failures,
-      ]);
+      setNote(
+        withEdits(
+          closingNote(plan.items.length - written.current.count, [
+            ...(signal.aborted ? [`cancelled after ${made} of ${items.length}`] : []),
+            ...plan.blockers,
+            ...failures,
+          ]),
+        ),
+      );
     } catch (err) {
       setNote(explainFailure(err, 'The piece could not be exported.').note);
     } finally {
       setExporting(null);
+      showRun(null);
       endTask();
     }
   }
@@ -578,87 +701,63 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   }
 
   /**
-   * Hand a rendered set over to the target chosen up front: a folder keeps
-   * the deck in order on disk; where the picker is unavailable each file is
-   * downloaded in turn, which is the only thing a non-Chromium browser can do.
-   */
-  async function deliver(
-    target: DeliveryTarget,
-    rendered: { name: string; blob: Blob }[],
-    short: number,
-    blockers: string[] = [],
-  ) {
-    const tail =
-      (short ? ` · ${short} could not be written` : '') +
-      (blockers.length ? ` — ${blockers[0]}` : '');
-    const res = await deliverFilesTo(
-      target,
-      rendered.map((r) => new File([r.blob], r.name)),
-      { replace: true },
-    );
-    if (res.method === 'folder') {
-      setNote(
-        `${res.written} file${res.written === 1 ? '' : 's'} written` +
-          (res.errors.length ? ` · ${res.errors.length} failed to write` : '') +
-          tail,
-      );
-      return;
-    }
-    setNote(`${res.written} file${res.written === 1 ? '' : 's'} downloaded` + tail);
-  }
-
-  /**
    * Render every slide and hand the set over. A folder keeps the deck in
    * order on disk; where the picker is unavailable each slide is downloaded
    * in turn, which is the only thing a non-Chromium browser can do.
    */
-  async function exportDeck() {
+  async function exportDeck(position?: number) {
+    const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
     const target = await askTarget();
     if (!target) return;
-    const signal = beginTask('Exporting the slides');
+    const slides = deckSlides(inputs.trip, inputs.post).filter((s) => position === undefined || s.position === position);
+    const signal = beginTask(position === undefined ? 'Exporting the slides' : 'Exporting the slide');
+    written.current = { count: 0, errors: [], method: 'folder' };
+    beginRun(slides.map((s) => slideUnit(s, s.media?.name ?? (s.kind === 'cta' ? 'the card' : 'no picture'), false)));
     setExporting('Choosing the pixels…');
+    let made = 0;
     try {
-      const resolve = await pixelsForStills(deckSlides(inputs.trip, inputs.post));
-      setExporting('Rendering…');
-      const rendered = await renderDeck({
-        signal,
-        trip: inputs.trip,
-        post: inputs.post,
-        aspect: inputs.aspect,
-        longEdge: DECK_LONG_EDGE,
-        timeSeconds: inputs.timeSeconds,
-        resolve,
-        pictures: inputs.hookPictures,
-        exif: inputs.exif,
-        lutFor: inputs.lutFor,
-        filmFor: inputs.filmFor,
-        onProgress: (done, total) => setExporting(`Rendering ${done}/${total}…`, done / total),
-      });
-      if (!rendered.length) {
+      const resolve = await pixelsForStills(slides);
+      for (const [i, slide] of slides.entries()) {
+        if (signal.aborted) break;
+        enter(i);
+        say('render', `Rendering ${slide.media?.name ?? 'the slide'}`);
+        const [file] = await renderDeck({
+          signal,
+          trip: inputs.trip,
+          post: inputs.post,
+          aspect: inputs.aspect,
+          longEdge: DECK_LONG_EDGE,
+          timeSeconds: inputs.timeSeconds,
+          resolve,
+          pictures: inputs.hookPictures,
+          exif: inputs.exif,
+          lutFor: looks.lutFor,
+          filmFor: looks.filmFor,
+          include: (s) => s.position === slide.position,
+        });
+        if (!file) {
+          finish(i, false);
+          continue;
+        }
+        made += 1;
+        say('write', `Writing ${file.name}`);
+        finish(i, await writeOne(target, file.name, file.blob));
+      }
+      if (!made) {
         setNote(signal.aborted ? 'Export cancelled — nothing was written.' : 'Nothing could be rendered — check the pictures are loaded.');
         return;
       }
-      const short = inputs.slideCount - rendered.length;
-      setExporting('Writing…');
-      const res = await deliverFilesTo(
-        target,
-        rendered.map((r) => new File([r.blob], r.name)),
-        { replace: true },
-      );
-      setNote(
-        `${res.written} slide${res.written === 1 ? '' : 's'} ${res.method === 'folder' ? 'written' : 'downloaded'}` +
-          (signal.aborted ? ` · cancelled after ${rendered.length} of ${inputs.slideCount}` : short ? ` · ${short} could not be rendered` : '') +
-          (res.method === 'folder' && res.errors.length ? ` · ${res.errors.length} failed to write` : ''),
-      );
+      setNote(withEdits(closingNote(slides.length - written.current.count, signal.aborted ? [`cancelled after ${made} of ${slides.length}`] : [])));
     } catch (err) {
       setNote(explainFailure(err, 'The slides could not be exported.').note);
     } finally {
       setExporting(null);
+      showRun(null);
       endTask();
     }
   }
 
-  return { exporting, progress, note, undecodable, exportPiece, exportDeck, exportHookClip };
+  return { exporting, run, cancel, progress, note, undecodable, exportPiece, exportDeck, exportHookClip };
 }

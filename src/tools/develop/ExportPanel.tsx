@@ -7,7 +7,7 @@ import Segmented from '../../shared/ui/Segmented';
 import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
 import { targetFolder } from '../../shared/develop/export-targets';
 import { captureYear } from '../../shared/exif/delivery-meta';
-import { Icons } from '../../shared/ui/icons';
+import RunLockNotice from '../../shared/ui/RunLockNotice';
 
 const WATERMARK_POSITION_OPTIONS: readonly { id: WatermarkPosition; label: string }[] = [
   { id: 'bottom-right', label: 'Bottom right' },
@@ -43,13 +43,7 @@ function describeHdrRun(hdr: RollRun['hdr']): string | null {
   return head + reach + check;
 }
 
-/** One export verb: what it renders, and how many. */
-export interface ExportVerb {
-  id: string;
-  label: string;
-  hint?: string;
-  run: () => void;
-}
+export type { ExportVerb } from '../../shared/ui/DeliverBar';
 
 /**
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,
@@ -121,18 +115,7 @@ export default function ExportPanel({
   return (
     <>
       {lockedSince !== null && (
-        // Stuck to the top of the tab's scroll: the lock must be read where
-        // the dimmed control is, and the tab is usually scrolled to the table.
-        <p className="sticky top-0 z-10 m-0 flex items-start gap-2 rounded-control border border-line bg-paper-2 px-2.5 py-2 text-xs leading-snug text-ink-soft shadow-[0_8px_14px_-12px_rgba(43,33,18,0.45)]" role="status">
-          <span className="flex-none inline-flex pt-px text-muted" aria-hidden="true">
-            {Icons.clock}
-          </span>
-          <span>
-            Locked while exporting — this run uses the settings as they were at{' '}
-            {new Date(lockedSince).toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })}. Retouching stays
-            free; a picture edited now is named when the run ends.
-          </span>
-        </p>
+        <RunLockNotice since={lockedSince}>Retouching stays free; a picture edited now is named when the run ends.</RunLockNotice>
       )}
       <LockSections locked={lockedSince !== null}>
         <InspectorSection

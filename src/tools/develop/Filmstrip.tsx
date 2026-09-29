@@ -13,7 +13,8 @@ import {
   type RollPicture,
 } from '../../shared/develop/roll-types';
 import { useObjectUrl } from '../../shared/media/use-object-url';
-import { runStateOf, type RunPictureState, type RunProgress } from '../../shared/develop/run-progress';
+import { runStateOf, type RunUnitState, type RunProgress } from '../../shared/tasks/run-progress';
+import RunMark, { RUN_WORDS } from '../../shared/ui/RunMark';
 import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { describeCulling, type Culling } from '../../shared/sources/winnow/culling';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
@@ -170,7 +171,7 @@ const Cell = memo(function Cell({
   availabilityKind: PictureAvailability['kind'];
   culling: Culling | undefined;
   /** Where this picture stands in a running export, or null outside one. */
-  runState: RunPictureState | null;
+  runState: RunUnitState | null;
   remoteClient: WinnowClient | null;
   remoteId: number | null;
   size: string;
@@ -289,39 +290,6 @@ const Cell = memo(function Cell({
     </li>
   );
 });
-
-/** A cell's place in a running export, for a screen reader. */
-const RUN_WORDS: Record<RunPictureState, string> = {
-  queued: 'waiting to be exported',
-  active: 'being exported',
-  done: 'exported',
-  failed: 'not exported',
-};
-
-/**
- * The cell's mark in a running export: a veil on what waits, a turning ring
- * on the picture in hand, ✓ or ! on what is finished. Pointer-transparent.
- */
-function RunMark({ state }: { state: RunPictureState }) {
-  return (
-    <span
-      className={`absolute inset-0 grid place-items-center pointer-events-none ${
-        state === 'queued' ? 'bg-[rgba(13,12,10,0.45)]' : state === 'active' ? 'bg-[rgba(13,12,10,0.25)]' : ''
-      }`}
-      aria-hidden="true"
-    >
-      {state === 'active' && (
-        <span className="w-5 h-5 rounded-full border-2 border-on-media/30 border-t-on-media/95 animate-spin motion-reduce:animate-none" />
-      )}
-      {state === 'done' && (
-        <span className="w-5 h-5 grid place-items-center rounded-full bg-ok text-white text-2xs">{Icons.check}</span>
-      )}
-      {state === 'failed' && (
-        <span className="w-5 h-5 grid place-items-center rounded-full bg-danger text-white font-mono text-2xs">!</span>
-      )}
-    </span>
-  );
-}
 
 /** What an empty cell says, in a word or two — the stage says the rest. */
 const CELL_WORDS: Record<PictureAvailability['kind'], string> = {
