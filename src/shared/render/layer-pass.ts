@@ -84,8 +84,11 @@ void main() {
   float lo = min(min(min(a, b), min(e, f)), c);
   float edge = (lo < 0.5 && hi >= 0.5) ? 1.0 : 0.0;
   // Dashes in the render's own pixels, ink and paper, so the line holds over
-  // a white sky and a black coat alike.
-  float dash = mod(floor((gl_FragCoord.x + gl_FragCoord.y) / 6.0), 2.0);
+  // a white sky and a black coat alike. Counted in the FRAME's pixels, never
+  // gl_FragCoord's: in a band drawn into a target those start at the band,
+  // and the dashes broke at every band edge.
+  vec2 px = floor(v_uv / u_texel);
+  float dash = mod(floor((px.x + px.y) / 6.0), 2.0);
   vec3 ink = mix(vec3(0.08), vec3(0.97), dash);
   outColor = vec4(mix(src.rgb, ink, edge), src.a);
 }`;

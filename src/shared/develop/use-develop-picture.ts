@@ -1637,9 +1637,12 @@ export function useDevelopPicture({
     ctx.imageSmoothingEnabled = pixelView !== 'pixels';
     ctx.imageSmoothingQuality = 'high';
     const f = full.source;
+    // The mask view and the tap's blink ride the loupe too: it covers the
+    // stage past 1:1, so without them picking a subject while zoomed showed
+    // neither the outline nor the fill.
     const grader = holding
       ? null
-      : graderFrom(loupeSlot.current, cube, f, geometry, stack, null, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, null, clipping, sharpenMask, postVignette);
+      : graderFrom(loupeSlot.current, cube, f, geometry, stack, overlay, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, flashMask, clipping, sharpenMask, postVignette);
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1672,6 +1675,8 @@ export function useDevelopPicture({
     cube,
     geometry,
     stack,
+    overlay,
+    flashMask,
     subjectMasks,
     detail,
     repair,

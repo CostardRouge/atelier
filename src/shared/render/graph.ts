@@ -27,7 +27,7 @@
  * Framework-free, like the renderer it grows from.
  */
 
-import { bandFragment, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
+import { bandFragment, nearRows, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
 import { VERTEX_SRC } from './glsl';
 import { isHalfImage, type HalfImage } from './half-image';
 import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
@@ -129,6 +129,128 @@ export function bandRowsFor(width: number, height: number): number | null {
   if (width * height < min) return null;
   const rows = Math.max(16, Math.round(per / Math.max(1, width)));
   return rows < height ? rows : null;
+}
+
+let bandProbe: boolean | null = null;
+
+/**
+ * Whether THIS machine's GPU draws a chain in bands exactly as it draws it
+ * whole — asked once per page, on a small frame, the first time a big one
+ * would be banded; where it does not, every frame here is drawn whole.
+ *
+ * Why a probe and not a gate: `scripts/check-bands.mjs` proves the arithmetic
+ * on SwiftShader, and that was all it could prove. On the maintainer's Mac
+ * the loupe drew a 7008 px picture in stripes — whole rows of one band
+ * repeated, another band's rows in its place (2026-09-30) — while the same
+ * chain at the same size was exact here, and a halation (which keeps the
+ * chain whole) made it vanish. The cause could not be reproduced away from
+ * that GPU, so the frame is no longer trusted to a driver nobody measured:
+ * the probe draws three passes whole and in bands of a few dozen rows, on the
+ * same kind of canvas with the same context, and compares the two. A band
+ * that is wrong costs the old memory, never a striped picture or file.
+ */
+export function bandsDrawRightHere(): boolean {
+  if (bandProbe !== null) return bandProbe;
+  bandProbe = probeBanding();
+  if (!bandProbe) {
+    console.warn('[render] this GPU drew a banded frame unlike the whole one; big frames are drawn whole here');
+  }
+  return bandProbe;
+}
+
+/** The probe's three passes: a colour, a neighbourhood and a read 23 rows away. */
+const PROBE_PASSES: RenderPass[] = [
+  {
+    id: 'probe:colour',
+    rows: OWN_ROWS,
+    fragment: `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 outColor;
+uniform sampler2D u_src;
+void main() { vec4 c = texture(u_src, v_uv); outColor = vec4(c.gbr * 0.9 + 0.05, 1.0); }`,
+  },
+  {
+    id: 'probe:near',
+    rows: nearRows(4),
+    fragment: `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 outColor;
+uniform sampler2D u_src;
+uniform vec2 u_texel;
+void main() {
+  vec4 a = texture(u_src, v_uv + vec2(0.0, 3.0 * u_texel.y));
+  vec4 b = texture(u_src, v_uv - vec2(0.0, 3.0 * u_texel.y));
+  outColor = vec4(mix(a.rgb, b.bgr, 0.5), 1.0);
+}`,
+  },
+  {
+    id: 'probe:far',
+    rows: nearRows(24),
+    fragment: `#version 300 es
+precision highp float;
+in vec2 v_uv;
+out vec4 outColor;
+uniform sampler2D u_src;
+uniform vec2 u_texel;
+void main() {
+  vec4 a = texture(u_src, v_uv + vec2(0.0, 23.0 * u_texel.y));
+  outColor = vec4(mix(texture(u_src, v_uv).rgb, a.rgb, 0.5), 1.0);
+}`,
+  },
+];
+
+function probeBanding(): boolean {
+  const width = 96;
+  const height = 480;
+  const canvas =
+    typeof OffscreenCanvas !== 'undefined'
+      ? new OffscreenCanvas(width, height)
+      : typeof document !== 'undefined'
+        ? Object.assign(document.createElement('canvas'), { width, height })
+        : null;
+  // Nothing to draw with means no graph either: nothing will be banded.
+  if (!canvas || typeof ImageData === 'undefined') return true;
+  let forced: number | null = null;
+  const graph = buildGraph(canvas, { bandRows: () => forced, probing: true });
+  if (!graph) return true;
+  const gl = canvas.getContext('webgl2') as WebGL2RenderingContext | null;
+  try {
+    if (!gl) return true;
+    // Every row and column its own, so a row taken from anywhere else shows.
+    const pixels = new Uint8ClampedArray(width * height * 4);
+    for (let y = 0; y < height; y += 1) {
+      for (let x = 0; x < width; x += 1) {
+        const i = (y * width + x) * 4;
+        pixels[i] = (y * 7 + x * 3) & 255;
+        pixels[i + 1] = (y * 13) & 255;
+        pixels[i + 2] = (x * 11 + ((y >> 3) & 1) * 128) & 255;
+        pixels[i + 3] = 255;
+      }
+    }
+    const source = new ImageData(pixels, width, height);
+    const read = () => {
+      const out = new Uint8Array(width * height * 4);
+      gl.readPixels(0, 0, width, height, gl.RGBA, gl.UNSIGNED_BYTE, out);
+      return out;
+    };
+    forced = null;
+    graph.render(source, PROBE_PASSES);
+    const whole = read();
+    forced = 40;
+    graph.render(source, PROBE_PASSES);
+    // A probe whose "banded" draw was whole again compares a picture with
+    // itself and proves nothing: it must really have been cut.
+    if (bandsLastDrawn < 10) return false;
+    const banded = read();
+    for (let i = 0; i < whole.length; i += 1) {
+      if (Math.abs(whole[i] - banded[i]) > 1) return false;
+    }
+    return true;
+  } finally {
+    graph.dispose();
+  }
 }
 
 export interface RenderGraph {
@@ -255,9 +377,31 @@ function sourceSize(source: RenderSource): { width: number; height: number } | n
 export function createRenderGraph(
   canvas: HTMLCanvasElement | OffscreenCanvas,
 ): RenderGraph | null {
+  return buildGraph(canvas, { bandRows: bandRowsFor, probing: false });
+}
+
+interface GraphOptions {
+  /** The rows of one band for a frame, or null to draw it whole. */
+  bandRows: (width: number, height: number) => number | null;
+  /** The probe's own graph, which must not ask the probe about itself. */
+  probing: boolean;
+}
+
+function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphOptions): RenderGraph | null {
   const gl = canvas.getContext('webgl2', {
     premultipliedAlpha: false,
     preserveDrawingBuffer: true,
+    // Every draw here is one quad covering its whole target, so multisampling
+    // smooths nothing — it only multiplied the canvas: a 7008 × 4672 loupe
+    // held four samples a pixel (half a gigabyte) plus a depth buffer nothing
+    // tests against. And a banded frame writes the canvas once per BAND,
+    // between render passes into the targets, which is exactly where a
+    // multisampled drawing buffer must be kept and reloaded behind our back
+    // (2026-09-30, `bandsDrawRightHere`). Single-sampled, a band's write is a
+    // plain write.
+    antialias: false,
+    depth: false,
+    stencil: false,
   }) as WebGL2RenderingContext | null;
   if (!gl) return null;
 
@@ -377,12 +521,16 @@ export function createRenderGraph(
   /** The band plan for this chain at this size, or null to draw it whole. */
   const bandPlanFor = (list: readonly RenderPass[], width: number, height: number): BandPlan | null => {
     if (list.length < 2) return null;
-    const rows = bandRowsFor(width, height);
+    const rows = options.bandRows(width, height);
     if (rows === null) return null;
     for (const pass of list) {
       if (!programFor(pass) || !bandable.has(pass.id)) return null;
     }
-    return planBands({ width, height }, rows, list.map((pass) => pass.rows));
+    const plan = planBands({ width, height }, rows, list.map((pass) => pass.rows));
+    // Only once there is a plan: a frame that would be drawn whole anyway
+    // never pays for the probe's context.
+    if (plan && !options.probing && !bandsDrawRightHere()) return null;
+    return plan;
   };
 
   /**

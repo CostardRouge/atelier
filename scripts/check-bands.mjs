@@ -39,7 +39,9 @@ const out = await page.evaluate(async () => {
   // The banding hooks come through the grader's module, never `graph.ts`
   // directly: after a hot reload the dev server serves `graph.ts` under a
   // second URL, and a hook set on the other instance changes nothing.
-  const { makeGraphGrader, setBandingForTest, bandsLastDrawnForTest } = await import(`${root}/render/graph-grader.ts`);
+  const { makeGraphGrader, setBandingForTest, bandsLastDrawnForTest, bandsDrawRightHere } = await import(
+    `${root}/render/graph-grader.ts`
+  );
   const { composeLutStack } = await import(`${root}/lut/lut-stack.ts`);
   const { DEFAULT_DEVELOP } = await import(`${root}/develop/develop.ts`);
   const { DEFAULT_DETAIL } = await import(`${root}/render/detail.ts`);
@@ -157,7 +159,10 @@ const out = await page.evaluate(async () => {
     return { worst, off, worstRow };
   };
 
-  const results = { passes: passes.pre.length + 1 + passes.post.length };
+  // The page's own probe (`bandsDrawRightHere`, graph.ts) must say yes on a GPU
+  // where bands are exact: a probe that said no would quietly draw every big
+  // frame whole — correct, and the memory banding exists to save spent again.
+  const results = { passes: passes.pre.length + 1 + passes.post.length, probe: bandsDrawRightHere() };
   for (const [name, source] of [['canvas', src], ['bitmap', bitmap]]) {
     const whole = draw(source, null);
     const wholeBands = drawn;
@@ -189,6 +194,8 @@ for (const name of ['canvas', 'bitmap']) {
       `; ${r.bands} bands against ${r.wholeBands}; the chain moves the picture up to ${r.moved} codes`,
   );
 }
+if (out.probe !== true) bad += 1;
+console.log(`\n  ${out.probe === true ? 'ok  ' : 'FAIL'}  the page's probe says bands draw right on this GPU: ${out.probe}`);
 if (errors.length) {
   bad += 1;
   console.log(`\n  FAIL  the page said:\n    ${errors.join('\n    ')}`);

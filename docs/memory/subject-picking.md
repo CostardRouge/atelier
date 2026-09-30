@@ -51,7 +51,14 @@ three accepted as drawn.
   raster, reported only for a point new against the points KNOWN at the last
   commit on this picture — so re-opening a picture (every point segmented
   again) blinks nothing. The host toggles a `mask-flash` pass on/off at 90 ms,
-  twice, and skips it under reduced motion.
+  twice, and skips it under reduced motion. **The FIRST tap of all never
+  blinked** (his report, 2026-09-30): the model's view (`segmentSource`) is
+  only made once a subject HAS a point, so that tap met no view, the mask
+  effect returned early, and the known-points record advanced in the same
+  commit — the point was "known" by the time the view arrived. Rule
+  (`subject-known.ts`, pure, tested): while there is no view, a point tapped
+  on the same picture is not recorded; a picture just opened is recorded
+  whole, view or not.
 
 **The export dropped every Subject layer, and nobody had noticed.**
 `renderRollPicture` built its layers with no rasters, and a subject with no
