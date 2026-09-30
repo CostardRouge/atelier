@@ -9,6 +9,7 @@ import {
   type SegmenterState,
 } from '../segment/segmenter';
 import { subjectLayersToSegment, type AdjustLayer } from './layer';
+import { knownSubjectPoints, type KnownPoints } from './subject-known';
 
 /**
  * The alpha map for every SUBJECT layer on the open picture, resolved by the
@@ -94,7 +95,7 @@ export function useSubjectMasks({
   const [fresh, setFresh] = useState<SubjectMasks['fresh']>(null);
   // Every subject layer's points as they stood at the last commit, for this
   // picture — what tells a TAPPED point from one merely segmented again.
-  const known = useRef<{ picture: string; points: Map<string, Set<string>> }>({
+  const known = useRef<{ picture: string; points: KnownPoints }>({
     picture: pictureKey,
     points: new Map(),
   });
@@ -210,7 +211,9 @@ export function useSubjectMasks({
 
   // Record every subject layer's points — those with none included, which is
   // what makes the FIRST tap on a fresh layer a new point — after the effect
-  // above has read what stood before.
+  // above has read what stood before. Not a point tapped while the model has
+  // no view yet: that is the very first tap of all, and recording it before
+  // the view arrived is what kept it from blinking (`subject-known.ts`).
   const everySubject = (layers ?? [])
     .filter((l) => l.mask?.kind === 'subject')
     .map((l) => {
@@ -219,15 +222,16 @@ export function useSubjectMasks({
       return `${l.id}\t${mask.points.map((p) => pointKey(pictureKey, mask.model, p)).join('\t')}`;
     })
     .join('\n');
+  const viewReady = source !== null;
   useEffect(() => {
-    const points = new Map<string, Set<string>>();
-    for (const entry of everySubject ? everySubject.split('\n') : []) {
+    const entries = (everySubject ? everySubject.split('\n') : []).map((entry) => {
       const [id, ...keys] = entry.split('\t');
-      points.set(id, new Set(keys.filter(Boolean)));
-    }
-    known.current = { picture: pictureKey, points };
+      return { id, keys: keys.filter(Boolean) };
+    });
+    const previous = known.current.picture === pictureKey ? known.current.points : null;
+    known.current = { picture: pictureKey, points: knownSubjectPoints(entries, previous, viewReady) };
     // Keyed on the string, for the reason the effect above is.
-  }, [everySubject, pictureKey]);
+  }, [everySubject, pictureKey, viewReady]);
 
   // The shown copy goes with the hook.
   useEffect(
