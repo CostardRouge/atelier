@@ -39,6 +39,15 @@ export interface GazetteerCity {
    * right — named only when nothing else is near.
    */
   section: boolean;
+  /**
+   * The first administrative subdivision it lies in — `AU.08` — or `''`.
+   * **This is what groups halts into a chapter, never `region`**: a key is
+   * `<country>.<code>`, so it is unique, while a NAME can be missing (202 keys
+   * have none in GeoNames' table) and two countries can share one.
+   */
+  regionKey: string;
+  /** That subdivision said out loud ("Western Australia"); `''` when unnamed. */
+  region: string;
 }
 
 /**
@@ -67,10 +76,22 @@ export function parseGazetteer(raw: unknown): GazetteerCity[] {
   const rows = (raw as { cities?: unknown })?.cities;
   if (!Array.isArray(rows)) return [];
 
+  // The file interns its regions: one `[key, name]` table, each city pointing
+  // into it by index. A file from before regions existed has no table, and
+  // every city then reads as having none — never as a failed load.
+  const table = (raw as { regions?: unknown }).regions;
+  const regions: [string, string][] = Array.isArray(table)
+    ? table.map((entry) =>
+        Array.isArray(entry) && typeof entry[0] === 'string'
+          ? [entry[0], typeof entry[1] === 'string' ? entry[1] : '']
+          : ['', ''],
+      )
+    : [];
+
   const cities: GazetteerCity[] = [];
   for (const row of rows) {
     if (!Array.isArray(row)) continue;
-    const [name, country, lat, lon, population, section] = row as unknown[];
+    const [name, country, lat, lon, population, section, regionIndex] = row as unknown[];
     if (typeof name !== 'string' || !name) continue;
     if (typeof lat !== 'number' || typeof lon !== 'number') continue;
     if (!Number.isFinite(lat) || !Number.isFinite(lon)) continue;
@@ -82,9 +103,21 @@ export function parseGazetteer(raw: unknown): GazetteerCity[] {
       lon,
       population: typeof population === 'number' && population > 0 ? population : 0,
       section: section === 1 || section === true,
+      ...regionAt(regions, regionIndex),
     });
   }
   return cities;
+}
+
+function regionAt(
+  regions: readonly [string, string][],
+  index: unknown,
+): { regionKey: string; region: string } {
+  const entry =
+    typeof index === 'number' && Number.isInteger(index) && index >= 0
+      ? regions[index]
+      : undefined;
+  return entry ? { regionKey: entry[0], region: entry[1] } : { regionKey: '', region: '' };
 }
 
 /** Degrees of longitude between two meridians, the short way round. */

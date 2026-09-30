@@ -1,8 +1,15 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
 import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
-import { dayStageActions, nearerEdge, resizeStage } from '../../shared/roadtrip/stage-edit';
-import { stageTint } from '../../shared/roadtrip/stage-ruler';
+import {
+  dayStageActions,
+  insertStageInOrder,
+  nearerEdge,
+  resizeStage,
+  stageOverGap,
+} from '../../shared/roadtrip/stage-edit';
+import { stageTint, type RulerGap } from '../../shared/roadtrip/stage-ruler';
+import { progressIndex, tripMap } from '../../shared/roadtrip/trip-map';
 import {
   addDays,
   daysBetween,
@@ -47,19 +54,24 @@ import { Icons } from '../../shared/ui/icons';
 import Button from '../../shared/ui/Button';
 import MonthCalendar, { type AdjustLeg, type DayPicture } from './MonthCalendar';
 import Segmented from '../../shared/ui/Segmented';
-import { isShortTrip, type MonthBlock } from '../../shared/roadtrip/month-grid';
+import { isShortTrip, tripBlocks, weekIndexOf, type MonthBlock } from '../../shared/roadtrip/month-grid';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import IconButton from '../../shared/ui/IconButton';
 import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import LegsSheet from './LegsSheet';
+import YearMap from './YearMap';
+import TripMapView, { OffMapRows, type StagePicture } from './TripMapView';
+import StageDays from './StageDays';
+import MapStageBar from './MapStageBar';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 
 interface TripOverviewProps {
   trip: TripDoc;
   /** The day the route names; null falls back to the first day of the trip. */
   selectedDate: IsoDate | null;
-  onSelectDate: (date: IsoDate) => void;
+  /** `replace` rewrites the route rather than adding a step — a drag along the year map. */
+  onSelectDate: (date: IsoDate, options?: { replace?: boolean }) => void;
   onShowTrips: () => void;
   onChange: (trip: TripDoc) => void;
   /** Open a piece's hook composer. */
@@ -76,6 +88,9 @@ interface TripOverviewProps {
 
 type CalendarView = 'rungs' | 'pictures';
 const VIEW_KEY = 'atelier.roadtrip.calendar.view';
+/** Calendar or map — the middle of the overview. A browser preference, never on the trip. */
+type OverviewView = 'calendar' | 'map';
+const OVERVIEW_KEY = 'atelier.roadtrip.overview.view';
 
 /**
  * The trip's name, renamed in place.
@@ -402,8 +417,8 @@ export default function TripOverview({
   const selectedStageId = trip.stages.some((s) => s.id === stageId) ? stageId : null;
 
   const selectDate = useCallback(
-    (date: IsoDate) => {
-      onSelectDate(date);
+    (date: IsoDate, options?: { replace?: boolean }) => {
+      onSelectDate(date, options);
       const covering = stageAt(trip, date);
       if (covering) setStageId(covering.id);
     },
@@ -576,6 +591,166 @@ export default function TripOverview({
     return out;
   }, [view, coverage.days, windowThumbs]);
 
+  // Calendar or map: ONE switch in the bar, remembered by the browser — the
+  // same kind of decision as rungs or pictures, so the same rule. It swaps the
+  // middle of the screen and nothing else, so the open day and the open stage
+  // carry over. Where the map is looking is not remembered (the loupe's rule).
+  const [overview, setOverview] = useState<OverviewView>(() => {
+    try {
+      return localStorage.getItem(OVERVIEW_KEY) === 'map' ? 'map' : 'calendar';
+    } catch {
+      return 'calendar';
+    }
+  });
+  const chooseOverview = useCallback((next: OverviewView) => {
+    setOverview(next);
+    try {
+      localStorage.setItem(OVERVIEW_KEY, next);
+    } catch {
+      /* private mode */
+    }
+  }, []);
+  const onMap = overview === 'map';
+
+  // The map's model: every stage once, at its place, with its days — never a
+  // day pinned inside a stage (`trip-map.ts`).
+  const model = useMemo(() => tripMap(trip), [trip]);
+  const dayOffset = selected ? daysBetween(trip.startDate, selected) : null;
+  // The stage the map's bar and card are about: the open one when the open
+  // day lies in it, else the day's own, else none — a day in no stage.
+  const barStage = useMemo(() => {
+    if (!selected) return null;
+    const open = model.stages.find((s) => s.stage.id === selectedStageId);
+    if (open && open.dates.includes(selected)) return open;
+    const own = stageAt(trip, selected);
+    return own ? (model.stages.find((s) => s.stage.id === own.id) ?? null) : null;
+  }, [model.stages, selectedStageId, selected, trip]);
+  const barGap = useMemo<RulerGap | null>(() => {
+    if (barStage || dayOffset === null) return null;
+    return model.offMap.gaps.find((g) => dayOffset >= g.from && dayOffset < g.from + g.length) ?? null;
+  }, [barStage, dayOffset, model.offMap.gaps]);
+  const toldIn = useCallback((dates: readonly IsoDate[]) => dates.filter((d) => rungAt(d) > 0).length, [rungAt]);
+
+  /**
+   * A stage opened from the map: marked, and the open day moved INTO it when
+   * it was elsewhere — the wide screen's rule for a leg clicked, which the map
+   * shares at every width because nothing here scrolls away under it.
+   */
+  const openStageOnMap = useCallback(
+    (id: string) => {
+      const s = model.stages.find((m) => m.stage.id === id);
+      if (!s) return;
+      setStageId(id);
+      if (!selected || !s.dates.includes(selected)) onSelectDate(s.dates[0]);
+    },
+    [model.stages, selected, onSelectDate],
+  );
+  // Along the route, one stage at a time: the stage bar's arrows.
+  const stepTarget = useCallback(
+    (dir: -1 | 1): number => {
+      if (barStage) return model.stages.indexOf(barStage) + dir;
+      const before = progressIndex(model.stages, dayOffset ?? 0);
+      return dir < 0 ? before : before + 1;
+    },
+    [barStage, model.stages, dayOffset],
+  );
+  const stepStage = useCallback(
+    (dir: -1 | 1) => {
+      const target = model.stages[stepTarget(dir)];
+      if (!target) return;
+      setStageId(target.stage.id);
+      onSelectDate(target.dates[0]);
+    },
+    [model.stages, stepTarget, onSelectDate],
+  );
+  const [offMapOpen, setOffMapOpen] = useState(false);
+  /**
+   * «Locate…»: open the stage — as a tap on its dial would, the day moving
+   * into it — where its place is edited: the aside's card, or the legs sheet.
+   * Opened without moving the day, the aside drew one stage's days above
+   * another stage's card.
+   */
+  const locateStage = useCallback(
+    (id: string) => {
+      openStageOnMap(id);
+      setOffMapOpen(false);
+      if (compact) setLegsOpen(true);
+    },
+    [openStageOnMap, compact],
+  );
+  /** «Cover…»: a new stage over exactly those days, open to be named — the ruler's gap `+`. */
+  const coverGap = useCallback(
+    (gap: RulerGap) => {
+      const stage = stageOverGap(trip, gap.startDate, gap.endDate);
+      setStages(insertStageInOrder(trip.stages, stage));
+      setStageId(stage.id);
+      if (!selected || selected < gap.startDate || selected > gap.endDate) onSelectDate(gap.startDate);
+      setOffMapOpen(false);
+      if (compact) setLegsOpen(true);
+    },
+    [trip, setStages, selected, onSelectDate, compact],
+  );
+
+  // The year map beside the MAP: its frame is the open day's week (dragged, it
+  // walks the days a week at a time, the map following), its accent bar the
+  // open stage. A drag is ONE step of the route, not one per week: the first
+  // move adds a step and the rest rewrite it.
+  const blocks = useMemo(() => tripBlocks(trip.startDate, trip.endDate), [trip.startDate, trip.endDate]);
+  const shortTrip = blocks.length === 1 && blocks[0].key === 'weeks';
+  const openWeek = selected ? weekIndexOf(selected, trip.startDate) : null;
+  const weekSpan = useMemo(() => (openWeek === null ? null : { from: openWeek, to: openWeek + 1 }), [openWeek]);
+  const [stageLoupe] = useState(createLoupeStore);
+  useEffect(() => {
+    stageLoupe.set(barStage ? { from: barStage.from, days: barStage.length } : null);
+  }, [stageLoupe, barStage]);
+  const lastScrub = useRef(0);
+  const scrubWeek = useCallback(
+    (week: number) => {
+      if (!selected || openWeek === null) return;
+      const next = addDays(selected, (Math.max(0, Math.round(week)) - openWeek) * 7);
+      if (!next) return;
+      const clamped = next < trip.startDate ? trip.startDate : next > trip.endDate ? trip.endDate : next;
+      if (clamped === selected) return;
+      const now = performance.now();
+      const replace = now - lastScrub.current < 600;
+      lastScrub.current = now;
+      selectDate(clamped, { replace });
+    },
+    [selected, openWeek, trip.startDate, trip.endDate, selectDate],
+  );
+  const jumpToBlock = useCallback(
+    (index: number) => {
+      const first = blocks[index]?.tripDays[0];
+      if (first) selectDate(first);
+    },
+    [blocks, selectDate],
+  );
+
+  // The pictures view on the map: each told stage's latest hook — a
+  // published piece first — read for the stages alone, never the whole trip.
+  const stagePosts = useMemo(() => {
+    if (!onMap || view !== 'pictures') return [];
+    const out: { stageId: string; post: TripPost; count: number }[] = [];
+    for (const s of model.stages) {
+      const posts = s.dates.flatMap((_, i) => coverage.days[s.from + i]?.posts ?? []);
+      if (!posts.length) continue;
+      const pick = [...posts].reverse().find((p) => p.publishedAt !== null) ?? posts[posts.length - 1];
+      out.push({ stageId: s.stage.id, post: pick, count: posts.length });
+    }
+    return out;
+  }, [onMap, view, model.stages, coverage.days]);
+  const stageThumbPosts = useMemo(() => stagePosts.map((p) => p.post), [stagePosts]);
+  const stageThumbs = useDayThumbs(stageThumbPosts);
+  const stagePictures = useMemo(() => {
+    if (!onMap || view !== 'pictures') return undefined;
+    const out = new Map<string, StagePicture>();
+    for (const p of stagePosts) {
+      const url = stageThumbs.get(p.post.id);
+      if (url) out.set(p.stageId, { url, count: p.count });
+    }
+    return out;
+  }, [onMap, view, stagePosts, stageThumbs]);
+
   // A leg being adjusted ON the calendar: a draft of its dates, written to
   // the trip on Done and dropped on Cancel — the garage's rule for a modal
   // edit. While it lasts the calendar draws only this leg, a tap on a day
@@ -590,8 +765,10 @@ export default function TripOverview({
       setDayOpen(false);
       setStageId(id);
       setAdjusting({ id, draft: stage });
+      // Adjusting IS the calendar: its grips are dragged over the cells.
+      chooseOverview('calendar');
     },
-    [trip.stages],
+    [trip.stages, chooseOverview],
   );
   const moveEdge = useCallback(
     (edge: 'start' | 'end', date: IsoDate) =>
@@ -716,8 +893,83 @@ export default function TripOverview({
     />
   );
 
+  // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
+  const overviewSwitch = (
+    <Segmented
+      size="sm"
+      label="Calendar or map"
+      value={overview}
+      onChange={chooseOverview}
+      options={[
+        {
+          id: 'calendar',
+          label: compact ? <span className="sr-only">Calendar</span> : 'Calendar',
+          icon: Icons.calendar,
+          title: 'The trip as its months: which days were told',
+        },
+        {
+          id: 'map',
+          label: compact ? <span className="sr-only">Map</span> : 'Map',
+          icon: Icons.map,
+          title: 'The trip as its route: each stage at its place, with its days',
+        },
+      ]}
+    />
+  );
+
+  const yearMap = !shortTrip && (
+    <YearMap
+      startDate={trip.startDate}
+      endDate={trip.endDate}
+      days={coverage.days}
+      blocks={blocks}
+      span={weekSpan}
+      loupe={stageLoupe}
+      veil={false}
+      onJump={jumpToBlock}
+      onScrub={scrubWeek}
+    />
+  );
+
+  const mapView = (footer?: ReactNode) => (
+    <TripMapView
+      map={model}
+      tripStart={trip.startDate}
+      days={coverage.days}
+      rungAt={rungAt}
+      stageOf={stageOf}
+      selected={selected}
+      selectedStageId={barStage?.stage.id ?? null}
+      onSelectDate={selectDate}
+      onOpenStage={openStageOnMap}
+      pictures={stagePictures}
+      compact={compact}
+      onLocate={locateStage}
+      onCover={coverGap}
+      onShowOffMap={() => setOffMapOpen(true)}
+      footer={footer}
+    />
+  );
+
   const sheets = (
     <>
+      {offMapOpen && (
+        <BottomSheet
+          open
+          onClose={() => setOffMapOpen(false)}
+          title="Not on the map"
+          hint="counted, never guessed"
+          snaps={[0.5, 0.85]}
+        >
+          <div className="px-4 pt-2 pb-4 flex flex-col gap-3">
+            <p className="m-0 text-xs text-muted">
+              The map shows only what the trip can place. A stage whose place has no position, and
+              days no stage covers, are listed here — the road is dotted where they fall.
+            </p>
+            <OffMapRows map={model} onLocate={locateStage} onCover={coverGap} />
+          </div>
+        </BottomSheet>
+      )}
       {locating && (
         <LocatePicturePanel
           trip={trip}
@@ -756,13 +1008,10 @@ export default function TripOverview({
           trailing={
             <>
               {headerExtra}
-              <span
-                className="inline-flex items-baseline gap-0.5 px-2 py-1 rounded-control bg-paper-2 font-mono text-xs tabular-nums text-ink-soft whitespace-nowrap"
-                title="Days told, of the trip's days"
-              >
-                {coverage.toldDays}
-                <span className="text-muted">/{coverage.totalDays}</span>
-              </span>
+              {/* The told/total chip lived here; on a phone the bar is full,
+                  so the view switch takes its place and the figure moves
+                  into the line under the bar. */}
+              {overviewSwitch}
               <Segmented
                 size="sm"
                 label="How the days are drawn"
@@ -809,6 +1058,10 @@ export default function TripOverview({
           </div>
         ) : (
         <p className="m-0 mt-1.5 mb-1 font-mono text-2xs text-muted truncate">
+          <span className="text-ink-soft" title="Days told, of the trip's days">
+            {coverage.toldDays}/{coverage.totalDays} told
+          </span>
+          {' · '}
           {coverage.publishedPosts} published
           {drafted > 0 && ` · ${drafted} drafted`}
           {coverage.longestGap && (
@@ -828,6 +1081,35 @@ export default function TripOverview({
         )}
         </div>
 
+        {onMap && !adjusting ? (
+          // The map between the year map and the strip: the strip and the
+          // sheets are the calendar's own, so the open day travels with the switch.
+          <>
+            {yearMap && <div className="px-2">{yearMap}</div>}
+            <div className="flex-1 min-h-0 flex px-2 pb-2">
+              {mapView(
+                <MapStageBar
+                  stage={barStage}
+                  gap={barGap}
+                  selected={selected}
+                  rungAt={rungAt}
+                  told={barStage ? toldIn(barStage.dates) : 0}
+                  onSelectDate={selectDate}
+                  onStep={stepStage}
+                  canStep={{
+                    back: stepTarget(-1) >= 0,
+                    forward: stepTarget(1) < model.stages.length,
+                  }}
+                  onEdit={() => {
+                    if (barStage) setStageId(barStage.stage.id);
+                    setLegsOpen(true);
+                  }}
+                  onCover={coverGap}
+                />,
+              )}
+            </div>
+          </>
+        ) : (
         <MonthCalendar
           gutter={8}
           trip={shownTrip}
@@ -842,6 +1124,7 @@ export default function TripOverview({
           onOpenLeg={openLegSheet}
           selectedLegId={selectedStageId}
         />
+        )}
 
         {adjusting ? (
           /* The keyboard twin of the grips, visible: nothing in this suite
@@ -951,6 +1234,7 @@ export default function TripOverview({
         trailing={
           <>
             {headerExtra}
+            {overviewSwitch}
             <Segmented
               size="sm"
               label="How the days are drawn"
@@ -1031,6 +1315,75 @@ export default function TripOverview({
           scroll rather than dragged. The day and the open leg are a column
           beside the calendar where there is room for one, under it where
           there is not. */}
+      {onMap ? (
+        // The map, with the year map above it and the day and its stage beside
+        // it at every wide width — a map has no minimum width to defend the way
+        // a row of month blocks does.
+        <div className="flex-1 min-h-0 flex gap-5">
+          <div className="flex-1 min-w-0 flex flex-col min-h-0 gap-1 pb-4">
+            {yearMap && <div className="flex-none px-1">{yearMap}</div>}
+            {mapView()}
+          </div>
+          <aside
+            className={`flex-none ${expanded ? 'w-[22rem]' : 'w-[19rem]'} min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4 pb-4`}
+            aria-label="The open day and its stage"
+          >
+            {dayPanel}
+            {(barStage || barGap || stageCard) && (
+              <div className="bg-surface border border-line rounded-paper-lg px-5 pb-5 pt-3 flex flex-col gap-3">
+                {barStage && (
+                  <div className="flex flex-col gap-1.5">
+                    <p className="m-0 flex items-center gap-2 text-xs text-muted">
+                      <span className="flex-none w-2 h-2 rounded-full" style={{ background: stageTint(barStage.index) }} aria-hidden="true" />
+                      <span className="flex-1 min-w-0 truncate">
+                        <span className="text-ink font-medium">{barStage.label || 'Unnamed stage'}</span> · {barStage.dates.length} d ·{' '}
+                        {toldIn(barStage.dates)} told
+                      </span>
+                      <IconButton size="sm" variant="ghost" label="The stage before" disabled={stepTarget(-1) < 0} onClick={() => stepStage(-1)}>
+                        {Icons.back}
+                      </IconButton>
+                      <IconButton
+                        size="sm"
+                        variant="ghost"
+                        label="The stage after"
+                        disabled={stepTarget(1) >= model.stages.length}
+                        onClick={() => stepStage(1)}
+                      >
+                        {Icons.forward}
+                      </IconButton>
+                    </p>
+                    <StageDays dates={barStage.dates} selected={selected} rungAt={rungAt} onSelect={selectDate} layout="grid" />
+                  </div>
+                )}
+                {!barStage && barGap && (
+                  <div className="flex items-center gap-2 text-xs">
+                    <span className="flex-none w-2 h-2 rounded-full border-[1.5px] border-dashed border-faint" aria-hidden="true" />
+                    <span className="flex-1 min-w-0 text-muted">
+                      {barGap.length} day{barGap.length === 1 ? '' : 's'} in no stage — the dotted road
+                    </span>
+                    <Button size="sm" onClick={() => coverGap(barGap)}>
+                      Cover…
+                    </Button>
+                    <IconButton size="sm" variant="ghost" label="The stage before" disabled={stepTarget(-1) < 0} onClick={() => stepStage(-1)}>
+                      {Icons.back}
+                    </IconButton>
+                    <IconButton
+                      size="sm"
+                      variant="ghost"
+                      label="The stage after"
+                      disabled={stepTarget(1) >= model.stages.length}
+                      onClick={() => stepStage(1)}
+                    >
+                      {Icons.forward}
+                    </IconButton>
+                  </div>
+                )}
+                {stageCard}
+              </div>
+            )}
+          </aside>
+        </div>
+      ) : (
       <div className="flex-1 min-h-0 flex gap-5">
         <div className="flex-1 min-w-0 flex flex-col min-h-0">
           <MonthCalendar
@@ -1060,6 +1413,7 @@ export default function TripOverview({
           </aside>
         )}
       </div>
+      )}
 
       {sheets}
     </section>

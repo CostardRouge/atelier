@@ -85,7 +85,9 @@ Read before touching `src/tools/studio/`, `src/shared/overlay/`, anything about 
 - **Gimbal attitude is deliberately not carried**: Winnow has pitch/yaw/roll but no overlay element draws them, and adding a `TelemetryFieldKey` to hold a value nobody asked for is how a vocabulary rots.
 - Merge field by field, never object by object: a stripped file is rarely empty (a WebP still declares its pixel size), so taking either whole throws away half the answer.
 
-## Edit on the proxy, deliver from the capture (2026-09-02)
+## Edit on the proxy, deliver from the capture (2026-09-02, rev. 2026-09-29)
+
+(Rev. 2026-09-29: the capture an export fetches is now HELD for the session through the one flight `held-fetch.ts`, shared with the stage, and a rush the author put ON the stage is delivered as it stands — «The stage switches between the capture's files», below.)
 
 **Decision.** A file a remote source handed over carries a `MediaOrigin` (`shared/projects/media-identity.ts`): which source, whether it is that source's editing rendition or the capture, the CAPTURE's pixel size, and a `fetchOriginal` thunk. When the active clip is a proxy, the studio's export fetches the capture **once, before the first variant**, and encodes every variant from it. A checkbox in the export panel opts out — "render from the proxy", off by default, for a quick look rather than delivery.
 
@@ -388,6 +390,21 @@ Unlike Trips and Develop, which hold ONE document in state and hand it back thro
   `editNow` (a ref to the history's `edit` slice) is compared with `sameSlice`
   to the click's at the end, variants and file name left out, and a move
   opens the note with "The project was edited during the export…".
+
+## 2026-09-29 — The stage switches between the capture's files, like Develop's pill
+
+**Decision** (his ask: *"switch asset variant like in the develop part — now we load proxy from winnow but there is higher quality videos"*). A chip beside the media's name (`tools/studio/StageRenditionMenu.tsx`) lists `stageRenditions` (`shared/projects/media-rendition.ts`, pure: `captureInput` + `renditionsOf` with `canStageDraw` — a drawable image or a VIDEO name — minus the sensor rows): Proxy, the rush, the camera's JPEG, a RAW companion's render. The choice is `ProjectMedia.renditions` — optional and additive (no version bump: absent is "every media on its proxy"), keyed by base name like the trims, re-keyed by `adoptRenames`, in the undo slice and the autosave, never in `.atelier.json`. An id the capture no longer offers opens the proxy silently; a failed fetch is SAID and clears the choice, a task Cancel clears it quietly.
+
+**How the file arrives** (`tools/studio/use-stage-rendition.ts`): `deliveredSourceFor` → `fetchHeld` (`shared/sources/held-fetch.ts`): ONE flight per asset id, held on landing; a reader's abort detaches that reader and the fetch stops only with its last one; the task's own Cancel stops it for everyone. The stage keeps its OWN reference to the landed `File` — the cache may evict it, and a stage that refetched on eviction would ping-pong against the cache. A fetch outlives a switch to another clip (the pill cancels it; coming back finds it held) but not a switch back to the proxy of the same media.
+
+**Rules a later change must keep.**
+- EXIF is read off the LIBRARY file (the media: every file of a capture was shot at one instant, and the readouts must not move on a switch); the decode, the transcode, the container probe and the Develop sheet take the STAGE file. The develop stays keyed and hash-guarded by the Library file.
+- **A trim keeps ONE clock, the Library file's** (`activeMeta.duration`, the same `video.duration` measurement), and is carried onto the stage's by `carryRange` (seconds kept, the end stays the end): a rush and its proxy share seconds (the export has always cut the fetched rush with the proxy's points) but rarely their exact length, and the 50 ms guard would read tens of ms of AAC priming as another take. With the Library file on the stage the carry is identity.
+- **The playhead survives the switch**: `currentTime` is read DURING the render that swaps `activeSource` (the old `src` is still committed), spent in `onLoadedMetadata`; an effect runs too late — the element has already reset to 0.
+- Export: a rush on the stage IS the source (no fetch, its own frame from `loadedmetadata`); *Render from the proxy* still means the Library's proxy; otherwise the capture fetch goes through `fetchHeld`. A still on a chosen file skips `deliveryFor` (the file is the choice, R4's rule) and the *Delivers* row describes the stage file.
+- The chip says `Proxy` or the file's TYPE (`stageChipLabel`: `MP4`, `JPEG`, `DNG render`), the whole name only when it is not named after the media: a Mini 4 Pro name said twice pushed the media's own name out of a 390px header. The menu lists whole names.
+
+**Verified** in headless Chromium against a stub instance (VP8 stand-ins, `testing.md`): 320×180 → 1280×720 with the playhead and the trim kept, one `/download` for three switches, undo/redo, the Export tab's sentence, reload → re-add → the stored rush comes back by itself, a still's JPEG export at the original's 3000 × 1688 with no second fetch, a 500 said and cleared, no overflow at 390px. **Not driven**: a real 4K HEVC rush (and its transcode), a clip export (no H.264 encoder here), a phone. **Not built, deliberately**: a device guard on a GB rush stored on a project that a phone then opens — the fetch is a task with a Cancel and the choice clears on it; revisit if a phone tab dies on one.
 
 ## Trips' shades in the Studio: over the whole clip, and on a scene (2026-09-29)
 

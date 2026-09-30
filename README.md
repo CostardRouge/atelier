@@ -41,9 +41,10 @@ Today it ships ten tools, converging into a few editors:
 > where you turn them on:
 >
 > - The **base map** under a flight path, in the Flight Map and the Composer,
->   and under the map Trips' openers pick their stops on: turning it on
+>   under the map Trips' openers pick their stops on, and under a trip's map
+>   view (whose own coastline ships with the app): turning it on
 >   fetches map tiles from OpenStreetMap, which reveals the viewed area to that
->   tile server. The flight path, the stops and the towns always draw locally;
+>   tile server. The flight path, the stops, the legs and the towns always draw locally;
 >   the choice is never remembered past the tab. The same tiles can also be
 >   drawn **into** an Itinerary or a Virée — in the preview and in the
 >   exported file, credited «© OpenStreetMap contributors» as the licence
@@ -145,6 +146,22 @@ keep the paper. Clips **without** an `.srt` are accepted: telemetry fields
 read “—”, free text and the grade still work. Stepping to the next clip with
 ‹ › hands playback over rather than stopping it: if you were watching, the
 next one picks up as soon as it is ready.
+
+**Which file is on the stage.** A clip or a photo fetched from a Winnow opens
+on its **proxy** — a 720p H.264, a 2048 px WebP: light, quick to scrub,
+decodable everywhere. A chip beside the media's name says so (`Proxy ▾`), and
+its menu lists the capture's other files with their pixels and weight — the
+rush itself behind a clip, the camera's JPEG behind a still, and the render
+inside a RAW the instance paired with it — the same list as Develop's, minus
+the sensor. Pick one and it is fetched (the chip shows `↓` and the proxy stays
+up meanwhile), kept for the session, and put on the stage at its own
+resolution, the playhead and the trim where they were; the chip then names its
+type (`MP4`, `JPEG`, `DNG render`). The choice is remembered per media in the
+project, so reopening it brings the same file back, and the export delivers
+from the file on the stage without fetching it again — *Render from the proxy*
+still means the proxy. A rush this browser cannot decode (often HEVC) says so,
+with **Back to the proxy** beside the transcode. Picking the proxy again stops
+a download still on its way.
 
 **Photographs are edited on the same stage.** A photo is not a second kind of
 project: it is a media a project can hold beside its clips, so a rush and a
@@ -555,6 +572,30 @@ place, and a day can be linked to. The trip's part is readable but resolves on
 an id fragment, so renaming a trip never breaks a link. Each piece in that list carries **a thumbnail of
 its own hook**, kept in the browser beside the trip, so a day reopened months
 later shows what you left there instead of a file name.
+
+**Or see it as a map.** One switch in the trip bar, **Calendar · Map**, turns
+the middle of the screen from the months to the **route**; everything around it
+stays where it is, so the open day and the open leg carry over, and the choice
+is remembered by the browser. Each leg is drawn **once, at its place** — halfway
+along its path when it holds several — wearing a **dial of its days**, one tick
+a day clockwise from the top on the calendar's own rungs, so the holes are as
+visible here as on the grid. A day is never pinned inside a leg: a place has no
+dates, and a dot for "the 12th" would claim what the trip does not know. The
+legs are joined in the order you lived them, the road solid up to the open leg
+and pale after it, and **dotted** where the trip cannot account for its days —
+days no leg covers, or a leg whose place was typed without a position. Those are
+**counted in a corner, never guessed**, each with its verb: *Locate…* opens the
+leg where its place is set, *Cover…* makes a leg of exactly those days. Click a
+dial to open its leg (the open day moves into it), pick one of its days in the
+leg's card, or drag along the year map above to walk the trip a week at a time
+while the map follows; the **Pictures** switch puts each told leg's latest hook
+on the map instead of its dial. On a phone the leg sits over the foot of the map
+with its days in one row and arrows to the leg before and after. The map is
+drawn **offline**: the coastline is Natural Earth's world outline shipped with
+the app (fetched from this site the first time the map opens, 175 kB) and the
+towns come from the same city index as the itinerary's names; the
+OpenStreetMap background is the usual opt-in, off every time. *Natural Earth is
+in the public domain; `scripts/gen-coastline.mjs` rebuilds the file.*
 
 **The hook.** Open a piece and you compose its badge over the picture, in the
 same darkroom the Studio grades in, with the deck and its transport as one
