@@ -293,9 +293,21 @@ subtitle can land half a second after the title; move the scene and the whole
 stagger moves with it — or let the scene **cascade** its elements by where
 they sit (top to bottom, from the centre, the largest first, shuffled with a
 kept seed), added to each one's own offset. The scene can lay a **veil** over the picture (colour,
-strength, fade) so a title reads over any rush, and can **hold the rest of the
+strength, fade) so a title reads over any rush, and **shades** of its own —
+the same gradients as in Trips, arriving and leaving with the scene over their
+own fade — and can **hold the rest of the
 deck back** while it plays, fading the telemetry HUD in when it ends — the HUD
 "boots up" after the hook.
+
+**Shades over the whole clip.** The Overlay tab's **Shades** are Trips' shades,
+with the same controls: up to four gradients, each coming from an edge, a
+corner, or in the centre a radial or a band, with its own colour, strength,
+reach, **core**, **falloff** and **invert** — a corner darkened under the
+readouts, a sky under a title that stays. They sit under every element and
+under the intro's veil, for as long as the footage runs, on a photograph as on
+a clip; a clean variant leaves them out with the overlays. They travel in the
+project file and the house style like the intro. A Trips shade can follow its
+badge; nothing in the Studio is a badge, so that option is not offered here.
 
 Every element, intro or not, can now be given a **window** (appears at, disappears
 at — both settable from the playhead) and an **entrance and exit**: fade, slide
@@ -1214,10 +1226,10 @@ the Studio carries the grade, the telemetry overlay and the day badge, so there
 is nothing left to join afterwards on a phone. Sending is explicit and
 repeatable: everything the bridge writes is named `roadtrip:…` and lives in one
 scene, so a second send replaces the first and never touches the grade, the
-trim, the telemetry elements or your own intro. The one thing that does not
-cross over is the shades — a Studio scene has a flat scrim rather than a
-gradient, so the strongest shade's colour and strength go over as that veil and
-the *shape* stays here, which the panel says out loud. When the piece **closes
+trim, the telemetry elements or your own intro. The piece's **shades** go too,
+whole, as the scene's own: the same gradients, arriving and leaving with the
+hook. A shade that follows the badge is sent as the shape it draws at that
+moment, since nothing in the Studio is a badge to follow. When the piece **closes
 with the trip's call to action**, the send also writes that card into the
 project's **outro** — the same closing card the carousel export appends as its
 last slide, appended here after the footage of the reel — under the same

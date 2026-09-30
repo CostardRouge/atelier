@@ -18,23 +18,24 @@
  *   - nothing else in the project is touched. A grade, a trim, the telemetry
  *     elements and the author's own intro survive a send untouched.
  *
- * What does NOT cross over: the shades. Road Trip paints gradients; a Studio
- * scene has a flat scrim, and quietly turning a bottom gradient into a full
- * veil would be a different picture. The strongest shade's colour and strength
- * become the scene's scrim, which is the honest lossy mapping — and it is
- * said out loud in the panel rather than left to be discovered.
+ * The shades cross WHOLE since 2026-09-29: a Studio scene holds Trips' very
+ * stack (`Scene.shades`), so the gradients land where they were drawn instead
+ * of being flattened into a veil. The one thing a scene has no use for is a
+ * badge to follow — its elements are not one — so a shade that followed it is
+ * baked into the plain shape it drew (`frozenShade`), and the badge's block
+ * is what the send is handed for that.
  *
  * Pure and DOM-free.
  */
 
 import type { OverlayElement } from '../overlay/overlay-types';
 import { OUTRO_SECONDS_DEFAULT, type OutroCard } from '../overlay/outro-card';
-import { type Scene, type SceneScrim } from '../overlay/scenes';
+import { type Scene } from '../overlay/scenes';
 import type { ProjectDoc } from '../projects/project-types';
 import { isDefaultDevelop, withoutBase, type DevelopSettings } from '../develop/develop';
 import { fileBaseName } from '../library/assets';
 import { ctaLayout, type CtaSlide } from './cta-slide';
-import type { Shade } from './shades';
+import { frozenShade, type HookBlock, type Shade } from '../shades/shades';
 
 /** The scene a sent hook lives in. One per project: a clip has one hook. */
 export const HOOK_SCENE_ID = 'roadtrip-hook';
@@ -44,28 +45,6 @@ export const HOOK_ELEMENT_PREFIX = 'roadtrip:';
 
 export function isHookElement(el: OverlayElement): boolean {
   return el.id.startsWith(HOOK_ELEMENT_PREFIX);
-}
-
-/**
- * The flat scrim that stands in for a stack of gradients: the strongest
- * shade's colour at its own strength, or null when there is nothing to stand
- * in for. Lossy on purpose and by exactly one dimension — where the darkening
- * falls — which is the part a scene cannot express.
- */
-export function scrimFromShades(shades: readonly Shade[], fade = 0.4): SceneScrim | null {
-  let strongest: Shade | null = null;
-  for (const shade of shades) {
-    if (shade.strength <= 0) continue;
-    if (!strongest || shade.strength > strongest.strength) strongest = shade;
-  }
-  if (!strongest) return null;
-  return {
-    color: strongest.color,
-    // A veil over the whole frame reads far heavier than the same number in a
-    // gradient that clears half of it, so it is held back deliberately.
-    opacity: Math.min(1, Math.max(0, strongest.strength * 0.6)),
-    fade,
-  };
 }
 
 export interface HookInjection {
@@ -85,6 +64,8 @@ export function hookInjection(
   durationSeconds: number,
   shades: readonly Shade[] = [],
   name = 'Trip hook',
+  /** The badge's block, which a shade following it landed on — baked in. */
+  block: HookBlock | null = null,
 ): HookInjection {
   const end = Number.isFinite(durationSeconds) && durationSeconds > 0 ? durationSeconds : 4;
   return {
@@ -93,7 +74,10 @@ export function hookInjection(
       name,
       start: 0,
       end,
-      scrim: scrimFromShades(shades),
+      // No veil: the shades themselves, as they were drawn over the hook,
+      // arriving and leaving with the scene like the veil they replace.
+      scrim: null,
+      ...(shades.length ? { shades: shades.map((shade) => frozenShade(shade, block)) } : {}),
       // The telemetry HUD holds back while the hook runs, then fades in — the
       // studio's own behaviour for an introduction, and the reason the badge
       // and a full HUD do not fight for the same frame.

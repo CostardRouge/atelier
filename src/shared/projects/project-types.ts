@@ -16,6 +16,7 @@ import type { OverlayElement } from '../overlay/overlay-types';
 import { DEFAULT_GUIDES, type GuidesState } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
+import type { Shade } from '../shades/shades';
 import type { OutroCard } from '../overlay/outro-card';
 import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { defaultVariants, type ExportVariant } from './export-variants';
@@ -180,6 +181,14 @@ export interface ProjectDoc {
    */
   scenes: Scene[];
   /**
+   * Trips' shades over the WHOLE picture, under every scene and element — a
+   * corner darkened under the readouts, a sky under a title that stays
+   * (2026-09-29). Portable, like the scenes. Optional, absent = none: every
+   * project stored before it existed reads as it always drew, with no
+   * migration. Anything that writes the portable half writes this too.
+   */
+  shades?: Shade[];
+  /**
    * The outro — a closing card appended after the footage on every variant
    * that carries the overlays. Portable like the intro: a closing card is
    * part of the template, not of the footage. Null = the export ends on the
@@ -223,6 +232,7 @@ export function createProjectDoc(
     | 'lutFilm'
     | 'theme'
     | 'scenes'
+    | 'shades'
     | 'outro'
     | 'exportPrefs'
   >,
@@ -251,6 +261,7 @@ export function createProjectDoc(
     lutFilm: template ? structuredClone(template.lutFilm ?? null) : null,
     theme: template ? structuredClone(template.theme) : null,
     scenes: template ? structuredClone(template.scenes ?? []) : [],
+    shades: template ? structuredClone(template.shades ?? []) : [],
     outro: template ? structuredClone(template.outro ?? null) : null,
     exportPrefs: template
       ? structuredClone(template.exportPrefs)

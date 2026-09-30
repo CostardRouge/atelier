@@ -9,9 +9,12 @@
  * overlay elements, they simply borrow the scene's clock and can dim what is
  * not part of it.
  *
- * Two pieces of furniture, both optional and independent:
+ * Three pieces of furniture, all optional and independent:
  * - a **scrim**, painted over the picture and under every element, which is
  *   what makes a title readable over any footage;
+ * - **shades** (2026-09-29), Trips' stack of gradients (`shared/shades/`)
+ *   painted over the scrim and under every element, arriving and leaving with
+ *   the scene — a darkened sky under a title, where a flat veil darkens all;
  * - **solo**, which holds back the elements that are not in the scene and
  *   fades them in when it ends, so the telemetry HUD "boots up" after the hook.
  *
@@ -22,6 +25,7 @@
 import type { ElementAnimation, TimeWindow } from './animation';
 import type { OverlayElement } from './overlay-types';
 import { staggerDelays, type Stagger } from './stagger';
+import type { Shade } from '../shades/shades';
 
 export interface SceneScrim {
   /** Any CSS colour the canvas understands. */
@@ -51,7 +55,18 @@ export interface Scene {
    * is what every scene written before 2026-09-16 means.
    */
   stagger?: Stagger | null;
+  /**
+   * Trips' shades, over the picture while the scene runs — the veil's
+   * gradients. Optional, absent = none, which is every scene written before
+   * 2026-09-29; a Trips hook sent here carries its own (`hook-scene.ts`).
+   */
+  shades?: Shade[];
+  /** Seconds the shades take to arrive and to leave. Absent = `SHADE_FADE`. */
+  shadeFade?: number;
 }
+
+/** How long a scene's shades take to arrive and leave, when it says nothing. */
+export const SHADE_FADE = 0.4;
 
 /**
  * The extra delay each of `scene`'s elements waits before its entrance, by
@@ -148,11 +163,27 @@ function ramp(t: number, span: number): number {
 export interface SceneRender {
   /** Colour + live opacity of the scrim to paint, or null. */
   scrim: { color: string; opacity: number } | null;
+  /**
+   * Each running scene's shades and how far in they are, 0..1 — painted over
+   * the scrim, their strengths scaled by `alpha`. Unlike the scrim, several
+   * scenes' shades all draw: gradients in different places do not add up to
+   * a wall the way two veils would.
+   */
+  shades: { shades: readonly Shade[]; alpha: number }[];
   /** Alpha multiplier for every element that belongs to no scene. */
   outsideAlpha: number;
 }
 
-const NO_SCENES: SceneRender = { scrim: null, outsideAlpha: 1 };
+const NO_SCENES: SceneRender = { scrim: null, shades: [], outsideAlpha: 1 };
+
+/** How far into its furniture's fade a scene is at `t`: up over `fade` from its start, down over `fade` to its end. */
+function furnitureStrength(scene: Scene, t: number, fade: number): number {
+  const len = scene.end - scene.start;
+  const f = Math.min(Math.max(0, fade), len / 2);
+  const rise = ramp(t - scene.start, f);
+  const fall = 1 - ramp(t - (scene.end - f), f);
+  return Math.max(0, Math.min(rise, fall));
+}
 
 /**
  * What the scene layer contributes at time `t` (seconds from the first
@@ -169,6 +200,7 @@ export function resolveScenes(
 ): SceneRender {
   if (!scenes || scenes.length === 0) return NO_SCENES;
   let scrim: { color: string; opacity: number } | null = null;
+  const shades: SceneRender['shades'] = [];
   let outsideAlpha = 1;
 
   for (const scene of scenes) {
@@ -176,14 +208,15 @@ export function resolveScenes(
     if (len <= 0) continue;
 
     if (scene.scrim && t > scene.start - scene.scrim.fade && t < scene.end + scene.scrim.fade) {
-      const fade = Math.min(scene.scrim.fade, len / 2);
-      const rise = ramp(t - scene.start, fade);
-      const fall = 1 - ramp(t - (scene.end - fade), fade);
-      const strength = Math.max(0, Math.min(rise, fall));
-      const opacity = scene.scrim.opacity * strength;
+      const opacity = scene.scrim.opacity * furnitureStrength(scene, t, scene.scrim.fade);
       if (opacity > 0 && (!scrim || opacity > scrim.opacity)) {
         scrim = { color: scene.scrim.color, opacity };
       }
+    }
+
+    if (scene.shades?.length) {
+      const alpha = furnitureStrength(scene, t, scene.shadeFade ?? SHADE_FADE);
+      if (alpha > 0) shades.push({ shades: scene.shades, alpha });
     }
 
     if (scene.solo) {
@@ -196,5 +229,5 @@ export function resolveScenes(
       outsideAlpha = Math.min(outsideAlpha, Math.max(0, alpha));
     }
   }
-  return { scrim, outsideAlpha };
+  return { scrim, shades, outsideAlpha };
 }

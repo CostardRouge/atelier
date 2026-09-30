@@ -27,7 +27,7 @@ import { ctaLayout } from './cta-slide';
 import { badgeContent, type BadgeContent, type BadgePiece, type CounterMode } from './day-badge';
 import type { TimeAgoMode } from './time-ago';
 import { contentSlideElements, type DeckSlide } from './deck';
-import type { HookBlock, Shade } from './shades';
+import type { HookBlock, Shade } from '../shades/shades';
 import { resolveHook } from './hooks/registry';
 import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
 import { hookElementsAt, type ElementsAt } from './hooks/hook-elements';

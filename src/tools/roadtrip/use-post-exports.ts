@@ -32,7 +32,7 @@ import {
   type ExportProgress,
 } from '../../shared/media/webcodecs-export';
 import { transcodeStore } from '../../shared/media/transcode-store';
-import type { HookBlock } from '../../shared/roadtrip/shades';
+import type { HookBlock } from '../../shared/shades/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { deliverFilesTo, pickDeliveryTarget, type DeliveryTarget } from '../../shared/sources/deliver-files';
 import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';

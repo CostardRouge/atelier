@@ -32,6 +32,7 @@ import {
   type ProjectPortable,
 } from './project-file';
 import { PROJECT_DOC_VERSION, type ProjectDoc } from './project-types';
+import type { Shade } from '../shades/shades';
 
 /** Tells the house style apart from any other JSON in the repository. */
 export const PROJECT_HOUSE_STYLE_KIND = 'atelier.project-house-style';
@@ -57,8 +58,11 @@ export interface ProjectHouseStyleSnapshot {
   leftTrips: boolean;
 }
 
+/** What a style is taken from: a project, whose shades may predate them. */
+type StyleSource = Omit<ProjectHouseStyle, 'shades'> & { shades?: Shade[] };
+
 /** A copy of the style's own fields, nothing else. */
-function pickStyle(source: ProjectHouseStyle): ProjectHouseStyle {
+function pickStyle(source: StyleSource): ProjectHouseStyle {
   return structuredClone({
     elements: source.elements,
     guides: source.guides,
@@ -69,13 +73,14 @@ function pickStyle(source: ProjectHouseStyle): ProjectHouseStyle {
     lutFilm: source.lutFilm ?? null,
     theme: source.theme,
     scenes: source.scenes,
+    shades: source.shades ?? [],
     outro: source.outro,
     exportPrefs: source.exportPrefs,
   });
 }
 
 /** The project's look as a file to commit, and what it had to leave behind. */
-export function projectHouseStyleFrom(project: ProjectHouseStyle): ProjectHouseStyleSnapshot {
+export function projectHouseStyleFrom(project: StyleSource): ProjectHouseStyleSnapshot {
   const style = pickStyle(project);
   const elements = style.elements.filter((el) => !isHookElement(el));
   const scenes = style.scenes.filter((scene) => scene.id !== HOOK_SCENE_ID);

@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  SHADE_FADE,
   createIntroScene,
   resolveScenes,
   resolveWindow,
@@ -8,6 +9,7 @@ import {
   type Scene,
 } from './scenes';
 import { createTextElement, type OverlayElement } from './overlay-types';
+import { createShade } from '../shades/shades';
 
 function scene(over: Partial<Scene> = {}): Scene {
   return { ...createIntroScene(4), ...over };
@@ -60,8 +62,8 @@ describe('resolveWindow', () => {
 
 describe('resolveScenes', () => {
   it('contributes nothing without scenes', () => {
-    expect(resolveScenes(undefined, 3)).toEqual({ scrim: null, outsideAlpha: 1 });
-    expect(resolveScenes([], 3)).toEqual({ scrim: null, outsideAlpha: 1 });
+    expect(resolveScenes(undefined, 3)).toEqual({ scrim: null, shades: [], outsideAlpha: 1 });
+    expect(resolveScenes([], 3)).toEqual({ scrim: null, shades: [], outsideAlpha: 1 });
   });
 
   it('fades the scrim in and out around the scene', () => {
@@ -143,5 +145,29 @@ describe('a scene\'s cascade', () => {
     const cut = staggeredAnimation(undefined, 0.3);
     expect(cut?.in).toEqual({ preset: 'none', duration: 0, easing: 'linear', delay: 0.3 });
     expect(staggeredAnimation(undefined, 0)).toBeUndefined();
+  });
+});
+
+describe('a scene\'s shades', () => {
+  const shade = createShade({ direction: 'top', strength: 0.8 });
+
+  it('arrive and leave with the scene, over their own fade', () => {
+    const s = { ...createIntroScene(4), shades: [shade], shadeFade: 1 };
+    expect(resolveScenes([s], 0).shades).toEqual([]);
+    expect(resolveScenes([s], 0.5).shades[0].alpha).toBeCloseTo(0.5);
+    expect(resolveScenes([s], 2).shades[0]).toEqual({ shades: [shade], alpha: 1 });
+    expect(resolveScenes([s], 3.5).shades[0].alpha).toBeCloseTo(0.5);
+    expect(resolveScenes([s], 4.5).shades).toEqual([]);
+  });
+
+  it('fade by SHADE_FADE when the scene says nothing, and need no veil', () => {
+    const s = { ...createIntroScene(4), shades: [shade] };
+    expect(s.scrim).toBeNull();
+    expect(resolveScenes([s], SHADE_FADE / 2).shades[0].alpha).toBeCloseTo(0.5);
+    expect(resolveScenes([s], 2).scrim).toBeNull();
+  });
+
+  it('a scene with none adds none — every scene written before they existed', () => {
+    expect(resolveScenes([createIntroScene(4)], 2).shades).toEqual([]);
   });
 });

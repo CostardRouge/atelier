@@ -22,6 +22,7 @@ import { prepareOutro, type OutroCard } from '../overlay/outro-card';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
+import type { Shade } from '../shades/shades';
 import type { TimeShift } from '../telemetry/time-format';
 import type { ExportTail } from './export-tail';
 import { resolveSpeed } from './frame-rate';
@@ -58,6 +59,12 @@ export interface VariantRenderOptions {
   timeShift?: TimeShift | null;
   /** The project's scenes — the intro's window, scrim and solo. */
   scenes?: readonly Scene[];
+  /**
+   * The project's shades over the whole picture, under the scenes and the
+   * elements — drawn with the overlays, so a clean variant ships without
+   * them, like the scene's veil.
+   */
+  shades?: readonly Shade[];
   /** Display-oriented source dimensions (from the clip's metadata). */
   srcWidth: number;
   srcHeight: number;
@@ -263,6 +270,7 @@ export async function exportVariantVideo(
               // entrance keeps its own pace under a re-timed clip.
               timeSeconds: delivered ? sinceStart : t,
               scenes: opts.scenes,
+              shades: opts.shades,
               originSeconds: delivered ? 0 : origin,
             });
           }

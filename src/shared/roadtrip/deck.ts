@@ -31,7 +31,7 @@ import { collageAnimates, collageCellsMove, type SlideCollage } from './collage'
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
 import { hookMoves, openerMoves, slideHookTiming } from './hooks/hook-context';
 import type { HookLayer } from './hooks/hook-variant';
-import type { Shade } from './shades';
+import type { Shade } from '../shades/shades';
 import type { SlideBadge } from './slide-capacities';
 
 export type DeckSlideKind = 'hook' | 'content' | 'cta';

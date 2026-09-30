@@ -4,6 +4,7 @@ import { useTranscode } from '../../../shared/media/use-transcode';
 import type { DeckSlide } from '../../../shared/roadtrip/deck';
 import { describePlan, type PieceExportPlan } from '../../../shared/roadtrip/export-plan';
 import type { TripDoc, TripGrade, TripPost } from '../../../shared/roadtrip/trip-types';
+import type { HookBlock } from '../../../shared/shades/shades';
 import StudioLink from '../StudioLink';
 import type { GradeScope } from '../use-trip-grade';
 import { reasonSentence } from './SlideDelivery';
@@ -18,6 +19,8 @@ interface ExportTabProps {
   slides: DeckSlide[];
   /** The badge exactly as the stage draws it, for the Studio bridge. */
   hookElements: OverlayElement[];
+  /** The hook badge's block — what a shade following it lands on. */
+  hookBlock: HookBlock | null;
   aspect: number;
   /** The hook's own picture, when the Library has it. */
   hookFile: File | null;
@@ -74,6 +77,7 @@ export default function ExportTab({
   post,
   slides,
   hookElements,
+  hookBlock,
   aspect,
   hookFile,
   hookIsVideo,
@@ -218,8 +222,9 @@ export default function ExportTab({
               </p>
               <p>
                 Sending again replaces the last one and touches nothing else. The shades
-                stay here: a Studio scene has one flat scrim rather than a gradient, so the
-                strongest shade&rsquo;s colour and strength cross over and its shape does not.
+                go too, as the scene&rsquo;s own: the same gradients, arriving and leaving
+                with the hook. A shade that follows the badge is sent as the shape it
+                draws now — in the Studio it no longer follows anything.
               </p>
             </>
           }
@@ -228,6 +233,7 @@ export default function ExportTab({
             post={post}
             elements={hookElements}
             shades={post.badge.shades}
+            block={hookBlock}
             cta={trip.cta}
             aspect={aspect}
             file={hookFile}

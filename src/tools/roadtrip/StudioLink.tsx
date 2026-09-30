@@ -16,7 +16,7 @@ import {
 } from '../../shared/roadtrip/hook-scene';
 import { isDefaultDevelop } from '../../shared/develop/develop';
 import type { CtaSlide } from '../../shared/roadtrip/cta-slide';
-import type { Shade } from '../../shared/roadtrip/shades';
+import type { HookBlock, Shade } from '../../shared/shades/shades';
 import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
 import type { GradeScope } from './use-trip-grade';
 import Button, { buttonClass } from '../../shared/ui/Button';
@@ -26,6 +26,8 @@ interface StudioLinkProps {
   /** The badge exactly as the stage draws it. */
   elements: OverlayElement[];
   shades: Shade[];
+  /** The badge's block: a shade following it is sent as the shape it draws. */
+  block: HookBlock | null;
   /** The trip's closing call to action, sent as the project's outro. */
   cta: CtaSlide;
   /** The piece's frame ratio — the card is laid out for its own aspect. */
@@ -65,6 +67,7 @@ export default function StudioLink({
   post,
   elements,
   shades,
+  block,
   cta,
   aspect,
   file,
@@ -101,7 +104,7 @@ export default function StudioLink({
       }
       let next = withHook(
         doc,
-        hookInjection(elements, post.badge.durationSeconds, shades, post.title || 'Trip hook'),
+        hookInjection(elements, post.badge.durationSeconds, shades, post.title || 'Trip hook', block),
       );
       // The closing card goes with the hook — into the project's outro slot —
       // when the piece closes with the CTA. Unticked, a previously sent card

@@ -19,6 +19,7 @@ import { ensureOverlayFonts } from '../overlay/fonts';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
+import type { Shade } from '../shades/shades';
 import type { TimeShift } from '../telemetry/time-format';
 
 export interface FrameGrabOptions {
@@ -30,6 +31,8 @@ export interface FrameGrabOptions {
   timeShift?: TimeShift | null;
   /** The project's scenes — so a still taken during the intro shows it. */
   scenes?: readonly Scene[];
+  /** The project's shades over the whole picture. */
+  shades?: readonly Shade[];
   /** Media time of the clip's in point; windows are counted from it. */
   originSeconds?: number;
   /** Burn the overlays in, or capture the clean graded frame. */
@@ -76,6 +79,7 @@ export async function grabFrame(
       cues: opts.cues,
       timeSeconds: t,
       scenes: opts.scenes,
+      shades: opts.shades,
       originSeconds: opts.originSeconds ?? 0,
     });
   }

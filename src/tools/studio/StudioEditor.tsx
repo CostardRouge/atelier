@@ -45,6 +45,8 @@ import ElementPanel from '../../shared/overlay/ElementPanel';
 import ScenePanel from '../../shared/overlay/ScenePanel';
 import TimingPanel from '../../shared/overlay/TimingPanel';
 import { createIntroScene, findScene, type Scene } from '../../shared/overlay/scenes';
+import ShadesPanel from '../../shared/shades/ShadesPanel';
+import type { Shade } from '../../shared/shades/shades';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
@@ -422,6 +424,10 @@ export default function StudioEditor({
   const [scenes, setScenes] = useState<Scene[]>(() =>
     structuredClone(project.scenes ?? []),
   );
+  // Trips' shades over the whole picture, under the scenes and every element
+  // — portable like the scenes (`ProjectDoc.shades`), absent on a project
+  // stored before they existed.
+  const [shades, setShades] = useState<Shade[]>(() => structuredClone(project.shades ?? []));
   // The outro — the closing card appended after the footage. Portable too:
   // intro · footage · closing card is the shape of a delivered piece, and
   // Road Trip fills this slot with the trip's call to action when it briefs
@@ -973,6 +979,8 @@ export default function StudioEditor({
     theme,
     timeShift,
     scenes: isPhoto ? undefined : scenes,
+    // Timeless, so a photograph takes them too — unlike a scene.
+    shades,
     // Windows run from the first frame the export keeps, so the preview has to
     // count from the in point too — otherwise a trimmed clip shows the intro
     // at a different moment than the file does.
@@ -1014,6 +1022,7 @@ export default function StudioEditor({
       guides,
       theme,
       scenes,
+      shades,
       outro,
       projectName,
       aspectId,
@@ -1033,6 +1042,7 @@ export default function StudioEditor({
       guides,
       theme,
       scenes,
+      shades,
       outro,
       projectName,
       aspectId,
@@ -1070,6 +1080,7 @@ export default function StudioEditor({
       setGuides(step.guides);
       setTheme(step.theme);
       setScenes(step.scenes);
+      setShades(step.shades);
       setOutro(step.outro);
       setProjectName(step.projectName);
       setAspectId(step.aspectId);
@@ -1195,6 +1206,7 @@ export default function StudioEditor({
         lutFilm: lutStack.film,
         theme,
         scenes,
+        shades,
         outro,
         exportPrefs: {
           fileName: exportFileName.trim() || null,
@@ -1236,6 +1248,7 @@ export default function StudioEditor({
     timeScale,
     theme,
     scenes,
+    shades,
     outro,
     exportFileName,
     variants,
@@ -1270,6 +1283,7 @@ export default function StudioEditor({
       lutFilm: lutStack.film,
       theme,
       scenes,
+      shades,
       outro,
       exportPrefs: { fileName: exportFileName.trim() || null, variants },
     });
@@ -1291,6 +1305,7 @@ export default function StudioEditor({
     setGuides(structuredClone(file.guides));
     setTheme(structuredClone(file.theme));
     setScenes(structuredClone(file.scenes ?? []));
+    setShades(structuredClone(file.shades ?? []));
     setOutro(structuredClone(file.outro ?? null));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
@@ -1320,6 +1335,7 @@ export default function StudioEditor({
       film: lutStack.film,
       theme,
       timeShift,
+      shades,
     });
     return blob;
   }
@@ -1345,6 +1361,7 @@ export default function StudioEditor({
       theme,
       timeShift,
       scenes,
+      shades,
       srcWidth,
       srcHeight,
       // null when the whole clip is kept, so an untrimmed export runs the
@@ -1377,6 +1394,7 @@ export default function StudioEditor({
           // The fallback runs only at source geometry, so the card composes
           // for the source frame — the same frame everything else drew for.
           variant.overlays ? outroTail(outro, srcWidth, srcHeight) : null,
+          shades,
         );
       }
       if (err instanceof DecodeUnsupportedError) {
@@ -1668,6 +1686,7 @@ export default function StudioEditor({
         theme,
         timeShift,
         scenes,
+        shades,
         originSeconds: range.start,
         overlays: true,
       });
@@ -1970,6 +1989,7 @@ export default function StudioEditor({
                   lutFilm: lutStack.film,
                   theme,
                   scenes,
+                  shades,
                   outro,
                   exportPrefs: { fileName: exportFileName.trim() || null, variants },
                 }
@@ -2374,6 +2394,24 @@ export default function StudioEditor({
                       onOpenChange={setPaletteOpen}
                       bare
                     />
+                  </InspectorSection>
+
+                  {/* Trips' shades, over the whole clip: under the intro's
+                      veil and every element, for as long as the footage runs
+                      — a corner under the readouts, a sky under a title. */}
+                  <InspectorSection
+                    id="studio.shades"
+                    title="Shades"
+                    badge={shades.length ? String(shades.filter((sh) => sh.enabled !== false).length) : undefined}
+                    info={
+                      <p>
+                        Gradients over the whole picture, under every element, so type stays readable
+                        — the same shades as in Trips. A scene has its own, which come and go with it.
+                        Clean variants leave them out, with the overlays.
+                      </p>
+                    }
+                  >
+                    <ShadesPanel shades={shades} onChange={setShades} />
                   </InspectorSection>
 
                   {introScene && (

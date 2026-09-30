@@ -368,9 +368,10 @@ centre, invert), not Trips' colour stack. Rejected: a per-picture stack of
 coloured shades painted over the photograph (a new pass and a roll version for
 what a layer already does), and both. The geometry moved to
 `shared/shades/shade-shape.ts` and the grid + falloff pickers to
-`shared/shades/ShadePickers.tsx`; `shared/roadtrip/shades.ts` keeps only what a
-Trips shade alone has (colour, strength, `enabled`, following the badge) and
-re-exports the rest, and its 487-line spec passed unchanged across the move.
+`shared/shades/ShadePickers.tsx`; the stack (colour, strength, `enabled`,
+following a badge) is `shared/shades/shades.ts` since the Studio took it the
+same day (`roadtrip.md`), and its 487-line spec passed unchanged across both
+moves.
 
 - **A shade mask IS a Trips shade at strength 1**: `maskAt` reads
   `shapeGradient(mask, 1)` through `gradientAt`, which evaluates a

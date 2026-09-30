@@ -48,6 +48,7 @@ import type { StyleTheme } from './title-styles';
 import type { TimeShift } from '../telemetry/time-format';
 import type { OverlayElement } from './overlay-types';
 import type { Scene } from './scenes';
+import type { Shade } from '../shades/shades';
 
 /** Seek `video` to `t` (seconds) and resolve once the frame is ready. */
 function seekTo(video: HTMLVideoElement, t: number): Promise<void> {
@@ -120,6 +121,8 @@ export async function exportOverlayVideoViaSeek(
   scenes?: readonly Scene[],
   /** The outro card appended after the footage; see media/export-tail.ts. */
   tail?: ExportTail | null,
+  /** The project's shades over the whole picture, under the scenes. */
+  shades?: readonly Shade[],
 ): Promise<Blob> {
   if (!isEncodeSupported()) {
     throw new Error('This browser does not support WebCodecs encoding.');
@@ -251,6 +254,7 @@ export async function exportOverlayVideoViaSeek(
         timeShift,
         cues,
         scenes,
+        shades,
         // Windows count from the first EXPORTED frame, so a trimmed head does
         // not eat the intro that plays over it.
         originSeconds: startSec,

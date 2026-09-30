@@ -1,6 +1,6 @@
 /**
- * The intro scene's own controls: how long it runs, its scrim, and whether it
- * holds the rest of the deck back while it plays.
+ * The intro scene's own controls: how long it runs, its scrim, its shades,
+ * and whether it holds the rest of the deck back while it plays.
  *
  * One panel per scene; the studio shows the single intro it creates on the
  * first intro element. The model already takes several (scenes.ts) — the day a
@@ -8,7 +8,8 @@
  */
 
 import { useState } from 'react';
-import type { Scene, SceneScrim } from './scenes';
+import { SHADE_FADE, type Scene, type SceneScrim } from './scenes';
+import ShadesPanel from '../shades/ShadesPanel';
 import { DEFAULT_STAGGER, STAGGER_ORDERS, newStaggerSeed } from './stagger';
 import Button from '../ui/Button';
 import { FieldRow, NumberField, RangeField, SelectField, ToggleField } from '../ui/Inspector';
@@ -113,6 +114,30 @@ export default function ScenePanel({
             />
           </FieldRow>
         </>
+      )}
+
+      {/* Trips' shades, for the scene alone: over its veil, under its
+          elements, arriving and leaving with it. A Trips hook sent here
+          brings its own. */}
+      <div className="flex flex-col gap-2 pt-1">
+        <span className="text-sm text-ink-soft">Shades</span>
+        <ShadesPanel
+          shades={scene.shades ?? []}
+          onChange={(shades) => patch({ shades: shades.length ? shades : undefined })}
+        />
+      </div>
+      {(scene.shades?.length ?? 0) > 0 && (
+        <FieldRow label="Fade">
+          <RangeField
+            label="Shades fade"
+            min={0}
+            max={2}
+            step={0.05}
+            value={scene.shadeFade ?? SHADE_FADE}
+            onChange={(shadeFade) => patch({ shadeFade })}
+            format={(v) => `${v.toFixed(2)} s`}
+          />
+        </FieldRow>
       )}
 
       {/* One cascade over the scene's members, from where they sit — added to

@@ -42,7 +42,7 @@ import {
   type BadgePieceStyles,
 } from './badge-layout';
 import type { CameraPlateSpec } from '../overlay/camera-plate';
-import { createShade, vignetteShade, type Shade } from './shades';
+import { createShade, vignetteShade, type Shade } from '../shades/shades';
 import { defaultHookLayers, type HookLayer, type HookShelf } from './hooks/hook-variant';
 import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';

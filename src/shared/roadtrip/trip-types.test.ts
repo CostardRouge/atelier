@@ -20,7 +20,7 @@ import {
   type TripStage,
 } from './trip-types';
 import { tripRouteLabel } from './trip-places';
-import { createShade } from './shades';
+import { createShade } from '../shades/shades';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_FRAMING } from '../media/framing';
 import { DEFAULT_CTA } from './cta-slide';

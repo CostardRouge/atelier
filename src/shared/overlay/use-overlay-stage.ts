@@ -31,6 +31,7 @@ import { snap, snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
 import type { Scene } from './scenes';
+import type { Shade } from '../shades/shades';
 import type { TimeShift } from '../telemetry/time-format';
 
 interface StageParams {
@@ -65,6 +66,8 @@ interface StageParams {
   timeShift?: TimeShift | null;
   /** The project's scenes — the intro's window, scrim and solo. */
   scenes?: readonly Scene[];
+  /** The project's shades over the whole picture (`ProjectDoc.shades`). */
+  shades?: readonly Shade[];
   /**
    * Media time of the clip's in point: element windows are counted from the
    * first frame the export will keep, not from the media's zero.
@@ -110,6 +113,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const themeRef = useRef(params.theme ?? null);
   const shiftRef = useRef(params.timeShift ?? null);
   const scenesRef = useRef(params.scenes);
+  const shadesRef = useRef(params.shades);
   const originRef = useRef(params.originSeconds ?? 0);
   const compareRef = useRef(params.compare ?? false);
   const stillRef = useRef(params.still ?? null);
@@ -124,6 +128,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   themeRef.current = params.theme ?? null;
   shiftRef.current = params.timeShift ?? null;
   scenesRef.current = params.scenes;
+  shadesRef.current = params.shades;
   originRef.current = params.originSeconds ?? 0;
   compareRef.current = params.compare ?? false;
   stillRef.current = params.still ?? null;
@@ -251,6 +256,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     params.theme,
     params.timeShift,
     params.scenes,
+    params.shades,
     params.originSeconds,
     params.compare,
     params.cues,
@@ -324,6 +330,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       cues: cuesRef.current,
       timeSeconds: frame.t,
       scenes: scenesRef.current,
+      shades: shadesRef.current,
       originSeconds: originRef.current,
       // The selected element is drawn even outside its window, ghosted: a
       // title that lives in the first three seconds must stay reachable with

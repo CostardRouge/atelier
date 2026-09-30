@@ -25,14 +25,14 @@ import type { StyleTheme } from '../overlay/title-styles';
 import { variantOutputSize, type ExportVariant } from '../projects/export-variants';
 import {
   loadBadgeSource,
-  paintShades,
   renderBadge,
   type BadgeSource,
   type CollageItem,
   type CollageRender,
 } from './badge-render';
 import { exportEdge } from '../media/photo-frame';
-import type { HookBlock, Shade } from './shades';
+import type { HookBlock, Shade } from '../shades/shades';
+import { paintShades } from '../shades/shade-paint';
 import type { ResolvedHook } from './hooks/hook-variant';
 import { BED_SAMPLE_RATE, renderBed } from '../audio/render-bed';
 import { aacPrimingSeconds } from '../media/audio-encode';

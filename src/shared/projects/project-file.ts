@@ -23,6 +23,7 @@ import type { GuidesState } from '../overlay/guides';
 import { DEFAULT_GUIDES } from '../overlay/guides';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { Scene } from '../overlay/scenes';
+import { readShades, type Shade } from '../shades/shades';
 import type { OutroCard } from '../overlay/outro-card';
 import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
@@ -56,6 +57,8 @@ export interface ProjectPortable {
   lutFilm: FilmTexture | null;
   theme: StyleTheme | null;
   scenes: Scene[];
+  /** The shades over the whole picture (`ProjectDoc.shades`). */
+  shades: Shade[];
   outro: OutroCard | null;
   exportPrefs: ExportPrefs;
 }
@@ -76,7 +79,7 @@ export type ParseResult =
 
 /** Build the file from a project document (or from the editor's live state). */
 export function toProjectFile(
-  source: ProjectPortable & { name: string },
+  source: Omit<ProjectPortable, 'shades'> & { shades?: Shade[]; name: string },
   exportedAt: number = Date.now(),
 ): ProjectFile {
   // The cadence correction stays home: it is measured against ONE clip's
@@ -99,6 +102,7 @@ export function toProjectFile(
     lutFilm: structuredClone(source.lutFilm ?? null),
     theme: structuredClone(source.theme),
     scenes: structuredClone(source.scenes ?? []),
+    shades: structuredClone(source.shades ?? []),
     outro: structuredClone(source.outro ?? null),
     exportPrefs: structuredClone(source.exportPrefs),
   };
@@ -183,6 +187,8 @@ export function parseProjectFile(text: string): ParseResult {
     lutFilm: filmTextureOrNull(raw.lutFilm),
     theme: isRecord(raw.theme) ? (raw.theme as unknown as StyleTheme) : null,
     scenes: Array.isArray(raw.scenes) ? (raw.scenes as Scene[]) : [],
+    // Read, not trusted: a shade is numbers a renderer divides by.
+    shades: readShades(raw.shades),
     outro: isRecord(raw.outro) ? (raw.outro as unknown as OutroCard) : null,
     exportPrefs:
       isRecord(raw.exportPrefs) && Array.isArray(raw.exportPrefs.variants)
@@ -218,6 +224,7 @@ export function parseProjectFile(text: string): ParseResult {
       lutFilm: migrated.lutFilm,
       theme: migrated.theme,
       scenes: migrated.scenes,
+      shades: migrated.shades ?? [],
       outro: migrated.outro,
       exportPrefs: migrated.exportPrefs,
     },
@@ -249,6 +256,8 @@ export function applyProjectFile(
     // NEW project silently lost its intro (the editor's own import path never
     // did — it writes the live state field by field). The outro joins both.
     scenes: structuredClone(file.scenes ?? []),
+    // The fourth place, from the day the shades existed — see `scenes` above.
+    shades: structuredClone(file.shades ?? []),
     outro: structuredClone(file.outro ?? null),
     exportPrefs: structuredClone(file.exportPrefs),
   };

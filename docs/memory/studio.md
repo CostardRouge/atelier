@@ -389,3 +389,43 @@ Unlike Trips and Develop, which hold ONE document in state and hand it back thro
   to the click's at the end, variants and file name left out, and a move
   opens the note with "The project was edited during the export…".
 
+## Trips' shades in the Studio: over the whole clip, and on a scene (2026-09-29)
+
+**Decision (the maintainer: "the same shape system that we have in trips … in
+studio", then "Both" of three homes offered).** Two stacks of Trips' very
+shades (`shared/shades/`, `roadtrip.md`), both edited with the shared
+`ShadesPanel` without badge-following (nothing in the Studio is a badge):
+
+- **`ProjectDoc.shades`** — over the WHOLE picture, the Overlay tab's
+  **Shades** section. Portable, OPTIONAL (absent = none, no version bump, no
+  migration): `ProjectPortable.shades` is required so the compiler makes every
+  writer carry it, and the four places all have it (`toProjectFile`,
+  `parseProjectFile` through `readShades` — a shade is numbers a renderer
+  divides by, never trusted —, `applyProjectFile`, `pickStyle` for the house
+  style), plus `createProjectDoc`'s template. Timeless: the stage passes them
+  over a photograph too (a scene is withheld there), and `exportPhotoVariant`
+  takes them.
+- **`Scene.shades` + `shadeFade`** (absent = `SHADE_FADE`, 0.4 s) — the
+  veil's gradients, edited in `ScenePanel` under the veil, faded in and out by
+  `resolveScenes` over their own fade (`furnitureStrength`, the veil's ramp),
+  every scene's shades drawn (the veil keeps "strongest wins"). What a Trips
+  hook sends now (`roadtrip.md`).
+
+**Draw order** (`drawOverlays`, `DrawOptions.shades`): picture → the clip's
+shades → a scene's veil → a scene's shades → elements. The veil is the scene's
+furniture and sits over what is the clip's. Shades are OVERLAYS: a clean
+variant leaves them out, like the veil. **How to apply**: anything that draws
+the Studio's deck passes `shades` beside `scenes` — the stage
+(`useOverlayStage`), `exportVariantVideo`, the seek fallback (a positional
+last argument), `grabFrame`, `exportPhotoVariant`; the history slice, the
+autosave and its deps, the file export/import and the house style carry them
+too. Not built: placing a shade's centre on the Studio stage (the sliders are
+its only hand — Trips and Develop have *Place on the picture*).
+
+Driven headless on a flat 154 still: a bottom shade gave 61 at the bottom and
+147 mid-frame, a top-right corner 64 in that corner and nothing elsewhere, the
+project stored it, the photo export carried it (36 / 138 / 154 for a top shade
+at 0.8) and a clean variant did not; a scene's bottom shade through
+`drawOverlays` read 200 → 101 at a quarter second → 4, and 200 after the
+scene, under a whole-clip corner holding at 5 throughout.
+

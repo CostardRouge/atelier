@@ -1,4 +1,4 @@
-import type { Anchor } from '../../shared/overlay/overlay-types';
+import type { Anchor } from '../overlay/overlay-types';
 import {
   MAX_CORE,
   MAX_SHADES,
@@ -16,22 +16,28 @@ import {
   type Shade,
   type ShadeDirection,
   type ShadeFollow,
-} from '../../shared/roadtrip/shades';
-import { isRoundShade } from '../../shared/shades/shade-shape';
+} from './shades';
+import { isRoundShade } from './shade-shape';
 import {
   SHADE_LABELS,
   ShadeDirectionPicker,
   ShadeFalloffPicker,
-} from '../../shared/shades/ShadePickers';
-import Button from '../../shared/ui/Button';
-import IconButton from '../../shared/ui/IconButton';
-import Segmented from '../../shared/ui/Segmented';
-import { FieldRow, RangeField, ToggleField } from '../../shared/ui/Inspector';
-import { Icons } from '../../shared/ui/icons';
+} from './ShadePickers';
+import Button from '../ui/Button';
+import IconButton from '../ui/IconButton';
+import Segmented from '../ui/Segmented';
+import { FieldRow, RangeField, ToggleField } from '../ui/Inspector';
+import { Icons } from '../ui/icons';
 
 interface ShadesPanelProps {
   shades: Shade[];
   onChange: (next: Shade[]) => void;
+  /**
+   * There is a BADGE to follow — Trips. Off (the Studio), the Follow row and
+   * the "Under the hook" shortcut are not offered, and every shade draws
+   * where its own grid cell says.
+   */
+  followBadge?: boolean;
   /** The badge's grid anchor, what a shade following it is placed by. */
   anchor?: Anchor;
   /** The shade whose centre the stage is placing, if any. */
@@ -74,6 +80,7 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 export default function ShadesPanel({
   shades,
   onChange,
+  followBadge = false,
   anchor,
   placing = null,
   onPlace,
@@ -90,13 +97,17 @@ export default function ShadesPanel({
     <>
       {shades.length === 0 && (
         <p className="m-0 text-xs text-muted">
-          The picture is untouched. Add a shade where the type needs help — a bright sky
-          exactly under the hook is the normal case.
+          The picture is untouched. Add a shade where the type needs help —{' '}
+          {followBadge
+            ? 'a bright sky exactly under the hook is the normal case.'
+            : 'a bright sky under a title, or a corner under the readouts.'}
         </p>
       )}
 
       {shades.map((shade, i) => {
-        const follow = shadeFollow(shade);
+        // Nothing to follow outside Trips: a stray flag from a sent hook or a
+        // file draws as the shade's own cell, and is shown that way.
+        const follow = followBadge ? shadeFollow(shade) : 'none';
         // What the shade really draws: under "Anchor", the badge's cell.
         const direction =
           follow === 'anchor' && anchor ? directionInCell(anchor, shade.direction) : shade.direction;
@@ -288,18 +299,20 @@ export default function ShadesPanel({
                 onChange={(invert) => patch(shade.id, { invert })}
               />
             </FieldRow>
-            <FieldRow
-              label="Follow badge"
-              hint={FOLLOW_OPTIONS.find((o) => o.id === follow)?.title}
-            >
-              <Segmented
-                size="sm"
-                label={`Shade ${i + 1} follows the badge`}
-                options={FOLLOW_OPTIONS}
-                value={follow}
-                onChange={(next) => patch(shade.id, followFlags(next))}
-              />
-            </FieldRow>
+            {followBadge && (
+              <FieldRow
+                label="Follow badge"
+                hint={FOLLOW_OPTIONS.find((o) => o.id === follow)?.title}
+              >
+                <Segmented
+                  size="sm"
+                  label={`Shade ${i + 1} follows the badge`}
+                  options={FOLLOW_OPTIONS}
+                  value={follow}
+                  onChange={(next) => patch(shade.id, followFlags(next))}
+                />
+              </FieldRow>
+            )}
           </div>
         );
       })}
@@ -309,9 +322,11 @@ export default function ShadesPanel({
           <Button size="sm" icon={Icons.plus} onClick={() => add(createShade())}>
             Shade
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => add(createShade({ followHook: true }))}>
-            Under the hook
-          </Button>
+          {followBadge && (
+            <Button size="sm" variant="ghost" onClick={() => add(createShade({ followHook: true }))}>
+              Under the hook
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => add(vignetteShade(0.45))}>
             Vignette
           </Button>

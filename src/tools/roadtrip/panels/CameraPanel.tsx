@@ -26,7 +26,7 @@ import { drawOverlays } from '../../../shared/overlay/draw-overlays';
 import { ensureOverlayFonts } from '../../../shared/overlay/fonts';
 import type { Anchor } from '../../../shared/overlay/overlay-types';
 import type { StyleTheme } from '../../../shared/overlay/title-styles';
-import { MAX_SHADES, createShade } from '../../../shared/roadtrip/shades';
+import { MAX_SHADES, createShade } from '../../../shared/shades/shades';
 import type { PostBadge, TripDoc, TripPost } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import IconButton from '../../../shared/ui/IconButton';

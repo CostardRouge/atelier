@@ -10,7 +10,7 @@ import {
   type ShadeMask,
 } from './mask';
 import { SHADE_RASTER_LONG_EDGE, rasteriseShade } from './shade-raster';
-import { createShade, shadeGradient } from '../roadtrip/shades';
+import { createShade, shadeGradient } from '../shades/shades';
 import { SHADE_DIRECTIONS, gradientAt } from '../shades/shade-shape';
 
 const shade = (over: Partial<ShadeMask> = {}): ShadeMask => ({ ...DEFAULT_SHADE, ...over });

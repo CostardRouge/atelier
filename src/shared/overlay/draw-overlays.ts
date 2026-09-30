@@ -19,6 +19,8 @@ import { tapeFadeAlpha, tapeTicks } from './heading-tape';
 import { smoothHeading } from '../telemetry/heading-smooth';
 import type { Anchor, LabelPlacement, OverlayElement } from './overlay-types';
 import { isHidden, transformAt, type Transform } from './animation';
+import { paintShades } from '../shades/shade-paint';
+import type { Shade } from '../shades/shades';
 import { compositeFor } from './blend';
 import { canMask, glyphsOf, readKnockout, washFill, type Knockout } from './knockout';
 import { tipAngle } from './rotate-device';
@@ -65,6 +67,12 @@ export interface DrawOptions {
    * of elements one window, a scrim and the power to hold the rest back.
    */
   scenes?: readonly Scene[];
+  /**
+   * Shades over the WHOLE picture, under every scene and every element — the
+   * Studio's project-level stack (`ProjectDoc.shades`), Trips' shades laid
+   * over a clip. Timeless: they draw on a still as on every frame.
+   */
+  shades?: readonly Shade[];
   /**
    * Media time of the FIRST EXPORTED FRAME, i.e. the clip's in point. Windows
    * and animations are counted from it, not from the media's zero: trimming
@@ -1685,7 +1693,12 @@ export function drawOverlays(
   const timeSeconds = opts?.timeSeconds ?? 0;
   const elapsed = elapsedAt(opts);
   const layer = resolveScenes(opts?.scenes, elapsed);
+  // Under everything the deck draws, in this order: the clip's own shades,
+  // then a scene's veil, then a scene's shades — the veil is the scene's
+  // furniture and sits over what is the clip's.
+  if (opts?.shades?.length) paintShades(ctx, videoWidth, videoHeight, opts.shades);
   if (layer.scrim) drawScrim(ctx, layer.scrim, videoWidth, videoHeight);
+  for (const s of layer.shades) paintShades(ctx, videoWidth, videoHeight, s.shades, null, s.alpha);
   const delays = sceneDelays(opts?.scenes, elements, videoWidth / videoHeight);
 
   for (const el of elements) {

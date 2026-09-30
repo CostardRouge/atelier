@@ -440,25 +440,30 @@ function linearEnds(
   }
 
   if (direction === 'top') {
-    const to = blockEnd(block, 'top') ?? r;
+    const to = (block && blockReach('top', block)) ?? r;
     return { x0: 0, y0: 0, x1: 0, y1: clamp01(to) };
   }
   if (direction === 'bottom') {
-    const to = blockEnd(block, 'bottom') ?? r;
+    const to = (block && blockReach('bottom', block)) ?? r;
     return { x0: 0, y0: 1, x1: 0, y1: clamp01(1 - to) };
   }
   if (direction === 'left') {
     return { x0: 0, y0: 0, x1: clamp01(r), y1: 0 };
   }
   return { x0: 1, y0: 0, x1: clamp01(1 - r), y1: 0 };
+}
 
-  function blockEnd(b: ShadeBlock | null, side: 'top' | 'bottom'): number | null {
-    if (!b) return null;
-    const margin = Math.max(b.bottom - b.top, 0.02) * 0.35;
-    return side === 'top'
-      ? clamp01(b.bottom + margin)
-      : clamp01(1 - Math.max(0, b.top - margin));
-  }
+/**
+ * The reach at which a top or bottom shade lands on `block` — its far edge
+ * plus a margin of the block's height, so the fade starts clear of the first
+ * line rather than cutting across it — or null for any other direction, which
+ * a block does not reach.
+ */
+export function blockReach(direction: ShadeDirection, block: ShadeBlock): number | null {
+  const margin = Math.max(block.bottom - block.top, 0.02) * 0.35;
+  if (direction === 'top') return clamp01(block.bottom + margin);
+  if (direction === 'bottom') return clamp01(1 - Math.max(0, block.top - margin));
+  return null;
 }
 
 /**

@@ -30,6 +30,7 @@ import { settleForStill } from '../overlay/still-frame';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 import type { TimeShift } from '../telemetry/time-format';
+import type { Shade } from '../shades/shades';
 import { fitRect } from './compose-layout';
 import { decodeStill, PhotoDecodeError, type StillFitArg } from './still-decode';
 import { fitStill, type PixelSize } from './still-fit';
@@ -154,6 +155,8 @@ export interface PhotoRenderOptions {
   film?: FilmTexture | null;
   theme: StyleTheme | null;
   timeShift?: TimeShift | null;
+  /** The project's shades over the whole picture — timeless, so a still takes them. */
+  shades?: readonly Shade[];
   /** JPEG quality 0..1. */
   quality?: number;
   /**
@@ -213,6 +216,7 @@ export async function exportPhotoVariant(
       // that would have read one.
       timeSeconds: 0,
       originSeconds: 0,
+      shades: opts.shades,
     });
   }
 

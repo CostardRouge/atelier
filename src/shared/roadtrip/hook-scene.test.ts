@@ -7,7 +7,6 @@ import {
   hookInjection,
   isHookElement,
   isRoadtripOutro,
-  scrimFromShades,
   withCtaOutro,
   withHook,
   withoutCtaOutro,
@@ -17,7 +16,7 @@ import {
 } from './hook-scene';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
-import { createShade } from './shades';
+import { createShade, shadeGradient } from '../shades/shades';
 import { createTextElement, type OverlayElement } from '../overlay/overlay-types';
 import { createIntroScene } from '../overlay/scenes';
 import type { ProjectDoc } from '../projects/project-types';
@@ -82,28 +81,34 @@ describe('hookInjection', () => {
   });
 });
 
-describe('scrimFromShades', () => {
-  it('is nothing when there is nothing to stand in for', () => {
-    expect(scrimFromShades([])).toBeNull();
-    expect(scrimFromShades([createShade({ strength: 0 })])).toBeNull();
+describe('the shades cross whole', () => {
+  const block = { top: 0.6, bottom: 0.8, anchor: 'bottom-left' as const };
+
+  it('as the scene\'s own shades, and no flattened veil', () => {
+    const band = createShade({ direction: 'middle-vertical', core: 0.3, falloff: 'in-out' });
+    const { scene } = hookInjection(badge(), 4, [band]);
+    expect(scene.scrim).toBeNull();
+    expect(scene.shades).toEqual([{ ...band, followHook: false, followAnchor: false }]);
   });
 
-  it('takes the strongest shade’s colour', () => {
-    const scrim = scrimFromShades([
-      createShade({ strength: 0.2, color: '#111111' }),
-      createShade({ strength: 0.8, color: '#402010' }),
-    ])!;
-    expect(scrim.color).toBe('#402010');
+  it('a shade that followed the badge draws the SAME gradient, baked in', () => {
+    const following = [
+      createShade({ direction: 'bottom', followHook: true }),
+      createShade({ direction: 'top', followHook: true, strength: 0.4 }),
+      createShade({ direction: 'radial', reach: 0.8, followHook: true }),
+      createShade({ direction: 'right', followAnchor: true }),
+    ];
+    const { scene } = hookInjection(badge(), 4, following, 'Hook', block);
+    scene.shades!.forEach((sent, i) => {
+      expect(sent.followHook || sent.followAnchor).toBe(false);
+      expect(shadeGradient(sent)).toEqual(shadeGradient(following[i], block));
+    });
+    // Anchored bottom-left, the right-hand shade drew in that corner.
+    expect(scene.shades![3].direction).toBe('bottom-left');
   });
 
-  it('holds the veil back, because a flat one reads heavier than a gradient', () => {
-    const scrim = scrimFromShades([createShade({ strength: 0.8 })])!;
-    expect(scrim.opacity).toBeGreaterThan(0);
-    expect(scrim.opacity).toBeLessThan(0.8);
-  });
-
-  it('never asks for more than opaque', () => {
-    expect(scrimFromShades([createShade({ strength: 5 })])!.opacity).toBeLessThanOrEqual(1);
+  it('sends none where there are none', () => {
+    expect(hookInjection(badge(), 4).scene.shades).toBeUndefined();
   });
 });
 
