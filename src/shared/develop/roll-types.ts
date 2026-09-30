@@ -30,6 +30,7 @@ import { isDefaultFraming, normaliseFraming, type Framing } from '../media/frami
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
 import { legacyWholeBorder, readBorder, sameBorder, type RollBorder } from './border-layout';
+import { DEFAULT_TIMELAPSE, readMakingOf, readTimelapseOptions, type MakingOf, type TimelapseOptions } from './timelapse-options';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import type { OutputTransform } from '../lut/transfer';
@@ -107,6 +108,12 @@ export interface RollExport {
    * on the targets that ask for it. Absent reads as the default.
    */
   watermark: Watermark;
+  /**
+   * How a picture's MAKING-OF video is made (`timelapse-options.ts`, v7):
+   * one social format, length and grammar for the roll, so a second device
+   * draws the same. Absent reads as the defaults.
+   */
+  timelapse: TimelapseOptions;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
@@ -116,6 +123,7 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   hdrStops: 2,
   metadata: ALL_META,
   watermark: DEFAULT_WATERMARK,
+  timelapse: DEFAULT_TIMELAPSE,
 });
 
 export const ROLL_EXPORT_LIMITS = {
@@ -247,6 +255,13 @@ export interface RollPicture {
    * mark's key. Absent and empty mean the same thing.
    */
   journal?: JournalStep[];
+  /**
+   * What the author changed about this picture's making-of (v7,
+   * `timelapse-options.ts`): chapters folded away, captions rewritten. A
+   * document write like any other — one undo step, synced — and never an
+   * edit of the picture. Absent and empty mean the same thing.
+   */
+  makingOf?: MakingOf;
 }
 
 /** How a step came to be, when it was not the author's own gesture on this picture. */
@@ -389,7 +404,15 @@ export function readRollGrade(raw: unknown): RollGrade | null {
 }
 
 export function readRollExport(raw: unknown): RollExport {
-  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, targets: [{ ...DEFAULT_TARGET }], metadata: { ...ALL_META }, watermark: { ...DEFAULT_WATERMARK } };
+  if (!isRecord(raw)) {
+    return {
+      ...DEFAULT_ROLL_EXPORT,
+      targets: [{ ...DEFAULT_TARGET }],
+      metadata: { ...ALL_META },
+      watermark: { ...DEFAULT_WATERMARK },
+      timelapse: readTimelapseOptions(undefined),
+    };
+  }
   return {
     // v5 and earlier held one long edge and one quality: they become the
     // only target, so an old roll exports exactly as it did.
@@ -404,6 +427,7 @@ export function readRollExport(raw: unknown): RollExport {
     ),
     metadata: readMetaChoice(raw.metadata),
     watermark: readWatermark(raw.watermark),
+    timelapse: readTimelapseOptions(raw.timelapse),
   };
 }
 
@@ -497,7 +521,38 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
       const journal = readJournal(raw.journal);
       return journal.length > 0 ? { journal } : {};
     })(),
+    ...(() => {
+      const makingOf = readMakingOf(raw.makingOf);
+      return makingOf ? { makingOf } : {};
+    })(),
   };
+}
+
+/**
+ * The roll with one picture's making-of edits replaced: a chapter hidden or
+ * shown, a caption rewritten — an emptied caption taken off, so the computed
+ * one returns. The same roll back when nothing changed.
+ */
+export function setMakingOf(
+  roll: RollDoc,
+  id: string,
+  change: { hidden?: string[]; captions?: Record<string, string> },
+  now: number = Date.now(),
+): RollDoc {
+  const picture = roll.pictures.find((p) => p.id === id);
+  if (!picture) return roll;
+  const next = readMakingOf({
+    hidden: change.hidden ?? picture.makingOf?.hidden ?? [],
+    captions: change.captions ?? picture.makingOf?.captions ?? {},
+  });
+  if (JSON.stringify(next ?? null) === JSON.stringify(picture.makingOf ?? null)) return roll;
+  const pictures = roll.pictures.map((p) => {
+    if (p.id !== id) return p;
+    const { makingOf: _m, ...rest } = p;
+    void _m;
+    return next ? { ...rest, makingOf: next } : rest;
+  });
+  return { ...roll, pictures, updatedAt: now };
 }
 
 /** The sections a step may name, in the inspector's order. */
