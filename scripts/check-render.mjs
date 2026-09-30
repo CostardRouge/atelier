@@ -403,6 +403,22 @@ const out = await page.evaluate(async () => {
           ],
         },
       },
+      // A SHADE rides the painted mask's branch as a map `shade-raster.ts`
+      // builds from Trips' shade shape: off-centre, with a core and a curve,
+      // so a map turned over, squashed to the wrong aspect or read at the
+      // wrong stops lands somewhere these probes see.
+      shade: {
+        source: white,
+        mask: {
+          kind: 'shade',
+          direction: 'radial',
+          reach: 0.7,
+          invert: false,
+          core: 0.15,
+          falloff: 'in-out',
+          center: { x: 0.35, y: 0.62 },
+        },
+      },
     };
 
     // PIXELS, not fractions: the expectation is evaluated at the very texel
@@ -1609,7 +1625,7 @@ for (const [name, vig] of [['mid grey', out.vignette], ['dark grey', out.vignett
 
 const mask = out.mask;
 console.log('\n  masks, against maskAt over 20 points of the frame:');
-for (const shape of ['linear', 'radial', 'luma', 'brush']) {
+for (const shape of ['linear', 'radial', 'luma', 'brush', 'shade']) {
   const spread = mask[`${shape}_spread`];
   const worst = Math.max(mask[`${shape}_canvas`], mask[`${shape}_bitmap`]);
   // 1/255 is one 8-bit code; the read-back is through a byte canvas.

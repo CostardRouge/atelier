@@ -20,12 +20,16 @@
  *   blue, a jacket.
  * - **brush** — painted strokes, kept as VECTORS so the document stays small
  *   and a mask painted on a preview delivers at full size.
+ * - **shade** — Trips' shade SHAPE (`shared/shades/shade-shape.ts`): an edge,
+ *   a corner, a band or a radial picked on a 3×3 grid, with its falloff, core
+ *   and centre. The same geometry a Trips shade paints in colour, weighing a
+ *   develop here instead (2026-09-29).
  *
  * Every shape is PURE here, so a spec holds its maths. The first three are a
  * few numbers the shader mirrors directly; a brush would cost `pixels × points`
- * that way, so the CPU rasterises the SAME function into an alpha map
- * (`brush-raster.ts`) and the GPU samples it. `scripts/check-render.mjs` holds
- * all four to this module.
+ * that way and a shade a stop list per slot, so the CPU rasterises the SAME
+ * function into an alpha map (`brush-raster.ts`, `shade-raster.ts`) and the
+ * GPU samples it. `scripts/check-render.mjs` holds every one to this module.
  *
  * An empty shape is EMPTY: a brush with no strokes covers nothing. Only the
  * absence of a mask altogether means the whole picture.
@@ -38,7 +42,17 @@
  * Pure and DOM-free.
  */
 
-export type MaskKind = 'linear' | 'radial' | 'luma' | 'colour' | 'brush' | 'subject';
+import {
+  MAX_CORE,
+  gradientAt,
+  isShadeDirection,
+  shapeGradient,
+  SHADE_DIRECTIONS,
+  SHADE_FALLOFFS,
+  type ShadeShape,
+} from '../shades/shade-shape';
+
+export type MaskKind = 'linear' | 'radial' | 'luma' | 'colour' | 'brush' | 'subject' | 'shade';
 
 export interface LinearMask {
   kind: 'linear';
@@ -158,7 +172,24 @@ export interface SubjectMask {
   model: string;
 }
 
-export type Mask = LinearMask | RadialMask | LumaMask | ColourMask | BrushMask | SubjectMask;
+/**
+ * A SHADE — Trips' shade shape as a mask: full where a Trips shade is at full
+ * strength, clear where it is clear, the fade between drawn by the very stops
+ * (`shapeGradient` at strength 1, read by `gradientAt` as a canvas fills it).
+ * What a Trips shade paints in colour, a layer's develop does here; its
+ * strength is the layer's opacity.
+ *
+ * Its own `invert` is the SHADE's — dark at the far end of the reach, the core
+ * held there — and not the layer's complement, so "Core" keeps meaning the
+ * part held at full effect either way round. Only a band or a radial reads
+ * `center`.
+ */
+export interface ShadeMask extends ShadeShape {
+  kind: 'shade';
+  invert: boolean;
+}
+
+export type Mask = LinearMask | RadialMask | LumaMask | ColourMask | BrushMask | SubjectMask | ShadeMask;
 
 /**
  * How a further mask COMBINES with what is there: Lightroom's Add, Subtract
@@ -257,8 +288,20 @@ export const DEFAULT_LUMA: Readonly<LumaMask> = Object.freeze({
   feather: 0.15,
 });
 
+/**
+ * A shade from the top — a darkened sky, the linear mask's own default — at
+ * the reach a new Trips shade starts with.
+ */
+export const DEFAULT_SHADE: Readonly<ShadeMask> = Object.freeze({
+  kind: 'shade',
+  direction: 'top',
+  reach: 0.55,
+  invert: false,
+});
+
 /** A new mask of one kind, at its own sensible starting shape. */
 export function defaultMask(kind: MaskKind): Mask {
+  if (kind === 'shade') return { ...DEFAULT_SHADE };
   if (kind === 'radial') return { ...DEFAULT_RADIAL };
   if (kind === 'luma') return { ...DEFAULT_LUMA };
   if (kind === 'colour') return { kind: 'colour', samples: [], range: DEFAULT_COLOUR_RANGE };
@@ -414,6 +457,16 @@ export function brushCoverageAt(
 }
 
 /**
+ * A shade mask at `(u, v)`, [0,1] frame coordinates: the Trips shade's own
+ * gradient at full strength, read as a canvas fills it. A shade with no reach
+ * draws nothing, so it covers nothing — an empty shape is empty.
+ */
+export function shadeMaskAt(mask: ShadeMask, u: number, v: number, aspectRatio = 1): number {
+  const g = shapeGradient(mask, 1);
+  return g ? gradientAt(g, u, v, aspectRatio) : 0;
+}
+
+/**
  * How much of the adjustment lands at this point: 0 to 1.
  *
  * `luma` is the pixel's own brightness, which only a luma mask reads — passing
@@ -444,6 +497,8 @@ export function maskAt(
   }
 
   if (mask.kind === 'colour') return rgb ? colourRangeAt(mask, rgb[0], rgb[1], rgb[2]) : 0;
+
+  if (mask.kind === 'shade') return shadeMaskAt(mask, u, v, aspectRatio);
 
   const [px, py] = framePoint(u, v, aspectRatio);
 
@@ -575,6 +630,25 @@ export function normaliseMask(raw: unknown): Mask | null {
       model: typeof src.model === 'string' && src.model ? src.model : SUBJECT_MODEL,
     };
   }
+  if (src.kind === 'shade') {
+    const shade: ShadeMask = {
+      kind: 'shade',
+      direction: isShadeDirection(src.direction) ? src.direction : DEFAULT_SHADE.direction,
+      reach: clamp(num(src.reach, DEFAULT_SHADE.reach), 0, 1),
+      invert: src.invert === true,
+    };
+    // Absent stays absent — what a Trips shade stores, and what it draws.
+    const falloff = SHADE_FALLOFFS.find((f) => f.id === src.falloff)?.id;
+    if (falloff) shade.falloff = falloff;
+    if (typeof src.core === 'number' && Number.isFinite(src.core)) shade.core = clamp(src.core, 0, MAX_CORE);
+    const c = src.center as Record<string, unknown> | null | undefined;
+    if (c && typeof c === 'object') {
+      const x = num(c.x, NaN);
+      const y = num(c.y, NaN);
+      if (Number.isFinite(x) && Number.isFinite(y)) shade.center = { x: clamp(x, 0, 1), y: clamp(y, 0, 1) };
+    }
+    return shade;
+  }
   if (src.kind !== 'linear') return null;
   return {
     kind: 'linear',
@@ -629,6 +703,17 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
   if (a.kind === 'luma' && b.kind === 'luma') {
     return a.from === b.from && a.to === b.to && a.feather === b.feather;
   }
+  if (a.kind === 'shade' && b.kind === 'shade') {
+    return (
+      a.direction === b.direction &&
+      a.reach === b.reach &&
+      a.invert === b.invert &&
+      a.falloff === b.falloff &&
+      a.core === b.core &&
+      a.center?.x === b.center?.x &&
+      a.center?.y === b.center?.y
+    );
+  }
   if (a.kind === 'linear' && b.kind === 'linear') {
     return a.x === b.x && a.y === b.y && a.angle === b.angle && a.feather === b.feather;
   }
@@ -660,6 +745,11 @@ export function cloneMask(m: Mask | null | undefined): Mask | null {
   if (m.kind === 'colour') {
     return { kind: 'colour', range: m.range, samples: m.samples.map((s) => ({ ...s })) };
   }
+  if (m.kind === 'shade') {
+    // The centre is an object, and a spread would alias it.
+    const { center, ...rest } = m;
+    return center ? { ...rest, center: { ...center } } : { ...rest };
+  }
   return { ...m } as Mask;
 }
 
@@ -679,6 +769,10 @@ export function describeMask(m: Mask | null | undefined): string {
   if (m.kind === 'colour') {
     const n = m.samples.length;
     return n === 0 ? 'colour · tap one' : `colour · ${n} sample${n === 1 ? '' : 's'}`;
+  }
+  if (m.kind === 'shade') {
+    const label = SHADE_DIRECTIONS.find((d) => d.id === m.direction)?.label ?? m.direction;
+    return `shade · ${label.toLowerCase()}${m.invert ? ' · inverted' : ''}`;
   }
   // A luma band gets a WORD where it has one: "shadows" says more than
   // "0.00–0.35" to anybody, and the numbers are on the sliders anyway.

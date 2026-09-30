@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { createTextElement } from '../overlay/overlay-types';
 import { DEFAULT_BADGE_DURATION, DEFAULT_BADGE_LAYOUT } from './badge-layout';
-import { createShade } from './shades';
+import { createShade } from '../shades/shades';
 import {
   CHAPTER_MARK_SCALE,
   SLIDE_TEXT_SIZE,

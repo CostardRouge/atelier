@@ -46,6 +46,12 @@ import ElementPanel from '../../shared/overlay/ElementPanel';
 import ScenePanel from '../../shared/overlay/ScenePanel';
 import TimingPanel from '../../shared/overlay/TimingPanel';
 import { createIntroScene, findScene, type Scene } from '../../shared/overlay/scenes';
+import ShadesPanel from '../../shared/shades/ShadesPanel';
+import type { Shade } from '../../shared/shades/shades';
+import { centreAxis, placedCentre, shadeCentre } from '../../shared/shades/shade-shape';
+
+/** The scope of the clip's own shades, beside a scene's id, while one is placed. */
+const CLIP_SHADES = '__clip__';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
@@ -453,6 +459,10 @@ export default function StudioEditor({
   const [scenes, setScenes] = useState<Scene[]>(() =>
     structuredClone(project.scenes ?? []),
   );
+  // Trips' shades over the whole picture, under the scenes and every element
+  // — portable like the scenes (`ProjectDoc.shades`), absent on a project
+  // stored before they existed.
+  const [shades, setShades] = useState<Shade[]>(() => structuredClone(project.shades ?? []));
   // The outro — the closing card appended after the footage. Portable too:
   // intro · footage · closing card is the shape of a delivered piece, and
   // Road Trip fills this slot with the trip's call to action when it briefs
@@ -1052,6 +1062,58 @@ export default function StudioEditor({
     [isPhoto, elements],
   );
 
+  // --- placing a shade's centre on the stage --------------------------------
+  /**
+   * The shade whose centre the stage is placing (a panel's "Place on the
+   * picture") — the clip's own (`CLIP_SHADES`) or a scene's (by its id). Only
+   * while the Overlay tab is the one open, and only while that shade still has
+   * a centre to move: anything else drops it, so the stage is never left
+   * taking presses for a panel nobody can see. A scene's shades are not drawn
+   * over a photograph, so neither is their handle.
+   */
+  const [placing, setPlacing] = useState<{ scope: string; id: string } | null>(null);
+  const placingList = !placing
+    ? null
+    : placing.scope === CLIP_SHADES
+      ? shades
+      : isPhoto
+        ? null
+        : (findScene(scenes, placing.scope)?.shades ?? null);
+  const shadeInPlace =
+    tab === 'overlay' && placing && placingList
+      ? (placingList.find((sh) => sh.id === placing.id && sh.enabled !== false) ?? null)
+      : null;
+  const placingAxis = shadeInPlace ? centreAxis(shadeInPlace.direction) : null;
+  const shadeHandle =
+    shadeInPlace && placingAxis ? { ...shadeCentre(shadeInPlace), axis: placingAxis } : null;
+  const placingLost = placing !== null && shadeHandle === null;
+  useEffect(() => {
+    if (placingLost) setPlacing(null);
+  }, [placingLost]);
+  /** What a panel's "Place on the picture" calls, for the shades of `scope`. */
+  const placeShade = (scope: string) => (id: string | null) => {
+    setPlacing(id ? { scope, id } : null);
+    // On a phone the inspector is a sheet over the very picture the centre is
+    // placed on: it steps aside, and the tab's cell brings it back.
+    if (id && compact) setInspectorOpen(false);
+  };
+  /** A press or a drag on the stage: the placed shade's centre, on its own axis. */
+  const moveShadeCentre = (x: number, y: number) => {
+    if (!placing) return;
+    const move = (list: Shade[]) =>
+      list.map((sh) => {
+        if (sh.id !== placing.id) return sh;
+        const center = placedCentre(sh, { x, y });
+        return center ? { ...sh, center } : sh;
+      });
+    if (placing.scope === CLIP_SHADES) setShades(move);
+    else {
+      setScenes((prev) =>
+        prev.map((sc) => (sc.id === placing.scope && sc.shades ? { ...sc, shades: move(sc.shades) } : sc)),
+      );
+    }
+  };
+
   const stage = useOverlayStage({
     videoRef,
     canvasRef,
@@ -1066,6 +1128,8 @@ export default function StudioEditor({
     theme,
     timeShift,
     scenes: isPhoto ? undefined : scenes,
+    // Timeless, so a photograph takes them too — unlike a scene.
+    shades,
     // Windows run from the first frame the export keeps, so the preview has to
     // count from the in point too — otherwise a trimmed clip shows the intro
     // at a different moment than the file does.
@@ -1076,6 +1140,8 @@ export default function StudioEditor({
     onSelect: selectElement,
     onActivate: activateElement,
     onMove: handleMove,
+    shadeHandle,
+    onPlaceShade: moveShadeCentre,
   });
 
   function handleScrub(value: number) {
@@ -1107,6 +1173,7 @@ export default function StudioEditor({
       guides,
       theme,
       scenes,
+      shades,
       outro,
       projectName,
       aspectId,
@@ -1127,6 +1194,7 @@ export default function StudioEditor({
       guides,
       theme,
       scenes,
+      shades,
       outro,
       projectName,
       aspectId,
@@ -1165,6 +1233,7 @@ export default function StudioEditor({
       setGuides(step.guides);
       setTheme(step.theme);
       setScenes(step.scenes);
+      setShades(step.shades);
       setOutro(step.outro);
       setProjectName(step.projectName);
       setAspectId(step.aspectId);
@@ -1291,6 +1360,7 @@ export default function StudioEditor({
         lutFilm: lutStack.film,
         theme,
         scenes,
+        shades,
         outro,
         exportPrefs: {
           fileName: exportFileName.trim() || null,
@@ -1333,6 +1403,7 @@ export default function StudioEditor({
     timeScale,
     theme,
     scenes,
+    shades,
     outro,
     exportFileName,
     variants,
@@ -1368,6 +1439,7 @@ export default function StudioEditor({
       lutFilm: lutStack.film,
       theme,
       scenes,
+      shades,
       outro,
       exportPrefs: { fileName: exportFileName.trim() || null, variants },
     });
@@ -1389,6 +1461,7 @@ export default function StudioEditor({
     setGuides(structuredClone(file.guides));
     setTheme(structuredClone(file.theme));
     setScenes(structuredClone(file.scenes ?? []));
+    setShades(structuredClone(file.shades ?? []));
     setOutro(structuredClone(file.outro ?? null));
     setExportFileName(file.exportPrefs.fileName ?? '');
     setVariants(structuredClone(file.exportPrefs.variants));
@@ -1418,6 +1491,7 @@ export default function StudioEditor({
       film: lutStack.film,
       theme,
       timeShift,
+      shades,
     });
     return blob;
   }
@@ -1443,6 +1517,7 @@ export default function StudioEditor({
       theme,
       timeShift,
       scenes,
+      shades,
       srcWidth,
       srcHeight,
       // null when the whole clip is kept, so an untrimmed export runs the
@@ -1475,6 +1550,7 @@ export default function StudioEditor({
           // The fallback runs only at source geometry, so the card composes
           // for the source frame — the same frame everything else drew for.
           variant.overlays ? outroTail(outro, srcWidth, srcHeight) : null,
+          shades,
         );
       }
       if (err instanceof DecodeUnsupportedError) {
@@ -1782,6 +1858,7 @@ export default function StudioEditor({
         theme,
         timeShift,
         scenes,
+        shades,
         originSeconds: range.start,
         overlays: true,
       });
@@ -2110,6 +2187,7 @@ export default function StudioEditor({
                   lutFilm: lutStack.film,
                   theme,
                   scenes,
+                  shades,
                   outro,
                   exportPrefs: { fileName: exportFileName.trim() || null, variants },
                 }
@@ -2546,6 +2624,29 @@ export default function StudioEditor({
                     />
                   </InspectorSection>
 
+                  {/* Trips' shades, over the whole clip: under the intro's
+                      veil and every element, for as long as the footage runs
+                      — a corner under the readouts, a sky under a title. */}
+                  <InspectorSection
+                    id="studio.shades"
+                    title="Shades"
+                    badge={shades.length ? String(shades.filter((sh) => sh.enabled !== false).length) : undefined}
+                    info={
+                      <p>
+                        Gradients over the whole picture, under every element, so type stays readable
+                        — the same shades as in Trips. A scene has its own, which come and go with it.
+                        Clean variants leave them out, with the overlays.
+                      </p>
+                    }
+                  >
+                    <ShadesPanel
+                      shades={shades}
+                      onChange={setShades}
+                      placing={placing?.scope === CLIP_SHADES ? placing.id : null}
+                      onPlace={placeShade(CLIP_SHADES)}
+                    />
+                  </InspectorSection>
+
                   {introScene && (
                     <InspectorSection
                       id="studio.scene"
@@ -2560,6 +2661,9 @@ export default function StudioEditor({
                           setScenes((prev) => prev.map((sc) => (sc.id === next.id ? next : sc)))
                         }
                         onRemove={() => removeScene(introScene.id)}
+                        placingShade={placing?.scope === introScene.id ? placing.id : null}
+                        // A scene is not drawn over a photograph: nothing to place there.
+                        onPlaceShade={isPhoto ? undefined : placeShade(introScene.id)}
                       />
                     </InspectorSection>
                   )}

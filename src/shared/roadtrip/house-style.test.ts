@@ -17,7 +17,7 @@ import {
 } from './trip-types';
 import { FRENCH_BADGE_WORDS } from './day-badge';
 import { DEFAULT_CTA } from './cta-slide';
-import { createShade } from './shades';
+import { createShade } from '../shades/shades';
 import { themeFromPreset } from '../overlay/title-styles';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { HOOK_VARIANTS } from './hooks/registry';

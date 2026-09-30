@@ -11,6 +11,7 @@ import {
 import { PROJECT_DOC_VERSION, createProjectDoc, type ProjectDoc } from './project-types';
 import { DEFAULT_GUIDES } from '../overlay/guides';
 import { defaultElementsPreset } from '../overlay/overlay-types';
+import { createShade } from '../shades/shades';
 
 function sampleDoc(): ProjectDoc {
   const doc = createProjectDoc(
@@ -195,6 +196,43 @@ describe('parseProjectFile', () => {
     expect(parsed.file.guides).toEqual(DEFAULT_GUIDES);
     // A file from before the outro existed lands on none, like a migrated doc.
     expect(parsed.file.outro).toBeNull();
+    // And one from before the shades, on none.
+    expect(parsed.file.shades).toEqual([]);
+  });
+});
+
+describe('the shades over the whole clip — all four places', () => {
+  const vignette = createShade({ id: 's1', direction: 'radial', invert: true, reach: 1, strength: 0.45 });
+  const corner = createShade({ id: 's2', direction: 'bottom-right', core: 0.3, falloff: 'in-cubic', color: '#102030' });
+
+  it('leave with the file, come back from it, and land on a project', () => {
+    const doc = { ...sampleDoc(), shades: [vignette, corner] };
+    const file = toProjectFile(doc);
+    expect(file.shades).toEqual([vignette, corner]);
+    const parsed = parseProjectFile(serializeProjectFile(file));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.file.shades).toEqual([vignette, corner]);
+    const target = createProjectDoc('Other', '1:1', [], DEFAULT_GUIDES);
+    expect(applyProjectFile(target, parsed.file).shades).toEqual([vignette, corner]);
+  });
+
+  it('a project stored before them exports none', () => {
+    const doc = sampleDoc();
+    delete doc.shades;
+    expect(toProjectFile(doc).shades).toEqual([]);
+  });
+
+  it('are READ from a file, not trusted: junk dropped, numbers clamped', () => {
+    const file = {
+      ...toProjectFile(sampleDoc()),
+      shades: [{ direction: 'diagonal' }, { direction: 'top', reach: 9, strength: -1, core: 4 }, 'x'],
+    };
+    const parsed = parseProjectFile(JSON.stringify(file));
+    expect(parsed.ok).toBe(true);
+    if (!parsed.ok) return;
+    expect(parsed.file.shades).toHaveLength(1);
+    expect(parsed.file.shades[0]).toMatchObject({ direction: 'top', reach: 1, strength: 0, core: 0.9 });
   });
 });
 

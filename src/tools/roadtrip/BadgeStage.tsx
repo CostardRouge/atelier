@@ -44,7 +44,7 @@ import {
   type QrDraw,
   type RenderBadgeOptions,
 } from '../../shared/roadtrip/badge-render';
-import type { HookBlock, Shade } from '../../shared/roadtrip/shades';
+import type { HookBlock, Shade } from '../../shared/shades/shades';
 import type { FrameRect, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
 import { TRIM_EPSILON, type TrimRange } from '../../shared/media/trim';
 import { clampPlaybackRate } from '../../shared/media/use-video-transport';

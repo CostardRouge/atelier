@@ -31,6 +31,7 @@ import { snap, snapToGrid, type GuidesState } from './guides';
 import type { OverlayElement } from './overlay-types';
 import type { StyleTheme } from './title-styles';
 import type { Scene } from './scenes';
+import type { Shade } from '../shades/shades';
 import type { TimeShift } from '../telemetry/time-format';
 
 interface StageParams {
@@ -65,6 +66,8 @@ interface StageParams {
   timeShift?: TimeShift | null;
   /** The project's scenes — the intro's window, scrim and solo. */
   scenes?: readonly Scene[];
+  /** The project's shades over the whole picture (`ProjectDoc.shades`). */
+  shades?: readonly Shade[];
   /**
    * Media time of the clip's in point: element windows are counted from the
    * first frame the export will keep, not from the media's zero.
@@ -87,6 +90,16 @@ interface StageParams {
   onActivate?: (id: string) => void;
   /** Commit a dragged element's new normalized position. */
   onMove: (id: string, x: number, y: number) => void;
+  /**
+   * A shade whose centre the stage is PLACING (the panel's "Place on the
+   * picture"): where it sits, in frame fractions, and the axis it moves
+   * along. While set, a press anywhere on the picture moves that centre and
+   * nothing else — no element is picked, no divider moves — and the handle
+   * is drawn as editor chrome. Absent or null: the stage edits elements.
+   */
+  shadeHandle?: { x: number; y: number; axis: 'x' | 'y' | 'both' } | null;
+  /** Where a press or drag put the centre, in frame fractions, clamped to the frame. */
+  onPlaceShade?: (x: number, y: number) => void;
 }
 
 interface StageHandlers {
@@ -110,6 +123,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   const themeRef = useRef(params.theme ?? null);
   const shiftRef = useRef(params.timeShift ?? null);
   const scenesRef = useRef(params.scenes);
+  const shadesRef = useRef(params.shades);
+  const shadeHandleRef = useRef(params.shadeHandle ?? null);
+  const onPlaceShadeRef = useRef(params.onPlaceShade);
   const originRef = useRef(params.originSeconds ?? 0);
   const compareRef = useRef(params.compare ?? false);
   const stillRef = useRef(params.still ?? null);
@@ -124,6 +140,9 @@ export function useOverlayStage(params: StageParams): StageHandlers {
   themeRef.current = params.theme ?? null;
   shiftRef.current = params.timeShift ?? null;
   scenesRef.current = params.scenes;
+  shadesRef.current = params.shades;
+  shadeHandleRef.current = params.shadeHandle ?? null;
+  onPlaceShadeRef.current = params.onPlaceShade;
   originRef.current = params.originSeconds ?? 0;
   compareRef.current = params.compare ?? false;
   stillRef.current = params.still ?? null;
@@ -251,6 +270,11 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     params.theme,
     params.timeShift,
     params.scenes,
+    params.shades,
+    // The placing handle is chrome, and moves with the centre it marks.
+    params.shadeHandle?.x,
+    params.shadeHandle?.y,
+    params.shadeHandle?.axis,
     params.originSeconds,
     params.compare,
     params.cues,
@@ -324,6 +348,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       cues: cuesRef.current,
       timeSeconds: frame.t,
       scenes: scenesRef.current,
+      shades: shadesRef.current,
       originSeconds: originRef.current,
       // The selected element is drawn even outside its window, ghosted: a
       // title that lives in the first three seconds must stay reachable with
@@ -371,6 +396,11 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     // Editor-only guides, painted over the composite (never via drawOverlays,
     // so they stay out of the export).
     drawGuides(ctx, guidesRef.current, vw, vh);
+
+    // A shade's centre being placed: its line (a band) or its cross (a
+    // radial), in the selection's ink — chrome, never in an export.
+    const handle = shadeHandleRef.current;
+    if (handle) drawShadeHandle(ctx, handle, vw, vh);
 
     const sel = selectedRef.current;
     // Only the selected element is measured: a box depends on its element
@@ -457,6 +487,17 @@ export function useOverlayStage(params: StageParams): StageHandlers {
     [canvasRef],
   );
 
+  /** Hands the placed centre under a canvas point to the editor. */
+  const placeShadeAt = useCallback(
+    (px: number, py: number) => {
+      const canvas = canvasRef.current;
+      const write = onPlaceShadeRef.current;
+      if (!canvas || !write || !shadeHandleRef.current) return;
+      write(Math.min(1, Math.max(0, px / canvas.width)), Math.min(1, Math.max(0, py / canvas.height)));
+    },
+    [canvasRef],
+  );
+
   const onPointerDown = useCallback(
     (e: React.PointerEvent) => {
       const canvas = canvasRef.current;
@@ -465,6 +506,17 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       if (!canvas || !frame || !pt) return;
       const ctx = canvas.getContext('2d');
       if (!ctx) return;
+
+      // Placing a shade's centre takes the whole picture, ahead of the
+      // compare divider and the elements: the author asked for it, and a
+      // press that selected a title instead would read as placing not working.
+      if (shadeHandleRef.current && onPlaceShadeRef.current) {
+        e.preventDefault();
+        drag.current = { id: SHADE_DRAG, startPx: pt.px, startPy: pt.py, startX: 0, startY: 0 };
+        canvas.setPointerCapture(e.pointerId);
+        placeShadeAt(pt.px, pt.py);
+        return;
+      }
 
       if (compareRef.current) {
         // Compare mode: any drag moves the wipe divider.
@@ -508,7 +560,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
         }
       }
     },
-    [canvasRef, readFrame, toVideoPixels, onSelect],
+    [canvasRef, readFrame, toVideoPixels, onSelect, placeShadeAt],
   );
 
   const onPointerMove = useCallback(
@@ -517,6 +569,10 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       const canvas = canvasRef.current;
       const pt = toVideoPixels(e);
       if (!d || !canvas || !pt) return;
+      if (d.id === SHADE_DRAG) {
+        placeShadeAt(pt.px, pt.py);
+        return;
+      }
       if (d.id === '__wipe__') {
         splitRef.current = Math.min(1, Math.max(0, pt.px / canvas.width));
         needsRedraw.current = true;
@@ -540,7 +596,7 @@ export function useOverlayStage(params: StageParams): StageHandlers {
       }
       onMove(d.id, nx, ny);
     },
-    [canvasRef, toVideoPixels, onMove],
+    [canvasRef, toVideoPixels, onMove, placeShadeAt],
   );
 
   const onPointerUp = useCallback(
@@ -567,3 +623,50 @@ export function useOverlayStage(params: StageParams): StageHandlers {
 
   return { onPointerDown, onPointerMove, onPointerUp };
 }
+
+/** The drag id a shade's centre moves under — never an element's. */
+const SHADE_DRAG = '__shade__';
+
+/**
+ * The placing handle: a dashed line across the frame on a band's centre line,
+ * or a cross in a ring on a radial's centre. Drawn twice, ink then paper, so
+ * it reads over a white sky and a black coat alike.
+ */
+function drawShadeHandle(
+  ctx: CanvasRenderingContext2D,
+  handle: { x: number; y: number; axis: 'x' | 'y' | 'both' },
+  vw: number,
+  vh: number,
+): void {
+  const x = handle.x * vw;
+  const y = handle.y * vh;
+  const unit = Math.max(1, Math.min(vw, vh) * 0.003);
+  ctx.save();
+  for (const [colour, width, dash] of [
+    ['rgba(0,0,0,0.55)', unit * 3, []],
+    ['#d9442a', unit * 1.5, [unit * 6, unit * 4]],
+  ] as const) {
+    ctx.strokeStyle = colour;
+    ctx.lineWidth = width;
+    ctx.setLineDash([...dash]);
+    ctx.beginPath();
+    if (handle.axis === 'y') {
+      ctx.moveTo(0, y);
+      ctx.lineTo(vw, y);
+    } else if (handle.axis === 'x') {
+      ctx.moveTo(x, 0);
+      ctx.lineTo(x, vh);
+    } else {
+      const r = unit * 10;
+      ctx.moveTo(x - r * 1.6, y);
+      ctx.lineTo(x + r * 1.6, y);
+      ctx.moveTo(x, y - r * 1.6);
+      ctx.lineTo(x, y + r * 1.6);
+      ctx.moveTo(x + r, y);
+      ctx.arc(x, y, r, 0, Math.PI * 2);
+    }
+    ctx.stroke();
+  }
+  ctx.restore();
+}
+

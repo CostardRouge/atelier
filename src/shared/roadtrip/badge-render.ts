@@ -30,7 +30,8 @@ import {
 import type { DevelopSettings } from '../develop/develop';
 import { makeFrameGrader, type FrameGrader } from '../lut/frame-grader';
 import { drawQr, type QrDraw } from '../overlay/draw-qr';
-import { shadeGradient, type HookBlock, type Shade } from './shades';
+import type { HookBlock, Shade } from '../shades/shades';
+import { paintShades } from '../shades/shade-paint';
 import type { ResolvedHook } from './hooks/hook-variant';
 import { seek as seekVideo } from './video-frames';
 import {
@@ -413,63 +414,6 @@ export function measureBadge(
 /** The elements a paint or a measure uses — rewritten at the clock when a hook says so. */
 function elementsFor(opts: RenderBadgeOptions): OverlayElement[] {
   return opts.elementsAt ? opts.elementsAt(opts.timeSeconds ?? 0) : opts.elements;
-}
-
-/** `#rrggbb` → `rgba(r,g,b,a)`; anything else is passed through unchanged. */
-function rgba(color: string, alpha: number): string {
-  const m = /^#([0-9a-f]{2})([0-9a-f]{2})([0-9a-f]{2})$/i.exec(color.trim());
-  if (!m) return color;
-  const [r, g, b] = [m[1], m[2], m[3]].map((h) => parseInt(h, 16));
-  return `rgba(${r},${g},${b},${alpha})`;
-}
-
-/**
- * Paint the shades over the picture. They run BEFORE the badge, never after:
- * darkening the text you just drew would defeat the point.
- *
- * Exported because the video burn-in needs the same treatment on every frame,
- * through the Studio's export pipeline rather than through `renderBadge` — a
- * gradient that appeared in the PNG and vanished in the reel would be a
- * different picture.
- *
- * The geometry is `shades.ts`'s; this only translates fractions into pixels.
- */
-export function paintShades(
-  ctx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D,
-  w: number,
-  h: number,
-  shades: readonly Shade[],
-  block: HookBlock | null,
-): void {
-  const short = Math.min(w, h);
-  for (const shade of shades) {
-    const g = shadeGradient(shade, block);
-    if (!g) continue;
-
-    let gradient: CanvasGradient;
-    if (g.kind === 'linear') {
-      if (typeof ctx.createLinearGradient !== 'function') continue;
-      gradient = ctx.createLinearGradient(g.x0 * w, g.y0 * h, g.x1 * w, g.y1 * h);
-    } else {
-      if (typeof ctx.createRadialGradient !== 'function') continue;
-      // Radii are fractions of the SHORTER side, so a radial keeps its shape
-      // on a 9:16 frame instead of turning into a stripe.
-      gradient = ctx.createRadialGradient(
-        g.cx * w,
-        g.cy * h,
-        g.r0 * short,
-        g.cx * w,
-        g.cy * h,
-        Math.max(g.r1 * short, 1),
-      );
-    }
-    for (const stop of g.stops) gradient.addColorStop(stop.at, rgba(shade.color, stop.alpha));
-
-    ctx.save();
-    ctx.fillStyle = gradient;
-    ctx.fillRect(0, 0, w, h);
-    ctx.restore();
-  }
 }
 
 /**

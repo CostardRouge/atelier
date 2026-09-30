@@ -1,37 +1,43 @@
-import type { CSSProperties } from 'react';
-import type { Anchor } from '../../shared/overlay/overlay-types';
+import type { Anchor } from '../overlay/overlay-types';
 import {
   MAX_CORE,
   MAX_SHADES,
-  SHADE_DIRECTIONS,
   SHADE_FALLOFFS,
-  SHADE_GRID,
   centreMovable,
   createShade,
   directionInCell,
   followFlags,
   reachFollowsBadge,
-  shadeCell,
   shadeCentre,
   shadeCore,
   shadeFalloff,
   shadeFollow,
-  shadeGradient,
   vignetteShade,
   type Shade,
   type ShadeDirection,
-  type ShadeFalloff,
   type ShadeFollow,
-} from '../../shared/roadtrip/shades';
-import Button from '../../shared/ui/Button';
-import IconButton from '../../shared/ui/IconButton';
-import Segmented from '../../shared/ui/Segmented';
-import { FieldRow, RangeField, ToggleField } from '../../shared/ui/Inspector';
-import { Icons } from '../../shared/ui/icons';
+} from './shades';
+import { isRoundShade } from './shade-shape';
+import {
+  SHADE_LABELS,
+  ShadeDirectionPicker,
+  ShadeFalloffPicker,
+} from './ShadePickers';
+import Button from '../ui/Button';
+import IconButton from '../ui/IconButton';
+import Segmented from '../ui/Segmented';
+import { FieldRow, RangeField, ToggleField } from '../ui/Inspector';
+import { Icons } from '../ui/icons';
 
 interface ShadesPanelProps {
   shades: Shade[];
   onChange: (next: Shade[]) => void;
+  /**
+   * There is a BADGE to follow — Trips. Off (the Studio), the Follow row and
+   * the "Under the hook" shortcut are not offered, and every shade draws
+   * where its own grid cell says.
+   */
+  followBadge?: boolean;
   /** The badge's grid anchor, what a shade following it is placed by. */
   anchor?: Anchor;
   /** The shade whose centre the stage is placing, if any. */
@@ -43,122 +49,11 @@ interface ShadesPanelProps {
   onPlace?: (id: string | null) => void;
 }
 
-const INK = 'color-mix(in srgb, var(--color-ink) 80%, transparent)';
-
-/**
- * A cell's picture of the shade it draws — the gradient itself, so the grid
- * is read by eye rather than by label. A sketch, not the renderer: it only has
- * to tell eleven shapes apart at 30px.
- */
-const GLYPHS: Record<ShadeDirection, string> = {
-  top: `linear-gradient(to bottom, ${INK}, transparent 75%)`,
-  bottom: `linear-gradient(to top, ${INK}, transparent 75%)`,
-  left: `linear-gradient(to right, ${INK}, transparent 75%)`,
-  right: `linear-gradient(to left, ${INK}, transparent 75%)`,
-  radial: `radial-gradient(circle at 50% 50%, ${INK}, transparent 60%)`,
-  'middle-vertical': `linear-gradient(to bottom, transparent 10%, ${INK}, transparent 90%)`,
-  'middle-horizontal': `linear-gradient(to right, transparent 10%, ${INK}, transparent 90%)`,
-  'top-left': `radial-gradient(circle at 0% 0%, ${INK}, transparent 80%)`,
-  'top-right': `radial-gradient(circle at 100% 0%, ${INK}, transparent 80%)`,
-  'bottom-left': `radial-gradient(circle at 0% 100%, ${INK}, transparent 80%)`,
-  'bottom-right': `radial-gradient(circle at 100% 100%, ${INK}, transparent 80%)`,
-};
-
-const LABELS = Object.fromEntries(SHADE_DIRECTIONS.map((d) => [d.id, d.label])) as Record<
-  ShadeDirection,
-  string
->;
-
-/** The shapes whose reach is a radius. */
-const ROUND = new Set<ShadeDirection>(['radial', 'top-left', 'top-right', 'bottom-left', 'bottom-right']);
-
 const FOLLOW_OPTIONS = [
   { id: 'none', label: 'No', title: 'Placed where the grid says' },
   { id: 'edge', label: 'Edge', title: 'The reach lands on the badge, the side stays yours' },
   { id: 'anchor', label: 'Anchor', title: 'Sits where the badge is anchored, and moves with it' },
 ] as const satisfies readonly { id: ShadeFollow; label: string; title: string }[];
-
-function GlyphButton({
-  direction,
-  pressed,
-  onClick,
-  label,
-}: {
-  direction: ShadeDirection;
-  pressed: boolean;
-  onClick: () => void;
-  label: string;
-}) {
-  const style: CSSProperties = { backgroundImage: GLYPHS[direction] };
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      aria-label={label}
-      aria-pressed={pressed}
-      title={label}
-      style={style}
-      className={`w-8 h-8 rounded-[6px] border bg-paper cursor-pointer transition-[border-color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
-        pressed
-          ? 'border-accent shadow-[0_0_0_1px_var(--color-accent)]'
-          : 'border-line-strong hover:border-muted'
-      }`}
-    />
-  );
-}
-
-/**
- * A falloff's picture: the strength along a shade's run, drawn from the very
- * stops the renderer gets for it — a sketch of the curve could drift from it.
- */
-const FALLOFF_PATHS: Record<ShadeFalloff, string> = Object.fromEntries(
-  SHADE_FALLOFFS.map(({ id }) => {
-    const g = shadeGradient(createShade({ direction: 'left', strength: 1, reach: 1, falloff: id }));
-    const stops = g?.stops ?? [];
-    const line = stops
-      .map((s, i) => `${i ? 'L' : 'M'}${(2 + s.at * 32).toFixed(2)} ${(3 + (1 - s.alpha) * 16).toFixed(2)}`)
-      .join('');
-    return [id, line];
-  }),
-) as Record<ShadeFalloff, string>;
-
-function FalloffButton({
-  falloff,
-  pressed,
-  disabled,
-  onClick,
-  label,
-  hint,
-}: {
-  falloff: ShadeFalloff;
-  pressed: boolean;
-  disabled: boolean;
-  onClick: () => void;
-  label: string;
-  hint: string;
-}) {
-  const path = FALLOFF_PATHS[falloff];
-  return (
-    <button
-      type="button"
-      onClick={onClick}
-      disabled={disabled}
-      aria-label={label}
-      aria-pressed={pressed}
-      title={`${label} — ${hint}`}
-      className={`w-9 h-7 rounded-[6px] border bg-paper cursor-pointer disabled:opacity-45 disabled:cursor-default transition-[border-color,box-shadow] focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent ${
-        pressed
-          ? 'border-accent text-accent shadow-[0_0_0_1px_var(--color-accent)]'
-          : 'border-line-strong text-ink-soft hover:border-muted'
-      }`}
-    >
-      <svg viewBox="0 0 36 22" className="w-full h-full" aria-hidden="true">
-        <path d={`${path}L34 19L2 19Z`} fill="currentColor" opacity="0.18" />
-        <path d={path} fill="none" stroke="currentColor" strokeWidth="1.6" strokeLinejoin="round" />
-      </svg>
-    </button>
-  );
-}
 
 const pct = (v: number) => `${Math.round(v * 100)}%`;
 
@@ -174,7 +69,9 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
  * anchor grid, each cell showing the gradient it draws: a list of eleven
  * sentences had to be read every time. The centre holds three shapes (a radial
  * and the two bands, which cross the frame and fit no single cell), offered
- * beside the grid only while the centre is the cell.
+ * beside the grid only while the centre is the cell. That grid and the
+ * falloff's curves are `shared/shades/ShadePickers.tsx`, the very pickers
+ * Develop's shade mask is drawn with.
  *
  * Two shortcuts sit beside the plain "add", because the two shapes that get
  * reached for constantly (a scrim under the hook, a corner vignette) would
@@ -183,6 +80,7 @@ const pct = (v: number) => `${Math.round(v * 100)}%`;
 export default function ShadesPanel({
   shades,
   onChange,
+  followBadge = false,
   anchor,
   placing = null,
   onPlace,
@@ -199,18 +97,21 @@ export default function ShadesPanel({
     <>
       {shades.length === 0 && (
         <p className="m-0 text-xs text-muted">
-          The picture is untouched. Add a shade where the type needs help — a bright sky
-          exactly under the hook is the normal case.
+          The picture is untouched. Add a shade where the type needs help —{' '}
+          {followBadge
+            ? 'a bright sky exactly under the hook is the normal case.'
+            : 'a bright sky under a title, or a corner under the readouts.'}
         </p>
       )}
 
       {shades.map((shade, i) => {
-        const follow = shadeFollow(shade);
+        // Nothing to follow outside Trips: a stray flag from a sent hook or a
+        // file draws as the shade's own cell, and is shown that way.
+        const follow = followBadge ? shadeFollow(shade) : 'none';
         // What the shade really draws: under "Anchor", the badge's cell.
         const direction =
           follow === 'anchor' && anchor ? directionInCell(anchor, shade.direction) : shade.direction;
-        const cell = shadeCell(direction);
-        const round = ROUND.has(direction);
+        const round = isRoundShade(direction);
         // A top or bottom shade following the badge takes its reach from the
         // block, so the slider would be a control that does nothing.
         const reachLive = !reachFollowsBadge(direction, follow);
@@ -266,45 +167,11 @@ export default function ShadesPanel({
               align="start"
               hint={
                 follow === 'anchor' && anchor
-                  ? `${LABELS[direction]} — where the badge is anchored.`
-                  : LABELS[direction]
+                  ? `${SHADE_LABELS[direction]} — where the badge is anchored.`
+                  : SHADE_LABELS[direction]
               }
             >
-              <div
-                className="grid grid-cols-3 gap-1"
-                role="group"
-                aria-label={`Shade ${i + 1} direction`}
-              >
-                {SHADE_GRID.map(({ cell: at, shapes }) => {
-                  const shape = at === 'center' ? directionInCell('center', direction) : shapes[0];
-                  return (
-                    <GlyphButton
-                      key={at}
-                      direction={shape}
-                      pressed={at === cell}
-                      label={at === 'center' ? 'Centre' : LABELS[shape]}
-                      onClick={() => pick(shape)}
-                    />
-                  );
-                })}
-              </div>
-              {cell === 'center' && (
-                <div
-                  className="flex flex-col gap-1 self-center pl-2 border-l border-line"
-                  role="group"
-                  aria-label={`Shade ${i + 1} centre shape`}
-                >
-                  {SHADE_GRID[4].shapes.map((shape) => (
-                    <GlyphButton
-                      key={shape}
-                      direction={shape}
-                      pressed={shape === direction}
-                      label={LABELS[shape]}
-                      onClick={() => pick(shape)}
-                    />
-                  ))}
-                </div>
-              )}
+              <ShadeDirectionPicker direction={direction} onPick={pick} label={`Shade ${i + 1}`} />
             </FieldRow>
             <FieldRow label="Strength">
               <RangeField
@@ -353,23 +220,12 @@ export default function ShadesPanel({
               label="Falloff"
               hint={SHADE_FALLOFFS.find((f) => f.id === falloff)?.hint}
             >
-              <div
-                className="flex flex-wrap gap-1"
-                role="group"
-                aria-label={`Shade ${i + 1} falloff`}
-              >
-                {SHADE_FALLOFFS.map((f) => (
-                  <FalloffButton
-                    key={f.id}
-                    falloff={f.id}
-                    label={f.label}
-                    hint={f.hint}
-                    pressed={f.id === falloff}
-                    disabled={!on}
-                    onClick={() => patch(shade.id, { falloff: f.id })}
-                  />
-                ))}
-              </div>
+              <ShadeFalloffPicker
+                falloff={falloff}
+                label={`Shade ${i + 1}`}
+                disabled={!on}
+                onPick={(next) => patch(shade.id, { falloff: next })}
+              />
             </FieldRow>
             {movable && (
               <FieldRow
@@ -443,18 +299,20 @@ export default function ShadesPanel({
                 onChange={(invert) => patch(shade.id, { invert })}
               />
             </FieldRow>
-            <FieldRow
-              label="Follow badge"
-              hint={FOLLOW_OPTIONS.find((o) => o.id === follow)?.title}
-            >
-              <Segmented
-                size="sm"
-                label={`Shade ${i + 1} follows the badge`}
-                options={FOLLOW_OPTIONS}
-                value={follow}
-                onChange={(next) => patch(shade.id, followFlags(next))}
-              />
-            </FieldRow>
+            {followBadge && (
+              <FieldRow
+                label="Follow badge"
+                hint={FOLLOW_OPTIONS.find((o) => o.id === follow)?.title}
+              >
+                <Segmented
+                  size="sm"
+                  label={`Shade ${i + 1} follows the badge`}
+                  options={FOLLOW_OPTIONS}
+                  value={follow}
+                  onChange={(next) => patch(shade.id, followFlags(next))}
+                />
+              </FieldRow>
+            )}
           </div>
         );
       })}
@@ -464,9 +322,11 @@ export default function ShadesPanel({
           <Button size="sm" icon={Icons.plus} onClick={() => add(createShade())}>
             Shade
           </Button>
-          <Button size="sm" variant="ghost" onClick={() => add(createShade({ followHook: true }))}>
-            Under the hook
-          </Button>
+          {followBadge && (
+            <Button size="sm" variant="ghost" onClick={() => add(createShade({ followHook: true }))}>
+              Under the hook
+            </Button>
+          )}
           <Button size="sm" variant="ghost" onClick={() => add(vignetteShade(0.45))}>
             Vignette
           </Button>

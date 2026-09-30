@@ -99,7 +99,7 @@ import {
   shadeCentre,
   shadeFollow,
   type Shade,
-} from '../../shared/roadtrip/shades';
+} from '../../shared/shades/shades';
 import {
   locate,
   loopsOpenSlide,
@@ -2341,6 +2341,7 @@ export default function PostEditor({
               post={post}
               slides={slides}
               hookElements={hookElements}
+              hookBlock={block}
               aspect={aspect}
               hookFile={hookFile}
               hookIsVideo={hookIsVideo}

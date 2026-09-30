@@ -22,7 +22,7 @@ import { isBlendMode } from '../overlay/blend';
 import { readKnockout } from '../overlay/knockout';
 import { DEFAULT_BADGE_DURATION, type BadgeLayout } from './badge-layout';
 import { BADGE_PIECES, COUNTER_MODES, type BadgePiece, type CounterMode } from './day-badge';
-import { createShade, type Shade } from './shades';
+import { createShade, type Shade } from '../shades/shades';
 import { TIME_AGO_MODES, type TimeAgoMode } from './time-ago';
 import type { HookLayer } from './hooks/hook-variant';
 import type { PostBadge } from './trip-types';

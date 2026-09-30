@@ -24,6 +24,7 @@ function rowsOf(style: ProjectHouseStyle): HouseStyleRow[] {
         : 'Element styles as-is',
     },
     { label: 'Overlays', value: plural(style.elements.length, 'element') },
+    { label: 'Shades', value: style.shades.length ? plural(style.shades.length, 'shade') : 'None' },
     { label: 'Intro', value: intro ? `${(intro.end - intro.start).toFixed(1)} s` : 'None' },
     {
       label: 'Closing card',

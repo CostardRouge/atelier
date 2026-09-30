@@ -406,3 +406,57 @@ Unlike Trips and Develop, which hold ONE document in state and hand it back thro
 
 **Verified** in headless Chromium against a stub instance (VP8 stand-ins, `testing.md`): 320×180 → 1280×720 with the playhead and the trim kept, one `/download` for three switches, undo/redo, the Export tab's sentence, reload → re-add → the stored rush comes back by itself, a still's JPEG export at the original's 3000 × 1688 with no second fetch, a 500 said and cleared, no overflow at 390px. **Not driven**: a real 4K HEVC rush (and its transcode), a clip export (no H.264 encoder here), a phone. **Not built, deliberately**: a device guard on a GB rush stored on a project that a phone then opens — the fetch is a task with a Cancel and the choice clears on it; revisit if a phone tab dies on one.
 
+## Trips' shades in the Studio: over the whole clip, and on a scene (2026-09-29)
+
+**Decision (the maintainer: "the same shape system that we have in trips … in
+studio", then "Both" of three homes offered).** Two stacks of Trips' very
+shades (`shared/shades/`, `roadtrip.md`), both edited with the shared
+`ShadesPanel` without badge-following (nothing in the Studio is a badge):
+
+- **`ProjectDoc.shades`** — over the WHOLE picture, the Overlay tab's
+  **Shades** section. Portable, OPTIONAL (absent = none, no version bump, no
+  migration): `ProjectPortable.shades` is required so the compiler makes every
+  writer carry it, and the four places all have it (`toProjectFile`,
+  `parseProjectFile` through `readShades` — a shade is numbers a renderer
+  divides by, never trusted —, `applyProjectFile`, `pickStyle` for the house
+  style), plus `createProjectDoc`'s template. Timeless: the stage passes them
+  over a photograph too (a scene is withheld there), and `exportPhotoVariant`
+  takes them.
+- **`Scene.shades` + `shadeFade`** (absent = `SHADE_FADE`, 0.4 s) — the
+  veil's gradients, edited in `ScenePanel` under the veil, faded in and out by
+  `resolveScenes` over their own fade (`furnitureStrength`, the veil's ramp),
+  every scene's shades drawn (the veil keeps "strongest wins"). What a Trips
+  hook sends now (`roadtrip.md`).
+
+**Draw order** (`drawOverlays`, `DrawOptions.shades`): picture → the clip's
+shades → a scene's veil → a scene's shades → elements. The veil is the scene's
+furniture and sits over what is the clip's. Shades are OVERLAYS: a clean
+variant leaves them out, like the veil. **How to apply**: anything that draws
+the Studio's deck passes `shades` beside `scenes` — the stage
+(`useOverlayStage`), `exportVariantVideo`, the seek fallback (a positional
+last argument), `grabFrame`, `exportPhotoVariant`; the history slice, the
+autosave and its deps, the file export/import and the house style carry them
+too.
+
+**Placing a centre on the stage (2026-09-30, his ask).** The same grammar as
+Trips: `useOverlayStage` takes `shadeHandle` (centre + axis) and
+`onPlaceShade`; while set, a press or drag anywhere on the picture moves THAT
+centre and nothing else — ahead of the A/B divider and the elements — and the
+handle is chrome (a dashed line on a band, a cross in a ring on a radial,
+ink under accent). The editor holds `placing = { scope, id }`, the scope
+`CLIP_SHADES` or a scene's id, writes through `placedCentre` (the axis rule
+lives in `shade-shape.ts`, not the stage), and drops it whenever the Overlay
+tab closes, the shade goes, is switched off or loses its centre; a scene's
+shades offer no *Place* over a photograph, where a scene is not drawn. On a
+phone the inspector sheet steps aside. A drag is one undo step (the 700 ms
+coalescing). Driven headless on a VP8 clip: an intro band moved from y 0.5 to
+0.8 by a press (x kept), a whole-clip vignette dragged to (0.25, 0.3), both
+stored; Style → Overlay ended it.
+
+Driven headless on a flat 154 still: a bottom shade gave 61 at the bottom and
+147 mid-frame, a top-right corner 64 in that corner and nothing elsewhere, the
+project stored it, the photo export carried it (36 / 138 / 154 for a top shade
+at 0.8) and a clean variant did not; a scene's bottom shade through
+`drawOverlays` read 200 → 101 at a quarter second → 4, and 200 after the
+scene, under a whole-clip corner holding at 5 throughout.
+

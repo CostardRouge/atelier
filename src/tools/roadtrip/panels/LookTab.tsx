@@ -1,6 +1,6 @@
 import type { Anchor } from '../../../shared/overlay/overlay-types';
 import StylePanel from '../../../shared/overlay/StylePanel';
-import type { Shade } from '../../../shared/roadtrip/shades';
+import type { Shade } from '../../../shared/shades/shades';
 import { defaultCascade, type BadgePieceStyle } from '../../../shared/roadtrip/badge-layout';
 import { STAGGER_ORDERS, newStaggerSeed } from '../../../shared/overlay/stagger';
 import { StepRows } from '../PieceStylePanel';
@@ -24,7 +24,7 @@ import {
 import Segmented from '../../../shared/ui/Segmented';
 import HookPicker from './HookPicker';
 import PieceStylePanel from '../PieceStylePanel';
-import ShadesPanel from '../ShadesPanel';
+import ShadesPanel from '../../../shared/shades/ShadesPanel';
 import { linkButton } from './ui';
 import Button from '../../../shared/ui/Button';
 import { FieldRow, InspectorSection, RangeField } from '../../../shared/ui/Inspector';
@@ -357,6 +357,7 @@ export default function LookTab({
             <ShadesPanel
               shades={[...shades]}
               onChange={onShades}
+              followBadge
               anchor={post.badge.layout.anchor}
               placing={placingShade}
               onPlace={onPlaceShade}
@@ -452,6 +453,7 @@ export default function LookTab({
             <ShadesPanel
               shades={[...shades]}
               onChange={onShades}
+              followBadge
               anchor={slide.badge?.layout.anchor ?? 'bottom-left'}
               placing={placingShade}
               onPlace={onPlaceShade}

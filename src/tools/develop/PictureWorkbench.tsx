@@ -64,7 +64,9 @@ import {
   type BrushStroke,
   type Mask,
   type MaskKind,
+  type ShadeMask,
 } from '../../shared/render/mask';
+import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 import { nextMaskView, type MaskView } from './LayersPanel';
@@ -81,6 +83,7 @@ const FLASH_STEP_MS = 90;
  * small and un-picking by accident is cheaper to undo than failing to un-pick.
  */
 const SUBJECT_HIT_RADIUS = 0.04;
+
 import {
   addLayer,
   componentMask,
@@ -159,6 +162,12 @@ import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
 import type { RollExports } from './use-roll-export';
+
+/** A shade mask with its centre moved under `point`, or unchanged where it has none to move. */
+function withShadeCentre(m: ShadeMask, point: readonly [number, number]): ShadeMask {
+  const center = placedCentre(m, { x: point[0], y: point[1] });
+  return center ? { ...m, center } : m;
+}
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
 const SNAPSHOT_DELAY_MS = 700;
@@ -426,8 +435,13 @@ export default function PictureWorkbench({
   const partIndex = selectedPart !== null && selectedLayer?.parts?.[selectedPart] ? selectedPart : null;
   const activeMask = selectedLayer ? componentMask(selectedLayer, partIndex) : null;
   const paintKind = painting ? activeMask?.kind : undefined;
+  // A shade takes the pointer only while it has a centre to place — a band or
+  // a radial. An edge or a corner is its own position.
+  const placingShade = paintKind === 'shade' && activeMask?.kind === 'shade' && centreAxis(activeMask.direction) !== null;
   const paintId =
-    paintKind === 'brush' || paintKind === 'subject' || paintKind === 'colour' ? (selectedLayer?.id ?? null) : null;
+    paintKind === 'brush' || paintKind === 'subject' || paintKind === 'colour' || placingShade
+      ? (selectedLayer?.id ?? null)
+      : null;
   const brushRef = useRef(brush);
   brushRef.current = brush;
   // The picture's own sampler, read at the tap: the hook is made further down.
@@ -471,11 +485,22 @@ export default function PictureWorkbench({
           });
           return;
         }
+        if (paintKind === 'shade') {
+          // Trips' "Place on the picture": a press puts the centre under it,
+          // on the axis the shape moves along.
+          edit((m) => (m?.kind === 'shade' ? withShadeCentre(m, point) : null));
+          return;
+        }
         const made: BrushStroke = { points: [point], ...brushRef.current };
         strokeRef.current = made;
         edit((m) => (m?.kind === 'brush' && m.strokes.length < MAX_STROKES ? { kind: 'brush', strokes: [...m.strokes, made] } : null));
       },
       onMove: (point: [number, number]) => {
+        // A shade's centre follows the drag, as it does in Trips.
+        if (paintKind === 'shade') {
+          edit((m) => (m?.kind === 'shade' ? withShadeCentre(m, point) : null));
+          return;
+        }
         // A subject and a colour are TAPPED, never dragged.
         if (paintKind !== 'brush') return;
         const live = strokeRef.current;
@@ -497,7 +522,7 @@ export default function PictureWorkbench({
       onEnd: () => {
         strokeRef.current = null;
       },
-      gesture: paintKind === 'brush' ? ('drag' as const) : ('tap' as const),
+      gesture: paintKind === 'brush' || paintKind === 'shade' ? ('drag' as const) : ('tap' as const),
     };
   }, [paintId, paintKind, partIndex]);
   // --- repairing -------------------------------------------------------------
@@ -1306,8 +1331,10 @@ export default function PictureWorkbench({
           return;
         }
         case 'pick': {
-          const kind = keyState.current.activeMask?.kind;
-          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush' && kind !== 'colour')) return;
+          const active = keyState.current.activeMask;
+          const kind = active?.kind;
+          const placeable = active?.kind === 'shade' && centreAxis(active.direction) !== null;
+          if (open !== 'layers' || (kind !== 'subject' && kind !== 'brush' && kind !== 'colour' && !placeable)) return;
           e.preventDefault();
           setPainting(!keyState.current.painting);
           return;

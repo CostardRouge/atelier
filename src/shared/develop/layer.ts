@@ -67,7 +67,7 @@ export interface MaskPart {
 export const MAX_MASK_PARTS = 4;
 
 /** The kinds a part may be — every kind but a subject. */
-export const PART_KINDS: readonly MaskKind[] = ['linear', 'radial', 'luma', 'colour', 'brush'];
+export const PART_KINDS: readonly MaskKind[] = ['linear', 'radial', 'luma', 'colour', 'brush', 'shade'];
 
 export interface AdjustLayer {
   id: string;

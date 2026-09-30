@@ -1,40 +1,34 @@
 /**
- * SHADES — the darkening laid over a picture so type stays readable on it.
+ * A SHADE's shape — where a gradient sits on a frame and how it fades — shared
+ * by every tool that draws one.
  *
- * One model replaces what used to be two controls (a vignette and a scrim).
- * They were the same thing seen twice: a gradient of some colour, anchored
- * somewhere, reaching some distance. Separating them cost the combinations
- * that actually come up — a band that starts clear at the top edge and closes
- * toward the middle, a radial under a centred hook, a wash from the left AND
- * a vignette at once — and gave the vignette no colour of its own.
+ * Trips was first (`shared/roadtrip/shades.ts`): a stack of coloured shades
+ * laid over a picture so type stays readable. Develop is second (2026-09-29,
+ * the maintainer's ask for "the same shape system"): a `shade` MASK for an
+ * adjustment layer (`render/mask.ts`), where the fade decides how much of the
+ * layer's develop lands rather than how much colour is painted. Both read the
+ * shape from here, so a band, a corner, a falloff and a core mean the same
+ * thing in both tools, and the pickers that choose them are one component
+ * (`ShadePickers.tsx`).
  *
- * A shade is therefore: a DIRECTION, how far it REACHES, how strong it gets,
- * what colour it is, and whether it is INVERTED (dark at the far end of the
- * reach rather than at the anchor). Inversion is not redundant with picking
- * the opposite edge: `top` reaching 0.5 inverted is clear at the top and dark
- * at mid-frame, which no un-inverted shade draws.
+ * A shape is: a DIRECTION picked on a 3×3 grid (four edges, four corners, and
+ * in the centre a radial and two middle bands), how far it REACHES, whether it
+ * is INVERTED (dark at the far end of the reach rather than at the anchor —
+ * `top` reaching 0.5 inverted is clear at the top and dark from mid-frame,
+ * which no un-inverted shape draws), and the FADE's own shape: a `falloff`
+ * curve, a `core` held at full strength before the fade starts, and a
+ * `center` for a band or a radial. Those three are optional and their absence
+ * draws exactly the three stops every shade drew before they existed.
  *
- * `followHook` hands the reach to the badge itself: a linear shade lands on
- * the block's own edge, a radial centres on it. That is the old "under the
- * hook" behaviour, kept because a scrim that moves with the text it protects
- * is worth more than one placed by eye.
+ * What is NOT here is a tool's own: a colour and a strength (Trips' shade
+ * paints; a Develop mask weighs a develop), and following a badge (only Trips
+ * has one — it hands this module a `ShadeBlock` and a direction instead).
  *
- * `followAnchor` goes one step further and hands over the POSITION too: the
- * shade sits in the cell of the 3×3 grid the badge is anchored to — a badge
- * set bottom-left gets a pool of shade in that corner, and moves it when the
- * badge moves. The shade's own direction is kept underneath, so switching the
- * option off returns exactly what was chosen by hand.
- *
- * The FADE has a shape of its own (2026-09-23): a `falloff` curve and a
- * `core` held at full strength before the fade starts, because three fixed
- * stops put a shade at full strength on one line only — at 100 % strength and
- * 100 % reach a middle band was a dark stroke in a gradient, never a dark
- * zone. A band or a radial also takes a `center`. All three are optional and
- * their absence draws exactly the stops stored shades always drew.
- *
- * Everything here is pure and DOM-free: `shadeGradient` returns a description
- * in fractions of the frame, so the geometry is unit-testable and the canvas
- * work is a dumb translation of it (`badge-render.ts`).
+ * Everything is pure and DOM-free. `shapeGradient` returns a description in
+ * FRACTIONS of the frame (radii against the shorter side, so a radial stays a
+ * circle on 9:16), a canvas painter is a dumb translation of it, and
+ * `gradientAt` evaluates it at a point exactly as a canvas fills it — which is
+ * what lets a mask that is not painted by a canvas draw the very same shape.
  */
 
 import type { Anchor } from '../overlay/overlay-types';
@@ -85,6 +79,10 @@ export const SHADE_DIRECTIONS: readonly {
   { id: 'bottom-right', label: 'Bottom-right corner', hint: 'Dark in the corner, clearing outward' },
 ];
 
+export function isShadeDirection(value: unknown): value is ShadeDirection {
+  return SHADE_DIRECTIONS.some((d) => d.id === value);
+}
+
 /**
  * The 3×3 grid a direction is picked on, in reading order, cell for cell the
  * badge's own anchor grid. Every cell holds one shape except the centre, which
@@ -118,84 +116,9 @@ export function directionInCell(anchor: Anchor, own: ShadeDirection): ShadeDirec
   return cell.shapes.includes(own) ? own : cell.shapes[0];
 }
 
-/** How a shade takes after the badge — nothing, its edge, or its anchor too. */
-export type ShadeFollow = 'none' | 'edge' | 'anchor';
-
-export function shadeFollow(shade: Pick<Shade, 'followHook' | 'followAnchor'>): ShadeFollow {
-  if (shade.followAnchor === true) return 'anchor';
-  return shade.followHook ? 'edge' : 'none';
-}
-
-/** The two stored flags a follow mode writes. */
-export function followFlags(follow: ShadeFollow): Pick<Shade, 'followHook' | 'followAnchor'> {
-  return { followHook: follow === 'edge', followAnchor: follow === 'anchor' };
-}
-
-/**
- * The direction a shade really draws with the badge in hand: under
- * `followAnchor`, the badge's cell; otherwise its own. No anchor to follow (a
- * slide without a badge) falls back to its own too, never to nothing.
- */
-export function resolvedDirection(shade: Shade, block: HookBlock | null): ShadeDirection {
-  if (shade.followAnchor === true && block?.anchor) {
-    return directionInCell(block.anchor, shade.direction);
-  }
-  return shade.direction;
-}
-
-/**
- * Whether the badge sets this direction's reach, so its slider does nothing:
- * only the top and bottom edges land on the block, which is measured
- * vertically. A side, a corner and a band keep the slider's reach.
- */
-export function reachFollowsBadge(direction: ShadeDirection, follow: ShadeFollow): boolean {
-  return follow !== 'none' && (direction === 'top' || direction === 'bottom');
-}
-
-export interface Shade {
-  id: string;
-  direction: ShadeDirection;
-  /** How far the fade travels, as a fraction of the frame. */
-  reach: number;
-  /** Peak opacity, 0..1. */
-  strength: number;
-  color: string;
-  /** Dark at the FAR end of the reach instead of at the anchor. */
-  invert: boolean;
-  /** Take the reach (and, for a radial, the centre) from the badge block. */
-  followHook: boolean;
-  /**
-   * Take the position from the badge's anchor as well (implies the reach of
-   * `followHook`). Optional, absent means off: shades stored before it
-   * existed carry no such key.
-   */
-  followAnchor?: boolean;
-  /**
-   * Off keeps the shade in the stack but skips it — the A/B of grading.
-   * Optional because every shade stored before the switch existed has no such
-   * key: absent means ON, so read it as `enabled !== false`, never `!enabled`.
-   */
-  enabled?: boolean;
-  /**
-   * How the shade fades from its strength to clear. Absent means `soft`, the
-   * three stops every shade drew before the choice existed — so no stored
-   * shade changes by a code value (the `enabled` rule again).
-   */
-  falloff?: ShadeFalloff;
-  /**
-   * The part of the reach held at FULL strength before the fade starts,
-   * 0..`MAX_CORE`. Absent means 0. This is what makes a dark ZONE: without
-   * it a shade is at full strength on one line only (the edge, or a band's
-   * centre) and already at 35 % halfway through its reach.
-   */
-  core?: number;
-  /**
-   * Where a band or a radial is centred, in frame fractions. Absent means the
-   * middle of the frame. A band reads only its own axis (`y` for ↕, `x` for
-   * ↔); an edge and a corner ARE their position and ignore it; a radial that
-   * follows the badge takes the badge's centre instead (`centreMovable`).
-   */
-  center?: { x: number; y: number };
+/** The shapes whose reach is a RADIUS — the radial and the four corners. */
+export function isRoundShade(direction: ShadeDirection): boolean {
+  return direction === 'radial' || cornerOf(direction) !== null;
 }
 
 /**
@@ -218,68 +141,89 @@ export const SHADE_FALLOFFS: readonly { id: ShadeFalloff; label: string; hint: s
 /** The most of a reach a core may hold: a fade needs somewhere to happen. */
 export const MAX_CORE = 0.9;
 
+/**
+ * A shade's SHAPE: everything about where it sits and how it fades, and
+ * nothing about what it does there.
+ */
+export interface ShadeShape {
+  direction: ShadeDirection;
+  /** How far the fade travels, as a fraction of the frame. */
+  reach: number;
+  /** Dark at the FAR end of the reach instead of at the anchor. Absent is off. */
+  invert?: boolean;
+  /**
+   * How the shade fades from its strength to clear. Absent means `soft`, the
+   * three stops every shade drew before the choice existed — so no stored
+   * shade changes by a code value. Read it through `shadeFalloff`.
+   */
+  falloff?: ShadeFalloff;
+  /**
+   * The part of the reach held at FULL strength before the fade starts,
+   * 0..`MAX_CORE`. Absent means 0. This is what makes a dark ZONE: without
+   * it a shade is at full strength on one line only (the edge, or a band's
+   * centre) and already at 35 % halfway through its reach.
+   */
+  core?: number;
+  /**
+   * Where a band or a radial is centred, in frame fractions. Absent means the
+   * middle of the frame. A band reads only its own axis (`y` for ↕, `x` for
+   * ↔); an edge and a corner ARE their position and ignore it.
+   */
+  center?: { x: number; y: number };
+}
+
 function isFalloff(value: unknown): value is ShadeFalloff {
   return SHADE_FALLOFFS.some((f) => f.id === value);
 }
 
 /** The falloff a shade really draws with: absent or unknown is `soft`. */
-export function shadeFalloff(shade: Pick<Shade, 'falloff'>): ShadeFalloff {
+export function shadeFalloff(shade: Pick<ShadeShape, 'falloff'>): ShadeFalloff {
   return isFalloff(shade.falloff) ? shade.falloff : 'soft';
 }
 
 /** The core a shade really holds, clamped: absent or garbage is 0. */
-export function shadeCore(shade: Pick<Shade, 'core'>): number {
+export function shadeCore(shade: Pick<ShadeShape, 'core'>): number {
   const c = shade.core;
   if (typeof c !== 'number' || !Number.isFinite(c)) return 0;
   return Math.min(MAX_CORE, Math.max(0, c));
 }
 
 /** The centre a shade is placed by, clamped to the frame: absent is the middle. */
-export function shadeCentre(shade: Pick<Shade, 'center'>): { x: number; y: number } {
+export function shadeCentre(shade: Pick<ShadeShape, 'center'>): { x: number; y: number } {
   const c = shade.center;
   return { x: clamp01(c?.x ?? 0.5, 0.5), y: clamp01(c?.y ?? 0.5, 0.5) };
 }
 
 /**
- * Which axis of a shade's centre the author can move, if any: a vertical band
- * moves up and down, a horizontal one sideways, a radial anywhere — unless it
- * follows the badge, which then places it. An edge and a corner are their
- * position.
+ * Which axis of a shape's centre can be moved, if any: a vertical band moves
+ * up and down, a horizontal one sideways, a radial anywhere. An edge and a
+ * corner are their position. (Trips narrows this: a radial following the
+ * badge is placed by the badge.)
  */
-export function centreMovable(
-  direction: ShadeDirection,
-  follow: ShadeFollow,
-): 'x' | 'y' | 'both' | null {
+export function centreAxis(direction: ShadeDirection): 'x' | 'y' | 'both' | null {
   if (direction === 'middle-vertical') return 'y';
   if (direction === 'middle-horizontal') return 'x';
-  if (direction === 'radial') return follow === 'none' ? 'both' : null;
+  if (direction === 'radial') return 'both';
   return null;
 }
 
-/** More than a handful stops being a treatment and starts being a paint job. */
-export const MAX_SHADES = 4;
-
-export function createShade(over: Partial<Shade> = {}): Shade {
+/**
+ * The centre a press at `point` (frame fractions) gives a shape, on the axis
+ * it can move along and no other: a band keeps its other coordinate, a radial
+ * takes both. Null for a shape whose position is its edge or its corner —
+ * there is nothing to place.
+ */
+export function placedCentre(
+  shape: Pick<ShadeShape, 'direction' | 'center'>,
+  point: { x: number; y: number },
+): { x: number; y: number } | null {
+  const axis = centreAxis(shape.direction);
+  if (!axis) return null;
+  const now = shadeCentre(shape);
   return {
-    id:
-      typeof crypto !== 'undefined' && 'randomUUID' in crypto
-        ? crypto.randomUUID()
-        : `shade_${Math.random().toString(36).slice(2)}`,
-    direction: 'bottom',
-    reach: 0.55,
-    strength: 0.65,
-    color: '#000000',
-    invert: false,
-    followHook: false,
-    followAnchor: false,
-    enabled: true,
-    ...over,
+    x: axis === 'y' ? now.x : clamp01(point.x, now.x),
+    y: axis === 'x' ? now.y : clamp01(point.y, now.y),
   };
-}
-
-/** The classic corner vignette: a radial, inverted, reaching the corners. */
-export function vignetteShade(strength: number, color = '#000000'): Shade {
-  return createShade({ direction: 'radial', invert: true, reach: 1, strength, color });
 }
 
 /** One stop of a gradient: where along it, and how opaque there. */
@@ -310,12 +254,14 @@ export interface RadialShade {
 
 export type ShadeGradient = LinearShade | RadialShade;
 
-/** The badge block's vertical extent, in fractions of the frame's height. */
-export interface HookBlock {
+/**
+ * A horizontal block of the frame a shade LANDS on, in fractions of its
+ * height: a top or bottom edge ends at the block's own edge, a radial centres
+ * on it. Trips hands its badge block here (`HookBlock`); nothing else has one.
+ */
+export interface ShadeBlock {
   top: number;
   bottom: number;
-  /** The badge's grid anchor, what `followAnchor` places a shade by. */
-  anchor?: Anchor;
 }
 
 function clamp01(value: number, fallback = 0): number {
@@ -442,6 +388,9 @@ function sampledStops(
 /** A corner's radial, as a fraction of the shorter side at full reach. */
 const CORNER_RADIUS = 1.2;
 
+/** A radial's radius, as a fraction of the shorter side at full reach. */
+const RADIAL_RADIUS = 0.72;
+
 /** The corner a direction names, as frame fractions, or null for any other. */
 function cornerOf(direction: ShadeDirection): { cx: number; cy: number } | null {
   switch (direction) {
@@ -467,14 +416,14 @@ function isMirrored(direction: ShadeDirection): boolean {
  * Where a linear shade runs from and to, in frame fractions. `reach` is
  * measured along the shade's own axis from its anchor.
  *
- * A `followHook` shade ends at the badge block's own edge (with a margin of
- * the block's height, so the fade starts clear of the first line rather than
- * cutting across it) — the old "under the hook" scrim, unchanged.
+ * Given a `block`, a top or bottom shade ends at the block's own edge (with a
+ * margin of the block's height, so the fade starts clear of the first line
+ * rather than cutting across it) — Trips' "under the hook" scrim, unchanged.
  */
 function linearEnds(
   direction: ShadeDirection,
   reach: number,
-  block: HookBlock | null,
+  block: ShadeBlock | null,
   centre: { x: number; y: number } = { x: 0.5, y: 0.5 },
 ): { x0: number; y0: number; x1: number; y1: number } {
   const r = clamp01(reach);
@@ -491,73 +440,142 @@ function linearEnds(
   }
 
   if (direction === 'top') {
-    const to = hookEnd(block, 'top') ?? r;
+    const to = (block && blockReach('top', block)) ?? r;
     return { x0: 0, y0: 0, x1: 0, y1: clamp01(to) };
   }
   if (direction === 'bottom') {
-    const to = hookEnd(block, 'bottom') ?? r;
+    const to = (block && blockReach('bottom', block)) ?? r;
     return { x0: 0, y0: 1, x1: 0, y1: clamp01(1 - to) };
   }
   if (direction === 'left') {
     return { x0: 0, y0: 0, x1: clamp01(r), y1: 0 };
   }
   return { x0: 1, y0: 0, x1: clamp01(1 - r), y1: 0 };
-
-  function hookEnd(b: HookBlock | null, side: 'top' | 'bottom'): number | null {
-    if (!b) return null;
-    const margin = Math.max(b.bottom - b.top, 0.02) * 0.35;
-    return side === 'top'
-      ? clamp01(b.bottom + margin)
-      : clamp01(1 - Math.max(0, b.top - margin));
-  }
 }
 
 /**
- * The gradient a shade draws, or null when it would draw nothing (no
- * strength, or no reach at all). A shade that paints nothing must be absent
- * rather than transparent: a zero-alpha `fillRect` still costs a composite on
- * every exported frame.
+ * The reach at which a top or bottom shade lands on `block` — its far edge
+ * plus a margin of the block's height, so the fade starts clear of the first
+ * line rather than cutting across it — or null for any other direction, which
+ * a block does not reach.
  */
-export function shadeGradient(
-  shade: Shade,
-  block: HookBlock | null = null,
+export function blockReach(direction: ShadeDirection, block: ShadeBlock): number | null {
+  const margin = Math.max(block.bottom - block.top, 0.02) * 0.35;
+  if (direction === 'top') return clamp01(block.bottom + margin);
+  if (direction === 'bottom') return clamp01(1 - Math.max(0, block.top - margin));
+  return null;
+}
+
+/**
+ * The gradient a shape draws at `strength`, or null when it would draw
+ * nothing (no strength, or no reach at all). A shade that paints nothing must
+ * be absent rather than transparent: a zero-alpha `fillRect` still costs a
+ * composite on every exported frame.
+ *
+ * `place` is how a host overrides the shape's own position: a `direction` in
+ * place of the stored one (Trips' shade following the badge's anchor), and a
+ * `block` a top or bottom edge lands on and a radial centres on (the badge).
+ */
+export function shapeGradient(
+  shape: ShadeShape,
+  strength: number,
+  place: { direction?: ShadeDirection; block?: ShadeBlock | null } = {},
 ): ShadeGradient | null {
-  if (shade.enabled === false) return null;
-  if (clamp01(shade.strength) <= 0) return null;
-  const direction = resolvedDirection(shade, block);
-  const useHook = shadeFollow(shade) !== 'none' ? block : null;
+  if (clamp01(strength) <= 0) return null;
+  const direction = place.direction ?? shape.direction;
+  const block = place.block ?? null;
   const stops = stopsFor(
-    shade.strength,
-    shade.invert,
+    strength,
+    shape.invert === true,
     isMirrored(direction),
-    shadeFalloff(shade),
-    shadeCore(shade),
+    shadeFalloff(shape),
+    shadeCore(shape),
   );
-  const centre = shadeCentre(shade);
+  const centre = shadeCentre(shape);
 
   // A corner is a quarter of a circle centred ON the corner — a pool of shade
   // falling off like light, where a diagonal linear would draw a straight
   // edge across the frame. Radii run against the shorter side, as a radial's.
   const corner = cornerOf(direction);
   if (corner) {
-    const reach = clamp01(shade.reach);
+    const reach = clamp01(shape.reach);
     if (reach <= 0) return null;
     return { kind: 'radial', ...corner, r0: 0, r1: reach * CORNER_RADIUS, stops };
   }
 
   if (direction === 'radial') {
-    // Centred on the badge when it is asked to follow it, so a hook set low
-    // in the frame gets its own pool of shade rather than one in the middle.
-    // Otherwise it sits where the author put it, the middle by default.
-    const cx = useHook ? 0.5 : centre.x;
-    const cy = useHook ? clamp01((useHook.top + useHook.bottom) / 2) : centre.y;
-    const reach = clamp01(shade.reach);
+    // Centred on the block when one is given, so a hook set low in the frame
+    // gets its own pool of shade rather than one in the middle. Otherwise it
+    // sits where the author put it, the middle by default.
+    const cx = block ? 0.5 : centre.x;
+    const cy = block ? clamp01((block.top + block.bottom) / 2) : centre.y;
+    const reach = clamp01(shape.reach);
     if (reach <= 0) return null;
-    return { kind: 'radial', cx, cy, r0: 0, r1: reach * 0.72, stops };
+    return { kind: 'radial', cx, cy, r0: 0, r1: reach * RADIAL_RADIUS, stops };
   }
 
-  if (!useHook && clamp01(shade.reach) <= 0) return null;
-  const ends = linearEnds(direction, shade.reach, useHook, centre);
+  if (!block && clamp01(shape.reach) <= 0) return null;
+  const ends = linearEnds(direction, shape.reach, block, centre);
   if (ends.x0 === ends.x1 && ends.y0 === ends.y1) return null;
   return { kind: 'linear', ...ends, stops };
+}
+
+/**
+ * The opacity of `stops` at `t` along a gradient, exactly as a canvas fills
+ * it: linear between two stops, and HELD at the first and last stop past the
+ * gradient's ends (the reason a band runs edge to edge — see `stopsFor`).
+ */
+export function stopsAt(stops: readonly ShadeStop[], t: number): number {
+  const n = stops.length;
+  if (n === 0) return 0;
+  if (!(t > stops[0].at)) return stops[0].alpha;
+  if (t >= stops[n - 1].at) return stops[n - 1].alpha;
+  // The first stop at or past `t`, by halving: a rasterised shade asks this
+  // once per texel, of up to ~35 stops.
+  let lo = 1;
+  let hi = n - 1;
+  while (lo < hi) {
+    const mid = (lo + hi) >> 1;
+    if (stops[mid].at < t) lo = mid + 1;
+    else hi = mid;
+  }
+  const a = stops[lo - 1];
+  const b = stops[lo];
+  const span = b.at - a.at;
+  return span > 0 ? a.alpha + ((b.alpha - a.alpha) * (t - a.at)) / span : b.alpha;
+}
+
+/**
+ * Where along a gradient the point `(u, v)` falls — 0 at its start, 1 at its
+ * end, not clamped — on a frame of this aspect (width over height), in the
+ * canvas's own terms: a linear gradient projects the point onto its axis in
+ * PIXELS, a radial measures the distance from its centre against the SHORTER
+ * side, as `paintShades` hands its radii to the canvas.
+ */
+export function gradientRun(g: ShadeGradient, u: number, v: number, aspectRatio = 1): number {
+  const ar = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
+  if (g.kind === 'linear') {
+    // Frame units with a height of 1, so the width is the aspect ratio.
+    const dx = (g.x1 - g.x0) * ar;
+    const dy = g.y1 - g.y0;
+    const len2 = dx * dx + dy * dy;
+    if (!(len2 > 0)) return 0;
+    return ((u - g.x0) * ar * dx + (v - g.y0) * dy) / len2;
+  }
+  const short = Math.min(ar, 1);
+  const dx = (u - g.cx) * ar;
+  const dy = v - g.cy;
+  const d = Math.sqrt(dx * dx + dy * dy);
+  const r0 = g.r0 * short;
+  const r1 = g.r1 * short;
+  if (!(r1 > r0)) return d >= r1 ? 1 : 0;
+  return (d - r0) / (r1 - r0);
+}
+
+/**
+ * The gradient's opacity at `(u, v)`, frame fractions, on a frame of this
+ * aspect: what a canvas filled with it shows there, 0..1.
+ */
+export function gradientAt(g: ShadeGradient, u: number, v: number, aspectRatio = 1): number {
+  return stopsAt(g.stops, gradientRun(g, u, v, aspectRatio));
 }

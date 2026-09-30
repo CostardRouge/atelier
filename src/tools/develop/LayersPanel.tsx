@@ -8,7 +8,7 @@ import { MAX_LAYERS, layerLabel, type AdjustLayer } from '../../shared/develop/l
 import type { MaskKind } from '../../shared/render/mask';
 
 const HINT =
-  'A layer is an ordinary develop that applies only where its mask says. Linear is a straight edge with a soft transition — a darkened sky; radial is an ellipse — a face lifted out of its surround, or a vignette drawn on purpose; brightness picks a band of tone wherever it falls in the frame; colour picks the colours you tap, wherever they are; painted is drawn by hand on the picture; subject is found by a model from a point you tap. A layer’s mask can be COMBINED with further ones — added, subtracted or intersected — in the layer’s own mask panel. Everything on the Develop tab works inside a layer, so a local exposure, a local white balance and a local curve are the same controls you already know. Layers apply on top of the picture as you see it, after its own develop and its look, so what a slider does here is what you are looking at.';
+  'A layer is an ordinary develop that applies only where its mask says. Linear is a straight edge with a soft transition — a darkened sky; radial is an ellipse — a face lifted out of its surround, or a vignette drawn on purpose; shade is the shape a Trips shade draws — an edge, a corner, a band or a pool of light picked on a grid, with its core and its falloff; brightness picks a band of tone wherever it falls in the frame; colour picks the colours you tap, wherever they are; painted is drawn by hand on the picture; subject is found by a model from a point you tap. A layer’s mask can be COMBINED with further ones — added, subtracted or intersected — in the layer’s own mask panel. Everything on the Develop tab works inside a layer, so a local exposure, a local white balance and a local curve are the same controls you already know. Layers apply on top of the picture as you see it, after its own develop and its look, so what a slider does here is what you are looking at.';
 
 /** How the open layer's mask is shown on the picture. */
 export type MaskView = 'off' | 'outline' | 'fill';
@@ -27,6 +27,7 @@ export function nextMaskView(v: MaskView): MaskView {
 const KINDS: readonly { kind: MaskKind | null; label: string }[] = [
   { kind: 'linear', label: 'Linear' },
   { kind: 'radial', label: 'Radial' },
+  { kind: 'shade', label: 'Shade' },
   { kind: 'luma', label: 'Brightness' },
   { kind: 'colour', label: 'Colour' },
   { kind: 'brush', label: 'Painted' },

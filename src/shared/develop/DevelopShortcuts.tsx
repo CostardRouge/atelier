@@ -55,7 +55,7 @@ const GROUPS: readonly Group[] = [
       { keys: '⌘/Ctrl ⇧C · ⇧V', what: 'the picture’s settings in sections — copy the ticked ones, paste them here, or apply them to others' },
       { keys: '⌘/Ctrl \'', what: 'a variant of this picture as it stands — the same file with its own edits; Add → as shot starts one bare' },
       { keys: '⌘/Ctrl Z', what: 'undo — and ⇧ to put it back' },
-      { keys: 'P', what: 'on the Layers tab, Pick (a subject) or Paint (a painted mask) on and off' },
+      { keys: 'P', what: 'on the Layers tab, Pick (a subject, a colour), Paint (a painted mask) or Place (a shade’s centre) on and off' },
       { keys: 'M', what: 'on the Layers tab, the mask hidden, as its outline, or filled in red' },
       { keys: 'tap', what: 'with Pick on, add a point to the subject — the + cursor' },
       { keys: 'tap a marker', what: 'take that point off again — it shows −' },
