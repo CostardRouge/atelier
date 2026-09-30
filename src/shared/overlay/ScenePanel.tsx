@@ -23,6 +23,10 @@ interface ScenePanelProps {
   onChange: (next: Scene) => void;
   /** Drops the scene AND the elements in it — hence the two-step confirm. */
   onRemove: () => void;
+  /** The scene's shade whose centre the stage is placing, if any. */
+  placingShade?: string | null;
+  /** Hand one of the scene's shades to the stage to place (null takes it back). */
+  onPlaceShade?: (id: string | null) => void;
 }
 
 const DEFAULT_SCRIM: SceneScrim = { color: '#0b0a09', opacity: 0.55, fade: 0.4 };
@@ -33,6 +37,8 @@ export default function ScenePanel({
   playhead,
   onChange,
   onRemove,
+  placingShade = null,
+  onPlaceShade,
 }: ScenePanelProps) {
   const scrim = scene.scrim;
   const [confirming, setConfirming] = useState(false);
@@ -124,6 +130,8 @@ export default function ScenePanel({
         <ShadesPanel
           shades={scene.shades ?? []}
           onChange={(shades) => patch({ shades: shades.length ? shades : undefined })}
+          placing={placingShade}
+          onPlace={onPlaceShade}
         />
       </div>
       {(scene.shades?.length ?? 0) > 0 && (

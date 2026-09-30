@@ -48,6 +48,10 @@ import TimingPanel from '../../shared/overlay/TimingPanel';
 import { createIntroScene, findScene, type Scene } from '../../shared/overlay/scenes';
 import ShadesPanel from '../../shared/shades/ShadesPanel';
 import type { Shade } from '../../shared/shades/shades';
+import { centreAxis, placedCentre, shadeCentre } from '../../shared/shades/shade-shape';
+
+/** The scope of the clip's own shades, beside a scene's id, while one is placed. */
+const CLIP_SHADES = '__clip__';
 import GuidesControl from '../../shared/overlay/GuidesControl';
 import { exportOverlayVideoViaSeek } from '../../shared/overlay/export-overlay-seek';
 import { exportVariantVideo, outroTail } from '../../shared/media/export-variant';
@@ -1058,6 +1062,58 @@ export default function StudioEditor({
     [isPhoto, elements],
   );
 
+  // --- placing a shade's centre on the stage --------------------------------
+  /**
+   * The shade whose centre the stage is placing (a panel's "Place on the
+   * picture") — the clip's own (`CLIP_SHADES`) or a scene's (by its id). Only
+   * while the Overlay tab is the one open, and only while that shade still has
+   * a centre to move: anything else drops it, so the stage is never left
+   * taking presses for a panel nobody can see. A scene's shades are not drawn
+   * over a photograph, so neither is their handle.
+   */
+  const [placing, setPlacing] = useState<{ scope: string; id: string } | null>(null);
+  const placingList = !placing
+    ? null
+    : placing.scope === CLIP_SHADES
+      ? shades
+      : isPhoto
+        ? null
+        : (findScene(scenes, placing.scope)?.shades ?? null);
+  const shadeInPlace =
+    tab === 'overlay' && placing && placingList
+      ? (placingList.find((sh) => sh.id === placing.id && sh.enabled !== false) ?? null)
+      : null;
+  const placingAxis = shadeInPlace ? centreAxis(shadeInPlace.direction) : null;
+  const shadeHandle =
+    shadeInPlace && placingAxis ? { ...shadeCentre(shadeInPlace), axis: placingAxis } : null;
+  const placingLost = placing !== null && shadeHandle === null;
+  useEffect(() => {
+    if (placingLost) setPlacing(null);
+  }, [placingLost]);
+  /** What a panel's "Place on the picture" calls, for the shades of `scope`. */
+  const placeShade = (scope: string) => (id: string | null) => {
+    setPlacing(id ? { scope, id } : null);
+    // On a phone the inspector is a sheet over the very picture the centre is
+    // placed on: it steps aside, and the tab's cell brings it back.
+    if (id && compact) setInspectorOpen(false);
+  };
+  /** A press or a drag on the stage: the placed shade's centre, on its own axis. */
+  const moveShadeCentre = (x: number, y: number) => {
+    if (!placing) return;
+    const move = (list: Shade[]) =>
+      list.map((sh) => {
+        if (sh.id !== placing.id) return sh;
+        const center = placedCentre(sh, { x, y });
+        return center ? { ...sh, center } : sh;
+      });
+    if (placing.scope === CLIP_SHADES) setShades(move);
+    else {
+      setScenes((prev) =>
+        prev.map((sc) => (sc.id === placing.scope && sc.shades ? { ...sc, shades: move(sc.shades) } : sc)),
+      );
+    }
+  };
+
   const stage = useOverlayStage({
     videoRef,
     canvasRef,
@@ -1084,6 +1140,8 @@ export default function StudioEditor({
     onSelect: selectElement,
     onActivate: activateElement,
     onMove: handleMove,
+    shadeHandle,
+    onPlaceShade: moveShadeCentre,
   });
 
   function handleScrub(value: number) {
@@ -2581,7 +2639,12 @@ export default function StudioEditor({
                       </p>
                     }
                   >
-                    <ShadesPanel shades={shades} onChange={setShades} />
+                    <ShadesPanel
+                      shades={shades}
+                      onChange={setShades}
+                      placing={placing?.scope === CLIP_SHADES ? placing.id : null}
+                      onPlace={placeShade(CLIP_SHADES)}
+                    />
                   </InspectorSection>
 
                   {introScene && (
@@ -2598,6 +2661,9 @@ export default function StudioEditor({
                           setScenes((prev) => prev.map((sc) => (sc.id === next.id ? next : sc)))
                         }
                         onRemove={() => removeScene(introScene.id)}
+                        placingShade={placing?.scope === introScene.id ? placing.id : null}
+                        // A scene is not drawn over a photograph: nothing to place there.
+                        onPlaceShade={isPhoto ? undefined : placeShade(introScene.id)}
                       />
                     </InspectorSection>
                   )}

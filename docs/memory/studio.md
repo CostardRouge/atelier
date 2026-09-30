@@ -436,8 +436,22 @@ the Studio's deck passes `shades` beside `scenes` — the stage
 (`useOverlayStage`), `exportVariantVideo`, the seek fallback (a positional
 last argument), `grabFrame`, `exportPhotoVariant`; the history slice, the
 autosave and its deps, the file export/import and the house style carry them
-too. Not built: placing a shade's centre on the Studio stage (the sliders are
-its only hand — Trips and Develop have *Place on the picture*).
+too.
+
+**Placing a centre on the stage (2026-09-30, his ask).** The same grammar as
+Trips: `useOverlayStage` takes `shadeHandle` (centre + axis) and
+`onPlaceShade`; while set, a press or drag anywhere on the picture moves THAT
+centre and nothing else — ahead of the A/B divider and the elements — and the
+handle is chrome (a dashed line on a band, a cross in a ring on a radial,
+ink under accent). The editor holds `placing = { scope, id }`, the scope
+`CLIP_SHADES` or a scene's id, writes through `placedCentre` (the axis rule
+lives in `shade-shape.ts`, not the stage), and drops it whenever the Overlay
+tab closes, the shade goes, is switched off or loses its centre; a scene's
+shades offer no *Place* over a photograph, where a scene is not drawn. On a
+phone the inspector sheet steps aside. A drag is one undo step (the 700 ms
+coalescing). Driven headless on a VP8 clip: an intro band moved from y 0.5 to
+0.8 by a press (x kept), a whole-clip vignette dragged to (0.25, 0.3), both
+stored; Style → Overlay ended it.
 
 Driven headless on a flat 154 still: a bottom shade gave 61 at the bottom and
 147 mid-frame, a top-right corner 64 in that corner and nothing elsewhere, the

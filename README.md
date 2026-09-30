@@ -322,7 +322,9 @@ corner, or in the centre a radial or a band, with its own colour, strength,
 reach, **core**, **falloff** and **invert** — a corner darkened under the
 readouts, a sky under a title that stays. They sit under every element and
 under the intro's veil, for as long as the footage runs, on a photograph as on
-a clip; a clean variant leaves them out with the overlays. They travel in the
+a clip; a clean variant leaves them out with the overlays. A band or a radial
+is moved with its sliders or by **Place on the picture**: press or drag where
+it should sit, on the clip's shades and the intro's alike. They travel in the
 project file and the house style like the intro. A Trips shade can follow its
 badge; nothing in the Studio is a badge, so that option is not offered here.
 
