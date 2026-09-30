@@ -256,6 +256,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-09-28 — **Develop's Export tab: all three designs from the lab are BUILT** (https://claude.ai/artifact/XmsmPRpMkaWRWEJthEcCLV): the verbs pinned at the bottom (his "bouton + menu"), the run seen picture by picture in that bar and in the filmstrip (V1 + V4), the Export tab locked during a run while retouching stays free (L2) — `develop-roll.md`. Tick-all is built too. Not driven on his phone; the lab's V2 (floating card) and V3 (blocking window) stay rejected unless he asks.
 - 2026-09-29 — **The same export grammar is BUILT in Trips and the Studio**, his pick of the labs' recommendations (Trips https://claude.ai/artifact/JZKUQMkzv9oYQbFn6rKj1g, Studio https://claude.ai/artifact/GVJobx14WXtDMv9QyrCZAD): the pinned bar + menu (Trips' header `Export` kept as a shortcut wearing the run's fill; the old "As images" switch is a menu verb), V1 + V4 with the SLIDE (the deck band as the queue) and the VARIANT (its rows + a stage `TaskEdge`) as the unit, L2 (Trips locks its Export tab and the deck ORDER, the Studio its Output and Variants; retouching stays free and is named when the run ends). One model and three shared pieces carry all three tools (`tasks.md`, «Runs seen unit by unit»). The bugs the labs found are fixed: Trips freezes the piece at the click and writes in deck order, file by file (`roadtrip.md`); the Studio's run belongs to its clip across a switch and a variant's figure is keyed by what produced it (`studio.md`). Not driven on his phone, and the Studio's clip path (H.264) was not encoded here — stills only.
 - 2026-09-29 — **A MAP view of the Trips overview is BUILT** (his ask, then *«go ahead and build it, with the coastline»*; lab: https://claude.ai/artifact/7PbFSMbgWxAEZRXnhpVx5e). Left open, deliberately: «Where the pictures were» (an instance read, his Q3) and the replay (his Q5); not driven on his phone — `roadtrip.md`, «A MAP view of the overview».
+- 2026-09-30 — **A picture's MAKING-OF as a video (the edit steps replayed with a camera, captions and a before/after, for a feed) is DESIGNED, nothing built** (`docs/develop-timelapse.md`; lab: <https://claude.ai/artifact/Xb3CsfT8sxXvYAEAKHdtpV>). The fact underneath: nothing records an edit past the session — the undo stack is in memory, fifty whole documents, no time on the past — so the first commit is a JOURNAL on the picture (`RollPicture.journal`, roll v7), appended by the one updater in the SAME write as the edit so undo is exact by construction, coalesced on the history's 700 ms, bounded, never copied by Apply-to and never an edit. Over it a pure script (a chapter per tool, a caption that says the DIFFERENCE, a camera read in the step's own geometry — a heal's discs, a mask's box — never invented), one painter for the preview and `encodeFrames` (a raster per state graded once through the export's pass chain, crossfades, the crop's zone animated, the first before/after ever drawn off the stage), a storyboard sheet from the Export tab. Seven commits, eight questions his (§6: the journal on the document, recording on by default, a labelled "standard order" for pictures edited before v7, the `-making-of` name, sound off by default). The pass chain of `roll-render.ts` becomes a function on the way (T4), the seam the stage's `graderFrom` duplicates.
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -453,6 +454,15 @@ anything about media sources or document storage:
   still lacks against Lightroom Classic and Capture One: bugs, consistency
   gaps, tools, output, workflow, a proposed order and his five questions. Read
   it before picking the next piece of Develop work.
+- **`docs/develop-timelapse.md`** — the proposal (2026-09-30) for a picture's
+  MAKING-OF: a journal of the edit steps on the picture (roll v7), a pure
+  script (chapters, captions, a camera per chapter, a hook and a reveal), one
+  painter for the preview and the MP4, a storyboard sheet, seven commits.
+  §2 is fact (the undo stack is in memory and unlabelled, `encodeFrames` is
+  H.264 only, no export draws a before/after today); §3 onwards awaits the
+  maintainer, §6 his eight questions. Read it before touching
+  `RollEditor.update`, `roll-render.ts`'s pass chain, or before recording
+  anything about HOW a picture was edited.
 - **`docs/film-simulation.md`** — the brief (2026-09-16, adjusted 2026-09-17
   against the photo editor) for a Fujifilm-style film simulation: why its
   colour is a generated LOOK LAYER and not a stage (F2 — ordering against a
