@@ -251,7 +251,10 @@ export function timelapseScript(picture: PictureChapters, options: TimelapseOpti
   });
   overlays.push(...revealOverlays(options, reveal, extras));
 
-  const states = [picture.asShot, ...kept.map((c) => c.after)];
+  // Every state a frame can ask for, once each: the chain's `before`s are the
+  // previous `after`s by construction, so this is N + 1 — and a broken chain
+  // costs a render, never a state the painter cannot find.
+  const states = [...new Set([picture.asShot, ...kept.flatMap((c) => [c.before, c.after])])];
   return {
     options,
     width,

@@ -57,11 +57,30 @@ describe('chapters', () => {
       [1200, { develop: null }],
       [5000, { aspect: '1:1' }],
     ]);
-    const { chapters } = pictureChapters(p);
+    const { chapters, asShot } = pictureChapters(p);
     expect(chapters.map((c) => c.section)).toEqual(['crop']);
+    // The chain closes over the dropped run: the crop starts from the picture as shot.
+    expect(chapters[0].before).toBe(asShot);
     const applied = { ...p, journal: [...(p.journal ?? []), { at: 9000, sections: ['look' as const], after: { look: { layers: [{ id: 'l', source: 'builtin', name: 'Portra 400', customText: null, intensity: 0.8, enabled: true }], output: 'none' as const, film: null } }, via: 'apply' as const }] };
     const { chapters: more } = pictureChapters(applied);
     expect(more[1].caption).toBe('Portra 400 · 80 % · from another picture');
+  });
+
+  it('keep the chain of states whole across a put-back and a step that changed nothing', () => {
+    const p = edited([
+      [1000, { develop: exposure(0.5) }],
+      [5000, { aspect: '1:1' }],
+      // A slider moved and put back inside one coalescing window: a step whose run ends where it started.
+      [9000, { develop: exposure(0.2) }],
+      [9100, { develop: exposure(0.5) }],
+      // A write that changes nothing.
+      [12000, { aspect: '1:1' }],
+      [15000, { vignette: { amount: -30, midpoint: 50, roundness: 0, feather: 50, highlights: 0 } }],
+    ]);
+    const { chapters, asShot } = pictureChapters(p);
+    expect(chapters.map((c) => c.section)).toEqual(['develop', 'crop', 'vignette']);
+    expect(chapters[0].before).toBe(asShot);
+    expect(chapters.every((c, i) => i === 0 || c.before === chapters[i - 1].after)).toBe(true);
   });
 
   it('caption each section in its own words', () => {

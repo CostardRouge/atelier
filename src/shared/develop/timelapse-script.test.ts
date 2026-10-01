@@ -112,6 +112,20 @@ describe('the script', () => {
     const script = timelapseScript(chapters, options(), { hidden, captions: { [chapters.chapters[0].id]: 'Light first' } });
     expect(script.chapters).toHaveLength(4);
     expect(script.chapters[0].caption).toBe('Light first');
+    // Every state a frame can ask for is in `states`, once — the painter renders exactly these.
+    const asked = new Set([script.asShot, script.final, ...script.chapters.flatMap((c) => [c.chapter.before, c.chapter.after])]);
+    expect(script.states).toHaveLength(asked.size);
+    expect([...asked].every((s) => script.states.includes(s))).toBe(true);
+    // The same holds over a dropped run, which is what used to leave a chapter's `before` unrendered.
+    const putBack = edited([
+      [1000, { develop: exposure(0.5) }],
+      [1200, { develop: null }],
+      [5000, { aspect: '1:1' }],
+    ]);
+    const dropped = timelapseScript(pictureChapters(putBack), options());
+    expect(dropped.chapters).toHaveLength(1);
+    expect(dropped.states).toEqual([dropped.asShot, dropped.chapters[0].chapter.after]);
+    expect(dropped.states).toContain(dropped.chapters[0].chapter.before);
     expect(script.chapters[3].chapter.absorbed).toEqual(['detail']);
     expect(momentAt(script, 0.5)).toBe('hook');
     expect(momentAt(script, script.chapters[1].start + 0.1)).toBe('chapter');

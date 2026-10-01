@@ -447,10 +447,10 @@ export function pictureChapters(p: RollPicture, aspectRatio = 1): PictureChapter
   for (const step of steps) {
     const next = withSectionValues(state, step.after);
     const changed = sectionsChanged(state, next);
-    if (changed.length === 0) {
-      state = next;
-      continue;
-    }
+    // A step that changed nothing keeps the running STATE OBJECT: the next
+    // chapter's `before` must be the previous one's `after` by identity, since
+    // that identity is what the painter's rasters are keyed on.
+    if (changed.length === 0) continue;
     const via = step.via ?? null;
     const last = chapters[chapters.length - 1];
     if (last && sameList(last.sections, changed) && last.via === via) {
@@ -473,8 +473,13 @@ export function pictureChapters(p: RollPicture, aspectRatio = 1): PictureChapter
     }
     state = next;
   }
-  // A folded run may end where it started (a slider put back): drop it.
+  // A folded run may end where it started (a slider put back): drop it, and
+  // close the chain over it — the dropped run's two ends are equal in value,
+  // so the chapter after it starts from the chapter before it.
   const live = chapters.filter((c) => sectionsChanged(c.before, c.after).length > 0);
+  live.forEach((c, i) => {
+    c.before = i === 0 ? base : live[i - 1].after;
+  });
   for (const c of live) {
     c.sections = sectionsChanged(c.before, c.after);
     c.section = leadingSection(c.sections);

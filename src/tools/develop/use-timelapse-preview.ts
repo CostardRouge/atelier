@@ -97,7 +97,7 @@ export function useTimelapsePreview({
         cache.current = p.cache;
         setProgress(null);
         setReady(true);
-        p.draw(scriptRef.current, tRef.current);
+        if (p.has(scriptRef.current)) p.draw(scriptRef.current, tRef.current);
       })
       .catch((err: unknown) => {
         if (!alive) return;
