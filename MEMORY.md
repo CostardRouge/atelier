@@ -449,8 +449,8 @@ anything about media sources or document storage:
   `DayPicker` each do); §7 is his pick — the rail, one shared modal for the
   Library's *browse all* and Develop's *Add a day*, the `PickerHost` contract,
   nine commits, five questions. §1–§6 are the first round, kept as record.
-  Read it before touching `WinnowBrowser.tsx`, `WinnowDaySheet.tsx`,
-  `DayPicker.tsx`, `use-scope-rows.ts`, `client.assets()`'s `collapse`, or any
+  Read it before touching `shared/sources/winnow/picker/`, `LibraryPicker.tsx`,
+  `RollPicker.tsx`, `DayPicker.tsx`, `use-scope-rows.ts`, `client.assets()`'s `collapse`, or any
   surface that lists an instance's day.
 - **`docs/progress-feedback.md`** — the proposal (2026-09-21) for saying that
   something is taking time, across the whole suite: one task registry

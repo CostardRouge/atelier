@@ -105,3 +105,20 @@ replace. Driven headless against a stub: the month walked back to a culled
 day, `P`, Sony + `4`, the folder popover, the Gallery half, *Add 4 to
 library* → four files in the pool; Escape closes the month first; a phone
 gets the rail as a sheet and no horizontal scroll.
+
+## Develop hosts it as *Add a day* (2026-10-01, P5)
+
+`tools/develop/RollPicker.tsx` replaces `WinnowDaySheet`: it opens on the
+open picture's day, marks it and the span the roll already covers, draws
+*on the roll* through `sameMediaRef` (an asset-id set first, the hash-then-
+name walk only for the rest), takes photos and clips, ticks a culled day's
+PICKS on open (else everything the roll lacks but the rejects), and its verb
+adds `rowMediaRef`s — nothing fetched, as before. **Trap**: a host object
+rebuilt per render re-derives the whole scope's rows on every one, so the
+roll editor memoises the held refs and the roll's span, and the verb reads
+`addRefs` through a ref. The open picture's day is `pictureDay` in the
+BROWSER's zone (unchanged from F3), so a picture shot at 07:00 +10:00 opens
+on the previous day in a UTC browser — the picker shows that day, it does
+not correct it. Driven headless against the stub: a new roll's *Add a day*,
+the month walked to a culled day, six picks ticked on arrival, *Add 6 to the
+roll*, the picker closed and the strip filled.
