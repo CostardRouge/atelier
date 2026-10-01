@@ -117,7 +117,6 @@ export default function TimelapseSheet({
   const preview = useTimelapsePreview({ script, source, cubes });
   const kept = useMemo(() => new Map(script.chapters.map((c) => [c.chapter.id, c] as const)), [script]);
   const format = TIMELAPSE_FORMATS[options.format];
-  const portrait = format.height >= format.width;
 
   const setHidden = (id: string, hide: boolean) => {
     const next = new Set(hidden);
@@ -175,11 +174,16 @@ export default function TimelapseSheet({
         </div>
 
         <div className="grid gap-4 min-[821px]:grid-cols-[minmax(0,24rem)_minmax(0,1fr)] items-start">
-          {/* The preview: the export's own painter on a canvas, the file scaled. */}
-          <div className="flex flex-col gap-2 min-w-0">
+          {/* The preview: the export's own painter on a canvas, the file scaled.
+              It STICKS to the top of the sheet while the settings scroll — the
+              point of every control below is what it does to this picture. Its
+              size comes from a height budget (the measured screen's), so the
+              whole column fits on a desktop and a phone keeps room for the
+              settings scrolling under it. */}
+          <div className="sticky -top-4 z-10 -mt-4 pt-4 self-start flex flex-col gap-2 min-w-0 bg-surface [--tl-preview-h:min(calc(var(--app-h,100dvh)*0.6),36rem)] max-[820px]:[--tl-preview-h:calc(var(--app-h,100dvh)*0.34)] max-[820px]:pb-2 max-[820px]:border-b max-[820px]:border-line">
             <div
-              className={`relative mx-auto w-full bg-frame rounded-paper overflow-hidden ${portrait ? 'max-w-[20rem]' : ''}`}
-              style={{ aspectRatio: `${format.width} / ${format.height}` }}
+              className="relative mx-auto bg-frame rounded-paper overflow-hidden"
+              style={{ aspectRatio: `${format.width} / ${format.height}`, width: `min(100%, calc(var(--tl-preview-h) * ${format.width / format.height}))` }}
             >
               <canvas
                 ref={preview.canvasRef}
