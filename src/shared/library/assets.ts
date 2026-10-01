@@ -145,6 +145,16 @@ function imageRank(name: string): number {
   return 0;
 }
 
+/**
+ * True for a CLIP, by its name alone — the one test every "is this a video?"
+ * question in the suite should share. By name and never by `File.type`: a
+ * file fetched from an instance carries an empty type (`materialize` hands an
+ * original over with none), and a RAW off a disk usually does too.
+ */
+export function isClipName(name: string): boolean {
+  return VIDEO_EXTENSIONS.includes(splitName(name).ext);
+}
+
 /** Classify a file by extension into the part slot it fills. */
 export function classifyPart(name: string): PartKind {
   const { ext } = splitName(name);

@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
-import { captureSiblings, photoFiles } from '../../shared/develop/roll-media';
+import { captureSiblings, rollFiles } from '../../shared/develop/roll-media';
 import { getRollFolders, putRollFolders, type RollFolder } from '../../shared/develop/roll-store';
 import { fileIdentity } from '../../shared/library/assets';
 import {
@@ -9,7 +9,7 @@ import {
 } from '../../shared/sources/file-sources';
 
 export interface RollFolders {
-  /** The photographs read from the roll's folders and drops, this session. */
+  /** The photographs and clips read from the roll's folders and drops, this session (`rollFiles`). */
   photos: readonly File[];
   /** The capture files beside them that lost the image slot — a RAW's JPEG, a HIF's ARW (`captureSiblings`). */
   siblings: readonly File[];
@@ -65,9 +65,9 @@ export function useRollFolders(rollId: string): RollFolders {
     const fresh = incoming.filter((f) => !seen.has(fileIdentity(f)));
     return fresh.length ? [...cur, ...fresh] : cur;
   };
-  /** A listing sorted the way the Library sorts one: the photographs, and the capture files beside them. */
+  /** A listing sorted the way the Library sorts one: the photographs and the clips, and the capture files beside them. */
   const addFiles = useCallback((listed: readonly File[]) => {
-    const found = photoFiles(listed);
+    const found = rollFiles(listed);
     if (found.length) setPhotos((cur) => merge(cur, found));
     const beside = captureSiblings(listed);
     if (beside.length) setSiblings((cur) => merge(cur, beside));

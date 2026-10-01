@@ -1226,3 +1226,85 @@ Every cell re-rendered on every tick of the open picture's sliders — a roll of
 
 The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
 
+
+## A roll takes CLIPS: played on the stage, switched to the rush, delivered as an MP4 (2026-09-30)
+
+**The maintainer, two lines: *"develop doit gérer les vidéos"* and *"ne pas
+oublier d'aussi pouvoir switcher du proxy à la vidéo HD"*.** Built in one
+pass; the rules a later agent must keep:
+
+- **A clip is told by its ref's NAME** (`isClipPicture`, over `isClipName` in
+  `library/assets.ts` — the one test every "is this a video?" question should
+  share): a Winnow proxy is `<base>.mp4`, a rush `<base>.MP4`, and the answer
+  must hold before a byte is in hand and on every device. Never by
+  `File.type`: a fetched file carries none.
+- **A clip takes the GLOBAL develop and the look, and nothing else** — what
+  the export grades every frame through (`SOURCE → CUBE → [FILM] → OUTPUT`,
+  the variant path's own chain). A crop, a border, the keystone and lens
+  warps, detail (Presence included), the post-crop vignette, repair and the
+  layers are passes over ONE still frame: on a clip they would have to follow
+  the picture from frame to frame, which nothing here does and Lightroom does
+  not do either. So they are refused at EVERY door, not hidden at one: the
+  workbench has two tabs (`workbenchTabsFor`, `CLIP_TABS` — Adjust and
+  Export; `C`/`D`/`L` do nothing, the editor lands a clip on Adjust when the
+  tab it held is not one of its), the stage is handed null for each of them
+  (so preview = export holds by construction), `copyCropTo` / `copyBorderTo`
+  skip a clip and the crop/border verbs count only the frames
+  (`frameOtherIds`), and `withSections` / `withoutSections` reduce a clip's
+  sections to `CLIP_SECTIONS` (`sectionsFor`) — a paste, an apply-to and a
+  reset all go through them. `pictureEdits` needs no clip branch: a clip can
+  never carry the other sections.
+- **The stage is the sheet's clip stage** (`use-develop-picture.ts`'s
+  `video`, `DevelopTransport` under the viewport, Space on the tool's window
+  with `targetOwnsSpace` and no dialog open, `restedFrame` feeding the
+  histogram and Auto). The loupe is off on a clip (no whole file to decode).
+- **The rush is a row of the name's menu** because `captureInput` is handed
+  `canDraw: canStageDraw` (`projects/media-rendition.ts`, the Studio's) —
+  `renditionsOf`'s default knows pictures only and would BLOCK an `.MP4`. The
+  fetch goes through `fetchHeld` (one flight per asset, `held-fetch.ts`) and
+  `fetchSourceFile` does too since this day, so an export that starts while
+  the stage is still bringing the rush JOINS that fetch; choosing another row
+  aborts THIS reader only (`flight` ref in the workbench). Measured headless:
+  three switches and an export, ONE `/download`.
+- **The playhead survives the switch** the Studio's way: the new element's
+  `videoTimeSeconds` is read from the OLD element's `currentTime` DURING the
+  render that swaps `shownFile` (a ref compared per render), never in an
+  effect — an effect runs after the decode effect already started at 0, and
+  would re-decode. Measured: seek 1.5 s, switch proxy → rush, 1.5 s.
+- **`measurePicture` is video-aware** (`loadClipMeta`, no thumbnail): without
+  it the *Delivers* row, the chip's pixels and the rows' `640 × 360` were all
+  empty for a clip. The chip says `proxy · clip · W × H` / `MP4 · clip · W × H`
+  (`pictureFidelity`); the menu's proxy hint is `CLIP_PROXY_ADDS`.
+- **The export is `roll-clip-render.ts`** over `exportProcessedVideo`: the
+  container is DEMUXED FIRST (`demuxSource`) because the pipeline reads
+  `outputSize` before it asks for a processor, and only the track and its
+  matrix say what frame the cap is read against; uncapped, the graded frames
+  stay in coded orientation with the rotation flag standing (the LUT tool's
+  path); capped (the FIRST target's size through `longEdgeFor`, even numbers,
+  never up), each frame is turned upright and drawn smaller, the flag baked.
+  Sound is copied. The name is the capture's exact name as `.mp4`
+  (`exportName`); `decodableOriginal` now accepts a clip's name so `Auto`
+  fetches the rush where the first target's frame asks for more than the
+  proxy holds (an HEVC rush WebCodecs cannot decode fails at the demux and is
+  said by the run, never refused on a name). Quality, borders, HDR, the
+  watermark, the metadata groups and the other targets do not reach a clip:
+  `clipNote` says so once per run. Progress is relayed per PERCENT, not per
+  frame (`say` sets state).
+- **A clip's cell** is one frame a second in (`bakeClipThumbnail` over
+  `loadBadgeSource`, released), marked ▶ at bottom-centre (the one spot free);
+  a WORKING PREVIEW is never made of a clip (`use-roll-previews.ts`'s
+  `isLocal`). The day sheet lists `media_type === 'video'` too; the Library
+  verbs and the drop take a `video`/`video+telemetry` asset's clip
+  (`rollFileOf`, `rollFiles` — the `.srt` stays the Studio's).
+
+Verified headless (`testing.md`, «Clips through the Develop tool»): a stub
+clip's roll opened on `proxy · clip · 640 × 360`, two tabs, the cell marked;
+Play advanced the position, Space paused it; exposure +1 wrote `1` to the
+roll and lifted the stage; the rush row read `DJI_0007.MP4 · 1280 × 720 ·
+752 KB`, the switch kept 1.5 s and stored `delivered:dji_0007.mp4`; the
+export wrote `DJI_0007.mp4` 1280 × 720 · 4.02 s from the HELD rush (one
+download in all), read back brighter than the source (143 against 129); a
+clip DROPPED from disk opened, baked its cell, refused `C`, and left capped
+at 320 × 180. Not driven: an HEVC rush, a real H.264 encode (this Chromium
+has none — the encoder was swapped to VP9 for the run, `testing.md`), his
+phone.

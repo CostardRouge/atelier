@@ -48,9 +48,12 @@ import { useEffectiveExif } from '../../shared/exif/use-effective-exif';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { heldOriginal, holdOriginal } from '../../shared/sources/original-cache';
 import { pictureAspectRatio } from '../../shared/develop/crop-aspect';
-import { WORKBENCH_TABS, editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
+import { editorKeyAction, sameDevelop, type WorkbenchTab } from '../../shared/develop/roll-editor';
 import { framedThumbnail } from '../../shared/develop/roll-thumb';
-import { pictureLabel, type RollGrade, type RollPicture } from '../../shared/develop/roll-types';
+import { isClipPicture, pictureLabel, type RollGrade, type RollPicture } from '../../shared/develop/roll-types';
+import DevelopTransport from '../../shared/develop/DevelopTransport';
+import { canStageDraw } from '../../shared/projects/media-rendition';
+import { fetchHeld } from '../../shared/sources/held-fetch';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
@@ -100,7 +103,7 @@ import {
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '../../shared/media/framing';
-import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
+import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import IconButton from '../../shared/ui/IconButton';
@@ -173,6 +176,8 @@ function withShadeCentre(m: ShadeMask, point: readonly [number, number]): ShadeM
 const SNAPSHOT_DELAY_MS = 700;
 
 const NO_FILES: readonly File[] = [];
+const NO_LAYERS: readonly AdjustLayer[] = [];
+const NO_PATCHES: readonly Patch[] = [];
 
 /**
  * What the NEXT stroke is painted with. Kept beside the layer rather than on
@@ -230,6 +235,7 @@ export default function PictureWorkbench({
   sheetOpen,
   onSheetOpen,
   tab,
+  tabs,
   onTabChange,
   brush,
   onBrush,
@@ -283,6 +289,8 @@ export default function PictureWorkbench({
   onSheetOpen: (open: boolean) => void;
   /** Which inspector tab is open — lifted to the editor so it survives stepping to another picture. */
   tab: WorkbenchTab;
+  /** The tabs THIS picture has (`workbenchTabsFor`): every one for a photograph, Adjust and Export for a clip. */
+  tabs: readonly { id: WorkbenchTab; label: string }[];
   onTabChange: (tab: WorkbenchTab) => void;
   /** What the next stroke is painted with — the editor's, so it survives stepping to another picture. */
   brush: BrushTool;
@@ -344,6 +352,14 @@ export default function PictureWorkbench({
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
+  // A CLIP (2026-09-30): played on the stage and developed WHOLE — the global
+  // develop and the look, which the export grades every frame through. The
+  // crop, the warps, detail, repair and the layers are a photograph's
+  // (`roll-types.ts`, `isClipPicture`): their tabs are not drawn, their keys
+  // do nothing, and the stage is handed none of them, so what it shows is
+  // what the file will get. Constant for this mount: the workbench is keyed
+  // per picture.
+  const clip = isClipPicture(entry);
   // Read once, like the develop: the workbench is keyed per picture.
   const [framingDraft, setFramingDraft] = useState<Framing>(entry.framing ?? { ...DEFAULT_FRAMING });
   // The aspect rides a draft too: a FREE crop's aspect moves with every
@@ -356,8 +372,8 @@ export default function PictureWorkbench({
   const [ratio, setRatio] = useState(0);
   const border = entry.border;
   const frame = useMemo<DevelopFrame | null>(
-    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft, border } : null),
-    [ratio, framingDraft, border],
+    () => (ratio > 0 && !clip ? { aspectRatio: ratio, framing: framingDraft, border } : null),
+    [ratio, framingDraft, border, clip],
   );
   // Read once, like the develop and the crop: the workbench is keyed per picture.
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
@@ -794,6 +810,10 @@ export default function PictureWorkbench({
           const facts = siblingFacts.get(fileIdentity(s));
           return facts ? [{ file: s, facts }] : [];
         }),
+        // What this stage can draw: a picture the browser decodes, or a CLIP
+        // — the rush behind a proxy is a row here since 2026-09-30, as on the
+        // Studio's stage (`media-rendition.ts`).
+        canDraw: canStageDraw,
       }),
     );
   }, [
@@ -823,6 +843,11 @@ export default function PictureWorkbench({
   const [deliveredFile, setDeliveredFile] = useState<{ id: string; file: File } | null>(null);
   const deliver = useRef({ wanted, siblings, origin, tell, onRendition });
   deliver.current = { wanted, siblings, origin, tell, onRendition };
+  // The fetch under way for a row of THIS picture, so choosing another row —
+  // the proxy back, after a gigabyte rush was asked for by mistake — lets go
+  // of it. Through `fetchHeld` (2026-09-30) a reader that lets go detaches
+  // itself alone: an export that joined the same fetch keeps it.
+  const flight = useRef<{ id: string; controller: AbortController } | null>(null);
   useEffect(() => {
     const { wanted: row, siblings: beside, origin: from } = deliver.current;
     if (!row || row.id !== wantedId || !file) return;
@@ -838,9 +863,17 @@ export default function PictureWorkbench({
     const fetch = from?.companion && isNamed(from.companion.name) ? from.companion.fetchFile : (from?.fetchOriginal ?? null);
     if (!fetch) return;
     let alive = true;
+    const controller = new AbortController();
+    flight.current = { id: row.id, controller };
     // A task of its own — the pill and the edge say it — and only a failure
-    // is said here.
-    trackedFetch({ label: `Fetching ${row.name}`, scope: taskScopeRef.current, bytes: row.bytes }, (opts) => fetch(opts))
+    // is said here. ONE flight per asset (`held-fetch.ts`): an export that
+    // asks for the same file before it lands joins this one, and the file is
+    // held for the session on landing.
+    const init = { label: `Fetching ${row.name}`, scope: taskScopeRef.current, bytes: row.bytes };
+    const job = row.assetId
+      ? fetchHeld(row.assetId, init, fetch, controller.signal)
+      : trackedFetch({ ...init, signal: controller.signal }, (opts) => fetch(opts));
+    job
       .then((fetched) => {
         if (!alive) return;
         if (row.assetId) holdOriginal(row.assetId, fetched);
@@ -848,14 +881,30 @@ export default function PictureWorkbench({
       })
       .catch((err: unknown) => {
         if (!alive) return;
+        // Let go on purpose (another row chosen): nothing to say, and the
+        // choice already moved. Anything else is said and the row cleared.
+        if (controller.signal.aborted) return;
         deliver.current.tell(`${row.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         deliver.current.onRendition(null);
+      })
+      .finally(() => {
+        if (flight.current?.controller === controller) flight.current = null;
       });
     return () => {
       alive = false;
     };
   }, [wantedId, file]);
   const shownFile = wanted && deliveredFile?.id === wanted.id ? deliveredFile.file : file;
+  // The CLIP's moment across a switch of its file (proxy ↔ rush): the new
+  // element opens where the old one was. Read DURING the render that swaps
+  // the file — the old element is still the one mounted — and only then, so a
+  // scrub never re-decodes (the Studio's own rule, `use-stage-rendition.ts`).
+  const videoRef = useRef<HTMLVideoElement | null>(null);
+  const lastShown = useRef<{ file: File | null; start: number }>({ file: null, start: 0 });
+  if (lastShown.current.file !== shownFile) {
+    lastShown.current = { file: shownFile, start: clip ? (videoRef.current?.currentTime ?? 0) : 0 };
+  }
+  const clipStart = lastShown.current.start;
   // The open file is measured by the export hook; a delivered file on the
   // stage is measured here, once, for the chip and the kernels.
   const [shownSize, setShownSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
@@ -901,41 +950,46 @@ export default function PictureWorkbench({
   }, [field, dust.map, threshold]);
   const picture = useDevelopPicture({
     file: shownFile,
+    videoTimeSeconds: clipStart,
     cube: stack.composed,
     frame,
-    keystone: keystoneDraft,
-    lens: lensDraft,
+    // A clip is handed the develop and the look alone: every other input is
+    // a pass over one still frame, and the export cannot follow it from
+    // frame to frame — so the stage must not show it (`isClipPicture`).
+    keystone: clip ? null : keystoneDraft,
+    lens: clip ? null : lensDraft,
     // The measured profile on the SENSOR by itself; on a camera render only
     // where the author asked — a body's JPEG is often corrected in camera.
-    lensProfile: profileInEffect(entry.lensProfile, onSensor),
-    layers: layersDraft,
-    subjectMasks: subjectRasters,
+    lensProfile: clip ? null : profileInEffect(entry.lensProfile, onSensor),
+    layers: clip ? NO_LAYERS : layersDraft,
+    subjectMasks: clip ? EMPTY_RASTERS : subjectRasters,
     // A subject is shown to the model in the frame it was tapped in — the
     // picture as the geometry bends it (`segment-view.ts`).
-    segmenting: subjectLayersToSegment(layersDraft).length > 0,
-    paint,
+    segmenting: !clip && subjectLayersToSegment(layersDraft).length > 0,
+    paint: clip ? null : paint,
     compare: compareOn,
     clipping,
-    sharpenMask: sharpenMaskView && tab === 'detail',
-    vignette: vignetteDraft,
+    sharpenMask: !clip && sharpenMaskView && tab === 'detail',
+    vignette: clip ? null : vignetteDraft,
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
-    showMaskOf: selectedLayer && maskView !== 'off' && (paintId !== null || showMask) ? selectedLayer.id : null,
+    showMaskOf: !clip && selectedLayer && maskView !== 'off' && (paintId !== null || showMask) ? selectedLayer.id : null,
     maskStyle: maskView === 'fill' ? 'fill' : 'outline',
-    flashMask,
+    flashMask: clip ? null : flashMask,
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
-    detail: detailDraft,
-    repair: repairDraft,
+    detail: clip ? null : detailDraft,
+    repair: clip ? NO_PATCHES : repairDraft,
     // The dust map, when the scan shows it: drawn through the stage's own
     // crop so a proposed ring lands on the mark it names.
-    veil,
+    veil: clip ? null : veil,
     // The roll's texture, drawn by the node after everything: the stage is
     // where grain is DIALLED and the loupe is where it is judged, since a
     // cell finer than the stage can resolve fades out rather than aliasing.
     film: stack.film,
     pixelScale: stageWidth && fullWidth ? Math.min(1, stageWidth / fullWidth) : 1,
-    loupe: true,
+    // The loupe decodes a FILE whole; a clip has no whole to decode.
+    loupe: !clip,
     pixelView,
     // The camera's own calibration at the rung this picture stands on — the
     // shading grid first on the sensor's data, the warp before the lens. The
@@ -963,6 +1017,27 @@ export default function PictureWorkbench({
     },
   });
   sampleColourRef.current = picture.sampleColour;
+  videoRef.current = picture.video;
+  // Space plays and pauses the CLIP — the sheet's rule (`DevelopSheet.tsx`),
+  // here on the tool's own window: a control the keyboard is on keeps its
+  // press (`targetOwnsSpace`), a press somebody else already answered is left
+  // alone, and on a photograph the key means nothing.
+  useEffect(() => {
+    if (!clip) return;
+    const onKey = (e: KeyboardEvent) => {
+      if (e.code !== 'Space' && e.key !== ' ') return;
+      if (e.ctrlKey || e.metaKey || e.altKey || e.shiftKey || e.defaultPrevented) return;
+      if (targetOwnsSpace(describeKeyTarget(e.target))) return;
+      if (document.querySelector('[role="alertdialog"], [role="dialog"]')) return;
+      e.preventDefault();
+      const v = videoRef.current;
+      if (e.repeat || !v) return;
+      if (v.paused) void v.play().catch(() => {});
+      else v.pause();
+    };
+    window.addEventListener('keydown', onKey);
+    return () => window.removeEventListener('keydown', onKey);
+  }, [clip]);
   // What the picture IS, with the pixels it really has: the file's own,
   // measured for the *Delivers* row, or the sensor's once the RAW is decoded —
   // and, beside them, what the file holds and the screen is not showing (the
@@ -1226,8 +1301,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing });
+  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1247,6 +1322,8 @@ export default function PictureWorkbench({
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
       if (typeof action === 'object') {
+        // A tab this picture has not got (a clip's Crop) is nobody's key.
+        if (!keyState.current.tabs.some((t) => t.id === action.tab)) return;
         e.preventDefault();
         callbacks.current.onTabChange(action.tab);
         return;
@@ -1394,7 +1471,7 @@ export default function PictureWorkbench({
   // at the fit where the new picture is exactly what was on screen. Never on a
   // legacy Whole framing, whose canvas is not its zone.
   const viewCrop =
-    source && !cropping && picture.view.zoomed && crop.src && crop.zone && framingDraft.fit !== 'contain'
+    source && !clip && !cropping && picture.view.zoomed && crop.src && crop.zone && framingDraft.fit !== 'contain'
       ? zoneFromView(
           crop.zone,
           borderLayout(crop.zone.w, crop.zone.h, border),
@@ -1433,7 +1510,7 @@ export default function PictureWorkbench({
       reset: () => setCropView(CROP_VIEW_FIT),
     };
   }, [cropView, setCropView]);
-  const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Adjust';
+  const tabLabel = tabs.find((t) => t.id === tab)?.label ?? 'Adjust';
   const deliverBar = (inDrawer: boolean) => (
     <DeliverBar
       verbs={exportVerbs}
@@ -1663,6 +1740,9 @@ export default function PictureWorkbench({
                 // A file below the sensor: the base comes off with it, and
                 // the opening row is stored as nothing, one spelling.
                 if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null });
+                // A row of this picture asked for and no longer wanted stops
+                // coming — this reader lets go; an export that joined keeps it.
+                if (flight.current && flight.current.id !== id) flight.current.controller.abort();
                 onRendition(id === opening?.id ? null : id);
               }}
               onRemeter={() => {
@@ -1819,6 +1899,10 @@ export default function PictureWorkbench({
             );
           }}
         />
+        {/* A clip is judged MOVING: the transport under the picture (the
+            sheet's own, `DevelopTransport`), the stage graded frame by frame
+            as it plays. Viewing only — where it is paused is written nowhere. */}
+        {clip && picture.video && <DevelopTransport video={picture.video} className="flex-none" />}
         {cropping && (
           <CropStage
             picture={picture}
@@ -1856,7 +1940,7 @@ export default function PictureWorkbench({
         className="col-start-2 row-start-1 row-span-2 min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3"
       >
         {!compact && (
-          <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={WORKBENCH_TABS} className="flex-none" />
+          <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={tabs} className="flex-none" />
         )}
         {/* Adjust, Detail and Crop are columns of folding sections, each with
             its own rule and padding — a gap on top of that is the air twice
@@ -1893,7 +1977,9 @@ export default function PictureWorkbench({
                 />
               )}
               <DevelopSliders value={draft.draft} onChange={draft.set} />
-              <PresencePanel value={detailDraft} onChange={setDetailDraft} />
+              {/* Presence and the post-crop vignette are PASSES over one
+                  frame (`detail.ts`, `post-vignette.ts`): a photograph's. */}
+              {!clip && <PresencePanel value={detailDraft} onChange={setDetailDraft} />}
               <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
               <DevelopCurve
                 value={draft.draft.curves}
@@ -1907,7 +1993,7 @@ export default function PictureWorkbench({
                 onMono={(mono) => draft.patch({ mono })}
               />
               <DevelopGrading value={draft.draft.grading} onChange={(grading) => draft.patch({ grading })} />
-              <VignettePanel value={vignetteDraft} onChange={setVignetteDraft} />
+              {!clip && <VignettePanel value={vignetteDraft} onChange={setVignetteDraft} />}
               <DevelopPresetsSection
                 presets={presets}
                 draft={draft.draft}
@@ -2097,6 +2183,7 @@ export default function PictureWorkbench({
               settings={exportSettings}
               onSettings={onExportSettings}
               delivery={exports.openDelivery}
+              clip={clip}
               plan={exports.plan}
               proxiesOnly={proxiesOnly}
               onProxiesOnly={onProxiesOnly}

@@ -172,6 +172,21 @@ export function photoFiles(files: readonly File[]): File[] {
 }
 
 /**
+ * What a ROLL takes from `files` (2026-09-30): the photographs, as above, and
+ * the CLIPS — one file per asset, in the Library's own grouping, so a
+ * `DJI_0001.MP4` + `DJI_0001.SRT` is the clip alone (the log is telemetry, the
+ * Studio's business) and a RAW still yields to its JPEG. Logs and anything
+ * the Library does not know are left out.
+ */
+export function rollFiles(files: readonly File[]): File[] {
+  return buildAssets([...files]).flatMap((a) => {
+    if (a.kind === 'photo' && a.parts.image) return [a.parts.image];
+    if ((a.kind === 'video' || a.kind === 'video+telemetry') && a.parts.video) return [a.parts.video];
+    return [];
+  });
+}
+
+/**
  * The capture files BESIDE those photographs — the DNG beside a JPEG, the
  * HIF beside an ARW — that lost the image slot (`AssetParts.siblings`). A
  * roll never lists them; the workbench offers them as the picture's other

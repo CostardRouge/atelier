@@ -11,12 +11,12 @@ import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
 import {
-  WORKBENCH_TABS,
   openAfterRemoval,
   openPictureId,
   sameDevelop,
   selectionAfterClick,
   stepPicture,
+  workbenchTabsFor,
   type SelectionModifiers,
   type WorkbenchTab,
 } from '../../shared/develop/roll-editor';
@@ -41,6 +41,7 @@ import {
   copyCropTo,
   copyGradeTo,
   delivers,
+  isClipPicture,
   isEdited,
   isIgnored,
   setDelivery,
@@ -58,7 +59,7 @@ import {
   type VariantStart,
 } from '../../shared/develop/roll-types';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
-import { fileBaseName } from '../../shared/library/assets';
+import { fileBaseName, type Asset } from '../../shared/library/assets';
 import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identity';
 import type { SavedMediaRef } from '../../shared/projects/project-types';
 import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/sources/file-sources';
@@ -115,6 +116,18 @@ import WinnowDaySheet from './WinnowDaySheet';
 
 /** One empty answer, so a memo keyed on it holds. */
 const NO_SIBLINGS: readonly File[] = [];
+
+/**
+ * The file of a Library asset a roll can take (2026-09-30): a photograph's
+ * image, or a CLIP — with or without its telemetry log, which stays the
+ * Studio's. Null for anything else (a lone log, junk).
+ */
+export function rollFileOf(asset: Asset | undefined): File | null {
+  if (!asset) return null;
+  if (asset.kind === 'photo') return asset.parts.image ?? null;
+  if (asset.kind === 'video' || asset.kind === 'video+telemetry') return asset.parts.video ?? null;
+  return null;
+}
 
 interface RollEditorProps {
   roll: RollDoc;
@@ -206,16 +219,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [visibleSelected, openId],
   );
 
-  // --- the Library's photos, and where each picture's bytes are ------------
-  const libraryPhotos = useMemo(
-    () => lib.assets.filter((a) => a.kind === 'photo' && a.parts.image).map((a) => a.parts.image!),
+  // --- the Library's photos and clips, and where each picture's bytes are --
+  const libraryFiles = useMemo(
+    () => lib.assets.flatMap((a) => rollFileOf(a) ?? []),
     [lib.assets],
   );
-  const selectedPhotos = useMemo(
-    () =>
-      lib.assets
-        .filter((a) => lib.selection.has(a.id) && a.kind === 'photo' && a.parts.image)
-        .map((a) => a.parts.image!),
+  const selectedFiles = useMemo(
+    () => lib.assets.flatMap((a) => (lib.selection.has(a.id) ? (rollFileOf(a) ?? []) : [])),
     [lib.assets, lib.selection],
   );
   // The Library's file when it holds the picture, else the roll's own fetch
@@ -223,7 +233,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // A local picture is found in the Library OR in the folders the roll
   // remembers and the files dropped on it (F4) — the same name-then-hash match.
   const folders = useRollFolders(roll.id);
-  const localPhotos = useMemo(() => [...libraryPhotos, ...folders.photos], [libraryPhotos, folders.photos]);
+  const localFiles = useMemo(() => [...libraryFiles, ...folders.photos], [libraryFiles, folders.photos]);
   // The capture files BESIDE the local photographs — a JPEG's DNG, an ARW's
   // HIF (`AssetParts.siblings`, R2): the workbench offers them as the open
   // picture's other renditions, found by base name. A LOCAL picture's only:
@@ -232,7 +242,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     () => [...lib.assets.flatMap((a) => (a.kind === 'photo' ? (a.parts.siblings ?? []) : [])), ...folders.siblings],
     [lib.assets, folders.siblings],
   );
-  const media = useRollMedia({ pictures: roll.pictures, openId, localPhotos });
+  const media = useRollMedia({ pictures: roll.pictures, openId, localFiles });
   // Winnow's picks and stars, read-only (item 33): shown on the strip and
   // filtered on — the filter is this sitting's, never the roll's.
   const culling = useRollCulling(roll.pictures);
@@ -303,15 +313,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const pictureKey = roll.pictures.map((p) => p.id).join('|');
   useEffect(() => {
     let alive = true;
-    void hashedMediaRefs(selectedPhotos).then((refs) => {
+    void hashedMediaRefs(selectedFiles).then((refs) => {
       if (!alive) return;
       const held = latest.current.pictures;
-      setNewPhotos(selectedPhotos.filter((_, i) => !held.some((p) => sameMediaRef(p.ref, refs[i]))));
+      setNewPhotos(selectedFiles.filter((_, i) => !held.some((p) => sameMediaRef(p.ref, refs[i]))));
     });
     return () => {
       alive = false;
     };
-  }, [selectedPhotos, pictureKey]);
+  }, [selectedFiles, pictureKey]);
 
   // --- thumbnails: stored, else baked as shot; the open one redraws graded --
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, Blob>>(new Map());
@@ -376,17 +386,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // on the picture — the same field the chip above the photograph writes.
   const [pendingAdd, setPendingAdd] = useState(0);
   const pendingView = useRef<MediaView | null>(null);
-  const activeFile = useMemo(() => {
-    const a = lib.assets.find((x) => x.id === lib.activeId);
-    return a?.kind === 'photo' && a.parts.image ? a.parts.image : null;
-  }, [lib.assets, lib.activeId]);
+  const activeFile = useMemo(() => rollFileOf(lib.assets.find((x) => x.id === lib.activeId)), [lib.assets, lib.activeId]);
   useEffect(() => {
     if (pendingAdd === 0) return;
     setPendingAdd(0);
     const view = pendingView.current;
     pendingView.current = null;
     if (!activeFile) {
-      setNotice('only a photograph can be developed');
+      setNotice('only a photograph or a clip can be developed');
       return;
     }
     void (async () => {
@@ -472,7 +479,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
    */
   async function takeLocal(photos: readonly File[]) {
     if (photos.length === 0) {
-      setNotice('no photographs in what was given');
+      setNotice('no photographs or clips in what was given');
       return;
     }
     setAdding(true);
@@ -791,6 +798,18 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [roll.pictures, openId, filtering, culling.byPicture, cullFilter],
   );
   const others = otherIds.length;
+  // The pictures a CROP or a BORDER can be written onto: never a clip
+  // (`isClipPicture` — the pure writers refuse it too), so the verb's count
+  // says what it will really write.
+  const isFrame = useCallback(
+    (id: string) => {
+      const p = roll.pictures.find((x) => x.id === id);
+      return !!p && !isClipPicture(p);
+    },
+    [roll.pictures],
+  );
+  const frameOtherIds = useMemo(() => otherIds.filter(isFrame), [otherIds, isFrame]);
+  const frameSelection = useMemo(() => selectionTargets.filter(isFrame), [selectionTargets, isFrame]);
   const applyTo = useMemo<DevelopApplyVerb[]>(() => {
     if (!openId) return [];
     if (selectionTargets.length > 0) {
@@ -833,26 +852,28 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) =>
       update((r) => copyCropTo(r, targets, crop));
     if (selectionTargets.length > 0) {
-      const n = selectionTargets.length;
+      const n = frameSelection.length;
+      if (n === 0) return [];
       return [
         {
           id: 'selection',
           label: `Apply crop to ${n} selected`,
-          hint: 'the pictures marked in the filmstrip, each as its own copy',
-          run: write(selectionTargets),
+          hint: 'the pictures marked in the filmstrip, each as its own copy — a clip takes no crop',
+          run: write(frameSelection),
         },
       ];
     }
-    if (others <= 0) return [];
+    const n = frameOtherIds.length;
+    if (n <= 0) return [];
     return [
       {
         id: 'roll',
-        label: `Apply crop to ${others} other picture${others === 1 ? '' : 's'}`,
-        hint: 'the rest of this roll, each as its own copy',
-        run: write(otherIds),
+        label: `Apply crop to ${n} other picture${n === 1 ? '' : 's'}`,
+        hint: 'the rest of this roll, each as its own copy — a clip takes no crop',
+        run: write(frameOtherIds),
       },
     ];
-  }, [openId, others, otherIds, selectionTargets, update]);
+  }, [openId, frameOtherIds, selectionTargets, frameSelection, update]);
 
   // The look's own verbs, apart from the develop's: a look is chosen per
   // picture, and this is the one gesture that dresses others with it. They
@@ -890,26 +911,37 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const write = (targets: readonly string[]) => (border: RollBorder | null) =>
       update((r) => copyBorderTo(r, targets, border));
     if (selectionTargets.length > 0) {
-      const n = selectionTargets.length;
+      const n = frameSelection.length;
+      if (n === 0) return [];
       return [
         {
           id: 'selection',
           label: `Apply borders to ${n} selected`,
-          hint: 'the pictures marked in the filmstrip, their crops untouched',
-          run: write(selectionTargets),
+          hint: 'the pictures marked in the filmstrip, their crops untouched — a clip takes no border',
+          run: write(frameSelection),
         },
       ];
     }
-    if (others <= 0) return [];
+    const n = frameOtherIds.length;
+    if (n <= 0) return [];
     return [
       {
         id: 'roll',
-        label: `Apply borders to ${others} other picture${others === 1 ? '' : 's'}`,
-        hint: 'the whole roll, each keeping its own crop',
-        run: write(otherIds),
+        label: `Apply borders to ${n} other picture${n === 1 ? '' : 's'}`,
+        hint: 'the whole roll, each keeping its own crop — a clip takes no border',
+        run: write(frameOtherIds),
       },
     ];
-  }, [openId, others, otherIds, selectionTargets, update]);
+  }, [openId, frameOtherIds, selectionTargets, frameSelection, update]);
+
+  // A clip has two tabs (`workbenchTabsFor`): stepping from a photograph's
+  // Crop tab onto a clip lands on Adjust, and back on the photograph the tab
+  // is whatever it was last on a picture that had it.
+  const openIsClip = open ? isClipPicture(open) : false;
+  const tabs = workbenchTabsFor(openIsClip);
+  useEffect(() => {
+    if (open && !tabs.some((t) => t.id === tab)) setTab('adjust');
+  }, [open, tabs, tab]);
 
   // On a phone the inspector is a sheet, opened from the shell's bottom bar;
   // picking a section is also what raises it — the Studio's own convention.
@@ -918,7 +950,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       () =>
         compact && open
           ? {
-              sections: WORKBENCH_TABS,
+              sections: tabs,
               active: sheetOpen ? tab : null,
               label: 'Develop inspector',
               onSelect: (id: string) => {
@@ -927,7 +959,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               },
             }
           : null,
-      [compact, open, sheetOpen, tab],
+      [compact, open, sheetOpen, tab, tabs],
     ),
   );
 
@@ -989,7 +1021,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           aria-hidden="true"
         >
           <p className="m-0 max-w-[28rem] px-6 text-center text-sm text-on-media">
-            Drop photographs or their folder: pictures already on the roll are found again, the others are added.
+            Drop photographs, clips or their folder: pictures already on the roll are found again, the others are added.
           </p>
         </div>
       )}
@@ -1057,8 +1089,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             </>
           }
         >
-          Pick a day on your Winnow, a folder of your own, or drop photographs here. The roll keeps a
-          reference to each and its own numbers, never a copy of the file.
+          Pick a day on your Winnow, a folder of your own, or drop photographs and clips here. The roll
+          keeps a reference to each and its own numbers, never a copy of the file.
         </EmptyState>
       ) : (
         // The container is the wrapper and the queried grid its CHILD: a
@@ -1080,7 +1112,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               compact={compact}
               sheetOpen={sheetOpen}
               onSheetOpen={setSheetOpen}
-              tab={tab}
+              tab={tabs.some((t) => t.id === tab) ? tab : 'adjust'}
+              tabs={tabs}
               onTabChange={setTab}
               brush={brush}
               onBrush={patchBrush}

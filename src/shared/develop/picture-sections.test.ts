@@ -3,12 +3,14 @@ import { DEFAULT_DEVELOP } from './develop';
 import { createLayer } from './layer';
 import { addPictures, createRollDoc, isEdited, pictureEdits, setPictureWords, type RollDoc } from './roll-types';
 import {
+  CLIP_SECTIONS,
   PICTURE_SECTIONS,
   applySections,
   copiedSettings,
   copySettings,
   readSections,
   resetSections,
+  sectionsFor,
   withSections,
   withoutSections,
 } from './picture-sections';
@@ -106,5 +108,20 @@ describe('picture sections', () => {
     expect(copiedSettings()?.from.develop?.exposure).toBe(1);
     copySettings(p, []);
     expect(copiedSettings()).toBeNull();
+  });
+});
+
+describe('a clip’s sections', () => {
+  it('are its develop and its look — a paste or an apply-to hands a clip nothing else', () => {
+    const src = everything(roll(), 'p' + (n - 2)).pictures[0];
+    const clip = { ...roll().pictures[1], ref: { name: 'b.mp4', size: 1, lastModified: 1 } };
+    expect(sectionsFor(clip, PICTURE_SECTIONS.map((s) => s.id))).toEqual(CLIP_SECTIONS);
+    expect(sectionsFor(src, ['crop', 'develop'])).toEqual(['crop', 'develop']);
+    const dressed = withSections(clip, src, PICTURE_SECTIONS.map((s) => s.id));
+    expect(pictureEdits(dressed)).toEqual(['develop', 'look']);
+    expect(dressed.aspect).toBe('original');
+    expect(dressed.layers).toEqual([]);
+    // A reset of everything on a clip touches its two and leaves the rest as it was.
+    expect(pictureEdits(withoutSections(dressed, PICTURE_SECTIONS.map((s) => s.id)))).toEqual([]);
   });
 });

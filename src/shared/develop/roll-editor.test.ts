@@ -1,6 +1,8 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
 import {
+  CLIP_TABS,
+  WORKBENCH_TABS,
   editorKeyAction,
   openAfterRemoval,
   pictureAfterRestore,
@@ -9,6 +11,7 @@ import {
   sameDevelop,
   selectionAfterClick,
   stepPicture,
+  workbenchTabsFor,
   type EditorKeyPress,
   type SelectionModifiers,
 } from './roll-editor';
@@ -257,5 +260,13 @@ describe('pictureAfterRestore', () => {
     const b2 = { id: 'b' };
     const c2 = { id: 'c' };
     expect(pictureAfterRestore([a, b, c], [a, b2, c2], 'a')).toBe('b');
+  });
+});
+
+describe('workbenchTabsFor', () => {
+  it('gives a photograph every tab and a clip its two — Adjust and Export', () => {
+    expect(workbenchTabsFor(false)).toBe(WORKBENCH_TABS);
+    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(['adjust', 'export']);
+    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(CLIP_TABS);
   });
 });

@@ -495,8 +495,10 @@ the extension beside the type — keep every "is this a clip?" test on both.
 ## The sheet plays a clip, and wears the A/B (2026-09-29, the maintainer's ask)
 
 *"In the develop modal that would be nice to have the possibility to play/pause
-a video and also have the a/b compare feature too."* Both are in
-`DevelopSheet` only; the Develop tool opens no clips.
+a video and also have the a/b compare feature too."* Both were the sheet's
+alone until 2026-09-30, when the Develop TOOL took clips too — the same
+`DevelopTransport`, the same Space rule, over `PictureWorkbench`
+(`develop-roll.md`, «A roll takes CLIPS»).
 
 - **The stage follows its own element.** For a clip `BadgeSource.image` IS the
   `<video>` (`badge-render.ts`), so `useDevelopPicture` exposes it as

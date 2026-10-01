@@ -15,6 +15,20 @@ export const WORKBENCH_TABS: readonly { id: WorkbenchTab; label: string }[] = [
   { id: 'export', label: 'Export' },
 ];
 
+/**
+ * The tabs a CLIP has (2026-09-30): Adjust and Export. A clip takes the
+ * global develop and the look — what the export grades every frame through —
+ * and none of what the other three tabs write, which are passes over one
+ * still frame (`roll-types.ts`, `isClipPicture`). A tab that cannot act on
+ * the picture is not drawn, and its key does nothing.
+ */
+export const CLIP_TABS: readonly WorkbenchTab[] = ['adjust', 'export'];
+
+/** The inspector's tabs for the picture in hand — every one for a photograph, a clip's two for a clip. */
+export function workbenchTabsFor(clip: boolean): readonly { id: WorkbenchTab; label: string }[] {
+  return clip ? WORKBENCH_TABS.filter((t) => CLIP_TABS.includes(t.id)) : WORKBENCH_TABS;
+}
+
 /** The picture the editor shows: the one the route names, else the first; null on an empty roll. */
 export function openPictureId(pictures: readonly { id: string }[], routeId: string | null): string | null {
   if (routeId && pictures.some((p) => p.id === routeId)) return routeId;

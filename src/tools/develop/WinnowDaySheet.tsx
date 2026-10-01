@@ -40,15 +40,18 @@ export default function WinnowDaySheet({
   const [day, setDay] = useState(initialDay);
   const { rows, problem, reload } = useScopeRows(client, connection?.id ?? null, day, day, Boolean(connection));
 
+  // The day's photographs AND its clips (2026-09-30): a roll takes both, and
+  // a clip's ref is its proxy's name (`<base>.mp4`), like a photo's WebP.
   const photos = useMemo(() => {
     if (!rows || !connection) return [];
     return rows
-      .filter((r) => r.media_type === 'photo')
+      .filter((r) => r.media_type === 'photo' || r.media_type === 'video')
       .map((row) => {
         const ref = rowMediaRef(connection.id, row);
         return { row, ref, onRoll: held.some((h) => sameMediaRef(h, ref)) };
       });
   }, [rows, connection, held]);
+  const clipCount = photos.filter((p) => p.row.media_type === 'video').length;
 
   // A new day starts with everything the roll does not hold ticked.
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
@@ -110,10 +113,10 @@ export default function WinnowDaySheet({
             : rows === null
               ? 'asking…'
               : photos.length === 0
-                ? 'no photographs on this day'
-                : `${photos.length} photograph${photos.length === 1 ? '' : 's'}${
-                    onRollCount ? ` · ${onRollCount} already on the roll` : ''
-                  } · ${chosen.length} ticked`}
+                ? 'no photographs or clips on this day'
+                : `${photos.length - clipCount} photograph${photos.length - clipCount === 1 ? '' : 's'}${
+                    clipCount ? ` · ${clipCount} clip${clipCount === 1 ? '' : 's'}` : ''
+                  }${onRollCount ? ` · ${onRollCount} already on the roll` : ''} · ${chosen.length} ticked`}
           {problem && (
             <span className="text-danger">
               {' '}
@@ -161,6 +164,15 @@ export default function WinnowDaySheet({
                         }`}
                       >
                         <WinnowThumb client={client} id={row.id} label={row.ext} box="w-full h-full" />
+                        {/* A clip says so, the way the roll's own strip does. */}
+                        {row.media_type === 'video' && (
+                          <span
+                            className="absolute right-1.5 bottom-1.5 w-5 h-5 grid place-items-center rounded-full bg-surface/85 text-ink [&_svg]:w-3 [&_svg]:h-3"
+                            aria-hidden="true"
+                          >
+                            {Icons.play}
+                          </span>
+                        )}
                         {!onRoll && (
                           <span
                             className={`absolute left-1.5 top-1.5 w-5 h-5 grid place-items-center rounded-full border text-3xs ${

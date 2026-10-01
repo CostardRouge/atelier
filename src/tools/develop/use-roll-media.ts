@@ -38,8 +38,8 @@ export interface RollMedia {
   remoteThumb: (picture: RollPicture) => { client: WinnowClient; id: number } | null;
 }
 
-/** The main file of a fetched asset: the still, never a `.srt`. */
-function stillOf(files: File[] | null): File | null {
+/** The main file of a fetched asset: the still or the clip, never a `.srt`. */
+function mainOf(files: File[] | null): File | null {
   return files?.find((f) => !/\.srt$/i.test(f.name)) ?? null;
 }
 
@@ -65,12 +65,12 @@ function stillOf(files: File[] | null): File | null {
 export function useRollMedia({
   pictures,
   openId,
-  localPhotos,
+  localFiles,
 }: {
   pictures: readonly RollPicture[];
   openId: string | null;
-  /** The photographs in hand on this device: the Library's, and the roll's own folders and drops. */
-  localPhotos: readonly File[];
+  /** The photographs and clips in hand on this device: the Library's, and the roll's own folders and drops. */
+  localFiles: readonly File[];
 }): RollMedia {
   // A connection added or forgotten changes what can be fetched.
   const connections = useSyncExternalStore(subscribeWinnowConnections, listWinnowConnections);
@@ -105,7 +105,7 @@ export function useRollMedia({
     void (async () => {
       const found = new Map<string, File>();
       for (const p of latest.current) {
-        const file = await findMedia(p.ref, localPhotos);
+        const file = await findMedia(p.ref, localFiles);
         if (file) found.set(p.id, file);
       }
       if (alive) setFromLibrary(found);
@@ -113,7 +113,7 @@ export function useRollMedia({
     return () => {
       alive = false;
     };
-  }, [refKey, localPhotos]);
+  }, [refKey, localFiles]);
 
   // --- the roll's own half ---------------------------------------------------
   const [pool, setPool] = useState<ReadonlyMap<string, File>>(new Map());
@@ -147,7 +147,7 @@ export function useRollMedia({
     };
     const promise = refetchMedia(picture.ref).then(
       (files) => {
-        const file = stillOf(files);
+        const file = mainOf(files);
         done(() => {
           if (!file) {
             setFailures((m) => new Map(m).set(picture.id, { kind: 'gone', sourceId }));

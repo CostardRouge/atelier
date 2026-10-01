@@ -19,6 +19,7 @@ import {
   copyCropTo,
   copyGradeTo,
   delivers,
+  isClipPicture,
   isEdited,
   isIgnored,
   matchesDeliveryFilter,
@@ -513,5 +514,30 @@ describe('variants (item 30)', () => {
     const read = readRollDoc(JSON.parse(JSON.stringify(roll)));
     expect(read?.pictures.map((p) => p.variant)).toEqual([undefined, 2, undefined]);
     expect(addVariant(roll, 'nope', 'clone')).toBe(roll);
+  });
+});
+
+describe('a clip on the roll', () => {
+  it('is told by its ref’s name — a proxy’s .mp4, a rush’s .MP4 — never by a file', () => {
+    expect(isClipPicture({ ref: ref('DJI_0001.mp4') })).toBe(true);
+    expect(isClipPicture({ ref: ref('DJI_0001.MP4') })).toBe(true);
+    expect(isClipPicture({ ref: ref('IMG_0001.MOV') })).toBe(true);
+    expect(isClipPicture({ ref: ref('DJI_0001.webp') })).toBe(false);
+    expect(isClipPicture({ ref: ref('DJI_0001.DNG') })).toBe(false);
+  });
+
+  it('takes a look like any picture, and never a crop or a border', () => {
+    const doc = roll(['a.jpg', 'b.mp4', 'c.jpg']);
+    const framing = { ...DEFAULT_FRAMING, scale: 1.5 };
+    const cropped = copyCropTo(doc, ['p2', 'p3'], { aspect: '4:5', framing }, 9);
+    expect(cropped.pictures[1]).toBe(doc.pictures[1]);
+    expect(cropped.pictures[2]).toMatchObject({ aspect: '4:5', framing });
+    // A batch that names the clip alone changes nothing: the roll itself comes back.
+    expect(copyCropTo(doc, ['p2'], { aspect: '4:5', framing }, 9)).toBe(doc);
+    const border = { aspect: '4:5', fill: 'blur', margin: { x: 0.1, y: 0.02 } };
+    expect(copyBorderTo(doc, ['p2'], border, 9)).toBe(doc);
+    const dressed = copyGradeTo(doc, ['p2'], { layers: [], output: 'rec709-to-srgb', film: null }, 9);
+    expect(dressed.pictures[1].grade).toEqual({ layers: [], output: 'rec709-to-srgb', film: null });
+    expect(pictureEdits(dressed.pictures[1])).toEqual(['look']);
   });
 });
