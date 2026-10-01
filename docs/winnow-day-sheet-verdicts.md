@@ -1,6 +1,8 @@
 # One Winnow picker — verdicts, filters, two hosts
 
-**Status (2026-10-01): designed, nothing built.** The first round (§1–§6) is
+**Status (2026-10-01): BUILT, the same day — W1 in Winnow (#277), P1–P8
+here** (§7.5 says what was answered by recommendation and what was not
+verified). The first round (§1–§6) is
 kept as the record of how it was argued; **§7 is what he chose and what will
 be built** — it supersedes §3's recommendation, §5's plan and §6's questions.
 §2 and §7.1 are fact, read in this repo and in `CostardRouge/winnow` the same
@@ -229,3 +231,21 @@ Library selects and adds to the library, Develop adds to the roll).
 
 §6's question 3 (write a verdict from Atelier) stands answered by the rule:
 the bar ticks, it never writes.
+
+### 7.5 Built (2026-10-01)
+
+He answered *"vas-y avec tes recommandations, construis-le"*, so §7.4's five
+questions took their recommendations: nothing ticked when the Library opens
+it, picks when Develop does; the rail remembered per instance and shared by
+both hosts; closing it moves nothing; no *by leg* scope while the timeline is
+off; the sidebar's tiles wear the marks and gain no verdict filter. The nine
+commits as planned: W1 (`CostardRouge/winnow#277`), then `pick-filter.ts`, the
+shared `DayPicker`, `WinnowPicker` + `PickerHost`, `LibraryPicker` (retiring
+`WinnowBrowser`), `RollPicker` (retiring `WinnowDaySheet`), the sidebar's
+marks, the burst frames (`collapse=pairs`, else `burst_id` on unfold) and
+Space to look. Decisions and traps: `docs/memory/winnow-picker.md`.
+**Verified** headless against a stub instance, both hosts, desktop and a
+390px phone. **Not verified**: a real instance (this container cannot sign in
+to one), and W1 only reaches Atelier once Winnow #277 is merged and deployed
+and the browser's capabilities sheet is re-read (`#/sources`); until then a
+pile's picked frame appears when the pile is unfolded.
