@@ -45,3 +45,15 @@ and reading belongs in a module the tests can hold.
 RAW+JPEG pair listed twice. Send it only where `listsBurstFrames(caps)` says
 the instance announced it (`media.listCollapse`); a stale capabilities sheet
 simply keeps the fold.
+
+## The day stepper is shared, and its month honours a filter (2026-10-01, P2)
+
+`DayPicker` (the stepper + its `MonthPanel`, bars or weeks) moved from
+`src/app/` to `shared/sources/winnow/DayPicker.tsx`, because the picker lives
+in `shared/` and `shared/` never imports `app/`. Two props were added, both
+optional so the sidebar's call barely changed: `filter` — the month's counts
+are asked under it and CACHED per month AND filter (a half's month is not the
+whole library's) — and `showLine`, off in the picker, whose own status line
+says the same thing. The sidebar now passes its half, so a day its strip
+calls full is full in the half the tab lists; before, the strip counted both
+halves while the grid listed one.

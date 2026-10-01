@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Tool } from './tools';
-import DayPicker from './DayPicker';
+import DayPicker from '../shared/sources/winnow/DayPicker';
 import WinnowBrowser from './WinnowBrowser';
 import WinnowLightbox from './WinnowLightbox';
 import MediaLightbox, { type LightboxItem } from '../shared/ui/MediaLightbox';
@@ -816,6 +816,7 @@ export default function AssetSidebar({
             count={scopeRows.rows?.length ?? null}
             client={client}
             connectionId={connection.id}
+            filter={half ? { half } : undefined}
           />
           <HalfPicker half={half} onHalf={setHalf} />
         </div>

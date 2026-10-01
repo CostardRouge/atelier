@@ -1,24 +1,24 @@
 import { useEffect, useMemo, useRef, useState } from 'react';
-import type { WinnowClient } from '../shared/sources/winnow/client';
-import { densityStrip, type DayBar } from '../shared/sources/winnow/day-density';
+import type { FilterQuery, WinnowClient } from './client';
+import { densityStrip, type DayBar } from './day-density';
 import {
   monthKeyOf,
   monthLabel,
   monthSpan,
   shiftMonth,
-} from '../shared/sources/winnow/month';
+} from './month';
 import {
   describeRelativeDay,
   formatIsoDate,
   todayIso,
   WEEKDAYS,
   weekdayIndex,
-} from '../shared/roadtrip/trip-days';
+} from '../../roadtrip/trip-days';
 import {
   relativeToAnchor,
   stepOut,
   type DaySpan,
-} from '../shared/sources/scope-override';
+} from '../scope-override';
 
 interface DayPickerProps {
   /**
@@ -52,6 +52,18 @@ interface DayPickerProps {
   client: WinnowClient | null;
   /** Its host, named in the strip's own sentences. */
   connectionId: string;
+  /**
+   * The narrowing the month's counts honour — the library half, in practice,
+   * so a day the strip calls full is full in the half being listed. Absent:
+   * the whole library.
+   */
+  filter?: FilterQuery;
+  /**
+   * Whether the one line under the control (the dot, where the view sits,
+   * the count) is drawn. The picker says the same thing in its own status
+   * line, so it turns this one off; the sidebar keeps it.
+   */
+  showLine?: boolean;
 }
 
 /** How tall the strip draws, in CSS pixels. */
@@ -130,6 +142,8 @@ export default function DayPicker({
   count,
   client,
   connectionId,
+  filter,
+  showLine = true,
 }: DayPickerProps) {
   const today = todayIso();
   const [open, setOpen] = useState(false);
@@ -237,6 +251,7 @@ export default function DayPicker({
           today={today}
           client={client}
           connectionId={connectionId}
+          filter={filter}
           onPick={(iso) => {
             onDay(iso);
             setOpen(false);
@@ -245,6 +260,7 @@ export default function DayPicker({
         />
       )}
 
+      {showLine && (
       <p className="m-0 flex items-center gap-1.5 text-2xs text-muted">
         <span
           aria-hidden="true"
@@ -275,6 +291,7 @@ export default function DayPicker({
           </button>
         )}
       </p>
+      )}
     </div>
   );
 }
@@ -292,6 +309,7 @@ interface MonthPanelProps {
   today: string;
   client: WinnowClient | null;
   connectionId: string;
+  filter?: FilterQuery;
   onPick: (iso: string) => void;
 }
 
@@ -309,7 +327,7 @@ interface MonthPanelProps {
  * give — the maintainer walked three months believing they held nothing, and
  * the media arrived after he had moved on.
  */
-function MonthPanel({ span: picked, anchor, today, client, connectionId, onPick }: MonthPanelProps) {
+function MonthPanel({ span: picked, anchor, today, client, connectionId, filter, onPick }: MonthPanelProps) {
   const [month, setMonth] = useState(() => monthKeyOf(picked.from));
   const [view, setView] = useState<MonthView>(readMonthView);
   const [answer, setAnswer] = useState<MonthAnswer | null>(null);
@@ -318,9 +336,14 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, onPick 
   const cache = useRef(new Map<string, MonthAnswer>());
 
   const span = useMemo(() => monthSpan(month), [month]);
+  // A primitive, so the effect does not re-ask on every render a caller
+  // passes a fresh object; and the cache key, since a half's month is not
+  // the whole library's.
+  const filterKey = JSON.stringify(filter ?? {});
 
   useEffect(() => {
-    const hit = cache.current.get(month);
+    const key = `${month}|${filterKey}`;
+    const hit = cache.current.get(key);
     if (hit) {
       setAnswer(hit);
       setFailed(false);
@@ -334,14 +357,14 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, onPick 
     }
     let cancelled = false;
     client
-      .calendar(span.from, span.to)
+      .calendar(span.from, span.to, JSON.parse(filterKey) as FilterQuery)
       .then((cal) => {
         if (cancelled) return;
         const got = {
           counts: new Map(cal.days.map((d) => [d.date, d.count])),
           bounds: cal.bounds,
         };
-        cache.current.set(month, got);
+        cache.current.set(key, got);
         setAnswer(got);
       })
       .catch(() => {
@@ -350,7 +373,7 @@ function MonthPanel({ span: picked, anchor, today, client, connectionId, onPick 
     return () => {
       cancelled = true;
     };
-  }, [client, month, span.from, span.to]);
+  }, [client, month, span.from, span.to, filterKey]);
 
   /** Waiting on this month — not the same thing as a month holding nothing. */
   const busy = !answer && !failed;
