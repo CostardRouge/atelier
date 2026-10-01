@@ -122,3 +122,11 @@ on the previous day in a UTC browser — the picker shows that day, it does
 not correct it. Driven headless against the stub: a new roll's *Add a day*,
 the month walked to a culled day, six picks ticked on arrival, *Add 6 to the
 roll*, the picker closed and the strip filled.
+
+## The sidebar's instance tiles wear the marks; no verdict filter there (2026-10-01, P6)
+
+`WinnowScopeGrid`'s tiles draw `CullMark` (flag, stars, label) top-right,
+from the row they already hold — no request. The sidebar gets NO verdict
+filter of its own: his question 5 of §7.4, answered by the recommendation
+(the marks first, a "⚑ only" beside All · Incoming · Gallery only if asked
+after use); narrowing by verdict is the picker's job, one *browse all* away.
