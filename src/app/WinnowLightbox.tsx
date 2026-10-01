@@ -165,7 +165,12 @@ export default function WinnowLightbox({
   // off once it has. View state only: nothing here writes a document.
   const held = useSyncExternalStore(subscribeHeld, heldVersion);
   const viewRows = useMemo<Rendition[]>(
-    () => (row && row.media_type === 'photo' ? renditionsOf(rowCaptureInput(row, connection.id, (id) => heldOriginal(id) !== null)) : []),
+    // A clip's too (2026-10-01): its proxy and its rush, the rush fetched on
+    // its chip and held — the same hold Develop's stage and export read.
+    () =>
+      row && (row.media_type === 'photo' || row.media_type === 'video')
+        ? renditionsOf(rowCaptureInput(row, connection.id, (id) => heldOriginal(id) !== null))
+        : [],
     // `held` is the cache's version: the rows must be rebuilt when a fetch lands.
     [row, connection.id, held],
   );

@@ -296,3 +296,23 @@ describe('names and sentences', () => {
     );
   });
 });
+
+describe('a clip at the export door', () => {
+  it('leaves under the capture’s exact name as an MP4', () => {
+    expect(exportName('DJI_0001.MP4')).toBe('DJI_0001.mp4');
+    expect(exportName('DJI_0001.mp4')).toBe('DJI_0001.mp4');
+    expect(exportName('IMG_0001.MOV')).toBe('IMG_0001.mp4');
+  });
+
+  it('counts a rush as an original the export can deliver from, so Auto fetches it where the proxy falls short', () => {
+    expect(decodableOriginal('DJI_0001.MP4')).toBe(true);
+    const proxy720 = { width: 1280, height: 720 };
+    const rush = { width: 3840, height: 2160, name: 'DJI_0001.MP4', bytes: 900_000_000 };
+    const summary = deliverySummary(proxy720, true, rush, null, 16 / 9, null, { size: null, pixels: 'auto' });
+    expect(summary.from).toBe('original');
+    expect(summary.line).toBe('DJI_0001.MP4 3840 px → 3840 · exact');
+    // A cap the proxy already fills keeps the proxy; proxies only keeps it whatever the cap.
+    expect(deliverySummary(proxy720, true, rush, null, 16 / 9, null, { size: { mode: 'long', value: 1280 }, pixels: 'auto' }).from).toBe('file');
+    expect(deliverySummary(proxy720, true, rush, null, 16 / 9, null, { size: null, pixels: 'proxies' }).line).toBe('Proxy 1280 px → 1280 · exact · asked 3840');
+  });
+});

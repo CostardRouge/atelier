@@ -1,5 +1,6 @@
 import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import { formatBytes } from '../lib/format';
+import { isClipName } from '../library/assets';
 import { renditionFacts, type Rendition } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
 
@@ -16,10 +17,20 @@ export const BASE_ADDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
   gainMapWarp: 'and the rectilinear warp beside it: the magnification and the lateral colour fringe the same file states.',
 });
 
+/**
+ * What a CLIP's proxy is (2026-09-30): a small re-encode a source made to
+ * play, where the rush is the file itself. The develop and the look act on
+ * whichever is on the stage, and the export takes the rush by itself where
+ * the frame asks for it.
+ */
+const CLIP_PROXY_ADDS =
+  'your source’s proxy of the clip — small and quick to play. The rush is the row under it: fetched once when chosen, held for this session, and what the export delivers from where the frame asks.';
+
 /** What a delivered row IS, in the words under its name. */
 function describeDelivered(row: Rendition): string {
   if (row.blocked) return row.blocked;
   const fetched = row.here ? '' : ' — fetched from its instance and held for this session';
+  if (isClipName(row.name)) return `the clip as recorded, every frame at its own size${fetched}`;
   if (row.reach === 'embedded') return `the 8-bit render your camera wrote inside the RAW${fetched}`;
   return `the file itself, 8-bit, drawn as it is${fetched}`;
 }
@@ -113,7 +124,14 @@ export function DevelopBaseMenu({
     .filter((r) => r.role !== 'sensor')
     .map((row) => {
       const marked = !onSensor && row.id === current;
-      const hint = marked && status ? status : row.role === 'proxy' ? BASE_ADDS.proxy : describeDelivered(row);
+      const hint =
+        marked && status
+          ? status
+          : row.role === 'proxy'
+            ? isClipName(row.name) || isClipName(name)
+              ? CLIP_PROXY_ADDS
+              : BASE_ADDS.proxy
+            : describeDelivered(row);
       return item(
         row.id,
         marked,

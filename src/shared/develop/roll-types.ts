@@ -27,6 +27,7 @@ import { readLayers, type AdjustLayer } from './layer';
 import { DEFAULT_DEVELOP, developOrNull, isDefaultDevelop, isRawDevelop, type DevelopSettings } from './develop';
 import { filmTextureOrNull, type FilmTexture } from '../film/film-texture';
 import { isDefaultFraming, normaliseFraming, type Framing } from '../media/framing';
+import { isClipName } from '../library/assets';
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
 import { legacyWholeBorder, readBorder, sameBorder, type RollBorder } from './border-layout';
@@ -515,6 +516,29 @@ export function addPictures(
   return pictures.length === roll.pictures.length ? roll : { ...roll, pictures, updatedAt: now };
 }
 
+// --- clips (2026-09-30) ------------------------------------------------------
+
+/**
+ * True when the picture is a CLIP — a video on the roll, developed and looked
+ * whole and delivered as an MP4. Read from the ref's NAME (a Winnow proxy is
+ * `<base>.mp4`, a rush `<base>.MP4`), never from a `File`: the answer must
+ * hold before any byte is in hand, on every device.
+ *
+ * What a clip takes is the GLOBAL develop and the look — the one cube the
+ * export grades every frame through, and the film node after it — and, since
+ * 2026-10-01, a CROP: one framing (aspect, zoom, pan, straighten, flip) held
+ * still over the whole clip, the same arithmetic as a photograph's applied
+ * to every frame. A border, the perspective and lens warps, detail, repair
+ * and layers stay a photograph's: they are passes over one still frame, and
+ * on a clip they would have to follow the picture from frame to frame, which
+ * nothing here does (and which Lightroom does not do either). So they are
+ * never written onto a clip, by any door — the pure writers below refuse
+ * them.
+ */
+export function isClipPicture(p: Pick<RollPicture, 'ref'>): boolean {
+  return isClipName(p.ref.name);
+}
+
 // --- variants (item 30) --------------------------------------------------------
 
 /** 1 for the first entry of a capture, 2, 3… for its copies. */
@@ -660,6 +684,7 @@ export function copyCropTo(
   const framing = crop.framing && !isDefaultFraming(crop.framing) ? crop.framing : null;
   let found = false;
   const pictures = roll.pictures.map((p) => {
+    // A clip takes a crop like a photograph (`isClipPicture`): held still over every frame.
     if (!ids.includes(p.id)) return p;
     found = true;
     return { ...p, aspect: crop.aspect, framing: framing ? { ...framing } : null };
@@ -701,7 +726,8 @@ export function copyBorderTo(
 ): RollDoc {
   let changed = false;
   const pictures = roll.pictures.map((p) => {
-    if (!ids.includes(p.id) || sameBorder(p.border, border)) return p;
+    // A clip leaves as it was recorded, with no border round it.
+    if (!ids.includes(p.id) || isClipPicture(p) || sameBorder(p.border, border)) return p;
     changed = true;
     return { ...p, border: border ? { ...border, margin: { ...border.margin } } : null };
   });

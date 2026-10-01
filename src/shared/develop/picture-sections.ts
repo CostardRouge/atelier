@@ -19,9 +19,25 @@
  */
 
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from './develop';
-import { pictureEdits, type PictureEdit, type RollDoc, type RollPicture } from './roll-types';
+import { isClipPicture, pictureEdits, type PictureEdit, type RollDoc, type RollPicture } from './roll-types';
 
 export type PictureSection = PictureEdit;
+
+/**
+ * The sections a CLIP can carry: its develop, its look and its crop — what
+ * the export grades and re-frames every frame through (`isClipPicture`). The
+ * crop is one framing held still over the whole clip (the same arithmetic as
+ * a photograph's, `deliveredLayout`), never a move. Everything else is a pass
+ * over one still frame — a border included, which is paper round ONE picture
+ * — and never lands on a clip, whichever door — a paste, an apply-to, a reset
+ * — asked for it.
+ */
+export const CLIP_SECTIONS: readonly PictureSection[] = ['develop', 'look', 'crop'];
+
+/** `sections` as they apply to `target`: a photograph takes them all, a clip its three. */
+export function sectionsFor(target: Pick<RollPicture, 'ref'>, sections: readonly PictureSection[]): PictureSection[] {
+  return isClipPicture(target) ? sections.filter((s) => CLIP_SECTIONS.includes(s)) : [...sections];
+}
 
 /** The sections in the inspector's own order, with what each carries. */
 export const PICTURE_SECTIONS: readonly { id: PictureSection; label: string; hint: string }[] = [
@@ -67,7 +83,7 @@ function developOnto(target: RollPicture, numbers: DevelopSettings | null): Deve
  * state, the sections not ticked — is left exactly as it was.
  */
 export function withSections(target: RollPicture, source: RollPicture, sections: readonly PictureSection[]): RollPicture {
-  const on = new Set(sections);
+  const on = new Set(sectionsFor(target, sections));
   const next: RollPicture = { ...target };
   if (on.has('develop')) next.develop = developOnto(target, source.develop);
   if (on.has('look')) next.grade = source.grade ? structuredClone(source.grade) : null;
@@ -87,7 +103,7 @@ export function withSections(target: RollPicture, source: RollPicture, sections:
 
 /** `picture` with `sections` back to as shot — its file, base, words and delivery state untouched. */
 export function withoutSections(picture: RollPicture, sections: readonly PictureSection[]): RollPicture {
-  const on = new Set(sections);
+  const on = new Set(sectionsFor(picture, sections));
   const next: RollPicture = { ...picture };
   if (on.has('develop')) next.develop = developOnto(picture, null);
   if (on.has('look')) next.grade = null;

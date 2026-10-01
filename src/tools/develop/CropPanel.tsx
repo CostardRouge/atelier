@@ -48,6 +48,7 @@ export default function CropPanel({
   deliveredSize,
   verbs = [],
   borderVerbs = [],
+  clip = false,
   onTold,
 }: {
   picture: DevelopPicture;
@@ -58,6 +59,8 @@ export default function CropPanel({
   deliveredSize: { w: number; h: number } | null;
   verbs?: readonly CropApplyVerb[];
   borderVerbs?: readonly BorderApplyVerb[];
+  /** A CLIP: the crop is held still over every frame, and it wears no border (`roll-types.ts`, `isClipPicture`). */
+  clip?: boolean;
   onTold?: (message: string) => void;
 }) {
   const { framing, zone } = crop;
@@ -89,6 +92,12 @@ export default function CropPanel({
               corrected by it. The quarter turns take the zone with the picture.
             </p>
             <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
+            {clip && (
+              <p>
+                On a clip the crop is ONE zone held still over every frame — play the clip under it to
+                judge it on the frames that matter; it never follows the picture.
+              </p>
+            )}
           </>
         }
         actions={
@@ -193,15 +202,17 @@ export default function CropPanel({
           ))}
         </DevelopFold>
       )}
-      <BorderSection
-        picture={picture}
-        crop={crop}
-        border={border}
-        onBorder={onBorder}
-        deliveredSize={deliveredSize}
-        verbs={borderVerbs}
-        onTold={onTold}
-      />
+      {!clip && (
+        <BorderSection
+          picture={picture}
+          crop={crop}
+          border={border}
+          onBorder={onBorder}
+          deliveredSize={deliveredSize}
+          verbs={borderVerbs}
+          onTold={onTold}
+        />
+      )}
     </>
   );
 }

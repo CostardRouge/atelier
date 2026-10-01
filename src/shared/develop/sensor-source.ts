@@ -22,7 +22,8 @@
 import { isRawImage } from '../library/assets';
 import type { MediaOrigin } from '../projects/media-identity';
 import type { FetchFile } from '../sources/fetch-options';
-import { heldOriginal, holdOriginal } from '../sources/original-cache';
+import { fetchHeld } from '../sources/held-fetch';
+import { heldOriginal } from '../sources/original-cache';
 import { trackedFetch } from '../tasks/tracked';
 
 export type SensorReach = 'file' | 'sibling' | 'original' | 'companion';
@@ -136,6 +137,11 @@ export function deliveredSourceFor(
  * A source's bytes: what is held, else fetched once — as a TASK named after
  * the file, on the picture's edge (`scope`), cancellable — and held for the
  * session. A cancelled fetch rejects with an `AbortError` (`fetch-options.ts`).
+ *
+ * A keyed source goes through the ONE flight per asset (`held-fetch.ts`,
+ * 2026-09-30): an export that asks for a rush the stage is already bringing
+ * joins that fetch instead of starting a second, and a reader that lets go
+ * detaches itself alone.
  */
 export async function fetchSourceFile(source: SensorSource, scope: string | null = null, signal?: AbortSignal): Promise<File> {
   if (source.held) return source.held;
@@ -143,7 +149,7 @@ export async function fetchSourceFile(source: SensorSource, scope: string | null
   if (held) return held;
   const fetch = source.fetch;
   if (!fetch) throw new Error(`${source.name} is not reachable from here`);
-  const fetched = await trackedFetch({ label: `Fetching ${source.name}`, scope, bytes: source.bytes, signal }, (opts) => fetch(opts));
-  if (source.key) holdOriginal(source.key, fetched);
-  return fetched;
+  const init = { label: `Fetching ${source.name}`, scope, bytes: source.bytes };
+  if (source.key) return fetchHeld(source.key, init, fetch, signal);
+  return trackedFetch({ ...init, signal }, (opts) => fetch(opts));
 }

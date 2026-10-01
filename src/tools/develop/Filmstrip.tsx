@@ -5,6 +5,7 @@ import type { PictureAvailability } from '../../shared/develop/roll-media';
 import {
   deliverState,
   delivers,
+  isClipPicture,
   isIgnored,
   pictureEdits,
   pictureLabel,
@@ -191,6 +192,7 @@ const Cell = memo(function Cell({
   const kind = availabilityKind;
   const label = pictureLabel(picture);
   const variant = variantNumber(picture);
+  const clip = isClipPicture(picture);
   const fetching = kind === 'fetching';
   const unreachable = kind === 'failed' || kind === 'gone' || kind === 'unconnected' || kind === 'local';
   return (
@@ -206,10 +208,10 @@ const Cell = memo(function Cell({
         }}
         aria-current={open ? 'true' : undefined}
         aria-selected={selected ? 'true' : undefined}
-        aria-label={`${label}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
+        aria-label={`${label}${clip ? ', a clip' : ''}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
           fetching ? ', fetching' : unreachable ? ', not available' : ''
         }${runState ? `, ${RUN_WORDS[runState]}` : ''}`}
-        title={`${label}${variant > 1 ? ' (a variant)' : ''}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
+        title={`${label}${clip ? ' (a clip)' : ''}${variant > 1 ? ' (a variant)' : ''}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
           culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
         } — Shift or ⌘/Ctrl-click to select for a batch`}
         className={`relative block ${size} p-0 rounded-paper overflow-hidden bg-frame cursor-pointer border-2 ${
@@ -263,6 +265,17 @@ const Cell = memo(function Cell({
         <span className="absolute left-1/2 -translate-x-1/2 top-1 pointer-events-none">
           <CullMark culling={culling} onMedia />
         </span>
+        {/* A CLIP says so between the two bottom corners (the edited dot and
+            the delivery badge own those): its cell is one frame, and a frame
+            that reads as a photograph would be opened expecting one. */}
+        {clip && (
+          <span
+            className="absolute left-1/2 -translate-x-1/2 bottom-1 w-4 h-4 grid place-items-center rounded-full bg-surface/85 text-ink pointer-events-none [&_svg]:w-2.5 [&_svg]:h-2.5"
+            aria-hidden="true"
+          >
+            {Icons.play}
+          </span>
+        )}
         {selected && (
           <span
             className="absolute left-1 top-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-paper text-3xs"
