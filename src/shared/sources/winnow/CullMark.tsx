@@ -1,4 +1,4 @@
-import { describeCulling, labelColour, type Culling, type LabelColour } from '../../shared/sources/winnow/culling';
+import { describeCulling, labelColour, type Culling, type LabelColour } from './culling';
 
 /**
  * The five label colours as a swatch — DATA colours, the ones a photographer

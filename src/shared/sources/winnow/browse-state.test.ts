@@ -5,6 +5,7 @@ import {
   writeBrowseState,
   type BrowseState,
 } from './browse-state';
+import { DEFAULT_FACETS } from './picker/pick-filter';
 
 const KEY = 'atelier.sources.winnow.browse.v1';
 
@@ -16,6 +17,8 @@ const place = (over: Partial<BrowseState> = {}): BrowseState => ({
   sessionId: null,
   chapterId: null,
   fidelity: 'proxy',
+  facets: DEFAULT_FACETS,
+  sort: 'time',
   ...over,
 });
 
@@ -48,6 +51,17 @@ describe('the browser\'s remembered place', () => {
   it('round-trips a place', () => {
     writeBrowseState('winnow.example', place());
     expect(readBrowseState('winnow.example')).toEqual(place());
+  });
+
+  it('remembers the picker\'s rail, and reads a place written before it as the default', () => {
+    const facets = { ...DEFAULT_FACETS, devices: ['Sony A7C II'], minStar: 4 };
+    writeBrowseState('a.example', place({ facets, sort: 'stars' }));
+    expect(readBrowseState('a.example')).toMatchObject({ facets, sort: 'stars' });
+    const older: Record<string, unknown> = { ...place() };
+    delete older.facets;
+    delete older.sort;
+    localStorage.setItem(KEY, JSON.stringify({ 'b.example': older }));
+    expect(readBrowseState('b.example')).toMatchObject({ facets: DEFAULT_FACETS, sort: 'time' });
   });
 
   it('keeps instances apart', () => {

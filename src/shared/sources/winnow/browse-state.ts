@@ -18,6 +18,7 @@
  */
 
 import type { FilterQuery } from './client';
+import { readFacets, type PickFacets, type PickSort } from './picker/pick-filter';
 
 export type BrowseView = 'day' | 'session' | 'chapter';
 
@@ -33,6 +34,13 @@ export interface BrowseState {
   /** The open timeline chapter's id, or null. */
   chapterId: string | null;
   fidelity: 'proxy' | 'original';
+  /**
+   * The picker's rail (`picker/pick-filter.ts`) — shared by every host of
+   * the picker on this instance, so a narrowing set in Develop is there when
+   * the Library's *browse all* opens. Absent in a place written before it.
+   */
+  facets?: PickFacets;
+  sort?: PickSort;
 }
 
 const KEY = 'atelier.sources.winnow.browse.v1';
@@ -85,6 +93,8 @@ export function readBrowseState(sourceId: string): BrowseState | null {
       : null,
     chapterId: typeof s.chapterId === 'string' && s.chapterId ? s.chapterId : null,
     fidelity: s.fidelity === 'original' ? 'original' : 'proxy',
+    facets: readFacets(s.facets),
+    sort: s.sort === 'stars' ? 'stars' : 'time',
   };
 }
 

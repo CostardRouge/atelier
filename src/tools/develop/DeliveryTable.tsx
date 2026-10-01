@@ -12,7 +12,7 @@ import { exportState, needsExport, type ExportMarks } from '../../shared/develop
 import { useObjectUrl } from '../../shared/media/use-object-url';
 import { Icons } from '../../shared/ui/icons';
 import type { Culling } from '../../shared/sources/winnow/culling';
-import CullMark from './CullMark';
+import CullMark from '../../shared/sources/winnow/CullMark';
 import type { DeliverAction } from './PictureWorkbench';
 
 /**
