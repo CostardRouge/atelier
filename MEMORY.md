@@ -294,6 +294,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/render-repair.md` | `render/repair.ts`, `repair-pass.ts`, `RollPicture.repair`, the Repair section — heal, clone, dust, anything that COPIES pixels from one place to another |
 | `docs/memory/render-film.md` | `render/film-pass.ts`, `shared/film/film-texture.ts` / `film-noise.ts` / `film-grain.ts` — grain, halation, `RenderPass.prepare`, any spatial effect belonging to a LOOK |
 | `docs/memory/hdr.md` | `src/shared/hdr/` (the gain map, the Ultra HDR container, the display probe), `RollExport.hdr`, any claim about HDR on a still |
+| `docs/memory/winnow-picker.md` | `shared/sources/winnow/picker/` (the one modal behind the Library's *browse all* and Develop's *Add a day*), its rail, `DayPicker`, anything that lists an instance's day or folder for a person to tick |
 | `docs/memory/tasks.md` | `src/shared/tasks/`, `TaskEdge`, `TaskPill` — progress, a cancel, a spinner, a "please wait" anywhere |
 
 Not memory files, but read them before starting new work, or before touching
