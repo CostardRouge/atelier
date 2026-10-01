@@ -103,6 +103,7 @@ import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '..
 import { describeKeyTarget, targetOwnsTyping } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
+import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import type { OverflowItem } from '../../shared/ui/OverflowMenu';
@@ -113,7 +114,11 @@ import DevelopShortcuts from '../../shared/develop/DevelopShortcuts';
 import { STAGE_ZOOM_STEP, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import type { RollExport } from '../../shared/develop/roll-types';
 import CropPanel, { type CropApplyVerb } from './CropPanel';
-import { FoldHints } from '../../shared/ui/Inspector';
+import { FieldRow, FoldHints } from '../../shared/ui/Inspector';
+import { exposureSummary } from '../../shared/exif/exif-summary';
+import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
+import TimelapseSheet, { makingOfLine } from './TimelapseSheet';
+import { usePictureChapters } from './use-picture-chapters';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import { lensKey, profileInEffect, type LensProfileApplied } from '../../shared/lens/lens-profile';
@@ -267,6 +272,9 @@ export default function PictureWorkbench({
   onVariant,
   onPasteSettings,
   onLook,
+  timelapseOpen = false,
+  onTimelapseOpen,
+  onMakingOf,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -338,6 +346,11 @@ export default function PictureWorkbench({
   onVariant?: () => void;
   /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
   onLook: (look: RollGrade) => void;
+  /** The making-of sheet (`TimelapseSheet`) — opened by the editor, drawn here over the picture's bytes. */
+  timelapseOpen?: boolean;
+  onTimelapseOpen?: (open: boolean) => void;
+  /** The picture's own making-of edits — a chapter hidden, a caption rewritten. */
+  onMakingOf?: (change: { hidden?: string[]; captions?: Record<string, string> }) => void;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -1434,6 +1447,21 @@ export default function PictureWorkbench({
     };
   }, [cropView, setCropView]);
   const tabLabel = WORKBENCH_TABS.find((t) => t.id === tab)?.label ?? 'Adjust';
+  // The making-of (`docs/develop-timelapse.md`): the picture's chapters,
+  // memoised on its journal and its sections so their states keep identity
+  // across a caption typed; the row on the Export tab, and the sheet.
+  const chapters = usePictureChapters(entry, exports.openSize ? exports.openSize.width / exports.openSize.height : 1);
+  const identity = useDeliveryIdentity();
+  const makingOfRow = (
+    <FieldRow label="This picture" align="start" hintShown hint={file ? undefined : 'the picture’s bytes are not in hand'}>
+      <div className="flex flex-col items-start gap-2 min-w-0 pt-1">
+        <span className="font-mono text-sm leading-snug text-ink">{makingOfLine(chapters, exportSettings.timelapse)}</span>
+        <Button size="sm" icon={Icons.video} onClick={() => onTimelapseOpen?.(true)} disabled={!file || !onTimelapseOpen}>
+          Timelapse…
+        </Button>
+      </div>
+    </FieldRow>
+  );
   const deliverBar = (inDrawer: boolean) => (
     <DeliverBar
       verbs={exportVerbs}
@@ -2107,6 +2135,7 @@ export default function PictureWorkbench({
               openExif={shotExif}
               picture={entry}
               onWords={onWords}
+              makingOf={makingOfRow}
             />
           ) : null}
           {/* Inside the drawer's own scroll on a phone, where `sticky` pins it. */}
@@ -2120,6 +2149,31 @@ export default function PictureWorkbench({
       </PanelHost>
 
       {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}
+      {timelapseOpen && onTimelapseOpen && (
+        <TimelapseSheet
+          picture={entry}
+          chapters={chapters}
+          // The bytes the stage draws — the rendition on screen — and the
+          // sensor's where the picture is developed on it, with the camera's
+          // calibration at the rung it stands on: the states grade exactly as
+          // the stage and the export do.
+          source={
+            shownFile
+              ? {
+                  file: shownFile,
+                  raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain ?? 1 } : null,
+                  calibration: wantsRaw ? applied : null,
+                }
+              : null
+          }
+          options={exportSettings.timelapse}
+          onOptions={(patch) => onExportSettings({ timelapse: { ...exportSettings.timelapse, ...patch } })}
+          onMakingOf={(change) => onMakingOf?.(change)}
+          plate={exposureSummary(shotExif) || null}
+          credit={identity.creator ? `Developed in Atelier · © ${identity.creator}` : 'Developed in Atelier'}
+          onClose={() => onTimelapseOpen(false)}
+        />
+      )}
     </>
   );
 }

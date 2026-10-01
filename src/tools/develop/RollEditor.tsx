@@ -45,6 +45,7 @@ import {
   isIgnored,
   setDelivery,
   setLeaving,
+  setMakingOf,
   toggledDelivery,
   patchPicture,
   setPictureWords,
@@ -685,6 +686,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     if (!openId) return [];
     const verbs: ExportVerb[] = [
       { id: 'open', label: 'Export this picture', run: () => void exportPictures([openId]) },
+      {
+        id: 'making-of',
+        label: 'Making-of video…',
+        hint: 'this picture’s edit steps replayed as a short video for a feed',
+        run: () => setTimelapseOpen(true),
+      },
     ];
     if (visibleSelected.size > 0) {
       const ids = roll.pictures.filter((p) => visibleSelected.has(p.id)).map((p) => p.id);
@@ -745,6 +752,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
   // --- the sections: ⌘⇧C / ⌘⇧V and "apply to others" for any part of a picture
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The making-of sheet: opened from the Export tab's row or the bar's menu,
+  // drawn by the workbench, which holds the picture's bytes.
+  const [timelapseOpen, setTimelapseOpen] = useState(false);
+  const handleMakingOf = useCallback(
+    (id: string, change: { hidden?: string[]; captions?: Record<string, string> }) => update((r) => setMakingOf(r, id, change)),
+    [update],
+  );
   const copied = useSyncExternalStore(subscribeCopiedSettings, copiedSettings);
   const sectionNames = (sections: readonly PictureSection[]) =>
     sections.map((id) => PICTURE_SECTIONS.find((x) => x.id === id)?.label.toLowerCase()).join(', ');
@@ -1124,6 +1138,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onDeliver={(action) => handleDeliver(open.id, action)}
               onWords={(words) => handleWords(open.id, words)}
               onSettings={() => setSettingsOpen(true)}
+              timelapseOpen={timelapseOpen}
+              onTimelapseOpen={setTimelapseOpen}
+              onMakingOf={(change) => handleMakingOf(open.id, change)}
               onVariant={() => makeVariant('clone')}
               onLook={(look) => update((r) => copyGradeTo(r, [open.id], look))}
               onPasteSettings={pasteSections}
