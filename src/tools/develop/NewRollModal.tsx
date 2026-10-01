@@ -67,7 +67,7 @@ export default function NewRollModal({
         <div>
           <h2 className="m-0 font-serif text-2xl">New roll</h2>
           <p className="m-0 mt-1 text-sm text-muted">
-            The photographs you mean to develop, each keeping its own light and colour.
+            The photographs and clips you mean to develop, each keeping its own light and colour.
           </p>
         </div>
 
@@ -98,7 +98,7 @@ export default function NewRollModal({
           />
           {selectedCount === 0
             ? 'Nothing ticked in the Library — add pictures once it is open'
-            : `Start with the ${selectedCount === 1 ? 'photo' : `${selectedCount} photos`} ticked in the Library`}
+            : `Start with the ${selectedCount === 1 ? 'picture' : `${selectedCount} pictures`} ticked in the Library`}
         </label>
 
         <div className="flex items-center justify-end gap-4 pt-1 border-t border-line">

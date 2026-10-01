@@ -1227,6 +1227,127 @@ Every cell re-rendered on every tick of the open picture's sliders — a roll of
 The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
 
 
+## A roll takes CLIPS: played on the stage, switched to the rush, delivered as an MP4 (2026-09-30, rev. 2026-10-01: a crop)
+
+**The maintainer, two lines: *"develop doit gérer les vidéos"* and *"ne pas
+oublier d'aussi pouvoir switcher du proxy à la vidéo HD"*.** Built in one
+pass; the rules a later agent must keep:
+
+- **A clip is told by its ref's NAME** (`isClipPicture`, over `isClipName` in
+  `library/assets.ts` — the one test every "is this a video?" question should
+  share): a Winnow proxy is `<base>.mp4`, a rush `<base>.MP4`, and the answer
+  must hold before a byte is in hand and on every device. Never by
+  `File.type`: a fetched file carries none.
+- **A clip takes the GLOBAL develop, the look and (since 2026-10-01) ONE
+  crop, and nothing else** — what the export grades every frame through
+  (`SOURCE → CUBE → [FILM] → OUTPUT`, the variant path's own chain) and then
+  cuts. A border, the keystone and lens warps, detail (Presence included),
+  the post-crop vignette, repair and the layers are passes over ONE still
+  frame: on a clip they would have to follow the picture from frame to frame,
+  which nothing here does and Lightroom does not do either. So they are
+  refused at EVERY door, not hidden at one: the workbench has three tabs
+  (`workbenchTabsFor`, `CLIP_TABS` — Adjust, Crop and Export; `D`/`L` do
+  nothing, the editor lands a clip on Adjust when the tab it held is not one
+  of its), the stage is handed null for each of them (so preview = export
+  holds by construction), `copyBorderTo` skips a clip and the border verbs
+  count only the frames (`frameOtherIds`), and `withSections` /
+  `withoutSections` reduce a clip's sections to `CLIP_SECTIONS`
+  (`sectionsFor`) — a paste, an apply-to and a reset all go through them.
+  `pictureEdits` needs no clip branch: a clip can never carry the other
+  sections.
+- **The crop on a clip is held STILL** (2026-10-01, his *"le crop sur un
+  clip"*): the same `aspect` + `framing` the roll always stored, the same
+  `CropStage` / `CropPanel` (the panel takes `clip` and drops `BorderSection`;
+  the Keystone and Lens panels are not drawn), the same `frame` handed to
+  `useDevelopPicture` — so the Adjust stage draws the square and the wipe
+  follows it with no clip branch. Three things a photograph never needed:
+  (1) `delivered()` and `snapshot` grade a clip AT `video.currentTime`, as
+  `paintStage` does — the held grade is keyed on the instant, and without it
+  the crop stage drew the first frame it ever rendered whatever the transport
+  did; (2) `DevelopPicture.frameSeq` (the hook's `restedFrame`, exposed) is a
+  dependency of the crop stage's paint, since the element `delivered()` reads
+  moves under it with nothing else React can see; (3) the transport is drawn
+  AFTER the crop stage in the column, so on the Crop tab it stays under the
+  picture and the zone is judged on any frame. A crop that MOVES (a pan or a
+  zoom over time, Trips' `framing-motion`) is deliberately not here.
+- **The export cuts every frame through the still export's own arithmetic**
+  (`clipDelivery` in `roll-clip-render.ts`, pure, tested): `deliveredLayout`
+  read against the clip's DISPLAY frame — the zone at the clip's own density,
+  the cap (`longEdgeFor`) read against the DELIVERED frame as for a
+  photograph, never an upscale, rounded to EVEN for the encoder — then
+  `drawDelivered` per frame with no border, from an upright scratch canvas
+  when the container is turned (a turned clip's framing was written in its
+  display frame, the one the stage showed). `outputSize` is set whenever the
+  frame is cropped or capped (the flag baked), and `Auto`'s `deliverySummary`
+  is handed the picture's framing and aspect, so a 1:1 zone out of a 360 px
+  proxy asks for the rush where the whole proxy would not have (measured:
+  *the proxy would be upscaled ×2.00*, the rush fetched, 720 × 720 written).
+- **The Library bar no longer greys clips out for Develop**: the registry's
+  `accepts` is `['photo', 'video+telemetry', 'video']` (`app/tools.tsx`) —
+  `assetUsableBy` is what dims a tile, and the tool had declared photographs
+  alone. The Winnow lightbox lists a VIDEO row's files too (`WinnowLightbox`,
+  `viewRows`): proxy and rush as chips, the rush fetched on its chip and held
+  under the same asset id the stage and the export read, and the `Develop`
+  verb carries the file on screen onto the roll like a photograph's.
+- **The stage is the sheet's clip stage** (`use-develop-picture.ts`'s
+  `video`, `DevelopTransport` under the viewport, Space on the tool's window
+  with `targetOwnsSpace` and no dialog open, `restedFrame` feeding the
+  histogram and Auto). The loupe is off on a clip (no whole file to decode).
+- **The rush is a row of the name's menu** because `captureInput` is handed
+  `canDraw: canStageDraw` (`projects/media-rendition.ts`, the Studio's) —
+  `renditionsOf`'s default knows pictures only and would BLOCK an `.MP4`. The
+  fetch goes through `fetchHeld` (one flight per asset, `held-fetch.ts`) and
+  `fetchSourceFile` does too since this day, so an export that starts while
+  the stage is still bringing the rush JOINS that fetch; choosing another row
+  aborts THIS reader only (`flight` ref in the workbench). Measured headless:
+  three switches and an export, ONE `/download`.
+- **The playhead survives the switch** the Studio's way: the new element's
+  `videoTimeSeconds` is read from the OLD element's `currentTime` DURING the
+  render that swaps `shownFile` (a ref compared per render), never in an
+  effect — an effect runs after the decode effect already started at 0, and
+  would re-decode. Measured: seek 1.5 s, switch proxy → rush, 1.5 s.
+- **`measurePicture` is video-aware** (`loadClipMeta`, no thumbnail): without
+  it the *Delivers* row, the chip's pixels and the rows' `640 × 360` were all
+  empty for a clip. The chip says `proxy · clip · W × H` / `MP4 · clip · W × H`
+  (`pictureFidelity`); the menu's proxy hint is `CLIP_PROXY_ADDS`.
+- **The export is `roll-clip-render.ts`** over `exportProcessedVideo`: the
+  container is DEMUXED FIRST (`demuxSource`) because the pipeline reads
+  `outputSize` before it asks for a processor, and only the track and its
+  matrix say what frame the cap is read against; uncapped, the graded frames
+  stay in coded orientation with the rotation flag standing (the LUT tool's
+  path); capped (the FIRST target's size through `longEdgeFor`, even numbers,
+  never up), each frame is turned upright and drawn smaller, the flag baked.
+  Sound is copied. The name is the capture's exact name as `.mp4`
+  (`exportName`); `decodableOriginal` now accepts a clip's name so `Auto`
+  fetches the rush where the first target's frame asks for more than the
+  proxy holds (an HEVC rush WebCodecs cannot decode fails at the demux and is
+  said by the run, never refused on a name). Quality, borders, HDR, the
+  watermark, the metadata groups and the other targets do not reach a clip:
+  `clipNote` says so once per run. Progress is relayed per PERCENT, not per
+  frame (`say` sets state).
+- **A clip's cell** is one frame a second in (`bakeClipThumbnail` over
+  `loadBadgeSource`, released), marked ▶ at bottom-centre (the one spot free);
+  a WORKING PREVIEW is never made of a clip (`use-roll-previews.ts`'s
+  `isLocal`). The day sheet lists `media_type === 'video'` too; the Library
+  verbs and the drop take a `video`/`video+telemetry` asset's clip
+  (`rollFileOf`, `rollFiles` — the `.srt` stays the Studio's).
+
+Verified headless (`testing.md`, «Clips through the Develop tool»): a stub
+clip's roll opened on `proxy · clip · 640 × 360`, two tabs, the cell marked;
+Play advanced the position, Space paused it; exposure +1 wrote `1` to the
+roll and lifted the stage; the rush row read `DJI_0007.MP4 · 1280 × 720 ·
+752 KB`, the switch kept 1.5 s and stored `delivered:dji_0007.mp4`; the
+export wrote `DJI_0007.mp4` 1280 × 720 · 4.02 s from the HELD rush (one
+download in all), read back brighter than the source (143 against 129); a
+clip DROPPED from disk opened, baked its cell, and left capped at 320 × 180.
+On 2026-10-01 (the crop): `C` opened the crop stage with the transport under
+it and no Borders / Perspective / Lens; `1:1` stored `aspect: '1:1'`; the
+Adjust stage went from 640 × 360 to 640 × 640 and still played; the Export
+tab read *the proxy would be upscaled ×2.00* and the run wrote `DJI_0007.mp4`
+at 720 × 720 · 4.02 s from the rush. Not driven: an HEVC rush, a real H.264
+encode (this Chromium has none — the encoder was swapped to VP9 for the run,
+`testing.md`), a turned (rotated) clip's crop, his phone.
+
 ## The JOURNAL is on the picture, written in the same write as the edit (2026-09-30, T1 of `docs/develop-timelapse.md`)
 
 `RollPicture.journal` (roll v7, `journal.ts`, pure): a step per write of the ONE updater — the sections that moved (`sectionsChanged`, the `PictureEdit` vocabulary) and their values after (`SectionValues`, the crop as aspect + framing together) — appended by `journalRoll(prev, next, now, via)` inside `RollEditor.update`, INSIDE the document. **Why**: undo is a stack of whole documents, so a step inside the picture is undone and redone with its edit by construction; a listener or a store beside the roll (the export marks' shape) would have to be kept in step by hand. Rules: (1) the changed pictures are found by IDENTITY (every write replaces the picture it touches) and diffed by section, so a write that moved nothing leaves no step; (2) coalesced on the history's own `COALESCE_MS` — the same sections, the same `via`, inside the window → the last step is REPLACED, a drag is one step; (3) bounded (`JOURNAL_MAX_STEPS` 300, `JOURNAL_MAX_BYTES` 96 KB per picture, the two OLDEST adjacent steps sharing a section merged first — a painted mask's every stroke is the heavy case); (4) never an edit (`pictureEdits`), never in an export mark's key (`KEYED`), never carried by `withSections` / `withoutSections` (an Apply-to, a paste or a reset lands on the TARGET as its own step, `via` said: `apply · paste · reset`), a `clone` variant takes it (`structuredClone`), a `fresh` one does not, the `.roll.json` carries it; (5) absent and empty are one spelling, `readJournal` drops a step with no time or no known section and reads each value through its own reader, so an old roll is byte-identical. (6) **A picture edited before v7 has settings and no story**: `pictureJournal` prepends one synthetic step per section the record does not explain, in `STANDARD_ORDER` (crop · perspective · lens · develop · detail · repair · layers · look · border · vignette), marked `via: 'earlier'` and `reconstructed` — folding the steps over `asShot(p)` gives the picture EXACTLY, asserted in the spec; a surface showing such a step must say "standard order (not recorded)". The stage's VIEW is not recorded (a way of looking, two components below the funnel); a preset applied through the draft reads as the author's own gesture (no `via`). Verified by the spec only: the undo half is a consequence of the document, not driven headless here.
@@ -1248,3 +1369,5 @@ The framing always went through a write-through draft; the aspect was written to
 **The export (T6, `use-timelapse-export.ts`).** A run of the suite's shape: the folder picked AT the click (`pickDeliveryTarget` first — `frontend.md`'s picker trap), a task on the PICTURE's edge (`taskScope`, so the stage's `TaskEdge` draws it), one unit with three stages (Render · Encode · Write) on the SAME `DeliverBar` as the roll's export — `PictureWorkbench` merges the two (`anyProgress`), the Export tab locks on either and the bar is drawn on every tab while either runs —, a Cancel ending the decode or the encode in flight. The states are graded at `min(exportEdge(), frame long edge × deepestZoom(script))`, so a close-up is not a blow-up and a phone keeps its ceiling; `encodeFrames` paints every frame through the sheet's own painter at `script.seconds` (the beat's length, never the option's); the file is `makingOfName(ref)` = `DJI_0101-making-of.mp4` — a SUFFIX, because a delivered picture's exact name exists to pair it with its capture and a video is not a rendition of the picture. H.264 is said BEFORE the click (`useAvcEncodeSupport` → the sheet's verdict disables the verb). Driven headless with the encoder faked the way `render-video.test.ts` fakes it (an init script: a `VideoEncoder` whose `isConfigSupported` answers for `avc1.640034`, chunks as instances of the global `EncodedVideoChunk`, `showDirectoryPicker` → the OPFS): 450 frames at 1080 × 1920 and 30 fps for 15 s, a real `ftyp` container in the OPFS under the right name, the note on the sheet and on the bar. The encode itself is NOT verified here — no H.264 in this Chromium — and must be run once on a real machine or the desktop app's pane.
 
 **The sound (T7).** `timelapseScore(script, kit)` (pure, tested): the kit's `tick` where each chapter starts (the level falling a touch per chapter), its `leg` landing at the hook's cut (the tease; none under `flash`), the `seat` where the reveal's figure ends — the openers' own kits (`tick-kits.ts`), so the four names on the Sound pill are the same four Défilé offers. Rendered by `renderBed` ahead of the AAC priming and handed to `encodeFrames` as `audio`; `'none'` (the default, his §6) writes NO track. The note says what became of it (*with its ticks* · *silent: …*): this Chromium renders the bed and cannot encode AAC, and the run said exactly that. The preview is silent, said in the hint. The plate, the credit, the ground and the three hooks and three reveals the plan listed under T7 were built with T5. **The whole plan is BUILT, T1 → T7**; what no run here could verify is the H.264 encode and the AAC track on a real machine, and the feel of the video on his own pictures.
+
+- **A making-of is a PHOTOGRAPH's** (2026-10-01, the merge with clips): its states are graded as stills, so a clip gets no Making-of row, no menu verb and no sheet (`isClipPicture`).

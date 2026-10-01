@@ -75,7 +75,8 @@ describe('pictureFidelity', () => {
   it('reads a fetched original by its NAME, since an instance hands it over with no type', () => {
     const f = pictureFidelity(file('DJI_0101.JPG', ''), null, { width: 8064, height: 4536 });
     expect(f.chip).toBe('JPEG · 8-bit · 8064 × 4536');
-    expect(pictureFidelity(file('DJI_0001.MP4', '')).chip).toBe('clip · 8-bit');
+    expect(pictureFidelity(file('DJI_0001.MP4', '')).chip).toBe('MP4 · clip');
+    expect(pictureFidelity(file('DJI_0001.MP4', ''), null, { width: 3840, height: 2160 }).chip).toBe('MP4 · clip · 3840 × 2160');
   });
 
   it('names the sensor on a RAW base', () => {

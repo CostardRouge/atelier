@@ -32,6 +32,8 @@ import type { BrushRaster } from '../render/brush-raster';
 import { DEFAULT_FRAMING, type Framing } from '../media/framing';
 import { fitPhotoForRender } from '../media/photo-frame';
 import { decodeStill, stillSize } from '../media/still-decode';
+import { loadClipMeta } from '../media/video-metadata';
+import { isClipName } from '../library/assets';
 import { decodeRaw } from '../raw/raw-decoder';
 import { rawDecodeCap, rawDecodeEdge } from '../raw/raw-budget';
 import { deviceClass } from '../lib/device-class';
@@ -273,6 +275,17 @@ export interface MeasuredPicture extends PictureSize {
  * only thing a browser draws of a DNG. Null when nothing reads it.
  */
 export async function measurePicture(file: File): Promise<MeasuredPicture | null> {
+  // A CLIP is measured by its element — `videoWidth`/`videoHeight`, the
+  // display size the browser already turned upright — and nothing is decoded
+  // past its metadata (`loadClipMeta`, no thumbnail).
+  if (isClipName(file.name) || file.type.startsWith('video/')) {
+    try {
+      const meta = await loadClipMeta(file, { thumbnail: false });
+      return meta.width > 0 && meta.height > 0 ? { width: meta.width, height: meta.height, viaRawPreview: false } : null;
+    } catch {
+      return null;
+    }
+  }
   const size = await stillSize(file);
   return size ? { width: size.width, height: size.height, viaRawPreview: size.viaRawPreview } : null;
 }

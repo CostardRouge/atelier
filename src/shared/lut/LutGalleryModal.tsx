@@ -1,72 +1,82 @@
 /**
- * "Choose a look" — a rail of families on the left, a grid of looks on a real
- * photograph on the right, so picking one means looking at the actual result
- * instead of reading a name off a `<select>`. A tile click IS the choice —
- * there is nothing further to confirm, since seeing it first was the point.
- * The ★ in a tile's corner is the one thing on it that is not the choice:
- * it builds the Favourites row at the top of the rail (§6).
+ * "Choose a look" — on a desktop a WORKBENCH: the host's picture in a column
+ * at the left, as tall as the dialog, with its controls under it; the looks
+ * as a panel at the right (the filter, what the tiles are shown on, the rail
+ * of families, the grid); one verb in a pinned footer. A tile click AIMS the
+ * look at the picture, and the pick is the second click, Enter or "Use this
+ * look" (`docs/look-picker-redesign.md`, face A — the maintainer's pick on
+ * 2026-10-01 over the band it replaced).
+ *
+ * **The stage column is as wide as the picture needs, never wider**
+ * (`stageColumnBox`, `look-scene.ts`): a portrait frame is bounded by the
+ * column's height and hands the width it does not use to the grid; a
+ * landscape one is capped at half the body. The old band gave a portrait
+ * picture 189 × 336 px on the maintainer's screen and three quarters of its
+ * width to a black table; the column gives it 565 × 1004.
  *
  * **The rail is what makes a purchased pack affordable** (variant B of
  * `docs/lut-packs.md` §6, the maintainer's choice): only the open node's
  * looks are ever resolved, so a 25-look pack of 65³ lattices — 41 MB — never
- * has to be decoded to draw a screen. On a phone the rail becomes a row of
- * crumbs.
+ * has to be decoded to draw a screen. Where the shell is `expanded` the rail
+ * is a column; on a `medium` shell (a tablet) and on a phone it is one line
+ * of crumbs over the grid, since a 152px rail beside a half-width stage would
+ * leave the grid one tile wide.
  *
  * **Opening it costs nothing (§7).** Every tile it draws was baked once
  * already: a pack's at import (`pack-thumbs.ts`), a built-in's and a film
  * stock's by `scripts/gen-lut-thumbs.mjs` and shipped in `public/lut-thumbs/`
  * — each look on the reference its family asks for, since a conversion LUT
  * read on a display-referred picture previews over-contrasted. So the gallery
- * opens without fetching or parsing a single `.cube`, where it used to fetch
- * and parse all 37 MB of them on every open to redraw pixels that could not
- * have changed.
+ * opens without fetching or parsing a single `.cube`.
  *
- * **"On my picture" is still here, as a CHOICE**: the open picture the host
- * passed in, or a photo the author loads right here. Then — and only then —
- * every look on screen resolves its lattice and is baked live, one at a time
- * with a tick between each, because a screenful of film stocks is real CPU
- * (~100 ms apiece, `film-layer.ts`) and one burst would hold a frame.
- * Thumbnails pop in as they finish, which reads as the grid filling in rather
- * than the modal being slow.
+ * **"On my picture" is still here, as a CHOICE** — a `Segmented` now, where a
+ * sentence and two ghost verbs stood: the open picture the host passed in, or
+ * a photo the author loads right here. Then — and only then — every look on
+ * screen resolves its lattice and is baked live, one at a time with a tick
+ * between each, because a screenful of film stocks is real CPU (~100 ms
+ * apiece, `film-layer.ts`) and one burst would hold a frame.
+ *
+ * ## What is NOT drawn any more on a desktop, and why
+ *
+ * The subtitle, the "tiles on…" sentence, the lattice sentence under the verb
+ * and the footer's sentence are one note behind an ⓘ beside the title — the
+ * suite's rule for standing prose (`frontend.md`, «Standing prose folds behind
+ * InfoDot»); the phone branch had already dropped every one of them. The
+ * footer's Close went with it: ✕ in the header is the one way out, and the
+ * footer exists only where there is a verb to pin. The wipe's second slider
+ * went too — two sliders of one dress for two different numbers read as a
+ * misalignment, and the divider is dragged on the picture, where a press
+ * places it. The controls are `FieldRow`s — the inspector grammar every side
+ * panel speaks — so their label column and their tracks line up.
  *
  * ## On a phone the GRID is what the screen is for
  *
- * At 390×844 the desktop arrangement stacked — a two-line title, the scene
- * with its name, its file line, its slider and its button, the three-row
- * "tiles on…" band, the crumbs, then the footer's sentence — left ONE row of
- * tiles visible, and the maintainer's report was exactly that: *"we barely
- * see the look we want to pick"*. So the compact shell (`useIsCompact`) is a
- * different arrangement of the same parts rather than the same one squeezed:
- * a one-row header; the scene at a fixed share of the measured app height
- * with only the aimed look's name and the Compare pill under it (the wipe is
- * the drag across the picture); the filter beside a ⋯ menu holding the
- * "tiles on…" choices; the family crumbs pinned OUTSIDE the scroller as one
- * swipeable line; and the "Use this look" verb in a footer of its own, in the
- * thumb's reach, where the sentence about lattices used to be. Everything
- * that only explains is gone from that width — the sheet has an ⓘ elsewhere
- * for it — because every explaining line was a row of looks not shown.
+ * The compact arrangement of 2026-09-21 is untouched: a one-row header; the
+ * scene at a fixed share of the measured app height with only the aimed
+ * look's name and the A/B pill under it (the wipe is the drag across the
+ * picture); the filter beside a ⋯ menu holding the "tiles on…" choices; the
+ * family crumbs pinned OUTSIDE the scroller as one swipeable line; and the
+ * "Use this look" verb in a footer of its own, in the thumb's reach. Measured
+ * at 390×844 and 390×664: six tiles, two full rows.
  *
  * ## The STRENGTH is part of the choice, not a setting found afterwards
  *
  * A look at 100 % and the same look at 40 % are different pictures, and the
  * question "which look" cannot be answered without the second number — which
- * is why the scene carries a strength slider and why the pick hands it to the
+ * is why the card carries a strength slider and why the pick hands it to the
  * host (`onPick(id, intensity)`), where it becomes the new layer's own. The
  * grid follows it wherever it is baking LIVE; the shipped reference tiles do
- * not, and their line already says they are the looks as authored.
+ * not, and the ⓘ says they are the looks as authored.
  *
- * ## On desktop the modal is as tall as the screen allows
+ * ## The dialog is as big as the screen allows
  *
- * It used to be `min(92dvh, 54rem)`, and the cap was the whole of the
- * maintainer's report: on a 1440-tall screen the header, the scene, the "tiles
- * on…" band and the footer left barely two rows of looks under them. The
- * height is now the MEASURED screen (`--app-h`, `frontend.md`) less the
- * backdrop's gutter, with no rem ceiling, and the scene takes a SHARE of it
- * rather than a fixed 21rem — so every pixel a taller screen brings is a pixel
- * of grid.
+ * The height is the MEASURED screen (`--app-h`, `frontend.md`) less the
+ * backdrop's gutter, with no rem ceiling; the width is `min(96vw, 100rem)`,
+ * where a 76rem cap used to hold the picture and the tiles back on exactly
+ * the screens that had room for them.
  */
 
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useId, useLayoutEffect, useMemo, useRef, useState } from 'react';
 import { createPortal } from 'react-dom';
 import type { CubeLut } from '../lib/cube-parser';
 import { decodePhoto } from '../media/photo-frame';
@@ -74,13 +84,23 @@ import { pickFile } from '../sources/file-sources';
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
+import { InfoDotButton } from '../ui/InfoDot';
+import { FieldRow } from '../ui/Inspector';
 import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
+import Segmented, { type SegmentedOption } from '../ui/Segmented';
 import useDialogKeys from '../ui/use-dialog-keys';
-import { useIsCompact } from '../ui/use-layout-mode';
+import { useAtLeast, useIsCompact } from '../ui/use-layout-mode';
 import { loadBuiltinThumbs } from './builtin-thumbs';
 import { galleryNodes, matchingItems, type GalleryItem, type GalleryNode } from './gallery-nodes';
 import LookScene from './LookScene';
-import { SCENE_PIXELS, asPreviewPicture, sceneNote, type LutPreviewPicture } from './look-scene';
+import {
+  SCENE_PIXELS,
+  asPreviewPicture,
+  sceneNote,
+  stageColumnBox,
+  type LutPreviewPicture,
+  type StageBox,
+} from './look-scene';
 import {
   PREVIEW_SAMPLE_SIZE,
   bakeLutPreview,
@@ -121,6 +141,12 @@ function sampleFromImage(source: LutPreviewPicture, size: number): RgbBitmap {
   return { width: size, height: size, data };
 }
 
+/** The gap between the picture and the card under it, in the stage column. */
+const STAGE_GAP = 12;
+
+/** What the tiles are shown on. `null` in state is the reference frames. */
+type ShownOn = 'reference' | 'open' | 'custom';
+
 export interface LutGalleryModalProps {
   /** Highlighted with a ring: a builtin id, `film:<id>`, `pack:<pack>/<look>`, or 'none'. */
   selected?: string;
@@ -129,12 +155,12 @@ export interface LutGalleryModalProps {
   /** Include the film stocks section — `GradePanel`'s "Add a look" already offers them. */
   includeFilm?: boolean;
   /**
-   * A picture already open in the host tool. It is OFFERED — "Preview on the
-   * open picture" — and never taken by default: the shipped tiles cost
-   * nothing, and a live bake costs a lattice per look (§7).
+   * A picture already open in the host tool. It is OFFERED — "My picture" —
+   * and never taken by default: the shipped tiles cost nothing, and a live
+   * bake costs a lattice per look (§7).
    */
   previewImage?: LutPreviewSource | null;
-  /** What that picture is called, for the line under the scene. */
+  /** What that picture is called, for the line under the look's name. */
   previewLabel?: string | null;
   /**
    * True when the host's picture is LOG footage. Every host that passes a
@@ -152,7 +178,7 @@ export interface LutGalleryModalProps {
   title?: string;
   /**
    * The look, and how strongly the author judged it — the second number is
-   * the scene's slider, and a host that has nowhere to put it may ignore it.
+   * the card's slider, and a host that has nowhere to put it may ignore it.
    */
   onPick: (id: string, intensity: number) => void;
   onClose: () => void;
@@ -173,6 +199,9 @@ export default function LutGalleryModal({
   const { interpolation } = useLutInterpolation();
   const packIndexes = useLutPacks();
   const compact = useIsCompact();
+  // The rail is a column only where the shell is wide enough to pay for one
+  // beside a stage; a tablet gets the crumbs a phone already had.
+  const railed = useAtLeast('expanded');
 
   const [query, setQuery] = useState('');
   const [openId, setOpenId] = useState<string>(() => (includeFilm ? 'film' : 'builtin'));
@@ -200,9 +229,13 @@ export default function LutGalleryModal({
    * only when the author asked to see them on this picture.
    */
   const [liveOn, setLiveOn] = useState<'open' | 'custom' | null>(null);
+  /** The standing explanation, behind the ⓘ beside the title. */
+  const [aboutOpen, setAboutOpen] = useState(false);
+  const aboutId = useId();
+  const strengthId = useId();
 
   /**
-   * THE SCENE — the aimed look on the host's own picture, above the grid.
+   * THE SCENE — the aimed look on the host's own picture.
    *
    * It exists only when a host handed one over, and where it does the gesture
    * changes: a click AIMS (the scene answers), and the pick is the second
@@ -216,9 +249,9 @@ export default function LutGalleryModal({
   const [aimed, setAimed] = useState<string | null>(selected ?? null);
   /**
    * The before/after wipe. It lives HERE rather than in `LookScene` because
-   * the slider that drives it belongs in the column beside the picture — a
+   * the switch that drives it belongs in the card under the picture — a
    * control over a photograph is a control in the way of what it is for — and
-   * the drag across the picture writes the same number.
+   * the drag across the picture writes the divider's position.
    */
   const [compare, setCompare] = useState(false);
   const [splitX, setSplitX] = useState(0.5);
@@ -308,7 +341,7 @@ export default function LutGalleryModal({
    * picture, at the number they are judging at, and showing it at 100 %
    * beside a scene at 40 % would be two answers to one question. A shipped
    * reference tile cannot follow it and does not pretend to: it was baked
-   * once, as the look was authored, and the line above the grid says so.
+   * once, as the look was authored, and the ⓘ says so.
    */
   const tileStrength = effectiveSource ? strength : 1;
   const previews = useMemo(() => {
@@ -411,9 +444,71 @@ export default function LutGalleryModal({
   useDialogKeys({
     onCancel: credits ? () => setCredits(null) : onClose,
     // Enter takes the aimed look — `dialog-keys.ts` already stands down for a
-    // focused field, so typing in the filter is untouched.
+    // focused field and for a focused button, so a tile's own Enter is one
+    // pick, not two.
     onConfirm: scene && aimed && !aimedBusy ? () => onPick(aimed, strength) : null,
   });
+
+  /**
+   * THE STAGE COLUMN'S SIZE, measured. The body's size and the card's height
+   * are read off the DOM (a ResizeObserver on both — the card grows when the
+   * caution appears) and `stageColumnBox` turns them into a width for the
+   * column and a height for the picture's box; a layout effect, so the first
+   * paint is already at the measured size and nothing jumps when the dialog
+   * opens.
+   */
+  const bodyRef = useRef<HTMLDivElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
+  const [stageBox, setStageBox] = useState<StageBox | null>(null);
+  useLayoutEffect(() => {
+    if (compact || !picture) return;
+    const body = bodyRef.current;
+    if (!body) return;
+    const aspect = picture.height > 0 ? picture.width / picture.height : 0;
+    const measure = () => {
+      const card = cardRef.current;
+      setStageBox(
+        stageColumnBox({
+          bodyWidth: body.clientWidth,
+          bodyHeight: body.clientHeight,
+          cardHeight: card ? card.offsetHeight + STAGE_GAP : 0,
+          aspect,
+        }),
+      );
+    };
+    measure();
+    if (typeof ResizeObserver === 'undefined') return;
+    const ro = new ResizeObserver(measure);
+    ro.observe(body);
+    if (cardRef.current) ro.observe(cardRef.current);
+    return () => ro.disconnect();
+  }, [compact, picture]);
+
+  /**
+   * ← → ↑ ↓ walk the tiles — the aim, where there is a scene, and the focus
+   * everywhere — so a look is found with the hands on the keyboard, the way
+   * the Develop filmstrip is. The column count is read off the layout rather
+   * than assumed: the grid is `auto-fill`.
+   */
+  const walkTiles = (e: React.KeyboardEvent<HTMLDivElement>) => {
+    if (!['ArrowRight', 'ArrowLeft', 'ArrowUp', 'ArrowDown'].includes(e.key)) return;
+    if ((e.target as HTMLElement).closest('input')) return;
+    const tiles = Array.from(e.currentTarget.querySelectorAll<HTMLElement>('[data-tile]'));
+    if (!tiles.length) return;
+    const focused = (e.target as HTMLElement).closest<HTMLElement>('[data-tile]');
+    const current = tiles.findIndex((t) => t === focused || (!focused && t.dataset.tile === ringed));
+    const perRow = Math.max(1, tiles.filter((t) => Math.abs(t.offsetTop - tiles[0].offsetTop) < 2).length);
+    const from = current < 0 ? 0 : current;
+    const step =
+      e.key === 'ArrowRight' ? 1 : e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowDown' ? perRow : -perRow;
+    const next = current < 0 ? 0 : Math.max(0, Math.min(tiles.length - 1, from + step));
+    e.preventDefault();
+    const tile = tiles[next];
+    const id = tile.dataset.tile!;
+    tile.querySelector<HTMLElement>('button')?.focus();
+    tile.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    if (scene) setAimed(id);
+  };
 
   const q = query.trim().toLowerCase();
   const showNone =
@@ -427,9 +522,9 @@ export default function LutGalleryModal({
    * What the looks are shown ON. The default costs nothing — the tiles were
    * baked once, each look on the reference its family asks for — so putting
    * them on YOUR picture is a choice you make rather than a price you pay for
-   * opening the picker (`docs/lut-packs.md` §7). One sentence says the state,
-   * and the same three verbs change it, drawn as buttons where there is a row
-   * for them and as a ⋯ menu on a phone.
+   * opening the picker (`docs/lut-packs.md` §7). On a desktop the choice is a
+   * `Segmented` with a "Photo…" verb beside it; on a phone the same choices
+   * are a ⋯ menu beside the filter, and a sentence is its title.
    */
   const sourceLine =
     liveOn === 'custom' && customLabel
@@ -462,6 +557,26 @@ export default function LutGalleryModal({
     },
     ...(liveOn
       ? [{ id: 'reference', label: 'Use the reference frames', onSelect: () => setLiveOn(null) }]
+      : []),
+  ];
+  const shownOn: ShownOn = liveOn ?? 'reference';
+  const shownOnOptions: SegmentedOption<ShownOn>[] = [
+    {
+      id: 'reference',
+      label: 'Reference',
+      title: 'Every look on the reference frame its family asks for — nothing fetched',
+    },
+    ...(picture
+      ? [
+          {
+            id: 'open' as const,
+            label: 'My picture',
+            title: 'Every look on screen baked on the open picture — one lattice per look',
+          },
+        ]
+      : []),
+    ...(customImage
+      ? [{ id: 'custom' as const, label: 'Photo', title: customLabel ? `On “${customLabel}”` : 'On the photo you loaded' }]
       : []),
   ];
 
@@ -511,19 +626,8 @@ export default function LutGalleryModal({
     />
   );
 
-  const useThisLook = (
-    <Button
-      size={compact ? 'md' : 'sm'}
-      variant={compact ? 'primary' : 'default'}
-      disabled={!aimed || aimedBusy}
-      onClick={() => aimed && onPick(aimed, strength)}
-    >
-      Use this look
-    </Button>
-  );
-
   /**
-   * The strength, beside the picture it is judged on. Dead without a look —
+   * The strength, under the picture it is judged on. Dead without a look —
    * shown disabled rather than hidden, so the row does not appear and
    * disappear under the pointer as looks are aimed at.
    */
@@ -531,6 +635,7 @@ export default function LutGalleryModal({
   const strengthSlider = (
     <>
       <input
+        id={strengthId}
         type="range"
         min={0}
         max={MAX_LAYER_INTENSITY}
@@ -550,6 +655,175 @@ export default function LutGalleryModal({
     </>
   );
 
+  /** The families as a swipeable line — a phone's rail, and a tablet's. */
+  const crumbStripNav = (
+    <nav
+      ref={crumbStrip}
+      className={`flex-none flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden ${
+        compact ? '-mx-3 px-3' : ''
+      }`}
+      aria-label="Look families"
+    >
+      {crumbs.map((node) => (
+        <button
+          key={node.id}
+          type="button"
+          onClick={() => openNode(node)}
+          aria-pressed={node.id === open?.id}
+          className={`shrink-0 h-[2.125rem] px-3 rounded-full border text-sm whitespace-nowrap ${
+            node.id === open?.id
+              ? 'border-accent bg-accent-wash text-accent-ink'
+              : 'border-line-strong bg-paper text-ink-soft'
+          }`}
+        >
+          {node.depth > 0 && <span className="text-muted">› </span>}
+          {node.label}
+          <span className="ml-1.5 font-mono text-2xs text-muted tabular-nums">{node.items.length}</span>
+        </button>
+      ))}
+    </nav>
+  );
+
+  /**
+   * The grid: one section per shown node (a search lists one per family it
+   * hit). A heading is drawn only where it carries something the rail or the
+   * crumb does not — a search result's family, a pack's ⓘ, a hint — because
+   * a heading that repeats the open row is a row of looks not shown. The "No
+   * look" tile joins the first grid rather than sitting on a row of its own.
+   */
+  const noneTile = (
+    <Tile
+      id="none"
+      name="No look (original)"
+      {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
+      bitmap={noneBitmap}
+      selected={selected === 'none'}
+      aimed={ringed === 'none'}
+      hint={scene && !compact}
+      onPick={touch}
+    />
+  );
+  // Fixed 8rem tracks on a desktop, never `minmax(8rem, 1fr)`: a flexible
+  // track stretches a tile towards a strip whenever the row's width is just
+  // short of one more column, and a fixed one leaves that slack at the end of
+  // the row instead, where it reads as margin. (A `minmax` with a LENGTH as
+  // its max is worse still: `auto-fill` then counts tracks by that max.)
+  const gridClass = `grid gap-2 ${
+    compact ? 'grid-cols-[repeat(auto-fill,minmax(88px,1fr))]' : 'grid-cols-[repeat(auto-fill,8rem)]'
+  }`;
+  const grid = (
+    <div
+      className="flex-1 min-w-0 min-h-0 overflow-auto overscroll-contain pr-1 -mr-1"
+      onKeyDown={walkTiles}
+    >
+      <div className="flex flex-col gap-5">
+        {showNone && shown.length === 0 && (
+          <section className="flex flex-col gap-2">
+            <div className={gridClass}>{noneTile}</div>
+          </section>
+        )}
+        {shown.map(({ node, items }, index) => (
+          <section key={node.id} className="flex flex-col gap-2">
+            {(q || node.pack || node.hint) && (
+              <div className="flex items-center gap-2 flex-wrap">
+                <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
+                  {node.label}
+                </h3>
+                {node.pack && (
+                  <IconButton
+                    size="sm"
+                    variant="ghost"
+                    label={`About ${node.label}`}
+                    onClick={() => setCredits(credits === node.id ? null : node.id)}
+                  >
+                    {Icons.info}
+                  </IconButton>
+                )}
+                {node.hint && <span className="text-2xs text-warn">{node.hint}</span>}
+              </div>
+            )}
+            {credits === node.id && creditsFor && (
+              <p className="m-0 px-3 py-2 rounded-control bg-paper-2 border border-line text-xs text-ink-soft">
+                <span className="font-medium text-ink">{creditsFor.name || 'Pack'}</span>
+                {creditsFor.author && <> — {creditsFor.author}</>}
+                {creditsFor.url && (
+                  <>
+                    {' · '}
+                    <a
+                      href={creditsFor.url}
+                      target="_blank"
+                      rel="noreferrer noopener"
+                      className="text-accent-ink underline"
+                    >
+                      where it came from
+                    </a>
+                  </>
+                )}
+                <br />
+                <span className="text-muted">
+                  Bought looks, kept in this browser — they never leave it.
+                </span>
+              </p>
+            )}
+            <div className={gridClass}>
+              {showNone && index === 0 && noneTile}
+              {items.map((item) => (
+                <Tile
+                  key={item.id}
+                  id={item.id}
+                  name={item.name}
+                  thumb={item.thumb}
+                  bitmap={previews[item.id]}
+                  failed={resolved[item.id] === 'error'}
+                  selected={selected === item.id}
+                  aimed={ringed === item.id}
+                  hint={scene && !compact}
+                  favourite={favourites.includes(item.id)}
+                  onPick={touch}
+                  onToggleFavourite={toggleFavourite}
+                />
+              ))}
+            </div>
+          </section>
+        ))}
+        {shown.length === 0 && !showNone && (
+          <p className="m-0 text-sm text-muted">
+            {query.trim() ? `No look matches “${query}”.` : 'Nothing here yet.'}
+          </p>
+        )}
+      </div>
+    </div>
+  );
+
+  const rail = (
+    <nav
+      className="w-[9.5rem] flex-none overflow-auto pr-1 -mr-1 border-r border-line"
+      aria-label="Look families"
+    >
+      {nodes.map((node) => (
+        <RailRow
+          key={node.id}
+          node={node}
+          open={!query.trim() && node.id === open?.id}
+          onOpen={() => openNode(node)}
+        />
+      ))}
+    </nav>
+  );
+
+  /** What the footer says about the state, beside the verb. */
+  const say = aimedItem ? (
+    <>
+      <span className="font-medium text-ink">{aimedItem.name}</span>
+      {!noLook && strength !== 1 && (
+        <span className="font-mono text-xs text-muted"> · {Math.round(strength * 100)} %</span>
+      )}
+      {note && <span className="text-warn"> · expects a log source</span>}
+    </>
+  ) : (
+    'Aim a look to see it on your picture.'
+  );
+
   return createPortal(
     <div
       className="fixed inset-0 z-50 flex items-center justify-center p-4 bg-[rgba(20,18,15,0.45)] backdrop-blur-[2px] max-[820px]:p-0"
@@ -560,28 +834,28 @@ export default function LutGalleryModal({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      {/* Wider than it was (56rem), and on desktop as tall as the screen
-          allows: the MEASURED height (`--app-h`) less the backdrop's 1rem
-          gutter top and bottom, with no rem cap — a 54rem ceiling on a tall
-          screen is a screenful of paper where rows of looks should be. On a
-          phone it is the whole screen already, with tighter gaps: every 8px
-          between bands is 8px of grid. */}
+      {/* As tall as the screen allows: the MEASURED height (`--app-h`) less
+          the backdrop's 1rem gutter top and bottom, with no rem cap — and as
+          wide as the screen allows too, where a 76rem cap used to hold the
+          picture and the tiles back. On a phone it is the whole screen
+          already, with tighter gaps: every 8px between bands is 8px of grid. */}
       <div
         className={
           compact
             ? 'w-full h-[var(--app-h,100dvh)] flex flex-col gap-2.5 bg-surface min-h-0 px-3 pt-[max(0.625rem,env(safe-area-inset-top))] pb-[max(0.5rem,env(safe-area-inset-bottom))]'
-            : 'w-full max-w-[76rem] h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0'
+            : 'w-full max-w-[min(96vw,100rem)] h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col gap-3.5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-5 pb-4 min-h-0'
         }
       >
-        <div className="flex items-center justify-between gap-3">
-          <div className="min-w-0">
+        <div className="flex-none flex items-center justify-between gap-3">
+          <div className="min-w-0 flex items-center gap-2.5">
             <h2 className={`m-0 font-serif truncate ${compact ? 'text-lg' : 'text-2xl'}`}>{title}</h2>
             {!compact && (
-              <p className="m-0 mt-1 text-sm text-muted">
-                {scene
-                  ? 'Aim a look to see it on your picture — click it again to use it.'
-                  : 'Every look, on a real picture — click one to use it.'}
-              </p>
+              <InfoDotButton
+                about="this picker"
+                open={aboutOpen}
+                controls={aboutId}
+                onToggle={() => setAboutOpen((v) => !v)}
+              />
             )}
           </div>
           <div className="flex items-center gap-1 shrink-0">
@@ -596,346 +870,241 @@ export default function LutGalleryModal({
             </IconButton>
           </div>
         </div>
-
-        {picture && (
-          /* The band: your picture with ONE look on it. It takes HEIGHT and
-             not width, which is the whole reason it is here and not in a
-             third column — measured, the modal is 848 px wide inside, the
-             rail takes 216, and a 420 px panel beside them leaves room for
-             one tile per row. */
-          <div
-            className={
-              compact
-                ? 'flex-none flex flex-col gap-1.5'
-                : 'flex-none flex gap-4 border-t border-line pt-3'
-            }
-          >
-            {/* The picture takes the room and is shown WHOLE inside it, its
-                surround the dark of a light table. */}
-            {/* HEIGHT is what gives the picture presence: the band is wide
-                enough for a 16:9 frame long before it is tall enough for a
-                4:3 one, so growing it downwards is what fills the room. It is
-                a SHARE of the measured screen at BOTH widths — a quarter on a
-                phone, 28 % on desktop between a 13rem floor and a 21rem
-                ceiling — so a taller screen gives the scene a little and the
-                grid the rest, rather than the scene taking a fixed 21rem out
-                of a short laptop's. */}
-            <div
-              className={
-                compact
-                  ? 'flex-none w-full h-[calc(var(--app-h,100dvh)*0.25)] min-h-[8rem]'
-                  : 'flex-1 min-w-0 h-[clamp(13rem,calc(var(--app-h,100dvh)*0.28),21rem)]'
-              }
-            >
-              <LookScene
-                source={picture}
-                cube={aimedCube}
-                intensity={strength}
-                interpolation={interpolation}
-                compare={compare}
-                splitX={splitX}
-                onSplit={(x) => {
-                  setCompare(true);
-                  setSplitX(x);
-                }}
-                busy={aimedBusy}
-                error={aimedError}
-              />
-            </div>
-            {compact ? (
-              /* ONE row under the picture, and it is the strength: the wipe's
-                 own slider is not here (the drag across the picture writes
-                 that number, and a finger is already on the picture), and the
-                 aimed look's NAME is in the footer, which is drawn at this
-                 width anyway. A second row here would be a row of looks. */
-              <div className="flex items-center gap-2 min-w-0">
-                {noLook ? (
-                  <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
-                    {aimedItem?.name ?? 'Your picture, as it is'}
-                  </span>
-                ) : (
-                  strengthSlider
-                )}
-                {note && (
-                  <span className="shrink-0 w-2 h-2 rounded-full bg-warn" title={note} aria-label={note} />
-                )}
-                <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
-              </div>
+        {!compact && aboutOpen && (
+          /* The standing prose, in one place and only when asked for: what the
+             gesture is, what the tiles are, what the preview is worth. */
+          <p id={aboutId} className="flex-none m-0 -mt-1.5 max-w-[80ch] text-xs leading-relaxed text-muted">
+            {scene ? (
+              <>
+                <span className="text-ink-soft">Aim, then take.</span> A click shows the look on your
+                picture; a second click, Enter or “Use this look” takes it, at the strength you set.{' '}
+              </>
             ) : (
-              <div className="w-[21rem] flex-none flex flex-col gap-1.5">
-                <span className="text-base font-medium text-ink truncate">
-                  {aimedItem?.name ?? 'Your picture, as it is'}
-                </span>
-                <span className="font-mono text-2xs text-muted">
-                  {[previewLabel, aimedItem ? 'the look alone, without your correction' : null]
-                    .filter(Boolean)
-                    .join(' · ')}
-                </span>
-                {/* The comparison slider: what the picture is worth against the
-                    original, said with a control you can put anywhere rather
-                    than a gesture you have to discover. Moving it turns the
-                    wipe ON — a slider that does nothing until a switch is found
-                    is a dead control. */}
-                {/* A DIV, not a label: a `<label>` around both made the
-                    button's accessible name the slider's VALUE ("50") — the
-                    browser takes a labelled control's name from the label's
-                    whole text, and a screen reader then announces the switch as
-                    a number. The slider names itself with `aria-label`. */}
-                <div className="flex items-center gap-2.5 mt-1 text-xs text-ink-soft">
-                  <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
-                  <input
-                    type="range"
-                    min={0}
-                    max={100}
-                    value={Math.round(splitX * 100)}
-                    onChange={(e) => {
+              <>
+                <span className="text-ink-soft">A click is the pick</span> — there is no picture here to
+                aim at.{' '}
+              </>
+            )}
+            The tiles show every look on the reference frame its family asks for, so two looks stay
+            comparable; <span className="text-ink-soft">My picture</span> bakes them on your own picture
+            instead, one lattice per look. What you see is baked from the same lattice the export uses.
+          </p>
+        )}
+
+        {compact ? (
+          <>
+            {picture && (
+              /* The band, as on 2026-09-21: the picture at a quarter of the
+                 measured screen, floor 8rem, and ONE row under it. */
+              <div className="flex-none flex flex-col gap-1.5">
+                <div className="flex-none w-full h-[calc(var(--app-h,100dvh)*0.25)] min-h-[8rem]">
+                  <LookScene
+                    source={picture}
+                    cube={aimedCube}
+                    intensity={strength}
+                    interpolation={interpolation}
+                    compare={compare}
+                    splitX={splitX}
+                    onSplit={(x) => {
                       setCompare(true);
-                      setSplitX(Number(e.target.value) / 100);
+                      setSplitX(x);
                     }}
-                    aria-label="Where the before/after divider sits"
-                    className="flex-1 min-w-0 accent-accent"
+                    busy={aimedBusy}
+                    error={aimedError}
                   />
                 </div>
-                {/* The strength, right under the wipe: the two questions a
-                    look raises on your own picture are "how much of it" and
-                    "against what", and they belong side by side. */}
-                <div className="flex items-center gap-2.5 text-xs text-ink-soft">
-                  <span className="font-mono text-2xs tracking-[0.12em] uppercase text-muted select-none">
-                    Strength
-                  </span>
-                  {strengthSlider}
-                </div>
-                {note && (
-                  <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
-                    {note}
-                  </p>
-                )}
-                <div className="mt-auto flex items-center gap-2 flex-wrap">
-                  {useThisLook}
-                  <span className="text-2xs leading-snug text-muted">
-                    One lattice read — and the strength goes with your pick.
-                  </span>
+                {/* ONE row under the picture, and it is the strength: the
+                    wipe's own slider is not here (the drag across the picture
+                    writes that number, and a finger is already on the
+                    picture), and the aimed look's NAME is in the footer, which
+                    is drawn at this width anyway. A second row here would be a
+                    row of looks. */}
+                <div className="flex items-center gap-2 min-w-0">
+                  {noLook ? (
+                    <span className="flex-1 min-w-0 text-sm font-medium text-ink truncate">
+                      {aimedItem?.name ?? 'Your picture, as it is'}
+                    </span>
+                  ) : (
+                    strengthSlider
+                  )}
+                  {note && (
+                    <span className="shrink-0 w-2 h-2 rounded-full bg-warn" title={note} aria-label={note} />
+                  )}
+                  <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
                 </div>
               </div>
             )}
-          </div>
-        )}
 
-        {compact ? (
-          /* The filter, and the "tiles on…" choices behind one ⋯: on a phone
-             the sentence and its three buttons were three rows over the grid
-             for a preference set once. The sample thumbnail says which
-             picture the tiles are on, when it is not the reference. */
-          <div className="flex-none flex items-center gap-2">
-            {effectiveSource && (
-              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0" title={sourceLine}>
-                <LutThumb bitmap={sample} />
-              </span>
+            {/* The filter, and the "tiles on…" choices behind one ⋯: on a phone
+                the sentence and its three buttons were three rows over the grid
+                for a preference set once. The sample thumbnail says which
+                picture the tiles are on, when it is not the reference. */}
+            <div className="flex-none flex items-center gap-2">
+              {effectiveSource && (
+                <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0" title={sourceLine}>
+                  <LutThumb bitmap={sample} />
+                </span>
+              )}
+              <div className="flex-1 min-w-0">{filterField}</div>
+              <OverflowMenu label="What the tiles are shown on" items={sourceVerbs} size="md" />
+            </div>
+            {imageError && <p className="m-0 -mt-1 text-xs text-danger">{imageError}</p>}
+
+            {/* The rail as ONE line of crumbs, pinned above the scroller so
+                the way to another family is never scrolled away. */}
+            {crumbStripNav}
+
+            <div className="flex-1 min-h-0 flex">{grid}</div>
+
+            {/* The verb, in the thumb's reach — only where there is a scene to
+                aim in. Without one a tap IS the pick, the ✕ is in the header,
+                and a footer would be a band of nothing over the grid. */}
+            {scene && (
+              <div className="flex-none flex items-center gap-3 border-t border-line pt-2.5">
+                <span className="flex-1 min-w-0 text-xs text-muted truncate">
+                  {aimedItem
+                    ? noLook || strength === 1
+                      ? aimedItem.name
+                      : `${aimedItem.name} · ${Math.round(strength * 100)}%`
+                    : 'Tap a look to see it on your picture.'}
+                </span>
+                <Button size="md" variant="primary" disabled={!aimed || aimedBusy} onClick={() => aimed && onPick(aimed, strength)}>
+                  Use this look
+                </Button>
+              </div>
             )}
-            <div className="flex-1 min-w-0">{filterField}</div>
-            <OverflowMenu label="What the tiles are shown on" items={sourceVerbs} size="md" />
-          </div>
+          </>
         ) : (
-          /* ONE row, and it wraps: the sentence, the three verbs and the
-             filter. It was two rows — the filter always full-width below —
-             because sharing them squeezed the field to a fixed `w-40` on a
-             phone; that width has its own branch now, and a second row over
-             the grid on a laptop is a third of a row of looks. */
-          <div className="flex items-center gap-3 flex-wrap border-y border-line py-3">
-            {effectiveSource && (
-              <span className="w-8 h-8 rounded-control overflow-hidden border border-line shrink-0">
-                <LutThumb bitmap={sample} />
-              </span>
-            )}
-            <span className="text-xs text-muted min-w-0 truncate">{sourceLine}</span>
-            {sourceVerbs.map((verb) => (
-              <Button key={verb.id} size="sm" variant="ghost" onClick={verb.onSelect} disabled={verb.disabled}>
-                {verb.label}
-              </Button>
-            ))}
-            <div className="flex-1 min-w-[12rem] max-w-[22rem] ml-auto">{filterField}</div>
-          </div>
-        )}
-        {imageError && <p className="m-0 -mt-2 text-xs text-danger">{imageError}</p>}
-
-        {compact && (
-          /* The rail as ONE line of crumbs — the families, then the open
-             branch — that swipes sideways and never wraps, pinned above the
-             scroller so the way to another family is never scrolled away.
-             34px tall: a finger's target, the height of the field above. */
-          <nav
-            ref={crumbStrip}
-            className="flex-none flex gap-1.5 overflow-x-auto overflow-y-hidden [scrollbar-width:none] [&::-webkit-scrollbar]:hidden -mx-3 px-3"
-            aria-label="Look families"
-          >
-            {crumbs.map((node) => (
-              <button
-                key={node.id}
-                type="button"
-                onClick={() => openNode(node)}
-                aria-pressed={node.id === open?.id}
-                className={`shrink-0 h-[2.125rem] px-3 rounded-full border text-sm whitespace-nowrap ${
-                  node.id === open?.id
-                    ? 'border-accent bg-accent-wash text-accent-ink'
-                    : 'border-line-strong bg-paper text-ink-soft'
-                }`}
-              >
-                {node.depth > 0 && <span className="text-muted">› </span>}
-                {node.label}
-                <span className="ml-1.5 font-mono text-2xs text-muted tabular-nums">{node.items.length}</span>
-              </button>
-            ))}
-          </nav>
-        )}
-
-        <div className={compact ? 'flex-1 min-h-0 flex' : 'flex-1 min-h-0 flex gap-4'}>
-          {/* The rail: every family, one open at a time. */}
-          {!compact && (
-            <nav
-              className="w-[13.5rem] flex-none overflow-auto pr-1 -mr-1 border-r border-line"
-              aria-label="Look families"
-            >
-              {nodes.map((node) => (
-                <RailRow
-                  key={node.id}
-                  node={node}
-                  open={!query.trim() && node.id === open?.id}
-                  onOpen={() => openNode(node)}
-                />
-              ))}
-            </nav>
-          )}
-
-          <div className="flex-1 min-w-0 overflow-auto overscroll-contain pr-1 -mr-1">
-            <div className="flex flex-col gap-5">
-              {/* On a phone the "No look" tile joins the open family's grid
-                  rather than sitting alone on a row of its own: a row is a
-                  third of the looks on screen there. */}
-              {showNone && !(compact && shown.length > 0) && (
-                <section className="flex flex-col gap-2">
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
-                    <Tile
-                      id="none"
-                      name="No look (original)"
-                      {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
-                      bitmap={noneBitmap}
-                      selected={selected === 'none'}
-                      aimed={ringed === 'none'}
-                      onPick={touch}
+          <>
+            {/* THE WORKBENCH: the stage column, then the looks panel. */}
+            <div ref={bodyRef} className="flex-1 min-h-0 flex gap-5">
+              {picture && (
+                <div
+                  className="flex-none flex flex-col min-h-0"
+                  style={{ width: stageBox?.width ?? '46%', gap: STAGE_GAP }}
+                >
+                  {/* The picture's box is as tall as the picture at this
+                      width and no taller, so the card sits right under it and
+                      a landscape frame's leftover falls below the pair; until
+                      measured it takes the column. */}
+                  <div
+                    className={stageBox ? 'flex-none min-h-0' : 'flex-1 min-h-0'}
+                    style={stageBox ? { height: stageBox.height } : undefined}
+                  >
+                    <LookScene
+                      source={picture}
+                      cube={aimedCube}
+                      intensity={strength}
+                      interpolation={interpolation}
+                      compare={compare}
+                      splitX={splitX}
+                      onSplit={(x) => {
+                        setCompare(true);
+                        setSplitX(x);
+                      }}
+                      busy={aimedBusy}
+                      error={aimedError}
                     />
                   </div>
-                </section>
-              )}
-              {shown.map(({ node, items }) => (
-                <section key={node.id} className="flex flex-col gap-2">
-                  {/* On a phone the open crumb already names the family, so
-                      the heading is drawn only where it carries something
-                      else — a search result's family, a pack's ⓘ, a hint. */}
-                  {(!compact || q || node.pack || node.hint) && (
-                  <div className="flex items-center gap-2 flex-wrap">
-                    <h3 className="m-0 font-mono text-2xs tracking-[0.16em] uppercase text-muted">
-                      {node.label}
-                    </h3>
-                    {node.pack && (
-                      <IconButton
-                        size="sm"
-                        variant="ghost"
-                        label={`About ${node.label}`}
-                        onClick={() => setCredits(credits === node.id ? null : node.id)}
-                      >
-                        {Icons.info}
-                      </IconButton>
-                    )}
-                    {node.hint && <span className="text-2xs text-warn">{node.hint}</span>}
-                  </div>
-                  )}
-                  {credits === node.id && creditsFor && (
-                    <p className="m-0 px-3 py-2 rounded-control bg-paper-2 border border-line text-xs text-ink-soft">
-                      <span className="font-medium text-ink">{creditsFor.name || 'Pack'}</span>
-                      {creditsFor.author && <> — {creditsFor.author}</>}
-                      {creditsFor.url && (
-                        <>
-                          {' · '}
-                          <a
-                            href={creditsFor.url}
-                            target="_blank"
-                            rel="noreferrer noopener"
-                            className="text-accent-ink underline"
-                          >
-                            where it came from
-                          </a>
-                        </>
-                      )}
-                      <br />
-                      <span className="text-muted">
-                        Bought looks, kept in this browser — they never leave it.
+                  {/* The card: the inspector grammar, so the label column and
+                      the tracks line up — Look · Strength · Compare, and the
+                      caution only a preview on YOUR picture can give. */}
+                  <div
+                    ref={cardRef}
+                    className="flex-none flex flex-col gap-2 rounded-paper border border-line bg-surface px-3 py-2.5"
+                  >
+                    <FieldRow label="Look">
+                      <span className="min-w-0 flex flex-col leading-tight">
+                        <span className="truncate text-sm font-medium text-ink">
+                          {aimedItem?.name ?? 'Your picture, as it is'}
+                        </span>
+                        {(previewLabel || aimedItem) && (
+                          <span className="truncate font-mono text-2xs text-muted">
+                            {[previewLabel, aimedItem ? 'the look alone, without your correction' : null]
+                              .filter(Boolean)
+                              .join(' · ')}
+                          </span>
+                        )}
                       </span>
-                    </p>
-                  )}
-                  <div className="grid grid-cols-[repeat(auto-fill,minmax(88px,1fr))] gap-2">
-                    {showNone && compact && node.id === shown[0]?.node.id && (
-                      <Tile
-                        id="none"
-                        name="No look (original)"
-                        {...(effectiveSource ? {} : thumbs.none ? { thumb: thumbs.none } : {})}
-                        bitmap={noneBitmap}
-                        selected={selected === 'none'}
-                        aimed={ringed === 'none'}
-                        onPick={touch}
-                      />
+                      {aimedItem?.family === 'log' && (
+                        <span className="shrink-0 inline-flex items-center h-5 px-2 rounded-full border border-warn-line bg-warn-wash font-mono text-3xs tracking-[0.1em] uppercase text-warn">
+                          Conversion
+                        </span>
+                      )}
+                    </FieldRow>
+                    <FieldRow label="Strength" htmlFor={strengthId}>
+                      {strengthSlider}
+                    </FieldRow>
+                    <FieldRow label="Compare">
+                      <CompareToggle compare={compare} onToggle={() => setCompare((v) => !v)} />
+                      <span className="min-w-0 truncate text-xs text-muted">
+                        {compare
+                          ? 'Drag across the picture to move the divider'
+                          : 'The original left of the divider, the look right'}
+                      </span>
+                    </FieldRow>
+                    {note && (
+                      <p className="m-0 px-2.5 py-1.5 rounded-control bg-warn-wash border border-warn-line text-xs leading-snug text-warn">
+                        {note}
+                      </p>
                     )}
-                    {items.map((item) => (
-                      <Tile
-                        key={item.id}
-                        id={item.id}
-                        name={item.name}
-                        thumb={item.thumb}
-                        bitmap={previews[item.id]}
-                        failed={resolved[item.id] === 'error'}
-                        selected={selected === item.id}
-                        aimed={ringed === item.id}
-                        favourite={favourites.includes(item.id)}
-                        onPick={touch}
-                        onToggleFavourite={toggleFavourite}
-                      />
-                    ))}
                   </div>
-                </section>
-              ))}
-              {shown.length === 0 && !showNone && (
-                <p className="m-0 text-sm text-muted">
-                  {query.trim() ? `No look matches “${query}”.` : 'Nothing here yet.'}
-                </p>
+                </div>
               )}
-            </div>
-          </div>
-        </div>
 
-        {compact ? (
-          /* The verb, in the thumb's reach — only where there is a scene to
-             aim in. Without one a tap IS the pick, the ✕ is in the header,
-             and a footer would be a band of nothing over the grid. */
-          scene && (
-            <div className="flex-none flex items-center gap-3 border-t border-line pt-2.5">
-              <span className="flex-1 min-w-0 text-xs text-muted truncate">
-                {aimedItem
-                  ? noLook || strength === 1
-                    ? aimedItem.name
-                    : `${aimedItem.name} · ${Math.round(strength * 100)}%`
-                  : 'Tap a look to see it on your picture.'}
-              </span>
-              {useThisLook}
+              <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2.5">
+                {/* The panel's toolbar: the filter, what the tiles are shown
+                    on, and the photo verb. */}
+                <div className="flex-none flex items-center gap-2.5 flex-wrap">
+                  <div className="flex-1 min-w-[10rem] max-w-[22rem]">{filterField}</div>
+                  {shownOnOptions.length > 1 && (
+                    <Segmented
+                      size="sm"
+                      label="What the tiles are shown on"
+                      options={shownOnOptions}
+                      value={shownOn}
+                      onChange={(id) => setLiveOn(id === 'reference' ? null : id)}
+                    />
+                  )}
+                  <Button
+                    size="sm"
+                    variant="ghost"
+                    disabled={imageBusy}
+                    title="Show every look on a photo of yours"
+                    onClick={() => void chooseImage()}
+                  >
+                    {imageBusy ? 'Reading…' : 'Photo…'}
+                  </Button>
+                </div>
+                {imageError && <p className="m-0 -mt-1 text-xs text-danger">{imageError}</p>}
+                {!railed && crumbStripNav}
+                <div className="flex-1 min-h-0 flex gap-3.5">
+                  {railed && rail}
+                  {grid}
+                </div>
+              </div>
             </div>
-          )
-        ) : (
-          <div className="flex items-center justify-between gap-3 border-t border-line pt-4">
-            <p className="m-0 text-xs text-muted">
-              Baked from the same lattice the export uses — what you see here is what you get.
-            </p>
-            <Button variant="ghost" onClick={onClose}>
-              Close
-            </Button>
-          </div>
+
+            {/* The footer, only where there is a verb to pin: the state at the
+                left, Cancel and the primary at the right — the two-group row
+                every sheet in the suite ends on. */}
+            {scene && (
+              <div className="flex-none flex items-center gap-3 border-t border-line pt-3.5">
+                <span className="flex-1 min-w-0 text-sm text-ink-soft truncate">{say}</span>
+                <Button variant="ghost" onClick={onClose}>
+                  Cancel
+                </Button>
+                <Button
+                  variant="primary"
+                  disabled={!aimed || aimedBusy}
+                  onClick={() => aimed && onPick(aimed, strength)}
+                  trailing={<kbd className="font-mono text-2xs opacity-70">↵</kbd>}
+                >
+                  Use this look
+                </Button>
+              </div>
+            )}
+          </>
         )}
       </div>
     </div>,
@@ -943,21 +1112,28 @@ export default function LutGalleryModal({
   );
 }
 
-/** The wipe as a switch: what it IS, not what pressing it does. */
+/**
+ * The wipe as a switch: `A/B`, the Develop sheet's own word for the same
+ * control, in its dress — one wipe control across the suite.
+ */
 function CompareToggle({ compare, onToggle }: { compare: boolean; onToggle: () => void }) {
   return (
     <button
       type="button"
       onClick={onToggle}
       aria-pressed={compare}
-      title={compare ? 'Show the graded picture whole' : 'Wipe it against the original'}
-      className={`flex-none h-7 px-2 rounded-control border font-mono text-2xs tracking-[0.08em] uppercase cursor-pointer transition-colors ${
+      title={
+        compare
+          ? 'Before / after — on; a drag across the picture places the divider'
+          : 'Before / after — off: the whole picture is shown with the look'
+      }
+      className={`flex-none inline-flex items-center justify-center h-7 px-2.5 rounded-full border font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors ${
         compare
           ? 'border-accent bg-accent-wash text-accent-ink'
-          : 'border-line-strong bg-paper text-muted hover:text-ink'
+          : 'border-line-strong bg-surface text-muted hover:border-accent hover:text-accent-ink'
       }`}
     >
-      Compare
+      A/B
     </button>
   );
 }
@@ -1001,7 +1177,13 @@ function RailRow({
  *
  * The star is drawn at every width rather than on hover: a phone has no
  * hover, and a control you can only find with a pointer is a control half the
- * devices do not have.
+ * devices do not have. The ✓ marks the look the stack WEARS now, which the
+ * ring could not once it moved to the aim; the `Use ↵` chip on the aimed tile
+ * says the second gesture, where the subtitle used to.
+ *
+ * The thumbnail keeps a FIXED pixel height: a `1fr` track cannot be trusted
+ * to carry `aspect-ratio` (`frontend.md`), and the desktop track is a fixed
+ * 8rem so a row never stretches a tile into a strip.
  */
 function Tile({
   id,
@@ -1011,6 +1193,7 @@ function Tile({
   failed = false,
   selected,
   aimed = false,
+  hint = false,
   favourite = false,
   onPick,
   onToggleFavourite,
@@ -1027,6 +1210,8 @@ function Tile({
    * always did.
    */
   aimed?: boolean;
+  /** Draw the `Use ↵` chip on the aimed tile — where a second click is the pick. */
+  hint?: boolean;
   favourite?: boolean;
   onPick: (id: string) => void;
   /** Omitted for "No look (original)", which is the absence of a look, not one. */
@@ -1034,6 +1219,7 @@ function Tile({
 }) {
   return (
     <div
+      data-tile={id}
       className={`group relative flex flex-col gap-1 p-1 rounded-control border bg-paper transition-colors ${
         aimed
           ? 'border-accent ring-2 ring-accent/40'
@@ -1049,7 +1235,7 @@ function Tile({
         title={name}
         className="flex flex-col gap-1 cursor-pointer text-left"
       >
-        <span className="block w-full h-[74px] rounded-[6px] overflow-hidden bg-paper-2 max-[820px]:h-[92px]">
+        <span className="block w-full h-[92px] rounded-[6px] overflow-hidden bg-paper-2">
           {thumb ? (
             // Baked once already — at import for a pack, at
             // `gen-lut-thumbs.mjs` time for a built-in — on the reference this
@@ -1064,6 +1250,23 @@ function Tile({
         </span>
         <span className="block text-2xs leading-tight text-ink-soft truncate group-hover:text-ink">{name}</span>
       </button>
+      {selected && (
+        <span
+          className="absolute left-2 top-2 grid place-items-center w-[18px] h-[18px] rounded-full bg-accent text-paper [&>svg]:w-3 [&>svg]:h-3"
+          title="On the stack now"
+          aria-label="On the stack now"
+        >
+          {Icons.check}
+        </span>
+      )}
+      {aimed && hint && (
+        <span
+          className="absolute left-1/2 bottom-7 -translate-x-1/2 px-1.5 py-px rounded-full bg-surface/90 border border-accent font-mono text-3xs tracking-[0.08em] uppercase text-accent-ink whitespace-nowrap pointer-events-none"
+          aria-hidden="true"
+        >
+          Use ↵
+        </span>
+      )}
       {onToggleFavourite && (
         <button
           type="button"

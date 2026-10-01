@@ -16,7 +16,15 @@ import { drawDelivered } from './border-paint';
 import { cropZoneSize } from './roll-export';
 import { decodeStill } from '../media/still-decode';
 import { makeDecodeQueue } from '../lib/decode-queue';
+import { isClipName } from '../library/assets';
+import { loadBadgeSource } from '../roadtrip/badge-render';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
+
+/**
+ * Which moment of a CLIP its cell shows: a second in, or the middle of a
+ * shorter one — the first frame of a camera clip is often black or a hand.
+ */
+export const CLIP_THUMB_SECONDS = 1;
 
 /**
  * The open picture's cell AS DELIVERED: the graded picture, framed into its
@@ -82,6 +90,7 @@ export function rollDecodesForTest(): { running: number; waiting: number } {
 }
 
 async function bakeThumbnail(file: File, longEdge: number, quality: number): Promise<Blob | null> {
+  if (isClipName(file.name) || file.type.startsWith('video/')) return bakeClipThumbnail(file, longEdge, quality);
   let bitmap: ImageBitmap | null = null;
   try {
     // Decoded AT the cell's size (`still-decode.ts`): a 48-megapixel JPEG
@@ -103,5 +112,32 @@ async function bakeThumbnail(file: File, longEdge: number, quality: number): Pro
     return null;
   } finally {
     bitmap?.close();
+  }
+}
+
+/**
+ * A clip's cell: one frame a second in, through the same decoder element the
+ * stage uses (`loadBadgeSource`, which seeks and hands the frame over), drawn
+ * small and released. A clip the browser cannot decode (an HEVC rush here)
+ * yields null and the cell says so, like a RAW without its render.
+ */
+async function bakeClipThumbnail(file: File, longEdge: number, quality: number): Promise<Blob | null> {
+  let source: Awaited<ReturnType<typeof loadBadgeSource>> | null = null;
+  try {
+    source = await loadBadgeSource(file, CLIP_THUMB_SECONDS);
+    const { w, h } = thumbSize(source.width, source.height, longEdge);
+    if (!w || !h) return null;
+    const canvas = document.createElement('canvas');
+    canvas.width = w;
+    canvas.height = h;
+    const ctx = canvas.getContext('2d');
+    if (!ctx) return null;
+    ctx.imageSmoothingQuality = 'high';
+    ctx.drawImage(source.image, 0, 0, w, h);
+    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+  } catch {
+    return null;
+  } finally {
+    source?.release();
   }
 }

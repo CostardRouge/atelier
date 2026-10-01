@@ -14,10 +14,10 @@ Today it ships ten tools, converging into a few editors:
 - **Trips** — plan and track how a journey gets told. Give a trip its two
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
-- **Develop** — gather the photographs you mean to develop into a **roll**,
-  kept in this browser or on your Winnow; give each its own light, colour and
-  crop under one look for the roll, and export them — from the proxy or the
-  original — or send them home to the Winnow they came from.
+- **Develop** — gather the photographs and clips you mean to develop into a
+  **roll**, kept in this browser or on your Winnow; give each its own light,
+  colour, look and (a photograph) crop, and export them — from the proxy or the
+  original, a clip as an MP4 graded frame by frame.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -1295,11 +1295,11 @@ A portable `.json` export of a trip is the phase that follows.
 
 ## Develop tool
 
-The third editor, for photographs you mean to **develop** rather than compose.
-It opens on your **rolls** — cards grouped by where each is kept, with the
-first pictures as a cover and how many are developed — and a roll is a set of
-pictures, each keeping its own develop, plus a **look** for the whole roll that
-dresses every picture after its own correction.
+The third editor, for photographs — and clips — you mean to **develop** rather
+than compose. It opens on your **rolls** — cards grouped by where each is
+kept, with the first pictures as a cover and how many are developed — and a
+roll is a set of pictures, each keeping its own develop and its own **look**,
+applied after its correction.
 
 **Making a roll.** *New roll* asks for a name, where to keep it when a Winnow
 can keep rolls too, and whether to start with the photos ticked in the Library
@@ -1380,6 +1380,42 @@ whether it leaves are never carried. A filmstrip cell shows the
 picture as it was last seen in the editor — developed and cropped — and a dot
 marks what is developed. On a phone the picture and the strip share the
 screen and the three tabs open from the bottom bar.
+
+**Clips.** A roll takes a video the way it takes a photograph: from a folder
+or a drop (the clip alone — its `.srt` flight log stays the Studio's), from
+the ticked Library, or from a day on your Winnow, where the day sheet lists
+its clips beside its photographs. A clip's cell in the filmstrip is a frame a
+second in, marked ▶. On the stage it **plays**: a transport under the picture,
+**Space** to play and pause, the develop and the look following every frame,
+the before/after divider live while it moves. What a clip takes is the
+**global** develop and the look — the sliders, curves, levels, mixer, black
+and white, grading, presets, LUTs, output transform and grain — and a
+**crop**: one zone held still over every frame, drawn on the same Crop tab
+as a photograph's (format, straighten, flips, *Apply crop to…*), with the
+transport under the crop stage so the zone is judged on the frames that
+matter. So its inspector has three tabs, **Adjust**, **Crop** and
+**Export**: a border, perspective, lens, detail, repair and layers are passes
+over one still frame and never land on a clip, whichever door they come from
+(a paste of sections, an *Apply to N other pictures*, a reset — a clip takes
+the develop, the look and the crop out of them and nothing else). Clips are
+usable in the Library bar when Develop is open, like photographs; they are
+no longer greyed out. A clip from your Winnow opens on the
+instance's small proxy, and the name above the picture is the same menu it
+is for a photograph: pick the **rush** — `DJI_0007.MP4 · 3840 × 2160 ·
+1.2 GB` — and it is fetched once, kept for the session, the playhead where it
+was, the choice stored on the picture so the roll shows the same file on
+another device; pick *Proxy* again and the fetch stops. A clip **exports as
+an MP4** under the capture's exact name: every frame developed under its
+look, cut to its crop at the clip's own density (a 1:1 out of 1080p is 1080
+× 1080, never blown up) and encoded to H.264 at the first target's size (a
+ceiling read against the cropped frame, never an upscale), its sound copied
+as recorded. The rush is what leaves — the file you chose, else fetched
+where the first target's frame asks for more than the proxy's zone holds,
+exactly as a photograph's original is — unless *Proxies only, for this run*
+is on. Quality, borders, HDR, the watermark and the metadata groups are a
+photograph's and do not reach a clip; the run says so once. Not built,
+deliberately: a crop that moves or a per-frame mask on a clip, and a second
+target for one.
 
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
@@ -1885,17 +1921,24 @@ workbench — offers the same two ways in: a native list grouped by family, and
 a **gallery** that shows each look *on a photograph* before you pick it, since
 reading a name off a dropdown tells you nothing about a LUT.
 
-**Where the tool has your picture open, the gallery shows it.** A band across
-the top draws the look you are aiming at on *that* photograph, with a compare
-toggle that wipes it against the original — before on the left, after on the
-right, the way Lightroom and Capture One put it. So the gesture there is aim,
-then take: the first click moves the band, and the look is yours on the second
-click, on "Use this look", or on Enter. Where no picture is open there is
-nothing to aim at and a click is the choice, as it always was.
+**Where the tool has your picture open, the gallery shows it.** On a desktop
+the picture takes a column of its own at the left, as tall as the dialog — a
+portrait frame gets the whole height, a landscape one half the width — with
+the look you are aiming at drawn on *that* photograph, and its name, its
+strength and an A/B wipe in a card under it; the wipe reads before on the
+left, after on the right, the way Lightroom and Capture One put it, and a drag
+across the picture moves the divider. The looks are a panel at the right: the
+filter, what the tiles are shown on (their reference frames, or your picture),
+the families, the grid, and the verb pinned in the footer. So the gesture
+there is aim, then take: the first click shows the look on your picture, and
+the look is yours on the second click, on "Use this look", or on Enter — the
+arrow keys walk the tiles. Where no picture is open there is nothing to aim at
+and a click is the choice, as it always was. On a phone the picture is a band
+over the grid and the verb sits in the thumb's reach.
 
 It costs one lattice — the look under your eye — and that is the point: the
 grid keeps its cheap pre-baked tiles, which is also what makes two looks
-comparable, since every tile is the same subject. The band shows the look
+comparable, since every tile is the same subject. The picture shows the look
 *alone*, without the correction you have set on the picture. And it says the
 one thing only your own photograph can reveal: aim a conversion look at a
 picture that is not log footage and it tells you so, rather than leaving you

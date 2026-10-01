@@ -1,7 +1,7 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { deleteRollPreviews, getRollPreviews, putRollPreview } from '../../shared/develop/roll-store';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
-import { sameMediaRef, variantNumber, type RollPicture } from '../../shared/develop/roll-types';
+import { isClipPicture, sameMediaRef, variantNumber, type RollPicture } from '../../shared/develop/roll-types';
 import {
   WORKING_PREVIEW_EDGE,
   WORKING_PREVIEW_QUALITY,
@@ -32,9 +32,13 @@ function readFlag(rollId: string): boolean {
   }
 }
 
-/** A LOCAL picture: no instance holds it, so nothing could fetch it back. */
+/**
+ * A LOCAL picture: no instance holds it, so nothing could fetch it back. Never
+ * a clip — one frame at 2048 px is not a working preview of a clip, and a
+ * proxy of a clip is a transcode this tool does not make.
+ */
 function isLocal(p: RollPicture): boolean {
-  return !p.ref.assetId;
+  return !p.ref.assetId && !isClipPicture(p);
 }
 
 /**

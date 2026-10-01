@@ -6,7 +6,7 @@ import { describe, expect, it, vi } from 'vitest';
 // built-in families are not what is under test here.
 vi.mock('virtual:luts', () => ({ default: [] }));
 import { buildPackIndex, type LutPackIndex } from './lut-pack';
-import { FAVOURITES_NODE, galleryNodes, matchingItems, packPickId } from './gallery-nodes';
+import { FAVOURITES_NODE, familyCase, galleryNodes, matchingItems, packPickId } from './gallery-nodes';
 
 /**
  * `galleryNodes` reaches for `virtual:luts` through `restore-grade`, which a
@@ -101,5 +101,25 @@ describe('the gallery rail', () => {
     const item = nodes.flatMap((n) => n.items).find((i) => i.id.startsWith('pack:'))!;
     expect(item.thumb).toBeUndefined();
     expect(typeof item.resolve).toBe('function');
+  });
+});
+
+describe('familyCase', () => {
+  it('writes an ALL-CAPS folder as a word, so the rail reads in one casing', () => {
+    expect(familyCase('APPLE')).toBe('Apple');
+    expect(familyCase('FILM')).toBe('Film');
+    expect(familyCase('ONE CLICK')).toBe('One Click');
+  });
+
+  it('keeps a lone initialism, which is what a short all-caps label is', () => {
+    expect(familyCase('DJI')).toBe('DJI');
+    expect(familyCase('BW')).toBe('BW');
+    expect(familyCase('LUT')).toBe('LUT');
+  });
+
+  it("leaves a label its author wrote in mixed case alone", () => {
+    expect(familyCase('Built-in')).toBe('Built-in');
+    expect(familyCase('★ Favourites')).toBe('★ Favourites');
+    expect(familyCase('AUTHENTIC Pack')).toBe('AUTHENTIC Pack');
   });
 });

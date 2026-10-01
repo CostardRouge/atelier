@@ -32,6 +32,24 @@ import {
 import { missingLookReason, resolvePackLattice } from './pack-vault';
 import { loadBuiltinLut } from './restore-grade';
 
+/**
+ * A family's label in ONE casing.
+ *
+ * The rail used to read `★ Favourites · FILM · Built-in · APPLE · DJI`: the
+ * built-in folders are uppercased for the native `<optgroup>`s, the film label
+ * by its own constant, a pack's categories by whatever the author's folders
+ * say — three systems in one column. A label that is ALL CAPS is written as
+ * words (`APPLE` → `Apple`, `ONE CLICK` → `One Click`), except a lone short
+ * one, which is an initialism and stays (`DJI`, `BW`). A label that already
+ * carries a lowercase letter is as its author wrote it. The optgroups are
+ * untouched: this is the rail's reading, not the data's.
+ */
+export function familyCase(label: string): string {
+  if (/[a-z]/.test(label)) return label;
+  if (/^[A-Z]{1,3}$/.test(label.trim())) return label;
+  return label.replace(/[A-Z]+/g, (word) => word[0] + word.slice(1).toLowerCase());
+}
+
 /** How a picked look is named back to the host. */
 export const FILM_PICK = 'film:';
 export const PACK_PICK = 'pack:';
@@ -133,7 +151,7 @@ export function galleryNodes(
   if (includeFilm) {
     nodes.push({
       id: FILM_NODE,
-      label: FILM_GROUP_LABEL,
+      label: familyCase(FILM_GROUP_LABEL),
       depth: 0,
       items: FILM_STOCKS.map((s) => ({
         id: `${FILM_PICK}${s.id}`,
@@ -158,7 +176,7 @@ export function galleryNodes(
   for (const group of LUT_GROUPS) {
     nodes.push({
       id: `builtin/${group.label}`,
-      label: group.label,
+      label: familyCase(group.label),
       depth: 1,
       items: builtinItems(group.luts),
     });
@@ -182,7 +200,7 @@ export function galleryNodes(
       const direct = branch.filter((l) => l.node === node.id);
       nodes.push({
         id: `pack/${pack.id}/${node.id}`,
-        label: node.label,
+        label: familyCase(node.label),
         depth: depth + 1,
         ...(node.hint ? { hint: node.hint } : {}),
         items: (direct.length ? direct : branch).map((l) => packItem(pack, l, thumbs !== null)),
