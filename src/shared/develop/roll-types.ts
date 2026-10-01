@@ -525,12 +525,15 @@ export function addPictures(
  * hold before any byte is in hand, on every device.
  *
  * What a clip takes is the GLOBAL develop and the look — the one cube the
- * export grades every frame through, and the film node after it. A crop, a
- * border, the perspective and lens warps, detail, repair and layers are a
- * photograph's: they are passes over one still frame, and on a clip they
- * would have to follow the picture from frame to frame, which nothing here
- * does (and which Lightroom does not do either). So they are never written
- * onto a clip, by any door — the pure writers below refuse them.
+ * export grades every frame through, and the film node after it — and, since
+ * 2026-10-01, a CROP: one framing (aspect, zoom, pan, straighten, flip) held
+ * still over the whole clip, the same arithmetic as a photograph's applied
+ * to every frame. A border, the perspective and lens warps, detail, repair
+ * and layers stay a photograph's: they are passes over one still frame, and
+ * on a clip they would have to follow the picture from frame to frame, which
+ * nothing here does (and which Lightroom does not do either). So they are
+ * never written onto a clip, by any door — the pure writers below refuse
+ * them.
  */
 export function isClipPicture(p: Pick<RollPicture, 'ref'>): boolean {
   return isClipName(p.ref.name);
@@ -681,8 +684,8 @@ export function copyCropTo(
   const framing = crop.framing && !isDefaultFraming(crop.framing) ? crop.framing : null;
   let found = false;
   const pictures = roll.pictures.map((p) => {
-    // A clip has no crop (`isClipPicture`): a batch over the roll skips it.
-    if (!ids.includes(p.id) || isClipPicture(p)) return p;
+    // A clip takes a crop like a photograph (`isClipPicture`): held still over every frame.
+    if (!ids.includes(p.id)) return p;
     found = true;
     return { ...p, aspect: crop.aspect, framing: framing ? { ...framing } : null };
   });

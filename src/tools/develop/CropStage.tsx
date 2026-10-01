@@ -107,7 +107,7 @@ export default function CropStage({
   const [active, setActive] = useState(false);
   // The Level tool's line while it is drawn, in the zone's frame.
   const [line, setLine] = useState<{ x1: number; y1: number; x2: number; y2: number } | null>(null);
-  const { source, cube, delivered } = picture;
+  const { source, cube, delivered, frameSeq } = picture;
   const hasSource = source !== null;
   const { src, zone, framing, rotating, levelling, setStageBox } = crop;
 
@@ -236,7 +236,9 @@ export default function CropStage({
       ctx.stroke();
       ctx.lineWidth = 1;
     }
-  }, [box, src, zone, framing, source, cube, delivered, active, rotating, line, crop.view]);
+    // `frameSeq`: a clip that came to rest on another frame is drawn again
+    // under the zone — the element `delivered()` reads moved, nothing else did.
+  }, [box, src, zone, framing, source, cube, delivered, frameSeq, active, rotating, line, crop.view]);
 
   // --- gestures -----------------------------------------------------------------
   const live = useRef({ crop, box });

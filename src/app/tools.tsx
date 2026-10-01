@@ -113,10 +113,10 @@ export const TOOLS: Tool[] = [
     label: 'Develop',
     subtitle: 'Roll · pictures · look',
     blurb:
-      'Gather the photographs you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.',
+      'Gather the photographs and clips you mean to develop into a roll — from a folder or a day on your Winnow — and give each its own light and colour, under one look for the roll.',
     Component: DevelopTool,
     preload: LOAD.develop,
-    accepts: ['photo'],
+    accepts: ['photo', 'video+telemetry', 'video'],
   },
   {
     id: 'telemetry',

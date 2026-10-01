@@ -495,11 +495,18 @@ export function useRollExport({
             // 720 — and never under "proxies only".
             if (source === file && !onlyProxies && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
               const size = await measurePicture(file);
+              // Read against the clip's CROP, as for a photograph: a zone cut
+              // out of a 720p proxy asks for the rush sooner than the whole.
               const summary = size
-                ? deliverySummary(size, true, originalOf(origin), null, size.width / size.height, null, {
-                    size: r.export.targets[0]?.size ?? null,
-                    pixels: 'auto',
-                  })
+                ? deliverySummary(
+                    size,
+                    true,
+                    originalOf(origin),
+                    picture.framing,
+                    pictureAspectRatio(picture.aspect, size.width, size.height),
+                    null,
+                    { size: r.export.targets[0]?.size ?? null, pixels: 'auto' },
+                  )
                 : null;
               if (summary?.from === 'original') {
                 const held = key ? heldOriginal(key) : null;
@@ -530,6 +537,9 @@ export function useRollExport({
               lut,
               film: picture.grade?.film ?? null,
               size: r.export.targets[0]?.size ?? null,
+              // The crop, held still over every frame (2026-10-01).
+              framing: picture.framing,
+              aspect: picture.aspect,
               signal: controller.signal,
               onProgress: (p) => {
                 if (p.phase === 'encoding' && p.ratio !== null) {

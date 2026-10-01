@@ -289,7 +289,7 @@ export default function PictureWorkbench({
   onSheetOpen: (open: boolean) => void;
   /** Which inspector tab is open — lifted to the editor so it survives stepping to another picture. */
   tab: WorkbenchTab;
-  /** The tabs THIS picture has (`workbenchTabsFor`): every one for a photograph, Adjust and Export for a clip. */
+  /** The tabs THIS picture has (`workbenchTabsFor`): every one for a photograph, Adjust, Crop and Export for a clip. */
   tabs: readonly { id: WorkbenchTab; label: string }[];
   onTabChange: (tab: WorkbenchTab) => void;
   /** What the next stroke is painted with — the editor's, so it survives stepping to another picture. */
@@ -353,12 +353,13 @@ export default function PictureWorkbench({
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
   // A CLIP (2026-09-30): played on the stage and developed WHOLE — the global
-  // develop and the look, which the export grades every frame through. The
-  // crop, the warps, detail, repair and the layers are a photograph's
-  // (`roll-types.ts`, `isClipPicture`): their tabs are not drawn, their keys
-  // do nothing, and the stage is handed none of them, so what it shows is
-  // what the file will get. Constant for this mount: the workbench is keyed
-  // per picture.
+  // develop and the look, which the export grades every frame through, and
+  // (2026-10-01) ONE crop held still over every frame, the same `frame` the
+  // stage draws a photograph through. The border, the warps, detail, repair
+  // and the layers are a photograph's (`roll-types.ts`, `isClipPicture`):
+  // their tabs are not drawn, their keys do nothing, and the stage is handed
+  // none of them, so what it shows is what the file will get. Constant for
+  // this mount: the workbench is keyed per picture.
   const clip = isClipPicture(entry);
   // Read once, like the develop: the workbench is keyed per picture.
   const [framingDraft, setFramingDraft] = useState<Framing>(entry.framing ?? { ...DEFAULT_FRAMING });
@@ -372,8 +373,8 @@ export default function PictureWorkbench({
   const [ratio, setRatio] = useState(0);
   const border = entry.border;
   const frame = useMemo<DevelopFrame | null>(
-    () => (ratio > 0 && !clip ? { aspectRatio: ratio, framing: framingDraft, border } : null),
-    [ratio, framingDraft, border, clip],
+    () => (ratio > 0 ? { aspectRatio: ratio, framing: framingDraft, border } : null),
+    [ratio, framingDraft, border],
   );
   // Read once, like the develop and the crop: the workbench is keyed per picture.
   const [keystoneDraft, setKeystoneDraft] = useState<Keystone | null>(entry.keystone ?? null);
@@ -1471,7 +1472,7 @@ export default function PictureWorkbench({
   // at the fit where the new picture is exactly what was on screen. Never on a
   // legacy Whole framing, whose canvas is not its zone.
   const viewCrop =
-    source && !clip && !cropping && picture.view.zoomed && crop.src && crop.zone && framingDraft.fit !== 'contain'
+    source && !cropping && picture.view.zoomed && crop.src && crop.zone && framingDraft.fit !== 'contain'
       ? zoneFromView(
           crop.zone,
           borderLayout(crop.zone.w, crop.zone.h, border),
@@ -1899,10 +1900,6 @@ export default function PictureWorkbench({
             );
           }}
         />
-        {/* A clip is judged MOVING: the transport under the picture (the
-            sheet's own, `DevelopTransport`), the stage graded frame by frame
-            as it plays. Viewing only — where it is paused is written nowhere. */}
-        {clip && picture.video && <DevelopTransport video={picture.video} className="flex-none" />}
         {cropping && (
           <CropStage
             picture={picture}
@@ -1912,6 +1909,11 @@ export default function PictureWorkbench({
             className="flex-1"
           />
         )}
+        {/* A clip is judged MOVING: the transport under the picture (the
+            sheet's own, `DevelopTransport`), the stage graded frame by frame
+            as it plays — under the crop stage too, so the zone is judged on
+            any frame. Viewing only — where it is paused is written nowhere. */}
+        {clip && picture.video && <DevelopTransport video={picture.video} className="flex-none" />}
         {/* The crop's own line stays UNDER the stage: the framing handles
             reach into every corner of that picture, so a box over it would
             cover a grip. On the Develop tab the same facts are drawn IN the
@@ -2155,10 +2157,12 @@ export default function PictureWorkbench({
               deliveredSize={exports.openDelivery?.out ?? null}
               verbs={cropApplyTo}
               borderVerbs={borderApplyTo}
+              clip={clip}
               onTold={tell}
             />
           ) : null}
-          {tab === 'crop' ? (
+          {/* The warps are a photograph's: a clip's Crop tab is the crop alone. */}
+          {tab === 'crop' && !clip ? (
             <>
               <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
               <LensPanel

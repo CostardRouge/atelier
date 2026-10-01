@@ -112,16 +112,17 @@ describe('picture sections', () => {
 });
 
 describe('a clip’s sections', () => {
-  it('are its develop and its look — a paste or an apply-to hands a clip nothing else', () => {
+  it('are its develop, its look and its crop — a paste or an apply-to hands a clip nothing else', () => {
     const src = everything(roll(), 'p' + (n - 2)).pictures[0];
     const clip = { ...roll().pictures[1], ref: { name: 'b.mp4', size: 1, lastModified: 1 } };
     expect(sectionsFor(clip, PICTURE_SECTIONS.map((s) => s.id))).toEqual(CLIP_SECTIONS);
     expect(sectionsFor(src, ['crop', 'develop'])).toEqual(['crop', 'develop']);
     const dressed = withSections(clip, src, PICTURE_SECTIONS.map((s) => s.id));
-    expect(pictureEdits(dressed)).toEqual(['develop', 'look']);
-    expect(dressed.aspect).toBe('original');
+    expect(pictureEdits(dressed)).toEqual(['develop', 'look', 'crop']);
+    expect(dressed.aspect).toBe('4:5');
+    expect(dressed.border).toBeNull();
     expect(dressed.layers).toEqual([]);
-    // A reset of everything on a clip touches its two and leaves the rest as it was.
+    // A reset of everything on a clip touches its three and leaves the rest as it was.
     expect(pictureEdits(withoutSections(dressed, PICTURE_SECTIONS.map((s) => s.id)))).toEqual([]);
   });
 });

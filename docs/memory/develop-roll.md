@@ -1227,7 +1227,7 @@ Every cell re-rendered on every tick of the open picture's sliders — a roll of
 The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
 
 
-## A roll takes CLIPS: played on the stage, switched to the rush, delivered as an MP4 (2026-09-30)
+## A roll takes CLIPS: played on the stage, switched to the rush, delivered as an MP4 (2026-09-30, rev. 2026-10-01: a crop)
 
 **The maintainer, two lines: *"develop doit gérer les vidéos"* and *"ne pas
 oublier d'aussi pouvoir switcher du proxy à la vidéo HD"*.** Built in one
@@ -1238,22 +1238,57 @@ pass; the rules a later agent must keep:
   share): a Winnow proxy is `<base>.mp4`, a rush `<base>.MP4`, and the answer
   must hold before a byte is in hand and on every device. Never by
   `File.type`: a fetched file carries none.
-- **A clip takes the GLOBAL develop and the look, and nothing else** — what
-  the export grades every frame through (`SOURCE → CUBE → [FILM] → OUTPUT`,
-  the variant path's own chain). A crop, a border, the keystone and lens
-  warps, detail (Presence included), the post-crop vignette, repair and the
-  layers are passes over ONE still frame: on a clip they would have to follow
-  the picture from frame to frame, which nothing here does and Lightroom does
-  not do either. So they are refused at EVERY door, not hidden at one: the
-  workbench has two tabs (`workbenchTabsFor`, `CLIP_TABS` — Adjust and
-  Export; `C`/`D`/`L` do nothing, the editor lands a clip on Adjust when the
-  tab it held is not one of its), the stage is handed null for each of them
-  (so preview = export holds by construction), `copyCropTo` / `copyBorderTo`
-  skip a clip and the crop/border verbs count only the frames
-  (`frameOtherIds`), and `withSections` / `withoutSections` reduce a clip's
-  sections to `CLIP_SECTIONS` (`sectionsFor`) — a paste, an apply-to and a
-  reset all go through them. `pictureEdits` needs no clip branch: a clip can
-  never carry the other sections.
+- **A clip takes the GLOBAL develop, the look and (since 2026-10-01) ONE
+  crop, and nothing else** — what the export grades every frame through
+  (`SOURCE → CUBE → [FILM] → OUTPUT`, the variant path's own chain) and then
+  cuts. A border, the keystone and lens warps, detail (Presence included),
+  the post-crop vignette, repair and the layers are passes over ONE still
+  frame: on a clip they would have to follow the picture from frame to frame,
+  which nothing here does and Lightroom does not do either. So they are
+  refused at EVERY door, not hidden at one: the workbench has three tabs
+  (`workbenchTabsFor`, `CLIP_TABS` — Adjust, Crop and Export; `D`/`L` do
+  nothing, the editor lands a clip on Adjust when the tab it held is not one
+  of its), the stage is handed null for each of them (so preview = export
+  holds by construction), `copyBorderTo` skips a clip and the border verbs
+  count only the frames (`frameOtherIds`), and `withSections` /
+  `withoutSections` reduce a clip's sections to `CLIP_SECTIONS`
+  (`sectionsFor`) — a paste, an apply-to and a reset all go through them.
+  `pictureEdits` needs no clip branch: a clip can never carry the other
+  sections.
+- **The crop on a clip is held STILL** (2026-10-01, his *"le crop sur un
+  clip"*): the same `aspect` + `framing` the roll always stored, the same
+  `CropStage` / `CropPanel` (the panel takes `clip` and drops `BorderSection`;
+  the Keystone and Lens panels are not drawn), the same `frame` handed to
+  `useDevelopPicture` — so the Adjust stage draws the square and the wipe
+  follows it with no clip branch. Three things a photograph never needed:
+  (1) `delivered()` and `snapshot` grade a clip AT `video.currentTime`, as
+  `paintStage` does — the held grade is keyed on the instant, and without it
+  the crop stage drew the first frame it ever rendered whatever the transport
+  did; (2) `DevelopPicture.frameSeq` (the hook's `restedFrame`, exposed) is a
+  dependency of the crop stage's paint, since the element `delivered()` reads
+  moves under it with nothing else React can see; (3) the transport is drawn
+  AFTER the crop stage in the column, so on the Crop tab it stays under the
+  picture and the zone is judged on any frame. A crop that MOVES (a pan or a
+  zoom over time, Trips' `framing-motion`) is deliberately not here.
+- **The export cuts every frame through the still export's own arithmetic**
+  (`clipDelivery` in `roll-clip-render.ts`, pure, tested): `deliveredLayout`
+  read against the clip's DISPLAY frame — the zone at the clip's own density,
+  the cap (`longEdgeFor`) read against the DELIVERED frame as for a
+  photograph, never an upscale, rounded to EVEN for the encoder — then
+  `drawDelivered` per frame with no border, from an upright scratch canvas
+  when the container is turned (a turned clip's framing was written in its
+  display frame, the one the stage showed). `outputSize` is set whenever the
+  frame is cropped or capped (the flag baked), and `Auto`'s `deliverySummary`
+  is handed the picture's framing and aspect, so a 1:1 zone out of a 360 px
+  proxy asks for the rush where the whole proxy would not have (measured:
+  *the proxy would be upscaled ×2.00*, the rush fetched, 720 × 720 written).
+- **The Library bar no longer greys clips out for Develop**: the registry's
+  `accepts` is `['photo', 'video+telemetry', 'video']` (`app/tools.tsx`) —
+  `assetUsableBy` is what dims a tile, and the tool had declared photographs
+  alone. The Winnow lightbox lists a VIDEO row's files too (`WinnowLightbox`,
+  `viewRows`): proxy and rush as chips, the rush fetched on its chip and held
+  under the same asset id the stage and the export read, and the `Develop`
+  verb carries the file on screen onto the roll like a photograph's.
 - **The stage is the sheet's clip stage** (`use-develop-picture.ts`'s
   `video`, `DevelopTransport` under the viewport, Space on the tool's window
   with `targetOwnsSpace` and no dialog open, `restedFrame` feeding the
@@ -1304,7 +1339,11 @@ roll and lifted the stage; the rush row read `DJI_0007.MP4 · 1280 × 720 ·
 752 KB`, the switch kept 1.5 s and stored `delivered:dji_0007.mp4`; the
 export wrote `DJI_0007.mp4` 1280 × 720 · 4.02 s from the HELD rush (one
 download in all), read back brighter than the source (143 against 129); a
-clip DROPPED from disk opened, baked its cell, refused `C`, and left capped
-at 320 × 180. Not driven: an HEVC rush, a real H.264 encode (this Chromium
-has none — the encoder was swapped to VP9 for the run, `testing.md`), his
-phone.
+clip DROPPED from disk opened, baked its cell, and left capped at 320 × 180.
+On 2026-10-01 (the crop): `C` opened the crop stage with the transport under
+it and no Borders / Perspective / Lens; `1:1` stored `aspect: '1:1'`; the
+Adjust stage went from 640 × 360 to 640 × 640 and still played; the Export
+tab read *the proxy would be upscaled ×2.00* and the run wrote `DJI_0007.mp4`
+at 720 × 720 · 4.02 s from the rush. Not driven: an HEVC rush, a real H.264
+encode (this Chromium has none — the encoder was swapped to VP9 for the run,
+`testing.md`), a turned (rotated) clip's crop, his phone.

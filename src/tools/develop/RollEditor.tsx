@@ -798,9 +798,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [roll.pictures, openId, filtering, culling.byPicture, cullFilter],
   );
   const others = otherIds.length;
-  // The pictures a CROP or a BORDER can be written onto: never a clip
-  // (`isClipPicture` — the pure writers refuse it too), so the verb's count
-  // says what it will really write.
+  // The pictures a BORDER can be written onto: never a clip (`isClipPicture`
+  // — the pure writer refuses it too), so the verb's count says what it will
+  // really write. A crop, by contrast, lands on a clip like on a photograph.
   const isFrame = useCallback(
     (id: string) => {
       const p = roll.pictures.find((x) => x.id === id);
@@ -852,28 +852,26 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) =>
       update((r) => copyCropTo(r, targets, crop));
     if (selectionTargets.length > 0) {
-      const n = frameSelection.length;
-      if (n === 0) return [];
+      const n = selectionTargets.length;
       return [
         {
           id: 'selection',
           label: `Apply crop to ${n} selected`,
-          hint: 'the pictures marked in the filmstrip, each as its own copy — a clip takes no crop',
-          run: write(frameSelection),
+          hint: 'the pictures marked in the filmstrip, each as its own copy — on a clip, held still over every frame',
+          run: write(selectionTargets),
         },
       ];
     }
-    const n = frameOtherIds.length;
-    if (n <= 0) return [];
+    if (others <= 0) return [];
     return [
       {
         id: 'roll',
-        label: `Apply crop to ${n} other picture${n === 1 ? '' : 's'}`,
-        hint: 'the rest of this roll, each as its own copy — a clip takes no crop',
-        run: write(frameOtherIds),
+        label: `Apply crop to ${others} other picture${others === 1 ? '' : 's'}`,
+        hint: 'the rest of this roll, each as its own copy — on a clip, held still over every frame',
+        run: write(otherIds),
       },
     ];
-  }, [openId, frameOtherIds, selectionTargets, frameSelection, update]);
+  }, [openId, others, otherIds, selectionTargets, update]);
 
   // The look's own verbs, apart from the develop's: a look is chosen per
   // picture, and this is the one gesture that dresses others with it. They
@@ -934,9 +932,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, frameOtherIds, selectionTargets, frameSelection, update]);
 
-  // A clip has two tabs (`workbenchTabsFor`): stepping from a photograph's
-  // Crop tab onto a clip lands on Adjust, and back on the photograph the tab
-  // is whatever it was last on a picture that had it.
+  // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
+  // Detail or Layers tab onto a clip lands on Adjust, and back on the
+  // photograph the tab is whatever it was last on a picture that had it.
   const openIsClip = open ? isClipPicture(open) : false;
   const tabs = workbenchTabsFor(openIsClip);
   useEffect(() => {

@@ -526,14 +526,14 @@ describe('a clip on the roll', () => {
     expect(isClipPicture({ ref: ref('DJI_0001.DNG') })).toBe(false);
   });
 
-  it('takes a look like any picture, and never a crop or a border', () => {
+  it('takes a look and a crop like any picture, and never a border', () => {
     const doc = roll(['a.jpg', 'b.mp4', 'c.jpg']);
     const framing = { ...DEFAULT_FRAMING, scale: 1.5 };
     const cropped = copyCropTo(doc, ['p2', 'p3'], { aspect: '4:5', framing }, 9);
-    expect(cropped.pictures[1]).toBe(doc.pictures[1]);
+    // The crop is one framing held still over the whole clip (2026-10-01).
+    expect(cropped.pictures[1]).toMatchObject({ aspect: '4:5', framing });
     expect(cropped.pictures[2]).toMatchObject({ aspect: '4:5', framing });
-    // A batch that names the clip alone changes nothing: the roll itself comes back.
-    expect(copyCropTo(doc, ['p2'], { aspect: '4:5', framing }, 9)).toBe(doc);
+    expect(pictureEdits(cropped.pictures[1])).toEqual(['crop']);
     const border = { aspect: '4:5', fill: 'blur', margin: { x: 0.1, y: 0.02 } };
     expect(copyBorderTo(doc, ['p2'], border, 9)).toBe(doc);
     const dressed = copyGradeTo(doc, ['p2'], { layers: [], output: 'rec709-to-srgb', film: null }, 9);

@@ -1389,26 +1389,33 @@ second in, marked ▶. On the stage it **plays**: a transport under the picture,
 **Space** to play and pause, the develop and the look following every frame,
 the before/after divider live while it moves. What a clip takes is the
 **global** develop and the look — the sliders, curves, levels, mixer, black
-and white, grading, presets, LUTs, output transform and grain — so its
-inspector has two tabs, **Adjust** and **Export**: a crop, a border,
-perspective, lens, detail, repair and layers are passes over one still frame
-and never land on a clip, whichever door they come from (a paste of sections,
-an *Apply to N other pictures*, a reset — a clip takes the develop and the
-look out of them and nothing else). A clip from your Winnow opens on the
+and white, grading, presets, LUTs, output transform and grain — and a
+**crop**: one zone held still over every frame, drawn on the same Crop tab
+as a photograph's (format, straighten, flips, *Apply crop to…*), with the
+transport under the crop stage so the zone is judged on the frames that
+matter. So its inspector has three tabs, **Adjust**, **Crop** and
+**Export**: a border, perspective, lens, detail, repair and layers are passes
+over one still frame and never land on a clip, whichever door they come from
+(a paste of sections, an *Apply to N other pictures*, a reset — a clip takes
+the develop, the look and the crop out of them and nothing else). Clips are
+usable in the Library bar when Develop is open, like photographs; they are
+no longer greyed out. A clip from your Winnow opens on the
 instance's small proxy, and the name above the picture is the same menu it
 is for a photograph: pick the **rush** — `DJI_0007.MP4 · 3840 × 2160 ·
 1.2 GB` — and it is fetched once, kept for the session, the playhead where it
 was, the choice stored on the picture so the roll shows the same file on
 another device; pick *Proxy* again and the fetch stops. A clip **exports as
-an MP4** under the capture's exact name: every frame developed under its look
-and encoded to H.264 at the first target's size (a ceiling, never an
-upscale), its sound copied as recorded. The rush is what leaves — the file
-you chose, else fetched where the first target's frame asks for more than
-the proxy holds, exactly as a photograph's original is — unless *Proxies
-only, for this run* is on. Quality, borders, HDR, the watermark and the
-metadata groups are a photograph's and do not reach a clip; the run says so
-once. Not built, deliberately: a crop or a per-frame mask on a clip, and a
-second target for one.
+an MP4** under the capture's exact name: every frame developed under its
+look, cut to its crop at the clip's own density (a 1:1 out of 1080p is 1080
+× 1080, never blown up) and encoded to H.264 at the first target's size (a
+ceiling read against the cropped frame, never an upscale), its sound copied
+as recorded. The rush is what leaves — the file you chose, else fetched
+where the first target's frame asks for more than the proxy's zone holds,
+exactly as a photograph's original is — unless *Proxies only, for this run*
+is on. Quality, borders, HDR, the watermark and the metadata groups are a
+photograph's and do not reach a clip; the run says so once. Not built,
+deliberately: a crop that moves or a per-frame mask on a clip, and a second
+target for one.
 
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of

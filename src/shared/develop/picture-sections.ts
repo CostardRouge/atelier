@@ -24,14 +24,17 @@ import { isClipPicture, pictureEdits, type PictureEdit, type RollDoc, type RollP
 export type PictureSection = PictureEdit;
 
 /**
- * The sections a CLIP can carry: its develop and its look, the two the export
- * grades every frame through (`isClipPicture`). Everything else is a pass
- * over one still frame and never lands on a clip, whichever door — a paste,
- * an apply-to, a reset — asked for it.
+ * The sections a CLIP can carry: its develop, its look and its crop — what
+ * the export grades and re-frames every frame through (`isClipPicture`). The
+ * crop is one framing held still over the whole clip (the same arithmetic as
+ * a photograph's, `deliveredLayout`), never a move. Everything else is a pass
+ * over one still frame — a border included, which is paper round ONE picture
+ * — and never lands on a clip, whichever door — a paste, an apply-to, a reset
+ * — asked for it.
  */
-export const CLIP_SECTIONS: readonly PictureSection[] = ['develop', 'look'];
+export const CLIP_SECTIONS: readonly PictureSection[] = ['develop', 'look', 'crop'];
 
-/** `sections` as they apply to `target`: a photograph takes them all, a clip its two. */
+/** `sections` as they apply to `target`: a photograph takes them all, a clip its three. */
 export function sectionsFor(target: Pick<RollPicture, 'ref'>, sections: readonly PictureSection[]): PictureSection[] {
   return isClipPicture(target) ? sections.filter((s) => CLIP_SECTIONS.includes(s)) : [...sections];
 }

@@ -509,7 +509,9 @@ alone until 2026-09-30, when the Develop TOOL took clips too — the same
   rAF where it is absent, not driven), plus on `seeked` / `pause` / `ended`. No React render
   per frame of the workbench: `restedFrame` is bumped only when the clip comes
   to REST on another frame, and is what re-runs the histogram and Auto's
-  as-shot `stats` — so Auto measures the frame on screen, never mid-play.
+  as-shot `stats` — so Auto measures the frame on screen, never mid-play. It
+  is exposed as `DevelopPicture.frameSeq` since 2026-10-01 for a surface that
+  draws `delivered()` itself (the tool's crop stage, `develop-roll.md`).
 - **The grade is keyed on the instant.** `grader.render(image, currentTime)`
   for a clip: `holdGrades` holds by source identity + seconds, and the element
   is the same object at every frame, so without the seconds a playing clip is
