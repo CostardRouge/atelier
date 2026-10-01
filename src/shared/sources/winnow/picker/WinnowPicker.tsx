@@ -10,6 +10,9 @@ import {
 import type { WinnowConnection } from '../store';
 import { readBrowseState, writeBrowseState } from '../browse-state';
 import DayPicker from '../DayPicker';
+import { describeCulling } from '../culling';
+import MediaLightbox, { type LightboxItem } from '../../../ui/MediaLightbox';
+import { formatIsoDate } from '../../../roadtrip/trip-days';
 import Button from '../../../ui/Button';
 import IconButton from '../../../ui/IconButton';
 import Segmented from '../../../ui/Segmented';
@@ -255,6 +258,24 @@ export default function WinnowPicker({
   const counts = useMemo(() => facetCounts(surfaced(items, piles, new Set())), [items, piles]);
   const shownItems = useMemo(() => shown(surfacedItems, facets, sort), [surfacedItems, facets, sort]);
   const drawnItems = useMemo(() => drawn(shownItems, items, piles, unfolded), [shownItems, items, piles, unfolded]);
+  // What the lightbox draws for each drawn tile: the proxy over the thumbnail,
+  // Winnow's word and the body in the facts line.
+  const lookItems = useMemo<LightboxItem[]>(
+    () =>
+      drawnItems.map(({ row, culling, device }) => ({
+        id: String(row.id),
+        title: row.filename,
+        facts: [describeCulling(culling) || 'not culled', device, row.capture_date ? formatIsoDate(row.capture_date) : null]
+          .filter(Boolean)
+          .join(' · '),
+        kind: row.media_type === 'video' ? 'video' : 'photo',
+        src: client.proxyUrl(row.id),
+        still: client.thumbUrl(row.id),
+        natural: row.width && row.height ? { width: row.width, height: row.height } : null,
+        credentialed: true,
+      })),
+    [drawnItems, client],
+  );
 
   // --- ticks -----------------------------------------------------------------
   const [ticked, setTicked] = useState<ReadonlySet<number>>(new Set());
@@ -354,16 +375,29 @@ export default function WinnowPicker({
     onClose();
   };
 
+  // A tile looked at large, an index into what is drawn — the lightbox pages
+  // through exactly the grid's order.
+  const [peek, setPeek] = useState<number | null>(null);
+  const look = (id: number) => {
+    const at = drawnItems.findIndex((it) => it.id === id);
+    if (at >= 0) setPeek(at);
+    setFocusId(id);
+    // The tile behind keeps the focus otherwise, and Enter would click it
+    // instead of ticking the picture on screen.
+    (document.activeElement as HTMLElement | null)?.blur();
+  };
+
+  // While a picture is looked at large, Escape and Enter are the lightbox's.
   useDialogKeys({
-    onCancel: close,
-    onConfirm: primary && tickedRows.length && !running ? () => void run(primary) : null,
+    onCancel: peek === null ? close : undefined,
+    onConfirm: peek === null && primary && tickedRows.length && !running ? () => void run(primary) : null,
   });
 
   // The grid's own keys: the bulk verbs, Winnow-style. A field keeps its keys,
   // and a press another surface claimed (a popover) is left alone.
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
-      if (e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
+      if (peek !== null || e.defaultPrevented || e.metaKey || e.ctrlKey || e.altKey || typing(e.target)) return;
       const k = e.key.toLowerCase();
       if (k === 'p') tickBy('picks', e.shiftKey);
       else if (e.code === 'Digit5') tickBy('stars5', e.shiftKey);
@@ -377,7 +411,7 @@ export default function WinnowPicker({
     };
     window.addEventListener('keydown', onKey);
     return () => window.removeEventListener('keydown', onKey);
-  }, [tickBy, drawnItems]);
+  }, [tickBy, drawnItems, peek]);
 
   useEffect(() => {
     // Under 820px this is a full-screen sheet, and a page still scrolling
@@ -439,7 +473,7 @@ export default function WinnowPicker({
       heldLabel={host.heldLabel}
       pile={pileBadge(it, inRow)}
       onToggle={(e) => toggle(it, e)}
-      onLook={() => setFocusId(it.id)}
+      onLook={() => look(it.id)}
       className={inRow ? 'w-32 h-24 shrink-0' : ''}
     />
   );
@@ -725,6 +759,55 @@ export default function WinnowPicker({
           })}
         </div>
       </div>
+      {peek !== null && drawnItems[peek] && (
+        <MediaLightbox
+          items={lookItems}
+          index={peek}
+          onIndex={(i) => {
+            setPeek(i);
+            setFocusId(drawnItems[i]?.id ?? null);
+          }}
+          onClose={() => setPeek(null)}
+          from={`from ${connection.id}`}
+          heal={(url) => client.heal(url)}
+          onConfirm={() => {
+            const it = drawnItems[peek];
+            if (it && !it.held) setTicked((cur) => {
+              const next = new Set(cur);
+              if (next.has(it.id)) next.delete(it.id);
+              else next.add(it.id);
+              return next;
+            });
+          }}
+          footer={(() => {
+            const it = drawnItems[peek];
+            const on = ticked.has(it.id);
+            return (
+              <div className="flex items-center gap-3 flex-wrap">
+                {it.held ? (
+                  <span className="font-mono text-2xs uppercase tracking-[0.1em] text-muted">{host.heldLabel}</span>
+                ) : (
+                  <Button
+                    variant={on ? 'default' : 'primary'}
+                    icon={on ? undefined : Icons.check}
+                    onClick={() =>
+                      setTicked((cur) => {
+                        const next = new Set(cur);
+                        if (next.has(it.id)) next.delete(it.id);
+                        else next.add(it.id);
+                        return next;
+                      })
+                    }
+                  >
+                    {on ? 'Untick' : 'Tick'}
+                  </Button>
+                )}
+                <span className="text-xs text-muted">{tickedRows.length} ticked · Enter ticks, Escape goes back to the grid</span>
+              </div>
+            );
+          })()}
+        />
+      )}
     </div>
   );
 }

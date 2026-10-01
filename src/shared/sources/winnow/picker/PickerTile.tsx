@@ -64,6 +64,17 @@ export default function PickerTile({
         title={`${row.filename}${row.device ? ` · ${row.device}` : ''}${item.tags.length ? ` · #${item.tags.join(' #')}` : ''}`}
         onClick={onToggle}
         onDoubleClick={onLook}
+        // Space LOOKS, as in Winnow and Lightroom; a click ticks. The button
+        // would otherwise click on the key's release, so both halves are
+        // claimed.
+        onKeyDown={(e) => {
+          if (e.key !== ' ') return;
+          e.preventDefault();
+          if (!e.repeat) onLook();
+        }}
+        onKeyUp={(e) => {
+          if (e.key === ' ') e.preventDefault();
+        }}
         className={`relative block w-full h-full p-0 rounded-paper overflow-hidden bg-frame border-2 cursor-pointer disabled:cursor-default ${
           item.held
             ? 'border-transparent opacity-45'

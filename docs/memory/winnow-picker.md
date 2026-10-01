@@ -144,3 +144,17 @@ keeps folding until `#/sources` (or a gallery's probe) re-asks the instance,
 and the fallback covers it meanwhile. Driven against the stub both ways: with
 `pairs` the day lists 44 media and `P` ticks 7 (the burst's pick included);
 without, 43 and 6, and the unfold asked `burst_id=9001` and drew 5 frames.
+
+## Space looks, a click ticks (2026-10-01, P8)
+
+A tile opens LARGE on Space or a double click, in the shared `MediaLightbox`
+(the instance's proxy over its thumbnail, Winnow's word, the body and the
+day in the facts line) and pages through what the grid DRAWS, in its order;
+Enter ticks the picture on screen, Escape goes back to the grid. Not
+`WinnowLightbox`: that one lives in `app/` and carries the Library's own
+verbs (pick, renditions, neighbouring days). **Traps, both met here**: a
+button clicks on Space's RELEASE, so a tile claims keydown AND keyup of
+Space or looking unticks it; and the tile behind keeps the focus unless the
+look blurs it, so Enter would click that tile instead of ticking the picture
+on screen. While the lightbox is up the picker's Escape/Enter and its grid
+keys stand down (`useDialogKeys` takes `undefined`).
