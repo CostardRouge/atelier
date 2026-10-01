@@ -8,8 +8,14 @@ import {
   TIMELAPSE_LENGTHS,
   type CameraKind,
   type GroundKind,
-  type HookKind,
-  type RevealKind,
+  END_LINES,
+  MOMENT_FIGURES,
+  TIMELAPSE_LIMITS,
+  type EndingMotion,
+  type MomentFigure,
+  type MomentOptions,
+  type MomentOrder,
+  type ProgressKind,
   type SoundKind,
   type TimelapseFormat,
   type TimelapseOptions,
@@ -254,32 +260,6 @@ export default function TimelapseSheet({
                   options={TIMELAPSE_LENGTHS.map((s) => ({ id: String(s), label: `${s} s` }))}
                 />
               </FieldRow>
-              <FieldRow label="Hook" hint="what opens the video: the finished picture then the file as shot, the inverse, or the two alternating">
-                <Segmented
-                  size="sm"
-                  label="Hook"
-                  value={options.hook}
-                  onChange={(id) => onOptions({ hook: id as HookKind })}
-                  options={[
-                    { id: 'result-first', label: 'Result first' },
-                    { id: 'raw-first', label: 'As shot first' },
-                    { id: 'flash', label: 'Flash' },
-                  ]}
-                />
-              </FieldRow>
-              <FieldRow label="Reveal" hint="the before/after at the end: the file as shot wiped off the finished picture, split on the middle, or flickered">
-                <Segmented
-                  size="sm"
-                  label="Reveal"
-                  value={options.reveal}
-                  onChange={(id) => onOptions({ reveal: id as RevealKind })}
-                  options={[
-                    { id: 'wipe', label: 'Wipe' },
-                    { id: 'split', label: 'Split' },
-                    { id: 'flicker', label: 'Flicker' },
-                  ]}
-                />
-              </FieldRow>
               <FieldRow label="Camera" hint="follows the tool — a heal's spot, a mask's box, read in the step itself — or stays on the whole picture">
                 <Segmented
                   size="sm"
@@ -325,7 +305,117 @@ export default function TimelapseSheet({
               </FieldRow>
             </DevelopFold>
 
+            <DevelopFold id="develop.timelapse.hook" title="Hook">
+              <MomentRows
+                name="Hook"
+                value={options.hook}
+                onChange={(hook) => onOptions({ hook })}
+                hint="the first seconds decide whether the video is watched: the finished picture then the file as shot, or the inverse"
+              />
+            </DevelopFold>
+
+            <DevelopFold id="develop.timelapse.tease" title="Tease">
+              <FieldRow label="Show" hint="the tease line from the hook's turn: for a few seconds, or kept on screen as the video's title">
+                <Segmented
+                  size="sm"
+                  label="Tease"
+                  value={options.tease.show}
+                  onChange={(id) => onOptions({ tease: { ...options.tease, show: id as 'off' | 'hook' | 'title' } })}
+                  options={[
+                    { id: 'off', label: 'Off' },
+                    { id: 'hook', label: 'For a while' },
+                    { id: 'title', label: 'As the title' },
+                  ]}
+                />
+              </FieldRow>
+              {options.tease.show === 'hook' && (
+                <FieldRow label="Stays">
+                  <RangeField
+                    label="Tease stays"
+                    value={options.tease.hold}
+                    min={TIMELAPSE_LIMITS.teaseHold.min}
+                    max={TIMELAPSE_LIMITS.teaseHold.max}
+                    step={0.5}
+                    format={(v) => `${v} s`}
+                    onChange={(hold) => onOptions({ tease: { ...options.tease, hold } })}
+                  />
+                </FieldRow>
+              )}
+              {options.tease.show !== 'off' && (
+                <FieldRow label="Line">
+                  <TextField label="The tease" value={options.words.how} onChange={(v) => setWord('how', v)} />
+                </FieldRow>
+              )}
+            </DevelopFold>
+
+            <DevelopFold id="develop.timelapse.reveal" title="Reveal">
+              <MomentRows
+                name="Reveal"
+                value={options.reveal}
+                onChange={(reveal) => onOptions({ reveal })}
+                hint="the before/after once every step is told, with BEFORE and AFTER in its corners"
+              />
+            </DevelopFold>
+
+            <DevelopFold id="develop.timelapse.ending" title="Ending">
+              <FieldRow label="Hold" hint="the finished picture alone after the reveal — the frame people pause on">
+                <Segmented
+                  size="sm"
+                  label="Ending hold"
+                  value={String(options.ending.hold)}
+                  onChange={(id) => onOptions({ ending: { ...options.ending, hold: Number(id) } })}
+                  options={[0, 1, 2, 3, 5, 8].map((v) => ({ id: String(v), label: v === 0 ? 'None' : `${v} s` }))}
+                />
+              </FieldRow>
+              {options.ending.hold > 0 && (
+                <FieldRow label="Motion">
+                  <Segmented
+                    size="sm"
+                    label="Ending motion"
+                    value={options.ending.motion}
+                    onChange={(id) => onOptions({ ending: { ...options.ending, motion: id as EndingMotion } })}
+                    options={[
+                      { id: 'still', label: 'Still' },
+                      { id: 'push', label: 'Push in' },
+                      { id: 'pull', label: 'Pull out' },
+                      { id: 'drift', label: 'Drift' },
+                    ]}
+                  />
+                </FieldRow>
+              )}
+              <SwitchRow
+                label="Loop"
+                name="Loop"
+                checked={options.ending.loop}
+                onChange={(loop) => onOptions({ ending: { ...options.ending, loop } })}
+                hint="the last half-second fades into the first frame, so a feed's autoplay replays it with no seam — and counts the watch twice"
+              />
+              <FieldRow label="End line" hint="a call to action over the ending, in the accent; empty draws nothing">
+                <TextField label="End line" value={options.ending.line} placeholder="Save this for your next edit" onChange={(line) => onOptions({ ending: { ...options.ending, line } })} />
+              </FieldRow>
+              <div className="flex flex-wrap gap-1 min-w-0" aria-label="End line suggestions">
+                {END_LINES.map((line) => (
+                  <Button key={line} size="sm" onClick={() => onOptions({ ending: { ...options.ending, line } })}>
+                    {line}
+                  </Button>
+                ))}
+              </div>
+            </DevelopFold>
+
             <DevelopFold id="develop.timelapse.overlays" title="Overlays">
+              <FieldRow label="Progress" hint="the video's clock: a hairline at the foot, or a bar per step along the top like a story">
+                <Segmented
+                  size="sm"
+                  label="Progress"
+                  value={options.progress}
+                  onChange={(id) => onOptions({ progress: id as ProgressKind })}
+                  options={[
+                    { id: 'line', label: 'Line' },
+                    { id: 'stories', label: 'Stories' },
+                    { id: 'none', label: 'None' },
+                  ]}
+                />
+              </FieldRow>
               <SwitchRow label="Captions" name="Captions" checked={options.overlays.captions} onChange={(captions) => onOptions({ overlays: { ...options.overlays, captions } })} hint="a line per chapter saying what changed, and the hook's words" />
               <SwitchRow label="Step counter" name="Step counter" checked={options.overlays.counter} onChange={(counter) => onOptions({ overlays: { ...options.overlays, counter } })} hint="3/7 in a corner" />
               <SwitchRow label="Tools drawn" name="Tools drawn" checked={options.overlays.tools} onChange={(tools) => onOptions({ overlays: { ...options.overlays, tools } })} hint="the crop's zone growing, a heal's rings, a mask's fill" />
@@ -417,9 +507,6 @@ export default function TimelapseSheet({
               <FieldRow label="As shot">
                 <TextField label="Over the picture as shot" value={options.words.raw} onChange={(v) => setWord('raw', v)} />
               </FieldRow>
-              <FieldRow label="Tease">
-                <TextField label="The tease" value={options.words.how} onChange={(v) => setWord('how', v)} />
-              </FieldRow>
               <FieldRow label="Labels">
                 <div className="flex gap-2 min-w-0">
                   <TextField label="Before label" value={options.words.before} onChange={(v) => setWord('before', v)} />
@@ -473,5 +560,69 @@ export default function TimelapseSheet({
         </div>
       </div>
     </div>
+  );
+}
+
+const FIGURE_LABEL: Readonly<Record<MomentFigure, string>> = {
+  cut: 'Cut',
+  crossfade: 'Fade',
+  wipe: 'Wipe',
+  split: 'Split',
+  flicker: 'Flicker',
+};
+
+/** One before/after moment's controls — the SAME for the hook and the reveal. */
+function MomentRows({ name, value, onChange, hint }: { name: string; value: MomentOptions; onChange: (next: MomentOptions) => void; hint: string }) {
+  const set = (patch: Partial<MomentOptions>) => onChange({ ...value, ...patch });
+  return (
+    <>
+      <FieldRow label="Figure" hint={hint}>
+        <Segmented
+          size="sm"
+          label={`${name} figure`}
+          value={value.figure}
+          onChange={(id) => set({ figure: id as MomentFigure })}
+          options={MOMENT_FIGURES.map((f) => ({ id: f, label: FIGURE_LABEL[f] }))}
+        />
+      </FieldRow>
+      {value.figure !== 'split' && (
+        <FieldRow label="First">
+          <Segmented
+            size="sm"
+            label={`${name} shows first`}
+            value={value.order}
+            onChange={(id) => set({ order: id as MomentOrder })}
+            options={[
+              { id: 'after-first', label: 'The result' },
+              { id: 'before-first', label: 'As shot' },
+            ]}
+          />
+        </FieldRow>
+      )}
+      <FieldRow label="Length">
+        <Segmented
+          size="sm"
+          label={`${name} length`}
+          value={value.seconds === null ? 'auto' : String(value.seconds)}
+          onChange={(id) => set({ seconds: id === 'auto' ? null : Number(id) })}
+          options={[{ id: 'auto', label: 'Auto' }, ...[1.5, 2, 3, 4, 6].map((v) => ({ id: String(v), label: `${v} s` }))]}
+        />
+      </FieldRow>
+      {value.figure !== 'split' && (
+        <FieldRow label="Back and forth" hint="goes back and forth before it lands — the eye compares, and stays">
+          <Segmented
+            size="sm"
+            label={`${name} back and forth`}
+            value={String(value.bounces)}
+            onChange={(id) => set({ bounces: Number(id) })}
+            options={[
+              { id: '0', label: 'Once' },
+              { id: '1', label: '×3' },
+              { id: '2', label: '×5' },
+            ]}
+          />
+        </FieldRow>
+      )}
+    </>
   );
 }

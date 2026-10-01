@@ -35,7 +35,7 @@ import { boxBlurRGBA, scaleLayout, type BorderLayout } from '../../shared/develo
 import { drawDelivered, drawPictureIn } from '../../shared/develop/border-paint';
 import { frameAffine } from '../../shared/develop/vignette-frame';
 import type { RollPicture } from '../../shared/develop/roll-types';
-import { HOOK_CUT_SHARE, REVEAL_FIGURE_SHARE, TRANSITION_SHARE, CAMERA_TRAVEL_SECONDS, momentAt, chapterAt, type ScriptChapter, type TimelapseScript } from '../../shared/develop/timelapse-script';
+import { LOOP_SECONDS, TRANSITION_SHARE, CAMERA_TRAVEL_SECONDS, momentAt, chapterAt, pairAt, progressSegments, type PairFrame, type ScriptChapter, type TimelapseScript } from '../../shared/develop/timelapse-script';
 import { WHOLE_PICTURE, type Camera } from '../../shared/develop/timelapse-chapters';
 import { isSilentTexture } from '../../shared/film/film-texture';
 import type { CubeLut } from '../../shared/lib/cube-parser';
@@ -494,6 +494,21 @@ function cameraAt(script: TimelapseScript, t: number): Camera {
     const p = clamp(t / Math.max(0.001, script.hook.dur), 0, 1);
     return { cx: 0.5, cy: 0.5, z: 1 + 0.04 * easeAt('out-expo', p) };
   }
+  if (moment === 'ending' || moment === 'done') {
+    // The finished picture held: a slow push in, a pull out from close, a drift across, or still.
+    const e = script.ending;
+    const p = easeAt('in-out-cubic', clamp((t - e.start) / Math.max(0.001, e.dur), 0, 1));
+    switch (script.options.ending.motion) {
+      case 'push':
+        return { cx: 0.5, cy: 0.5, z: 1 + 0.12 * p };
+      case 'pull':
+        return { cx: 0.5, cy: 0.5, z: 1.12 - 0.12 * p };
+      case 'drift':
+        return { cx: 0.46 + 0.08 * p, cy: 0.5, z: 1.1 };
+      default:
+        return { ...WHOLE_PICTURE };
+    }
+  }
   const c = chapterAt(script, t);
   if (!c) return { ...WHOLE_PICTURE };
   const p = easeAt('out-cubic', clamp((t - c.start) / CAMERA_TRAVEL_SECONDS, 0, 1));
@@ -534,6 +549,52 @@ function drawLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: nu
 }
 
 /**
+ * One frame of a before/after figure: the finished picture whole, the
+ * picture as shot over it across `pair.width` from the left at `pair.alpha`,
+ * a divider where the figure draws one. The hook and the reveal both paint
+ * through here, which is what lets them share their options.
+ */
+function drawPair(ctx: CanvasRenderingContext2D, f: Fitted, asShot: Rendered, final: Rendered, state: RollPicture, cam: Camera, pair: PairFrame): void {
+  drawPicture(ctx, f, final, state, cam);
+  if (pair.width <= 0 || pair.alpha <= 0) return;
+  ctx.save();
+  ctx.beginPath();
+  ctx.rect(f.x, f.y, f.w * pair.width, f.h);
+  ctx.clip();
+  drawPicture(ctx, f, asShot, state, cam, pair.alpha);
+  ctx.restore();
+  if (pair.divider) {
+    const x = f.x + f.w * pair.width;
+    const w = Math.max(2, Math.round(Math.min(f.w, f.h) * 0.004));
+    ctx.fillStyle = ON_MEDIA;
+    ctx.fillRect(x - w / 2, f.y, w, f.h);
+  }
+}
+
+/** A figure's progress at `t`: 0 at the moment's start, 1 once it has landed. */
+function figureProgress(start: number, turn: number, t: number): number {
+  return clamp((t - start) / Math.max(0.001, turn - start), 0, 1);
+}
+
+/** The story-style bar along the top: a segment per moment, the one playing filling. */
+function drawStories(ctx: CanvasRenderingContext2D, s: TimelapseScript, t: number, W: number, H: number): void {
+  const segments = progressSegments(s);
+  const pad = Math.round(W * 0.03);
+  const gap = Math.max(2, Math.round(W * 0.006));
+  const h = Math.max(3, Math.round(H * 0.0035));
+  const y = Math.round(H * 0.014);
+  const w = (W - pad * 2 - gap * (segments.length - 1)) / segments.length;
+  segments.forEach((seg, i) => {
+    const x = pad + i * (w + gap);
+    const fill = clamp((t - seg.start) / Math.max(0.001, seg.end - seg.start), 0, 1);
+    ctx.fillStyle = 'rgba(244,239,228,0.35)';
+    ctx.fillRect(x, y, w, h);
+    ctx.fillStyle = ON_MEDIA;
+    ctx.fillRect(x, y, w * fill, h);
+  });
+}
+
+/**
  * Prepare a painter for `script`'s states over `source`: decode once, grade
  * every state, load the overlay fonts, and hand back `draw`. The states are
  * fixed at this call; the script's words, timing and options may change
@@ -562,28 +623,19 @@ export async function prepareTimelapse(script: TimelapseScript, source: Timelaps
     return r;
   };
 
-  const draw = (s: TimelapseScript, t: number) => {
-    const W = canvas.width;
-    const H = canvas.height;
+  /** The pictures of frame `t` — everything but the words and the clock — onto `g`. */
+  const paintScene = (g: CanvasRenderingContext2D, s: TimelapseScript, t: number, W: number, H: number) => {
     const S = Math.min(W, H);
     const moment = momentAt(s, t);
     const asShot = rendered(s.asShot);
     const final = rendered(s.final);
     const finalFit = fit(s.final, final, W, H);
-    ac.setTransform(1, 0, 0, 1, 0, 0);
-    ac.clearRect(0, 0, W, H);
 
-    if (moment === 'hook' || moment === 'done') {
-      const p = clamp(t / Math.max(0.001, s.hook.dur), 0, 1);
-      let after = true;
-      if (moment === 'hook') {
-        if (s.options.hook === 'result-first') after = p < HOOK_CUT_SHARE;
-        else if (s.options.hook === 'raw-first') after = p >= HOOK_CUT_SHARE;
-        else after = Math.floor(p * 8) % 2 === 0;
-      }
-      const shown = after ? final : asShot;
-      drawGround(ac, s, shown, W, H);
-      drawPicture(ac, finalFit, shown, s.final, cameraAt(s, t));
+    if (moment === 'hook') {
+      const h = s.options.hook;
+      const pair = pairAt(h.figure, h.order, h.bounces, figureProgress(0, s.hook.turn, t));
+      drawGround(g, s, pair.width > 0.5 && pair.alpha > 0.5 ? asShot : final, W, H);
+      drawPair(g, finalFit, asShot, final, s.final, cameraAt(s, t), pair);
     } else if (moment === 'chapter') {
       const c = chapterAt(s, t)!;
       const before = rendered(c.chapter.before);
@@ -592,92 +644,108 @@ export async function prepareTimelapse(script: TimelapseScript, source: Timelaps
       const fa = fit(c.chapter.after, after, W, H);
       const u = transitionAt(c, t);
       const cam = cameraAt(s, t);
-      drawGround(ac, s, u < 0.5 ? before : after, W, H);
+      drawGround(g, s, u < 0.5 ? before : after, W, H);
       const crops = c.chapter.sections.includes('crop');
       if (crops && u < 1) {
-        drawPicture(ac, fb, before, c.chapter.before, cam);
-        if (s.options.overlays.tools) drawCropFigure(ac, fb, before, fa, after, u);
+        drawPicture(g, fb, before, c.chapter.before, cam);
+        if (s.options.overlays.tools) drawCropFigure(g, fb, before, fa, after, u);
       } else if (u >= 1) {
-        drawPicture(ac, fa, after, c.chapter.after, cam);
+        drawPicture(g, fa, after, c.chapter.after, cam);
       } else {
-        drawPicture(ac, fb, before, c.chapter.before, cam);
-        drawPicture(ac, fa, after, c.chapter.after, cam, u);
+        drawPicture(g, fb, before, c.chapter.before, cam);
+        drawPicture(g, fa, after, c.chapter.after, cam, u);
       }
       if (s.options.overlays.tools) {
         // The tools: shown whole through the first quarter, gone by the end of the transition.
         const hold = clamp((t - c.start) / Math.max(0.001, c.dur * TRANSITION_SHARE), 0, 1);
         const toolAlpha = hold < 0.5 ? 1 : 1 - (hold - 0.5) / 0.5;
-        if (c.chapter.section === 'repair') drawRepairRings(ac, fa, after, c.chapter.after, c.chapter.before, cam, toolAlpha);
+        if (c.chapter.section === 'repair') drawRepairRings(g, fa, after, c.chapter.after, c.chapter.before, cam, toolAlpha);
         if (c.chapter.section === 'layers' && toolAlpha > 0) {
           const ar = after.width / after.height;
           for (const layer of changedLayers(c.chapter.before, c.chapter.after)) {
             const tint = maskTint(layer, ar, after.rasters);
             if (!tint) continue;
-            ac.save();
-            ac.globalAlpha = toolAlpha * 0.4;
-            ac.beginPath();
-            ac.rect(fa.x, fa.y, fa.w, fa.h);
-            ac.clip();
-            applyCamera(ac, fa, after, cam);
-            ac.translate(fa.x, fa.y);
-            drawPictureIn(ac, tint, tint.width, tint.height, fa.framing, fa.layout);
-            ac.restore();
+            g.save();
+            g.globalAlpha = toolAlpha * 0.4;
+            g.beginPath();
+            g.rect(fa.x, fa.y, fa.w, fa.h);
+            g.clip();
+            applyCamera(g, fa, after, cam);
+            g.translate(fa.x, fa.y);
+            drawPictureIn(g, tint, tint.width, tint.height, fa.framing, fa.layout);
+            g.restore();
           }
         }
       }
-    } else {
-      // The reveal: the picture as shot wiped off the finished one, both in the final frame.
-      const p = clamp((t - s.reveal.start) / Math.max(0.001, s.reveal.dur), 0, 1);
-      drawGround(ac, s, final, W, H);
-      drawPicture(ac, finalFit, final, s.final, WHOLE_PICTURE);
-      const R = finalFit;
-      const kind = s.options.reveal;
-      const label = Math.round(S * 0.032);
-      const inset = Math.round(S * 0.03);
-      let divider: number | null = null;
-      let beforeAlpha = 0;
-      if (kind === 'wipe') {
-        const sweep = easeAt('in-out-cubic', clamp(p / REVEAL_FIGURE_SHARE, 0, 1));
-        divider = R.x + R.w * (1 - sweep);
-        beforeAlpha = 1 - sweep;
-      } else if (kind === 'split') {
-        divider = p < REVEAL_FIGURE_SHARE ? R.x + R.w / 2 : null;
-        beforeAlpha = divider !== null ? 1 : 0;
-      } else {
-        const on = p < REVEAL_FIGURE_SHARE && Math.floor(p * 12) % 2 === 1;
-        if (on) divider = R.x + R.w;
-        beforeAlpha = p < REVEAL_FIGURE_SHARE ? 1 : 0;
-      }
-      if (divider !== null && divider > R.x) {
-        ac.save();
-        ac.beginPath();
-        ac.rect(R.x, R.y, divider - R.x, R.h);
-        ac.clip();
-        drawPicture(ac, finalFit, asShot, s.final, WHOLE_PICTURE);
-        ac.restore();
-        if (divider < R.x + R.w) {
-          ac.fillStyle = ON_MEDIA;
-          ac.fillRect(divider - 2, R.y, 4, R.h);
-        }
-      }
-      if (s.options.overlays.captions) {
-        const flicker = kind === 'flicker' && p < REVEAL_FIGURE_SHARE;
-        const showBefore = flicker ? divider !== null : beforeAlpha > 0.02;
-        const showAfter = flicker ? divider === null : true;
+    } else if (moment === 'reveal') {
+      // The reveal: the same figures as the hook, on the whole picture, with BEFORE / AFTER in the corners.
+      const r = s.options.reveal;
+      const pair = pairAt(r.figure, r.order, r.bounces, figureProgress(s.reveal.start, s.reveal.turn, t));
+      drawGround(g, s, final, W, H);
+      drawPair(g, finalFit, asShot, final, s.final, WHOLE_PICTURE, pair);
+      if (s.options.overlays.captions && t < s.reveal.turn) {
+        const R = finalFit;
+        const label = Math.round(S * 0.032);
+        const inset = Math.round(S * 0.03);
         const half = Math.max(1, R.w / 2 - inset * 1.5);
-        if (showBefore) drawLabel(ac, s.options.words.before, R.x + inset, R.y + inset + label, label, 'left', flicker ? 1 : beforeAlpha, half);
-        if (showAfter) drawLabel(ac, s.options.words.afterLabel, R.x + R.w - inset, R.y + inset + label, label, 'right', 1, half);
+        // Side by side, both are named; one over the other, the one on screen is.
+        const both = pair.divider;
+        const beforeOn = pair.width > 0.02 && pair.alpha > 0.5;
+        const showBefore = both ? pair.width > 0.02 : beforeOn && pair.width >= 0.98;
+        const showAfter = both ? pair.width < 0.98 : !(beforeOn && pair.width >= 0.98);
+        if (showBefore) drawLabel(g, s.options.words.before, R.x + inset, R.y + inset + label, label, 'left', 1, half);
+        if (showAfter) drawLabel(g, s.options.words.afterLabel, R.x + R.w - inset, R.y + inset + label, label, 'right', 1, half);
+      }
+    } else {
+      // The ending: the finished picture alone, moving slowly.
+      drawGround(g, s, final, W, H);
+      drawPicture(g, finalFit, final, s.final, cameraAt(s, t));
+    }
+  };
+
+  // The loop's target, the video's first frame, painted once per script and size.
+  let firstFrame: { script: TimelapseScript; canvas: HTMLCanvasElement } | null = null;
+  const firstFrameOf = (s: TimelapseScript, W: number, H: number): HTMLCanvasElement | null => {
+    if (firstFrame && firstFrame.script === s && firstFrame.canvas.width === W && firstFrame.canvas.height === H) return firstFrame.canvas;
+    const c = document.createElement('canvas');
+    c.width = W;
+    c.height = H;
+    const g = c.getContext('2d');
+    if (!g) return null;
+    paintScene(g, s, 0, W, H);
+    firstFrame = { script: s, canvas: c };
+    return c;
+  };
+
+  const draw = (s: TimelapseScript, t: number) => {
+    const W = canvas.width;
+    const H = canvas.height;
+    ac.setTransform(1, 0, 0, 1, 0, 0);
+    ac.clearRect(0, 0, W, H);
+    paintScene(ac, s, Math.min(t, Math.max(0, s.seconds - 1e-3)), W, H);
+    // A loop's last half-second fades into the first frame, so the feed's replay has no seam.
+    if (s.options.ending.loop && t > s.seconds - LOOP_SECONDS) {
+      const first = firstFrameOf(s, W, H);
+      if (first) {
+        ac.save();
+        ac.globalAlpha = easeAt('in-out-cubic', clamp((t - (s.seconds - LOOP_SECONDS)) / LOOP_SECONDS, 0, 1));
+        ac.drawImage(first, 0, 0);
+        ac.restore();
       }
     }
 
     // The captions, the counter, the words, the plate and the credit — the engine's.
     drawOverlays(ac, s.overlays, null, W, H, { timeSeconds: t, theme });
-    // The clock along the bottom edge: the suite's hairline as the video's own.
-    const bar = Math.max(2, Math.round(H * 0.003));
-    ac.fillStyle = 'rgba(244,239,228,0.25)';
-    ac.fillRect(0, H - bar, W, bar);
-    ac.fillStyle = ACCENT;
-    ac.fillRect(0, H - bar, W * clamp(t / Math.max(0.001, s.seconds), 0, 1), bar);
+    if (s.options.progress === 'stories') {
+      drawStories(ac, s, t, W, H);
+    } else if (s.options.progress === 'line') {
+      // The clock along the bottom edge: the suite's hairline as the video's own.
+      const bar = Math.max(2, Math.round(H * 0.003));
+      ac.fillStyle = 'rgba(244,239,228,0.25)';
+      ac.fillRect(0, H - bar, W, bar);
+      ac.fillStyle = ACCENT;
+      ac.fillRect(0, H - bar, W * clamp(t / Math.max(0.001, s.seconds), 0, 1), bar);
+    }
   };
 
   return {

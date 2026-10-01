@@ -405,7 +405,7 @@ describe('reading a stored roll', () => {
       format: '1:1',
       seconds: 120,
       beat: 120,
-      hook: 'result-first',
+      hook: { figure: 'cut', order: 'after-first', seconds: null, bounces: 0 },
       words: { how: 'Comment ?', after: 'This is the after.' },
     });
     // The HDR delivery: off unless said, its reach clamped to the stops a RAW keeps.

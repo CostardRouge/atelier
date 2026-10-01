@@ -1752,7 +1752,16 @@ music); a **sound** — none by default, or one of the openers' tick kits: a tic
 where each chapter starts, a deeper one at the tease, the seat at the reveal,
 rendered here and encoded to AAC like a hook's ticks; the ground round the
 picture; and five switches — captions, the step counter, the tools drawn, the
-plate, the credit. A **Style** section dresses every word of the video at once:
+plate, the credit. The **hook** and the **reveal** take the same choices: a
+figure (cut, fade, wipe, split or flicker), which picture comes first, a length,
+and a back-and-forth that compares the two three or five times before landing.
+The **tease** ("How?") stays for as long as you set, or stays on screen as the
+video's title. The **ending** holds the finished picture after the reveal (up
+to 8 s, still, pushing in, pulling out or drifting), can **loop** — its last
+half-second fades into the first frame so a feed's autoplay replays it with no
+seam — and can carry an **end line**, a call to action in the accent, typed or
+picked from ready-made ones. The clock is a hairline, story-style bars along
+the top, or nothing. A **Style** section dresses every word of the video at once:
 the font (VT323 by default, JetBrains Mono, Space Grotesk, Instrument Serif, Georgia), a
 size from 70 to 150 %, bold, capitals, a box, a shadow or nothing behind the
 words, the box's corners (square to pill) and opacity, and three colours — the

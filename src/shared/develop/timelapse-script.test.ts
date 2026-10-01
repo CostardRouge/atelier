@@ -3,8 +3,8 @@ import { DEFAULT_DEVELOP } from './develop';
 import { journalRoll } from './journal';
 import { addPictures, createRollDoc, patchPicture, readRollDoc, setMakingOf, type RollDoc, type RollPicture } from './roll-types';
 import { pictureChapters } from './timelapse-chapters';
-import { DEFAULT_TIMELAPSE, DEFAULT_TIMELAPSE_STYLE, readMakingOf, readTimelapseOptions, readTimelapseStyle, type TimelapseOptions } from './timelapse-options';
-import { lookFor, TEXT_MAX_LINES, beatGrid, chapterAt, deepestZoom, fitText, makingOfName, momentAt, momentLengths, monoBudget, onGrid, packLines, timelapseScore, timelapseScript } from './timelapse-script';
+import { DEFAULT_TIMELAPSE, DEFAULT_TIMELAPSE_STYLE, readMoment, readMakingOf, readTimelapseOptions, readTimelapseStyle, type TimelapseOptions } from './timelapse-options';
+import { LOOP_SECONDS, lookFor, pairAt, progressSegments, TEXT_MAX_LINES, beatGrid, chapterAt, deepestZoom, fitText, makingOfName, momentAt, momentLengths, monoBudget, onGrid, packLines, timelapseScore, timelapseScript } from './timelapse-script';
 
 let n = 0;
 function roll(): RollDoc {
@@ -35,7 +35,7 @@ describe('the script', () => {
     const p = edited(FIVE);
     const script = timelapseScript(pictureChapters(p, 4 / 3), options());
     expect(script).toMatchObject({ width: 1080, height: 1920, fps: 30, recorded: true, empty: false });
-    expect(script.hook).toEqual({ start: 0, dur: 1.8 });
+    expect(script.hook).toEqual({ start: 0, dur: 1.8, turn: 1.8 * 0.62 });
     expect(script.chapters).toHaveLength(5);
     expect(script.reveal.dur).toBe(3);
     expect(script.seconds).toBeCloseTo(15, 6);
@@ -99,9 +99,9 @@ describe('the script', () => {
     ]);
     const bare = timelapseScript(pictureChapters(edited(FIVE)), options({ overlays: { ...DEFAULT_TIMELAPSE.overlays, captions: false, counter: false } }));
     expect(bare.overlays).toEqual([]);
-    const raw = timelapseScript(pictureChapters(edited(FIVE)), options({ hook: 'raw-first' }));
+    const raw = timelapseScript(pictureChapters(edited(FIVE)), options({ hook: { ...DEFAULT_TIMELAPSE.hook, order: 'before-first' } }));
     expect(raw.overlays[0].text).toBe('This is the file as shot.');
-    const flash = timelapseScript(pictureChapters(edited(FIVE)), options({ hook: 'flash' }));
+    const flash = timelapseScript(pictureChapters(edited(FIVE)), options({ hook: { ...DEFAULT_TIMELAPSE.hook, figure: 'flicker' } }));
     expect(flash.overlays[0]).toMatchObject({ id: 'hook-flash', text: 'BEFORE ↔ AFTER' });
   });
 
@@ -184,6 +184,71 @@ describe('the script', () => {
     expect(readTimelapseOptions({}).style).toEqual(DEFAULT_TIMELAPSE.style);
   });
 
+  it('runs the hook and the reveal through ONE figure, landing on the second picture whatever the bounces', () => {
+    // The landing: the picture shown second, alone.
+    for (const figure of ['cut', 'crossfade', 'wipe', 'split', 'flicker'] as const) {
+      expect(pairAt(figure, 'after-first', 0, 1)).toEqual({ width: 1, alpha: 1, divider: false });
+      expect(pairAt(figure, 'before-first', 2, 1)).toEqual({ width: 0, alpha: 1, divider: false });
+    }
+    // A cut holds the first picture until it lands.
+    expect(pairAt('cut', 'after-first', 0, 0.5)).toEqual({ width: 1, alpha: 0, divider: false });
+    expect(pairAt('cut', 'before-first', 0, 0.5)).toEqual({ width: 1, alpha: 1, divider: false });
+    // A wipe moves its divider across, the before always on the LEFT.
+    const mid = pairAt('wipe', 'before-first', 0, 0.6);
+    expect(mid.divider).toBe(true);
+    expect(mid.width).toBeGreaterThan(0);
+    expect(mid.width).toBeLessThan(1);
+    // A crossfade blends, a split shows both halves.
+    expect(pairAt('crossfade', 'before-first', 0, 0.8).alpha).toBeGreaterThan(0);
+    expect(pairAt('crossfade', 'before-first', 0, 0.8).alpha).toBeLessThan(1);
+    expect(pairAt('split', 'after-first', 0, 0.3)).toEqual({ width: 0.5, alpha: 1, divider: true });
+    // Bounces: back to the first picture in the middle pass, then on to the second.
+    expect(pairAt('cut', 'after-first', 1, 0.5).alpha).toBe(1);
+    expect(pairAt('cut', 'after-first', 1, 0.1).alpha).toBe(0);
+  });
+
+  it('holds the tease for a while or keeps it as a title, ends on the finished picture, and loops', () => {
+    const p = pictureChapters(edited(FIVE));
+    const base = timelapseScript(p, options());
+    const how = base.overlays.find((e) => e.id === 'hook-how')!;
+    // From the hook's turn, for its hold — past the hook, into the first chapter.
+    expect(how.window).toEqual({ start: base.hook.turn, end: base.hook.turn + 2.5 });
+    expect(how.window!.end!).toBeGreaterThan(base.hook.dur);
+    const title = timelapseScript(p, options({ tease: { show: 'title', hold: 2.5 } }));
+    expect(title.overlays.find((e) => e.id === 'hook-how')!.window).toEqual({ start: title.hook.turn, end: null });
+    expect(timelapseScript(p, options({ tease: { show: 'off', hold: 2.5 } })).overlays.some((e) => e.id === 'hook-how')).toBe(false);
+    // The ending: two seconds of the finished picture by default, inside the asked length.
+    expect(base.ending).toEqual({ start: base.reveal.start + base.reveal.dur, dur: 2 });
+    expect(base.seconds).toBeCloseTo(15, 6);
+    expect(momentAt(base, base.ending.start + 0.5)).toBe('ending');
+    const long = timelapseScript(p, options({ ending: { hold: 5, motion: 'drift', loop: false, line: 'Save this for your next edit' } }));
+    expect(long.ending.dur).toBe(5);
+    expect(long.seconds).toBeCloseTo(15, 6);
+    const line = long.overlays.find((e) => e.id === 'end-line')!;
+    expect(line).toMatchObject({ text: 'Save this for your next edit', window: { start: long.ending.start, end: null } });
+    // A loop: what stays to the end fades out where the crossfade into the first frame starts.
+    const loop = timelapseScript(p, options({ tease: { show: 'title', hold: 2 }, ending: { hold: 2, motion: 'push', loop: true, line: 'Follow' } }), { credit: 'Developed in Atelier' });
+    for (const id of ['hook-how', 'end-line', 'credit']) {
+      expect(loop.overlays.find((e) => e.id === id)!.window!.end).toBeCloseTo(loop.seconds - LOOP_SECONDS, 9);
+    }
+    // Stories: one segment for the hook, one per chapter, one for the reveal with its ending.
+    expect(progressSegments(base)).toHaveLength(base.chapters.length + 2);
+    expect(progressSegments(base).at(-1)).toEqual({ start: base.reveal.start, end: base.seconds });
+    // A moment's own length wins over the length's.
+    expect(timelapseScript(p, options({ hook: { ...DEFAULT_TIMELAPSE.hook, seconds: 3 } })).hook.dur).toBe(3);
+  });
+
+  it('reads the moments a roll stored before they shared one vocabulary', () => {
+    const d = DEFAULT_TIMELAPSE;
+    expect(readMoment('result-first', d.hook)).toMatchObject({ figure: 'cut', order: 'after-first' });
+    expect(readMoment('raw-first', d.hook)).toMatchObject({ figure: 'cut', order: 'before-first' });
+    expect(readMoment('flash', d.hook)).toMatchObject({ figure: 'flicker' });
+    expect(readMoment('split', d.reveal)).toMatchObject({ figure: 'split', order: 'before-first' });
+    expect(readMoment({ figure: 'crossfade', seconds: 99, bounces: 7 }, d.reveal)).toEqual({ figure: 'crossfade', order: 'before-first', seconds: 6, bounces: 2 });
+    expect(readTimelapseOptions({ hook: 'flash', reveal: 'flicker' })).toMatchObject({ hook: { figure: 'flicker' }, reveal: { figure: 'flicker' } });
+    expect(readTimelapseOptions({ ending: { hold: 20, motion: 'spin', line: 42 } }).ending).toEqual({ hold: 8, motion: 'push', loop: false, line: '' });
+  });
+
   it('takes the author’s own captions and hidden chapters, and finds the moment at a time', () => {
     const p = edited(FIVE);
     const chapters = pictureChapters(p);
@@ -226,7 +291,7 @@ describe('the script', () => {
     expect(score.slice(1, -1).every((e) => e.voice === 'wood' && e.rate === 1)).toBe(true);
     expect(score[score.length - 1]).toMatchObject({ at: script.reveal.start + script.reveal.dur * 0.55, voice: 'seat' });
     expect(score.every((e, i) => i === 0 || e.at >= score[i - 1].at)).toBe(true);
-    const flash = timelapseScore(timelapseScript(pictureChapters(edited(FIVE)), options({ hook: 'flash' })), 'click');
+    const flash = timelapseScore(timelapseScript(pictureChapters(edited(FIVE)), options({ hook: { ...DEFAULT_TIMELAPSE.hook, figure: 'flicker' } })), 'click');
     expect(flash[0].voice).toBe('click');
   });
 

@@ -12,8 +12,55 @@
 import type { TickKit } from '../roadtrip/hooks/tick-kits';
 
 export type TimelapseFormat = '9:16' | '4:5' | '1:1' | '16:9';
-export type HookKind = 'result-first' | 'raw-first' | 'flash';
-export type RevealKind = 'wipe' | 'split' | 'flicker';
+/**
+ * How a moment goes from one picture to the other — the SAME vocabulary for
+ * the hook and the reveal (his ask): a hard cut, a crossfade, a wipe across
+ * a divider, the two side by side, or a flicker between them.
+ */
+export type MomentFigure = 'cut' | 'crossfade' | 'wipe' | 'split' | 'flicker';
+export const MOMENT_FIGURES: readonly MomentFigure[] = ['cut', 'crossfade', 'wipe', 'split', 'flicker'];
+/** Which picture a moment shows FIRST — it lands on the other. */
+export type MomentOrder = 'after-first' | 'before-first';
+
+export interface MomentOptions {
+  figure: MomentFigure;
+  order: MomentOrder;
+  /** The moment's length, or null for the length's own (`momentLengths`). */
+  seconds: number | null;
+  /** Extra back-and-forths before it lands (0–2): a ping-pong that makes a viewer watch twice. */
+  bounces: number;
+}
+
+/** The tease ("How?"): off, shown from the hook's turn for `hold` seconds, or kept as the video's TITLE. */
+export interface TeaseOptions {
+  show: 'off' | 'hook' | 'title';
+  /** Seconds it stays from the hook's turn, under `hook` — spilling into the first chapter. */
+  hold: number;
+}
+
+/** What follows the reveal: the finished picture held clean, moving, and maybe looping into the hook. */
+export type EndingMotion = 'still' | 'push' | 'pull' | 'drift';
+export interface EndingOptions {
+  /** Seconds of the finished picture alone after the reveal, 0–8. */
+  hold: number;
+  motion: EndingMotion;
+  /** The last half-second crossfades into the video's first frame, so a feed's autoplay loops seamlessly. */
+  loop: boolean;
+  /** A line over the ending — a call to action; empty draws nothing. */
+  line: string;
+}
+
+/** The video's clock: the suite's hairline, story-style segments, or none. */
+export type ProgressKind = 'line' | 'stories' | 'none';
+
+/** Ready-made end lines, the kinds that get a comment or a save. */
+export const END_LINES: readonly string[] = [
+  'Save this for your next edit',
+  'Before or after? Tell me below',
+  'Want this look? Comment LOOK',
+  'Follow for the next edit',
+  'Guess the edit time',
+];
 export type CameraKind = 'follow' | 'still';
 export type GroundKind = 'blur' | 'paper' | 'ink';
 export type SoundKind = 'none' | TickKit;
@@ -111,8 +158,11 @@ export function rgba(hex: string, alpha: number): string {
 export interface TimelapseOptions {
   format: TimelapseFormat;
   seconds: number;
-  hook: HookKind;
-  reveal: RevealKind;
+  hook: MomentOptions;
+  reveal: MomentOptions;
+  tease: TeaseOptions;
+  ending: EndingOptions;
+  progress: ProgressKind;
   camera: CameraKind;
   /** Beats per minute the cuts land on, or null for free timing. */
   beat: number | null;
@@ -135,8 +185,11 @@ export const DEFAULT_WORDS: Readonly<TimelapseWords> = Object.freeze({
 export const DEFAULT_TIMELAPSE: Readonly<TimelapseOptions> = Object.freeze({
   format: '9:16',
   seconds: 15,
-  hook: 'result-first',
-  reveal: 'wipe',
+  hook: Object.freeze({ figure: 'cut', order: 'after-first', seconds: null, bounces: 0 }) as MomentOptions,
+  reveal: Object.freeze({ figure: 'wipe', order: 'before-first', seconds: null, bounces: 0 }) as MomentOptions,
+  tease: Object.freeze({ show: 'hook', hold: 2.5 }) as TeaseOptions,
+  ending: Object.freeze({ hold: 2, motion: 'push', loop: false, line: '' }) as EndingOptions,
+  progress: 'line',
   camera: 'follow',
   beat: null,
   overlays: Object.freeze({ captions: true, counter: true, plate: true, credit: true, tools: true }),
@@ -149,11 +202,16 @@ export const DEFAULT_TIMELAPSE: Readonly<TimelapseOptions> = Object.freeze({
 export const TIMELAPSE_LIMITS = {
   seconds: { min: 6, max: 120 },
   beat: { min: 60, max: 200 },
+  moment: { min: 1, max: 6 },
+  bounces: { min: 0, max: 2 },
+  teaseHold: { min: 1, max: 8 },
+  endingHold: { min: 0, max: 8 },
 } as const;
 
 const FORMATS: ReadonlySet<string> = new Set(Object.keys(TIMELAPSE_FORMATS));
-const HOOKS: ReadonlySet<string> = new Set(['result-first', 'raw-first', 'flash']);
-const REVEALS: ReadonlySet<string> = new Set(['wipe', 'split', 'flicker']);
+const FIGURES: ReadonlySet<string> = new Set(MOMENT_FIGURES);
+const MOTIONS: ReadonlySet<string> = new Set(['still', 'push', 'pull', 'drift']);
+const PROGRESS: ReadonlySet<string> = new Set(['line', 'stories', 'none']);
 const GROUNDS: ReadonlySet<string> = new Set(['blur', 'paper', 'ink']);
 const SOUNDS: ReadonlySet<string> = new Set(['none', 'ratchet', 'wood', 'typewriter', 'click']);
 
@@ -178,6 +236,26 @@ function hex(v: unknown, fallback: string): string {
 
 function within(v: unknown, range: { min: number; max: number }, fallback: number): number {
   return typeof v === 'number' && Number.isFinite(v) ? Math.min(range.max, Math.max(range.min, v)) : fallback;
+}
+
+/**
+ * A stored moment on the current shape. Rolls written before the two moments
+ * shared one vocabulary stored a WORD: the hook's `result-first` · `raw-first`
+ * · `flash` and the reveal's `wipe` · `split` · `flicker` read as that figure.
+ */
+export function readMoment(raw: unknown, fallback: MomentOptions): MomentOptions {
+  if (raw === 'result-first') return { ...fallback, figure: 'cut', order: 'after-first' };
+  if (raw === 'raw-first') return { ...fallback, figure: 'cut', order: 'before-first' };
+  if (raw === 'flash') return { ...fallback, figure: 'flicker', order: 'after-first' };
+  if (typeof raw === 'string' && FIGURES.has(raw)) return { ...fallback, figure: raw as MomentFigure };
+  if (!isRecord(raw)) return { ...fallback };
+  const L = TIMELAPSE_LIMITS;
+  return {
+    figure: pick(raw.figure, FIGURES, fallback.figure),
+    order: raw.order === 'before-first' ? 'before-first' : raw.order === 'after-first' ? 'after-first' : fallback.order,
+    seconds: typeof raw.seconds === 'number' && Number.isFinite(raw.seconds) ? within(raw.seconds, L.moment, L.moment.min) : null,
+    bounces: Math.round(within(raw.bounces, L.bounces, fallback.bounces)),
+  };
 }
 
 /** A stored style on the current shape; absent keys read as the defaults. */
@@ -206,7 +284,12 @@ function word(v: unknown, fallback: string): string {
 /** Stored options on the current shape; absent reads as the defaults. */
 export function readTimelapseOptions(raw: unknown): TimelapseOptions {
   const d = DEFAULT_TIMELAPSE;
-  if (!isRecord(raw)) return { ...d, overlays: { ...d.overlays }, words: { ...d.words }, style: { ...d.style } };
+  if (!isRecord(raw)) {
+    return { ...d, hook: { ...d.hook }, reveal: { ...d.reveal }, tease: { ...d.tease }, ending: { ...d.ending }, overlays: { ...d.overlays }, words: { ...d.words }, style: { ...d.style } };
+  }
+  const te = isRecord(raw.tease) ? raw.tease : {};
+  const en = isRecord(raw.ending) ? raw.ending : {};
+  const L = TIMELAPSE_LIMITS;
   const o = isRecord(raw.overlays) ? raw.overlays : {};
   const w = isRecord(raw.words) ? raw.words : {};
   const seconds = typeof raw.seconds === 'number' && Number.isFinite(raw.seconds) ? raw.seconds : d.seconds;
@@ -214,8 +297,19 @@ export function readTimelapseOptions(raw: unknown): TimelapseOptions {
   return {
     format: pick(raw.format, FORMATS, d.format),
     seconds: Math.round(Math.min(TIMELAPSE_LIMITS.seconds.max, Math.max(TIMELAPSE_LIMITS.seconds.min, seconds))),
-    hook: pick(raw.hook, HOOKS, d.hook),
-    reveal: pick(raw.reveal, REVEALS, d.reveal),
+    hook: readMoment(raw.hook, d.hook),
+    reveal: readMoment(raw.reveal, d.reveal),
+    tease: {
+      show: te.show === 'off' || te.show === 'title' || te.show === 'hook' ? te.show : d.tease.show,
+      hold: within(te.hold, L.teaseHold, d.tease.hold),
+    },
+    ending: {
+      hold: within(en.hold, L.endingHold, d.ending.hold),
+      motion: pick(en.motion, MOTIONS, d.ending.motion),
+      loop: flag(en.loop, d.ending.loop),
+      line: typeof en.line === 'string' ? en.line.slice(0, 80) : d.ending.line,
+    },
+    progress: pick(raw.progress, PROGRESS, d.progress),
     camera: raw.camera === 'still' ? 'still' : 'follow',
     beat: beat === null ? null : Math.round(Math.min(TIMELAPSE_LIMITS.beat.max, Math.max(TIMELAPSE_LIMITS.beat.min, beat))),
     overlays: {
