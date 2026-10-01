@@ -4,7 +4,7 @@ import { journalRoll } from './journal';
 import { addPictures, createRollDoc, patchPicture, readRollDoc, setMakingOf, type RollDoc, type RollPicture } from './roll-types';
 import { pictureChapters } from './timelapse-chapters';
 import { DEFAULT_TIMELAPSE, readMakingOf, readTimelapseOptions, type TimelapseOptions } from './timelapse-options';
-import { beatGrid, chapterAt, deepestZoom, makingOfName, momentAt, momentLengths, onGrid, timelapseScore, timelapseScript } from './timelapse-script';
+import { TEXT_MAX_LINES, beatGrid, chapterAt, deepestZoom, fitText, makingOfName, momentAt, momentLengths, monoBudget, onGrid, packLines, timelapseScore, timelapseScript } from './timelapse-script';
 
 let n = 0;
 function roll(): RollDoc {
@@ -103,6 +103,60 @@ describe('the script', () => {
     expect(raw.overlays[0].text).toBe('This is the file as shot.');
     const flash = timelapseScript(pictureChapters(edited(FIVE)), options({ hook: 'flash' }));
     expect(flash.overlays[0]).toMatchObject({ id: 'hook-flash', text: 'BEFORE ↔ AFTER' });
+  });
+
+  it('wraps a long overlay like a flex row: whole facts first, then words, never off the frame', () => {
+    expect(packLines('+0.7 EV · highlights −40 · vibrance +15', 20)).toEqual(['+0.7 EV', 'highlights −40', 'vibrance +15']);
+    expect(packLines('+0.7 EV · highlights −40 · vibrance +15', 30)).toEqual(['+0.7 EV · highlights −40', 'vibrance +15']);
+    expect(packLines('A sentence much longer than one line · ok', 16)).toEqual(['A sentence much', 'longer than one', 'line · ok']);
+    expect(packLines('short', 40)).toEqual(['short']);
+    expect(packLines('typed\nbreak', 40)).toEqual(['typed', 'break']);
+    // A 9:16 frame at the caption's size: every line within the budget.
+    const budget = monoBudget(1080, 0.042 * 1080, 0.5);
+    expect(budget).toBeGreaterThan(30);
+    expect(budget).toBeLessThan(40);
+    const long = 'Portra 400 · 80 % · Rec.709 2.4 → sRGB · grain · from another picture · + detail, vignette';
+    const fitted = fitText(long, 1080, 1920, 0.042, 0.5);
+    expect(fitted.lines.join(' · ').replace(/ · /g, ' ')).toBe(long.replace(/ · /g, ' '));
+    expect(fitted.lines.every((l) => l.length <= monoBudget(1080, fitted.sizeFrac * 1080, 0.5))).toBe(true);
+    // Too many lines at the asked size: it steps down first, and never under its floor.
+    expect(fitted.sizeFrac).toBeLessThan(0.042);
+    expect(fitted.sizeFrac).toBeGreaterThanOrEqual(0.042 * 0.65 - 1e-9);
+    expect(fitted.lines.length).toBeLessThanOrEqual(TEXT_MAX_LINES);
+    // Balanced like text-wrap: balance — the tease never ends on one orphaned word.
+    const tease = fitText('Here is exactly how this picture was edited, step by step', 1080, 1920, 0.05, 0.5);
+    expect(tease.lines.length).toBeGreaterThan(1);
+    expect(tease.lines.every((l) => l.split(' ').length >= 2)).toBe(true);
+    // A short line is left alone, at its size.
+    expect(fitText('+0.7 EV', 1080, 1920, 0.042, 0.5)).toEqual({ lines: ['+0.7 EV'], sizeFrac: 0.042 });
+  });
+
+  it('stacks a wrapped caption upward from its foot, and lifts the plate over a wrapped credit', () => {
+    const p = edited(FIVE);
+    const chapters = pictureChapters(p);
+    const id = chapters.chapters[0].id;
+    const long = 'Lifted the shadows · cooled the whites · warmed the skin · pulled the sky down';
+    const script = timelapseScript(chapters, options(), {
+      captions: { [id]: long },
+      plate: 'ƒ/1.7 · 1/500 · ISO 100',
+      credit: 'Developed in Atelier · © A photographer with a remarkably long name indeed, and a studio',
+    });
+    const lines = script.overlays.filter((e) => e.id === `caption-${id}` || e.id.startsWith(`caption-${id}.`));
+    expect(lines.length).toBeGreaterThan(1);
+    expect(lines.map((e) => e.text).join(' · ')).toBe(long);
+    // The foot stays where a one-line caption sits; the lines above climb in order.
+    expect(lines[lines.length - 1].y).toBeCloseTo(0.86, 9);
+    expect(lines.every((e, i) => i === 0 || e.y > lines[i - 1].y)).toBe(true);
+    expect(new Set(lines.map((e) => e.sizeFrac)).size).toBe(1);
+    // The mono face and the box are pinned: the painter's theme would otherwise replace both.
+    expect(lines.every((e) => e.fontFamily === 'JetBrains Mono' && e.legibility.mode === 'box' && e.styleOverrides?.includes('fontFamily') && e.styleOverrides.includes('legibility'))).toBe(true);
+    expect(lines.every((e) => e.window?.start === script.chapters[0].start)).toBe(true);
+    // Reveal: the credit wraps, the plate sits above its top line.
+    const credit = script.overlays.filter((e) => e.id === 'credit' || e.id.startsWith('credit.'));
+    const plate = script.overlays.filter((e) => e.id === 'plate' || e.id.startsWith('plate.'));
+    expect(credit.length).toBeGreaterThan(1);
+    expect(credit[credit.length - 1].y).toBeCloseTo(0.955, 9);
+    expect(Math.max(...plate.map((e) => e.y))).toBeLessThan(Math.min(...credit.map((e) => e.y)));
   });
 
   it('takes the author’s own captions and hidden chapters, and finds the moment at a time', () => {

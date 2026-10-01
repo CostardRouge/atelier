@@ -510,17 +510,26 @@ function transitionAt(c: ScriptChapter, t: number): number {
   return easeAt('in-out-cubic', clamp((t - c.start) / Math.max(0.001, c.dur * TRANSITION_SHARE), 0, 1));
 }
 
-function drawLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, align: CanvasTextAlign, alpha: number): void {
+/**
+ * A corner label over the picture, kept inside `maxWidth`: a word too long
+ * for its half of the picture is drawn smaller (down to 60 %), then squeezed
+ * by the canvas itself — never run into the other corner's label.
+ */
+function drawLabel(ctx: CanvasRenderingContext2D, text: string, x: number, y: number, size: number, align: CanvasTextAlign, alpha: number, maxWidth: number): void {
   if (alpha <= 0) return;
   ctx.save();
   ctx.globalAlpha = alpha;
-  ctx.font = `600 ${size}px "JetBrains Mono", ui-monospace, monospace`;
+  const font = (px: number) => `600 ${px}px "JetBrains Mono", ui-monospace, monospace`;
+  ctx.font = font(size);
+  const wide = ctx.measureText(text).width;
+  const px = wide > maxWidth ? Math.max(size * 0.6, (size * maxWidth) / wide) : size;
+  ctx.font = font(px);
   ctx.textAlign = align;
   ctx.textBaseline = 'alphabetic';
   ctx.fillStyle = 'rgba(0,0,0,0.55)';
-  ctx.fillText(text, x + size * 0.06, y + size * 0.06);
+  ctx.fillText(text, x + px * 0.06, y + px * 0.06, maxWidth);
   ctx.fillStyle = ON_MEDIA;
-  ctx.fillText(text, x, y);
+  ctx.fillText(text, x, y, maxWidth);
   ctx.restore();
 }
 
@@ -655,8 +664,9 @@ export async function prepareTimelapse(script: TimelapseScript, source: Timelaps
         const flicker = kind === 'flicker' && p < REVEAL_FIGURE_SHARE;
         const showBefore = flicker ? divider !== null : beforeAlpha > 0.02;
         const showAfter = flicker ? divider === null : true;
-        if (showBefore) drawLabel(ac, s.options.words.before, R.x + inset, R.y + inset + label, label, 'left', flicker ? 1 : beforeAlpha);
-        if (showAfter) drawLabel(ac, s.options.words.afterLabel, R.x + R.w - inset, R.y + inset + label, label, 'right', 1);
+        const half = Math.max(1, R.w / 2 - inset * 1.5);
+        if (showBefore) drawLabel(ac, s.options.words.before, R.x + inset, R.y + inset + label, label, 'left', flicker ? 1 : beforeAlpha, half);
+        if (showAfter) drawLabel(ac, s.options.words.afterLabel, R.x + R.w - inset, R.y + inset + label, label, 'right', 1, half);
       }
     }
 
