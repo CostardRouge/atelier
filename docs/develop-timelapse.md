@@ -1,5 +1,16 @@
 # The making-of: a picture's edit steps replayed as a video
 
+**Status (2026-10-01): BUILT, T1 → T7**, the maintainer's *"go ahead, build
+T1 to T7"* on 2026-09-30, one commit each, on the brief's own working
+answers to §6 (the journal on the picture; recording on with no switch; the
+standard order shipped and said; the `-making-of` suffix; sound off by
+default with the kits on request; the defaults as listed; English captions,
+editable). What is verified and what is not is in `docs/memory/develop-roll.md`
+(«The JOURNAL is on the picture» → «The export»): everything but the H.264
+encode itself was driven headless, that one needs a real machine. §6 stays his
+to overrule. The rest of this brief is the design as it was proposed; where
+the build departed from it, the memory says so.
+
 **Status (2026-09-30).** A PROPOSAL, nothing built. §1 is the maintainer's ask
 in his words. §2 is FACT, read in this repository at `0bcbdae` (file:line).
 §3 onwards is the design: the record it needs, the video's grammar, the

@@ -1748,8 +1748,11 @@ when you developed it on the RAW — and holds the roll's choices as pills:
 the lightest fold into the next); the hook, the reveal, the camera; an
 optional **beat** that lands every cut on a half-note grid so a track laid on
 the file in the socials app finds its downbeats on them (the file carries no
-music); the ground round the picture; and five switches — captions, the step
-counter, the tools drawn, the plate, the credit. Each chapter's caption can be
+music); a **sound** — none by default, or one of the openers' tick kits: a tick
+where each chapter starts, a deeper one at the tease, the seat at the reveal,
+rendered here and encoded to AAC like a hook's ticks; the ground round the
+picture; and five switches — captions, the step counter, the tools drawn, the
+plate, the credit. Each chapter's caption can be
 rewritten (an emptied one gets the computed line back) and any chapter folded
 away — its change still happens, it rides the next one; the order is never
 reordered. A picture edited before the journal existed has its steps told in a

@@ -10,10 +10,12 @@ import {
   type GroundKind,
   type HookKind,
   type RevealKind,
+  type SoundKind,
   type TimelapseFormat,
   type TimelapseOptions,
   type TimelapseWords,
 } from '../../shared/develop/timelapse-options';
+import { KIT_IDS, TICK_KITS } from '../../shared/roadtrip/hooks/tick-kits';
 import { timelapseScript, type TimelapseScript } from '../../shared/develop/timelapse-script';
 import Button from '../../shared/ui/Button';
 import { FieldRow, SwitchRow, TextField } from '../../shared/ui/Inspector';
@@ -286,6 +288,15 @@ export default function TimelapseSheet({
                   value={String(options.beat ?? 0)}
                   onChange={(id) => onOptions({ beat: Number(id) || null })}
                   options={BEATS}
+                />
+              </FieldRow>
+              <FieldRow label="Sound" hint="a tick where each chapter starts, a deeper one at the tease, the seat at the reveal — heard in the file; the preview is silent. Off writes no track: the socials app lays the music">
+                <Segmented
+                  size="sm"
+                  label="Sound"
+                  value={options.sound}
+                  onChange={(id) => onOptions({ sound: id as SoundKind })}
+                  options={[{ id: 'none', label: 'None' }, ...KIT_IDS.map((id) => ({ id, label: TICK_KITS[id].label }))]}
                 />
               </FieldRow>
               <FieldRow label="Ground" hint="what fills the frame around the picture">

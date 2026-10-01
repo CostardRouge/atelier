@@ -2,7 +2,9 @@ import { useCallback, useRef, useState } from 'react';
 import { deliverFilesTo, pickDeliveryTarget } from '../../shared/sources/deliver-files';
 import { encodeFrames } from '../../shared/media/render-video';
 import { exportEdge } from '../../shared/media/photo-frame';
-import { deepestZoom, makingOfName, type TimelapseScript } from '../../shared/develop/timelapse-script';
+import { deepestZoom, makingOfName, timelapseScore, type TimelapseScript } from '../../shared/develop/timelapse-script';
+import { BED_SAMPLE_RATE, renderBed } from '../../shared/audio/render-bed';
+import { aacPrimingSeconds } from '../../shared/media/audio-encode';
 import { startTask } from '../../shared/tasks/tasks';
 import { atStep, cancelRun, enterUnit, finishUnit, startRun, type RunPhase, type RunProgress } from '../../shared/tasks/run-progress';
 import { prepareTimelapse, type TimelapseSource } from './timelapse-paint';
@@ -96,6 +98,12 @@ export function useTimelapseExport({ cubes }: { cubes: RollCubes }): TimelapseEx
           onProgress: (done, total) => say('render', `Grading the states · ${done} of ${total}`, (done / total) * 0.3),
         });
         const p = painter;
+        // The bed, from the score the frames are painted from, rendered ahead
+        // of the AAC encoder's priming so each tick lands ON its frame
+        // (`media-pipeline.md`); none when the sound is off, and then no track.
+        const score = timelapseScore(script, script.options.sound);
+        const audio = score.length ? await renderBed(score, script.seconds, { leadSeconds: aacPrimingSeconds(BED_SAMPLE_RATE) }) : null;
+        let audioSkipped: string | null = null;
         say('encode', 'Encoding', 0.3);
         const grained = script.states.some((s) => (s.grade?.film?.grain ?? 0) > 0);
         const blob = await encodeFrames({
@@ -104,6 +112,10 @@ export function useTimelapseExport({ cubes }: { cubes: RollCubes }): TimelapseEx
           seconds: script.seconds,
           fps: script.fps,
           grained,
+          audio,
+          onAudioSkipped: (reason) => {
+            audioSkipped = reason;
+          },
           signal: controller.signal,
           draw: (t) => {
             p.draw(script, t);
@@ -119,7 +131,8 @@ export function useTimelapseExport({ cubes }: { cubes: RollCubes }): TimelapseEx
         const delivery = await deliverFilesTo(target, [file], { replace: false });
         const failed = delivery.method === 'folder' && delivery.failed.length > 0;
         show(finishUnit(progressNow, 0, !failed, Date.now()));
-        const size = `${script.width} × ${script.height} · ${script.seconds.toFixed(1)} s`;
+        const sound = audioSkipped ? ` · silent: ${audioSkipped}` : audio ? ' · with its ticks' : '';
+        const size = `${script.width} × ${script.height} · ${script.seconds.toFixed(1)} s${sound}`;
         if (failed) setNote(`${name} could not be written: ${delivery.errors[0] ?? 'the folder refused it'}`);
         else if (delivery.method === 'download') setNote(`${name} downloaded · ${size}`);
         else setNote(`${name} written${delivery.renamed ? ' (numbered — the folder already held that name)' : ''} · ${size}`);

@@ -24,6 +24,8 @@
  * Pure and DOM-free.
  */
 
+import type { SoundEvent } from '../audio/sound-event';
+import { TICK_KITS, type TickKit } from '../roadtrip/hooks/tick-kits';
 import { createTextElement, type OverlayElement } from '../overlay/overlay-types';
 import type { PictureEdit, RollPicture } from './roll-types';
 import { WHOLE_PICTURE, cameraFor, keepCount, keptChapters, type Camera, type Chapter, type PictureChapters } from './timelapse-chapters';
@@ -284,6 +286,27 @@ export function makingOfName(refName: string): string {
 /** The deepest zoom the script's camera reaches — what the decode's edge is sized for. */
 export function deepestZoom(script: TimelapseScript): number {
   return script.chapters.reduce((z, c) => Math.max(z, c.camera.to.z), 1);
+}
+
+/**
+ * The making-of's SOUND, from the kits the openers share (`tick-kits.ts`):
+ * a tick where each chapter starts, the kit's deeper landing at the hook's
+ * cut (the tease), and the seat where the reveal's figure ends — the end of
+ * the phrase. Off (`'none'`) writes no track at all; the socials app lays
+ * the music, and the beat grid is what makes that land.
+ */
+export function timelapseScore(script: TimelapseScript, kit: TickKit | 'none'): SoundEvent[] {
+  if (kit === 'none') return [];
+  const k = TICK_KITS[kit];
+  const out: SoundEvent[] = [];
+  if (script.options.hook !== 'flash') {
+    out.push({ at: script.hook.start + script.hook.dur * HOOK_CUT_SHARE, voice: k.leg.voice, gain: 0.8 * k.leg.gain, rate: k.leg.rate });
+  }
+  script.chapters.forEach((c, i) => {
+    out.push({ at: c.start, voice: k.tick, gain: Math.max(0.4, 0.85 - i * 0.04), rate: 1 });
+  });
+  out.push({ at: script.reveal.start + script.reveal.dur * REVEAL_FIGURE_SHARE, voice: k.seat, gain: 0.8, rate: 1 });
+  return out;
 }
 
 /** Which chapter plays at `t`, or null during the hook or the reveal. */

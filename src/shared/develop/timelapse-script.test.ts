@@ -4,7 +4,7 @@ import { journalRoll } from './journal';
 import { addPictures, createRollDoc, patchPicture, readRollDoc, setMakingOf, type RollDoc, type RollPicture } from './roll-types';
 import { pictureChapters } from './timelapse-chapters';
 import { DEFAULT_TIMELAPSE, readMakingOf, readTimelapseOptions, type TimelapseOptions } from './timelapse-options';
-import { beatGrid, chapterAt, deepestZoom, makingOfName, momentAt, momentLengths, onGrid, timelapseScript } from './timelapse-script';
+import { beatGrid, chapterAt, deepestZoom, makingOfName, momentAt, momentLengths, onGrid, timelapseScore, timelapseScript } from './timelapse-script';
 
 let n = 0;
 function roll(): RollDoc {
@@ -121,6 +121,20 @@ describe('the script', () => {
     expect(momentAt(script, script.seconds)).toBe('done');
     // An unedited picture has nothing to tell.
     expect(timelapseScript(pictureChapters(roll().pictures[0]), options()).empty).toBe(true);
+  });
+
+  it('scores a tick per chapter, the landing at the tease and the seat at the reveal, or nothing', () => {
+    const script = timelapseScript(pictureChapters(edited(FIVE)), options());
+    expect(timelapseScore(script, 'none')).toEqual([]);
+    const score = timelapseScore(script, 'wood');
+    expect(score).toHaveLength(1 + script.chapters.length + 1);
+    expect(score[0]).toMatchObject({ at: script.hook.dur * 0.62, voice: 'wood', rate: 0.67 });
+    expect(score.slice(1, -1).map((e) => e.at)).toEqual(script.chapters.map((c) => c.start));
+    expect(score.slice(1, -1).every((e) => e.voice === 'wood' && e.rate === 1)).toBe(true);
+    expect(score[score.length - 1]).toMatchObject({ at: script.reveal.start + script.reveal.dur * 0.55, voice: 'seat' });
+    expect(score.every((e, i) => i === 0 || e.at >= score[i - 1].at)).toBe(true);
+    const flash = timelapseScore(timelapseScript(pictureChapters(edited(FIVE)), options({ hook: 'flash' })), 'click');
+    expect(flash[0].voice).toBe('click');
   });
 
   it('keeps a picture’s making-of edits on the roll, absent when they say nothing', () => {
