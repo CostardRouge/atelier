@@ -111,7 +111,9 @@ export default function TaskPill({ compact = false }: { compact?: boolean }) {
         }`}
       >
         <span className="inline-block w-[7px] h-[7px] rounded-full shrink-0 bg-accent animate-pulse" aria-hidden="true" />
-        {word}
+        {/* A percentage in a slot as wide as `100 %`, so the pill keeps its width
+            from the first frame to the last and nothing beside it in the masthead moves. */}
+        {word && <span className="inline-block min-w-[5.5ch] text-right">{word}</span>}
       </button>
       <span className="sr-only" role="status" aria-live="polite">
         {sentence}

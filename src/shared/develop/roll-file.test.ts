@@ -3,6 +3,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_FILM_TEXTURE } from '../film/film-texture';
 import { DEFAULT_DEVELOP } from './develop';
 import { addPictures, createRollDoc, patchPicture, ROLL_DOC_VERSION, type RollDoc } from './roll-types';
+import { readTimelapseOptions } from './timelapse-options';
 import {
   ROLL_FILE_KIND,
   parseRollFile,
@@ -33,7 +34,15 @@ function sample(): RollDoc {
   );
   return {
     ...doc,
-    export: { targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off', watermark: false }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard', watermark: true }], replace: true, hdr: true, hdrStops: 3, metadata: { ...ALL_META, position: false }, watermark: { text: '© {creator}', position: 'bottom-left', size: 3, opacity: 0.5, tone: 'dark' } },
+    export: {
+      targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off', watermark: false }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard', watermark: true }],
+      replace: true,
+      hdr: true,
+      hdrStops: 3,
+      metadata: { ...ALL_META, position: false },
+      watermark: { text: '© {creator}', position: 'bottom-left', size: 3, opacity: 0.5, tone: 'dark' },
+      timelapse: { ...readTimelapseOptions(undefined), format: '4:5', seconds: 30, beat: 120 },
+    },
   };
 }
 

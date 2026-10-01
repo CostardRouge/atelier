@@ -193,9 +193,15 @@ function RunBar({
   const phaseAt = phaseIndex(progress);
   return (
     <div className="flex flex-col gap-1.5 min-w-0" role="status" aria-live="polite" aria-label={headline}>
-      <div className="flex items-baseline justify-between gap-2 font-mono text-2xs tabular-nums">
-        <span className="text-ink">{headline}</span>
-        {left && !progress.cancelling && <span className="text-muted">{left}</span>}
+      {/* Every line of the running bar keeps ONE height and the controls one place
+          while its words change many times a second (his report on the making-of):
+          the headline truncates, the time left has a slot of its own that is always
+          drawn, the stages never wrap and the step is one truncated line. */}
+      <div className="flex items-baseline justify-between gap-2 font-mono text-2xs tabular-nums whitespace-nowrap min-w-0">
+        <span className="text-ink min-w-0 truncate">{headline}</span>
+        <span className="flex-none min-w-[15ch] text-right text-muted" aria-hidden={!left || progress.cancelling}>
+          {left && !progress.cancelling ? left : '\u00a0'}
+        </span>
       </div>
       {total <= MAX_SEGMENTS ? (
         <div className="grid gap-[2px]" style={{ gridTemplateColumns: `repeat(${total}, minmax(0, 1fr))` }} aria-hidden="true">
@@ -219,12 +225,12 @@ function RunBar({
       {inHand && (
         <div className="flex flex-col gap-1 min-w-0">
           <span className="font-mono text-2xs text-ink truncate min-w-0">{progress.names[progress.index]}</span>
-          <span className="flex flex-wrap gap-1" aria-label="Stage">
+          <span className="flex flex-nowrap gap-1 min-w-0 overflow-hidden" aria-label="Stage">
             {phases.map((p, k) => (
               <span
                 key={p.id}
                 aria-current={k === phaseAt ? 'step' : undefined}
-                className={`px-1.5 rounded-full border font-mono text-3xs leading-4 ${
+                className={`flex-none whitespace-nowrap px-1.5 rounded-full border font-mono text-3xs leading-4 ${
                   k === phaseAt
                     ? 'border-accent bg-accent-wash text-accent-ink'
                     : k < phaseAt
@@ -244,11 +250,11 @@ function RunBar({
           {progress.step ?? exporting ?? ''}
         </span>
         {(done > 0 || failed > 0) && (
-          <span className="flex-none font-mono text-3xs text-muted tabular-nums">
+          <span className="flex-none whitespace-nowrap font-mono text-3xs text-muted tabular-nums">
             {done} done{failed > 0 ? ` · ${failed} not` : ''}
           </span>
         )}
-        <Button size="sm" onClick={onCancel} disabled={progress.cancelling}>
+        <Button size="sm" onClick={onCancel} disabled={progress.cancelling} className="flex-none min-w-[11ch] justify-center">
           {progress.cancelling ? 'Cancelling…' : 'Cancel'}
         </Button>
       </div>

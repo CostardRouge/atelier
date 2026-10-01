@@ -31,6 +31,7 @@ import { isClipName } from '../library/assets';
 import { type SavedMediaRef } from '../projects/project-types';
 import { isStoredAspect } from './crop-aspect';
 import { legacyWholeBorder, readBorder, sameBorder, type RollBorder } from './border-layout';
+import { DEFAULT_TIMELAPSE, readMakingOf, readTimelapseOptions, type MakingOf, type TimelapseOptions } from './timelapse-options';
 import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import type { OutputTransform } from '../lut/transfer';
@@ -58,8 +59,12 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * item 28) — `RollExport.longEdge` and `quality` became the first target's
  * size and quality, read back by `readTargets`, so a roll exports exactly as
  * it did.
+ * v7 (2026-09-30): `RollPicture.journal` — the picture's edit STEPS, for the
+ * making-of video (`docs/develop-timelapse.md`). Absent reads as no steps,
+ * so nothing migrates; a picture edited before v7 has settings and no story,
+ * and `journal.ts` reconstructs one in a standard order, said as such.
  */
-export const ROLL_DOC_VERSION = 6;
+export const ROLL_DOC_VERSION = 7;
 
 /** A picture's look, after its own develop — Trips' `TripGrade` shape. */
 export interface RollGrade {
@@ -104,6 +109,12 @@ export interface RollExport {
    * on the targets that ask for it. Absent reads as the default.
    */
   watermark: Watermark;
+  /**
+   * How a picture's MAKING-OF video is made (`timelapse-options.ts`, v7):
+   * one social format, length and grammar for the roll, so a second device
+   * draws the same. Absent reads as the defaults.
+   */
+  timelapse: TimelapseOptions;
 }
 
 export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
@@ -113,6 +124,7 @@ export const DEFAULT_ROLL_EXPORT: Readonly<RollExport> = Object.freeze({
   hdrStops: 2,
   metadata: ALL_META,
   watermark: DEFAULT_WATERMARK,
+  timelapse: DEFAULT_TIMELAPSE,
 });
 
 export const ROLL_EXPORT_LIMITS = {
@@ -234,6 +246,56 @@ export interface RollPicture {
    * capture's exact name, the one Winnow's `reconcile` pairs on.
    */
   variant?: number;
+  /**
+   * The picture's edit STEPS, oldest first (v7, `journal.ts`): what each
+   * write of the one updater changed and the values it left — the record a
+   * making-of video replays. Written in the SAME write as the edit, so an
+   * undo takes the step with it; coalesced like the undo stack; bounded.
+   * Never copied by Apply-to, a paste or a preset (a target's step is its
+   * own, `via` said), never an edit (`pictureEdits`), never in an export
+   * mark's key. Absent and empty mean the same thing.
+   */
+  journal?: JournalStep[];
+  /**
+   * What the author changed about this picture's making-of (v7,
+   * `timelapse-options.ts`): chapters folded away, captions rewritten. A
+   * document write like any other — one undo step, synced — and never an
+   * edit of the picture. Absent and empty mean the same thing.
+   */
+  makingOf?: MakingOf;
+}
+
+/** How a step came to be, when it was not the author's own gesture on this picture. */
+export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier';
+
+/**
+ * A step's VALUES: the sections it changed, as they stood after it — the
+ * fields `PictureEdit` names, each under its section's own id. The crop is
+ * its aspect AND its framing, the one section stored as two fields.
+ */
+export interface SectionValues {
+  develop?: DevelopSettings | null;
+  look?: RollGrade | null;
+  crop?: { aspect: RollAspect; framing: Framing | null };
+  border?: RollBorder | null;
+  perspective?: Keystone | null;
+  lens?: LensCorrection | null;
+  detail?: DetailSettings | null;
+  vignette?: PostCropVignette | null;
+  repair?: Patch[];
+  layers?: AdjustLayer[];
+}
+
+/** One write of the updater that changed a picture. */
+export interface JournalStep {
+  /** When the write landed (ms since the epoch); a coalesced step keeps its LAST write's. */
+  at: number;
+  /** What the write changed, in the inspector's order. */
+  sections: PictureEdit[];
+  /** Those sections' values AFTER the write — nothing else. */
+  after: SectionValues;
+  /** Absent for the author's own gesture on this picture. */
+  via?: JournalVia;
 }
 
 export interface RollDoc {
@@ -343,7 +405,15 @@ export function readRollGrade(raw: unknown): RollGrade | null {
 }
 
 export function readRollExport(raw: unknown): RollExport {
-  if (!isRecord(raw)) return { ...DEFAULT_ROLL_EXPORT, targets: [{ ...DEFAULT_TARGET }], metadata: { ...ALL_META }, watermark: { ...DEFAULT_WATERMARK } };
+  if (!isRecord(raw)) {
+    return {
+      ...DEFAULT_ROLL_EXPORT,
+      targets: [{ ...DEFAULT_TARGET }],
+      metadata: { ...ALL_META },
+      watermark: { ...DEFAULT_WATERMARK },
+      timelapse: readTimelapseOptions(undefined),
+    };
+  }
   return {
     // v5 and earlier held one long edge and one quality: they become the
     // only target, so an old roll exports exactly as it did.
@@ -358,6 +428,7 @@ export function readRollExport(raw: unknown): RollExport {
     ),
     metadata: readMetaChoice(raw.metadata),
     watermark: readWatermark(raw.watermark),
+    timelapse: readTimelapseOptions(raw.timelapse),
   };
 }
 
@@ -445,7 +516,130 @@ function readPicture(raw: unknown, rollGrade: RollGrade | null = null): RollPict
     layers: readLayers(raw.layers),
     // Absent is the first variant — every roll written before copies existed.
     ...(Number.isInteger(raw.variant) && (raw.variant as number) >= 2 ? { variant: raw.variant as number } : {}),
+    // v7: absent on every roll written before the journal existed, and an
+    // empty one is left absent so an old roll's record is byte-identical.
+    ...(() => {
+      const journal = readJournal(raw.journal);
+      return journal.length > 0 ? { journal } : {};
+    })(),
+    ...(() => {
+      const makingOf = readMakingOf(raw.makingOf);
+      return makingOf ? { makingOf } : {};
+    })(),
   };
+}
+
+/**
+ * The roll with one picture's making-of edits replaced: a chapter hidden or
+ * shown, a caption rewritten — an emptied caption taken off, so the computed
+ * one returns. The same roll back when nothing changed.
+ */
+export function setMakingOf(
+  roll: RollDoc,
+  id: string,
+  change: { hidden?: string[]; captions?: Record<string, string> },
+  now: number = Date.now(),
+): RollDoc {
+  const picture = roll.pictures.find((p) => p.id === id);
+  if (!picture) return roll;
+  const next = readMakingOf({
+    hidden: change.hidden ?? picture.makingOf?.hidden ?? [],
+    captions: change.captions ?? picture.makingOf?.captions ?? {},
+  });
+  if (JSON.stringify(next ?? null) === JSON.stringify(picture.makingOf ?? null)) return roll;
+  const pictures = roll.pictures.map((p) => {
+    if (p.id !== id) return p;
+    const { makingOf: _m, ...rest } = p;
+    void _m;
+    return next ? { ...rest, makingOf: next } : rest;
+  });
+  return { ...roll, pictures, updatedAt: now };
+}
+
+/** The sections a step may name, in the inspector's order. */
+export const PICTURE_EDITS: readonly PictureEdit[] = [
+  'develop',
+  'look',
+  'crop',
+  'border',
+  'perspective',
+  'lens',
+  'detail',
+  'vignette',
+  'repair',
+  'layers',
+];
+
+const EDIT_IDS: ReadonlySet<string> = new Set(PICTURE_EDITS);
+const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier']);
+
+/** A step's stored values read through the same readers a picture's fields are. */
+function readSectionValues(raw: unknown, sections: readonly PictureEdit[]): SectionValues {
+  const r = isRecord(raw) ? raw : {};
+  const out: SectionValues = {};
+  for (const s of sections) {
+    switch (s) {
+      case 'develop':
+        out.develop = developOrNull(r.develop);
+        break;
+      case 'look':
+        out.look = readRollGrade(r.look);
+        break;
+      case 'crop': {
+        const crop = isRecord(r.crop) ? r.crop : {};
+        out.crop = {
+          aspect: typeof crop.aspect === 'string' && isStoredAspect(crop.aspect) ? crop.aspect : 'original',
+          framing: readFraming(crop.framing),
+        };
+        break;
+      }
+      case 'border':
+        out.border = readBorder(r.border);
+        break;
+      case 'perspective':
+        out.perspective = keystoneOrNull(r.perspective);
+        break;
+      case 'lens':
+        out.lens = lensOrNull(r.lens);
+        break;
+      case 'detail':
+        out.detail = detailOrNull(r.detail);
+        break;
+      case 'vignette':
+        out.vignette = postVignetteOrNull(r.vignette);
+        break;
+      case 'repair':
+        out.repair = readPatches(r.repair);
+        break;
+      case 'layers':
+        out.layers = readLayers(r.layers);
+        break;
+    }
+  }
+  return out;
+}
+
+/**
+ * A stored journal: a step with no time or no known section is dropped, the
+ * sections come back in the inspector's order, each value through its own
+ * reader, and the steps in time order.
+ */
+export function readJournal(raw: unknown): JournalStep[] {
+  if (!Array.isArray(raw)) return [];
+  const steps: JournalStep[] = [];
+  for (const item of raw) {
+    if (!isRecord(item) || typeof item.at !== 'number' || !Number.isFinite(item.at) || !Array.isArray(item.sections)) continue;
+    const wanted = new Set(item.sections.filter((x): x is PictureEdit => typeof x === 'string' && EDIT_IDS.has(x)));
+    const sections = PICTURE_EDITS.filter((s) => wanted.has(s));
+    if (sections.length === 0) continue;
+    steps.push({
+      at: item.at,
+      sections,
+      after: readSectionValues(item.after, sections),
+      ...(typeof item.via === 'string' && VIAS.has(item.via) ? { via: item.via as JournalVia } : {}),
+    });
+  }
+  return steps.sort((a, b) => a.at - b.at);
 }
 
 /**

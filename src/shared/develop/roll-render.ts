@@ -41,6 +41,7 @@ import { isDefaultDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
 import type { Patch } from '../render/repair';
 import { makeRepairPass } from '../render/repair-pass';
+import type { RenderPass } from '../render/graph';
 import { maxRenderSize } from '../render/graph-grader';
 import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
@@ -186,6 +187,60 @@ export interface RollRendered {
   subjects?: { asked: number; resolved: number };
 }
 
+/** What a picture's pass chain is built from: its settings, on either side of its cube. */
+export type PassSettings = Pick<
+  RollRenderOptions,
+  'keystone' | 'lens' | 'lensProfile' | 'layers' | 'detail' | 'repair' | 'vignette' | 'calibration' | 'aspect' | 'framing'
+>;
+
+export interface PicturePasses {
+  /** BEFORE the cube, on the source: the camera's shading (RAW), the repair, the noise passes. */
+  pre: RenderPass[];
+  /** AFTER it: the geometry, the layers with their rasters, the sharpen, the post-crop vignette. */
+  passes: RenderPass[];
+}
+
+/**
+ * The pass chain a picture's settings ask for — ONE function for the
+ * delivery, its darker HDR twin and every state of a making-of video
+ * (`docs/develop-timelapse.md` §3.4), so a render is never assembled two ways.
+ *
+ * `raw` says which path this is: the sensor's data takes the camera's own
+ * calibration — its shading grid FIRST of all, ahead of the repair
+ * (`render-gain-map.md`), and its warp in the geometry — while a render or a
+ * proxy has had both applied by the camera, and applying them twice would
+ * lift the corners into white. `scale` is the decode's density over the
+ * source's (the file's, the sensor's): kernels are stated in SOURCE pixels.
+ * Only the aspect reaches the vignette: its map is in [0,1] and asks for no
+ * size. A pass holds textures on the context it first drew on, so every
+ * grader takes a chain of its own.
+ */
+export function picturePasses(
+  opts: PassSettings,
+  ar: number,
+  scale: number,
+  rasters: ReadonlyMap<string, BrushRaster> | null,
+  raw: boolean,
+): PicturePasses {
+  // Noise and fringe BEFORE the cube, on the source; sharpen AFTER every warp
+  // and layer, so nothing resamples it (`detail.ts`, «Order»). Repair FIRST, on
+  // the source: a copied pixel then takes the same develop, look, warp and
+  // layer as its neighbours, and a denoise sees a repaired picture.
+  const { pre: detailPre, post } = detailPasses(opts.detail, scale);
+  const repairPass = makeRepairPass(opts.repair ?? [], ar);
+  const gainPass = raw ? makeGainMapPass(opts.calibration?.gain) : null;
+  const geometry = raw ? { ...opts, cameraWarp: opts.calibration?.warp ?? null } : opts;
+  return {
+    pre: [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre],
+    passes: [
+      ...geometryPasses(geometry, ar),
+      ...layerPasses(opts.layers, ar, undefined, rasters),
+      ...post,
+      ...vignettePasses(opts, { width: ar, height: 1 }),
+    ],
+  };
+}
+
 /** The subjects of a delivery, segmented on `image`, and the count the run reports. */
 async function segmentFor(
   opts: RollRenderOptions,
@@ -269,24 +324,23 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     // fitted first, and the size it was really graded at is reported.
     const fit = needsGpu ? await fitPhotoForRender(bitmap) : null;
     const gradedAt = fit ? { width: fit.width, height: fit.height } : source;
-    // Kernels are in the SOURCE's pixels: a picture fitted to the GPU's cap
-    // scales them, exactly as the stage does.
-    const { pre: detailPre, post } = detailPasses(opts.detail, gradedAt.width / source.width);
-    const repairPass = makeRepairPass(patches, ar);
-    const pre = [...(repairPass ? [repairPass] : []), ...detailPre];
     // The subjects, segmented on the picture being delivered — an export
     // built without them dropped every Subject layer from the file.
     // Shown the picture as its GEOMETRY bends it — the frame the author tapped
     // in and the layer pass samples (`segment-view.ts`).
     const { rasters, subjects } = await segmentFor(opts, () => segmentationView(bitmap, source, opts));
-    const passes = [...geometryPasses(opts, ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
+    // Kernels are in the SOURCE's pixels: a picture fitted to the GPU's cap
+    // scales them, exactly as the stage does.
+    const scale = gradedAt.width / source.width;
+    const chain = picturePasses(opts, ar, scale, rasters, false);
     const grader = needsGpu && fit
-      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, passes, pre, opts.film ?? null)
+      ? makeFrameGrader(opts.lut as CubeLut, fit.width, fit.height, 1, chain.passes, chain.pre, opts.film ?? null)
       : null;
-    // The darker render for the gain map takes a grader of its own with
-    // fresh passes: a pass holds textures on the context it first drew on.
-    const darkGrader = opts.hdr && fit
-      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, freshPasses(opts, ar, rasters, gradedAt.width / source.width), freshPre(opts, ar, patches, gradedAt.width / source.width), opts.film ?? null)
+    // The darker render for the gain map takes a grader of its own with a
+    // fresh chain: a pass holds textures on the context it first drew on.
+    const dark = opts.hdr && fit ? picturePasses(opts, ar, scale, rasters, false) : null;
+    const darkGrader = opts.hdr && fit && dark
+      ? makeFrameGrader(opts.hdr.lut as CubeLut, fit.width, fit.height, 1, dark.passes, dark.pre, opts.film ?? null)
       : null;
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
@@ -339,25 +393,21 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const askedLess = Boolean(decodeEdge) && decodedEdge >= (decodeEdge ?? 0);
   const capped = decodedEdge < sensorEdge && !askedLess ? rawDecodeCap(sensorEdge, 'export', klass, gpuMax) : null;
   const ar = source.width / source.height;
-  // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
-  const { pre: detailPre, post } = detailPasses(opts.detail, source.width / decoded.sourceWidth);
-  const repairPass = makeRepairPass(opts.repair, ar);
-  // The camera's shading FIRST of all, ahead of the repair and the denoise —
-  // `render-gain-map.md`'s order, the same one the stage runs.
-  const gainPass = makeGainMapPass(opts.calibration?.gain);
-  const pre = [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPre];
   // A half-float picture is not something the model can be shown: it sees the
   // picture through its own cube, as the author does, and bent by the same
   // geometry — the camera's warp included — rendered once apart, small.
   const { rasters, subjects } = await segmentFor(opts, () =>
     segmentationView(decoded.half, source, withCalibration(opts), opts.lut as CubeLut),
   );
-  const passes = [...geometryPasses(withCalibration(opts), ar), ...layerPasses(opts.layers, ar, undefined, rasters), ...post, ...vignettePasses(opts, source)];
+  // The decode may be half the sensor: a kernel stated in sensor pixels scales with it.
+  const scale = source.width / decoded.sourceWidth;
+  const chain = picturePasses(opts, ar, scale, rasters, true);
   // A RAW is never drawn without the GPU: its half-floats have no 2D form,
   // and its develop is never default (the gain alone is a stage).
-  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, passes, pre, opts.film ?? null);
-  const darkGrader = opts.hdr
-    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, freshPasses(opts, ar, rasters, source.width / decoded.sourceWidth), freshPre(opts, ar, opts.repair ?? [], source.width / decoded.sourceWidth), opts.film ?? null)
+  const grader = makeFrameGrader(opts.lut as CubeLut, source.width, source.height, 1, chain.passes, chain.pre, opts.film ?? null);
+  const dark = opts.hdr ? picturePasses(opts, ar, scale, rasters, true) : null;
+  const darkGrader = opts.hdr && dark
+    ? makeFrameGrader(opts.hdr.lut as CubeLut, source.width, source.height, 1, dark.passes, dark.pre, opts.film ?? null)
     : null;
   try {
     // Copied out: two graders' canvases are two contexts, but the SDR one is
@@ -380,38 +430,15 @@ function withCalibration(opts: RollRenderOptions) {
   return { ...opts, cameraWarp: opts.calibration?.warp ?? null };
 }
 
-/** The passes after the cube, built anew for a second grader. */
-function freshPasses(
-  opts: RollRenderOptions,
-  ar: number,
-  rasters: ReadonlyMap<string, BrushRaster> | null,
-  scale: number,
-) {
-  // The source's aspect is `ar` — the vignette's map is in [0,1] and asks for no size.
-  return [
-    ...geometryPasses(withCalibration(opts), ar),
-    ...layerPasses(opts.layers, ar, undefined, rasters),
-    ...detailPasses(opts.detail, scale).post,
-    ...vignettePasses(opts, { width: ar, height: 1 }),
-  ];
-}
-
 /**
  * The post-crop vignette for this delivery, in the frame its crop cuts —
  * after the sharpen, as the stage draws it. One place, so the SDR base and
  * the HDR rendition cannot be vignetted differently.
  */
-function vignettePasses(opts: RollRenderOptions, source: PictureSize) {
+function vignettePasses(opts: PassSettings, source: PictureSize) {
   const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
   const pass = postVignettePass(opts.vignette, source.width, source.height, ratio, opts.framing);
   return pass ? [pass] : [];
-}
-
-/** The passes before the cube, built anew for a second grader. */
-function freshPre(opts: RollRenderOptions, ar: number, patches: readonly Patch[], scale: number) {
-  const repairPass = makeRepairPass(patches, ar);
-  const gainPass = makeGainMapPass(opts.calibration?.gain);
-  return [...(gainPass ? [gainPass] : []), ...(repairPass ? [repairPass] : []), ...detailPasses(opts.detail, scale).pre];
 }
 
 /** A grader's canvas copied to a 2D canvas, so a second render cannot replace it. */

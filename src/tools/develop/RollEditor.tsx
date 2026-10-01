@@ -46,6 +46,7 @@ import {
   isIgnored,
   setDelivery,
   setLeaving,
+  setMakingOf,
   toggledDelivery,
   patchPicture,
   setPictureWords,
@@ -53,11 +54,13 @@ import {
   removePictures,
   rollProgress,
   sameMediaRef,
+  type JournalVia,
   type RollDoc,
   type RollExport,
   type RollPicture,
   type VariantStart,
 } from '../../shared/develop/roll-types';
+import { journalRoll } from '../../shared/develop/journal';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { fileBaseName, type Asset } from '../../shared/library/assets';
 import { hashedMediaRefs, mediaOrigin } from '../../shared/projects/media-identity';
@@ -179,12 +182,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const latest = useRef(roll);
   latest.current = roll;
+  // Every write lands here and is JOURNALED on the way (`journal.ts`): the
+  // pictures the change touched get a step in the SAME document, so the step
+  // and the edit are one undo step. `via` says how, when it is not the
+  // author's own gesture on that picture.
   const update = useCallback(
-    (change: (r: RollDoc) => RollDoc) => {
+    (change: (r: RollDoc) => RollDoc, via?: JournalVia) => {
       const next = change(latest.current);
       if (next === latest.current) return;
-      latest.current = next;
-      onChange(next);
+      const journaled = journalRoll(latest.current, next, Date.now(), via);
+      latest.current = journaled;
+      onChange(journaled);
     },
     [onChange],
   );
@@ -683,9 +691,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   exportRunning.current = exports.progress !== null;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
-    const verbs: ExportVerb[] = [
-      { id: 'open', label: 'Export this picture', run: () => void exportPictures([openId]) },
-    ];
+    const verbs: ExportVerb[] = [{ id: 'open', label: 'Export this picture', run: () => void exportPictures([openId]) }];
+    // A making-of replays a PHOTOGRAPH's edit steps: its states are graded as
+    // stills, and a clip is a video, so a clip is not offered one.
+    if (!roll.pictures.some((p) => p.id === openId && isClipPicture(p))) {
+      verbs.push({
+        id: 'making-of',
+        label: 'Making-of video…',
+        hint: 'this picture’s edit steps replayed as a short video for a feed',
+        run: () => setTimelapseOpen(true),
+      });
+    }
     if (visibleSelected.size > 0) {
       const ids = roll.pictures.filter((p) => visibleSelected.has(p.id)).map((p) => p.id);
       verbs.push({
@@ -721,27 +737,37 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   }, [openId, visibleSelected, roll.pictures, exportPictures, exportMarks]);
 
   const writeDevelopTo = useCallback(
-    (targets: readonly string[], develop: DevelopSettings | null) => {
+    (targets: readonly string[], develop: DevelopSettings | null, via: JournalVia = 'apply') => {
       // The NUMBERS travel, never the material: a base and its metered gain
       // are facts about the one picture they were measured on. A target's
       // own base is kept, so a batch onto a RAW keeps it on the RAW.
       const numbers = develop ? withoutBase(develop) : null;
       const value = numbers && !isDefaultDevelop(numbers) ? numbers : null;
-      update((r) => ({
-        ...r,
-        pictures: r.pictures.map((p) => {
-          if (!targets.includes(p.id)) return p;
-          const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain } : null;
-          return { ...p, develop: value || own ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null };
+      update(
+        (r) => ({
+          ...r,
+          pictures: r.pictures.map((p) => {
+            if (!targets.includes(p.id)) return p;
+            const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain } : null;
+            return { ...p, develop: value || own ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null };
+          }),
+          updatedAt: Date.now(),
         }),
-        updatedAt: Date.now(),
-      }));
+        via,
+      );
     },
     [update],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
   // --- the sections: ⌘⇧C / ⌘⇧V and "apply to others" for any part of a picture
   const [settingsOpen, setSettingsOpen] = useState(false);
+  // The making-of sheet: opened from the Export tab's row or the bar's menu,
+  // drawn by the workbench, which holds the picture's bytes.
+  const [timelapseOpen, setTimelapseOpen] = useState(false);
+  const handleMakingOf = useCallback(
+    (id: string, change: { hidden?: string[]; captions?: Record<string, string> }) => update((r) => setMakingOf(r, id, change)),
+    [update],
+  );
   const copied = useSyncExternalStore(subscribeCopiedSettings, copiedSettings);
   const sectionNames = (sections: readonly PictureSection[]) =>
     sections.map((id) => PICTURE_SECTIONS.find((x) => x.id === id)?.label.toLowerCase()).join(', ');
@@ -758,7 +784,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const held = copiedSettings();
     const id = openIdRef.current;
     if (!held || !id) return false;
-    update((r) => applySections(r, held.from, [id], held.sections));
+    update((r) => applySections(r, held.from, [id], held.sections), 'paste');
     setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)}`);
     return true;
   }, [update]);
@@ -766,7 +792,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (sections: PictureSection[]) => {
       const id = openIdRef.current;
       if (!id) return;
-      update((r) => resetSections(r, id, sections));
+      update((r) => resetSections(r, id, sections), 'reset');
       setNotice(`reset ${sectionNames(sections)} — ⌘Z brings them back`);
     },
     [update],
@@ -775,7 +801,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (ids: readonly string[], sections: PictureSection[]) => {
       const source = latest.current.pictures.find((x) => x.id === openIdRef.current);
       if (!source) return;
-      update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, sections));
+      update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, sections), 'apply');
       setNotice(`${sectionNames(sections)} applied to ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
     },
     [update],
@@ -829,7 +855,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           hint: 'the copied numbers, written onto each marked picture',
           run: () => {
             const pasted = pasteDevelop();
-            if (pasted) writeDevelopTo(selectionTargets, pasted);
+            if (pasted) writeDevelopTo(selectionTargets, pasted, 'paste');
           },
         });
       }
@@ -850,7 +876,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const cropApplyTo = useMemo<CropApplyVerb[]>(() => {
     if (!openId) return [];
     const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) =>
-      update((r) => copyCropTo(r, targets, crop));
+      update((r) => copyCropTo(r, targets, crop), 'apply');
     if (selectionTargets.length > 0) {
       const n = selectionTargets.length;
       return [
@@ -879,7 +905,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const lookApplyTo = useMemo<LookApplyVerb[]>(() => {
     if (!openId) return [];
     const write = (targets: readonly string[]) => () =>
-      update((r) => copyGradeTo(r, targets, r.pictures.find((p) => p.id === openId)?.grade ?? null));
+      update((r) => copyGradeTo(r, targets, r.pictures.find((p) => p.id === openId)?.grade ?? null), 'apply');
     if (selectionTargets.length > 0) {
       const n = selectionTargets.length;
       return [
@@ -907,7 +933,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const borderApplyTo = useMemo<BorderApplyVerb[]>(() => {
     if (!openId) return [];
     const write = (targets: readonly string[]) => (border: RollBorder | null) =>
-      update((r) => copyBorderTo(r, targets, border));
+      update((r) => copyBorderTo(r, targets, border), 'apply');
     if (selectionTargets.length > 0) {
       const n = frameSelection.length;
       if (n === 0) return [];
@@ -1145,6 +1171,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onDeliver={(action) => handleDeliver(open.id, action)}
               onWords={(words) => handleWords(open.id, words)}
               onSettings={() => setSettingsOpen(true)}
+              timelapseOpen={timelapseOpen}
+              onTimelapseOpen={setTimelapseOpen}
+              onMakingOf={(change) => handleMakingOf(open.id, change)}
               onVariant={() => makeVariant('clone')}
               onLook={(look) => update((r) => copyGradeTo(r, [open.id], look))}
               onPasteSettings={pasteSections}

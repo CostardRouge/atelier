@@ -345,6 +345,7 @@ describe('reading a stored roll', () => {
       hdrStops: 2,
       metadata: DEFAULT_ROLL_EXPORT.metadata,
       watermark: DEFAULT_ROLL_EXPORT.watermark,
+      timelapse: DEFAULT_ROLL_EXPORT.timelapse,
     });
     expect(doc.sourceId).toBe('winnow.example');
     expect('future' in doc).toBe(false);
@@ -398,6 +399,15 @@ describe('reading a stored roll', () => {
       hdrStops: 2,
       metadata: DEFAULT_ROLL_EXPORT.metadata,
       watermark: DEFAULT_ROLL_EXPORT.watermark,
+      timelapse: DEFAULT_ROLL_EXPORT.timelapse,
+    });
+    // v7: the making-of's options ride the export, read through their limits.
+    expect(readRollExport({ timelapse: { format: '1:1', seconds: 999, beat: 120, hook: 'nope', words: { how: 'Comment ?' } } }).timelapse).toMatchObject({
+      format: '1:1',
+      seconds: 120,
+      beat: 120,
+      hook: { figure: 'cut', order: 'after-first', seconds: null, bounces: 0 },
+      words: { how: 'Comment ?', after: 'This is the after.' },
     });
     // The HDR delivery: off unless said, its reach clamped to the stops a RAW keeps.
     expect(readRollExport({ hdr: true, hdrStops: 9.6 })).toMatchObject({ hdr: true, hdrStops: 4 });

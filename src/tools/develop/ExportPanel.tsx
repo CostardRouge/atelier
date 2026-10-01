@@ -77,6 +77,7 @@ export default function ExportPanel({
   openExif = null,
   picture = null,
   onWords,
+  makingOf = null,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -111,6 +112,8 @@ export default function ExportPanel({
   /** The open picture, whose title and caption the Metadata section edits. */
   picture?: RollPicture | null;
   onWords?: (words: { title?: string; caption?: string }) => void;
+  /** The open picture's making-of row (`TimelapseSheet`) — the workbench builds it, since it holds the picture's bytes. */
+  makingOf?: ReactNode;
 }) {
   const identity = useDeliveryIdentity();
   // The line on the picture in hand, as the run will draw it.
@@ -220,6 +223,31 @@ export default function ExportPanel({
             </span>
           </FieldRow>
         </InspectorSection>
+
+        {makingOf && (
+          <InspectorSection
+            id="develop.makingof"
+            title="Making-of"
+            info={
+              <>
+                <p>
+                  A short video of how this picture was edited, for a feed: the finished picture as a hook, then
+                  each step — the light, the crop with its zone drawn, a heal with its rings, a mask with its
+                  fill, the look — under a caption saying what changed, with the camera zooming to where the
+                  tool worked, and a before/after at the end with the camera plate and your credit. The steps
+                  are the picture’s own journal, kept with every write since the journal existed; a picture
+                  edited before it has its steps told in a standard order, and the video says so.
+                </p>
+                <p>
+                  The format, the length, the hook, the reveal and the beat are the roll’s; which chapters a
+                  picture keeps and their captions are the picture’s. The preview is the file, scaled.
+                </p>
+              </>
+            }
+          >
+            {makingOf}
+          </InspectorSection>
+        )}
 
         <InspectorSection
           id="develop.watermark"
