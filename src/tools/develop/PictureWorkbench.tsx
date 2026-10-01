@@ -1464,6 +1464,21 @@ export default function PictureWorkbench({
   const cubes = useMemo(() => rollCubes(interpolation), [interpolation]);
   const makingOf = useTimelapseExport({ cubes });
   const avcEncode = useAvcEncodeSupport();
+  // The making-of's source, kept as ONE object while its bytes are the same:
+  // a fresh object per render restarted the sheet's preview on every progress
+  // report of a running export (his report: the sheet's status and buttons
+  // jumping while it exports).
+  const timelapseSource = useMemo(
+    () =>
+      shownFile
+        ? {
+            file: shownFile,
+            raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain ?? 1 } : null,
+            calibration: wantsRaw ? applied : null,
+          }
+        : null,
+    [shownFile, wantsRaw, rawFile, rawGain, applied],
+  );
   const anyProgress = exports.progress ?? makingOf.progress;
   const anyExporting = exports.exporting ?? makingOf.exporting;
   const makingOfRow = (
@@ -2171,15 +2186,7 @@ export default function PictureWorkbench({
           // sensor's where the picture is developed on it, with the camera's
           // calibration at the rung it stands on: the states grade exactly as
           // the stage and the export do.
-          source={
-            shownFile
-              ? {
-                  file: shownFile,
-                  raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain ?? 1 } : null,
-                  calibration: wantsRaw ? applied : null,
-                }
-              : null
-          }
+          source={timelapseSource}
           cubes={cubes}
           options={exportSettings.timelapse}
           onOptions={(patch) => onExportSettings({ timelapse: { ...exportSettings.timelapse, ...patch } })}

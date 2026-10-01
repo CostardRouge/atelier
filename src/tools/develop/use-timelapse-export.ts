@@ -78,7 +78,14 @@ export function useTimelapseExport({ cubes }: { cubes: RollCubes }): TimelapseEx
       };
       show(enterUnit(progressNow, 0));
       controller.signal.addEventListener('abort', () => show(progressNow));
+      // The encoder reports every frame — 450 times for 15 s. A report that
+      // changes neither the words nor the whole percentage is dropped, so the
+      // bar, the pill and the task re-render ~100 times instead, never mid-word.
+      let said = '';
       const say = (phase: string, words: string, ratio: number | null = null) => {
+        const key = `${phase}|${words}|${ratio === null ? '-' : Math.floor(ratio * 100)}`;
+        if (key === said) return;
+        said = key;
         setExporting(`${words}…`);
         task.update({ detail: words, ...(ratio === null ? {} : { progress: ratio }) });
         show(atStep(progressNow, phase, words, ratio));

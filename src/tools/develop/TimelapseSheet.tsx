@@ -147,7 +147,7 @@ export default function TimelapseSheet({
     >
       <div className="w-full max-w-[70rem] max-h-[min(94dvh,52rem)] overflow-y-auto overscroll-contain flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:max-h-none max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex-none flex items-center gap-2.5 min-w-0">
-          <h2 className="m-0 font-serif text-lg min-w-0 truncate">Making-of of {pictureLabel(picture)}</h2>
+          <h2 className="m-0 font-serif text-lg min-w-0 truncate">Making-of · {pictureLabel(picture)}</h2>
           <span className="flex-1" />
           <button
             type="button"
@@ -196,7 +196,9 @@ export default function TimelapseSheet({
               />
               <span className="flex-none font-mono text-2xs tabular-nums text-muted w-12 text-right">{clock(preview.t)}</span>
             </div>
-            <p className="m-0 font-mono text-2xs leading-snug text-ink-soft" role="status">
+            {/* One line, always: a status that wrapped differently as its words
+                changed moved the export button under it. */}
+            <p className="m-0 font-mono text-2xs leading-snug text-ink-soft truncate" role="status">
               {preview.ready && status ? status : `${format.width} × ${format.height} · ${clock(script.seconds)} · 30 fps${script.options.beat ? ` · on ${script.options.beat} BPM` : ''}`}
             </p>
             {verdict && (

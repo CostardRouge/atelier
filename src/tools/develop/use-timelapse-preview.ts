@@ -62,13 +62,26 @@ export function useTimelapsePreview({
 
   // The states' identities: what a prepare is keyed on, never the script object.
   const statesKey = `${script.states.length}:${script.chapters.length}`;
+  // The source by what it IS, not by its object: a host that rebuilds it per
+  // render must not restart the preparation.
+  const sourceRef = useRef(source);
+  const sameSource =
+    sourceRef.current === source ||
+    (sourceRef.current !== null &&
+      source !== null &&
+      sourceRef.current.file === source.file &&
+      (sourceRef.current.raw?.file ?? null) === (source.raw?.file ?? null) &&
+      (sourceRef.current.raw?.gain ?? null) === (source.raw?.gain ?? null) &&
+      sourceRef.current.calibration === source.calibration);
+  if (!sameSource) sourceRef.current = source;
+  const stableSource = sourceRef.current;
   const statesRef = useRef(script.states);
   const sameStates = statesRef.current.length === script.states.length && statesRef.current.every((s, i) => s === script.states[i]);
   if (!sameStates) statesRef.current = script.states;
   const states = statesRef.current;
 
   useEffect(() => {
-    if (!canvas || !source) {
+    if (!canvas || !stableSource) {
       setReady(false);
       return;
     }
@@ -77,7 +90,7 @@ export function useTimelapsePreview({
     setReady(false);
     setError(null);
     setProgress({ done: 0, total: states.length });
-    void prepareTimelapse(scriptRef.current, source, {
+    void prepareTimelapse(scriptRef.current, stableSource, {
       cubes,
       edge: PREVIEW_DECODE_EDGE,
       size,
@@ -110,7 +123,7 @@ export function useTimelapsePreview({
       controller.abort();
     };
     // `states` is what `statesKey` stands for; `size` follows the script's format.
-  }, [canvas, source, cubes, states, statesKey, size.width, size.height]);
+  }, [canvas, stableSource, cubes, states, statesKey, size.width, size.height]);
 
   // Let the rasters go with the sheet.
   useEffect(
