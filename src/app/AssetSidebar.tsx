@@ -1,7 +1,7 @@
-import { useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore } from 'react';
 import type { Tool } from './tools';
 import DayPicker from '../shared/sources/winnow/DayPicker';
-import WinnowBrowser from './WinnowBrowser';
+import LibraryPicker from './LibraryPicker';
 import WinnowLightbox from './WinnowLightbox';
 import MediaLightbox, { type LightboxItem } from '../shared/ui/MediaLightbox';
 import WinnowScopeGrid from './WinnowScopeGrid';
@@ -248,6 +248,25 @@ export default function AssetSidebar({
       return !rid || !listed.has(rid);
     });
   }, [connection, remoteAssets, scopeRows.rows]);
+
+  // What the active tool has open, and the span around it, as the day
+  // stepper marks them — the same marks in the picker's month.
+  const dayAnchor = useMemo(
+    () =>
+      published && viewed.anchor
+        ? {
+            span: viewed.anchor,
+            label: published.label,
+            publisher: published.publisher,
+            within: published.within
+              ? { span: { from: published.within.from, to: published.within.to }, label: published.within.label }
+              : null,
+          }
+        : null,
+    // The anchor is a fresh object per render; its two ends are what it says.
+    [published, viewed.anchor?.from, viewed.anchor?.to],
+  );
+  const addPicked = useCallback((files: File[]) => lib.addFiles(files), [lib]);
 
   const q = query.trim().toLowerCase();
   /** The instance's rows past the filter box — the grid draws these, the
@@ -795,21 +814,7 @@ export default function AssetSidebar({
           <DayPicker
             span={{ from, to }}
             onDay={goToDay}
-            anchor={
-              published && viewed.anchor
-                ? {
-                    span: viewed.anchor,
-                    label: published.label,
-                    publisher: published.publisher,
-                    within: published.within
-                      ? {
-                          span: { from: published.within.from, to: published.within.to },
-                          label: published.within.label,
-                        }
-                      : null,
-                  }
-                : null
-            }
+            anchor={dayAnchor}
             overridden={viewed.overridden}
             onReset={() => setOverride(null)}
             asking={scopeRows.rows === null && scopeRows.problem === null}
@@ -896,10 +901,16 @@ export default function AssetSidebar({
         />
       )}
 
-      {browsing && connection && (
-        <WinnowBrowser
+      {browsing && connection && client && (
+        // Opens where the tab is looking: its day and its half.
+        <LibraryPicker
           connection={connection}
-          onAdd={(files) => lib.addFiles(files)}
+          client={client}
+          day={from}
+          half={half}
+          anchor={dayAnchor}
+          inLibrary={inLibrary}
+          onAdd={addPicked}
           onClose={() => setBrowsing(false)}
         />
       )}

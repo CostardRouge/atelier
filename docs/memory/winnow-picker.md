@@ -87,3 +87,21 @@ apply**:
 - On a phone the rail is a full sheet behind *Filters · N* with a pinned
   *Show N media*; the scope and the date take their own line, the close
   button stays beside the title.
+
+## The Library hosts it as *browse all* (2026-10-01, P4)
+
+`app/LibraryPicker.tsx` replaces `WinnowBrowser` (865 lines, deleted): it
+opens on the sidebar's DAY AND HALF, marks the tool's span in the month
+(the sidebar's own `dayAnchor`), draws what the pool holds *in library*,
+ticks NOTHING on open (an add downloads — his question 1 of §7.4, answered
+by the recommendation), and its one verb fetches each ticked row through
+`materialize` at the chosen fidelity, kept in `browse-state` beside the rail
+and written read-modify-write so neither half of the place overwrites the
+other. A Cancel stops the run and what landed is still added. Closing it
+leaves the sidebar where it was (question 3). **Given up**: the old browser's
+*by leg* tab (dormant behind `TIMELINE_SYNC_ENABLED`) and its server-side
+`mediaType`/`ext`/`device` selects, which the rail's multi-select facets
+replace. Driven headless against a stub: the month walked back to a culled
+day, `P`, Sony + `4`, the folder popover, the Gallery half, *Add 4 to
+library* → four files in the pool; Escape closes the month first; a phone
+gets the rail as a sheet and no horizontal scroll.
