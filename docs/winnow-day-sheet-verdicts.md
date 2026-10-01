@@ -1,10 +1,13 @@
-# Adding a culled day — Winnow's verdicts in the Develop day sheet
+# One Winnow picker — verdicts, filters, two hosts
 
-**Status (2026-10-01): a proposal, nothing built.** §2 is fact, read in this
-repo and in `CostardRouge/winnow` the same day; §3 onwards awaits the
-maintainer, and §6 lists the five choices that are his. Lab, the current sheet
-beside three faces over one sample day, with a gesture counter per task:
-<https://claude.ai/artifact/9hZnWW5Kog8nzwmNk1WXdw>
+**Status (2026-10-01): designed, nothing built.** The first round (§1–§6) is
+kept as the record of how it was argued; **§7 is what he chose and what will
+be built** — it supersedes §3's recommendation, §5's plan and §6's questions.
+§2 and §7.1 are fact, read in this repo and in `CostardRouge/winnow` the same
+day. Two labs: the first, three faces over one day
+(<https://claude.ai/artifact/9hZnWW5Kog8nzwmNk1WXdw>); the second, his pick
+merged with *browse all*, in both hosts
+(<https://claude.ai/artifact/R99xvWQAi3bHWt3hehv2i1>).
 
 ## 1. The ask
 
@@ -120,3 +123,109 @@ a range, `Space` to look large.
 5. **The same sheet elsewhere?** A hook's picture chooser (Trips) and the
    Library's Winnow tab read the same rows. Recommended: the sheet in
    `shared/` from P3, wired elsewhere later.
+
+## 7. His pick, and one picker for two hosts (second round, same day)
+
+**His answer**: **B · Rail** — Groups was interesting, but he wants to narrow
+by **device** and **tags** too, which only the rail offers. Then three asks of
+his own: the sheet looks like the Library's *browse all*
+(`src/app/WinnowBrowser.tsx`), so **merge the two** and gather what each has;
+add **Incoming / Gallery / both** and **extensions**; take the sidebar's **day
+stepper with its mini calendar** and its **bars**; and offer the result **in
+the Library sidebar too — the same modal, with the host's own actions** (the
+Library selects and adds to the library, Develop adds to the roll).
+
+### 7.1 What each half brings (fact)
+
+- **`WinnowBrowser`** (865 lines, the sidebar's *browse all*): by day / by
+  folder (/ by leg, dormant behind `TIMELINE_SYNC_ENABLED = false`); half ·
+  media type · extension · device sent to the server as single values
+  (`FilterQuery`), choices from `/api/facets`; `browse-state.ts` remembers per
+  instance the view, filters, month, day, folder and fidelity — never the
+  selection; *Proxies · Originals* with the weight; `materialize` per row with
+  an abort on Cancel; tiles mounted 240 at a time. Its left column is a month
+  grid or a folder list.
+- **`WinnowDaySheet`** (226 lines, Develop): refs through `rowMediaRef`, "on
+  the roll" through `sameMediaRef`, the opening tick rule, photos and clips.
+- **`DayPicker`** (the sidebar's Winnow tab): a stepper (‹ value ▾ ›) whose
+  value opens `MonthPanel` — the month as a density strip (`day-density.ts`,
+  one bar per day, normalised to the month's peak, floor 0.22) or as a week
+  grid, toggled and remembered (`atelier.library.month-view`); one
+  `calendar()` per month cached for the popover's life; a busy state that is
+  never read as empty; the ANCHOR marks (the tool's day in accent, the span
+  around it in ink). It lives in `src/app/`, which `shared/` cannot import.
+- Rows also carry `tags` and `device` (`GRID_SELECT`'s `a.*` and its tags
+  subquery); `WinnowAssetRow` declares neither yet.
+
+### 7.2 The shape
+
+- **One modal, `shared/sources/winnow/picker/WinnowPicker.tsx`, that knows
+  no tool.** A host passes a `PickerHost`: `title`, `destination` (the pill:
+  *Library*, *Roll · Whitsundays*), `anchor` (the open day and the span
+  around it, for the calendar's marks), `start` (day, half), `held(row)` +
+  `heldLabel`, `openTicks` (`picks` · `none` · `all`), `accepts(row)`,
+  `extras` (the Library's *Proxies · Originals* and weight) and `actions`
+  (`label(n)`, `run(rows, ctx)` with `ctx.signal`, the last one primary).
+- **Header**: the title, the destination pill, the scope (**Day · Folder**),
+  and ONE control whose value opens a popover — the sidebar's month panel for
+  a day, the folder list for a folder. `WinnowBrowser`'s left column goes.
+- **The rail**: *Library* (All · Incoming · Gallery — a SCOPE, sent to the
+  server like the sidebar's `HalfPicker`, because a capped list filtered
+  afterwards loses rows) · *Winnow verdict* · *Stars, at least* (a clickable
+  histogram) · *Type* · *Extension* (with the pair: `.hif + .arw`) · *Device*
+  · *Winnow tags* · *State* (not yet in the Gallery; not already held).
+  Facets are multi-select and filtered here over the scope's rows; their
+  counts are the scope's, so ticking one facet does not move another's.
+  `verdict` / `star_min` go to the server only when a scope would pass the
+  row cap. On a phone the rail is a full sheet behind *Filters · N*, the
+  active filters as removable chips.
+- **The verbs act on what is SHOWN** — revising §4.1–2's lab, which ticked
+  across the whole day: filter by a device, press `4`, and the ★4+ of that
+  device are ticked. A ticked picture a filter hides is still counted on the
+  bar and still added.
+- **The two hosts**:
+
+| | Library · sidebar | Develop · roll |
+| --- | --- | --- |
+| Entry | *browse all*, over the Winnow tab's day stepper | *Add ▾ → A day from <host>…* |
+| Opens on | the sidebar's day AND half | the open picture's day |
+| Calendar marks | what the tool has open, and the span around it (a trip) | the open picture, and the roll's days |
+| Held | *in library* (`host/id` in the pool) | *on the roll* (`sameMediaRef`) |
+| Ticked on open | nothing — an add downloads | the picks of a culled day, else everything |
+| Actions | *Proxies · Originals* (+ weight), *Add N to library*, Cancel stops it | *Add N to the roll*: refs, nothing fetched |
+| Remembered per instance | scope, filters, half (`browse-state.ts`, one place) — never the selection | same |
+
+- **The sidebar keeps its compact tab** (stepper, half, file-name filter,
+  grid); its tiles gain the same marks; *browse all* opens the picker where
+  the sidebar is looking.
+
+### 7.3 The plan, in commits (supersedes §5)
+
+| # | Repo | What |
+| --- | --- | --- |
+| W1 | winnow | `collapse=pairs`, announced in `/api/capabilities` (unchanged from §5). |
+| P1 | atelier | `picker/pick-filter.ts`, pure + tested: facets and their counts, verbs over what is shown, opening rules, pile surfacing, hidden-ticked count; `tags` and `device` declared on `WinnowAssetRow`. |
+| P2 | atelier | `DayPicker` + `MonthPanel` move to `shared/`, unchanged for the sidebar. |
+| P3 | atelier | `WinnowPicker` + `PickerHost`: header, rail, grid, marks, bar, folder popover, phone. |
+| P4 | atelier | Library host: *browse all* opens it on the sidebar's day and half; `WinnowBrowser.tsx` retired, adds still through `materialize`. |
+| P5 | atelier | Develop host: `WinnowDaySheet.tsx` retired. |
+| P6 | atelier | The sidebar's Winnow tiles wear the marks (`CullMark`). |
+| P7 | atelier | Piles unfolded — `collapse=pairs` when announced, else `burst_id`. |
+| P8 | atelier | `Space` opens `WinnowLightbox` on a tile, with *Tick*. |
+
+### 7.4 His questions (supersede §6)
+
+1. **What is ticked when the Library opens it?** Recommended: nothing, an add
+   downloads; Develop keeps its picks.
+2. **Are the filters shared between the two hosts?** Recommended: yes, per
+   instance as today; the day comes from the host.
+3. **Does closing the picker move the sidebar to the day it was on?**
+   Recommended: no — the sidebar follows the tool.
+4. **Does *by leg* come back as a third scope?** Recommended: not while the
+   timeline is off; the contract leaves room.
+5. **Does the sidebar gain a verdict filter** (a "⚑ only" beside All /
+   Incoming / Gallery)? Recommended: the marks first (P6), the filter on
+   request.
+
+§6's question 3 (write a verdict from Atelier) stands answered by the rule:
+the bar ticks, it never writes.
