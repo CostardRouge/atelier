@@ -1,5 +1,12 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent } from 'react';
-import { WinnowError, type LibraryHalf, type WinnowAssetRow, type WinnowClient, type WinnowSession } from '../client';
+import {
+  listsBurstFrames,
+  WinnowError,
+  type LibraryHalf,
+  type WinnowAssetRow,
+  type WinnowClient,
+  type WinnowSession,
+} from '../client';
 import type { WinnowConnection } from '../store';
 import { readBrowseState, writeBrowseState } from '../browse-state';
 import DayPicker from '../DayPicker';
@@ -121,6 +128,12 @@ export default function WinnowPicker({
   const [rows, setRows] = useState<WinnowAssetRow[] | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
   const [generation, setGeneration] = useState(0);
+  // Every frame of a pile, where the instance says it can list them (Winnow
+  // #277, `collapse=pairs`): a frame elected inside a pile is never its
+  // cover, so the fold would hide exactly what a culled day is opened for.
+  // An instance that predates it folds piles, and a pile's frames are asked
+  // for when it is unfolded (`burstId`).
+  const framesListed = listsBurstFrames(connection.capabilities);
 
   // The scope's rows, every page. A change of scope forgets the last answer
   // first, so a new day never shows the previous one's pictures for a frame.
@@ -130,7 +143,7 @@ export default function WinnowPicker({
     if (scope === 'session' && sessionId === null) return;
     const controller = new AbortController();
     let cancelled = false;
-    const narrowing = half ? { half } : {};
+    const narrowing = { ...(half ? { half } : {}), bursts: framesListed ? ('frames' as const) : ('fold' as const) };
     const ask =
       scope === 'day'
         ? client.allAssets({ dateFrom: day, dateTo: day, ...narrowing }, DAY_CAP, controller.signal)
@@ -148,7 +161,44 @@ export default function WinnowPicker({
       cancelled = true;
       controller.abort();
     };
-  }, [client, connection.id, scope, day, sessionId, half, generation]);
+  }, [client, connection.id, scope, day, sessionId, half, generation, framesListed]);
+
+  // A folded pile's frames, asked for on its unfold where the scope's list
+  // could not carry them. Forgotten with the scope.
+  const [pileRows, setPileRows] = useState<ReadonlyMap<number, WinnowAssetRow[]>>(new Map());
+  const [pileAsking, setPileAsking] = useState<ReadonlySet<number>>(new Set());
+  useEffect(() => {
+    setPileRows(new Map());
+    setPileAsking(new Set());
+  }, [rows]);
+  const askPile = (pileId: number) => {
+    setPileAsking((cur) => new Set(cur).add(pileId));
+    client
+      .allAssets({ burstId: pileId, ...(half ? { half } : {}) }, 200)
+      .then((list) => setPileRows((cur) => new Map(cur).set(pileId, list)))
+      .catch((err: unknown) => setProblem(explain(err, client, connection.id)))
+      .finally(() =>
+        setPileAsking((cur) => {
+          const next = new Set(cur);
+          next.delete(pileId);
+          return next;
+        }),
+      );
+  };
+  /** The scope's rows and the frames unfolded piles brought, once each. */
+  const listed = useMemo(() => {
+    if (!rows || pileRows.size === 0) return rows;
+    const seen = new Set(rows.map((r) => r.id));
+    const extra: WinnowAssetRow[] = [];
+    for (const list of pileRows.values()) {
+      for (const r of list) {
+        if (seen.has(r.id)) continue;
+        seen.add(r.id);
+        extra.push(r);
+      }
+    }
+    return [...rows, ...extra];
+  }, [rows, pileRows]);
 
   // The folders, under the same half, asked for when the folder scope is up.
   const [sessions, setSessions] = useState<WinnowSession[] | null>(null);
@@ -195,8 +245,8 @@ export default function WinnowPicker({
 
   // --- what the grid holds ---------------------------------------------------
   const items = useMemo<PickItem[]>(
-    () => (rows ?? []).filter((r) => !host.accepts || host.accepts(r)).map((r) => pickItem(r, host.held(r))),
-    [rows, host],
+    () => (listed ?? []).filter((r) => !host.accepts || host.accepts(r)).map((r) => pickItem(r, host.held(r))),
+    [listed, host],
   );
   const piles = useMemo(() => pilesOf(items), [items]);
   const [unfolded, setUnfolded] = useState<ReadonlySet<number>>(new Set());
@@ -353,13 +403,16 @@ export default function WinnowPicker({
     const pile = piles.get(it.pileId);
     if (!pile) return null;
     const open = unfolded.has(pile.id);
-    const flip = () =>
+    const flip = () => {
+      // Unfolding a pile whose frames the list did not carry asks for them.
+      if (!open && pile.frameIds.length < pile.size && !pileRows.has(pile.id) && !pileAsking.has(pile.id)) askPile(pile.id);
       setUnfolded((cur) => {
         const next = new Set(cur);
         if (next.has(pile.id)) next.delete(pile.id);
         else next.add(pile.id);
         return next;
       });
+    };
     if (pile.coverId === it.id) {
       const picks = pile.frameIds.filter((id) => byId.get(id)?.bucket === 'pick').length;
       return {
@@ -585,9 +638,13 @@ export default function WinnowPicker({
                         {row && (
                           <li className="col-span-full row-span-1 min-w-0 rounded-paper border border-dashed border-line-strong bg-paper-2">
                             <ul className="m-0 p-2 list-none flex gap-2 overflow-x-auto h-full items-center">
-                              {row.length ? row.map((f) => tile(f, true)) : (
+                              {row.length ? (
+                                row.map((f) => tile(f, true))
+                              ) : (
                                 <li className="font-mono text-2xs text-muted px-2">
-                                  {pile!.size - 1} more frame{pile!.size === 2 ? '' : 's'} on {connection.id}, not listed here
+                                  {pileAsking.has(pile!.id)
+                                    ? `asking ${connection.id} for the burst's frames…`
+                                    : `${pile!.size - 1} more frame${pile!.size === 2 ? '' : 's'} on ${connection.id}, not listed here`}
                                 </li>
                               )}
                             </ul>

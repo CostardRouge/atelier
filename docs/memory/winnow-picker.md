@@ -130,3 +130,17 @@ from the row they already hold — no request. The sidebar gets NO verdict
 filter of its own: his question 5 of §7.4, answered by the recommendation
 (the marks first, a "⚑ only" beside All · Incoming · Gallery only if asked
 after use); narrowing by verdict is the picker's job, one *browse all* away.
+
+## A pile's frames: listed where announced, asked for on unfold otherwise (2026-10-01, P7)
+
+The picker asks its scope with `bursts: 'frames'` (`collapse=pairs`) when
+`listsBurstFrames(connection.capabilities)` says so — the elected frame of a
+pile then surfaces as its own tile and `P` ticks it. Otherwise piles come
+folded, and unfolding one whose listed frames are fewer than its size asks
+`burstId` (one request, the half kept) and merges the frames into the scope's
+rows — never into the opening ticks, which describe the scope as it arrived.
+The capabilities sheet is a SNAPSHOT: a browser connected before Winnow #277
+keeps folding until `#/sources` (or a gallery's probe) re-asks the instance,
+and the fallback covers it meanwhile. Driven against the stub both ways: with
+`pairs` the day lists 44 media and `P` ticks 7 (the burst's pick included);
+without, 43 and 6, and the unfold asked `burst_id=9001` and drew 5 frames.
