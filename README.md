@@ -1744,7 +1744,7 @@ heal's rings and a mask's fill drawn, then a before/after at the end (a wipe,
 a split or a flicker) with the camera plate and your credit. The sheet plays
 it exactly as the file will be, over the picture's own bytes — the sensor's
 when you developed it on the RAW — and holds the roll's choices as pills:
-9:16, 4:5, 1:1 or 16:9; 15, 30 or 60 s (a longer video keeps more chapters,
+9:16, 4:5, 1:1 or 16:9; 10, 15, 30 or 60 s (a longer video keeps more chapters,
 the lightest fold into the next); the hook, the reveal, the camera; an
 optional **beat** that lands every cut on a half-note grid so a track laid on
 the file in the socials app finds its downbeats on them (the file carries no
@@ -1753,7 +1753,7 @@ where each chapter starts, a deeper one at the tease, the seat at the reveal,
 rendered here and encoded to AAC like a hook's ticks; the ground round the
 picture; and five switches — captions, the step counter, the tools drawn, the
 plate, the credit. A **Style** section dresses every word of the video at once:
-the font (JetBrains Mono, Space Grotesk, Instrument Serif, VT323, Georgia), a
+the font (VT323 by default, JetBrains Mono, Space Grotesk, Instrument Serif, Georgia), a
 size from 70 to 150 %, bold, capitals, a box, a shadow or nothing behind the
 words, the box's corners (square to pill) and opacity, and three colours — the
 words, the box or shadow, and the accent of the tease. A long line wraps on its

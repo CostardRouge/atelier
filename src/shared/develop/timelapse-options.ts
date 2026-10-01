@@ -25,7 +25,7 @@ export const TIMELAPSE_FORMATS: Readonly<Record<TimelapseFormat, { width: number
   '16:9': { width: 1920, height: 1080, label: 'YouTube · landscape' },
 });
 
-export const TIMELAPSE_LENGTHS: readonly number[] = [15, 30, 60];
+export const TIMELAPSE_LENGTHS: readonly number[] = [10, 15, 30, 60];
 
 export interface TimelapseOverlays {
   /** A caption per chapter, saying what changed. */
@@ -61,7 +61,7 @@ export type TextBackground = 'box' | 'shadow' | 'none';
 /**
  * How the making-of's words LOOK — every caption, the hook's words, the
  * counter, the plate and the credit at once, so a video keeps one voice.
- * The defaults are exactly the look the script drew before this existed.
+ * The defaults are his (2026-10-01): VT323 on a solid, square black box.
  */
 export interface TimelapseStyle {
   font: TimelapseFont;
@@ -84,15 +84,15 @@ export interface TimelapseStyle {
 }
 
 export const DEFAULT_TIMELAPSE_STYLE: Readonly<TimelapseStyle> = Object.freeze({
-  font: 'JetBrains Mono',
+  font: 'VT323',
   size: 1,
   bold: true,
   uppercase: false,
   background: 'box',
-  radius: 4,
+  radius: 0,
   text: '#ffffff',
   box: '#000000',
-  boxOpacity: 0.55,
+  boxOpacity: 1,
   accent: '#d8461f',
 });
 

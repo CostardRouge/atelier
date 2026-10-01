@@ -46,7 +46,7 @@ describe('the script', () => {
     expect(script.states).toHaveLength(6);
     expect(script.states[0]).toBe(script.asShot);
     expect(script.final.vignette?.amount).toBe(-30);
-    expect([momentLengths(15), momentLengths(30), momentLengths(60)]).toEqual([{ hook: 1.8, reveal: 3 }, { hook: 2.4, reveal: 4 }, { hook: 3, reveal: 5 }]);
+    expect([momentLengths(10), momentLengths(15), momentLengths(30), momentLengths(60)]).toEqual([{ hook: 1.5, reveal: 2.5 }, { hook: 1.8, reveal: 3 }, { hook: 2.4, reveal: 4 }, { hook: 3, reveal: 5 }]);
   });
 
   it('reads the camera in the chapter and hands it from one chapter to the next', () => {
@@ -148,8 +148,8 @@ describe('the script', () => {
     expect(lines[lines.length - 1].y).toBeCloseTo(0.86, 9);
     expect(lines.every((e, i) => i === 0 || e.y > lines[i - 1].y)).toBe(true);
     expect(new Set(lines.map((e) => e.sizeFrac)).size).toBe(1);
-    // The mono face and the box are pinned: the painter's theme would otherwise replace both.
-    expect(lines.every((e) => e.fontFamily === 'JetBrains Mono' && e.legibility.mode === 'box' && e.styleOverrides?.includes('fontFamily') && e.styleOverrides.includes('legibility'))).toBe(true);
+    // The face and the box are pinned: the painter's theme would otherwise replace both.
+    expect(lines.every((e) => e.fontFamily === 'VT323' && e.legibility.mode === 'box' && e.styleOverrides?.includes('fontFamily') && e.styleOverrides.includes('legibility'))).toBe(true);
     expect(lines.every((e) => e.window?.start === script.chapters[0].start)).toBe(true);
     // Reveal: the credit wraps, the plate sits above its top line.
     const credit = script.overlays.filter((e) => e.id === 'credit' || e.id.startsWith('credit.'));
@@ -160,10 +160,10 @@ describe('the script', () => {
   });
 
   it('dresses every overlay in the roll’s style, the default being the look it always had', () => {
-    // The default reproduces the old look value for value.
+    // The default is his: VT323 on a solid, square black box.
     const plain = timelapseScript(pictureChapters(edited(FIVE)), options(), { credit: 'Developed in Atelier' });
     const caption = plain.overlays.find((e) => e.id.startsWith('caption-'))!;
-    expect(caption).toMatchObject({ fontFamily: 'JetBrains Mono', weight: 600, color: '#ffffff', legibility: { mode: 'box', color: 'rgba(0,0,0,0.55)', padFrac: 0.5, radiusFrac: 4 } });
+    expect(caption).toMatchObject({ fontFamily: 'VT323', weight: 600, color: '#ffffff', legibility: { mode: 'box', color: 'rgba(0,0,0,1)', padFrac: 0.5, radiusFrac: 0 } });
     expect(plain.overlays.find((e) => e.id === 'hook-how')!.legibility.color).toBe('rgba(216,70,31,0.92)');
     expect(plain.overlays.find((e) => e.id === 'credit')!.color).toBe('rgba(255,255,255,0.85)');
     // A style changes all of them at once.

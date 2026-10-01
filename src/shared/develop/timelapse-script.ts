@@ -96,7 +96,8 @@ export interface ScriptExtras {
 export function momentLengths(seconds: number): { hook: number; reveal: number } {
   if (seconds >= 60) return { hook: 3, reveal: 5 };
   if (seconds >= 30) return { hook: 2.4, reveal: 4 };
-  return { hook: 1.8, reveal: 3 };
+  if (seconds >= 15) return { hook: 1.8, reveal: 3 };
+  return { hook: 1.5, reveal: 2.5 };
 }
 
 /** The half-note grid of a beat in seconds, or null for free timing. */

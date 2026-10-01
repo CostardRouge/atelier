@@ -123,7 +123,7 @@ describe('chapters', () => {
   });
 
   it('keep as many chapters as the length allows, the lightest folding into the next', () => {
-    expect([keepCount(15), keepCount(30), keepCount(60), keepCount(6), keepCount(120)]).toEqual([5, 8, 14, 2, 24]);
+    expect([keepCount(10), keepCount(15), keepCount(30), keepCount(60), keepCount(6), keepCount(120)]).toEqual([3, 5, 8, 14, 2, 24]);
     const p = edited([
       [1000, { develop: exposure(0.7) }],
       [3000, { detail: { luminance: 0, colour: 0, defringe: 0, sharpen: 30, sharpenRadius: 1, sharpenDetail: 25, sharpenMasking: 0, texture: 0, clarity: 0, dehaze: 0 } as never }],
