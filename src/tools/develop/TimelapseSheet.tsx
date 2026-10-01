@@ -15,13 +15,12 @@ import {
   type TimelapseWords,
 } from '../../shared/develop/timelapse-options';
 import { timelapseScript, type TimelapseScript } from '../../shared/develop/timelapse-script';
-import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import Button from '../../shared/ui/Button';
 import { FieldRow, SwitchRow, TextField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
-import { rollCubes } from './roll-cubes';
+import type { RollCubes } from './roll-cubes';
 import type { TimelapseSource } from './timelapse-paint';
 import { useTimelapsePreview } from './use-timelapse-preview';
 
@@ -64,6 +63,7 @@ export default function TimelapseSheet({
   picture,
   chapters,
   source,
+  cubes,
   options,
   onOptions,
   onMakingOf,
@@ -77,6 +77,8 @@ export default function TimelapseSheet({
   chapters: PictureChapters;
   /** The picture's bytes as the stage draws them, or null while they are not in hand. */
   source: TimelapseSource | null;
+  /** The cubes each state is graded through — the export's own resolver, shared with the run. */
+  cubes: RollCubes;
   options: TimelapseOptions;
   onOptions: (patch: Partial<TimelapseOptions>) => void;
   /** The picture's own edits of its chapters — a document write, one undo step. */
@@ -87,13 +89,11 @@ export default function TimelapseSheet({
   credit: string | null;
   /** What this browser can encode, when it cannot — said before the click. */
   verdict?: string | null;
-  /** The export verb, when a host offers one. */
-  exportVerb?: { label: string; run: () => void; busy: boolean } | null;
+  /** The export verb, when a host offers one: handed the script and the source as the sheet holds them. */
+  exportVerb?: { label: string; run: (script: TimelapseScript, source: TimelapseSource) => void; busy: boolean; note?: string | null } | null;
   onClose: () => void;
 }) {
   useDialogKeys({ onCancel: onClose });
-  const { interpolation } = useLutInterpolation();
-  const cubes = useMemo(() => rollCubes(interpolation), [interpolation]);
   const hidden = useMemo(() => new Set(picture.makingOf?.hidden ?? []), [picture.makingOf?.hidden]);
   const captions = picture.makingOf?.captions ?? {};
   const script: TimelapseScript = useMemo(
@@ -201,9 +201,21 @@ export default function TimelapseSheet({
               <p className="m-0 font-mono text-2xs leading-snug text-danger">{verdict}</p>
             )}
             {exportVerb && (
-              <Button variant="primary" icon={Icons.export} onClick={exportVerb.run} disabled={exportVerb.busy || script.empty || !source}>
-                {exportVerb.label}
-              </Button>
+              <>
+                <Button
+                  variant="primary"
+                  icon={Icons.export}
+                  onClick={() => source && exportVerb.run(script, source)}
+                  disabled={exportVerb.busy || script.empty || !source || Boolean(verdict)}
+                >
+                  {exportVerb.busy ? 'Exporting…' : exportVerb.label}
+                </Button>
+                {exportVerb.note && (
+                  <p className="m-0 font-mono text-2xs leading-snug text-ink-soft" role="status">
+                    {exportVerb.note}
+                  </p>
+                )}
+              </>
             )}
           </div>
 

@@ -119,6 +119,10 @@ import { exposureSummary } from '../../shared/exif/exif-summary';
 import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import TimelapseSheet, { makingOfLine } from './TimelapseSheet';
 import { usePictureChapters } from './use-picture-chapters';
+import { useTimelapseExport } from './use-timelapse-export';
+import { useAvcEncodeSupport } from '../../shared/media/use-encode-support';
+import { rollCubes } from './roll-cubes';
+import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import KeystonePanel from './KeystonePanel';
 import LensPanel from './LensPanel';
 import { lensKey, profileInEffect, type LensProfileApplied } from '../../shared/lens/lens-profile';
@@ -1452,6 +1456,16 @@ export default function PictureWorkbench({
   // across a caption typed; the row on the Export tab, and the sheet.
   const chapters = usePictureChapters(entry, exports.openSize ? exports.openSize.width / exports.openSize.height : 1);
   const identity = useDeliveryIdentity();
+  // The making-of's own run (`use-timelapse-export.ts`): a task on this
+  // picture's edge, one unit on the same Deliver bar as the roll's export,
+  // the two never running at once. The states are graded through the
+  // export's own cube resolver, shared with the sheet's preview.
+  const { interpolation } = useLutInterpolation();
+  const cubes = useMemo(() => rollCubes(interpolation), [interpolation]);
+  const makingOf = useTimelapseExport({ cubes });
+  const avcEncode = useAvcEncodeSupport();
+  const anyProgress = exports.progress ?? makingOf.progress;
+  const anyExporting = exports.exporting ?? makingOf.exporting;
   const makingOfRow = (
     <FieldRow label="This picture" align="start" hintShown hint={file ? undefined : 'the picture’s bytes are not in hand'}>
       <div className="flex flex-col items-start gap-2 min-w-0 pt-1">
@@ -1466,17 +1480,17 @@ export default function PictureWorkbench({
     <DeliverBar
       verbs={exportVerbs}
       summary={exports.plan.summary}
-      exporting={exports.exporting}
-      progress={exports.progress}
-      onCancel={exports.cancel}
-      note={exports.note}
+      exporting={anyExporting}
+      progress={anyProgress}
+      onCancel={exports.progress ? exports.cancel : makingOf.cancel}
+      note={exports.note ?? makingOf.note}
       placement={inDrawer ? 'drawer' : 'panel'}
       primary="roll"
       unitWord="picture"
       empty="Open a picture to export."
       settingsLine={
-        exports.progress
-          ? `Settings as at ${runClock(exports.progress.startedAt)} · an edit now goes to the next export`
+        anyProgress
+          ? `Settings as at ${runClock(anyProgress.startedAt)} · an edit now goes to the next export`
           : null
       }
     />
@@ -2128,8 +2142,8 @@ export default function PictureWorkbench({
               plan={exports.plan}
               proxiesOnly={proxiesOnly}
               onProxiesOnly={onProxiesOnly}
-              exporting={exports.exporting}
-              lockedSince={exports.progress?.startedAt ?? null}
+              exporting={anyExporting}
+              lockedSince={anyProgress?.startedAt ?? null}
               hdrRun={exports.lastRun?.hdr ?? null}
               pictures={deliveryTable}
               openExif={shotExif}
@@ -2139,13 +2153,13 @@ export default function PictureWorkbench({
             />
           ) : null}
           {/* Inside the drawer's own scroll on a phone, where `sticky` pins it. */}
-          {compact && (tab === 'export' || exports.progress) && deliverBar(true)}
+          {compact && (tab === 'export' || anyProgress) && deliverBar(true)}
         </div>
         </FoldHints>
         {/* Docked: under the scrolling sections, as the tab strip is over them.
             A run in flight keeps it on EVERY tab: the roll leaves while a
             picture is worked on, and the bar is where that is seen. */}
-        {!compact && (tab === 'export' || exports.progress) && deliverBar(false)}
+        {!compact && (tab === 'export' || anyProgress) && deliverBar(false)}
       </PanelHost>
 
       {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}
@@ -2166,11 +2180,22 @@ export default function PictureWorkbench({
                 }
               : null
           }
+          cubes={cubes}
           options={exportSettings.timelapse}
           onOptions={(patch) => onExportSettings({ timelapse: { ...exportSettings.timelapse, ...patch } })}
           onMakingOf={(change) => onMakingOf?.(change)}
           plate={exposureSummary(shotExif) || null}
           credit={identity.creator ? `Developed in Atelier · © ${identity.creator}` : 'Developed in Atelier'}
+          // Said before the click: a browser without an H.264 encoder cannot
+          // make the file, and a button that fails afterwards is worse.
+          verdict={avcEncode ? null : 'This browser cannot encode H.264 video, which the making-of needs — Chrome, Edge or Safari can.'}
+          exportVerb={{
+            label: 'Export the making-of',
+            busy: anyProgress !== null,
+            note: makingOf.note,
+            run: (script, source) =>
+              void makingOf.run({ script, source, refName: entry.ref.name, pictureId: entry.id, scope: taskScope }),
+          }}
           onClose={() => onTimelapseOpen(false)}
         />
       )}

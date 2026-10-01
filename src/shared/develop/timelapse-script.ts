@@ -269,6 +269,23 @@ export function timelapseScript(picture: PictureChapters, options: TimelapseOpti
   };
 }
 
+/**
+ * `DJI_0101.JPG` → `DJI_0101-making-of.mp4`. A suffix, where a delivered
+ * PICTURE keeps its exact name: that rule exists so the file pairs with its
+ * capture by name in a Gallery and in Winnow's `reconcile` — and a video is
+ * not a rendition of the picture, so `DJI_0101.mp4` beside `DJI_0101.jpg`
+ * would be paired as a final of the capture it is not.
+ */
+export function makingOfName(refName: string): string {
+  const base = refName.replace(/\.[^.]+$/, '') || 'picture';
+  return `${base}-making-of.mp4`;
+}
+
+/** The deepest zoom the script's camera reaches — what the decode's edge is sized for. */
+export function deepestZoom(script: TimelapseScript): number {
+  return script.chapters.reduce((z, c) => Math.max(z, c.camera.to.z), 1);
+}
+
 /** Which chapter plays at `t`, or null during the hook or the reveal. */
 export function chapterAt(script: TimelapseScript, t: number): ScriptChapter | null {
   for (const c of script.chapters) if (t >= c.start && t < c.start + c.dur) return c;

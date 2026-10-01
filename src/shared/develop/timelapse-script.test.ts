@@ -4,7 +4,7 @@ import { journalRoll } from './journal';
 import { addPictures, createRollDoc, patchPicture, readRollDoc, setMakingOf, type RollDoc, type RollPicture } from './roll-types';
 import { pictureChapters } from './timelapse-chapters';
 import { DEFAULT_TIMELAPSE, readMakingOf, readTimelapseOptions, type TimelapseOptions } from './timelapse-options';
-import { beatGrid, chapterAt, momentAt, momentLengths, onGrid, timelapseScript } from './timelapse-script';
+import { beatGrid, chapterAt, deepestZoom, makingOfName, momentAt, momentLengths, onGrid, timelapseScript } from './timelapse-script';
 
 let n = 0;
 function roll(): RollDoc {
@@ -59,6 +59,10 @@ describe('the script', () => {
     expect(next.camera.to.z).toBe(1);
     const still = timelapseScript(pictureChapters(edited(FIVE), 4 / 3), options({ camera: 'still' }));
     expect(still.chapters.every((c) => c.camera.to.z === 1)).toBe(true);
+    expect(deepestZoom(script)).toBe(heal.camera.to.z);
+    expect(deepestZoom(still)).toBe(1);
+    expect(makingOfName('DJI_0101.JPG')).toBe('DJI_0101-making-of.mp4');
+    expect(makingOfName('')).toBe('picture-making-of.mp4');
   });
 
   it('lands every cut on the beat, and says the length it reached', () => {

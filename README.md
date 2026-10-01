@@ -1728,6 +1728,41 @@ that Winnow's finals, each linked to its own capture — the same panel the
 Studio uses, and the same rule: only what you just rendered, only to the
 instance it came from, never automatically.
 
+**Making-of.** Every write to a picture is also a step of its **journal** —
+what changed and the values it left, kept on the picture with the roll, undone
+and redone with the edit, coalesced like the undo (a slider drag is one step),
+never copied by an apply-to and never counted as an edit. The Export tab's
+**Making-of** row (or **Making-of video…** in the export menu) opens that
+journal as a short video for a feed: a hook (the finished picture, then the
+file as shot and a tease — or the inverse, or the two flashing), then a chapter
+per tool in the order you worked, each the picture going from before to after
+under a caption that says the difference (`+0.7 EV · highlights −40`, `Crop
+4:5 · straighten −2.0°`, `Heal ×3`, `Sky · −0.6 EV`, `Portra 400 · 80 %`), the
+camera zooming to where the tool worked (a heal's spot, a mask's box — read in
+the step itself, never guessed), the crop's zone growing over the picture, a
+heal's rings and a mask's fill drawn, then a before/after at the end (a wipe,
+a split or a flicker) with the camera plate and your credit. The sheet plays
+it exactly as the file will be, over the picture's own bytes — the sensor's
+when you developed it on the RAW — and holds the roll's choices as pills:
+9:16, 4:5, 1:1 or 16:9; 15, 30 or 60 s (a longer video keeps more chapters,
+the lightest fold into the next); the hook, the reveal, the camera; an
+optional **beat** that lands every cut on a half-note grid so a track laid on
+the file in the socials app finds its downbeats on them (the file carries no
+music); the ground round the picture; and five switches — captions, the step
+counter, the tools drawn, the plate, the credit. Each chapter's caption can be
+rewritten (an emptied one gets the computed line back) and any chapter folded
+away — its change still happens, it rides the next one; the order is never
+reordered. A picture edited before the journal existed has its steps told in a
+standard order and the sheet says so. **Export the making-of** asks for the
+folder at the click, grades every state once, encodes at 30 fps (H.264 — a
+browser that cannot encode it is told before the click) and writes
+`DJI_0101-making-of.mp4` beside your other exports: a suffix, since a video is
+not a rendition of the picture and `DJI_0101.mp4` would be paired with its
+capture as one. The run shows on the same bar and masthead pill as a roll's
+export, with a Cancel; the file lands in the Library like any clip, so it can be
+a Trips slide or a Studio rush with nothing more to build. Grain is frozen in
+it — every state is graded once, like a painted hook clip.
+
 **From a picture.** Under any picture you are looking at large — in the
 Library's preview sheet, or a day on your Winnow — a **Develop** button adds
 it to the open roll and opens it there (a picture already on the roll is
