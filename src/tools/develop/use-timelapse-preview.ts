@@ -1,5 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import type { TimelapseScript } from '../../shared/develop/timelapse-script';
+import { ensureOverlayFonts } from '../../shared/overlay/fonts';
+import { themeFromPreset } from '../../shared/overlay/title-styles';
 import { prepareTimelapse, type StateCache, type TimelapsePainter, type TimelapseSource } from './timelapse-paint';
 import type { RollCubes } from './roll-cubes';
 
@@ -141,6 +143,21 @@ export function useTimelapsePreview({
     if (!ready || !p || !p.has(script)) return;
     p.draw(script, t);
   }, [script, t, ready]);
+
+  // A face picked after the prepare is loaded, then the frame redrawn — or the
+  // canvas draws a fallback until something else re-prepares.
+  const font = script.options.style ? `${script.options.style.font}|${script.options.style.bold}` : null;
+  useEffect(() => {
+    if (!ready || !font) return;
+    let alive = true;
+    void ensureOverlayFonts(scriptRef.current.overlays, themeFromPreset('neutral')).then(() => {
+      const p = painter.current;
+      if (alive && p && p.has(scriptRef.current)) p.draw(scriptRef.current, tRef.current);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [font, ready]);
 
   // The clock: a rAF loop while playing, looping at the end.
   useEffect(() => {

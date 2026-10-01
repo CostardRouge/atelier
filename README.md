@@ -1752,7 +1752,12 @@ music); a **sound** — none by default, or one of the openers' tick kits: a tic
 where each chapter starts, a deeper one at the tease, the seat at the reveal,
 rendered here and encoded to AAC like a hook's ticks; the ground round the
 picture; and five switches — captions, the step counter, the tools drawn, the
-plate, the credit. Each chapter's caption can be
+plate, the credit. A **Style** section dresses every word of the video at once:
+the font (JetBrains Mono, Space Grotesk, Instrument Serif, VT323, Georgia), a
+size from 70 to 150 %, bold, capitals, a box, a shadow or nothing behind the
+words, the box's corners (square to pill) and opacity, and three colours — the
+words, the box or shadow, and the accent of the tease. A long line wraps on its
+facts and steps down in size rather than leaving the frame. Each chapter's caption can be
 rewritten (an emptied one gets the computed line back) and any chapter folded
 away — its change still happens, it rides the next one; the order is never
 reordered. A picture edited before the journal existed has its steps told in a

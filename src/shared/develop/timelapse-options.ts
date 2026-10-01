@@ -53,6 +53,61 @@ export interface TimelapseWords {
   afterLabel: string;
 }
 
+/** The faces the making-of's words may wear — the overlay engine's own, served from our origin. */
+export const TIMELAPSE_FONTS = ['JetBrains Mono', 'Space Grotesk', 'Instrument Serif', 'VT323', 'Georgia'] as const;
+export type TimelapseFont = (typeof TIMELAPSE_FONTS)[number];
+export type TextBackground = 'box' | 'shadow' | 'none';
+
+/**
+ * How the making-of's words LOOK — every caption, the hook's words, the
+ * counter, the plate and the credit at once, so a video keeps one voice.
+ * The defaults are exactly the look the script drew before this existed.
+ */
+export interface TimelapseStyle {
+  font: TimelapseFont;
+  /** A scale on every block's size, 0.7–1.5. */
+  size: number;
+  bold: boolean;
+  uppercase: boolean;
+  /** Behind the words: a filled box, a drop shadow, or nothing. */
+  background: TextBackground;
+  /** The box's corner, as the engine's `radiusFrac` (a share of the padding): 0 square, 4 a pill. */
+  radius: number;
+  /** `#rrggbb`. */
+  text: string;
+  /** The box's (or the shadow's) colour, `#rrggbb`. */
+  box: string;
+  /** The box's opacity, 0–1. */
+  boxOpacity: number;
+  /** The tease's box — the one accent of the video, `#rrggbb`. */
+  accent: string;
+}
+
+export const DEFAULT_TIMELAPSE_STYLE: Readonly<TimelapseStyle> = Object.freeze({
+  font: 'JetBrains Mono',
+  size: 1,
+  bold: true,
+  uppercase: false,
+  background: 'box',
+  radius: 4,
+  text: '#ffffff',
+  box: '#000000',
+  boxOpacity: 0.55,
+  accent: '#d8461f',
+});
+
+export const TIMELAPSE_STYLE_LIMITS = {
+  size: { min: 0.7, max: 1.5 },
+  radius: { min: 0, max: 4 },
+  boxOpacity: { min: 0, max: 1 },
+} as const;
+
+/** `#rrggbb` at `alpha`, as the engine's rgba string. */
+export function rgba(hex: string, alpha: number): string {
+  const n = Number.parseInt(hex.slice(1), 16);
+  return `rgba(${(n >> 16) & 255},${(n >> 8) & 255},${n & 255},${Math.round(alpha * 1000) / 1000})`;
+}
+
 export interface TimelapseOptions {
   format: TimelapseFormat;
   seconds: number;
@@ -66,6 +121,7 @@ export interface TimelapseOptions {
   ground: GroundKind;
   sound: SoundKind;
   words: TimelapseWords;
+  style: TimelapseStyle;
 }
 
 export const DEFAULT_WORDS: Readonly<TimelapseWords> = Object.freeze({
@@ -87,6 +143,7 @@ export const DEFAULT_TIMELAPSE: Readonly<TimelapseOptions> = Object.freeze({
   ground: 'blur',
   sound: 'none',
   words: DEFAULT_WORDS,
+  style: DEFAULT_TIMELAPSE_STYLE,
 });
 
 export const TIMELAPSE_LIMITS = {
@@ -112,6 +169,36 @@ function flag(v: unknown, fallback: boolean): boolean {
   return typeof v === 'boolean' ? v : fallback;
 }
 
+const FONTS: ReadonlySet<string> = new Set(TIMELAPSE_FONTS);
+const BACKGROUNDS: ReadonlySet<string> = new Set(['box', 'shadow', 'none']);
+
+function hex(v: unknown, fallback: string): string {
+  return typeof v === 'string' && /^#[0-9a-f]{6}$/i.test(v) ? v.toLowerCase() : fallback;
+}
+
+function within(v: unknown, range: { min: number; max: number }, fallback: number): number {
+  return typeof v === 'number' && Number.isFinite(v) ? Math.min(range.max, Math.max(range.min, v)) : fallback;
+}
+
+/** A stored style on the current shape; absent keys read as the defaults. */
+export function readTimelapseStyle(raw: unknown): TimelapseStyle {
+  const d = DEFAULT_TIMELAPSE_STYLE;
+  const r = isRecord(raw) ? raw : {};
+  const L = TIMELAPSE_STYLE_LIMITS;
+  return {
+    font: pick(r.font, FONTS, d.font),
+    size: within(r.size, L.size, d.size),
+    bold: flag(r.bold, d.bold),
+    uppercase: flag(r.uppercase, d.uppercase),
+    background: pick(r.background, BACKGROUNDS, d.background),
+    radius: within(r.radius, L.radius, d.radius),
+    text: hex(r.text, d.text),
+    box: hex(r.box, d.box),
+    boxOpacity: within(r.boxOpacity, L.boxOpacity, d.boxOpacity),
+    accent: hex(r.accent, d.accent),
+  };
+}
+
 function word(v: unknown, fallback: string): string {
   return typeof v === 'string' ? v.slice(0, 80) : fallback;
 }
@@ -119,7 +206,7 @@ function word(v: unknown, fallback: string): string {
 /** Stored options on the current shape; absent reads as the defaults. */
 export function readTimelapseOptions(raw: unknown): TimelapseOptions {
   const d = DEFAULT_TIMELAPSE;
-  if (!isRecord(raw)) return { ...d, overlays: { ...d.overlays }, words: { ...d.words } };
+  if (!isRecord(raw)) return { ...d, overlays: { ...d.overlays }, words: { ...d.words }, style: { ...d.style } };
   const o = isRecord(raw.overlays) ? raw.overlays : {};
   const w = isRecord(raw.words) ? raw.words : {};
   const seconds = typeof raw.seconds === 'number' && Number.isFinite(raw.seconds) ? raw.seconds : d.seconds;
@@ -147,6 +234,7 @@ export function readTimelapseOptions(raw: unknown): TimelapseOptions {
       before: word(w.before, d.words.before),
       afterLabel: word(w.afterLabel, d.words.afterLabel),
     },
+    style: readTimelapseStyle(raw.style),
   };
 }
 

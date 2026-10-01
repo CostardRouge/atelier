@@ -14,11 +14,17 @@ import {
   type TimelapseFormat,
   type TimelapseOptions,
   type TimelapseWords,
+  DEFAULT_TIMELAPSE_STYLE,
+  TIMELAPSE_FONTS,
+  TIMELAPSE_STYLE_LIMITS,
+  type TextBackground,
+  type TimelapseFont,
+  type TimelapseStyle,
 } from '../../shared/develop/timelapse-options';
 import { KIT_IDS, TICK_KITS } from '../../shared/roadtrip/hooks/tick-kits';
 import { timelapseScript, type TimelapseScript } from '../../shared/develop/timelapse-script';
 import Button from '../../shared/ui/Button';
-import { FieldRow, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, RangeField, SelectField, SwitchRow, TextField, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
@@ -120,6 +126,9 @@ export default function TimelapseSheet({
     onMakingOf({ captions: next });
   };
   const setWord = (key: keyof TimelapseWords, value: string) => onOptions({ words: { ...options.words, [key]: value } });
+  const style = options.style ?? DEFAULT_TIMELAPSE_STYLE;
+  const setStyle = (patch: Partial<TimelapseStyle>) => onOptions({ style: { ...style, ...patch } });
+  const styled = JSON.stringify(style) !== JSON.stringify(DEFAULT_TIMELAPSE_STYLE);
 
   const status: ReactNode = !source
     ? 'This picture’s bytes are not in hand — open its folder or its day first.'
@@ -322,6 +331,83 @@ export default function TimelapseSheet({
               <SwitchRow label="Tools drawn" name="Tools drawn" checked={options.overlays.tools} onChange={(tools) => onOptions({ overlays: { ...options.overlays, tools } })} hint="the crop's zone growing, a heal's rings, a mask's fill" />
               <SwitchRow label="Camera plate" name="Camera plate" checked={options.overlays.plate} onChange={(plate) => onOptions({ overlays: { ...options.overlays, plate } })} hintShown hint={plate ?? 'the file says nothing about its camera'} />
               <SwitchRow label="Credit" name="Credit" checked={options.overlays.credit} onChange={(credit) => onOptions({ overlays: { ...options.overlays, credit } })} hintShown hint={credit ?? 'set a creator under Export → Metadata to be credited'} />
+            </DevelopFold>
+
+            <DevelopFold id="develop.timelapse.style" title="Style">
+              <FieldRow label="Font">
+                <SelectField<TimelapseFont>
+                  label="Font"
+                  value={style.font}
+                  onChange={(font) => setStyle({ font })}
+                  options={TIMELAPSE_FONTS.map((f) => ({ id: f, label: f }))}
+                />
+              </FieldRow>
+              <FieldRow label="Size" hint="every caption, the hook's words and the small print together; a block that would take more than three lines still steps down">
+                <RangeField
+                  label="Size"
+                  value={style.size}
+                  min={TIMELAPSE_STYLE_LIMITS.size.min}
+                  max={TIMELAPSE_STYLE_LIMITS.size.max}
+                  step={0.05}
+                  format={(v) => `${Math.round(v * 100)} %`}
+                  onChange={(size) => setStyle({ size })}
+                />
+              </FieldRow>
+              <SwitchRow label="Bold" name="Bold" checked={style.bold} onChange={(bold) => setStyle({ bold })} />
+              <SwitchRow label="Capitals" name="Capitals" checked={style.uppercase} onChange={(uppercase) => setStyle({ uppercase })} />
+              <FieldRow label="Behind" hint="a filled box, a drop shadow, or the words alone">
+                <Segmented
+                  size="sm"
+                  label="Behind the words"
+                  value={style.background}
+                  onChange={(id) => setStyle({ background: id as TextBackground })}
+                  options={[
+                    { id: 'box', label: 'Box' },
+                    { id: 'shadow', label: 'Shadow' },
+                    { id: 'none', label: 'None' },
+                  ]}
+                />
+              </FieldRow>
+              {style.background === 'box' && (
+                <>
+                  <FieldRow label="Corners">
+                    <RangeField
+                      label="Corner radius"
+                      value={style.radius}
+                      min={TIMELAPSE_STYLE_LIMITS.radius.min}
+                      max={TIMELAPSE_STYLE_LIMITS.radius.max}
+                      step={0.25}
+                      format={(v) => (v === 0 ? 'square' : v >= TIMELAPSE_STYLE_LIMITS.radius.max ? 'pill' : `${Math.round((v / TIMELAPSE_STYLE_LIMITS.radius.max) * 100)} %`)}
+                      onChange={(radius) => setStyle({ radius })}
+                    />
+                  </FieldRow>
+                  <FieldRow label="Box opacity">
+                    <RangeField
+                      label="Box opacity"
+                      value={style.boxOpacity}
+                      min={0}
+                      max={1}
+                      step={0.05}
+                      format={(v) => `${Math.round(v * 100)} %`}
+                      onChange={(boxOpacity) => setStyle({ boxOpacity })}
+                    />
+                  </FieldRow>
+                </>
+              )}
+              <FieldRow label="Colours" hint="the words; the box or the shadow; the tease's accent — its box, or its words when there is no box">
+                <div className="flex items-center gap-2">
+                  <input type="color" className={swatchClass} aria-label="Text colour" value={style.text} onChange={(e) => setStyle({ text: e.target.value })} />
+                  <input type="color" className={swatchClass} aria-label={style.background === 'shadow' ? 'Shadow colour' : 'Box colour'} value={style.box} disabled={style.background === 'none'} onChange={(e) => setStyle({ box: e.target.value })} />
+                  <input type="color" className={swatchClass} aria-label="Accent colour" value={style.accent} onChange={(e) => setStyle({ accent: e.target.value })} />
+                </div>
+              </FieldRow>
+              {styled && (
+                <div className="flex justify-end">
+                  <Button size="sm" onClick={() => onOptions({ style: { ...DEFAULT_TIMELAPSE_STYLE } })}>
+                    Back to the default style
+                  </Button>
+                </div>
+              )}
             </DevelopFold>
 
             <DevelopFold id="develop.timelapse.words" title="Words" defaultOpen={false}>

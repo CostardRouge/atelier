@@ -26,12 +26,12 @@
 
 import type { SoundEvent } from '../audio/sound-event';
 import { TICK_KITS, type TickKit } from '../roadtrip/hooks/tick-kits';
-import { createTextElement, type LegibilityStyle, type OverlayElement } from '../overlay/overlay-types';
+import { createTextElement, type LegibilityStyle, type OverlayElement, type FontWeight, type OverlayFontFamily } from '../overlay/overlay-types';
 import type { ThemableKey } from '../overlay/title-styles';
 import { wrapText } from '../lib/wrap-text';
 import type { PictureEdit, RollPicture } from './roll-types';
 import { WHOLE_PICTURE, cameraFor, keepCount, keptChapters, type Camera, type Chapter, type PictureChapters } from './timelapse-chapters';
-import { TIMELAPSE_FORMATS, type TimelapseOptions } from './timelapse-options';
+import { DEFAULT_TIMELAPSE_STYLE, TIMELAPSE_FORMATS, rgba, type TimelapseFont, type TimelapseOptions, type TimelapseStyle } from './timelapse-options';
 
 export const TIMELAPSE_FPS = 30;
 
@@ -112,7 +112,6 @@ export function onGrid(seconds: number, grid: number | null): number {
 
 // --- the overlays -----------------------------------------------------------------
 
-const MONO = 'JetBrains Mono' as const;
 
 /** The share of the frame's width a block of text may take. */
 export const TEXT_WIDTH_SHARE = 0.9;
@@ -129,9 +128,9 @@ const SHADOW_PITCH = 1.35;
 const SEPARATOR = ' · ';
 
 /** How many characters of the mono face fit across `share` of a `frameW` frame at `fontPx`, a box's padding taken off. */
-export function monoBudget(frameW: number, fontPx: number, padFrac: number, share = TEXT_WIDTH_SHARE): number {
+export function monoBudget(frameW: number, fontPx: number, padFrac: number, share = TEXT_WIDTH_SHARE, advance = MONO_ADVANCE): number {
   if (fontPx <= 0) return 1;
-  return Math.max(1, Math.floor((frameW * share - 2 * padFrac * fontPx) / (fontPx * MONO_ADVANCE)));
+  return Math.max(1, Math.floor((frameW * share - 2 * padFrac * fontPx) / (fontPx * advance)));
 }
 
 /**
@@ -168,12 +167,19 @@ export function packLines(text: string, budget: number): string[] {
  * take more than `TEXT_MAX_LINES` — never under `TEXT_MIN_SHARE` of the asked
  * size, and never by dropping a word. A short line comes back untouched.
  */
-export function fitText(text: string, frameW: number, frameH: number, sizeFrac: number, padFrac: number): { lines: string[]; sizeFrac: number } {
+export function fitText(
+  text: string,
+  frameW: number,
+  frameH: number,
+  sizeFrac: number,
+  padFrac: number,
+  advance = MONO_ADVANCE,
+): { lines: string[]; sizeFrac: number } {
   const short = Math.min(frameW, frameH);
   const floor = sizeFrac * TEXT_MIN_SHARE;
   let size = sizeFrac;
   for (;;) {
-    const budget = monoBudget(frameW, size * short, padFrac);
+    const budget = monoBudget(frameW, size * short, padFrac, TEXT_WIDTH_SHARE, advance);
     const lines = packLines(text, budget);
     const smaller = size * 0.92;
     if (lines.length <= TEXT_MAX_LINES || smaller < floor) return { lines: balanced(text, lines, budget), sizeFrac: size };
@@ -204,11 +210,61 @@ interface Frame {
 }
 
 /**
+ * The making-of's words as one LOOK, read once from `TimelapseStyle`: the
+ * face, the weights, the colours, the casing, and the three backgrounds — a
+ * main one for the captions and the hook, the accent for the tease, a soft
+ * one for the small print (counter, plate, credit).
+ */
+interface Look {
+  font: OverlayFontFamily;
+  /** Characters per em the width budget counts with. */
+  advance: number;
+  scale: number;
+  uppercase: boolean;
+  weight: FontWeight;
+  smallWeight: FontWeight;
+  text: string;
+  main: LegibilityStyle;
+  accent: { legibility: LegibilityStyle; color: string };
+  soft: LegibilityStyle;
+}
+
+/** Characters per em by face: JetBrains Mono's measured 0.6, VT323's narrow cell, the others pessimistic. */
+const ADVANCE: Readonly<Record<TimelapseFont, number>> = {
+  'JetBrains Mono': MONO_ADVANCE,
+  VT323: 0.52,
+  'Space Grotesk': 0.6,
+  'Instrument Serif': 0.52,
+  Georgia: 0.6,
+};
+
+export function lookFor(style: TimelapseStyle): Look {
+  const shadow = (alpha: number): LegibilityStyle => ({ mode: 'shadow', color: rgba(style.box, alpha), padFrac: 0.3 });
+  const none: LegibilityStyle = { mode: 'none', color: rgba(style.box, 0.6), padFrac: 0 };
+  const box = (hex: string, alpha: number): LegibilityStyle => ({ mode: 'box', color: rgba(hex, alpha), padFrac: 0.5, radiusFrac: style.radius });
+  const main = style.background === 'box' ? box(style.box, style.boxOpacity) : style.background === 'shadow' ? shadow(0.6) : none;
+  return {
+    font: style.font,
+    // Capitals are wider than the average letter in a proportional face.
+    advance: ADVANCE[style.font] * (style.uppercase && style.font !== 'JetBrains Mono' && style.font !== 'VT323' ? 1.15 : 1),
+    scale: style.size,
+    uppercase: style.uppercase,
+    weight: style.bold ? 600 : 400,
+    smallWeight: style.bold ? 500 : 400,
+    text: style.text,
+    main,
+    // On a box the accent is the box; without one it is the words' own colour.
+    accent: style.background === 'box' ? { legibility: box(style.accent, 0.92), color: style.text } : { legibility: main, color: style.accent },
+    soft: style.background === 'none' ? none : shadow(0.6),
+  };
+}
+
+/**
  * A block of `value` as one element per line, stacked from `y` — its FOOT
  * for `grow: 'up'` (a caption grows upward, never off the bottom), its HEAD
  * for `grow: 'down'`. The first line keeps `id`; the others take `id.1`,
  * `id.2`. Returns the elements and the y of the block's far edge, so the
- * next block can be stacked against it.
+ * next block can be stacked against it. `el.sizeFrac` is scaled by the look.
  */
 function block(
   id: string,
@@ -216,42 +272,43 @@ function block(
   frame: Frame,
   y: number,
   grow: 'up' | 'down',
+  look: Look,
   el: Partial<OverlayElement> & { sizeFrac: number },
 ): { elements: OverlayElement[]; edge: number } {
-  const legibility = el.legibility ?? BOX;
-  const fitted = fitText(value, frame.width, frame.height, el.sizeFrac, legibility.padFrac);
+  const legibility = el.legibility ?? look.main;
+  // Casing is applied to the STRING, so the width budget counts the capitals.
+  const said = look.uppercase ? value.toUpperCase() : value;
+  const fitted = fitText(said, frame.width, frame.height, el.sizeFrac * look.scale, legibility.padFrac, look.advance);
   const fontPx = fitted.sizeFrac * Math.min(frame.width, frame.height);
   const pitch = ((legibility.mode === 'box' ? BOX_PITCH : SHADOW_PITCH) * fontPx) / frame.height;
   const n = fitted.lines.length;
   const elements = fitted.lines.map((line, i) => {
     const at = grow === 'up' ? y - pitch * (n - 1 - i) : y + pitch * i;
-    return text(i === 0 ? id : `${id}.${i}`, line, { ...el, sizeFrac: fitted.sizeFrac, y: at });
+    return text(i === 0 ? id : `${id}.${i}`, line, look, { ...el, legibility, sizeFrac: fitted.sizeFrac, y: at });
   });
   return { elements, edge: grow === 'up' ? y - pitch * n : y + pitch * n };
 }
 
-const BOX: LegibilityStyle = { mode: 'box', color: 'rgba(0,0,0,0.55)', padFrac: 0.5, radiusFrac: 4 };
-const SHADOW: LegibilityStyle = { mode: 'shadow', color: 'rgba(0,0,0,0.6)', padFrac: 0.3 };
-
 /**
  * Every style key a theme could replace, pinned: the painter draws through
- * the neutral theme, which otherwise swaps the mono face, the weight and the
- * boxes for its own — and the width budget above is the mono face's.
+ * the neutral theme, which otherwise swaps the face, the weight and the
+ * boxes for its own — and the width budget above is the look's face's.
  */
 const PINNED: ThemableKey[] = ['fontFamily', 'weight', 'italic', 'color', 'legibility', 'uppercase', 'letterSpacing', 'glow'];
 
-function text(id: string, value: string, el: Partial<OverlayElement>): OverlayElement {
+function text(id: string, value: string, look: Look, el: Partial<OverlayElement>): OverlayElement {
   return {
     ...createTextElement(value),
     id,
-    fontFamily: MONO,
-    weight: 600,
+    fontFamily: look.font,
+    weight: look.weight,
+    color: look.text,
     italic: false,
     uppercase: false,
     letterSpacingEm: 0,
     glowAmount: 0,
     ...el,
-    legibility: { ...(el.legibility ?? BOX) },
+    legibility: { ...(el.legibility ?? look.main) },
     styleOverrides: [...PINNED],
   };
 }
@@ -262,8 +319,8 @@ const SOFT_IN = { preset: 'fade' as const, duration: 0.4, easing: 'out' as const
 /** Where a caption block's foot sits. */
 const CAPTION_FOOT = 0.86;
 
-function captionAt(id: string, value: string, frame: Frame, start: number, end: number | null): OverlayElement[] {
-  return block(id, value, frame, CAPTION_FOOT, 'up', {
+function captionAt(id: string, value: string, frame: Frame, look: Look, start: number, end: number | null): OverlayElement[] {
+  return block(id, value, frame, CAPTION_FOOT, 'up', look, {
     anchor: 'bottom-center',
     x: 0.5,
     sizeFrac: 0.042,
@@ -272,38 +329,39 @@ function captionAt(id: string, value: string, frame: Frame, start: number, end: 
   }).elements;
 }
 
-function counterAt(id: string, value: string, start: number, end: number | null): OverlayElement {
-  return text(id, value, {
+function counterAt(id: string, value: string, look: Look, start: number, end: number | null): OverlayElement {
+  return text(id, value, look, {
     anchor: 'top-right',
     x: 0.95,
     y: 0.06,
-    sizeFrac: 0.03,
-    weight: 500,
-    legibility: SHADOW,
+    sizeFrac: 0.03 * look.scale,
+    weight: look.smallWeight,
+    legibility: look.soft,
     window: { start, end },
     animation: { in: SOFT_IN, out: CAPTION_OUT },
   });
 }
 
 /** The elements of the hook: what is said over the first picture, over the second, and the tease. */
-function hookOverlays(options: TimelapseOptions, hook: Moment, frame: Frame): OverlayElement[] {
+function hookOverlays(options: TimelapseOptions, hook: Moment, frame: Frame, look: Look): OverlayElement[] {
   if (!options.overlays.captions) return [];
   const { words } = options;
   const cut = hook.start + hook.dur * HOOK_CUT_SHARE;
   const end = hook.start + hook.dur;
   if (options.hook === 'flash') {
-    return captionAt('hook-flash', `${words.before} ↔ ${words.afterLabel}`, frame, hook.start, end);
+    return captionAt('hook-flash', `${words.before} ↔ ${words.afterLabel}`, frame, look, hook.start, end);
   }
   const first = options.hook === 'result-first' ? words.after : words.raw;
   const second = options.hook === 'result-first' ? words.raw : words.after;
   return [
-    ...captionAt('hook-first', first, frame, hook.start, cut),
-    ...captionAt('hook-second', second, frame, cut, end),
-    ...block('hook-how', words.how, frame, 0.12, 'down', {
+    ...captionAt('hook-first', first, frame, look, hook.start, cut),
+    ...captionAt('hook-second', second, frame, look, cut, end),
+    ...block('hook-how', words.how, frame, 0.12, 'down', look, {
       anchor: 'top-center',
       x: 0.5,
       sizeFrac: 0.05,
-      legibility: { mode: 'box', color: 'rgba(216,70,31,0.92)', padFrac: 0.5, radiusFrac: 4 },
+      legibility: look.accent.legibility,
+      color: look.accent.color,
       window: { start: cut, end },
       animation: { in: { preset: 'scale', duration: 0.3, easing: 'back', scaleFrom: 0.7 }, out: CAPTION_OUT },
     }).elements,
@@ -315,18 +373,18 @@ function hookOverlays(options: TimelapseOptions, hook: Moment, frame: Frame): Ov
  * column standing on the frame's foot, the credit under the plate, so a
  * credit that wraps lifts the plate rather than writing over it.
  */
-function revealOverlays(options: TimelapseOptions, reveal: Moment, extras: ScriptExtras, frame: Frame): OverlayElement[] {
+function revealOverlays(options: TimelapseOptions, reveal: Moment, extras: ScriptExtras, frame: Frame, look: Look): OverlayElement[] {
   const start = reveal.start + reveal.dur * (REVEAL_FIGURE_SHARE + 0.05);
   const out: OverlayElement[] = [];
   let foot = 0.955;
   if (options.overlays.credit && extras.credit) {
-    const credit = block('credit', extras.credit, frame, foot, 'up', {
+    const credit = block('credit', extras.credit, frame, foot, 'up', look, {
       anchor: 'bottom-center',
       x: 0.5,
       sizeFrac: 0.022,
       weight: 400,
-      color: 'rgba(255,255,255,0.85)',
-      legibility: SHADOW,
+      color: rgba(look.text, 0.85),
+      legibility: look.soft,
       window: { start: start + 0.2, end: null },
       animation: { in: SOFT_IN },
     });
@@ -334,12 +392,12 @@ function revealOverlays(options: TimelapseOptions, reveal: Moment, extras: Scrip
     foot = Math.min(0.9, credit.edge);
   }
   if (options.overlays.plate && extras.plate) {
-    const plate = block('plate', extras.plate, frame, foot, 'up', {
+    const plate = block('plate', extras.plate, frame, foot, 'up', look, {
       anchor: 'bottom-center',
       x: 0.5,
       sizeFrac: 0.026,
-      weight: 500,
-      legibility: SHADOW,
+      weight: look.smallWeight,
+      legibility: look.soft,
       window: { start, end: null },
       animation: { in: SOFT_IN },
     });
@@ -379,13 +437,14 @@ export function timelapseScript(picture: PictureChapters, options: TimelapseOpti
   const seconds = reveal.start + reveal.dur;
 
   const frame: Frame = { width, height };
-  const overlays: OverlayElement[] = [...hookOverlays(options, hook, frame)];
+  const look = lookFor(options.style ?? DEFAULT_TIMELAPSE_STYLE);
+  const overlays: OverlayElement[] = [...hookOverlays(options, hook, frame, look)];
   chapters.forEach((c) => {
     const end = c.start + c.dur;
-    if (options.overlays.captions) overlays.push(...captionAt(`caption-${c.chapter.id}`, c.caption, frame, c.start, end));
-    if (options.overlays.counter) overlays.push(counterAt(`counter-${c.chapter.id}`, `${c.index + 1}/${chapters.length}`, c.start, end));
+    if (options.overlays.captions) overlays.push(...captionAt(`caption-${c.chapter.id}`, c.caption, frame, look, c.start, end));
+    if (options.overlays.counter) overlays.push(counterAt(`counter-${c.chapter.id}`, `${c.index + 1}/${chapters.length}`, look, c.start, end));
   });
-  overlays.push(...revealOverlays(options, reveal, extras, frame));
+  overlays.push(...revealOverlays(options, reveal, extras, frame, look));
 
   // Every state a frame can ask for, once each: the chain's `before`s are the
   // previous `after`s by construction, so this is N + 1 — and a broken chain

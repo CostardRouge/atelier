@@ -3,8 +3,8 @@ import { DEFAULT_DEVELOP } from './develop';
 import { journalRoll } from './journal';
 import { addPictures, createRollDoc, patchPicture, readRollDoc, setMakingOf, type RollDoc, type RollPicture } from './roll-types';
 import { pictureChapters } from './timelapse-chapters';
-import { DEFAULT_TIMELAPSE, readMakingOf, readTimelapseOptions, type TimelapseOptions } from './timelapse-options';
-import { TEXT_MAX_LINES, beatGrid, chapterAt, deepestZoom, fitText, makingOfName, momentAt, momentLengths, monoBudget, onGrid, packLines, timelapseScore, timelapseScript } from './timelapse-script';
+import { DEFAULT_TIMELAPSE, DEFAULT_TIMELAPSE_STYLE, readMakingOf, readTimelapseOptions, readTimelapseStyle, type TimelapseOptions } from './timelapse-options';
+import { lookFor, TEXT_MAX_LINES, beatGrid, chapterAt, deepestZoom, fitText, makingOfName, momentAt, momentLengths, monoBudget, onGrid, packLines, timelapseScore, timelapseScript } from './timelapse-script';
 
 let n = 0;
 function roll(): RollDoc {
@@ -157,6 +157,31 @@ describe('the script', () => {
     expect(credit.length).toBeGreaterThan(1);
     expect(credit[credit.length - 1].y).toBeCloseTo(0.955, 9);
     expect(Math.max(...plate.map((e) => e.y))).toBeLessThan(Math.min(...credit.map((e) => e.y)));
+  });
+
+  it('dresses every overlay in the roll’s style, the default being the look it always had', () => {
+    // The default reproduces the old look value for value.
+    const plain = timelapseScript(pictureChapters(edited(FIVE)), options(), { credit: 'Developed in Atelier' });
+    const caption = plain.overlays.find((e) => e.id.startsWith('caption-'))!;
+    expect(caption).toMatchObject({ fontFamily: 'JetBrains Mono', weight: 600, color: '#ffffff', legibility: { mode: 'box', color: 'rgba(0,0,0,0.55)', padFrac: 0.5, radiusFrac: 4 } });
+    expect(plain.overlays.find((e) => e.id === 'hook-how')!.legibility.color).toBe('rgba(216,70,31,0.92)');
+    expect(plain.overlays.find((e) => e.id === 'credit')!.color).toBe('rgba(255,255,255,0.85)');
+    // A style changes all of them at once.
+    const style = { ...DEFAULT_TIMELAPSE_STYLE, font: 'Instrument Serif' as const, size: 1.3, bold: false, uppercase: true, radius: 0, text: '#fff8e7', box: '#1a2b3c', boxOpacity: 0.8, accent: '#2266ff' };
+    const dressed = timelapseScript(pictureChapters(edited(FIVE)), options({ style }));
+    const c = dressed.overlays.find((e) => e.id.startsWith('caption-'))!;
+    expect(c).toMatchObject({ fontFamily: 'Instrument Serif', weight: 400, color: '#fff8e7', legibility: { mode: 'box', color: 'rgba(26,43,60,0.8)', radiusFrac: 0 } });
+    expect(c.text).toBe(c.text?.toUpperCase());
+    expect(c.sizeFrac).toBeCloseTo(0.042 * 1.3, 9);
+    expect(dressed.overlays.find((e) => e.id === 'hook-how')!.legibility.color).toBe('rgba(34,102,255,0.92)');
+    // Without a box the tease wears the accent as its words, and the small print has no shadow.
+    const bare = timelapseScript(pictureChapters(edited(FIVE)), options({ style: { ...style, background: 'none' } }));
+    expect(bare.overlays.find((e) => e.id === 'hook-how')).toMatchObject({ color: '#2266ff', legibility: { mode: 'none' } });
+    expect(bare.overlays.find((e) => e.id.startsWith('counter-'))!.legibility.mode).toBe('none');
+    expect(lookFor({ ...style, background: 'shadow' }).main.mode).toBe('shadow');
+    // The reader clamps and refuses what is not a style.
+    expect(readTimelapseStyle({ font: 'Comic Sans', size: 9, radius: -2, text: 'red', boxOpacity: 2 })).toEqual({ ...DEFAULT_TIMELAPSE_STYLE, size: 1.5, radius: 0, boxOpacity: 1 });
+    expect(readTimelapseOptions({}).style).toEqual(DEFAULT_TIMELAPSE.style);
   });
 
   it('takes the author’s own captions and hidden chapters, and finds the moment at a time', () => {
