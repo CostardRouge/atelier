@@ -1869,17 +1869,24 @@ workbench — offers the same two ways in: a native list grouped by family, and
 a **gallery** that shows each look *on a photograph* before you pick it, since
 reading a name off a dropdown tells you nothing about a LUT.
 
-**Where the tool has your picture open, the gallery shows it.** A band across
-the top draws the look you are aiming at on *that* photograph, with a compare
-toggle that wipes it against the original — before on the left, after on the
-right, the way Lightroom and Capture One put it. So the gesture there is aim,
-then take: the first click moves the band, and the look is yours on the second
-click, on "Use this look", or on Enter. Where no picture is open there is
-nothing to aim at and a click is the choice, as it always was.
+**Where the tool has your picture open, the gallery shows it.** On a desktop
+the picture takes a column of its own at the left, as tall as the dialog — a
+portrait frame gets the whole height, a landscape one half the width — with
+the look you are aiming at drawn on *that* photograph, and its name, its
+strength and an A/B wipe in a card under it; the wipe reads before on the
+left, after on the right, the way Lightroom and Capture One put it, and a drag
+across the picture moves the divider. The looks are a panel at the right: the
+filter, what the tiles are shown on (their reference frames, or your picture),
+the families, the grid, and the verb pinned in the footer. So the gesture
+there is aim, then take: the first click shows the look on your picture, and
+the look is yours on the second click, on "Use this look", or on Enter — the
+arrow keys walk the tiles. Where no picture is open there is nothing to aim at
+and a click is the choice, as it always was. On a phone the picture is a band
+over the grid and the verb sits in the thumb's reach.
 
 It costs one lattice — the look under your eye — and that is the point: the
 grid keeps its cheap pre-baked tiles, which is also what makes two looks
-comparable, since every tile is the same subject. The band shows the look
+comparable, since every tile is the same subject. The picture shows the look
 *alone*, without the correction you have set on the picture. And it says the
 one thing only your own photograph can reveal: aim a conversion look at a
 picture that is not log footage and it tells you so, rather than leaving you

@@ -388,7 +388,73 @@ a tall one comfortable (the scene is
 `clamp(13rem, calc(var(--app-h) * 0.28), 21rem)`, where it was a flat 21rem);
 and a row that only explains costs a third of a row of looks, which is why the
 filter field went back onto the "tiles on…" row it had been split off for a
-phone — that width has its own branch now.
+phone — that width has its own branch now. **Rev. 2026-10-01**: the width cap
+went too (`max-w-[min(96vw,100rem)]`), and on a desktop the scene is a COLUMN
+sized by the picture, not a band — «The look picker is a workbench» below; the
+share rule survives on the phone, which the redesign left untouched.
+
+## The look picker is a WORKBENCH on a desktop: the picture in a column sized BY the picture (2026-10-01)
+
+**Reported, with a screenshot of his 1270 × 1300 window**: *"la modal Choose a
+look est très moche, peu pratique, tout est décalé"*. Measured against the
+code (`docs/look-picker-redesign.md` §2, ten faults each traced to a line): a
+9:16 frame drawn 189 × 336 px on an 816 px black table because the scene was
+a band of a fixed SHARE of the height; a controls column with `mt-auto` pushing
+the verb 250 px under two look-alike sliders whose tracks started at different
+x; four sentences of standing prose the phone branch had already dropped; ✕ AND
+Close; 96 × 74 px tiles sized for the 56 rem modal of 2026-09-18 and never
+grown with it; three casings in one rail; a `default` verb 900 px from the
+tiles. Three faces were drawn as working mocks (lab:
+<https://claude.ai/artifact/WcwvdZ5zD7Gbnoecdep17R>, the dialog as it was
+reproduced beside them at four screen sizes) and **he picked A, the
+workbench, the same day**.
+
+**Decision**: the desktop picker is the suite's own editor shape — the picture
+in a column at the LEFT with a `FieldRow` card under it (Look · Strength ·
+Compare), the looks a panel at the RIGHT (filter · `Segmented` Reference / My
+picture / Photo · rail · grid), ONE verb in a pinned footer beside Cancel, the
+prose behind an `InfoDotButton` by the title. The compact branch of 2026-09-21
+is untouched (re-measured: six tiles, two rows at 390 × 664). Rules it fixed:
+
+- **The stage column is as wide as the picture needs, never wider**
+  (`stageColumnBox`, `look-scene.ts`, pure, tested): a portrait frame is
+  bounded by the body's HEIGHT and takes exactly the width that buys; a
+  landscape one is capped at HALF the body, and its box is then only as tall
+  as the picture, so the card sits under the picture and the leftover falls
+  below the pair (the phone stage's own rule). Measured headless on his
+  screen: the 9:16 frame went from 189 × 336 to **556 × 988**, a 16:9 one from
+  597 × 336 to 585 × 329 (the same picture, no longer centred in a black
+  column). Measured with a `ResizeObserver` on the body AND the card (the
+  caution grows the card) in a layout effect, so the first paint is already
+  right; a floor of 20 rem keeps the card's rows on one line, and the half
+  wins over the floor on a narrow body.
+- **The rail is a column only on an `expanded` shell**; a `medium` one (a
+  tablet) gets the crumb strip the phone already had, above the grid — a
+  152 px rail beside a half-width stage left the grid one tile wide at 1024.
+- **Tiles are FIXED 8 rem tracks on a desktop, `repeat(auto-fill, 8rem)`** —
+  never `minmax(8rem, 1fr)`, which stretches a tile towards a strip whenever
+  the row is just short of one more column, and never `minmax(7.5rem, 9rem)`,
+  because **`auto-fill` with a LENGTH as the max counts its tracks by that
+  max** (measured: 5 tracks of 144 px in an 817 px scroller, 65 px left over,
+  where 6 fit). The slack lands at the end of the row, where it reads as
+  margin; the thumbnail keeps its fixed 92 px height (the `1fr`/`aspect-ratio`
+  rule above).
+- **Two sliders of one dress for two different numbers read as a
+  misalignment.** The wipe's slider is gone; `A/B` (the Develop sheet's own
+  pill) switches it and the divider is dragged on the picture, where a press
+  places it. If he wants the slider back it is one `FieldRow` (`docs/look-picker-redesign.md` §7).
+- **One casing in the rail** (`familyCase`, `gallery-nodes.ts`): an ALL-CAPS
+  label is written as words, a lone short one stays an initialism (`DJI`), a
+  mixed-case one is the author's; the native optgroups are untouched.
+- The worn look wears a ✓ (the ring moves to the aim, so the accent border
+  alone could not say "on the stack"); the aimed tile says `Use ↵`; ← → ↑ ↓
+  walk the tiles and Enter takes (`dialog-keys.ts` already yields Enter to a
+  focused button, so a tile's own Enter is one pick, not two).
+
+**Not seen on his Mac**: driven in headless Chromium at 1270 × 1300, 1440 × 900,
+1024 × 768 and 390 × 664 with a portrait and a landscape picture — the aim, the
+strength travelling with the pick, A/B, the arrows, the live bake, the search,
+the ⓘ, Escape, and the no-picture host where a click is the pick.
 
 ## A phone gets a SHEET or a DRAWER, and a picture being judged gets the drawer (2026-09-16)
 
