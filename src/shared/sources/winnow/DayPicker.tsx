@@ -177,6 +177,9 @@ export default function DayPicker({
     }
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
+      // Claimed, so a dialog hosting the stepper (the picker) closes the
+      // popover and not itself: `useDialogKeys` stands down on it.
+      e.preventDefault();
       setOpen(false);
       valueRef.current?.focus();
     }

@@ -20,7 +20,7 @@ import type { WinnowClient } from '../../shared/sources/winnow/client';
 import { describeCulling, type Culling } from '../../shared/sources/winnow/culling';
 import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
 import { Icons } from '../../shared/ui/icons';
-import CullMark from './CullMark';
+import CullMark from '../../shared/sources/winnow/CullMark';
 import type { DeliverAction } from './PictureWorkbench';
 
 /**

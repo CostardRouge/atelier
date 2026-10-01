@@ -57,3 +57,33 @@ whole library's) — and `showLine`, off in the picker, whose own status line
 says the same thing. The sidebar now passes its half, so a day its strip
 calls full is full in the half the tab lists; before, the strip counted both
 halves while the grid listed one.
+
+## The modal and its host contract (2026-10-01, P3)
+
+`WinnowPicker` (`picker/WinnowPicker.tsx`, with `PickerRail`, `PickerTile`,
+`picker-host.ts`) knows no tool: a host passes a `PickerHost` — title,
+destination pill, start (a day, and a half when it is looking at one),
+anchor for the month's marks, `held` + its label, `openTicks`, `accepts`,
+`extras` drawn in the bar, and `actions` (the last is the primary, Enter;
+`run(rows, { signal, progress })` resolves `true` to close). It always OPENS
+ON THE HOST'S DAY (scope Day); the folder, the half (unless the host names
+one) and the rail come back from `browse-state`. The scope's ticks are
+re-seeded when its rows ARRIVE, never on a facet or a tick. **How to
+apply**:
+
+- **One date control.** `Day` is the shared `DayPicker` (bars or weeks);
+  `Folder` is a button whose popover lists the instance's sessions under the
+  same half. A popover that closes on Escape CLAIMS the key
+  (`preventDefault`) — `useDialogKeys` stands down on a prevented press, so
+  the first Escape closes the popover and the second the picker.
+- **A tile's pile badge is a SIBLING of its button**, never inside it: a
+  button in a button is invalid, and a click on the badge must not tick.
+- **A `Button`'s own `inline-flex` outranks `hidden`** in the generated
+  sheet (the trap `WinnowBrowser` already paid): a breakpoint that hides a
+  `Button` goes on a wrapper (`hidden max-[820px]:contents`), never on the
+  button's `className`.
+- `CullMark` moved to `shared/sources/winnow/` with its second consumer
+  (the picker after Develop's filmstrip and Pictures table).
+- On a phone the rail is a full sheet behind *Filters · N* with a pinned
+  *Show N media*; the scope and the date take their own line, the close
+  button stays beside the title.
