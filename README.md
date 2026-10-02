@@ -722,17 +722,27 @@ and a picture can place a single day.
 **Deduce** (in the stages header, for any connected Winnow) asks the instance
 for **one position per day** over the trip's span — a few kilobytes for a
 hundred days; no photograph is fetched and nothing is read from your media. A
-leg is then a run of consecutive days whose position stays inside a radius of
-the run so far, and you say what that means: the radius of one halt, how many
-days make a halt rather than a stop on the way, whether a shorter run is listed
-on its own (marked, and left unticked) or folded into the halt it was on the
-way to, whether a day the instance has no position for is **covered** by the
-leg around it — nothing is invented there, a leg is a span — and, off by
-default and marked wherever it shows, whether the days of a move are guessed
-between two places. Moving any of those never asks the instance again. What
-comes back is a list of proposals, one tick each, in the same shape a re-run
-later would produce: nothing is written until you accept it, and no piece is
-ever created.
+halt is a run of consecutive days whose position stays inside a radius of the
+run so far, and the window then cuts the halts into stages at a **grain** you
+choose with one slider: one stage per region, split at long drives (the
+default), one per big halt, or one per halt. Three windows show the same
+proposals, and you pass from one to the other by tabs or by a hand-off that
+carries the chapter you were looking at: **the grain** (the slider, the stages
+as cards with the map beside them), **the calque** (say what you want first —
+fill the gaps, enrich your stages, show everything — and read the proposals
+under the stages you already drew), **the paquet** (one chapter at a time,
+answered in one gesture, keys 1 to 4). Each proposal carries the safe verb for
+where it falls — the places a stage of yours lacks, only the days none of your
+stages covers, or a new stage where nothing is — and you can change it, split
+it, correct its name, dates and places, or name a halt the city index could
+not. The thresholds (radius, long drive, big halt, blind days, outliers) sit
+under *Fine settings*; moving any of them never asks the instance again. What
+the instance could not say is said rather than hidden: days without a position,
+a day placed far from the days around it (a drone that kept the GPS of home —
+left out by default, keepable), halts nobody can name. Nothing is written
+before you review exactly what will be, every stage written carries a mark so
+the ⋯ menu can take them all out again, a re-run recognises what is already in
+the trip, and no piece is ever created.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
