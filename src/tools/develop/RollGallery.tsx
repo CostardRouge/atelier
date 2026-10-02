@@ -381,7 +381,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
   async function handleCreate(choices: NewRollChoices) {
     setNotice(null);
     setCreating(false);
-    let doc = createRollDoc(choices.name, choices.sourceId);
+    let doc: RollDoc = { ...createRollDoc(choices.name, choices.sourceId), opensOn: choices.opensOn };
     if (choices.withSelected) doc = addPictures(doc, await hashedMediaRefs(selectedPhotos));
     if (await createOn(doc, 'created')) onOpen(doc);
   }

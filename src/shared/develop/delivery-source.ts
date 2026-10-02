@@ -85,16 +85,33 @@ export async function rawRenderFrom(
     if (known !== undefined) return { render: known, head: null };
   }
   if (!fetchHead) return { render: null, head: null };
+  // One head read per RAW at a time: the stage's rows, the roll's choice and
+  // the Delivers row all ask the moment a picture opens, and each used to
+  // pull its own megabyte. A caller that joins shares the head it read.
+  const flying = key ? headsInFlight.get(key) : undefined;
+  if (flying) return flying;
+  const read = (async () => {
+    try {
+      const buffer = await fetchHead(RAW_PROBE_BYTES);
+      const render = rawSizesFrom(buffer).render;
+      if (key) holdRawRender(key, render);
+      return { render, head: new Uint8Array(buffer) };
+    } catch {
+      if (key) holdRawRender(key, null);
+      return { render: null, head: null };
+    }
+  })();
+  if (!key) return read;
+  headsInFlight.set(key, read);
   try {
-    const buffer = await fetchHead(RAW_PROBE_BYTES);
-    const render = rawSizesFrom(buffer).render;
-    if (key) holdRawRender(key, render);
-    return { render, head: new Uint8Array(buffer) };
-  } catch {
-    if (key) holdRawRender(key, null);
-    return { render: null, head: null };
+    return await read;
+  } finally {
+    headsInFlight.delete(key);
   }
 }
+
+/** The head reads under way, by asset id — `rawRenderFrom`'s one flight per RAW. */
+const headsInFlight = new Map<string, Promise<{ render: PictureSize | null; head: Uint8Array | null }>>();
 
 /** What a host got back: the bytes to render, and the sentence about them. */
 export interface DeliverySource {

@@ -25,7 +25,7 @@ import {
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
-import { resolveRollChoice, rollChoiceFor, type RollChoice } from '../../shared/develop/roll-choice';
+import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import {
   calibrationAt,
   readRawCalibration,
@@ -278,6 +278,8 @@ export default function PictureWorkbench({
   onAspect,
   onRendition,
   rollChoice = null,
+  onRollChoice,
+  rollPhotos = 0,
   siblings = NO_FILES,
   exportSettings,
   onExportSettings,
@@ -319,6 +321,10 @@ export default function PictureWorkbench({
    * its own (`RollDoc.opensOn`, `roll-choice.ts`); null for where it opens.
    */
   rollChoice?: RollChoice | null;
+  /** Set the roll's choice — from the foot of the name menu, or the line a pick offers. */
+  onRollChoice?: (choice: RollChoice | null) => void;
+  /** How many photographs the roll holds: a roll of one has no "every other picture". */
+  rollPhotos?: number;
   /** The capture's other files a folder listed beside `file` (`AssetParts.siblings`) — a local picture's only. */
   siblings?: readonly File[];
   /** THIS picture's look (roll v5) — the stack follows the open picture; the draft rides it. */
@@ -941,6 +947,22 @@ export default function PictureWorkbench({
   const rollAnswer = handed === 'delivered' && !rollOff ? resolveRollChoice(rows, 'delivered') : null;
   const chosen = renditionById(rows, entry.rendition) ?? rollAnswer?.row ?? null;
   const fromRoll = !entry.rendition && Boolean(rollAnswer?.row);
+  // Why the roll's choice did not land on this picture, where it follows it.
+  const rollReason =
+    handed === 'delivered'
+      ? rollOff
+        ? 'its camera file could not be had — back where it opens for this visit'
+        : (rollAnswer?.reason ?? null)
+      : handed === 'sensor' && !followsSensor
+        ? rollOff
+          ? 'its RAW could not be opened — back on the render for this visit'
+          : 'no RAW in this capture'
+        : rollChoiceFor(rollChoice, entry).reason;
+  // B of « C + B »: the file just picked, offered to the whole roll right
+  // where it was picked — gone when ignored, never a mode left switched on.
+  const [offer, setOffer] = useState<ChoiceRole | null>(null);
+  const rollOffer =
+    offer && onRollChoice && rollPhotos > 1 && !clip && (offer === 'proxy' ? null : offer) !== rollChoice ? offer : null;
   // The row on screen below the sensor: the stored choice where the capture
   // still offers it, else where the picture opens — never a blocked row.
   const current = (chosen && chosen.role !== 'sensor' && !chosen.blocked ? chosen : opening)?.id ?? null;
@@ -1951,6 +1973,8 @@ export default function PictureWorkbench({
                 // Under a roll's choice the opening row is a choice too — the
                 // one that keeps this picture off the roll's file.
                 onRendition(id === opening?.id && !rollChoice ? null : id);
+                const row = rows.find((r) => r.id === id);
+                setOffer(row ? roleOfRow(row) : null);
               }}
               onRemeter={() => {
                 // The stored number goes, the held decodes with it (a held
@@ -1969,6 +1993,7 @@ export default function PictureWorkbench({
                 }
                 const climbing = baseRung(developNow.base) === 0;
                 patchDraft({ base: next });
+                setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');
                 }
@@ -1976,6 +2001,11 @@ export default function PictureWorkbench({
               status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
               gain={wantsRaw ? rawGain : null}
               calibration={calibration?.summary ?? null}
+              roll={
+                onRollChoice && rollPhotos > 1 && !clip
+                  ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason }
+                  : null
+              }
             />
             {told && (
               <span className="flex-none font-mono text-xs text-accent-ink" role="status">
@@ -2104,6 +2134,28 @@ export default function PictureWorkbench({
           pixelView={pixelView}
           facts={facts}
           shot={shotLine}
+          // B of « C + B »: drawn OVER the picture, at the top, so the bar
+          // above it never gains a control and nothing slides under a pointer.
+          offer={
+            rollOffer && onRollChoice ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title={`Every picture with no choice of its own opens on ${CHOICE_WORDS[rollOffer]} — the ones you chose by hand keep theirs`}
+                  onClick={() => {
+                    onRollChoice(rollOffer === 'proxy' ? null : rollOffer);
+                    setOffer(null);
+                  }}
+                >
+                  {compact ? `${CHOICE_WORDS[rollOffer]} → whole roll` : `Use ${CHOICE_WORDS[rollOffer]} for the whole roll`}
+                </Button>
+                <IconButton size="sm" variant="ghost" label="Only this picture" onClick={() => setOffer(null)}>
+                  {Icons.close}
+                </IconButton>
+              </>
+            ) : null
+          }
           marks={subjectMarks}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick

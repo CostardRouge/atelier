@@ -2,7 +2,7 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
-import { ontoRollSensor } from '../../shared/develop/roll-choice';
+import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
 import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
@@ -695,6 +695,25 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, rendition: string | null) => update((r) => patchPicture(r, id, { rendition })),
     [update],
   );
+  // The roll's choice of file (`roll-choice.ts`): ONE fact on the roll, one
+  // undo step, and every picture with no choice of its own follows it —
+  // the pictures added tomorrow too. The ones chosen by hand are counted,
+  // since they are the ones that will not move.
+  const handleRollChoice = useCallback(
+    (opensOn: RollChoice | null) => {
+      const before = latest.current;
+      if ((before.opensOn ?? null) === opensOn) return;
+      update((r) => ({ ...r, opensOn, updatedAt: Date.now() }));
+      const own = opensOn ? before.pictures.filter((p) => departsFromRoll(opensOn, p)).length : 0;
+      setNotice(
+        `${opensOn ? `The roll opens on ${CHOICE_WORDS[opensOn]}` : 'Each picture opens where it opens'}${
+          own ? ` — ${own} picture${own === 1 ? '' : 's'} chosen by hand keep${own === 1 ? 's' : ''} its own file` : ''
+        }`,
+      );
+    },
+    [update],
+  );
+  const rollPhotos = useMemo(() => roll.pictures.filter((p) => !isClipPicture(p)).length, [roll.pictures]);
   const handleWords = useCallback(
     (id: string, words: { title?: string; caption?: string }) => update((r) => setPictureWords(r, id, words)),
     [update],
@@ -1732,6 +1751,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onAspect={(aspect) => handleAspect(open.id, aspect)}
               onRendition={(rendition) => handleRendition(open.id, rendition)}
               rollChoice={roll.opensOn ?? null}
+              onRollChoice={handleRollChoice}
+              rollPhotos={rollPhotos}
               siblings={openSiblings}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}
@@ -1841,6 +1862,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     onVariant={(id) => makeVariantOf(id, 'clone')}
                     hideIgnored={!showIgnored}
                     culling={culling.byPicture}
+                    rollChoice={roll.opensOn ?? null}
                     shows={filtering ? passesFilter : undefined}
                   />
                 </div>
@@ -1878,6 +1900,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 onVariant={(id) => makeVariantOf(id, 'clone')}
                 hideIgnored={!showIgnored}
                 culling={culling.byPicture}
+                rollChoice={roll.opensOn ?? null}
                 shows={filtering ? passesFilter : undefined}
               />
             )}
