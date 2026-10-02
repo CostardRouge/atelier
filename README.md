@@ -1400,7 +1400,15 @@ why it is its own button, and **Pick grey** asks you for a neutral instead;
 **Auto bands** compresses the ends where the picture leans — a tenth of it
 against black lifts Shadows, a tenth against white pulls Highlights down —
 part of the way, so a picture dark on purpose keeps its character, and says
-when a band runs out before its target. Every setting belongs to the
+when a band runs out before its target. Each is a **switch**: a second click
+puts back what its own sliders held before it and leaves the others alone, so
+of Auto tone and Auto colour you keep the one that helped. A lit switch still
+holds its answer, a dashed one found nothing to change, a half-lit one has
+been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
+Pick grey share the white balance — the newer replaces the older, and turning
+it off gives back the balance from before either. The switches remember
+their clicks for the session only: after a reload they are off and the values
+stay. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
@@ -1561,7 +1569,10 @@ subject** draws the zone around the subject — what your Subject layers point
 at, else what the model finds at the centre of the picture, and the line says
 which — with room around it, in the format chosen, slid inside the picture
 rather than shrunk; a speck and a subject that is the whole picture are
-refused with the reason. The quarter
+refused with the reason. Both are **switches** like the Adjust tab's Auto
+row: a second click puts back the crop from before that verb — so Auto level,
+then Crop to subject, then the crop turned off gives back the levelled
+picture. The quarter
 turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
