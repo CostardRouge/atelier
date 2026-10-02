@@ -3,7 +3,7 @@ import { toLinear } from '../lut/transfer';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
-import { segmentationView } from './segment-view';
+import { segmentationView, type SegmentView } from './segment-view';
 
 /** How long the geometry must stand still before the subject model is shown it again. */
 const SEGMENT_SETTLE_MS = 300;
@@ -27,6 +27,7 @@ import {
   cloneGeometry,
   geometryPasses,
   hasGeometry,
+  placementKey,
   sameGeometry,
   type PictureGeometry,
 } from '../render/picture-geometry';
@@ -436,8 +437,9 @@ export interface DevelopPicture {
    * keystone and the camera's warp, small, SETTLED a moment after the last
    * geometry change so a slider drag does not ask the model per step. The
    * source itself when there is no geometry; null when nothing is segmented.
+   * Beside it, the value naming its frame (`SegmentView`).
    */
-  segmentSource: TexImageSource | null;
+  segmentView: SegmentView | null;
   /**
    * Decode the picture again from its file — after the stored exposure was
    * dropped and the session's held decodes with it, so the RAW is metered
@@ -691,7 +693,7 @@ export function useDevelopPicture({
    */
   subjectMasks?: ReadonlyMap<string, BrushRaster> | null;
   /**
-   * A subject is picked on this picture: `segmentSource` is then made — the
+   * A subject is picked on this picture: `segmentView` is then made — the
    * picture as its geometry bends it, the frame a tap lands in and a layer
    * samples its mask in (`segment-view.ts`). Nothing is rendered otherwise.
    */
@@ -779,6 +781,10 @@ export function useDevelopPicture({
   // stored exposure is gone (`redecode`).
   const [decodeNonce, setDecodeNonce] = useState(0);
   const redecode = useCallback(() => setDecodeNonce((n) => n + 1), []);
+  // The file each decoded source came from, as a value — part of the name of
+  // the model's view (`SegmentView`). Recorded with the source rather than
+  // read from `file` later: the two change in different commits.
+  const sourceNames = useRef(new WeakMap<BadgeSource, string>());
 
   useEffect(() => {
     let cancelled = false;
@@ -790,6 +796,8 @@ export function useDevelopPicture({
     // the decoder drops its turn — and the host is told; a render's decode is
     // the browser's own and only says that it is happening.
     const controller = new AbortController();
+    const decoded = rawFile ?? file;
+    const decodedName = `${rawFile ? 'sensor' : 'file'}:${decoded.name}|${decoded.size}|${decoded.lastModified}`;
     const opening = rawFile
       ? null
       : startTask({ label: `Opening ${file.name}`, scope: taskScopeRef.current, detail: null });
@@ -825,6 +833,7 @@ export function useDevelopPicture({
           return;
         }
         loaded = s;
+        sourceNames.current.set(s, decodedName);
         setSource(s);
       })
       .catch((e: unknown) => {
@@ -880,26 +889,32 @@ export function useDevelopPicture({
     [warpField, lens, lensProfile, keystone],
   );
   // What the subject model is shown (`segment-view.ts`): the geometry's frame,
-  // settled — each new view re-asks the model for every point.
-  const [segmentSource, setSegmentSource] = useState<TexImageSource | null>(null);
+  // settled — each new FRAME re-asks the model for every point — with the
+  // value that names it, set in the same call so the two never disagree.
+  const [segmentView, setSegmentView] = useState<SegmentView | null>(null);
   const hasSegmentSource = useRef(false);
-  hasSegmentSource.current = segmentSource !== null;
+  hasSegmentSource.current = segmentView !== null;
   useEffect(() => {
     if (!segmenting || !source) {
-      setSegmentSource(null);
+      setSegmentView(null);
       return;
     }
     const image = source.image as TexImageSource;
+    const named = (g: PictureGeometry | null) =>
+      `${sourceNames.current.get(source) ?? ''}|${source.width}x${source.height}|${placementKey(g)}`;
     if (!hasGeometry(geometry)) {
-      setSegmentSource(image);
+      setSegmentView({ image, key: named(null) });
       return;
     }
     const timer = window.setTimeout(() => {
       try {
-        setSegmentSource(segmentationView(source.image, { width: source.width, height: source.height }, geometry));
+        setSegmentView({
+          image: segmentationView(source.image, { width: source.width, height: source.height }, geometry),
+          key: named(geometry),
+        });
       } catch {
         // No WebGL2: the unwarped picture is still better than no subject.
-        setSegmentSource(image);
+        setSegmentView({ image, key: named(null) });
       }
       // The first view is made at once — a first tap must not wait on a
       // drag that is not happening; only a CHANGE of geometry settles.
@@ -1902,7 +1917,7 @@ export function useDevelopPicture({
     setPicking,
     pickAt,
     sampleColour,
-    segmentSource,
+    segmentView,
     redecode,
     pointAt,
     veilCanvasRef,

@@ -101,12 +101,27 @@ grader's order is `[cube, …geometry, …layers]`, `render-layers.md`), but
 **Rule**: whatever a mask is computed FROM must be the frame it is sampled IN.
 `segment-view.ts` renders the source through `geometryPasses` alone (camera
 warp, lens + profile, keystone) at the model's 1024 px, and all three readers
-use it — the stage (`useDevelopPicture.segmentSource`, made at once the first
+use it — the stage (`useDevelopPicture.segmentView`, made at once the first
 time and SETTLED 300 ms after a geometry change so a slider drag does not
 re-ask the model per step), the JPEG export and the RAW export (through its
 cube, `withCalibration` so the DNG's own warp is in it). Stored points are
 screen positions in that frame: after a geometry change the subject is
 re-segmented from the same spot on the new picture, like every other mask kind
 stays where it was drawn. Measured: a line at 0.8950 of the source lands at
-0.8725 in both the model's view and the stage under distortion 60. Not driven
-with the model itself (it needs a real GPU).
+0.8725 in both the model's view and the stage under distortion 60.
+
+**The stage did not re-segment until 2026-10-02**: `useSubjectMasks` cached
+per POINT alone, so a new view hit the cache and the old frame's mask stayed
+up until the picture was opened again — the remount, not the geometry, was
+what refreshed it, and the EXPORT (its own view) disagreed with the stage
+meanwhile. Measured headless at distortion 100 on an off-centre disc: 14.5 %
+of grey covered and 0 model calls, against 1.3 % (the edge) and 1 call now.
+**Rule**: a cache of anything computed from a FRAME is keyed on the frame's
+VALUE. `SegmentView` carries the image AND its key, set in one call — the
+decoded file (recorded with the source, since `file` and `source` change in
+different commits), its size and `placementKey(geometry)`, which names where
+GREEN lands: CA and a vignette move no point, so their sliders cost no
+inference (0 calls at vignetting 60). And the cache is MODULE state, not the
+hook's: the workbench is mounted per picture, so the per-hook cache re-asked
+the model for every point on every landing (2 calls → 0 measured). Bounded:
+64 masks (~50 MB), 16 on a constrained device.
