@@ -558,3 +558,23 @@ suite's own maths; a clamp or a refusal said out loud; nothing written where
 nothing was measured). The three heuristic verbs are §5 of the brief (Auto
 bands, Auto level, crop to the subject); a model's inference and an LLM's
 answer land through the very same seam when they come.
+
+**Auto bands (A1, built 2026-10-02).** `autoBands(stats)` in
+`auto-develop.ts`, the third button of the Auto row in both hosts. It reads
+the 10th and 90th percentiles of the as-shot bins: under `DARK_LEAN` (0.10)
+the picture leans dark and `shadows` lifts that percentile 0.6 of the way to
+`DARK_TARGET` (0.14); over `BRIGHT_LEAN` (0.88) `highlights` pulls it toward
+`BRIGHT_TARGET` (0.84). Each value is SOLVED against `toneCurve` — the shift
+at L is `value/100 × reach × bandWeights(L)`, so `HIGHLIGHTS_REACH`,
+`SHADOWS_REACH` and `bandWeights` are exported for it — and a spec develops
+the percentile through the written number and asserts it lands within a
+slider unit of the aim. Rules: whites, blacks and the levels stay Auto
+tone's (a stretch and a compression are different answers, so a third
+button and never a menu); the band has NO weight at black itself, so a
+picture with a tenth crushed to 0 gets `shadows 100` and "as far as the band
+reaches" said; the four constants are TASTE, named and exported so they can
+be moved from his pictures (`docs/auto-develop.md` §8); "nothing to recover"
+still writes both bands to 0 — leaving a stale value where no reason for one
+was found would be a nudge. The bands act BEFORE levels in `developLinear`,
+so Tone then Bands compounds, each still SET from the source. Not driven in
+a browser: the module is pure and the button is one `onPatch`.

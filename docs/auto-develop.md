@@ -122,7 +122,7 @@ through the Batch API. Price is not the issue; local-first is.
 Each verb lives in a pure module beside a `.test.ts`, is drawn by the panel
 it belongs to, and reports what it did (or why not) through the told line.
 
-**A1 — Auto bands** (`auto-develop.ts`, the Auto row). The two verbs there
+**A1 — Auto bands — BUILT 2026-10-02** (`auto-develop.ts`, the Auto row). The two verbs there
 touch the ENDS (levels) and the CAST (white balance); nothing yet touches the
 two bands between them. `autoBands(stats)` reads the as-shot bins: where the
 10th percentile sits below a dark threshold the picture leans dark and

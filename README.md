@@ -1352,7 +1352,16 @@ Apply-to blocks; Borders starts closed). What a setting does is explained
 behind the small **ⓘ** beside its name rather than under it, so the column
 holds the controls; what a line says about the picture right now — why it
 leaves at this size, the copyright that will be written — stays in the open.
-Every setting belongs to the
+Three **Auto** verbs
+write numbers from the picture *as shot*, so pressing one twice gives the
+same answer: **Auto tone** stretches the range into Levels (a black point, a
+white point, a gamma) and touches no colour; **Auto colour** neutralises the
+average cast as temperature and tint — the wrong answer on a sunset, which is
+why it is its own button, and **Pick grey** asks you for a neutral instead;
+**Auto bands** compresses the ends where the picture leans — a tenth of it
+against black lifts Shadows, a tenth against white pulls Highlights down —
+part of the way, so a picture dark on purpose keeps its character, and says
+when a band runs out before its target. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on

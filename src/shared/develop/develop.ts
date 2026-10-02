@@ -457,9 +457,12 @@ const LUM_B = 0.0722;
  */
 const CONTRAST_PIVOT = fromLinear(0.18, 'srgb');
 
-/** How far a band moves the encoded luminance at full slider and full weight. */
-const HIGHLIGHTS_REACH = 0.15;
-const SHADOWS_REACH = 0.15;
+/**
+ * How far a band moves the encoded luminance at full slider and full weight.
+ * The two exported ones are what `auto-develop.ts` solves its bands against.
+ */
+export const HIGHLIGHTS_REACH = 0.15;
+export const SHADOWS_REACH = 0.15;
 const WHITES_REACH = 0.2;
 const BLACKS_REACH = 0.2;
 /** Contrast −100..100 → slope 0.4..1.6 around the pivot. */
@@ -482,7 +485,7 @@ function clamp01(x: number): number {
  * 3/4 (zero at both ends of their half), blacks and whites ramp to the
  * extreme and are zero at mid-grey.
  */
-function bandWeights(L: number): { hi: number; sh: number; wh: number; bl: number } {
+export function bandWeights(L: number): { hi: number; sh: number; wh: number; bl: number } {
   if (L <= 0.5) {
     const u = L / 0.5; // 0..1 across the lower half
     return { hi: 0, wh: 0, sh: 4 * u * (1 - u), bl: (1 - u) * (1 - u) };
