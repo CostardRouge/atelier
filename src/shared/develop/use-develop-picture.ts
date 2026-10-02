@@ -213,11 +213,16 @@ function graderFrom(
       // the only thing that draws it, so "no lut and no pass" stopped meaning
       // "nothing to do" the day the film node arrived.
       !isSilentTexture(film);
-    if (!needsGpu) {
-      cur?.grader.dispose();
-      slot.current = null;
-      return null;
-    }
+    // Nothing to render: the source is handed back as it is. The grader the
+    // slot already holds is KEPT, never disposed here — it goes with the
+    // source or the hook. Disposing it was the stage's freeze (2026-10-02):
+    // with a mask outline or a blink as the ONLY reason for the GPU, every
+    // histogram read, snapshot and `delivered()` asks for the picture WITHOUT
+    // those looking passes, found nothing to render, threw the context away,
+    // and the next paint built a new one — shaders compiled, the 4K source or
+    // the RAW's half-floats uploaded again, on every slider step and every
+    // blink. Measured headless: 22 contexts for a 12-step drag of Tolerance.
+    if (!needsGpu) return null;
     // Compared by VALUE: the panel hands down a new object on every slider
     // step, and identity would rebuild the grader per frame of a drag.
     // A new LOOK on the same picture is swapped in place: a develop slider

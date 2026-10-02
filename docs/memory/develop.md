@@ -543,6 +543,27 @@ release skips whatever `source` currently is, and that one waits its turn.
 Otherwise the next paint draws a bitmap of width 0 and the cube pass logs
 `GL error 0x501` on its first draw.
 
+## The stage's grader LIVES with the source — never disposed for want of work (2026-10-02)
+
+**The freeze he reported (*"ui / app freeze"* while editing his DNGs with
+layers).** `graderFrom` used to DISPOSE the stage slot's grader whenever a
+call needed no GPU. Every caller that measures or delivers — the histogram
+one frame after each paint, `delivered()` for the crop stage and the
+snapshot, a thumbnail's `layerInput` — asks for the picture WITHOUT the
+looking passes (the mask's outline or wash, a tap's blink, the clipping
+view). So on a picture whose ONLY reason for the GPU was such a pass — a
+fresh Subject layer with its sliders at zero, on a photograph with no look
+or develop yet, which is exactly how a mask session starts — each measure
+threw the WebGL2 context away and the next paint built a new one: shaders
+compiled, the 4K bitmap or the RAW's half-floats uploaded again, on every
+slider step and every blink. Measured headless (`testing.md`'s layers
+bench): a 12-step drag of Tolerance made **22 contexts**, 33 stage paints
+and 159 s of long tasks under SwiftShader. **Rule**: once a slot holds a
+grader it is kept until the hook unmounts (the loupe's slot has its own
+release); a call that needs nothing returns null and leaves it. The context
+is one per stage and its programs are cached by pass id, so keeping it is
+what makes a swap cheap; disposing was never a saving.
+
 ## A picture is read by its NAME before its type (2026-09-21)
 
 `pictureFidelity` asked `file.type` before anything else, and a JPEG fetched
