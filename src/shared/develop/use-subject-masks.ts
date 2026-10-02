@@ -211,9 +211,11 @@ export function useSubjectMasks({
 
   // Record every subject layer's points — those with none included, which is
   // what makes the FIRST tap on a fresh layer a new point — after the effect
-  // above has read what stood before. Not a point tapped while the model has
-  // no view yet: that is the very first tap of all, and recording it before
-  // the view arrived is what kept it from blinking (`subject-known.ts`).
+  // above has read what stood before. Not a point a KNOWN layer gained while
+  // the model has no view yet: that is the very first tap of all, and
+  // recording it before the view arrived is what kept it from blinking. A
+  // layer that arrives with its points — this picture just opened, the record
+  // below starting empty for it — records them whole (`subject-known.ts`).
   const everySubject = (layers ?? [])
     .filter((l) => l.mask?.kind === 'subject')
     .map((l) => {

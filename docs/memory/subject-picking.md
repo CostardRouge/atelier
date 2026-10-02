@@ -56,9 +56,22 @@ three accepted as drawn.
   only made once a subject HAS a point, so that tap met no view, the mask
   effect returned early, and the known-points record advanced in the same
   commit — the point was "known" by the time the view arrived. Rule
-  (`subject-known.ts`, pure, tested): while there is no view, a point tapped
-  on the same picture is not recorded; a picture just opened is recorded
-  whole, view or not.
+  (`subject-known.ts`, pure, tested, rev. 2026-10-02): while there is no
+  view, a point GAINED by a layer the record already held is not recorded; a
+  layer that ARRIVES with its points (a picture just opened, an undo, a
+  paste) is recorded whole, view or not. **The first version of that rule
+  made EVERY landing blink** (his report, 2026-10-02: *«tous les masques
+  flashent dès qu'on atterrit sur une photo»*): it told a picture just opened
+  by a null record, but `PictureWorkbench` is MOUNTED per picture
+  (`key={open.id}`) and the hook's record starts as THIS picture, empty — so
+  every subject was recorded with no points and its region blinked as a
+  fresh tap when the model's view arrived. The blink never served the
+  re-segmentation: it was the classifier, nothing else. With two subjects
+  only ONE region was seen blinking on a landing — the layer listed FIRST in
+  the panel, which lists the stack top-down, so the last one segmented; why
+  the other's 90 ms blink never reached the screen was not pinned down, and no
+  longer matters. Driven headless both ways (testing.md, «The subject model
+  runs headless»).
 
 **The export dropped every Subject layer, and nobody had noticed.**
 `renderRollPicture` built its layers with no rasters, and a subject with no
@@ -75,7 +88,8 @@ silence.
 stray, 0 missed of 672). To run it here without a dev server left behind: Vite
 `createServer().listen()` in one process and the gate as an ASYNC child —
 `spawnSync` blocks the loop serving the page and every `goto` times out.
-Not driven in the UI: the model needs a GPU and a real picture on a roll.
+Not driven in the UI then — since 2026-10-02 the model is known to run
+headless here (testing.md).
 
 ## The model is shown the WARPED frame (2026-09-24)
 
