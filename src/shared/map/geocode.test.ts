@@ -3,6 +3,7 @@ import {
   PLACE_RESULT_LIMIT,
   nominatimUrl,
   parsePlaceResults,
+  placeDetails,
   regionFromDisplayName,
 } from './geocode';
 
@@ -10,7 +11,7 @@ describe('nominatimUrl', () => {
   it('is the only URL this module can build — assert it in full', () => {
     expect(nominatimUrl('Kalbarri')).toBe(
       'https://nominatim.openstreetmap.org/search' +
-        `?q=Kalbarri&format=jsonv2&addressdetails=0&limit=${PLACE_RESULT_LIMIT}`,
+        `?q=Kalbarri&format=jsonv2&addressdetails=1&limit=${PLACE_RESULT_LIMIT}`,
     );
   });
 
@@ -57,15 +58,56 @@ describe('parsePlaceResults', () => {
     lon: '114.1650',
   };
 
-  it('reads a real response', () => {
+  const none = { area: '', state: '', stateCode: '', country: '', countryCode: '' };
+
+  it('reads a response with no structured address — the region from the display name, the details empty', () => {
     expect(parsePlaceResults([row])).toEqual([
       {
         name: 'Kalbarri',
         region: 'Western Australia, Australia',
         lat: -27.7099,
         lon: 114.165,
+        ...none,
       },
     ]);
+  });
+
+  it('keeps the structured address: county, state and its ISO code, country and its code', () => {
+    const address = {
+      town: 'Kalbarri',
+      county: 'Shire of Northampton',
+      state: 'Western Australia',
+      'ISO3166-2-lvl4': 'AU-WA',
+      postcode: '6536',
+      country: 'Australia',
+      country_code: 'au',
+    };
+    expect(parsePlaceResults([{ ...row, address }])[0]).toMatchObject({
+      region: 'Western Australia, Australia',
+      area: 'Shire of Northampton',
+      state: 'Western Australia',
+      stateCode: 'WA',
+      country: 'Australia',
+      countryCode: 'AU',
+    });
+  });
+
+  it('reads a province or a region as the state, a district as the area, and drops a code with no dash', () => {
+    expect(placeDetails({ province: 'Hokkaido', state_district: 'Ishikari', country: 'Japan', country_code: 'jp', 'ISO3166-2-lvl4': 'JP01' })).toEqual({
+      area: 'Ishikari',
+      state: 'Hokkaido',
+      stateCode: '',
+      country: 'Japan',
+      countryCode: 'JP',
+    });
+    expect(placeDetails(null)).toEqual(none);
+    expect(placeDetails('Perth')).toEqual(none);
+  });
+
+  it('prefers the structured state and country for the one-line region', () => {
+    const address = { state: 'Queensland', country: 'Australia' };
+    const r = parsePlaceResults([{ ...row, display_name: 'Cairns, Cairns Regional, Queensland, 4870, Australia', address }])[0];
+    expect(r.region).toBe('Queensland, Australia');
   });
 
   it('falls back to the head of the display name when `name` is absent', () => {

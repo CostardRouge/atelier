@@ -1,6 +1,7 @@
 import { useState } from 'react';
 import PlaceSearchField from '../../shared/map/PlaceSearchField';
 import { moveItem } from '../../shared/roadtrip/deck';
+import { adoptSearchResult } from '../../shared/roadtrip/place-search';
 import { formatCoords, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { createTripPlace, type TripPlace, type TripStage } from '../../shared/roadtrip/trip-types';
 
@@ -177,13 +178,7 @@ function PlaceFields({
           value={place.name}
           onChange={(next) => onChange({ ...place, name: next })}
           onPick={(result) =>
-            onChange({
-              ...place,
-              name: result.name,
-              // Only fill a state the author has not written themselves.
-              state: place.state.trim() || result.region,
-              coords: { lat: result.lat, lon: result.lon },
-            })
+            onChange(adoptSearchResult(place, result))
           }
           placeholder="Kalbarri"
           label={`Place ${index + 1}`}
