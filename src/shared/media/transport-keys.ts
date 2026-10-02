@@ -117,7 +117,20 @@ export function targetOwnsTyping(target: KeyTarget | null): boolean {
   return target.isContentEditable || TYPING_TAGS.has(target.tagName);
 }
 
-/** Describe a DOM event target for the two predicates above. */
+/**
+ * True when the focused element holds TEXT a ⌘C / ⌘V is about — a field, a
+ * text area, an editable region. Narrower again than {@link targetOwnsTyping}:
+ * a slider, a checkbox or a `<select>` has nothing to copy, and the slider is
+ * exactly what a click leaves focused after every adjustment — counting it
+ * made the Develop tool's ⌘C / ⌘V dead in the one moment they are wanted.
+ */
+export function targetTakesText(target: KeyTarget | null): boolean {
+  if (!target) return false;
+  if (target.isContentEditable || target.tagName === 'TEXTAREA') return true;
+  return target.tagName === 'INPUT' && !isActivatedInput(target);
+}
+
+/** Describe a DOM event target for the predicates above. */
 export function describeKeyTarget(target: EventTarget | null): KeyTarget | null {
   const el = target as HTMLElement | null;
   if (!el || typeof el.tagName !== 'string') return null;

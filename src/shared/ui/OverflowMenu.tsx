@@ -42,6 +42,12 @@ export interface OverflowItem {
   /** Painted red, and separated from the rest by a rule. */
   danger?: boolean;
   disabled?: boolean;
+  /**
+   * A TOGGLE rather than a verb: drawn with its tick, announced as a
+   * `menuitemcheckbox`, and the menu stays open so several can be set in one
+   * visit — closing per tick is a menu reopened for every row.
+   */
+  checked?: boolean;
 }
 
 export interface AnchoredMenuProps {
@@ -125,12 +131,13 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
     <button
       key={it.id}
       type="button"
-      role="menuitem"
+      role={it.checked === undefined ? 'menuitem' : 'menuitemcheckbox'}
+      aria-checked={it.checked}
       disabled={it.disabled}
       title={it.title}
       onClick={(e) => {
         e.stopPropagation();
-        latest.current.onClose();
+        if (it.checked === undefined) latest.current.onClose();
         it.onSelect();
       }}
       className={`shrink-0 text-left font-sans text-sm border-0 bg-transparent px-2.5 py-2 rounded-[8px] cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-default ${
@@ -139,7 +146,19 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
           : 'text-ink-soft hover:bg-paper-2 hover:text-ink'
       }`}
     >
-      {it.label}
+      {it.checked === undefined ? (
+        it.label
+      ) : (
+        <span className="flex items-center gap-2">
+          <span
+            aria-hidden="true"
+            className={`flex-none grid place-items-center w-4 h-4 rounded-[4px] border-[1.5px] ${it.checked ? 'bg-accent border-accent text-white' : 'border-line-strong'}`}
+          >
+            {it.checked && <span className="inline-flex text-3xs">{Icons.check}</span>}
+          </span>
+          <span className="min-w-0 flex-1">{it.label}</span>
+        </span>
+      )}
     </button>
   );
 

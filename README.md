@@ -1405,16 +1405,20 @@ picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
 the roll as you go. **←/→** move along the strip, **\\** held shows the picture
-as shot, **Z** goes closer and back, **⌘C / ⌘V** copy a develop from one
-picture to the next, and **Apply to N other pictures** writes it onto the rest
-of the roll, each as its own copy. **Shift-click** marks a range of the strip
-and **⌘/Ctrl-click** one picture, and the batch verbs then read the marks —
-*Apply to N selected*, *Paste to N selected*. For more than the develop,
-**⌘⇧C** (or the ⚙ glyph above the picture) opens the picture's settings as
-**sections** — develop, look, crop, border, perspective, lens, detail, repair,
-layers — ticked like Lightroom's Copy Settings: **Copy** holds them, **⌘⇧V**
-pastes them onto the picture on screen, and *Apply to N selected / N other
-pictures* writes them across the roll; **Reset** puts the ticked sections of
+as shot, **Z** goes closer and back, **⌘C** copies everything done to the
+picture on screen — no dialog — and **⌘V** pastes it onto the picture on
+screen, or onto every picture marked in the band when some are. What a paste
+carries is a standing choice, ticked in the **▾** beside the paste glyph:
+**sections** — develop, look, crop, border, perspective, lens, detail,
+vignette, repair, layers. A section the copied picture never touched is never
+pasted, so a target keeps its own. The keys hold while a slider has the focus,
+and there is no ⇧ chord to collide with a browser's (Arc copies the page's URL
+on ⌘⇧C). **Shift-click** marks a range of the strip and **⌘/Ctrl-click** one
+picture, and the batch verbs then read the marks. The ⚙ glyph above the
+picture opens the same sections as a sheet, like Lightroom's Copy Settings,
+for the deliberate gestures: *Apply to N selected / N other pictures* writes
+them across the roll, its **Copy** also carries a section left as shot (so the
+paste resets it), and **Reset** puts the ticked sections of
 the picture on screen back to as shot — its look and its layers included —
 one ⌘Z away. A **preset** saved here can carry the picture's look too (tick
 *+ look* when naming it): the chip then dresses a picture in both. In the

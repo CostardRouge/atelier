@@ -1,8 +1,6 @@
-import { useState } from 'react';
 import {
   DEFAULT_COPY_SECTIONS,
   PICTURE_SECTIONS,
-  readSections,
   sectionsWithEdits,
   type CopiedSettings,
   type PictureSection,
@@ -11,39 +9,24 @@ import { pictureLabel, type RollPicture } from '../../shared/develop/roll-types'
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
-
-const STORE_KEY = 'atelier.develop.sections';
-
-function readStored(): PictureSection[] {
-  try {
-    const raw = localStorage.getItem(STORE_KEY);
-    return readSections(raw ? JSON.parse(raw) : null);
-  } catch {
-    return [...DEFAULT_COPY_SECTIONS];
-  }
-}
-
-function store(sections: readonly PictureSection[]) {
-  try {
-    localStorage.setItem(STORE_KEY, JSON.stringify(sections));
-  } catch {
-    /* a private window: the choice lasts this sheet */
-  }
-}
+import { setCarriedSections, useCarriedSections } from './carried-sections';
 
 /**
  * The one picker for every verb that carries MORE than the develop
- * (`picture-sections.ts`): copy (⌘⇧C), paste what was copied (⌘⇧V), apply to
- * the marked pictures or to the others. Lightroom's Copy Settings dialog, as
- * one sheet — the per-tab Apply-to verbs stay for the one-section gesture.
+ * (`picture-sections.ts`): copy, paste what was copied, apply to the marked
+ * pictures or to the others. Lightroom's Copy Settings dialog, as one sheet —
+ * the per-tab Apply-to verbs stay for the one-section gesture. The everyday
+ * copy is NOT here: ⌘C / ⌘V copy what was done and paste it with no dialog;
+ * this sheet's Copy is the deliberate one, which also carries a section left
+ * as shot (so it resets it on the targets).
  *
  * **Reset** is the same picker read the other way (audit item 7): the ticked
  * sections of THIS picture back to as shot — the look and the layers had no
  * reset at all, and the develop's ↺ still resets the numbers alone. No
  * confirmation: it is one undo step, like every write of the roll.
  *
- * The ticks are remembered in this browser, a convenience like a remembered
- * tab. Each row says whether THIS picture has anything in that section, so a
+ * The ticks are remembered in this browser and are the very set ⌘V carries
+ * (`carried-sections.ts`). Each row says whether THIS picture has anything in that section, so a
  * copy of an untouched section reads as what it is: a reset of the others.
  */
 export default function SettingsSheet({
@@ -70,14 +53,10 @@ export default function SettingsSheet({
   onReset: (sections: PictureSection[]) => void;
   onClose: () => void;
 }) {
-  const [ticked, setTicked] = useState<PictureSection[]>(readStored);
+  const ticked = useCarriedSections();
   useDialogKeys({ onCancel: onClose });
   const edited = sectionsWithEdits(picture);
-  const set = (next: PictureSection[]) => {
-    const ordered = readSections(next);
-    setTicked(ordered);
-    store(ordered);
-  };
+  const set = setCarriedSections;
   const toggle = (id: PictureSection) => set(ticked.includes(id) ? ticked.filter((x) => x !== id) : [...ticked, id]);
   const none = ticked.length === 0;
   const pasteFrom = copied;
@@ -116,7 +95,7 @@ export default function SettingsSheet({
               Copied from <span className="text-ink">{pictureLabel(pasteFrom.from)}</span>:{' '}
               {pasteFrom.sections.map((id) => PICTURE_SECTIONS.find((s) => s.id === id)?.label).join(', ')}
             </span>
-            <Button size="sm" icon={Icons.paste} onClick={act(onPaste)} title="Paste ⌘⇧V — these sections onto this picture">
+            <Button size="sm" icon={Icons.paste} onClick={act(onPaste)} title="Paste — these sections onto this picture">
               Paste
             </Button>
           </div>
@@ -188,7 +167,7 @@ export default function SettingsSheet({
             Reset
           </Button>
           <span className="flex-1" />
-          <Button size="sm" icon={Icons.copy} disabled={none} onClick={act(() => onCopy(ticked))} title="Copy ⌘⇧C — hold these sections for another picture, in this session">
+          <Button size="sm" icon={Icons.copy} disabled={none} onClick={act(() => onCopy(ticked))} title="Copy — hold the ticked sections for another picture, as shot ones included, in this session">
             Copy
           </Button>
           {selectedIds.length > 0 && (

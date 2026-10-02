@@ -12,7 +12,7 @@ export interface SelectionVerbs {
   applyCount: number;
   /** Every marked picture is ignored — the Ignore verb brings them back instead. */
   allIgnored: boolean;
-  /** Settings are copied (⌘⇧C), so "Paste settings" can act. */
+  /** A picture is copied (⌘C), so "Paste settings" can act. */
   canPaste: boolean;
   onAll: () => void;
   onNone: () => void;
@@ -62,7 +62,7 @@ export default function SelectionBar({
         ]
       : []),
     { id: 'rule', label: 'Back to the roll’s rule', title: 'U — each leaves if it is edited', disabled: none, onSelect: verbs.onRule },
-    { id: 'paste', label: 'Paste settings', title: '⌘⇧V — the sections copied with ⌘⇧C, onto each', disabled: none || !verbs.canPaste, onSelect: verbs.onPaste },
+    { id: 'paste', label: 'Paste settings', title: '⌘V — the picture copied with ⌘C, onto each, as the ▾ beside paste says', disabled: none || !verbs.canPaste, onSelect: verbs.onPaste },
     { id: 'variants', label: 'A variant of each, as edited', disabled: none, onSelect: verbs.onVariants },
     { id: 'remove', label: `Take ${n === 1 ? 'it' : 'them'} off the roll…`, title: 'The files stay where they are', danger: true, disabled: none, onSelect: verbs.onRemove },
   ];

@@ -13,6 +13,7 @@ import type { LutStack } from '../lut/use-lut-stack';
 import type { ButtonSize } from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
+import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import DevelopFold from './DevelopFold';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
@@ -39,7 +40,23 @@ import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './de
  *
  * The modal keeps the links (`DevelopClipboardActions`): a sheet has room, and
  * no stage bar.
+ *
+ * `clip` lets a host copy MORE than the develop numbers through the same two
+ * glyphs — the Develop tool copies the whole picture — and hang a ▾ off the
+ * paste for what a paste carries. The ▾ is drawn always, greyed when nothing
+ * is held: a control that appeared on a copy would slide every verb after it.
  */
+export interface DevelopClipVerbs {
+  canCopy: boolean;
+  copyTitle: string;
+  onCopy: () => void;
+  canPaste: boolean;
+  pasteTitle: string;
+  onPaste: () => void;
+  /** What a paste carries, as toggles — the ▾ beside the paste glyph. */
+  pasteMenu: readonly OverflowItem[];
+}
+
 export function DevelopActionsGroup({
   draft,
   asShot,
@@ -48,6 +65,7 @@ export function DevelopActionsGroup({
   className = '',
   size = 'sm',
   clipboard = true,
+  clip,
   children,
 }: {
   draft: DevelopSettings;
@@ -59,6 +77,8 @@ export function DevelopActionsGroup({
   size?: ButtonSize;
   /** The three verbs themselves — a stage with no develop to copy (the crop) keeps the well for `children` alone. */
   clipboard?: boolean;
+  /** The host's own copy and paste, in place of the develop numbers'. */
+  clip?: DevelopClipVerbs;
   /** The host's own verbs, past a hairline. */
   children?: ReactNode;
 }) {
@@ -70,11 +90,21 @@ export function DevelopActionsGroup({
       {clipboard && (
         <>
       <IconButton
-        label="Copy this develop"
-        title={asShot ? 'Nothing to copy — this picture is as shot' : 'Copy ⌘C — keep these numbers for the next picture, in this session'}
+        label={clip ? 'Copy this picture' : 'Copy this develop'}
+        title={
+          clip
+            ? clip.copyTitle
+            : asShot
+              ? 'Nothing to copy — this picture is as shot'
+              : 'Copy ⌘C — keep these numbers for the next picture, in this session'
+        }
         size={size}
-        disabled={asShot}
+        disabled={clip ? !clip.canCopy : asShot}
         onClick={() => {
+          if (clip) {
+            clip.onCopy();
+            return;
+          }
           copyDevelop(draft);
           onTold('copied');
         }}
@@ -82,11 +112,15 @@ export function DevelopActionsGroup({
         {Icons.copy}
       </IconButton>
       <IconButton
-        label="Paste a develop onto this picture"
-        title={canPaste ? 'Paste ⌘V — replace these numbers with the copied ones' : 'Nothing copied yet'}
+        label={clip ? 'Paste onto this picture' : 'Paste a develop onto this picture'}
+        title={clip ? clip.pasteTitle : canPaste ? 'Paste ⌘V — replace these numbers with the copied ones' : 'Nothing copied yet'}
         size={size}
-        disabled={!canPaste}
+        disabled={clip ? !clip.canPaste : !canPaste}
         onClick={() => {
+          if (clip) {
+            clip.onPaste();
+            return;
+          }
           const pasted = pasteDevelop();
           if (!pasted) return;
           onReplace(pasted);
@@ -95,6 +129,16 @@ export function DevelopActionsGroup({
       >
         {Icons.paste}
       </IconButton>
+      {clip && (
+        <OverflowMenu
+          label="What a paste carries"
+          icon={Icons.down}
+          size={size}
+          align="start"
+          className="-ml-0.5 [&>button]:w-4 [&>button]:min-w-0 [&>button]:px-0"
+          items={clip.pasteMenu}
+        />
+      )}
       <IconButton
         label="Reset to as shot"
         title="Reset to as shot — throw these numbers away"

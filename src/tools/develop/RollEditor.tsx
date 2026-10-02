@@ -2,7 +2,7 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
-import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
+import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
 import type { DetailSettings } from '../../shared/render/detail';
@@ -111,11 +111,15 @@ import { DEFAULT_REPAIR_TOOL, type RepairTool } from './RepairPanel';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useExportMarks } from './use-export-marks';
 import SettingsSheet from './SettingsSheet';
+import { carriedSections, setCarriedSections, useCarriedSections } from './carried-sections';
+import type { DevelopClipVerbs } from '../../shared/develop/DevelopSections';
 import {
   PICTURE_SECTIONS,
   applySections,
+  copiedSectionsOf,
   copiedSettings,
   copySettings,
+  pastedSections,
   resetSections,
   subscribeCopiedSettings,
   type PictureSection,
@@ -838,7 +842,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
-  // --- the sections: ⌘⇧C / ⌘⇧V and "apply to others" for any part of a picture
+  // --- the sections: ⌘C / ⌘V and "apply to others" for any part of a picture
   const [settingsOpen, setSettingsOpen] = useState(false);
   // The making-of sheet: opened from the Export tab's row or the bar's menu,
   // drawn by the workbench, which holds the picture's bytes.
@@ -848,6 +852,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const copied = useSyncExternalStore(subscribeCopiedSettings, copiedSettings);
+  const carried = useCarriedSections();
   const sectionNames = (sections: readonly PictureSection[]) =>
     sections.map((id) => PICTURE_SECTIONS.find((x) => x.id === id)?.label.toLowerCase()).join(', ');
   const copySectionsOf = useCallback(
@@ -859,14 +864,90 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     },
     [],
   );
+  /**
+   * ⌘C and the copy glyph: the picture AS IT STANDS — `develop` is the
+   * workbench's draft, which can be a beat ahead of the roll — holding every
+   * section it has something in, with no dialog. The develop numbers also go
+   * to the develop clipboard, so a Trips or Studio sheet can paste them.
+   */
+  const copyPicture = useCallback((develop: DevelopSettings) => {
+    const p = latest.current.pictures.find((x) => x.id === openIdRef.current);
+    if (!p) return;
+    const now = { ...p, develop };
+    const sections = copiedSectionsOf(now);
+    if (sections.length === 0) {
+      setNotice('nothing to copy — this picture is as shot');
+      return;
+    }
+    copySettings(now, sections);
+    copyDevelop(develop);
+    const left = sections.filter((id) => !carriedSections().includes(id));
+    setNotice(`copied ${sectionNames(sections)}${left.length ? ` — ⌘V leaves ${sectionNames(left)} behind (▾ beside paste)` : ''}`);
+  }, []);
+  /** The held picture onto `ids`, carrying what the ▾ says. */
+  const pasteOnto = useCallback(
+    (ids: readonly string[]): boolean => {
+      const held = copiedSettings();
+      if (!held || ids.length === 0) return false;
+      const sections = pastedSections(held.sections, carriedSections());
+      if (sections.length === 0) {
+        setNotice(`nothing to paste — ${sectionNames(held.sections)} ${held.sections.length === 1 ? 'is' : 'are'} left behind (▾ beside paste)`);
+        return true;
+      }
+      update((r) => applySections(r, held.from, ids, sections), 'paste');
+      const onto = ids.length === 1 && ids[0] === openIdRef.current ? '' : ` onto ${ids.length} picture${ids.length === 1 ? '' : 's'}`;
+      setNotice(`pasted ${sectionNames(sections)} from ${pictureLabel(held.from)}${onto}`);
+      return true;
+    },
+    [update],
+  );
   const pasteSections = useCallback((): boolean => {
-    const held = copiedSettings();
     const id = openIdRef.current;
-    if (!held || !id) return false;
-    update((r) => applySections(r, held.from, [id], held.sections), 'paste');
-    setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)}`);
-    return true;
-  }, [update]);
+    return id ? pasteOnto([id]) : false;
+  }, [pasteOnto]);
+  /**
+   * The copy and paste glyphs' state, and the ▾ of what a paste carries —
+   * the workbench draws them and adds the draft to a copy. A section the held
+   * picture has nothing in is still offered (the choice stands for the next
+   * copy) and says so.
+   */
+  const clip = useMemo<Omit<DevelopClipVerbs, 'onCopy' | 'onPaste'>>(() => {
+    const n = selectionTargets.length;
+    const goes = copied ? pastedSections(copied.sections, carried) : [];
+    const pasteMenu: OverflowItem[] = [
+      {
+        id: 'from',
+        label: copied ? `⌘V carries, from ${pictureLabel(copied.from)}:` : '⌘V carries:',
+        disabled: true,
+        onSelect: () => {},
+      },
+      ...PICTURE_SECTIONS.map((sec) => ({
+        id: sec.id,
+        // A section the held picture has nothing in is greyed, not worded:
+        // the tick still stands for the next copy.
+        label: copied && !copied.sections.includes(sec.id) ? <span className="text-faint">{sec.label}</span> : sec.label,
+        title: copied && !copied.sections.includes(sec.id) ? `${sec.hint} — nothing of it on ${pictureLabel(copied.from)}` : sec.hint,
+        checked: carried.includes(sec.id),
+        onSelect: () => {
+          const now = carriedSections();
+          setCarriedSections(now.includes(sec.id) ? now.filter((x) => x !== sec.id) : [...now, sec.id]);
+        },
+      })),
+    ];
+    return {
+      canCopy: !!open && isEdited(open),
+      copyTitle: 'Copy ⌘C — everything done to this picture, held for the next one',
+      canPaste: !!copied || canPaste,
+      pasteTitle: copied
+        ? goes.length
+          ? `Paste ⌘V — ${sectionNames(goes)} from ${pictureLabel(copied.from)}${n ? `, onto the ${n} selected` : ''}`
+          : 'Paste ⌘V — everything copied is left behind; the ▾ chooses'
+        : canPaste
+          ? 'Paste ⌘V — the develop numbers copied in another sheet'
+          : 'Nothing copied yet — ⌘C on an edited picture',
+      pasteMenu,
+    };
+  }, [copied, carried, canPaste, open, selectionTargets.length]);
   const resetSectionsOf = useCallback(
     (sections: PictureSection[]) => {
       const id = openIdRef.current;
@@ -1068,15 +1149,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     update((r) => setDelivery(r, ids, 'auto'));
     setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} back on the roll’s rule — each leaves if it is edited`);
   }, [selectedPictures, update]);
-  const pasteSectionsTo = useCallback(
-    (ids: readonly string[]) => {
-      const held = copiedSettings();
-      if (!held || ids.length === 0) return;
-      update((r) => applySections(r, held.from, ids, held.sections), 'paste');
-      setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)} onto ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
-    },
-    [update],
-  );
+  const pasteSectionsTo = useCallback((ids: readonly string[]) => void pasteOnto(ids), [pasteOnto]);
+  /**
+   * ⌘V and the paste glyph: onto the pictures marked in the band when some
+   * are, else onto the open one — Lightroom's paste and its sync, one key.
+   */
+  const selectionRef = useRef(selectionTargets);
+  selectionRef.current = selectionTargets;
+  const pastePicture = useCallback((): boolean => {
+    const marked = selectionRef.current;
+    return marked.length > 0 ? pasteOnto(marked) : pasteSections();
+  }, [pasteOnto, pasteSections]);
   const variantsOf = useCallback(
     (ids: readonly string[]) => {
       // One id per source, decided before the write, so the thumbnails can
@@ -1770,7 +1853,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onMakingOf={(change) => handleMakingOf(open.id, change)}
               onVariant={() => makeVariant('clone')}
               onLook={(look) => update((r) => copyGradeTo(r, [open.id], look))}
-              onPasteSettings={pasteSections}
+              clipboard={clip}
+              onCopy={copyPicture}
+              onPaste={pastePicture}
               deliveryTable={
                 <DeliveryTable
                   pictures={roll.pictures}

@@ -152,6 +152,12 @@ export interface EditorKeyPress {
   shiftKey: boolean;
   /** The focused element types or moves a value (an input, a slider, a select). */
   targetTypes: boolean;
+  /**
+   * The focused element holds TEXT a ⌘C / ⌘V is about (`targetTakesText`) —
+   * narrower than `targetTypes`: a slider a click left focused must not keep
+   * the chord, or copying after an adjustment never works. Absent = `targetTypes`.
+   */
+  targetTakesText?: boolean;
   /** Text is selected on the page: ⌘C copies THAT, not the develop. */
   hasSelection: boolean;
   /** The Layers tab is open — where `P` and `M` are the mask's keys, not the delivery's. */
@@ -179,8 +185,6 @@ export type EditorKeyAction =
   | 'deliver'
   | 'deliver-auto'
   | 'ignore'
-  | 'copy-settings'
-  | 'paste-settings'
   | 'clipping'
   | 'mono'
   | 'variant'
@@ -218,26 +222,24 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * contact sheet, `F` the picture alone, `-` and `=` the thumbnails smaller
  * and larger, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
- * copy and paste the develop — the chord is read first, so ⌘C stays copy while
- * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
+ * copy the picture and paste it — the chord is read first, so ⌘C stays copy
+ * while a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
  * the picture (a repair patch) and Escape lets go of it — what each applies
  * to is the caller's, which knows what is selected. A field or a slider keeps
  * every key it could use; a held arrow does step (it is how a strip is
  * swept), a held `\` does not re-press.
  */
 export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
-  if (press.targetTypes || press.altKey) return null;
+  if (press.altKey) return null;
   const mod = press.metaKey || press.ctrlKey;
   if (mod) {
-    if (press.shiftKey) {
-      // ⌘⇧C / ⌘⇧V: the SECTIONS, Lightroom's chord (`picture-sections.ts`) —
-      // ⌘C / ⌘V below stay the develop numbers, shared with the modals.
-      const k = press.key.toLowerCase();
-      if (press.repeat) return null;
-      if (k === 'c') return press.hasSelection ? null : 'copy-settings';
-      if (k === 'v') return 'paste-settings';
-      return null;
-    }
+    // A chord yields only to a field holding TEXT: a slider left focused by
+    // the drag that just adjusted the picture has nothing to copy.
+    if (press.targetTakesText ?? press.targetTypes) return null;
+    // ONE chord copies and pastes the whole picture (`picture-sections.ts`):
+    // the shifted pair it replaces is a browser's own in Arc (⌘⇧C copies the
+    // page's URL), so it never reached the page. ⌘⇧ anything is left alone.
+    if (press.shiftKey) return null;
     const k = press.key.toLowerCase();
     // ⌘' — Lightroom's virtual copy: a variant of the picture as it stands
     // (item 30). The apostrophe is unshifted on QWERTY and on AZERTY (its 4).
@@ -249,6 +251,7 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
     if (k === 'a') return press.selecting && !press.repeat ? 'select-all' : null;
     return null;
   }
+  if (press.targetTypes) return null;
   // `?` is the one key reached WITH shift on most layouts, so it is read
   // before the blanket refusal below: a help key nobody can press is not one.
   if (press.key === '?') return press.repeat ? null : 'help';

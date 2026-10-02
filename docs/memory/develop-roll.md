@@ -493,21 +493,34 @@ shared block. Rules a later phase must keep:
   exact identity against LittleCMS's own sRGB (Pillow's ImageCms, 2 197
   colours, 0 codes apart): check a profile change the same way. Wide gamut
   (P3, Adobe RGB) is pass 4 and needs a P3 canvas, not a tag.
-- **Copy, paste and Apply-to go through ONE picker of SECTIONS**
-  (2026-09-23, audit items 4+5, `develop/picture-sections.ts`,
-  `SettingsSheet.tsx`). The sections ARE `PictureEdit` — "edited" and "what can
-  be copied" one vocabulary. ⌘C/⌘V stay the develop numbers (shared with the
-  Trips/Studio modals); ⌘⇧C opens the sheet (and a ⚙ glyph in the stage-bar
-  well), ⌘⇧V pastes what was copied. The clipboard holds a SNAPSHOT of the
-  source picture, so pasting back onto that same picture restores it
-  (`applySections` skips the source only by IDENTITY, i.e. an apply-to).
-  Defaults: develop, look, lens, detail — what one body shares; crop, border,
-  perspective, repair and layers belong to one frame. Ticks remembered in
-  `localStorage` (a convenience). Never carried: rendition, RAW base
-  (`developOnto` keeps the TARGET's), words, delivery state. A ticked section
-  that is as shot at the source RESETS it on the targets — said in the sheet,
-  and each row marks `edited` / `as shot`. The per-tab Apply-to verbs stay for
-  the one-section gesture. ⌘⇧C replaced a test pinning it to nothing: ⇧C alone
+- **Copy, paste and Apply-to go through ONE vocabulary of SECTIONS**
+  (2026-09-23, audit items 4+5, `develop/picture-sections.ts`; rev.
+  2026-10-02, his *"ce n'est pas du tout le cas … j'utilise Arc"*). The
+  sections ARE `PictureEdit` — "edited" and "what can be copied" one
+  vocabulary. **⌘C copies the WHOLE picture with no dialog** — every section
+  it has something in (`copiedSectionsOf`, the draft folded in since it can be
+  a beat ahead of the roll; the develop numbers also go to the shared develop
+  clipboard for the Trips/Studio sheets) — and **⌘V pastes onto the band's
+  selection when there is one, else the open picture**, carrying
+  `pastedSections(copied, carried)`: what a paste carries is ONE standing
+  per-browser choice (`tools/develop/carried-sections.ts`, the old sheet's
+  `atelier.develop.sections` key), ticked in a ▾ always drawn beside the paste
+  glyph (`DevelopClipVerbs.pasteMenu`, `OverflowItem.checked` keeps the menu
+  open) and in the ⚙ sheet alike. A section the source never touched is never
+  pasted, so a target keeps its own; the ⚙ sheet's Copy is the deliberate one
+  that carries an as-shot section and therefore resets it. **Why it was
+  rebuilt**: ⌘⇧C/⌘⇧V never reached the page in Arc (⌘⇧C copies the URL), the
+  copy glyph was disabled on a picture whose only edit was a look or a crop,
+  and ⌘C/⌘V were DEAD after every slider drag — the range kept the focus and
+  `targetOwnsTyping` counts an INPUT as typing. A chord now yields only to a
+  field holding text (`targetTakesText`, `EditorKeyPress.targetTakesText`);
+  letters and arrows still yield to the slider. No ⇧ chord is ours any more.
+  The clipboard holds a SNAPSHOT of the source picture, so pasting back onto
+  that same picture restores it (`applySections` skips the source only by
+  IDENTITY, i.e. an apply-to). Defaults: develop, look, lens, detail — what
+  one body shares. Never carried: rendition, RAW base (`developOnto` keeps the
+  TARGET's), words, delivery state. The per-tab Apply-to verbs stay for the
+  one-section gesture. ⇧C alone
   is still crop-to-view. **Reset this picture** (item 7) is the same sheet read
   the other way: the ticked sections back to as shot, NO confirmation — it is
   one undo step like every roll write (measured: reset all, ⌘Z restores the

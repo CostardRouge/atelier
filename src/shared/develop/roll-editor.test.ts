@@ -119,11 +119,24 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: "'" }))).toBeNull();
   });
 
-  it('opens the sections on ⌘⇧C and pastes them on ⌘⇧V, never over a text selection', () => {
-    expect(editorKeyAction(press({ key: 'C', metaKey: true, shiftKey: true }))).toBe('copy-settings');
-    expect(editorKeyAction(press({ key: 'v', ctrlKey: true, shiftKey: true }))).toBe('paste-settings');
-    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true, hasSelection: true }))).toBeNull();
-    expect(editorKeyAction(press({ key: 'c', metaKey: true, shiftKey: true, targetTypes: true }))).toBeNull();
+  it('copies and pastes on ⌘C / ⌘V alone — the shifted pair is a browser\'s (Arc copies the URL on ⌘⇧C)', () => {
+    expect(editorKeyAction(press({ key: 'C', metaKey: true, shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'v', ctrlKey: true, shiftKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, hasSelection: true }))).toBeNull();
+  });
+
+  it('keeps ⌘C / ⌘V on a slider a click left focused, and yields them to a text field', () => {
+    // The slider is what every adjustment leaves focused: it moves a value
+    // (`targetTypes`) but holds no text, so the chord is still the editor's.
+    const onSlider = { targetTypes: true, targetTakesText: false };
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, ...onSlider }))).toBe('copy');
+    expect(editorKeyAction(press({ key: 'v', metaKey: true, ...onSlider }))).toBe('paste');
+    // ...while its letters and arrows stay the slider's.
+    expect(editorKeyAction(press({ key: 'ArrowLeft', ...onSlider }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'a', ...onSlider }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, targetTypes: true, targetTakesText: true }))).toBeNull();
+    // A caller that does not say keeps the old, wider rule.
+    expect(editorKeyAction(press({ key: 'c', metaKey: true, targetTypes: true }))).toBeNull();
   });
 
   it('yields to a field, a selection, a held key and other chords', () => {
@@ -220,8 +233,8 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'C', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'c', shiftKey: true }))).toBe('crop-view');
     expect(editorKeyAction(press({ key: 'C', shiftKey: true, repeat: true }))).toBeNull();
-    // With ⌘ it is the settings' copy, never the crop.
-    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBe('copy-settings');
+    // With ⌘ it is nobody's — never the crop.
+    expect(editorKeyAction(press({ key: 'C', shiftKey: true, metaKey: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'C', shiftKey: true, targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
   });
@@ -240,7 +253,7 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'd', repeat: true }))).toBeNull();
   });
 
-  it('keeps ⌘C for the develop, so a bare C can open the crop', () => {
+  it('keeps ⌘C for the copy, so a bare C can open the crop', () => {
     expect(editorKeyAction(press({ key: 'c', metaKey: true }))).toBe('copy');
     expect(editorKeyAction(press({ key: 'c' }))).toEqual({ tab: 'crop' });
   });
