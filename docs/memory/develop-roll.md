@@ -1428,3 +1428,59 @@ The rules a later agent must keep:
   are relayed through `callbacks.current`, like every other.
 - Driven headless at 1270 × 1300, 1700 × 1200 and 390 × 844 (touch) — NOT on
   his Mac or his iPhone. §7 of the brief stays his to overrule.
+## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
+
+`shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the
+Crop tab's Level row. `measureTilt(luma)`: a 5-tap binomial blur, a
+**Scharr** gradient per pixel, each edge's line direction folded to its
+deviation from the nearest axis (the fold `levelDelta` makes, so a leaning
+wall and a tilted horizon vote together), a 0.1° histogram within
+`MAX_TILT` (15°) weighted by edge strength (edges under 15 % of the strongest
+do not vote), the peak refined by a weighted mean over ±1°, and a
+CONFIDENCE — that window's share of the mass — under which (`CONFIDENCE_FLOOR`
+0.2) the verb says "no line to level on" and turns nothing. The panel reads
+the picture AS SHOT through `picture.asShotSample(512)` (new on
+`DevelopPicture`: a fresh canvas with the source drawn small, on demand), and
+writes through `crop.straighten(levelFine(tilt, flipX, flipY))` so the zone
+refits from the intent exactly as a drawn Level line does; a flip reverses
+the sign, a quarter turn needs no account. **Two traps, both measured in the
+specs**: Sobel's kernel is not rotation-symmetric and read a 4° edge as 3.8°
+(a 5 % shrink on every angle) — Scharr's (3, 10, 3) is exact to the tenth;
+and without the blur a nearly horizontal edge is a staircase whose long runs
+vote for 0°. **A third, found only by driving it**: `asShotSample` first drew
+the source to 512 px in ONE `drawImage`, and the browser's default downscale
+is a bilinear SUBSAMPLE — at 3.1× it turned a 4° horizon into a staircase the
+module read as 5.9° at 36 % confidence (reproduced in node by subsampling the
+same picture). The sample is now halved step by step with
+`imageSmoothingQuality = 'high'`, so every source pixel is averaged; a
+sampler for any measurement (a histogram excepted) must downscale that way.
+Driven headless against the dev server on a 1600 × 1200 PNG with a horizon
+falling 4° to the right: *Auto* wrote Straighten −3.9° (79 % of the edges
+agree), kept through a later crop, no page error.
+
+## Crop to the subject (2026-10-02, A3 of `docs/auto-develop.md`)
+
+`shared/develop/subject-crop.ts` (pure, 11 specs) + `tools/develop/use-subject-crop.ts`
++ a *Subject* row in the Crop tab. `maskBounds` reads the subject's box and
+covered share off a `BrushRaster`; `subjectZone` takes the box's corners into
+the TURNED picture's frame (`screen = R(θ)·M·q`, the zone's own, so a flip
+mirrors the centre and a quarter turn transposes the box), pads by
+`SUBJECT_MARGIN` (12 % of the longer side, each side), grows the SHORTER side
+to the locked ratio (the subject is never cut to a format), and SETTLES the
+zone: `settleZone` moves it toward the middle as little as it takes, keeping
+its size, and shrinks (`fitIntent`) only when even the middle cannot hold it
+— a subject at the edge keeps its shoulder. Refused and said: a mask under
+`MIN_SUBJECT` (0.5 % of the frame), a box past `MAX_SUBJECT` (92 % of both
+edges). **Where the subject comes from**: the union of the picture's Subject
+layers' rasters (`subjectLayersToSegment`, the very rasters the layer pass
+draws — `resolvedSubjects`) when it has any; else the model is asked about
+the CENTRE, once (`segmentSubject` over `picture.segmentSource`, else
+`asShotSample(1024)`), as a task on the stage's scope so the hairline says
+it, and the told line says *from the centre* — an assumption spoken, never a
+crop from nowhere. The zone goes through `crop.setZone` so the chip is kept.
+Three taste constants, named for his pictures. Driven headless on the same
+synthetic picture with no Subject layer: the model loaded on SwiftShader,
+answered the centre, the told line read *cropped to what the model finds at
+the centre*, the Shape row went 1.33:1 → 1.70:1 and the straighten stayed
+— the plumbing, not the taste, since a synthetic picture has no subject to
+judge. Not driven on a photograph with a Subject layer.

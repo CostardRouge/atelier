@@ -1,7 +1,13 @@
 import { describe, expect, it } from 'vitest';
 import {
+  BRIGHT_LEAN,
+  BRIGHT_TARGET,
+  DARK_LEAN,
+  DARK_TARGET,
+  autoBands,
   autoColour,
   autoTone,
+  describeAutoBands,
   describeAutoTone,
   measureSource,
   percentile,
@@ -277,5 +283,82 @@ describe('whiteBalanceFor — the dropper and the button share one solve', () =>
 
   it('says so when the pixel it was given is past the sliders’ reach', () => {
     expect(whiteBalanceFor([0.6, 0.3, 0.05]).clamped).toBe(true);
+  });
+});
+
+describe('autoBands — the two bands between the ends', () => {
+  /** A picture with most of its pixels at `lowCode` and the rest at `highCode`. */
+  const leaning = (lowCode: number, highCode: number, lowShare = 0.8) =>
+    measureSource(
+      bytes([
+        ...Array.from({ length: Math.round(1000 * lowShare) }, () => [lowCode, lowCode, lowCode] as [number, number, number]),
+        ...Array.from({ length: Math.round(1000 * (1 - lowShare)) }, () => [highCode, highCode, highCode] as [number, number, number]),
+      ]),
+    );
+  /** The encoded luminance a grey of this encoded value lands on through the record. */
+  const through = (L: number, patch: Partial<typeof DEFAULT_DEVELOP>): number => {
+    const lin = toLinear(L, 'srgb');
+    const [r] = developLinear([lin, lin, lin], { ...DEFAULT_DEVELOP, ...patch });
+    return fromLinear(Math.min(1, r), 'srgb');
+  };
+
+  it('leaves a picture that leans neither way alone', () => {
+    expect(autoBands(measureSource(ramp(30, 220)))).toBeNull();
+    expect(describeAutoBands(null)).toBe('nothing to recover');
+  });
+
+  it('lifts the shadows of a dark-leaning picture, and no highlight', () => {
+    const stats = leaning(20, 140);
+    const dark = percentile(stats.bins, stats.total, 0.1);
+    expect(dark).toBeLessThan(DARK_LEAN);
+    const bands = autoBands(stats)!;
+    expect(bands.shadows).toBeGreaterThan(0);
+    expect(bands.highlights).toBe(0);
+    // Solved against the engine: the 10th percentile moves toward its target,
+    // part of the way (0.6 of it) — within a slider unit.
+    const out = through(dark, { shadows: bands.shadows });
+    const aimed = dark + (DARK_TARGET - dark) * 0.6;
+    expect(out).toBeGreaterThan(dark);
+    expect(Math.abs(out - aimed)).toBeLessThan(0.004);
+    expect(describeAutoBands(bands)).toBe(`shadows +${bands.shadows}`);
+  });
+
+  it('pulls the highlights of a bright-leaning picture down, and no shadow', () => {
+    const stats = leaning(236, 120);
+    const bright = percentile(stats.bins, stats.total, 0.9);
+    expect(bright).toBeGreaterThan(BRIGHT_LEAN);
+    const bands = autoBands(stats)!;
+    expect(bands.highlights).toBeLessThan(0);
+    expect(bands.shadows).toBe(0);
+    const out = through(bright, { highlights: bands.highlights });
+    const aimed = bright + (BRIGHT_TARGET - bright) * 0.6;
+    expect(out).toBeLessThan(bright);
+    expect(Math.abs(out - aimed)).toBeLessThan(0.004);
+    expect(describeAutoBands(bands)).toBe(`highlights ${bands.highlights}`);
+  });
+
+  it('writes both on a picture that leans both ways', () => {
+    const bands = autoBands(leaning(8, 245, 0.5))!;
+    expect(bands.shadows).toBeGreaterThan(0);
+    expect(bands.highlights).toBeLessThan(0);
+  });
+
+  it('says so when the band runs out before its target', () => {
+    // A tenth of the picture crushed to black: the band has no weight at 0
+    // and cannot reach the target, so it is written whole and the clamp said.
+    const bands = autoBands(leaning(0, 128, 0.2))!;
+    expect(bands.shadows).toBe(100);
+    expect(bands.clamped).toBe(true);
+    expect(describeAutoBands(bands)).toContain('as far as the band reaches');
+  });
+
+  it('touches no end and no colour — whites, blacks and the levels are the other verbs’', () => {
+    const bands = autoBands(leaning(12, 140))!;
+    expect(Object.keys(bands).sort()).toEqual(['clamped', 'highlights', 'shadows']);
+  });
+
+  it('gives the same answer twice — it SETS, it does not nudge', () => {
+    const stats = leaning(20, 140);
+    expect(autoBands(stats)).toEqual(autoBands(stats));
   });
 });

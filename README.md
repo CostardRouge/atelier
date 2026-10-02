@@ -1363,7 +1363,16 @@ Apply-to blocks; Borders starts closed). What a setting does is explained
 behind the small **ⓘ** beside its name rather than under it, so the column
 holds the controls; what a line says about the picture right now — why it
 leaves at this size, the copyright that will be written — stays in the open.
-Every setting belongs to the
+Three **Auto** verbs
+write numbers from the picture *as shot*, so pressing one twice gives the
+same answer: **Auto tone** stretches the range into Levels (a black point, a
+white point, a gamma) and touches no colour; **Auto colour** neutralises the
+average cast as temperature and tint — the wrong answer on a sunset, which is
+why it is its own button, and **Pick grey** asks you for a neutral instead;
+**Auto bands** compresses the ends where the picture leans — a tenth of it
+against black lifts Shadows, a tenth against white pulls Highlights down —
+part of the way, so a picture dark on purpose keeps its character, and says
+when a band runs out before its target. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
@@ -1517,7 +1526,15 @@ zone of it, and the arrow keys nudge the zone once the stage has been touched.
 **Straighten** turns the picture *under* the zone, which shrinks just enough
 to keep clear of the corners and grows back to what you drew when you
 straighten back; **Level** corrects the angle from a line you draw along the
-horizon. The quarter turns take the zone with the picture, and the two flips
+horizon, and **Auto** finds that line by itself — the strongest straight edge
+within 15° of level, a horizon or a wall, read off the picture as shot — or
+says that the picture holds none it can trust and turns nothing. **Crop to
+subject** draws the zone around the subject — what your Subject layers point
+at, else what the model finds at the centre of the picture, and the line says
+which — with room around it, in the format chosen, slid inside the picture
+rather than shrunk; a speck and a subject that is the whole picture are
+refused with the reason. The quarter
+turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.

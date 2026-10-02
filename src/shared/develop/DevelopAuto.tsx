@@ -1,5 +1,5 @@
 import DevelopFold from './DevelopFold';
-import { autoColour, autoTone, describeAutoTone, type SourceStats } from './auto-develop';
+import { autoBands, autoColour, autoTone, describeAutoBands, describeAutoTone, type SourceStats } from './auto-develop';
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { RangeSlider } from './DevelopSliders';
 import {
@@ -13,7 +13,7 @@ import {
 import type { DevelopSettings } from './develop';
 
 const AUTO_HINT =
-  'Tone reads where the picture’s light actually sits and writes a black point, a white point and a midtone gamma into Levels — it touches no colour. Colour neutralises the AVERAGE cast, which is the wrong answer on a sunset or a candle-lit room, so it is a second button and never rides along with the first. Pick grey asks you instead: click something in the picture that ought to be neutral and the white balance is solved for that, which beats the average whenever the picture is not an average scene. All three are measured on the picture as shot, so pressing one twice gives the same answer rather than compounding.';
+  'Tone reads where the picture’s light actually sits and writes a black point, a white point and a midtone gamma into Levels — it touches no colour. Colour neutralises the AVERAGE cast, which is the wrong answer on a sunset or a candle-lit room, so it is a second button and never rides along with the first. Pick grey asks you instead: click something in the picture that ought to be neutral and the white balance is solved for that, which beats the average whenever the picture is not an average scene. Bands is the third answer: where a tenth of the picture sits against black it lifts Shadows, where a tenth sits against white it pulls Highlights down — a compression of the ends where Tone is a stretch, so the two stay separate buttons. All of them are measured on the picture as shot, so pressing one twice gives the same answer rather than compounding.';
 
 const LEVELS_HINT =
   'Where the range is read FROM: everything at or under black becomes black, everything at or over white becomes white, and gamma bends what is between them. Auto tone writes these three; the curve’s own end points do the same thing by hand.';
@@ -44,7 +44,7 @@ export function DevelopAutoSection({
     // One row of verbs: not worth a fold, but drawn with the same header as
     // the foldable sections under it.
     <DevelopFold id="auto" title="Auto" info={<p>{AUTO_HINT}</p>} foldable={false}>
-      <div className="flex items-center gap-2">
+      <div className="flex flex-wrap items-center gap-2">
         <button
           type="button"
           className={developButtonClass}
@@ -77,6 +77,22 @@ export function DevelopAutoSection({
           }}
         >
           Auto colour
+        </button>
+        <button
+          type="button"
+          className={developButtonClass}
+          disabled={!ready}
+          title={ready ? 'Lift the shadows and pull the highlights down where the picture leans' : 'the picture has not been read yet'}
+          onClick={() => {
+            if (!stats) return;
+            const bands = autoBands(stats);
+            // Nothing to recover still SETS the two bands to zero: a verb that
+            // leaves a stale value where it found no reason for one is a nudge.
+            onPatch({ highlights: bands?.highlights ?? 0, shadows: bands?.shadows ?? 0 });
+            onTold(bands ? `auto bands · ${describeAutoBands(bands)}` : 'nothing to recover');
+          }}
+        >
+          Auto bands
         </button>
         {onPicking && (
           <button

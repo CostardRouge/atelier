@@ -23,7 +23,7 @@
  */
 
 import { toLinear } from '../lut/transfer';
-import { TEMPERATURE_REACH, TINT_REACH } from './develop';
+import { HIGHLIGHTS_REACH, SHADOWS_REACH, TEMPERATURE_REACH, TINT_REACH, bandWeights } from './develop';
 import { HISTOGRAM_BINS } from './histogram';
 import { MAX_LEVEL_GAMMA, MIN_LEVEL_GAMMA, type Levels } from './curves';
 
@@ -190,6 +190,86 @@ export function whiteBalanceFor(linear: readonly [number, number, number]): Auto
   // panel must not imply it is balanced. The battery gauge's rule.
   const wanted = (t / TEMPERATURE_REACH) * 100;
   return { temperature, tint, clamped: Math.abs(wanted) > 100.5 };
+}
+
+/**
+ * Where a picture LEANS, and where Auto bands brings it back to. Taste
+ * constants, named so they can be moved from his pictures rather than from an
+ * argument (`docs/auto-develop.md` §8): a 10th percentile under `DARK_LEAN`
+ * means a tenth of the picture sits in the deepest blacks; a 90th over
+ * `BRIGHT_LEAN` means a tenth sits against white.
+ */
+export const DARK_LEAN = 0.1;
+export const DARK_TARGET = 0.14;
+export const BRIGHT_LEAN = 0.88;
+export const BRIGHT_TARGET = 0.84;
+/** How far toward its target a leaning end is pulled — part of the way, like the median. */
+const BAND_PULL = MID_PULL;
+/** Which percentiles stand for "the shadows" and "the highlights". */
+const DARK_P = 0.1;
+const BRIGHT_P = 0.9;
+
+/** What Auto bands wrote: the two bands, and whether a band ran out before its target. */
+export interface AutoBands {
+  highlights: number;
+  shadows: number;
+  clamped: boolean;
+}
+
+/**
+ * The two bands BETWEEN the ends: `shadows` lifted where the picture leans
+ * dark, `highlights` pulled down where it leans bright — or null when it
+ * leans neither way.
+ *
+ * Auto tone stretches the range (levels) and Auto colour neutralises the
+ * cast; neither compresses the extremes, which is what a photographer reaches
+ * for next on a backlit face or a sky against white. This is that verb, kept
+ * apart from the other two for the same reason they are apart: a stretch and
+ * a compression are different answers, and a person wants one without the
+ * other.
+ *
+ * SOLVED against `toneCurve`: a band shifts the encoded luminance by
+ * `value/100 × reach × weight(L)`, so the value that moves the 10th percentile
+ * part of the way to its target is `100 × want / (reach × weight)`. Whites and
+ * blacks stay Auto tone's. The bands act BEFORE levels in `developLinear`, so
+ * pressing both verbs compounds the two answers — each is still SET from the
+ * picture as shot and a second press of either is the same answer.
+ */
+export function autoBands(stats: SourceStats): AutoBands | null {
+  if (stats.total <= 0) return null;
+  const dark = percentile(stats.bins, stats.total, DARK_P);
+  const bright = percentile(stats.bins, stats.total, BRIGHT_P);
+  let shadows = 0;
+  let highlights = 0;
+  let clamped = false;
+  if (dark < DARK_LEAN) {
+    const want = (DARK_TARGET - dark) * BAND_PULL;
+    const reach = SHADOWS_REACH * bandWeights(dark).sh;
+    // At black itself the band has no weight: nothing can lift a crushed
+    // pixel, so the band is written whole and the clamp is said.
+    const asked = reach > 0 ? (100 * want) / reach : Infinity;
+    shadows = Math.round(clamp(asked, 0, 100));
+    if (asked > 100.5) clamped = true;
+  }
+  if (bright > BRIGHT_LEAN) {
+    const want = (BRIGHT_TARGET - bright) * BAND_PULL;
+    const reach = HIGHLIGHTS_REACH * bandWeights(bright).hi;
+    const asked = reach > 0 ? (100 * want) / reach : -Infinity;
+    highlights = Math.round(clamp(asked, -100, 0));
+    if (asked < -100.5) clamped = true;
+  }
+  if (!shadows && !highlights) return null;
+  return { highlights, shadows, clamped };
+}
+
+/** What Auto bands did, for the line that reports it. */
+export function describeAutoBands(bands: AutoBands | null): string {
+  if (!bands) return 'nothing to recover';
+  const parts: string[] = [];
+  if (bands.shadows) parts.push(`shadows +${bands.shadows}`);
+  if (bands.highlights) parts.push(`highlights ${bands.highlights}`);
+  if (bands.clamped) parts.push('as far as the band reaches');
+  return parts.join(' · ');
 }
 
 /** What Auto colour found. `clamped` means the cast is past the sliders' reach. */

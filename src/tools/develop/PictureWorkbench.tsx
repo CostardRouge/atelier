@@ -172,6 +172,7 @@ import DeliverBar from '../../shared/ui/DeliverBar';
 import { runClock } from '../../shared/ui/RunLockNotice';
 import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
+import { useSubjectCrop } from './use-subject-crop';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
 import type { RollExports } from './use-roll-export';
 
@@ -1348,6 +1349,14 @@ export default function PictureWorkbench({
     onAspect: setAspectDraft,
     onFraming: setFramingDraft,
   });
+  const subjectCrop = useSubjectCrop({
+    picture,
+    crop,
+    layers: layersDraft,
+    rasters: resolvedSubjects,
+    taskScope,
+    onTold: tell,
+  });
   useEffect(() => {
     if (!source) return;
     const t = window.setTimeout(() => {
@@ -2313,6 +2322,7 @@ export default function PictureWorkbench({
               verbs={cropApplyTo}
               borderVerbs={borderApplyTo}
               clip={clip}
+              subjectCrop={subjectCrop}
               onTold={tell}
             />
           ) : null}
