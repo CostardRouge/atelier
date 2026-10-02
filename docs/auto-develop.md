@@ -147,7 +147,7 @@ sets the fine straighten through the crop API's own `straighten`, so the zone
 refits from the intent exactly as a drawn Level line does; a flip reverses
 the sign. Tested on synthetic two-tone fields at known angles.
 
-**A3 — Crop to the subject** (`subject-crop.ts`, the Crop tab). The subject
+**A3 — Crop to the subject — BUILT 2026-10-02** (`subject-crop.ts`, the Crop tab). The subject
 is the union of the picture's Subject layers' rasters when it has any — the
 author already said what the subject is — else the model is asked about the
 CENTRE of the picture, and the told line says so. The mask's bounding box is

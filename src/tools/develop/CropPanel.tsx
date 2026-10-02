@@ -14,6 +14,7 @@ import type { RollBorder } from '../../shared/develop/border-layout';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import BorderSection, { type BorderApplyVerb } from './BorderSection';
 import type { CropZoneApi } from './use-crop-zone';
+import type { SubjectCropVerb } from './use-subject-crop';
 
 /** A batch verb of the Crop tab: handed this picture's crop on its click. */
 export interface CropApplyVerb {
@@ -49,6 +50,7 @@ export default function CropPanel({
   deliveredSize,
   verbs = [],
   borderVerbs = [],
+  subjectCrop,
   onTold,
 }: {
   picture: DevelopPicture;
@@ -59,6 +61,8 @@ export default function CropPanel({
   deliveredSize: { w: number; h: number } | null;
   verbs?: readonly CropApplyVerb[];
   borderVerbs?: readonly BorderApplyVerb[];
+  /** Crop to the subject (`use-subject-crop.ts`); omitted, the row is not drawn. */
+  subjectCrop?: SubjectCropVerb;
   onTold?: (message: string) => void;
 }) {
   const { framing, zone } = crop;
@@ -102,6 +106,12 @@ export default function CropPanel({
               corrected by it. <strong>Auto</strong> finds that line by itself — the strongest straight
               edge within 15° of level, a horizon or a wall — and says when the picture holds none it can
               trust. The quarter turns take the zone with the picture.
+            </p>
+            <p>
+              <strong>Crop to subject</strong> draws the zone around the subject — what your Subject
+              layers point at, else what the model finds at the centre, and the line says which — with
+              room around it, in the format chosen above, slid inside the picture rather than shrunk;
+              a speck and a subject that is the whole picture are refused with the reason.
             </p>
             <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
           </>
@@ -170,6 +180,32 @@ export default function CropPanel({
             </Button>
           )}
         </FieldRow>
+        {subjectCrop && (
+          <FieldRow
+            label="Subject"
+            hint={
+              subjectCrop.named
+                ? 'The subject is what your Subject layers point at.'
+                : 'No subject picked: the model is asked what sits at the centre. Pick one on the Layers tab for another.'
+            }
+          >
+            <Button
+              size="sm"
+              onClick={subjectCrop.run}
+              disabled={!picture.source || subjectCrop.busy}
+              title={
+                subjectCrop.named
+                  ? 'Crop around what your Subject layers point at, in the format chosen above'
+                  : 'Crop around what the model finds at the centre of the picture, in the format chosen above'
+              }
+            >
+              {subjectCrop.busy ? 'Finding…' : 'Crop to subject'}
+            </Button>
+            <span className="font-mono text-3xs text-faint leading-relaxed">
+              {subjectCrop.named ? 'from your Subject layers' : 'from the centre'}
+            </span>
+          </FieldRow>
+        )}
         <FieldRow label="Turn">
           <Button size="sm" onClick={() => crop.quarterTurn(-1)} title="Turn a quarter anticlockwise">
             −90°

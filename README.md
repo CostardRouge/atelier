@@ -1441,7 +1441,12 @@ to keep clear of the corners and grows back to what you drew when you
 straighten back; **Level** corrects the angle from a line you draw along the
 horizon, and **Auto** finds that line by itself — the strongest straight edge
 within 15° of level, a horizon or a wall, read off the picture as shot — or
-says that the picture holds none it can trust and turns nothing. The quarter
+says that the picture holds none it can trust and turns nothing. **Crop to
+subject** draws the zone around the subject — what your Subject layers point
+at, else what the model finds at the centre of the picture, and the line says
+which — with room around it, in the format chosen, slid inside the picture
+rather than shrunk; a speck and a subject that is the whole picture are
+refused with the reason. The quarter
 turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is

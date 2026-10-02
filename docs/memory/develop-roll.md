@@ -1256,3 +1256,30 @@ sampler for any measurement (a histogram excepted) must downscale that way.
 Driven headless against the dev server on a 1600 × 1200 PNG with a horizon
 falling 4° to the right: *Auto* wrote Straighten −3.9° (79 % of the edges
 agree), kept through a later crop, no page error.
+
+## Crop to the subject (2026-10-02, A3 of `docs/auto-develop.md`)
+
+`shared/develop/subject-crop.ts` (pure, 11 specs) + `tools/develop/use-subject-crop.ts`
++ a *Subject* row in the Crop tab. `maskBounds` reads the subject's box and
+covered share off a `BrushRaster`; `subjectZone` takes the box's corners into
+the TURNED picture's frame (`screen = R(θ)·M·q`, the zone's own, so a flip
+mirrors the centre and a quarter turn transposes the box), pads by
+`SUBJECT_MARGIN` (12 % of the longer side, each side), grows the SHORTER side
+to the locked ratio (the subject is never cut to a format), and SETTLES the
+zone: `settleZone` moves it toward the middle as little as it takes, keeping
+its size, and shrinks (`fitIntent`) only when even the middle cannot hold it
+— a subject at the edge keeps its shoulder. Refused and said: a mask under
+`MIN_SUBJECT` (0.5 % of the frame), a box past `MAX_SUBJECT` (92 % of both
+edges). **Where the subject comes from**: the union of the picture's Subject
+layers' rasters (`subjectLayersToSegment`, the very rasters the layer pass
+draws — `resolvedSubjects`) when it has any; else the model is asked about
+the CENTRE, once (`segmentSubject` over `picture.segmentSource`, else
+`asShotSample(1024)`), as a task on the stage's scope so the hairline says
+it, and the told line says *from the centre* — an assumption spoken, never a
+crop from nowhere. The zone goes through `crop.setZone` so the chip is kept.
+Three taste constants, named for his pictures. Driven headless on the same
+synthetic picture with no Subject layer: the model loaded on SwiftShader,
+answered the centre, the told line read *cropped to what the model finds at
+the centre*, the Shape row went 1.33:1 → 1.70:1 and the straighten stayed
+— the plumbing, not the taste, since a synthetic picture has no subject to
+judge. Not driven on a photograph with a Subject layer.
