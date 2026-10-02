@@ -18,6 +18,7 @@ import type { TripDoc } from '../../../shared/roadtrip/trip-types';
 import type { WinnowConnection } from '../../../shared/sources/winnow/store';
 import Button from '../../../shared/ui/Button';
 import OverflowMenu from '../../../shared/ui/OverflowMenu';
+import InfoDot from '../../../shared/ui/InfoDot';
 import Segmented from '../../../shared/ui/Segmented';
 import useDialogKeys from '../../../shared/ui/use-dialog-keys';
 import CalqueWindow, { visibleUnder } from './CalqueWindow';
@@ -72,9 +73,19 @@ interface DeduceStagesPanelProps {
 type Pane = 'window' | 'data' | 'review' | 'done';
 
 const TABS: { id: DeduceTab; key: string; label: string; sub: string }[] = [
-  { id: 'grain', key: 'A', label: 'Le grain', sub: 'One grain for the whole trip; each stage then has its own verb and its own pencil.' },
-  { id: 'calque', key: 'B', label: 'Le calque', sub: 'What your pictures say, laid under the stages you already have. Say what you want first.' },
-  { id: 'paquet', key: 'C', label: 'Le paquet', sub: 'One chapter at a time. Your answer moves to the next; the safe one is marked.' },
+  { id: 'grain', key: 'A', label: 'All stages', sub: 'One grain for the whole trip; each stage then has its own verb.' },
+  { id: 'calque', key: 'B', label: 'Against mine', sub: 'What your pictures say, laid under the stages you already have.' },
+  { id: 'paquet', key: 'C', label: 'One by one', sub: 'One chapter at a time, answered in one gesture.' },
+];
+
+/** The keys, said once behind the ⓘ beside the tabs — never a standing line. */
+const KEYS: [string, string][] = [
+  ['A B C', 'switch the window, carrying the stage under the hand'],
+  ['↑ ↓', 'move between the stages of All stages'],
+  ['Space', 'keep or skip the focused stage'],
+  ['E', 'edit it'],
+  ['1 – 4 · →', 'answer in One by one; ← goes back'],
+  ['Enter', 'Review, then Write'],
 ];
 
 const isTyping = (target: EventTarget | null): boolean =>
@@ -271,7 +282,6 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
   const ctx: DeduceContext = { trip, deduction, draft, settings, hot, flash, editing, intent, index, actions };
   const size = draftSize(draft);
   const draftParts = [size.answers ? plural(size.answers, 'verb') : '', size.edits ? plural(size.edits, 'edit') : '', size.names ? plural(size.names, 'name') : ''].filter(Boolean);
-  const current = TABS.find((t) => t.id === tab)!;
   const written = deducedStages(trip).length;
   const flaws = [
     deduction.outliers.length ? `${plural(deduction.outliers.length, 'outlier')} ${settings.ignoreOutliers ? 'ignored' : 'kept'}` : '',
@@ -293,10 +303,10 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         ? 'The trip now carries these. Undo takes all of it back in one step.'
         : pane === 'data'
           ? `${sourceId} · one position per day, no picture fetched.`
-          : current.sub;
+          : null;
 
   const summary = toWrite
-    ? `${outcome.adds.length ? `adds ${plural(outcome.adds.length, 'stage')}` : ''}${outcome.adds.length && outcome.completes.length ? ', ' : ''}${outcome.completes.length ? `completes ${plural(outcome.completes.length, 'stage')}` : ''}. Nothing is written before Review.`
+    ? [outcome.adds.length ? `${outcome.adds.length} new` : '', outcome.completes.length ? `${outcome.completes.length} completed` : ''].filter(Boolean).join(' · ')
     : deduction.problem
       ? ''
       : 'Nothing to write with these answers.';
@@ -319,7 +329,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
           <div className="flex items-start justify-between gap-3">
             <div className="min-w-0">
               <h2 className="m-0 font-serif text-2xl leading-tight">{title}</h2>
-              <p className="m-0 mt-1 text-sm text-muted">{subtitle}</p>
+              {subtitle && <p className="m-0 mt-1 text-sm text-muted">{subtitle}</p>}
             </div>
             <div className="flex items-center gap-1 flex-none">
               <OverflowMenu
@@ -347,64 +357,60 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
             </div>
           </div>
           {pane === 'window' && (
-            <div className="flex flex-wrap items-center justify-between gap-2">
+            <div className="flex flex-wrap items-center gap-x-3 gap-y-2">
               <Segmented
                 size="sm"
                 label="Window"
                 value={tab}
                 onChange={(id) => goTo(id)}
-                options={TABS.map((t) => ({
-                  id: t.id,
-                  label: (
-                    <>
-                      <span className="font-mono text-3xs opacity-70 mr-1">{t.key}</span>
-                      {t.label}
-                    </>
-                  ),
-                }))}
+                options={TABS.map((t) => ({ id: t.id, label: t.label, title: `${t.key} · ${t.sub}` }))}
               />
-              <span
-                className={`inline-flex items-center gap-2 max-w-full pl-2.5 pr-1 py-0.5 rounded-full border border-line font-mono text-2xs ${draftParts.length ? 'text-ink-soft' : 'text-muted'}`}
-                title="The draft every window reads"
+              <InfoDot about="the keys">
+                <span className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-3 gap-y-0.5">
+                  {KEYS.map(([k, what]) => (
+                    <span key={k} className="contents">
+                      <kbd className="font-mono text-2xs text-ink-soft">{k}</kbd>
+                      <span>{what}</span>
+                    </span>
+                  ))}
+                </span>
+              </InfoDot>
+              <span className="flex-1" />
+              {/* What was read, in one chip: the days placed, and what to check
+                  — the detail, the source and its age are the Data pane's. */}
+              <button
+                type="button"
+                onClick={() => setPane('data')}
+                title={`${deduction.days.length} days · ${placed} placed · ${blind} without position · ${sourceId}${ago !== null ? `, read ${ago === 0 ? 'just now' : `${ago} min ago`}` : ''}`}
+                className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-line bg-transparent font-mono text-2xs text-ink-soft cursor-pointer hover:border-line-strong hover:text-ink"
               >
-                <i className={`w-1.5 h-1.5 rounded-full flex-none ${draftParts.length ? 'bg-accent' : 'bg-line-strong'}`} aria-hidden="true" />
-                {draftParts.length ? `Draft · ${draftParts.join(' · ')}` : 'No draft yet · the safe verbs stand'}
-                <button
-                  type="button"
-                  disabled={!draftParts.length}
-                  onClick={() => {
-                    setDraft(EMPTY_DRAFT);
-                    setEditing(null);
-                  }}
-                  className="px-1.5 py-px rounded-full border-0 bg-transparent font-sans text-2xs font-medium text-muted cursor-pointer hover:bg-paper-2 hover:text-ink disabled:opacity-40 disabled:cursor-default"
+                <i className={`w-1.5 h-1.5 rounded-full ${flaws.length ? 'bg-warn' : 'bg-ok'}`} aria-hidden="true" />
+                {placed}/{deduction.days.length} days
+                {flaws.length ? <span className="text-warn">· {plural(flaws.length, 'thing', 'things')} to check</span> : null}
+              </button>
+              {draftParts.length > 0 && (
+                <span
+                  className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full border border-line font-mono text-2xs text-ink-soft"
+                  title={`The draft every window reads: ${draftParts.join(' · ')}`}
                 >
-                  Clear
-                </button>
-              </span>
+                  {plural(size.answers + size.edits + size.names, 'change')}
+                  <button
+                    type="button"
+                    onClick={() => {
+                      setDraft(EMPTY_DRAFT);
+                      setEditing(null);
+                    }}
+                    aria-label="Clear the draft"
+                    title="Clear the draft — back to the safe verbs"
+                    className="w-5 h-5 inline-grid place-items-center rounded-full border-0 bg-transparent text-muted cursor-pointer hover:bg-paper-2 hover:text-ink"
+                  >
+                    ×
+                  </button>
+                </span>
+              )}
             </div>
           )}
         </div>
-
-        {/* --- the strip: what was read, and what is wrong with it --------- */}
-        {pane === 'window' && (
-          <div className={`flex flex-wrap items-center gap-x-3 gap-y-1 pb-2 border-b border-line text-2xs text-muted ${padX}`}>
-            <span className="font-mono text-ink-soft tabular-nums">
-              {deduction.days.length} days · {placed} placed · {blind} without position
-            </span>
-            <button
-              type="button"
-              onClick={() => setPane('data')}
-              className={`inline-flex items-center gap-1.5 p-0 border-0 bg-transparent font-sans text-2xs font-medium cursor-pointer ${flaws.length ? 'text-warn' : 'text-ok'}`}
-            >
-              <i className={`w-1.5 h-1.5 rounded-full ${flaws.length ? 'bg-warn' : 'bg-ok'}`} aria-hidden="true" />
-              {flaws.length ? flaws.join(' · ') : 'nothing to fix'} →
-            </button>
-            <span className="ml-auto">
-              {sourceId}
-              {ago !== null ? ` · read ${ago === 0 ? 'just now' : `${ago} min ago`}` : deduction.loading ? ' · reading…' : ''}
-            </span>
-          </div>
-        )}
 
         {/* --- the body: the window, or a pane ----------------------------- */}
         <div ref={bodyRef} className={`flex-1 min-h-0 overflow-auto flex flex-col gap-3.5 pt-3 pb-4 ${padX} [&>*]:flex-none`}>
@@ -440,7 +446,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
             {pane === 'review'
               ? `${plural(outcome.adds.length, 'stage')} added, ${outcome.completes.length} completed, ${outcome.left.length} left out.`
               : pane === 'done' && lastRun
-                ? `${plural(lastRun.adds.length, 'stage')} added, ${lastRun.completes.length} completed.`
+                ? ''
                 : pane === 'data'
                   ? 'Nothing here is written to the instance.'
                   : summary}

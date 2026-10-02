@@ -5,7 +5,7 @@ import type { TripStage } from '../../../shared/roadtrip/trip-types';
 import { stageTint } from '../../../shared/roadtrip/stage-ruler';
 import Button from '../../../shared/ui/Button';
 import Segmented from '../../../shared/ui/Segmented';
-import { formatIsoDate, legend, mono, note, num, plural, spanText } from './pieces';
+import { formatIsoDate, mono, note, num, plural, spanText } from './pieces';
 import type { DeduceContext } from './context';
 
 /**
@@ -36,7 +36,7 @@ function placesText(stage: TripStage): string {
 }
 
 export function ReviewPane({ ctx, outcome }: { ctx: DeduceContext; outcome: DraftOutcome }) {
-  const { settings, deduction } = ctx;
+  const { deduction } = ctx;
   return (
     <div className="flex flex-col gap-3">
       {outcome.over.length > 0 && (
@@ -44,46 +44,46 @@ export function ReviewPane({ ctx, outcome }: { ctx: DeduceContext; outcome: Draf
           {plural(outcome.over.length, 'stage')} will sit over a stage you drew. The stage you drew is kept as it is; a badge on those days names the later one.
         </Callout>
       )}
-      <Heading count={outcome.adds.length}>New stages</Heading>
-      {outcome.adds.length ? (
-        <ul className={list}>
-          {outcome.adds.map((a, i) => (
-            <li key={`${a.stage.startDate}-${i}`} className={row}>
-              <span className="w-2.5 h-full min-h-5 rounded-sm" style={{ background: stageTint(a.from.index) }} aria-hidden="true" />
-              <span className="min-w-0">
-                <b className="font-medium">{stageLabel(a.stage) || 'Unnamed stage'}</b>
-                <span className={`block ${mono}`}>
-                  {spanText(a.stage.startDate, a.stage.endDate)}
-                  {a.stage.places.length ? ` · ${placesText(a.stage)}` : ' · no place: its halts are unnamed'}
+      {outcome.adds.length > 0 && (
+        <>
+          <Heading count={outcome.adds.length}>New stages</Heading>
+          <ul className={list}>
+            {outcome.adds.map((a, i) => (
+              <li key={`${a.stage.startDate}-${i}`} className={row}>
+                <span className="w-2.5 h-full min-h-5 rounded-sm" style={{ background: stageTint(a.from.index) }} aria-hidden="true" />
+                <span className="min-w-0">
+                  <b className="font-medium">{stageLabel(a.stage) || 'Unnamed stage'}</b>
+                  <span className={`block ${mono}`}>
+                    {spanText(a.stage.startDate, a.stage.endDate)}
+                    {a.stage.places.length ? ` · ${placesText(a.stage)}` : ' · no place: its halts are unnamed'}
+                  </span>
                 </span>
-              </span>
-              <span className={`${pill} ${a.from.verb === 'stage' && a.from.overlapping.length ? 'bg-warn-wash text-warn' : 'bg-accent-wash text-accent-ink'}`}>
-                {a.from.verb === 'stage' && a.from.overlapping.length ? 'over' : 'new'}
-              </span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={`m-0 ${note}`}>None.</p>
+                <span className={`${pill} ${a.from.verb === 'stage' && a.from.overlapping.length ? 'bg-warn-wash text-warn' : 'bg-accent-wash text-accent-ink'}`}>
+                  {a.from.verb === 'stage' && a.from.overlapping.length ? 'over' : 'new'}
+                </span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      <Heading count={outcome.completes.length}>Stages of yours, completed</Heading>
-      {outcome.completes.length ? (
-        <ul className={list}>
-          {outcome.completes.map((c) => (
-            <li key={c.stage.id + c.from.key} className={row}>
-              <span className="w-2.5 h-full min-h-5 rounded-sm bg-ok" aria-hidden="true" />
-              <span className="min-w-0">
-                <b className="font-medium">{stageLabel(c.stage) || 'Unnamed stage'}</b>
-                <span className={`block ${mono}`}>
-                  {spanText(c.stage.startDate, c.stage.endDate)} · {placesText(c.stage)} <span className="text-ok">+ {c.places.map((p) => p.name).join(', ')}</span> · after yours
+      {outcome.completes.length > 0 && (
+        <>
+          <Heading count={outcome.completes.length}>Stages of yours, completed</Heading>
+          <ul className={list}>
+            {outcome.completes.map((c) => (
+              <li key={c.stage.id + c.from.key} className={row}>
+                <span className="w-2.5 h-full min-h-5 rounded-sm bg-ok" aria-hidden="true" />
+                <span className="min-w-0">
+                  <b className="font-medium">{stageLabel(c.stage) || 'Unnamed stage'}</b>
+                  <span className={`block ${mono}`}>
+                    {spanText(c.stage.startDate, c.stage.endDate)} · {placesText(c.stage)} <span className="text-ok">+ {c.places.map((p) => p.name).join(', ')}</span> · after yours
+                  </span>
                 </span>
-              </span>
-              <span className={`${pill} bg-ok-wash text-ok`}>places</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={`m-0 ${note}`}>None.</p>
+                <span className={`${pill} bg-ok-wash text-ok`}>places</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
       {outcome.left.length > 0 && (
         <details className="group rounded-paper border border-line bg-paper px-3 py-2">
@@ -100,9 +100,9 @@ export function ReviewPane({ ctx, outcome }: { ctx: DeduceContext; outcome: Draf
           </ul>
         </details>
       )}
-      <Callout>
-        Each stage written carries a mark — deduced from {deduction.sourceId}, at the {settings.grain === 'hops' ? 'long drives' : settings.grain} grain. It is one undo step, and the ⋯ menu above can take every such stage out again.
-      </Callout>
+      <p className={`m-0 ${note}`}>
+        Each stage written is marked as deduced from {deduction.sourceId}: one undo step, and ⋯ can take them all out again.
+      </p>
     </div>
   );
 }
@@ -111,43 +111,47 @@ export function DonePane({ ctx, outcome }: { ctx: DeduceContext; outcome: DraftO
   const { deduction } = ctx;
   return (
     <div className="flex flex-col gap-3">
-      <Heading count={outcome.adds.length}>Stages added</Heading>
-      {outcome.adds.length ? (
-        <ul className={list}>
-          {outcome.adds.map((a, i) => (
-            <li key={`${a.stage.startDate}-${i}`} className={row}>
-              <span className="w-2.5 h-full min-h-5 rounded-sm bg-accent" aria-hidden="true" />
-              <span className="min-w-0">
-                <b className="font-medium">{stageLabel(a.stage) || 'Unnamed stage'}</b>
-                <span className={`block ${mono}`}>{spanText(a.stage.startDate, a.stage.endDate)}{a.stage.places.length ? ` · ${placesText(a.stage)}` : ''}</span>
-              </span>
-              <span className={`${pill} bg-accent-wash text-accent-ink`}>deduced</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={`m-0 ${note}`}>None.</p>
+      {/* The end of the run is what is remembered of it: one clear line first. */}
+      <p className="m-0 flex items-baseline gap-2.5 font-serif text-3xl leading-tight">
+        <span className="text-ok" aria-hidden="true">✓</span>
+        {[outcome.adds.length ? plural(outcome.adds.length, 'stage') + ' added' : '', outcome.completes.length ? `${outcome.completes.length} completed` : '']
+          .filter(Boolean)
+          .join(' · ') || 'Nothing written'}
+      </p>
+      {outcome.adds.length > 0 && (
+        <>
+          <ul className={list}>
+            {outcome.adds.map((a, i) => (
+              <li key={`${a.stage.startDate}-${i}`} className={row}>
+                <span className="w-2.5 h-full min-h-5 rounded-sm bg-accent" aria-hidden="true" />
+                <span className="min-w-0">
+                  <b className="font-medium">{stageLabel(a.stage) || 'Unnamed stage'}</b>
+                  <span className={`block ${mono}`}>{spanText(a.stage.startDate, a.stage.endDate)}{a.stage.places.length ? ` · ${placesText(a.stage)}` : ''}</span>
+                </span>
+                <span className={`${pill} bg-accent-wash text-accent-ink`}>deduced</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      <Heading count={outcome.completes.length}>Stages completed</Heading>
-      {outcome.completes.length ? (
-        <ul className={list}>
-          {outcome.completes.map((c) => (
-            <li key={c.stage.id + c.from.key} className={row}>
-              <span className="w-2.5 h-full min-h-5 rounded-sm bg-ok" aria-hidden="true" />
-              <span className="min-w-0">
-                <b className="font-medium">{stageLabel(c.stage) || 'Unnamed stage'}</b>
-                <span className={`block ${mono}`}>+ {c.places.map((p) => p.name).join(', ')}</span>
-              </span>
-              <span className={`${pill} bg-ok-wash text-ok`}>places</span>
-            </li>
-          ))}
-        </ul>
-      ) : (
-        <p className={`m-0 ${note}`}>None.</p>
+      {outcome.completes.length > 0 && (
+        <>
+          <Heading count={outcome.completes.length}>Yours, completed</Heading>
+          <ul className={list}>
+            {outcome.completes.map((c) => (
+              <li key={c.stage.id + c.from.key} className={row}>
+                <span className="w-2.5 h-full min-h-5 rounded-sm bg-ok" aria-hidden="true" />
+                <span className="min-w-0">
+                  <b className="font-medium">{stageLabel(c.stage) || 'Unnamed stage'}</b>
+                  <span className={`block ${mono}`}>+ {c.places.map((p) => p.name).join(', ')}</span>
+                </span>
+                <span className={`${pill} bg-ok-wash text-ok`}>places</span>
+              </li>
+            ))}
+          </ul>
+        </>
       )}
-      <Callout tone="ok">
-        Run again after cleaning {deduction.sourceId}: a stage already in the trip is recognised by its days, and only what changed is proposed. A chapter you skipped stays skipped for this session.
-      </Callout>
+      <p className={`m-0 ${note}`}>Run it again after cleaning {deduction.sourceId}: what is already in the trip is recognised by its days.</p>
     </div>
   );
 }
@@ -245,13 +249,11 @@ export function DataPane({ ctx }: { ctx: DeduceContext }) {
           {plural(halts.filter((h) => h.short).length, 'stop on the way', 'stops on the way')} · {plural(halts.filter((h) => h.inferred).length, 'halt')} resting on guessed positions only · {plural(halts.reduce((n, h) => n + h.bridged, 0), 'blind day')} covered
         </span>
       </Row>
-      <Callout>
-        <span className={legend}>Refresh</span> reads the instance again without closing the window. A chapter whose days did not change keeps your answer and your edits; one that moved comes back with the safe verb.
-      </Callout>
-      <div>
+      <div className="flex flex-wrap items-center gap-2.5">
         <Button size="sm" onClick={deduction.refresh} disabled={deduction.loading}>
           {deduction.loading ? 'Reading…' : `Refresh from ${sourceId}`}
         </Button>
+        <span className={note}>Your answers stay on every chapter whose days did not move.</span>
       </div>
     </div>
   );

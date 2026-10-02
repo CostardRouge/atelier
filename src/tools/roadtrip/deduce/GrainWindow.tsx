@@ -1,11 +1,12 @@
 import { GRAINS, grainAt, grainIndex } from '../../../shared/roadtrip/deduce-grain';
-import { draftOutcome, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import type { Proposal } from '../../../shared/roadtrip/deduce-draft';
 import Button from '../../../shared/ui/Button';
+import OverflowMenu from '../../../shared/ui/OverflowMenu';
 import DeduceFrieze from './DeduceFrieze';
 import DeduceMap from './DeduceMap';
 import FineSettings from './FineSettings';
 import ProposalEditor from './ProposalEditor';
-import { Flags, GoButton, HaltChips, VerbPill, VerbSelect, mono, note, num, plural, proposalColour, spanText } from './pieces';
+import { Flags, GoButton, HaltChips, VerbPill, VerbSelect, mono, num, plural, proposalColour, spanText } from './pieces';
 import type { DeduceContext } from './context';
 
 /**
@@ -14,8 +15,6 @@ import type { DeduceContext } from './context';
  * its own pencil, and two hand-offs: *Deck ›* opens the paquet on it,
  * *Against yours ›* the calque, where it overlaps a stage of the author's.
  */
-
-const kbd = 'font-mono text-3xs font-semibold px-1 rounded border border-line-strong text-muted';
 
 function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
   const { actions, draft, editing, trip, flash } = ctx;
@@ -28,7 +27,7 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
       onMouseEnter={() => actions.setHot(p.key)}
       onMouseLeave={() => actions.setHot(null)}
       onFocus={() => actions.setHot(p.key)}
-      className={`flex flex-col gap-1.5 px-3 py-2.5 rounded-paper border bg-paper focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent hover:border-ink-soft focus-within:border-ink-soft ${
+      className={`group flex flex-col gap-1.5 px-3 py-2.5 rounded-paper border bg-paper focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent hover:border-ink-soft focus-within:border-ink-soft ${
         skipped ? 'border-dashed border-line-strong' : 'border-line-strong'
       } ${p.already && skipped ? 'opacity-60' : ''} ${flash === p.key ? 'shadow-[inset_0_0_0_2px_var(--color-accent)]' : ''}`}
     >
@@ -40,20 +39,21 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
             {spanText(p.startDate, p.endDate)} · {p.dayCount} d · {plural(p.halts.length, 'place')} · {num(p.count)} pictures
           </span>
         </div>
-        <VerbPill p={p} />
+        {p.already && skipped && p.verbs.length <= 2 ? <VerbPill p={p} /> : <VerbSelect p={p} onChange={(v) => actions.answer(p.key, v)} />}
       </div>
       <div className={skipped ? 'opacity-50' : ''}>
         <HaltChips p={p} draft={draft} />
       </div>
       <Flags p={p} />
       <div className="flex flex-wrap items-center gap-1.5">
-        {!(p.already && skipped && p.verbs.length <= 2) && <VerbSelect p={p} onChange={(v) => actions.answer(p.key, v)} />}
         <Button size="sm" variant="ghost" aria-expanded={editing === p.key} onClick={() => actions.setEditing(editing === p.key ? null : p.key)}>
           {editing === p.key ? 'Close' : 'Edit'}
         </Button>
-        <span className="ml-auto inline-flex gap-0.5">
-          <GoButton tab="paquet" label="Deck" onClick={() => actions.goTo('paquet', p.key)} />
-          {p.overlapping.length > 0 && <GoButton tab="calque" label="Against yours" onClick={() => actions.goTo('calque', p.key)} />}
+        {/* The hand-offs are quiet until the card is under the hand: four
+            controls on every card was the clutter, and A/B/C carry it too. */}
+        <span className="ml-auto inline-flex gap-0.5 [@media(hover:hover)]:opacity-0 group-hover:opacity-100 group-focus-within:opacity-100 transition-opacity">
+          <GoButton tab="paquet" label="One by one" onClick={() => actions.goTo('paquet', p.key)} />
+          {p.overlapping.length > 0 && <GoButton tab="calque" label="Against mine" onClick={() => actions.goTo('calque', p.key)} />}
         </span>
       </div>
       {editing === p.key && <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />}
@@ -63,10 +63,9 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
 
 export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
   const { deduction, draft, settings, actions, hot } = ctx;
-  const { proposals, days, points, track, halts, land, sourceId } = deduction;
+  const { proposals, days, points, track, land } = deduction;
   const grain = GRAINS[grainIndex(settings.grain)];
   const kept = proposals.filter((p) => p.verb !== 'skip');
-  const outcome = draftOutcome(proposals, draft, { sourceId, now: 0 });
   const oneDay = proposals.filter((p) => p.doubtful && p.verb !== 'skip');
   const over = proposals.filter((p) => p.verb === 'stage' && p.overlapping.length > 0);
   const ignored = track ? track.points.filter((p) => !points.includes(p)) : [];
@@ -78,9 +77,23 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
       <div className="flex flex-col gap-1.5">
         <div className="flex flex-wrap items-baseline gap-x-2.5 gap-y-1">
           <b className="font-serif font-normal text-4xl leading-none">{plural(kept.length, 'stage')}</b>
-          <span className="text-sm text-ink-soft">
-            {grain.label.replace('%d', String(settings.bigDays))} · {days.length} days, {plural(halts.length, 'halt')} · {outcome.adds.length} new, {outcome.completes.length} completed
-          </span>
+          {/* What the slider does, said once — the counts are the foot's, beside Review. */}
+          <span className="text-sm text-ink-soft">{grain.label.replace('%d', String(settings.bigDays))}</span>
+          <OverflowMenu
+            label="Answer every stage at once"
+            className="ml-auto self-center"
+            trigger={{ text: 'All…', variant: 'ghost', size: 'sm' }}
+            items={[
+              { id: 'keep', label: 'Keep every stage', onSelect: () => actions.setDraft({ ...draft, answers: Object.fromEntries(Object.entries(draft.answers).filter(([, v]) => v !== 'skip')) }) },
+              { id: 'safe', label: 'Back to the safe verbs', onSelect: () => actions.setDraft({ ...draft, answers: {} }) },
+              ...(oneDay.length
+                ? [{ id: 'oneday', label: `Skip the stops on the way (${oneDay.length})`, onSelect: () => actions.setDraft({ ...draft, answers: { ...draft.answers, ...Object.fromEntries(oneDay.map((p) => [p.key, 'skip' as const])) } }) }]
+                : []),
+              ...(over.length
+                ? [{ id: 'over', label: `Never over a stage of mine (${over.length})`, onSelect: () => actions.setDraft({ ...draft, answers: { ...draft.answers, ...Object.fromEntries(over.map((p) => [p.key, p.safe === 'stage' ? 'skip' : p.safe])) } }) }]
+                : []),
+            ]}
+          />
         </div>
         <input
           type="range"
@@ -90,6 +103,8 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
           value={grainIndex(settings.grain)}
           onChange={(e) => actions.setSettings({ grain: grainAt(Number(e.target.value)) })}
           aria-label="The grain of the stages"
+          aria-valuetext={grain.label.replace('%d', String(settings.bigDays))}
+          title={grain.label.replace('%d', String(settings.bigDays))}
           className="w-full accent-accent"
         />
         <div className="grid grid-cols-4 text-2xs text-muted">
@@ -128,34 +143,6 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
         ]}
       />
 
-      {/* the verbs of mass, and the hand-offs */}
-      <div className="flex flex-wrap items-center gap-1.5 text-2xs text-muted">
-        <span>All:</span>
-        <Button size="sm" onClick={() => actions.setDraft({ ...draft, answers: Object.fromEntries(Object.entries(draft.answers).filter(([, v]) => v !== 'skip')) })}>
-          Keep all
-        </Button>
-        <Button size="sm" onClick={() => actions.setDraft({ ...draft, answers: {} })}>
-          Back to the safe verbs
-        </Button>
-        {oneDay.length > 0 && (
-          <Button size="sm" onClick={() => actions.setDraft({ ...draft, answers: { ...draft.answers, ...Object.fromEntries(oneDay.map((p) => [p.key, 'skip' as const])) } })}>
-            Skip stops on the way ({oneDay.length})
-          </Button>
-        )}
-        {over.length > 0 && (
-          <Button size="sm" onClick={() => actions.setDraft({ ...draft, answers: { ...draft.answers, ...Object.fromEntries(over.map((p) => [p.key, p.safe === 'stage' ? 'skip' : p.safe])) } })}>
-            The safe verb instead of over ({over.length})
-          </Button>
-        )}
-        <span className="ml-auto inline-flex gap-0.5">
-          <GoButton tab="paquet" label="One by one" onClick={() => actions.goTo('paquet', proposals[0]?.key)} />
-          <GoButton tab="calque" label="Against my stages" onClick={() => actions.goTo('calque', (over[0] ?? proposals.find((p) => p.overlapping.length) ?? proposals[0])?.key)} />
-        </span>
-      </div>
-      <p className={`m-0 ${note}`}>
-        <kbd className={kbd}>↑↓</kbd> move · <kbd className={kbd}>Space</kbd> keep / skip · <kbd className={kbd}>E</kbd> edit · <kbd className={kbd}>A</kbd> <kbd className={kbd}>B</kbd> <kbd className={kbd}>C</kbd> switch the window
-      </p>
-
       {/* the cards, the map collée beside them */}
       <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,17rem)] gap-3.5 items-start max-[700px]:grid-cols-1">
         <div className="flex flex-col gap-2 min-w-0" data-cards>
@@ -177,8 +164,9 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
             hot={hot}
             caption={hotProposal ? `${hotProposal.label} · ${spanText(hotProposal.startDate, hotProposal.endDate)}` : 'Hover or focus a stage'}
             className="max-[700px]:[&_svg]:max-h-[9.5rem]"
+            legend="Colour: a new stage · green: places into one of yours · faint: left out · ✕: an ignored position"
           />
-          <span className={`${note} max-[700px]:hidden`}>Colour: a new stage; green: places into one of yours; faint: left out; ✕ an ignored position.</span>
+
         </div>
       </div>
 

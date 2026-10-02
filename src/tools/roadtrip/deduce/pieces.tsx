@@ -81,12 +81,23 @@ export function VerbPill({ p }: { p: Proposal }) {
 
 /** A native select of the verbs a proposal can take — compact, keyboard-reachable, one per card. */
 export function VerbSelect({ p, onChange }: { p: Proposal; onChange: (verb: DeduceVerb) => void }) {
+  // The select IS the card's verb now (the pill beside it said the same thing
+  // twice), so it wears the pill's tone: the one that needs a look — over a
+  // stage of yours — is the one that stands out.
+  const tone =
+    p.verb === 'skip'
+      ? 'border-line-strong text-muted bg-surface'
+      : p.verb === 'into'
+        ? 'border-ok text-ok bg-surface'
+        : p.verb === 'stage' && p.overlapping.length
+          ? 'border-warn text-warn bg-warn-wash'
+          : 'border-accent/50 text-accent-ink bg-surface';
   return (
     <select
       value={p.verb}
       onChange={(e) => onChange(e.target.value as DeduceVerb)}
       aria-label={`What to do with ${p.label}`}
-      className="h-7 max-w-full pl-2.5 pr-7 rounded-full border border-line-strong bg-surface text-xs max-[820px]:text-base font-medium text-ink cursor-pointer appearance-none bg-no-repeat bg-[length:0.5rem_0.5rem] bg-[position:right_0.6rem_center] bg-[image:linear-gradient(45deg,transparent_50%,var(--color-muted)_50%),linear-gradient(135deg,var(--color-muted)_50%,transparent_50%)] [background-size:0.3rem_0.3rem,0.3rem_0.3rem] [background-position:calc(100%_-_0.95rem)_center,calc(100%_-_0.65rem)_center]"
+      className={`h-7 max-[820px]:h-9 max-w-full pl-2.5 pr-7 rounded-full border text-xs max-[820px]:text-base font-medium cursor-pointer ${tone} appearance-none bg-no-repeat bg-[length:0.5rem_0.5rem] bg-[position:right_0.6rem_center] bg-[image:linear-gradient(45deg,transparent_50%,var(--color-muted)_50%),linear-gradient(135deg,var(--color-muted)_50%,transparent_50%)] [background-size:0.3rem_0.3rem,0.3rem_0.3rem] [background-position:calc(100%_-_0.95rem)_center,calc(100%_-_0.65rem)_center]`}
     >
       {p.verbs.map((v) => (
         <option key={v} value={v}>

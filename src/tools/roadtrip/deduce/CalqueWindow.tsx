@@ -5,7 +5,7 @@ import Segmented from '../../../shared/ui/Segmented';
 import DeduceFrieze, { type FriezeItem } from './DeduceFrieze';
 import FineSettings from './FineSettings';
 import ProposalEditor from './ProposalEditor';
-import { GoButton, VerbPill, VerbSelect, legend, mono, note, plural, quoted, spanText } from './pieces';
+import { GoButton, VerbPill, VerbSelect, legend, mono, plural, quoted, spanText } from './pieces';
 import type { DeduceContext, DeduceIntent } from './context';
 
 /**
@@ -16,10 +16,12 @@ import type { DeduceContext, DeduceIntent } from './context';
  * card's verb in the grain and the answer in the paquet.
  */
 
+// Short on purpose: three of them share one control a phone's width wide;
+// the chosen one's hint, under it, is the sentence.
 export const INTENTS: { id: DeduceIntent; title: string; hint: string }[] = [
-  { id: 'fill', title: 'Fill the gaps', hint: 'Only the days none of your stages covers. Never touches a stage of yours.' },
-  { id: 'enrich', title: 'Enrich my stages', hint: 'Add the places your pictures saw to the stages you drew. No new stage.' },
-  { id: 'all', title: 'Show everything', hint: 'Every deduced stage beside yours, with the safe verb picked for each.' },
+  { id: 'fill', title: 'Fill gaps', hint: 'Only the days none of your stages covers. Never touches a stage of yours.' },
+  { id: 'enrich', title: 'Enrich mine', hint: 'Add the places your pictures saw to the stages you drew. No new stage.' },
+  { id: 'all', title: 'Everything', hint: 'Every deduced stage beside yours, with the safe verb picked for each.' },
 ];
 
 export function visibleUnder(intent: DeduceIntent, proposals: readonly Proposal[]): Proposal[] {
@@ -75,22 +77,28 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
 
   return (
     <>
-      <div role="group" aria-label="What you want" className="grid grid-cols-3 gap-2 max-[520px]:grid-cols-1">
-        {INTENTS.map((i) => (
-          <button
-            key={i.id}
-            type="button"
-            aria-pressed={intent === i.id}
-            onClick={() => actions.setIntent(i.id)}
-            className={`flex flex-col gap-0.5 px-3 py-2.5 rounded-paper border text-left cursor-pointer bg-paper ${
-              intent === i.id ? 'border-ink shadow-[inset_0_0_0_1px_var(--color-ink)] bg-surface' : 'border-line-strong hover:border-ink-soft'
-            }`}
-          >
-            <b className="font-serif font-normal text-lg leading-tight">{i.title}</b>
-            <span className="text-2xs text-muted leading-snug">{i.hint}</span>
-            <span className="font-mono text-2xs text-ink-soft">{plural(counts[i.id], 'proposal')}</span>
-          </button>
-        ))}
+      {/* What you want, as ONE control: three cards with three standing hints
+          were nine things to read before the first proposal. The chosen
+          intent's hint is the one line under it. */}
+      <div className="flex flex-col gap-1.5">
+        <Segmented
+          fill
+          size="sm"
+          label="What you want"
+          value={intent}
+          onChange={(id) => actions.setIntent(id)}
+          options={INTENTS.map((i) => ({
+            id: i.id,
+            label: (
+              <>
+                {i.title}
+                <span className="ml-1.5 font-mono text-2xs text-muted tabular-nums">{counts[i.id]}</span>
+              </>
+            ),
+            title: i.hint,
+          }))}
+        />
+        <span className="text-xs text-muted">{INTENTS.find((i) => i.id === intent)?.hint}</span>
       </div>
 
       <div className="flex flex-wrap items-center gap-2">
@@ -108,11 +116,9 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
         ]}
       />
       <div className="flex flex-wrap gap-x-3.5 gap-y-1 text-2xs text-ink-soft">
-        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle bg-ink" />your stages</span>
-        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle bg-accent" />new stage</span>
-        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle border border-ok" />places into a stage of yours</span>
-        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle bg-warn" />would sit over one of yours</span>
-        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle border border-dashed border-faint" />left out</span>
+        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle bg-ink" />yours</span>
+        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle bg-accent" />new</span>
+        <span><i className="inline-block w-4 h-2 rounded-sm mr-1 align-middle border border-ok" />places into yours</span>
       </div>
 
       {visible.length === 0 ? (
@@ -143,7 +149,7 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
                       {intent === 'all' && p.verbs.length > 2 && <VerbSelect p={p} onChange={(v) => actions.answer(p.key, v)} />}
-                      <GoButton tab="paquet" label="Deck" onClick={() => actions.goTo('paquet', p.key)} />
+                      <GoButton tab="paquet" label="One by one" onClick={() => actions.goTo('paquet', p.key)} />
                     </span>
                   </span>
                   <VerbPill p={p} />
@@ -167,7 +173,6 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
           })}
         </ul>
       )}
-      <p className={`m-0 ${note}`}>A tick is the same verb the grain's card shows and the paquet answers; unticked, the chapter is left — never dropped from the trip.</p>
 
       <FineSettings settings={settings} actions={actions} />
     </>

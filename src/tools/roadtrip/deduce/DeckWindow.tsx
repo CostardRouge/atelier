@@ -1,7 +1,9 @@
 import { GRAINS } from '../../../shared/roadtrip/deduce-grain';
-import { haltName, type DeduceVerb, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import { type DeduceVerb, type Proposal } from '../../../shared/roadtrip/deduce-draft';
 import { stageLabel } from '../../../shared/roadtrip/trip-places';
 import Button from '../../../shared/ui/Button';
+import IconButton from '../../../shared/ui/IconButton';
+import { Icons } from '../../../shared/ui/icons';
 import Segmented from '../../../shared/ui/Segmented';
 import DeduceMap from './DeduceMap';
 import FineSettings from './FineSettings';
@@ -58,7 +60,15 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
 
   const top = (
     <div className="flex flex-wrap items-center justify-between gap-2.5">
-      <span className={legend}>{k < proposals.length ? `${k + 1} / ${proposals.length}` : 'Done'}</span>
+      <span className="inline-flex items-center gap-1">
+        <IconButton size="sm" variant="ghost" label="The chapter before (←)" disabled={k === 0} onClick={() => { actions.setIndex(k - 1); actions.setEditing(null); }}>
+          {Icons.back}
+        </IconButton>
+        <span className={`${legend} tabular-nums`}>
+          {k < proposals.length ? `${k + 1} / ${proposals.length}` : 'Done'}
+          {answered ? ` · ${answered} answered` : ''}
+        </span>
+      </span>
       <div className="flex flex-wrap gap-1" role="group" aria-label="The chapters">
         {proposals.map((p, j) => (
           <button
@@ -122,8 +132,8 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
             <Button size="sm" variant="ghost" aria-expanded={editing === p.key} onClick={() => actions.setEditing(editing === p.key ? null : p.key)}>
               <kbd className={kbd}>E</kbd> {editing === p.key ? 'Close' : 'Edit this chapter'}
             </Button>
-            <GoButton tab="grain" label="In the list" onClick={() => actions.goTo('grain', p.key)} />
-            {p.overlapping.length > 0 && <GoButton tab="calque" label="Against yours" onClick={() => actions.goTo('calque', p.key)} />}
+            <GoButton tab="grain" label="All stages" onClick={() => actions.goTo('grain', p.key)} />
+            {p.overlapping.length > 0 && <GoButton tab="calque" label="Against mine" onClick={() => actions.goTo('calque', p.key)} />}
           </span>
         </div>
         <DeduceMap proposals={proposals} draft={draft} points={points} ignored={ignored} land={land} focus={p} className="rounded-none border-0 max-[560px]:[&_svg]:max-h-[11rem]" />
@@ -167,15 +177,9 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
           );
         })}
       </div>
-      <p className={`m-0 text-2xs text-muted`}>
-        {answered ? `${answered} of ${proposals.length} answered` : 'Keys 1 to 4 and → answer; ← goes back'}. A chapter not answered takes the safe verb.
-        {haltName(p.halts[0], draft) === null ? ' A halt with no name gives no place unless you name it (Edit).' : ''}
-      </p>
-      <div>
-        <Button size="sm" disabled={k === 0} onClick={() => { actions.setIndex(k - 1); actions.setEditing(null); }}>
-          Back
-        </Button>
-      </div>
+      {p.unnamed.length > 0 && (
+        <p className="m-0 text-2xs text-warn">An unnamed halt gives no place unless you name it (E).</p>
+      )}
 
       <FineSettings settings={settings} actions={actions} />
     </>
