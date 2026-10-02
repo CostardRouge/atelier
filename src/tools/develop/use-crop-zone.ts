@@ -17,6 +17,7 @@ import {
 import { isDefaultFraming, sameFraming, wrapDegrees, type Framing } from '../../shared/media/framing';
 import { ASPECT_PRESETS } from '../../shared/projects/project-types';
 import { CROP_VIEW_FIT, clampCropView, type CropView, type StageBox } from './crop-view';
+import type { StoredCrop } from './crop-switches';
 
 export type { CropChip } from '../../shared/develop/crop-aspect';
 
@@ -63,6 +64,14 @@ export interface CropZoneApi {
   setLevelling: (on: boolean) => void;
   /** The zone last DRAWN (not fitted after a rotation). */
   intent: MutableRefObject<CropZone | null>;
+  /** The crop as stored right now — current even inside the click that just wrote it. */
+  stored: () => StoredCrop;
+  /**
+   * Put a whole stored crop back — an automatic verb turned off
+   * (`crop-switches.ts`). Written like an undo: the zone is derived from it
+   * and becomes the intent; the chip moves only if the format did.
+   */
+  restore: (crop: StoredCrop) => void;
   /**
    * How closely the STAGE looks at the picture — inspection only, never the
    * zone: a pinch, the wheel, the pill or `Z` move this, and the crop is
@@ -311,6 +320,20 @@ export function useCropZone({
     write(fitted);
   }, [write]);
 
+  const stored = useCallback((): StoredCrop => ({ aspect: live.current.aspect, framing: live.current.framing }), []);
+
+  const restore = useCallback((c: StoredCrop) => {
+    const { src: s, aspect: a, onAspect: setAspect, onFraming: setFraming } = live.current;
+    if (c.aspect !== a) {
+      setAspect(c.aspect);
+      setChipState(openingCropChip(c.aspect, c.aspect === 'original' && isDefaultFraming(c.framing)));
+    }
+    setFraming(c.framing);
+    written.current = { aspect: c.aspect, framing: c.framing };
+    live.current = { ...live.current, aspect: c.aspect, framing: c.framing };
+    intent.current = s ? zoneFromCrop(s, pictureAspectRatio(c.aspect, s.width, s.height), c.framing) : null;
+  }, []);
+
   const reset = useCallback(() => {
     const { src: s, onAspect: setAspect, onFraming: setFraming, aspect: a } = live.current;
     // Reset leaves the picture untouched, which is where Free is the default.
@@ -342,6 +365,8 @@ export function useCropZone({
     levelling,
     setLevelling,
     intent,
+    stored,
+    restore,
     view,
     setView,
     setStageBox,

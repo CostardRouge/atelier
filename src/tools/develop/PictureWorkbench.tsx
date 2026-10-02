@@ -9,6 +9,8 @@ import DevelopCurve from '../../shared/develop/DevelopCurve';
 import { developButtonClass } from '../../shared/develop/develop-classes';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
+import { useAutoMemory } from '../../shared/develop/use-auto-memory';
+import { useCropSwitches } from './use-crop-switches';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopMixer from '../../shared/develop/DevelopMixer';
 import { straightMono } from '../../shared/develop/mixer';
@@ -21,9 +23,11 @@ import {
   developBase,
   developLines,
   isDefaultDevelop,
+  isRawDevelop,
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
+import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import {
   calibrationAt,
   readRawCalibration,
@@ -64,28 +68,40 @@ import {
   DEFAULT_BRUSH_RADIUS,
   MAX_COLOUR_SAMPLES,
   MAX_STROKES,
+  SUBJECT_HIT_RADIUS,
+  defaultMask,
+  dropSubjectPin,
+  subjectPins,
+  tapSubject,
   type BrushStroke,
   type Mask,
   type MaskKind,
   type ShadeMask,
+  type SubjectPin,
 } from '../../shared/render/mask';
 import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
-import { nextMaskView, type MaskView } from './LayersPanel';
+import { MASK_VIEW_LABELS, nextMaskView, shownMaskView, type MaskView } from './mask-view';
 import type { BrushRaster } from '../../shared/render/brush-raster';
+import type { MaskFlash } from '../../shared/develop/layer-render';
 
 type SubjectRasters = ReadonlyMap<string, BrushRaster>;
 const EMPTY_RASTERS: SubjectRasters = new Map();
 /** One beat of the blink: on, off, on, off — about a third of a second. */
 const FLASH_STEP_MS = 90;
 
+/** What a tap on a subject does — the switch over the picture and in the panel. */
+const SUBJECT_TONES: readonly { id: 'add' | 'remove'; label: string }[] = [
+  { id: 'add', label: '+ Add' },
+  { id: 'remove', label: '− Remove' },
+];
+
 /**
  * How near a tap must land to count as a tap ON an existing point rather than
  * beside it, in [0,1] frame coordinates. Generous, because the markers are
  * small and un-picking by accident is cheaper to undo than failing to un-pick.
  */
-const SUBJECT_HIT_RADIUS = 0.04;
 
 import {
   addLayer,
@@ -93,7 +109,10 @@ import {
   createLayer,
   drawingLayers,
   withComponentMask,
+  duplicateLayer,
   moveLayer,
+  moveLayerTo,
+  newLayerId,
   patchLayer,
   removeLayer,
   sameLayers,
@@ -162,6 +181,10 @@ import {
 } from '../../shared/render/repair';
 import type { RepairRing, RingGesture, RingPart, SpotRing } from '../../shared/develop/DevelopViewport';
 import LayersPanel from './LayersPanel';
+import { takesPointer } from './kind-palette';
+import { useLayerThumbs } from './use-layer-thumbs';
+import LayerDetail, { type LayerTab } from './LayerDetail';
+import type { PaletteKind } from './kind-palette';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import { borderLayout, type RollBorder } from '../../shared/develop/border-layout';
@@ -275,6 +298,9 @@ export default function PictureWorkbench({
   onLayers,
   onAspect,
   onRendition,
+  rollChoice = null,
+  onRollChoice,
+  rollPhotos = 0,
   siblings = NO_FILES,
   exportSettings,
   onExportSettings,
@@ -311,6 +337,15 @@ export default function PictureWorkbench({
   file: File | null;
   /** Which file of the capture the picture is developed from (`RollPicture.rendition`); null for where it opens. */
   onRendition: (rendition: string | null) => void;
+  /**
+   * Which file the ROLL opens a picture on when the picture has no choice of
+   * its own (`RollDoc.opensOn`, `roll-choice.ts`); null for where it opens.
+   */
+  rollChoice?: RollChoice | null;
+  /** Set the roll's choice — from the foot of the name menu, or the line a pick offers. */
+  onRollChoice?: (choice: RollChoice | null) => void;
+  /** How many photographs the roll holds: a roll of one has no "every other picture". */
+  rollPhotos?: number;
   /** The capture's other files a folder listed beside `file` (`AssetParts.siblings`) — a local picture's only. */
   siblings?: readonly File[];
   /** THIS picture's look (roll v5) — the stack follows the open picture; the draft rides it. */
@@ -412,6 +447,8 @@ export default function PictureWorkbench({
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
+  // The Auto row's switches remember their clicks per picture, for the session.
+  const auto = useAutoMemory({ pictureKey: entry.id, develop: draft.draft, onPatch: draft.patch, onTold: tell });
   // A CLIP (2026-09-30): played on the stage and developed WHOLE — the global
   // develop and the look, which the export grades every frame through, and
   // (2026-10-01) ONE crop held still over every frame, the same `frame` the
@@ -462,15 +499,15 @@ export default function PictureWorkbench({
   // rather than one document write per step.
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  // The mask pinned on outside Pick / Paint. While either is on the mask shows
-  // by itself (below), which is when it is needed.
-  const [showMask, setShowMask] = useState(false);
-  // HOW the mask is shown: its line by default, the red wash on `M` — the
-  // maintainer's pick (2026-09-23): an outline says where the edge is without
-  // hiding the colour being set under it.
-  const [maskView, setMaskView] = useState<MaskView>('outline');
+  // HOW the open layer's mask is shown — Hidden, Outline, Fill, on the bar's
+  // glyph and on `M` (`mask-view.ts`). Hidden by default, and while Pick or
+  // Paint makes the mask its OUTLINE shows by itself — the maintainer's pick
+  // (2026-09-23): a line says where the edge is without hiding the colour
+  // being set under it. Outline or Fill keep it shown, which the "keep it
+  // shown" checkbox used to.
+  const [maskView, setMaskView] = useState<MaskView>('off');
   // One point's region, on and off twice after the model answers a tap.
-  const [flashMask, setFlashMask] = useState<BrushRaster | null>(null);
+  const [flashMask, setFlashMask] = useState<MaskFlash | null>(null);
   const [pixelView, setPixelView] = usePixelView();
   // What the picture SAYS about itself, and where. Off by default — the
   // maintainer does not want the numbers in front of him while he works, and
@@ -495,6 +532,15 @@ export default function PictureWorkbench({
   // once per tap rather than once per frame.
   const [subjectRasters, setSubjectRasters] = useState<SubjectRasters>(EMPTY_RASTERS);
   const [painting, setPainting] = useState(false);
+  // What a tap on a subject does: ADD a region, or take one back OUT
+  // (2026-10-02, his *«passer en soustraction»*). ⌥ held at the press flips
+  // it for that one tap, as Lightroom and Photoshop do; the switch is the
+  // touch screen's way and the one the panel shows. Back to Add whenever
+  // another layer opens — a removal mode met by surprise is a lost subject.
+  const [subjectTone, setSubjectTone] = useState<'add' | 'remove'>('add');
+  const subjectToneRef = useRef(subjectTone);
+  subjectToneRef.current = subjectTone;
+  useEffect(() => setSubjectTone('add'), [selectedLayerId]);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
 
@@ -510,6 +556,17 @@ export default function PictureWorkbench({
   const [selectedPart, setSelectedPart] = useState<number | null>(null);
   useEffect(() => setSelectedPart(null), [selectedLayerId]);
   const partIndex = selectedPart !== null && selectedLayer?.parts?.[selectedPart] ? selectedPart : null;
+  // Which half of the open layer is shown — WHERE it applies or WHAT it
+  // changes (`LayerDetail.tsx`) —, kept across layers like any tab.
+  const [layerTab, setLayerTab] = useState<LayerTab>('mask');
+  /** A layer's kind changed — from its row's ⋯ or its head's chip: the shape starts fresh, a pointer kind turns the pointer on. */
+  const changeLayerKind = (id: string, kind: PaletteKind) => {
+    setLayersDraft((list) => patchLayer(list, id, { mask: kind === 'whole' ? null : defaultMask(kind) }));
+    setSelectedLayerId(id);
+    setSelectedPart(null);
+    setLayerTab('mask');
+    setPainting(takesPointer(kind));
+  };
   const activeMask = selectedLayer ? componentMask(selectedLayer, partIndex) : null;
   const paintKind = painting ? activeMask?.kind : undefined;
   // A shade takes the pointer only while it has a centre to place — a band or
@@ -519,6 +576,9 @@ export default function PictureWorkbench({
     paintKind === 'brush' || paintKind === 'subject' || paintKind === 'colour' || placingShade
       ? (selectedLayer?.id ?? null)
       : null;
+  // What the stage draws of the open layer's mask: the view chosen, else its
+  // outline by itself while the pointer makes it.
+  const shownMask = shownMaskView(maskView, paintId !== null);
   const brushRef = useRef(brush);
   brushRef.current = brush;
   // The picture's own sampler, read at the tap: the hook is made further down.
@@ -536,17 +596,14 @@ export default function PictureWorkbench({
         }),
       );
     return {
-      onStart: (point: [number, number]) => {
+      onStart: (point: [number, number], mods?: { alt: boolean }) => {
         if (paintKind === 'subject') {
-          // A tap ADDS a point, and a tap on one REMOVES it — the
-          // click-a-marker-to-unpick gesture, which is how a subject is
-          // narrowed after the model took in too much.
-          edit((m) => {
-            if (m?.kind !== 'subject') return null;
-            const hit = m.points.findIndex(([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS);
-            const points = hit >= 0 ? m.points.filter((_, i) => i !== hit) : [...m.points, point];
-            return { ...m, points };
-          });
+          // A tap ADDS a region or takes one OUT (`tapSubject`), ⌥ flipping
+          // the mode for this tap; a tap on a pin takes that pin off — the
+          // click-a-marker-to-unpick gesture.
+          const mode = subjectToneRef.current;
+          const tone = mods?.alt ? (mode === 'add' ? 'remove' : 'add') : mode;
+          edit((m) => (m?.kind === 'subject' ? tapSubject(m, point, tone) : null));
           return;
         }
         if (paintKind === 'colour') {
@@ -735,7 +792,42 @@ export default function PictureWorkbench({
   const sensor = file ? sensorSourceFor(file, origin, siblings, assetKey) : null;
   const sensorHeld = sensor?.held ?? null;
   const sensorName = sensor?.name ?? null;
-  const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
+  // The roll's choice (`roll-choice.ts`) for a picture with none of its own,
+  // read from the STORED picture: a draft not yet written changes nothing.
+  // Let go for this visit when its file cannot be had (a cancel, a failure).
+  const handed = rollChoiceFor(rollChoice, entry).choice;
+  const [rollOff, setRollOff] = useState(false);
+  // On the roll's sensor the base is the ROLL's, never written, until the
+  // picture is given numbers — numbers bind their material, so the first
+  // write carries the base with them. Its gain is metered by the stage's own
+  // decode and held for this visit, which is how the export meters it too.
+  const followsSensor = handed === 'sensor' && sensor !== null && !rollOff && !clip;
+  const [followGain, setFollowGain] = useState<number | null>(null);
+  // The document already on a RAW base the draft has not been re-seeded
+  // with yet — the render between the first write and its echo, or an undo
+  // landing — is drawn on that base, never on the render for one frame.
+  const stored = entry.develop;
+  const settling = isRawDevelop(stored) && !isRawDevelop(draft.draft);
+  const developNow = useMemo<DevelopSettings>(() => {
+    if (isRawDevelop(draft.draft)) return draft.draft;
+    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain };
+    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain } : draft.draft;
+  }, [followsSensor, settling, stored, draft.draft, followGain]);
+  const inherited = developNow !== draft.draft;
+  // On the roll's sensor and not yet on its own: what a cancel, a failed fetch
+  // or the stage's meter answers for the visit rather than for the document.
+  const following = inherited && !settling;
+  const followingRef = useRef(following);
+  followingRef.current = following;
+  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain'> | null>(null);
+  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain } : null;
+  // The stack grades what the picture is developed WITH: after the draft's
+  // own effect, so the roll's base reaches the cube in the same commit.
+  const { setDevelop: setStackDevelop } = stack;
+  useEffect(() => {
+    setStackDevelop(developNow);
+  }, [developNow, setStackDevelop]);
+  const wantsRaw = baseRung(developNow.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
   // Developed from the sensor's own data right now — where a measured lens
   // profile applies by itself (`lens-profile.ts`).
@@ -761,13 +853,14 @@ export default function PictureWorkbench({
       .catch((err: unknown) => {
         if (!alive) return;
         tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
-        patchDraft({ base: null, rawGain: null });
+        if (followingRef.current) setRollOff(true);
+        else patchDraft({ base: null, rawGain: null });
       });
     return () => {
       alive = false;
     };
   }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
-  const rawGain = draft.draft.rawGain ?? null;
+  const rawGain = developNow.rawGain ?? null;
   // The calibration the RAW carries, read from a megabyte of its head as soon
   // as it is in hand — it is what decides whether the two top rungs are
   // offered at all, and what the passes apply at them.
@@ -788,7 +881,7 @@ export default function PictureWorkbench({
   // A rung the file cannot reach is never left standing: a picture developed
   // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
   // back to what IS there, rather than claiming a correction it cannot apply.
-  const rung = rungs.includes(developBase(draft.draft)) ? developBase(draft.draft) : rungs[rungs.length - 1];
+  const rung = rungs.includes(developBase(developNow)) ? developBase(developNow) : rungs[rungs.length - 1];
   // Memoised: `calibrationAt` builds a fresh record per call, and the hook
   // below took the record's identity as a dep of an effect that sets state —
   // a RAW on the gain-map rung re-rendered, re-graded and read the GPU back
@@ -892,7 +985,27 @@ export default function PictureWorkbench({
     siblingFacts,
   ]);
   const opening = openingRendition(rows);
-  const chosen = renditionById(rows, entry.rendition);
+  // The roll's camera file for a picture with none of its own: where it beats
+  // the proxy, and nothing before its size is measured (`resolveRollChoice`).
+  const rollAnswer = handed === 'delivered' && !rollOff ? resolveRollChoice(rows, 'delivered') : null;
+  const chosen = renditionById(rows, entry.rendition) ?? rollAnswer?.row ?? null;
+  const fromRoll = !entry.rendition && Boolean(rollAnswer?.row);
+  // Why the roll's choice did not land on this picture, where it follows it.
+  const rollReason =
+    handed === 'delivered'
+      ? rollOff
+        ? 'its camera file could not be had — back where it opens for this visit'
+        : (rollAnswer?.reason ?? null)
+      : handed === 'sensor' && !followsSensor
+        ? rollOff
+          ? 'its RAW could not be opened — back on the render for this visit'
+          : 'no RAW in this capture'
+        : rollChoiceFor(rollChoice, entry).reason;
+  // B of « C + B »: the file just picked, offered to the whole roll right
+  // where it was picked — gone when ignored, never a mode left switched on.
+  const [offer, setOffer] = useState<ChoiceRole | null>(null);
+  const rollOffer =
+    offer && onRollChoice && rollPhotos > 1 && !clip && (offer === 'proxy' ? null : offer) !== rollChoice ? offer : null;
   // The row on screen below the sensor: the stored choice where the capture
   // still offers it, else where the picture opens — never a blocked row.
   const current = (chosen && chosen.role !== 'sensor' && !chosen.blocked ? chosen : opening)?.id ?? null;
@@ -902,8 +1015,8 @@ export default function PictureWorkbench({
   // original), else fetched once and held for the session. Keyed on the id
   // alone, so a list rebuilt around it never restarts a fetch in flight.
   const [deliveredFile, setDeliveredFile] = useState<{ id: string; file: File } | null>(null);
-  const deliver = useRef({ wanted, siblings, origin, tell, onRendition });
-  deliver.current = { wanted, siblings, origin, tell, onRendition };
+  const deliver = useRef({ wanted, siblings, origin, tell, onRendition, fromRoll });
+  deliver.current = { wanted, siblings, origin, tell, onRendition, fromRoll };
   // The fetch under way for a row of THIS picture, so choosing another row —
   // the proxy back, after a gigabyte rush was asked for by mistake — lets go
   // of it. Through `fetchHeld` (2026-09-30) a reader that lets go detaches
@@ -946,7 +1059,9 @@ export default function PictureWorkbench({
         // choice already moved. Anything else is said and the row cleared.
         if (controller.signal.aborted) return;
         deliver.current.tell(`${row.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
-        deliver.current.onRendition(null);
+        // The roll's file is let go for this visit; a picture's own choice is cleared.
+        if (deliver.current.fromRoll) setRollOff(true);
+        else deliver.current.onRendition(null);
       })
       .finally(() => {
         if (flight.current?.controller === controller) flight.current = null;
@@ -1035,8 +1150,9 @@ export default function PictureWorkbench({
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
-    showMaskOf: !clip && selectedLayer && maskView !== 'off' && (paintId !== null || showMask) ? selectedLayer.id : null,
-    maskStyle: maskView === 'fill' ? 'fill' : 'outline',
+    // On the Layers tab only: a wash left on is never carried onto Adjust.
+    showMaskOf: !clip && selectedLayer && tab === 'layers' && shownMask !== 'off' ? selectedLayer.id : null,
+    maskStyle: shownMask === 'fill' ? 'fill' : 'outline',
     flashMask: clip ? null : flashMask,
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: clip ? null : detailDraft,
@@ -1064,14 +1180,18 @@ export default function PictureWorkbench({
     // Cancelled from the pill: back on the render, and said — a base whose
     // data never arrived is not a base.
     onRawAborted: () => {
-      patchDraft({ base: null, rawGain: null, rawWb: null });
+      if (following) setRollOff(true);
+      else patchDraft({ base: null, rawGain: null, rawWb: null });
       tell('Opening the RAW was cancelled — back on the render');
     },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       setRawWhite(info.meta.white);
       if (rawGain === null) {
-        patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
+        // On the roll's sensor the gain is held for the visit and written
+        // only with the picture's first numbers (`inheritedRef`).
+        if (following) setFollowGain(info.gain);
+        else patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
         const ev = Math.log2(info.gain);
         tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
       }
@@ -1115,7 +1235,7 @@ export default function PictureWorkbench({
       full: shownFile === file ? (sensorSize ?? proxyOriginalSize) : null,
     };
   }, [wantsRaw, rawSize, measured, sensorSize, proxyOriginalSize, shownFile, file]);
-  const fidelity = pictureFidelity(shownFile, draft.draft.base, fidelityPixels);
+  const fidelity = pictureFidelity(shownFile, developNow.base, fidelityPixels);
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
@@ -1132,18 +1252,21 @@ export default function PictureWorkbench({
   });
   const { rasters: resolvedSubjects, fresh: freshSubject } = subject;
   useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);
-  // The region a tap just added BLINKS twice (on, off, on, off, 90 ms each),
-  // like a macOS menu item, then leaves the stage to the chosen view. Only
-  // what the tap added, never the whole subject; nothing under reduced motion,
-  // where the outline alone says it.
+  // The list's thumbnails of each layer's REAL mask, a moment after the stack moves.
+  const layerThumbs = useLayerThumbs(layersDraft, picture, resolvedSubjects, selectedLayerId);
+  // The region a tap just changed BLINKS twice (on, off, on, off, 90 ms
+  // each), like a macOS menu item, then leaves the stage to the chosen view.
+  // Only what the tap changed, never the whole subject — added in the accent,
+  // taken away in ink; nothing under reduced motion, where the outline alone
+  // says it.
   useEffect(() => {
-    const raster = freshSubject?.raster;
-    if (!raster || prefersReducedMotion()) return;
+    if (!freshSubject || prefersReducedMotion()) return;
+    const blink: MaskFlash = { raster: freshSubject.raster, tone: freshSubject.tone };
     let step = 0;
-    setFlashMask(raster);
+    setFlashMask(blink);
     const timer = window.setInterval(() => {
       step += 1;
-      setFlashMask(step === 2 ? raster : null);
+      setFlashMask(step === 2 ? blink : null);
       if (step >= 3) window.clearInterval(timer);
     }, FLASH_STEP_MS);
     return () => {
@@ -1164,9 +1287,15 @@ export default function PictureWorkbench({
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
-    draft: isDefaultDevelop(draft.draft) ? null : draft.draft,
+    // A white balance set in kelvin is a number too, on the roll's sensor.
+    draft: isDefaultDevelop(draft.draft) && !(inherited && draft.draft.rawWb) ? null : draft.draft,
     same: sameDevelop,
-    onWrite: (value) => callbacks.current.onDevelop(value),
+    // A picture on the roll's sensor writes the base WITH its first numbers:
+    // they were set on the sensor's data and mean nothing on the render.
+    onWrite: (value) => {
+      const roll = inheritedRef.current;
+      callbacks.current.onDevelop(roll && value && !isRawDevelop(value) ? { ...value, ...roll } : value);
+    },
     // The WHOLE record, material included: an undo that takes a picture back
     // off its RAW must put the base back with the numbers.
     onReseed: (value) => replace(value ?? DEFAULT_DEVELOP),
@@ -1350,6 +1479,8 @@ export default function PictureWorkbench({
     onAspect: setAspectDraft,
     onFraming: setFramingDraft,
   });
+  // The Crop tab's Auto level and Crop to subject are switches like the Auto row's.
+  const cropSwitches = useCropSwitches({ pictureKey: entry.id, crop, aspect: aspectDraft, onTold: tell });
   const subjectCrop = useSubjectCrop({
     picture,
     crop,
@@ -1357,6 +1488,7 @@ export default function PictureWorkbench({
     rasters: resolvedSubjects,
     taskScope,
     onTold: tell,
+    record: (write) => cropSwitches.record('subject', write),
   });
   useEffect(() => {
     if (!source) return;
@@ -1682,22 +1814,64 @@ export default function PictureWorkbench({
    * tap-a-marker-to-remove gesture unaimable — the maintainer's *"i can not
    * see"*.
    */
-  const subjectMarks = useMemo<readonly (readonly [number, number])[] | null>(
+  const subjectMarks = useMemo<readonly SubjectPin[] | null>(
     () =>
       activeMask?.kind === 'subject'
-        ? activeMask.points
+        ? subjectPins(activeMask)
         : activeMask?.kind === 'colour'
-          ? activeMask.samples.map((c) => [c.x, c.y] as const)
+          ? activeMask.samples.map((c) => ({ x: c.x, y: c.y, tone: 'add' as const }))
           : null,
     [activeMask],
   );
+  // ⌥ held while a subject is picked shows the OTHER mode on the stage — in
+  // the switch and in the cursor — for as long as it is held, so the hand is
+  // told before it clicks what the click will do. The tap itself reads the
+  // modifier off its own event (`paint.onStart`), never this state.
+  const pickingSubject = paintKind === 'subject';
+  const [altHeld, setAltHeld] = useState(false);
+  useEffect(() => {
+    if (!pickingSubject) {
+      setAltHeld(false);
+      return;
+    }
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltHeld(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltHeld(false);
+    };
+    const lost = () => setAltHeld(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', lost);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', lost);
+    };
+  }, [pickingSubject]);
+  const tapTone: 'add' | 'remove' = altHeld ? (subjectTone === 'add' ? 'remove' : 'add') : subjectTone;
+  // The switch over the picture while a subject is picked: the eye is on the
+  // picture then, not on the panel.
+  const subjectTool = pickingSubject ? (
+    <div className="flex items-center gap-1.5 rounded-control border border-line-strong bg-surface/92 shadow-paper py-0.5 pl-0.5 pr-2">
+      <Segmented
+        size="sm"
+        label="What a tap on the picture does"
+        value={tapTone}
+        onChange={(v) => setSubjectTone(v)}
+        options={SUBJECT_TONES}
+      />
+      <span className="font-mono text-3xs text-faint">⌥ flips</span>
+    </div>
+  ) : null;
   const unmarkSubject = useCallback(
     (index: number) => {
       setLayersDraft((list) =>
         list.map((l) => {
           if (l.id !== paintId) return l;
           const m = componentMask(l, partIndex);
-          if (m?.kind === 'subject') return withComponentMask(l, partIndex, { ...m, points: m.points.filter((_, i) => i !== index) });
+          if (m?.kind === 'subject') return withComponentMask(l, partIndex, dropSubjectPin(m, index));
           if (m?.kind === 'colour') return withComponentMask(l, partIndex, { ...m, samples: m.samples.filter((_, i) => i !== index) });
           return l;
         }),
@@ -1714,14 +1888,14 @@ export default function PictureWorkbench({
    */
   const facts = useMemo<string[] | null>(() => {
     if (!factsOn) return null;
-    const lines = developLines(draft.draft);
+    const lines = developLines(developNow);
     if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
     if (detailDraft) lines.push(describeDetail(detailDraft));
     if (vignetteDraft) lines.push(describePostVignette(vignetteDraft));
     if (repairDraft.length) lines.push(describePatches(repairDraft));
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
-  }, [factsOn, draft.draft, drawingCount, detailDraft, vignetteDraft, repairDraft, fidelity.note]);
+  }, [factsOn, developNow, drawingCount, detailDraft, vignetteDraft, repairDraft, fidelity.note]);
 
   /**
    * What the CAMERA did, drawn above those facts under the same key — the
@@ -1796,6 +1970,8 @@ export default function PictureWorkbench({
    * well reads as one family, and the colours are the Studio's A/B.
    */
   const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
+  /** A layer is open on the Layers tab: there is a mask to show. */
+  const maskOpen = tab === 'layers' && selectedLayer !== null && !clip;
   const abPill =
     `${verbHeight} px-2 flex-none inline-flex items-center justify-center rounded-control border ` +
     'font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors';
@@ -1888,13 +2064,18 @@ export default function PictureWorkbench({
                 // A row of this picture asked for and no longer wanted stops
                 // coming — this reader lets go; an export that joined keeps it.
                 if (flight.current && flight.current.id !== id) flight.current.controller.abort();
-                onRendition(id === opening?.id ? null : id);
+                // Under a roll's choice the opening row is a choice too — the
+                // one that keeps this picture off the roll's file.
+                onRendition(id === opening?.id && !rollChoice ? null : id);
+                const row = rows.find((r) => r.id === id);
+                setOffer(row ? roleOfRow(row) : null);
               }}
               onRemeter={() => {
                 // The stored number goes, the held decodes with it (a held
                 // decode answers with the gain it was asked for), and the
                 // next decode measures anew and stores what it finds.
                 patchDraft({ rawGain: null });
+                setFollowGain(null);
                 dropDecodedRaws();
                 picture.redecode();
                 tell('metering the exposure again from the sensor’s data');
@@ -1904,8 +2085,9 @@ export default function PictureWorkbench({
                   patchDraft({ base: null, rawGain: null });
                   return;
                 }
-                const climbing = baseRung(draft.draft.base) === 0;
+                const climbing = baseRung(developNow.base) === 0;
                 patchDraft({ base: next });
+                setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');
                 }
@@ -1913,6 +2095,11 @@ export default function PictureWorkbench({
               status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
               gain={wantsRaw ? rawGain : null}
               calibration={calibration?.summary ?? null}
+              roll={
+                onRollChoice && rollPhotos > 1 && !clip
+                  ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason }
+                  : null
+              }
             />
             {told && (
               <span className="flex-none font-mono text-xs text-accent-ink" role="status">
@@ -1997,6 +2184,33 @@ export default function PictureWorkbench({
                 A/B
               </button>
             )}
+            {/* The MASK VIEW — Hidden, Outline, Fill — as one glyph of fixed
+                width in the well, drawn on every tab so it never slides a verb
+                aside (`frontend.md`, a toolbar never inserts a control), lit
+                only where there is a mask to show: the Layers tab with a layer
+                open. A click steps it, like `M`. */}
+            {source && !cropping && (
+              <button
+                type="button"
+                className={`${helpVerb} ${
+                  maskOpen && maskView !== 'off'
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
+                } disabled:opacity-35 disabled:cursor-default disabled:hover:text-muted`}
+                disabled={!maskOpen}
+                onClick={() => setMaskView((v) => nextMaskView(v))}
+                aria-label={`Mask view: ${MASK_VIEW_LABELS[maskView]}`}
+                title={
+                  maskOpen
+                    ? `Mask: ${MASK_VIEW_LABELS[maskView]} — click or M for ${MASK_VIEW_LABELS[nextMaskView(maskView)]}${
+                        maskView === 'off' ? '; its outline shows by itself while you pick or paint' : ''
+                      }`
+                    : 'Mask view — open a layer on the Layers tab'
+                }
+              >
+                <MaskViewGlyph view={maskView} />
+              </button>
+            )}
             {/* FOCUS — the picture alone, the band, the inspector and the page
                 bar away (`docs/develop-roll-browser.md`, face D): a verb at
                 every width, since a phone has no F and the way back must be
@@ -2041,7 +2255,31 @@ export default function PictureWorkbench({
           pixelView={pixelView}
           facts={facts}
           shot={shotLine}
+          // B of « C + B »: drawn OVER the picture, at the top, so the bar
+          // above it never gains a control and nothing slides under a pointer.
+          offer={
+            rollOffer && onRollChoice ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title={`Every picture with no choice of its own opens on ${CHOICE_WORDS[rollOffer]} — the ones you chose by hand keep theirs`}
+                  onClick={() => {
+                    onRollChoice(rollOffer === 'proxy' ? null : rollOffer);
+                    setOffer(null);
+                  }}
+                >
+                  {compact ? `${CHOICE_WORDS[rollOffer]} → whole roll` : `Use ${CHOICE_WORDS[rollOffer]} for the whole roll`}
+                </Button>
+                <IconButton size="sm" variant="ghost" label="Only this picture" onClick={() => setOffer(null)}>
+                  {Icons.close}
+                </IconButton>
+              </>
+            ) : null
+          }
           marks={subjectMarks}
+          tapTone={tapTone}
+          tool={subjectTool}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick
           // is on, so a settled mask cannot be edited by a stray click.
@@ -2057,10 +2295,10 @@ export default function PictureWorkbench({
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);
-            draft.patch({ temperature, tint });
-            tell(
-              `picked grey · temperature ${temperature}, tint ${tint}` +
-                (clamped ? ' · as far as the sliders reach' : ''),
+            auto.apply(
+              'pick',
+              { temperature, tint },
+              `picked grey · temperature ${temperature}, tint ${tint}` + (clamped ? ' · as far as the sliders reach' : ''),
             );
           }}
         />
@@ -2131,8 +2369,7 @@ export default function PictureWorkbench({
               />
               <DevelopAutoSection
                 stats={picture.stats}
-                onPatch={draft.patch}
-                onTold={tell}
+                auto={auto}
                 picking={picture.picking}
                 onPicking={picture.setPicking}
               />
@@ -2238,78 +2475,106 @@ export default function PictureWorkbench({
               <LayersPanel
                 layers={layersDraft}
                 selectedId={selectedLayerId}
-                showMask={showMask}
-                maskView={maskView}
-                onMaskView={setMaskView}
-                autoShown={paintId !== null}
+                thumbs={layerThumbs.rows}
                 onSelect={setSelectedLayerId}
                 onAdd={(kind: MaskKind | null) => {
                   const made = createLayer(kind);
                   setLayersDraft((list) => addLayer(list, made));
                   setSelectedLayerId(made.id);
-                  // A fresh subject's only use is to be tapped: Pick comes on
-                  // with it rather than being one more thing to find.
-                  setPainting(kind === 'subject' || kind === 'colour');
+                  // A new layer is made WHERE first: its mask is what it lacks.
+                  setLayerTab('mask');
+                  // A fresh subject's only use is to be tapped, a painted
+                  // mask's to be painted: Pick / Paint comes on with it rather
+                  // than being one more thing to find.
+                  setPainting(takesPointer(kind));
                 }}
                 onRemove={(id) => {
                   setLayersDraft((list) => removeLayer(list, id));
                   if (id === selectedLayerId) setSelectedLayerId(null);
                 }}
                 onMove={(id, delta) => setLayersDraft((list) => moveLayer(list, id, delta))}
+                onMoveTo={(id, index) => setLayersDraft((list) => moveLayerTo(list, id, index))}
+                onDuplicate={(id) => {
+                  const copy = newLayerId();
+                  setLayersDraft((list) => duplicateLayer(list, id, copy));
+                  setSelectedLayerId(copy);
+                }}
+                onKind={changeLayerKind}
                 onPatch={(id, patch) => setLayersDraft((list) => patchLayer(list, id, patch))}
-                onShowMask={setShowMask}
               />
               {selectedLayer && (
-                <>
-                  <MaskPanel
-                    layer={selectedLayer}
-                    layers={layersDraft}
-                    part={partIndex}
-                    onPart={setSelectedPart}
-                    onPatch={(patch) =>
-                      setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
-                    }
-                    brush={brush}
-                    onBrush={onBrush}
-                    painting={painting}
-                    onPainting={setPainting}
-                    subject={
-                      partIndex === null && selectedLayer.mask?.kind === 'subject'
-                        ? {
-                            working: subject.working === selectedLayer.id,
-                            state: subject.state,
-                            resolved: subjectRasters.has(selectedLayer.id),
-                          }
-                        : null
-                    }
-                  />
-                  {/* The SAME sliders the global develop uses, because a
-                      layer's adjustment IS a DevelopSettings — one maths, one
-                      panel, and a local exposure behaves like a global one. */}
-                  <DevelopSliders
-                    foldPrefix="layer."
-                    value={selectedLayer.develop}
-                    onChange={(key, v) =>
-                      setLayersDraft((list) =>
-                        patchLayer(list, selectedLayer.id, {
-                          develop: { ...selectedLayer.develop, [key]: v },
-                        }),
-                      )
-                    }
-                  />
-                  <DevelopCurve
-                    foldPrefix="layer."
-                    value={selectedLayer.develop.curves}
-                    histogram={picture.histogram}
-                    onChange={(curves) =>
-                      setLayersDraft((list) =>
-                        patchLayer(list, selectedLayer.id, {
-                          develop: { ...selectedLayer.develop, curves },
-                        }),
-                      )
-                    }
-                  />
-                </>
+                <LayerDetail
+                  layer={selectedLayer}
+                  tab={layerTab}
+                  onTab={(next) => {
+                    setLayerTab(next);
+                    // The Adjust half has nothing to pick or paint.
+                    if (next === 'adjust') setPainting(false);
+                  }}
+                  onRename={(name) => setLayersDraft((list) => patchLayer(list, selectedLayer.id, { name }))}
+                  onKind={(kind) => changeLayerKind(selectedLayer.id, kind)}
+                >
+                  {layerTab === 'mask' ? (
+                    <MaskPanel
+                      layer={selectedLayer}
+                      layers={layersDraft}
+                      part={partIndex}
+                      onPart={setSelectedPart}
+                      onPatch={(patch) =>
+                        setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
+                      }
+                      brush={brush}
+                      onBrush={onBrush}
+                      painting={painting}
+                      onPainting={setPainting}
+                      subjectTone={tapTone}
+                      onSubjectTone={(tone) => {
+                        setSubjectTone(tone);
+                        // Choosing what a tap does is choosing to tap.
+                        if (!painting) setPainting(true);
+                      }}
+                      terms={layerThumbs.terms}
+                      subject={
+                        partIndex === null && selectedLayer.mask?.kind === 'subject'
+                          ? {
+                              working: subject.working === selectedLayer.id,
+                              state: subject.state,
+                              resolved: subjectRasters.has(selectedLayer.id),
+                            }
+                          : null
+                      }
+                    />
+                  ) : (
+                    <>
+                      {/* The SAME sliders the global develop uses, because a
+                          layer's adjustment IS a DevelopSettings — one maths, one
+                          panel, and a local exposure behaves like a global one. */}
+                      <DevelopSliders
+                        foldPrefix="layer."
+                        value={selectedLayer.develop}
+                        onChange={(key, v) =>
+                          setLayersDraft((list) =>
+                            patchLayer(list, selectedLayer.id, {
+                              develop: { ...selectedLayer.develop, [key]: v },
+                            }),
+                          )
+                        }
+                      />
+                      <DevelopCurve
+                        foldPrefix="layer."
+                        value={selectedLayer.develop.curves}
+                        histogram={picture.histogram}
+                        onChange={(curves) =>
+                          setLayersDraft((list) =>
+                            patchLayer(list, selectedLayer.id, {
+                              develop: { ...selectedLayer.develop, curves },
+                            }),
+                          )
+                        }
+                      />
+                    </>
+                  )}
+                </LayerDetail>
               )}
             </>
           ) : tab === 'crop' ? (
@@ -2324,6 +2589,7 @@ export default function PictureWorkbench({
               borderVerbs={borderApplyTo}
               clip={clip}
               subjectCrop={subjectCrop}
+              switches={cropSwitches}
               onTold={tell}
             />
           ) : null}
@@ -2407,5 +2673,18 @@ export default function PictureWorkbench({
         />
       )}
     </>
+  );
+}
+
+/** The mask view's glyph: a dotted ring hidden, a dashed one for its outline, a disc for its fill. */
+function MaskViewGlyph({ view }: { view: MaskView }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      {view === 'fill' ? (
+        <circle cx="8" cy="8" r="6" fill="currentColor" stroke="none" />
+      ) : (
+        <circle cx="8" cy="8" r="5.5" strokeDasharray={view === 'off' ? '1.5 2.5' : '3 2'} opacity={view === 'off' ? 0.6 : 1} />
+      )}
+    </svg>
   );
 }

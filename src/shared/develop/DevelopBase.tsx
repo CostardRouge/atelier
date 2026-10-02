@@ -3,6 +3,7 @@ import { formatBytes } from '../lib/format';
 import { isClipName } from '../library/assets';
 import { renditionFacts, type Rendition } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
+import { CHOICE_WORDS, type RollChoice } from './roll-choice';
 
 export type { DevelopBase } from './develop';
 
@@ -25,6 +26,23 @@ export const BASE_ADDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
  */
 const CLIP_PROXY_ADDS =
   'your source’s proxy of the clip — small and quick to play. The rush is the row under it: fetched once when chosen, held for this session, and what the export delivers from where the frame asks.';
+
+/** What the roll's choice does to a picture with none of its own, under each word. */
+const ROLL_ADDS: Readonly<Record<'proxy' | RollChoice, string>> = Object.freeze({
+  proxy: 'each where it opens — quick, as every roll did until now',
+  delivered: 'the camera’s own file — its JPEG, or the render inside its RAW — wherever it beats the proxy',
+  sensor: 'developed from its RAW where it has one, its exposure metered on itself; numbers set on a render stay there',
+});
+
+/** The roll's choice of file, at the foot of the list — `DevelopBaseMenu`'s `roll`. */
+export interface RollChoiceMenu {
+  choice: RollChoice | null;
+  onChoice: (choice: RollChoice | null) => void;
+  /** This picture has no choice of its own and takes the roll's. */
+  follows: boolean;
+  /** Why the roll's choice did not land on this picture, where it follows; null when it did. */
+  reason: string | null;
+}
 
 /** What a delivered row IS, in the words under its name. */
 function describeDelivered(row: Rendition): string {
@@ -67,6 +85,7 @@ export function DevelopBaseMenu({
   status,
   gain,
   calibration,
+  roll = null,
   className = '',
 }: {
   /** The open file's name — the trigger's first words, truncated before the chip. */
@@ -97,11 +116,22 @@ export function DevelopBaseMenu({
   gain: number | null;
   /** What the RAW's own calibration asks for, once read; null when it carries none. */
   calibration?: string | null;
+  /**
+   * The ROLL's choice (`roll-choice.ts`), listed at the foot: which file every
+   * picture with no choice of its own opens on. The question is this menu's —
+   * which bytes — asked once for all of them. Absent outside a roll.
+   */
+  roll?: RollChoiceMenu | null;
   className?: string;
 }) {
   const onSensor = baseRung(base) > 0;
   const ev = gain ? Math.log2(gain) : 0;
   const sensor = rows.find((r) => r.role === 'sensor') ?? null;
+  // The row on screen says when it is there by the roll's choice — only
+  // where that choice LANDED: a picture the roll could not move says why at
+  // the foot, and its proxy is then where it opens, not the roll's.
+  const byRoll = (marked: boolean, facts: string) =>
+    marked && roll?.follows && roll.choice && !roll.reason ? [facts, 'the roll’s'].filter(Boolean).join(' · ') : facts;
 
   const item = (id: string, marked: boolean, title: string, facts: string, hint: string, onSelect: () => void, disabled = false): OverflowItem => ({
     id,
@@ -136,7 +166,7 @@ export function DevelopBaseMenu({
         row.id,
         marked,
         row.role === 'proxy' ? 'Proxy' : row.name,
-        renditionFacts(row, formatBytes),
+        byRoll(marked, renditionFacts(row, formatBytes)),
         hint,
         () => onRendition(row.id),
         Boolean(row.blocked),
@@ -160,7 +190,7 @@ export function DevelopBaseMenu({
           rung,
           marked,
           rung === 'gain' ? `${sensor.name} → ${BASE_LABELS.gain}` : `→ ${BASE_LABELS[rung]}`,
-          rung === 'gain' ? renditionFacts(sensor, formatBytes) : '',
+          byRoll(marked, rung === 'gain' ? renditionFacts(sensor, formatBytes) : ''),
           hint,
           () => onBase(rung),
         ),
@@ -191,6 +221,22 @@ export function DevelopBaseMenu({
         <span className="font-mono text-3xs text-faint whitespace-normal max-w-[22rem]">this file asks for {calibration}</span>
       ),
     });
+  }
+
+  if (roll) {
+    items.push({
+      id: 'roll-head',
+      disabled: true,
+      onSelect: () => {},
+      label: <span className="font-mono text-3xs tracking-[0.12em] uppercase text-faint">The whole roll opens on</span>,
+    });
+    for (const role of ['proxy', 'delivered', 'sensor'] as const) {
+      const value = role === 'proxy' ? null : role;
+      const marked = roll.choice === value;
+      // Where the roll's choice did not land on THIS picture, its row says why.
+      const hint = marked && roll.follows && roll.reason ? `not this picture: ${roll.reason}` : ROLL_ADDS[role];
+      items.push(item(`roll-${role}`, marked, CHOICE_WORDS[role], '', hint, () => roll.onChoice(value)));
+    }
   }
 
   const words = (

@@ -1400,7 +1400,15 @@ why it is its own button, and **Pick grey** asks you for a neutral instead;
 **Auto bands** compresses the ends where the picture leans — a tenth of it
 against black lifts Shadows, a tenth against white pulls Highlights down —
 part of the way, so a picture dark on purpose keeps its character, and says
-when a band runs out before its target. Every setting belongs to the
+when a band runs out before its target. Each is a **switch**: a second click
+puts back what its own sliders held before it and leaves the others alone, so
+of Auto tone and Auto colour you keep the one that helped. A lit switch still
+holds its answer, a dashed one found nothing to change, a half-lit one has
+been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
+Pick grey share the white balance — the newer replaces the older, and turning
+it off gives back the balance from before either. The switches remember
+their clicks for the session only: after a reload they are off and the values
+stay. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
@@ -1508,7 +1516,19 @@ target for one.
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
 *brightness*, a *colour* range, a mask *painted* by hand, a *subject* found by
-a model from a point you tap, or the *whole picture*. Every Develop slider works inside a layer, and layers add up
+a model from a point you tap, or the *whole picture*. One **+ Layer** opens
+a palette of those kinds, grouped by what you do — *Point at it* (subject,
+colour, brightness), *Draw it* (linear, radial, shade, painted) and
+*Everywhere* — each with its glyph and a line of use (a sheet on a phone).
+The same palette changes a layer's kind, from the chip beside **Mask**, and
+combines a term into its mask. Each row of the list shows a thumbnail of the
+layer's real mask (its terms combined, the subject it takes out cut away),
+its name beside its kind (double-click to rename), chips of what it changes
+and its opacity as a slim bar; drag its grip, or press **⌥↑ / ⌥↓**, to
+reorder, and **⋯** holds Rename, Duplicate, Move up and down, Invert, Change
+type… and Delete. The open layer is named in its own head, beside the chip of
+its kind, and splits into **Mask · where** and **Adjust · what**, so its
+sliders are one tap away. Every Develop slider works inside a layer, and layers add up
 from the bottom of the list to the top. A **shade** is the very shape a Trips
 shade draws, picked with the same controls: where it comes from on the 3×3
 grid (an edge, a quarter circle from a corner, or in the centre a radial and
@@ -1519,9 +1539,26 @@ lands, and its opacity is the strength. A band or a radial can be moved:
 **Place on the picture** (or **P**), then press or drag where it should sit. A new Subject layer starts with
 **Pick** on (**P**): tap the thing you mean and the model finds it at once —
 a ring turns while it thinks, then what the tap added blinks twice — tap
-again to add to it, tap a marker to take it off. While you pick or paint, the
-mask shows by itself as its **outline**; **M** steps it to a red **fill** and
-to hidden, and the box under it keeps it shown once Pick is off. Any layer
+again to add to it, tap a marker to take it off. When the model takes in too
+much — the bench the person leans on — switch the picture's **+ Add | −
+Remove** to Remove, or hold **⌥** for one tap, and tap the part you do not
+want: the model finds that object as well and it is taken **out** of the
+subject, its region blinking in ink, its pin an ink disc with a `−`. Under
+the points, **Refine what it found** works on the model's answer, which is
+how SURE it is pixel by pixel: **Tolerance** moves the cut (higher takes in
+what it was less sure of, lower keeps the core; 50 % is the model's own
+answer), **only what touches my + points** drops a region the model returned
+nowhere near your taps, and **Grow / Shrink** moves the edge by up to 24
+pixels of the 1024 px picture the model is shown. **Edge** is made last: *As
+found*, *Soft* (feathered), or *Snap to edges*, which pulls an edge the model
+drew a few pixels off onto the picture's own (a guided filter over what the
+model was shown) — it refines an edge, and cannot bring back a part the model
+left out. A removed region is cut at the same tolerance and taken out after
+the rest, and no knob asks the model again.
+The mask view is
+one glyph in the picture's bar, beside **A/B** (and **M**): *Hidden*, its
+*Outline* or a red *Fill*. Hidden, its outline still shows by itself while you
+pick or paint; Outline or Fill keep it shown, on the Layers tab only. Any layer
 can take a subject **out** of itself (*Except › The subject*): darken the
 whole picture except the person, and the person's own layer alone decides
 them. The model (17 MB) is served from this site and loads the first time a
@@ -1529,8 +1566,10 @@ subject is asked for; an export segments the same points on the picture it
 delivers.
 
 **Combining masks.** A layer's mask can be combined with up to four more,
-the way Lightroom does it: under **Combine**, pick **Add**, **Subtract** or
-**Intersect**, then the kind. *Add* takes in the new shape too, *Subtract*
+the way Lightroom does it, and the mask reads as a **recipe** of them — a
+tile per term with its own small map, the operator between two (a click on it
+cycles **+**, **−**, **∩**) — and the recipe's **+** opens the palette with
+**Add**, **Subtract** or **Intersect** at its head, then the kind. *Add* takes in the new shape too, *Subtract*
 takes it out (a sky minus the mountain you paint over), *Intersect* keeps only
 where both are (the shadows, but only inside an ellipse). The parts apply in
 order, each with its own invert. The list at the top of the mask panel opens
@@ -1561,7 +1600,10 @@ subject** draws the zone around the subject — what your Subject layers point
 at, else what the model finds at the centre of the picture, and the line says
 which — with room around it, in the format chosen, slid inside the picture
 rather than shrunk; a speck and a subject that is the whole picture are
-refused with the reason. The quarter
+refused with the reason. Both are **switches** like the Adjust tab's Auto
+row: a second click puts back the crop from before that verb — so Auto level,
+then Crop to subject, then the crop turned off gives back the levelled
+picture. The quarter
 turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
@@ -1639,7 +1681,18 @@ only where the file carries it). A file that is not here is fetched from its
 instance and held for the session, its weight said before the click; a DNG
 beside a JPEG in a folder is the sensor with no fetch at all. The choice is
 saved on the picture, so another device shows the same one, and the export
-follows it. **On a phone or a tablet** the sensor is decoded to what the
+follows it. **For the whole roll**, the same list ends on *The whole roll
+opens on* — *Proxy*, *Camera render* or *Sensor (RAW)* — and choosing a file
+on one picture offers *Use Camera render for the whole roll* right beside its
+name (also asked when the roll is created). Every picture with no choice of
+its own then opens on that file, the ones added later too: the roll holds one
+choice, not a copy per picture, and one ⌘Z takes it back. A picture you chose
+by hand keeps its own file and wears `≠` in the filmstrip. The camera's file
+is taken only where it has more pixels than the proxy — the 960 × 540 render
+inside a DJI DNG is not, so that picture stays on its proxy and its menu says
+why — and a picture whose numbers were set on the render is never moved onto
+its sensor by the roll. Each file is fetched when its picture opens, never the
+whole roll at once; a clip never follows. **On a phone or a tablet** the sensor is decoded to what the
 device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the

@@ -9,6 +9,8 @@ import {
   layerDraws,
   layerLabel,
   moveLayer,
+  moveLayerTo,
+  duplicateLayer,
   normaliseLayer,
   patchLayer,
   removeLayer,
@@ -326,5 +328,35 @@ describe('masks combined (item 16)', () => {
     expect(layerWeight(0.4, false, 0, 1, [{ op: 'add', invert: false, value: 0.4 }])).toBe(0.4);
     // The hole still comes last.
     expect(layerWeight(0, true, 1, 1, [{ op: 'add', invert: false, value: 1 }])).toBe(0);
+  });
+});
+
+describe('the list\'s own moves', () => {
+  const ids = (list: readonly { id: string }[]) => list.map((l) => l.id);
+  const three = () => [createLayer('linear', 'a'), createLayer('radial', 'b'), createLayer(null, 'c')];
+
+  it('moves a layer to an index of the stack, holding at the ends', () => {
+    expect(ids(moveLayerTo(three(), 'a', 2))).toEqual(['b', 'c', 'a']);
+    expect(ids(moveLayerTo(three(), 'c', 0))).toEqual(['c', 'a', 'b']);
+    expect(ids(moveLayerTo(three(), 'b', 99))).toEqual(['a', 'c', 'b']);
+    expect(ids(moveLayerTo(three(), 'zz', 0))).toEqual(['a', 'b', 'c']);
+  });
+
+  it('duplicates a layer just above it, cloned and named a copy', () => {
+    const list = three();
+    list[0] = { ...list[0], name: 'Sky' };
+    const out = duplicateLayer(list, 'a', 'a2');
+    expect(ids(out)).toEqual(['a', 'a2', 'b', 'c']);
+    expect(out[1].name).toBe('Sky copy');
+    expect(out[1].mask).toEqual(out[0].mask);
+    expect(out[1].mask).not.toBe(out[0].mask);
+    // An unnamed layer's copy is named after what its mask is.
+    expect(duplicateLayer(three(), 'b', 'b2')[2].name).toMatch(/^radial.* copy$/);
+  });
+
+  it('refuses a copy past the limit', () => {
+    let list = three();
+    for (let i = 0; list.length < MAX_LAYERS; i += 1) list = duplicateLayer(list, 'a', `x${i}`);
+    expect(duplicateLayer(list, 'a', 'over')).toHaveLength(MAX_LAYERS);
   });
 });

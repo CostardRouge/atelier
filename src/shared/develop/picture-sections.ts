@@ -19,6 +19,7 @@
  */
 
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from './develop';
+import { ontoRollSensor } from './roll-choice';
 import { isClipPicture, pictureEdits, type PictureEdit, type RollDoc, type RollPicture } from './roll-types';
 
 export type PictureSection = PictureEdit;
@@ -147,6 +148,8 @@ export function applySections(
   const pictures = roll.pictures.map((p) => {
     if (!ids.includes(p.id) || p === source) return p;
     const next = withSections(p, source, sections);
+    // Onto a picture on the roll's sensor, a sensor's numbers keep it there.
+    next.develop = ontoRollSensor(roll.opensOn, p, isRawDevelop(source.develop), next.develop);
     if (sameSections(next, p)) return p;
     changed = true;
     return next;

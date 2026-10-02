@@ -36,6 +36,7 @@ import type { SavedLutLayer } from '../lut/use-lut-stack';
 import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import type { OutputTransform } from '../lut/transfer';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
+import { readRollChoice, type RollChoice } from './roll-choice';
 
 /**
  * Bumped with a migration block in `migrateRollDoc`, never without.
@@ -63,6 +64,9 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
  * making-of video (`docs/develop-timelapse.md`). Absent reads as no steps,
  * so nothing migrates; a picture edited before v7 has settings and no story,
  * and `journal.ts` reconstructs one in a standard order, said as such.
+ * `RollDoc.opensOn` (2026-10-02) needed no bump, like the rendition: absent
+ * reads as null, which is what every roll did until then — each picture
+ * opens where it opens.
  */
 export const ROLL_DOC_VERSION = 7;
 
@@ -309,6 +313,14 @@ export interface RollDoc {
   /** The filmstrip's order. */
   pictures: RollPicture[];
   export: RollExport;
+  /**
+   * Which file of its capture a picture with no choice of its own opens on
+   * (`roll-choice.ts`, 2026-10-02): the camera's file, its sensor, or —
+   * null, absent — where it opens, its proxy. A ROLE, resolved per picture,
+   * since a stored rendition names one capture's file and means nothing on
+   * another's. A picture's own choice always wins; a clip never follows.
+   */
+  opensOn?: RollChoice | null;
 }
 
 export function newRollId(): string {
@@ -332,6 +344,7 @@ export function createRollDoc(
     updatedAt: now,
     pictures: [],
     export: { ...DEFAULT_ROLL_EXPORT },
+    opensOn: null,
   };
 }
 
@@ -674,6 +687,7 @@ export function readRollDoc(raw: unknown, fallbackSourceId: string = DEFAULT_SOU
     updatedAt: finite(raw.updatedAt, now),
     pictures,
     export: readRollExport(raw.export),
+    opensOn: readRollChoice(raw.opensOn),
   };
 }
 

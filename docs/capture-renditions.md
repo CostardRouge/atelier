@@ -714,6 +714,9 @@ opens. Nothing else in the shell learns about renditions.
 
 ### 13.4b The roll-wide default — DEFERRED on purpose, with its direction
 
+**BUILT 2026-10-02** as `RollDoc.opensOn` — his pick «C + B» (the roll's
+choice, offered right after a pick), rules in `docs/memory/roll-choice.md`. What follows is the record of the deferral.
+
 He declined to answer now, and said where it is heading, which is worth more
 than the answer: *"à terme il faudra absolument que l'on bosse sur le fichier
 RAW, et le proxy serait plutôt le choix à sélectionner explicitement quand on
@@ -732,8 +735,7 @@ default go down the same path.
 
 - **A TIFF row** (C14): no camera here writes one; the answer is no row until
   one does.
-- **A roll-wide default** — "develop everything from the RAW where there is
-  one" as a roll setting, rather than a verb run over a selection.
+- ~~**A roll-wide default**~~ — built 2026-10-02 (`RollDoc.opensOn`, §13.4b).
 - **A capture with no proxy at all** (a local folder, no instance): the list is
   `HIF · ARW` and the stage opens on… the biggest drawable rendition. Needs
   saying, since every pixel budget in the suite assumes a proxy-sized opening.

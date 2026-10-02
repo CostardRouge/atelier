@@ -15,6 +15,7 @@
 
 import type { BrushRaster } from '../render/brush-raster';
 import { segmentSubject } from '../segment/segmenter';
+import { subjectRefineOf } from '../render/mask';
 import { subjectLayersForRender, type AdjustLayer } from './layer';
 
 export async function resolveSubjectRasters(
@@ -25,7 +26,11 @@ export async function resolveSubjectRasters(
   for (const layer of subjectLayersForRender(layers)) {
     if (layer.mask?.kind !== 'subject') continue;
     const points = layer.mask.points.map(([x, y]) => ({ x, y }));
-    const raster = await segmentSubject(image, points);
+    // What the author took back out is removed here exactly as on the stage
+    // (`composeSubject`), or the file would carry the bench the stage left out.
+    const minus = (layer.mask.minus ?? []).map(([x, y]) => ({ x, y }));
+    // And refined exactly as on the stage, by the same composer.
+    const raster = await segmentSubject(image, points, minus, subjectRefineOf(layer.mask));
     if (raster) out.set(layer.id, raster);
   }
   return out;

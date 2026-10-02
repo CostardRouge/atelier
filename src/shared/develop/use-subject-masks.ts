@@ -1,15 +1,19 @@
 import { useEffect, useRef, useState } from 'react';
 import type { BrushRaster } from '../render/brush-raster';
 import {
+  composeSubject,
+  type ComposeOptions,
   prepareSegmentSource,
+  readGuide,
   segmentPoint,
   segmenterState,
-  unionMasks,
   type SegmentSource,
   type SegmenterState,
 } from '../segment/segmenter';
 import { isConstrainedDevice } from '../lib/device-class';
 import { subjectLayersToSegment, type AdjustLayer } from './layer';
+import { subjectRefineOf, type SubjectMask } from '../render/mask';
+import { cutConfidence, type GuideImage } from '../segment/subject-refine';
 import type { SegmentView } from './segment-view';
 import { knownSubjectPoints, type KnownPoints } from './subject-known';
 
@@ -29,7 +33,9 @@ import { knownSubjectPoints, type KnownPoints } from './subject-known';
  * - **Cached per POINT and per VIEW, not per request.** A layer's mask is the
  *   union of its points, so a third tap costs ONE inference rather than three,
  *   un-picking a point costs none, and two layers pointing at the same spot
- *   segment once. Nudging a slider never re-runs a four-second inference. The
+ *   segment once. Nudging a slider never re-runs a four-second inference, and
+ *   neither does a REFINE knob (Tolerance, islands, Grow / Shrink): what is
+ *   cached is the model's confidence, and the cut is made at compose time. The
  *   VIEW is the frame the model was shown (`SegmentView.key`): a lens
  *   correction or a keystone moves the subject in that frame, so a point is
  *   asked again there — and only there, never for a vignette or a colour.
@@ -50,12 +56,14 @@ export interface SubjectMasks {
   working: string | null;
   state: SegmenterState;
   /**
-   * The region of the point the author has JUST added, once the model has
+   * The region of the point the author has JUST tapped, once the model has
    * answered it — a new object per answer, so the host can blink it
    * (2026-09-23). Only a point tapped on this picture while it was open: a
    * picture re-opened, whose points are segmented again, blinks nothing.
+   * `tone` says which way the tap went — a region ADDED, or one taken back
+   * out (2026-10-02), which must not blink like an addition.
    */
-  fresh: { layerId: string; raster: BrushRaster } | null;
+  fresh: { layerId: string; raster: BrushRaster; tone: 'add' | 'remove' } | null;
 }
 
 /** How many points' masks are kept — ~50 MB at the model's input size, at most. */
@@ -75,6 +83,52 @@ type Point = readonly [number, number];
 
 function pointKey(pictureKey: string, model: string, [x, y]: Point): string {
   return `${pictureKey}|${model}|${x.toFixed(4)},${y.toFixed(4)}`;
+}
+
+/** One tap of a subject: the point, and whether it added or took away. */
+interface SubjectTap {
+  point: Point;
+  tone: 'add' | 'remove';
+}
+
+/**
+ * How a layer's answers are composed: its refine settings, and its ADDED points
+ * as the seeds "Only what touches my + points" keeps.
+ */
+function composeOptions(mask: SubjectMask): ComposeOptions {
+  return { ...subjectRefineOf(mask), seeds: mask.points.map(([x, y]) => ({ x, y })) };
+}
+
+/** A refine setting as text, for the signature — so a knob re-composes and never re-asks the model. */
+function refineKey(mask: SubjectMask): string {
+  const r = subjectRefineOf(mask);
+  return `t${r.tolerance}i${r.islands ? 1 : 0}g${r.grow}e${r.edge}`;
+}
+
+// The model's view as pixels, for an edge snapped to the picture's own — one
+// view at a time (~2.8 MB at 1024 px), read once and kept while it is the
+// view, so a knob that re-composes a snapped subject reads nothing again.
+let guideHeld: { key: string; guide: GuideImage | null } | null = null;
+
+function heldGuide(viewKey: string): GuideImage | null | undefined {
+  return guideHeld?.key === viewKey ? guideHeld.guide : undefined;
+}
+
+/** Every tap of a subject, the added ones first — the order they compose in. */
+function subjectTaps(mask: SubjectMask): SubjectTap[] {
+  return [
+    ...mask.points.map((point) => ({ point, tone: 'add' as const })),
+    ...(mask.minus ?? []).map((point) => ({ point, tone: 'remove' as const })),
+  ];
+}
+
+/**
+ * A tap as the RECORD knows it: signed, because a point added and the same
+ * point taken away are two different taps — while the model's answer to it,
+ * cached under `pointKey`, is the same either way.
+ */
+function tapKey(pictureKey: string, model: string, tap: SubjectTap): string {
+  return `${tap.tone === 'add' ? '+' : '-'}${pointKey(pictureKey, model, tap.point)}`;
 }
 
 /** A Map used as an LRU: a hit is re-inserted at the end, an insert past the cap evicts the oldest. */
@@ -130,13 +184,12 @@ export function useSubjectMasks({
   // and not when a slider moves. Every visible subject with a point, drawing
   // or not (`subjectLayersToSegment`): the model runs on the tap, and the
   // raster is what "show the mask" paints before the layer has a develop.
-  const wanted = subjectLayersToSegment(layers)
-    .map((l) => {
-      const mask = l.mask as { points: readonly Point[]; model: string };
-      return { id: l.id, model: mask.model, points: mask.points };
-    });
+  const wanted = subjectLayersToSegment(layers).map((l) => {
+    const mask = l.mask as SubjectMask;
+    return { id: l.id, model: mask.model, taps: subjectTaps(mask), options: composeOptions(mask), refine: refineKey(mask) };
+  });
   const signature = wanted
-    .map((w) => `${w.id}=${w.points.map((p) => pointKey(pictureKey, w.model, p)).join(';')}`)
+    .map((w) => `${w.id}=${w.taps.map((t) => tapKey(pictureKey, w.model, t)).join(';')}~${w.refine}`)
     .join('|');
 
   useEffect(() => {
@@ -155,23 +208,29 @@ export function useSubjectMasks({
     const ready = new Map<string, BrushRaster>();
     const missing: typeof wanted = [];
     for (const want of wanted) {
-      let union: BrushRaster | null = null;
+      const plus: BrushRaster[] = [];
+      const minus: BrushRaster[] = [];
       let complete = true;
-      let added: BrushRaster | null = null;
-      for (const point of want.points) {
-        const key = pointKey(pictureKey, want.model, point);
-        const hit = lruGet(pointCache, `${viewKey}#${key}`);
+      let tapped: SubjectMasks['fresh'] = null;
+      for (const tap of want.taps) {
+        const hit = lruGet(pointCache, `${viewKey}#${pointKey(pictureKey, want.model, tap.point)}`);
         if (!hit) {
           complete = false;
           break;
         }
-        if (isNew(want.id, key)) added = hit;
-        union = unionMasks(union, hit);
+        if (isNew(want.id, tapKey(pictureKey, want.model, tap))) tapped = { layerId: want.id, raster: hit, tone: tap.tone };
+        (tap.tone === 'add' ? plus : minus).push(hit);
       }
+      // A SNAPPED edge needs the view's pixels; until they are read the
+      // layer goes the slow way below, which reads them once.
+      const guide = want.options.edge === 'snap' ? heldGuide(viewKey) : null;
+      if (guide === undefined) complete = false;
       // A point tapped again where one was taken off: its answer is cached,
-      // and it blinks all the same — it is still what the tap added.
-      if (complete && added) setFresh({ layerId: want.id, raster: added });
-      if (complete && union) ready.set(want.id, union);
+      // and it blinks all the same — it is still what the tap changed. The
+      // blink is the answer CUT, as the subject takes it, not the soft map.
+      if (complete && tapped) setFresh({ ...tapped, raster: cutConfidence(tapped.raster, want.options.tolerance) });
+      const composed = complete ? composeSubject(plus, minus, { ...want.options, guide }) : null;
+      if (composed) ready.set(want.id, composed);
       else missing.push(want);
     }
     if (ready.size) setRasters((prev) => (sameMaps(prev, ready) ? prev : mergeKept(prev, ready, wanted)));
@@ -189,27 +248,37 @@ export function useSubjectMasks({
 
     void (async () => {
       const input = await shownNow.ready;
+      if (missing.some((w) => w.options.edge === 'snap') && heldGuide(viewKey) === undefined) {
+        guideHeld = { key: viewKey, guide: readGuide(input.image) };
+      }
+      const guide = heldGuide(viewKey) ?? null;
       for (const want of missing) {
         if (cancelled || runId.current !== run) return;
-        setWorking(want.id);
-        let union: BrushRaster | null = null;
-        for (const point of want.points) {
+        // "Finding it" only where the model is really asked — a snapped edge
+        // waiting on the view's pixels is not a search.
+        if (want.taps.some((tap) => !pointCache.has(`${viewKey}#${pointKey(pictureKey, want.model, tap.point)}`))) {
+          setWorking(want.id);
+        }
+        const plus: (BrushRaster | null)[] = [];
+        const minus: (BrushRaster | null)[] = [];
+        for (const tap of want.taps) {
           if (cancelled || runId.current !== run) return;
-          const key = pointKey(pictureKey, want.model, point);
-          let mask = lruGet(pointCache, `${viewKey}#${key}`) ?? null;
+          const key = `${viewKey}#${pointKey(pictureKey, want.model, tap.point)}`;
+          let mask = lruGet(pointCache, key) ?? null;
           if (!mask) {
-            mask = await segmentPoint(input.image, { x: point[0], y: point[1] });
+            mask = await segmentPoint(input.image, { x: tap.point[0], y: tap.point[1] });
             setState(segmenterState());
-            if (mask) lruSet(pointCache, `${viewKey}#${key}`, mask, pointCacheSize());
+            if (mask) lruSet(pointCache, key, mask, pointCacheSize());
           }
-          if (mask && isNew(want.id, key) && !cancelled && runId.current === run) {
-            setFresh({ layerId: want.id, raster: mask });
+          if (mask && isNew(want.id, tapKey(pictureKey, want.model, tap)) && !cancelled && runId.current === run) {
+            setFresh({ layerId: want.id, raster: cutConfidence(mask, want.options.tolerance), tone: tap.tone });
           }
-          union = unionMasks(union, mask);
+          (tap.tone === 'add' ? plus : minus).push(mask);
         }
         if (cancelled || runId.current !== run) return;
-        if (union) {
-          const raster = union;
+        const composed = composeSubject(plus, minus, { ...want.options, guide: want.options.edge === 'snap' ? guide : null });
+        if (composed) {
+          const raster = composed;
           setRasters((prev) => {
             const next = new Map(prev);
             next.set(want.id, raster);
@@ -237,9 +306,9 @@ export function useSubjectMasks({
   const everySubject = (layers ?? [])
     .filter((l) => l.mask?.kind === 'subject')
     .map((l) => {
-      const mask = l.mask as { points: readonly Point[]; model: string };
+      const mask = l.mask as SubjectMask;
       // A point key holds `|` itself, so lines and tabs part the entries.
-      return `${l.id}\t${mask.points.map((p) => pointKey(pictureKey, mask.model, p)).join('\t')}`;
+      return `${l.id}\t${subjectTaps(mask).map((t) => tapKey(pictureKey, mask.model, t)).join('\t')}`;
     })
     .join('\n');
   const viewReady = source !== null;

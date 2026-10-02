@@ -1,6 +1,6 @@
 import DevelopFold from './DevelopFold';
 import { autoBands, autoColour, autoTone, describeAutoBands, describeAutoTone, type SourceStats } from './auto-develop';
-import { developButtonClass, developLinkClass } from './develop-classes';
+import { developLinkClass } from './develop-classes';
 import { RangeSlider } from './DevelopSliders';
 import {
   MAX_LEVEL_GAMMA,
@@ -10,101 +10,132 @@ import {
   type LevelChannel,
   type Levels,
 } from './curves';
-import type { DevelopSettings } from './develop';
+import type { AutoVerb } from './auto-slots';
+import AutoSwitch from './AutoSwitch';
+import type { AutoMemory } from './use-auto-memory';
 
 const AUTO_HINT =
   'Tone reads where the picture’s light actually sits and writes a black point, a white point and a midtone gamma into Levels — it touches no colour. Colour neutralises the AVERAGE cast, which is the wrong answer on a sunset or a candle-lit room, so it is a second button and never rides along with the first. Pick grey asks you instead: click something in the picture that ought to be neutral and the white balance is solved for that, which beats the average whenever the picture is not an average scene. Bands is the third answer: where a tenth of the picture sits against black it lifts Shadows, where a tenth sits against white it pulls Highlights down — a compression of the ends where Tone is a stretch, so the two stay separate buttons. All of them are measured on the picture as shot, so pressing one twice gives the same answer rather than compounding.';
+
+const SWITCH_HINT =
+  'Each one is a switch: a second click puts back what its own sliders held before it, and leaves the others alone. Lit, it still holds its answer; dashed, it found nothing to change; half-lit, you moved its sliders since. Colour and Pick grey share the white balance — the newer replaces the older, and turning it off gives back the balance from before either.';
 
 const LEVELS_HINT =
   'Where the range is read FROM: everything at or under black becomes black, everything at or over white becomes white, and gamma bends what is between them. Auto tone writes these three; the curve’s own end points do the same thing by hand.';
 
 /**
- * Auto — two buttons, deliberately not one.
+ * Auto — separate buttons, deliberately not one, and each a SWITCH.
  *
  * Splitting tone from colour is the whole design: a stretch is almost always
  * an improvement, and a white balance is often exactly wrong, so they must not
- * share a click. The maths and the reasons are in `auto-develop.ts`.
+ * share a click. Since 2026-10-02 a second click takes ONE verb back without
+ * touching the others (`auto-slots.ts`, `use-auto-memory.ts`). The maths and
+ * the reasons are in `auto-develop.ts`.
  */
 export function DevelopAutoSection({
   stats,
-  onPatch,
-  onTold,
+  auto,
   picking,
   onPicking,
 }: {
   stats: SourceStats | null;
-  onPatch: (partial: Partial<DevelopSettings>) => void;
-  onTold: (message: string) => void;
+  /** The row's memory of its clicks, held by the host per picture (`useAutoMemory`). */
+  auto: AutoMemory;
   /** Whether the eyedropper is armed; omitted, no dropper is drawn. */
   picking?: boolean;
   onPicking?: (on: boolean) => void;
 }) {
   const ready = Boolean(stats && stats.total > 0);
+  const notRead = 'the picture has not been read yet';
+
+  const toggle = (verb: AutoVerb, run: (stats: SourceStats) => void) => {
+    if (auto.turnOff(verb) || !stats) return;
+    run(stats);
+  };
+
+  const verbs: { verb: AutoVerb; label: string; hint?: string; run: (stats: SourceStats) => void }[] = [
+    {
+      verb: 'tone',
+      label: 'Auto tone',
+      run: (s) => {
+        const levels = autoTone(s);
+        auto.apply('tone', { levels }, levels ? `auto tone · ${describeAutoTone(levels)}` : 'nothing to stretch');
+      },
+    },
+    {
+      verb: 'colour',
+      label: 'Auto colour',
+      run: (s) => {
+        const { temperature, tint, clamped } = autoColour(s);
+        auto.apply(
+          'colour',
+          { temperature, tint },
+          !temperature && !tint
+            ? 'already neutral'
+            : `auto colour · temperature ${temperature}, tint ${tint}` + (clamped ? ' · as far as the sliders reach' : ''),
+        );
+      },
+    },
+    {
+      verb: 'bands',
+      label: 'Auto bands',
+      hint: 'Lift the shadows and pull the highlights down where the picture leans',
+      // Nothing to recover still SETS the two bands to zero: a verb that
+      // leaves a stale value where it found no reason for one is a nudge.
+      run: (s) => {
+        const bands = autoBands(s);
+        auto.apply(
+          'bands',
+          { highlights: bands?.highlights ?? 0, shadows: bands?.shadows ?? 0 },
+          bands ? `auto bands · ${describeAutoBands(bands)}` : 'nothing to recover',
+        );
+      },
+    },
+  ];
+
+  const pickState = auto.state('pick');
   return (
     // One row of verbs: not worth a fold, but drawn with the same header as
     // the foldable sections under it.
-    <DevelopFold id="auto" title="Auto" info={<p>{AUTO_HINT}</p>} foldable={false}>
+    <DevelopFold
+      id="auto"
+      title="Auto"
+      info={
+        <>
+          <p>{AUTO_HINT}</p>
+          <p>{SWITCH_HINT}</p>
+        </>
+      }
+      foldable={false}
+    >
       <div className="flex flex-wrap items-center gap-2">
-        <button
-          type="button"
-          className={developButtonClass}
-          disabled={!ready}
-          title={ready ? undefined : 'the picture has not been read yet'}
-          onClick={() => {
-            if (!stats) return;
-            const levels = autoTone(stats);
-            onPatch({ levels });
-            onTold(levels ? `auto tone · ${describeAutoTone(levels)}` : 'nothing to stretch');
-          }}
-        >
-          Auto tone
-        </button>
-        <button
-          type="button"
-          className={developButtonClass}
-          disabled={!ready}
-          title={ready ? undefined : 'the picture has not been read yet'}
-          onClick={() => {
-            if (!stats) return;
-            const { temperature, tint, clamped } = autoColour(stats);
-            onPatch({ temperature, tint });
-            if (!temperature && !tint) onTold('already neutral');
-            else
-              onTold(
-                `auto colour · temperature ${temperature}, tint ${tint}` +
-                  (clamped ? ' · as far as the sliders reach' : ''),
-              );
-          }}
-        >
-          Auto colour
-        </button>
-        <button
-          type="button"
-          className={developButtonClass}
-          disabled={!ready}
-          title={ready ? 'Lift the shadows and pull the highlights down where the picture leans' : 'the picture has not been read yet'}
-          onClick={() => {
-            if (!stats) return;
-            const bands = autoBands(stats);
-            // Nothing to recover still SETS the two bands to zero: a verb that
-            // leaves a stale value where it found no reason for one is a nudge.
-            onPatch({ highlights: bands?.highlights ?? 0, shadows: bands?.shadows ?? 0 });
-            onTold(bands ? `auto bands · ${describeAutoBands(bands)}` : 'nothing to recover');
-          }}
-        >
-          Auto bands
-        </button>
+        {verbs.map(({ verb, label, hint, run }) => {
+          const state = auto.state(verb);
+          return (
+            <AutoSwitch
+              key={verb}
+              state={state}
+              disabled={!ready && state === 'off'}
+              hint={ready ? hint : notRead}
+              onClick={() => toggle(verb, run)}
+            >
+              {label}
+            </AutoSwitch>
+          );
+        })}
         {onPicking && (
-          <button
-            type="button"
-            className={`${developButtonClass} ${picking ? 'border-accent text-accent-ink' : ''}`}
-            aria-pressed={picking}
-            disabled={!ready}
-            onClick={() => onPicking(!picking)}
-            title="Click something in the picture that should be grey"
+          <AutoSwitch
+            state={pickState}
+            armed={picking}
+            disabled={!ready && pickState === 'off'}
+            hint={ready ? 'Click something in the picture that should be grey' : notRead}
+            onClick={() => {
+              if (!picking && auto.turnOff('pick')) return;
+              onPicking(!picking);
+            }}
           >
             {picking ? 'Pick\u2026' : 'Pick grey'}
-          </button>
+          </AutoSwitch>
         )}
       </div>
     </DevelopFold>

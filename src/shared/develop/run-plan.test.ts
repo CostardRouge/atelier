@@ -37,6 +37,21 @@ const plain = (f: File | null, extra: Partial<PictureFacts> = {}): PictureFacts 
 describe('planPicture', () => {
   const p = (extra: Partial<RollPicture> = {}): RollPicture => ({ ...roll(['DSC08463.JPG']).pictures[0], ...extra });
 
+  it('takes the roll’s sensor for a picture that follows it, and says whose choice it is', () => {
+    const plan = planPicture(p(), plain(file('DSC08463.webp'), { proxy: true, sensor: src('companion', 'DSC08463.ARW', 34.6e6, true), follows: 'sensor' }), false);
+    expect(plan).toMatchObject({ kind: 'sensor', from: 'DSC08463.ARW', fetchBytes: 0 });
+    expect(plan.line).toContain('the roll’s choice');
+  });
+
+  it('leaves the camera’s file to the run, where its size is read', () => {
+    const facts = plain(file('DJI_0202.webp'), { proxy: true, original: { name: 'DJI_0202.DNG', bytes: 74e6, held: false }, follows: 'delivered' });
+    const plan = planPicture(p(), facts, false);
+    expect(plan).toMatchObject({ kind: 'delivered', fetchBytes: 0, maybeBytes: 74e6 });
+    expect(plan.line).toContain('where it beats the proxy');
+    // Proxies only wins over the roll as it does over a picture's own choice.
+    expect(planPicture(p(), facts, true).kind).toBe('proxy');
+  });
+
   it('leaves from the sensor when the picture is developed on it, and says the fetch', () => {
     const onRaw = p({ develop: { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 1 } });
     const plan = planPicture(onRaw, plain(file('DSC08463.webp'), { proxy: true, sensor: src('companion', 'DSC08463.ARW', 34.6e6, false) }), false);

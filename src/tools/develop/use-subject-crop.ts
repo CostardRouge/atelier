@@ -37,6 +37,7 @@ export function useSubjectCrop({
   rasters,
   taskScope,
   onTold,
+  record,
 }: {
   picture: DevelopPicture;
   crop: CropZoneApi;
@@ -44,17 +45,19 @@ export function useSubjectCrop({
   rasters: ReadonlyMap<string, BrushRaster>;
   taskScope: string | null;
   onTold: (message: string) => void;
+  /** Runs the write so the Crop tab's switch remembers the crop around it (`use-crop-switches.ts`). */
+  record?: (write: () => void) => void;
 }): SubjectCropVerb {
   const [busy, setBusy] = useState(false);
   const subjects = subjectLayersToSegment(layers);
   const named = subjects.length > 0;
   // Read at the click, never through a stale closure: a drag may have moved
   // the crop between the render and the press.
-  const live = useRef({ picture, crop, subjects, rasters, taskScope, onTold });
-  live.current = { picture, crop, subjects, rasters, taskScope, onTold };
+  const live = useRef({ picture, crop, subjects, rasters, taskScope, onTold, record });
+  live.current = { picture, crop, subjects, rasters, taskScope, onTold, record };
 
   const write = useCallback((raster: BrushRaster | null, from: 'layers' | 'centre') => {
-    const { crop: c, onTold: tell } = live.current;
+    const { crop: c, onTold: tell, record: remember } = live.current;
     const src = c.src;
     if (!raster || !src) {
       tell(from === 'layers' ? 'the subject is still being found' : 'the model found no subject at the centre');
@@ -67,7 +70,11 @@ export function useSubjectCrop({
     }
     const { rotation, flipX, flipY } = c.framing;
     const result = subjectZone(bounds, src, rotation, flipX, flipY, c.lock);
-    if (result.ok) c.setZone(result.zone);
+    if (result.ok) {
+      const write = () => c.setZone(result.zone);
+      if (remember) remember(write);
+      else write();
+    }
     tell(`crop to subject · ${describeSubjectCrop(result, from)}`);
   }, []);
 
