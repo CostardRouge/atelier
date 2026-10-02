@@ -744,7 +744,8 @@ trip's legs by hand is some three hundred gestures, most of them archaeology
 about where you were on a given day — so the legs can be *deduced* instead,
 and a picture can place a single day.
 
-**Deduce** (in the stages header, for any connected Winnow) asks the instance
+**Deduce** (in the trip's bar beside Trip settings, in the calendar and on the
+map alike; on a phone, in the Stages sheet; for any connected Winnow) asks the instance
 for **one position per day** over the trip's span — a few kilobytes for a
 hundred days; no photograph is fetched and nothing is read from your media. A
 halt is a run of consecutive days whose position stays inside a radius of the
@@ -752,11 +753,13 @@ run so far, and the window then cuts the halts into stages at a **grain** you
 choose with one slider: one stage per region, split at long drives (the
 default), one per big halt, or one per halt. Three windows show the same
 proposals, and you pass from one to the other by tabs or by a hand-off that
-carries the chapter you were looking at: **the grain** (the slider, the stages
-as cards with the map beside them), **the calque** (say what you want first —
+carries the chapter you were looking at: **All stages** (the slider, the stages
+as cards with the map beside them), **Against mine** (say what you want first —
 fill the gaps, enrich your stages, show everything — and read the proposals
-under the stages you already drew), **the paquet** (one chapter at a time,
-answered in one gesture, keys 1 to 4). Each proposal carries the safe verb for
+under the stages you already drew), **One by one** (one chapter at a time,
+answered in one gesture, keys 1 to 4). The keys are listed behind the ⓘ beside
+the tabs, and what was read from the instance is one chip — the days placed and
+what to check — that opens the details. Each proposal carries the safe verb for
 where it falls — the places a stage of yours lacks, only the days none of your
 stages covers, or a new stage where nothing is — and you can change it, split
 it, correct its name, dates and places, or name a halt the city index could

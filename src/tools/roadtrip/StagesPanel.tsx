@@ -54,14 +54,6 @@ interface StagesPanelProps {
   /** Connected Winnows whose timeline can complete the stages; empty shows nothing. */
   timelineSources?: string[];
   onCompleteFrom?: (sourceId: string) => void;
-  /**
-   * Connected Winnows the itinerary can be DEDUCED from — one position per day,
-   * read over the trip's own span. Unrelated to `timelineSources`: this asks
-   * for dates and positions, never for chapters, so it is not behind
-   * `TIMELINE_SYNC_ENABLED`.
-   */
-  deduceSources?: string[];
-  onDeduceFrom?: (sourceId: string) => void;
   /** A state's code kept for the whole trip, from a place's own editor. */
   onRememberCode?: (state: string, code: string) => void;
 }
@@ -243,9 +235,7 @@ export default function StagesPanel({
   onScrub,
   onChange,
   timelineSources = [],
-  deduceSources = [],
   onCompleteFrom,
-  onDeduceFrom,
   onRememberCode,
 }: StagesPanelProps) {
   // The track's gestures are spelled out until the track has been USED at all
@@ -346,19 +336,6 @@ export default function StagesPanel({
               icon={Icons.download}
             >
               From {id}
-            </Button>
-          ))}
-        {/* The days themselves propose the legs: one position per day, read
-            over this trip's span. No picture is fetched and no post is made. */}
-        {onDeduceFrom &&
-          deduceSources.map((id) => (
-            <Button
-              key={`deduce-${id}`}
-              onClick={() => onDeduceFrom(id)}
-              title={`Work these legs out from where ${id} says each day was`}
-              icon={Icons.search}
-            >
-              Deduce
             </Button>
           ))}
         {/* The zoom's buttons: nothing here is gesture-only, and a mouse

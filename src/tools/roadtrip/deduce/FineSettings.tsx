@@ -71,10 +71,8 @@ export default function FineSettings({ settings: s, actions }: FineSettingsProps
           <span className="text-muted mr-1 hidden group-open:inline">▾</span>
           Fine settings
         </span>
-        <span className="ml-auto font-mono text-2xs text-muted tabular-nums">
-          radius {s.radiusKm} km · long drive {s.hopKm} km · big halt {s.bigDays} d · halt ≥ {s.minNights} d · blind days {s.bridgeBlind ? 'covered' : 'left out'} · outliers {s.ignoreOutliers ? 'ignored' : 'kept'}
-          {changed ? ' · changed' : ''}
-        </span>
+        {/* The values are inside; the line only says whether they are yours. */}
+        {changed && <span className="font-mono text-2xs text-accent-ink">changed</span>}
       </summary>
       <div className="grid grid-cols-[repeat(auto-fit,minmax(13rem,1fr))] gap-x-5 gap-y-3.5 mt-3">
         <Range label="Radius of one halt" value={s.radiusKm} unit="km" min={5} max={120} step={5} hint="Two days this close are the same place. Beyond it, you drove." onChange={(v) => actions.setSettings({ radiusKm: v })} />

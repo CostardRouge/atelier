@@ -32,6 +32,8 @@ interface DeduceMapProps {
   focus?: Proposal | null;
   /** A short line under the map, inside its frame. */
   caption?: string;
+  /** What the colours mean — the map's tooltip, never a standing sentence. */
+  legend?: string;
   className?: string;
 }
 
@@ -91,6 +93,7 @@ export default function DeduceMap({
   hot = null,
   focus = null,
   caption,
+  legend,
   className = '',
 }: DeduceMapProps) {
   // The view fits the whole route, or one proposal's halts — with room
@@ -123,7 +126,7 @@ export default function DeduceMap({
   const dim = (key: string | null) => (hot && key !== hot ? 'opacity-25' : '');
 
   return (
-    <div className={`relative rounded-paper border border-line bg-paper-2 overflow-hidden ${className}`}>
+    <div className={`relative rounded-paper border border-line bg-paper-2 overflow-hidden ${className}`} title={legend}>
       <svg
         viewBox={`0 0 ${MAP_W} ${MAP_H}`}
         className="block w-full h-auto"

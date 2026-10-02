@@ -108,7 +108,7 @@ export default function DeduceFrieze({ days, lanes, hot = null, barHeight = 34 }
             const x = i * dw + dw * 0.14;
             const w = Math.max(1, dw * 0.72);
             const y = barTop + barHeight - h;
-            const fill = !d.placed ? 'url(#deduce-hatch)' : d.ignored ? 'var(--color-warn)' : 'var(--color-heat-2)';
+            const fill = !d.placed ? 'url(#deduce-hatch)' : d.ignored ? 'var(--color-warn)' : 'var(--color-line-strong)';
             return <rect key={d.date} x={x.toFixed(1)} y={y.toFixed(1)} width={w.toFixed(1)} height={h.toFixed(1)} fill={fill} />;
           })}
           {months.map((m) => (
