@@ -20,6 +20,12 @@ import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './his
 
 /** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
 const COLOUR_SAMPLE_EDGE = 512;
+/**
+ * The long edge the picture is rendered at AS A LAYER SEES IT (`drawBelow`) —
+ * the colour sample's own size, and four times a row's thumbnail, so the
+ * small render is drawn down with smoothing rather than sampled sparsely.
+ */
+const BELOW_RENDER_EDGE = 512;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection, LensProfileTerms } from '../render/lens';
@@ -50,6 +56,7 @@ import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
 import type { BandPreference } from '../render/band-policy';
 import { useBandPreference } from '../render/use-band-preference';
+import { fitRenderSize } from '../render/render-size';
 import { clipPass } from '../render/clip-pass';
 import { makePostVignettePass } from '../render/post-vignette-pass';
 import type { FrameAffine, PostCropVignette } from '../render/post-vignette';
@@ -1403,6 +1410,22 @@ export function useDevelopPicture({
    * mask's own wash — a sample taken there would move the range every time a
    * slider did. A 5×5 average at a small size, like the white-balance dropper.
    */
+  // Drawn through a grader of ITS OWN, small (`BELOW_RENDER_EDGE`), never the
+  // stage's: this used to call `graderFor` on the stage slot, which swapped
+  // the stage's passes to the layers below — releasing every pass above, the
+  // overlay, the film — and, where nothing below needed the GPU, disposed the
+  // stage's whole context. Every thumbnail pass then cost the stage a rebuild
+  // (2026-10-02). The slot borrows the stage cache's CUBES (`cubeOf`) so a
+  // layer's 33³ bake is never made twice; its passes are its own, since a
+  // pass holds textures on the one context it drew on.
+  const belowSlot = useRef<GraderSlot | null>(null);
+  useEffect(
+    () => () => {
+      belowSlot.current?.current?.grader.dispose();
+      belowSlot.current = null;
+    },
+    [],
+  );
   const drawBelow = useCallback(
     (layerId: string, canvas: HTMLCanvasElement, longEdge: number): CanvasRenderingContext2D | null => {
       if (!source || source.width <= 0 || source.height <= 0) return null;
@@ -1418,24 +1441,29 @@ export function useDevelopPicture({
       }
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
-      // The finishing passes run after every layer, so none of them is what a
-      // layer reads: the sharpen and presence are cleared, the grain is not
-      // passed, and the vignette the ref would hand in is held back.
-      const unfinished = detail ? { ...detail, sharpen: 0, texture: 0, clarity: 0, dehaze: 0 } : null;
-      const keepVignette = postVignetteRef.current;
-      postVignetteRef.current = null;
       try {
-        const grader = graderFor(cube, source, geometry, below, null, subjectMasks, unfinished, pixelScale, repair, null, gainField);
+        if (!belowSlot.current) belowSlot.current = { cache: makeLayerPassCache(stageSlot.current.cache), current: null };
+        // The render size: the sample's, never the stage's — a mask's
+        // thumbnail and a 5×5 colour average need no 4K render. The source
+        // itself is uploaded whole, once per identity, like the stage's.
+        const fitted = fitRenderSize(source.width, source.height, BELOW_RENDER_EDGE);
+        const sized: BadgeSource = { ...source, width: fitted.width, height: fitted.height };
+        // The finishing passes run after every layer, so none of them is what
+        // a layer reads: no detail, no film, no post-crop vignette. The
+        // repair and the camera's shading come first and are kept, as is the
+        // geometry: a mask is measured on the warped frame it is drawn in.
+        const grader = graderFrom(belowSlot.current, cube, sized, geometry, below, null, subjectMasks, null, 1, repair, null, gainField);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
-        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        const gw = grader ? fitted.width : source.width;
+        const gh = grader ? fitted.height : source.height;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(graded, 0, 0, gw, gh, 0, 0, w, h);
         return ctx;
       } catch {
         return null;
-      } finally {
-        postVignetteRef.current = keepVignette;
       }
     },
-    [source, layers, cube, geometry, subjectMasks, detail, pixelScale, repair, gainField, graderFor],
+    [source, layers, cube, geometry, subjectMasks, repair, gainField],
   );
   const colourRef = useRef<HTMLCanvasElement | null>(null);
   const sampleColour = useCallback(

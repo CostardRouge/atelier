@@ -305,6 +305,14 @@ export interface LayerPassCache {
    * input event. `passes` then finds the cube already made. Idempotent.
    */
   prime(layers: readonly AdjustLayer[] | null | undefined, interpolation?: Interpolation): void;
+  /**
+   * The cube this cache already holds for `layer` — held by a pass, or baked
+   * ahead by `prime` — while the layer's develop is the one it was baked
+   * from; `undefined` otherwise. What a SECOND cache over the same picture
+   * (a thumbnail's grader beside the stage's) asks before baking its own: a
+   * 33³ bake is ~40 ms, and the two graders see the same layers.
+   */
+  cubeOf(layer: AdjustLayer, interpolation?: Interpolation): CubeLut | null | undefined;
 }
 
 interface Held {
@@ -359,14 +367,32 @@ function partRasterFor(
   });
 }
 
-export function makeLayerPassCache(): LayerPassCache {
+export function makeLayerPassCache(
+  /**
+   * Another cache over the SAME picture whose cubes this one may borrow
+   * (`cubeOf`) rather than bake again — the stage's, for the small grader
+   * that draws the picture as a layer sees it. A pass is never shared: it
+   * holds textures on the one context it drew on; a cube is plain data.
+   */
+  lender: Pick<LayerPassCache, 'cubeOf'> | null = null,
+): LayerPassCache {
   const held = new Map<string, Held>();
   /** Cubes baked by `prime`, by layer id, with the develop they were baked from. */
   const baked = new Map<string, { develop: DevelopSettings; interpolation: Interpolation; cube: CubeLut | null }>();
   let overlay: { id: string; held: HeldOverlay } | null = null;
   let flash: { flash: MaskFlash; aspectRatio: number; pass: RenderPass | null } | null = null;
 
+  const cubeOf = (layer: AdjustLayer, interpolation: Interpolation = getDefaultLutInterpolation()): CubeLut | null | undefined => {
+    const prev = held.get(layer.id);
+    if (prev && prev.interpolation === interpolation && sameDevelop(prev.develop, layer.develop)) return prev.cube;
+    const primed = baked.get(layer.id);
+    if (primed && primed.interpolation === interpolation && sameDevelop(primed.develop, layer.develop)) return primed.cube;
+    return undefined;
+  };
+
   return {
+    cubeOf,
+
     passes(layers, aspectRatio, rasters = null, interpolation = getDefaultLutInterpolation()) {
       const drawing = drawingLayers(layers);
       const keep = new Set<string>();
@@ -375,13 +401,8 @@ export function makeLayerPassCache(): LayerPassCache {
         keep.add(layer.id);
         const prev = held.get(layer.id);
 
-        const primed = baked.get(layer.id);
-        const cube =
-          prev && prev.interpolation === interpolation && sameDevelop(prev.develop, layer.develop)
-            ? prev.cube
-            : primed && primed.interpolation === interpolation && sameDevelop(primed.develop, layer.develop)
-              ? primed.cube
-              : layerCube(layer.develop, interpolation);
+        const own = cubeOf(layer, interpolation);
+        const cube = own !== undefined ? own : (lender?.cubeOf(layer, interpolation) ?? layerCube(layer.develop, interpolation));
 
         let raster: BrushRaster | null;
         let strokes: readonly BrushStroke[] | null = null;

@@ -44,6 +44,17 @@ and a layer's NAME (`AdjustLayer.name`) existed with no way to set it.
   LAYER SEES IT, factored out of `sampleColour` —, never on the picture as
   shot, which is not what those masks read. Redrawn 180 ms after the stack
   moves (`use-layer-thumbs.ts`), so the stage repaints first.
+- **`layerInput` and `sampleColour` draw through a grader of their OWN**
+  (`drawBelow`'s `belowSlot`, 512 px on the long edge, 2026-10-02), never the
+  stage's. The first version called `graderFor` on the stage slot with the
+  layers BELOW: every pass above, the overlay and the film were released and
+  re-uploaded on the next paint, and where nothing below needed the GPU the
+  stage's whole context was disposed (`develop.md`, «The stage's grader LIVES
+  with the source»). The small slot borrows the stage cache's CUBES
+  (`LayerPassCache.cubeOf`, the `lender` of `makeLayerPassCache`) so a layer
+  is baked once; its passes are its own, a pass holding textures on one
+  context. It renders without detail, film or vignette — none is what a
+  layer reads — and keeps the repair, the camera's shading and the geometry.
 - The drag carries its OWN type (`application/x-atelier-layer`), so a layer
   dragged in the list can never be read as a picture dropped on a cell
   (`asset-drag.ts`); dropped ON a row, it goes just ABOVE that row
