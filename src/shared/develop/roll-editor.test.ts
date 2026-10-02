@@ -169,6 +169,17 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'a', selecting: true }))).toEqual({ tab: 'adjust' });
   });
 
+  it('folds the band on B and steps its thumbnails on - and =, never from a field', () => {
+    expect(editorKeyAction(press({ key: 'b' }))).toBe('band');
+    expect(editorKeyAction(press({ key: 'B' }))).toBe('band');
+    expect(editorKeyAction(press({ key: '-' }))).toBe('thumbs-smaller');
+    expect(editorKeyAction(press({ key: '=' }))).toBe('thumbs-larger');
+    expect(editorKeyAction(press({ key: '+' }))).toBe('thumbs-larger');
+    expect(editorKeyAction(press({ key: '-', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '=', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '-', metaKey: true }))).toBeNull();
+  });
+
   it('opens the shortcuts on H and the facts on I', () => {
     expect(editorKeyAction(press({ key: 'h' }))).toBe('help');
     expect(editorKeyAction(press({ key: 'H' }))).toBe('help');

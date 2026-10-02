@@ -28,7 +28,22 @@ import {
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
-import { STRIP_METRICS, heightForRows, type StripKind } from '../../shared/develop/roll-strip';
+import {
+  STRIP_FILTERS,
+  STRIP_METRICS,
+  autoBandHeight,
+  bandAfterDrag,
+  cellAspect,
+  heightForRows,
+  maxBandHeight,
+  medianAspect,
+  passesStripFilter,
+  rowsForHeight,
+  stepThumb,
+  stripFilterLabel,
+  type StripFilterKey,
+  type StripKind,
+} from '../../shared/develop/roll-strip';
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
 import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
@@ -70,6 +85,7 @@ import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/source
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
@@ -107,16 +123,10 @@ import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
 import { useRollCulling } from './use-roll-culling';
-import {
-  CULL_FILTERS,
-  NO_CULL_FILTER,
-  countCulling,
-  cullFilterKey,
-  cullFilterLabel,
-  passesCull,
-  readCullFilter,
-  type CullFilter,
-} from '../../shared/sources/winnow/culling';
+import { countCulling } from '../../shared/sources/winnow/culling';
+import { useElementSize } from '../../shared/ui/use-element-width';
+import BandGrip from './BandGrip';
+import { useStripPrefs } from './use-strip-prefs';
 import { useRollPreviews } from './use-roll-previews';
 import RollPicker from './RollPicker';
 
@@ -167,6 +177,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // The band's numbers for this shell (`roll-strip.ts`): a phone's and a desktop's differ.
   const stripKind: StripKind = compact ? 'phone' : 'desktop';
   const stripMetrics = STRIP_METRICS[stripKind];
+  // How THIS device wants the band — size, folded, the thumbnails — never the roll.
+  const [strip, patchStrip] = useStripPrefs(stripKind);
+  // The column the stage and the band share, and the band's own width: what
+  // the band may take, and what "height follows the roll" is sized against.
+  const [columnRef, columnBox] = useElementSize<HTMLDivElement>();
+  const [bandRef, bandBox] = useElementSize<HTMLDivElement>();
+  // The status lines over the band, measured on their own: a measurement
+  // that included the band would feed the band's height back into itself.
+  const [statusRef, statusBox] = useElementSize<HTMLDivElement>();
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   // The pictures a removal is asking about — one from a cell's menu, several
@@ -280,14 +299,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // Winnow's picks and stars, read-only (item 33): shown on the strip and
   // filtered on — the filter is this sitting's, never the roll's.
   const culling = useRollCulling(roll.pictures);
-  const [cullFilter, setCullFilter] = useState<CullFilter>(NO_CULL_FILTER);
-  const filtering = culling.reachable && cullFilter.kind !== 'all';
+  // What the band SHOWS (`roll-strip.ts`, `StripFilterKey`): the roll's own
+  // states, the ignored alone, or Winnow's culling — the sitting's, never the
+  // roll's. The arrows and every "Apply to N other pictures" follow it.
+  const [stripFilter, setStripFilter] = useState<StripFilterKey>('all');
+  const filtering = stripFilter !== 'all';
   const cullingRef = useRef(culling.byPicture);
   cullingRef.current = culling.byPicture;
-  const cullFilterRef = useRef(cullFilter);
-  cullFilterRef.current = filtering ? cullFilter : NO_CULL_FILTER;
-  const shownByCull = useCallback(
-    (p: RollPicture) => passesCull(cullingRef.current.get(p.id), cullFilterRef.current),
+  const stripFilterRef = useRef(stripFilter);
+  stripFilterRef.current = stripFilter;
+  const passesFilter = useCallback(
+    (p: RollPicture) => passesStripFilter(p, stripFilterRef.current, cullingRef.current.get(p.id)),
     [],
   );
   const { retryFailed, remoteThumb } = media;
@@ -579,10 +601,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (by: number) => {
       // The arrows walk the roll's WORK: an ignored picture is stepped over,
       // and so is one Winnow's filter has taken off the strip.
-      const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !shownByCull(p));
+      const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !passesFilter(p));
       if (next && next !== openIdRef.current) onOpenPicture(next);
     },
-    [onOpenPicture, shownByCull],
+    [onOpenPicture, passesFilter],
   );
 
   // A VARIANT of a picture (item 30): Lightroom's virtual copy when it is
@@ -862,10 +884,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           (p) =>
             p.id !== openId &&
             !isIgnored(p) &&
-            (!filtering || passesCull(culling.byPicture.get(p.id), cullFilter)),
+            (!filtering || passesStripFilter(p, stripFilter, culling.byPicture.get(p.id))),
         )
         .map((p) => p.id),
-    [roll.pictures, openId, filtering, culling.byPicture, cullFilter],
+    [roll.pictures, openId, filtering, culling.byPicture, stripFilter],
   );
   const others = otherIds.length;
   // The pictures a BORDER can be written onto: never a clip (`isClipPicture`
@@ -1009,9 +1031,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const shownIds = useMemo(
     () =>
       roll.pictures
-        .filter((p) => p.id === openId || ((showIgnored || !isIgnored(p)) && (!filtering || passesCull(culling.byPicture.get(p.id), cullFilter))))
+        .filter((p) => p.id === openId || ((showIgnored || !isIgnored(p)) && (!filtering || passesStripFilter(p, stripFilter, culling.byPicture.get(p.id)))))
         .map((p) => p.id),
-    [roll.pictures, openId, showIgnored, filtering, culling.byPicture, cullFilter],
+    [roll.pictures, openId, showIgnored, filtering, culling.byPicture, stripFilter],
   );
   const selectAll = useCallback(() => setSelected(new Set(shownIds)), [shownIds]);
   const ignoreSelection = useCallback(() => {
@@ -1094,24 +1116,154 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     // `removeAsked` is a plain function over refs; it reads nothing stale.
     [selectedIds, selectedPictures, open, selectionTargets, copied, selectAll, handleDeliverAll, ignoreSelection, ruleSelection, writeDevelopTo, pasteSectionsTo, variantsOf, stopSelecting],
   );
-  // The band's header: where it stands in its pictures and the way into the
-  // selection, or — the selection on — its bar of verbs.
+  // --- the band's size: the device's preference, held to what the column allows
+  const drawerBand = compact && sheetOpen;
+  // What the column holds besides the picture and the band: the grid's row
+  // gap, the workbench's toolbar (one 28 px row and an 8 px gap on a desktop;
+  // the name row, the verbs row and their gaps on a phone — its own markup's
+  // numbers) and whatever status lines sit over the band in its cell.
+  const toolbarAbove = compact ? 76 : 36;
+  const statusAbove = statusBox.height > 0 ? statusBox.height + 4 : 0;
+  const columnHeight = Math.max(0, columnBox.height - 8 - toolbarAbove - statusAbove);
+  const maxBand = columnHeight > 0 ? maxBandHeight(columnHeight, stripMetrics) : Number.POSITIVE_INFINITY;
+  const rollAspect = useMemo(
+    () => medianAspect(roll.pictures.map((p) => ({ id: p.id, aspect: cellAspect(p, thumbAspects.get(p.id)) }))),
+    [roll.pictures, thumbAspects],
+  );
+  const bandHeight = drawerBand
+    ? // With a phone's drawer up every row is the photograph's: one short row
+      // of cells and no header, the size the strip had before it could be pulled.
+      56 + 2 * stripMetrics.pad
+    : strip.folded
+      ? stripMetrics.head
+      : strip.auto && bandBox.width > 0 && columnHeight > 0
+        ? Math.round(autoBandHeight({ columnWidth: bandBox.width, columnHeight, aspect: rollAspect, metrics: stripMetrics }))
+        : Math.min(maxBand, strip.height ?? heightForRows(1, stripMetrics, strip.thumb));
+  const dragFrom = useRef<number | null>(null);
+  const onGripDrag = useCallback(
+    ({ dy }: { dx: number; dy: number }) => {
+      dragFrom.current ??= bandHeight;
+      const { folded, size } = bandAfterDrag(dragFrom.current - dy, stripMetrics, false, maxBand);
+      patchStrip({ folded, auto: false, ...(size === null ? {} : { height: size }) });
+    },
+    // `bandHeight` is read only to seed the drag; the ref holds it after.
+    [bandHeight, stripMetrics, maxBand, patchStrip],
+  );
+  const onGripEnd = useCallback(() => {
+    dragFrom.current = null;
+  }, []);
+  const toggleFolded = useCallback(() => patchStrip({ folded: !strip.folded }), [patchStrip, strip.folded]);
+  const stepThumbs = useCallback(
+    (direction: 1 | -1) => patchStrip({ thumb: stepThumb(strip.thumb, direction, stripMetrics, 'band') }),
+    [patchStrip, strip.thumb, stripMetrics],
+  );
+  /** A menu row that says whether it is the state: a dot before the one in force. */
+  const marked = (on: boolean, text: string, key?: string) => (
+    <span className="inline-flex items-center gap-3 whitespace-pre">
+      <span>
+        {on ? '· ' : '  '}
+        {text}
+      </span>
+      {key && <span className="ml-auto font-mono text-3xs text-faint">{key}</span>}
+    </span>
+  );
+  const rowsNow = strip.folded || strip.auto ? 0 : rowsForHeight(bandHeight - stripMetrics.head, stripMetrics, strip.thumb);
+  const bandMenu: OverflowItem[] = [
+    { id: 'fold', label: marked(strip.folded, 'Folded to its rail', 'B'), onSelect: toggleFolded },
+    ...[1, 2, 3].map((n) => ({
+      id: `rows-${n}`,
+      label: marked(rowsNow === n, n === 1 ? 'One row' : `${n === 2 ? 'Two' : 'Three'} rows`),
+      onSelect: () => patchStrip({ folded: false, auto: false, height: Math.min(maxBand, heightForRows(n, stripMetrics, strip.thumb)) }),
+    })),
+    {
+      id: 'auto',
+      label: marked(strip.auto, 'Height follows the roll'),
+      title: 'The band takes the room the roll’s typical picture leaves under itself — sized on the roll, so stepping to a portrait moves nothing',
+      onSelect: () => patchStrip({ auto: !strip.auto, folded: false }),
+    },
+    { id: 'smaller', label: marked(false, 'Smaller thumbnails', '−'), disabled: strip.thumb <= stripMetrics.thumbMin, onSelect: () => stepThumbs(-1) },
+    { id: 'larger', label: marked(false, 'Larger thumbnails', '='), disabled: strip.thumb >= stripMetrics.thumbMax, onSelect: () => stepThumbs(1) },
+  ];
+  const filterMenu: OverflowItem[] = [
+    ...STRIP_FILTERS.filter((f) => !f.winnow || culling.reachable).map((f) => ({
+      id: f.key,
+      label: marked(stripFilter === f.key, f.label),
+      onSelect: () => setStripFilter(f.key),
+    })),
+    {
+      id: 'ignored-view',
+      label: marked(false, showIgnored ? 'Ignored pictures: dimmed' : 'Ignored pictures: hidden'),
+      title: showIgnored ? 'Leave the ignored pictures out of the band' : 'Show the ignored pictures in the band, dimmed',
+      onSelect: () => setShowIgnored(!showIgnored),
+    },
+    ...(culling.reachable
+      ? [
+          {
+            id: 'refresh',
+            label: marked(false, culling.asking ? 'Asking Winnow…' : 'Ask Winnow again'),
+            title: 'Winnow’s picks, stars and labels are asked by themselves when you come back to this tab',
+            disabled: culling.asking,
+            onSelect: culling.refresh,
+          },
+        ]
+      : []),
+  ];
+  // The band's header: where it stands in its pictures, what the roll holds,
+  // what the band shows and the way into the selection — or, the selection
+  // on, its bar of verbs.
   const bandHeader = useCallback(
-    ({ at, shown, width }: { at: number; shown: number; width: number }) =>
-      selecting ? (
-        <SelectionBar compact={compact} dense={width < 800} verbs={selectionVerbs} />
-      ) : (
+    ({ at, shown, width }: { at: number; shown: number; width: number }) => {
+      if (selecting) return <SelectionBar compact={compact} dense={width < 800} verbs={selectionVerbs} />;
+      const progress = rollProgress(roll);
+      const leaving = roll.pictures.filter(delivers).length;
+      const changed = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
+      const looks = roll.pictures.filter((p) => p.grade).length;
+      const cull = culling.reachable ? countCulling(roll.pictures.map((p) => culling.byPicture.get(p.id))) : null;
+      const summary = [
+        `${progress.developed} edited`,
+        `${leaving} to export`,
+        changed > 0 ? `${changed} changed since exported` : '',
+        progress.ignored > 0 ? `${progress.ignored} ignored` : '',
+        looks > 0 ? `${looks} with a look` : '',
+        cull
+          ? cull.known === 0 && culling.asking
+            ? 'asking Winnow…'
+            : `Winnow ${[cull.picks > 0 ? `${cull.picks} pick${cull.picks === 1 ? '' : 's'}` : '', cull.rejects > 0 ? `${cull.rejects} rejected` : ''].filter(Boolean).join(', ') || 'nothing culled'}`
+          : '',
+        filtering ? `${shown} shown` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      const size = compact ? 'md' : 'sm';
+      return (
         <>
-          <span className="flex-none font-mono text-2xs text-ink tabular-nums whitespace-nowrap px-0.5" aria-live="polite">
+          <IconButton size={size} variant="ghost" label={strip.folded ? 'Show the band (B)' : 'Fold the band to its rail (B)'} onClick={toggleFolded}>
+            {strip.folded ? Icons.up : Icons.down}
+          </IconButton>
+          <span className="flex-none font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
             {at >= 0 ? at + 1 : '–'} / {shown}
           </span>
+          {!compact && (
+            <span className="min-w-0 truncate font-mono text-2xs text-muted tabular-nums" title={summary}>
+              · {summary}
+            </span>
+          )}
+          <OverflowMenu
+            label="What the band shows"
+            items={filterMenu}
+            align="start"
+            trigger={{ text: stripFilterLabel(stripFilter), size, variant: filtering ? 'primary' : 'default' }}
+          />
           <span className="flex-1" />
-          <Button size={compact ? 'md' : 'sm'} onClick={() => startSelecting()} title="Pick several pictures, then act on them all (S)">
+          <Button size={size} onClick={() => startSelecting()} title="Pick several pictures, then act on them all (S)">
             Select
           </Button>
+          <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side="above" />
         </>
-      ),
-    [selecting, compact, selectionVerbs, startSelecting],
+      );
+    },
+    // The menus are rebuilt per render on purpose: they read the band's state.
+    [selecting, compact, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, showIgnored, bandHeight, strip.thumb, strip.auto],
   );
 
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
@@ -1143,11 +1295,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ),
   );
 
-  const progress = rollProgress(roll);
-  const withLook = roll.pictures.filter((p) => p.grade).length;
-  const leavingCount = roll.pictures.filter(delivers).length;
-  // Delivered from here once, and edited since — the ones a re-export is for.
-  const changedCount = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -1286,6 +1433,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         // width a viewport query cannot see).
         <div className="@container flex-1 min-h-0 flex flex-col">
           <div
+            ref={columnRef}
             className={
               compact
                 ? 'flex-1 min-h-0 flex flex-col gap-2'
@@ -1336,6 +1484,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               selecting={selecting}
               onSelectMode={() => (selecting ? stopSelecting() : startSelecting())}
               onSelectAll={selectAll}
+              onBand={toggleFolded}
+              onThumbs={stepThumbs}
               onEscape={() => {
                 if (selecting) {
                   stopSelecting();
@@ -1366,53 +1516,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
-            <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
+            <div ref={bandRef} className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
+              <div ref={statusRef} className="flex flex-col gap-1 empty:hidden">
+              {/* What STATE is in the band's header now (how far the roll has
+                  got, what it shows); this line keeps what asks for a click —
+                  a fetch that failed, a folder to reopen, a notice — and is
+                  not drawn at all when nothing does. */}
+              {(reach.fetching + reach.failed + reach.gone + reach.unconnected + reach.previewed + reach.local > 0 || notice || culling.problem) && (
               <p className="m-0 font-mono text-2xs text-muted tabular-nums">
-                {progress.developed} of {progress.total} developed
-                {leavingCount > 0 && <span className="text-faint"> · {leavingCount} to export</span>}
-                {changedCount > 0 && <span className="text-faint"> · {changedCount} changed since exported</span>}
-                {progress.ignored > 0 && (
-                  <span className="text-faint">
-                    {' '}
-                    · {progress.ignored} ignored{' '}
-                    <button
-                      type="button"
-                      onClick={() => setShowIgnored(!showIgnored)}
-                      className="underline underline-offset-2 cursor-pointer"
-                      title={showIgnored ? 'Leave the ignored pictures out of the strip' : 'Show the ignored pictures in the strip, dimmed'}
-                    >
-                      {showIgnored ? 'Hide' : 'Show'}
-                    </button>
-                  </span>
-                )}
-                {culling.reachable && (
-                  <CullLine
-                    counts={countCulling(roll.pictures.map((p) => culling.byPicture.get(p.id)))}
-                    filter={cullFilter}
-                    onFilter={setCullFilter}
-                    shown={filtering ? roll.pictures.filter((p) => !isIgnored(p) && shownByCull(p)).length : null}
-                    asking={culling.asking}
-                    problem={culling.problem}
-                    onRefresh={culling.refresh}
-                  />
-                )}
-                {withLook > 0 && (
-                  <span className="text-faint">
-                    {' '}
-                    · {withLook} with a look
-                  </span>
-                )}
-                {visibleSelected.size > 0 && (
-                  <span className="text-accent-ink">
-                    {' '}
-                    · {visibleSelected.size} selected{' '}
-                    <button
-                      type="button"
-                      onClick={() => setSelected(new Set())}
-                      className="underline underline-offset-2 cursor-pointer"
-                    >
-                      Clear
-                    </button>
+                {culling.problem && (
+                  <span className="text-danger">
+                    Winnow {culling.problem}{' '}
+                    <button type="button" onClick={culling.refresh} disabled={culling.asking} className="underline underline-offset-2 cursor-pointer">
+                      {culling.asking ? 'asking…' : 'Try again'}
+                    </button>{' '}
                   </span>
                 )}
                 {reach.fetching > 0 && (
@@ -1483,6 +1600,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     could not be reached, which is the half that asks for a
                     click. */}
               </p>
+              )}
               {/* Housekeeping, and it wraps to three lines at 390px: on a
                   phone with the drawer up those are three lines taken off the
                   photograph. It is back as soon as the drawer is down, which
@@ -1520,37 +1638,45 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   )}
                 </p>
               )}
-              {/* V4: the strip is the run's queue — each cell marked, and the
+              </div>
+              {/* V4: the band is the run's queue — each cell marked, and the
                   run's own hairline along its top (`TaskEdge`, the run's scope). */}
-              <div className="relative flex-none">
-                <TaskEdge scope={runScope(roll.id)} edge="top" />
-                <RollBand
-                  pictures={roll.pictures}
-                  run={exports.progress}
-                  openId={openId}
-                  selectedIds={visibleSelected}
-                  thumbs={thumbs}
-                  aspects={thumbAspects}
-                  availability={availability}
-                  remoteThumb={remoteThumb}
-                  kind={stripKind}
-                  // With a phone's drawer up every row is the photograph's:
-                  // the band keeps one short row of cells and no header, the
-                  // size the strip had before it could be pulled.
-                  height={compact && sheetOpen ? 56 + 2 * stripMetrics.pad : heightForRows(1, stripMetrics, stripMetrics.thumb)}
-                  header={compact && sheetOpen ? null : bandHeader}
-                  selecting={selecting}
+              <div className="relative flex-none flex flex-col">
+                {/* The grip: the band's size by a drag, its rail by a
+                    double-click (`BandGrip`); gone with a phone's drawer up,
+                    where the band is one fixed row. */}
+                {!drawerBand && (
+                  <BandGrip axis="y" size={stripMetrics.grip} label="Resize the band" onDrag={onGripDrag} onEnd={onGripEnd} onToggle={toggleFolded} />
+                )}
+                <div className="relative">
+                  <TaskEdge scope={runScope(roll.id)} edge="top" />
+                  <RollBand
+                    pictures={roll.pictures}
+                    run={exports.progress}
+                    openId={openId}
+                    selectedIds={visibleSelected}
+                    thumbs={thumbs}
+                    aspects={thumbAspects}
+                    availability={availability}
+                    remoteThumb={remoteThumb}
+                    kind={stripKind}
+                    height={bandHeight}
+                    folded={!drawerBand && strip.folded}
+                    thumb={strip.thumb}
+                    header={drawerBand ? null : bandHeader}
+                    selecting={selecting}
                   onOpen={(id) => onOpenPicture(id)}
                   onSelectClick={handleSelectClick}
                   onPress={startSelecting}
                   onSelect={startSelecting}
-                  onRemove={(p) => removeAsked([p.id])}
-                  onDeliver={handleDeliver}
-                  onVariant={(id) => makeVariantOf(id, 'clone')}
-                  hideIgnored={!showIgnored}
-                  culling={culling.byPicture}
-                  shows={filtering ? shownByCull : undefined}
-                />
+                    onRemove={(p) => removeAsked([p.id])}
+                    onDeliver={handleDeliver}
+                    onVariant={(id) => makeVariantOf(id, 'clone')}
+                    hideIgnored={!showIgnored}
+                    culling={culling.byPicture}
+                    shows={filtering ? passesFilter : undefined}
+                  />
+                </div>
               </div>
             </div>
           </div>
@@ -1602,76 +1728,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         </ConfirmDialog>
       )}
     </div>
-  );
-}
-
-/**
- * Winnow's word on the roll, in the status line: how many picks and rejects
- * it answered, and the strip's filter on them. Read-only — the filter shows
- * and hides, it never writes to Winnow (item 33 of `docs/lightroom-gaps.md`).
- */
-function CullLine({
-  counts,
-  filter,
-  onFilter,
-  shown,
-  asking,
-  problem,
-  onRefresh,
-}: {
-  counts: ReturnType<typeof countCulling>;
-  filter: CullFilter;
-  onFilter: (f: CullFilter) => void;
-  /** How many pictures the filter leaves in the strip, or null with none on. */
-  shown: number | null;
-  asking: boolean;
-  problem: string | null;
-  onRefresh: () => void;
-}) {
-  const said = [
-    counts.picks > 0 && `${counts.picks} pick${counts.picks === 1 ? '' : 's'}`,
-    counts.rejects > 0 && `${counts.rejects} rejected`,
-    counts.starred > 0 && `${counts.starred} starred`,
-  ].filter(Boolean);
-  return (
-    <span className="text-faint">
-      {' '}
-      · Winnow{' '}
-      {problem ? (
-        <span className="text-danger">{problem}</span>
-      ) : asking && counts.known === 0 ? (
-        'asking…'
-      ) : said.length ? (
-        said.join(', ')
-      ) : (
-        'nothing culled'
-      )}{' '}
-      <select
-        value={cullFilterKey(filter)}
-        onChange={(e) => onFilter(readCullFilter(e.target.value))}
-        aria-label="Show in the strip, by Winnow's culling"
-        title="Show in the strip, by Winnow's culling — read-only: culling stays Winnow's"
-        className={`bg-transparent border-0 border-b border-dotted font-mono text-2xs cursor-pointer ${
-          filter.kind === 'all' ? 'border-line-strong text-muted' : 'border-accent text-accent-ink'
-        }`}
-      >
-        {CULL_FILTERS.map((f) => (
-          <option key={cullFilterKey(f)} value={cullFilterKey(f)}>
-            {f.kind === 'all' ? 'show all' : `show ${cullFilterLabel(f).toLowerCase()}`}
-          </option>
-        ))}
-      </select>
-      {shown !== null && <> ({shown} shown)</>}{' '}
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={asking}
-        className="underline underline-offset-2 cursor-pointer disabled:cursor-default disabled:no-underline"
-        title="Ask Winnow again — it is asked by itself when you come back to this tab"
-      >
-        {asking ? 'asking…' : 'Refresh'}
-      </button>
-    </span>
   );
 }
 

@@ -68,6 +68,10 @@ const GROUPS: readonly Group[] = [
       { keys: 'U', what: 'back to the roll’s rule: it leaves if it is edited — on every tab' },
       { keys: 'M', what: 'off the Layers tab, ignore this picture ↔ bring it back — never exported, stepped over by ← / →' },
       { keys: '⋯ on a cell · right-click', what: 'the picture’s verbs — open, send ↔ hold, back to the rule, ignore, a variant, take it off the roll' },
+      { keys: 'drag the band’s handle', what: 'the band taller — one row, then a grid of two or three — or down to its rail; double-click folds it' },
+      { keys: 'B', what: 'the band folded to its rail ↔ back to its size' },
+      { keys: '− · =', what: 'the band’s thumbnails smaller or larger — its ⋯ menu has the rows, the height that follows the roll, and where it sits' },
+      { keys: 'the band’s filter', what: 'what it shows — all, edited, to export, held back, ignored, or by Winnow’s culling; ← / → and Apply to N other pictures follow it' },
     ],
   },
   {

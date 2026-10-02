@@ -186,6 +186,9 @@ export type EditorKeyAction =
   | 'variant'
   | 'select'
   | 'select-all'
+  | 'band'
+  | 'thumbs-smaller'
+  | 'thumbs-larger'
   | null;
 
 /**
@@ -209,7 +212,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * crops to the zoomed view (the caller decides whether there is one), `H`
  * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
  * painted on it, `V` black and white, `S` the band's selection (and ⌘A every
- * shown picture while it is on), `M` the mask's view
+ * shown picture while it is on), `B` the band folded to its rail, `-` and
+ * `=` its thumbnails smaller and larger, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
@@ -266,6 +270,12 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   // §5): pick several pictures, then act on them all — the two-step gesture
   // that took the verbs off the cells.
   if (press.key === 's' || press.key === 'S') return 'select';
+  // `B` folds the band to its rail and back; `-` and `=` (the `+` key
+  // unshifted, on QWERTY and on AZERTY alike) step its thumbnails — the
+  // grid's keys in Lightroom, where the stage keeps Z and the wheel.
+  if (press.key === 'b' || press.key === 'B') return 'band';
+  if (press.key === '-' || press.key === '_') return 'thumbs-smaller';
+  if (press.key === '=' || press.key === '+') return 'thumbs-larger';
   // `J` paints what is clipped over the picture — Lightroom's own letter, so
   // a hand that learnt it there finds it here.
   if (press.key === 'j' || press.key === 'J') return 'clipping';

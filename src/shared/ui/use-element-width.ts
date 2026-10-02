@@ -7,16 +7,23 @@ import { useEffect, useRef, useState, type RefObject } from 'react';
  * a caller draws nothing meaningful at zero.
  */
 export function useElementWidth<T extends HTMLElement>(): [RefObject<T>, number] {
+  const [ref, size] = useElementSize<T>();
+  return [ref, size.width];
+}
+
+/** Both inner sides, the same way — for a box whose HEIGHT is shared out (the stage and the band under it). */
+export function useElementSize<T extends HTMLElement>(): [RefObject<T>, { width: number; height: number }] {
   const ref = useRef<T>(null);
-  const [width, setWidth] = useState(0);
+  const [size, setSize] = useState({ width: 0, height: 0 });
   useEffect(() => {
     const el = ref.current;
     if (!el) return;
-    const measure = () => setWidth(el.clientWidth);
+    const measure = () =>
+      setSize((cur) => (cur.width === el.clientWidth && cur.height === el.clientHeight ? cur : { width: el.clientWidth, height: el.clientHeight }));
     measure();
     const ro = new ResizeObserver(measure);
     ro.observe(el);
     return () => ro.disconnect();
   }, []);
-  return [ref, width];
+  return [ref, size];
 }

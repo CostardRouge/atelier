@@ -81,6 +81,8 @@ export default function RollBand({
   height,
   header,
   selecting = false,
+  folded = false,
+  thumb,
   onOpen,
   onSelectClick,
   onPress,
@@ -115,6 +117,10 @@ export default function RollBand({
   header?: ((info: { at: number; shown: number; width: number }) => ReactNode) | null;
   /** The selection is on: a plain click marks, the cells wear a ring to tick, the ⋯ stands down. */
   selecting?: boolean;
+  /** Folded to its rail: the header alone, no cell laid out or drawn. */
+  folded?: boolean;
+  /** The thumbnail height a grid aims at (`StripPrefs.thumb`); the metrics' own by default. */
+  thumb?: number;
   onOpen: (id: string) => void;
   onSelectClick: (id: string, mods: SelectionModifiers) => void;
   /** A finger held on a cell: the selection on, with that picture. */
@@ -158,10 +164,11 @@ export default function RollBand({
     [pictures, openId, hideIgnored, shows],
   );
   const items = useMemo<StripItem[]>(() => shown.map((p) => ({ id: p.id, aspect: cellAspect(p, aspects.get(p.id)) })), [shown, aspects]);
-  const bodyHeight = height - (header ? metrics.head : 0);
+  const bodyHeight = folded ? 0 : height - (header ? metrics.head : 0);
+  const target = thumb ?? metrics.thumb;
   const layout = useMemo(
-    () => bandLayout({ items, width, bodyHeight, metrics, thumb: metrics.thumb }),
-    [items, width, bodyHeight, metrics],
+    () => bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
+    [items, folded, width, bodyHeight, metrics, target],
   );
   const cellById = useMemo(() => new Map(layout.cells.map((c) => [c.id, c])), [layout]);
 
@@ -188,11 +195,11 @@ export default function RollBand({
         // the browser already does both axes, and the gestures a cell takes
         // (a click, a press) write no drag.
         className={`relative flex-1 min-h-0 min-w-0 overscroll-contain [scrollbar-width:thin] ${
-          layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'
+          folded ? 'hidden' : layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'
         }`}
       >
         <ol className="relative m-0 p-0 list-none" style={{ width: layout.width, height: layout.height }}>
-          {shown.map((p) => {
+          {!folded && shown.map((p) => {
             const cell = cellById.get(p.id);
             if (!cell) return null;
             // Handed as two values, not a fresh object per render, so the memo holds.
