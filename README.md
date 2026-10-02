@@ -1513,7 +1513,12 @@ a palette of those kinds, grouped by what you do — *Point at it* (subject,
 colour, brightness), *Draw it* (linear, radial, shade, painted) and
 *Everywhere* — each with its glyph and a line of use (a sheet on a phone).
 The same palette changes a layer's kind, from the chip beside **Mask**, and
-combines a term into its mask. Every Develop slider works inside a layer, and layers add up
+combines a term into its mask. Each row of the list shows a thumbnail of the
+layer's real mask (its terms combined, the subject it takes out cut away),
+its name beside its kind (double-click to rename), chips of what it changes
+and its opacity as a slim bar; drag its grip, or press **⌥↑ / ⌥↓**, to
+reorder, and **⋯** holds Rename, Duplicate, Move up and down, Invert, Change
+type… and Delete. Every Develop slider works inside a layer, and layers add up
 from the bottom of the list to the top. A **shade** is the very shape a Trips
 shade draws, picked with the same controls: where it comes from on the 3×3
 grid (an edge, a quarter circle from a corner, or in the centre a radial and

@@ -26,3 +26,34 @@ Pick / Paint on — a fresh painted layer now does too, where only a subject and
 a colour did. Switching kind still STARTS the shape fresh (`defaultMask`).
 Driven headless at 1440 and 390 px: add, change (the current kind marked),
 combine with Subtract, Escape and a press outside close it.
+
+## The list READS — a row per layer (2026-10-02)
+
+**Decision**: a row is grip · eye · thumbnail of the REAL combined mask ·
+name beside its kind word · ⋯, then chips of what it changes (`developLines`,
+three and "+N", or "no change yet") and its opacity as a slim bar. The ⋯ holds
+Rename, Duplicate, Move up / down, Invert, Change type… (the palette, hung
+from the row) and Delete — the three icon buttons a row had are gone. **Why**:
+a row was one truncated line («radial · 40 % · 40 %») the eye had to parse,
+and a layer's NAME (`AdjustLayer.name`) existed with no way to set it.
+**How to apply**:
+- The thumbnail is `layer-thumb.ts` (pure, tested) — `layerWeight` over the
+  same evaluators the renderer reads, opacity LEFT OUT (the bar says it), a
+  painted mask through `rasteriseBrush`, a subject from its raster. A
+  brightness or colour mask is measured on `layerInput` — the picture AS THE
+  LAYER SEES IT, factored out of `sampleColour` —, never on the picture as
+  shot, which is not what those masks read. Redrawn 180 ms after the stack
+  moves (`use-layer-thumbs.ts`), so the stage repaints first.
+- The drag carries its OWN type (`application/x-atelier-layer`), so a layer
+  dragged in the list can never be read as a picture dropped on a cell
+  (`asset-drag.ts`); dropped ON a row, it goes just ABOVE that row
+  (`moveLayerTo`). Touch has no HTML drag: ⋯ Move up / down is its way, and
+  ⌥↑ / ⌥↓ the keyboard's, on the grip or the name.
+- A name stays OPTIONAL: empty reads as the kind's name, renamed in place
+  (double-click, or ⋯ Rename; Enter or a click away keeps it, Escape does
+  not). A duplicate lands just above its original, every field cloned, named
+  `<name> copy`.
+- A click anywhere on a row opens its layer, except on a control.
+Driven headless: four kinds, the thumbnails' ink measured per row, +1 EV
+showing as a chip, the bar writing 0.4, a rename, a duplicate, Change type,
+a drag to the top and ⌥↓, the roll read back after its debounced save.

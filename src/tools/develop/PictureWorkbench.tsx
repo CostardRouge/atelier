@@ -65,6 +65,7 @@ import {
   MAX_COLOUR_SAMPLES,
   MAX_STROKES,
   SUBJECT_HIT_RADIUS,
+  defaultMask,
   dropSubjectPin,
   subjectPins,
   tapSubject,
@@ -104,7 +105,10 @@ import {
   createLayer,
   drawingLayers,
   withComponentMask,
+  duplicateLayer,
   moveLayer,
+  moveLayerTo,
+  newLayerId,
   patchLayer,
   removeLayer,
   sameLayers,
@@ -174,6 +178,7 @@ import {
 import type { RepairRing, RingGesture, RingPart, SpotRing } from '../../shared/develop/DevelopViewport';
 import LayersPanel from './LayersPanel';
 import { takesPointer } from './kind-palette';
+import { useLayerThumbs } from './use-layer-thumbs';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import { borderLayout, type RollBorder } from '../../shared/develop/border-layout';
@@ -1150,6 +1155,8 @@ export default function PictureWorkbench({
   });
   const { rasters: resolvedSubjects, fresh: freshSubject } = subject;
   useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);
+  // The list's thumbnails of each layer's REAL mask, a moment after the stack moves.
+  const layerThumbs = useLayerThumbs(layersDraft, picture, resolvedSubjects);
   // The region a tap just changed BLINKS twice (on, off, on, off, 90 ms
   // each), like a macOS menu item, then leaves the stage to the chosen view.
   // Only what the tap changed, never the whole subject — added in the accent,
@@ -2301,6 +2308,7 @@ export default function PictureWorkbench({
               <LayersPanel
                 layers={layersDraft}
                 selectedId={selectedLayerId}
+                thumbs={layerThumbs}
                 showMask={showMask}
                 maskView={maskView}
                 onMaskView={setMaskView}
@@ -2320,6 +2328,20 @@ export default function PictureWorkbench({
                   if (id === selectedLayerId) setSelectedLayerId(null);
                 }}
                 onMove={(id, delta) => setLayersDraft((list) => moveLayer(list, id, delta))}
+                onMoveTo={(id, index) => setLayersDraft((list) => moveLayerTo(list, id, index))}
+                onDuplicate={(id) => {
+                  const copy = newLayerId();
+                  setLayersDraft((list) => duplicateLayer(list, id, copy));
+                  setSelectedLayerId(copy);
+                }}
+                onKind={(id, kind) => {
+                  // The same rule as the mask's own chip: the new shape starts
+                  // fresh, and a kind made with the pointer turns it on.
+                  setLayersDraft((list) => patchLayer(list, id, { mask: kind === 'whole' ? null : defaultMask(kind) }));
+                  setSelectedLayerId(id);
+                  setSelectedPart(null);
+                  setPainting(takesPointer(kind));
+                }}
                 onPatch={(id, patch) => setLayersDraft((list) => patchLayer(list, id, patch))}
                 onShowMask={setShowMask}
               />

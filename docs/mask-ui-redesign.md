@@ -5,7 +5,7 @@ avec tes recommandations, construis-le»*, §6 answered by its recommendations
 (the lab's face, ⌥ beside the switch, SAM after steps 1–3 on his pictures,
 Refine shown at once). Built: §5.1 Remove, §5.2 Refine, §5.3 the edge (on the CPU in the composer,
 not as a shader — `docs/memory/subject-model.md` says why), §5.4 the one
-palette (`docs/memory/mask-ui.md`).
+palette, §5.5 the list (`docs/memory/mask-ui.md`).
 This brief comes from his
 report. The lab that carries the proposal as a working mock is
 <https://claude.ai/artifact/5jy9NnEg1SoRdUNjDcAMas>. It holds the stage, the
