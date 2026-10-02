@@ -34,7 +34,8 @@
 
 import { formatIsoDate, spanLength, todayIso, type IsoDate } from './trip-days';
 import { postDayRange, stageAt, stageDayNumber } from './trip-coverage';
-import { stageLabel, stageRegionLabel } from './trip-places';
+import { stageRoute } from './place-style';
+import { stageRegionLabel } from './trip-places';
 import {
   DEFAULT_TIME_AGO_WORDS,
   FRENCH_TIME_AGO_WORDS,
@@ -344,9 +345,11 @@ export function counterPieces(
 
   const stage = stageAt(trip, post.date);
   // The stage's own name when it has one, else the leg its places describe
-  // ("Perth → Cairns"). Still never fabricated: a stage naming nothing gives
-  // null and the caller falls back to the day of the trip.
-  const place = (stage && stageLabel(stage)) || null;
+  // ("Perth → Cairns"), the places written as the trip's BADGE style says —
+  // the name alone by default, so no stored badge changes. Still never
+  // fabricated: a stage naming nothing gives null and the caller falls back
+  // to the day of the trip.
+  const place = (stage && stageRoute(stage, trip, 'badge')) || null;
   const pin = (text: string | null) =>
     text && showPin && w.pin.trim() ? `${w.pin.trim()} ${text}` : text;
 

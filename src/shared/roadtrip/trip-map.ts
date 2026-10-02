@@ -19,8 +19,8 @@
  * Pure and DOM-free: positions on screen are handed in, never measured here.
  */
 
+import { stageRoute, type PlaceWritingTrip } from './place-style';
 import { rulerBars, rulerGaps, type RulerGap } from './stage-ruler';
-import { stageLabel } from './trip-places';
 import type { TripDoc, TripStage } from './trip-types';
 import type { IsoDate } from './trip-days';
 import { addDays } from './trip-days';
@@ -39,7 +39,7 @@ export interface MapStage {
   stage: TripStage;
   /** Its position in `trip.stages` — what picks its tint, like the ruler's bars. */
   index: number;
-  /** `stageLabel`, possibly empty (an unnamed stage says so where it is drawn). */
+  /** `stageRoute` in the lists style, possibly empty (an unnamed stage says so where it is drawn). */
   label: string;
   /** Its places that HAVE a position, in lived order. */
   places: MapPlace[];
@@ -130,7 +130,7 @@ function located(stage: TripStage): MapPlace[] {
  * the trip, is left out — the ruler's rule (`rulerBars`): it exists, the
  * editor lists it, but there is no honest place to draw its days.
  */
-export function tripMap(trip: Pick<TripDoc, 'startDate' | 'endDate' | 'stages'>): TripMap {
+export function tripMap(trip: Pick<TripDoc, 'startDate' | 'endDate' | 'stages'> & PlaceWritingTrip): TripMap {
   const bars = rulerBars(trip);
   const stages: MapStage[] = bars
     .map((bar) => {
@@ -143,7 +143,8 @@ export function tripMap(trip: Pick<TripDoc, 'startDate' | 'endDate' | 'stages'>)
       return {
         stage: bar.stage,
         index: bar.index,
-        label: stageLabel(bar.stage),
+        // Written as the trip's LISTS style says — the map is where there is room.
+        label: stageRoute(bar.stage, trip, 'lists'),
         places,
         anchor: pathMidpoint(places),
         from: bar.from,

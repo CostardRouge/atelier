@@ -69,6 +69,9 @@ import {
   type BadgeWords,
   type CounterMode,
 } from './day-badge';
+// The default lives in `place-style.ts`, which takes only TYPES from here —
+// a value both ways is the cycle that left `day-badge.ts` half-loaded.
+import { DEFAULT_PLACE_STYLE } from './place-style';
 
 export const TRIP_DOC_VERSION = 30;
 
@@ -205,12 +208,7 @@ export interface TripPlaceStyle {
   lists: PlaceStyle;
 }
 
-/**
- * Today's writing exactly on the badge — the name alone, the region on its
- * own caption line as it always was — and the short code in the lists, so
- * what a place keeps is seen where there is room for it.
- */
-export const DEFAULT_PLACE_STYLE: TripPlaceStyle = { badge: 'name', lists: 'code' };
+export { DEFAULT_PLACE_STYLE };
 
 /**
  * Where a stage was SEEDED from — a Winnow timeline chapter, reached through

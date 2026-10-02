@@ -11,6 +11,7 @@ import {
 import { startStageAt } from '../../shared/roadtrip/stage-edit';
 import { rulerBars, rulerGaps, stageTint } from '../../shared/roadtrip/stage-ruler';
 import { addDays, formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { PLACE_STYLE_OPTIONS, writePlace } from '../../shared/roadtrip/place-style';
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
 import SectionLegend from '../../shared/ui/SectionLegend';
@@ -18,7 +19,7 @@ import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { stepZoom, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
-import PlacesEditor from './PlacesEditor';
+import PlacesEditor, { PlaceStyleSelect } from './PlacesEditor';
 import StageRuler from './StageRuler';
 import { useLoupe } from './use-loupe';
 import { Icons } from '../../shared/ui/icons';
@@ -61,6 +62,8 @@ interface StagesPanelProps {
    */
   deduceSources?: string[];
   onDeduceFrom?: (sourceId: string) => void;
+  /** A state's code kept for the whole trip, from a place's own editor. */
+  onRememberCode?: (state: string, code: string) => void;
 }
 
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
@@ -75,6 +78,7 @@ export function StageCard({
   onDelete,
   onClose,
   onAdjust,
+  onRememberCode,
 }: {
   trip: TripDoc;
   stage: TripStage;
@@ -88,6 +92,8 @@ export function StageCard({
    * screen, which has the ruler.
    */
   onAdjust?: () => void;
+  /** A state's code kept for the whole trip, from a place's own editor. */
+  onRememberCode?: (state: string, code: string) => void;
 }) {
   const [confirming, setConfirming] = useState(false);
   const problem = stageProblem(trip, stage);
@@ -162,6 +168,28 @@ export function StageCard({
           format={formatIsoDate}
           onChange={({ start, end }) => onChange({ ...stage, startDate: start, endDate: end })}
         />
+        {/* How THIS stage's places are written, over the trip's two defaults —
+            the look's cascade: empty means «like the trip». */}
+        <PlaceStyleSelect
+          value={stage.placeStyle ?? ''}
+          inherit={`Like the trip · ${
+            // The trip's lists writing shown on one of THIS stage's places, else the stock example.
+            (() => {
+              const sample = (stage.places ?? []).find((p) => p.name.trim() && p.state.trim());
+              return sample
+                ? writePlace(sample, trip.placeStyle.lists, trip)
+                : (PLACE_STYLE_OPTIONS.find((o) => o.id === trip.placeStyle.lists)?.example ?? '');
+            })()
+          }`}
+          label="How this stage's places are written"
+          onChange={(style) => {
+            const next = { ...stage };
+            if (style) next.placeStyle = style;
+            else delete next.placeStyle;
+            onChange(next);
+          }}
+          className={`${inputClass} min-w-[8rem]`}
+        />
       </div>
       <p
         className={`m-0 font-mono text-2xs ${problem ? 'text-danger' : 'text-faint'}`}
@@ -179,7 +207,12 @@ export function StageCard({
           Adjust on the calendar
         </Button>
       )}
-      <PlacesEditor stage={stage} onChange={(places) => onChange({ ...stage, places })} />
+      <PlacesEditor
+        trip={trip}
+        stage={stage}
+        onChange={(places) => onChange({ ...stage, places })}
+        onRememberCode={onRememberCode}
+      />
     </div>
   );
 }
@@ -213,6 +246,7 @@ export default function StagesPanel({
   deduceSources = [],
   onCompleteFrom,
   onDeduceFrom,
+  onRememberCode,
 }: StagesPanelProps) {
   // The track's gestures are spelled out until the track has been USED at all
   // — a leg opened, a day tapped, a leg dragged, a gap filled — and stay behind
@@ -401,6 +435,7 @@ export default function StagesPanel({
             onSelect(null);
           }}
           onClose={() => onSelect(null)}
+          onRememberCode={onRememberCode}
         />
       )}
     </section>

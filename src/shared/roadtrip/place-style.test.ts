@@ -7,6 +7,7 @@ import {
   placeStyleFor,
   placeText,
   rememberStateCode,
+  stageRoute,
   stateCodeFor,
   statesOf,
   tableCode,
@@ -134,6 +135,28 @@ describe('placeStyleFor / placeText — the cascade', () => {
 
   it('works with no stage at all', () => {
     expect(placeStyleFor(place, null, t, 'lists').from).toBe('trip');
+  });
+});
+
+describe('stageRoute', () => {
+  const t = trip({ Queensland: 'QLD' });
+  const leg = (places: ReturnType<typeof createTripPlace>[], name = '') => createTripStage(name, '', '2025-11-02', '2025-11-10', places);
+
+  it('is the author’s own name, or empty when the stage names nothing', () => {
+    expect(stageRoute(leg([createTripPlace('Perth', 'Western Australia')], 'Coral Coast'), t, 'lists')).toBe('Coral Coast');
+    expect(stageRoute(leg([]), t, 'lists')).toBe('');
+  });
+
+  it('writes one place, and says a shared state once over a route', () => {
+    expect(stageRoute(leg([createTripPlace('Kalbarri', 'Western Australia')]), t, 'lists')).toBe('Kalbarri, WA');
+    expect(stageRoute(leg([createTripPlace('Kalbarri', 'Western Australia'), createTripPlace('Exmouth', 'Western Australia')]), t, 'lists')).toBe('Kalbarri → Exmouth, WA');
+    expect(stageRoute(leg([createTripPlace('Perth', 'Western Australia'), createTripPlace('Cairns', 'Queensland')]), t, 'lists')).toBe('Perth, WA → Cairns, QLD');
+  });
+
+  it('is today’s label on the badge, whose default writing is the name alone', () => {
+    expect(stageRoute(leg([createTripPlace('Perth', 'Western Australia'), createTripPlace('Cairns', 'Queensland')]), t, 'badge')).toBe('Perth → Cairns');
+    // A caller holding less than a document gets the defaults.
+    expect(stageRoute(leg([createTripPlace('Perth', 'Western Australia')]), {}, 'lists')).toBe('Perth, WA');
   });
 });
 

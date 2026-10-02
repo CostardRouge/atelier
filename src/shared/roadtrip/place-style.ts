@@ -26,16 +26,19 @@
  */
 
 import { formatDayMonth, isWithin, parseIsoDate, type IsoDate } from './trip-days';
-import type {
-  PlaceCodeFrom,
-  PlaceStyle,
-  TripDoc,
-  TripPlace,
-  TripPlaceStyle,
-  TripStage,
-} from './trip-types';
+import { PLACE_ARROW, stageEnd, stageStart } from './trip-places';
+// Types only: `trip-types.ts` imports THIS module's default, and a value the
+// other way round is the cycle that left `day-badge.ts` half-loaded in tests.
+import type { PlaceCodeFrom, PlaceStyle, TripDoc, TripPlace, TripPlaceStyle, TripStage } from './trip-types';
 
 export type PlaceSurface = keyof TripPlaceStyle;
+
+/**
+ * Today's writing exactly on the badge — the name alone, the region on its
+ * own caption line as it always was — and the short code in the lists, so
+ * what a place keeps is seen where there is room for it.
+ */
+export const DEFAULT_PLACE_STYLE: TripPlaceStyle = { badge: 'name', lists: 'code' };
 
 export const PLACE_STYLE_OPTIONS: readonly { id: PlaceStyle; label: string; example: string }[] = [
   { id: 'code', label: 'Name, code', example: 'Sydney, NSW' },
@@ -162,14 +165,37 @@ export function writePlace(
   return style === 'paren' ? `${name} (${code})` : `${name}, ${code}`;
 }
 
+/** A trip as the writing needs it; a caller holding less than a document passes what it has. */
+export type PlaceWritingTrip = Partial<Pick<TripDoc, 'placeStyle' | 'stateCodes'>>;
+
+function whole(trip: PlaceWritingTrip): Pick<TripDoc, 'placeStyle' | 'stateCodes'> {
+  return { placeStyle: trip.placeStyle ?? DEFAULT_PLACE_STYLE, stateCodes: trip.stateCodes ?? {} };
+}
+
 /** `writePlace` through the cascade — what a surface actually shows. */
-export function placeText(
-  place: TripPlace,
-  stage: TripStage | null,
-  trip: Pick<TripDoc, 'placeStyle' | 'stateCodes'>,
-  surface: PlaceSurface,
-): string {
-  return writePlace(place, placeStyleFor(place, stage, trip, surface).style, trip);
+export function placeText(place: TripPlace, stage: TripStage | null, trip: PlaceWritingTrip, surface: PlaceSurface): string {
+  const t = whole(trip);
+  return writePlace(place, placeStyleFor(place, stage, t, surface).style, t);
+}
+
+/**
+ * The stage as a surface names it: the author's own name always wins
+ * (`stageLabel`), else its two ends WRITTEN — «Kalbarri, WA → Exmouth, WA»
+ * is said once, «Kalbarri → Exmouth, WA», when both ends share the state and
+ * neither place departs from the cascade. Empty when the stage names nothing,
+ * exactly like `stageLabel`, so every caller's fallback still holds.
+ */
+export function stageRoute(stage: TripStage, trip: PlaceWritingTrip, surface: PlaceSurface): string {
+  const own = stage.name.trim();
+  if (own) return own;
+  const from = stageStart(stage);
+  const to = stageEnd(stage);
+  if (!from) return '';
+  const t = whole(trip);
+  if (!to || to.id === from.id) return placeText(from, stage, t, surface);
+  const shared = from.state.trim() && from.state.trim() === to.state.trim() && !from.style && !to.style;
+  const head = shared ? from.name.trim() : placeText(from, stage, t, surface);
+  return `${head} ${PLACE_ARROW} ${placeText(to, stage, t, surface)}`;
 }
 
 /** The states the trip's places name, distinct, in the order they are met — what the table lists. */

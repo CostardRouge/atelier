@@ -1,6 +1,7 @@
 import { insertStageInOrder, stageOverGap, startStageAt } from '../../shared/roadtrip/stage-edit';
 import { rulerBars, rulerGaps, stageTint } from '../../shared/roadtrip/stage-ruler';
 import { enumerateDays, formatIsoDate, spanLength, type IsoDate } from '../../shared/roadtrip/trip-days';
+import { stageRoute } from '../../shared/roadtrip/place-style';
 import { stageLabel } from '../../shared/roadtrip/trip-places';
 import type { TripDoc, TripStage } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
@@ -24,6 +25,8 @@ interface LegsSheetProps {
   /** Connected Winnows the itinerary can be deduced from. */
   deduceSources?: readonly string[];
   onDeduceFrom?: (sourceId: string) => void;
+  /** A state's code kept for the whole trip, from a place's own editor. */
+  onRememberCode?: (state: string, code: string) => void;
 }
 
 /** How many days of a leg the barcode shows before it samples. */
@@ -49,6 +52,7 @@ export default function LegsSheet({
   onCompleteFrom,
   deduceSources = [],
   onDeduceFrom,
+  onRememberCode,
 }: LegsSheetProps) {
   const bars = rulerBars(trip);
   const gaps = rulerGaps(trip, bars);
@@ -130,7 +134,7 @@ export default function LegsSheet({
           // The barcode samples a long leg so it stays one row wide.
           const stride = Math.max(1, Math.ceil(all.length / BARS));
           const sample = all.filter((_, i) => i % stride === 0);
-          const label = stageLabel(stage) || 'Unnamed stage';
+          const label = stageRoute(stage, trip, 'lists') || 'Unnamed stage';
           return (
             <li key={stage.id} className="border-b border-line">
               <button
@@ -168,6 +172,7 @@ export default function LegsSheet({
                     }}
                     onClose={() => onSelect(null)}
                     onAdjust={onAdjust ? () => onAdjust(stage.id) : undefined}
+                    onRememberCode={onRememberCode}
                   />
                 </div>
               )}
