@@ -74,3 +74,30 @@ and `subject-refine.test.ts` holds it.
   report. Driven headless on that scene: the switch drops the island on the
   stage and in the export rasters (`resolveSubjectRasters`), Tolerance moved
   the covered area 155 521 → 161 377 px, Grow / Shrink 114 318 → 208 205.
+
+## The edge — As found · Soft · Snap, built (2026-10-02)
+
+- **CPU, in the composer, never a shader** — so no `check-render.mjs` row,
+  the brief's §5.3 notwithstanding: the subject is composed at the model's
+  1024 px view for the stage and the export alike, and an edge made there is
+  one function both reach; the unit tests are its gate. LAST in the order,
+  after the removal, so a removal's edge is refined like the rest.
+- **Snap is the colour guided filter run "fast"** (coefficients at a fraction
+  of the density, spread back bilinearly), the step from the raster's size
+  (long edge ÷ 256 → 4 at 1024). Measured on a disc drawn 3 px too wide:
+  3 772 px of edge error as found, 1 029 at full density, 727 at half, 343 at
+  a quarter — the coarse window is both cheaper (41 against 76 ms in node) and
+  the better fit. Then a CONTRAST on the matte (smoothstep 0.2–0.8): the
+  filter alone leaves, where the model overshot, the share of the window that
+  was wrongly in — a 0.3 haze —, which this clears while a half-covered pixel
+  stays at half.
+- **It refines an edge; it cannot restore what the model answered 0 for**:
+  thin branches off a tapped trunk come back at confidence 0, measured, so
+  the hint sends that to a tap or a painted mask. On flat synthetic shapes the
+  model's edge is already exact and Snap barely moves it (20 338 → 20 266 px);
+  on a blurred disc it moves the stage's edge sample 100 → 79 and leaves
+  10 854 export pixels partial. Its value on hair is unmeasured here.
+- **The guide is the model's view, read once per VIEW** (`readGuide`, one
+  entry in module state, ~2.8 MB) — a snapped subject waiting on it goes the
+  hook's async path, which says "finding it" only where the model is really
+  asked. Browser timings: Soft ~30 ms, Snap ~45 ms per compose.

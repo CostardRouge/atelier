@@ -2,7 +2,11 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TOLERANCE,
   GROW_REFERENCE_EDGE,
+  boxMean,
   cutConfidence,
+  finishEdge,
+  snapEdge,
+  softEdge,
   growPixels,
   growShrink,
   isDefaultRefine,
@@ -100,8 +104,11 @@ describe('grow and shrink', () => {
 
 describe('the settings', () => {
   it('fill their defaults and are brought into range', () => {
-    expect(normaliseRefine(undefined)).toEqual({ tolerance: 0.5, islands: false, grow: 0 });
-    expect(normaliseRefine({ tolerance: -1, grow: 3.6, islands: true })).toEqual({ tolerance: 0.05, islands: true, grow: 4 });
+    expect(normaliseRefine(undefined)).toEqual({ tolerance: 0.5, islands: false, grow: 0, edge: 'found' });
+    expect(normaliseRefine({ tolerance: -1, grow: 3.6, islands: true })).toEqual({ tolerance: 0.05, islands: true, grow: 4, edge: 'found' });
+    expect(normaliseRefine({ edge: 'snap' }).edge).toBe('snap');
+    expect(normaliseRefine({ edge: 'lasso' as never }).edge).toBe('found');
+    expect(isDefaultRefine({ edge: 'soft' })).toBe(false);
     expect(isDefaultRefine({ tolerance: 0.5, grow: 0 })).toBe(true);
     expect(isDefaultRefine({ islands: true })).toBe(false);
   });
@@ -141,5 +148,76 @@ describe('composing a refined subject', () => {
   it('at the defaults draws the model\'s own cut, unchanged', () => {
     const answer = conf([0, 90, 130, 250]);
     expect(Array.from(composeSubject([answer])!.data)).toEqual([0, 0, 255, 255]);
+  });
+});
+
+describe('the edge', () => {
+  // A guide whose subject (bright) is columns 0–19 and ground (dark) 20–39,
+  // and a mask the model drew three pixels too wide (0–22).
+  const W = 40;
+  const H = 16;
+  const guide = { data: new Uint8Array(W * H * 4), width: W, height: H };
+  const mask = { data: new Uint8Array(W * H), width: W, height: H };
+  for (let y = 0; y < H; y += 1) {
+    for (let x = 0; x < W; x += 1) {
+      const i = y * W + x;
+      const v = x < 20 ? 220 : 40;
+      guide.data.set([v, v, v, 255], i * 4);
+      mask.data[i] = x < 23 ? 255 : 0;
+    }
+  }
+  const row = (r: { data: Uint8Array }, y: number) => Array.from(r.data.slice(y * W, y * W + W));
+
+  it('averages a window clipped at the border', () => {
+    const f = Float32Array.from([0, 3, 6, 9]);
+    expect(Array.from(boxMean(f, 4, 1, 1))).toEqual([1.5, 3, 6, 7.5]);
+  });
+
+  it('snaps an edge drawn too wide back onto the picture\'s own', () => {
+    const out = row(snapEdge(mask, guide, 8, 1e-4, 1), 8);
+    expect(out[10]).toBeGreaterThan(240); // well inside: still the subject
+    expect(out[19]).toBe(255); // the last pixel of the bright side
+    // The overshoot onto the ground falls under half at the picture's own
+    // edge and clears within a few pixels, where it was fully in…
+    expect(out[20]).toBeLessThan(128);
+    expect(out[21]).toBeLessThan(90);
+    expect(out[22]).toBeLessThan(50);
+    expect(out[24]).toBeLessThan(10);
+    expect(out[30]).toBe(0); // …and the ground stays clear
+    // As found, those two pixels were fully in.
+    expect(row(mask, 8)[22]).toBe(255);
+  });
+
+  it('snaps alike at half density, the way a big raster runs it', () => {
+    const full = row(snapEdge(mask, guide, 8, 1e-4, 1), 8);
+    const half = row(snapEdge(mask, guide, 8, 1e-4, 2), 8);
+    expect(half[22]).toBeLessThan(50);
+    expect(Math.abs(half[10] - full[10])).toBeLessThan(10);
+  });
+
+  it('refuses a guide of another size, and leaves the edge as found without one', () => {
+    const stale = { data: new Uint8Array(4 * 4), width: 2, height: 2 };
+    expect(row(snapEdge(mask, stale, 4), 8)).toEqual(row(mask, 8));
+    expect(finishEdge(mask, 'snap', null)).toBe(mask);
+    expect(finishEdge(mask, 'found', guide)).toBe(mask);
+  });
+
+  it('feathers a SOFT edge across the cut, and leaves the middle alone', () => {
+    const out = row(softEdge(mask, 2), 8);
+    expect(out[5]).toBe(255);
+    expect(out[35]).toBe(0);
+    expect(out[22]).toBeGreaterThan(0);
+    expect(out[22]).toBeLessThan(255);
+    expect(out[23]).toBeGreaterThan(0);
+  });
+
+  it('is made LAST, after a removal, so the removal\'s edge is refined too', () => {
+    const removed = { data: new Uint8Array(W * H), width: W, height: H };
+    for (let i = 0; i < removed.data.length; i += 1) removed.data[i] = i % W < 5 ? 255 : 0;
+    const out = row(composeSubject([mask], [removed], { edge: 'soft' })!, 8);
+    expect(out[0]).toBe(0);
+    expect(out[5]).toBeGreaterThan(0); // the removal's own edge, feathered
+    expect(out[5]).toBeLessThan(255);
+    expect(out[12]).toBe(255);
   });
 });

@@ -51,7 +51,7 @@ import {
   SHADE_FALLOFFS,
   type ShadeShape,
 } from '../shades/shade-shape';
-import { DEFAULT_TOLERANCE, normaliseRefine, type SubjectRefine } from '../segment/subject-refine';
+import { DEFAULT_TOLERANCE, normaliseRefine, type SubjectEdge, type SubjectRefine } from '../segment/subject-refine';
 
 export type MaskKind = 'linear' | 'radial' | 'luma' | 'colour' | 'brush' | 'subject' | 'shade';
 
@@ -182,12 +182,14 @@ export interface SubjectMask {
   /**
    * How the model's answer is REFINED (2026-10-02, `subject-refine.ts`): the
    * cut on its confidence, whether islands no added point is in are dropped,
-   * and an edge grown or shrunk. Each optional and absent at its default, so
-   * a stored roll draws exactly as before.
+   * an edge grown or shrunk, and the edge drawn soft or snapped to the
+   * picture's own. Each optional and absent at its default, so a stored roll
+   * draws exactly as before.
    */
   tolerance?: number;
   islands?: boolean;
   grow?: number;
+  edge?: Exclude<SubjectEdge, 'found'>;
 }
 
 /**
@@ -344,9 +346,11 @@ export function withSubjectRefine(mask: SubjectMask, patch: SubjectRefine): Subj
   delete out.tolerance;
   delete out.islands;
   delete out.grow;
+  delete out.edge;
   if (next.tolerance !== DEFAULT_TOLERANCE) out.tolerance = next.tolerance;
   if (next.islands) out.islands = true;
   if (next.grow) out.grow = next.grow;
+  if (next.edge !== 'found') out.edge = next.edge;
   return out;
 }
 
@@ -731,6 +735,7 @@ export function normaliseMask(raw: unknown): Mask | null {
       tolerance: typeof src.tolerance === 'number' ? src.tolerance : undefined,
       islands: src.islands === true,
       grow: typeof src.grow === 'number' ? src.grow : undefined,
+      edge: typeof src.edge === 'string' ? (src.edge as SubjectEdge) : undefined,
     });
   }
   if (src.kind === 'shade') {
@@ -782,7 +787,8 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
       samePoints(a.minus ?? [], b.minus ?? []) &&
       ra.tolerance === rb.tolerance &&
       ra.islands === rb.islands &&
-      ra.grow === rb.grow
+      ra.grow === rb.grow &&
+      ra.edge === rb.edge
     );
   }
   if (a.kind === 'colour' && b.kind === 'colour') {

@@ -4,6 +4,7 @@ import {
   composeSubject,
   type ComposeOptions,
   prepareSegmentSource,
+  readGuide,
   segmentPoint,
   segmenterState,
   type SegmentSource,
@@ -12,7 +13,7 @@ import {
 import { isConstrainedDevice } from '../lib/device-class';
 import { subjectLayersToSegment, type AdjustLayer } from './layer';
 import { subjectRefineOf, type SubjectMask } from '../render/mask';
-import { cutConfidence } from '../segment/subject-refine';
+import { cutConfidence, type GuideImage } from '../segment/subject-refine';
 import type { SegmentView } from './segment-view';
 import { knownSubjectPoints, type KnownPoints } from './subject-known';
 
@@ -101,7 +102,16 @@ function composeOptions(mask: SubjectMask): ComposeOptions {
 /** A refine setting as text, for the signature — so a knob re-composes and never re-asks the model. */
 function refineKey(mask: SubjectMask): string {
   const r = subjectRefineOf(mask);
-  return `t${r.tolerance}i${r.islands ? 1 : 0}g${r.grow}`;
+  return `t${r.tolerance}i${r.islands ? 1 : 0}g${r.grow}e${r.edge}`;
+}
+
+// The model's view as pixels, for an edge snapped to the picture's own — one
+// view at a time (~2.8 MB at 1024 px), read once and kept while it is the
+// view, so a knob that re-composes a snapped subject reads nothing again.
+let guideHeld: { key: string; guide: GuideImage | null } | null = null;
+
+function heldGuide(viewKey: string): GuideImage | null | undefined {
+  return guideHeld?.key === viewKey ? guideHeld.guide : undefined;
 }
 
 /** Every tap of a subject, the added ones first — the order they compose in. */
@@ -211,11 +221,15 @@ export function useSubjectMasks({
         if (isNew(want.id, tapKey(pictureKey, want.model, tap))) tapped = { layerId: want.id, raster: hit, tone: tap.tone };
         (tap.tone === 'add' ? plus : minus).push(hit);
       }
+      // A SNAPPED edge needs the view's pixels; until they are read the
+      // layer goes the slow way below, which reads them once.
+      const guide = want.options.edge === 'snap' ? heldGuide(viewKey) : null;
+      if (guide === undefined) complete = false;
       // A point tapped again where one was taken off: its answer is cached,
       // and it blinks all the same — it is still what the tap changed. The
       // blink is the answer CUT, as the subject takes it, not the soft map.
       if (complete && tapped) setFresh({ ...tapped, raster: cutConfidence(tapped.raster, want.options.tolerance) });
-      const composed = complete ? composeSubject(plus, minus, want.options) : null;
+      const composed = complete ? composeSubject(plus, minus, { ...want.options, guide }) : null;
       if (composed) ready.set(want.id, composed);
       else missing.push(want);
     }
@@ -234,9 +248,17 @@ export function useSubjectMasks({
 
     void (async () => {
       const input = await shownNow.ready;
+      if (missing.some((w) => w.options.edge === 'snap') && heldGuide(viewKey) === undefined) {
+        guideHeld = { key: viewKey, guide: readGuide(input.image) };
+      }
+      const guide = heldGuide(viewKey) ?? null;
       for (const want of missing) {
         if (cancelled || runId.current !== run) return;
-        setWorking(want.id);
+        // "Finding it" only where the model is really asked — a snapped edge
+        // waiting on the view's pixels is not a search.
+        if (want.taps.some((tap) => !pointCache.has(`${viewKey}#${pointKey(pictureKey, want.model, tap.point)}`))) {
+          setWorking(want.id);
+        }
         const plus: (BrushRaster | null)[] = [];
         const minus: (BrushRaster | null)[] = [];
         for (const tap of want.taps) {
@@ -254,7 +276,7 @@ export function useSubjectMasks({
           (tap.tone === 'add' ? plus : minus).push(mask);
         }
         if (cancelled || runId.current !== run) return;
-        const composed = composeSubject(plus, minus, want.options);
+        const composed = composeSubject(plus, minus, { ...want.options, guide: want.options.edge === 'snap' ? guide : null });
         if (composed) {
           const raster = composed;
           setRasters((prev) => {

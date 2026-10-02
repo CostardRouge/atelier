@@ -282,7 +282,7 @@ describe('a tap on a subject', () => {
   it('keeps the refine settings through every pin edit — they are the subject\'s', () => {
     const refined = { ...base, minus: [[0.1, 0.1]], tolerance: 0.7, islands: true, grow: -3 } as SubjectMask;
     for (const next of [tapSubject(refined, [0.9, 0.9], 'add'), dropSubjectPin(refined, 1), dropSubjectPin(refined, 0)]) {
-      expect(subjectRefineOf(next)).toEqual({ tolerance: 0.7, islands: true, grow: -3 });
+      expect(subjectRefineOf(next)).toEqual({ tolerance: 0.7, islands: true, grow: -3, edge: 'found' });
     }
     expect('minus' in dropSubjectPin(refined, 1)).toBe(false);
   });
@@ -293,20 +293,25 @@ describe('a subject\'s refine settings', () => {
 
   it('are off the record at their defaults, so a stored roll reads back as written', () => {
     const m = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]] }) as SubjectMask;
-    expect(['tolerance', 'islands', 'grow'].some((k) => k in m)).toBe(false);
-    expect(subjectRefineOf(m)).toEqual({ tolerance: 0.5, islands: false, grow: 0 });
+    expect(['tolerance', 'islands', 'grow', 'edge'].some((k) => k in m)).toBe(false);
+    expect(subjectRefineOf(m)).toEqual({ tolerance: 0.5, islands: false, grow: 0, edge: 'found' });
     // Turned back to its default, a knob leaves nothing behind.
-    const back = withSubjectRefine(withSubjectRefine(base, { tolerance: 0.8, grow: 4 }), { tolerance: 0.5, grow: 0 });
+    const back = withSubjectRefine(withSubjectRefine(base, { tolerance: 0.8, grow: 4, edge: 'snap' }), {
+      tolerance: 0.5,
+      grow: 0,
+      edge: 'found',
+    });
     expect(back).toEqual(base);
   });
 
   it('are read in range, junk dropped', () => {
-    const m = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], tolerance: 2, islands: 'yes', grow: -99.4 }) as SubjectMask;
+    const m = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], tolerance: 2, islands: 'yes', grow: -99.4, edge: 'blur' }) as SubjectMask;
     expect(m.tolerance).toBe(0.95);
     expect('islands' in m).toBe(false);
     expect(m.grow).toBe(-24);
-    const kept = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], tolerance: 0.3, islands: true, grow: 2 }) as SubjectMask;
-    expect(subjectRefineOf(kept)).toEqual({ tolerance: 0.3, islands: true, grow: 2 });
+    expect('edge' in m).toBe(false);
+    const kept = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], tolerance: 0.3, islands: true, grow: 2, edge: 'snap' }) as SubjectMask;
+    expect(subjectRefineOf(kept)).toEqual({ tolerance: 0.3, islands: true, grow: 2, edge: 'snap' });
   });
 
   it('are compared and cloned, a written default equal to none', () => {
@@ -314,8 +319,9 @@ describe('a subject\'s refine settings', () => {
     expect(sameMask(base, { ...base, tolerance: 0.6 })).toBe(false);
     expect(sameMask(base, { ...base, islands: true })).toBe(false);
     expect(sameMask(base, { ...base, grow: 1 })).toBe(false);
-    const held = cloneMask({ ...base, tolerance: 0.7, islands: true, grow: 5 }) as SubjectMask;
-    expect(subjectRefineOf(held)).toEqual({ tolerance: 0.7, islands: true, grow: 5 });
+    expect(sameMask(base, { ...base, edge: 'soft' })).toBe(false);
+    const held = cloneMask({ ...base, tolerance: 0.7, islands: true, grow: 5, edge: 'snap' }) as SubjectMask;
+    expect(subjectRefineOf(held)).toEqual({ tolerance: 0.7, islands: true, grow: 5, edge: 'snap' });
   });
 });
 

@@ -34,10 +34,12 @@ import type { BrushRaster } from '../render/brush-raster';
 import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
 import {
   cutConfidence,
+  finishEdge,
   growPixels,
   growShrink,
   keepTouching,
   normaliseRefine,
+  type GuideImage,
   type SubjectRefine,
 } from './subject-refine';
 
@@ -302,6 +304,8 @@ export function subtractMasks(a: BrushRaster | null, b: BrushRaster | null): Bru
 export interface ComposeOptions extends SubjectRefine {
   /** The ADDED points, for "Only what touches my + points". */
   seeds?: readonly SubjectPoint[];
+  /** The model's view as pixels, for an edge snapped to the picture's own (`readGuide`). */
+  guide?: GuideImage | null;
 }
 
 /**
@@ -311,8 +315,10 @@ export interface ComposeOptions extends SubjectRefine {
  * 1. the added points' confidence, united, CUT at the tolerance;
  * 2. only the regions an added point lands in, when asked;
  * 3. grown or shrunk;
- * 4. less what the removed points found, cut at the same tolerance — last, so
- *    growing never creeps back into a part the author took out.
+ * 4. less what the removed points found, cut at the same tolerance, so
+ *    growing never creeps back into a part the author took out;
+ * 5. the edge — as found, soft, or snapped to the picture's own edges, last
+ *    so a removal's edge is refined like the rest.
  *
  * The model only ever answers "this object"; removing is arithmetic on its
  * answers. With nothing added there is nothing to take from, so the answer is
@@ -333,7 +339,32 @@ export function composeSubject(
   if (refine.grow) plus = growShrink(plus, growPixels(refine.grow, plus));
   let minus: BrushRaster | null = null;
   for (const r of removed) minus = unionMasks(minus, r);
-  return minus ? subtractMasks(plus, cutConfidence(minus, refine.tolerance)) : plus;
+  const less = minus ? subtractMasks(plus, cutConfidence(minus, refine.tolerance)) : plus;
+  return less ? finishEdge(less, refine.edge, options.guide) : null;
+}
+
+/**
+ * The pixels of what the model was shown, read once — the guide an edge is
+ * snapped to. Null where the image cannot be read (no 2D context, a frame of
+ * no size), and the edge is then left as found.
+ */
+export function readGuide(image: TexImageSource): GuideImage | null {
+  if (typeof ImageData !== 'undefined' && image instanceof ImageData) return image;
+  const { width, height } = image as { width?: unknown; height?: unknown };
+  if (typeof width !== 'number' || typeof height !== 'number' || !width || !height) return null;
+  try {
+    const canvas =
+      typeof OffscreenCanvas !== 'undefined' ? new OffscreenCanvas(width, height) : Object.assign(document.createElement('canvas'), { width, height });
+    const g = canvas.getContext('2d', { willReadFrequently: true }) as
+      | CanvasRenderingContext2D
+      | OffscreenCanvasRenderingContext2D
+      | null;
+    if (!g) return null;
+    g.drawImage(image as CanvasImageSource, 0, 0, width, height);
+    return g.getImageData(0, 0, width, height);
+  } catch {
+    return null;
+  }
 }
 
 /**
@@ -364,7 +395,9 @@ export async function segmentSubject(
     for (const point of points) added.push(await segmentPoint(shown.image, point));
     const removed: (BrushRaster | null)[] = [];
     for (const point of minus) removed.push(await segmentPoint(shown.image, point));
-    return composeSubject(added, removed, { ...refine, seeds: points });
+    // The picture's own pixels, only when an edge is snapped to them.
+    const guide = normaliseRefine(refine).edge === 'snap' ? readGuide(shown.image) : null;
+    return composeSubject(added, removed, { ...refine, seeds: points, guide });
   } finally {
     shown.release();
   }

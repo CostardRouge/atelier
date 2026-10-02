@@ -50,6 +50,7 @@ import {
   GROW_LIMIT,
   TOLERANCE_MAX,
   TOLERANCE_MIN,
+  type SubjectEdge,
 } from '../../shared/segment/subject-refine';
 
 const KIND_OPTIONS: readonly { id: string; label: string }[] = [
@@ -82,7 +83,13 @@ const SUBJECT_HINT =
   'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. When it takes in too much — the bench the person leans on, a second person far away — switch to Remove (or hold ⌥ for one tap) and tap the part you do not want: the model finds that object too, and it is taken out of the subject. Tapping a point you already placed takes it off. “Background” is this mask inverted — the checkbox below.';
 
 const REFINE_HINT =
-  'The model answers a tap with how SURE it is, pixel by pixel; these three work on that answer, never on the points. Tolerance moves the cut: higher takes in what it was less sure of — an edge, a neighbour it half-joined — lower keeps only the core; 50 % is the model’s own answer. Only what touches my + points drops every region no added point lands in — the second person a tap on the first also found. Grow / Shrink moves the edge, in pixels of the 1024 px picture the model is shown. A removed region is cut at the same Tolerance and taken out last, so growing never creeps back into it.';
+  'The model answers a tap with how SURE it is, pixel by pixel; these three work on that answer, never on the points. Tolerance moves the cut: higher takes in what it was less sure of — an edge, a neighbour it half-joined — lower keeps only the core; 50 % is the model’s own answer. Only what touches my + points drops every region no added point lands in — the second person a tap on the first also found. Grow / Shrink moves the edge, in pixels of the 1024 px picture the model is shown. A removed region is cut at the same Tolerance and taken out after, so growing never creeps back into it. Edge is made last: As found is the cut as it is, Soft feathers it, and Snap pulls an edge the model drew roughly onto the picture’s own, within a few pixels — a guided filter over what the model was shown. It refines an edge; it cannot bring back a part the model left out (tap that part, or paint it).';
+
+const EDGE_OPTIONS: readonly { id: SubjectEdge; label: string }[] = [
+  { id: 'found', label: 'As found' },
+  { id: 'soft', label: 'Soft' },
+  { id: 'snap', label: 'Snap to edges' },
+];
 
 const SUBJECT_TONES: readonly { id: 'add' | 'remove'; label: string }[] = [
   { id: 'add', label: '+ Add' },
@@ -801,6 +808,16 @@ function SubjectRefineControls({ mask, setMask }: { mask: SubjectMask; setMask: 
         printed={`${refine.grow > 0 ? '+' : ''}${refine.grow} px`}
         onChange={(v) => setMask(withSubjectRefine(mask, { grow: v }))}
       />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-ink">Edge</span>
+        <Segmented
+          size="sm"
+          label="Edge"
+          value={refine.edge}
+          onChange={(v) => setMask(withSubjectRefine(mask, { edge: v }))}
+          options={EDGE_OPTIONS}
+        />
+      </div>
       <label className="flex items-center gap-1.5 font-mono text-3xs text-faint">
         <input
           type="checkbox"
