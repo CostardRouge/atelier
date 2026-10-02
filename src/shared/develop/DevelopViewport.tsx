@@ -420,9 +420,12 @@ export default function DevelopViewport({
       {/* The passive surface: a hairline along the bottom for whatever is
           happening to THIS picture — the words and the Cancel are the pill's. */}
       {scope && <TaskEdge scope={scope} className="z-10" />}
+      {/* Under the corner pills' row, never on it: "before · after" grows
+          with the wipe and the crop verb comes with a zoom, and on a phone
+          either one reached the chip. */}
       {offer && source && (
         <div
-          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-[calc(100%-1.25rem)] inline-flex items-center gap-0.5 pl-1 rounded-full border border-line-strong bg-surface/92 shadow-paper"
+          className="absolute top-9 left-1/2 -translate-x-1/2 z-10 max-w-[calc(100%-1.25rem)] inline-flex items-center gap-0.5 pl-1 rounded-full border border-line-strong bg-surface/92 shadow-paper"
           onPointerDown={(e) => e.stopPropagation()}
           role="status"
         >

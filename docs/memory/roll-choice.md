@@ -46,6 +46,11 @@ Rules a later change must keep:
   no gain left at gain 1.
 - **A failed fetch or a cancelled decode lets go of the roll's file for that
   VISIT** (`rollOff`), never writes the picture.
+- **The offer chip sits UNDER the stage's corner-pill row** (`top-9`, 2026-10-02):
+  on `top-2` it shared the row with `before · after`, which widens with the
+  wipe, and with the crop verb a zoom brings — on a 390 px phone they met.
+  Measured headless; the loupe's status pill (under the crop verb, zoomed
+  past 1:1) was not.
 - **Where it lives on screen**: the foot of the name menu (*The whole roll
   opens on*), the line after a pick (*Use Camera render for the whole roll*,
   dismissed by ✕, never a mode), New roll's *Pictures open on*. Put in the
