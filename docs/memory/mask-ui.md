@@ -57,3 +57,29 @@ and a layer's NAME (`AdjustLayer.name`) existed with no way to set it.
 Driven headless: four kinds, the thumbnails' ink measured per row, +1 EV
 showing as a chip, the bar writing 0.4, a rename, a duplicate, Change type,
 a drag to the top and ⌥↓, the roll read back after its debounced save.
+
+## Mask · where | Adjust · what, and the recipe (2026-10-02)
+
+**Decision**: the open layer is a HEAD (its name, edited where it is read,
+beside the chip of its kind) over a switch, *Mask · where* | *Adjust · what*
+(`LayerDetail.tsx`); the mask half opens on the RECIPE — the layer's own term,
+then each part as an operator and a term, each tile its own small map
+(`maskCoverage`, before its invert, which the label's red "not" says) — and
+the old components list, the per-part op switch and the Combine block are
+gone. **Why**: the layer's sliders began 857 px down a Subject's panel
+(measured in the brief), under every mask control; Combine was a footer where
+it is the structure of the mask. **How to apply**:
+- A click on a term OPENS it (its controls below, what Pick / Paint act on);
+  a click on an operator CYCLES it + → − → ∩; the recipe's `+` opens the
+  palette in `part` mode; an open part carries its own kind chip
+  (`part-type`) and *Remove this term*. The own kind's chip lives in the head.
+- Switching to Adjust turns Pick / Paint OFF — that half has nothing to point
+  at; a new layer and a changed kind open on Mask (`changeLayerKind`, one
+  function for the row's ⋯ and the head's chip). The tab is kept across
+  layers, like any tab.
+- The term maps are computed only for the OPEN layer, in the same debounced
+  pass as the rows (`useLayerThumbs(…, openId)`).
+Driven headless: the head's placeholder is the kind, Adjust hides the mask
+controls and drops Pick, `Subject − Radial` combined from the `+`, the
+operator cycled to ∩, the term maps inked, a rename in the head reaching the
+row, *Remove this term*, the roll read back.

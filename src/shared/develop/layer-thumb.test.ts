@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { createLayer, type AdjustLayer } from './layer';
-import { layerCoverage, readsPixels, thumbSize } from './layer-thumb';
+import { layerCoverage, maskCoverage, readsPixels, thumbSize } from './layer-thumb';
 import { defaultMask, type LinearMask, type LumaMask } from '../render/mask';
 
 const W = 8;
@@ -76,6 +76,15 @@ describe('a layer\'s thumbnail', () => {
     expect(at(map, 1, 4)).toBe(255);
     expect(at(map, 6, 4)).toBe(0);
     expect(Math.max(...layerCoverage(layer, input))).toBe(0);
+  });
+
+  it('draws ONE term on its own, before its invert and before it combines', () => {
+    const layer: AdjustLayer = { ...topHalf(), invert: true };
+    const own = maskCoverage(layer.mask, layer.id, input);
+    expect(at(own, 4, 1)).toBe(255); // the term as drawn, not turned
+    expect(at(own, 4, 6)).toBe(0);
+    // No mask is the whole picture.
+    expect(Math.min(...maskCoverage(null, 'x', input))).toBe(255);
   });
 
   it('is sized to the frame', () => {

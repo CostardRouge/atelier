@@ -179,6 +179,8 @@ import type { RepairRing, RingGesture, RingPart, SpotRing } from '../../shared/d
 import LayersPanel from './LayersPanel';
 import { takesPointer } from './kind-palette';
 import { useLayerThumbs } from './use-layer-thumbs';
+import LayerDetail, { type LayerTab } from './LayerDetail';
+import type { PaletteKind } from './kind-palette';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import { borderLayout, type RollBorder } from '../../shared/develop/border-layout';
@@ -536,6 +538,17 @@ export default function PictureWorkbench({
   const [selectedPart, setSelectedPart] = useState<number | null>(null);
   useEffect(() => setSelectedPart(null), [selectedLayerId]);
   const partIndex = selectedPart !== null && selectedLayer?.parts?.[selectedPart] ? selectedPart : null;
+  // Which half of the open layer is shown — WHERE it applies or WHAT it
+  // changes (`LayerDetail.tsx`) —, kept across layers like any tab.
+  const [layerTab, setLayerTab] = useState<LayerTab>('mask');
+  /** A layer's kind changed — from its row's ⋯ or its head's chip: the shape starts fresh, a pointer kind turns the pointer on. */
+  const changeLayerKind = (id: string, kind: PaletteKind) => {
+    setLayersDraft((list) => patchLayer(list, id, { mask: kind === 'whole' ? null : defaultMask(kind) }));
+    setSelectedLayerId(id);
+    setSelectedPart(null);
+    setLayerTab('mask');
+    setPainting(takesPointer(kind));
+  };
   const activeMask = selectedLayer ? componentMask(selectedLayer, partIndex) : null;
   const paintKind = painting ? activeMask?.kind : undefined;
   // A shade takes the pointer only while it has a centre to place — a band or
@@ -1156,7 +1169,7 @@ export default function PictureWorkbench({
   const { rasters: resolvedSubjects, fresh: freshSubject } = subject;
   useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);
   // The list's thumbnails of each layer's REAL mask, a moment after the stack moves.
-  const layerThumbs = useLayerThumbs(layersDraft, picture, resolvedSubjects);
+  const layerThumbs = useLayerThumbs(layersDraft, picture, resolvedSubjects, selectedLayerId);
   // The region a tap just changed BLINKS twice (on, off, on, off, 90 ms
   // each), like a macOS menu item, then leaves the stage to the chosen view.
   // Only what the tap changed, never the whole subject — added in the accent,
@@ -2308,7 +2321,7 @@ export default function PictureWorkbench({
               <LayersPanel
                 layers={layersDraft}
                 selectedId={selectedLayerId}
-                thumbs={layerThumbs}
+                thumbs={layerThumbs.rows}
                 showMask={showMask}
                 maskView={maskView}
                 onMaskView={setMaskView}
@@ -2318,6 +2331,8 @@ export default function PictureWorkbench({
                   const made = createLayer(kind);
                   setLayersDraft((list) => addLayer(list, made));
                   setSelectedLayerId(made.id);
+                  // A new layer is made WHERE first: its mask is what it lacks.
+                  setLayerTab('mask');
                   // A fresh subject's only use is to be tapped, a painted
                   // mask's to be painted: Pick / Paint comes on with it rather
                   // than being one more thing to find.
@@ -2334,74 +2349,83 @@ export default function PictureWorkbench({
                   setLayersDraft((list) => duplicateLayer(list, id, copy));
                   setSelectedLayerId(copy);
                 }}
-                onKind={(id, kind) => {
-                  // The same rule as the mask's own chip: the new shape starts
-                  // fresh, and a kind made with the pointer turns it on.
-                  setLayersDraft((list) => patchLayer(list, id, { mask: kind === 'whole' ? null : defaultMask(kind) }));
-                  setSelectedLayerId(id);
-                  setSelectedPart(null);
-                  setPainting(takesPointer(kind));
-                }}
+                onKind={changeLayerKind}
                 onPatch={(id, patch) => setLayersDraft((list) => patchLayer(list, id, patch))}
                 onShowMask={setShowMask}
               />
               {selectedLayer && (
-                <>
-                  <MaskPanel
-                    layer={selectedLayer}
-                    layers={layersDraft}
-                    part={partIndex}
-                    onPart={setSelectedPart}
-                    onPatch={(patch) =>
-                      setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
-                    }
-                    brush={brush}
-                    onBrush={onBrush}
-                    painting={painting}
-                    onPainting={setPainting}
-                    subjectTone={tapTone}
-                    onSubjectTone={(tone) => {
-                      setSubjectTone(tone);
-                      // Choosing what a tap does is choosing to tap.
-                      if (!painting) setPainting(true);
-                    }}
-                    subject={
-                      partIndex === null && selectedLayer.mask?.kind === 'subject'
-                        ? {
-                            working: subject.working === selectedLayer.id,
-                            state: subject.state,
-                            resolved: subjectRasters.has(selectedLayer.id),
-                          }
-                        : null
-                    }
-                  />
-                  {/* The SAME sliders the global develop uses, because a
-                      layer's adjustment IS a DevelopSettings — one maths, one
-                      panel, and a local exposure behaves like a global one. */}
-                  <DevelopSliders
-                    foldPrefix="layer."
-                    value={selectedLayer.develop}
-                    onChange={(key, v) =>
-                      setLayersDraft((list) =>
-                        patchLayer(list, selectedLayer.id, {
-                          develop: { ...selectedLayer.develop, [key]: v },
-                        }),
-                      )
-                    }
-                  />
-                  <DevelopCurve
-                    foldPrefix="layer."
-                    value={selectedLayer.develop.curves}
-                    histogram={picture.histogram}
-                    onChange={(curves) =>
-                      setLayersDraft((list) =>
-                        patchLayer(list, selectedLayer.id, {
-                          develop: { ...selectedLayer.develop, curves },
-                        }),
-                      )
-                    }
-                  />
-                </>
+                <LayerDetail
+                  layer={selectedLayer}
+                  tab={layerTab}
+                  onTab={(next) => {
+                    setLayerTab(next);
+                    // The Adjust half has nothing to pick or paint.
+                    if (next === 'adjust') setPainting(false);
+                  }}
+                  onRename={(name) => setLayersDraft((list) => patchLayer(list, selectedLayer.id, { name }))}
+                  onKind={(kind) => changeLayerKind(selectedLayer.id, kind)}
+                >
+                  {layerTab === 'mask' ? (
+                    <MaskPanel
+                      layer={selectedLayer}
+                      layers={layersDraft}
+                      part={partIndex}
+                      onPart={setSelectedPart}
+                      onPatch={(patch) =>
+                        setLayersDraft((list) => patchLayer(list, selectedLayer.id, patch))
+                      }
+                      brush={brush}
+                      onBrush={onBrush}
+                      painting={painting}
+                      onPainting={setPainting}
+                      subjectTone={tapTone}
+                      onSubjectTone={(tone) => {
+                        setSubjectTone(tone);
+                        // Choosing what a tap does is choosing to tap.
+                        if (!painting) setPainting(true);
+                      }}
+                      terms={layerThumbs.terms}
+                      subject={
+                        partIndex === null && selectedLayer.mask?.kind === 'subject'
+                          ? {
+                              working: subject.working === selectedLayer.id,
+                              state: subject.state,
+                              resolved: subjectRasters.has(selectedLayer.id),
+                            }
+                          : null
+                      }
+                    />
+                  ) : (
+                    <>
+                      {/* The SAME sliders the global develop uses, because a
+                          layer's adjustment IS a DevelopSettings — one maths, one
+                          panel, and a local exposure behaves like a global one. */}
+                      <DevelopSliders
+                        foldPrefix="layer."
+                        value={selectedLayer.develop}
+                        onChange={(key, v) =>
+                          setLayersDraft((list) =>
+                            patchLayer(list, selectedLayer.id, {
+                              develop: { ...selectedLayer.develop, [key]: v },
+                            }),
+                          )
+                        }
+                      />
+                      <DevelopCurve
+                        foldPrefix="layer."
+                        value={selectedLayer.develop.curves}
+                        histogram={picture.histogram}
+                        onChange={(curves) =>
+                          setLayersDraft((list) =>
+                            patchLayer(list, selectedLayer.id, {
+                              develop: { ...selectedLayer.develop, curves },
+                            }),
+                          )
+                        }
+                      />
+                    </>
+                  )}
+                </LayerDetail>
               )}
             </>
           ) : tab === 'crop' ? (

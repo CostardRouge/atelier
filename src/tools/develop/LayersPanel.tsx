@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
+import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
@@ -11,6 +11,7 @@ import { MAX_LAYERS, type AdjustLayer } from '../../shared/develop/layer';
 import type { MaskKind } from '../../shared/render/mask';
 import KindPalette from './KindPalette';
 import { kindLabel, type PaletteKind } from './kind-palette';
+import MaskThumb from './MaskThumb';
 import type { LayerThumb } from './use-layer-thumbs';
 
 const HINT =
@@ -261,7 +262,10 @@ export default function LayersPanel({
                 >
                   {layer.enabled ? Icons.eye : Icons.eyeOff}
                 </IconButton>
-                <MaskThumb thumb={thumbs.get(layer.id)} dim={!layer.enabled} />
+                <MaskThumb
+                  thumb={thumbs.get(layer.id)}
+                  className={`row-span-2 h-[43px] w-16 rounded-[6px] ${layer.enabled ? '' : 'opacity-45'}`}
+                />
                 <div className={`flex min-w-0 items-baseline gap-1.5 ${layer.enabled ? '' : 'opacity-45'}`}>
                   {renaming === layer.id ? (
                     <RenameField
@@ -358,39 +362,6 @@ export default function LayersPanel({
         </div>
       )}
     </div>
-  );
-}
-
-/**
- * A layer's mask, drawn as ink on the row's paper — the coverage as the ink's
- * alpha, so the thumbnail follows the theme. Empty until the first map is
- * made (`use-layer-thumbs.ts`, a moment after the stack changes).
- */
-function MaskThumb({ thumb, dim }: { thumb: LayerThumb | undefined; dim: boolean }) {
-  const ref = useRef<HTMLCanvasElement>(null);
-  useEffect(() => {
-    const canvas = ref.current;
-    if (!canvas || !thumb) return;
-    const ctx = canvas.getContext('2d');
-    if (!ctx) return;
-    const ink = getComputedStyle(canvas).color.match(/\d+(\.\d+)?/g)?.map(Number) ?? [27, 24, 19];
-    const image = ctx.createImageData(thumb.width, thumb.height);
-    for (let i = 0; i < thumb.data.length; i += 1) {
-      image.data[i * 4] = ink[0];
-      image.data[i * 4 + 1] = ink[1];
-      image.data[i * 4 + 2] = ink[2];
-      image.data[i * 4 + 3] = thumb.data[i];
-    }
-    ctx.putImageData(image, 0, 0);
-  }, [thumb]);
-  return (
-    <canvas
-      ref={ref}
-      width={thumb?.width ?? 64}
-      height={thumb?.height ?? 43}
-      aria-hidden="true"
-      className={`row-span-2 h-[43px] w-16 rounded-[6px] border border-line bg-paper-2 object-contain text-ink ${dim ? 'opacity-45' : ''}`}
-    />
   );
 }
 

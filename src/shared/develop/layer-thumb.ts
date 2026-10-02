@@ -104,6 +104,34 @@ export function layerCoverage(layer: AdjustLayer, input: LayerThumbInput): Uint8
   return out;
 }
 
+/**
+ * ONE term of a layer's mask on its own — its own mask or a part, as drawn,
+ * before its invert and before it combines — for the recipe's tiles, whose
+ * label says "not" where the term is turned. 0..255, row by row.
+ */
+export function maskCoverage(mask: Mask | null, layerId: string, input: LayerThumbInput): Uint8Array {
+  const { width: w, height: h, pixels } = input;
+  const at = evaluator(mask, layerId, input);
+  const out = new Uint8Array(w * h);
+  for (let y = 0; y < h; y += 1) {
+    const v = (y + 0.5) / h;
+    for (let x = 0; x < w; x += 1) {
+      const u = (x + 0.5) / w;
+      let luma = 0;
+      let rgb: [number, number, number] | undefined;
+      if (pixels) {
+        const px = Math.min(pixels.width - 1, Math.floor(u * pixels.width));
+        const py = Math.min(pixels.height - 1, Math.floor(v * pixels.height));
+        const i = (py * pixels.width + px) * 4;
+        rgb = [pixels.data[i] / 255, pixels.data[i + 1] / 255, pixels.data[i + 2] / 255];
+        luma = lumaOf(rgb[0], rgb[1], rgb[2]);
+      }
+      out[y * w + x] = Math.round(Math.min(1, Math.max(0, at(u, v, luma, rgb))) * 255);
+    }
+  }
+  return out;
+}
+
 /** The map's size for a frame: `longEdge` on its long side, the other in proportion. */
 export function thumbSize(aspectRatio: number, longEdge: number): { width: number; height: number } {
   const ar = Number.isFinite(aspectRatio) && aspectRatio > 0 ? aspectRatio : 1;
