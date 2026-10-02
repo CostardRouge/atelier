@@ -58,6 +58,17 @@ export const Icons = {
     </>,
   ),
   /** The dotted wait — an export in flight, a fetch not yet answered. */
+  /** A handle that drags: two columns of three dots. */
+  grip: icon(
+    <>
+      {[6, 12, 18].map((y) => (
+        <g key={y}>
+          <circle cx="9" cy={y} r="1.4" fill="currentColor" stroke="none" />
+          <circle cx="15" cy={y} r="1.4" fill="currentColor" stroke="none" />
+        </g>
+      ))}
+    </>,
+  ),
   ellipsis: icon(
     <>
       <circle cx="6" cy="12" r="1.2" fill="currentColor" stroke="none" />

@@ -15,6 +15,8 @@ import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import BorderSection, { type BorderApplyVerb } from './BorderSection';
 import type { CropZoneApi } from './use-crop-zone';
 import type { SubjectCropVerb } from './use-subject-crop';
+import type { CropSwitches } from './use-crop-switches';
+import AutoSwitch from '../../shared/develop/AutoSwitch';
 
 /** A batch verb of the Crop tab: handed this picture's crop on its click. */
 export interface CropApplyVerb {
@@ -52,6 +54,7 @@ export default function CropPanel({
   borderVerbs = [],
   clip = false,
   subjectCrop,
+  switches,
   onTold,
 }: {
   picture: DevelopPicture;
@@ -66,6 +69,8 @@ export default function CropPanel({
   clip?: boolean;
   /** Crop to the subject (`use-subject-crop.ts`); omitted, the row is not drawn. */
   subjectCrop?: SubjectCropVerb;
+  /** Auto level and Crop to subject as switches (`use-crop-switches.ts`); omitted, they only apply. */
+  switches?: CropSwitches;
   onTold?: (message: string) => void;
 }) {
   const { framing, zone } = crop;
@@ -79,9 +84,15 @@ export default function CropPanel({
       return;
     }
     const tilt = measureTilt(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
-    if (tilt && tilt.tilt !== 0) crop.straighten(levelFine(tilt, framing.flipX, framing.flipY));
+    const write = () => {
+      if (tilt && tilt.tilt !== 0) crop.straighten(levelFine(tilt, framing.flipX, framing.flipY));
+    };
+    if (switches) switches.record('level', write);
+    else write();
     onTold?.(`auto level · ${describeTilt(tilt)}`);
   };
+  const levelState = switches?.state('level') ?? 'off';
+  const subjectState = switches?.state('subject') ?? 'off';
   return (
     <>
       <DevelopFold
@@ -175,14 +186,17 @@ export default function CropPanel({
           >
             {crop.levelling ? 'Draw the line…' : 'Level'}
           </Button>
-          <Button
-            size="sm"
-            onClick={autoLevel}
-            disabled={!picture.source}
-            title="Find the horizon, or an upright, by itself — the strongest line near level — and straighten on it"
+          <AutoSwitch
+            shape="control"
+            state={levelState}
+            onClick={() => {
+              if (!switches?.turnOff('level')) autoLevel();
+            }}
+            disabled={!picture.source && levelState === 'off'}
+            hint="Find the horizon, or an upright, by itself — the strongest line near level — and straighten on it"
           >
             Auto
-          </Button>
+          </AutoSwitch>
           {splitRotation(framing.rotation).fine !== 0 && (
             <Button size="sm" variant="ghost" onClick={() => crop.straighten(0)}>
               Straight
@@ -198,18 +212,21 @@ export default function CropPanel({
                 : 'No subject picked: the model is asked what sits at the centre. Pick one on the Layers tab for another.'
             }
           >
-            <Button
-              size="sm"
-              onClick={subjectCrop.run}
-              disabled={!picture.source || subjectCrop.busy}
-              title={
+            <AutoSwitch
+              shape="control"
+              state={subjectCrop.busy ? 'off' : subjectState}
+              onClick={() => {
+                if (!switches?.turnOff('subject')) subjectCrop.run();
+              }}
+              disabled={(!picture.source && subjectState === 'off') || subjectCrop.busy}
+              hint={
                 subjectCrop.named
                   ? 'Crop around what your Subject layers point at, in the format chosen above'
                   : 'Crop around what the model finds at the centre of the picture, in the format chosen above'
               }
             >
               {subjectCrop.busy ? 'Finding…' : 'Crop to subject'}
-            </Button>
+            </AutoSwitch>
             <span className="font-mono text-3xs text-faint leading-relaxed">
               {subjectCrop.named ? 'from your Subject layers' : 'from the centre'}
             </span>

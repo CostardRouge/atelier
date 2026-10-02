@@ -307,6 +307,43 @@ export function moveLayer(
   return list;
 }
 
+/**
+ * The layer moved to `index` of the stack (bottom to top) — what a drag in
+ * the list lands on. An index past either end holds at that end.
+ */
+export function moveLayerTo(
+  layers: readonly AdjustLayer[] | null | undefined,
+  id: string,
+  index: number,
+): AdjustLayer[] {
+  const list = [...(layers ?? [])];
+  const from = list.findIndex((l) => l.id === id);
+  if (from < 0) return list;
+  const [moved] = list.splice(from, 1);
+  list.splice(Math.max(0, Math.min(list.length, Math.trunc(index))), 0, moved);
+  return list;
+}
+
+/**
+ * A copy of the layer, placed just ABOVE it, under a fresh id and named
+ * `<name> copy` — every field cloned, so the two never share a stroke or a
+ * curve. Refused at `MAX_LAYERS`. A layer that took the original subject out
+ * still takes out the original.
+ */
+export function duplicateLayer(
+  layers: readonly AdjustLayer[] | null | undefined,
+  id: string,
+  copyId: string = newLayerId(),
+): AdjustLayer[] {
+  const list = [...(layers ?? [])];
+  const at = list.findIndex((l) => l.id === id);
+  if (at < 0 || list.length >= MAX_LAYERS) return list;
+  const original = list[at];
+  const copy: AdjustLayer = { ...cloneLayer(original), id: copyId, name: `${layerLabel(original, list)} copy` };
+  list.splice(at + 1, 0, copy);
+  return list;
+}
+
 /** One layer's own fields changed; its id never moves. */
 export function patchLayer(
   layers: readonly AdjustLayer[] | null | undefined,

@@ -17,12 +17,24 @@ import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
 import { useLutFavourites } from './use-lut-favourites';
 import { useLutPacks } from './use-lut-packs';
+import { deviceClass } from '../lib/device-class';
+import { autoBandsMean, type BandPreference } from '../render/band-policy';
+import { useBandPreference } from '../render/use-band-preference';
 
 import Button from '../ui/Button';
 import IconButton from '../ui/IconButton';
 import Segmented from '../ui/Segmented';
 import { FieldRow, NativeSelect, RangeField, SelectField, ToggleField } from '../ui/Inspector';
 import { Icons } from '../ui/icons';
+
+/** What each choice does to a picture past 12 megapixels, behind the row's dot. */
+const BAND_HINTS: Record<BandPreference, string> = {
+  auto: 'In bands on a phone, whole on a computer — the loupe and a full-size export alike. Auto says which this one is.',
+  whole:
+    'The whole picture on the graphics card at once: two float copies of it, three quarters of a gigabyte at 48 megapixels — what a computer has.',
+  bands:
+    'A slice of the picture on the graphics card at a time, the memory a phone has. If the loupe or an export comes out striped here, choose Whole.',
+};
 
 interface GradePanelProps {
   stack: LutStack;
@@ -64,6 +76,7 @@ export default function GradePanel({
   const favourites = useLutFavourites();
   const [pick, setPick] = useState('');
   const [gallery, setGallery] = useState(false);
+  const bands = useBandPreference();
 
   // The starred looks, named — read from the gallery's own node list so a
   // favourite is spelled here exactly as it is there, whatever family it came
@@ -344,6 +357,27 @@ export default function GradePanel({
           options={[
             { id: 'tetrahedral', label: 'Tetrahedral' },
             { id: 'trilinear', label: 'Trilinear' },
+          ]}
+          className="flex-1 min-w-0"
+        />
+      </FieldRow>
+
+      {/* The second render preference, the same row as the first: whether a
+          picture past 12 megapixels — the loupe, a full-size export — is drawn
+          whole or a slice at a time (`render/band-policy.ts`). A phone needs
+          the slice; a computer does not, and the maintainer's Mac drew the
+          slices striped, so this is the switch that stops them per browser. */}
+      <FieldRow label="Big pictures" hint={BAND_HINTS[bands.preference]}>
+        <Segmented
+          fill
+          size="sm"
+          label="Big pictures"
+          value={bands.preference}
+          onChange={(mode) => bands.setPreference(mode)}
+          options={[
+            { id: 'auto', label: `Auto · ${autoBandsMean(deviceClass()) === 'bands' ? 'bands' : 'whole'}` },
+            { id: 'whole', label: 'Whole' },
+            { id: 'bands', label: 'In bands' },
           ]}
           className="flex-1 min-w-0"
         />

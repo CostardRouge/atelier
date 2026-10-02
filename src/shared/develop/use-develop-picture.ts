@@ -32,7 +32,7 @@ import {
   type PictureGeometry,
 } from '../render/picture-geometry';
 import { cloneLayer, cloneLayers, drawingLayers, sameLayer, sameLayers, type AdjustLayer } from './layer';
-import { exceptRaster, makeLayerPassCache, type LayerPassCache, type MaskOverlayStyle } from './layer-render';
+import { exceptRaster, makeLayerPassCache, type LayerPassCache, type MaskFlash, type MaskOverlayStyle } from './layer-render';
 import type { BrushRaster } from '../render/brush-raster';
 import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
@@ -48,6 +48,8 @@ import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
+import type { BandPreference } from '../render/band-policy';
+import { useBandPreference } from '../render/use-band-preference';
 import { clipPass } from '../render/clip-pass';
 import { makePostVignettePass } from '../render/post-vignette-pass';
 import type { FrameAffine, PostCropVignette } from '../render/post-vignette';
@@ -94,8 +96,8 @@ interface GraderRecord {
   geometry: PictureGeometry;
   layers: AdjustLayer[];
   overlay: MaskOverlay | null;
-  /** The blink's raster, by identity — one per answered tap. */
-  flash: BrushRaster | null;
+  /** The blink, by identity — one per answered tap. */
+  flash: MaskFlash | null;
   /** The clipping view is painted over the picture. */
   clip: boolean;
   /** The sharpen's Masking weight is painted instead of the picture. */
@@ -172,7 +174,7 @@ function graderFrom(
   /** The camera's own shading grid, read from the file and never edited. */
   gain: GainField | null = null,
   /** One point's region, blinking after the model answered a tap. */
-  flash: BrushRaster | null = null,
+  flash: MaskFlash | null = null,
   /**
    * Paint what is clipped (`clip-pass.ts`) — a way of LOOKING, so only the
    * stage and the loupe ever ask; everything that measures or leaves passes
@@ -440,6 +442,13 @@ export interface DevelopPicture {
    */
   sampleColour: (point: readonly [number, number], layerId: string) => [number, number, number] | null;
   /**
+   * The picture as the layer `layerId` sees it — under it, before anything
+   * above —, drawn within `longEdge`: what a brightness or a colour mask is
+   * measured on, for the list's thumbnail of that mask (`layer-thumb.ts`).
+   * Null off a picture.
+   */
+  layerInput: (layerId: string, longEdge: number) => ImageData | null;
+  /**
    * The picture the subject model is shown: the source bent by the lens, the
    * keystone and the camera's warp, small, SETTLED a moment after the last
    * geometry change so a slider drag does not ask the model per step. The
@@ -693,7 +702,7 @@ export function useDevelopPicture({
    * the model answers a tap. A way of LOOKING like the overlay: never
    * delivered, never measured.
    */
-  flashMask?: BrushRaster | null;
+  flashMask?: MaskFlash | null;
   /**
    * Alpha maps for the SUBJECT layers, resolved by the model — the one mask
    * kind the renderer cannot compute for itself (`use-subject-masks.ts`).
@@ -712,7 +721,11 @@ export function useDevelopPicture({
    * and says when the stroke starts and ends.
    */
   paint?: {
-    onStart: (point: [number, number]) => void;
+    /**
+     * `alt`: the modifier held at the press — what flips a subject tap from
+     * adding to taking away, read off the very event so no key state can lag.
+     */
+    onStart: (point: [number, number], mods?: { alt: boolean }) => void;
     onMove: (point: [number, number]) => void;
     onEnd: () => void;
     /**
@@ -969,7 +982,7 @@ export function useDevelopPicture({
       patches: readonly Patch[] | null,
       texture: FilmTexture | null,
       gain: GainField | null,
-      flash: BrushRaster | null = null,
+      flash: MaskFlash | null = null,
       clip = false,
       maskView = false,
     ): HeldGrader | null =>
@@ -1376,18 +1389,15 @@ export function useDevelopPicture({
    * mask's own wash — a sample taken there would move the range every time a
    * slider did. A 5×5 average at a small size, like the white-balance dropper.
    */
-  const colourRef = useRef<HTMLCanvasElement | null>(null);
-  const sampleColour = useCallback(
-    (point: readonly [number, number], layerId: string): [number, number, number] | null => {
+  const drawBelow = useCallback(
+    (layerId: string, canvas: HTMLCanvasElement, longEdge: number): CanvasRenderingContext2D | null => {
       if (!source || source.width <= 0 || source.height <= 0) return null;
       const all = layers ?? [];
       const at = all.findIndex((l) => l.id === layerId);
       const below = drawingLayers(at < 0 ? all : all.slice(0, at));
-      const k = Math.min(1, COLOUR_SAMPLE_EDGE / Math.max(source.width, source.height));
+      const k = Math.min(1, longEdge / Math.max(source.width, source.height));
       const w = Math.max(1, Math.round(source.width * k));
       const h = Math.max(1, Math.round(source.height * k));
-      if (!colourRef.current) colourRef.current = document.createElement('canvas');
-      const canvas = colourRef.current;
       if (canvas.width !== w || canvas.height !== h) {
         canvas.width = w;
         canvas.height = h;
@@ -1404,6 +1414,25 @@ export function useDevelopPicture({
         const grader = graderFor(cube, source, geometry, below, null, subjectMasks, unfinished, pixelScale, repair, null, gainField);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
         ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        return ctx;
+      } catch {
+        return null;
+      } finally {
+        postVignetteRef.current = keepVignette;
+      }
+    },
+    [source, layers, cube, geometry, subjectMasks, detail, pixelScale, repair, gainField, graderFor],
+  );
+  const colourRef = useRef<HTMLCanvasElement | null>(null);
+  const sampleColour = useCallback(
+    (point: readonly [number, number], layerId: string): [number, number, number] | null => {
+      if (!colourRef.current) colourRef.current = document.createElement('canvas');
+      const canvas = colourRef.current;
+      const ctx = drawBelow(layerId, canvas, COLOUR_SAMPLE_EDGE);
+      if (!ctx) return null;
+      const w = canvas.width;
+      const h = canvas.height;
+      try {
         const x = Math.min(w - 1, Math.max(0, Math.floor(point[0] * w)));
         const y = Math.min(h - 1, Math.max(0, Math.floor(point[1] * h)));
         const half = 2;
@@ -1424,11 +1453,24 @@ export function useDevelopPicture({
         return n ? [r / n / 255, g / n / 255, b / n / 255] : null;
       } catch {
         return null;
-      } finally {
-        postVignetteRef.current = keepVignette;
       }
     },
-    [source, layers, cube, geometry, subjectMasks, detail, pixelScale, repair, gainField, graderFor],
+    [drawBelow],
+  );
+  const inputRef = useRef<HTMLCanvasElement | null>(null);
+  const layerInput = useCallback(
+    (layerId: string, longEdge: number): ImageData | null => {
+      if (!inputRef.current) inputRef.current = document.createElement('canvas');
+      const canvas = inputRef.current;
+      const ctx = drawBelow(layerId, canvas, longEdge);
+      if (!ctx) return null;
+      try {
+        return ctx.getImageData(0, 0, canvas.width, canvas.height);
+      } catch {
+        return null;
+      }
+    },
+    [drawBelow],
   );
 
   /**
@@ -1683,6 +1725,12 @@ export function useDevelopPicture({
   }, [file, rawFile]);
   const loupeActive = loupeWanted && loupeState !== 'idle';
   const { rect: loupeRect, viewport: loupeViewport } = view;
+  // Whether the loupe's frame is drawn whole or in bands is a render
+  // preference the graph reads at render time (`render/band-policy.ts`); the
+  // loupe repaints when it moves, since the switch is for the stripes the
+  // author is looking at right then.
+  const { preference: bandPreference } = useBandPreference();
+  const loupeBandsRef = useRef<BandPreference | null>(null);
   useEffect(() => {
     const canvas = loupeCanvasRef.current;
     if (!canvas) return;
@@ -1717,6 +1765,12 @@ export function useDevelopPicture({
     const grader = holding
       ? null
       : graderFrom(loupeSlot.current, cube, f, geometry, stack, overlay, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, flashMask, clipping, sharpenMask, postVignette);
+    // The band preference moved since this loupe was last graded: the held
+    // copy was drawn whole or in bands under the old one, and redrawing it is
+    // the whole point of the switch — a striped loupe that stayed striped
+    // after "Whole" would read as a switch that does nothing.
+    if (grader && loupeBandsRef.current !== null && loupeBandsRef.current !== bandPreference) grader.invalidate();
+    loupeBandsRef.current = bandPreference;
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1762,6 +1816,7 @@ export function useDevelopPicture({
     clipping,
     sharpenMask,
     postVignette,
+    bandPreference,
     loupeRect.x,
     loupeRect.y,
     loupeRect.width,
@@ -1855,7 +1910,7 @@ export function useDevelopPicture({
           } catch {
             /* not a live pointer */
           }
-          paint.onStart(at);
+          paint.onStart(at, { alt: e.altKey });
           return;
         }
       }
@@ -1968,6 +2023,7 @@ export function useDevelopPicture({
     pickAt,
     asShotSample,
     sampleColour,
+    layerInput,
     segmentView,
     redecode,
     pointAt,

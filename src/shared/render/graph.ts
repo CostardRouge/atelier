@@ -27,7 +27,9 @@
  * Framework-free, like the renderer it grows from.
  */
 
+import { deviceClass } from '../lib/device-class';
 import { bandFragment, nearRows, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
+import { BAND_PREFERENCE_KEY, bandsWanted, readBandPreference, type BandPreference } from './band-policy';
 import { VERTEX_SRC } from './glsl';
 import { isHalfImage, type HalfImage } from './half-image';
 import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
@@ -98,7 +100,9 @@ export interface RenderPass {
 /**
  * Frames at least this big are drawn in bands when every pass can say what it
  * reads: the stage (a phone's 3.7 MP, a computer's 8.3 MP 4K frame) never is,
- * so an interactive render stays one draw per pass; a full-density export is.
+ * so an interactive render stays one draw per pass; a full-density export is —
+ * on a device that wants bands at all (`band-policy.ts`: a phone by default,
+ * a computer only when asked).
  */
 const BAND_MIN_PIXELS = 12_000_000;
 /** The rows of one band, as a share of pixels: ~4 MP of output per band. */
@@ -109,7 +113,7 @@ let bandOverride: { min: number; pixels: number } | null = null;
 /**
  * Force the banding threshold and the band's size — for the render gate and a
  * diagnostic, which must be able to band a small frame and compare it with the
- * whole. `null` restores the defaults.
+ * whole, on any device and under any preference. `null` restores the defaults.
  */
 export function setBandingForTest(next: { min: number; pixels: number } | null): void {
   bandOverride = next;
@@ -122,8 +126,37 @@ export function bandsLastDrawnForTest(): number {
   return bandsLastDrawn;
 }
 
+let bandPreference: BandPreference | null = null;
+
+/**
+ * Whether big frames are banded here — `auto` (a constrained device only),
+ * `whole` or `bands` (`band-policy.ts`). Read from `localStorage` once per
+ * page; every grader built afterwards asks this at render time, so an export
+ * started after the switch takes the mode just chosen.
+ */
+export function getBandPreference(): BandPreference {
+  if (bandPreference === null) {
+    let stored: string | null = null;
+    try {
+      stored = typeof localStorage !== 'undefined' ? localStorage.getItem(BAND_PREFERENCE_KEY) : null;
+    } catch {
+      stored = null;
+    }
+    bandPreference = readBandPreference(stored);
+  }
+  return bandPreference;
+}
+
+/** Set the preference new renders read. Owned by `useBandPreference`, which also persists it. */
+export function setBandPreference(next: BandPreference): void {
+  bandPreference = next;
+}
+
 /** The rows of one band for this frame, or null where it is drawn whole. */
 export function bandRowsFor(width: number, height: number): number | null {
+  // The gate's override bands whatever the device and the preference say: it
+  // is how a small frame is cut and compared with itself drawn whole.
+  if (!bandOverride && !bandsWanted(getBandPreference(), deviceClass())) return null;
   const min = bandOverride?.min ?? BAND_MIN_PIXELS;
   const per = bandOverride?.pixels ?? BAND_PIXELS;
   if (width * height < min) return null;

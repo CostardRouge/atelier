@@ -1,5 +1,7 @@
 import { useEffect, useRef, useState } from 'react';
+import { CHOICE_WORDS, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
+import Segmented from '../../shared/ui/Segmented';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 
 export interface NewRollChoices {
@@ -7,7 +9,15 @@ export interface NewRollChoices {
   sourceId: string;
   /** Start with the photos ticked in the Library. */
   withSelected: boolean;
+  /** Which file of its capture every picture opens on (`RollDoc.opensOn`); null for its proxy. */
+  opensOn: RollChoice | null;
 }
+
+const OPENS_ON: readonly { id: ChoiceRole; label: string; title: string }[] = [
+  { id: 'proxy', label: CHOICE_WORDS.proxy, title: 'Each picture opens where it opens — quick' },
+  { id: 'delivered', label: CHOICE_WORDS.delivered, title: 'The camera’s own file — its JPEG, or the render inside its RAW — wherever it beats the proxy' },
+  { id: 'sensor', label: 'RAW', title: 'Developed from its RAW where it has one, metered on itself' },
+];
 
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 const field =
@@ -38,6 +48,7 @@ export default function NewRollModal({
   const [name, setName] = useState(defaultRollName);
   const [sourceId, setSourceId] = useState(DEFAULT_SOURCE_ID);
   const [withSelected, setWithSelected] = useState(selectedCount > 0);
+  const [opensOn, setOpensOn] = useState<ChoiceRole>('proxy');
   const inputRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
@@ -47,7 +58,7 @@ export default function NewRollModal({
   const create = () => {
     const trimmed = name.trim();
     if (!trimmed) return;
-    onCreate({ name: trimmed, sourceId, withSelected: withSelected && selectedCount > 0 });
+    onCreate({ name: trimmed, sourceId, withSelected: withSelected && selectedCount > 0, opensOn: opensOn === 'proxy' ? null : opensOn });
   };
   useDialogKeys({ onCancel, onConfirm: name.trim() ? create : null });
 
@@ -88,6 +99,19 @@ export default function NewRollModal({
             </select>
           </label>
         )}
+
+        {/* Which file every picture opens on — changed later from the name
+            menu over the picture, and a picture chosen by hand keeps its own. */}
+        <div className="flex flex-col gap-1.5">
+          <span className={legend}>Pictures open on</span>
+          <Segmented
+            label="Pictures open on"
+            options={OPENS_ON.map((o) => ({ id: o.id, label: o.label, title: o.title }))}
+            value={opensOn}
+            onChange={setOpensOn}
+            size="sm"
+          />
+        </div>
 
         <label className={`flex items-center gap-2 text-sm ${selectedCount === 0 ? 'text-faint' : 'text-ink'}`}>
           <input

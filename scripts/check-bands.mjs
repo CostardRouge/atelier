@@ -15,16 +15,44 @@
  * Usage: `npm run dev` in one shell, then
  *   node scripts/check-bands.mjs
  * with BASE set if the dev server is not on 5173.
+ *
+ * On a REAL GPU — the one place the stripes the maintainer's Mac draws can be
+ * measured (`render-core.md`, «Bands»): `ANGLE=metal` (or `default`) in place
+ * of SwiftShader, `HEADED=1` so Chromium is sure to use the machine's GPU,
+ * `SIZE=4672x7008 ROWS=856` to draw the loupe's own frame in the graph's own
+ * ~4-megapixel bands rather than a small frame in 37-row ones, and
+ * `CHROMIUM_PATH` pointing at a Chromium of that machine, e.g.
+ *   CHROMIUM_PATH=~/Library/Caches/ms-playwright/chromium-<build>/chrome-mac/Chromium.app/Contents/MacOS/Chromium
+ *   ANGLE=metal HEADED=1 SIZE=4672x7008 ROWS=856 node scripts/check-bands.mjs
+ * A failing row then names the worst ROW, which says which band edge it is.
  */
 import { chromium } from 'playwright';
 const EXE =
   process.env.CHROMIUM_PATH ??
   '/opt/pw-browsers/chromium_headless_shell-1194/chrome-linux/headless_shell';
 const BASE = process.env.BASE ?? 'http://127.0.0.1:5173/atelier/';
+// The GL backend: SwiftShader by default (the container's, and the gate's
+// baseline), else ANGLE's named backend on the machine's own GPU.
+const ANGLE = process.env.ANGLE ?? 'swiftshader';
+const GL_ARGS =
+  ANGLE === 'swiftshader'
+    ? ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader']
+    : ANGLE === 'default'
+      ? ['--use-gl=angle', '--ignore-gpu-blocklist']
+      : ['--use-gl=angle', `--use-angle=${ANGLE}`, '--ignore-gpu-blocklist'];
+// The frame and the band: small and fine by default (fifteen seams across a
+// 960 × 720 frame); a real frame in the graph's own bands on request.
+const [SIZE_W, SIZE_H] = (process.env.SIZE ?? '960x720').split('x').map(Number);
+const ROWS = Number(process.env.ROWS ?? 37);
+if (!(SIZE_W > 0 && SIZE_H > 0 && ROWS > 0)) {
+  console.error('SIZE must be WxH and ROWS a number of rows');
+  process.exit(2);
+}
 
 const browser = await chromium.launch({
   executablePath: EXE,
-  args: ['--use-gl=angle', '--use-angle=swiftshader', '--enable-unsafe-swiftshader', '--no-sandbox'],
+  headless: !process.env.HEADED,
+  args: [...GL_ARGS, '--no-sandbox'],
 });
 const page = await browser.newPage();
 const errors = [];
@@ -34,7 +62,7 @@ page.on('console', (m) => {
 });
 await page.goto(BASE, { waitUntil: 'networkidle' });
 
-const out = await page.evaluate(async () => {
+const out = await page.evaluate(async ({ W, H, ROWS }) => {
   const root = '/atelier/src/shared';
   // The banding hooks come through the grader's module, never `graph.ts`
   // directly: after a hot reload the dev server serves `graph.ts` under a
@@ -56,8 +84,6 @@ const out = await page.evaluate(async () => {
   const { makePostVignettePass } = await import(`${root}/render/post-vignette-pass.ts`);
   const { DEFAULT_POST_VIGNETTE } = await import(`${root}/render/post-vignette.ts`);
 
-  const W = 960;
-  const H = 720;
   const AR = W / H;
   const src = document.createElement('canvas');
   src.width = W;
@@ -166,9 +192,9 @@ const out = await page.evaluate(async () => {
   for (const [name, source] of [['canvas', src], ['bitmap', bitmap]]) {
     const whole = draw(source, null);
     const wholeBands = drawn;
-    // Bands of 37 rows: an odd height, so no band edge falls on a tile of the
-    // checker, and small enough for fifteen seams across the frame.
-    const banded = draw(source, { min: 0, pixels: W * 37 });
+    // Bands of 37 rows by default: an odd height, so no band edge falls on a
+    // tile of the checker, and small enough for fifteen seams across the frame.
+    const banded = draw(source, { min: 0, pixels: W * ROWS });
     const bands = drawn;
     // The chain must MOVE the picture, or both draws could be the source and agree.
     const plain = read(src);
@@ -176,17 +202,25 @@ const out = await page.evaluate(async () => {
     for (let i = 0; i < plain.length; i += 4) moved = Math.max(moved, Math.abs(plain[i] - whole[i]));
     results[name] = { ...compare(whole, banded), moved, bands, wholeBands };
   }
+  results.gpu = (() => {
+    const gl = document.createElement('canvas').getContext('webgl2');
+    const info = gl?.getExtension('WEBGL_debug_renderer_info');
+    return gl && info ? String(gl.getParameter(info.UNMASKED_RENDERER_WEBGL)) : 'unknown';
+  })();
   return results;
-});
+}, { W: SIZE_W, H: SIZE_H, ROWS });
 
 await browser.close();
 let bad = 0;
-console.log(`\n  one chain of ${out.passes} passes, whole against bands of 37 rows:\n`);
+console.log(`\n  one chain of ${out.passes} passes, ${SIZE_W} × ${SIZE_H}, whole against bands of ${ROWS} rows, on ${out.gpu}:\n`);
+// With the graph's own bands a frame holds fewer than ten of them; the gate
+// only insists that it was really cut.
+const fewBands = Math.ceil(SIZE_H / ROWS) <= 10;
 for (const name of ['canvas', 'bitmap']) {
   const r = out[name];
   // One code of float16 → 8-bit rounding is allowed; a seam is dozens.
   // …and the bands must really have been drawn, or this compares whole with whole.
-  const ok = r.worst <= 1 && r.moved > 20 && r.bands > 10 && r.wholeBands === 1;
+  const ok = r.worst <= 1 && r.moved > 20 && (fewBands ? r.bands > 1 : r.bands > 10) && r.wholeBands === 1;
   if (!ok) bad += 1;
   console.log(
     `  ${ok ? 'ok  ' : 'FAIL'}  ${name.padEnd(7)} worst ${r.worst} code(s), ${r.off} samples past 1` +
