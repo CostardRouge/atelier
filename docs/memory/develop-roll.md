@@ -1226,3 +1226,25 @@ Every cell re-rendered on every tick of the open picture's sliders — a roll of
 
 The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
 
+
+## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
+
+`shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the
+Crop tab's Level row. `measureTilt(luma)`: a 5-tap binomial blur, a
+**Scharr** gradient per pixel, each edge's line direction folded to its
+deviation from the nearest axis (the fold `levelDelta` makes, so a leaning
+wall and a tilted horizon vote together), a 0.1° histogram within
+`MAX_TILT` (15°) weighted by edge strength (edges under 15 % of the strongest
+do not vote), the peak refined by a weighted mean over ±1°, and a
+CONFIDENCE — that window's share of the mass — under which (`CONFIDENCE_FLOOR`
+0.2) the verb says "no line to level on" and turns nothing. The panel reads
+the picture AS SHOT through `picture.asShotSample(512)` (new on
+`DevelopPicture`: a fresh canvas with the source drawn small, on demand), and
+writes through `crop.straighten(levelFine(tilt, flipX, flipY))` so the zone
+refits from the intent exactly as a drawn Level line does; a flip reverses
+the sign, a quarter turn needs no account. **Two traps, both measured in the
+specs**: Sobel's kernel is not rotation-symmetric and read a 4° edge as 3.8°
+(a 5 % shrink on every angle) — Scharr's (3, 10, 3) is exact to the tenth;
+and without the blur a nearly horizontal edge is a staircase whose long runs
+vote for 0°. Not driven in a browser: the module is pure and the button is
+one read and one `straighten`.

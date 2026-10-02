@@ -1,4 +1,5 @@
 import { isDefaultFraming, type Framing } from '../../shared/media/framing';
+import { LEVEL_SAMPLE_EDGE, describeTilt, levelFine, lumaOf, measureTilt } from '../../shared/develop/auto-level';
 import { splitRotation } from '../../shared/develop/crop-rect';
 import { describeAspect } from '../../shared/develop/crop-aspect';
 import { developButtonClass } from '../../shared/develop/develop-classes';
@@ -62,6 +63,18 @@ export default function CropPanel({
 }) {
   const { framing, zone } = crop;
   const touched = !isDefaultFraming(framing) || aspect !== 'original';
+  // Auto level: the picture as shot, read whole and once, on the click.
+  const autoLevel = () => {
+    const sample = picture.asShotSample(LEVEL_SAMPLE_EDGE);
+    const ctx = sample?.getContext('2d', { willReadFrequently: true });
+    if (!sample || !ctx) {
+      onTold?.('the picture has not been read yet');
+      return;
+    }
+    const tilt = measureTilt(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
+    if (tilt && tilt.tilt !== 0) crop.straighten(levelFine(tilt, framing.flipX, framing.flipY));
+    onTold?.(`auto level · ${describeTilt(tilt)}`);
+  };
   return (
     <>
       <DevelopFold
@@ -86,7 +99,9 @@ export default function CropPanel({
               <strong>Straighten</strong> turns the picture under the zone, which shrinks just enough to
               keep clear of the corners — and grows back to what you drew when you straighten back.
               <strong> Level</strong>: draw a line along the horizon (or an upright) and the angle is
-              corrected by it. The quarter turns take the zone with the picture.
+              corrected by it. <strong>Auto</strong> finds that line by itself — the strongest straight
+              edge within 15° of level, a horizon or a wall — and says when the picture holds none it can
+              trust. The quarter turns take the zone with the picture.
             </p>
             <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
           </>
@@ -140,6 +155,14 @@ export default function CropPanel({
             title="Draw a line along the horizon, or along something that should stand upright"
           >
             {crop.levelling ? 'Draw the line…' : 'Level'}
+          </Button>
+          <Button
+            size="sm"
+            onClick={autoLevel}
+            disabled={!picture.source}
+            title="Find the horizon, or an upright, by itself — the strongest line near level — and straighten on it"
+          >
+            Auto
           </Button>
           {splitRotation(framing.rotation).fine !== 0 && (
             <Button size="sm" variant="ghost" onClick={() => crop.straighten(0)}>

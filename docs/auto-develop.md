@@ -136,7 +136,7 @@ recover"; whites and blacks stay Auto tone's. A third button, never folded
 into the first: a stretch and a compression are different answers and a
 person wants one without the other.
 
-**A2 — Auto level** (`auto-level.ts`, the Crop tab's Level row). The horizon
+**A2 — Auto level — BUILT 2026-10-02** (`auto-level.ts`, the Crop tab's Level row). The horizon
 is the dominant straight line near horizontal or vertical: a Sobel over a
 512 px luma sample, every gradient's line direction folded to its deviation
 from the nearest axis (the same fold `levelDelta` uses), a histogram of those

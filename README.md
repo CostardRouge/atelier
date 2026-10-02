@@ -1439,7 +1439,10 @@ zone of it, and the arrow keys nudge the zone once the stage has been touched.
 **Straighten** turns the picture *under* the zone, which shrinks just enough
 to keep clear of the corners and grows back to what you drew when you
 straighten back; **Level** corrects the angle from a line you draw along the
-horizon. The quarter turns take the zone with the picture, and the two flips
+horizon, and **Auto** finds that line by itself — the strongest straight edge
+within 15° of level, a horizon or a wall, read off the picture as shot — or
+says that the picture holds none it can trust and turns nothing. The quarter
+turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is
 saved as you go, and is never inherited by the next one.
