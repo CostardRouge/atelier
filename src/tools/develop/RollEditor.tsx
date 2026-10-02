@@ -28,6 +28,7 @@ import {
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
+import { STRIP_METRICS, heightForRows, type StripKind } from '../../shared/develop/roll-strip';
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
 import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
@@ -78,7 +79,8 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
-import Filmstrip from './Filmstrip';
+import RollBand from './RollBand';
+import { useThumbAspects } from './use-thumb-aspects';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
@@ -161,6 +163,9 @@ const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs —
 export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
+  // The band's numbers for this shell (`roll-strip.ts`): a phone's and a desktop's differ.
+  const stripKind: StripKind = compact ? 'phone' : 'desktop';
+  const stripMetrics = STRIP_METRICS[stripKind];
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
   const [confirmRemove, setConfirmRemove] = useState<RollPicture | null>(null);
@@ -381,6 +386,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     void putRollThumb(id, blob);
     setThumbs((cur) => new Map(cur).set(id, blob));
   }, []);
+  // Each thumbnail's shape, which is its cell's (`roll-strip.ts`).
+  const thumbAspects = useThumbAspects(thumbs);
 
   // --- the shell's verb: "Develop" under a picture being looked at (D10) ---
   // `run` is called with the picture already ACTIVE in the Library — but in
@@ -546,14 +553,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [onOpenPicture, shownByCull],
   );
 
-  // A VARIANT of the open picture (item 30): Lightroom's virtual copy when it
-  // is cloned, Capture One's New Variant when it starts as shot. It is opened
+  // A VARIANT of a picture (item 30): Lightroom's virtual copy when it is
+  // cloned, Capture One's New Variant when it starts as shot. It is opened
   // at once — making a copy is always to work on it — and wears the source's
-  // thumbnail until its own is taken.
-  const makeVariant = useCallback(
-    (start: VariantStart) => {
-      const from = openIdRef.current;
-      if (!from) return;
+  // thumbnail until its own is taken. From the keys and the Add menu it is
+  // the open picture's; a cell's menu asks for any picture's.
+  const makeVariantOf = useCallback(
+    (from: string, start: VariantStart) => {
       const id = newRollId();
       update((r) => addVariant(r, from, start, id));
       if (!latest.current.pictures.some((p) => p.id === id)) return;
@@ -564,6 +570,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       onOpenPicture(id);
     },
     [update, onOpenPicture],
+  );
+  const makeVariant = useCallback(
+    (start: VariantStart) => {
+      if (openIdRef.current) makeVariantOf(openIdRef.current, start);
+    },
+    [makeVariantOf],
   );
 
   const handleDevelop = useCallback(
@@ -1355,25 +1367,32 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               )}
               {/* V4: the strip is the run's queue — each cell marked, and the
                   run's own hairline along its top (`TaskEdge`, the run's scope). */}
-              <div className="relative">
+              <div className="relative flex-none">
                 <TaskEdge scope={runScope(roll.id)} edge="top" />
-              <Filmstrip
-                pictures={roll.pictures}
-                run={exports.progress}
-                openId={openId}
-                selectedIds={visibleSelected}
-                thumbs={thumbs}
-                availability={availability}
-                remoteThumb={remoteThumb}
-                compact={compact}
-                onOpen={(id) => onOpenPicture(id)}
-                onSelectClick={handleSelectClick}
-                onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
-                onDeliver={handleDeliver}
-                hideIgnored={!showIgnored}
-                culling={culling.byPicture}
-                shows={filtering ? shownByCull : undefined}
-              />
+                <RollBand
+                  pictures={roll.pictures}
+                  run={exports.progress}
+                  openId={openId}
+                  selectedIds={visibleSelected}
+                  thumbs={thumbs}
+                  aspects={thumbAspects}
+                  availability={availability}
+                  remoteThumb={remoteThumb}
+                  kind={stripKind}
+                  // With a phone's drawer up every row is the photograph's:
+                  // the band keeps one short row of cells and no header, the
+                  // size the strip had before it could be pulled.
+                  height={compact && sheetOpen ? 56 + 2 * stripMetrics.pad : heightForRows(1, stripMetrics, stripMetrics.thumb)}
+                  header={!(compact && sheetOpen)}
+                  onOpen={(id) => onOpenPicture(id)}
+                  onSelectClick={handleSelectClick}
+                  onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
+                  onDeliver={handleDeliver}
+                  onVariant={(id) => makeVariantOf(id, 'clone')}
+                  hideIgnored={!showIgnored}
+                  culling={culling.byPicture}
+                  shows={filtering ? shownByCull : undefined}
+                />
               </div>
             </div>
           </div>

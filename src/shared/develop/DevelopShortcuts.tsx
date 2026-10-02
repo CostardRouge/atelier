@@ -64,7 +64,7 @@ const GROUPS: readonly Group[] = [
       { keys: 'P', what: 'off the Layers tab, send this picture ↔ hold it back — edited pictures leave unless you say otherwise' },
       { keys: 'U', what: 'back to the roll’s rule: it leaves if it is edited — on every tab' },
       { keys: 'M', what: 'off the Layers tab, ignore this picture ↔ bring it back — never exported, stepped over by ← / →' },
-      { keys: 'a cell’s badge', what: 'click to send ↔ hold · right-click or hold a finger to ignore' },
+      { keys: '⋯ on a cell · right-click', what: 'the picture’s verbs — open, send ↔ hold, back to the rule, ignore, a variant, take it off the roll' },
     ],
   },
   {

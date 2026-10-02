@@ -1,0 +1,475 @@
+import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import { describeDevelop } from '../../shared/develop/develop';
+import type { SelectionModifiers } from '../../shared/develop/roll-editor';
+import type { PictureAvailability } from '../../shared/develop/roll-media';
+import {
+  STRIP_METRICS,
+  bandLayout,
+  cellAspect,
+  type StripCell,
+  type StripItem,
+  type StripKind,
+} from '../../shared/develop/roll-strip';
+import {
+  deliverState,
+  delivers,
+  isClipPicture,
+  isIgnored,
+  pictureEdits,
+  pictureLabel,
+  variantNumber,
+  type PictureEdit,
+  type RollPicture,
+} from '../../shared/develop/roll-types';
+import { useObjectUrl } from '../../shared/media/use-object-url';
+import { runStateOf, type RunUnitState, type RunProgress } from '../../shared/tasks/run-progress';
+import RunMark, { RUN_WORDS } from '../../shared/ui/RunMark';
+import type { WinnowClient } from '../../shared/sources/winnow/client';
+import { describeCulling, type Culling } from '../../shared/sources/winnow/culling';
+import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
+import CullMark from '../../shared/sources/winnow/CullMark';
+import { Icons } from '../../shared/ui/icons';
+import { AnchoredMenu, type OverflowItem } from '../../shared/ui/OverflowMenu';
+import type { AnchorRect } from '../../shared/ui/menu-anchor';
+import { useElementWidth } from '../../shared/ui/use-element-width';
+import type { DeliverAction } from './PictureWorkbench';
+
+/**
+ * The roll's pictures in a BAND under the stage (`docs/develop-roll-browser.md`,
+ * face D): one row of cells at their pictures' own aspects, laid out by
+ * `roll-strip.ts` and drawn at the rectangles it answers.
+ *
+ * A cell is CALM: it carries what is READ — one pill with the picture's state
+ * (● edited, ↑ leaves at export, – held back, ⊘ ignored, its variant number,
+ * ▶ a clip, ! not reachable), Winnow's word in the other corner, the run's
+ * mark at its centre — and nothing that is DONE. What used to be three
+ * buttons on 72 px (the delivery badge, the ×, and on a phone two targets
+ * covering 43 % of the cell) is the picture's MENU now: ⋯ under the pointer,
+ * or a right-click anywhere on the cell. A plain click still opens the
+ * picture (outlined, kept in view as ←/→ step), Shift or ⌘/Ctrl marks it for
+ * a batch (D7 of `docs/develop-tool.md`).
+ *
+ * While an export runs the band is its QUEUE (his pick V4): a cell still to
+ * leave is veiled, the one in hand turns, a written one says ✓ and one that
+ * did not leave says ! — over the picture's centre, pointer-transparent.
+ */
+export default function RollBand({
+  pictures,
+  run = null,
+  openId,
+  selectedIds,
+  thumbs,
+  aspects,
+  availability,
+  remoteThumb,
+  kind,
+  height,
+  header = true,
+  onOpen,
+  onSelectClick,
+  onRemove,
+  onDeliver,
+  onVariant,
+  hideIgnored = false,
+  culling,
+  shows = () => true,
+}: {
+  pictures: readonly RollPicture[];
+  /** A running export (`run-progress.ts`): each cell says where its picture stands in it. */
+  run?: RunProgress | null;
+  openId: string | null;
+  selectedIds: ReadonlySet<string>;
+  thumbs: ReadonlyMap<string, Blob>;
+  /** Each thumbnail's measured aspect (`use-thumb-aspects.ts`) — the shape its cell takes. */
+  aspects: ReadonlyMap<string, number>;
+  /** Where each picture's bytes stand — a cell says it, the stage explains it. */
+  availability: ReadonlyMap<string, PictureAvailability>;
+  /** The instance's thumbnail, for a cell that has none of its own yet. */
+  remoteThumb: (picture: RollPicture) => { client: WinnowClient; id: number } | null;
+  kind: StripKind;
+  /** The band's whole height, header included. */
+  height: number;
+  /** Whether the header row is drawn — not with a phone's drawer up, where every row is the photograph's. */
+  header?: boolean;
+  onOpen: (id: string) => void;
+  onSelectClick: (id: string, mods: SelectionModifiers) => void;
+  onRemove: (picture: RollPicture) => void;
+  /** The delivery verbs of the menu — `RollEditor.handleDeliver`. */
+  onDeliver: (id: string, action: DeliverAction) => void;
+  /** A variant of this picture as it stands (⌘' on the open one). */
+  onVariant: (id: string) => void;
+  /** Leave ignored pictures out of the band (the open one always stays). */
+  hideIgnored?: boolean;
+  /** Winnow's word on each picture it answered for (`use-roll-culling.ts`). */
+  culling?: ReadonlyMap<string, Culling>;
+  /** Whether a picture passes the band's filter. The open one always stays. */
+  shows?: (picture: RollPicture) => boolean;
+}) {
+  const metrics = STRIP_METRICS[kind];
+  const [bodyRef, width] = useElementWidth<HTMLDivElement>();
+  // The cells are MEMOISED, so what they are handed must be stable: the
+  // host's callbacks are read through a ref, and every cell gets the same
+  // handlers for the life of the band. Without this every cell re-rendered
+  // on every tick of the open picture's sliders (the audit of 2026-09-22),
+  // a roll of hundreds of cells for one picture's change.
+  const latest = useRef({ onOpen, onSelectClick, onRemove, onDeliver, onVariant });
+  latest.current = { onOpen, onSelectClick, onRemove, onDeliver, onVariant };
+  const [menu, setMenu] = useState<{ id: string; rect: AnchorRect } | null>(null);
+  const handlers = useMemo<CellHandlers>(
+    () => ({
+      open: (id) => latest.current.onOpen(id),
+      selectClick: (id, mods) => latest.current.onSelectClick(id, mods),
+      menu: (id, rect) => setMenu({ id, rect }),
+    }),
+    [],
+  );
+
+  const shown = useMemo(
+    () => pictures.filter((p) => p.id === openId || ((!hideIgnored || !isIgnored(p)) && shows(p))),
+    [pictures, openId, hideIgnored, shows],
+  );
+  const items = useMemo<StripItem[]>(() => shown.map((p) => ({ id: p.id, aspect: cellAspect(p, aspects.get(p.id)) })), [shown, aspects]);
+  const bodyHeight = height - (header ? metrics.head : 0);
+  const layout = useMemo(
+    () => bandLayout({ items, width, bodyHeight, metrics, thumb: metrics.thumb }),
+    [items, width, bodyHeight, metrics],
+  );
+  const cellById = useMemo(() => new Map(layout.cells.map((c) => [c.id, c])), [layout]);
+
+  useEffect(() => {
+    const cell = openId ? bodyRef.current?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
+    cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [openId, bodyRef]);
+
+  const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
+  const menuPicture = menu ? pictures.find((p) => p.id === menu.id) ?? null : null;
+  const menuRect = useCallback(() => menu?.rect ?? null, [menu]);
+  const closeMenu = useCallback(() => setMenu(null), []);
+
+  return (
+    <div className="flex flex-col min-w-0 min-h-0" style={{ height }} role="group" aria-label="Pictures on this roll">
+      {header && (
+        <div className="flex-none flex items-center gap-1.5 min-w-0 px-0.5" style={{ height: metrics.head }}>
+          <span className="font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
+            {at >= 0 ? at + 1 : '–'} / {shown.length}
+          </span>
+        </div>
+      )}
+      <div
+        ref={bodyRef}
+        // An ORDINARY scroll box declares no `touch-action` (`frontend.md`):
+        // the browser already does both axes, and the gestures a cell takes
+        // (a click, a press) write no drag.
+        className={`relative flex-1 min-h-0 min-w-0 overscroll-contain [scrollbar-width:thin] ${
+          layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'
+        }`}
+      >
+        <ol className="relative m-0 p-0 list-none" style={{ width: layout.width, height: layout.height }}>
+          {shown.map((p) => {
+            const cell = cellById.get(p.id);
+            if (!cell) return null;
+            // Handed as two values, not a fresh object per render, so the memo holds.
+            const remote = thumbs.has(p.id) ? null : remoteThumb(p);
+            return (
+              <Cell
+                key={p.id}
+                picture={p}
+                cell={cell}
+                open={p.id === openId}
+                selected={selectedIds.has(p.id)}
+                thumb={thumbs.get(p.id) ?? null}
+                // The kind alone: the map is rebuilt per roll change, its objects with it.
+                availabilityKind={availability.get(p.id)?.kind ?? 'local'}
+                culling={culling?.get(p.id)}
+                runState={runStateOf(run, p.id)}
+                remoteClient={remote?.client ?? null}
+                remoteId={remote?.id ?? null}
+                menuOpen={menu?.id === p.id}
+                handlers={handlers}
+              />
+            );
+          })}
+        </ol>
+      </div>
+      {menu && menuPicture && (
+        <AnchoredMenu
+          anchorRect={menuRect}
+          items={pictureMenu(menuPicture, menuPicture.id === openId, latest.current)}
+          onClose={closeMenu}
+          align="start"
+          label={`Actions for ${pictureLabel(menuPicture)}`}
+        />
+      )}
+    </div>
+  );
+}
+
+/** The band's gestures on a cell, one set for every cell and for the band's life. */
+interface CellHandlers {
+  open: (id: string) => void;
+  selectClick: (id: string, mods: SelectionModifiers) => void;
+  menu: (id: string, rect: AnchorRect) => void;
+}
+
+/**
+ * The picture's verbs, as a menu: what the cell used to wear as buttons.
+ * The delivery ones say the state they lead TO, with the key that does the
+ * same from the keyboard; the roll's rule is offered back only where the
+ * author decided; removal is apart, in red, and confirms where it costs.
+ */
+function pictureMenu(
+  p: RollPicture,
+  open: boolean,
+  host: { onOpen: (id: string) => void; onDeliver: (id: string, action: DeliverAction) => void; onVariant: (id: string) => void; onRemove: (p: RollPicture) => void },
+): OverflowItem[] {
+  const ignored = isIgnored(p);
+  const leaves = delivers(p);
+  const state = deliverState(p);
+  const items: OverflowItem[] = [];
+  if (!open) items.push({ id: 'open', label: 'Open', onSelect: () => host.onOpen(p.id) });
+  if (ignored) {
+    items.push({ id: 'back', label: 'Bring it back into the roll’s work', title: 'M', onSelect: () => host.onDeliver(p.id, 'ignore') });
+  } else {
+    items.push({
+      id: 'toggle',
+      label: leaves ? 'Hold it back from the export' : 'Send it at export',
+      title: `P — ${leaves ? 'it leaves' : 'it stays'} today${state === 'auto' ? ' by the roll’s rule' : ''}`,
+      onSelect: () => host.onDeliver(p.id, 'toggle'),
+    });
+    if (state === 'yes' || state === 'no') {
+      items.push({ id: 'rule', label: 'Back to the roll’s rule', title: 'U — it leaves if it is edited', onSelect: () => host.onDeliver(p.id, 'auto') });
+    }
+    items.push({ id: 'ignore', label: 'Ignore it', title: 'M — never exported, stepped over by ← / →', onSelect: () => host.onDeliver(p.id, 'ignore') });
+  }
+  items.push({
+    id: 'variant',
+    label: 'A variant, as edited',
+    title: "Lightroom's virtual copy — the same file with its own develop, crop, look and words (⌘' on the open picture)",
+    onSelect: () => host.onVariant(p.id),
+  });
+  items.push({ id: 'remove', label: 'Take it off the roll…', title: 'The file stays where it is', danger: true, onSelect: () => host.onRemove(p) });
+  return items;
+}
+
+const Cell = memo(function Cell({
+  picture,
+  cell,
+  open,
+  selected,
+  thumb,
+  availabilityKind,
+  culling,
+  runState,
+  remoteClient,
+  remoteId,
+  menuOpen,
+  handlers,
+}: {
+  picture: RollPicture;
+  cell: StripCell;
+  open: boolean;
+  selected: boolean;
+  thumb: Blob | null;
+  availabilityKind: PictureAvailability['kind'];
+  culling: Culling | undefined;
+  /** Where this picture stands in a running export, or null outside one. */
+  runState: RunUnitState | null;
+  remoteClient: WinnowClient | null;
+  remoteId: number | null;
+  menuOpen: boolean;
+  handlers: CellHandlers;
+}) {
+  const remote = remoteClient && remoteId !== null ? { client: remoteClient, id: remoteId } : null;
+  const url = useObjectUrl(thumb);
+  const ignored = isIgnored(picture);
+  // The roll's one answer (`pictureEdits`): the pill, the progress line and the
+  // remove confirmation cannot disagree about what counts.
+  const edits = pictureEdits(picture);
+  const developed = edits.length > 0;
+  const kind = availabilityKind;
+  const label = pictureLabel(picture);
+  const variant = variantNumber(picture);
+  const clip = isClipPicture(picture);
+  const leaves = delivers(picture);
+  const fetching = kind === 'fetching';
+  const unreachable = kind === 'failed' || kind === 'gone' || kind === 'unconnected' || kind === 'local';
+  const moreRef = useRef<HTMLButtonElement>(null);
+  const onContextMenu = (e: ReactMouseEvent) => {
+    e.preventDefault();
+    handlers.menu(picture.id, { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY });
+  };
+  const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, unreachable: unreachable && !!url });
+  return (
+    <li
+      className={`group absolute ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
+      style={{ left: cell.x, top: cell.y, width: cell.w, height: cell.h + cell.cap }}
+      data-picture={picture.id}
+      onContextMenu={onContextMenu}
+    >
+      <button
+        type="button"
+        onClick={(e) => {
+          if (e.shiftKey || e.metaKey || e.ctrlKey) {
+            handlers.selectClick(picture.id, { shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey });
+          } else {
+            handlers.open(picture.id);
+          }
+        }}
+        aria-current={open ? 'true' : undefined}
+        aria-selected={selected ? 'true' : undefined}
+        aria-label={`${label}${clip ? ', a clip' : ''}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
+          fetching ? ', fetching' : unreachable ? ', not available' : ''
+        }${runState ? `, ${RUN_WORDS[runState]}` : ''}`}
+        title={`${label}${clip ? ' (a clip)' : ''}${variant > 1 ? ' (a variant)' : ''}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
+          culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
+        } — Shift or ⌘/Ctrl-click to select for a batch · right-click for its actions`}
+        className="relative block w-full p-0 rounded-[6px] overflow-hidden bg-frame cursor-pointer border-0"
+        style={{ height: cell.h }}
+      >
+        {url ? (
+          <img
+            src={url}
+            alt=""
+            className={`block w-full h-full object-cover ${unreachable ? 'opacity-45 grayscale' : ''}`}
+            draggable={false}
+          />
+        ) : remote && (kind === 'waiting' || kind === 'fetching') ? (
+          <WinnowThumb client={remote.client} id={remote.id} label={CELL_WORDS[kind]} box="w-full h-full" />
+        ) : (
+          <span className="absolute inset-0 grid place-items-center px-1 text-center font-mono text-3xs leading-tight text-muted">
+            {CELL_WORDS[kind]}
+          </span>
+        )}
+        {/* The outline is INSIDE the box: a border would move every cell's picture by its width. */}
+        <span
+          className={`absolute inset-0 rounded-[6px] pointer-events-none ${
+            open
+              ? 'shadow-[inset_0_0_0_2px_var(--color-accent),inset_0_0_0_3px_rgba(0,0,0,0.35)]'
+              : 'group-hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
+          }`}
+          aria-hidden="true"
+        />
+        {fetching && (
+          <span className="absolute inset-0 grid place-items-center bg-[rgba(13,12,10,0.5)]" aria-hidden="true">
+            <span className="w-4 h-4 rounded-full border-2 border-on-media/30 border-t-on-media/95 animate-spin motion-reduce:animate-none" />
+          </span>
+        )}
+        {/* What is READ, and only while there is no caption to say it in: the
+            state as one pill in a corner, Winnow's word in the other. */}
+        {cell.cap === 0 && pills.length > 0 && (
+          <span
+            className="absolute left-1 bottom-1 inline-flex items-center gap-[3px] px-1.5 py-0.5 rounded-full bg-surface/85 font-mono text-3xs leading-none text-ink pointer-events-none"
+            aria-hidden="true"
+          >
+            {pills.map((pill) => (
+              <span key={pill.key} className={pill.className} title={pill.title}>
+                {pill.glyph}
+              </span>
+            ))}
+          </span>
+        )}
+        {cell.cap === 0 && (
+          <span className={`absolute right-1 top-1 pointer-events-none ${menuOpen ? 'opacity-0' : 'pointer-fine:group-hover:opacity-0'}`}>
+            <CullMark culling={culling} onMedia />
+          </span>
+        )}
+        {selected && (
+          <span
+            className="absolute left-1 top-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-paper text-3xs"
+            aria-hidden="true"
+          >
+            {Icons.check}
+          </span>
+        )}
+        {runState && <RunMark state={runState} />}
+      </button>
+      {/* The picture's menu, under a pointer that can hover; a finger reaches
+          the same verbs by a long press (the selection) and the bulk bar. It
+          replaces Winnow's mark in that corner while shown, so the two never
+          overlap. */}
+      <button
+        ref={moreRef}
+        type="button"
+        onClick={(e) => {
+          e.stopPropagation();
+          const r = moreRef.current?.getBoundingClientRect();
+          if (r) handlers.menu(picture.id, r);
+        }}
+        className={`absolute right-1 top-1 w-[22px] h-[22px] grid place-items-center rounded-full border-0 bg-surface/85 text-ink cursor-pointer [&>svg]:w-3.5 [&>svg]:h-3.5 pointer-coarse:hidden ${
+          menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+        }`}
+        aria-label={`Actions for ${label}`}
+        aria-haspopup="menu"
+        aria-expanded={menuOpen}
+        title="Actions — or right-click the picture"
+      >
+        {Icons.more}
+      </button>
+      {cell.cap > 0 && (
+        <span
+          className="absolute left-0.5 right-0.5 bottom-0 flex items-center gap-1 font-mono text-3xs leading-none text-ink-soft whitespace-nowrap overflow-hidden"
+          style={{ height: cell.cap }}
+          aria-hidden="true"
+        >
+          <span className={`min-w-0 overflow-hidden text-ellipsis ${open ? 'text-accent-ink font-medium' : ''}`}>{label}</span>
+          <span className="ml-auto flex-none inline-flex items-center gap-[3px] text-muted">
+            {pills.map((pill) => (
+              <span key={pill.key} className={pill.className} title={pill.title}>
+                {pill.glyph}
+              </span>
+            ))}
+            <CullMark culling={culling} />
+          </span>
+        </span>
+      )}
+    </li>
+  );
+});
+
+/** The state glyphs a cell reads, in one order wherever they are drawn. */
+function statePills({
+  developed,
+  leaves,
+  ignored,
+  held,
+  variant,
+  clip,
+  unreachable,
+}: {
+  developed: boolean;
+  leaves: boolean;
+  ignored: boolean;
+  held: boolean;
+  variant: number;
+  clip: boolean;
+  unreachable: boolean;
+}): { key: string; glyph: string; className: string; title: string }[] {
+  const out: { key: string; glyph: string; className: string; title: string }[] = [];
+  if (ignored) out.push({ key: 'ignored', glyph: '⊘', className: 'text-muted', title: 'ignored' });
+  else {
+    if (developed) out.push({ key: 'edited', glyph: '●', className: 'text-accent', title: 'developed' });
+    if (leaves) out.push({ key: 'leaves', glyph: '↑', className: 'text-accent-ink font-medium', title: 'leaves at export' });
+    else if (held) out.push({ key: 'held', glyph: '–', className: 'text-ink-soft', title: 'held back' });
+  }
+  if (variant > 1) out.push({ key: 'variant', glyph: String(variant), className: 'text-ink', title: `variant ${variant}` });
+  if (clip) out.push({ key: 'clip', glyph: '▶', className: 'text-ink', title: 'a clip' });
+  if (unreachable) out.push({ key: 'unreachable', glyph: '!', className: 'text-danger font-medium', title: 'not available' });
+  return out;
+}
+
+/** What an empty cell says, in a word or two — the stage says the rest. */
+const CELL_WORDS: Record<PictureAvailability['kind'], string> = {
+  ready: '…',
+  preview: '…',
+  fetching: '',
+  waiting: 'on its instance',
+  failed: 'not fetched',
+  gone: 'gone',
+  unconnected: 'not connected',
+  local: 'not open',
+};
+
+/** `+1.2 EV · contrast +10 · look · crop` — the develop's own numbers, then every other kind of edit by name. */
+function editSummary(develop: RollPicture['develop'], edits: readonly PictureEdit[]): string {
+  return [describeDevelop(develop), ...edits.filter((e) => e !== 'develop')].filter(Boolean).join(' · ');
+}
