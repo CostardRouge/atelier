@@ -169,9 +169,11 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'a', selecting: true }))).toEqual({ tab: 'adjust' });
   });
 
-  it('folds the band on B and steps its thumbnails on - and =, never from a field', () => {
+  it('folds the band on B, opens the sheet on G and steps the thumbnails on - and =, never from a field', () => {
     expect(editorKeyAction(press({ key: 'b' }))).toBe('band');
     expect(editorKeyAction(press({ key: 'B' }))).toBe('band');
+    expect(editorKeyAction(press({ key: 'g' }))).toBe('sheet');
+    expect(editorKeyAction(press({ key: 'G', repeat: true }))).toBeNull();
     expect(editorKeyAction(press({ key: '-' }))).toBe('thumbs-smaller');
     expect(editorKeyAction(press({ key: '=' }))).toBe('thumbs-larger');
     expect(editorKeyAction(press({ key: '+' }))).toBe('thumbs-larger');

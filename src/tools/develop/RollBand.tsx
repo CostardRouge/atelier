@@ -8,6 +8,7 @@ import {
   type MouseEvent as ReactMouseEvent,
   type PointerEvent as ReactPointerEvent,
   type ReactNode,
+  type RefObject,
 } from 'react';
 import { describeDevelop } from '../../shared/develop/develop';
 import type { SelectionModifiers } from '../../shared/develop/roll-editor';
@@ -19,6 +20,7 @@ import {
   type StripCell,
   type StripItem,
   type StripKind,
+  type StripLayout,
 } from '../../shared/develop/roll-strip';
 import {
   deliverState,
@@ -46,9 +48,66 @@ import { useElementWidth } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
 
 /**
+ * What the band and the contact sheet both take about the roll's pictures,
+ * and what they both answer: the cells' facts, and the host's verbs on one
+ * picture. The selection's verbs are the host's bar, not a cell's.
+ */
+export interface StripCellsProps {
+  pictures: readonly RollPicture[];
+  /** A running export (`run-progress.ts`): each cell says where its picture stands in it. */
+  run?: RunProgress | null;
+  openId: string | null;
+  selectedIds: ReadonlySet<string>;
+  thumbs: ReadonlyMap<string, Blob>;
+  /** Each thumbnail's measured aspect (`use-thumb-aspects.ts`) — the shape its cell takes. */
+  aspects: ReadonlyMap<string, number>;
+  /** Where each picture's bytes stand — a cell says it, the stage explains it. */
+  availability: ReadonlyMap<string, PictureAvailability>;
+  /** The instance's thumbnail, for a cell that has none of its own yet. */
+  remoteThumb: (picture: RollPicture) => { client: WinnowClient; id: number } | null;
+  kind: StripKind;
+  /** The selection is on: a plain click marks, the cells wear a ring to tick, the ⋯ stands down. */
+  selecting?: boolean;
+  onOpen: (id: string) => void;
+  onSelectClick: (id: string, mods: SelectionModifiers) => void;
+  /** A finger held on a cell: the selection on, with that picture. */
+  onPress: (id: string) => void;
+  /** The menu's Select: the same, from a pointer. */
+  onSelect: (id: string) => void;
+  onRemove: (picture: RollPicture) => void;
+  /** The delivery verbs of the menu — `RollEditor.handleDeliver`. */
+  onDeliver: (id: string, action: DeliverAction) => void;
+  /** A variant of this picture as it stands (⌘' on the open one). */
+  onVariant: (id: string) => void;
+  /** Leave ignored pictures out (the open one always stays). */
+  hideIgnored?: boolean;
+  /** Winnow's word on each picture it answered for (`use-roll-culling.ts`). */
+  culling?: ReadonlyMap<string, Culling>;
+  /** Whether a picture passes the filter. The open one always stays. */
+  shows?: (picture: RollPicture) => boolean;
+}
+
+/** The pictures a band or a sheet SHOWS: the filter's, the ignored where asked, the open one always. */
+export function shownPictures(
+  pictures: readonly RollPicture[],
+  openId: string | null,
+  hideIgnored: boolean,
+  shows: (picture: RollPicture) => boolean,
+): RollPicture[] {
+  return pictures.filter((p) => p.id === openId || ((!hideIgnored || !isIgnored(p)) && shows(p)));
+}
+
+/** Those pictures as the geometry takes them, each at its cell's aspect. */
+export function stripItems(shown: readonly RollPicture[], aspects: ReadonlyMap<string, number>): StripItem[] {
+  return shown.map((p) => ({ id: p.id, aspect: cellAspect(p, aspects.get(p.id)) }));
+}
+
+/**
  * The roll's pictures in a BAND under the stage (`docs/develop-roll-browser.md`,
- * face D): one row of cells at their pictures' own aspects, laid out by
- * `roll-strip.ts` and drawn at the rectangles it answers.
+ * face D): cells at their pictures' own aspects, laid out by `roll-strip.ts`
+ * and drawn at the rectangles it answers — one row scrolling sideways at the
+ * band's smallest, a justified grid once the band is pulled up, the header
+ * alone once it is folded.
  *
  * A cell is CALM: it carries what is READ — one pill with the picture's state
  * (● edited, ↑ leaves at export, – held back, ⊘ ignored, its variant number,
@@ -69,119 +128,38 @@ import type { DeliverAction } from './PictureWorkbench';
  * did not leave says ! — over the picture's centre, pointer-transparent.
  */
 export default function RollBand({
-  pictures,
-  run = null,
-  openId,
-  selectedIds,
-  thumbs,
-  aspects,
-  availability,
-  remoteThumb,
-  kind,
   height,
   header,
-  selecting = false,
   folded = false,
   thumb,
-  onOpen,
-  onSelectClick,
-  onPress,
-  onSelect,
-  onRemove,
-  onDeliver,
-  onVariant,
-  hideIgnored = false,
-  culling,
-  shows = () => true,
-}: {
-  pictures: readonly RollPicture[];
-  /** A running export (`run-progress.ts`): each cell says where its picture stands in it. */
-  run?: RunProgress | null;
-  openId: string | null;
-  selectedIds: ReadonlySet<string>;
-  thumbs: ReadonlyMap<string, Blob>;
-  /** Each thumbnail's measured aspect (`use-thumb-aspects.ts`) — the shape its cell takes. */
-  aspects: ReadonlyMap<string, number>;
-  /** Where each picture's bytes stand — a cell says it, the stage explains it. */
-  availability: ReadonlyMap<string, PictureAvailability>;
-  /** The instance's thumbnail, for a cell that has none of its own yet. */
-  remoteThumb: (picture: RollPicture) => { client: WinnowClient; id: number } | null;
-  kind: StripKind;
+  ...cells
+}: StripCellsProps & {
   /** The band's whole height, header included. */
   height: number;
   /**
-   * The header row's content, handed where the band stands in its pictures;
-   * none draws no header at all — with a phone's drawer up, where every row
-   * is the photograph's.
+   * The header row's content, handed where the band stands in its pictures
+   * and how wide it is; none draws no header at all — with a phone's drawer
+   * up, where every row is the photograph's.
    */
   header?: ((info: { at: number; shown: number; width: number }) => ReactNode) | null;
-  /** The selection is on: a plain click marks, the cells wear a ring to tick, the ⋯ stands down. */
-  selecting?: boolean;
   /** Folded to its rail: the header alone, no cell laid out or drawn. */
   folded?: boolean;
   /** The thumbnail height a grid aims at (`StripPrefs.thumb`); the metrics' own by default. */
   thumb?: number;
-  onOpen: (id: string) => void;
-  onSelectClick: (id: string, mods: SelectionModifiers) => void;
-  /** A finger held on a cell: the selection on, with that picture. */
-  onPress: (id: string) => void;
-  /** The menu's Select: the same, from a pointer. */
-  onSelect: (id: string) => void;
-  onRemove: (picture: RollPicture) => void;
-  /** The delivery verbs of the menu — `RollEditor.handleDeliver`. */
-  onDeliver: (id: string, action: DeliverAction) => void;
-  /** A variant of this picture as it stands (⌘' on the open one). */
-  onVariant: (id: string) => void;
-  /** Leave ignored pictures out of the band (the open one always stays). */
-  hideIgnored?: boolean;
-  /** Winnow's word on each picture it answered for (`use-roll-culling.ts`). */
-  culling?: ReadonlyMap<string, Culling>;
-  /** Whether a picture passes the band's filter. The open one always stays. */
-  shows?: (picture: RollPicture) => boolean;
 }) {
-  const metrics = STRIP_METRICS[kind];
+  const metrics = STRIP_METRICS[cells.kind];
   const [bodyRef, width] = useElementWidth<HTMLDivElement>();
-  // The cells are MEMOISED, so what they are handed must be stable: the
-  // host's callbacks are read through a ref, and every cell gets the same
-  // handlers for the life of the band. Without this every cell re-rendered
-  // on every tick of the open picture's sliders (the audit of 2026-09-22),
-  // a roll of hundreds of cells for one picture's change.
-  const latest = useRef({ onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant });
-  latest.current = { onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant };
-  const [menu, setMenu] = useState<{ id: string; rect: AnchorRect } | null>(null);
-  const handlers = useMemo<CellHandlers>(
-    () => ({
-      open: (id) => latest.current.onOpen(id),
-      selectClick: (id, mods) => latest.current.onSelectClick(id, mods),
-      press: (id) => latest.current.onPress(id),
-      menu: (id, rect) => setMenu({ id, rect }),
-    }),
-    [],
-  );
-
-  const shown = useMemo(
-    () => pictures.filter((p) => p.id === openId || ((!hideIgnored || !isIgnored(p)) && shows(p))),
-    [pictures, openId, hideIgnored, shows],
-  );
-  const items = useMemo<StripItem[]>(() => shown.map((p) => ({ id: p.id, aspect: cellAspect(p, aspects.get(p.id)) })), [shown, aspects]);
+  const { pictures, openId, hideIgnored = false, shows = ALWAYS, aspects } = cells;
+  const shown = useMemo(() => shownPictures(pictures, openId, hideIgnored, shows), [pictures, openId, hideIgnored, shows]);
+  const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
   const bodyHeight = folded ? 0 : height - (header ? metrics.head : 0);
   const target = thumb ?? metrics.thumb;
   const layout = useMemo(
     () => bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
     [items, folded, width, bodyHeight, metrics, target],
   );
-  const cellById = useMemo(() => new Map(layout.cells.map((c) => [c.id, c])), [layout]);
-
-  useEffect(() => {
-    const cell = openId ? bodyRef.current?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
-    cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [openId, bodyRef]);
-
+  useScrollToOpen(bodyRef, openId);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
-  const menuPicture = menu ? pictures.find((p) => p.id === menu.id) ?? null : null;
-  const menuRect = useCallback(() => menu?.rect ?? null, [menu]);
-  const closeMenu = useCallback(() => setMenu(null), []);
-
   return (
     <div className="flex flex-col min-w-0 min-h-0" style={{ height }} role="group" aria-label="Pictures on this roll">
       {header && (
@@ -198,34 +176,96 @@ export default function RollBand({
           folded ? 'hidden' : layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'
         }`}
       >
-        <ol className="relative m-0 p-0 list-none" style={{ width: layout.width, height: layout.height }}>
-          {!folded && shown.map((p) => {
-            const cell = cellById.get(p.id);
-            if (!cell) return null;
-            // Handed as two values, not a fresh object per render, so the memo holds.
-            const remote = thumbs.has(p.id) ? null : remoteThumb(p);
-            return (
-              <Cell
-                key={p.id}
-                picture={p}
-                cell={cell}
-                open={p.id === openId}
-                selected={selectedIds.has(p.id)}
-                thumb={thumbs.get(p.id) ?? null}
-                // The kind alone: the map is rebuilt per roll change, its objects with it.
-                availabilityKind={availability.get(p.id)?.kind ?? 'local'}
-                culling={culling?.get(p.id)}
-                runState={runStateOf(run, p.id)}
-                remoteClient={remote?.client ?? null}
-                remoteId={remote?.id ?? null}
-                menuOpen={menu?.id === p.id}
-                selecting={selecting}
-                handlers={handlers}
-              />
-            );
-          })}
-        </ol>
+        {!folded && <StripCells shown={shown} layout={layout} {...cells} />}
       </div>
+    </div>
+  );
+}
+
+const ALWAYS = () => true;
+
+/** The open picture's cell kept in view as ←/→ step along the roll. */
+export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null) {
+  useEffect(() => {
+    const cell = openId ? ref.current?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
+    cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+  }, [openId, ref]);
+}
+
+/**
+ * The cells themselves, at the rectangles a layout answers, with the one
+ * menu they share — the band's body and the contact sheet's alike. Drawn in
+ * a `<ol>` the size of the layout, inside whichever scroller the host gives.
+ */
+export function StripCells({
+  shown,
+  layout,
+  run = null,
+  openId,
+  selectedIds,
+  thumbs,
+  availability,
+  remoteThumb,
+  selecting = false,
+  onOpen,
+  onSelectClick,
+  onPress,
+  onSelect,
+  onRemove,
+  onDeliver,
+  onVariant,
+  culling,
+}: StripCellsProps & { shown: readonly RollPicture[]; layout: StripLayout }) {
+  // The cells are MEMOISED, so what they are handed must be stable: the
+  // host's callbacks are read through a ref, and every cell gets the same
+  // handlers for the life of the strip. Without this every cell re-rendered
+  // on every tick of the open picture's sliders (the audit of 2026-09-22),
+  // a roll of hundreds of cells for one picture's change.
+  const latest = useRef({ onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant });
+  latest.current = { onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant };
+  const [menu, setMenu] = useState<{ id: string; rect: AnchorRect } | null>(null);
+  const handlers = useMemo<CellHandlers>(
+    () => ({
+      open: (id) => latest.current.onOpen(id),
+      selectClick: (id, mods) => latest.current.onSelectClick(id, mods),
+      press: (id) => latest.current.onPress(id),
+      menu: (id, rect) => setMenu({ id, rect }),
+    }),
+    [],
+  );
+  const cellById = useMemo(() => new Map(layout.cells.map((c) => [c.id, c])), [layout]);
+  const menuPicture = menu ? shown.find((p) => p.id === menu.id) ?? null : null;
+  const menuRect = useCallback(() => menu?.rect ?? null, [menu]);
+  const closeMenu = useCallback(() => setMenu(null), []);
+  return (
+    <>
+      <ol className="relative m-0 p-0 list-none" style={{ width: layout.width, height: layout.height }}>
+        {shown.map((p) => {
+          const cell = cellById.get(p.id);
+          if (!cell) return null;
+          // Handed as two values, not a fresh object per render, so the memo holds.
+          const remote = thumbs.has(p.id) ? null : remoteThumb(p);
+          return (
+            <Cell
+              key={p.id}
+              picture={p}
+              cell={cell}
+              open={p.id === openId}
+              selected={selectedIds.has(p.id)}
+              thumb={thumbs.get(p.id) ?? null}
+              // The kind alone: the map is rebuilt per roll change, its objects with it.
+              availabilityKind={availability.get(p.id)?.kind ?? 'local'}
+              culling={culling?.get(p.id)}
+              runState={runStateOf(run, p.id)}
+              remoteClient={remote?.client ?? null}
+              remoteId={remote?.id ?? null}
+              menuOpen={menu?.id === p.id}
+              selecting={selecting}
+              handlers={handlers}
+            />
+          );
+        })}
+      </ol>
       {menu && menuPicture && (
         <AnchoredMenu
           anchorRect={menuRect}
@@ -235,11 +275,11 @@ export default function RollBand({
           label={`Actions for ${pictureLabel(menuPicture)}`}
         />
       )}
-    </div>
+    </>
   );
 }
 
-/** The band's gestures on a cell, one set for every cell and for the band's life. */
+/** The gestures on a cell, one set for every cell and for the strip's life. */
 interface CellHandlers {
   open: (id: string) => void;
   selectClick: (id: string, mods: SelectionModifiers) => void;
@@ -487,24 +527,24 @@ const Cell = memo(function Cell({
           replaces Winnow's mark in that corner while shown, so the two never
           overlap — and stands down in the selection, whose bar holds them. */}
       {!selecting && (
-      <button
-        ref={moreRef}
-        type="button"
-        onClick={(e) => {
-          e.stopPropagation();
-          const r = moreRef.current?.getBoundingClientRect();
-          if (r) handlers.menu(picture.id, r);
-        }}
-        className={`absolute right-1 top-1 w-[22px] h-[22px] grid place-items-center rounded-full border-0 bg-surface/85 text-ink cursor-pointer [&>svg]:w-3.5 [&>svg]:h-3.5 pointer-coarse:hidden ${
-          menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
-        }`}
-        aria-label={`Actions for ${label}`}
-        aria-haspopup="menu"
-        aria-expanded={menuOpen}
-        title="Actions — or right-click the picture"
-      >
-        {Icons.more}
-      </button>
+        <button
+          ref={moreRef}
+          type="button"
+          onClick={(e) => {
+            e.stopPropagation();
+            const r = moreRef.current?.getBoundingClientRect();
+            if (r) handlers.menu(picture.id, r);
+          }}
+          className={`absolute right-1 top-1 w-[22px] h-[22px] grid place-items-center rounded-full border-0 bg-surface/85 text-ink cursor-pointer [&>svg]:w-3.5 [&>svg]:h-3.5 pointer-coarse:hidden ${
+            menuOpen ? 'opacity-100' : 'opacity-0 group-hover:opacity-100 focus-visible:opacity-100'
+          }`}
+          aria-label={`Actions for ${label}`}
+          aria-haspopup="menu"
+          aria-expanded={menuOpen}
+          title="Actions — or right-click the picture"
+        >
+          {Icons.more}
+        </button>
       )}
       {cell.cap > 0 && (
         <span

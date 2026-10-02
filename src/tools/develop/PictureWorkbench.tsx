@@ -290,6 +290,7 @@ export default function PictureWorkbench({
   onSelectAll,
   onEscape,
   onBand,
+  onSheet,
   onThumbs,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
@@ -379,6 +380,8 @@ export default function PictureWorkbench({
   onEscape?: () => boolean;
   /** `B` — the band folded to its rail ↔ back to its size. */
   onBand?: () => void;
+  /** `G` — the contact sheet over the stage ↔ closed. */
+  onSheet?: () => void;
   /** `-` / `=` — the band's thumbnails one step smaller or larger. */
   onThumbs?: (direction: 1 | -1) => void;
   /** What the stage says while the picture's bytes are not in hand. */
@@ -1132,8 +1135,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onThumbs });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onThumbs };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1447,6 +1450,11 @@ export default function PictureWorkbench({
           if (!callbacks.current.onBand) return;
           e.preventDefault();
           callbacks.current.onBand();
+          return;
+        case 'sheet':
+          if (!callbacks.current.onSheet) return;
+          e.preventDefault();
+          callbacks.current.onSheet();
           return;
         case 'thumbs-smaller':
         case 'thumbs-larger':

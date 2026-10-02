@@ -126,6 +126,7 @@ import { useRollCulling } from './use-roll-culling';
 import { countCulling } from '../../shared/sources/winnow/culling';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import BandGrip from './BandGrip';
+import ContactSheet from './ContactSheet';
 import { useStripPrefs } from './use-strip-prefs';
 import { useRollPreviews } from './use-roll-previews';
 import RollPicker from './RollPicker';
@@ -197,6 +198,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // Select, a cell's menu or a finger held on a cell turn it on; Done, S
   // again or Escape turn it off and clear it.
   const [selecting, setSelecting] = useState(false);
+  // The CONTACT SHEET (`ContactSheet`): the roll large over the stage, to
+  // sort and to act on many — `G`, the band's ▦; a click on a picture opens
+  // it and closes the sheet.
+  const [contactOpen, setContactOpen] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
@@ -1153,10 +1158,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     dragFrom.current = null;
   }, []);
   const toggleFolded = useCallback(() => patchStrip({ folded: !strip.folded }), [patchStrip, strip.folded]);
+  // `-` / `=` step whichever thumbnails are on screen: the sheet's while it is open, else the band's.
   const stepThumbs = useCallback(
-    (direction: 1 | -1) => patchStrip({ thumb: stepThumb(strip.thumb, direction, stripMetrics, 'band') }),
-    [patchStrip, strip.thumb, stripMetrics],
+    (direction: 1 | -1) =>
+      contactOpen
+        ? patchStrip({ sheet: stepThumb(strip.sheet, direction, stripMetrics, 'sheet') })
+        : patchStrip({ thumb: stepThumb(strip.thumb, direction, stripMetrics, 'band') }),
+    [patchStrip, strip.thumb, strip.sheet, stripMetrics, contactOpen],
   );
+  const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
+  const chipSize = compact ? 'md' : 'sm';
   /** A menu row that says whether it is the state: a dot before the one in force. */
   const marked = (on: boolean, text: string, key?: string) => (
     <span className="inline-flex items-center gap-3 whitespace-pre">
@@ -1208,6 +1219,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         ]
       : []),
   ];
+  // ONE filter chip, drawn in the band's header and in the sheet's.
+  const filterChip = (
+    <OverflowMenu
+      label="What the band shows"
+      items={filterMenu}
+      align="start"
+      trigger={{ text: stripFilterLabel(stripFilter), size: chipSize, variant: filtering ? 'primary' : 'default' }}
+    />
+  );
   // The band's header: where it stands in its pictures, what the roll holds,
   // what the band shows and the way into the selection — or, the selection
   // on, its bar of verbs.
@@ -1248,22 +1268,26 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               · {summary}
             </span>
           )}
-          <OverflowMenu
-            label="What the band shows"
-            items={filterMenu}
-            align="start"
-            trigger={{ text: stripFilterLabel(stripFilter), size, variant: filtering ? 'primary' : 'default' }}
-          />
+          {filterChip}
           <span className="flex-1" />
           <Button size={size} onClick={() => startSelecting()} title="Pick several pictures, then act on them all (S)">
             Select
           </Button>
+          {compact ? (
+            <IconButton size="md" label="Contact sheet (G)" onClick={toggleSheet}>
+              {Icons.grid}
+            </IconButton>
+          ) : (
+            <Button size="sm" icon={Icons.grid} onClick={toggleSheet} title="The whole roll large over the picture, to sort and to act on many (G)">
+              Sheet
+            </Button>
+          )}
           <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side="above" />
         </>
       );
     },
     // The menus are rebuilt per render on purpose: they read the band's state.
-    [selecting, compact, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, showIgnored, bandHeight, strip.thumb, strip.auto],
+    [selecting, compact, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandHeight, strip.thumb, strip.auto],
   );
 
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
@@ -1486,9 +1510,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSelectAll={selectAll}
               onBand={toggleFolded}
               onThumbs={stepThumbs}
+              onSheet={toggleSheet}
               onEscape={() => {
+                // In order: the selection, then the sheet — each one step back.
                 if (selecting) {
                   stopSelecting();
+                  return true;
+                }
+                if (contactOpen) {
+                  setContactOpen(false);
                   return true;
                 }
                 return false;
@@ -1679,6 +1709,40 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 </div>
               </div>
             </div>
+            {contactOpen && (
+              <ContactSheet
+                compact={compact}
+                pictures={roll.pictures}
+                run={exports.progress}
+                openId={openId}
+                selectedIds={visibleSelected}
+                thumbs={thumbs}
+                aspects={thumbAspects}
+                availability={availability}
+                remoteThumb={remoteThumb}
+                kind={stripKind}
+                selecting={selecting}
+                thumb={strip.sheet}
+                onThumb={stepThumbs}
+                filter={filterChip}
+                bar={selecting ? <SelectionBar compact={compact} dense={bandBox.width < 800} verbs={selectionVerbs} /> : null}
+                onSelecting={() => startSelecting()}
+                onClose={() => setContactOpen(false)}
+                onOpen={(id) => {
+                  onOpenPicture(id);
+                  setContactOpen(false);
+                }}
+                onSelectClick={handleSelectClick}
+                onPress={startSelecting}
+                onSelect={startSelecting}
+                onRemove={(p) => removeAsked([p.id])}
+                onDeliver={handleDeliver}
+                onVariant={(id) => makeVariantOf(id, 'clone')}
+                hideIgnored={!showIgnored}
+                culling={culling.byPicture}
+                shows={filtering ? passesFilter : undefined}
+              />
+            )}
           </div>
         </div>
       )}
