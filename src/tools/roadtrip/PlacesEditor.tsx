@@ -180,8 +180,8 @@ function PlaceFields({
             onChange({
               ...place,
               name: result.name,
-              // Only fill a region the author has not written themselves.
-              region: place.region.trim() || result.region,
+              // Only fill a state the author has not written themselves.
+              state: place.state.trim() || result.region,
               coords: { lat: result.lat, lon: result.lon },
             })
           }
@@ -192,10 +192,10 @@ function PlaceFields({
           inputClassName={inputClass}
         />
         <input
-          value={place.region}
-          onChange={(e) => onChange({ ...place, region: e.target.value })}
+          value={place.state}
+          onChange={(e) => onChange({ ...place, state: e.target.value })}
           placeholder={inherited || 'Western Australia'}
-          aria-label={`Region of ${name}`}
+          aria-label={`State of ${name}`}
           className={`${inputClass} flex-1 min-w-[7rem]`}
         />
         {confirming ? (

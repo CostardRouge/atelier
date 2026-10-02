@@ -180,8 +180,8 @@ describe('dayStageActions', () => {
   it('names the covering leg by its derived label when it has no name', () => {
     const leg = stage('2025-03-02', '2025-03-10');
     leg.places = [
-      { id: 'a', name: 'Perth', region: '', coords: null },
-      { id: 'b', name: 'Kalbarri', region: '', coords: null },
+      { id: 'a', name: 'Perth', state: '', coords: null },
+      { id: 'b', name: 'Kalbarri', state: '', coords: null },
     ];
     expect(dayStageActions(trip([leg]), '2025-03-04')[1].label).toBe('End “Perth → Kalbarri” here');
   });

@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { mapOptions } from './hooks/map-plan';
 import {
+  DEFAULT_PLACE_STYLE,
   DEFAULT_SLIDE_SECONDS,
   TRIP_DOC_VERSION,
   createTripDoc,
@@ -14,9 +15,13 @@ import {
   emptyGrade,
   hookDefaultsFrom,
   migrateTripDoc,
+  readPlaceStyle,
+  readStateCodes,
   spanProblem,
+  splitLegacyRegion,
   stageProblem,
   type TripDoc,
+  type TripPlace,
   type TripStage,
 } from './trip-types';
 import { tripRouteLabel } from './trip-places';
@@ -945,9 +950,89 @@ describe('createTripStage', () => {
   it('trims what was typed', () => {
     expect(createTripPlace('  Perth  ', '  WA  ')).toMatchObject({
       name: 'Perth',
-      region: 'WA',
+      state: 'WA',
       coords: null,
     });
+  });
+
+  it('writes what else is known only when it is given, trimmed, so a bare place keeps its four fields', () => {
+    const bare = createTripPlace('Perth');
+    expect(Object.keys(bare).sort()).toEqual(['coords', 'id', 'name', 'state']);
+    const full = createTripPlace('Sydney', 'New South Wales', null, {
+      searchCode: ' NSW ',
+      country: 'Australia',
+      countryCode: 'AU',
+      arrived: '2025-11-10',
+      area: '',
+      source: 'search',
+    });
+    expect(full).toMatchObject({ searchCode: 'NSW', country: 'Australia', countryCode: 'AU', arrived: '2025-11-10', source: 'search' });
+    expect(full).not.toHaveProperty('area');
+    expect(full).not.toHaveProperty('left');
+  });
+});
+
+describe('migrateTripDoc — v29 → v30, a place keeps what it knows', () => {
+  const v29 = () => {
+    const doc = createTripDoc('Australie', '2025-11-01', '2025-11-30');
+    const legacy = (id: string, name: string, region: string) => ({ id, name, region, coords: null });
+    doc.stages = [
+      {
+        ...createTripStage('', 'WA (typed)', '2025-11-02', '2025-11-10'),
+        places: [
+          legacy('a', 'Kalbarri', 'Western Australia, Australia'),
+          legacy('b', 'Perth', 'Western Australia'),
+          legacy('c', 'Somewhere', ''),
+          legacy('d', 'Sapporo', 'Hokkaido, Hokkaido Prefecture, Japan'),
+        ] as unknown as TripPlace[],
+      },
+    ];
+    const bare = doc as unknown as Record<string, unknown>;
+    delete bare.placeStyle;
+    delete bare.stateCodes;
+    return { ...doc, version: 29 } as TripDoc;
+  };
+
+  it('splits the old free region into a state and a country, and deletes the key', () => {
+    const [stage] = migrateTripDoc(v29()).stages;
+    const [a, b, c, d] = stage.places;
+    expect(a).toMatchObject({ name: 'Kalbarri', state: 'Western Australia', country: 'Australia' });
+    expect(b).toMatchObject({ name: 'Perth', state: 'Western Australia' });
+    expect(b).not.toHaveProperty('country');
+    expect(c).toMatchObject({ name: 'Somewhere', state: '' });
+    // Several levels: everything but the last is the state, the last the country.
+    expect(d).toMatchObject({ state: 'Hokkaido, Hokkaido Prefecture', country: 'Japan' });
+    for (const place of stage.places) expect(place).not.toHaveProperty('region');
+    // The stage's own typed region is untouched.
+    expect(stage.region).toBe('WA (typed)');
+  });
+
+  it('gives the trip its two writings and an empty table, and reaches the version', () => {
+    const doc = migrateTripDoc(v29());
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+    expect(doc.placeStyle).toEqual(DEFAULT_PLACE_STYLE);
+    expect(doc.stateCodes).toEqual({});
+  });
+
+  it('is idempotent and keeps a v30 place and table as they are', () => {
+    const once = migrateTripDoc(v29());
+    once.stages[0].places[0].stateCode = 'WA';
+    once.stateCodes = { Queensland: 'QLD' };
+    once.placeStyle = { badge: 'paren', lists: 'full' };
+    const twice = migrateTripDoc(structuredClone(once));
+    expect(twice).toEqual(once);
+  });
+
+  it('reads junk writings and tables as the default and nothing', () => {
+    expect(readPlaceStyle({ badge: 'bold', lists: 'full' })).toEqual({ badge: 'name', lists: 'full' });
+    expect(readPlaceStyle(null)).toEqual(DEFAULT_PLACE_STYLE);
+    expect(readStateCodes({ Queensland: 'QLD', Victoria: 3, '': 'X', Tasmania: ' ' })).toEqual({ Queensland: 'QLD' });
+    expect(readStateCodes(['QLD'])).toEqual({});
+  });
+
+  it('splitLegacyRegion keeps one part as the state — nothing says whether it was a country', () => {
+    expect(splitLegacyRegion('Japan')).toEqual({ state: 'Japan', country: '' });
+    expect(splitLegacyRegion(' , ')).toEqual({ state: '', country: '' });
   });
 });
 

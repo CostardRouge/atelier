@@ -16,10 +16,10 @@
  *   `stageLabel`; writing "Kalbarri" into the name would pin as a decision what
  *   the place already says, and the label would lie the moment the place was
  *   renamed.
- * - **No country in the document.** `TripPlace.region` is an editorial field
- *   whose empty value means derived, while "AU" is a machine token. The country
- *   rides on `PictureLocation.city` for a panel to show as a hint, and reaches
- *   nothing that is stored.
+ * - **No country NAME in the document.** `TripPlace.state` is an editorial
+ *   field whose empty value means derived, while "AU" is a machine token: since
+ *   v30 it lands in `countryCode`, the field made for a code, and the country
+ *   still rides on `PictureLocation.city` for a panel to show as a hint.
  * - **Null Island is refused.** `0, 0` is what a camera writes with no fix
  *   (`readDayPoint` and `parsePosition` both refuse it), and one such picture
  *   would drag a leg into the Gulf of Guinea.
@@ -123,8 +123,12 @@ function legName(stage: TripStage): string {
 function placeFor(city: GazetteerCity) {
   // The name is the city's, so the coordinates are too — the same pairing
   // `track-chapters.ts` writes, and the one the Itinerary draws a stop at.
-  // The region stays EMPTY: empty means derived, and "AU" is a machine token.
-  return createTripPlace(city.name, '', { lat: city.lat, lon: city.lon });
+  // The state stays EMPTY: empty means derived, and "AU" is a machine token,
+  // which is why it lands in `countryCode` and never in `country`.
+  return createTripPlace(city.name, '', { lat: city.lat, lon: city.lon }, {
+    source: 'deduced',
+    countryCode: city.country.toUpperCase(),
+  });
 }
 
 /** Does this leg already say it went there? Names are compared as written. */

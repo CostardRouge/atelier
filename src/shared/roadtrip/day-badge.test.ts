@@ -58,6 +58,8 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   cover: defaultTripCover(),
   developPresets: [],
   car: defaultCarSpec(),
+  placeStyle: { badge: 'name', lists: 'code' },
+  stateCodes: {},
   createdAt: 0,
   updatedAt: 0,
   ...over,
@@ -502,7 +504,7 @@ describe('counterPreviews', () => {
 });
 
 describe('a stage names its place through its places, not only its name', () => {
-  const legStage = (places: { name: string; region?: string }[]): TripStage => ({
+  const legStage = (places: { name: string; state?: string }[]): TripStage => ({
     id: 's-leg',
     name: '',
     region: '',
@@ -511,7 +513,7 @@ describe('a stage names its place through its places, not only its name', () => 
     places: places.map((p, i) => ({
       id: `pl-${i}`,
       name: p.name,
-      region: p.region ?? '',
+      state: p.state ?? '',
       coords: null,
     })),
   });
@@ -523,12 +525,12 @@ describe('a stage names its place through its places, not only its name', () => 
     expect(pieces?.unavailable).toBeNull();
   });
 
-  it('carries the region its places agree on into the caption', () => {
+  it('carries the state its places agree on into the caption', () => {
     const doc = trip({
       stages: [
         legStage([
-          { name: 'Perth', region: 'Western Australia' },
-          { name: 'Kalbarri', region: 'Western Australia' },
+          { name: 'Perth', state: 'Western Australia' },
+          { name: 'Kalbarri', state: 'Western Australia' },
         ]),
       ],
     });

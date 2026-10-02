@@ -1,0 +1,220 @@
+/**
+ * How a place is WRITTEN, and where its short code comes from.
+ *
+ * A place keeps facts (`TripPlace`: a name, a state, a code or three, a
+ * country, two dates). This module turns them into the string a surface
+ * shows — «Sydney, NSW» · «Sydney, New South Wales» · «Sydney (NSW)» ·
+ * «Sydney» — and settles the one fact that has several candidates, the
+ * state's short code.
+ *
+ * Two rules, both the maintainer's (2026-10-01 / 2026-10-02):
+ *
+ * - **The writing CASCADES** like the look does — the place's own, else its
+ *   stage's, else the trip's for that kind of surface (`badge` has little
+ *   room, `lists` has plenty); nearest wins and absent means «like above».
+ * - **No table of codes is shipped.** A state's code is the place's OWN when
+ *   the author wrote one, else the TRIP's table (filled by the author, one
+ *   state at a time, from a place where a code was corrected), else what the
+ *   SEARCH gave (the second half of an ISO 3166-2), else DERIVED from the
+ *   name — and a place may be pinned to any of the three it has
+ *   (`codeFrom`), so the author can always prefer the search's value, the
+ *   table's or their own. The derivation is a last resort said out loud: it
+ *   is right for «New South Wales» and wrong for «Queensland», which is what
+ *   the table is for.
+ *
+ * Pure and DOM-free.
+ */
+
+import { formatDayMonth, isWithin, parseIsoDate, type IsoDate } from './trip-days';
+import type {
+  PlaceCodeFrom,
+  PlaceStyle,
+  TripDoc,
+  TripPlace,
+  TripPlaceStyle,
+  TripStage,
+} from './trip-types';
+
+export type PlaceSurface = keyof TripPlaceStyle;
+
+export const PLACE_STYLE_OPTIONS: readonly { id: PlaceStyle; label: string; example: string }[] = [
+  { id: 'code', label: 'Name, code', example: 'Sydney, NSW' },
+  { id: 'full', label: 'Name, state', example: 'Sydney, New South Wales' },
+  { id: 'paren', label: 'Name (code)', example: 'Sydney (NSW)' },
+  { id: 'name', label: 'Name only', example: 'Sydney' },
+];
+
+/** Where a resolved code came from — the three a place may wear, plus the two fallbacks. */
+export type CodeFrom = PlaceCodeFrom | 'derived' | 'none';
+
+export interface StateCode {
+  code: string;
+  from: CodeFrom;
+}
+
+export const CODE_FROM_WORDS: Record<CodeFrom, string> = {
+  own: 'this place’s own',
+  table: 'the trip’s table',
+  search: 'the search',
+  derived: 'derived from the name',
+  none: 'no state',
+};
+
+/** Words an acronym skips: «Australian Capital Territory» → ACT, «Île-de-France» → IDF. */
+const SMALL_WORDS = new Set(['of', 'the', 'and', 'de', 'du', 'des', 'la', 'le', 'les', 'et', 'd', 'l', 'y', 'del', 'di', 'da', 'do', 'dos', 'das', 'van', 'von']);
+
+function fold(text: string): string {
+  return text.normalize('NFD').replace(/[̀-ͯ]/g, '');
+}
+
+/**
+ * A code from a state's name alone: the initials of its words (small words
+ * skipped), or the first three letters of a single word. «New South Wales» →
+ * NSW, «Western Australia» → WA, «Bretagne» → BRE — and «Queensland» → QUE,
+ * which is why this is the LAST rung and never the first.
+ */
+export function deriveStateCode(state: string): string {
+  const words = fold(state)
+    .split(/[\s\-'’]+/)
+    .filter((word) => word.length > 0 && !SMALL_WORDS.has(word.toLowerCase()));
+  if (words.length === 0) return '';
+  if (words.length === 1) return words[0].slice(0, 3).toUpperCase();
+  return words.map((word) => word[0]).join('').toUpperCase();
+}
+
+function sameState(a: string, b: string): boolean {
+  return fold(a).trim().toLowerCase() === fold(b).trim().toLowerCase();
+}
+
+/** The trip's table, read by the state's name — accents and case forgiven. */
+export function tableCode(codes: Record<string, string>, state: string): string {
+  if (!state.trim()) return '';
+  const exact = codes[state.trim()];
+  if (exact) return exact;
+  for (const [key, code] of Object.entries(codes)) if (sameState(key, state)) return code;
+  return '';
+}
+
+/** Every code this place could wear, empty where it has none. */
+export function codeCandidates(
+  place: Pick<TripPlace, 'state' | 'stateCode' | 'searchCode'>,
+  trip: Pick<TripDoc, 'stateCodes'>,
+): Record<PlaceCodeFrom | 'derived', string> {
+  return {
+    own: (place.stateCode ?? '').trim(),
+    table: tableCode(trip.stateCodes ?? {}, place.state),
+    search: (place.searchCode ?? '').trim(),
+    derived: deriveStateCode(place.state),
+  };
+}
+
+/**
+ * The code a place wears: the rung it is pinned to when that rung has a
+ * value, else the automatic order own → table → search → derived. A pin on
+ * a rung that went empty (the table entry was removed) falls through rather
+ * than showing nothing — the pin is a preference, not a fact.
+ */
+export function stateCodeFor(
+  place: Pick<TripPlace, 'state' | 'stateCode' | 'searchCode' | 'codeFrom'>,
+  trip: Pick<TripDoc, 'stateCodes'>,
+): StateCode {
+  if (!place.state.trim()) return { code: '', from: 'none' };
+  const c = codeCandidates(place, trip);
+  if (place.codeFrom && c[place.codeFrom]) return { code: c[place.codeFrom], from: place.codeFrom };
+  for (const from of ['own', 'table', 'search'] as const) if (c[from]) return { code: c[from], from };
+  return { code: c.derived, from: c.derived ? 'derived' : 'none' };
+}
+
+export interface ResolvedStyle {
+  style: PlaceStyle;
+  from: 'place' | 'stage' | 'trip';
+}
+
+/** The cascade: the place's own, else its stage's, else the trip's for this surface. */
+export function placeStyleFor(
+  place: Pick<TripPlace, 'style'>,
+  stage: Pick<TripStage, 'placeStyle'> | null,
+  trip: Pick<TripDoc, 'placeStyle'>,
+  surface: PlaceSurface,
+): ResolvedStyle {
+  if (place.style) return { style: place.style, from: 'place' };
+  if (stage?.placeStyle) return { style: stage.placeStyle, from: 'stage' };
+  return { style: trip.placeStyle[surface], from: 'trip' };
+}
+
+/**
+ * The place in one writing. A style that asks for what the place lacks
+ * degrades to the next thing it has — «Sydney, NSW» with no code becomes
+ * «Sydney, New South Wales», and with no state «Sydney» — never a dangling
+ * comma, never an invented code.
+ */
+export function writePlace(
+  place: Pick<TripPlace, 'name' | 'state' | 'stateCode' | 'searchCode' | 'codeFrom'>,
+  style: PlaceStyle,
+  trip: Pick<TripDoc, 'stateCodes'>,
+): string {
+  const name = place.name.trim();
+  const state = place.state.trim();
+  if (!name || !state || style === 'name') return name;
+  if (style === 'full') return `${name}, ${state}`;
+  const { code } = stateCodeFor(place, trip);
+  if (!code) return `${name}, ${state}`;
+  return style === 'paren' ? `${name} (${code})` : `${name}, ${code}`;
+}
+
+/** `writePlace` through the cascade — what a surface actually shows. */
+export function placeText(
+  place: TripPlace,
+  stage: TripStage | null,
+  trip: Pick<TripDoc, 'placeStyle' | 'stateCodes'>,
+  surface: PlaceSurface,
+): string {
+  return writePlace(place, placeStyleFor(place, stage, trip, surface).style, trip);
+}
+
+/** The states the trip's places name, distinct, in the order they are met — what the table lists. */
+export function statesOf(trip: Pick<TripDoc, 'stages'>): string[] {
+  const seen: string[] = [];
+  for (const stage of trip.stages ?? []) {
+    for (const place of stage.places ?? []) {
+      const state = place.state.trim();
+      if (state && !seen.some((s) => sameState(s, state))) seen.push(state);
+    }
+  }
+  return seen;
+}
+
+/** The trip with one more line in its table — or one less, when the code is emptied. */
+export function rememberStateCode(trip: TripDoc, state: string, code: string): TripDoc {
+  const key = state.trim();
+  if (!key) return trip;
+  const next = { ...trip.stateCodes };
+  for (const existing of Object.keys(next)) if (sameState(existing, key)) delete next[existing];
+  if (code.trim()) next[key] = code.trim();
+  return { ...trip, stateCodes: next };
+}
+
+/**
+ * A place's dates as one chip: nothing, «10 Nov», or «7–9 Nov» — the month
+ * said once when both days share it. The year is the trip's.
+ */
+export function placeDates(place: Pick<TripPlace, 'arrived' | 'left'>): string {
+  const from = place.arrived && parseIsoDate(place.arrived) !== null ? place.arrived : '';
+  const to = place.left && parseIsoDate(place.left) !== null ? place.left : '';
+  if (!from) return to ? formatDayMonth(to) : '';
+  if (!to || to === from) return formatDayMonth(from);
+  const [a, b] = [formatDayMonth(from), formatDayMonth(to)];
+  const [ad, am] = a.split(' ');
+  const [bd, bm] = b.split(' ');
+  return am === bm ? `${ad}–${bd} ${bm}` : `${a}–${b}`;
+}
+
+/** A date outside the stage's span — kept and SAID, never corrected. */
+export function datesOutsideStage(
+  place: Pick<TripPlace, 'arrived' | 'left'>,
+  stage: Pick<TripStage, 'startDate' | 'endDate'>,
+): boolean {
+  const outside = (iso: IsoDate | undefined) =>
+    !!iso && parseIsoDate(iso) !== null && !isWithin(stage.startDate, stage.endDate, iso);
+  return outside(place.arrived) || outside(place.left);
+}

@@ -160,7 +160,19 @@ describe('proposeDraft — answers and edits', () => {
     const [p] = regions(trip(), draft);
     expect(p.unnamed).toEqual([]);
     const halt = p.halts[3];
-    expect(haltPlace(halt, draft)).toMatchObject({ name: 'Mount Barnett', region: '', coords: { lat: -16.7, lon: 125.92 } });
+    expect(haltPlace(halt, draft)).toMatchObject({
+      name: 'Mount Barnett',
+      state: '',
+      coords: { lat: -16.7, lon: 125.92 },
+      arrived: '2025-11-13',
+      left: '2025-11-14',
+      dateFrom: 'photos',
+      source: 'deduced',
+    });
+    expect(haltPlace(halt, draft)).not.toHaveProperty('countryCode');
+    // A named halt carries the city's country as the CODE it is, never as a name.
+    expect(haltPlace(p.halts[0], draft)).toMatchObject({ state: 'Western Australia', countryCode: 'AU' });
+    expect(haltPlace(p.halts[0], draft)).not.toHaveProperty('country');
     expect(haltPlace(halt, EMPTY_DRAFT)).toBeNull();
     expect(rename(draft, '2025-11-13', '  ').renames).toEqual({});
   });

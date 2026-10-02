@@ -144,6 +144,7 @@ function placesOf(chapter: TimelineChapter): TripPlace[] {
         finiteWithin(place.lat, 90) && finiteWithin(place.lon, 180)
           ? { lat: place.lat, lon: place.lon }
           : null,
+        { source: 'deduced' },
       ),
     );
 }
