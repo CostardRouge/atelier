@@ -1,6 +1,10 @@
 # Develop's layers and masks, measured, and a subject that can be taken back
 
-**Status: proposed on 2026-10-02, nothing built.** This brief comes from his
+**Status: proposed on 2026-10-02; §5 being built the same day** on his *«vas-y
+avec tes recommandations, construis-le»*, §6 answered by its recommendations
+(the lab's face, ⌥ beside the switch, SAM after steps 1–3 on his pictures,
+Refine shown at once). Built: §5.1 Remove, §5.2 Refine — `docs/memory/subject-model.md`.
+This brief comes from his
 report. The lab that carries the proposal as a working mock is
 <https://claude.ai/artifact/5jy9NnEg1SoRdUNjDcAMas>. It holds the stage, the
 proposed inspector, today's inspector as measured, and the model's four paths.

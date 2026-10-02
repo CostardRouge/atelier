@@ -2,6 +2,7 @@ import { useEffect, useRef, useState } from 'react';
 import type { BrushRaster } from '../render/brush-raster';
 import {
   composeSubject,
+  type ComposeOptions,
   prepareSegmentSource,
   segmentPoint,
   segmenterState,
@@ -10,7 +11,8 @@ import {
 } from '../segment/segmenter';
 import { isConstrainedDevice } from '../lib/device-class';
 import { subjectLayersToSegment, type AdjustLayer } from './layer';
-import type { SubjectMask } from '../render/mask';
+import { subjectRefineOf, type SubjectMask } from '../render/mask';
+import { cutConfidence } from '../segment/subject-refine';
 import type { SegmentView } from './segment-view';
 import { knownSubjectPoints, type KnownPoints } from './subject-known';
 
@@ -30,7 +32,9 @@ import { knownSubjectPoints, type KnownPoints } from './subject-known';
  * - **Cached per POINT and per VIEW, not per request.** A layer's mask is the
  *   union of its points, so a third tap costs ONE inference rather than three,
  *   un-picking a point costs none, and two layers pointing at the same spot
- *   segment once. Nudging a slider never re-runs a four-second inference. The
+ *   segment once. Nudging a slider never re-runs a four-second inference, and
+ *   neither does a REFINE knob (Tolerance, islands, Grow / Shrink): what is
+ *   cached is the model's confidence, and the cut is made at compose time. The
  *   VIEW is the frame the model was shown (`SegmentView.key`): a lens
  *   correction or a keystone moves the subject in that frame, so a point is
  *   asked again there — and only there, never for a vignette or a colour.
@@ -84,6 +88,20 @@ function pointKey(pictureKey: string, model: string, [x, y]: Point): string {
 interface SubjectTap {
   point: Point;
   tone: 'add' | 'remove';
+}
+
+/**
+ * How a layer's answers are composed: its refine settings, and its ADDED points
+ * as the seeds "Only what touches my + points" keeps.
+ */
+function composeOptions(mask: SubjectMask): ComposeOptions {
+  return { ...subjectRefineOf(mask), seeds: mask.points.map(([x, y]) => ({ x, y })) };
+}
+
+/** A refine setting as text, for the signature — so a knob re-composes and never re-asks the model. */
+function refineKey(mask: SubjectMask): string {
+  const r = subjectRefineOf(mask);
+  return `t${r.tolerance}i${r.islands ? 1 : 0}g${r.grow}`;
 }
 
 /** Every tap of a subject, the added ones first — the order they compose in. */
@@ -158,10 +176,10 @@ export function useSubjectMasks({
   // raster is what "show the mask" paints before the layer has a develop.
   const wanted = subjectLayersToSegment(layers).map((l) => {
     const mask = l.mask as SubjectMask;
-    return { id: l.id, model: mask.model, taps: subjectTaps(mask) };
+    return { id: l.id, model: mask.model, taps: subjectTaps(mask), options: composeOptions(mask), refine: refineKey(mask) };
   });
   const signature = wanted
-    .map((w) => `${w.id}=${w.taps.map((t) => tapKey(pictureKey, w.model, t)).join(';')}`)
+    .map((w) => `${w.id}=${w.taps.map((t) => tapKey(pictureKey, w.model, t)).join(';')}~${w.refine}`)
     .join('|');
 
   useEffect(() => {
@@ -194,9 +212,10 @@ export function useSubjectMasks({
         (tap.tone === 'add' ? plus : minus).push(hit);
       }
       // A point tapped again where one was taken off: its answer is cached,
-      // and it blinks all the same — it is still what the tap changed.
-      if (complete && tapped) setFresh(tapped);
-      const composed = complete ? composeSubject(plus, minus) : null;
+      // and it blinks all the same — it is still what the tap changed. The
+      // blink is the answer CUT, as the subject takes it, not the soft map.
+      if (complete && tapped) setFresh({ ...tapped, raster: cutConfidence(tapped.raster, want.options.tolerance) });
+      const composed = complete ? composeSubject(plus, minus, want.options) : null;
       if (composed) ready.set(want.id, composed);
       else missing.push(want);
     }
@@ -230,12 +249,12 @@ export function useSubjectMasks({
             if (mask) lruSet(pointCache, key, mask, pointCacheSize());
           }
           if (mask && isNew(want.id, tapKey(pictureKey, want.model, tap)) && !cancelled && runId.current === run) {
-            setFresh({ layerId: want.id, raster: mask, tone: tap.tone });
+            setFresh({ layerId: want.id, raster: cutConfidence(mask, want.options.tolerance), tone: tap.tone });
           }
           (tap.tone === 'add' ? plus : minus).push(mask);
         }
         if (cancelled || runId.current !== run) return;
-        const composed = composeSubject(plus, minus);
+        const composed = composeSubject(plus, minus, want.options);
         if (composed) {
           const raster = composed;
           setRasters((prev) => {

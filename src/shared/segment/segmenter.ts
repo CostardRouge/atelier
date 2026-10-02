@@ -32,6 +32,14 @@
 
 import type { BrushRaster } from '../render/brush-raster';
 import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
+import {
+  cutConfidence,
+  growPixels,
+  growShrink,
+  keepTouching,
+  normaliseRefine,
+  type SubjectRefine,
+} from './subject-refine';
 
 /**
  * Where the files are, under the deployed base — NEVER a hardcoded `/models/`.
@@ -57,13 +65,15 @@ interface VisionBundle {
   };
 }
 
+interface MPMask {
+  getAsFloat32Array(): Float32Array;
+  width: number;
+  height: number;
+  close(): void;
+}
+
 interface SegmentationResult {
-  categoryMask?: {
-    getAsUint8Array(): Uint8Array;
-    width: number;
-    height: number;
-    close(): void;
-  } | null;
+  confidenceMasks?: MPMask[] | null;
   close?(): void;
 }
 
@@ -104,8 +114,11 @@ export async function loadSegmenter(): Promise<InteractiveSegmenterTask | null> 
       const create = (delegate: 'GPU' | 'CPU') =>
         bundle.InteractiveSegmenter.createFromOptions(fileset, {
           baseOptions: { delegate, modelAssetPath: `${MEDIAPIPE_BASE}/magic_touch.tflite` },
-          outputCategoryMask: true,
-          outputConfidenceMasks: false,
+          // The CONFIDENCE map, not the category mask: the category is this
+          // map cut at one half (measured, not a pixel differs), and the map
+          // is what lets Tolerance move the cut (`subject-refine.ts`).
+          outputCategoryMask: false,
+          outputConfidenceMasks: true,
         });
       try {
         task = await create('GPU');
@@ -135,23 +148,21 @@ export function disposeSegmenter(): void {
 }
 
 /**
- * The selected object is category **0**, and everything else is 255.
- *
- * Backwards from the obvious reading, and not a guess: a bright disc pointed at
- * dead centre came back with 0 at the disc and 255 in the corners, and
- * `p5-templates` defaults its own `inverse` flag to true over the same model
- * for the same reason. Reading it the other way selects the BACKGROUND, which
- * looks like a working feature until somebody notices the adjustment landed
- * everywhere except the subject.
+ * The confidence map is the probability of the SELECTED object — high on the
+ * thing tapped, 0 on the ground (measured: 1 inside a tapped square, 0.989 on a
+ * disc within it, 0 on the grey around). Its category mask counts the other way
+ * — the selected object is category **0** — which `p5-templates` meets with an
+ * `inverse` flag defaulting to true; reading the category the obvious way
+ * selects the BACKGROUND. The map has no such trap, and is stored as a byte.
  */
-const isSubject = (category: number): number => (category === 0 ? 255 : 0);
+const toByte = (confidence: number): number => Math.round(Math.min(1, Math.max(0, confidence)) * 255);
 
 /**
  * The long edge the model is SHOWN, and so the size of the mask it returns.
  *
  * `magic_touch` resamples its input to a few hundred pixels inside, so showing
  * it a stage-budget picture (4K) buys no precision — it costs an upload and a
- * downscale per point, and the category mask comes back at the INPUT's size:
+ * downscale per point, and the confidence map comes back at the INPUT's size:
  * 12 MB per point at 4K, copied, unioned and cached. 1024 is the painted
  * mask's own density (`BRUSH_RASTER_LONG_EDGE`), sampled bilinearly by the
  * same pass, and a mask is a soft thing by design.
@@ -200,9 +211,9 @@ export async function prepareSegmentSource(
 }
 
 /**
- * One point's mask, normalised to the raster every layer pass draws (the
- * subject 255, the rest 0), or null when the model refused or did not answer
- * in time.
+ * One point's answer as the model's CONFIDENCE, a byte per pixel (255 = sure
+ * it is the object tapped), or null when the model refused or did not answer
+ * in time. Not yet a mask: `composeSubject` cuts it at the tolerance.
  */
 export async function segmentPoint(
   source: TexImageSource,
@@ -223,24 +234,27 @@ export async function segmentPoint(
       model.segment(source, { keypoint: { x: point.x, y: point.y } }, (result) => {
         if (settled) {
           // Too late: the answer belongs to nobody, but its buffers are still ours to free.
-          result.categoryMask?.close();
+          for (const m of result.confidenceMasks ?? []) m.close();
           result.close?.();
           return;
         }
         settled = true;
         clearTimeout(timer);
-        const mask = result.categoryMask;
+        const masks = result.confidenceMasks ?? [];
+        const mask = masks[0];
         if (!mask) {
+          for (const m of masks) m.close();
+          result.close?.();
           resolve(null);
           return;
         }
         // Copied out before `close()`: the buffer is the task's, and reading it
         // after the result is closed is reading freed memory.
-        const categories = mask.getAsUint8Array();
-        const data = new Uint8Array(categories.length);
-        for (let i = 0; i < categories.length; i += 1) data[i] = isSubject(categories[i]);
+        const confidence = mask.getAsFloat32Array();
+        const data = new Uint8Array(confidence.length);
+        for (let i = 0; i < confidence.length; i += 1) data[i] = toByte(confidence[i]);
         const { width, height } = mask;
-        mask.close();
+        for (const m of masks) m.close();
         result.close?.();
         resolve({ data, width, height });
       });
@@ -284,37 +298,54 @@ export function subtractMasks(a: BrushRaster | null, b: BrushRaster | null): Bru
   return { data, width: a.width, height: a.height };
 }
 
+/** How a subject is composed: its refine settings, and the added points the islands are kept by. */
+export interface ComposeOptions extends SubjectRefine {
+  /** The ADDED points, for "Only what touches my + points". */
+  seeds?: readonly SubjectPoint[];
+}
+
 /**
- * A subject's raster from its points' own answers: the union of what each
- * ADDED point found, less the union of what each REMOVED point found
- * (2026-10-02, his *«passer en soustraction»*). The model only ever answers
- * "this object"; removing is arithmetic on its answers. With nothing added
- * there is nothing to take from, so the answer is null — a removal alone never
- * makes a subject. One function for the stage and the export, so the two
- * cannot remove differently.
+ * A subject's raster from its points' own answers (2026-10-02, his *«passer en
+ * soustraction»*, then the refine of `subject-refine.ts`):
+ *
+ * 1. the added points' confidence, united, CUT at the tolerance;
+ * 2. only the regions an added point lands in, when asked;
+ * 3. grown or shrunk;
+ * 4. less what the removed points found, cut at the same tolerance — last, so
+ *    growing never creeps back into a part the author took out.
+ *
+ * The model only ever answers "this object"; removing is arithmetic on its
+ * answers. With nothing added there is nothing to take from, so the answer is
+ * null — a removal alone never makes a subject. One function for the stage and
+ * the export, so the two cannot refine differently.
  */
 export function composeSubject(
   added: readonly (BrushRaster | null)[],
   removed: readonly (BrushRaster | null)[] = [],
+  options: ComposeOptions = {},
 ): BrushRaster | null {
-  let plus: BrushRaster | null = null;
-  for (const r of added) plus = unionMasks(plus, r);
-  if (!plus) return null;
+  const refine = normaliseRefine(options);
+  let union: BrushRaster | null = null;
+  for (const r of added) union = unionMasks(union, r);
+  if (!union) return null;
+  let plus = cutConfidence(union, refine.tolerance);
+  if (refine.islands && options.seeds?.length) plus = keepTouching(plus, options.seeds);
+  if (refine.grow) plus = growShrink(plus, growPixels(refine.grow, plus));
   let minus: BrushRaster | null = null;
   for (const r of removed) minus = unionMasks(minus, r);
-  return minus ? subtractMasks(plus, minus) : plus;
+  return minus ? subtractMasks(plus, cutConfidence(minus, refine.tolerance)) : plus;
 }
 
 /**
  * The subject the author pointed at, as an alpha map — the union of one mask
- * per point, less the regions of the points that take away.
+ * per point, refined, less the regions of the points that take away.
  *
  * The model answers ONE point at a time, so the points are segmented in
  * sequence. That is the same shape `p5-templates` settled on, and the reason is
  * not tidiness: a single result slot means two inferences in flight can have
  * their answers swapped, and a mask attributed to the wrong point is a subject
  * that jumps. `useSubjectMasks` caches per POINT and composes with
- * `unionMasks` itself, so a third tap costs one inference, not three; this is
+ * `composeSubject` itself, so a third tap costs one inference, not three; this is
  * the one-shot form for a caller with no cache.
  *
  * Null when the model is unavailable, so a caller can say so rather than
@@ -324,6 +355,7 @@ export async function segmentSubject(
   source: TexImageSource,
   points: readonly SubjectPoint[],
   minus: readonly SubjectPoint[] = [],
+  refine: SubjectRefine = {},
 ): Promise<BrushRaster | null> {
   if (points.length === 0) return null;
   const shown = await prepareSegmentSource(source);
@@ -332,7 +364,7 @@ export async function segmentSubject(
     for (const point of points) added.push(await segmentPoint(shown.image, point));
     const removed: (BrushRaster | null)[] = [];
     for (const point of minus) removed.push(await segmentPoint(shown.image, point));
-    return composeSubject(added, removed);
+    return composeSubject(added, removed, { ...refine, seeds: points });
   } finally {
     shown.release();
   }

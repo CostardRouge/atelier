@@ -12,10 +12,13 @@ import {
   MAX_COLOUR_SAMPLES,
   defaultMask,
   describeMask,
+  subjectRefineOf,
+  withSubjectRefine,
   type Mask,
   type MaskKind,
   type MaskOp,
   type ShadeMask,
+  type SubjectMask,
 } from '../../shared/render/mask';
 import {
   MAX_MASK_PARTS,
@@ -42,6 +45,12 @@ import {
   shadeFalloff,
 } from '../../shared/shades/shade-shape';
 import { ShadeDirectionPicker, ShadeFalloffPicker } from '../../shared/shades/ShadePickers';
+import {
+  DEFAULT_TOLERANCE,
+  GROW_LIMIT,
+  TOLERANCE_MAX,
+  TOLERANCE_MIN,
+} from '../../shared/segment/subject-refine';
 
 const KIND_OPTIONS: readonly { id: string; label: string }[] = [
   { id: 'none', label: 'Whole' },
@@ -71,6 +80,9 @@ const COLOUR_HINT =
 
 const SUBJECT_HINT =
   'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. When it takes in too much — the bench the person leans on, a second person far away — switch to Remove (or hold ⌥ for one tap) and tap the part you do not want: the model finds that object too, and it is taken out of the subject. Tapping a point you already placed takes it off. “Background” is this mask inverted — the checkbox below.';
+
+const REFINE_HINT =
+  'The model answers a tap with how SURE it is, pixel by pixel; these three work on that answer, never on the points. Tolerance moves the cut: higher takes in what it was less sure of — an edge, a neighbour it half-joined — lower keeps only the core; 50 % is the model’s own answer. Only what touches my + points drops every region no added point lands in — the second person a tap on the first also found. Grow / Shrink moves the edge, in pixels of the 1024 px picture the model is shown. A removed region is cut at the same Tolerance and taken out last, so growing never creeps back into it.';
 
 const SUBJECT_TONES: readonly { id: 'add' | 'remove'; label: string }[] = [
   { id: 'add', label: '+ Add' },
@@ -585,6 +597,7 @@ function ShapeControls({
                       }`
                     : 'the model is loading — 17 MB, once per visit'}
           </span>
+          {mask.points.length > 0 && <SubjectRefineControls mask={mask} setMask={setMask} />}
         </>
       )}
 
@@ -756,5 +769,46 @@ function ShadeControls({
         invert — clear at the {anchorWord(mask.direction)}, full at the far end of the {round ? 'radius' : 'reach'}
       </label>
     </>
+  );
+}
+
+/**
+ * The three knobs over what the model found (`subject-refine.ts`), shown at
+ * once under the subject's status — his answer to the brief's question 4.
+ * Each one writes through `withSubjectRefine`, which leaves a default off
+ * the record.
+ */
+function SubjectRefineControls({ mask, setMask }: { mask: SubjectMask; setMask: (mask: Mask) => void }) {
+  const refine = subjectRefineOf(mask);
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      <SectionLegend label="Refine what it found">
+        <p>{REFINE_HINT}</p>
+      </SectionLegend>
+      <RangeSlider
+        label="Tolerance"
+        value={refine.tolerance}
+        range={{ min: TOLERANCE_MIN, max: TOLERANCE_MAX, step: 0.01, unit: '' }}
+        reset={DEFAULT_TOLERANCE}
+        printed={`${Math.round(refine.tolerance * 100)} %`}
+        onChange={(v) => setMask(withSubjectRefine(mask, { tolerance: v }))}
+      />
+      <RangeSlider
+        label="Grow / Shrink"
+        value={refine.grow}
+        range={{ min: -GROW_LIMIT, max: GROW_LIMIT, step: 1, unit: '' }}
+        reset={0}
+        printed={`${refine.grow > 0 ? '+' : ''}${refine.grow} px`}
+        onChange={(v) => setMask(withSubjectRefine(mask, { grow: v }))}
+      />
+      <label className="flex items-center gap-1.5 font-mono text-3xs text-faint">
+        <input
+          type="checkbox"
+          checked={refine.islands}
+          onChange={(e) => setMask(withSubjectRefine(mask, { islands: e.target.checked }))}
+        />
+        only what touches my + points
+      </label>
+    </div>
   );
 }

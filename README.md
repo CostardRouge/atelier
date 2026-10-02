@@ -1523,7 +1523,15 @@ again to add to it, tap a marker to take it off. When the model takes in too
 much — the bench the person leans on — switch the picture's **+ Add | −
 Remove** to Remove, or hold **⌥** for one tap, and tap the part you do not
 want: the model finds that object as well and it is taken **out** of the
-subject, its region blinking in ink, its pin an ink disc with a `−`. While you pick or paint, the
+subject, its region blinking in ink, its pin an ink disc with a `−`. Under
+the points, **Refine what it found** works on the model's answer, which is
+how SURE it is pixel by pixel: **Tolerance** moves the cut (higher takes in
+what it was less sure of, lower keeps the core; 50 % is the model's own
+answer), **only what touches my + points** drops a region the model returned
+nowhere near your taps, and **Grow / Shrink** moves the edge by up to 24
+pixels of the 1024 px picture the model is shown. A removed region is cut at
+the same tolerance and taken out last, and no knob asks the model again.
+While you pick or paint, the
 mask shows by itself as its **outline**; **M** steps it to a red **fill** and
 to hidden, and the box under it keeps it shown once Pick is off. Any layer
 can take a subject **out** of itself (*Except › The subject*): darken the

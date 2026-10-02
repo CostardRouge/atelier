@@ -51,6 +51,7 @@ import {
   SHADE_FALLOFFS,
   type ShadeShape,
 } from '../shades/shade-shape';
+import { DEFAULT_TOLERANCE, normaliseRefine, type SubjectRefine } from '../segment/subject-refine';
 
 export type MaskKind = 'linear' | 'radial' | 'luma' | 'colour' | 'brush' | 'subject' | 'shade';
 
@@ -178,6 +179,15 @@ export interface SubjectMask {
   minus?: readonly (readonly [number, number])[];
   /** Which model produced the cached raster; a mismatch refuses the cache. */
   model: string;
+  /**
+   * How the model's answer is REFINED (2026-10-02, `subject-refine.ts`): the
+   * cut on its confidence, whether islands no added point is in are dropped,
+   * and an edge grown or shrunk. Each optional and absent at its default, so
+   * a stored roll draws exactly as before.
+   */
+  tolerance?: number;
+  islands?: boolean;
+  grow?: number;
 }
 
 /**
@@ -312,8 +322,32 @@ export function dropSubjectPin(mask: SubjectMask, index: number): SubjectMask {
   const added = mask.points.length;
   if (index < added) return { ...mask, points: mask.points.filter((_, i) => i !== index) };
   const minus = (mask.minus ?? []).filter((_, i) => i !== index - added);
-  const rest: SubjectMask = { kind: 'subject', model: mask.model, points: mask.points };
-  return minus.length ? { ...rest, minus } : rest;
+  // The refine settings stay: they are the subject's, not one pin's.
+  const next: SubjectMask = { ...mask };
+  if (minus.length) next.minus = minus;
+  else delete next.minus;
+  return next;
+}
+
+/** A subject's refine settings, defaults filled — what the panel shows and the composer reads. */
+export function subjectRefineOf(mask: SubjectMask): Required<SubjectRefine> {
+  return normaliseRefine(mask);
+}
+
+/**
+ * The subject with its refine settings changed, every one at its default
+ * left off the record — so turning a knob back leaves the roll as it was.
+ */
+export function withSubjectRefine(mask: SubjectMask, patch: SubjectRefine): SubjectMask {
+  const next = normaliseRefine({ ...subjectRefineOf(mask), ...patch });
+  const out: SubjectMask = { ...mask };
+  delete out.tolerance;
+  delete out.islands;
+  delete out.grow;
+  if (next.tolerance !== DEFAULT_TOLERANCE) out.tolerance = next.tolerance;
+  if (next.islands) out.islands = true;
+  if (next.grow) out.grow = next.grow;
+  return out;
 }
 
 /**
@@ -692,7 +726,12 @@ export function normaliseMask(raw: unknown): Mask | null {
     };
     // Absent stays absent: an empty list would make every old roll differ.
     const minus = pointsOf(src.minus);
-    return minus.length ? { ...subject, minus } : subject;
+    const read = minus.length ? { ...subject, minus } : subject;
+    return withSubjectRefine(read, {
+      tolerance: typeof src.tolerance === 'number' ? src.tolerance : undefined,
+      islands: src.islands === true,
+      grow: typeof src.grow === 'number' ? src.grow : undefined,
+    });
   }
   if (src.kind === 'shade') {
     const shade: ShadeMask = {
@@ -735,7 +774,16 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
   if (!a || !b) return !a && !b;
   if (a.kind !== b.kind) return false;
   if (a.kind === 'subject' && b.kind === 'subject') {
-    return a.model === b.model && samePoints(a.points, b.points) && samePoints(a.minus ?? [], b.minus ?? []);
+    const ra = subjectRefineOf(a);
+    const rb = subjectRefineOf(b);
+    return (
+      a.model === b.model &&
+      samePoints(a.points, b.points) &&
+      samePoints(a.minus ?? [], b.minus ?? []) &&
+      ra.tolerance === rb.tolerance &&
+      ra.islands === rb.islands &&
+      ra.grow === rb.grow
+    );
   }
   if (a.kind === 'colour' && b.kind === 'colour') {
     return (
@@ -804,8 +852,10 @@ export function cloneMask(m: Mask | null | undefined): Mask | null {
     };
   }
   if (m.kind === 'subject') {
-    const copy: SubjectMask = { kind: 'subject', model: m.model, points: m.points.map((p) => [p[0], p[1]] as const) };
-    return m.minus?.length ? { ...copy, minus: m.minus.map((p) => [p[0], p[1]] as const) } : copy;
+    // Spread first for the refine settings (numbers and a flag), the lists copied over it.
+    const copy: SubjectMask = { ...m, points: m.points.map((p) => [p[0], p[1]] as const) };
+    if (m.minus?.length) copy.minus = m.minus.map((p) => [p[0], p[1]] as const);
+    return copy;
   }
   if (m.kind === 'colour') {
     return { kind: 'colour', range: m.range, samples: m.samples.map((s) => ({ ...s })) };
