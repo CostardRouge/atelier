@@ -1722,11 +1722,17 @@ already on the stage — instead of the whole file, which on a computer took an
 export of that post from thirteen seconds to under one. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
 iPad and Android count as phones, and `localStorage['atelier.device']`
-(`constrained` or `roomy`) overrides it. A big export is also graded in
-bands: the graphics card holds a slice of the picture at a time rather than
-two full copies of it, which on a 48-megapixel still is a few hundred
-megabytes instead of three quarters of a gigabyte — with exactly the same
-pixels (a film stock's halation still needs the whole picture at once).
+(`constrained` or `roomy`) overrides it. On a phone a big picture — a
+full-size export, anything past 12 megapixels — is also graded in **bands**:
+the graphics card holds a slice of the picture at a time rather than two full
+copies of it, which on a 48-megapixel still is a few hundred megabytes instead
+of three quarters of a gigabyte — with exactly the same pixels (a film stock's
+halation still needs the whole picture at once). A computer draws it whole: it
+has the memory, and the one Mac measured drew the loupe's bands striped. The
+rule is a preference of this browser, **Big pictures** under the Look panel's
+Interpolation — *Auto* (bands on a phone, whole on a computer, and it says
+which this one is), *Whole*, *In bands* — and the loupe redraws the moment it
+changes, so a striped loupe is one click from a whole one.
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
