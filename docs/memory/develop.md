@@ -564,6 +564,13 @@ release); a call that needs nothing returns null and leaves it. The context
 is one per stage and its programs are cached by pass id, so keeping it is
 what makes a swap cheap; disposing was never a saving.
 
+**The readout re-reads once per PAINT, never per render** (same day): the
+pixel under a resting pointer was read again by an effect with no deps, so
+every render of the workbench — six per slider step, measured, with a mask
+being refined — cost a one-pixel `getImageData` off a 2D canvas just drawn
+from the WebGL one, each a GPU sync. It now follows the paint effect alone;
+a clip's own frame loop reads nothing.
+
 ## A picture is read by its NAME before its type (2026-09-21)
 
 `pictureFidelity` asked `file.type` before anything else, and a JPEG fetched

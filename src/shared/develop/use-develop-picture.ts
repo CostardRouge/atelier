@@ -1098,8 +1098,17 @@ export function useDevelopPicture({
   };
   const paintRef = useRef(paintStage);
   paintRef.current = paintStage;
+  // The readout's re-read, set once the readout exists (further down): after
+  // THIS effect's paint, never on every render — the hook's host re-renders
+  // several times per slider step (the draft, the deferred layers, a raster
+  // landing, the thumbnails), and each read of one pixel off a 2D canvas that
+  // was just drawn from the WebGL one is a GPU sync; six per step, measured
+  // (2026-10-02). A clip's own frame loop reads nothing: a pointer at rest
+  // over a playing clip would pay that sync per presented frame.
+  const readAfterPaint = useRef<() => void>(() => {});
   useEffect(() => {
     paintRef.current();
+    readAfterPaint.current();
   }, [
     source,
     canvasSize,
@@ -1881,10 +1890,11 @@ export function useDevelopPicture({
     if (!readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
   };
   // A new picture, a slider step, the clipping view: the pixel under a
-  // pointer that has not moved is read again from what is now drawn.
-  useEffect(() => {
+  // pointer that has not moved is read again from what is now drawn — once
+  // per PAINT of the stage (the effect above), not per render.
+  readAfterPaint.current = () => {
     if (readoutAt.current && !readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
-  });
+  };
   useEffect(
     () => () => {
       cancelAnimationFrame(readoutFrame.current);
