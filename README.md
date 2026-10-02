@@ -52,8 +52,9 @@ Today it ships ten tools, converging into a few editors:
 >   yes is kept on the device, never in the trip, so a trip opened elsewhere
 >   fetches nothing until that device says yes too.
 > - The **place search** in Trips: looking a stage's place up sends *the words
->   you type* to OpenStreetMap's Nominatim service, and gets a name, a region
->   and coordinates back. Every place can be typed by hand instead, so the
+>   you type* to OpenStreetMap's Nominatim service, and gets a name, a
+>   structured address (the county, the state and its code, the country) and
+>   coordinates back. Every place can be typed by hand instead, so the
 >   feature is a convenience and never a requirement.
 > - **Lens profiles** in Develop: looking a lens up fetches the Lensfun
 >   database's file for your camera's maker from GitHub
@@ -699,20 +700,44 @@ itself rather than two more fields to keep in step; drag a chip (or move it
 with the arrow keys) to reorder, click one to edit it. Leave the stage's own
 name empty and it writes itself from those two ends — "Perth → Cairns" — and
 typing a name over it always wins; clearing that name gives the derived one
-back rather than a blank. A place is a *point inside* a stage and carries no
-dates of its own: the stage is the dated thing, so "Uluru on the 12th" inside
-a nine-day leg means splitting the leg, not dating the place — which is what
-"start a stage here" on that day does.
+back rather than a blank. A place is a *point inside* a stage: the stage is
+the dated thing a badge counts inside, so "Uluru on the 12th" inside a
+nine-day leg still means splitting the leg — which is what "start a stage
+here" on that day does. A place may nonetheless carry **its own two dates**,
+the day you reached it and the day you left, as a bonus: nothing is drawn
+until you add one (**+ date** under the open chip), the deduction writes the
+days your pictures say (a dashed chip), and a date outside the stage is kept
+and shown in orange, never corrected.
+
+**A place keeps what it knows.** Beside its name and position it holds its
+state ("Western Australia"), the state's short code, the county or shire, the
+country — every field optional, and a name typed alone is still a complete
+place. How a place is **written** is a setting: "Kalbarri, WA", "Kalbarri,
+Western Australia", "Kalbarri (WA)" or "Kalbarri" alone, chosen in **Trip
+settings → Places** once for the badges and the openers (the name alone by
+default, so nothing you composed changes) and once for the lists, the legs,
+the calendar and the map (the short code by default); a stage, or a single
+place under **More…**, can depart from it, the nearest choice winning. The
+**short code** comes from the place's own, else the trip's own table, else
+what the search gave, else the state's initials — said as such, because
+initials are right for New South Wales and wrong for Queensland. No table is
+shipped: the trip's table is yours, one line per state, written from a
+place's editor (**Keep QLD for Queensland on this trip**) or in Trip settings
+→ Places, where every state your places name is listed with the code it
+reads today and where that code comes from; a place can still prefer the
+search's code or its own over the table. The table travels in the backup.
 
 Each place can carry **coordinates**, and there are two ways to get them: type
 the name and leave it at that (a place that is only a name is a complete
 place), or use the **optional place search**, which sends the words you type to
-OpenStreetMap's Nominatim and fills in the name, the region and the position.
-That search is **off until you turn it on**, it says exactly what it will send
-before it sends anything, and it fires on Enter or the button — never as you
-type. Places are only ever typed on a leg: the New trip dialog asks for the
-name and the two dates and nothing else, so a trip starts with no leg at all
-and a day outside every leg names no place rather than claiming one.
+OpenStreetMap's Nominatim and fills in the name, the position and the
+structured address — the county, the state and its code, the country — never
+overwriting a field you typed yourself. That search is **off until you turn it
+on**, it says exactly what it will send before it sends anything, and it fires
+on Enter or the button — never as you type. Places are only ever typed on a
+leg: the New trip dialog asks for the name and the two dates and nothing else,
+so a trip starts with no leg at all and a day outside every leg names no place
+rather than claiming one.
 
 **Working the itinerary out, instead of typing it.** Drawing a three-month
 trip's legs by hand is some three hundred gestures, most of them archaeology

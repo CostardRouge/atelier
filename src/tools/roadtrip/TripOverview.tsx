@@ -20,6 +20,7 @@ import {
 } from '../../shared/roadtrip/trip-days';
 import { createLoupeStore } from '../../shared/roadtrip/loupe';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { rememberStateCode } from '../../shared/roadtrip/place-style';
 import { stageLabel, tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import {
   usePublishMediaActions,
@@ -404,6 +405,11 @@ export default function TripOverview({
 
   const setStages = useCallback(
     (stages: TripStage[]) => onChange({ ...trip, stages, updatedAt: Date.now() }),
+    [trip, onChange],
+  );
+  /** A state's short code kept on the TRIP, from a place where it was corrected. */
+  const rememberCode = useCallback(
+    (state: string, code: string) => onChange({ ...rememberStateCode(trip, state, code), updatedAt: Date.now() }),
     [trip, onChange],
   );
 
@@ -859,6 +865,7 @@ export default function TripOverview({
       onOpenStage={openStage}
       onScrub={selectDate}
       onChange={setStages}
+      onRememberCode={rememberCode}
       timelineSources={timelineSources}
       onCompleteFrom={onCompleteFrom}
       deduceSources={deduceSources}
@@ -1188,6 +1195,7 @@ export default function TripOverview({
               selectedId={selectedStageId}
               onSelect={setStageId}
               onChange={setStages}
+              onRememberCode={rememberCode}
               onAdjust={startAdjust}
               timelineSources={timelineSources}
               onCompleteFrom={onCompleteFrom}
@@ -1217,6 +1225,7 @@ export default function TripOverview({
         setStageId(null);
       }}
       onClose={() => setStageId(null)}
+      onRememberCode={rememberCode}
     />
   );
 

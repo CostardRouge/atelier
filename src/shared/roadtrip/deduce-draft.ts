@@ -94,10 +94,22 @@ export function haltName(halt: NamedLeg, draft: DeduceDraft): string | null {
 export function haltPlace(halt: NamedLeg, draft: DeduceDraft): TripPlace | null {
   const name = haltName(halt, draft);
   if (!name) return null;
+  // What the pictures say and the deduction used to throw away: the halt's
+  // two days, said to come from the photos, and the city's country as the
+  // CODE it is ("AU" is a machine token, so it never lands in `country`).
+  const known = {
+    arrived: halt.leg.startDate,
+    left: halt.leg.endDate,
+    dateFrom: 'photos' as const,
+    source: 'deduced' as const,
+  };
   if (halt.city) {
-    return createTripPlace(name, halt.city.region, { lat: halt.city.lat, lon: halt.city.lon });
+    return createTripPlace(name, halt.city.region, { lat: halt.city.lat, lon: halt.city.lon }, {
+      ...known,
+      countryCode: halt.city.country.toUpperCase(),
+    });
   }
-  return createTripPlace(name, '', { lat: halt.leg.centroid.lat, lon: halt.leg.centroid.lon });
+  return createTripPlace(name, '', { lat: halt.leg.centroid.lat, lon: halt.leg.centroid.lon }, known);
 }
 
 /** "Perth → Broome", "Broome", or '' when no halt is named. */

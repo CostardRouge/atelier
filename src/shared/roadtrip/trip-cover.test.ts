@@ -59,6 +59,8 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   cover: defaultTripCover(),
   developPresets: [],
   car: defaultCarSpec(),
+  placeStyle: { badge: 'name', lists: 'code' },
+  stateCodes: {},
   createdAt: 0,
   updatedAt: 0,
   ...over,

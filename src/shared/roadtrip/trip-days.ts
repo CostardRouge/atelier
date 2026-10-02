@@ -274,6 +274,14 @@ export function formatIsoDate(iso: IsoDate): string {
   return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]} ${d.getUTCFullYear()}`;
 }
 
+/** `2025-11-10` → `10 Nov`: a day inside a trip whose year the reader knows. */
+export function formatDayMonth(iso: IsoDate): string {
+  const ms = parseIsoDate(iso);
+  if (ms === null) return iso;
+  const d = new Date(ms);
+  return `${d.getUTCDate()} ${MONTHS[d.getUTCMonth()]}`;
+}
+
 /**
  * Up to this many days a trip is SHORT: its overview draws every day as a
  * cell of real width on one strip, legs beneath on the same axis, no zoom.

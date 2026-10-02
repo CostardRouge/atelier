@@ -30,9 +30,12 @@
  * - **A place is listed once**, at its first visit, compared on its name the
  *   way `applyTimelineDiff` compares when it merges: a chapter that returns to
  *   Perth does not end on a second Perth.
- * - **The country never reaches the document** — "AU" is a machine token, and
- *   so is `AU.08`. What a place carries is its region's NAME, which is what
- *   `stageRegionLabel` reads and what an author would have written.
+ * - **No machine token where a word is read** — "AU" and `AU.08` are tokens.
+ *   What a place carries as its STATE is the region's NAME, which is what
+ *   `stageRegionLabel` reads and what an author would have written; since v30
+ *   the halt's place (`haltPlace`, `deduce-draft.ts`) also keeps "AU" in
+ *   `countryCode`, the field made for a code, and its two days from the
+ *   photos.
  *
  * Pure and DOM-free.
  */

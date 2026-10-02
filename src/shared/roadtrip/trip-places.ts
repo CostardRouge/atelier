@@ -67,23 +67,23 @@ export function stageLabel(stage: TripStage): string {
 }
 
 /**
- * The stage's region. The author's own wins; otherwise the region its places
+ * The stage's region. The author's own wins; otherwise the STATE its places
  * AGREE on — one place in Western Australia and one in Queensland have no
  * common region, and printing either would be a quiet lie about the other.
  */
 export function stageRegionLabel(stage: TripStage): string {
   const own = stage.region.trim();
   if (own) return own;
-  const regions = namedPlaces(stage)
-    .map((place) => place.region.trim())
-    .filter((region) => region.length > 0);
-  if (regions.length === 0) return '';
-  return regions.every((region) => region === regions[0]) ? regions[0] : '';
+  const states = namedPlaces(stage)
+    .map((place) => place.state.trim())
+    .filter((state) => state.length > 0);
+  if (states.length === 0) return '';
+  return states.every((state) => state === states[0]) ? states[0] : '';
 }
 
-/** A place's region, falling back to its stage's — empty means "the stage's". */
+/** A place's state, falling back to its stage's region — empty means "the stage's". */
 export function placeRegionLabel(place: TripPlace, stage: TripStage): string {
-  return place.region.trim() || stageRegionLabel(stage);
+  return place.state.trim() || stageRegionLabel(stage);
 }
 
 /**

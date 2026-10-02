@@ -25,13 +25,15 @@ import {
 import CarGaragePanel from './CarGaragePanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import HouseStylePanel from './HouseStylePanel';
+import PlacesSettingsPanel from './PlacesSettingsPanel';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
-export type TripSettingsSection = 'words' | 'cta' | 'defaults' | 'car' | 'house';
+export type TripSettingsSection = 'words' | 'places' | 'cta' | 'defaults' | 'car' | 'house';
 
 const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
   { id: 'words', label: 'Words' },
+  { id: 'places', label: 'Places' },
   { id: 'cta', label: 'Closing card' },
   { id: 'defaults', label: 'New pieces' },
   { id: 'car', label: 'Car' },
@@ -308,6 +310,8 @@ export default function TripSettingsModal({
                 </div>
               </>
             )}
+
+            {open === 'places' && <PlacesSettingsPanel trip={trip} onChange={onChangeTrip} />}
 
             {open === 'cta' && (
               <>

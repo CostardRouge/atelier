@@ -6,7 +6,7 @@ import {
   type DayCell,
 } from '../../shared/roadtrip/trip-coverage';
 import { stageTint } from '../../shared/roadtrip/stage-ruler';
-import { stageLabel } from '../../shared/roadtrip/trip-places';
+import { stageRoute } from '../../shared/roadtrip/place-style';
 import {
   POST_KINDS,
   duplicateTripPost,
@@ -340,7 +340,7 @@ export default function DayPanel({
               aria-hidden="true"
             />
             <span className="flex-1 min-w-0 text-sm truncate">
-              {stageLabel(stage) || 'Unnamed stage'}
+              {stageRoute(stage, trip, 'lists') || 'Unnamed stage'}
               <span className="text-muted">
                 {atStage ? ` · day ${atStage.day}/${atStage.total}` : ''} · {formatIsoDate(stage.startDate)} → {formatIsoDate(stage.endDate)}
               </span>

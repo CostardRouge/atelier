@@ -125,12 +125,17 @@ describe('locatePicture — naming the leg of the day', () => {
     expect(stageLabel(stages[0])).toBe('Kalbarri');
   });
 
-  it('writes the CITY’s own coordinates, and no country', () => {
+  it('writes the CITY’s own coordinates, its country as a CODE and never as a name', () => {
     const doc = trip([nameless()]);
     const { stages } = locate(doc, '2025-11-03').proposal!.apply(doc);
-    expect(stages[0].places[0].coords).toEqual({ lat: -27.7105, lon: 114.165 });
-    expect(stages[0].places[0].region).toBe('');
-    expect(JSON.stringify(stages[0])).not.toContain('AU');
+    const [place] = stages[0].places;
+    expect(place.coords).toEqual({ lat: -27.7105, lon: 114.165 });
+    expect(place.state).toBe('');
+    // "AU" is a machine token: it lands in the field made for a code (v30)
+    // and nowhere a reader would print it as a word.
+    expect(place.countryCode).toBe('AU');
+    expect(place).not.toHaveProperty('country');
+    expect(place.source).toBe('deduced');
   });
 
   it('joins the route of a leg that already names places', () => {

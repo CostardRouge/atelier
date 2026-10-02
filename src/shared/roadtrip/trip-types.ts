@@ -69,8 +69,11 @@ import {
   type BadgeWords,
   type CounterMode,
 } from './day-badge';
+// The default lives in `place-style.ts`, which takes only TYPES from here —
+// a value both ways is the cycle that left `day-badge.ts` half-loaded.
+import { DEFAULT_PLACE_STYLE } from './place-style';
 
-export const TRIP_DOC_VERSION = 29;
+export const TRIP_DOC_VERSION = 30;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -115,11 +118,39 @@ export const POST_KINDS: readonly { id: PostKind; label: string; hint: string }[
   { id: 'photo', label: 'Single photo', hint: 'One image with its badge' },
 ];
 
+/** Where a place's facts came from — said beside it, never decisive. */
+export type PlaceSource = 'typed' | 'search' | 'deduced';
+
 /**
- * One point on the map, named. A place is a POINT INSIDE a stage, never a
- * dated thing of its own: the stage carries the span, so "Uluru on the 12th"
- * inside a nine-day stage means splitting the stage, not dating the place.
- * One dated thing, therefore one place `stageAt` has to look.
+ * How a place is WRITTEN where it is shown: «Sydney, NSW» · «Sydney, New
+ * South Wales» · «Sydney (NSW)» · «Sydney». A setting, not a fact — the facts
+ * are the place's own fields, and a style only chooses which of them to say.
+ */
+export type PlaceStyle = 'code' | 'full' | 'paren' | 'name';
+
+/**
+ * Which of a place's three possible codes it wears. Absent = automatic: its
+ * own, else the trip's table, else what the search gave, else derived from
+ * the state's name (`place-style.ts`).
+ */
+export type PlaceCodeFrom = 'own' | 'table' | 'search';
+
+/** Where a place's dates came from: the author's hand, or the pictures' days. */
+export type PlaceDateFrom = 'hand' | 'photos';
+
+/**
+ * One point on the map, named. A place is a POINT INSIDE a stage: the stage
+ * carries the span `stageAt` looks at, and a place that gained dates on
+ * 2026-10-02 gained them as its OWN facts (when the pictures say it was
+ * reached and left), never as a second span the badge counts inside. Both
+ * dates are optional, «du bonus»: nothing about a trip needs them.
+ *
+ * What it KEEPS, since v30: beside its name, the county or shire (`area`),
+ * the state and its short code, the country — what a search answers and what
+ * the deduction knows and used to throw away. Every field is optional and
+ * typed by hand is a complete place, as it always was. `state` replaced the
+ * free `region` string (a search used to fold «Western Australia, Australia»
+ * into it; the v30 migration splits that back into a state and a country).
  *
  * `coords` mirrors `GpsCoord` (shared/exif/exif-parser.ts) — decimal degrees,
  * south and west negative. Beware the neighbouring convention: `TrackPoint`
@@ -133,11 +164,51 @@ export interface TripPlace {
   id: string;
   /** The place as it is said out loud ("Kalbarri"). */
   name: string;
-  /** Region or country. Empty means "the stage's own" — never blank. */
-  region: string;
+  /**
+   * The state, province or region it lies in ("Western Australia"). Empty
+   * means "the stage's own" — never blank (`placeRegionLabel`).
+   */
+  state: string;
   /** Where it is, when that is known. */
   coords: { lat: number; lon: number } | null;
+  /** The county, shire or département ("Shire of Northampton"). */
+  area?: string;
+  /** The author's OWN short code for the state ("NSW"); the trip's table and the search are the other two. */
+  stateCode?: string;
+  /** The code the search gave — the second half of an ISO 3166-2 ("AU-NSW" → "NSW"). */
+  searchCode?: string;
+  /** Which of the three codes this place wears; absent = automatic. */
+  codeFrom?: PlaceCodeFrom;
+  /** The country said out loud ("Australia"). */
+  country?: string;
+  /** ISO 3166-1 alpha-2, upper case ("AU"). */
+  countryCode?: string;
+  /** The day it was reached, when known. Optional, kept as given even outside the stage. */
+  arrived?: IsoDate;
+  /** The day it was left, when known. */
+  left?: IsoDate;
+  /** Where the dates came from; absent when there are none. */
+  dateFrom?: PlaceDateFrom;
+  /** How the place got here; absent on a place written before v30. */
+  source?: PlaceSource;
+  /** This place's own writing, over its stage's and the trip's. */
+  style?: PlaceStyle;
 }
+
+/**
+ * The trip's two writings of a place, one per kind of surface — a badge has
+ * little room and a list has plenty — with a stage and a place able to
+ * depart from them (`TripStage.placeStyle`, `TripPlace.style`): the cascade
+ * the look follows, nearest wins, absent means «like above».
+ */
+export interface TripPlaceStyle {
+  /** On the badges and the openers. */
+  badge: PlaceStyle;
+  /** In the lists, the legs, the calendar and the map. */
+  lists: PlaceStyle;
+}
+
+export { DEFAULT_PLACE_STYLE };
 
 /**
  * Where a stage was SEEDED from — a Winnow timeline chapter, reached through
@@ -195,6 +266,8 @@ export interface TripStage {
   places: TripPlace[];
   /** Set when the stage was seeded from a timeline chapter; absent by hand. */
   origin?: StageOrigin;
+  /** How this stage's places are written, over the trip's; absent = the trip's. */
+  placeStyle?: PlaceStyle;
 }
 
 /**
@@ -722,6 +795,22 @@ export interface TripDoc {
    * Portable, so the backup carries it.
    */
   car: CarSpec;
+  /**
+   * How a place is written on this trip's two kinds of surface. A stage or a
+   * place may depart from it (`TripStage.placeStyle`, `TripPlace.style`).
+   * Portable: it is how the trip speaks, like its words.
+   */
+  placeStyle: TripPlaceStyle;
+  /**
+   * The trip's OWN table of short codes for its states — «Queensland» → «QLD»
+   * — keyed by the state's name as it is written on the places. Filled by the
+   * author, one state at a time, from a place where a code was corrected and
+   * kept «for the whole trip»; read by every place of that state that has no
+   * code of its own. Deliberately per trip and never shipped (the maintainer's
+   * call, 2026-10-02): a table for every country is weight, and a traveller
+   * meets a dozen states. Portable, so the backup carries it.
+   */
+  stateCodes: Record<string, string>;
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -771,6 +860,8 @@ export function createTripDoc(
     cover: defaultTripCover(),
     developPresets: [],
     car: defaultCarSpec(),
+    placeStyle: { ...DEFAULT_PLACE_STYLE },
+    stateCodes: {},
     createdAt: now,
     updatedAt: now,
   };
@@ -855,12 +946,38 @@ export function createTripStage(
   };
 }
 
+/**
+ * A place from its name, its state and its position; `more` carries what else
+ * is known (the country, the dates, the source…), written only when given, so
+ * a place that knows nothing more stays the four-field record it always was.
+ */
 export function createTripPlace(
   name = '',
-  region = '',
+  state = '',
   coords: { lat: number; lon: number } | null = null,
+  more: Partial<Omit<TripPlace, 'id' | 'name' | 'state' | 'coords'>> = {},
 ): TripPlace {
-  return { id: newId(), name: name.trim(), region: region.trim(), coords };
+  const place: TripPlace = { id: newId(), name: name.trim(), state: state.trim(), coords };
+  for (const [key, value] of Object.entries(more)) {
+    if (value === undefined || value === null || value === '') continue;
+    (place as unknown as Record<string, unknown>)[key] = typeof value === 'string' ? value.trim() : value;
+  }
+  return place;
+}
+
+/**
+ * The v30 split of the old free `region`: «Western Australia, Australia» was
+ * what a search wrote (`regionFromDisplayName`, the two outermost levels), so
+ * the last part is the country and the rest the state; one part alone is kept
+ * as the state, since nothing says whether «Japan» was a country or a region.
+ */
+export function splitLegacyRegion(region: string): { state: string; country: string } {
+  const parts = region
+    .split(',')
+    .map((part) => part.trim())
+    .filter((part) => part.length > 0);
+  if (parts.length < 2) return { state: parts[0] ?? '', country: '' };
+  return { state: parts.slice(0, -1).join(', '), country: parts[parts.length - 1] };
 }
 
 /**
@@ -1438,6 +1555,52 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     }));
   }
 
+  if (migrated.version < 30) {
+    // A place keeps what it knows. The old free `region` becomes a `state`
+    // and, where a search had folded the country into it, a `country`; the
+    // trip gains its two writings and its own empty table of state codes.
+    // A key no type names is deleted, never left for a reader to misread.
+    migrated.stages = (migrated.stages ?? []).map((stage) => ({
+      ...stage,
+      places: (stage.places ?? []).map((place) => {
+        const legacy = place as TripPlace & { region?: unknown };
+        const { region, ...rest } = legacy;
+        const split = splitLegacyRegion(typeof region === 'string' ? region : '');
+        const next: TripPlace = { ...rest, state: typeof rest.state === 'string' ? rest.state : split.state };
+        if (!next.country && split.country) next.country = split.country;
+        return next;
+      }),
+    }));
+    migrated.placeStyle = readPlaceStyle(migrated.placeStyle);
+    migrated.stateCodes = readStateCodes(migrated.stateCodes);
+  }
+
   migrated.version = TRIP_DOC_VERSION;
   return migrated;
+}
+
+const PLACE_STYLES: readonly PlaceStyle[] = ['code', 'full', 'paren', 'name'];
+
+export function isPlaceStyle(value: unknown): value is PlaceStyle {
+  return typeof value === 'string' && (PLACE_STYLES as readonly string[]).includes(value);
+}
+
+/** A validated read of the trip's two writings: junk or nothing lands on the default. */
+export function readPlaceStyle(value: unknown): TripPlaceStyle {
+  const raw = (value ?? {}) as Partial<Record<keyof TripPlaceStyle, unknown>>;
+  return {
+    badge: isPlaceStyle(raw.badge) ? raw.badge : DEFAULT_PLACE_STYLE.badge,
+    lists: isPlaceStyle(raw.lists) ? raw.lists : DEFAULT_PLACE_STYLE.lists,
+  };
+}
+
+/** A validated read of the trip's table: only string → non-empty string pairs survive. */
+export function readStateCodes(value: unknown): Record<string, string> {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return {};
+  const out: Record<string, string> = {};
+  for (const [state, code] of Object.entries(value as Record<string, unknown>)) {
+    if (typeof code !== 'string' || !state.trim() || !code.trim()) continue;
+    out[state.trim()] = code.trim();
+  }
+  return out;
 }

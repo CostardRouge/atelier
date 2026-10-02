@@ -43,6 +43,8 @@ import {
   TRIP_DOC_VERSION,
   createTripDoc,
   migrateTripDoc,
+  readPlaceStyle,
+  readStateCodes,
   type TripDoc,
   type TripPost,
 } from './trip-types';
@@ -103,6 +105,10 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     // own develop rides inside its post above.
     developPresets: structuredClone(trip.developPresets),
     car: structuredClone(trip.car),
+    // How the trip writes its places, and its own table of state codes: the
+    // trip's voice, like its words — a place read elsewhere should read the same.
+    placeStyle: { ...trip.placeStyle },
+    stateCodes: { ...trip.stateCodes },
   };
 }
 
@@ -199,6 +205,8 @@ export function parseTripFile(text: string): ParseResult {
       : base.developPresets,
     // A validated read, never a cast: junk or nothing lands on the default car.
     car: readCarSpec(raw.car),
+    placeStyle: readPlaceStyle(raw.placeStyle),
+    stateCodes: readStateCodes(raw.stateCodes),
   });
 
   return {
@@ -222,6 +230,8 @@ export function parseTripFile(text: string): ParseResult {
       cover: migrated.cover,
       developPresets: migrated.developPresets,
       car: migrated.car,
+      placeStyle: migrated.placeStyle,
+      stateCodes: migrated.stateCodes,
     },
   };
 }

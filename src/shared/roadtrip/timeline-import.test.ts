@@ -80,7 +80,7 @@ describe('importTimeline — the mapping', () => {
     expect(stages[2].places.map((p) => p.name)).toEqual(['Alice Springs', 'Uluru']);
     expect(stages[0].places[0].coords).toEqual({ lat: -31.95, lon: 115.86 });
     expect(stages[1].places[0].coords).toBeNull();
-    expect(stages[0].places[0].region).toBe('Western Australia');
+    expect(stages[0].places[0].state).toBe('Western Australia');
     // The stage's own region stays empty: it derives from what the places agree on.
     expect(stages[0].region).toBe('');
     expect(stageRegionLabel(stages[2])).toBe('Northern Territory');
