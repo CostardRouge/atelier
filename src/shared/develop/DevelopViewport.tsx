@@ -1,10 +1,11 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
 import TaskEdge from '../ui/TaskEdge';
 import { Icons } from '../ui/icons';
 import type { DevelopPicture } from './use-develop-picture';
+import type { SubjectPin } from '../render/mask';
 
 /**
  * A repair patch as the viewport draws it: two discs in the source's own
@@ -67,6 +68,15 @@ const REMOVE_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
 )}") 11 11, pointer`;
 
 /**
+ * The cursor while a tap TAKES a region out of a subject: the arrow the
+ * browser's `copy` cursor draws, with a minus badge where `copy` puts its
+ * plus — the two read as one pair. Falls back to the crosshair.
+ */
+const SUBTRACT_CURSOR = `url("data:image/svg+xml;utf8,${encodeURIComponent(
+  '<svg xmlns="http://www.w3.org/2000/svg" width="24" height="24" viewBox="0 0 24 24"><path d="M2 2v15l4-4 3 6 2-1-3-6h5z" fill="white" stroke="black" stroke-width="1" stroke-linejoin="round"/><circle cx="17.5" cy="17.5" r="5.5" fill="rgba(20,18,14,0.95)" stroke="white" stroke-width="1"/><path d="M14.8 17.5h5.4" stroke="white" stroke-width="1.8" stroke-linecap="round"/></svg>',
+)}") 2 2, crosshair`;
+
+/**
  * The picture being developed: the canvas, the before/after divider and its
  * handle, the state lines (no picture, decoding, a decoder's refusal), and the
  * two pills over it. Everything it shows is `useDevelopPicture`'s; the host
@@ -85,6 +95,8 @@ export default function DevelopViewport({
   shot = null,
   marks = null,
   onUnmark,
+  tapTone = 'add',
+  tool = null,
   rings = null,
   onRing,
   spots = null,
@@ -129,9 +141,24 @@ export default function DevelopViewport({
    * tap-a-marker-to-remove gesture unusable: nothing said where a marker was,
    * so nothing could be aimed at. A point the crop cut away is not drawn.
    */
-  marks?: readonly (readonly [number, number])[] | null;
-  /** Taking one off. Given, a marker answers its own click and shows `−`. */
+  marks?: readonly SubjectPin[] | null;
+  /**
+   * Taking one off. Given, a marker answers its own click and shows `×` — the
+   * click's meaning, now that `−` is a kind of pin (a region taken away).
+   */
   onUnmark?: (index: number) => void;
+  /**
+   * What a tap on the picture does while a subject is picked: add a region
+   * (the browser's own `copy` cursor, a `+` badge) or take one out (a minus
+   * badge of our own) — so the hand is told before it clicks.
+   */
+  tapTone?: 'add' | 'remove';
+  /**
+   * The armed tool's own controls, drawn over the picture's top-left corner
+   * — where the eye already is while it taps (the subject's `+ Add | −
+   * Remove`). The host draws it only while the tool is armed.
+   */
+  tool?: ReactNode;
   /**
    * The picture's own facts, drawn DOWN its bottom-left corner — what the
    * numbers say, what the picture is, what else is on it. Over the photograph
@@ -241,6 +268,7 @@ export default function DevelopViewport({
   // A tap-gesture mask tool is armed: the pointer ADDS a point, and the native
   // `copy` cursor is the browser's own `+` badge saying so.
   const tapping = !picking && picture.painting && picture.paintGesture === 'tap';
+  const subtracting = tapping && tapTone === 'remove' && !moving;
   return (
     <div
       ref={view.viewportRef}
@@ -250,7 +278,9 @@ export default function DevelopViewport({
           : moving
             ? 'cursor-grabbing'
             : tapping
-            ? 'cursor-copy'
+            ? subtracting
+              ? ''
+              : 'cursor-copy'
             : view.zoomed
             ? view.panning
               ? 'cursor-grabbing'
@@ -259,6 +289,7 @@ export default function DevelopViewport({
               ? 'cursor-col-resize'
               : 'cursor-default'
       } ${className}`}
+      style={subtracting ? { cursor: SUBTRACT_CURSOR } : undefined}
       // While the dropper is armed it takes the gesture WHOLE: the wipe and the
       // pan are the same pointer, and letting them run too would drag the
       // picture out from under the pick.
@@ -391,12 +422,13 @@ export default function DevelopViewport({
         </span>
       )}
       {source &&
-        marks?.map(([sx, sy], i) => {
-          const at = picture.stagePoint(sx, sy);
+        marks?.map((pin, i) => {
+          const at = picture.stagePoint(pin.x, pin.y);
           if (!at || !at.inside) return null;
+          const removed = pin.tone === 'remove';
           return (
             <button
-              key={`${sx},${sy},${i}`}
+              key={`${pin.x},${pin.y},${pin.tone},${i}`}
               type="button"
               // Its OWN press, and it never reaches the stage: the tap path
               // below would hit-test the same marker on state this click has
@@ -411,23 +443,42 @@ export default function DevelopViewport({
                   : undefined
               }
               disabled={!onUnmark}
-              className={`absolute -translate-x-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full bg-surface/92 border border-line-strong text-ink-soft shadow-paper group ${
-                onUnmark ? 'cursor-pointer hover:border-accent hover:text-accent-ink' : 'pointer-events-none'
-              }`}
+              // An ADDED point is a paper disc with `+`; a point that TAKES
+              // AWAY is an ink disc with `−` (the fixed frame and on-media
+              // tokens: a pin sits on a picture, never on the page).
+              className={`absolute -translate-x-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full shadow-paper group border ${
+                removed ? 'bg-frame/92 border-on-media/70 text-on-media' : 'bg-surface/92 border-line-strong text-ink-soft'
+              } ${onUnmark ? 'cursor-pointer hover:border-accent hover:text-accent-ink' : 'pointer-events-none'}`}
               style={{ left: at.x, top: at.y }}
-              title={onUnmark ? 'Take this point off the subject' : 'A point of the subject'}
-              aria-label={onUnmark ? `Take subject point ${i + 1} off` : `Subject point ${i + 1}`}
+              title={
+                onUnmark
+                  ? removed
+                    ? 'Put this region back — take the point off'
+                    : 'Take this point off the subject'
+                  : removed
+                    ? 'A region taken out of the subject'
+                    : 'A point of the subject'
+              }
+              aria-label={
+                onUnmark
+                  ? `Take ${removed ? 'removed ' : ''}subject point ${i + 1} off`
+                  : `${removed ? 'Removed s' : 'S'}ubject point ${i + 1}`
+              }
             >
               <svg viewBox="0 0 24 24" width="12" height="12" fill="none" stroke="currentColor" strokeWidth={2.4} strokeLinecap="round">
-                {/* `+` at rest, `−` under the pointer: the vertical stroke is
-                    what the hover takes away, so the icon SAYS what the click
-                    will do rather than what the marker is. */}
-                <path d="M5 12h14" />
-                <path d="M12 5v14" className={onUnmark ? 'group-hover:hidden' : ''} />
+                {/* What the pin IS at rest (`+` added, `−` taken away), and
+                    `×` under the pointer: the icon says what the click will
+                    do — take the pin off — rather than what the pin is. */}
+                <g className={onUnmark ? 'group-hover:hidden' : ''}>
+                  <path d="M5 12h14" />
+                  {!removed && <path d="M12 5v14" />}
+                </g>
+                {onUnmark && <path className="hidden group-hover:inline" d="M7 7l10 10M17 7L7 17" />}
               </svg>
             </button>
           );
         })}
+      {tool && source && <div className="absolute top-2 left-2.5 z-10">{tool}</div>}
       {source && ((rings && rings.length > 0) || (spots && spots.length > 0)) && (
         <svg
           className="absolute inset-0 w-full h-full overflow-visible"

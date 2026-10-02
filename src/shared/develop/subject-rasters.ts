@@ -25,7 +25,10 @@ export async function resolveSubjectRasters(
   for (const layer of subjectLayersForRender(layers)) {
     if (layer.mask?.kind !== 'subject') continue;
     const points = layer.mask.points.map(([x, y]) => ({ x, y }));
-    const raster = await segmentSubject(image, points);
+    // What the author took back out is removed here exactly as on the stage
+    // (`composeSubject`), or the file would carry the bench the stage left out.
+    const minus = (layer.mask.minus ?? []).map(([x, y]) => ({ x, y }));
+    const raster = await segmentSubject(image, points, minus);
     if (raster) out.set(layer.id, raster);
   }
   return out;

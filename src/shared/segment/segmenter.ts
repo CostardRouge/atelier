@@ -271,8 +271,43 @@ export function unionMasks(a: BrushRaster | null, b: BrushRaster | null): BrushR
 }
 
 /**
+ * SUBTRACTION: `b` taken out of `a`, coverage by coverage — `a × (1 − b)`, the
+ * product every other mask subtraction in the suite uses (`combineMask`), so a
+ * soft edge stays soft. A mask of another size is stale and refused, `a` kept
+ * whole. Pure; the result is a fresh raster.
+ */
+export function subtractMasks(a: BrushRaster | null, b: BrushRaster | null): BrushRaster | null {
+  if (!a) return null;
+  const data = new Uint8Array(a.data);
+  if (!b || b.width !== a.width || b.height !== a.height) return { data, width: a.width, height: a.height };
+  for (let i = 0; i < data.length; i += 1) data[i] = Math.round((data[i] * (255 - b.data[i])) / 255);
+  return { data, width: a.width, height: a.height };
+}
+
+/**
+ * A subject's raster from its points' own answers: the union of what each
+ * ADDED point found, less the union of what each REMOVED point found
+ * (2026-10-02, his *«passer en soustraction»*). The model only ever answers
+ * "this object"; removing is arithmetic on its answers. With nothing added
+ * there is nothing to take from, so the answer is null — a removal alone never
+ * makes a subject. One function for the stage and the export, so the two
+ * cannot remove differently.
+ */
+export function composeSubject(
+  added: readonly (BrushRaster | null)[],
+  removed: readonly (BrushRaster | null)[] = [],
+): BrushRaster | null {
+  let plus: BrushRaster | null = null;
+  for (const r of added) plus = unionMasks(plus, r);
+  if (!plus) return null;
+  let minus: BrushRaster | null = null;
+  for (const r of removed) minus = unionMasks(minus, r);
+  return minus ? subtractMasks(plus, minus) : plus;
+}
+
+/**
  * The subject the author pointed at, as an alpha map — the union of one mask
- * per point.
+ * per point, less the regions of the points that take away.
  *
  * The model answers ONE point at a time, so the points are segmented in
  * sequence. That is the same shape `p5-templates` settled on, and the reason is
@@ -288,13 +323,16 @@ export function unionMasks(a: BrushRaster | null, b: BrushRaster | null): BrushR
 export async function segmentSubject(
   source: TexImageSource,
   points: readonly SubjectPoint[],
+  minus: readonly SubjectPoint[] = [],
 ): Promise<BrushRaster | null> {
   if (points.length === 0) return null;
   const shown = await prepareSegmentSource(source);
   try {
-    let out: BrushRaster | null = null;
-    for (const point of points) out = unionMasks(out, await segmentPoint(shown.image, point));
-    return out;
+    const added: (BrushRaster | null)[] = [];
+    for (const point of points) added.push(await segmentPoint(shown.image, point));
+    const removed: (BrushRaster | null)[] = [];
+    for (const point of minus) removed.push(await segmentPoint(shown.image, point));
+    return composeSubject(added, removed);
   } finally {
     shown.release();
   }

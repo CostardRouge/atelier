@@ -32,7 +32,7 @@ import {
   type PictureGeometry,
 } from '../render/picture-geometry';
 import { cloneLayer, cloneLayers, drawingLayers, sameLayer, sameLayers, type AdjustLayer } from './layer';
-import { exceptRaster, makeLayerPassCache, type LayerPassCache, type MaskOverlayStyle } from './layer-render';
+import { exceptRaster, makeLayerPassCache, type LayerPassCache, type MaskFlash, type MaskOverlayStyle } from './layer-render';
 import type { BrushRaster } from '../render/brush-raster';
 import type { PixelView } from '../ui/use-pixel-view';
 import { decodeRaw, type RawMeta } from '../raw/raw-decoder';
@@ -94,8 +94,8 @@ interface GraderRecord {
   geometry: PictureGeometry;
   layers: AdjustLayer[];
   overlay: MaskOverlay | null;
-  /** The blink's raster, by identity — one per answered tap. */
-  flash: BrushRaster | null;
+  /** The blink, by identity — one per answered tap. */
+  flash: MaskFlash | null;
   /** The clipping view is painted over the picture. */
   clip: boolean;
   /** The sharpen's Masking weight is painted instead of the picture. */
@@ -172,7 +172,7 @@ function graderFrom(
   /** The camera's own shading grid, read from the file and never edited. */
   gain: GainField | null = null,
   /** One point's region, blinking after the model answered a tap. */
-  flash: BrushRaster | null = null,
+  flash: MaskFlash | null = null,
   /**
    * Paint what is clipped (`clip-pass.ts`) — a way of LOOKING, so only the
    * stage and the loupe ever ask; everything that measures or leaves passes
@@ -693,7 +693,7 @@ export function useDevelopPicture({
    * the model answers a tap. A way of LOOKING like the overlay: never
    * delivered, never measured.
    */
-  flashMask?: BrushRaster | null;
+  flashMask?: MaskFlash | null;
   /**
    * Alpha maps for the SUBJECT layers, resolved by the model — the one mask
    * kind the renderer cannot compute for itself (`use-subject-masks.ts`).
@@ -712,7 +712,11 @@ export function useDevelopPicture({
    * and says when the stroke starts and ends.
    */
   paint?: {
-    onStart: (point: [number, number]) => void;
+    /**
+     * `alt`: the modifier held at the press — what flips a subject tap from
+     * adding to taking away, read off the very event so no key state can lag.
+     */
+    onStart: (point: [number, number], mods?: { alt: boolean }) => void;
     onMove: (point: [number, number]) => void;
     onEnd: () => void;
     /**
@@ -969,7 +973,7 @@ export function useDevelopPicture({
       patches: readonly Patch[] | null,
       texture: FilmTexture | null,
       gain: GainField | null,
-      flash: BrushRaster | null = null,
+      flash: MaskFlash | null = null,
       clip = false,
       maskView = false,
     ): HeldGrader | null =>
@@ -1855,7 +1859,7 @@ export function useDevelopPicture({
           } catch {
             /* not a live pointer */
           }
-          paint.onStart(at);
+          paint.onStart(at, { alt: e.altKey });
           return;
         }
       }

@@ -1519,7 +1519,11 @@ lands, and its opacity is the strength. A band or a radial can be moved:
 **Place on the picture** (or **P**), then press or drag where it should sit. A new Subject layer starts with
 **Pick** on (**P**): tap the thing you mean and the model finds it at once —
 a ring turns while it thinks, then what the tap added blinks twice — tap
-again to add to it, tap a marker to take it off. While you pick or paint, the
+again to add to it, tap a marker to take it off. When the model takes in too
+much — the bench the person leans on — switch the picture's **+ Add | −
+Remove** to Remove, or hold **⌥** for one tap, and tap the part you do not
+want: the model finds that object as well and it is taken **out** of the
+subject, its region blinking in ink, its pin an ink disc with a `−`. While you pick or paint, the
 mask shows by itself as its **outline**; **M** steps it to a red **fill** and
 to hidden, and the box under it keeps it shown once Pick is off. Any layer
 can take a subject **out** of itself (*Except › The subject*): darken the

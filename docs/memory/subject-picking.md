@@ -126,12 +126,34 @@ hook's: the workbench is mounted per picture, so the per-hook cache re-asked
 the model for every point on every landing (2 calls → 0 measured). Bounded:
 64 masks (~50 MB), 16 on a constrained device.
 
-## Taking a subject BACK — proposed, not built (2026-10-02)
+## Taking a subject BACK — Remove, built (2026-10-02)
 
-His report: the model only adds, and sometimes adds too much. Measured in the
-code: `magic_touch` takes a `keypoint` or a `scribble`, never a negative
-point; `loadSegmenter` asks for the CATEGORY mask (cut at the model's own
-threshold) and not the confidence masks it can return. The proposal and the
-order of work are `docs/mask-ui-redesign.md`. If it is built, the rules above
-bind it: a negative point is cached per point and per VIEW, the export removes
-exactly what the stage removes, and the blink stays for what a tap changed.
+His report: the model only adds, and sometimes adds too much. `magic_touch`
+takes a `keypoint` or a `scribble` and never a negative point, so a removal is
+ARITHMETIC on its answers: `SubjectMask.minus` (optional, absent when empty —
+no roll migrated) holds the points tapped out, each segmented by the same
+model, and `composeSubject` (`segmenter.ts`, pure, tested) is the union of the
+added points' rasters less the union of the removed ones (`a × (1 − b)`, the
+suite's one subtraction). **ONE function for the stage and the export**
+(`useSubjectMasks`, `segmentSubject` ← `subject-rasters.ts`), or the file
+would carry the bench the stage left out. A removal alone makes no subject.
+
+- **The tap's tone is read off the PRESS** (`paint.onStart(at, { alt })`):
+  the mode is a switch (`+ Add | − Remove`, in the panel AND over the picture's
+  top-left corner while picking — `DevelopViewport`'s `tool` slot), ⌥ flips it
+  for one tap; a held ⌥ only DISPLAYS the flip (switch, cursor), never decides
+  it, so no key state can lag. Back to Add whenever another layer opens.
+- **Pins**: `tapSubject` (pure) takes the NEAREST pin of either kind off, else
+  places one of the tap's tone; added = paper disc `+`, removed = ink disc `−`
+  (`bg-frame` / `on-media`, fixed tokens on a picture), `×` under the pointer
+  for both — `−` stopped meaning "click to remove" the day it became a kind.
+  A minus cursor (`SUBTRACT_CURSOR`) replaces `copy` in Remove.
+- **The record keys taps SIGNED** (`+`/`-` + `pointKey`), the cache UNSIGNED:
+  the model's answer to a point is the same either way, the tap is not.
+- **The blink has a tone** (`MaskFlash`): a removed region blinks in ink
+  through its own cube and pass id — a red blink would say "added".
+
+Driven headless (a yellow disc inside a blue square): the + on the square
+took the disc in (washed 223,112,32), the ⌥-tap took it out (230,200,40,
+unwashed), the disc blinked dark (G 200 → 72), dropping the − pin put it back.
+What is proposed next is `docs/mask-ui-redesign.md` §5.

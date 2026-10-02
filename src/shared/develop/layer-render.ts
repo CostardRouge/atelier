@@ -201,20 +201,46 @@ const FLASH_CUBE: CubeLut = {
 };
 
 /**
+ * A REMOVED region blinks in ink, never in the accent (2026-10-02): the red
+ * wash says "this is in the subject", and a tap that took a region out must
+ * not say the opposite of what it did.
+ */
+const FLASH_REMOVE_CUBE: CubeLut = {
+  ...RED_CUBE,
+  title: 'mask flash (removed)',
+  data: (() => {
+    const data = new Float32Array(2 * 2 * 2 * 3);
+    for (let i = 0; i < 8; i += 1) {
+      data[i * 3] = 0.08;
+      data[i * 3 + 1] = 0.07;
+      data[i * 3 + 2] = 0.06;
+    }
+    return data;
+  })(),
+};
+
+/** What blinks: one tap's region, and which way the tap went. */
+export interface MaskFlash {
+  raster: BrushRaster;
+  tone: 'add' | 'remove';
+}
+
+/**
  * One point's own region, washed — what BLINKS when the model answers a tap
  * (the maintainer's pick, 2026-09-23: twice, like a macOS menu item). The
  * point's raster alone, never the layer's union: the blink says what this tap
- * ADDED.
+ * CHANGED — added in the accent, taken away in ink.
  */
-export function maskFlashPass(raster: BrushRaster, aspectRatio: number): RenderPass | null {
+export function maskFlashPass(raster: BrushRaster, aspectRatio: number, tone: MaskFlash['tone'] = 'add'): RenderPass | null {
   return makeLayerPass({
-    lut: FLASH_CUBE,
+    lut: tone === 'add' ? FLASH_CUBE : FLASH_REMOVE_CUBE,
     mask: { kind: 'subject', points: [], model: 'flash' },
     raster,
     opacity: 0.7,
     aspectRatio,
     interpolation: 'trilinear',
-    id: 'mask-flash',
+    // The tone is in the id: the two blink through different cubes.
+    id: `mask-flash-${tone}`,
   });
 }
 
@@ -268,8 +294,8 @@ export interface LayerPassCache {
     style?: MaskOverlayStyle,
     except?: BrushRaster | null,
   ): RenderPass | null;
-  /** The blink over one point's region, kept while it is the same raster. */
-  flash(raster: BrushRaster | null, aspectRatio: number): RenderPass | null;
+  /** The blink over one point's region, kept while it is the same blink. */
+  flash(flash: MaskFlash | null, aspectRatio: number): RenderPass | null;
   /**
    * Bake the cubes of `layers` AHEAD of `passes`, where it is cheap to be
    * interrupted: the Develop stage calls this while React renders a DEFERRED
@@ -338,7 +364,7 @@ export function makeLayerPassCache(): LayerPassCache {
   /** Cubes baked by `prime`, by layer id, with the develop they were baked from. */
   const baked = new Map<string, { develop: DevelopSettings; interpolation: Interpolation; cube: CubeLut | null }>();
   let overlay: { id: string; held: HeldOverlay } | null = null;
-  let flash: { raster: BrushRaster; aspectRatio: number; pass: RenderPass | null } | null = null;
+  let flash: { flash: MaskFlash; aspectRatio: number; pass: RenderPass | null } | null = null;
 
   return {
     passes(layers, aspectRatio, rasters = null, interpolation = getDefaultLutInterpolation()) {
@@ -511,13 +537,13 @@ export function makeLayerPassCache(): LayerPassCache {
       return pass;
     },
 
-    flash(raster, aspectRatio) {
-      if (!raster) {
+    flash(blink, aspectRatio) {
+      if (!blink) {
         flash = null;
         return null;
       }
-      if (flash && flash.raster === raster && flash.aspectRatio === aspectRatio) return flash.pass;
-      flash = { raster, aspectRatio, pass: maskFlashPass(raster, aspectRatio) };
+      if (flash && flash.flash === blink && flash.aspectRatio === aspectRatio) return flash.pass;
+      flash = { flash: blink, aspectRatio, pass: maskFlashPass(blink.raster, aspectRatio, blink.tone) };
       return flash.pass;
     },
   };

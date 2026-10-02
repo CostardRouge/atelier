@@ -70,7 +70,12 @@ const COLOUR_HINT =
   'Turn Pick on and tap a colour on the picture: every pixel near that colour is in the mask, wherever it is — a sky’s blue, a jacket, the green of a hillside. Tap again elsewhere to add up to five colours; tap a marker to remove it. The colour is taken from the picture as THIS layer sees it — the develop, the look and the layers below, not this layer’s own change nor anything above it — and stored, so the mask does not move when a slider does. Refine widens or narrows how far a colour may stray and still be in; lightness counts half as much as hue, so a sampled blue takes in the sky’s lighter and darker blues but not a grey of the same brightness.';
 
 const SUBJECT_HINT =
-  'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. Tapping a marker you already placed removes it. It is the whole subject the model returns, not a region you drew, so it follows an edge better than a brush and understands nothing about why you chose it: if it takes in too much, remove the point and tap somewhere more specific, or fall back to painting. “Background” is this mask inverted — the checkbox below.';
+  'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. When it takes in too much — the bench the person leans on, a second person far away — switch to Remove (or hold ⌥ for one tap) and tap the part you do not want: the model finds that object too, and it is taken out of the subject. Tapping a point you already placed takes it off. “Background” is this mask inverted — the checkbox below.';
+
+const SUBJECT_TONES: readonly { id: 'add' | 'remove'; label: string }[] = [
+  { id: 'add', label: '+ Add' },
+  { id: 'remove', label: '− Remove' },
+];
 
 const PAINT_HINT =
   'With Paint on, a drag across the picture lays a stroke; the before/after wipe waits until it is off. Erase takes coverage away, and only from what is already there — a stroke painted after an eraser comes back, because strokes apply in the order they were made. Size and Softness are set before a stroke, not after: each stroke keeps the ones it was painted with, which is what lets a soft edge and a hard one live in the same mask.';
@@ -114,6 +119,8 @@ export default function MaskPanel({
   onBrush,
   painting,
   onPainting,
+  subjectTone,
+  onSubjectTone,
   subject,
 }: {
   layer: AdjustLayer;
@@ -128,6 +135,9 @@ export default function MaskPanel({
   onBrush: (patch: Partial<{ radius: number; hardness: number; erase: boolean }>) => void;
   painting: boolean;
   onPainting: (on: boolean) => void;
+  /** What a tap on a subject does — added to it, or taken out (⌥ flips it). */
+  subjectTone?: 'add' | 'remove';
+  onSubjectTone?: (tone: 'add' | 'remove') => void;
   /** Present only for a subject mask — how its segmentation is getting on. */
   subject: SubjectStatus | null;
 }) {
@@ -251,6 +261,8 @@ export default function MaskPanel({
           onBrush={onBrush}
           painting={painting}
           onPainting={onPainting}
+          subjectTone={subjectTone}
+          onSubjectTone={onSubjectTone}
           subject={subject}
         />
       )}
@@ -331,6 +343,8 @@ function ShapeControls({
   onBrush,
   painting,
   onPainting,
+  subjectTone = 'add',
+  onSubjectTone,
   subject,
 }: {
   mask: Mask;
@@ -341,6 +355,8 @@ function ShapeControls({
   onBrush: (patch: Partial<{ radius: number; hardness: number; erase: boolean }>) => void;
   painting: boolean;
   onPainting: (on: boolean) => void;
+  subjectTone?: 'add' | 'remove';
+  onSubjectTone?: (tone: 'add' | 'remove') => void;
   subject: SubjectStatus | null;
 }) {
   return (
@@ -533,8 +549,22 @@ function ShapeControls({
             >
               {painting ? 'Picking' : 'Pick'}
             </Button>
+            {onSubjectTone && (
+              <Segmented
+                size="sm"
+                label="What a tap on the picture does"
+                value={subjectTone}
+                onChange={(v) => onSubjectTone(v)}
+                options={SUBJECT_TONES}
+              />
+            )}
             <span className="flex-1" />
-            <Button size="sm" variant="ghost" disabled={!mask.points.length} onClick={() => setMask({ ...mask, points: [] })}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!mask.points.length && !mask.minus?.length}
+              onClick={() => setMask({ kind: 'subject', model: mask.model, points: [] })}
+            >
               Clear
             </Button>
           </div>
@@ -542,11 +572,13 @@ function ShapeControls({
             {subject?.state === 'unavailable'
               ? 'the model could not be loaded — every other mask still works'
               : mask.points.length === 0
-                ? 'tap the subject on the picture'
+                ? mask.minus?.length
+                  ? 'tap the subject to add it — a removal alone takes away from nothing'
+                  : 'tap the subject on the picture'
                 : subject?.working
-                  ? `finding it… (${mask.points.length} point${mask.points.length === 1 ? '' : 's'})`
+                  ? `finding it… (${pointCount(mask)})`
                   : subject?.resolved
-                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it${
+                    ? `${pointCount(mask)} · ⌥-tap takes a part out · tap a point to drop it${
                         // Found, and still doing nothing: said, or a subject
                         // that the model answered reads as a pick that failed.
                         isDefaultDevelop(layer.develop) ? ' · found — move a slider below to act on it' : ''
@@ -604,6 +636,13 @@ function ShapeControls({
 }
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
+
+/** `2 points`, `2 points, 1 taken out`. */
+function pointCount(mask: { points: readonly unknown[]; minus?: readonly unknown[] }): string {
+  const n = mask.points.length;
+  const out = mask.minus?.length ?? 0;
+  return `${n} point${n === 1 ? '' : 's'}${out ? `, ${out} taken out` : ''}`;
+}
 
 /** Where a shape is darkest when it is not inverted, in a word. */
 function anchorWord(direction: ShadeMask['direction']): string {

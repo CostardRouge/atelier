@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { SEGMENT_INPUT_LONG_EDGE, unionMasks } from './segmenter';
+import { SEGMENT_INPUT_LONG_EDGE, composeSubject, subtractMasks, unionMasks } from './segmenter';
 import { BRUSH_RASTER_LONG_EDGE } from '../render/brush-raster';
 import { fitRenderSize } from '../render/render-size';
 
@@ -29,6 +29,38 @@ describe('unionMasks', () => {
     const stale = raster(3, 1, [0, 1, 2]);
     expect([...unionMasks(a, stale)!.data]).toEqual([...a.data]);
     expect(unionMasks(null, null)).toBeNull();
+  });
+});
+
+describe('taking a region back out of the subject', () => {
+  it('removes what a removed point found, and only that', () => {
+    // The person (0, 1) came back with the bench (2); the bench is tapped out.
+    const person = raster(2, 2, [0, 1, 2]);
+    const bench = raster(2, 2, [2, 3]);
+    expect(Array.from(subtractMasks(person, bench)!.data)).toEqual([255, 255, 0, 0]);
+  });
+
+  it('keeps a soft edge soft — a product, like every other subtraction', () => {
+    const a = { data: new Uint8Array([255, 200]), width: 2, height: 1 };
+    const b = { data: new Uint8Array([128, 0]), width: 2, height: 1 };
+    expect(Array.from(subtractMasks(a, b)!.data)).toEqual([127, 200]);
+  });
+
+  it('refuses a mask of another size and keeps the subject whole', () => {
+    const a = raster(2, 2, [0]);
+    expect(Array.from(subtractMasks(a, raster(1, 1, [0]))!.data)).toEqual([255, 0, 0, 0]);
+    expect(subtractMasks(null, a)).toBeNull();
+  });
+
+  it('composes the added points, then takes the removed ones out', () => {
+    const out = composeSubject([raster(2, 2, [0]), raster(2, 2, [1, 2])], [raster(2, 2, [2]), raster(2, 2, [3])]);
+    expect(Array.from(out!.data)).toEqual([255, 255, 0, 0]);
+  });
+
+  it('makes no subject from removals alone, and skips a point the model did not answer', () => {
+    expect(composeSubject([], [raster(2, 2, [0])])).toBeNull();
+    expect(composeSubject([null], [])).toBeNull();
+    expect(Array.from(composeSubject([raster(2, 2, [0]), null], [null])!.data)).toEqual([255, 0, 0, 0]);
   });
 });
 

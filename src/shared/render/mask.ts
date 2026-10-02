@@ -168,6 +168,14 @@ export interface SubjectMask {
   kind: 'subject';
   /** Where the author tapped, in [0,1] frame coordinates. */
   points: readonly (readonly [number, number])[];
+  /**
+   * Where the author tapped to TAKE AWAY (2026-10-02, his *«passer en
+   * soustraction»*): each point is segmented by the same model and its region
+   * removed from the union of `points` — the model only answers "this
+   * object", so a removal is arithmetic on its answers, never a second model.
+   * Optional and absent when empty, so no stored roll changes shape.
+   */
+  minus?: readonly (readonly [number, number])[];
   /** Which model produced the cached raster; a mismatch refuses the cache. */
   model: string;
 }
@@ -276,6 +284,57 @@ export const DEFAULT_BRUSH: Readonly<BrushMask> = Object.freeze({
  * by an older build is refused rather than shown as though it were current.
  */
 export const SUBJECT_MODEL = 'mediapipe/magic_touch@1';
+
+/**
+ * How near a tap must land on a point already placed to take it OFF rather
+ * than place another, in [0,1] of the frame — the click-a-marker-to-unpick
+ * gesture a subject has had since it was wired.
+ */
+export const SUBJECT_HIT_RADIUS = 0.04;
+
+/** One placed point of a subject, as the stage draws it. */
+export interface SubjectPin {
+  x: number;
+  y: number;
+  tone: 'add' | 'remove';
+}
+
+/** Every pin of a subject, the added ones first — the order `dropSubjectPin` counts in. */
+export function subjectPins(mask: SubjectMask): SubjectPin[] {
+  return [
+    ...mask.points.map(([x, y]) => ({ x, y, tone: 'add' as const })),
+    ...(mask.minus ?? []).map(([x, y]) => ({ x, y, tone: 'remove' as const })),
+  ];
+}
+
+/** The subject without the pin at `index` (in `subjectPins`' order). */
+export function dropSubjectPin(mask: SubjectMask, index: number): SubjectMask {
+  const added = mask.points.length;
+  if (index < added) return { ...mask, points: mask.points.filter((_, i) => i !== index) };
+  const minus = (mask.minus ?? []).filter((_, i) => i !== index - added);
+  const rest: SubjectMask = { kind: 'subject', model: mask.model, points: mask.points };
+  return minus.length ? { ...rest, minus } : rest;
+}
+
+/**
+ * A tap on the picture: on a pin already placed — of either kind, the nearest
+ * one — it takes that pin off; anywhere else it places a new one, added to the
+ * subject or taken away from it as `tone` says (2026-10-02).
+ */
+export function tapSubject(mask: SubjectMask, point: readonly [number, number], tone: 'add' | 'remove'): SubjectMask {
+  let hit = -1;
+  let nearest = SUBJECT_HIT_RADIUS;
+  subjectPins(mask).forEach((pin, i) => {
+    const d = Math.hypot(pin.x - point[0], pin.y - point[1]);
+    if (d < nearest) {
+      nearest = d;
+      hit = i;
+    }
+  });
+  if (hit >= 0) return dropSubjectPin(mask, hit);
+  const at = [point[0], point[1]] as const;
+  return tone === 'add' ? { ...mask, points: [...mask.points, at] } : { ...mask, minus: [...(mask.minus ?? []), at] };
+}
 
 /** Where a new stroke starts, before the author touches the size or the softness. */
 export const DEFAULT_BRUSH_RADIUS = 0.12;
@@ -615,20 +674,25 @@ export function normaliseMask(raw: unknown): Mask | null {
     return { kind: 'brush', strokes };
   }
   if (src.kind === 'subject') {
-    const raw = Array.isArray(src.points) ? src.points : [];
-    const points: [number, number][] = [];
-    for (const p of raw) {
-      if (!Array.isArray(p) || p.length < 2) continue;
-      const x = num(p[0], NaN);
-      const y = num(p[1], NaN);
-      if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
-      points.push([clamp(x, 0, 1), clamp(y, 0, 1)]);
-    }
-    return {
+    const pointsOf = (list: unknown): [number, number][] => {
+      const out: [number, number][] = [];
+      for (const p of Array.isArray(list) ? list : []) {
+        if (!Array.isArray(p) || p.length < 2) continue;
+        const x = num(p[0], NaN);
+        const y = num(p[1], NaN);
+        if (!Number.isFinite(x) || !Number.isFinite(y)) continue;
+        out.push([clamp(x, 0, 1), clamp(y, 0, 1)]);
+      }
+      return out;
+    };
+    const subject: SubjectMask = {
       kind: 'subject',
-      points,
+      points: pointsOf(src.points),
       model: typeof src.model === 'string' && src.model ? src.model : SUBJECT_MODEL,
     };
+    // Absent stays absent: an empty list would make every old roll differ.
+    const minus = pointsOf(src.minus);
+    return minus.length ? { ...subject, minus } : subject;
   }
   if (src.kind === 'shade') {
     const shade: ShadeMask = {
@@ -671,11 +735,7 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
   if (!a || !b) return !a && !b;
   if (a.kind !== b.kind) return false;
   if (a.kind === 'subject' && b.kind === 'subject') {
-    return (
-      a.model === b.model &&
-      a.points.length === b.points.length &&
-      a.points.every((p, i) => p[0] === b.points[i][0] && p[1] === b.points[i][1])
-    );
+    return a.model === b.model && samePoints(a.points, b.points) && samePoints(a.minus ?? [], b.minus ?? []);
   }
   if (a.kind === 'colour' && b.kind === 'colour') {
     return (
@@ -729,6 +789,10 @@ export function sameMask(a: Mask | null | undefined, b: Mask | null | undefined)
   );
 }
 
+function samePoints(a: readonly (readonly [number, number])[], b: readonly (readonly [number, number])[]): boolean {
+  return a.length === b.length && a.every((p, i) => p[0] === b[i][0] && p[1] === b[i][1]);
+}
+
 export function cloneMask(m: Mask | null | undefined): Mask | null {
   if (!m) return null;
   // A brush holds arrays, so a spread would alias the very strokes a live
@@ -740,7 +804,8 @@ export function cloneMask(m: Mask | null | undefined): Mask | null {
     };
   }
   if (m.kind === 'subject') {
-    return { kind: 'subject', model: m.model, points: m.points.map((p) => [p[0], p[1]] as const) };
+    const copy: SubjectMask = { kind: 'subject', model: m.model, points: m.points.map((p) => [p[0], p[1]] as const) };
+    return m.minus?.length ? { ...copy, minus: m.minus.map((p) => [p[0], p[1]] as const) } : copy;
   }
   if (m.kind === 'colour') {
     return { kind: 'colour', range: m.range, samples: m.samples.map((s) => ({ ...s })) };
@@ -764,7 +829,9 @@ export function describeMask(m: Mask | null | undefined): string {
   }
   if (m.kind === 'subject') {
     const n = m.points.length;
-    return n === 0 ? 'subject · tap it' : `subject · ${n} point${n === 1 ? '' : 's'}`;
+    const less = m.minus?.length ?? 0;
+    if (n === 0) return 'subject · tap it';
+    return `subject · ${n} point${n === 1 ? '' : 's'}${less ? ` − ${less}` : ''}`;
   }
   if (m.kind === 'colour') {
     const n = m.samples.length;

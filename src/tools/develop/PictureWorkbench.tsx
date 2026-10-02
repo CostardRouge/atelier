@@ -64,28 +64,39 @@ import {
   DEFAULT_BRUSH_RADIUS,
   MAX_COLOUR_SAMPLES,
   MAX_STROKES,
+  SUBJECT_HIT_RADIUS,
+  dropSubjectPin,
+  subjectPins,
+  tapSubject,
   type BrushStroke,
   type Mask,
   type MaskKind,
   type ShadeMask,
+  type SubjectPin,
 } from '../../shared/render/mask';
 import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 import { nextMaskView, type MaskView } from './LayersPanel';
 import type { BrushRaster } from '../../shared/render/brush-raster';
+import type { MaskFlash } from '../../shared/develop/layer-render';
 
 type SubjectRasters = ReadonlyMap<string, BrushRaster>;
 const EMPTY_RASTERS: SubjectRasters = new Map();
 /** One beat of the blink: on, off, on, off — about a third of a second. */
 const FLASH_STEP_MS = 90;
 
+/** What a tap on a subject does — the switch over the picture and in the panel. */
+const SUBJECT_TONES: readonly { id: 'add' | 'remove'; label: string }[] = [
+  { id: 'add', label: '+ Add' },
+  { id: 'remove', label: '− Remove' },
+];
+
 /**
  * How near a tap must land to count as a tap ON an existing point rather than
  * beside it, in [0,1] frame coordinates. Generous, because the markers are
  * small and un-picking by accident is cheaper to undo than failing to un-pick.
  */
-const SUBJECT_HIT_RADIUS = 0.04;
 
 import {
   addLayer,
@@ -470,7 +481,7 @@ export default function PictureWorkbench({
   // hiding the colour being set under it.
   const [maskView, setMaskView] = useState<MaskView>('outline');
   // One point's region, on and off twice after the model answers a tap.
-  const [flashMask, setFlashMask] = useState<BrushRaster | null>(null);
+  const [flashMask, setFlashMask] = useState<MaskFlash | null>(null);
   const [pixelView, setPixelView] = usePixelView();
   // What the picture SAYS about itself, and where. Off by default — the
   // maintainer does not want the numbers in front of him while he works, and
@@ -495,6 +506,15 @@ export default function PictureWorkbench({
   // once per tap rather than once per frame.
   const [subjectRasters, setSubjectRasters] = useState<SubjectRasters>(EMPTY_RASTERS);
   const [painting, setPainting] = useState(false);
+  // What a tap on a subject does: ADD a region, or take one back OUT
+  // (2026-10-02, his *«passer en soustraction»*). ⌥ held at the press flips
+  // it for that one tap, as Lightroom and Photoshop do; the switch is the
+  // touch screen's way and the one the panel shows. Back to Add whenever
+  // another layer opens — a removal mode met by surprise is a lost subject.
+  const [subjectTone, setSubjectTone] = useState<'add' | 'remove'>('add');
+  const subjectToneRef = useRef(subjectTone);
+  subjectToneRef.current = subjectTone;
+  useEffect(() => setSubjectTone('add'), [selectedLayerId]);
   const selectedLayer = layersDraft.find((l) => l.id === selectedLayerId) ?? null;
   const drawingCount = drawingLayers(layersDraft).length;
 
@@ -536,17 +556,14 @@ export default function PictureWorkbench({
         }),
       );
     return {
-      onStart: (point: [number, number]) => {
+      onStart: (point: [number, number], mods?: { alt: boolean }) => {
         if (paintKind === 'subject') {
-          // A tap ADDS a point, and a tap on one REMOVES it — the
-          // click-a-marker-to-unpick gesture, which is how a subject is
-          // narrowed after the model took in too much.
-          edit((m) => {
-            if (m?.kind !== 'subject') return null;
-            const hit = m.points.findIndex(([x, y]) => Math.hypot(x - point[0], y - point[1]) < SUBJECT_HIT_RADIUS);
-            const points = hit >= 0 ? m.points.filter((_, i) => i !== hit) : [...m.points, point];
-            return { ...m, points };
-          });
+          // A tap ADDS a region or takes one OUT (`tapSubject`), ⌥ flipping
+          // the mode for this tap; a tap on a pin takes that pin off — the
+          // click-a-marker-to-unpick gesture.
+          const mode = subjectToneRef.current;
+          const tone = mods?.alt ? (mode === 'add' ? 'remove' : 'add') : mode;
+          edit((m) => (m?.kind === 'subject' ? tapSubject(m, point, tone) : null));
           return;
         }
         if (paintKind === 'colour') {
@@ -1132,18 +1149,19 @@ export default function PictureWorkbench({
   });
   const { rasters: resolvedSubjects, fresh: freshSubject } = subject;
   useEffect(() => setSubjectRasters(resolvedSubjects), [resolvedSubjects]);
-  // The region a tap just added BLINKS twice (on, off, on, off, 90 ms each),
-  // like a macOS menu item, then leaves the stage to the chosen view. Only
-  // what the tap added, never the whole subject; nothing under reduced motion,
-  // where the outline alone says it.
+  // The region a tap just changed BLINKS twice (on, off, on, off, 90 ms
+  // each), like a macOS menu item, then leaves the stage to the chosen view.
+  // Only what the tap changed, never the whole subject — added in the accent,
+  // taken away in ink; nothing under reduced motion, where the outline alone
+  // says it.
   useEffect(() => {
-    const raster = freshSubject?.raster;
-    if (!raster || prefersReducedMotion()) return;
+    if (!freshSubject || prefersReducedMotion()) return;
+    const blink: MaskFlash = { raster: freshSubject.raster, tone: freshSubject.tone };
     let step = 0;
-    setFlashMask(raster);
+    setFlashMask(blink);
     const timer = window.setInterval(() => {
       step += 1;
-      setFlashMask(step === 2 ? raster : null);
+      setFlashMask(step === 2 ? blink : null);
       if (step >= 3) window.clearInterval(timer);
     }, FLASH_STEP_MS);
     return () => {
@@ -1682,22 +1700,64 @@ export default function PictureWorkbench({
    * tap-a-marker-to-remove gesture unaimable — the maintainer's *"i can not
    * see"*.
    */
-  const subjectMarks = useMemo<readonly (readonly [number, number])[] | null>(
+  const subjectMarks = useMemo<readonly SubjectPin[] | null>(
     () =>
       activeMask?.kind === 'subject'
-        ? activeMask.points
+        ? subjectPins(activeMask)
         : activeMask?.kind === 'colour'
-          ? activeMask.samples.map((c) => [c.x, c.y] as const)
+          ? activeMask.samples.map((c) => ({ x: c.x, y: c.y, tone: 'add' as const }))
           : null,
     [activeMask],
   );
+  // ⌥ held while a subject is picked shows the OTHER mode on the stage — in
+  // the switch and in the cursor — for as long as it is held, so the hand is
+  // told before it clicks what the click will do. The tap itself reads the
+  // modifier off its own event (`paint.onStart`), never this state.
+  const pickingSubject = paintKind === 'subject';
+  const [altHeld, setAltHeld] = useState(false);
+  useEffect(() => {
+    if (!pickingSubject) {
+      setAltHeld(false);
+      return;
+    }
+    const down = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltHeld(true);
+    };
+    const up = (e: KeyboardEvent) => {
+      if (e.key === 'Alt') setAltHeld(false);
+    };
+    const lost = () => setAltHeld(false);
+    window.addEventListener('keydown', down);
+    window.addEventListener('keyup', up);
+    window.addEventListener('blur', lost);
+    return () => {
+      window.removeEventListener('keydown', down);
+      window.removeEventListener('keyup', up);
+      window.removeEventListener('blur', lost);
+    };
+  }, [pickingSubject]);
+  const tapTone: 'add' | 'remove' = altHeld ? (subjectTone === 'add' ? 'remove' : 'add') : subjectTone;
+  // The switch over the picture while a subject is picked: the eye is on the
+  // picture then, not on the panel.
+  const subjectTool = pickingSubject ? (
+    <div className="flex items-center gap-1.5 rounded-control border border-line-strong bg-surface/92 shadow-paper py-0.5 pl-0.5 pr-2">
+      <Segmented
+        size="sm"
+        label="What a tap on the picture does"
+        value={tapTone}
+        onChange={(v) => setSubjectTone(v)}
+        options={SUBJECT_TONES}
+      />
+      <span className="font-mono text-3xs text-faint">⌥ flips</span>
+    </div>
+  ) : null;
   const unmarkSubject = useCallback(
     (index: number) => {
       setLayersDraft((list) =>
         list.map((l) => {
           if (l.id !== paintId) return l;
           const m = componentMask(l, partIndex);
-          if (m?.kind === 'subject') return withComponentMask(l, partIndex, { ...m, points: m.points.filter((_, i) => i !== index) });
+          if (m?.kind === 'subject') return withComponentMask(l, partIndex, dropSubjectPin(m, index));
           if (m?.kind === 'colour') return withComponentMask(l, partIndex, { ...m, samples: m.samples.filter((_, i) => i !== index) });
           return l;
         }),
@@ -2042,6 +2102,8 @@ export default function PictureWorkbench({
           facts={facts}
           shot={shotLine}
           marks={subjectMarks}
+          tapTone={tapTone}
+          tool={subjectTool}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick
           // is on, so a settled mask cannot be edited by a stray click.
@@ -2273,6 +2335,12 @@ export default function PictureWorkbench({
                     onBrush={onBrush}
                     painting={painting}
                     onPainting={setPainting}
+                    subjectTone={tapTone}
+                    onSubjectTone={(tone) => {
+                      setSubjectTone(tone);
+                      // Choosing what a tap does is choosing to tap.
+                      if (!painting) setPainting(true);
+                    }}
                     subject={
                       partIndex === null && selectedLayer.mask?.kind === 'subject'
                         ? {
