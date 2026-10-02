@@ -728,3 +728,15 @@ no prop for it, the DOM does; a pointer and the keyboard both pass through,
 and a wheel still scrolls the column. The host owes the WHY in words, stuck
 at the top of the scroll (Develop's Export tab during a run): a lock nobody
 explains reads as a broken control.
+
+## 2026-10-02 — Measure the ROOM, never the box that holds the thing being sized; and a column only where the grid has one
+
+Two traps from Develop's band (`develop-roll.md`, «The roll's pictures are a
+BAND»). A band whose height "follows the roll" read the height of the cell it
+sat in — a cell that grew with the band — and oscillated between two answers
+on every frame; the cure is to measure what is NOT the band (the status lines
+on their own `useElementSize`, the toolbar a constant) and derive the room
+from the column. And a child placed with `col-start-2` in a grid that has one
+explicit column does not fail: it makes an implicit column and silently
+reshapes the page — hand a column index only under the grid that owns it
+(Develop's focus grid is one column, so the column index is withheld there).

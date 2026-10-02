@@ -17,6 +17,7 @@ import { StripCells, shownPictures, stripItems, useScrollToOpen, type StripCells
  */
 export default function ContactSheet({
   compact,
+  span = 1,
   thumb,
   onThumb,
   filter,
@@ -26,6 +27,8 @@ export default function ContactSheet({
   ...cells
 }: StripCellsProps & {
   compact: boolean;
+  /** How many of the host's grid columns it covers — the stage's, and the band's when that stands beside it. */
+  span?: 1 | 2;
   /** The sheet's thumbnail height (`StripPrefs.sheet`), and the way to step it. */
   thumb: number;
   onThumb: (direction: 1 | -1) => void;
@@ -81,7 +84,7 @@ export default function ContactSheet({
           ? 'fixed inset-0 z-50 flex flex-col gap-2 bg-paper px-3 pt-[max(0.5rem,env(safe-area-inset-top))] pb-[max(0.75rem,env(safe-area-inset-bottom))]'
           : // A grid item over the stage's cells, both rows: later in tree
             // order, so it paints over them; the inspector keeps its column.
-            'col-start-1 row-start-1 row-span-2 z-10 min-h-0 min-w-0 flex flex-col gap-2 bg-paper'
+            `col-start-1 ${span === 2 ? 'col-span-2' : ''} row-start-1 row-span-2 z-10 min-h-0 min-w-0 flex flex-col gap-2 bg-paper`
       }
     >
       <div className="flex-none flex items-center min-w-0" style={{ minHeight: metrics.head }}>

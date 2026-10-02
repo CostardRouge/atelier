@@ -34,11 +34,24 @@ export interface SelectionVerbs {
  * sized on a phone where the words fold into glyphs and the rest into ⋯.
  * Done (or Escape, or S) leaves the selection and clears it.
  */
-export default function SelectionBar({ compact, dense = false, verbs }: { compact: boolean; /** Too narrow a band for every verb in words: Apply folds into More. */ dense?: boolean; verbs: SelectionVerbs }) {
+export default function SelectionBar({
+  compact,
+  dense = false,
+  narrow = false,
+  verbs,
+}: {
+  compact: boolean;
+  /** Too narrow a band for every verb in words: Apply folds into More. */
+  dense?: boolean;
+  /** A column beside the picture: the phone's glyphs, wrapped onto two rows. */
+  narrow?: boolean;
+  verbs: SelectionVerbs;
+}) {
   const n = verbs.count;
   const none = n === 0;
+  const glyphs = compact || narrow;
   const more: OverflowItem[] = [
-    ...(compact || dense
+    ...(glyphs || dense
       ? [
           {
             id: 'apply',
@@ -55,14 +68,18 @@ export default function SelectionBar({ compact, dense = false, verbs }: { compac
   ];
   const size = compact ? 'md' : 'sm';
   return (
-    <div className="flex items-center gap-1.5 w-full h-full min-w-0 px-1 rounded-control bg-accent-wash" role="toolbar" aria-label="Selected pictures">
+    <div
+      className={`flex items-center gap-1.5 w-full min-w-0 px-1 rounded-control bg-accent-wash ${narrow ? 'flex-wrap py-1' : 'h-full'}`}
+      role="toolbar"
+      aria-label="Selected pictures"
+    >
       <IconButton size={size} variant="ghost" label="Leave the selection (Esc)" onClick={verbs.onDone}>
         {Icons.close}
       </IconButton>
       <span className="flex-none font-mono text-2xs font-medium text-accent-ink tabular-nums whitespace-nowrap" aria-live="polite">
-        {compact ? `${n} ✓` : `${n} selected`}
+        {glyphs ? `${n} ✓` : `${n} selected`}
       </span>
-      {!compact && (
+      {!glyphs && (
         <>
           <Button size="sm" variant="ghost" onClick={verbs.onAll} title="Every picture the band shows (⌘A)">
             All
@@ -73,19 +90,19 @@ export default function SelectionBar({ compact, dense = false, verbs }: { compac
           <span className="flex-none w-px h-4 bg-line-strong mx-0.5" aria-hidden="true" />
         </>
       )}
-      {compact && <span className="flex-1" />}
-      {compact ? (
+      {glyphs && <span className="flex-1" />}
+      {glyphs ? (
         <>
-          <IconButton size="md" label="Send at export (P)" onClick={verbs.onSend} disabled={none}>
+          <IconButton size={size} label="Send at export (P)" onClick={verbs.onSend} disabled={none}>
             {Icons.arrowUp}
           </IconButton>
-          <IconButton size="md" label="Hold back from the export" onClick={verbs.onHold} disabled={none}>
+          <IconButton size={size} label="Hold back from the export" onClick={verbs.onHold} disabled={none}>
             {Icons.minus}
           </IconButton>
-          <IconButton size="md" label={verbs.allIgnored ? 'Bring back into the roll’s work (M)' : 'Ignore (M)'} onClick={verbs.onIgnore} disabled={none}>
+          <IconButton size={size} label={verbs.allIgnored ? 'Bring back into the roll’s work (M)' : 'Ignore (M)'} onClick={verbs.onIgnore} disabled={none}>
             {verbs.allIgnored ? Icons.eye : Icons.eyeOff}
           </IconButton>
-          <OverflowMenu label="More for the selection" size="md" variant="default" side="above" items={more} />
+          <OverflowMenu label="More for the selection" size={size} variant="default" side="above" items={more} />
         </>
       ) : (
         <>
@@ -118,7 +135,7 @@ export default function SelectionBar({ compact, dense = false, verbs }: { compac
           <OverflowMenu label="More for the selection" side="above" items={more} trigger={{ text: 'More', size: 'sm' }} />
         </>
       )}
-      {!compact && <span className="flex-1" />}
+      {!glyphs && <span className="flex-1" />}
       <Button size={size} variant="primary" onClick={verbs.onDone} title="Leave the selection (Esc)">
         Done
       </Button>

@@ -1313,7 +1313,7 @@ available it is a single button, and it is gone when there is nothing to add. A 
 the file. A picture that came from your Winnow comes back by itself when the
 roll is opened, even after a reload and without passing through the Library:
 the picture you open is fetched from the instance, then its two neighbours on
-each side, and the filmstrip shows the instance's thumbnails meanwhile. It is
+each side, and the band shows the instance's thumbnails meanwhile. It is
 only ever asked of an instance you connected, and the roll says so when it is
 not signed in (*Sign in*, *Try again*), when the instance no longer has a
 picture, or when a picture lives on an instance this browser is not connected
@@ -1325,7 +1325,8 @@ finds the ones it already holds and adds the others. (Remembering a folder
 needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 
 **Developing.** A roll opens in its editor: the picture large, the roll as a
-filmstrip under it, and beside it the same controls as the Develop sheet in
+**band** of its pictures under it (or a column beside it — see *The band*
+below), and beside it the same controls as the Develop sheet in
 Trips and the Studio — the histogram, the sliders, your presets, the
 before/after wipe and zoom, and the picture's **look** (LUTs, output
 transform, grain), applied after its correction. The histogram draws the
@@ -1376,15 +1377,55 @@ undo that reaches another picture than the one on screen opens that picture,
 so what changed is what you see. The develop, the look, the lens and the
 detail are ticked to start — what a roll shot with one body shares — and the
 ticks are remembered. A picture's file, its RAW base, its title and caption and
-whether it leaves are never carried. A filmstrip cell shows the
-picture as it was last seen in the editor — developed and cropped — and a dot
-marks what is developed. On a phone the picture and the strip share the
+whether it leaves are never carried. A cell of the band shows the
+picture as it was last seen in the editor — developed and cropped — and its
+pill says what is developed. On a phone the picture and the band share the
 screen and the three tabs open from the bottom bar.
+
+**The band.** The roll's pictures run under the photograph as cells at their
+own shapes — a portrait narrow, a panorama wide — one row scrolling sideways
+at the band's smallest. Pull the **handle** above it and the band grows into a
+grid of two or three rows, justified like a photo site's; pull it down past
+its header and it folds to a **rail** (one line: where you are in the roll,
+the filter, *Select*, the sheet and the band's ⋯ menu), **B** does the same
+from the keyboard and a double-click on the handle too. The ⋯ menu names the
+rows, lets the band's **height follow the roll** (it takes the room the roll's
+typical picture leaves under itself, so stepping to a portrait moves
+nothing), makes the thumbnails smaller or larger (**−** / **=**), and says
+**where the band sits on this screen**: under the picture, or a **column** at
+its left or right — the same cells in one, two or three columns, the handle
+on its edge, the rail a thin strip when folded. All of that is remembered
+per device in the browser and never written to the roll; a phone keeps the
+band under the picture. A **filter** chip shows the roll whole or only the
+pictures *edited*, *to export*, *held back*, *ignored* — or by your Winnow's
+culling (*picks*, *rejected*, starred), when the roll came from one. A cell
+is calm: a small pill reads its state (**●** edited, **↑** leaves at export,
+**–** held back, **⊘** ignored, its variant number, **▶** a clip, **!** not
+reachable), Winnow's mark sits in the other corner, the name is written under
+it once the cells are large enough, and nothing on it is a button. What you
+DO to a picture is in its **menu** — ⋯ under the pointer, or a right-click
+anywhere on the cell: open, send ↔ hold, back to the rule, ignore, a variant,
+take it off the roll. For several at once, **Select** (or **S**, a
+**Shift / ⌘-click**, or on a phone a **finger held** on a cell) turns the
+**selection** on: a click now marks a cell instead of opening it, **⌘A**
+marks every picture the band shows, and the band's header becomes a bar of
+verbs for the marked pictures — *Send*, *Hold*, *Ignore* / *Bring back*,
+*Apply ‹the open picture›'s develop*, and under *More* back to the rule,
+paste settings, a variant of each, take them off the roll. *Done*, **S** or
+**Esc** leaves it. The **contact sheet** (**G**, or the ▦ button) lays the
+whole roll large over the picture — every name written, the same filter, the
+same selection and bar, the cells sized with **−** / **=** — to sort and to
+act on many; it covers the picture and the band and leaves the inspector, so
+the numbers you are about to apply stay in view, and a click on a picture
+opens it and closes the sheet (on a phone it is the whole screen). **Focus**
+(**F**, or the ⤢ button above the picture) puts the band, the inspector and
+the page bar away and leaves the photograph alone; **←/→** still step, and
+**F**, ⤢ or **Esc** brings everything back.
 
 **Clips.** A roll takes a video the way it takes a photograph: from a folder
 or a drop (the clip alone — its `.srt` flight log stays the Studio's), from
 the ticked Library, or from your Winnow, where the picker (below) lists
-its clips beside its photographs. A clip's cell in the filmstrip is a frame a
+its clips beside its photographs. A clip's cell in the band is a frame a
 second in, marked ▶. On the stage it **plays**: a transport under the picture,
 **Space** to play and pause, the develop and the look following every frame,
 the before/after divider live while it moves. What a clip takes is the
@@ -1624,13 +1665,14 @@ not touch, hold back one you did. The **Pictures** table in the Export tab
 lists the roll one row per picture (the whole row is the click, with what the
 picture would leave from and at what size), filtered by *Edited*, *Leaving* or
 *Held*, and a box at its head ticks or unticks every row shown at once — a
-filter first makes it a batch (every *Picks*, every *Edited*); the badge at the
-corner of each filmstrip cell does the same without leaving the photograph. **P** sends or holds the picture on the stage, **U**
+filter first makes it a batch (every *Picks*, every *Edited*); a picture's
+menu on its cell in the band does the same without leaving the photograph,
+and the band's selection bar does it for several at once. **P** sends or holds the picture on the stage, **U**
 puts it back on the rule (on the Layers tab, **P** and **M** belong to the
 mask instead — Pick and the mask's view). A picture you do not want to work on at all can be
-**ignored** (**M**, or a right-click / a held finger on its badge): it never
+**ignored** (**M**, or its cell's menu): it never
 leaves, **←/→** step over it, "apply to the other pictures" leaves it alone,
-the strip dims it or hides it, and a click still opens it. None of this is a
+the band dims it or, from its filter, hides it, and a click still opens it. None of this is a
 rating — culling stays Winnow's. Once a picture has been exported, its row
 says when (`✓ 14:32`), and says **changed** if you edited it since — its
 develop, look, crop, geometry, repairs, layers or words; a new export size or
@@ -1642,21 +1684,21 @@ undo never forgets one.
 
 The export buttons stay pinned at the bottom of the Export tab, whatever is
 scrolled above them: **Export N pictures** (the ones that leave) is the main
-button, and the menu beside it offers this picture, the filmstrip's selection
+button, and the menu beside it offers this picture, the band's selection
 and the new or changed ones. While an export runs, that bar becomes the run
 and stays on whichever tab you are working in: a segment per picture (green
 when written, red when it could not be), the picture in hand with its stage —
 *Fetch*, *Develop*, *Write* — and what it is doing in words, the time left once
 a first picture has measured it, and **Cancel**, which stops at the next
-picture and keeps what was written. The filmstrip is the queue at the same
+picture and keeps what was written. The band is the queue at the same
 time: a picture still to go is veiled, the one in hand turns, a written one
-shows ✓ and one that could not leave shows !, and a hairline along the strip's
+shows ✓ and one that could not leave shows !, and a hairline along the band's
 top fills as the run goes.
 
 An export works from the roll **as it was when you pressed the button**. While
 it runs, the Export tab is locked and dimmed under a line that says so — its
 settings, and which pictures leave (the **P** / **U** / **M** keys and the
-strip's badges say they are locked too), would only apply to the next export.
+band's menus answer that they are locked too), would only apply to the next export.
 Developing, cropping and every other edit stay free: a picture you change
 while the roll leaves is named when the run ends, its row says **changed**,
 and **Export new or changed** sends it again.

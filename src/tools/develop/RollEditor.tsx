@@ -34,15 +34,19 @@ import {
   autoBandHeight,
   bandAfterDrag,
   cellAspect,
+  columnsForWidth,
   heightForRows,
   maxBandHeight,
+  maxBandWidth,
   medianAspect,
   passesStripFilter,
   rowsForHeight,
   stepThumb,
   stripFilterLabel,
+  widthForColumns,
   type StripFilterKey,
   type StripKind,
+  type StripPlace,
 } from '../../shared/develop/roll-strip';
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
 import { formatBytes } from '../../shared/lib/format';
@@ -1127,6 +1131,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   );
   // --- the band's size: the device's preference, held to what the column allows
   const drawerBand = compact && sheetOpen;
+  // Where the band stands on THIS device (`StripPrefs.place`, his Q1): under
+  // the picture by default, or a COLUMN at its left or right on a desktop —
+  // a phone's preference is read as `bottom` whatever it says.
+  const side = !compact && strip.place !== 'bottom';
+  const left = side && strip.place === 'left';
   // What the column holds besides the picture and the band: the grid's row
   // gap, the workbench's toolbar (one 28 px row and an 8 px gap on a desktop;
   // the name row, the verbs row and their gaps on a phone — its own markup's
@@ -1134,41 +1143,68 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const toolbarAbove = compact ? 76 : 36;
   const statusAbove = statusBox.height > 0 ? statusBox.height + 4 : 0;
   const columnHeight = Math.max(0, columnBox.height - 8 - toolbarAbove - statusAbove);
-  const maxBand = columnHeight > 0 ? maxBandHeight(columnHeight, stripMetrics) : Number.POSITIVE_INFINITY;
+  // Beside the picture the room is the grid's width less the inspector's
+  // column (22rem, 18rem under the 880 px container query) and the two gaps.
+  const roomBeside = Math.max(0, columnBox.width - (columnBox.width > 880 ? 352 : 288) - 2 * 16);
+  const maxBand = side
+    ? columnBox.width > 0
+      ? maxBandWidth(roomBeside, stripMetrics)
+      : Number.POSITIVE_INFINITY
+    : columnHeight > 0
+      ? maxBandHeight(columnHeight, stripMetrics)
+      : Number.POSITIVE_INFINITY;
   const rollAspect = useMemo(
     () => medianAspect(roll.pictures.map((p) => ({ id: p.id, aspect: cellAspect(p, thumbAspects.get(p.id)) }))),
     [roll.pictures, thumbAspects],
   );
-  const bandHeight = drawerBand
+  /** The band's extent on its axis: its height under the picture, its width beside it. */
+  const bandSizeNow = drawerBand
     ? // With a phone's drawer up every row is the photograph's: one short row
       // of cells and no header, the size the strip had before it could be pulled.
       56 + 2 * stripMetrics.pad
     : strip.folded
-      ? stripMetrics.head
-      : strip.auto && bandBox.width > 0 && columnHeight > 0
-        ? Math.round(autoBandHeight({ columnWidth: bandBox.width, columnHeight, aspect: rollAspect, metrics: stripMetrics }))
-        : Math.min(maxBand, strip.height ?? heightForRows(1, stripMetrics, strip.thumb));
+      ? side
+        ? stripMetrics.rail
+        : stripMetrics.head
+      : side
+        ? Math.min(maxBand, Math.max(stripMetrics.columnMin, strip.width ?? widthForColumns(1, stripMetrics)))
+        : strip.auto && bandBox.width > 0 && columnHeight > 0
+          ? Math.round(autoBandHeight({ columnWidth: bandBox.width, columnHeight, aspect: rollAspect, metrics: stripMetrics }))
+          : Math.min(maxBand, strip.height ?? heightForRows(1, stripMetrics, strip.thumb));
   const dragFrom = useRef<number | null>(null);
   const onGripDrag = useCallback(
-    ({ dy }: { dx: number; dy: number }) => {
-      dragFrom.current ??= bandHeight;
-      const { folded, size } = bandAfterDrag(dragFrom.current - dy, stripMetrics, false, maxBand);
-      patchStrip({ folded, auto: false, ...(size === null ? {} : { height: size }) });
+    ({ dx, dy }: { dx: number; dy: number }) => {
+      dragFrom.current ??= bandSizeNow;
+      // Under the picture the grip is the band's top edge, so up is more; at
+      // the left its right edge, so right is more; at the right, left is.
+      const travel = side ? (left ? dx : -dx) : -dy;
+      const { folded, size } = bandAfterDrag(dragFrom.current + travel, stripMetrics, side, maxBand);
+      patchStrip({ folded, auto: false, ...(size === null ? {} : side ? { width: size } : { height: size }) });
     },
-    // `bandHeight` is read only to seed the drag; the ref holds it after.
-    [bandHeight, stripMetrics, maxBand, patchStrip],
+    // `bandSizeNow` is read only to seed the drag; the ref holds it after.
+    [bandSizeNow, side, left, stripMetrics, maxBand, patchStrip],
   );
   const onGripEnd = useCallback(() => {
     dragFrom.current = null;
   }, []);
   const toggleFolded = useCallback(() => patchStrip({ folded: !strip.folded }), [patchStrip, strip.folded]);
-  // `-` / `=` step whichever thumbnails are on screen: the sheet's while it is open, else the band's.
+  // A column's cells are sized by how many stand side by side (`columnLayout`
+  // takes no thumbnail height): what the band shows as one, two or three.
+  const columnsNow = side && !strip.folded ? columnsForWidth(bandSizeNow, stripMetrics) : 0;
+  const setColumns = useCallback(
+    (n: number) => patchStrip({ folded: false, auto: false, width: Math.min(maxBand, widthForColumns(n, stripMetrics)) }),
+    [patchStrip, maxBand, stripMetrics],
+  );
+  // `-` / `=` step whichever thumbnails are on screen: the sheet's while it
+  // is open, else the band's — a column one column narrower or wider.
   const stepThumbs = useCallback(
     (direction: 1 | -1) =>
       contactOpen
         ? patchStrip({ sheet: stepThumb(strip.sheet, direction, stripMetrics, 'sheet') })
-        : patchStrip({ thumb: stepThumb(strip.thumb, direction, stripMetrics, 'band') }),
-    [patchStrip, strip.thumb, strip.sheet, stripMetrics, contactOpen],
+        : side
+          ? setColumns(Math.max(1, columnsNow + direction))
+          : patchStrip({ thumb: stepThumb(strip.thumb, direction, stripMetrics, 'band') }),
+    [patchStrip, strip.thumb, strip.sheet, stripMetrics, contactOpen, side, columnsNow, setColumns],
   );
   const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
   const chipSize = compact ? 'md' : 'sm';
@@ -1182,22 +1218,53 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       {key && <span className="ml-auto font-mono text-3xs text-faint">{key}</span>}
     </span>
   );
-  const rowsNow = strip.folded || strip.auto ? 0 : rowsForHeight(bandHeight - stripMetrics.head, stripMetrics, strip.thumb);
+  const rowsNow = side || strip.folded || strip.auto ? 0 : rowsForHeight(bandSizeNow - stripMetrics.head, stripMetrics, strip.thumb);
+  const COUNT = ['One', 'Two', 'Three'];
   const bandMenu: OverflowItem[] = [
     { id: 'fold', label: marked(strip.folded, 'Folded to its rail', 'B'), onSelect: toggleFolded },
-    ...[1, 2, 3].map((n) => ({
-      id: `rows-${n}`,
-      label: marked(rowsNow === n, n === 1 ? 'One row' : `${n === 2 ? 'Two' : 'Three'} rows`),
-      onSelect: () => patchStrip({ folded: false, auto: false, height: Math.min(maxBand, heightForRows(n, stripMetrics, strip.thumb)) }),
-    })),
-    {
-      id: 'auto',
-      label: marked(strip.auto, 'Height follows the roll'),
-      title: 'The band takes the room the roll’s typical picture leaves under itself — sized on the roll, so stepping to a portrait moves nothing',
-      onSelect: () => patchStrip({ auto: !strip.auto, folded: false }),
-    },
-    { id: 'smaller', label: marked(false, 'Smaller thumbnails', '−'), disabled: strip.thumb <= stripMetrics.thumbMin, onSelect: () => stepThumbs(-1) },
-    { id: 'larger', label: marked(false, 'Larger thumbnails', '='), disabled: strip.thumb >= stripMetrics.thumbMax, onSelect: () => stepThumbs(1) },
+    ...(side
+      ? [1, 2, 3].map((n) => ({
+          id: `columns-${n}`,
+          label: marked(columnsNow === n, `${COUNT[n - 1]} column${n === 1 ? '' : 's'}`),
+          disabled: widthForColumns(n, stripMetrics) > maxBand,
+          onSelect: () => setColumns(n),
+        }))
+      : [1, 2, 3].map((n) => ({
+          id: `rows-${n}`,
+          label: marked(rowsNow === n, `${COUNT[n - 1]} row${n === 1 ? '' : 's'}`),
+          onSelect: () => patchStrip({ folded: false, auto: false, height: Math.min(maxBand, heightForRows(n, stripMetrics, strip.thumb)) }),
+        }))),
+    ...(side
+      ? [
+          { id: 'narrower', label: marked(false, 'One column fewer', '−'), disabled: columnsNow <= 1, onSelect: () => stepThumbs(-1) },
+          { id: 'wider', label: marked(false, 'One column more', '='), disabled: widthForColumns(columnsNow + 1, stripMetrics) > maxBand, onSelect: () => stepThumbs(1) },
+        ]
+      : [
+          {
+            id: 'auto',
+            label: marked(strip.auto, 'Height follows the roll'),
+            title: 'The band takes the room the roll’s typical picture leaves under itself — sized on the roll, so stepping to a portrait moves nothing',
+            onSelect: () => patchStrip({ auto: !strip.auto, folded: false }),
+          },
+          { id: 'smaller', label: marked(false, 'Smaller thumbnails', '−'), disabled: strip.thumb <= stripMetrics.thumbMin, onSelect: () => stepThumbs(-1) },
+          { id: 'larger', label: marked(false, 'Larger thumbnails', '='), disabled: strip.thumb >= stripMetrics.thumbMax, onSelect: () => stepThumbs(1) },
+        ]),
+    // Where the band stands, remembered per device (his Q1): a phone's is
+    // always under the picture, so the choice is a desktop's alone.
+    ...(compact
+      ? []
+      : (
+          [
+            ['bottom', 'Under the picture'],
+            ['left', 'A column at the left'],
+            ['right', 'A column at the right'],
+          ] as const
+        ).map(([place, text]: readonly [StripPlace, string]) => ({
+          id: `place-${place}`,
+          label: marked(strip.place === place, text),
+          title: 'On this screen — the band on a phone stays under the picture',
+          onSelect: () => patchStrip({ place, folded: false }),
+        }))),
   ];
   const filterMenu: OverflowItem[] = [
     ...STRIP_FILTERS.filter((f) => !f.winnow || culling.reachable).map((f) => ({
@@ -1237,7 +1304,26 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // on, its bar of verbs.
   const bandHeader = useCallback(
     ({ at, shown, width }: { at: number; shown: number; width: number }) => {
-      if (selecting) return <SelectionBar compact={compact} dense={width < 800} verbs={selectionVerbs} />;
+      if (selecting) return <SelectionBar compact={compact} dense={width < 800} narrow={side} verbs={selectionVerbs} />;
+      const size = compact ? 'md' : 'sm';
+      if (side && strip.folded) {
+        // The column's RAIL: a stack of three — unfold, the count read down
+        // the rail, the sheet — and the menu, so the band can be moved from here.
+        return (
+          <>
+            <IconButton size={size} variant="ghost" label="Show the band (B)" onClick={toggleFolded}>
+              {left ? Icons.chevronRight : Icons.back}
+            </IconButton>
+            <span className="[writing-mode:vertical-rl] font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
+              {at >= 0 ? at + 1 : '–'} / {shown}
+            </span>
+            <IconButton size={size} variant="ghost" label="Contact sheet (G)" onClick={toggleSheet}>
+              {Icons.grid}
+            </IconButton>
+            <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side="below" />
+          </>
+        );
+      }
       const progress = rollProgress(roll);
       const leaving = roll.pictures.filter(delivers).length;
       const changed = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
@@ -1258,16 +1344,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       ]
         .filter(Boolean)
         .join(' · ');
-      const size = compact ? 'md' : 'sm';
       return (
         <>
           <IconButton size={size} variant="ghost" label={strip.folded ? 'Show the band (B)' : 'Fold the band to its rail (B)'} onClick={toggleFolded}>
-            {strip.folded ? Icons.up : Icons.down}
+            {side ? (left ? Icons.back : Icons.chevronRight) : strip.folded ? Icons.up : Icons.down}
           </IconButton>
           <span className="flex-none font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
             {at >= 0 ? at + 1 : '–'} / {shown}
           </span>
-          {!compact && (
+          {!compact && !side && (
             <span className="min-w-0 truncate font-mono text-2xs text-muted tabular-nums" title={summary}>
               · {summary}
             </span>
@@ -1277,8 +1362,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           <Button size={size} onClick={() => startSelecting()} title="Pick several pictures, then act on them all (S)">
             Select
           </Button>
-          {compact ? (
-            <IconButton size="md" label="Contact sheet (G)" onClick={toggleSheet}>
+          {compact || side ? (
+            <IconButton size={size} label="Contact sheet (G)" onClick={toggleSheet}>
               {Icons.grid}
             </IconButton>
           ) : (
@@ -1286,12 +1371,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               Sheet
             </Button>
           )}
-          <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side="above" />
+          <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side={side ? 'below' : 'above'} />
         </>
       );
     },
     // The menus are rebuilt per render on purpose: they read the band's state.
-    [selecting, compact, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandHeight, strip.thumb, strip.auto],
+    [selecting, compact, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
   );
 
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
@@ -1370,6 +1455,136 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     return days.length ? { from: days[0], to: days[days.length - 1] } : null;
   }, [roll.pictures]);
   const removing = confirmRemove ? roll.pictures.filter((p) => confirmRemove.includes(p.id)) : [];
+  // The status lines: in the band's cell under the picture; a grid item of
+  // their own under the stage once the band stands beside it (the band's
+  // cell spans both rows then). Drawn once, in whichever place.
+  const statusLines = (
+    <div
+      ref={statusRef}
+      className={`flex flex-col gap-1 empty:hidden ${side ? `${left ? 'col-start-2' : 'col-start-1'} row-start-2 mt-2` : ''}`}
+    >
+    {/* What STATE is in the band's header now (how far the roll has
+        got, what it shows); this line keeps what asks for a click —
+        a fetch that failed, a folder to reopen, a notice — and is
+        not drawn at all when nothing does. */}
+    {(reach.fetching + reach.failed + reach.gone + reach.unconnected + reach.previewed + reach.local > 0 || notice || culling.problem) && (
+    <p className="m-0 font-mono text-2xs text-muted tabular-nums">
+      {culling.problem && (
+        <span className="text-danger">
+          Winnow {culling.problem}{' '}
+          <button type="button" onClick={culling.refresh} disabled={culling.asking} className="underline underline-offset-2 cursor-pointer">
+            {culling.asking ? 'asking…' : 'Try again'}
+          </button>{' '}
+        </span>
+      )}
+      {reach.fetching > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · fetching {reach.fetching} from {availabilityHost(availability, 'fetching')}
+        </span>
+      )}
+      {reach.failed > 0 && (
+        <span className="text-danger">
+          {' '}
+          · {reach.failed} could not be fetched — {reach.problem}{' '}
+          {reach.loginUrl && (
+            <a href={reach.loginUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+              Sign in
+            </a>
+          )}{' '}
+          <button type="button" onClick={retryFailed} className="underline underline-offset-2 cursor-pointer">
+            Try again
+          </button>
+        </span>
+      )}
+      {reach.gone > 0 && (
+        <span className="text-danger">
+          {' '}
+          · {reach.gone} no longer on {reach.sourceId}
+        </span>
+      )}
+      {reach.unconnected > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · {reach.unconnected} on {reach.unconnectedSourceId}, not connected —{' '}
+          <a href="#/sources" className="underline underline-offset-2">
+            Sources
+          </a>
+        </span>
+      )}
+      {reach.previewed > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · {reach.previewed} from {reach.previewed === 1 ? 'its' : 'their'} working preview
+          {reach.previewed === 1 ? '' : 's'} — reopen the folder for full size
+        </span>
+      )}
+      {reach.local > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · {reach.local} from this computer, not open —{' '}
+          {folders.waiting.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void folders.reopen()}
+              className="underline underline-offset-2 cursor-pointer text-accent-ink"
+            >
+              Reopen {folders.waiting.length === 1 ? folders.waiting[0].name : `${folders.waiting.length} folders`}
+            </button>
+          ) : (
+            'drop their folder here'
+          )}
+        </span>
+      )}
+      {notice && <span className="text-ink-soft"> · {notice}</span>}
+      {/* The shortcuts used to run along here as a seventh clause.
+          They are behind `H` and the stage bar's `?` now
+          (`DevelopShortcuts.tsx`): a legend read once still cost the
+          photograph three wrapped lines every day after. What stays
+          on this line is STATE — how far the roll has got, and what
+          could not be reached, which is the half that asks for a
+          click. */}
+    </p>
+    )}
+    {/* Housekeeping, and it wraps to three lines at 390px: on a
+        phone with the drawer up those are three lines taken off the
+        photograph. It is back as soon as the drawer is down, which
+        is when a roll's upkeep is read anyway. */}
+    {localCount > 0 && !(compact && sheetOpen) && (
+      <p className="m-0 font-mono text-2xs text-faint tabular-nums">
+        working previews ·{' '}
+        {previews.enabled ? (
+          <>
+            {previews.files.size} of {localCount} kept · {formatBytes(previews.bytes)}
+            {previews.pending > 0 && ` · making ${previews.pending}`} ·{' '}
+            <button
+              type="button"
+              onClick={() => previews.setEnabled(false)}
+              className="underline underline-offset-2 cursor-pointer"
+              title="Delete this roll's working previews from this browser"
+            >
+              Stop keeping them
+            </button>
+          </>
+        ) : (
+          <>
+            off ·{' '}
+            <button
+              type="button"
+              onClick={() => previews.setEnabled(true)}
+              className="underline underline-offset-2 cursor-pointer text-accent-ink"
+              title="Keep a 2048 px copy of each picture from this computer, in this browser, so the roll can be developed while its files are away"
+            >
+              Keep them
+            </button>{' '}
+            (≈ {formatBytes(localCount * WORKING_PREVIEW_ESTIMATE_BYTES)} for {localCount} picture
+            {localCount === 1 ? '' : 's'} from this computer)
+          </>
+        )}
+      </p>
+    )}
+    </div>
+  );
 
   return (
     <div
@@ -1472,7 +1687,14 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 ? 'flex-1 min-h-0 flex flex-col gap-2'
                 : focus
                   ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-y-2'
-                  : 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4 gap-y-2'
+                  : // The band standing beside the stage is a column of its own
+                    // (sized by its content: the band's own width), both rows tall;
+                    // the status lines then sit under the stage in row 2.
+                    left
+                    ? 'flex-1 min-h-0 grid grid-cols-[auto_minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[auto_minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4'
+                    : side
+                      ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_auto_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_auto_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4'
+                      : 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4 gap-y-2'
             }
           >
             <PictureWorkbench
@@ -1524,6 +1746,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSheet={toggleSheet}
               focused={focus}
               onFocusMode={toggleFocus}
+              columns={side && !focus ? (left ? { stage: 2, panel: 3 } : { stage: 1, panel: 3 }) : undefined}
               onEscape={() => {
                 // In order: the selection, then the sheet, then the focus — each one step back.
                 if (selecting) {
@@ -1563,139 +1786,31 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
-            <div ref={bandRef} className={`flex-col gap-1 min-w-0 ${focus ? 'hidden' : 'flex'} ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
-              <div ref={statusRef} className="flex flex-col gap-1 empty:hidden">
-              {/* What STATE is in the band's header now (how far the roll has
-                  got, what it shows); this line keeps what asks for a click —
-                  a fetch that failed, a folder to reopen, a notice — and is
-                  not drawn at all when nothing does. */}
-              {(reach.fetching + reach.failed + reach.gone + reach.unconnected + reach.previewed + reach.local > 0 || notice || culling.problem) && (
-              <p className="m-0 font-mono text-2xs text-muted tabular-nums">
-                {culling.problem && (
-                  <span className="text-danger">
-                    Winnow {culling.problem}{' '}
-                    <button type="button" onClick={culling.refresh} disabled={culling.asking} className="underline underline-offset-2 cursor-pointer">
-                      {culling.asking ? 'asking…' : 'Try again'}
-                    </button>{' '}
-                  </span>
-                )}
-                {reach.fetching > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · fetching {reach.fetching} from {availabilityHost(availability, 'fetching')}
-                  </span>
-                )}
-                {reach.failed > 0 && (
-                  <span className="text-danger">
-                    {' '}
-                    · {reach.failed} could not be fetched — {reach.problem}{' '}
-                    {reach.loginUrl && (
-                      <a href={reach.loginUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                        Sign in
-                      </a>
-                    )}{' '}
-                    <button type="button" onClick={retryFailed} className="underline underline-offset-2 cursor-pointer">
-                      Try again
-                    </button>
-                  </span>
-                )}
-                {reach.gone > 0 && (
-                  <span className="text-danger">
-                    {' '}
-                    · {reach.gone} no longer on {reach.sourceId}
-                  </span>
-                )}
-                {reach.unconnected > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · {reach.unconnected} on {reach.unconnectedSourceId}, not connected —{' '}
-                    <a href="#/sources" className="underline underline-offset-2">
-                      Sources
-                    </a>
-                  </span>
-                )}
-                {reach.previewed > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · {reach.previewed} from {reach.previewed === 1 ? 'its' : 'their'} working preview
-                    {reach.previewed === 1 ? '' : 's'} — reopen the folder for full size
-                  </span>
-                )}
-                {reach.local > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · {reach.local} from this computer, not open —{' '}
-                    {folders.waiting.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => void folders.reopen()}
-                        className="underline underline-offset-2 cursor-pointer text-accent-ink"
-                      >
-                        Reopen {folders.waiting.length === 1 ? folders.waiting[0].name : `${folders.waiting.length} folders`}
-                      </button>
-                    ) : (
-                      'drop their folder here'
-                    )}
-                  </span>
-                )}
-                {notice && <span className="text-ink-soft"> · {notice}</span>}
-                {/* The shortcuts used to run along here as a seventh clause.
-                    They are behind `H` and the stage bar's `?` now
-                    (`DevelopShortcuts.tsx`): a legend read once still cost the
-                    photograph three wrapped lines every day after. What stays
-                    on this line is STATE — how far the roll has got, and what
-                    could not be reached, which is the half that asks for a
-                    click. */}
-              </p>
-              )}
-              {/* Housekeeping, and it wraps to three lines at 390px: on a
-                  phone with the drawer up those are three lines taken off the
-                  photograph. It is back as soon as the drawer is down, which
-                  is when a roll's upkeep is read anyway. */}
-              {localCount > 0 && !(compact && sheetOpen) && (
-                <p className="m-0 font-mono text-2xs text-faint tabular-nums">
-                  working previews ·{' '}
-                  {previews.enabled ? (
-                    <>
-                      {previews.files.size} of {localCount} kept · {formatBytes(previews.bytes)}
-                      {previews.pending > 0 && ` · making ${previews.pending}`} ·{' '}
-                      <button
-                        type="button"
-                        onClick={() => previews.setEnabled(false)}
-                        className="underline underline-offset-2 cursor-pointer"
-                        title="Delete this roll's working previews from this browser"
-                      >
-                        Stop keeping them
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      off ·{' '}
-                      <button
-                        type="button"
-                        onClick={() => previews.setEnabled(true)}
-                        className="underline underline-offset-2 cursor-pointer text-accent-ink"
-                        title="Keep a 2048 px copy of each picture from this computer, in this browser, so the roll can be developed while its files are away"
-                      >
-                        Keep them
-                      </button>{' '}
-                      (≈ {formatBytes(localCount * WORKING_PREVIEW_ESTIMATE_BYTES)} for {localCount} picture
-                      {localCount === 1 ? '' : 's'} from this computer)
-                    </>
-                  )}
-                </p>
-              )}
-              </div>
+            {side && statusLines}
+            <div
+              ref={bandRef}
+              className={
+                focus
+                  ? 'hidden'
+                  : compact
+                    ? 'flex flex-col gap-1 min-w-0 flex-none'
+                    : side
+                      ? `flex min-w-0 min-h-0 ${left ? 'col-start-1' : 'col-start-2'} row-start-1 row-span-2`
+                      : 'flex flex-col gap-1 min-w-0 col-start-1 row-start-2'
+              }
+            >
+              {!side && statusLines}
               {/* V4: the band is the run's queue — each cell marked, and the
                   run's own hairline along its top (`TaskEdge`, the run's scope). */}
-              <div className="relative flex-none flex flex-col">
+              <div className={side ? `relative flex-1 min-h-0 min-w-0 flex ${left ? 'flex-row-reverse' : 'flex-row'}` : 'relative flex-none flex flex-col'}>
                 {/* The grip: the band's size by a drag, its rail by a
                     double-click (`BandGrip`); gone with a phone's drawer up,
-                    where the band is one fixed row. */}
+                    where the band is one fixed row. Beside the stage it is
+                    the band's edge that faces the picture. */}
                 {!drawerBand && (
-                  <BandGrip axis="y" size={stripMetrics.grip} label="Resize the band" onDrag={onGripDrag} onEnd={onGripEnd} onToggle={toggleFolded} />
+                  <BandGrip axis={side ? 'x' : 'y'} size={stripMetrics.grip} label="Resize the band" onDrag={onGripDrag} onEnd={onGripEnd} onToggle={toggleFolded} />
                 )}
-                <div className="relative">
+                <div className={side ? 'relative min-h-0 h-full' : 'relative'}>
                   <TaskEdge scope={runScope(roll.id)} edge="top" />
                   <RollBand
                     pictures={roll.pictures}
@@ -1707,7 +1822,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     availability={availability}
                     remoteThumb={remoteThumb}
                     kind={stripKind}
-                    height={bandHeight}
+                    place={side ? strip.place : 'bottom'}
+                    size={bandSizeNow}
                     folded={!drawerBand && strip.folded}
                     thumb={strip.thumb}
                     header={drawerBand ? null : bandHeader}
@@ -1729,6 +1845,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             {contactOpen && (
               <ContactSheet
                 compact={compact}
+                span={side ? 2 : 1}
                 pictures={roll.pictures}
                 run={exports.progress}
                 openId={openId}

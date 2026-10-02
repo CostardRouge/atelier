@@ -184,6 +184,14 @@ function withShadeCentre(m: ShadeMask, point: readonly [number, number]): ShadeM
 /** How long the picture rests before its filmstrip cell is redrawn. */
 const SNAPSHOT_DELAY_MS = 700;
 
+/**
+ * Which grid column of the host the stage and the inspector take — the band
+ * under the picture leaves the stage first, a band standing at the LEFT
+ * pushes it to the second (`StripPrefs.place`); the inspector keeps the last.
+ */
+const COLUMN_CLASS = { 1: 'col-start-1', 2: 'col-start-2', 3: 'col-start-3' } as const;
+const STAGE_COLUMNS = { stage: 1, panel: 2 } as const;
+
 const NO_FILES: readonly File[] = [];
 const NO_LAYERS: readonly AdjustLayer[] = [];
 const NO_PATCHES: readonly Patch[] = [];
@@ -294,6 +302,7 @@ export default function PictureWorkbench({
   onThumbs,
   focused = false,
   onFocusMode,
+  columns = STAGE_COLUMNS,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -388,6 +397,12 @@ export default function PictureWorkbench({
   focused?: boolean;
   /** `F`, and the ⤢ verb — focus on ↔ off. */
   onFocusMode?: () => void;
+  /**
+   * Which grid columns the stage and the inspector take in the host's grid:
+   * the first and the second by default; one further right each when the
+   * roll's band stands in a column at the left (`RollEditor`).
+   */
+  columns?: { stage: 1 | 2; panel: 2 | 3 };
   /** `-` / `=` — the band's thumbnails one step smaller or larger. */
   onThumbs?: (direction: 1 | -1) => void;
   /** What the stage says while the picture's bytes are not in hand. */
@@ -1835,7 +1850,7 @@ export default function PictureWorkbench({
 
   return (
     <>
-      <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : 'col-start-1 row-start-1 min-w-0 min-h-0 flex flex-col gap-2'}>
+      <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : `${COLUMN_CLASS[columns.stage]} row-start-1 min-w-0 min-h-0 flex flex-col gap-2`}>
         {/* One row above a phone: the name gives way first, the verbs never
             wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
             the verbs take a line of their own under it — `contents` at every
@@ -2079,7 +2094,7 @@ export default function PictureWorkbench({
         // The docked inspector wears the frame both editors' inspectors wear
         // (`frontend.md`): the tab strip pinned, the sections scrolling under it.
         // In focus it is not drawn — kept mounted, so its folds and fields hold.
-        className={`${focused ? 'hidden' : 'col-start-2 row-start-1 row-span-2'} min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3`}
+        className={`${focused ? 'hidden' : `${COLUMN_CLASS[columns.panel]} row-start-1 row-span-2`} min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3`}
       >
         {!compact && (
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={tabs} className="flex-none" />

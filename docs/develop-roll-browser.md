@@ -1,14 +1,21 @@
 # The roll's pictures in Develop, measured, and four faces to redraw them
 
-**Status: a proposal (2026-10-02), nothing built.** The lab draws the editor at
-its true pixel size on four screens (his 1270 × 1300 window, 1440 × 900,
-1920 × 1080, a 390 × 844 phone), with today's band reproduced from its code
-beside the four faces as working mocks, and the measured table:
-<https://claude.ai/artifact/SKGeL5LXQ7ZAnZ5pH3xrUS>. §1 is fact, traced to
-`main` f6ee666; §2 his ask; §3 the measurements; §4–§6 the proposal; §7 is his.
-Read it before touching `Filmstrip.tsx`, the band half of `RollEditor.tsx`
-(the status line and the strip, lines ~1202–1377), or the selection and key
-rules in `shared/develop/roll-editor.ts`.
+**Status: face D BUILT (2026-10-02, the same day), commits C1–C7 of §6, on
+his *«on part sur la D, avec tes recommandations»* — so §7's six answers are
+the recommendations in brackets there (the column in the band's ⋯ menu per
+device, the dragged size, a long press selects, the sheet over the stage, captions
+from 112 px, the badge leaves the cell), and stay his to overrule.** Driven
+headless at three sizes, not on his Mac or his iPhone. The rules it fixed are
+in `docs/memory/develop-roll.md`, «The roll's pictures are a BAND». The lab
+draws the editor at its true pixel size on four screens (his 1270 × 1300
+window, 1440 × 900, 1920 × 1080, a 390 × 844 phone), with the band as it was
+reproduced from its code beside the four faces as working mocks, and the
+measured table: <https://claude.ai/artifact/SKGeL5LXQ7ZAnZ5pH3xrUS>. §1 is the
+state BEFORE, traced to `main` f6ee666; §2 his ask; §3 the measurements;
+§4–§6 the proposal as built; §7 his questions. Read it before touching
+`RollBand.tsx`, `ContactSheet.tsx`, `SelectionBar.tsx`, `BandGrip.tsx`,
+`shared/develop/roll-strip.ts`, the band half of `RollEditor.tsx`, or the
+selection and key rules in `shared/develop/roll-editor.ts`.
 
 ## 1. What is built (fact)
 
@@ -110,7 +117,7 @@ band 107. The lab's DOM measures the same numbers.
   export · Held back · Ignored · Winnow picks · ★★★ · Not rejected, plus
   Ignored dimmed/hidden) and the position move into the band's header.
 
-## 6. Proposed commits (D)
+## 6. Commits (D) — all seven built on 2026-10-02
 
 1. `shared/develop/roll-strip.ts`, pure and tested: justified rows, columns,
    the size → rows mapping, the rail threshold, "height follows the roll", the
@@ -124,7 +131,7 @@ band 107. The lab's DOM measures the same numbers.
 6. Focus, `F` and the ⤢ verb.
 7. The column, if §7 Q1 says yes — the same band on the other axis.
 
-## 7. His questions
+## 7. His questions — answered by the recommendations, still his to overrule
 
 1. **The column**: a per-screen preference, or not at all? (Recommended: in
    the band's ⋯ menu, remembered per device, the band underneath by default.)

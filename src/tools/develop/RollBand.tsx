@@ -17,10 +17,12 @@ import {
   STRIP_METRICS,
   bandLayout,
   cellAspect,
+  columnLayout,
   type StripCell,
   type StripItem,
   type StripKind,
   type StripLayout,
+  type StripPlace,
 } from '../../shared/develop/roll-strip';
 import {
   deliverState,
@@ -107,7 +109,9 @@ export function stripItems(shown: readonly RollPicture[], aspects: ReadonlyMap<s
  * face D): cells at their pictures' own aspects, laid out by `roll-strip.ts`
  * and drawn at the rectangles it answers — one row scrolling sideways at the
  * band's smallest, a justified grid once the band is pulled up, the header
- * alone once it is folded.
+ * alone once it is folded. Or STANDING beside the stage, where this device
+ * prefers it (`place`): the same cells in one, two or three columns, the
+ * same header wrapped, a rail once folded.
  *
  * A cell is CALM: it carries what is READ — one pill with the picture's state
  * (● edited, ↑ leaves at export, – held back, ⊘ ignored, its variant number,
@@ -128,18 +132,22 @@ export function stripItems(shown: readonly RollPicture[], aspects: ReadonlyMap<s
  * did not leave says ! — over the picture's centre, pointer-transparent.
  */
 export default function RollBand({
-  height,
+  place = 'bottom',
+  size,
   header,
   folded = false,
   thumb,
   ...cells
 }: StripCellsProps & {
-  /** The band's whole height, header included. */
-  height: number;
+  /** Under the picture (a band of rows), or standing beside it (a column) — `StripPrefs.place`. */
+  place?: StripPlace;
+  /** The band's whole extent on its axis: its height under the picture, its width beside it. */
+  size: number;
   /**
-   * The header row's content, handed where the band stands in its pictures
-   * and how wide it is; none draws no header at all — with a phone's drawer
-   * up, where every row is the photograph's.
+   * The header's content, handed where the band stands in its pictures and
+   * how wide it is; none draws no header at all — with a phone's drawer up,
+   * where every row is the photograph's. One row under the picture; wrapped
+   * beside it, where the column is narrow; a stack once folded to a rail.
    */
   header?: ((info: { at: number; shown: number; width: number }) => ReactNode) | null;
   /** Folded to its rail: the header alone, no cell laid out or drawn. */
@@ -148,23 +156,41 @@ export default function RollBand({
   thumb?: number;
 }) {
   const metrics = STRIP_METRICS[cells.kind];
+  const side = place !== 'bottom';
   const [bodyRef, width] = useElementWidth<HTMLDivElement>();
   const { pictures, openId, hideIgnored = false, shows = ALWAYS, aspects } = cells;
   const shown = useMemo(() => shownPictures(pictures, openId, hideIgnored, shows), [pictures, openId, hideIgnored, shows]);
   const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
-  const bodyHeight = folded ? 0 : height - (header ? metrics.head : 0);
+  const bodyHeight = folded || side ? 0 : size - (header ? metrics.head : 0);
   const target = thumb ?? metrics.thumb;
   const layout = useMemo(
-    () => bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
-    [items, folded, width, bodyHeight, metrics, target],
+    () =>
+      side
+        ? columnLayout({ items: folded ? [] : items, width, metrics })
+        : bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
+    [side, items, folded, width, bodyHeight, metrics, target],
   );
   useScrollToOpen(bodyRef, openId);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
   return (
-    <div className="flex flex-col min-w-0 min-h-0" style={{ height }} role="group" aria-label="Pictures on this roll">
+    <div
+      className={`flex flex-col min-w-0 min-h-0 ${side ? 'h-full' : ''}`}
+      style={side ? { width: size } : { height: size }}
+      role="group"
+      aria-label="Pictures on this roll"
+    >
       {header && (
-        <div className="flex-none flex items-center gap-1.5 min-w-0" style={{ height: metrics.head }}>
-          {header({ at, shown: shown.length, width })}
+        <div
+          className={`flex-none min-w-0 ${
+            side && folded
+              ? 'flex flex-col items-center gap-2 py-1'
+              : side
+                ? 'flex flex-wrap items-center gap-1.5 px-0.5 py-0.5'
+                : 'flex items-center gap-1.5'
+          }`}
+          style={side ? undefined : { height: metrics.head }}
+        >
+          {header({ at, shown: shown.length, width: side ? size : width })}
         </div>
       )}
       <div
