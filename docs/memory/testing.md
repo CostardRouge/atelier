@@ -118,7 +118,32 @@ that says WHEN it is (a bar crossing the frame) and read the stage canvas.
 
 ## The subject model runs headless (2026-10-02)
 
-**Fact, measured**: MediaPipe's `InteractiveSegmenter` answers in this container's headless shell — its GPU delegate comes up on SwiftShader (`--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, the console saying `OpenGL error checking is disabled`), a few seconds a point. So a Subject layer CAN be driven end to end here; "it needs a real GPU" was never true. **Recipe**, on the scratchpad Playwright above: `putRoll(createRollDoc(…))`, the hash `#/develop/<rollRef(roll)>`, two canvas-made JPEGs (a disc on grey) dropped on `div.relative.flex.flex-col.flex-1.min-h-0.gap-2`, the picture ids read back with `listRolls().find(…)` (the store has no `getRoll`; Playwright's `waitForFunction` with an ASYNC predicate resolved to `null` — poll with `evaluate`), the `Layers` tab, `+ Subject`, a click on the disc. A BLINK is read by sampling the 2D stage canvas `[aria-label="The picture, corrected"]` every 15 ms for R > 120 over a blue disc (the flash cube is 0.94/0.34/0.22 at 0.7); the picture is letterboxed in that canvas AND the canvas is `object-contain` in its box, so a mapping by `min(w/W, h/H)` alone is right at one window size and wrong at another (a tap at y 0.29 landed at 0.13 in a 1500 px window) — find the picture's rect by its PIXELS (everything brighter than the frame), then map canvas → client by the box's own contain scale (`bench.mjs` in the session scratchpad did both). The model's CALLS are counted by wrapping the singleton: `(await import('/atelier/src/shared/segment/segmenter.ts')).loadSegmenter()` and replacing `task.segment` on the instance — after the first tap, once it is loaded. The roll is SAVED on a debounce, so a value set through the panel is read back by polling `listRolls()` until it is the value set, never once (a single read after 600 ms returned the knob's state two changes earlier). A range slider is set with Playwright's `fill('0.95')` on `input[aria-label=…]`. An export's subject is checked without encoding: import `subject-rasters.ts` in the page and call `resolveSubjectRasters` on the roll's layers and a canvas of the scene — with a develop on the layer, since a delivery segments only subjects something DRAWS with.
+**Fact, measured**: MediaPipe's `InteractiveSegmenter` answers in this container's headless shell — its GPU delegate comes up on SwiftShader (`--enable-unsafe-swiftshader --use-angle=swiftshader --ignore-gpu-blocklist`, the console saying `OpenGL error checking is disabled`), a few seconds a point. So a Subject layer CAN be driven end to end here; "it needs a real GPU" was never true. **Recipe**, on the scratchpad Playwright above: `putRoll(createRollDoc(…))`, the hash `#/develop/<rollRef(roll)>`, two canvas-made JPEGs (a disc on grey) dropped on `div.relative.flex.flex-col.flex-1.min-h-0.gap-2`, the picture ids read back with `listRolls().find(…)` (the store has no `getRoll`; Playwright's `waitForFunction` with an ASYNC predicate resolved to `null` — poll with `evaluate`), the `Layers` tab, `+ Subject`, a click on the disc. A BLINK is read by sampling the 2D stage canvas `[aria-label="The picture, corrected"]` every 15 ms for R > 120 over a blue disc (the flash cube is 0.94/0.34/0.22 at 0.7); the picture is letterboxed in that canvas AND the canvas is `object-contain` in its box, so a mapping by `min(w/W, h/H)` alone is right at one window size and wrong at another (a tap at y 0.29 landed at 0.13 in a 1500 px window) — find the picture's rect by its PIXELS (everything brighter than the frame), then map canvas → client by the box's own contain scale (`bench.mjs` in the session scratchpad did both). The model's CALLS used to be counted by wrapping the singleton (`loadSegmenter()` then replacing `task.segment`); since the model runs in a WORKER (2026-10-02, `subject-model.md`) `loadSegmenter()` answers an engine (`{ kind: 'worker' | 'page' }`) and the main thread has no `segment` to wrap — wait for the raster by the panel's own words instead (`tap a point to drop it`), or force the page path with `localStorage['atelier.segment'] = 'page'` in `addInitScript` and wrap `engine.task.segment`. The roll is SAVED on a debounce, so a value set through the panel is read back by polling `listRolls()` until it is the value set, never once (a single read after 600 ms returned the knob's state two changes earlier). A range slider is set with Playwright's `fill('0.95')` on `input[aria-label=…]`. An export's subject is checked without encoding: import `subject-rasters.ts` in the page and call `resolveSubjectRasters` on the roll's layers and a canvas of the scene — with a develop on the layer, since a delivery segments only subjects something DRAWS with.
+
+## The layers bench: GPU WORK per interaction, never time (2026-10-02)
+
+**Recipe, headless here**, on the stub recipe's browser and dev server (the
+session scratchpad's `bench/bench.mjs`, never in the repo): seed a roll
+through the module URLs, drop a canvas-made scene (or a synthetic DNG LibRaw
+decodes — `testing.md`'s recipe, built in the page; `roll.opensOn = 'sensor'`
+puts the stage on the sensor through the roll's choice), then add a Subject
+layer, tap, drag Tolerance / Grow / a layer's Exposure, add a Brightness and a
+Painted layer, paint a stroke, and for each step read COUNTERS patched in by
+`addInitScript`: WebGL contexts made (`getContext` on `HTMLCanvasElement` and
+`OffscreenCanvas`), `drawArrays`, `texImage2D` with data, `getImageData`,
+`drawImage` onto `canvas[aria-label="The picture, corrected"]`, and the
+`longtask` entries. **Why counts**: under SwiftShader a 1.5-megapixel render
+is seconds and the model is ten, so a wall time here says nothing about his
+Mac — but a drag of twelve steps that makes **22 WebGL contexts** says
+everything, on any machine (`develop.md`, «The stage's grader LIVES with the
+source»). Traps: an edit to ANY file of the project while the bench runs — a memory
+note, a spec, the README — is a Vite full reload (`page reload README.md` in
+the dev log: a file outside the module graph reloads the page) that empties
+the in-memory Library and fails the run, so edit nothing until the run ends;
+`pkill -f` with a pattern that also matches the bench's own `bash -c` chain
+kills the chain (exit 144) — kill the node process by `^node bench`; a palette entry
+is clicked INSIDE `role="dialog"`, since `getByRole('button', { name:
+'Brightness' })` lands on the develop slider's `Reset Brightness` first.
 
 ## Clips through the Develop tool, and an export encoded here (2026-09-30)
 

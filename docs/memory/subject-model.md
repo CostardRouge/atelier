@@ -6,6 +6,29 @@ Remove switch and Refine knobs. How a tap reaches the model, the blink and the
 export path are `subject-picking.md`; the plan these steps come from is
 `docs/mask-ui-redesign.md` §5.
 
+## The model runs in a WORKER (2026-10-02)
+
+`segment-worker.ts` + `segment-worker-client.ts`, behind the same
+`loadSegmenter` / `segmentPoint`; `segmenterPlace()` says where it landed.
+**Why**: `segment()` answers synchronously on the thread that calls it, so
+on the main thread every tap and every re-ask of a point (a lens or
+keystone change, a RAW rung switch — the view's key) stood the whole
+interface still for the inference, which his *"ui / app freeze"* was in
+part. **Rules**: the worker is a CLASSIC worker (MediaPipe loads its wasm
+glue with `importScripts`, which a module worker has not got — it then asks
+`document` for a `<script>` and fails), so `segment-worker.ts` has no static
+import of its own; the model is handed an `OffscreenCanvas` (`canvas:`),
+since a worker cannot make a `<canvas>` and WebKit's path asks the document
+for one; the picture is shown ONCE per source identity (an `ImageBitmap`
+copy, transferred) and a point is then a message of four numbers; the
+answer's bytes are transferred back. One worker, one inference at a time —
+the single result slot the main-thread path serialised by hand is now the
+worker's message queue. Where no worker can run it (no `Worker`, no
+`OffscreenCanvas`, the model failing to load there), the model loads on the
+main thread exactly as before; `localStorage['atelier.segment'] = 'page'`
+forces that path for diagnosis. Still synchronous INSIDE the worker: a
+second tap waits for the first, which is the model's own rule.
+
 ## Taking a subject BACK — Remove, built (2026-10-02)
 
 His report: the model only adds, and sometimes adds too much. `magic_touch`
