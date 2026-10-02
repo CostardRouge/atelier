@@ -6,7 +6,7 @@ Read before touching UI, layout, the design tokens, or any MapLibre pane.
 
 **Decision.** `src/index.css` declares the palette and typography in an `@theme` block — warm paper surfaces (never pure white), ink text, **one** desaturated vermilion accent (`--color-accent: #d9442a`), a near-black `--color-frame` behind video, plus `Space Grotesk` (sans), `Instrument Serif` (serif) and `JetBrains Mono` (numerals), paper radii/shadows and an `--ease-paper` curve. Everything else is Tailwind utilities in the components. **Why**: one accent and one surface family is what makes the suite read as a single studio rather than nine tools. **How to apply**: use the tokens; do not introduce a second accent colour or a raw hex in a component. Numeric readouts use the mono face.
 
-**There is ONE button, one icon button and one segmented control (2026-09-13).** `shared/ui/Button` (`primary` · `default` · `ghost` · `danger`, sizes `sm` 28px · `md` 34px · `lg` 40px, `rounded-control` = 11px, Winnow's recipe with Atelier's vermilion on hover), `IconButton` (square, `label` REQUIRED — it becomes the accessible name and the tooltip) and `Segmented` (a recessed well with the chosen option raised on a paper tile, `aria-pressed` buttons, the one look for "chosen"). `buttonClass()` is exported for a `<label>` or `<a>` that must look like a button. `PageBar`'s back pill IS a `Button`, and `barPill` is now that `md` geometry with no skin, so a screen's own pill stays one band with it. `Segmented` takes `columns` (2026-09-13) for a choice wider than one row — Trips' eight formats sit on a 4-column well — so a chip grid is never hand-rolled beside it. **How to apply**: never write a new `pill`/`btn`/`chip` constant — reach for these; a control that needs a fifth variant is a design question, not a class string. Legacy constants still exist in the tools not yet migrated (`panels/ui.ts`, `StagesPanel`, `SourcesScreen`, `WinnowBrowser`, `DayPanel`…); retire them screen by screen as the audit's plan reaches each one.
+**There is ONE button, one icon button and one segmented control (2026-09-13).** `shared/ui/Button` (`primary` · `default` · `ghost` · `danger`, sizes `sm` 28px · `md` 34px · `lg` 40px, `rounded-control` = 11px, Winnow's recipe with Atelier's vermilion on hover), `IconButton` (square, `label` REQUIRED — it becomes the accessible name and the tooltip) and `Segmented` (a recessed well with the chosen option raised on a paper tile, `aria-pressed` buttons, the one look for "chosen"). `buttonClass()` is exported for a `<label>` or `<a>` that must look like a button. `PageBar`'s back pill IS a `Button`, and `barPill` is now that `md` geometry with no skin, so a screen's own pill stays one band with it. `Segmented` takes `columns` (2026-09-13) for a choice wider than one row — Trips' eight formats sit on a 4-column well — so a chip grid is never hand-rolled beside it. **How to apply**: never write a new `pill`/`btn`/`chip` constant — reach for these; a control that needs a fifth variant is a design question, not a class string. Legacy constants still exist in the tools not yet migrated (`panels/ui.ts`, `StagesPanel`, `SourcesScreen`, `DayPanel`…; `WinnowBrowser` left with them on 2026-10-01, replaced by the picker on the shared controls); retire them screen by screen as the audit's plan reaches each one.
 
 **Icons are SVGs from `shared/ui/icons.tsx`, never Unicode glyphs (2026-09-13).** One 24-grid, stroke 1.7, `currentColor`, `1em` — the same drawings Winnow ships, kept in the repo (no icon package: no dependency, no request). `Icons.play`/`pause` replaced the `❚❚`/`▶` string copied into seven players; `Icons.settings`, `back`, `export`, `check`, `down`/`chevronRight` replaced the bar and fold glyphs. **How to apply**: a control's glyph comes from `Icons`; a glyph that is CONTENT (the `→` between two places, the `◆` marker, a `▶` kind chip on a thumbnail) stays text. Add a missing icon to the module rather than typing a character — a glyph is drawn by whichever font the platform substitutes. **An icon must read ALONE (2026-09-16).** `settings` was a circle with eight rays — fine beside the word, a SUN (brightness, in a grading suite) once the Trips piece bar dropped the word; it is a toothed cog now. Judge a new glyph with its label covered.
 
@@ -234,7 +234,7 @@ The kind chip (`video+srt`, `video`, `photo`, …) is back to its original full-
 
 ## A modal is a full-screen sheet under 820px, and shows ONE pane at a time (2026-09-02)
 
-**Trap, seen on an iPad.** `WinnowBrowser` is a fixed-height card (`h-[min(90vh,52rem)]`, `overflow-hidden`) holding a two-column grid that switched to `grid-cols-1` under 820px. Stacking put two panes in a height that never grew: the pictures pane landed *on top of* the calendar, clipped, and its "Choose a day on the left." sat across the grid. **The shape to keep**: below 820px the modal is the whole screen (`max-w-none h-dvh rounded-none border-0`, overlay `p-0`, `pb-[max(1rem,env(safe-area-inset-bottom))]` so the actions clear the home indicator) and only one pane is rendered — the picker until something is chosen, then the results with a back control (`hidden max-[820px]:inline-flex`). A drill-down, not a stack; the header, the filters and the action row stay pinned around it, and only the middle scrolls.
+**Trap, seen on an iPad** (in `WinnowBrowser`, retired 2026-10-01 for the Winnow picker, which keeps the shape: its rail becomes a full sheet on a phone). `WinnowBrowser` was a fixed-height card (`h-[min(90vh,52rem)]`, `overflow-hidden`) holding a two-column grid that switched to `grid-cols-1` under 820px. Stacking put two panes in a height that never grew: the pictures pane landed *on top of* the calendar, clipped, and its "Choose a day on the left." sat across the grid. **The shape to keep**: below 820px the modal is the whole screen (`max-w-none h-dvh rounded-none border-0`, overlay `p-0`, `pb-[max(1rem,env(safe-area-inset-bottom))]` so the actions clear the home indicator) and only one pane is rendered — the picker until something is chosen, then the results with a back control (`hidden max-[820px]:inline-flex`). A drill-down, not a stack; the header, the filters and the action row stay pinned around it, and only the middle scrolls.
 
 **A viewport query IS right for a modal** — the container-query rule (`studio.md`, `roadtrip.md`) exists because the Library sidebar eats 288px a tool cannot see; a `position: fixed` overlay spans the viewport, so `max-[820px]:` measures exactly what the sheet gets. Use `dvh`, never `vh`: on iOS Safari `vh` is the *large* viewport, so a `max-h-[90vh]` card can hang behind the toolbar with its Apply button under it.
 
@@ -388,7 +388,87 @@ a tall one comfortable (the scene is
 `clamp(13rem, calc(var(--app-h) * 0.28), 21rem)`, where it was a flat 21rem);
 and a row that only explains costs a third of a row of looks, which is why the
 filter field went back onto the "tiles on…" row it had been split off for a
-phone — that width has its own branch now.
+phone — that width has its own branch now. **Rev. 2026-10-01**: the width cap
+went too (`max-w-[min(96vw,100rem)]`), and on a desktop the scene is a COLUMN
+sized by the picture, not a band — «The look picker is a workbench» below; the
+share rule survives on the phone, which the redesign left untouched.
+
+## The look picker is a WORKBENCH on a desktop: the picture in a column sized BY the picture (2026-10-01)
+
+**Reported, with a screenshot of his 1270 × 1300 window**: *"la modal Choose a
+look est très moche, peu pratique, tout est décalé"*. Measured against the
+code (`docs/look-picker-redesign.md` §2, ten faults each traced to a line): a
+9:16 frame drawn 189 × 336 px on an 816 px black table because the scene was
+a band of a fixed SHARE of the height; a controls column with `mt-auto` pushing
+the verb 250 px under two look-alike sliders whose tracks started at different
+x; four sentences of standing prose the phone branch had already dropped; ✕ AND
+Close; 96 × 74 px tiles sized for the 56 rem modal of 2026-09-18 and never
+grown with it; three casings in one rail; a `default` verb 900 px from the
+tiles. Three faces were drawn as working mocks (lab:
+<https://claude.ai/artifact/WcwvdZ5zD7Gbnoecdep17R>, the dialog as it was
+reproduced beside them at four screen sizes) and **he picked A, the
+workbench, the same day**.
+
+**Decision**: the desktop picker is the suite's own editor shape — the picture
+in a column at the LEFT with a `FieldRow` card under it (Look · Strength ·
+Compare), the looks a panel at the RIGHT (filter · `Segmented` Reference / My
+picture / Photo · rail · grid), ONE verb in a pinned footer beside Cancel, the
+prose behind an `InfoDotButton` by the title. The compact branch of 2026-09-21
+is untouched (re-measured: six tiles, two rows at 390 × 664). Rules it fixed:
+
+- **The stage column is as wide as the picture needs, never wider**
+  (`stageColumnBox`, `look-scene.ts`, pure, tested): a portrait frame is
+  bounded by the body's HEIGHT and takes exactly the width that buys; a
+  landscape one is capped at HALF the body, and its box is then only as tall
+  as the picture, so the card sits under the picture and the leftover falls
+  below the pair (the phone stage's own rule). Measured headless on his
+  screen: the 9:16 frame went from 189 × 336 to **556 × 988**, a 16:9 one from
+  597 × 336 to 585 × 329 (the same picture, no longer centred in a black
+  column). Measured with a `ResizeObserver` on the body AND the card (the
+  caution grows the card) in a layout effect, so the first paint is already
+  right; a floor of 20 rem keeps the card's rows on one line, and the half
+  wins over the floor on a narrow body.
+- **The rail is a column only on an `expanded` shell**; a `medium` one (a
+  tablet) gets the crumb strip the phone already had, above the grid — a
+  152 px rail beside a half-width stage left the grid one tile wide at 1024.
+- **Tiles are FIXED 8 rem tracks on a desktop, `repeat(auto-fill, 8rem)`** —
+  never `minmax(8rem, 1fr)`, which stretches a tile towards a strip whenever
+  the row is just short of one more column, and never `minmax(7.5rem, 9rem)`,
+  because **`auto-fill` with a LENGTH as the max counts its tracks by that
+  max** (measured: 5 tracks of 144 px in an 817 px scroller, 65 px left over,
+  where 6 fit). The slack lands at the end of the row, where it reads as
+  margin; the thumbnail keeps its fixed 92 px height (the `1fr`/`aspect-ratio`
+  rule above).
+- **Two sliders of one dress for two different numbers read as a
+  misalignment.** The wipe's slider is gone; `A/B` (the Develop sheet's own
+  pill) switches it and the divider is dragged on the picture, where a press
+  places it. If he wants the slider back it is one `FieldRow` (`docs/look-picker-redesign.md` §7).
+- **One casing in the rail** (`familyCase`, `gallery-nodes.ts`): an ALL-CAPS
+  label is written as words, a lone short one stays an initialism (`DJI`), a
+  mixed-case one is the author's; the native optgroups are untouched.
+- The worn look wears a ✓ (the ring moves to the aim, so the accent border
+  alone could not say "on the stack"); the aimed tile says `Use ↵`; ← → ↑ ↓
+  walk the tiles and Enter takes (`dialog-keys.ts` already yields Enter to a
+  focused button, so a tile's own Enter is one pick, not two).
+
+**Not seen on his Mac**: driven in headless Chromium at 1270 × 1300, 1440 × 900,
+1024 × 768 and 390 × 664 with a portrait and a landscape picture — the aim, the
+strength travelling with the pick, A/B, the arrows, the live bake, the search,
+the ⓘ, Escape, and the no-picture host where a click is the pick.
+
+## His window is TALLER than wide for a stage: size a layout against it, not against 16:9 (2026-10-02)
+
+His browser window measures 1270 × 1300 (two screenshots, 2026-10-01 and the
+filmstrip lab), so a tool's stage column there is TALLER than wide — Develop's
+is 814 × 1012 (the shell's chrome is (w − 456) × (h − 180) on a desktop:
+masthead 52, rail 48, padding 20, PageBar 40 + 12, inspector 352 + 16,
+toolbar 28 + 8). A landscape picture is then bound by the WIDTH and leaves
+~470 px of black above and below: anything stacked UNDER the stage (a band, a
+transport, a caption) is free for a landscape picture there, and anything
+BESIDE it costs a third of the picture. On a 16:9 screen it is the reverse.
+**How to apply**: weigh a layout change on at least his window AND a 16:9
+screen, by the area of the open picture fitted in the stage, before calling
+one orientation better (`docs/develop-roll-browser.md` §3 has the table).
 
 ## A phone gets a SHEET or a DRAWER, and a picture being judged gets the drawer (2026-09-16)
 
@@ -648,3 +728,15 @@ no prop for it, the DOM does; a pointer and the keyboard both pass through,
 and a wheel still scrolls the column. The host owes the WHY in words, stuck
 at the top of the scroll (Develop's Export tab during a run): a lock nobody
 explains reads as a broken control.
+
+## 2026-10-02 — Measure the ROOM, never the box that holds the thing being sized; and a column only where the grid has one
+
+Two traps from Develop's band (`develop-roll.md`, «The roll's pictures are a
+BAND»). A band whose height "follows the roll" read the height of the cell it
+sat in — a cell that grew with the band — and oscillated between two answers
+on every frame; the cure is to measure what is NOT the band (the status lines
+on their own `useElementSize`, the toolbar a constant) and derive the room
+from the column. And a child placed with `col-start-2` in a grid that has one
+explicit column does not fail: it makes an implicit column and silently
+reshapes the page — hand a column index only under the grid that owns it
+(Develop's focus grid is one column, so the column index is withheld there).

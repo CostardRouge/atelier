@@ -302,16 +302,16 @@ end, the pictures edited meanwhile are NAMED first in the note
 the table's `changed` cannot disagree) and "Export new or changed" sends
 them. Rejected: locking a queued picture's retouching (L3 — it blocks the
 very pictures one wants to fix) and a blocking window (V3).
-**E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
-moved to the top-right to make room); a click toggles, a right-click or a
-550 ms touch hold ignores ↔ brings back, and the click that ends a hold is
-swallowed so it is not a second gesture. Filled = the author decided, dashed =
-the rule answers; a picture on the rule that stays OUT (a big roll's untouched
-majority) shows its badge only under the pointer — always on a touch screen —
-so the strip does not wear a hundred grey rings. Ignored cells are dimmed, or
-left out by the status line's Hide (`atelier.develop.showIgnored`, a
-`localStorage` view pref, never the roll's), the OPEN picture always staying
-in the strip.
+**E3's badge LEFT the cell (2026-10-02, his Q6)**: a cell wears ONE pill
+reading its state (`↑` leaves, `–` held, `⊘` ignored, beside `●`, the variant
+number, `▶`, `!`) and no button; what is DONE to a picture from the band is
+its ⋯ menu (right-click too — send ↔ hold, back to the rule, ignore, a
+variant, off the roll) or the selection's bar for several, and `P` / `U` /
+`M` on the stage — the Pictures table stays the other door. A held finger now
+SELECTS (his Q3), it no longer ignores. Ignored cells are dimmed, or left out
+by the band filter's "Ignored pictures: hidden" (`atelier.develop.showIgnored`,
+a `localStorage` view pref, never the roll's), the OPEN picture always staying
+in the band — «The roll's pictures are a BAND» below.
 
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 
@@ -353,6 +353,13 @@ wrote +1.5 EV to the three non-open targets only (the other two, unselected,
 stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
 "Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
 badges and the verb reverted to "Apply to 5 other pictures".
+
+**Since 2026-10-02 the selection is also a MODE** (`docs/develop-roll-browser.md`,
+built): `selectionAfterClick`'s rules are unchanged, a Shift/⌘-click just
+turns the mode on; the `Clear` link, the count in the progress line and the
+verbs' "N selected" reading are the `SelectionBar`'s now — «The roll's
+pictures are a BAND» below. Do not add a mark or a button to a cell: a cell
+is READ, the menu and the bar ACT.
 
 ## The crop is a second tab over the SAME delivered picture (2026-09-16, D8; rev. 2026-09-19)
 
@@ -1209,24 +1216,218 @@ there is one, still names every way in). The Trips overview's bar, the same
 fix; a wide screen keeps every word. Measured: the stage's top moved from 214
 to 172 css px.
 
-The filmstrip's × badge overhangs its cell by 4px, and a scroller that clips
-x clips y too — on a touch screen, where the badge is always drawn at 28px,
-its top was sliced flat. The strip pays `pt-1.5 pr-1.5` for it; any badge
-overhanging a cell in a horizontal scroller needs the same room.
-
 ## A run writes each picture as it lands (2026-09-28)
 
 `exportPictures` used to render the whole run into memory — every JPEG and every second target's — and write it all at the end, then keep the files in `lastRun` until the NEXT run: gigabytes on a big roll, and on a phone where a long roll died. Each picture is now handed to `deliverFilesTo` as soon as it is rendered (its main file and its other targets' together), the counts and refusals are accumulated, and only the NAMES are kept (`RollRun.names`, for the unplugged send home, which can read them back from the folder). The folder is still picked at the click, before anything renders (`deliver-files.ts`). A cancel keeps what was already written — as it always said.
 
-## The filmstrip's cells are memoised (2026-09-28)
+## The band's cells are memoised (2026-09-28, kept through the 2026-10-02 rebuild)
 
-Every cell re-rendered on every tick of the open picture's sliders — a roll of hundreds of cells for one picture's change. `Cell` is `memo`, and what it is handed is kept stable: the host's four callbacks are read through a ref and handed as ONE `CellHandlers` for the strip's life (RollEditor passes inline arrows), the Winnow thumbnail as a client and an id rather than a fresh object, and the availability as its KIND alone — `use-roll-media` rebuilds that map, objects and all, on every roll change. A new prop on a cell must be stable too, or the memo quietly stops holding.
+Every cell re-rendered on every tick of the open picture's sliders — a roll of hundreds of cells for one picture's change. `Cell` (`RollBand.tsx`) is `memo`, and what it is handed is kept stable: the host's callbacks are read through a ref and handed as ONE handlers object for the strip's life (RollEditor passes inline arrows), the Winnow thumbnail as a client and an id rather than a fresh object, the availability as its KIND alone — `use-roll-media` rebuilds that map, objects and all, on every roll change — and the cell's rectangle from the layout (a new layout object only when the items, the width or the size changed). The picture's ⋯ menu is ONE `AnchoredMenu` for the whole strip, never one per cell. A new prop on a cell must be stable too, or the memo quietly stops holding.
 
 ## The crop's ASPECT rides a draft too (2026-09-28)
 
 The framing always went through a write-through draft; the aspect was written to the roll at once — and a Free crop's aspect changes with every pointer move of a handle, so a drag rewrote the whole document per move. `PictureWorkbench` now holds `aspectDraft` beside `framingDraft`, the zone, the stage and the Crop panel read it, and `useWriteThrough<string>` writes it at rest (200 ms). Driven headless: a chip reads `original` in the roll at once and `4:5` after the rest. Anything that reads the roll's own `aspect` (the export plan) sees it a rest later, like every draft here.
 
 
+## A roll takes CLIPS: played on the stage, switched to the rush, delivered as an MP4 (2026-09-30, rev. 2026-10-01: a crop)
+
+**The maintainer, two lines: *"develop doit gérer les vidéos"* and *"ne pas
+oublier d'aussi pouvoir switcher du proxy à la vidéo HD"*.** Built in one
+pass; the rules a later agent must keep:
+
+- **A clip is told by its ref's NAME** (`isClipPicture`, over `isClipName` in
+  `library/assets.ts` — the one test every "is this a video?" question should
+  share): a Winnow proxy is `<base>.mp4`, a rush `<base>.MP4`, and the answer
+  must hold before a byte is in hand and on every device. Never by
+  `File.type`: a fetched file carries none.
+- **A clip takes the GLOBAL develop, the look and (since 2026-10-01) ONE
+  crop, and nothing else** — what the export grades every frame through
+  (`SOURCE → CUBE → [FILM] → OUTPUT`, the variant path's own chain) and then
+  cuts. A border, the keystone and lens warps, detail (Presence included),
+  the post-crop vignette, repair and the layers are passes over ONE still
+  frame: on a clip they would have to follow the picture from frame to frame,
+  which nothing here does and Lightroom does not do either. So they are
+  refused at EVERY door, not hidden at one: the workbench has three tabs
+  (`workbenchTabsFor`, `CLIP_TABS` — Adjust, Crop and Export; `D`/`L` do
+  nothing, the editor lands a clip on Adjust when the tab it held is not one
+  of its), the stage is handed null for each of them (so preview = export
+  holds by construction), `copyBorderTo` skips a clip and the border verbs
+  count only the frames (`frameOtherIds`), and `withSections` /
+  `withoutSections` reduce a clip's sections to `CLIP_SECTIONS`
+  (`sectionsFor`) — a paste, an apply-to and a reset all go through them.
+  `pictureEdits` needs no clip branch: a clip can never carry the other
+  sections.
+- **The crop on a clip is held STILL** (2026-10-01, his *"le crop sur un
+  clip"*): the same `aspect` + `framing` the roll always stored, the same
+  `CropStage` / `CropPanel` (the panel takes `clip` and drops `BorderSection`;
+  the Keystone and Lens panels are not drawn), the same `frame` handed to
+  `useDevelopPicture` — so the Adjust stage draws the square and the wipe
+  follows it with no clip branch. Three things a photograph never needed:
+  (1) `delivered()` and `snapshot` grade a clip AT `video.currentTime`, as
+  `paintStage` does — the held grade is keyed on the instant, and without it
+  the crop stage drew the first frame it ever rendered whatever the transport
+  did; (2) `DevelopPicture.frameSeq` (the hook's `restedFrame`, exposed) is a
+  dependency of the crop stage's paint, since the element `delivered()` reads
+  moves under it with nothing else React can see; (3) the transport is drawn
+  AFTER the crop stage in the column, so on the Crop tab it stays under the
+  picture and the zone is judged on any frame. A crop that MOVES (a pan or a
+  zoom over time, Trips' `framing-motion`) is deliberately not here.
+- **The export cuts every frame through the still export's own arithmetic**
+  (`clipDelivery` in `roll-clip-render.ts`, pure, tested): `deliveredLayout`
+  read against the clip's DISPLAY frame — the zone at the clip's own density,
+  the cap (`longEdgeFor`) read against the DELIVERED frame as for a
+  photograph, never an upscale, rounded to EVEN for the encoder — then
+  `drawDelivered` per frame with no border, from an upright scratch canvas
+  when the container is turned (a turned clip's framing was written in its
+  display frame, the one the stage showed). `outputSize` is set whenever the
+  frame is cropped or capped (the flag baked), and `Auto`'s `deliverySummary`
+  is handed the picture's framing and aspect, so a 1:1 zone out of a 360 px
+  proxy asks for the rush where the whole proxy would not have (measured:
+  *the proxy would be upscaled ×2.00*, the rush fetched, 720 × 720 written).
+- **The Library bar no longer greys clips out for Develop**: the registry's
+  `accepts` is `['photo', 'video+telemetry', 'video']` (`app/tools.tsx`) —
+  `assetUsableBy` is what dims a tile, and the tool had declared photographs
+  alone. The Winnow lightbox lists a VIDEO row's files too (`WinnowLightbox`,
+  `viewRows`): proxy and rush as chips, the rush fetched on its chip and held
+  under the same asset id the stage and the export read, and the `Develop`
+  verb carries the file on screen onto the roll like a photograph's.
+- **The stage is the sheet's clip stage** (`use-develop-picture.ts`'s
+  `video`, `DevelopTransport` under the viewport, Space on the tool's window
+  with `targetOwnsSpace` and no dialog open, `restedFrame` feeding the
+  histogram and Auto). The loupe is off on a clip (no whole file to decode).
+- **The rush is a row of the name's menu** because `captureInput` is handed
+  `canDraw: canStageDraw` (`projects/media-rendition.ts`, the Studio's) —
+  `renditionsOf`'s default knows pictures only and would BLOCK an `.MP4`. The
+  fetch goes through `fetchHeld` (one flight per asset, `held-fetch.ts`) and
+  `fetchSourceFile` does too since this day, so an export that starts while
+  the stage is still bringing the rush JOINS that fetch; choosing another row
+  aborts THIS reader only (`flight` ref in the workbench). Measured headless:
+  three switches and an export, ONE `/download`.
+- **The playhead survives the switch** the Studio's way: the new element's
+  `videoTimeSeconds` is read from the OLD element's `currentTime` DURING the
+  render that swaps `shownFile` (a ref compared per render), never in an
+  effect — an effect runs after the decode effect already started at 0, and
+  would re-decode. Measured: seek 1.5 s, switch proxy → rush, 1.5 s.
+- **`measurePicture` is video-aware** (`loadClipMeta`, no thumbnail): without
+  it the *Delivers* row, the chip's pixels and the rows' `640 × 360` were all
+  empty for a clip. The chip says `proxy · clip · W × H` / `MP4 · clip · W × H`
+  (`pictureFidelity`); the menu's proxy hint is `CLIP_PROXY_ADDS`.
+- **The export is `roll-clip-render.ts`** over `exportProcessedVideo`: the
+  container is DEMUXED FIRST (`demuxSource`) because the pipeline reads
+  `outputSize` before it asks for a processor, and only the track and its
+  matrix say what frame the cap is read against; uncapped, the graded frames
+  stay in coded orientation with the rotation flag standing (the LUT tool's
+  path); capped (the FIRST target's size through `longEdgeFor`, even numbers,
+  never up), each frame is turned upright and drawn smaller, the flag baked.
+  Sound is copied. The name is the capture's exact name as `.mp4`
+  (`exportName`); `decodableOriginal` now accepts a clip's name so `Auto`
+  fetches the rush where the first target's frame asks for more than the
+  proxy holds (an HEVC rush WebCodecs cannot decode fails at the demux and is
+  said by the run, never refused on a name). Quality, borders, HDR, the
+  watermark, the metadata groups and the other targets do not reach a clip:
+  `clipNote` says so once per run. Progress is relayed per PERCENT, not per
+  frame (`say` sets state).
+- **A clip's cell** is one frame a second in (`bakeClipThumbnail` over
+  `loadBadgeSource`, released), marked ▶ at bottom-centre (the one spot free);
+  a WORKING PREVIEW is never made of a clip (`use-roll-previews.ts`'s
+  `isLocal`). The day sheet lists `media_type === 'video'` too; the Library
+  verbs and the drop take a `video`/`video+telemetry` asset's clip
+  (`rollFileOf`, `rollFiles` — the `.srt` stays the Studio's).
+
+Verified headless (`testing.md`, «Clips through the Develop tool»): a stub
+clip's roll opened on `proxy · clip · 640 × 360`, two tabs, the cell marked;
+Play advanced the position, Space paused it; exposure +1 wrote `1` to the
+roll and lifted the stage; the rush row read `DJI_0007.MP4 · 1280 × 720 ·
+752 KB`, the switch kept 1.5 s and stored `delivered:dji_0007.mp4`; the
+export wrote `DJI_0007.mp4` 1280 × 720 · 4.02 s from the HELD rush (one
+download in all), read back brighter than the source (143 against 129); a
+clip DROPPED from disk opened, baked its cell, and left capped at 320 × 180.
+On 2026-10-01 (the crop): `C` opened the crop stage with the transport under
+it and no Borders / Perspective / Lens; `1:1` stored `aspect: '1:1'`; the
+Adjust stage went from 640 × 360 to 640 × 640 and still played; the Export
+tab read *the proxy would be upscaled ×2.00* and the run wrote `DJI_0007.mp4`
+at 720 × 720 · 4.02 s from the rush. Not driven: an HEVC rush, a real H.264
+encode (this Chromium has none — the encoder was swapped to VP9 for the run,
+`testing.md`), a turned (rotated) clip's crop, his phone.
+
+## The JOURNAL is on the picture, written in the same write as the edit (2026-09-30, T1 of `docs/develop-timelapse.md`)
+
+`RollPicture.journal` (roll v7, `journal.ts`, pure): a step per write of the ONE updater — the sections that moved (`sectionsChanged`, the `PictureEdit` vocabulary) and their values after (`SectionValues`, the crop as aspect + framing together) — appended by `journalRoll(prev, next, now, via)` inside `RollEditor.update`, INSIDE the document. **Why**: undo is a stack of whole documents, so a step inside the picture is undone and redone with its edit by construction; a listener or a store beside the roll (the export marks' shape) would have to be kept in step by hand. Rules: (1) the changed pictures are found by IDENTITY (every write replaces the picture it touches) and diffed by section, so a write that moved nothing leaves no step; (2) coalesced on the history's own `COALESCE_MS` — the same sections, the same `via`, inside the window → the last step is REPLACED, a drag is one step; (3) bounded (`JOURNAL_MAX_STEPS` 300, `JOURNAL_MAX_BYTES` 96 KB per picture, the two OLDEST adjacent steps sharing a section merged first — a painted mask's every stroke is the heavy case); (4) never an edit (`pictureEdits`), never in an export mark's key (`KEYED`), never carried by `withSections` / `withoutSections` (an Apply-to, a paste or a reset lands on the TARGET as its own step, `via` said: `apply · paste · reset`), a `clone` variant takes it (`structuredClone`), a `fresh` one does not, the `.roll.json` carries it; (5) absent and empty are one spelling, `readJournal` drops a step with no time or no known section and reads each value through its own reader, so an old roll is byte-identical. (6) **A picture edited before v7 has settings and no story**: `pictureJournal` prepends one synthetic step per section the record does not explain, in `STANDARD_ORDER` (crop · perspective · lens · develop · detail · repair · layers · look · border · vignette), marked `via: 'earlier'` and `reconstructed` — folding the steps over `asShot(p)` gives the picture EXACTLY, asserted in the spec; a surface showing such a step must say "standard order (not recorded)". The stage's VIEW is not recorded (a way of looking, two components below the funnel); a preset applied through the draft reads as the author's own gesture (no `via`). Verified by the spec only: the undo half is a consequence of the document, not driven headless here.
+
+**Chapters (T2, `timelapse-chapters.ts`, pure).** A chapter is a TOOL, not a write: consecutive steps of the same sections with the same `via` fold into one, carrying the picture BEFORE and AFTER as whole `RollPicture` states folded from `asShot(p)` (so a painter renders N + 1 states and re-derives none); a run that ends where it started leaves no chapter. The caption says the DIFFERENCE (`describeDevelopChange`: the sliders that moved with their value after, then the new lines of `developLines` — a `SLIDER_LINE` regex keeps the two from repeating; `describeLook` names the enabled layers with a strength under 100 %, the output transform's label, the texture; the crop says its aspect, `turned`, `straighten`, `flipped`), and `via: apply | paste` appends *from another picture*, `reset` says `Reset …`. The REGION is read in the step's own geometry — the changed patches' destination AND source discs, a changed layer's radial box, a brush's strokes' box, a subject's or colour range's points padded — in half-diagonal units converted per axis (`halfDiagonal`), padded by half, held inside the picture; a band, a luma, a shade or a global section is `null` = the whole picture; `cameraFor` fills 60 % of the frame, capped at 3×, its window kept inside the picture. Weights: crop and layers 1.4, repair and look 1.2, develop 1, perspective 0.8, the rest 0.5; `keepCount` is 5 · 8 · 14 at 15 · 30 · 60 s and `keptChapters` folds the lightest (ties: the earliest) into the chapter that FOLLOWS (the last one for a trailing run), whose `before` reaches back and whose caption says `· + detail`; a hidden chapter folds the same way, and the chain of states stays continuous (asserted). **The chain is continuous BY IDENTITY, not by value** (2026-10-01, his first report on the sheet: *A state of the script was not rendered*, the tool crashed from the preview's rAF): the painter's rasters are keyed on the state OBJECT, so a chapter's `before` must be the previous chapter's `after` object — a step that changed nothing keeps the running object instead of advancing to an equal one, and a dropped run (a slider put back) is closed over by re-pointing the next chapter's `before` at the previous live `after`. Belt and braces: `TimelapseScript.states` is the SET of every state a frame can ask for (`asShot`, each kept chapter's `before` and `after`), de-duplicated, so a broken chain costs a render and never a throw, and `has()` is complete. Tests pin the two shapes; the drive is `drive-putback.mjs` (scratchpad), which crashed the old code and passes the new.
+
+**The script (T3, `timelapse-script.ts` + `timelapse-options.ts`, pure).** `RollExport.timelapse` (v7, `readTimelapseOptions`: format · seconds 6–120 · hook `result-first | raw-first | flash` · reveal `wipe | split | flicker` · camera `follow | still` · beat BPM or null · five overlay switches · ground · sound · the five WORDS, English by default and each editable) is the ROLL's, so a second device draws the same; `RollPicture.makingOf` (`readMakingOf`, `setMakingOf`: hidden chapter ids, caption overrides — an emptied caption is never stored, the computed one returns) is the picture's, a document write like any other and never an edit. `timelapseScript(pictureChapters, options, extras)` times the three moments — the hook 1.8 · 2.4 · 3 s and the reveal 3 · 4 · 5 s at 15 · 30 · 60 s, the body shared by weight over `keptChapters` — hands each chapter a camera FROM the previous chapter's target TO its own (`WHOLE_PICTURE` under `still`), and builds the captions, the counter, the hook's words and the plate/credit as `OverlayElement`s with a `window` per chapter (JetBrains Mono, a box legibility, a slide-up entrance), so `drawOverlays` draws them and nothing else does. A BEAT rounds every moment to a half-note grid (`beatGrid` = 120 / bpm, never under one) and the script says the length it reached (`seconds`), which the encode must read instead of the option. `states` is every state a frame can ask for, once each (see the chain entry above). **Long text WRAPS, as a flex row** (2026-10-01, his report: overlays hidden past the frame's edge): `drawOverlays` draws one line per element, so every block (`block()`) is fitted first by `fitText` — the ` · `-joined facts packed whole, a fact longer than a line broken on its words (`packLines`), the size stepped down by 8 % while it takes more than three lines and never under 65 %, then BALANCED like `text-wrap: balance` (the narrowest budget keeping the line count) — and laid out one element per line from a FOOT that never moves (captions grow upward from 0.86, the tease downward from 0.12, the credit and the plate as ONE column from 0.955 so a wrapped credit lifts the plate); the first line keeps the block's id, the others `id.1`, `id.2`. The budget is the MONO face's (0.62 em, a box's padding taken off, 90 % of the width), which is only true because every text element PINS all eight themable keys in `styleOverrides`: the painter draws through the neutral theme, which had been silently swapping the mono face, the weight and the boxes for its own since T5. **The words' STYLE is the roll's** (2026-10-01, his ask: radius, colours, size, font): `TimelapseOptions.style` (`readTimelapseStyle`, clamped, an unknown font or a non-`#rrggbb` colour reads as the default) — font from the engine's own five faces, size 0.7–1.5, bold, capitals, background `box | shadow | none`, radius (the engine's `radiusFrac`, 0 square to 4 pill), box opacity, and three colours (words, box/shadow, accent). The script reads it ONCE into a `Look` (`lookFor`): the captions and the hook take the main background, the tease takes the ACCENT (its box, or its words' colour when there is no box), the counter/plate/credit keep a soft shadow (none with `none`). The DEFAULT is his (2026-10-01): VT323, bold, a SOLID (opacity 1) SQUARE (radius 0) black box, white words, the vermilion accent — a roll that stored a style keeps it, one that never did now reads this. Lengths are 10 · 15 · 30 · 60 s; at 10 s the hook is 1.5 s, the reveal 2.5 s and three chapters are kept. Capitals are applied to the STRING before fitting, so the width budget counts them; each face has its own advance (`ADVANCE`, ×1.15 for capitals in a proportional face). The preview loads a newly picked face (and weight) itself and redraws, since its prepare only loaded the faces it started with. The reveal's BEFORE / AFTER corner labels are drawn by the painter itself and are fitted to half the picture (smaller down to 60 %, then squeezed by `fillText`'s `maxWidth`). Kept in `timelapse-options.ts` apart from the script so `roll-types.ts` reads the options without a cycle.
+
+**The pass chain is ONE function (T4, `picturePasses` in `roll-render.ts`).** `picturePasses(settings, ar, scale, rasters, raw)` builds both halves of a picture's chain — before the cube (the camera's shading on the RAW path, the repair, the noise passes) and after it (the geometry with the camera's warp on the RAW path, the layers with their rasters, the sharpen, the post-crop vignette) — for the delivery, its darker HDR twin and every state of a making-of. `raw` is the one switch: a render or a proxy has had the calibration applied by the camera, and applying it twice lifts the corners into white; `use-roll-export` sets `calibration` only on the RAW path, so the export is unchanged to the byte (a pure code motion — `freshPasses`/`freshPre` were already this function for the HDR twin). Only the ASPECT reaches the vignette (its map is in [0,1]); a pass holds textures on the context it first drew on, so every grader takes a chain of its own. Verified: `check-render.mjs` and `check-bands.mjs` both pass after it (Playwright installed in the scratchpad and symlinked into `node_modules/`, never a dependency).
+
+## The making-of's painter and sheet (2026-10-01, T5 of `docs/develop-timelapse.md`)
+
+`tools/develop/timelapse-paint.ts` (DOM) is ONE `draw(script, t)` for the preview and the file. **Rules**: (1) a raster per STATE, graded once — `prepareTimelapse` decodes the picture once at `edge` (the sensor through LibRaw where the picture is developed on it) and renders every state of `script.states` through `picturePasses` + `makeFrameGrader` into an `ImageBitmap`, a grader built and disposed per state; the rasters live in a `StateCache` keyed by the STATE OBJECT, reused across prepares of the same source and edge, so hiding a chapter or changing the length renders nothing new — which is why `usePictureChapters` memoises the chapters on the picture's `journal` and a key of its sections, never on the picture object a caption typed replaces. (2) The script is read at every draw and the states are fixed at the prepare: `painter.has(script)` guards a frame asked for a script whose chapters moved. (3) A transition is a crossfade of two rasters over the first 45 % of the chapter (`TRANSITION_SHARE`); a chapter with `crop` among its sections draws the picture BEFORE with the zone growing over it — the after's four corners through `unframePoint`, interpolated from the before's, mapped back through `framePoint`, a veil in even-odd, the outline and the thirds — and CUTS to the after at the transition's end. (4) The tools: a repair chapter's rings at the changed patches' destination AND source discs (dashed, joined), a layers chapter's mask as an accent tint rasterised at 160 px through `maskAt` (a subject through its raster from the state's render; a luma or colour range draws nothing, it reads the pixels), drawn through `drawPictureIn` so the crop carries it; both whole for the first half of the transition and faded by its end. (5) The frame: the delivered picture (`deliveredLayout` + `drawDelivered`, border and all) FITTED at 94 % of the frame over a ground (its own blurred 48 px copy darkened, or paper, or ink); the camera is a transform about the chapter's target through `frameAffine`, travelling 0.6 s on out-cubic with a geometric zoom; the hook pushes in 4 %. (6) The reveal draws the as-shot raster in the FINAL state's frame over the final, clipped left of a divider (the wipe sweeps right → left over 55 % of the reveal; the split holds the middle; the flicker alternates on twelfths), with `BEFORE`/`AFTER` labels drawn by the painter — the first before/after any export of the suite draws. (7) The captions, the counter, the hook's words, the plate and the credit are `drawOverlays` on the script's elements in the neutral title style, their fonts loaded first by `ensureOverlayFonts`; the bottom hairline is the video's own clock. Grain is frozen (one field per state). `use-timelapse-preview.ts` plays it on the page's canvas at an 800 px long edge from a 1600 px decode, looping, with a rAF clock; `TimelapseSheet.tsx` is the storyboard (pills for the roll's options, the five switches, the words, the chapter list with an eye and an editable caption whose placeholder is the computed one) opened from the Export tab's *Making-of* row (`ExportPanel`'s `makingOf` slot) or the bar's menu verb, the state in `RollEditor`, the sheet drawn by `PictureWorkbench` over `shownFile` + the RAW + the calibration at the rung in hand. **Traps met headless**: a `Button` with an `sr-only` child is NAMED by that child, not its `title`; a slider left focused keeps the editor's letter keys (`c`, `e`) — blur first. Driven headless (recipe in the scratchpad's `drive-t5.mjs`): a dropped JPEG, exposure and contrast by keyboard and a 4:5 chip → three journal steps, ⌘Z two, ⇧⌘Z three; the row `2 steps recorded · 15 s · 9:16`; the sheet's canvas at 0.4 s brighter than at 1.5 s (the after over the as-shot) and at the end; captions off changed the bottom band; Split stored on the roll, a folded chapter and a caption on the picture; no horizontal overflow at 390 px; no page error.
+
+- **The hook and the reveal are ONE kind of moment** (2026-10-01, his ask: "the same kind of options for both"): `MomentOptions` = figure (`cut · crossfade · wipe · split · flicker`) · order (which picture first; it LANDS on the other) · seconds (null = `momentLengths`) · bounces (0–2 extra back-and-forths). ONE pure function, `pairAt(figure, order, bounces, q)`, says how much of the picture as shot covers the finished one at any point (width from the LEFT — before → after reads left to right — and alpha), and ONE painter routine, `drawPair`, draws it for both moments; the hook lands at 62 % of its length, the reveal at 55 %. A roll stored before this kept a WORD (`result-first · raw-first · flash`, `wipe · split · flicker`) and `readMoment` reads it as its figure. Split and flicker show both pictures at once, so the hook says `BEFORE ↔ AFTER` in one line. **The tease** is `off · hook (for `hold` s from the hook's turn, spilling into the first chapter — his report: it left too soon) · title (to the end)`. **The ending** is a moment of its own after the reveal (`EndingOptions`: hold 0–8 s, default 2; motion still · push · pull · drift; loop; an end LINE in the accent, with ready-made calls to action in `END_LINES`); the body shrinks to keep the asked length. **The loop** crossfades the last `LOOP_SECONDS` into the video's first frame (painted once per script into an offscreen canvas) and everything that would stay to the end — the title, the end line, the plate, the credit — fades out where that starts, so the last frame and the first are the same picture with the same words. **Progress** is `line` (the hairline) · `stories` (a segment per moment along the top, `progressSegments`) · `none`.
+
+- **A running export must not move the screen** (2026-10-01, his report: during a making-of export the status text changed very fast and the button zone jumped). The root cause was the SHEET: the workbench rebuilt its `source` as a new object on every render, and the preview's preparation was keyed on it, so every progress report of the run (one per encoded frame) restarted the preview. Now the source is memoised in the workbench AND the preview hook keys on the source's contents (file, RAW file, gain, calibration), so a host that rebuilds it cannot restart anything. Around it: the making-of reports only when its step, words or whole percentage change (≈100 updates, not 450); the sheet's status is one truncated line; the `DeliverBar`'s running rows never wrap (the time left has an always-drawn slot, the stage chips do not wrap, the headline truncates, Cancel has a fixed width); the masthead `TaskPill`'s percentage sits in a slot as wide as `100 %`. Rule for any run: a value that changes per frame goes in a slot of fixed width, and a prop object handed to a component that prepares work is memoised, or keyed on its contents by the receiver. Not changed, deliberately: the Export tab's lock notice still appears at the run's start and goes at its end (one move each way, the L2 design), and the bar still grows into the run (his V1 pick).
+
+**The export (T6, `use-timelapse-export.ts`).** A run of the suite's shape: the folder picked AT the click (`pickDeliveryTarget` first — `frontend.md`'s picker trap), a task on the PICTURE's edge (`taskScope`, so the stage's `TaskEdge` draws it), one unit with three stages (Render · Encode · Write) on the SAME `DeliverBar` as the roll's export — `PictureWorkbench` merges the two (`anyProgress`), the Export tab locks on either and the bar is drawn on every tab while either runs —, a Cancel ending the decode or the encode in flight. The states are graded at `min(exportEdge(), frame long edge × deepestZoom(script))`, so a close-up is not a blow-up and a phone keeps its ceiling; `encodeFrames` paints every frame through the sheet's own painter at `script.seconds` (the beat's length, never the option's); the file is `makingOfName(ref)` = `DJI_0101-making-of.mp4` — a SUFFIX, because a delivered picture's exact name exists to pair it with its capture and a video is not a rendition of the picture. H.264 is said BEFORE the click (`useAvcEncodeSupport` → the sheet's verdict disables the verb). Driven headless with the encoder faked the way `render-video.test.ts` fakes it (an init script: a `VideoEncoder` whose `isConfigSupported` answers for `avc1.640034`, chunks as instances of the global `EncodedVideoChunk`, `showDirectoryPicker` → the OPFS): 450 frames at 1080 × 1920 and 30 fps for 15 s, a real `ftyp` container in the OPFS under the right name, the note on the sheet and on the bar. The encode itself is NOT verified here — no H.264 in this Chromium — and must be run once on a real machine or the desktop app's pane.
+
+**The sound (T7).** `timelapseScore(script, kit)` (pure, tested): the kit's `tick` where each chapter starts (the level falling a touch per chapter), its `leg` landing at the hook's cut (the tease; none under `flash`), the `seat` where the reveal's figure ends — the openers' own kits (`tick-kits.ts`), so the four names on the Sound pill are the same four Défilé offers. Rendered by `renderBed` ahead of the AAC priming and handed to `encodeFrames` as `audio`; `'none'` (the default, his §6) writes NO track. The note says what became of it (*with its ticks* · *silent: …*): this Chromium renders the bed and cannot encode AAC, and the run said exactly that. The preview is silent, said in the hint. The plate, the credit, the ground and the three hooks and three reveals the plan listed under T7 were built with T5. **The whole plan is BUILT, T1 → T7**; what no run here could verify is the H.264 encode and the AAC track on a real machine, and the feel of the video on his own pictures.
+
+- **The sheet's preview STICKS** (2026-10-01, his report: it scrolled away): the whole preview column is `sticky` inside the sheet (the sheet is the scroller; a sticky child of the column alone would leave with the column on a phone, where the columns stack), on the paper so the settings scroll under it, and its picture is sized from a HEIGHT budget — `--tl-preview-h`, 60 % of the measured `--app-h` up to 36rem on a desktop, 34 % on a phone — through `width: min(100%, budget × aspect)`, so a 9:16 preview never outgrows the screen it must stay on.
+- **A making-of is a PHOTOGRAPH's** (2026-10-01, the merge with clips): its states are graded as stills, so a clip gets no Making-of row, no menu verb and no sheet (`isClipPicture`).
+
+## The roll's pictures are a BAND, a COLUMN or a CONTACT SHEET; a cell is calm and the selection is a MODE (2026-10-02)
+
+His *«les miniatures sont trop petites»* → `docs/develop-roll-browser.md`, face
+D picked with its §7 recommendations, built C1–C7 the same day (`Filmstrip.tsx`
+is gone; `RollBand.tsx`, `ContactSheet.tsx`, `SelectionBar.tsx`, `BandGrip.tsx`,
+`use-strip-prefs.ts`, `use-thumb-aspects.ts` over `shared/develop/roll-strip.ts`).
+The rules a later agent must keep:
+
+- **Geometry is pure** (`roll-strip.ts`, tested): Flickr-style justified rows,
+  one scrolling row, the column, the sheet, rows ↔ height, columns ↔ width, the
+  fold threshold, the auto height from the roll's MEDIAN aspect, the prefs
+  reader, the filter. A cell is drawn at the rectangle the layout answers,
+  never by CSS flow, so the host knows every size before it paints. Aspects
+  are MEASURED from the thumbnail blob (`use-thumb-aspects.ts`, batched) and
+  fall back to the picture's own; the layout re-justifies as they land.
+- **Preferences are PER DEVICE**, `localStorage['atelier.develop.strip.<desktop|phone>']`
+  (`StripPrefs`: place, height, width, folded, auto, thumb, sheet), never on
+  the roll; a phone's `place` is read as `bottom` whatever it says, and its
+  menu offers no placement.
+- **The size is the DRAGGED one by default** (his Q2), "height follows the
+  roll" a menu option; a drag under the fold threshold folds to the rail
+  (`bandAfterDrag`). Trap: the box that sizes the band must be measured APART
+  from the band — the status lines have their own `useElementSize` and the
+  toolbar is a constant — or the auto height reads its own output and
+  flickers (707 ↔ 743 px; Playwright's "element is not stable" was that).
+- **The column** (his Q1): `place: left | right`, the band's cell `row-span-2`
+  in a grid column of its own (`auto`), the stage handed its column through
+  `PictureWorkbench`'s `columns` — never in focus, where the grid has ONE
+  column and a `col-start-2` would make an implicit one —, the status lines a
+  grid item of their own under the stage. The grip is the band's stage-facing
+  edge, `−` / `=` step the COLUMN COUNT (`columnLayout` takes no thumbnail
+  height), and `maxBandWidth` keeps the stage 320 px: two columns are a
+  DISABLED menu row at 1270 px with the Library docked, not a silent clamp.
+- **A cell is CALM**: one pill (`⊘ ● ↑ – variant ▶ !`), Winnow's mark, the
+  run's mark at the centre, a caption from 112 px (his Q5; always in the
+  sheet). The delivery badge and `×` LEFT it (Q6). Acting is the picture's
+  ⋯ menu (a right-click too; one portalled `AnchoredMenu`, extracted from
+  `OverflowMenu`, for the whole strip) or the SELECTION — a mode (`S`, Select,
+  a Shift/⌘-click, a finger held on touch: `press-intent.ts`'s
+  `LONG_PRESS_MS` / `PRESS_SLOP`, the click after the hold swallowed, the
+  touch `contextmenu` suppressed) whose header is the `SelectionBar`: words on
+  a desktop, glyphs on a phone and in the column (`narrow`), Apply folded into
+  More under 800 px (`dense`). `⌘A` only while selecting; a removal that
+  empties the selection ends the mode; `openAfterRemovals` picks the next open
+  picture for a bulk removal.
+- **The sheet** (`G`, ▦) covers the stage and the band and NEVER the inspector
+  (Q4; `span=2` beside a column), full screen on a phone. **Focus** (`F`, ⤢)
+  hides the band, the inspector and the page bar; Escape steps selection →
+  sheet → focus → the stage's own (`onEscape` returns whether it took it).
+- Keys live in `editorKeyAction` (S, ⌘A while selecting, B, G, F, −, =) and
+  are relayed through `callbacks.current`, like every other.
+- Driven headless at 1270 × 1300, 1700 × 1200 and 390 × 844 (touch) — NOT on
+  his Mac or his iPhone. §7 of the brief stays his to overrule.
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the

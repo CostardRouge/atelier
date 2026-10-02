@@ -1,14 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
 import {
+  CLIP_TABS,
+  WORKBENCH_TABS,
   editorKeyAction,
   openAfterRemoval,
+  openAfterRemovals,
   pictureAfterRestore,
   openPictureId,
   pictureRange,
   sameDevelop,
   selectionAfterClick,
   stepPicture,
+  workbenchTabsFor,
   type EditorKeyPress,
   type SelectionModifiers,
 } from './roll-editor';
@@ -79,6 +83,16 @@ describe('sameDevelop', () => {
   });
 });
 
+describe('openAfterRemovals', () => {
+  it('keeps the open picture unless it leaves, then takes the next survivor, else the last', () => {
+    expect(openAfterRemovals(wideStrip, ['a', 'c'], 'b')).toBe('b');
+    expect(openAfterRemovals(wideStrip, ['b', 'c'], 'b')).toBe('d');
+    expect(openAfterRemovals(wideStrip, ['c', 'd'], 'd')).toBe('b');
+    expect(openAfterRemovals(wideStrip, ['a', 'b', 'c', 'd'], 'a')).toBeNull();
+    expect(openAfterRemovals(wideStrip, ['a'], null)).toBeNull();
+  });
+});
+
 describe('editorKeyAction', () => {
   it('maps the editor keys', () => {
     expect(editorKeyAction(press({ key: 'ArrowLeft' }))).toBe('previous');
@@ -140,6 +154,34 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'Backspace', repeat: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'Escape' }))).toBe('escape');
     expect(editorKeyAction(press({ key: 'Escape', metaKey: true }))).toBeNull();
+  });
+
+  it('turns the band’s selection on S, and ⌘A takes every shown picture only while it is on', () => {
+    expect(editorKeyAction(press({ key: 's' }))).toBe('select');
+    expect(editorKeyAction(press({ key: 'S' }))).toBe('select');
+    expect(editorKeyAction(press({ key: 's', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 's', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'a', metaKey: true, selecting: true }))).toBe('select-all');
+    expect(editorKeyAction(press({ key: 'A', ctrlKey: true, selecting: true }))).toBe('select-all');
+    expect(editorKeyAction(press({ key: 'a', metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'a', metaKey: true, selecting: true, repeat: true }))).toBeNull();
+    // A bare A is still the Adjust tab's.
+    expect(editorKeyAction(press({ key: 'a', selecting: true }))).toEqual({ tab: 'adjust' });
+  });
+
+  it('folds the band on B, opens the sheet on G and steps the thumbnails on - and =, never from a field', () => {
+    expect(editorKeyAction(press({ key: 'b' }))).toBe('band');
+    expect(editorKeyAction(press({ key: 'B' }))).toBe('band');
+    expect(editorKeyAction(press({ key: 'g' }))).toBe('sheet');
+    expect(editorKeyAction(press({ key: 'G', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'f' }))).toBe('focus');
+    expect(editorKeyAction(press({ key: 'F', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '-' }))).toBe('thumbs-smaller');
+    expect(editorKeyAction(press({ key: '=' }))).toBe('thumbs-larger');
+    expect(editorKeyAction(press({ key: '+' }))).toBe('thumbs-larger');
+    expect(editorKeyAction(press({ key: '-', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '=', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: '-', metaKey: true }))).toBeNull();
   });
 
   it('opens the shortcuts on H and the facts on I', () => {
@@ -257,5 +299,13 @@ describe('pictureAfterRestore', () => {
     const b2 = { id: 'b' };
     const c2 = { id: 'c' };
     expect(pictureAfterRestore([a, b, c], [a, b2, c2], 'a')).toBe('b');
+  });
+});
+
+describe('workbenchTabsFor', () => {
+  it('gives a photograph every tab and a clip its three — Adjust, Crop and Export', () => {
+    expect(workbenchTabsFor(false)).toBe(WORKBENCH_TABS);
+    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(['adjust', 'crop', 'export']);
+    expect(workbenchTabsFor(true).map((t) => t.id)).toEqual(CLIP_TABS);
   });
 });

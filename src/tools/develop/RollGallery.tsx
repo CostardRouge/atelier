@@ -30,6 +30,7 @@ import {
   putRoll,
 } from '../../shared/develop/roll-store';
 import { addPictures, createRollDoc, rollProgress, type RollDoc } from '../../shared/develop/roll-types';
+import { rollFileOf } from './RollEditor';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { downloadBlob } from '../../shared/media/save';
 import { useObjectUrl } from '../../shared/media/use-object-url';
@@ -305,11 +306,9 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     createOn,
   } = gallery;
 
+  // The photographs AND the clips ticked in the Library: a roll takes both (2026-09-30).
   const selectedPhotos = useMemo(
-    () =>
-      lib.assets
-        .filter((a) => lib.selection.has(a.id) && a.kind === 'photo' && a.parts.image)
-        .map((a) => a.parts.image!),
+    () => lib.assets.flatMap((a) => (lib.selection.has(a.id) ? (rollFileOf(a) ?? []) : [])),
     [lib.assets, lib.selection],
   );
 
@@ -348,15 +347,12 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
   // answers after the render, from the active asset as it then is (`run` is
   // called in the same tick as the activation — `RollEditor` has the note).
   const [pendingNew, setPendingNew] = useState(0);
-  const activeFile = useMemo(() => {
-    const a = lib.assets.find((x) => x.id === lib.activeId);
-    return a?.kind === 'photo' && a.parts.image ? a.parts.image : null;
-  }, [lib.assets, lib.activeId]);
+  const activeFile = useMemo(() => rollFileOf(lib.assets.find((x) => x.id === lib.activeId)), [lib.assets, lib.activeId]);
   useEffect(() => {
     if (pendingNew === 0) return;
     setPendingNew(0);
     if (!activeFile) {
-      setNotice('Only a photograph can start a roll.');
+      setNotice('Only a photograph or a clip can start a roll.');
       return;
     }
     void (async () => {
@@ -457,7 +453,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
             </>
           }
         >
-          A roll is the set of photographs you mean to develop — from a folder or a day on your Winnow —
+          A roll is the set of photographs and clips you mean to develop — from a folder or a day on your Winnow —
           each keeping its own light and colour, and the roll a look of its own.
         </EmptyState>
       ) : (

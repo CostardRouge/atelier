@@ -89,6 +89,62 @@ export function sceneFrame(w: number, h: number): { w: number; h: number } {
   return stageFrameSize(w, h, SCENE_PIXELS);
 }
 
+/** The room the picker's body gives the stage column, and the picture's shape. */
+export interface StageRoom {
+  /** The body's inner width — the stage column and the looks panel share it. */
+  bodyWidth: number;
+  /** The body's inner height — what the stage column is as tall as. */
+  bodyHeight: number;
+  /** The controls card under the picture, with the gap above it. */
+  cardHeight: number;
+  /** The picture's width over its height; 0 while unknown. */
+  aspect: number;
+}
+
+/** The floor of the stage column: 20rem, so the card's rows keep their line. */
+export const STAGE_MIN_WIDTH = 320;
+
+/** The stage column's width, and the height of the picture's box inside it. */
+export interface StageBox {
+  width: number;
+  height: number;
+}
+
+/**
+ * How big the stage column is on a desktop: AS WIDE AS THE PICTURE NEEDS,
+ * NEVER WIDER — and the picture's box as tall as the picture, never taller.
+ *
+ * The picker's desktop layout is the suite's own editor shape — the picture in
+ * a column at the left with its controls under it, the looks as a panel at the
+ * right (`docs/look-picker-redesign.md`, face A). What makes that work for both
+ * shapes of picture is one rule: a portrait frame is bounded by the column's
+ * HEIGHT, so it takes exactly the width that height buys and hands the rest
+ * to the grid; a landscape frame would take everything, so it is capped at
+ * half the body — which, measured on the maintainer's screen, is within three
+ * pixels of what the old band gave it — and its box is then only as tall as
+ * the picture is at that width, so the card sits right under the picture and
+ * the leftover falls below the pair (the phone stage's own rule, `frontend.md`
+ * «an ASPECT BOX hands it back»). Nothing is centred on a black table.
+ *
+ * The floor keeps the card's label column and its slider on one line; where
+ * half the body is narrower than the floor (a tablet), the half wins, since a
+ * column wider than its half starves the grid it shares the body with.
+ */
+export function stageColumnBox({ bodyWidth, bodyHeight, cardHeight, aspect }: StageRoom): StageBox {
+  const half = bodyWidth / 2;
+  const boxHeight = Math.max(0, bodyHeight - cardHeight);
+  const need = aspect > 0 ? boxHeight * aspect : half;
+  const floor = Math.min(STAGE_MIN_WIDTH, half);
+  const width = Math.round(Math.max(floor, Math.min(half, need)));
+  const height = Math.round(aspect > 0 ? Math.min(boxHeight, width / aspect) : boxHeight);
+  return { width, height };
+}
+
+/** The stage column's width alone — `stageColumnBox` for a caller that needs one number. */
+export function stageColumnWidth(room: StageRoom): number {
+  return stageColumnBox(room).width;
+}
+
 /**
  * What the scene says about the look it is showing, beyond its name — or null
  * when there is nothing to say.

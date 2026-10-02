@@ -50,6 +50,7 @@ export default function CropPanel({
   deliveredSize,
   verbs = [],
   borderVerbs = [],
+  clip = false,
   subjectCrop,
   onTold,
 }: {
@@ -61,6 +62,8 @@ export default function CropPanel({
   deliveredSize: { w: number; h: number } | null;
   verbs?: readonly CropApplyVerb[];
   borderVerbs?: readonly BorderApplyVerb[];
+  /** A CLIP: the crop is held still over every frame, and it wears no border (`roll-types.ts`, `isClipPicture`). */
+  clip?: boolean;
   /** Crop to the subject (`use-subject-crop.ts`); omitted, the row is not drawn. */
   subjectCrop?: SubjectCropVerb;
   onTold?: (message: string) => void;
@@ -114,6 +117,12 @@ export default function CropPanel({
               a speck and a subject that is the whole picture are refused with the reason.
             </p>
             <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
+            {clip && (
+              <p>
+                On a clip the crop is ONE zone held still over every frame — play the clip under it to
+                judge it on the frames that matter; it never follows the picture.
+              </p>
+            )}
           </>
         }
         actions={
@@ -252,15 +261,17 @@ export default function CropPanel({
           ))}
         </DevelopFold>
       )}
-      <BorderSection
-        picture={picture}
-        crop={crop}
-        border={border}
-        onBorder={onBorder}
-        deliveredSize={deliveredSize}
-        verbs={borderVerbs}
-        onTold={onTold}
-      />
+      {!clip && (
+        <BorderSection
+          picture={picture}
+          crop={crop}
+          border={border}
+          onBorder={onBorder}
+          deliveredSize={deliveredSize}
+          verbs={borderVerbs}
+          onTold={onTold}
+        />
+      )}
     </>
   );
 }

@@ -1,5 +1,7 @@
 import type { WinnowAssetRow, WinnowClient } from '../shared/sources/winnow/client';
 import WinnowThumb from '../shared/sources/winnow/WinnowThumb';
+import CullMark from '../shared/sources/winnow/CullMark';
+import { cullingFromRow } from '../shared/sources/winnow/culling';
 import type { WinnowConnection } from '../shared/sources/winnow/store';
 import type { ScopeRows } from '../shared/sources/winnow/use-scope-rows';
 import type { InstancePicker } from '../shared/sources/winnow/use-pick';
@@ -159,6 +161,11 @@ export default function WinnowScopeGrid({
                     ▶{r.has_telemetry ? ' srt' : ''}
                   </span>
                 )}
+                {/* Winnow's word — the same flag, stars and label the picker
+                    and Develop's strip draw; nothing for a picture not culled. */}
+                <span className="absolute top-1 right-1 flex">
+                  <CullMark culling={cullingFromRow(r) ?? undefined} onMedia />
+                </span>
                 {/* Two independent facts, so both are always drawn: the ✓
                     says the picture is in the pool, the ring says it is the
                     one the tool is on. Hiding the ✓ under the ring made a

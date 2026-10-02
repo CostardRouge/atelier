@@ -15,7 +15,7 @@
  * what moved it out of the piece editor (the `StylePanel` rule).
  */
 
-import { classifyPart, isRawImage } from '../library/assets';
+import { captureFileType, classifyPart, isClipName, isRawImage } from '../library/assets';
 import { baseRung, type DevelopBase } from './develop';
 import { imageTypeLabel } from '../media/image-meta';
 import { mediaOrigin } from '../projects/media-identity';
@@ -133,11 +133,24 @@ export function pictureFidelity(
     };
   }
   const origin = mediaOrigin(file);
+  // A CLIP, by its name (a fetched file carries no type): a source's proxy of
+  // one is a small re-encode made to PLAY, and the rush is a row of the
+  // name's menu — the note says where the pixels are, not only that these are few.
+  const clip = isClipName(file.name) || file.type.startsWith('video/');
   if (origin?.fidelity === 'proxy') {
+    if (clip) {
+      return {
+        chip: `proxy · clip${chipPixels(pixels)}`,
+        note: `a proxy of the clip from ${origin.sourceId}, re-encoded small to play: the rush itself is a row under the name above, fetched once and held when chosen${sizeClause(pixels)}`,
+      };
+    }
     return {
       chip: `proxy · 8-bit${chipPixels(pixels)}`,
       note: `an 8-bit proxy from ${origin.sourceId}: highlights above white are already gone here${sizeClause(pixels)}`,
     };
+  }
+  if (clip) {
+    return { chip: `${captureFileType(file.name)} · clip${chipPixels(pixels)}`, note: null };
   }
   // BEFORE the media-type test: a RAW off a disk usually carries an empty
   // type, so asking the type first called every DNG a clip. It is on screen at
@@ -158,7 +171,7 @@ export function pictureFidelity(
   // type (`materialize` hands an original over with none), and calling a
   // JPEG a clip on that account is exactly the sentence this must never say.
   if (classifyPart(file.name) !== 'image' && !file.type.startsWith('image/')) {
-    return { chip: `clip · 8-bit${chipPixels(pixels)}`, note: null };
+    return { chip: `file · 8-bit${chipPixels(pixels)}`, note: null };
   }
   return {
     chip: `${imageTypeLabel(file.name)} · 8-bit${chipPixels(pixels)}`,

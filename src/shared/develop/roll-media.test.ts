@@ -4,6 +4,7 @@ import {
   fetchOrder,
   keepWindow,
   photoFiles,
+  rollFiles,
   pictureDay,
   splitByRoll,
   summarizeAvailability,
@@ -106,3 +107,11 @@ describe('splitByRoll', () => {
   });
 });
 
+
+describe('rollFiles', () => {
+  it('keeps the photographs AND the clips, one file per asset, a clip’s log left to the Studio', () => {
+    const f = (name: string) => new File(['x'], name);
+    const names = rollFiles([f('A.ARW'), f('A.JPG'), f('B.jpg'), f('C.MP4'), f('C.SRT'), f('D.srt'), f('E.mov'), f('.hidden.jpg')]).map((x) => x.name);
+    expect(names).toEqual(['A.JPG', 'B.jpg', 'C.MP4', 'E.mov']);
+  });
+});

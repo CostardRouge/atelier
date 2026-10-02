@@ -367,6 +367,13 @@ export interface DevelopPicture {
    * plays»). Muted, like every decoder element in the suite.
    */
   video: HTMLVideoElement | null;
+  /**
+   * Moves when a CLIP comes to REST on another frame (a pause, a seek while
+   * paused) — what a surface that draws `delivered()` itself (the crop
+   * stage) repaints on, since the element it reads changes under it without
+   * anything else React can see. 0 and still for a photograph.
+   */
+  frameSeq: number;
   /** Why it could not be decoded, in the decoder's words. */
   problem: string | null;
   canvasRef: RefObject<HTMLCanvasElement>;
@@ -1486,9 +1493,11 @@ export function useDevelopPicture({
     const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
     if (!s || s.width <= 0 || s.height <= 0) return null;
     // Never the overlay: this is what LEAVES, and a red wash is a way of
-    // looking, like the wipe.
+    // looking, like the wipe. A clip is graded AT its instant, as the stage
+    // does — the held grade is keyed on it, or the crop stage would show the
+    // first frame it ever drew whatever the transport did.
     const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
-    return grader ? grader.render(s.gpu ?? s.image) : s.image;
+    return grader ? grader.render(s.gpu ?? s.image, isVideoElement(s.image) ? s.image.currentTime : undefined) : s.image;
   }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette]);
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
@@ -1502,7 +1511,7 @@ export function useDevelopPicture({
       if (!ctx) return null;
       try {
         const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
-        const graded = grader ? grader.render(s.gpu ?? s.image) : s.image;
+        const graded = grader ? grader.render(s.gpu ?? s.image, isVideoElement(s.image) ? s.image.currentTime : undefined) : s.image;
         ctx.imageSmoothingQuality = 'high';
         ctx.drawImage(graded, 0, 0, s.width, s.height, 0, 0, w, h);
       } catch {
@@ -1925,6 +1934,7 @@ export function useDevelopPicture({
   return {
     source,
     video,
+    frameSeq: restedFrame,
     problem,
     canvasRef,
     canvasSize,

@@ -33,7 +33,7 @@ import {
 } from '../../shared/sources/winnow/store';
 import PostEditor from './PostEditor';
 import TimelineImportPanel from './TimelineImportPanel';
-import DeduceStagesPanel from './DeduceStagesPanel';
+import DeduceStagesPanel from './deduce/DeduceStagesPanel';
 import TripGallery from './TripGallery';
 import TripOverview from './TripOverview';
 
@@ -373,6 +373,22 @@ export default function RoadTripTool() {
     [handleChange],
   );
 
+  /**
+   * A deduction WRITES and stays open — on its Written pane, with Undo and
+   * Run again — so the modal closes only when the author closes it.
+   */
+  const handleWritten = useCallback(
+    (doc: TripDoc, spanWidened: boolean) => {
+      handleChange(doc);
+      setSpanNote(
+        spanWidened
+          ? `The trip now runs ${doc.startDate} → ${doc.endDate}: its dates grew to hold a leg you accepted.`
+          : null,
+      );
+    },
+    [handleChange],
+  );
+
   // By id from the route, never a held copy: editing writes a NEW post into
   // the trip, and a copy would go stale the moment a control moved.
   const editingPost = route.postId
@@ -471,7 +487,9 @@ export default function RoadTripTool() {
           connection={deducing}
           trip={open}
           onCancel={() => setDeducing(null)}
-          onApply={handleApplied}
+          onWrite={handleWritten}
+          onUndo={history.undo}
+          canUndo={history.canUndo}
         />
       )}
 

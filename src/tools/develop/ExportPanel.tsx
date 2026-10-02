@@ -66,6 +66,7 @@ export default function ExportPanel({
   settings,
   onSettings,
   delivery,
+  clip = false,
   plan,
   proxiesOnly,
   onProxiesOnly,
@@ -76,11 +77,19 @@ export default function ExportPanel({
   openExif = null,
   picture = null,
   onWords,
+  makingOf = null,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
   /** What the open picture will deliver, or null until it is measured. */
   delivery: DeliverySummary | null;
+  /**
+   * The open picture is a CLIP (2026-09-30): it leaves as an MP4, and the
+   * panel says which of the roll's settings reach one — the first target's
+   * size does; quality, borders, HDR, the watermark and the metadata groups
+   * are a photograph's.
+   */
+  clip?: boolean;
   /** What the whole run will deliver, and the bytes it costs. */
   plan: RunPlan;
   /** *Proxies only, for this run* — a run-time choice, never on the roll. */
@@ -103,6 +112,8 @@ export default function ExportPanel({
   /** The open picture, whose title and caption the Metadata section edits. */
   picture?: RollPicture | null;
   onWords?: (words: { title?: string; caption?: string }) => void;
+  /** The open picture's making-of row (`TimelapseSheet`) — the workbench builds it, since it holds the picture's bytes. */
+  makingOf?: ReactNode;
 }) {
   const identity = useDeliveryIdentity();
   // The line on the picture in hand, as the run will draw it.
@@ -197,10 +208,14 @@ export default function ExportPanel({
             }
           />
           <FieldRow
-            label="This picture"
+            label={clip ? 'This clip' : 'This picture'}
             align="start"
             hintShown
-            hint={delivery?.reason ?? (delivery ? undefined : 'measured once the picture is in the Library')}
+            hint={
+              clip
+                ? `${delivery?.reason ? `${delivery.reason} — ` : ''}a clip leaves as an MP4: every frame developed under its look, H.264 at the first target’s size (never upscaled), its sound copied as recorded. Quality, borders, HDR, the watermark and the metadata groups are a photograph’s and do not reach it.`
+                : (delivery?.reason ?? (delivery ? undefined : 'measured once the picture is in the Library'))
+            }
           >
             {/* The calculator's sentence wraps rather than truncates: its end is the verdict. */}
             <span className={`font-mono text-sm tabular-nums leading-snug pt-1 ${delivery ? 'text-ink' : 'text-muted'}`}>
@@ -208,6 +223,31 @@ export default function ExportPanel({
             </span>
           </FieldRow>
         </InspectorSection>
+
+        {makingOf && (
+          <InspectorSection
+            id="develop.makingof"
+            title="Making-of"
+            info={
+              <>
+                <p>
+                  A short video of how this picture was edited, for a feed: the finished picture as a hook, then
+                  each step — the light, the crop with its zone drawn, a heal with its rings, a mask with its
+                  fill, the look — under a caption saying what changed, with the camera zooming to where the
+                  tool worked, and a before/after at the end with the camera plate and your credit. The steps
+                  are the picture’s own journal, kept with every write since the journal existed; a picture
+                  edited before it has its steps told in a standard order, and the video says so.
+                </p>
+                <p>
+                  The format, the length, the hook, the reveal and the beat are the roll’s; which chapters a
+                  picture keeps and their captions are the picture’s. The preview is the file, scaled.
+                </p>
+              </>
+            }
+          >
+            {makingOf}
+          </InspectorSection>
+        )}
 
         <InspectorSection
           id="develop.watermark"

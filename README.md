@@ -14,10 +14,10 @@ Today it ships ten tools, converging into a few editors:
 - **Trips** — plan and track how a journey gets told. Give a trip its two
   dates and every day of it becomes a cell in a contribution-style grid; the
   holes are the days you have never posted from.
-- **Develop** — gather the photographs you mean to develop into a **roll**,
-  kept in this browser or on your Winnow; give each its own light, colour and
-  crop under one look for the roll, and export them — from the proxy or the
-  original — or send them home to the Winnow they came from.
+- **Develop** — gather the photographs and clips you mean to develop into a
+  **roll**, kept in this browser or on your Winnow; give each its own light,
+  colour, look and (a photograph) crop, and export them — from the proxy or the
+  original, a clip as an MP4 graded frame by frame.
 - **DJI Telemetry** — view DJI drone flight telemetry in sync with the video it
   was captured with.
 - **Telemetry Overlay** — place altitude, GPS and exposure readouts anywhere on
@@ -722,17 +722,27 @@ and a picture can place a single day.
 **Deduce** (in the stages header, for any connected Winnow) asks the instance
 for **one position per day** over the trip's span — a few kilobytes for a
 hundred days; no photograph is fetched and nothing is read from your media. A
-leg is then a run of consecutive days whose position stays inside a radius of
-the run so far, and you say what that means: the radius of one halt, how many
-days make a halt rather than a stop on the way, whether a shorter run is listed
-on its own (marked, and left unticked) or folded into the halt it was on the
-way to, whether a day the instance has no position for is **covered** by the
-leg around it — nothing is invented there, a leg is a span — and, off by
-default and marked wherever it shows, whether the days of a move are guessed
-between two places. Moving any of those never asks the instance again. What
-comes back is a list of proposals, one tick each, in the same shape a re-run
-later would produce: nothing is written until you accept it, and no piece is
-ever created.
+halt is a run of consecutive days whose position stays inside a radius of the
+run so far, and the window then cuts the halts into stages at a **grain** you
+choose with one slider: one stage per region, split at long drives (the
+default), one per big halt, or one per halt. Three windows show the same
+proposals, and you pass from one to the other by tabs or by a hand-off that
+carries the chapter you were looking at: **the grain** (the slider, the stages
+as cards with the map beside them), **the calque** (say what you want first —
+fill the gaps, enrich your stages, show everything — and read the proposals
+under the stages you already drew), **the paquet** (one chapter at a time,
+answered in one gesture, keys 1 to 4). Each proposal carries the safe verb for
+where it falls — the places a stage of yours lacks, only the days none of your
+stages covers, or a new stage where nothing is — and you can change it, split
+it, correct its name, dates and places, or name a halt the city index could
+not. The thresholds (radius, long drive, big halt, blind days, outliers) sit
+under *Fine settings*; moving any of them never asks the instance again. What
+the instance could not say is said rather than hidden: days without a position,
+a day placed far from the days around it (a drone that kept the GPS of home —
+left out by default, keepable), halts nobody can name. Nothing is written
+before you review exactly what will be, every stage written carries a mark so
+the ⋯ menu can take them all out again, a re-run recognises what is already in
+the trip, and no piece is ever created.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
@@ -1295,11 +1305,11 @@ A portable `.json` export of a trip is the phase that follows.
 
 ## Develop tool
 
-The third editor, for photographs you mean to **develop** rather than compose.
-It opens on your **rolls** — cards grouped by where each is kept, with the
-first pictures as a cover and how many are developed — and a roll is a set of
-pictures, each keeping its own develop, plus a **look** for the whole roll that
-dresses every picture after its own correction.
+The third editor, for photographs — and clips — you mean to **develop** rather
+than compose. It opens on your **rolls** — cards grouped by where each is
+kept, with the first pictures as a cover and how many are developed — and a
+roll is a set of pictures, each keeping its own develop and its own **look**,
+applied after its correction.
 
 **Making a roll.** *New roll* asks for a name, where to keep it when a Winnow
 can keep rolls too, and whether to start with the photos ticked in the Library
@@ -1313,7 +1323,7 @@ available it is a single button, and it is gone when there is nothing to add. A 
 the file. A picture that came from your Winnow comes back by itself when the
 roll is opened, even after a reload and without passing through the Library:
 the picture you open is fetched from the instance, then its two neighbours on
-each side, and the filmstrip shows the instance's thumbnails meanwhile. It is
+each side, and the band shows the instance's thumbnails meanwhile. It is
 only ever asked of an instance you connected, and the roll says so when it is
 not signed in (*Sign in*, *Try again*), when the instance no longer has a
 picture, or when a picture lives on an instance this browser is not connected
@@ -1325,7 +1335,8 @@ finds the ones it already holds and adds the others. (Remembering a folder
 needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 
 **Developing.** A roll opens in its editor: the picture large, the roll as a
-filmstrip under it, and beside it the same controls as the Develop sheet in
+**band** of its pictures under it (or a column beside it — see *The band*
+below), and beside it the same controls as the Develop sheet in
 Trips and the Studio — the histogram, the sliders, your presets, the
 before/after wipe and zoom, and the picture's **look** (LUTs, output
 transform, grain), applied after its correction. The histogram draws the
@@ -1385,10 +1396,86 @@ undo that reaches another picture than the one on screen opens that picture,
 so what changed is what you see. The develop, the look, the lens and the
 detail are ticked to start — what a roll shot with one body shares — and the
 ticks are remembered. A picture's file, its RAW base, its title and caption and
-whether it leaves are never carried. A filmstrip cell shows the
-picture as it was last seen in the editor — developed and cropped — and a dot
-marks what is developed. On a phone the picture and the strip share the
+whether it leaves are never carried. A cell of the band shows the
+picture as it was last seen in the editor — developed and cropped — and its
+pill says what is developed. On a phone the picture and the band share the
 screen and the three tabs open from the bottom bar.
+
+**The band.** The roll's pictures run under the photograph as cells at their
+own shapes — a portrait narrow, a panorama wide — one row scrolling sideways
+at the band's smallest. Pull the **handle** above it and the band grows into a
+grid of two or three rows, justified like a photo site's; pull it down past
+its header and it folds to a **rail** (one line: where you are in the roll,
+the filter, *Select*, the sheet and the band's ⋯ menu), **B** does the same
+from the keyboard and a double-click on the handle too. The ⋯ menu names the
+rows, lets the band's **height follow the roll** (it takes the room the roll's
+typical picture leaves under itself, so stepping to a portrait moves
+nothing), makes the thumbnails smaller or larger (**−** / **=**), and says
+**where the band sits on this screen**: under the picture, or a **column** at
+its left or right — the same cells in one, two or three columns, the handle
+on its edge, the rail a thin strip when folded. All of that is remembered
+per device in the browser and never written to the roll; a phone keeps the
+band under the picture. A **filter** chip shows the roll whole or only the
+pictures *edited*, *to export*, *held back*, *ignored* — or by your Winnow's
+culling (*picks*, *rejected*, starred), when the roll came from one. A cell
+is calm: a small pill reads its state (**●** edited, **↑** leaves at export,
+**–** held back, **⊘** ignored, its variant number, **▶** a clip, **!** not
+reachable), Winnow's mark sits in the other corner, the name is written under
+it once the cells are large enough, and nothing on it is a button. What you
+DO to a picture is in its **menu** — ⋯ under the pointer, or a right-click
+anywhere on the cell: open, send ↔ hold, back to the rule, ignore, a variant,
+take it off the roll. For several at once, **Select** (or **S**, a
+**Shift / ⌘-click**, or on a phone a **finger held** on a cell) turns the
+**selection** on: a click now marks a cell instead of opening it, **⌘A**
+marks every picture the band shows, and the band's header becomes a bar of
+verbs for the marked pictures — *Send*, *Hold*, *Ignore* / *Bring back*,
+*Apply ‹the open picture›'s develop*, and under *More* back to the rule,
+paste settings, a variant of each, take them off the roll. *Done*, **S** or
+**Esc** leaves it. The **contact sheet** (**G**, or the ▦ button) lays the
+whole roll large over the picture — every name written, the same filter, the
+same selection and bar, the cells sized with **−** / **=** — to sort and to
+act on many; it covers the picture and the band and leaves the inspector, so
+the numbers you are about to apply stay in view, and a click on a picture
+opens it and closes the sheet (on a phone it is the whole screen). **Focus**
+(**F**, or the ⤢ button above the picture) puts the band, the inspector and
+the page bar away and leaves the photograph alone; **←/→** still step, and
+**F**, ⤢ or **Esc** brings everything back.
+
+**Clips.** A roll takes a video the way it takes a photograph: from a folder
+or a drop (the clip alone — its `.srt` flight log stays the Studio's), from
+the ticked Library, or from your Winnow, where the picker (below) lists
+its clips beside its photographs. A clip's cell in the band is a frame a
+second in, marked ▶. On the stage it **plays**: a transport under the picture,
+**Space** to play and pause, the develop and the look following every frame,
+the before/after divider live while it moves. What a clip takes is the
+**global** develop and the look — the sliders, curves, levels, mixer, black
+and white, grading, presets, LUTs, output transform and grain — and a
+**crop**: one zone held still over every frame, drawn on the same Crop tab
+as a photograph's (format, straighten, flips, *Apply crop to…*), with the
+transport under the crop stage so the zone is judged on the frames that
+matter. So its inspector has three tabs, **Adjust**, **Crop** and
+**Export**: a border, perspective, lens, detail, repair and layers are passes
+over one still frame and never land on a clip, whichever door they come from
+(a paste of sections, an *Apply to N other pictures*, a reset — a clip takes
+the develop, the look and the crop out of them and nothing else). Clips are
+usable in the Library bar when Develop is open, like photographs; they are
+no longer greyed out. A clip from your Winnow opens on the
+instance's small proxy, and the name above the picture is the same menu it
+is for a photograph: pick the **rush** — `DJI_0007.MP4 · 3840 × 2160 ·
+1.2 GB` — and it is fetched once, kept for the session, the playhead where it
+was, the choice stored on the picture so the roll shows the same file on
+another device; pick *Proxy* again and the fetch stops. A clip **exports as
+an MP4** under the capture's exact name: every frame developed under its
+look, cut to its crop at the clip's own density (a 1:1 out of 1080p is 1080
+× 1080, never blown up) and encoded to H.264 at the first target's size (a
+ceiling read against the cropped frame, never an upscale), its sound copied
+as recorded. The rush is what leaves — the file you chose, else fetched
+where the first target's frame asks for more than the proxy's zone holds,
+exactly as a photograph's original is — unless *Proxies only, for this run*
+is on. Quality, borders, HDR, the watermark and the metadata groups are a
+photograph's and do not reach a clip; the run says so once. Not built,
+deliberately: a crop that moves or a per-frame mask on a clip, and a second
+target for one.
 
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
@@ -1605,13 +1692,14 @@ not touch, hold back one you did. The **Pictures** table in the Export tab
 lists the roll one row per picture (the whole row is the click, with what the
 picture would leave from and at what size), filtered by *Edited*, *Leaving* or
 *Held*, and a box at its head ticks or unticks every row shown at once — a
-filter first makes it a batch (every *Picks*, every *Edited*); the badge at the
-corner of each filmstrip cell does the same without leaving the photograph. **P** sends or holds the picture on the stage, **U**
+filter first makes it a batch (every *Picks*, every *Edited*); a picture's
+menu on its cell in the band does the same without leaving the photograph,
+and the band's selection bar does it for several at once. **P** sends or holds the picture on the stage, **U**
 puts it back on the rule (on the Layers tab, **P** and **M** belong to the
 mask instead — Pick and the mask's view). A picture you do not want to work on at all can be
-**ignored** (**M**, or a right-click / a held finger on its badge): it never
+**ignored** (**M**, or its cell's menu): it never
 leaves, **←/→** step over it, "apply to the other pictures" leaves it alone,
-the strip dims it or hides it, and a click still opens it. None of this is a
+the band dims it or, from its filter, hides it, and a click still opens it. None of this is a
 rating — culling stays Winnow's. Once a picture has been exported, its row
 says when (`✓ 14:32`), and says **changed** if you edited it since — its
 develop, look, crop, geometry, repairs, layers or words; a new export size or
@@ -1623,21 +1711,21 @@ undo never forgets one.
 
 The export buttons stay pinned at the bottom of the Export tab, whatever is
 scrolled above them: **Export N pictures** (the ones that leave) is the main
-button, and the menu beside it offers this picture, the filmstrip's selection
+button, and the menu beside it offers this picture, the band's selection
 and the new or changed ones. While an export runs, that bar becomes the run
 and stays on whichever tab you are working in: a segment per picture (green
 when written, red when it could not be), the picture in hand with its stage —
 *Fetch*, *Develop*, *Write* — and what it is doing in words, the time left once
 a first picture has measured it, and **Cancel**, which stops at the next
-picture and keeps what was written. The filmstrip is the queue at the same
+picture and keeps what was written. The band is the queue at the same
 time: a picture still to go is veiled, the one in hand turns, a written one
-shows ✓ and one that could not leave shows !, and a hairline along the strip's
+shows ✓ and one that could not leave shows !, and a hairline along the band's
 top fills as the run goes.
 
 An export works from the roll **as it was when you pressed the button**. While
 it runs, the Export tab is locked and dimmed under a line that says so — its
 settings, and which pictures leave (the **P** / **U** / **M** keys and the
-strip's badges say they are locked too), would only apply to the next export.
+band's menus answer that they are locked too), would only apply to the next export.
 Developing, cropping and every other edit stay free: a picture you change
 while the roll leaves is named when the run ends, its row says **changed**,
 and **Export new or changed** sends it again.
@@ -1654,6 +1742,26 @@ for all of them. A variant leaves into a sub-folder named after it,
 `Variant 2/DJI_0101.jpg`, so every delivered file keeps the capture's exact
 name (`Web/Variant 2/…` for a second target). Adding the same file to the roll
 twice is still refused: a variant is made from a picture already there.
+
+**Adding what you culled in Winnow.** *Add ▾ → A day on your Winnow…* opens
+the **Winnow picker**, the same one as the Library's *browse all*: a **day**,
+walked with the Library's own stepper and its month (a bar per day, or the
+weeks), or a **folder** as Winnow ingested it. Every tile wears Winnow's word —
+the pick or reject flag, the stars, a label, a *Gallery* chip when a final
+already links to it — and a rail of filters narrows the list: Incoming ·
+Gallery · All, the verdict, a star floor, photos or clips, the extension, the
+body, Winnow's tags, *no final yet*, *not on the roll*, each with its count. A
+**culled day opens with its picks ticked**, so taking what you kept is one
+click on *Add N to the roll*; an unculled day ticks everything the roll lacks
+but the rejects. The bar ticks among what is shown — **All**, **None**,
+**Invert**, **⚑ Picks**, **★5**, **★4+**, or `A` `N` `I` `P` `5` `4` `3`, ⇧ to
+add rather than replace, ⇧-click for a range — and counts a ticked picture a
+filter hides rather than dropping it. A burst shows its cover and every frame
+you picked or starred in it, and unfolds under the cover. **Space** looks at a
+tile large, **Enter** ticks it there. What the roll holds is drawn *on the
+roll* and cannot be ticked twice; adding takes references, and a picture's
+bytes are fetched when you open it. The filters are remembered per instance,
+shared with *browse all*.
 
 **Winnow's culling, where you edit.** A picture that came from a Winnow
 instance wears what you decided about it there — a flag for a **pick** or a
@@ -1744,6 +1852,58 @@ pictures came from an instance, **Send N files to …** uploads them home into
 that Winnow's finals, each linked to its own capture — the same panel the
 Studio uses, and the same rule: only what you just rendered, only to the
 instance it came from, never automatically.
+
+**Making-of.** Every write to a picture is also a step of its **journal** —
+what changed and the values it left, kept on the picture with the roll, undone
+and redone with the edit, coalesced like the undo (a slider drag is one step),
+never copied by an apply-to and never counted as an edit. The Export tab's
+**Making-of** row (or **Making-of video…** in the export menu) opens that
+journal as a short video for a feed: a hook (the finished picture, then the
+file as shot and a tease — or the inverse, or the two flashing), then a chapter
+per tool in the order you worked, each the picture going from before to after
+under a caption that says the difference (`+0.7 EV · highlights −40`, `Crop
+4:5 · straighten −2.0°`, `Heal ×3`, `Sky · −0.6 EV`, `Portra 400 · 80 %`), the
+camera zooming to where the tool worked (a heal's spot, a mask's box — read in
+the step itself, never guessed), the crop's zone growing over the picture, a
+heal's rings and a mask's fill drawn, then a before/after at the end (a wipe,
+a split or a flicker) with the camera plate and your credit. The sheet plays
+it exactly as the file will be, over the picture's own bytes — the sensor's
+when you developed it on the RAW — and holds the roll's choices as pills:
+9:16, 4:5, 1:1 or 16:9; 10, 15, 30 or 60 s (a longer video keeps more chapters,
+the lightest fold into the next); the hook, the reveal, the camera; an
+optional **beat** that lands every cut on a half-note grid so a track laid on
+the file in the socials app finds its downbeats on them (the file carries no
+music); a **sound** — none by default, or one of the openers' tick kits: a tick
+where each chapter starts, a deeper one at the tease, the seat at the reveal,
+rendered here and encoded to AAC like a hook's ticks; the ground round the
+picture; and five switches — captions, the step counter, the tools drawn, the
+plate, the credit. The **hook** and the **reveal** take the same choices: a
+figure (cut, fade, wipe, split or flicker), which picture comes first, a length,
+and a back-and-forth that compares the two three or five times before landing.
+The **tease** ("How?") stays for as long as you set, or stays on screen as the
+video's title. The **ending** holds the finished picture after the reveal (up
+to 8 s, still, pushing in, pulling out or drifting), can **loop** — its last
+half-second fades into the first frame so a feed's autoplay replays it with no
+seam — and can carry an **end line**, a call to action in the accent, typed or
+picked from ready-made ones. The clock is a hairline, story-style bars along
+the top, or nothing. A **Style** section dresses every word of the video at once:
+the font (VT323 by default, JetBrains Mono, Space Grotesk, Instrument Serif, Georgia), a
+size from 70 to 150 %, bold, capitals, a box, a shadow or nothing behind the
+words, the box's corners (square to pill) and opacity, and three colours — the
+words, the box or shadow, and the accent of the tease. A long line wraps on its
+facts and steps down in size rather than leaving the frame. Each chapter's caption can be
+rewritten (an emptied one gets the computed line back) and any chapter folded
+away — its change still happens, it rides the next one; the order is never
+reordered. A picture edited before the journal existed has its steps told in a
+standard order and the sheet says so. **Export the making-of** asks for the
+folder at the click, grades every state once, encodes at 30 fps (H.264 — a
+browser that cannot encode it is told before the click) and writes
+`DJI_0101-making-of.mp4` beside your other exports: a suffix, since a video is
+not a rendition of the picture and `DJI_0101.mp4` would be paired with its
+capture as one. The run shows on the same bar and masthead pill as a roll's
+export, with a Cancel; the file lands in the Library like any clip, so it can be
+a Trips slide or a Studio rush with nothing more to build. Grain is frozen in
+it — every state is graded once, like a painted hook clip.
 
 **From a picture.** Under any picture you are looking at large — in the
 Library's preview sheet, or a day on your Winnow — a **Develop** button adds
@@ -1850,17 +2010,24 @@ workbench — offers the same two ways in: a native list grouped by family, and
 a **gallery** that shows each look *on a photograph* before you pick it, since
 reading a name off a dropdown tells you nothing about a LUT.
 
-**Where the tool has your picture open, the gallery shows it.** A band across
-the top draws the look you are aiming at on *that* photograph, with a compare
-toggle that wipes it against the original — before on the left, after on the
-right, the way Lightroom and Capture One put it. So the gesture there is aim,
-then take: the first click moves the band, and the look is yours on the second
-click, on "Use this look", or on Enter. Where no picture is open there is
-nothing to aim at and a click is the choice, as it always was.
+**Where the tool has your picture open, the gallery shows it.** On a desktop
+the picture takes a column of its own at the left, as tall as the dialog — a
+portrait frame gets the whole height, a landscape one half the width — with
+the look you are aiming at drawn on *that* photograph, and its name, its
+strength and an A/B wipe in a card under it; the wipe reads before on the
+left, after on the right, the way Lightroom and Capture One put it, and a drag
+across the picture moves the divider. The looks are a panel at the right: the
+filter, what the tiles are shown on (their reference frames, or your picture),
+the families, the grid, and the verb pinned in the footer. So the gesture
+there is aim, then take: the first click shows the look on your picture, and
+the look is yours on the second click, on "Use this look", or on Enter — the
+arrow keys walk the tiles. Where no picture is open there is nothing to aim at
+and a click is the choice, as it always was. On a phone the picture is a band
+over the grid and the verb sits in the thumb's reach.
 
 It costs one lattice — the look under your eye — and that is the point: the
 grid keeps its cheap pre-baked tiles, which is also what makes two looks
-comparable, since every tile is the same subject. The band shows the look
+comparable, since every tile is the same subject. The picture shows the look
 *alone*, without the correction you have set on the picture. And it says the
 one thing only your own photograph can reveal: aim a conversion look at a
 picture that is not log footage and it tells you so, rather than leaving you
@@ -1947,13 +2114,20 @@ changes, so nothing accumulates and nothing needs clearing. One click on a
 tile fetches that picture into the library as an ordinary file — the
 **proxy** (an H.264 clip or a WebP photo, fast and decodable everywhere) — and
 makes it the active one; a tile already fetched is marked and only
-re-activates. "Browse all" opens the full browser — by day or by folder, with
-filters — to tick many at once, or to take the **original** instead, with its
-weight shown first. A DJI clip brings its flight log along either way.
+re-activates. Each tile also wears what you decided in Winnow — a flag for a
+pick or a reject, its stars. "Browse all" opens the **Winnow picker** where the
+tab is looking — its day and its half — to tick many at once: by day (the
+same stepper and month) or by folder, every tile with Winnow's verdict, a rail
+of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
+extension, body, tags, no final yet, not in the library), tick verbs over what
+is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
+to look at a tile large. Nothing is ticked when it opens — an add downloads —
+and the files come as **proxies**, or as **originals** with their weight shown
+first; a Cancel stops the download and keeps what landed. A DJI clip brings its
+flight log along either way.
 
 When the Winnow serves its **timeline** (media grouped into legs by place and
-date), the browser gains a third way in, **by leg**, and a trip can be seeded
-from it: the legs become the trip's stages — span, places, order — and nothing
+date), a trip can be seeded from it: the legs become the trip's stages — span, places, order — and nothing
 else; no post is created, so the grid of days still to tell stays yours. Re-run
 it later and it proposes what the timeline gained, renamed or lost, one tick
 per leg, never a sync. A Winnow can link straight into either screen

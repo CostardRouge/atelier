@@ -15,7 +15,7 @@
  * inside it, measured (decision 4, corrected below).
  */
 
-import { isDecodableImage, isRawImage } from '../library/assets';
+import { isClipName, isDecodableImage, isRawImage } from '../library/assets';
 import { DEFAULT_FRAMING, framingTransform, type Framing } from '../media/framing';
 import { borderLayout, scaleLayout, type BorderLayout, type RollBorder } from './border-layout';
 import { longEdgeFor, type ExportSize } from './export-targets';
@@ -180,10 +180,16 @@ export function pixelHeadroom(src: PictureSize, framing: Framing | null, out: { 
  * its own, plus the HEIF and JPEG XL this suite decodes itself
  * (`media/wasm-still.ts`). A RAW is delivered from its render, a TIFF from
  * the render you developed. The list is `assets.ts`'s.
+ *
+ * A CLIP's rush is one too (2026-09-30): the export decodes it through
+ * WebCodecs, frame by frame. What that cannot decode — an HEVC rush on a
+ * browser without it — is found at the demux and SAID by the run, not
+ * guessed from the name here: a proxy of a 4K clip is 720p, and refusing the
+ * rush on a name would deliver 720p by default from every clip.
  */
 export function decodableOriginal(name: string | null): boolean {
   if (!name || isRawImage(name)) return false;
-  return isDecodableImage(name);
+  return isDecodableImage(name) || isClipName(name);
 }
 
 export type PixelsFrom = 'file' | 'original';
@@ -460,7 +466,9 @@ export function fixedFrameDelivery(
  */
 export function exportName(refName: string): string {
   const base = refName.replace(/\.[^.]+$/, '') || 'picture';
-  return `${base}.jpg`;
+  // A clip leaves as an MP4 (H.264, its sound copied) under the same rule:
+  // the capture's exact name, the extension the delivery deserves.
+  return isClipName(refName) ? `${base}.mp4` : `${base}.jpg`;
 }
 
 /**

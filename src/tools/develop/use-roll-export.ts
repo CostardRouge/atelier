@@ -9,7 +9,8 @@ import {
   type PictureSize,
 } from '../../shared/develop/roll-export';
 import { measurePicture, renderRollPicture, type MeasuredPicture } from '../../shared/develop/roll-render';
-import { delivers, pictureLabel, variantFolder, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
+import { renderRollClip } from '../../shared/develop/roll-clip-render';
+import { delivers, isClipPicture, pictureLabel, variantFolder, type RollDoc, type RollPicture } from '../../shared/develop/roll-types';
 import type { Interpolation } from '../../shared/lut/interpolate';
 import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
@@ -49,6 +50,21 @@ function placeNote(names: readonly string[]): string[] {
   const who = names.length === 1 ? names[0] : `${names.length} pictures`;
   return [`${who} had no named town within ${PLACE_MAX_KM} km of its position — no city was written`];
 }
+
+/**
+ * The clips the run wrote — said once: what the roll's JPEG settings cannot
+ * reach on an MP4, so a folder of stamped photographs and one bare clip is
+ * not read as a stamp that failed.
+ */
+function clipNote(names: readonly string[], targets: number, watermarked: boolean): string[] {
+  if (names.length === 0) return [];
+  const who = names.length === 1 ? names[0] : `${names.length} clips`;
+  const verb = names.length === 1 ? 'left' : 'left';
+  const parts = [`${who} ${verb} as MP4 — H.264 at the first target’s size, the sound copied; no EXIF, ICC or HDR is written on a clip`];
+  if (targets > 1) parts.push('the other targets are for photographs');
+  if (watermarked) parts.push('a clip carries no watermark');
+  return [parts.join(', ')];
+}
 import { useDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../shared/sources/original-cache';
 import { formatBytes } from '../../shared/lib/format';
@@ -67,6 +83,7 @@ import {
   type RawCalibration,
 } from '../../shared/raw/calibration';
 import { deliveredSourceFor, fetchSourceFile, sensorSourceFor } from '../../shared/develop/sensor-source';
+import { fetchHeld } from '../../shared/sources/held-fetch';
 import { trackedFetch } from '../../shared/tasks/tracked';
 import { startTask } from '../../shared/tasks/tasks';
 import { planRun, type PictureFacts, type RunPlan } from '../../shared/develop/run-plan';
@@ -410,6 +427,8 @@ export function useRollExport({
     const unplaced: string[] = [];
     // Pictures whose watermark line came out empty — no creator set, no title.
     const unmarked: string[] = [];
+    // The clips written, for the one line that says what a clip does not carry.
+    const clipsWritten: string[] = [];
     if (r.export.metadata.place) {
       setExporting('Loading the place index…');
       const cities = await gazetteerOrEmpty();
@@ -452,6 +471,112 @@ export function useRollExport({
           const origin = mediaOrigin(file);
           const identity = knownIdentity(file);
           let source = file;
+          // --- a CLIP (2026-09-30): the develop and the look on every frame, as an MP4
+          if (isClipPicture(picture)) {
+            const key = identity?.assetId ?? null;
+            const beside = latest.current.siblingsOf?.(file) ?? [];
+            // The file set above the clip (`RollPicture.rendition`) — the rush,
+            // fetched once and held, exactly as the stage did (one flight per
+            // asset, `held-fetch.ts`: an export that starts while the stage is
+            // still bringing it joins that fetch). Never under "proxies only".
+            const chosen = !onlyProxies ? deliveredSourceFor(picture.rendition, file, origin, beside, key) : null;
+            if (chosen) {
+              if (!chosen.held) say('fetch', `Fetching ${chosen.name}${chosen.bytes ? ` · ${formatBytes(chosen.bytes)}` : ''}`);
+              try {
+                source = await fetchSourceFile(chosen, key, controller.signal);
+              } catch {
+                if (controller.signal.aborted) break;
+                failures.push(`${picture.ref.name}: ${chosen.name} could not be fetched — the proxy left instead`);
+              }
+            }
+            // Else `Auto`'s arithmetic, the roll's own: the rush is fetched
+            // where the first target's frame asks for more than the proxy
+            // holds — which for a 720p proxy of a 4K clip is any frame above
+            // 720 — and never under "proxies only".
+            if (source === file && !onlyProxies && origin?.fidelity === 'proxy' && origin.fetchOriginal) {
+              const size = await measurePicture(file);
+              // Read against the clip's CROP, as for a photograph: a zone cut
+              // out of a 720p proxy asks for the rush sooner than the whole.
+              const summary = size
+                ? deliverySummary(
+                    size,
+                    true,
+                    originalOf(origin),
+                    picture.framing,
+                    pictureAspectRatio(picture.aspect, size.width, size.height),
+                    null,
+                    { size: r.export.targets[0]?.size ?? null, pixels: 'auto' },
+                  )
+                : null;
+              if (summary?.from === 'original') {
+                const held = key ? heldOriginal(key) : null;
+                if (held) {
+                  source = held;
+                } else {
+                  say('fetch', `Fetching ${origin.name ?? 'the rush'}${origin.bytes ? ` · ${formatBytes(origin.bytes)}` : ''}`);
+                  const fetchOriginal = origin.fetchOriginal;
+                  const init = { label: `Fetching ${origin.name ?? 'the rush'}`, scope: key, bytes: origin.bytes ?? null };
+                  source = key
+                    ? await fetchHeld(key, init, fetchOriginal, controller.signal)
+                    : await trackedFetch({ ...init, signal: controller.signal }, (opts) => fetchOriginal(opts));
+                }
+              }
+            }
+            if (origin) sourceIds.add(origin.sourceId);
+            // The clip's own cube from the DOCUMENT (its develop under its own
+            // look), its texture with it; a RAW base means nothing on a clip.
+            const develop = picture.develop && isRawDevelop(picture.develop) ? withoutBase(picture.develop) : picture.develop;
+            const lut = await cubeFor(picture.grade ?? null, develop);
+            for (const look of await missingIn(picture.grade ?? null)) {
+              failures.push(`${picture.ref.name} left without the look ${look.name}: ${look.reason.replace(/\.$/, '')}`);
+            }
+            say('develop', 'Reading the clip');
+            // The encoder reports per frame; the bar is told per percent.
+            let lastPct = -1;
+            const out = await renderRollClip(source, {
+              lut,
+              film: picture.grade?.film ?? null,
+              size: r.export.targets[0]?.size ?? null,
+              // The crop, held still over every frame (2026-10-01).
+              framing: picture.framing,
+              aspect: picture.aspect,
+              signal: controller.signal,
+              onProgress: (p) => {
+                if (p.phase === 'encoding' && p.ratio !== null) {
+                  const pct = Math.round(p.ratio * 100);
+                  if (pct === lastPct) return;
+                  lastPct = pct;
+                  say('develop', `Encoding ${pct} %`);
+                } else if (p.phase === 'finalizing') {
+                  say('develop', 'Finishing the file');
+                }
+              },
+            });
+            const variantDir = variantFolder(picture);
+            const inDir = (n: string) => `${variantDir}/${n}`.toLowerCase();
+            const name = uniqueName(exportName(picture.ref.name), (c) => named.has(inDir(c)));
+            named.add(inDir(name));
+            // The capture's own instant, never the moment it was rendered.
+            const main = new File([out.blob], name, { type: 'video/mp4', lastModified: file.lastModified });
+            renderedCount += 1;
+            say('write', `Writing ${name}`);
+            const delivery = await deliverFilesTo(target, [variantDir ? { file: main, folder: variantDir } : main], {
+              replace: r.export.replace,
+            });
+            written.count += delivery.written;
+            if (delivery.method === 'folder') {
+              written.renamed += delivery.renamed;
+              written.errors.push(...delivery.errors);
+            }
+            const mainName = variantDir ? `${variantDir}/${name}` : name;
+            const ok = delivery.method !== 'folder' || !delivery.failed.includes(mainName);
+            if (ok) landed.push(picture);
+            finish(ok);
+            names.push(mainName);
+            assetIds.push(key);
+            clipsWritten.push(picture.ref.name);
+            continue;
+          }
           // A picture developed on its RAW leaves from the sensor's data: the
           // file itself when it is the RAW, else the proxy's original, held
           // for the session like any fetched original (decision 3). Not
@@ -744,10 +869,22 @@ export function useRollExport({
       const moved = describeEditedDuring(editedDuringRun(landed, latest.current.roll.pictures));
       const outcome =
         (cancelled ? `Cancelled after ${renderedCount} of ${targets.length} — ` : '') +
-        describeRun(written.count, method, [...failures, ...placeNote(unplaced), ...markNote(unmarked), ...written.errors], written.renamed, {
-          pictures: renderedCount,
-          targets: r.export.targets.length,
-        });
+        describeRun(
+          written.count,
+          method,
+          [
+            ...failures,
+            ...placeNote(unplaced),
+            ...markNote(unmarked),
+            ...clipNote(clipsWritten, r.export.targets.length, r.export.targets.some((t) => t.watermark)),
+            ...written.errors,
+          ],
+          written.renamed,
+          {
+            pictures: renderedCount,
+            targets: r.export.targets.length,
+          },
+        );
       setNote(moved ? `${moved} ${outcome}` : outcome);
       // Only the files from ONE instance, so a future send-home plan refuses
       // nothing it did not have to.
