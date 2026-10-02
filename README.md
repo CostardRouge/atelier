@@ -1547,9 +1547,10 @@ drew a few pixels off onto the picture's own (a guided filter over what the
 model was shown) — it refines an edge, and cannot bring back a part the model
 left out. A removed region is cut at the same tolerance and taken out after
 the rest, and no knob asks the model again.
-While you pick or paint, the
-mask shows by itself as its **outline**; **M** steps it to a red **fill** and
-to hidden, and the box under it keeps it shown once Pick is off. Any layer
+The mask view is
+one glyph in the picture's bar, beside **A/B** (and **M**): *Hidden*, its
+*Outline* or a red *Fill*. Hidden, its outline still shows by itself while you
+pick or paint; Outline or Fill keep it shown, on the Layers tab only. Any layer
 can take a subject **out** of itself (*Except › The subject*): darken the
 whole picture except the person, and the person's own layer alone decides
 them. The model (17 MB) is served from this site and loads the first time a

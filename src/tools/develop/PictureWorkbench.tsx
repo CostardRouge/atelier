@@ -78,7 +78,7 @@ import {
 import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
-import { nextMaskView, type MaskView } from './LayersPanel';
+import { MASK_VIEW_LABELS, nextMaskView, shownMaskView, type MaskView } from './mask-view';
 import type { BrushRaster } from '../../shared/render/brush-raster';
 import type { MaskFlash } from '../../shared/develop/layer-render';
 
@@ -481,13 +481,13 @@ export default function PictureWorkbench({
   // rather than one document write per step.
   const [layersDraft, setLayersDraft] = useState<AdjustLayer[]>(entry.layers ?? []);
   const [selectedLayerId, setSelectedLayerId] = useState<string | null>(null);
-  // The mask pinned on outside Pick / Paint. While either is on the mask shows
-  // by itself (below), which is when it is needed.
-  const [showMask, setShowMask] = useState(false);
-  // HOW the mask is shown: its line by default, the red wash on `M` — the
-  // maintainer's pick (2026-09-23): an outline says where the edge is without
-  // hiding the colour being set under it.
-  const [maskView, setMaskView] = useState<MaskView>('outline');
+  // HOW the open layer's mask is shown — Hidden, Outline, Fill, on the bar's
+  // glyph and on `M` (`mask-view.ts`). Hidden by default, and while Pick or
+  // Paint makes the mask its OUTLINE shows by itself — the maintainer's pick
+  // (2026-09-23): a line says where the edge is without hiding the colour
+  // being set under it. Outline or Fill keep it shown, which the "keep it
+  // shown" checkbox used to.
+  const [maskView, setMaskView] = useState<MaskView>('off');
   // One point's region, on and off twice after the model answers a tap.
   const [flashMask, setFlashMask] = useState<MaskFlash | null>(null);
   const [pixelView, setPixelView] = usePixelView();
@@ -558,6 +558,9 @@ export default function PictureWorkbench({
     paintKind === 'brush' || paintKind === 'subject' || paintKind === 'colour' || placingShade
       ? (selectedLayer?.id ?? null)
       : null;
+  // What the stage draws of the open layer's mask: the view chosen, else its
+  // outline by itself while the pointer makes it.
+  const shownMask = shownMaskView(maskView, paintId !== null);
   const brushRef = useRef(brush);
   brushRef.current = brush;
   // The picture's own sampler, read at the tap: the hook is made further down.
@@ -1071,8 +1074,9 @@ export default function PictureWorkbench({
     // Only while the layer is open, and then by itself while Pick or Paint is
     // on — the moment the mask is what is being made — else only when pinned:
     // a red wash left on by accident would be mistaken for the picture.
-    showMaskOf: !clip && selectedLayer && maskView !== 'off' && (paintId !== null || showMask) ? selectedLayer.id : null,
-    maskStyle: maskView === 'fill' ? 'fill' : 'outline',
+    // On the Layers tab only: a wash left on is never carried onto Adjust.
+    showMaskOf: !clip && selectedLayer && tab === 'layers' && shownMask !== 'off' ? selectedLayer.id : null,
+    maskStyle: shownMask === 'fill' ? 'fill' : 'outline',
     flashMask: clip ? null : flashMask,
     raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
     detail: clip ? null : detailDraft,
@@ -1877,6 +1881,8 @@ export default function PictureWorkbench({
    * well reads as one family, and the colours are the Studio's A/B.
    */
   const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
+  /** A layer is open on the Layers tab: there is a mask to show. */
+  const maskOpen = tab === 'layers' && selectedLayer !== null && !clip;
   const abPill =
     `${verbHeight} px-2 flex-none inline-flex items-center justify-center rounded-control border ` +
     'font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors';
@@ -2076,6 +2082,33 @@ export default function PictureWorkbench({
                 }
               >
                 A/B
+              </button>
+            )}
+            {/* The MASK VIEW — Hidden, Outline, Fill — as one glyph of fixed
+                width in the well, drawn on every tab so it never slides a verb
+                aside (`frontend.md`, a toolbar never inserts a control), lit
+                only where there is a mask to show: the Layers tab with a layer
+                open. A click steps it, like `M`. */}
+            {source && !cropping && (
+              <button
+                type="button"
+                className={`${helpVerb} ${
+                  maskOpen && maskView !== 'off'
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
+                } disabled:opacity-35 disabled:cursor-default disabled:hover:text-muted`}
+                disabled={!maskOpen}
+                onClick={() => setMaskView((v) => nextMaskView(v))}
+                aria-label={`Mask view: ${MASK_VIEW_LABELS[maskView]}`}
+                title={
+                  maskOpen
+                    ? `Mask: ${MASK_VIEW_LABELS[maskView]} — click or M for ${MASK_VIEW_LABELS[nextMaskView(maskView)]}${
+                        maskView === 'off' ? '; its outline shows by itself while you pick or paint' : ''
+                      }`
+                    : 'Mask view — open a layer on the Layers tab'
+                }
+              >
+                <MaskViewGlyph view={maskView} />
               </button>
             )}
             {/* FOCUS — the picture alone, the band, the inspector and the page
@@ -2322,10 +2355,6 @@ export default function PictureWorkbench({
                 layers={layersDraft}
                 selectedId={selectedLayerId}
                 thumbs={layerThumbs.rows}
-                showMask={showMask}
-                maskView={maskView}
-                onMaskView={setMaskView}
-                autoShown={paintId !== null}
                 onSelect={setSelectedLayerId}
                 onAdd={(kind: MaskKind | null) => {
                   const made = createLayer(kind);
@@ -2351,7 +2380,6 @@ export default function PictureWorkbench({
                 }}
                 onKind={changeLayerKind}
                 onPatch={(id, patch) => setLayersDraft((list) => patchLayer(list, id, patch))}
-                onShowMask={setShowMask}
               />
               {selectedLayer && (
                 <LayerDetail
@@ -2523,5 +2551,18 @@ export default function PictureWorkbench({
         />
       )}
     </>
+  );
+}
+
+/** The mask view's glyph: a dotted ring hidden, a dashed one for its outline, a disc for its fill. */
+function MaskViewGlyph({ view }: { view: MaskView }) {
+  return (
+    <svg viewBox="0 0 16 16" aria-hidden="true" className="h-3.5 w-3.5" fill="none" stroke="currentColor" strokeWidth={1.5}>
+      {view === 'fill' ? (
+        <circle cx="8" cy="8" r="6" fill="currentColor" stroke="none" />
+      ) : (
+        <circle cx="8" cy="8" r="5.5" strokeDasharray={view === 'off' ? '1.5 2.5' : '3 2'} opacity={view === 'off' ? 0.6 : 1} />
+      )}
+    </svg>
   );
 }

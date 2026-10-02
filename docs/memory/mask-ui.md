@@ -83,3 +83,27 @@ Driven headless: the head's placeholder is the kind, Adjust hides the mask
 controls and drops Pick, `Subject − Radial` combined from the `+`, the
 operator cycled to ∩, the term maps inked, a rename in the head reaching the
 row, *Remove this term*, the roll read back.
+
+## The mask view is ONE glyph in the picture's bar (2026-10-02)
+
+**Decision**: Hidden · Outline · Fill is one glyph of fixed width in the
+stage bar's well, beside A/B — a dotted ring, a dashed one, a disc —, stepped
+by a click or `M`; the inspector's segmented switch, its "keep it shown"
+checkbox and its Done link are gone (`mask-view.ts`, pure, tested). Hidden is
+the default and shows the OUTLINE by itself while Pick / Paint makes the mask
+— today's behaviour, unchanged —; Outline or Fill keep it shown, which is what
+the checkbox did. **Why**: the brief's §3.6 — the view is a way of LOOKING,
+whose home is over the picture, and three controls in the inspector said one
+thing. **How to apply**:
+- The glyph is drawn on EVERY tab and DISABLED off the Layers tab or with no
+  layer open, never inserted: a control that appears by state slides the
+  verbs after it under a hand aimed at them (`frontend.md`, «A toolbar never
+  INSERTS a control»).
+- The mask is drawn on the Layers tab only (`showMaskOf` checks the tab): a
+  Fill chosen there is never carried onto Adjust as a red wash.
+- The shortcuts sheet names the glyph with `M`, the ⌥-tap, the pin's × and
+  ⌥↑ / ⌥↓.
+Driven headless, counting the stage's dash and wash pixels: 0 / 0 on Adjust
+(glyph disabled), 3 199 dash pixels while picking at Hidden, 0 once Pick is
+off, 3 199 at Outline with Pick off, 102 698 washed at Fill, 0 on Adjust with
+Fill chosen, back on returning to Layers.

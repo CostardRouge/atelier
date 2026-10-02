@@ -1,11 +1,9 @@
 import { useRef, useState, type DragEvent, type KeyboardEvent } from 'react';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import Button from '../../shared/ui/Button';
-import Segmented from '../../shared/ui/Segmented';
 import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
-import { developLinkClass } from '../../shared/develop/develop-classes';
 import { developLines } from '../../shared/develop/develop';
 import { MAX_LAYERS, type AdjustLayer } from '../../shared/develop/layer';
 import type { MaskKind } from '../../shared/render/mask';
@@ -16,20 +14,6 @@ import type { LayerThumb } from './use-layer-thumbs';
 
 const HINT =
   'A layer is an ordinary develop that applies only where its mask says. Linear is a straight edge with a soft transition — a darkened sky; radial is an ellipse — a face lifted out of its surround, or a vignette drawn on purpose; shade is the shape a Trips shade draws — an edge, a corner, a band or a pool of light picked on a grid, with its core and its falloff; brightness picks a band of tone wherever it falls in the frame; colour picks the colours you tap, wherever they are; painted is drawn by hand on the picture; subject is found by a model from a point you tap. A layer’s mask can be COMBINED with further ones — added, subtracted or intersected — in the layer’s own mask panel. Everything on the Develop tab works inside a layer, so a local exposure, a local white balance and a local curve are the same controls you already know. Layers apply on top of the picture as you see it, after its own develop and its look, so what a slider does here is what you are looking at.';
-
-/** How the open layer's mask is shown on the picture. */
-export type MaskView = 'off' | 'outline' | 'fill';
-
-const MASK_VIEWS: readonly { id: MaskView; label: string }[] = [
-  { id: 'off', label: 'Hidden' },
-  { id: 'outline', label: 'Outline' },
-  { id: 'fill', label: 'Fill' },
-];
-
-/** What `M` steps to: hidden → outline → fill → hidden. */
-export function nextMaskView(v: MaskView): MaskView {
-  return v === 'off' ? 'outline' : v === 'outline' ? 'fill' : 'off';
-}
 
 /** The drag's own type, so a layer dragged in the list is never a picture dropped on a cell. */
 const LAYER_DRAG = 'application/x-atelier-layer';
@@ -73,10 +57,6 @@ export default function LayersPanel({
   layers,
   selectedId,
   thumbs,
-  showMask,
-  maskView,
-  onMaskView,
-  autoShown,
   onSelect,
   onAdd,
   onRemove,
@@ -85,18 +65,11 @@ export default function LayersPanel({
   onDuplicate,
   onKind,
   onPatch,
-  onShowMask,
 }: {
   layers: readonly AdjustLayer[];
   selectedId: string | null;
   /** Each layer's mask, small (`use-layer-thumbs.ts`). */
   thumbs: ReadonlyMap<string, LayerThumb>;
-  /** The mask pinned on, outside Pick and Paint. */
-  showMask: boolean;
-  maskView: MaskView;
-  onMaskView: (v: MaskView) => void;
-  /** Pick or Paint is on, so the mask is showing by itself. */
-  autoShown: boolean;
   onSelect: (id: string | null) => void;
   onAdd: (kind: MaskKind | null) => void;
   onRemove: (id: string) => void;
@@ -107,7 +80,6 @@ export default function LayersPanel({
   /** A layer's kind changed from its row's ⋯. */
   onKind: (id: string, kind: PaletteKind) => void;
   onPatch: (id: string, patch: Partial<Omit<AdjustLayer, 'id'>>) => void;
-  onShowMask: (on: boolean) => void;
 }) {
   const full = layers.length >= MAX_LAYERS;
   // Top of the stack first, the way a layer list has always read.
@@ -341,26 +313,6 @@ export default function LayersPanel({
         </ul>
       )}
 
-      {selectedId && (
-        <div className="flex flex-col gap-1.5">
-          {/* HOW the mask is shown, and WHEN: by itself while Pick or Paint is
-              on — the moment the mask is being made — else only when pinned,
-              since a red wash left on by accident reads as the picture. */}
-          <div className="flex items-center gap-2">
-            <span className="font-mono text-3xs text-faint">Mask</span>
-            <Segmented size="sm" label="Show the mask" value={maskView} onChange={(v) => onMaskView(v as MaskView)} options={MASK_VIEWS} />
-            <span className="flex-1" />
-            <button type="button" className={developLinkClass} onClick={() => onSelect(null)}>
-              Done
-            </button>
-          </div>
-          <label className="flex items-center gap-1.5 font-mono text-3xs text-faint">
-            <input type="checkbox" checked={showMask} onChange={(e) => onShowMask(e.target.checked)} />
-            {autoShown ? 'keep it shown once Pick / Paint is off' : 'show it now — it shows by itself while picking or painting'}
-            <span className="text-faint"> · M</span>
-          </label>
-        </div>
-      )}
     </div>
   );
 }
