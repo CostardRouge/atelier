@@ -1650,7 +1650,18 @@ only where the file carries it). A file that is not here is fetched from its
 instance and held for the session, its weight said before the click; a DNG
 beside a JPEG in a folder is the sensor with no fetch at all. The choice is
 saved on the picture, so another device shows the same one, and the export
-follows it. **On a phone or a tablet** the sensor is decoded to what the
+follows it. **For the whole roll**, the same list ends on *The whole roll
+opens on* — *Proxy*, *Camera render* or *Sensor (RAW)* — and choosing a file
+on one picture offers *Use Camera render for the whole roll* right beside its
+name (also asked when the roll is created). Every picture with no choice of
+its own then opens on that file, the ones added later too: the roll holds one
+choice, not a copy per picture, and one ⌘Z takes it back. A picture you chose
+by hand keeps its own file and wears `≠` in the filmstrip. The camera's file
+is taken only where it has more pixels than the proxy — the 960 × 540 render
+inside a DJI DNG is not, so that picture stays on its proxy and its menu says
+why — and a picture whose numbers were set on the render is never moved onto
+its sensor by the roll. Each file is fetched when its picture opens, never the
+whole roll at once; a clip never follows. **On a phone or a tablet** the sensor is decoded to what the
 device can hold — 2560 px on the stage, 4096 px in an export, and the export
 says when a picture left under its sensor's pixels — the decoder is let go
 between pictures, and a picture you come back to is not decoded twice; the

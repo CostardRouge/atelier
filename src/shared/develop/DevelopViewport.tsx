@@ -1,4 +1,4 @@
-import { useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
+import { useRef, useState, type PointerEvent as ReactPointerEvent, type ReactNode } from 'react';
 import { describeDevelop, type DevelopSettings } from './develop';
 import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
@@ -78,6 +78,7 @@ export default function DevelopViewport({
   hasFile,
   emptyText = 'No picture to develop yet.',
   className = '',
+  offer = null,
   onPick,
   onCropToView,
   pixelView = 'smooth',
@@ -162,6 +163,12 @@ export default function DevelopViewport({
   /** What an empty frame says — the host knows where a picture comes from. */
   emptyText?: string;
   className?: string;
+  /**
+   * A question about the picture's OWN action, asked over it at the top —
+   * a file just picked, offered to the whole roll. Over the picture so the
+   * bar above never gains a control; its own press, never the stage's.
+   */
+  offer?: ReactNode;
   /**
    * The colour the eyedropper read, in linear light. Given, the viewport
    * answers a click while `picture.picking` is on; omitted, there is no dropper.
@@ -382,6 +389,15 @@ export default function DevelopViewport({
       {/* The passive surface: a hairline along the bottom for whatever is
           happening to THIS picture — the words and the Cancel are the pill's. */}
       {scope && <TaskEdge scope={scope} className="z-10" />}
+      {offer && source && (
+        <div
+          className="absolute top-2 left-1/2 -translate-x-1/2 z-10 max-w-[calc(100%-1.25rem)] inline-flex items-center gap-0.5 pl-1 rounded-full border border-line-strong bg-surface/92 shadow-paper"
+          onPointerDown={(e) => e.stopPropagation()}
+          role="status"
+        >
+          {offer}
+        </div>
+      )}
       {picking && (
         <span
           className={`absolute top-2 left-2.5 ${developPillClass} bg-surface/92 text-accent-ink border-accent`}

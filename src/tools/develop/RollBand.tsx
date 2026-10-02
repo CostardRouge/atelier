@@ -44,6 +44,7 @@ import WinnowThumb from '../../shared/sources/winnow/WinnowThumb';
 import CullMark from '../../shared/sources/winnow/CullMark';
 import { Icons } from '../../shared/ui/icons';
 import { AnchoredMenu, type OverflowItem } from '../../shared/ui/OverflowMenu';
+import { CHOICE_WORDS, departsFromRoll, type RollChoice } from '../../shared/develop/roll-choice';
 import type { AnchorRect } from '../../shared/ui/menu-anchor';
 import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementWidth } from '../../shared/ui/use-element-width';
@@ -87,6 +88,8 @@ export interface StripCellsProps {
   culling?: ReadonlyMap<string, Culling>;
   /** Whether a picture passes the filter. The open one always stays. */
   shows?: (picture: RollPicture) => boolean;
+  /** The roll's choice of file (`RollDoc.opensOn`): a cell whose picture chose otherwise marks it. */
+  rollChoice?: RollChoice | null;
 }
 
 /** The pictures a band or a sheet SHOWS: the filter's, the ignored where asked, the open one always. */
@@ -115,7 +118,7 @@ export function stripItems(shown: readonly RollPicture[], aspects: ReadonlyMap<s
  *
  * A cell is CALM: it carries what is READ — one pill with the picture's state
  * (● edited, ↑ leaves at export, – held back, ⊘ ignored, its variant number,
- * ▶ a clip, ! not reachable), Winnow's word in the other corner, the run's
+ * ▶ a clip, ≠ its own file where the roll chose another, ! not reachable), Winnow's word in the other corner, the run's
  * mark at its centre — and nothing that is DONE. What used to be three
  * buttons on 72 px (the delivery badge, the ×, and on a phone two targets
  * covering 43 % of the cell) is the picture's MENU now: ⋯ under the pointer,
@@ -241,6 +244,7 @@ export function StripCells({
   onDeliver,
   onVariant,
   culling,
+  rollChoice = null,
 }: StripCellsProps & { shown: readonly RollPicture[]; layout: StripLayout }) {
   // The cells are MEMOISED, so what they are handed must be stable: the
   // host's callbacks are read through a ref, and every cell gets the same
@@ -287,6 +291,7 @@ export function StripCells({
               remoteId={remote?.id ?? null}
               menuOpen={menu?.id === p.id}
               selecting={selecting}
+              departs={rollChoice && departsFromRoll(rollChoice, p) ? CHOICE_WORDS[rollChoice] : null}
               handlers={handlers}
             />
           );
@@ -374,6 +379,7 @@ const Cell = memo(function Cell({
   remoteId,
   menuOpen,
   selecting,
+  departs,
   handlers,
 }: {
   picture: RollPicture;
@@ -389,6 +395,8 @@ const Cell = memo(function Cell({
   remoteId: number | null;
   menuOpen: boolean;
   selecting: boolean;
+  /** The roll's choice, in words, when this picture chose another file — else null. */
+  departs: string | null;
   handlers: CellHandlers;
 }) {
   const remote = remoteClient && remoteId !== null ? { client: remoteClient, id: remoteId } : null;
@@ -454,7 +462,7 @@ const Cell = memo(function Cell({
       handlers.open(picture.id);
     }
   };
-  const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, unreachable: unreachable && !!url });
+  const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, departs, unreachable: unreachable && !!url });
   return (
     <li
       className={`group absolute select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
@@ -601,6 +609,7 @@ function statePills({
   held,
   variant,
   clip,
+  departs,
   unreachable,
 }: {
   developed: boolean;
@@ -609,6 +618,7 @@ function statePills({
   held: boolean;
   variant: number;
   clip: boolean;
+  departs: string | null;
   unreachable: boolean;
 }): { key: string; glyph: string; className: string; title: string }[] {
   const out: { key: string; glyph: string; className: string; title: string }[] = [];
@@ -620,6 +630,9 @@ function statePills({
   }
   if (variant > 1) out.push({ key: 'variant', glyph: String(variant), className: 'text-ink', title: `variant ${variant}` });
   if (clip) out.push({ key: 'clip', glyph: '▶', className: 'text-ink', title: 'a clip' });
+  // Its own file, where the roll chose another: the one picture that will
+  // not follow when the roll's choice changes.
+  if (departs) out.push({ key: 'departs', glyph: '≠', className: 'text-info font-medium', title: `its own file — not the roll’s ${departs}` });
   if (unreachable) out.push({ key: 'unreachable', glyph: '!', className: 'text-danger font-medium', title: 'not available' });
   return out;
 }

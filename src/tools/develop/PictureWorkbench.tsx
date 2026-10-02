@@ -23,9 +23,11 @@ import {
   developBase,
   developLines,
   isDefaultDevelop,
+  isRawDevelop,
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
+import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import {
   calibrationAt,
   readRawCalibration,
@@ -277,6 +279,9 @@ export default function PictureWorkbench({
   onLayers,
   onAspect,
   onRendition,
+  rollChoice = null,
+  onRollChoice,
+  rollPhotos = 0,
   siblings = NO_FILES,
   exportSettings,
   onExportSettings,
@@ -313,6 +318,15 @@ export default function PictureWorkbench({
   file: File | null;
   /** Which file of the capture the picture is developed from (`RollPicture.rendition`); null for where it opens. */
   onRendition: (rendition: string | null) => void;
+  /**
+   * Which file the ROLL opens a picture on when the picture has no choice of
+   * its own (`RollDoc.opensOn`, `roll-choice.ts`); null for where it opens.
+   */
+  rollChoice?: RollChoice | null;
+  /** Set the roll's choice — from the foot of the name menu, or the line a pick offers. */
+  onRollChoice?: (choice: RollChoice | null) => void;
+  /** How many photographs the roll holds: a roll of one has no "every other picture". */
+  rollPhotos?: number;
   /** The capture's other files a folder listed beside `file` (`AssetParts.siblings`) — a local picture's only. */
   siblings?: readonly File[];
   /** THIS picture's look (roll v5) — the stack follows the open picture; the draft rides it. */
@@ -739,7 +753,42 @@ export default function PictureWorkbench({
   const sensor = file ? sensorSourceFor(file, origin, siblings, assetKey) : null;
   const sensorHeld = sensor?.held ?? null;
   const sensorName = sensor?.name ?? null;
-  const wantsRaw = baseRung(draft.draft.base) > 0 && sensor !== null;
+  // The roll's choice (`roll-choice.ts`) for a picture with none of its own,
+  // read from the STORED picture: a draft not yet written changes nothing.
+  // Let go for this visit when its file cannot be had (a cancel, a failure).
+  const handed = rollChoiceFor(rollChoice, entry).choice;
+  const [rollOff, setRollOff] = useState(false);
+  // On the roll's sensor the base is the ROLL's, never written, until the
+  // picture is given numbers — numbers bind their material, so the first
+  // write carries the base with them. Its gain is metered by the stage's own
+  // decode and held for this visit, which is how the export meters it too.
+  const followsSensor = handed === 'sensor' && sensor !== null && !rollOff && !clip;
+  const [followGain, setFollowGain] = useState<number | null>(null);
+  // The document already on a RAW base the draft has not been re-seeded
+  // with yet — the render between the first write and its echo, or an undo
+  // landing — is drawn on that base, never on the render for one frame.
+  const stored = entry.develop;
+  const settling = isRawDevelop(stored) && !isRawDevelop(draft.draft);
+  const developNow = useMemo<DevelopSettings>(() => {
+    if (isRawDevelop(draft.draft)) return draft.draft;
+    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain };
+    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain } : draft.draft;
+  }, [followsSensor, settling, stored, draft.draft, followGain]);
+  const inherited = developNow !== draft.draft;
+  // On the roll's sensor and not yet on its own: what a cancel, a failed fetch
+  // or the stage's meter answers for the visit rather than for the document.
+  const following = inherited && !settling;
+  const followingRef = useRef(following);
+  followingRef.current = following;
+  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain'> | null>(null);
+  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain } : null;
+  // The stack grades what the picture is developed WITH: after the draft's
+  // own effect, so the roll's base reaches the cube in the same commit.
+  const { setDevelop: setStackDevelop } = stack;
+  useEffect(() => {
+    setStackDevelop(developNow);
+  }, [developNow, setStackDevelop]);
+  const wantsRaw = baseRung(developNow.base) > 0 && sensor !== null;
   const [rawFile, setRawFile] = useState<File | null>(null);
   // Developed from the sensor's own data right now — where a measured lens
   // profile applies by itself (`lens-profile.ts`).
@@ -765,13 +814,14 @@ export default function PictureWorkbench({
       .catch((err: unknown) => {
         if (!alive) return;
         tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
-        patchDraft({ base: null, rawGain: null });
+        if (followingRef.current) setRollOff(true);
+        else patchDraft({ base: null, rawGain: null });
       });
     return () => {
       alive = false;
     };
   }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
-  const rawGain = draft.draft.rawGain ?? null;
+  const rawGain = developNow.rawGain ?? null;
   // The calibration the RAW carries, read from a megabyte of its head as soon
   // as it is in hand — it is what decides whether the two top rungs are
   // offered at all, and what the passes apply at them.
@@ -792,7 +842,7 @@ export default function PictureWorkbench({
   // A rung the file cannot reach is never left standing: a picture developed
   // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
   // back to what IS there, rather than claiming a correction it cannot apply.
-  const rung = rungs.includes(developBase(draft.draft)) ? developBase(draft.draft) : rungs[rungs.length - 1];
+  const rung = rungs.includes(developBase(developNow)) ? developBase(developNow) : rungs[rungs.length - 1];
   // Memoised: `calibrationAt` builds a fresh record per call, and the hook
   // below took the record's identity as a dep of an effect that sets state —
   // a RAW on the gain-map rung re-rendered, re-graded and read the GPU back
@@ -896,7 +946,27 @@ export default function PictureWorkbench({
     siblingFacts,
   ]);
   const opening = openingRendition(rows);
-  const chosen = renditionById(rows, entry.rendition);
+  // The roll's camera file for a picture with none of its own: where it beats
+  // the proxy, and nothing before its size is measured (`resolveRollChoice`).
+  const rollAnswer = handed === 'delivered' && !rollOff ? resolveRollChoice(rows, 'delivered') : null;
+  const chosen = renditionById(rows, entry.rendition) ?? rollAnswer?.row ?? null;
+  const fromRoll = !entry.rendition && Boolean(rollAnswer?.row);
+  // Why the roll's choice did not land on this picture, where it follows it.
+  const rollReason =
+    handed === 'delivered'
+      ? rollOff
+        ? 'its camera file could not be had — back where it opens for this visit'
+        : (rollAnswer?.reason ?? null)
+      : handed === 'sensor' && !followsSensor
+        ? rollOff
+          ? 'its RAW could not be opened — back on the render for this visit'
+          : 'no RAW in this capture'
+        : rollChoiceFor(rollChoice, entry).reason;
+  // B of « C + B »: the file just picked, offered to the whole roll right
+  // where it was picked — gone when ignored, never a mode left switched on.
+  const [offer, setOffer] = useState<ChoiceRole | null>(null);
+  const rollOffer =
+    offer && onRollChoice && rollPhotos > 1 && !clip && (offer === 'proxy' ? null : offer) !== rollChoice ? offer : null;
   // The row on screen below the sensor: the stored choice where the capture
   // still offers it, else where the picture opens — never a blocked row.
   const current = (chosen && chosen.role !== 'sensor' && !chosen.blocked ? chosen : opening)?.id ?? null;
@@ -906,8 +976,8 @@ export default function PictureWorkbench({
   // original), else fetched once and held for the session. Keyed on the id
   // alone, so a list rebuilt around it never restarts a fetch in flight.
   const [deliveredFile, setDeliveredFile] = useState<{ id: string; file: File } | null>(null);
-  const deliver = useRef({ wanted, siblings, origin, tell, onRendition });
-  deliver.current = { wanted, siblings, origin, tell, onRendition };
+  const deliver = useRef({ wanted, siblings, origin, tell, onRendition, fromRoll });
+  deliver.current = { wanted, siblings, origin, tell, onRendition, fromRoll };
   // The fetch under way for a row of THIS picture, so choosing another row —
   // the proxy back, after a gigabyte rush was asked for by mistake — lets go
   // of it. Through `fetchHeld` (2026-09-30) a reader that lets go detaches
@@ -950,7 +1020,9 @@ export default function PictureWorkbench({
         // choice already moved. Anything else is said and the row cleared.
         if (controller.signal.aborted) return;
         deliver.current.tell(`${row.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
-        deliver.current.onRendition(null);
+        // The roll's file is let go for this visit; a picture's own choice is cleared.
+        if (deliver.current.fromRoll) setRollOff(true);
+        else deliver.current.onRendition(null);
       })
       .finally(() => {
         if (flight.current?.controller === controller) flight.current = null;
@@ -1068,14 +1140,18 @@ export default function PictureWorkbench({
     // Cancelled from the pill: back on the render, and said — a base whose
     // data never arrived is not a base.
     onRawAborted: () => {
-      patchDraft({ base: null, rawGain: null, rawWb: null });
+      if (following) setRollOff(true);
+      else patchDraft({ base: null, rawGain: null, rawWb: null });
       tell('Opening the RAW was cancelled — back on the render');
     },
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       setRawWhite(info.meta.white);
       if (rawGain === null) {
-        patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
+        // On the roll's sensor the gain is held for the visit and written
+        // only with the picture's first numbers (`inheritedRef`).
+        if (following) setFollowGain(info.gain);
+        else patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
         const ev = Math.log2(info.gain);
         tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
       }
@@ -1119,7 +1195,7 @@ export default function PictureWorkbench({
       full: shownFile === file ? (sensorSize ?? proxyOriginalSize) : null,
     };
   }, [wantsRaw, rawSize, measured, sensorSize, proxyOriginalSize, shownFile, file]);
-  const fidelity = pictureFidelity(shownFile, draft.draft.base, fidelityPixels);
+  const fidelity = pictureFidelity(shownFile, developNow.base, fidelityPixels);
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an
@@ -1168,9 +1244,15 @@ export default function PictureWorkbench({
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
-    draft: isDefaultDevelop(draft.draft) ? null : draft.draft,
+    // A white balance set in kelvin is a number too, on the roll's sensor.
+    draft: isDefaultDevelop(draft.draft) && !(inherited && draft.draft.rawWb) ? null : draft.draft,
     same: sameDevelop,
-    onWrite: (value) => callbacks.current.onDevelop(value),
+    // A picture on the roll's sensor writes the base WITH its first numbers:
+    // they were set on the sensor's data and mean nothing on the render.
+    onWrite: (value) => {
+      const roll = inheritedRef.current;
+      callbacks.current.onDevelop(roll && value && !isRawDevelop(value) ? { ...value, ...roll } : value);
+    },
     // The WHOLE record, material included: an undo that takes a picture back
     // off its RAW must put the base back with the numbers.
     onReseed: (value) => replace(value ?? DEFAULT_DEVELOP),
@@ -1721,14 +1803,14 @@ export default function PictureWorkbench({
    */
   const facts = useMemo<string[] | null>(() => {
     if (!factsOn) return null;
-    const lines = developLines(draft.draft);
+    const lines = developLines(developNow);
     if (drawingCount) lines.push(`${drawingCount} layer${drawingCount === 1 ? '' : 's'}`);
     if (detailDraft) lines.push(describeDetail(detailDraft));
     if (vignetteDraft) lines.push(describePostVignette(vignetteDraft));
     if (repairDraft.length) lines.push(describePatches(repairDraft));
     if (fidelity.note) lines.push(fidelity.note);
     return lines;
-  }, [factsOn, draft.draft, drawingCount, detailDraft, vignetteDraft, repairDraft, fidelity.note]);
+  }, [factsOn, developNow, drawingCount, detailDraft, vignetteDraft, repairDraft, fidelity.note]);
 
   /**
    * What the CAMERA did, drawn above those facts under the same key — the
@@ -1895,13 +1977,18 @@ export default function PictureWorkbench({
                 // A row of this picture asked for and no longer wanted stops
                 // coming — this reader lets go; an export that joined keeps it.
                 if (flight.current && flight.current.id !== id) flight.current.controller.abort();
-                onRendition(id === opening?.id ? null : id);
+                // Under a roll's choice the opening row is a choice too — the
+                // one that keeps this picture off the roll's file.
+                onRendition(id === opening?.id && !rollChoice ? null : id);
+                const row = rows.find((r) => r.id === id);
+                setOffer(row ? roleOfRow(row) : null);
               }}
               onRemeter={() => {
                 // The stored number goes, the held decodes with it (a held
                 // decode answers with the gain it was asked for), and the
                 // next decode measures anew and stores what it finds.
                 patchDraft({ rawGain: null });
+                setFollowGain(null);
                 dropDecodedRaws();
                 picture.redecode();
                 tell('metering the exposure again from the sensor’s data');
@@ -1911,8 +1998,9 @@ export default function PictureWorkbench({
                   patchDraft({ base: null, rawGain: null });
                   return;
                 }
-                const climbing = baseRung(draft.draft.base) === 0;
+                const climbing = baseRung(developNow.base) === 0;
                 patchDraft({ base: next });
+                setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');
                 }
@@ -1920,6 +2008,11 @@ export default function PictureWorkbench({
               status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
               gain={wantsRaw ? rawGain : null}
               calibration={calibration?.summary ?? null}
+              roll={
+                onRollChoice && rollPhotos > 1 && !clip
+                  ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason }
+                  : null
+              }
             />
             {told && (
               <span className="flex-none font-mono text-xs text-accent-ink" role="status">
@@ -2048,6 +2141,28 @@ export default function PictureWorkbench({
           pixelView={pixelView}
           facts={facts}
           shot={shotLine}
+          // B of « C + B »: drawn OVER the picture, at the top, so the bar
+          // above it never gains a control and nothing slides under a pointer.
+          offer={
+            rollOffer && onRollChoice ? (
+              <>
+                <Button
+                  size="sm"
+                  variant="ghost"
+                  title={`Every picture with no choice of its own opens on ${CHOICE_WORDS[rollOffer]} — the ones you chose by hand keep theirs`}
+                  onClick={() => {
+                    onRollChoice(rollOffer === 'proxy' ? null : rollOffer);
+                    setOffer(null);
+                  }}
+                >
+                  {compact ? `${CHOICE_WORDS[rollOffer]} → whole roll` : `Use ${CHOICE_WORDS[rollOffer]} for the whole roll`}
+                </Button>
+                <IconButton size="sm" variant="ghost" label="Only this picture" onClick={() => setOffer(null)}>
+                  {Icons.close}
+                </IconButton>
+              </>
+            ) : null
+          }
           marks={subjectMarks}
           // Shown whenever the subject layer is open — a picked point is a fact
           // about the layer, not about the tool — but removable only while Pick

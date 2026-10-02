@@ -120,11 +120,11 @@ Rules a later phase must keep:
   sheet already draws `Develop` under a picture looked at large, and pressing
   it while the ARW is on screen opens the develop on that rendition. An
   explicit gesture, an explicit intent — and no document changed by looking.
-- **No roll-wide default, deliberately** (§13.4b). The per-picture verb and the
-  filmstrip batch only, for performance and for the measuring. His stated
-  direction, which is worth more than the answer: RAW by default one day, the
-  proxy chosen deliberately when speed matters, possibly at the roll's
-  creation. Do not build it early; do not design against it.
+- **A roll-wide default — deferred on 2026-09-21 (§13.4b), BUILT on 2026-10-02**,
+  his pick «C + B» from the lab https://claude.ai/artifact/XdcJWppmzbmCU2EBNVH7Wc
+  (*"que le choix soit appliqué automatiquement sur tous les autres médias"*,
+  with every recommendation of its seven questions). Its rules are
+  `roll-choice.md`.
 
 ## The build record lives beside this file
 

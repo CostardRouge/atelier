@@ -16,6 +16,7 @@
  */
 
 import { isRawDevelop } from './develop';
+import type { RollChoice } from './roll-choice';
 import type { RollPicture } from './roll-types';
 import type { SensorSource } from './sensor-source';
 
@@ -33,6 +34,12 @@ export interface PictureFacts {
   delivered: SensorSource | null;
   /** A proxy's own original — what `Auto` may fetch where the frame asks; null where there is none. */
   original: { name: string; bytes: number | null; held: boolean } | null;
+  /**
+   * The roll's choice this picture takes, having none of its own
+   * (`rollChoiceFor`); absent or null where it takes none. The camera's file
+   * is resolved when the picture leaves — it needs sizes a plan does not read.
+   */
+  follows?: RollChoice | null;
 }
 
 export interface PicturePlan {
@@ -64,7 +71,9 @@ export function planPicture(picture: RollPicture, facts: PictureFacts, proxiesOn
   if (!facts.file) {
     return { ...base, kind: 'missing', from: null, fetchBytes: 0, line: `${name} — not in hand, left out` };
   }
-  const onSensor = isRawDevelop(picture.develop);
+  const follows = facts.follows ?? null;
+  const onSensor = isRawDevelop(picture.develop) || (follows === 'sensor' && facts.sensor !== null);
+  const roll = follows ? ' — the roll’s choice' : '';
   if (proxiesOnly) {
     const from = facts.file.name;
     const aside = onSensor ? ', its RAW base set aside' : '';
@@ -80,13 +89,27 @@ export function planPicture(picture: RollPicture, facts: PictureFacts, proxiesOn
       kind: 'sensor',
       from: s.name,
       fetchBytes: s.held ? 0 : (s.bytes ?? 0),
-      line: `${name} ← ${s.name}, the sensor’s data (${cost})`,
+      line: `${name} ← ${s.name}, the sensor’s data (${cost})${roll}`,
     };
   }
   if (facts.delivered) {
     const d = facts.delivered;
     const cost = d.held ? 'in hand' : `${d.bytes ?? 0} B to fetch`;
     return { ...base, kind: 'delivered', from: d.name, fetchBytes: d.held ? 0 : (d.bytes ?? 0), line: `${name} ← ${d.name} (${cost})` };
+  }
+  if (follows === 'delivered') {
+    // Where its camera file beats the proxy — the render inside a DJI's DNG
+    // does not — which only the sizes read at the run can say.
+    const o = facts.original;
+    const maybe = o && !o.held ? (o.bytes ?? 0) : 0;
+    return {
+      ...base,
+      kind: 'delivered',
+      from: facts.file.name,
+      fetchBytes: 0,
+      maybeBytes: maybe,
+      line: `${name} ← its camera’s file where it beats the proxy${roll}`,
+    };
   }
   const aside = onSensor ? ' — its RAW is out of reach here, the base set aside' : '';
   if (facts.proxy) {

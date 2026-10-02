@@ -59,6 +59,8 @@ describe('createRollDoc', () => {
       updatedAt: 5,
       pictures: [],
       export: { ...DEFAULT_ROLL_EXPORT },
+      // Every picture opens where it opens until the roll is given a choice.
+      opensOn: null,
     });
   });
 });
