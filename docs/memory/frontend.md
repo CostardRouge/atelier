@@ -456,6 +456,20 @@ is untouched (re-measured: six tiles, two rows at 390 × 664). Rules it fixed:
 strength travelling with the pick, A/B, the arrows, the live bake, the search,
 the ⓘ, Escape, and the no-picture host where a click is the pick.
 
+## His window is TALLER than wide for a stage: size a layout against it, not against 16:9 (2026-10-02)
+
+His browser window measures 1270 × 1300 (two screenshots, 2026-10-01 and the
+filmstrip lab), so a tool's stage column there is TALLER than wide — Develop's
+is 814 × 1012 (the shell's chrome is (w − 456) × (h − 180) on a desktop:
+masthead 52, rail 48, padding 20, PageBar 40 + 12, inspector 352 + 16,
+toolbar 28 + 8). A landscape picture is then bound by the WIDTH and leaves
+~470 px of black above and below: anything stacked UNDER the stage (a band, a
+transport, a caption) is free for a landscape picture there, and anything
+BESIDE it costs a third of the picture. On a 16:9 screen it is the reverse.
+**How to apply**: weigh a layout change on at least his window AND a 16:9
+screen, by the area of the open picture fitted in the stage, before calling
+one orientation better (`docs/develop-roll-browser.md` §3 has the table).
+
 ## A phone gets a SHEET or a DRAWER, and a picture being judged gets the drawer (2026-09-16)
 
 **Reported**: in the Develop tool on a phone, opening Develop, Crop or Export

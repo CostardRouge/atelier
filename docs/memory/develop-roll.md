@@ -354,6 +354,14 @@ stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
 "Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
 badges and the verb reverted to "Apply to 5 other pictures".
 
+**Under redesign (2026-10-02, a proposal — `docs/develop-roll-browser.md`)**:
+he finds the cells too small and too busy. The gap the lab found that no one
+had written down: a FINGER has no batch at all, since Shift/⌘ are the only
+way in. The proposal keeps `selectionAfterClick`'s rules and adds an explicit
+selection MODE (Select, `S`, a long press) whose bar holds the verbs the cell
+loses (the delivery badge and `×`). Until he answers §7 there, do not add a
+new mark or button to a cell.
+
 ## The crop is a second tab over the SAME delivered picture (2026-09-16, D8; rev. 2026-09-19)
 
 `CropStage` + `CropPanel` (`tools/develop/`; the D8 `FramingStage` is gone,
