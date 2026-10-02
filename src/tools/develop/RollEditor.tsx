@@ -115,7 +115,7 @@ import {
   type CullFilter,
 } from '../../shared/sources/winnow/culling';
 import { useRollPreviews } from './use-roll-previews';
-import WinnowDaySheet from './WinnowDaySheet';
+import RollPicker from './RollPicker';
 
 /** One empty answer, so a memo keyed on it holds. */
 const NO_SIBLINGS: readonly File[] = [];
@@ -166,7 +166,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [confirmRemove, setConfirmRemove] = useState<RollPicture | null>(null);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
-  const { connection } = useWinnowConnection();
+  const { connection, client } = useWinnowConnection();
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('adjust');
@@ -1029,6 +1029,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   };
   const dayLabel = connection ? `Add a day from ${connection.id}` : '';
   const initialDay = pictureDay(open?.ref.lastModified ?? roll.pictures[roll.pictures.length - 1]?.ref.lastModified ?? 0);
+  // What the picker marks in its month and draws "on the roll" — stable
+  // across renders, or it re-derives a day's rows on every one.
+  const heldRefs = useMemo(() => roll.pictures.map((p) => p.ref), [roll.pictures]);
+  const rollSpan = useMemo(() => {
+    const days = roll.pictures.flatMap((p) => (p.ref.lastModified > 0 ? [pictureDay(p.ref.lastModified)] : [])).sort();
+    return days.length ? { from: days[0], to: days[days.length - 1] } : null;
+  }, [roll.pictures]);
 
   return (
     <div
@@ -1373,12 +1380,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         </div>
       )}
 
-      {pickingDay && (
-        <WinnowDaySheet
-          initialDay={initialDay}
-          held={roll.pictures.map((p) => p.ref)}
-          onCancel={() => setPickingDay(false)}
+      {pickingDay && connection && client && (
+        <RollPicker
+          connection={connection}
+          client={client}
+          rollName={roll.name}
+          day={initialDay}
+          rollSpan={rollSpan}
+          held={heldRefs}
           onAdd={addRefs}
+          onClose={() => setPickingDay(false)}
         />
       )}
 

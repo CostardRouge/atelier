@@ -68,7 +68,7 @@ click the button went away with both still ticked.
 
 ## A day of the instance is added from inside the roll, as refs (2026-09-16, F3)
 
-`WinnowDaySheet` lists ONE day of the first connection (`useScopeRows`, the
+Since 2026-10-01 this is the Winnow PICKER hosted by the roll (`RollPicker`, `winnow-picker.md`): a day or a folder, the rail, the picks of a culled day ticked on open — `WinnowDaySheet` is gone. It lists ONE day of the first connection (`useScopeRows`, the
 Library tab's own read), photos only, opening on the open picture's capture
 day (`pictureDay`, local zone); what the roll lacks starts ticked, what it
 holds is drawn "on the roll" and cannot be ticked. **Adding fetches nothing**:

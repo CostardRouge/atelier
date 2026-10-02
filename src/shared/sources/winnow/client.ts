@@ -112,6 +112,22 @@ export interface WinnowAssetRow {
   verdict?: string | null;
   star?: number | null;
   color_label?: string | null;
+  /**
+   * The tags set in Winnow, sorted — `GRID_SELECT`'s own subquery, on every
+   * row. Read by the picker's rail; optional for the same reason as the
+   * culling.
+   */
+  tags?: string[] | null;
+  /** `make model` as Winnow derived it (`a.device`) — what its device filter matches. */
+  device?: string | null;
+  /** How many Gallery finals link back to this original (`edit_count`). */
+  edit_count?: number | null;
+  /** On a Gallery final, the original it was edited from. */
+  original_asset_id?: number | null;
+  /** The burst pile this frame belongs to, its stored cover and its live size. */
+  burst_id?: number | null;
+  burst_cover_id?: number | null;
+  burst_count?: number | null;
   group_kind?: 'raw_jpeg' | 'live_photo' | null;
   companion_id?: number | null;
   companion_ext?: string | null;
@@ -167,6 +183,12 @@ export interface WinnowCapabilities {
      * `hasTimeline`.
      */
     timeline?: boolean;
+    /**
+     * The values `/api/assets` takes for `collapse` (Winnow's PR #277):
+     * `pairs` folds a pair and keeps every frame of a burst pile. Absent on
+     * an older instance, which folds both — see `listsBurstFrames`.
+     */
+    listCollapse?: string[];
   };
   documents: {
     bucket: boolean;
@@ -228,6 +250,15 @@ export interface AssetQuery extends FilterQuery {
   sessionId?: number;
   /** An explicit set of assets — how a document's refs are re-resolved. */
   ids?: readonly number[];
+  /** Every frame of ONE burst pile — Winnow lifts the pile fold for it. */
+  burstId?: number;
+  /**
+   * `frames` asks for every frame of a pile (`collapse=pairs`), `fold` (the
+   * default) for one tile per pile. Send `frames` only where
+   * `listsBurstFrames` says the instance understands it: an older one would
+   * read the unknown value as no collapse at all and list every RAW twice.
+   */
+  bursts?: 'fold' | 'frames';
   cursor?: string | null;
   limit?: number;
 }
@@ -394,6 +425,15 @@ export function chapterDays(
  * not name it would answer a PUT with a 404 the client can only discover
  * after uploading.
  */
+/**
+ * Whether an instance lists every frame of a burst pile on request
+ * (`collapse=pairs`). Absence is "no": an instance that predates it reads an
+ * unknown `collapse` as none at all and would list a RAW+JPEG pair twice.
+ */
+export function listsBurstFrames(caps: WinnowCapabilities | null | undefined): boolean {
+  return Array.isArray(caps?.media?.listCollapse) && caps.media.listCollapse.includes('pairs');
+}
+
 export function hasFileBucket(caps: WinnowCapabilities | null | undefined): boolean {
   return caps?.files?.bucket === true;
 }
@@ -957,10 +997,11 @@ export class WinnowClient {
         session_id: query.sessionId,
         // Winnow's `intList`: comma-separated, whitespace tolerated.
         ids: query.ids?.length ? query.ids.join(',') : undefined,
+        burst_id: query.burstId,
         ...filterParams(query),
         cursor: query.cursor,
         limit: query.limit ?? 200,
-        collapse: 1,
+        collapse: query.bursts === 'frames' ? 'pairs' : 1,
         sort_dir: 'asc',
       }),
       signal,

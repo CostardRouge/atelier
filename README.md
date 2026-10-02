@@ -1383,7 +1383,7 @@ screen and the three tabs open from the bottom bar.
 
 **Clips.** A roll takes a video the way it takes a photograph: from a folder
 or a drop (the clip alone — its `.srt` flight log stays the Studio's), from
-the ticked Library, or from a day on your Winnow, where the day sheet lists
+the ticked Library, or from your Winnow, where the picker (below) lists
 its clips beside its photographs. A clip's cell in the filmstrip is a frame a
 second in, marked ▶. On the stage it **plays**: a transport under the picture,
 **Space** to play and pause, the develop and the look following every frame,
@@ -1673,6 +1673,26 @@ for all of them. A variant leaves into a sub-folder named after it,
 `Variant 2/DJI_0101.jpg`, so every delivered file keeps the capture's exact
 name (`Web/Variant 2/…` for a second target). Adding the same file to the roll
 twice is still refused: a variant is made from a picture already there.
+
+**Adding what you culled in Winnow.** *Add ▾ → A day on your Winnow…* opens
+the **Winnow picker**, the same one as the Library's *browse all*: a **day**,
+walked with the Library's own stepper and its month (a bar per day, or the
+weeks), or a **folder** as Winnow ingested it. Every tile wears Winnow's word —
+the pick or reject flag, the stars, a label, a *Gallery* chip when a final
+already links to it — and a rail of filters narrows the list: Incoming ·
+Gallery · All, the verdict, a star floor, photos or clips, the extension, the
+body, Winnow's tags, *no final yet*, *not on the roll*, each with its count. A
+**culled day opens with its picks ticked**, so taking what you kept is one
+click on *Add N to the roll*; an unculled day ticks everything the roll lacks
+but the rejects. The bar ticks among what is shown — **All**, **None**,
+**Invert**, **⚑ Picks**, **★5**, **★4+**, or `A` `N` `I` `P` `5` `4` `3`, ⇧ to
+add rather than replace, ⇧-click for a range — and counts a ticked picture a
+filter hides rather than dropping it. A burst shows its cover and every frame
+you picked or starred in it, and unfolds under the cover. **Space** looks at a
+tile large, **Enter** ticks it there. What the roll holds is drawn *on the
+roll* and cannot be ticked twice; adding takes references, and a picture's
+bytes are fetched when you open it. The filters are remembered per instance,
+shared with *browse all*.
 
 **Winnow's culling, where you edit.** A picture that came from a Winnow
 instance wears what you decided about it there — a flag for a **pick** or a
@@ -2025,13 +2045,20 @@ changes, so nothing accumulates and nothing needs clearing. One click on a
 tile fetches that picture into the library as an ordinary file — the
 **proxy** (an H.264 clip or a WebP photo, fast and decodable everywhere) — and
 makes it the active one; a tile already fetched is marked and only
-re-activates. "Browse all" opens the full browser — by day or by folder, with
-filters — to tick many at once, or to take the **original** instead, with its
-weight shown first. A DJI clip brings its flight log along either way.
+re-activates. Each tile also wears what you decided in Winnow — a flag for a
+pick or a reject, its stars. "Browse all" opens the **Winnow picker** where the
+tab is looking — its day and its half — to tick many at once: by day (the
+same stepper and month) or by folder, every tile with Winnow's verdict, a rail
+of filters with their counts (Incoming · Gallery · All, verdict, stars, type,
+extension, body, tags, no final yet, not in the library), tick verbs over what
+is shown (*Picks*, *★5*, *★4+*, All, None, Invert, and their keys), **Space**
+to look at a tile large. Nothing is ticked when it opens — an add downloads —
+and the files come as **proxies**, or as **originals** with their weight shown
+first; a Cancel stops the download and keeps what landed. A DJI clip brings its
+flight log along either way.
 
 When the Winnow serves its **timeline** (media grouped into legs by place and
-date), the browser gains a third way in, **by leg**, and a trip can be seeded
-from it: the legs become the trip's stages — span, places, order — and nothing
+date), a trip can be seeded from it: the legs become the trip's stages — span, places, order — and nothing
 else; no post is created, so the grid of days still to tell stays yours. Re-run
 it later and it proposes what the timeline gained, renamed or lost, one tick
 per leg, never a sync. A Winnow can link straight into either screen

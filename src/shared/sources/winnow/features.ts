@@ -17,7 +17,7 @@
  * offered.
  *
  * What "off" does: every entry point disappears rather than being greyed —
- * the leg tab in the media browser, the "seed from" row when a trip is
+ * the "seed from" row when a trip is
  * created, the "↓ From <host>" button over the stages, and the two link
  * routes, which are consumed and land on the ordinary screen instead of
  * opening a panel. Nothing asks the instance for a timeline, so an immature
@@ -25,9 +25,12 @@
  *
  * What "off" does NOT do: remove the work. `timeline-import.ts` and its 42
  * specs, `TimelineImportPanel`, and the wire reading in `client.ts` all stay,
- * tested and dormant. Flipping this to `true` brings the feature back exactly
- * as it was, and `hasTimeline` then falls back to what the instance says
- * about itself — so a Winnow without a timeline still degrades to a sentence.
+ * tested and dormant. Flipping this to `true` brings the feature back as it
+ * was, and `hasTimeline` then falls back to what the instance says about
+ * itself — so a Winnow without a timeline still degrades to a sentence. One
+ * entry point is gone for good: the old media browser's leg tab, retired with
+ * `WinnowBrowser` on 2026-10-01 — legs would come back as a third scope of
+ * the Winnow picker (`picker/WinnowPicker.tsx`).
  *
  * **This is not the way to reach a Winnow's media.** Browsing by day and by
  * folder, and the Library's Winnow tab, use plain date filters that have
