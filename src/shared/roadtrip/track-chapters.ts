@@ -37,6 +37,7 @@
  * Pure and DOM-free.
  */
 
+import { DEFAULT_GRAIN_OPTIONS, groupByGrain, type DeduceGrain } from './deduce-grain';
 import { nearestCity, type GazetteerCity } from './gazetteer';
 import { groupLegs, type NamedLeg } from './group-legs';
 import type { TimelineChapter, TimelinePlace } from './timeline-import';
@@ -62,6 +63,13 @@ export interface TrackChapterOptions {
   nameByRegion?: boolean;
   /** Also cut a chapter on a hop this long inside one region (`groupLegs`). */
   maxHopKm?: number;
+  /**
+   * How the halts are cut into chapters (`deduce-grain.ts`). Absent, the
+   * region cut as it always was, with `maxHopKm` as its optional extra cut;
+   * `hops` reads `maxHopKm` (else the grain's default), `big` reads `bigDays`.
+   */
+  grain?: DeduceGrain;
+  bigDays?: number;
 }
 
 /**
@@ -127,7 +135,14 @@ export function trackChapters(
     city: cities.length ? nearestCity(cities, leg.centroid, options.maxKm) : null,
   }));
 
-  return groupLegs(named, { maxHopKm: options.maxHopKm }).map(({ halts, regionKey }) => {
+  const groups = options.grain
+    ? groupByGrain(named, options.grain, {
+        hopKm: options.maxHopKm ?? DEFAULT_GRAIN_OPTIONS.hopKm,
+        bigDays: options.bigDays ?? DEFAULT_GRAIN_OPTIONS.bigDays,
+      })
+    : groupLegs(named, { maxHopKm: options.maxHopKm });
+
+  return groups.map(({ halts, regionKey }) => {
     const region = regionNameOf(halts, regionKey);
     return {
       halts,
