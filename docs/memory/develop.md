@@ -539,3 +539,22 @@ while playing, the clip learned its length at its end and a scrub to 0.5 s
 landed; at 390 px under `LayoutModeProvider` the A/B sits in the wrapped row
 beside the clipboard verbs; a PNG kept its grade (64 → 90), no transport,
 Space swallowed. Not driven on the maintainer's machine or on H.264/HEVC.
+
+## Automating the develop: the record is the contract (2026-10-02)
+
+**Decision (the maintainer, `docs/auto-develop.md`).** Every automatic
+develop — a heuristic verb, a model learned on his own rolls, a language
+model, an agent — WRITES `DevelopSettings` plus the picture's crop, layers
+and repair, through the same `patch` / crop API a hand uses, and never
+pixels. **Why**: the engine renders a record identically everywhere, so one
+contract keeps preview = export, undo, presets, apply-to and the house style
+working on anything an automatism wrote, and lets one approach's output be
+another's training data. **How to apply**: a new automatic verb is a pure
+module beside `auto-develop.ts` with a `.test.ts`, drawn by the panel its
+field belongs to (the Auto row for the record, the Crop tab for the crop),
+reporting through `onTold`; it keeps the four rules Auto tone fixed above
+(measured AS SHOT so a second press is the same answer; solved against this
+suite's own maths; a clamp or a refusal said out loud; nothing written where
+nothing was measured). The three heuristic verbs are §5 of the brief (Auto
+bands, Auto level, crop to the subject); a model's inference and an LLM's
+answer land through the very same seam when they come.
