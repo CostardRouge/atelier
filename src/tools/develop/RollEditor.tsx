@@ -202,6 +202,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // sort and to act on many — `G`, the band's ▦; a click on a picture opens
   // it and closes the sheet.
   const [contactOpen, setContactOpen] = useState(false);
+  // FOCUS: the picture alone — the band, the inspector and the page bar not
+  // drawn (`F`, the ⤢ verb in the stage bar; Escape, either, brings them back).
+  const [focus, setFocus] = useState(false);
+  const toggleFocus = useCallback(() => setFocus((f) => !f), []);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
@@ -1312,6 +1316,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSelect: (id: string) => {
                 setTab(id as WorkbenchTab);
                 setSheetOpen(true);
+                // A section asked for from the bar is the drawer asked for: the focus ends.
+                setFocus(false);
               },
             }
           : null,
@@ -1388,44 +1394,47 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           it wraps to two and the photograph pays ~50px for it: the back is its
           chevron, the name one step smaller, and Add is its glyph (the menu
           still names every way in). The Trips overview's bar, the same fix. */}
-      <PageBar
-        back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
-        trailing={
-          <>
-            {headerExtra}
-            {/* The Library's item only when it holds something the roll does
-                not: a ticked picture already on the roll is nothing to add. */}
-            {adding ? (
-              <Button variant="primary" icon={Icons.plus} disabled aria-label="Adding…">
-                {compact ? null : 'Adding…'}
-              </Button>
-            ) : addItems.length > 1 ? (
-              <OverflowMenu
-                label="Add pictures to this roll"
-                items={addItems}
-                trigger={{ text: compact ? null : 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
-              />
-            ) : addItems[0] ? (
-              <Button
-                icon={Icons.plus}
-                onClick={addItems[0].onSelect}
-                aria-label={compact ? addButtonLabel[addItems[0].id] : undefined}
-                title={compact ? addButtonLabel[addItems[0].id] : undefined}
-              >
-                {compact ? null : addButtonLabel[addItems[0].id]}
-              </Button>
-            ) : null}
-          </>
-        }
-      >
-        <span className="min-w-0 flex-1">
-          <RollTitle
-            name={roll.name}
-            size={compact ? 'md' : 'lg'}
-            onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))}
-          />
-        </span>
-      </PageBar>
+      {/* In focus the bar goes with the band and the inspector: the picture, its own row, nothing else. */}
+      {!focus && (
+        <PageBar
+          back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
+          trailing={
+            <>
+              {headerExtra}
+              {/* The Library's item only when it holds something the roll does
+                  not: a ticked picture already on the roll is nothing to add. */}
+              {adding ? (
+                <Button variant="primary" icon={Icons.plus} disabled aria-label="Adding…">
+                  {compact ? null : 'Adding…'}
+                </Button>
+              ) : addItems.length > 1 ? (
+                <OverflowMenu
+                  label="Add pictures to this roll"
+                  items={addItems}
+                  trigger={{ text: compact ? null : 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
+                />
+              ) : addItems[0] ? (
+                <Button
+                  icon={Icons.plus}
+                  onClick={addItems[0].onSelect}
+                  aria-label={compact ? addButtonLabel[addItems[0].id] : undefined}
+                  title={compact ? addButtonLabel[addItems[0].id] : undefined}
+                >
+                  {compact ? null : addButtonLabel[addItems[0].id]}
+                </Button>
+              ) : null}
+            </>
+          }
+        >
+          <span className="min-w-0 flex-1">
+            <RollTitle
+              name={roll.name}
+              size={compact ? 'md' : 'lg'}
+              onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))}
+            />
+          </span>
+        </PageBar>
+      )}
 
       {!open ? (
         <EmptyState
@@ -1461,7 +1470,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             className={
               compact
                 ? 'flex-1 min-h-0 flex flex-col gap-2'
-                : 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4 gap-y-2'
+                : focus
+                  ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-y-2'
+                  : 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4 gap-y-2'
             }
           >
             <PictureWorkbench
@@ -1511,14 +1522,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onBand={toggleFolded}
               onThumbs={stepThumbs}
               onSheet={toggleSheet}
+              focused={focus}
+              onFocusMode={toggleFocus}
               onEscape={() => {
-                // In order: the selection, then the sheet — each one step back.
+                // In order: the selection, then the sheet, then the focus — each one step back.
                 if (selecting) {
                   stopSelecting();
                   return true;
                 }
                 if (contactOpen) {
                   setContactOpen(false);
+                  return true;
+                }
+                if (focus) {
+                  setFocus(false);
                   return true;
                 }
                 return false;
@@ -1546,7 +1563,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
-            <div ref={bandRef} className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
+            <div ref={bandRef} className={`flex-col gap-1 min-w-0 ${focus ? 'hidden' : 'flex'} ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
               <div ref={statusRef} className="flex flex-col gap-1 empty:hidden">
               {/* What STATE is in the band's header now (how far the roll has
                   got, what it shows); this line keeps what asks for a click —

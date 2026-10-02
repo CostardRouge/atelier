@@ -174,6 +174,8 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'B' }))).toBe('band');
     expect(editorKeyAction(press({ key: 'g' }))).toBe('sheet');
     expect(editorKeyAction(press({ key: 'G', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'f' }))).toBe('focus');
+    expect(editorKeyAction(press({ key: 'F', targetTypes: true }))).toBeNull();
     expect(editorKeyAction(press({ key: '-' }))).toBe('thumbs-smaller');
     expect(editorKeyAction(press({ key: '=' }))).toBe('thumbs-larger');
     expect(editorKeyAction(press({ key: '+' }))).toBe('thumbs-larger');

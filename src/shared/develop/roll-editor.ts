@@ -188,6 +188,7 @@ export type EditorKeyAction =
   | 'select-all'
   | 'band'
   | 'sheet'
+  | 'focus'
   | 'thumbs-smaller'
   | 'thumbs-larger'
   | null;
@@ -214,8 +215,8 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
  * painted on it, `V` black and white, `S` the band's selection (and ⌘A every
  * shown picture while it is on), `B` the band folded to its rail, `G` the
- * contact sheet, `-` and `=` the thumbnails smaller and larger, `M` the
- * mask's view
+ * contact sheet, `F` the picture alone, `-` and `=` the thumbnails smaller
+ * and larger, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
@@ -278,6 +279,8 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'b' || press.key === 'B') return 'band';
   // `G` — the contact sheet over the stage and back: Lightroom's Grid.
   if (press.key === 'g' || press.key === 'G') return 'sheet';
+  // `F` — the picture alone: the band, the inspector and the page bar away.
+  if (press.key === 'f' || press.key === 'F') return 'focus';
   if (press.key === '-' || press.key === '_') return 'thumbs-smaller';
   if (press.key === '=' || press.key === '+') return 'thumbs-larger';
   // `J` paints what is clipped over the picture — Lightroom's own letter, so

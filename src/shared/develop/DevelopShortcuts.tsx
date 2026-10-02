@@ -71,6 +71,7 @@ const GROUPS: readonly Group[] = [
       { keys: 'drag the band’s handle', what: 'the band taller — one row, then a grid of two or three — or down to its rail; double-click folds it' },
       { keys: 'B', what: 'the band folded to its rail ↔ back to its size' },
       { keys: 'G · ▦', what: 'the contact sheet over the picture — the whole roll large, with names, to sort and to act on many; a click opens a picture and closes it' },
+      { keys: 'F · ⤢', what: 'focus — the picture alone, the band, the inspector and the page bar away; F, ⤢ or Esc brings them back' },
       { keys: '− · =', what: 'the band’s thumbnails smaller or larger — its ⋯ menu has the rows, the height that follows the roll, and where it sits' },
       { keys: 'the band’s filter', what: 'what it shows — all, edited, to export, held back, ignored, or by Winnow’s culling; ← / → and Apply to N other pictures follow it' },
     ],

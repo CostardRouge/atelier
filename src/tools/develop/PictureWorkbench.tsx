@@ -292,6 +292,8 @@ export default function PictureWorkbench({
   onBand,
   onSheet,
   onThumbs,
+  focused = false,
+  onFocusMode,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -382,6 +384,10 @@ export default function PictureWorkbench({
   onBand?: () => void;
   /** `G` — the contact sheet over the stage ↔ closed. */
   onSheet?: () => void;
+  /** The picture alone (`F`): the inspector is not drawn and the ⤢ verb says so. */
+  focused?: boolean;
+  /** `F`, and the ⤢ verb — focus on ↔ off. */
+  onFocusMode?: () => void;
   /** `-` / `=` — the band's thumbnails one step smaller or larger. */
   onThumbs?: (direction: 1 | -1) => void;
   /** What the stage says while the picture's bytes are not in hand. */
@@ -1135,8 +1141,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1455,6 +1461,11 @@ export default function PictureWorkbench({
           if (!callbacks.current.onSheet) return;
           e.preventDefault();
           callbacks.current.onSheet();
+          return;
+        case 'focus':
+          if (!callbacks.current.onFocusMode) return;
+          e.preventDefault();
+          callbacks.current.onFocusMode();
           return;
         case 'thumbs-smaller':
         case 'thumbs-larger':
@@ -1961,6 +1972,26 @@ export default function PictureWorkbench({
                 A/B
               </button>
             )}
+            {/* FOCUS — the picture alone, the band, the inspector and the page
+                bar away (`docs/develop-roll-browser.md`, face D): a verb at
+                every width, since a phone has no F and the way back must be
+                where the way in was. Lit while on, like the A/B. */}
+            {onFocusMode && (
+              <button
+                type="button"
+                className={`${helpVerb} ${
+                  focused
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
+                }`}
+                onClick={onFocusMode}
+                aria-pressed={focused}
+                title={focused ? 'Focus — the picture alone; F or Esc brings the rest back' : 'Focus — the picture alone, nothing else on screen (F)'}
+                aria-label="Focus — the picture alone"
+              >
+                ⤢
+              </button>
+            )}
             {/* The legend that used to run along the bottom of the editor, as a
                 verb. Drawn at every width: on a phone there are no keys, but the
                 GESTURES it lists are exactly the ones a finger has to
@@ -2042,12 +2073,13 @@ export default function PictureWorkbench({
         // exists to judge — the colour that will leave — cannot be seen while
         // it is being set (`frontend.md`).
         compactAs="drawer"
-        open={sheetOpen}
+        open={sheetOpen && !focused}
         onClose={() => onSheetOpen(false)}
         title={`${tabLabel} · ${pictureLabel(entry)}`}
         // The docked inspector wears the frame both editors' inspectors wear
         // (`frontend.md`): the tab strip pinned, the sections scrolling under it.
-        className="col-start-2 row-start-1 row-span-2 min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3"
+        // In focus it is not drawn — kept mounted, so its folds and fields hold.
+        className={`${focused ? 'hidden' : 'col-start-2 row-start-1 row-span-2'} min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3`}
       >
         {!compact && (
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={tabs} className="flex-none" />
