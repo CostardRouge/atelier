@@ -2,7 +2,7 @@ import SectionLegend from '../../shared/ui/SectionLegend';
 import Segmented from '../../shared/ui/Segmented';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
 import Button from '../../shared/ui/Button';
-import { useState } from 'react';
+import { useRef, useState } from 'react';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import {
@@ -15,14 +15,12 @@ import {
   subjectRefineOf,
   withSubjectRefine,
   type Mask,
-  type MaskKind,
   type MaskOp,
   type ShadeMask,
   type SubjectMask,
 } from '../../shared/render/mask';
 import {
   MAX_MASK_PARTS,
-  PART_KINDS,
   addPart,
   componentMask,
   describePart,
@@ -45,6 +43,9 @@ import {
   shadeFalloff,
 } from '../../shared/shades/shade-shape';
 import { ShadeDirectionPicker, ShadeFalloffPicker } from '../../shared/shades/ShadePickers';
+import KindGlyph from './KindGlyph';
+import KindPalette from './KindPalette';
+import { kindLabel, takesPointer, type PaletteKind, type PaletteMode } from './kind-palette';
 import {
   DEFAULT_TOLERANCE,
   GROW_LIMIT,
@@ -52,20 +53,6 @@ import {
   TOLERANCE_MIN,
   type SubjectEdge,
 } from '../../shared/segment/subject-refine';
-
-const KIND_OPTIONS: readonly { id: string; label: string }[] = [
-  { id: 'none', label: 'Whole' },
-  { id: 'linear', label: 'Linear' },
-  { id: 'radial', label: 'Radial' },
-  { id: 'shade', label: 'Shade' },
-  { id: 'luma', label: 'Brightness' },
-  { id: 'colour', label: 'Colour' },
-  { id: 'brush', label: 'Painted' },
-  { id: 'subject', label: 'Subject' },
-];
-
-/** A part may be any kind but a subject, and never "the whole picture". */
-const PART_KIND_OPTIONS = KIND_OPTIONS.filter((o) => PART_KINDS.includes(o.id as MaskKind));
 
 const OP_OPTIONS: readonly { id: MaskOp; label: string }[] = [
   { id: 'add', label: 'Add' },
@@ -160,11 +147,14 @@ export default function MaskPanel({
   /** Present only for a subject mask — how its segmentation is getting on. */
   subject: SubjectStatus | null;
 }) {
-  const [nextOp, setNextOp] = useState<MaskOp>('add');
+  // The palette of kinds, open from the kind chip (change it) or from
+  // Combine (add a term) — one palette for both, `kind-palette.ts`.
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const kindRef = useRef<HTMLButtonElement>(null);
+  const combineRef = useRef<HTMLButtonElement>(null);
   const parts = layer.parts ?? [];
   const open = part !== null && parts[part] ? part : null;
   const mask = componentMask(layer, open);
-  const kind: string = mask?.kind ?? 'none';
   const invert = open === null ? layer.invert : parts[open].invert;
   // The subjects this layer may SUBTRACT — «sauf le sujet», the maintainer's
   // pick (2026-09-23). Offered only where one exists: a control with nothing
@@ -179,12 +169,15 @@ export default function MaskPanel({
     if (open === null) onPatch({ mask: next });
     else if (next) onPatch({ parts: withComponentMask(layer, open, next).parts });
   };
-  const setKind = (next: string) => {
+  const setKind = (next: PaletteKind) => {
     // Switching kinds STARTS the new shape fresh rather than carrying numbers
     // across: a radius is not an angle, and a half-translated shape is worse
     // than an obvious default.
-    setMask(next === 'none' ? null : defaultMask(next as MaskKind));
+    setMask(next === 'whole' ? null : defaultMask(next));
+    onPainting(takesPointer(next));
   };
+  const currentKind: PaletteKind = mask?.kind ?? 'whole';
+  const paletteAnchor = palette === 'part' ? combineRef : kindRef;
   const patchMask = (patch: Partial<Record<string, number>>) => {
     if (!mask) return;
     setMask({ ...mask, ...patch } as Mask);
@@ -258,17 +251,43 @@ export default function MaskPanel({
         </div>
       )}
 
-      {/* Seven kinds do not fit one row at an inspector's width — the labels
-          ran together as "Radial BrightnessPainted". `columns` is what this
-          control has for a choice bigger than a row. */}
-      <Segmented
-        columns={open === null ? 4 : 3}
-        size="sm"
-        label={open === null ? 'Mask' : 'Part'}
-        value={kind}
-        onChange={setKind}
-        options={open === null ? KIND_OPTIONS : PART_KIND_OPTIONS}
-      />
+      {/* The kind, as a chip that opens the palette — where an eight-way
+          switch used to sit (`kind-palette.ts`). */}
+      <div className="flex items-center gap-2">
+        <span className="font-mono text-3xs text-faint">{open === null ? 'Mask' : 'This term'}</span>
+        <button
+          ref={kindRef}
+          type="button"
+          aria-haspopup="dialog"
+          aria-expanded={palette === 'type' || palette === 'part-type'}
+          title={open === null ? 'Change what this layer’s mask is' : 'Change what this term is'}
+          onClick={() => setPalette((m) => (m ? null : open === null ? 'type' : 'part-type'))}
+          className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-paper pl-1.5 pr-2.5 py-0.5 text-xs text-ink cursor-pointer hover:border-ink-soft"
+        >
+          <KindGlyph kind={currentKind} className="w-[22px] h-[15px]" />
+          {kindLabel(currentKind)} ▾
+        </button>
+      </div>
+      {palette && (
+        <KindPalette
+          mode={palette}
+          current={palette === 'part' ? null : currentKind}
+          anchorRect={() => paletteAnchor.current?.getBoundingClientRect() ?? null}
+          within={paletteAnchor}
+          onClose={() => setPalette(null)}
+          onPick={(picked, op) => {
+            setPalette(null);
+            if (palette === 'part') {
+              if (picked === 'whole') return;
+              onPatch({ parts: addPart(layer, op, picked).parts });
+              onPart(parts.length);
+              onPainting(takesPointer(picked));
+            } else if (picked !== currentKind) {
+              setKind(picked);
+            }
+          }}
+        />
+      )}
 
       {mask && (
         <ShapeControls
@@ -323,28 +342,22 @@ export default function MaskPanel({
         </div>
       )}
       {parts.length < MAX_MASK_PARTS && (
-        <div className="flex flex-col gap-1">
+        <div className="flex items-center justify-between gap-2">
           <SectionLegend label="Combine">
             <p>{COMBINE_HINT}</p>
           </SectionLegend>
-          <Segmented size="sm" label="How the next mask combines" value={nextOp} onChange={(v) => setNextOp(v as MaskOp)} options={OP_OPTIONS} />
-          <div className="flex flex-wrap items-center gap-1">
-            {PART_KIND_OPTIONS.map((o) => (
-              <Button
-                key={o.id}
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  onPatch({ parts: addPart(layer, nextOp, o.id as MaskKind).parts });
-                  onPart(parts.length);
-                  // A colour or a painted part is made with the pointer.
-                  onPainting(o.id === 'colour' || o.id === 'brush');
-                }}
-              >
-                {nextOp === 'add' ? '+' : nextOp === 'subtract' ? '−' : '∩'} {o.label}
-              </Button>
-            ))}
-          </div>
+          {/* Add, subtract or intersect is chosen at the head of the same
+              palette, with the kind. */}
+          <Button
+            ref={combineRef}
+            size="sm"
+            variant="ghost"
+            aria-haspopup="dialog"
+            aria-expanded={palette === 'part'}
+            onClick={() => setPalette((m) => (m === 'part' ? null : 'part'))}
+          >
+            + Combine…
+          </Button>
         </div>
       )}
 

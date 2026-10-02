@@ -1508,7 +1508,12 @@ target for one.
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
 *brightness*, a *colour* range, a mask *painted* by hand, a *subject* found by
-a model from a point you tap, or the *whole picture*. Every Develop slider works inside a layer, and layers add up
+a model from a point you tap, or the *whole picture*. One **+ Layer** opens
+a palette of those kinds, grouped by what you do — *Point at it* (subject,
+colour, brightness), *Draw it* (linear, radial, shade, painted) and
+*Everywhere* — each with its glyph and a line of use (a sheet on a phone).
+The same palette changes a layer's kind, from the chip beside **Mask**, and
+combines a term into its mask. Every Develop slider works inside a layer, and layers add up
 from the bottom of the list to the top. A **shade** is the very shape a Trips
 shade draws, picked with the same controls: where it comes from on the 3×3
 grid (an edge, a quarter circle from a corner, or in the centre a radial and
@@ -1545,8 +1550,8 @@ subject is asked for; an export segments the same points on the picture it
 delivers.
 
 **Combining masks.** A layer's mask can be combined with up to four more,
-the way Lightroom does it: under **Combine**, pick **Add**, **Subtract** or
-**Intersect**, then the kind. *Add* takes in the new shape too, *Subtract*
+the way Lightroom does it: **Combine…** opens the palette with **Add**,
+**Subtract** or **Intersect** at its head, then the kind. *Add* takes in the new shape too, *Subtract*
 takes it out (a sky minus the mountain you paint over), *Intersect* keeps only
 where both are (the shadows, but only inside an ellipse). The parts apply in
 order, each with its own invert. The list at the top of the mask panel opens

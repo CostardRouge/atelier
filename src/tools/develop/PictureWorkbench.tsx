@@ -173,6 +173,7 @@ import {
 } from '../../shared/render/repair';
 import type { RepairRing, RingGesture, RingPart, SpotRing } from '../../shared/develop/DevelopViewport';
 import LayersPanel from './LayersPanel';
+import { takesPointer } from './kind-palette';
 import MaskPanel from './MaskPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import { borderLayout, type RollBorder } from '../../shared/develop/border-layout';
@@ -2309,9 +2310,10 @@ export default function PictureWorkbench({
                   const made = createLayer(kind);
                   setLayersDraft((list) => addLayer(list, made));
                   setSelectedLayerId(made.id);
-                  // A fresh subject's only use is to be tapped: Pick comes on
-                  // with it rather than being one more thing to find.
-                  setPainting(kind === 'subject' || kind === 'colour');
+                  // A fresh subject's only use is to be tapped, a painted
+                  // mask's to be painted: Pick / Paint comes on with it rather
+                  // than being one more thing to find.
+                  setPainting(takesPointer(kind));
                 }}
                 onRemove={(id) => {
                   setLayersDraft((list) => removeLayer(list, id));

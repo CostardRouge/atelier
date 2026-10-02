@@ -1,3 +1,4 @@
+import { useRef, useState } from 'react';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import Button from '../../shared/ui/Button';
 import Segmented from '../../shared/ui/Segmented';
@@ -6,6 +7,7 @@ import { Icons } from '../../shared/ui/icons';
 import { developLinkClass } from '../../shared/develop/develop-classes';
 import { MAX_LAYERS, layerLabel, type AdjustLayer } from '../../shared/develop/layer';
 import type { MaskKind } from '../../shared/render/mask';
+import KindPalette from './KindPalette';
 
 const HINT =
   'A layer is an ordinary develop that applies only where its mask says. Linear is a straight edge with a soft transition — a darkened sky; radial is an ellipse — a face lifted out of its surround, or a vignette drawn on purpose; shade is the shape a Trips shade draws — an edge, a corner, a band or a pool of light picked on a grid, with its core and its falloff; brightness picks a band of tone wherever it falls in the frame; colour picks the colours you tap, wherever they are; painted is drawn by hand on the picture; subject is found by a model from a point you tap. A layer’s mask can be COMBINED with further ones — added, subtracted or intersected — in the layer’s own mask panel. Everything on the Develop tab works inside a layer, so a local exposure, a local white balance and a local curve are the same controls you already know. Layers apply on top of the picture as you see it, after its own develop and its look, so what a slider does here is what you are looking at.';
@@ -23,17 +25,6 @@ const MASK_VIEWS: readonly { id: MaskView; label: string }[] = [
 export function nextMaskView(v: MaskView): MaskView {
   return v === 'off' ? 'outline' : v === 'outline' ? 'fill' : 'off';
 }
-
-const KINDS: readonly { kind: MaskKind | null; label: string }[] = [
-  { kind: 'linear', label: 'Linear' },
-  { kind: 'radial', label: 'Radial' },
-  { kind: 'shade', label: 'Shade' },
-  { kind: 'luma', label: 'Brightness' },
-  { kind: 'colour', label: 'Colour' },
-  { kind: 'brush', label: 'Painted' },
-  { kind: 'subject', label: 'Subject' },
-  { kind: null, label: 'Whole picture' },
-];
 
 /**
  * The stack, drawn TOP FIRST.
@@ -76,26 +67,41 @@ export default function LayersPanel({
   const full = layers.length >= MAX_LAYERS;
   // Top of the stack first, the way a layer list has always read.
   const rows = [...layers].reverse();
+  // ONE way to add a layer: the palette of kinds (`kind-palette.ts`), where a
+  // grid of eight `+ Kind` buttons used to be.
+  const addRef = useRef<HTMLButtonElement>(null);
+  const [palette, setPalette] = useState(false);
 
   return (
     <div className="flex flex-col gap-2">
-      <SectionLegend label="Layers">
-        <p>{HINT}</p>
-      </SectionLegend>
-
-      <div className="flex flex-wrap items-center gap-1">
-        {KINDS.map((k) => (
-          <Button
-            key={k.label}
-            size="sm"
-            variant="ghost"
-            disabled={full}
-            onClick={() => onAdd(k.kind)}
-          >
-            + {k.label}
-          </Button>
-        ))}
+      <div className="flex items-center justify-between gap-2">
+        <SectionLegend label="Layers · top first">
+          <p>{HINT}</p>
+        </SectionLegend>
+        <Button
+          ref={addRef}
+          size="sm"
+          variant="primary"
+          disabled={full}
+          aria-haspopup="dialog"
+          aria-expanded={palette}
+          onClick={() => setPalette((on) => !on)}
+        >
+          + Layer
+        </Button>
       </div>
+      {palette && (
+        <KindPalette
+          mode="new"
+          anchorRect={() => addRef.current?.getBoundingClientRect() ?? null}
+          within={addRef}
+          onClose={() => setPalette(false)}
+          onPick={(kind) => {
+            setPalette(false);
+            onAdd(kind === 'whole' ? null : kind);
+          }}
+        />
+      )}
       {full && (
         <span className="font-mono text-3xs text-faint">
           {MAX_LAYERS} layers is the limit — each one is a pass over the whole picture
@@ -104,7 +110,7 @@ export default function LayersPanel({
 
       {rows.length === 0 ? (
         <p className="m-0 font-mono text-2xs text-faint leading-relaxed">
-          No layers. Add one and it changes nothing until you move a slider on it.
+          No layers yet. <b className="font-medium text-ink-soft">+ Layer</b> picks where a change goes: a subject you tap, a sky, an edge.
         </p>
       ) : (
         <ul className="m-0 flex list-none flex-col gap-1 p-0">
