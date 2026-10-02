@@ -48,6 +48,8 @@ import { makeGainMapPass } from '../render/gain-map-pass';
 import type { GainField } from '../render/gain-map';
 import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
+import type { BandPreference } from '../render/band-policy';
+import { useBandPreference } from '../render/use-band-preference';
 import { clipPass } from '../render/clip-pass';
 import { makePostVignettePass } from '../render/post-vignette-pass';
 import type { FrameAffine, PostCropVignette } from '../render/post-vignette';
@@ -1723,6 +1725,12 @@ export function useDevelopPicture({
   }, [file, rawFile]);
   const loupeActive = loupeWanted && loupeState !== 'idle';
   const { rect: loupeRect, viewport: loupeViewport } = view;
+  // Whether the loupe's frame is drawn whole or in bands is a render
+  // preference the graph reads at render time (`render/band-policy.ts`); the
+  // loupe repaints when it moves, since the switch is for the stripes the
+  // author is looking at right then.
+  const { preference: bandPreference } = useBandPreference();
+  const loupeBandsRef = useRef<BandPreference | null>(null);
   useEffect(() => {
     const canvas = loupeCanvasRef.current;
     if (!canvas) return;
@@ -1757,6 +1765,12 @@ export function useDevelopPicture({
     const grader = holding
       ? null
       : graderFrom(loupeSlot.current, cube, f, geometry, stack, overlay, subjectMasks, detail, f.width / full.fileWidth, repair, film, gainField, flashMask, clipping, sharpenMask, postVignette);
+    // The band preference moved since this loupe was last graded: the held
+    // copy was drawn whole or in bands under the old one, and redrawing it is
+    // the whole point of the switch — a striped loupe that stayed striped
+    // after "Whole" would read as a switch that does nothing.
+    if (grader && loupeBandsRef.current !== null && loupeBandsRef.current !== bandPreference) grader.invalidate();
+    loupeBandsRef.current = bandPreference;
     const graded = grader ? grader.render(f.gpu ?? f.image) : f.image;
     // The stage canvas (w×h) sits at `rect` in the viewport: the same picture
     // is drawn from the file's pixels under that very transform, in device
@@ -1802,6 +1816,7 @@ export function useDevelopPicture({
     clipping,
     sharpenMask,
     postVignette,
+    bandPreference,
     loupeRect.x,
     loupeRect.y,
     loupeRect.width,
