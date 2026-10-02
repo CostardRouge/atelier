@@ -285,6 +285,10 @@ export default function PictureWorkbench({
   timelapseOpen = false,
   onTimelapseOpen,
   onMakingOf,
+  selecting = false,
+  onSelectMode,
+  onSelectAll,
+  onEscape,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -363,6 +367,14 @@ export default function PictureWorkbench({
   onTimelapseOpen?: (open: boolean) => void;
   /** The picture's own making-of edits — a chapter hidden, a caption rewritten. */
   onMakingOf?: (change: { hidden?: string[]; captions?: Record<string, string> }) => void;
+  /** The band's selection is on (`RollEditor`): ⌘A takes every shown picture, P / U / M act on the marked ones. */
+  selecting?: boolean;
+  /** `S` — the band's selection on ↔ off. */
+  onSelectMode?: () => void;
+  /** ⌘A while the selection is on. */
+  onSelectAll?: () => void;
+  /** Escape with nothing of the stage's to let go: the host's turn (the selection, the sheet, the focus). True when it took it. */
+  onEscape?: () => boolean;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -1114,8 +1126,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1319,8 +1331,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
+  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1336,6 +1348,7 @@ export default function PictureWorkbench({
         targetTypes: targetOwnsTyping(describeKeyTarget(e.target)),
         hasSelection: Boolean(window.getSelection()?.toString()),
         layersTab: keyState.current.tab === 'layers',
+        selecting: keyState.current.selecting,
       });
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
@@ -1414,6 +1427,16 @@ export default function PictureWorkbench({
           e.preventDefault();
           keyState.current.setFactsOn(!keyState.current.factsOn);
           return;
+        case 'select':
+          if (!callbacks.current.onSelectMode) return;
+          e.preventDefault();
+          callbacks.current.onSelectMode();
+          return;
+        case 'select-all':
+          if (!callbacks.current.onSelectAll) return;
+          e.preventDefault();
+          callbacks.current.onSelectAll();
+          return;
         case 'clipping':
           e.preventDefault();
           keyState.current.setClipping((on) => !on);
@@ -1463,7 +1486,10 @@ export default function PictureWorkbench({
           if (keyState.current.repairing) {
             e.preventDefault();
             setRepairing(false);
+            return;
           }
+          // Then the host's: the band's selection, its sheet, the focus.
+          if (callbacks.current.onEscape?.()) e.preventDefault();
           return;
       }
     };

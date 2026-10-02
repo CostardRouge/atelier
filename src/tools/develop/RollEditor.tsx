@@ -11,7 +11,7 @@ import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
 import {
-  openAfterRemoval,
+  openAfterRemovals,
   openPictureId,
   sameDevelop,
   selectionAfterClick,
@@ -80,6 +80,7 @@ import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
 import RollBand from './RollBand';
+import SelectionBar, { type SelectionVerbs } from './SelectionBar';
 import { useThumbAspects } from './use-thumb-aspects';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
@@ -168,7 +169,15 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const stripMetrics = STRIP_METRICS[stripKind];
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState<RollPicture | null>(null);
+  // The pictures a removal is asking about — one from a cell's menu, several
+  // from the selection — when any of them carries work that would go with it.
+  const [confirmRemove, setConfirmRemove] = useState<readonly string[] | null>(null);
+  // The band's SELECTION (`docs/develop-roll-browser.md` §5): a mode in
+  // which a plain click on a cell marks it and the band's header is the bar
+  // of verbs acting on every marked picture. Shift / ⌘-click, S, the header's
+  // Select, a cell's menu or a finger held on a cell turn it on; Done, S
+  // again or Escape turn it off and clear it.
+  const [selecting, setSelecting] = useState(false);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
@@ -224,9 +233,21 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, mods: SelectionModifiers) => {
       setSelected((s) => selectionAfterClick(latest.current.pictures, s, anchor ?? openIdRef.current ?? id, id, mods));
       if (mods.metaKey || mods.ctrlKey) setAnchor(id);
+      // A modified click is already a selection: the mode comes on with it,
+      // so the bar of verbs is there for what was just marked.
+      setSelecting(true);
     },
     [anchor],
   );
+  const startSelecting = useCallback((id?: string) => {
+    setSelecting(true);
+    if (id) setSelected((s) => (s.has(id) ? s : new Set([...s, id])));
+  }, []);
+  const stopSelecting = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Set());
+    setAnchor(null);
+  }, []);
   const selectionTargets = useMemo(
     () => [...visibleSelected].filter((id) => id !== openId),
     [visibleSelected, openId],
@@ -535,12 +556,23 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     void Promise.all([listed, handles]).then(([dropped, folderHandles]) => takeLocal(folders.accept(dropped, folderHandles)));
   };
 
-  function remove(picture: RollPicture) {
-    const nextOpen = openAfterRemoval(latest.current.pictures, picture.id, openId);
-    update((r) => removePictures(r, [picture.id]));
-    void deleteRollThumbs([picture.id]);
-    previews.forget([picture.id]);
+  /** Pictures off the roll — one, or the selection; what was done to them goes with them, the files stay. */
+  function removeMany(ids: readonly string[]) {
+    const nextOpen = openAfterRemovals(latest.current.pictures, ids, openId);
+    update((r) => removePictures(r, ids));
+    void deleteRollThumbs(ids);
+    previews.forget(ids);
+    // A selection that just left the roll is done with: the mode ends with it.
+    const remaining = [...visibleSelected].filter((id) => !ids.includes(id));
+    if (selecting && remaining.length === 0) stopSelecting();
+    else setSelected(new Set(remaining));
     if (nextOpen !== openId) onOpenPicture(nextOpen);
+  }
+  /** Asked first where any of them carries work; a plain picture goes at once. */
+  function removeAsked(ids: readonly string[]) {
+    const pictures = latest.current.pictures.filter((p) => ids.includes(p.id));
+    if (pictures.some(isEdited)) setConfirmRemove(ids);
+    else removeMany(ids);
   }
 
   const step = useCallback(
@@ -970,6 +1002,118 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, frameOtherIds, selectionTargets, frameSelection, update]);
 
+  // --- the selection's verbs (`SelectionBar`), on every marked picture at once
+  const selectedIds = useMemo(() => [...visibleSelected], [visibleSelected]);
+  const selectedPictures = useMemo(() => roll.pictures.filter((p) => visibleSelected.has(p.id)), [roll.pictures, visibleSelected]);
+  // What the band SHOWS — the same reading as the band's own — for ⌘A.
+  const shownIds = useMemo(
+    () =>
+      roll.pictures
+        .filter((p) => p.id === openId || ((showIgnored || !isIgnored(p)) && (!filtering || passesCull(culling.byPicture.get(p.id), cullFilter))))
+        .map((p) => p.id),
+    [roll.pictures, openId, showIgnored, filtering, culling.byPicture, cullFilter],
+  );
+  const selectAll = useCallback(() => setSelected(new Set(shownIds)), [shownIds]);
+  const ignoreSelection = useCallback(() => {
+    if (exportRunning.current) {
+      setNotice(LOCKED_DELIVERY);
+      return;
+    }
+    const ids = selectedIds;
+    const back = selectedPictures.every(isIgnored);
+    update((r) => setDelivery(r, ids, back ? 'auto' : 'ignore'));
+    setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} ${back ? 'back into the roll’s work' : 'ignored — the arrows step over them'}`);
+  }, [selectedIds, selectedPictures, update]);
+  const ruleSelection = useCallback(() => {
+    if (exportRunning.current) {
+      setNotice(LOCKED_DELIVERY);
+      return;
+    }
+    const ids = selectedPictures.filter((p) => !isIgnored(p)).map((p) => p.id);
+    update((r) => setDelivery(r, ids, 'auto'));
+    setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} back on the roll’s rule — each leaves if it is edited`);
+  }, [selectedPictures, update]);
+  const pasteSectionsTo = useCallback(
+    (ids: readonly string[]) => {
+      const held = copiedSettings();
+      if (!held || ids.length === 0) return;
+      update((r) => applySections(r, held.from, ids, held.sections), 'paste');
+      setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)} onto ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
+    },
+    [update],
+  );
+  const variantsOf = useCallback(
+    (ids: readonly string[]) => {
+      // One id per source, decided before the write, so the thumbnails can
+      // follow their pictures; nothing is opened — a batch is not a start.
+      const made = ids.map((from) => [from, newRollId()] as const);
+      update((r) => made.reduce((acc, [from, id]) => addVariant(acc, from, 'clone', id), r));
+      setThumbs((cur) => {
+        const next = new Map(cur);
+        for (const [from, id] of made) {
+          const blob = cur.get(from);
+          if (blob) next.set(id, blob);
+        }
+        return next;
+      });
+      setNotice(`${made.length} variant${made.length === 1 ? '' : 's'} made, each after its picture`);
+    },
+    [update],
+  );
+  // The delivery keys (P, U, M) act on the selection while it is on and
+  // holds something; else on the open picture, as they always did.
+  const deliverSelection = useCallback(
+    (action: DeliverAction) => {
+      if (action === 'ignore') ignoreSelection();
+      else if (action === 'auto') ruleSelection();
+      else handleDeliverAll(selectedIds, !selectedPictures.every(delivers));
+    },
+    [ignoreSelection, ruleSelection, handleDeliverAll, selectedIds, selectedPictures],
+  );
+  const selectionVerbs = useMemo<SelectionVerbs>(
+    () => ({
+      count: selectedIds.length,
+      openLabel: open ? pictureLabel(open) : null,
+      applyCount: open ? selectionTargets.length : 0,
+      allIgnored: selectedPictures.length > 0 && selectedPictures.every(isIgnored),
+      canPaste: copied !== null,
+      onAll: selectAll,
+      onNone: () => setSelected(new Set()),
+      onSend: () => handleDeliverAll(selectedIds, true),
+      onHold: () => handleDeliverAll(selectedIds, false),
+      onIgnore: ignoreSelection,
+      onRule: ruleSelection,
+      onApply: () => {
+        if (open) writeDevelopTo(selectionTargets, open.develop);
+      },
+      onPaste: () => pasteSectionsTo(selectedIds),
+      onVariants: () => variantsOf(selectedIds),
+      onRemove: () => removeAsked(selectedIds),
+      onDone: stopSelecting,
+    }),
+    // `removeAsked` is a plain function over refs; it reads nothing stale.
+    [selectedIds, selectedPictures, open, selectionTargets, copied, selectAll, handleDeliverAll, ignoreSelection, ruleSelection, writeDevelopTo, pasteSectionsTo, variantsOf, stopSelecting],
+  );
+  // The band's header: where it stands in its pictures and the way into the
+  // selection, or — the selection on — its bar of verbs.
+  const bandHeader = useCallback(
+    ({ at, shown, width }: { at: number; shown: number; width: number }) =>
+      selecting ? (
+        <SelectionBar compact={compact} dense={width < 800} verbs={selectionVerbs} />
+      ) : (
+        <>
+          <span className="flex-none font-mono text-2xs text-ink tabular-nums whitespace-nowrap px-0.5" aria-live="polite">
+            {at >= 0 ? at + 1 : '–'} / {shown}
+          </span>
+          <span className="flex-1" />
+          <Button size={compact ? 'md' : 'sm'} onClick={() => startSelecting()} title="Pick several pictures, then act on them all (S)">
+            Select
+          </Button>
+        </>
+      ),
+    [selecting, compact, selectionVerbs, startSelecting],
+  );
+
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
   // Detail or Layers tab onto a clip lands on Adjust, and back on the
   // photograph the tab is whatever it was last on a picture that had it.
@@ -1048,6 +1192,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const days = roll.pictures.flatMap((p) => (p.ref.lastModified > 0 ? [pictureDay(p.ref.lastModified)] : [])).sort();
     return days.length ? { from: days[0], to: days[days.length - 1] } : null;
   }, [roll.pictures]);
+  const removing = confirmRemove ? roll.pictures.filter((p) => confirmRemove.includes(p.id)) : [];
 
   return (
     <div
@@ -1187,7 +1332,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
-              onDeliver={(action) => handleDeliver(open.id, action)}
+              onDeliver={(action) => (selecting && selectedIds.length > 0 ? deliverSelection(action) : handleDeliver(open.id, action))}
+              selecting={selecting}
+              onSelectMode={() => (selecting ? stopSelecting() : startSelecting())}
+              onSelectAll={selectAll}
+              onEscape={() => {
+                if (selecting) {
+                  stopSelecting();
+                  return true;
+                }
+                return false;
+              }}
               onWords={(words) => handleWords(open.id, words)}
               onSettings={() => setSettingsOpen(true)}
               timelapseOpen={timelapseOpen}
@@ -1383,10 +1538,13 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                   // the band keeps one short row of cells and no header, the
                   // size the strip had before it could be pulled.
                   height={compact && sheetOpen ? 56 + 2 * stripMetrics.pad : heightForRows(1, stripMetrics, stripMetrics.thumb)}
-                  header={!(compact && sheetOpen)}
+                  header={compact && sheetOpen ? null : bandHeader}
+                  selecting={selecting}
                   onOpen={(id) => onOpenPicture(id)}
                   onSelectClick={handleSelectClick}
-                  onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
+                  onPress={startSelecting}
+                  onSelect={startSelecting}
+                  onRemove={(p) => removeAsked([p.id])}
                   onDeliver={handleDeliver}
                   onVariant={(id) => makeVariantOf(id, 'clone')}
                   hideIgnored={!showIgnored}
@@ -1425,20 +1583,21 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      {confirmRemove && (
+      {confirmRemove && removing.length > 0 && (
         <ConfirmDialog
-          title={`Take ${pictureLabel(confirmRemove)} off the roll?`}
+          title={removing.length === 1 ? `Take ${pictureLabel(removing[0])} off the roll?` : `Take ${removing.length} pictures off the roll?`}
           confirmLabel="Remove"
           danger
           onCancel={() => setConfirmRemove(null)}
           onConfirm={() => {
-            remove(confirmRemove);
+            removeMany(confirmRemove);
             setConfirmRemove(null);
           }}
         >
           <p>
-            What was done to it goes with it — {pictureEdits(confirmRemove).join(', ')}. The file stays where it
-            is.
+            {removing.length === 1
+              ? `What was done to it goes with it — ${pictureEdits(removing[0]).join(', ')}. The file stays where it is.`
+              : `What was done to them goes with them — ${removing.filter(isEdited).length} of them carry work. The files stay where they are.`}
           </p>
         </ConfirmDialog>
       )}

@@ -1,4 +1,14 @@
-import { memo, useCallback, useEffect, useMemo, useRef, useState, type MouseEvent as ReactMouseEvent } from 'react';
+import {
+  memo,
+  useCallback,
+  useEffect,
+  useMemo,
+  useRef,
+  useState,
+  type MouseEvent as ReactMouseEvent,
+  type PointerEvent as ReactPointerEvent,
+  type ReactNode,
+} from 'react';
 import { describeDevelop } from '../../shared/develop/develop';
 import type { SelectionModifiers } from '../../shared/develop/roll-editor';
 import type { PictureAvailability } from '../../shared/develop/roll-media';
@@ -31,6 +41,7 @@ import CullMark from '../../shared/sources/winnow/CullMark';
 import { Icons } from '../../shared/ui/icons';
 import { AnchoredMenu, type OverflowItem } from '../../shared/ui/OverflowMenu';
 import type { AnchorRect } from '../../shared/ui/menu-anchor';
+import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
 
@@ -45,9 +56,13 @@ import type { DeliverAction } from './PictureWorkbench';
  * mark at its centre — and nothing that is DONE. What used to be three
  * buttons on 72 px (the delivery badge, the ×, and on a phone two targets
  * covering 43 % of the cell) is the picture's MENU now: ⋯ under the pointer,
- * or a right-click anywhere on the cell. A plain click still opens the
- * picture (outlined, kept in view as ←/→ step), Shift or ⌘/Ctrl marks it for
- * a batch (D7 of `docs/develop-tool.md`).
+ * or a right-click anywhere on the cell — and, for several at once, the
+ * SELECTION: a mode the host owns (`S`, the header's Select, a Shift or
+ * ⌘/Ctrl-click, a finger held on a cell), in which a plain click marks a
+ * cell instead of opening it and the header becomes the bar of verbs that
+ * act on every marked picture. Outside it a plain click opens the picture
+ * (outlined, kept in view as ←/→ step), Shift or ⌘/Ctrl marks it for a batch
+ * (D7 of `docs/develop-tool.md`) and turns the mode on.
  *
  * While an export runs the band is its QUEUE (his pick V4): a cell still to
  * leave is veiled, the one in hand turns, a written one says ✓ and one that
@@ -64,9 +79,12 @@ export default function RollBand({
   remoteThumb,
   kind,
   height,
-  header = true,
+  header,
+  selecting = false,
   onOpen,
   onSelectClick,
+  onPress,
+  onSelect,
   onRemove,
   onDeliver,
   onVariant,
@@ -89,10 +107,20 @@ export default function RollBand({
   kind: StripKind;
   /** The band's whole height, header included. */
   height: number;
-  /** Whether the header row is drawn — not with a phone's drawer up, where every row is the photograph's. */
-  header?: boolean;
+  /**
+   * The header row's content, handed where the band stands in its pictures;
+   * none draws no header at all — with a phone's drawer up, where every row
+   * is the photograph's.
+   */
+  header?: ((info: { at: number; shown: number; width: number }) => ReactNode) | null;
+  /** The selection is on: a plain click marks, the cells wear a ring to tick, the ⋯ stands down. */
+  selecting?: boolean;
   onOpen: (id: string) => void;
   onSelectClick: (id: string, mods: SelectionModifiers) => void;
+  /** A finger held on a cell: the selection on, with that picture. */
+  onPress: (id: string) => void;
+  /** The menu's Select: the same, from a pointer. */
+  onSelect: (id: string) => void;
   onRemove: (picture: RollPicture) => void;
   /** The delivery verbs of the menu — `RollEditor.handleDeliver`. */
   onDeliver: (id: string, action: DeliverAction) => void;
@@ -112,13 +140,14 @@ export default function RollBand({
   // handlers for the life of the band. Without this every cell re-rendered
   // on every tick of the open picture's sliders (the audit of 2026-09-22),
   // a roll of hundreds of cells for one picture's change.
-  const latest = useRef({ onOpen, onSelectClick, onRemove, onDeliver, onVariant });
-  latest.current = { onOpen, onSelectClick, onRemove, onDeliver, onVariant };
+  const latest = useRef({ onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant });
+  latest.current = { onOpen, onSelectClick, onPress, onSelect, onRemove, onDeliver, onVariant };
   const [menu, setMenu] = useState<{ id: string; rect: AnchorRect } | null>(null);
   const handlers = useMemo<CellHandlers>(
     () => ({
       open: (id) => latest.current.onOpen(id),
       selectClick: (id, mods) => latest.current.onSelectClick(id, mods),
+      press: (id) => latest.current.onPress(id),
       menu: (id, rect) => setMenu({ id, rect }),
     }),
     [],
@@ -149,10 +178,8 @@ export default function RollBand({
   return (
     <div className="flex flex-col min-w-0 min-h-0" style={{ height }} role="group" aria-label="Pictures on this roll">
       {header && (
-        <div className="flex-none flex items-center gap-1.5 min-w-0 px-0.5" style={{ height: metrics.head }}>
-          <span className="font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
-            {at >= 0 ? at + 1 : '–'} / {shown.length}
-          </span>
+        <div className="flex-none flex items-center gap-1.5 min-w-0" style={{ height: metrics.head }}>
+          {header({ at, shown: shown.length, width })}
         </div>
       )}
       <div
@@ -185,6 +212,7 @@ export default function RollBand({
                 remoteClient={remote?.client ?? null}
                 remoteId={remote?.id ?? null}
                 menuOpen={menu?.id === p.id}
+                selecting={selecting}
                 handlers={handlers}
               />
             );
@@ -194,7 +222,7 @@ export default function RollBand({
       {menu && menuPicture && (
         <AnchoredMenu
           anchorRect={menuRect}
-          items={pictureMenu(menuPicture, menuPicture.id === openId, latest.current)}
+          items={pictureMenu(menuPicture, menuPicture.id === openId, selecting, latest.current)}
           onClose={closeMenu}
           align="start"
           label={`Actions for ${pictureLabel(menuPicture)}`}
@@ -208,6 +236,7 @@ export default function RollBand({
 interface CellHandlers {
   open: (id: string) => void;
   selectClick: (id: string, mods: SelectionModifiers) => void;
+  press: (id: string) => void;
   menu: (id: string, rect: AnchorRect) => void;
 }
 
@@ -220,13 +249,21 @@ interface CellHandlers {
 function pictureMenu(
   p: RollPicture,
   open: boolean,
-  host: { onOpen: (id: string) => void; onDeliver: (id: string, action: DeliverAction) => void; onVariant: (id: string) => void; onRemove: (p: RollPicture) => void },
+  selecting: boolean,
+  host: {
+    onOpen: (id: string) => void;
+    onSelect: (id: string) => void;
+    onDeliver: (id: string, action: DeliverAction) => void;
+    onVariant: (id: string) => void;
+    onRemove: (p: RollPicture) => void;
+  },
 ): OverflowItem[] {
   const ignored = isIgnored(p);
   const leaves = delivers(p);
   const state = deliverState(p);
   const items: OverflowItem[] = [];
   if (!open) items.push({ id: 'open', label: 'Open', onSelect: () => host.onOpen(p.id) });
+  if (!selecting) items.push({ id: 'select', label: 'Select…', title: 'S — pick several pictures, then act on them all', onSelect: () => host.onSelect(p.id) });
   if (ignored) {
     items.push({ id: 'back', label: 'Bring it back into the roll’s work', title: 'M', onSelect: () => host.onDeliver(p.id, 'ignore') });
   } else {
@@ -263,6 +300,7 @@ const Cell = memo(function Cell({
   remoteClient,
   remoteId,
   menuOpen,
+  selecting,
   handlers,
 }: {
   picture: RollPicture;
@@ -277,10 +315,39 @@ const Cell = memo(function Cell({
   remoteClient: WinnowClient | null;
   remoteId: number | null;
   menuOpen: boolean;
+  selecting: boolean;
   handlers: CellHandlers;
 }) {
   const remote = remoteClient && remoteId !== null ? { client: remoteClient, id: remoteId } : null;
   const url = useObjectUrl(thumb);
+  // A finger HELD on the cell turns the selection on with it (the gesture
+  // every phone means "pick this up" by, `press-intent.ts`): a timer from the
+  // touch, dropped the moment the finger travels past the slop (that is a
+  // scroll) or lifts. The click that ends a hold is swallowed — it is not a
+  // second gesture — and so is the browser's own long-press context menu.
+  const press = useRef<{ x: number; y: number; timer: number } | null>(null);
+  const swallow = useRef(false);
+  const lastPointer = useRef<string>('mouse');
+  const clearPress = () => {
+    if (press.current) window.clearTimeout(press.current.timer);
+    press.current = null;
+  };
+  useEffect(() => clearPress, []);
+  const onPointerDown = (e: ReactPointerEvent) => {
+    lastPointer.current = e.pointerType;
+    if (e.pointerType !== 'touch' || selecting) return;
+    clearPress();
+    const timer = window.setTimeout(() => {
+      press.current = null;
+      swallow.current = true;
+      handlers.press(picture.id);
+    }, LONG_PRESS_MS);
+    press.current = { x: e.clientX, y: e.clientY, timer };
+  };
+  const onPointerMove = (e: ReactPointerEvent) => {
+    const p = press.current;
+    if (p && Math.hypot(e.clientX - p.x, e.clientY - p.y) > PRESS_SLOP) clearPress();
+  };
   const ignored = isIgnored(picture);
   // The roll's one answer (`pictureEdits`): the pill, the progress line and the
   // remove confirmation cannot disagree about what counts.
@@ -296,25 +363,40 @@ const Cell = memo(function Cell({
   const moreRef = useRef<HTMLButtonElement>(null);
   const onContextMenu = (e: ReactMouseEvent) => {
     e.preventDefault();
+    // A finger's long press is the selection's, never the menu's.
+    if (lastPointer.current === 'touch' || selecting) return;
     handlers.menu(picture.id, { left: e.clientX, right: e.clientX, top: e.clientY, bottom: e.clientY });
+  };
+  const onClick = (e: ReactMouseEvent) => {
+    if (swallow.current) {
+      swallow.current = false;
+      return;
+    }
+    if (e.shiftKey || e.metaKey || e.ctrlKey) {
+      handlers.selectClick(picture.id, { shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey });
+    } else if (selecting) {
+      // In the selection a plain click MARKS: one more, or one less — ⌘'s own reading.
+      handlers.selectClick(picture.id, { shiftKey: false, metaKey: true, ctrlKey: false });
+    } else {
+      handlers.open(picture.id);
+    }
   };
   const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, unreachable: unreachable && !!url });
   return (
     <li
-      className={`group absolute ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
+      className={`group absolute select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
       style={{ left: cell.x, top: cell.y, width: cell.w, height: cell.h + cell.cap }}
       data-picture={picture.id}
       onContextMenu={onContextMenu}
+      onPointerDown={onPointerDown}
+      onPointerMove={onPointerMove}
+      onPointerUp={clearPress}
+      onPointerCancel={clearPress}
+      onPointerLeave={clearPress}
     >
       <button
         type="button"
-        onClick={(e) => {
-          if (e.shiftKey || e.metaKey || e.ctrlKey) {
-            handlers.selectClick(picture.id, { shiftKey: e.shiftKey, metaKey: e.metaKey, ctrlKey: e.ctrlKey });
-          } else {
-            handlers.open(picture.id);
-          }
-        }}
+        onClick={onClick}
         aria-current={open ? 'true' : undefined}
         aria-selected={selected ? 'true' : undefined}
         aria-label={`${label}${clip ? ', a clip' : ''}${developed ? ', developed' : ''}${selected ? ', selected' : ''}${
@@ -322,7 +404,7 @@ const Cell = memo(function Cell({
         }${runState ? `, ${RUN_WORDS[runState]}` : ''}`}
         title={`${label}${clip ? ' (a clip)' : ''}${variant > 1 ? ' (a variant)' : ''}${developed ? ` — ${editSummary(picture.develop, edits)}` : ' — as shot'}${
           culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
-        } — Shift or ⌘/Ctrl-click to select for a batch · right-click for its actions`}
+        }${selecting ? ' — click to mark it' : ' — Shift or ⌘/Ctrl-click to select for a batch · right-click for its actions'}`}
         className="relative block w-full p-0 rounded-[6px] overflow-hidden bg-frame cursor-pointer border-0"
         style={{ height: cell.h }}
       >
@@ -340,12 +422,18 @@ const Cell = memo(function Cell({
             {CELL_WORDS[kind]}
           </span>
         )}
-        {/* The outline is INSIDE the box: a border would move every cell's picture by its width. */}
+        {/* The outline is INSIDE the box: a border would move every cell's
+            picture by its width. A marked cell wears the accent and a wash;
+            marked AND open, a paper ring inside the accent tells the two. */}
         <span
           className={`absolute inset-0 rounded-[6px] pointer-events-none ${
-            open
-              ? 'shadow-[inset_0_0_0_2px_var(--color-accent),inset_0_0_0_3px_rgba(0,0,0,0.35)]'
-              : 'group-hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
+            selected && open
+              ? 'shadow-[inset_0_0_0_3px_var(--color-accent),inset_0_0_0_5px_var(--color-on-media)] bg-accent/15'
+              : selected
+                ? 'shadow-[inset_0_0_0_3px_var(--color-accent)] bg-accent/15'
+                : open
+                  ? 'shadow-[inset_0_0_0_2px_var(--color-accent),inset_0_0_0_3px_rgba(0,0,0,0.35)]'
+                  : 'group-hover:shadow-[inset_0_0_0_1px_var(--color-line-strong)]'
           }`}
           aria-hidden="true"
         />
@@ -369,13 +457,17 @@ const Cell = memo(function Cell({
           </span>
         )}
         {cell.cap === 0 && (
-          <span className={`absolute right-1 top-1 pointer-events-none ${menuOpen ? 'opacity-0' : 'pointer-fine:group-hover:opacity-0'}`}>
+          <span className={`absolute right-1 top-1 pointer-events-none ${menuOpen ? 'opacity-0' : selecting ? '' : 'pointer-fine:group-hover:opacity-0'}`}>
             <CullMark culling={culling} onMedia />
           </span>
         )}
-        {selected && (
+        {/* In the selection every cell wears a ring to tick — the mark that
+            says what a click does here — filled on the marked ones. */}
+        {selecting && (
           <span
-            className="absolute left-1 top-1 w-4 h-4 grid place-items-center rounded-full bg-accent text-paper text-3xs"
+            className={`absolute left-1 top-1 w-[18px] h-[18px] pointer-coarse:w-[22px] pointer-coarse:h-[22px] grid place-items-center rounded-full border-[1.5px] shadow-[0_0_0_1px_rgba(0,0,0,0.25)] [&>svg]:w-3 [&>svg]:h-3 ${
+              selected ? 'bg-accent border-accent text-paper' : 'border-on-media/95 bg-frame/30 text-transparent'
+            }`}
             aria-hidden="true"
           >
             {Icons.check}
@@ -386,7 +478,8 @@ const Cell = memo(function Cell({
       {/* The picture's menu, under a pointer that can hover; a finger reaches
           the same verbs by a long press (the selection) and the bulk bar. It
           replaces Winnow's mark in that corner while shown, so the two never
-          overlap. */}
+          overlap — and stands down in the selection, whose bar holds them. */}
+      {!selecting && (
       <button
         ref={moreRef}
         type="button"
@@ -405,6 +498,7 @@ const Cell = memo(function Cell({
       >
         {Icons.more}
       </button>
+      )}
       {cell.cap > 0 && (
         <span
           className="absolute left-0.5 right-0.5 bottom-0 flex items-center gap-1 font-mono text-3xs leading-none text-ink-soft whitespace-nowrap overflow-hidden"

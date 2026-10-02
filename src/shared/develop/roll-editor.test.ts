@@ -5,6 +5,7 @@ import {
   WORKBENCH_TABS,
   editorKeyAction,
   openAfterRemoval,
+  openAfterRemovals,
   pictureAfterRestore,
   openPictureId,
   pictureRange,
@@ -82,6 +83,16 @@ describe('sameDevelop', () => {
   });
 });
 
+describe('openAfterRemovals', () => {
+  it('keeps the open picture unless it leaves, then takes the next survivor, else the last', () => {
+    expect(openAfterRemovals(wideStrip, ['a', 'c'], 'b')).toBe('b');
+    expect(openAfterRemovals(wideStrip, ['b', 'c'], 'b')).toBe('d');
+    expect(openAfterRemovals(wideStrip, ['c', 'd'], 'd')).toBe('b');
+    expect(openAfterRemovals(wideStrip, ['a', 'b', 'c', 'd'], 'a')).toBeNull();
+    expect(openAfterRemovals(wideStrip, ['a'], null)).toBeNull();
+  });
+});
+
 describe('editorKeyAction', () => {
   it('maps the editor keys', () => {
     expect(editorKeyAction(press({ key: 'ArrowLeft' }))).toBe('previous');
@@ -143,6 +154,19 @@ describe('editorKeyAction', () => {
     expect(editorKeyAction(press({ key: 'Backspace', repeat: true }))).toBeNull();
     expect(editorKeyAction(press({ key: 'Escape' }))).toBe('escape');
     expect(editorKeyAction(press({ key: 'Escape', metaKey: true }))).toBeNull();
+  });
+
+  it('turns the band’s selection on S, and ⌘A takes every shown picture only while it is on', () => {
+    expect(editorKeyAction(press({ key: 's' }))).toBe('select');
+    expect(editorKeyAction(press({ key: 'S' }))).toBe('select');
+    expect(editorKeyAction(press({ key: 's', repeat: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 's', targetTypes: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'a', metaKey: true, selecting: true }))).toBe('select-all');
+    expect(editorKeyAction(press({ key: 'A', ctrlKey: true, selecting: true }))).toBe('select-all');
+    expect(editorKeyAction(press({ key: 'a', metaKey: true }))).toBeNull();
+    expect(editorKeyAction(press({ key: 'a', metaKey: true, selecting: true, repeat: true }))).toBeNull();
+    // A bare A is still the Adjust tab's.
+    expect(editorKeyAction(press({ key: 'a', selecting: true }))).toEqual({ tab: 'adjust' });
   });
 
   it('opens the shortcuts on H and the facts on I', () => {
