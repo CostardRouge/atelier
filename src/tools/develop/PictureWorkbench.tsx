@@ -9,6 +9,7 @@ import DevelopCurve from '../../shared/develop/DevelopCurve';
 import { developButtonClass } from '../../shared/develop/develop-classes';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
+import { useAutoMemory } from '../../shared/develop/use-auto-memory';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopMixer from '../../shared/develop/DevelopMixer';
 import { straightMono } from '../../shared/develop/mixer';
@@ -412,6 +413,8 @@ export default function PictureWorkbench({
   const presets = usePresetBookHost();
   const draft = useDevelopDraft(entry.develop, stack);
   const [told, tell] = useTold();
+  // The Auto row's switches remember their clicks per picture, for the session.
+  const auto = useAutoMemory({ pictureKey: entry.id, develop: draft.draft, onPatch: draft.patch, onTold: tell });
   // A CLIP (2026-09-30): played on the stage and developed WHOLE — the global
   // develop and the look, which the export grades every frame through, and
   // (2026-10-01) ONE crop held still over every frame, the same `frame` the
@@ -2057,10 +2060,10 @@ export default function PictureWorkbench({
           className={cropping ? 'hidden' : 'flex-1'}
           onPick={(linear) => {
             const { temperature, tint, clamped } = whiteBalanceFor(linear);
-            draft.patch({ temperature, tint });
-            tell(
-              `picked grey · temperature ${temperature}, tint ${tint}` +
-                (clamped ? ' · as far as the sliders reach' : ''),
+            auto.apply(
+              'pick',
+              { temperature, tint },
+              `picked grey · temperature ${temperature}, tint ${tint}` + (clamped ? ' · as far as the sliders reach' : ''),
             );
           }}
         />
@@ -2131,8 +2134,7 @@ export default function PictureWorkbench({
               />
               <DevelopAutoSection
                 stats={picture.stats}
-                onPatch={draft.patch}
-                onTold={tell}
+                auto={auto}
                 picking={picture.picking}
                 onPicking={picture.setPicking}
               />

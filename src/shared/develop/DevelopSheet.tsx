@@ -20,6 +20,7 @@ import {
 import DevelopCurve from './DevelopCurve';
 import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
 import { whiteBalanceFor } from './auto-develop';
+import { useAutoMemory } from './use-auto-memory';
 import DevelopHistogram from './DevelopHistogram';
 import DevelopMixer from './DevelopMixer';
 import DevelopGrading from './DevelopGrading';
@@ -120,6 +121,8 @@ export default function DevelopSheet({
   const chip = fidelity ?? own.chip;
   const caption = note ?? own.note;
   const [told, tell] = useTold();
+  // The Auto row's switches remember their clicks while the sheet is open.
+  const auto = useAutoMemory({ develop: draft.draft, onPatch: draft.patch, onTold: tell });
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
   const compact = useIsCompact();
@@ -289,10 +292,10 @@ export default function DevelopSheet({
               pixelView={pixelView}
               onPick={(linear) => {
                 const { temperature, tint, clamped } = whiteBalanceFor(linear);
-                draft.patch({ temperature, tint });
-                tell(
-                  `picked grey · temperature ${temperature}, tint ${tint}` +
-                    (clamped ? ' · as far as the sliders reach' : ''),
+                auto.apply(
+                  'pick',
+                  { temperature, tint },
+                  `picked grey · temperature ${temperature}, tint ${tint}` + (clamped ? ' · as far as the sliders reach' : ''),
                 );
               }}
               // On a phone the picture takes a fixed share of the MEASURED app
@@ -317,8 +320,7 @@ export default function DevelopSheet({
             />
             <DevelopAutoSection
               stats={picture.stats}
-              onPatch={draft.patch}
-              onTold={tell}
+              auto={auto}
               picking={picture.picking}
               onPicking={picture.setPicking}
             />

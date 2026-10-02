@@ -1400,7 +1400,15 @@ why it is its own button, and **Pick grey** asks you for a neutral instead;
 **Auto bands** compresses the ends where the picture leans — a tenth of it
 against black lifts Shadows, a tenth against white pulls Highlights down —
 part of the way, so a picture dark on purpose keeps its character, and says
-when a band runs out before its target. Every setting belongs to the
+when a band runs out before its target. Each is a **switch**: a second click
+puts back what its own sliders held before it and leaves the others alone, so
+of Auto tone and Auto colour you keep the one that helped. A lit switch still
+holds its answer, a dashed one found nothing to change, a half-lit one has
+been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
+Pick grey share the white balance — the newer replaces the older, and turning
+it off gives back the balance from before either. The switches remember
+their clicks for the session only: after a reload they are off and the values
+stay. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on

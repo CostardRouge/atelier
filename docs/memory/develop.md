@@ -237,6 +237,51 @@ cast): Auto tone wrote `black 69 · white 155` and NO colour; Auto colour wrote
 temperature −100 (clamped, said) and tint −36; both pressed again changed
 nothing.
 
+## The Auto verbs are SWITCHES, each taken back alone (2026-10-02)
+
+**Decision (the maintainer, from his lab https://claude.ai/artifact/BQSDJ7VWvuWGTH1t8L3xzv,
+face A, his four questions answered by its recommendations).** After Auto tone
+then Auto colour, only one of them may have helped, and ⌘Z — a stack of whole
+documents — could only take back the LAST. **Why it is cheap**: every verb
+writes its own fields and none is written by two (tone → `levels`, colour and
+Pick grey → `temperature`/`tint`, bands → `shadows`/`highlights`), so a click
+is two small records, its slot before and after, and taking it back is
+`before` on that slot alone. **How it is built**: `auto-slots.ts` (pure,
+specced) + `use-auto-memory.ts` + `AutoSwitch.tsx`. Rules:
+
+- **The state is READ from the develop, never stored on it**: on while the
+  slot holds `after`, off once it holds `before`, `nothing` when the click
+  wrote what was there (dashed), `edited` when anything else moved it
+  (half-lit). That is what makes ⌘Z/⇧⌘Z light and dim the switches with no
+  wiring into the history.
+- **One click rule**: off → apply; on, edited or nothing → put `before` back
+  (an `edited` turn-off drops the hand change on that slot too, said in the
+  told line; undo returns it). Pick grey's switch, when lit, turns off before
+  it would arm the dropper.
+- **A turned-off memo is KEPT and marked `off`**: without the mark a hand
+  moving the slot after the turn-off read as `edited` and the next click
+  "restored" the pre-auto values over the hand's.
+- **Colour and Pick grey share the `balance` slot**: the newer replaces the
+  older and INHERITS its `before` while the slot is held, so turning it off
+  returns the balance from before any auto.
+- **Session only, per picture**: keyed memos live in a module map (the
+  Develop tool remounts its workbench per picture, `entry.id`), the sheet's
+  for as long as it is open. Nothing on the document, no migration; a reload
+  shows every switch off over values that stay — the row's old behaviour.
+  Moving it onto the picture is the recorded next step if that bothers him.
+- **"Already neutral" still WRITES 0/0** (kept on purpose): with the switch,
+  turning it off gives a hand-set temperature back, which was the hidden cost.
+- **Trap**: the lit look appended to `developButtonClass` LOST to its own
+  `border-line-strong bg-paper text-ink-soft` (Tailwind's order, `frontend.md`)
+  — measured `rgb(210,200,179)` on a lit switch; the old armed-dropper look had
+  the same bug. `AutoSwitch` picks each state's colours whole.
+
+Driven headless in the Develop tool (flat warm JPEG): tone + colour lit, tone
+off kept colour, ⌘Z relit tone, ⇧⌘Z dimmed it, bands dashed, Pick grey took
+the slot and its turn-off gave back as shot, a hand nudge read edited and the
+turn-off put 0/0 back. The Trips/Studio sheet shares the section and the hook
+and was NOT driven.
+
 ## A RAW draws today, from the render its camera wrote inside it (2026-09-17, P3)
 
 `shared/exif/raw-probe.ts` (pure, 12 specs) walks a RAW's IFDs through
