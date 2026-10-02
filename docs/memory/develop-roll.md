@@ -1246,5 +1246,13 @@ the sign, a quarter turn needs no account. **Two traps, both measured in the
 specs**: Sobel's kernel is not rotation-symmetric and read a 4° edge as 3.8°
 (a 5 % shrink on every angle) — Scharr's (3, 10, 3) is exact to the tenth;
 and without the blur a nearly horizontal edge is a staircase whose long runs
-vote for 0°. Not driven in a browser: the module is pure and the button is
-one read and one `straighten`.
+vote for 0°. **A third, found only by driving it**: `asShotSample` first drew
+the source to 512 px in ONE `drawImage`, and the browser's default downscale
+is a bilinear SUBSAMPLE — at 3.1× it turned a 4° horizon into a staircase the
+module read as 5.9° at 36 % confidence (reproduced in node by subsampling the
+same picture). The sample is now halved step by step with
+`imageSmoothingQuality = 'high'`, so every source pixel is averaged; a
+sampler for any measurement (a histogram excepted) must downscale that way.
+Driven headless against the dev server on a 1600 × 1200 PNG with a horizon
+falling 4° to the right: *Auto* wrote Straighten −3.9° (79 % of the edges
+agree), kept through a later crop, no page error.
