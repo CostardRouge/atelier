@@ -41,12 +41,13 @@ three accepted as drawn.
 - **The outline is the SAME pass with another `main`** (`finish: 'outline'`,
   id `mask-outline:<id>`): it evaluates `coverage` at the texel and 1.5 texels
   either side and draws ink/paper dashes where they straddle one half — the
-  very line a gradient panel draws. The view is Hidden · Outline · Fill
-  (default Outline, **M** steps it — ON THE LAYERS TAB: off it, `P` and `M`
+  very line a gradient panel draws. The view is Hidden · Outline · Fill, on
+  the picture bar's glyph and **M** (ON THE LAYERS TAB: off it, `P` and `M`
   are the delivery state's, send/hold and ignore, the rule fixed when #183 and
-  #185 met, `EditorKeyPress.layersTab`), shown BY ITSELF while Pick or Paint is on
-  and otherwise only when pinned; **P** toggles Pick/Paint; a new Subject layer
-  starts with Pick on.
+  #185 met, `EditorKeyPress.layersTab`); Hidden by default with the OUTLINE
+  shown by itself while Pick or Paint is on, Outline or Fill kept shown
+  (since 2026-10-02, `mask-ui.md` — the pin checkbox is gone); **P** toggles
+  Pick/Paint; a new Subject layer starts with Pick on.
 - **The blink is what the tap ADDED**: `useSubjectMasks.fresh` is one point's
   raster, reported only for a point new against the points KNOWN at the last
   commit on this picture — so re-opening a picture (every point segmented
@@ -126,12 +127,4 @@ hook's: the workbench is mounted per picture, so the per-hook cache re-asked
 the model for every point on every landing (2 calls → 0 measured). Bounded:
 64 masks (~50 MB), 16 on a constrained device.
 
-## Taking a subject BACK — proposed, not built (2026-10-02)
-
-His report: the model only adds, and sometimes adds too much. Measured in the
-code: `magic_touch` takes a `keypoint` or a `scribble`, never a negative
-point; `loadSegmenter` asks for the CATEGORY mask (cut at the model's own
-threshold) and not the confidence masks it can return. The proposal and the
-order of work are `docs/mask-ui-redesign.md`. If it is built, the rules above
-bind it: a negative point is cached per point and per VIEW, the export removes
-exactly what the stage removes, and the blink stays for what a tap changed.
+What the model's answer is turned into — Remove, Refine — is `subject-model.md`.

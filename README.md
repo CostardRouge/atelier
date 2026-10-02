@@ -1516,7 +1516,19 @@ target for one.
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
 *brightness*, a *colour* range, a mask *painted* by hand, a *subject* found by
-a model from a point you tap, or the *whole picture*. Every Develop slider works inside a layer, and layers add up
+a model from a point you tap, or the *whole picture*. One **+ Layer** opens
+a palette of those kinds, grouped by what you do — *Point at it* (subject,
+colour, brightness), *Draw it* (linear, radial, shade, painted) and
+*Everywhere* — each with its glyph and a line of use (a sheet on a phone).
+The same palette changes a layer's kind, from the chip beside **Mask**, and
+combines a term into its mask. Each row of the list shows a thumbnail of the
+layer's real mask (its terms combined, the subject it takes out cut away),
+its name beside its kind (double-click to rename), chips of what it changes
+and its opacity as a slim bar; drag its grip, or press **⌥↑ / ⌥↓**, to
+reorder, and **⋯** holds Rename, Duplicate, Move up and down, Invert, Change
+type… and Delete. The open layer is named in its own head, beside the chip of
+its kind, and splits into **Mask · where** and **Adjust · what**, so its
+sliders are one tap away. Every Develop slider works inside a layer, and layers add up
 from the bottom of the list to the top. A **shade** is the very shape a Trips
 shade draws, picked with the same controls: where it comes from on the 3×3
 grid (an edge, a quarter circle from a corner, or in the centre a radial and
@@ -1527,9 +1539,26 @@ lands, and its opacity is the strength. A band or a radial can be moved:
 **Place on the picture** (or **P**), then press or drag where it should sit. A new Subject layer starts with
 **Pick** on (**P**): tap the thing you mean and the model finds it at once —
 a ring turns while it thinks, then what the tap added blinks twice — tap
-again to add to it, tap a marker to take it off. While you pick or paint, the
-mask shows by itself as its **outline**; **M** steps it to a red **fill** and
-to hidden, and the box under it keeps it shown once Pick is off. Any layer
+again to add to it, tap a marker to take it off. When the model takes in too
+much — the bench the person leans on — switch the picture's **+ Add | −
+Remove** to Remove, or hold **⌥** for one tap, and tap the part you do not
+want: the model finds that object as well and it is taken **out** of the
+subject, its region blinking in ink, its pin an ink disc with a `−`. Under
+the points, **Refine what it found** works on the model's answer, which is
+how SURE it is pixel by pixel: **Tolerance** moves the cut (higher takes in
+what it was less sure of, lower keeps the core; 50 % is the model's own
+answer), **only what touches my + points** drops a region the model returned
+nowhere near your taps, and **Grow / Shrink** moves the edge by up to 24
+pixels of the 1024 px picture the model is shown. **Edge** is made last: *As
+found*, *Soft* (feathered), or *Snap to edges*, which pulls an edge the model
+drew a few pixels off onto the picture's own (a guided filter over what the
+model was shown) — it refines an edge, and cannot bring back a part the model
+left out. A removed region is cut at the same tolerance and taken out after
+the rest, and no knob asks the model again.
+The mask view is
+one glyph in the picture's bar, beside **A/B** (and **M**): *Hidden*, its
+*Outline* or a red *Fill*. Hidden, its outline still shows by itself while you
+pick or paint; Outline or Fill keep it shown, on the Layers tab only. Any layer
 can take a subject **out** of itself (*Except › The subject*): darken the
 whole picture except the person, and the person's own layer alone decides
 them. The model (17 MB) is served from this site and loads the first time a
@@ -1537,8 +1566,10 @@ subject is asked for; an export segments the same points on the picture it
 delivers.
 
 **Combining masks.** A layer's mask can be combined with up to four more,
-the way Lightroom does it: under **Combine**, pick **Add**, **Subtract** or
-**Intersect**, then the kind. *Add* takes in the new shape too, *Subtract*
+the way Lightroom does it, and the mask reads as a **recipe** of them — a
+tile per term with its own small map, the operator between two (a click on it
+cycles **+**, **−**, **∩**) — and the recipe's **+** opens the palette with
+**Add**, **Subtract** or **Intersect** at its head, then the kind. *Add* takes in the new shape too, *Subtract*
 takes it out (a sky minus the mountain you paint over), *Intersect* keeps only
 where both are (the shadows, but only inside an ellipse). The parts apply in
 order, each with its own invert. The list at the top of the mask panel opens

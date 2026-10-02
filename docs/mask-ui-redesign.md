@@ -1,6 +1,14 @@
 # Develop's layers and masks, measured, and a subject that can be taken back
 
-**Status: proposed on 2026-10-02, nothing built.** This brief comes from his
+**Status: proposed on 2026-10-02, and §5 BUILT the same day, all seven
+steps,** on his *«vas-y avec tes recommandations, construis-le»*, §6 answered
+by its recommendations (the lab's face, ⌥ beside the switch, SAM after steps
+1–3 on his pictures, Refine shown at once). What each step fixed is in
+`docs/memory/subject-model.md` (Remove, Refine, the edge — on the CPU in the
+composer, not as a shader, which is why §5.3's render-gate row was not
+needed) and `docs/memory/mask-ui.md` (the palette, the list, Mask | Adjust and
+the recipe, the mask view as one glyph in the picture's bar).
+This brief comes from his
 report. The lab that carries the proposal as a working mock is
 <https://claude.ai/artifact/5jy9NnEg1SoRdUNjDcAMas>. It holds the stage, the
 proposed inspector, today's inspector as measured, and the model's four paths.

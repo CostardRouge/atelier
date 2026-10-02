@@ -2,27 +2,24 @@ import SectionLegend from '../../shared/ui/SectionLegend';
 import Segmented from '../../shared/ui/Segmented';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
 import Button from '../../shared/ui/Button';
-import { useState } from 'react';
-import IconButton from '../../shared/ui/IconButton';
-import { Icons } from '../../shared/ui/icons';
+import { useRef, useState } from 'react';
 import {
   DEFAULT_BRUSH_HARDNESS,
   DEFAULT_BRUSH_RADIUS,
   DEFAULT_COLOUR_RANGE,
   MAX_COLOUR_SAMPLES,
   defaultMask,
-  describeMask,
+  subjectRefineOf,
+  withSubjectRefine,
   type Mask,
-  type MaskKind,
   type MaskOp,
   type ShadeMask,
+  type SubjectMask,
 } from '../../shared/render/mask';
 import {
   MAX_MASK_PARTS,
-  PART_KINDS,
   addPart,
   componentMask,
-  describePart,
   exceptCandidates,
   layerLabel,
   patchPart,
@@ -42,35 +39,45 @@ import {
   shadeFalloff,
 } from '../../shared/shades/shade-shape';
 import { ShadeDirectionPicker, ShadeFalloffPicker } from '../../shared/shades/ShadePickers';
+import KindGlyph from './KindGlyph';
+import KindPalette from './KindPalette';
+import MaskThumb from './MaskThumb';
+import type { LayerThumb } from './use-layer-thumbs';
+import { kindLabel, takesPointer, type PaletteKind, type PaletteMode } from './kind-palette';
+import {
+  DEFAULT_TOLERANCE,
+  GROW_LIMIT,
+  TOLERANCE_MAX,
+  TOLERANCE_MIN,
+  type SubjectEdge,
+} from '../../shared/segment/subject-refine';
 
-const KIND_OPTIONS: readonly { id: string; label: string }[] = [
-  { id: 'none', label: 'Whole' },
-  { id: 'linear', label: 'Linear' },
-  { id: 'radial', label: 'Radial' },
-  { id: 'shade', label: 'Shade' },
-  { id: 'luma', label: 'Brightness' },
-  { id: 'colour', label: 'Colour' },
-  { id: 'brush', label: 'Painted' },
-  { id: 'subject', label: 'Subject' },
-];
-
-/** A part may be any kind but a subject, and never "the whole picture". */
-const PART_KIND_OPTIONS = KIND_OPTIONS.filter((o) => PART_KINDS.includes(o.id as MaskKind));
-
-const OP_OPTIONS: readonly { id: MaskOp; label: string }[] = [
-  { id: 'add', label: 'Add' },
-  { id: 'subtract', label: 'Subtract' },
-  { id: 'intersect', label: 'Intersect' },
-];
+/** An operator's glyph in the recipe, and what a click on it turns it into. */
+const OP_SYMBOL: Record<MaskOp, string> = { add: '+', subtract: '−', intersect: '∩' };
+const NEXT_OP: Record<MaskOp, MaskOp> = { add: 'subtract', subtract: 'intersect', intersect: 'add' };
 
 const COMBINE_HINT =
-  'Combine a further mask with this one, the way Lightroom does. Add takes in the new shape as well (the larger of the two wherever they overlap, so a shape added to itself changes nothing); Subtract takes it out — a sky minus the mountain you paint over; Intersect keeps only where both are — the shadows, but only inside an ellipse. Parts apply in order, each one reading what the ones above it made, and each has its own invert. A subject is not offered as a part: a Subject layer can carry parts of its own, and “everything but the subject” is Except, below.';
+  'The mask reads as a recipe: its own term, then each further one with the operator that combines it — the way Lightroom does. Click a term to open it, an operator to change it, + to combine another. Add takes in the new shape as well (the larger of the two wherever they overlap, so a shape added to itself changes nothing); Subtract takes it out — a sky minus the mountain you paint over; Intersect keeps only where both are — the shadows, but only inside an ellipse. Parts apply in order, each one reading what the ones above it made, and each has its own invert. A subject is not offered as a part: a Subject layer can carry parts of its own, and “everything but the subject” is Except, below.';
 
 const COLOUR_HINT =
   'Turn Pick on and tap a colour on the picture: every pixel near that colour is in the mask, wherever it is — a sky’s blue, a jacket, the green of a hillside. Tap again elsewhere to add up to five colours; tap a marker to remove it. The colour is taken from the picture as THIS layer sees it — the develop, the look and the layers below, not this layer’s own change nor anything above it — and stored, so the mask does not move when a slider does. Refine widens or narrows how far a colour may stray and still be in; lightness counts half as much as hue, so a sampled blue takes in the sky’s lighter and darker blues but not a grey of the same brightness.';
 
 const SUBJECT_HINT =
-  'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. Tapping a marker you already placed removes it. It is the whole subject the model returns, not a region you drew, so it follows an edge better than a brush and understands nothing about why you chose it: if it takes in too much, remove the point and tap somewhere more specific, or fall back to painting. “Background” is this mask inverted — the checkbox below.';
+  'A model finds the subject you tap. Turn Pick on and tap the thing you mean — a person, a car, a dog — and tap again anywhere else to add to it, which is how you take in someone AND their bag. When it takes in too much — the bench the person leans on, a second person far away — switch to Remove (or hold ⌥ for one tap) and tap the part you do not want: the model finds that object too, and it is taken out of the subject. Tapping a point you already placed takes it off. “Background” is this mask inverted — the checkbox below.';
+
+const REFINE_HINT =
+  'The model answers a tap with how SURE it is, pixel by pixel; these three work on that answer, never on the points. Tolerance moves the cut: higher takes in what it was less sure of — an edge, a neighbour it half-joined — lower keeps only the core; 50 % is the model’s own answer. Only what touches my + points drops every region no added point lands in — the second person a tap on the first also found. Grow / Shrink moves the edge, in pixels of the 1024 px picture the model is shown. A removed region is cut at the same Tolerance and taken out after, so growing never creeps back into it. Edge is made last: As found is the cut as it is, Soft feathers it, and Snap pulls an edge the model drew roughly onto the picture’s own, within a few pixels — a guided filter over what the model was shown. It refines an edge; it cannot bring back a part the model left out (tap that part, or paint it).';
+
+const EDGE_OPTIONS: readonly { id: SubjectEdge; label: string }[] = [
+  { id: 'found', label: 'As found' },
+  { id: 'soft', label: 'Soft' },
+  { id: 'snap', label: 'Snap to edges' },
+];
+
+const SUBJECT_TONES: readonly { id: 'add' | 'remove'; label: string }[] = [
+  { id: 'add', label: '+ Add' },
+  { id: 'remove', label: '− Remove' },
+];
 
 const PAINT_HINT =
   'With Paint on, a drag across the picture lays a stroke; the before/after wipe waits until it is off. Erase takes coverage away, and only from what is already there — a stroke painted after an eraser comes back, because strokes apply in the order they were made. Size and Softness are set before a stroke, not after: each stroke keeps the ones it was painted with, which is what lets a soft edge and a hard one live in the same mask.';
@@ -114,7 +121,10 @@ export default function MaskPanel({
   onBrush,
   painting,
   onPainting,
+  subjectTone,
+  onSubjectTone,
   subject,
+  terms,
 }: {
   layer: AdjustLayer;
   /** The whole stack, for the subjects this layer may take out of itself. */
@@ -128,14 +138,22 @@ export default function MaskPanel({
   onBrush: (patch: Partial<{ radius: number; hardness: number; erase: boolean }>) => void;
   painting: boolean;
   onPainting: (on: boolean) => void;
+  /** What a tap on a subject does — added to it, or taken out (⌥ flips it). */
+  subjectTone?: 'add' | 'remove';
+  onSubjectTone?: (tone: 'add' | 'remove') => void;
   /** Present only for a subject mask — how its segmentation is getting on. */
   subject: SubjectStatus | null;
+  /** Each term's own map — the layer's mask, then each part (`use-layer-thumbs.ts`). */
+  terms?: readonly LayerThumb[];
 }) {
-  const [nextOp, setNextOp] = useState<MaskOp>('add');
+  // The palette of kinds, open from the kind chip (change it) or from
+  // Combine (add a term) — one palette for both, `kind-palette.ts`.
+  const [palette, setPalette] = useState<PaletteMode | null>(null);
+  const kindRef = useRef<HTMLButtonElement>(null);
+  const combineRef = useRef<HTMLButtonElement>(null);
   const parts = layer.parts ?? [];
   const open = part !== null && parts[part] ? part : null;
   const mask = componentMask(layer, open);
-  const kind: string = mask?.kind ?? 'none';
   const invert = open === null ? layer.invert : parts[open].invert;
   // The subjects this layer may SUBTRACT — «sauf le sujet», the maintainer's
   // pick (2026-09-23). Offered only where one exists: a control with nothing
@@ -150,12 +168,15 @@ export default function MaskPanel({
     if (open === null) onPatch({ mask: next });
     else if (next) onPatch({ parts: withComponentMask(layer, open, next).parts });
   };
-  const setKind = (next: string) => {
+  const setKind = (next: PaletteKind) => {
     // Switching kinds STARTS the new shape fresh rather than carrying numbers
     // across: a radius is not an angle, and a half-translated shape is worse
     // than an obvious default.
-    setMask(next === 'none' ? null : defaultMask(next as MaskKind));
+    setMask(next === 'whole' ? null : defaultMask(next));
+    onPainting(takesPointer(next));
   };
+  const currentKind: PaletteKind = mask?.kind ?? 'whole';
+  const paletteAnchor = palette === 'part' ? combineRef : kindRef;
   const patchMask = (patch: Partial<Record<string, number>>) => {
     if (!mask) return;
     setMask({ ...mask, ...patch } as Mask);
@@ -166,80 +187,126 @@ export default function MaskPanel({
   };
 
   return (
-    <div className="flex flex-col gap-2">
-      <SectionLegend label={parts.length ? `Mask · ${parts.length + 1} combined` : `Mask · ${describeMask(layer.mask)}`}>
-        <p>{HINT}</p>
-      </SectionLegend>
-
-      {/* The COMPONENTS, once there is more than one: the layer's own mask,
-          then each part in the order it applies. A row opens it below — the
-          controls, and what the stage's Pick / Paint act on. */}
-      {parts.length > 0 && (
-        <ul className="m-0 flex list-none flex-col gap-1 p-0">
+    <div className="flex flex-col gap-2.5">
+      {/* The RECIPE: the mask as an equation of its terms — the layer's own
+          mask, then each part with the operator that combines it. A term
+          opens below on a click (its controls, and what Pick / Paint act
+          on), an operator cycles on a click, and `+` combines another
+          through the palette (`docs/mask-ui-redesign.md` §3.4). */}
+      <div className="flex flex-col gap-1">
+        <SectionLegend label="Where it applies">
+          <p>{HINT}</p>
+          <p>{COMBINE_HINT}</p>
+        </SectionLegend>
+        <div
+          role="group"
+          aria-label="The mask, as a recipe"
+          className="flex flex-wrap items-center gap-1.5 rounded-paper border border-line bg-paper p-2"
+        >
           {[null, ...parts.map((_, i) => i)].map((i) => {
-            const selected = i === open;
-            const label =
-              i === null
-                ? `${layer.invert ? 'not ' : ''}${describeMask(layer.mask)}`
-                : describePart(parts[i]);
+            const term = i === null ? layer.mask : parts[i].mask;
+            const turned = i === null ? layer.invert : parts[i].invert;
+            const termKind: PaletteKind = term?.kind ?? 'whole';
+            const opened = i === open;
             return (
-              <li
-                key={i === null ? 'own' : i}
-                className={`flex items-center gap-1 rounded-paper border px-1.5 py-0.5 ${
-                  selected ? 'border-accent bg-surface-raised' : 'border-line'
-                }`}
-              >
+              <div key={i === null ? 'own' : i} className="contents">
+                {i !== null && (
+                  <button
+                    type="button"
+                    title={`${parts[i].op} — click to change`}
+                    aria-label={`Combine: ${parts[i].op}. Click to change`}
+                    onClick={() =>
+                      onPatch({ parts: patchPart(layer, i, { op: NEXT_OP[parts[i].op] }).parts })
+                    }
+                    className="grid h-[26px] w-[26px] place-items-center rounded-full border border-line-strong bg-surface p-0 font-mono text-sm font-semibold text-ink cursor-pointer hover:border-ink"
+                  >
+                    {OP_SYMBOL[parts[i].op]}
+                  </button>
+                )}
                 <button
                   type="button"
-                  aria-pressed={selected}
-                  className="flex-1 min-w-0 truncate bg-transparent border-0 p-0 text-left font-mono text-2xs text-ink"
+                  aria-pressed={opened}
+                  title={opened ? 'Open below' : 'Open this term'}
                   onClick={() => onPart(i)}
+                  className={`flex min-w-[58px] flex-col items-center gap-0.5 rounded-[9px] border-[1.5px] bg-surface px-1 pb-0.5 pt-1 cursor-pointer ${
+                    opened ? 'border-accent' : 'border-line hover:border-line-strong'
+                  }`}
                 >
-                  {i === null ? <span className="text-faint">mask · </span> : null}
-                  {label}
+                  <MaskThumb thumb={terms?.[i === null ? 0 : i + 1]} className="h-8 w-12 rounded-[4px]" />
+                  <span className="max-w-[64px] truncate font-mono text-3xs text-ink-soft">
+                    {turned && <b className="font-semibold text-accent-ink">not </b>}
+                    {kindLabel(termKind)}
+                  </span>
                 </button>
-                {i !== null && (
-                  <IconButton
-                    size="sm"
-                    label={`Remove ${label}`}
-                    onClick={() => {
-                      onPatch({ parts: removePart(layer, i).parts });
-                      onPart(null);
-                    }}
-                  >
-                    {Icons.trash}
-                  </IconButton>
-                )}
-              </li>
+              </div>
             );
           })}
-        </ul>
-      )}
+          {parts.length < MAX_MASK_PARTS && (
+            <button
+              ref={combineRef}
+              type="button"
+              aria-haspopup="dialog"
+              aria-expanded={palette === 'part'}
+              aria-label="Combine another mask"
+              title="Combine another mask — add, subtract or intersect"
+              onClick={() => setPalette((m) => (m === 'part' ? null : 'part'))}
+              className="h-[52px] w-[58px] rounded-[9px] border-[1.5px] border-dashed border-line-strong bg-transparent text-lg text-muted cursor-pointer hover:border-ink-soft hover:text-ink"
+            >
+              +
+            </button>
+          )}
+        </div>
+      </div>
 
+      {/* An open TERM: its kind, through the same palette, and its way out. */}
       {open !== null && (
         <div className="flex items-center gap-2">
-          <span className="font-mono text-3xs text-faint">This part</span>
-          <Segmented
-            size="sm"
-            label="How this part combines"
-            value={parts[open].op}
-            onChange={(v) => onPatch({ parts: patchPart(layer, open, { op: v as MaskOp }).parts })}
-            options={OP_OPTIONS}
-          />
+          <span className="font-mono text-3xs text-faint">This term</span>
+          <button
+            ref={kindRef}
+            type="button"
+            aria-haspopup="dialog"
+            aria-expanded={palette === 'part-type'}
+            title="Change what this term is"
+            onClick={() => setPalette((m) => (m ? null : 'part-type'))}
+            className="inline-flex items-center gap-1.5 rounded-full border border-line-strong bg-paper py-0.5 pl-1.5 pr-2.5 text-xs text-ink cursor-pointer hover:border-ink-soft"
+          >
+            <KindGlyph kind={currentKind} className="h-[15px] w-[22px]" />
+            {kindLabel(currentKind)} ▾
+          </button>
+          <span className="flex-1" />
+          <button
+            type="button"
+            className={developLinkClass}
+            onClick={() => {
+              onPatch({ parts: removePart(layer, open).parts });
+              onPart(null);
+            }}
+          >
+            Remove this term
+          </button>
         </div>
       )}
-
-      {/* Seven kinds do not fit one row at an inspector's width — the labels
-          ran together as "Radial BrightnessPainted". `columns` is what this
-          control has for a choice bigger than a row. */}
-      <Segmented
-        columns={open === null ? 4 : 3}
-        size="sm"
-        label={open === null ? 'Mask' : 'Part'}
-        value={kind}
-        onChange={setKind}
-        options={open === null ? KIND_OPTIONS : PART_KIND_OPTIONS}
-      />
+      {palette && (
+        <KindPalette
+          mode={palette}
+          current={palette === 'part' ? null : currentKind}
+          anchorRect={() => paletteAnchor.current?.getBoundingClientRect() ?? null}
+          within={paletteAnchor}
+          onClose={() => setPalette(null)}
+          onPick={(picked, op) => {
+            setPalette(null);
+            if (palette === 'part') {
+              if (picked === 'whole') return;
+              onPatch({ parts: addPart(layer, op, picked).parts });
+              onPart(parts.length);
+              onPainting(takesPointer(picked));
+            } else if (picked !== currentKind) {
+              setKind(picked);
+            }
+          }}
+        />
+      )}
 
       {mask && (
         <ShapeControls
@@ -251,6 +318,8 @@ export default function MaskPanel({
           onBrush={onBrush}
           painting={painting}
           onPainting={onPainting}
+          subjectTone={subjectTone}
+          onSubjectTone={onSubjectTone}
           subject={subject}
         />
       )}
@@ -291,31 +360,6 @@ export default function MaskPanel({
           </span>
         </div>
       )}
-      {parts.length < MAX_MASK_PARTS && (
-        <div className="flex flex-col gap-1">
-          <SectionLegend label="Combine">
-            <p>{COMBINE_HINT}</p>
-          </SectionLegend>
-          <Segmented size="sm" label="How the next mask combines" value={nextOp} onChange={(v) => setNextOp(v as MaskOp)} options={OP_OPTIONS} />
-          <div className="flex flex-wrap items-center gap-1">
-            {PART_KIND_OPTIONS.map((o) => (
-              <Button
-                key={o.id}
-                size="sm"
-                variant="ghost"
-                onClick={() => {
-                  onPatch({ parts: addPart(layer, nextOp, o.id as MaskKind).parts });
-                  onPart(parts.length);
-                  // A colour or a painted part is made with the pointer.
-                  onPainting(o.id === 'colour' || o.id === 'brush');
-                }}
-              >
-                {nextOp === 'add' ? '+' : nextOp === 'subtract' ? '−' : '∩'} {o.label}
-              </Button>
-            ))}
-          </div>
-        </div>
-      )}
 
     </div>
   );
@@ -331,6 +375,8 @@ function ShapeControls({
   onBrush,
   painting,
   onPainting,
+  subjectTone = 'add',
+  onSubjectTone,
   subject,
 }: {
   mask: Mask;
@@ -341,6 +387,8 @@ function ShapeControls({
   onBrush: (patch: Partial<{ radius: number; hardness: number; erase: boolean }>) => void;
   painting: boolean;
   onPainting: (on: boolean) => void;
+  subjectTone?: 'add' | 'remove';
+  onSubjectTone?: (tone: 'add' | 'remove') => void;
   subject: SubjectStatus | null;
 }) {
   return (
@@ -533,8 +581,22 @@ function ShapeControls({
             >
               {painting ? 'Picking' : 'Pick'}
             </Button>
+            {onSubjectTone && (
+              <Segmented
+                size="sm"
+                label="What a tap on the picture does"
+                value={subjectTone}
+                onChange={(v) => onSubjectTone(v)}
+                options={SUBJECT_TONES}
+              />
+            )}
             <span className="flex-1" />
-            <Button size="sm" variant="ghost" disabled={!mask.points.length} onClick={() => setMask({ ...mask, points: [] })}>
+            <Button
+              size="sm"
+              variant="ghost"
+              disabled={!mask.points.length && !mask.minus?.length}
+              onClick={() => setMask({ kind: 'subject', model: mask.model, points: [] })}
+            >
               Clear
             </Button>
           </div>
@@ -542,17 +604,20 @@ function ShapeControls({
             {subject?.state === 'unavailable'
               ? 'the model could not be loaded — every other mask still works'
               : mask.points.length === 0
-                ? 'tap the subject on the picture'
+                ? mask.minus?.length
+                  ? 'tap the subject to add it — a removal alone takes away from nothing'
+                  : 'tap the subject on the picture'
                 : subject?.working
-                  ? `finding it… (${mask.points.length} point${mask.points.length === 1 ? '' : 's'})`
+                  ? `finding it… (${pointCount(mask)})`
                   : subject?.resolved
-                    ? `${mask.points.length} point${mask.points.length === 1 ? '' : 's'} · tap a marker to remove it${
+                    ? `${pointCount(mask)} · ⌥-tap takes a part out · tap a point to drop it${
                         // Found, and still doing nothing: said, or a subject
                         // that the model answered reads as a pick that failed.
                         isDefaultDevelop(layer.develop) ? ' · found — move a slider below to act on it' : ''
                       }`
                     : 'the model is loading — 17 MB, once per visit'}
           </span>
+          {mask.points.length > 0 && <SubjectRefineControls mask={mask} setMask={setMask} />}
         </>
       )}
 
@@ -604,6 +669,13 @@ function ShapeControls({
 }
 
 const pct = (v: number) => `${Math.round(v * 100)} %`;
+
+/** `2 points`, `2 points, 1 taken out`. */
+function pointCount(mask: { points: readonly unknown[]; minus?: readonly unknown[] }): string {
+  const n = mask.points.length;
+  const out = mask.minus?.length ?? 0;
+  return `${n} point${n === 1 ? '' : 's'}${out ? `, ${out} taken out` : ''}`;
+}
 
 /** Where a shape is darkest when it is not inverted, in a word. */
 function anchorWord(direction: ShadeMask['direction']): string {
@@ -717,5 +789,56 @@ function ShadeControls({
         invert — clear at the {anchorWord(mask.direction)}, full at the far end of the {round ? 'radius' : 'reach'}
       </label>
     </>
+  );
+}
+
+/**
+ * The three knobs over what the model found (`subject-refine.ts`), shown at
+ * once under the subject's status — his answer to the brief's question 4.
+ * Each one writes through `withSubjectRefine`, which leaves a default off
+ * the record.
+ */
+function SubjectRefineControls({ mask, setMask }: { mask: SubjectMask; setMask: (mask: Mask) => void }) {
+  const refine = subjectRefineOf(mask);
+  return (
+    <div className="flex flex-col gap-2 pt-1">
+      <SectionLegend label="Refine what it found">
+        <p>{REFINE_HINT}</p>
+      </SectionLegend>
+      <RangeSlider
+        label="Tolerance"
+        value={refine.tolerance}
+        range={{ min: TOLERANCE_MIN, max: TOLERANCE_MAX, step: 0.01, unit: '' }}
+        reset={DEFAULT_TOLERANCE}
+        printed={`${Math.round(refine.tolerance * 100)} %`}
+        onChange={(v) => setMask(withSubjectRefine(mask, { tolerance: v }))}
+      />
+      <RangeSlider
+        label="Grow / Shrink"
+        value={refine.grow}
+        range={{ min: -GROW_LIMIT, max: GROW_LIMIT, step: 1, unit: '' }}
+        reset={0}
+        printed={`${refine.grow > 0 ? '+' : ''}${refine.grow} px`}
+        onChange={(v) => setMask(withSubjectRefine(mask, { grow: v }))}
+      />
+      <div className="flex flex-wrap items-center gap-2">
+        <span className="text-xs text-ink">Edge</span>
+        <Segmented
+          size="sm"
+          label="Edge"
+          value={refine.edge}
+          onChange={(v) => setMask(withSubjectRefine(mask, { edge: v }))}
+          options={EDGE_OPTIONS}
+        />
+      </div>
+      <label className="flex items-center gap-1.5 font-mono text-3xs text-faint">
+        <input
+          type="checkbox"
+          checked={refine.islands}
+          onChange={(e) => setMask(withSubjectRefine(mask, { islands: e.target.checked }))}
+        />
+        only what touches my + points
+      </label>
+    </div>
   );
 }

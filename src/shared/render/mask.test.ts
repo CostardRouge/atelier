@@ -15,8 +15,14 @@ import {
   maskAt,
   normaliseMask,
   sameMask,
+  SUBJECT_HIT_RADIUS,
   SUBJECT_MODEL,
+  dropSubjectPin,
   smoothStep01,
+  subjectPins,
+  subjectRefineOf,
+  tapSubject,
+  withSubjectRefine,
   type BrushMask,
   type ColourMask,
   type ColourSample,
@@ -222,6 +228,100 @@ describe('a subject mask', () => {
   it('says how many points, or asks for one', () => {
     expect(describeMask({ kind: 'subject', points: [], model: 'x' })).toBe('subject · tap it');
     expect(describeMask({ kind: 'subject', points: [[0.5, 0.5]], model: 'x' })).toBe('subject · 1 point');
+    expect(describeMask({ kind: 'subject', points: [[0.5, 0.5]], minus: [[0.2, 0.2]], model: 'x' })).toBe('subject · 1 point − 1');
+  });
+
+  it('keeps the points it TAKES AWAY, and leaves an old mask without the field', () => {
+    const m = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], minus: [[0.7, 0.4], 'junk', [3, 0.2]] }) as SubjectMask;
+    expect(m.minus).toEqual([[0.7, 0.4], [1, 0.2]]);
+    // A roll stored before the field reads back exactly as it was written.
+    expect('minus' in (normaliseMask({ kind: 'subject', points: [[0.5, 0.5]] }) as SubjectMask)).toBe(false);
+    expect('minus' in (normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], minus: [] }) as SubjectMask)).toBe(false);
+  });
+
+  it('compares and clones the points it takes away, an empty list equal to none', () => {
+    const a = { kind: 'subject', points: [[0.5, 0.5]], model: 'a' } as SubjectMask;
+    expect(sameMask(a, { ...a, minus: [] })).toBe(true);
+    expect(sameMask(a, { ...a, minus: [[0.1, 0.1]] })).toBe(false);
+    const live = { ...a, minus: [[0.1, 0.1]] } as SubjectMask;
+    const held = cloneMask(live) as SubjectMask;
+    (live.minus as [number, number][]).push([0.3, 0.3]);
+    expect(held.minus).toEqual([[0.1, 0.1]]);
+    expect('minus' in (cloneMask(a) as SubjectMask)).toBe(false);
+  });
+});
+
+describe('a tap on a subject', () => {
+  const base = { kind: 'subject', points: [[0.5, 0.5]], model: 'x' } as SubjectMask;
+
+  it('adds a point, or takes a region away, as the tone says', () => {
+    expect(tapSubject(base, [0.2, 0.2], 'add').points).toEqual([[0.5, 0.5], [0.2, 0.2]]);
+    const less = tapSubject(base, [0.8, 0.3], 'remove');
+    expect(less.points).toEqual([[0.5, 0.5]]);
+    expect(less.minus).toEqual([[0.8, 0.3]]);
+  });
+
+  it('takes the NEAREST pin off, of either kind, whatever the tone', () => {
+    const both = { ...base, minus: [[0.52, 0.5]] } as SubjectMask;
+    // Nearer the removed pin: it goes, and the mode the tap was in is moot.
+    const a = tapSubject(both, [0.53, 0.5], 'add');
+    expect(a.points).toEqual([[0.5, 0.5]]);
+    expect('minus' in a).toBe(false);
+    // Nearer the added one: that one goes.
+    expect(tapSubject(both, [0.49, 0.5], 'remove').points).toEqual([]);
+  });
+
+  it('lists the pins added first, and drops one by that index', () => {
+    const both = { ...base, minus: [[0.1, 0.1], [0.2, 0.2]] } as SubjectMask;
+    expect(subjectPins(both).map((p) => p.tone)).toEqual(['add', 'remove', 'remove']);
+    expect(dropSubjectPin(both, 0).points).toEqual([]);
+    expect(dropSubjectPin(both, 2).minus).toEqual([[0.1, 0.1]]);
+    expect(SUBJECT_HIT_RADIUS).toBeGreaterThan(0);
+  });
+
+  it('keeps the refine settings through every pin edit — they are the subject\'s', () => {
+    const refined = { ...base, minus: [[0.1, 0.1]], tolerance: 0.7, islands: true, grow: -3 } as SubjectMask;
+    for (const next of [tapSubject(refined, [0.9, 0.9], 'add'), dropSubjectPin(refined, 1), dropSubjectPin(refined, 0)]) {
+      expect(subjectRefineOf(next)).toEqual({ tolerance: 0.7, islands: true, grow: -3, edge: 'found' });
+    }
+    expect('minus' in dropSubjectPin(refined, 1)).toBe(false);
+  });
+});
+
+describe('a subject\'s refine settings', () => {
+  const base = { kind: 'subject', points: [[0.5, 0.5]], model: 'x' } as SubjectMask;
+
+  it('are off the record at their defaults, so a stored roll reads back as written', () => {
+    const m = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]] }) as SubjectMask;
+    expect(['tolerance', 'islands', 'grow', 'edge'].some((k) => k in m)).toBe(false);
+    expect(subjectRefineOf(m)).toEqual({ tolerance: 0.5, islands: false, grow: 0, edge: 'found' });
+    // Turned back to its default, a knob leaves nothing behind.
+    const back = withSubjectRefine(withSubjectRefine(base, { tolerance: 0.8, grow: 4, edge: 'snap' }), {
+      tolerance: 0.5,
+      grow: 0,
+      edge: 'found',
+    });
+    expect(back).toEqual(base);
+  });
+
+  it('are read in range, junk dropped', () => {
+    const m = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], tolerance: 2, islands: 'yes', grow: -99.4, edge: 'blur' }) as SubjectMask;
+    expect(m.tolerance).toBe(0.95);
+    expect('islands' in m).toBe(false);
+    expect(m.grow).toBe(-24);
+    expect('edge' in m).toBe(false);
+    const kept = normaliseMask({ kind: 'subject', points: [[0.5, 0.5]], tolerance: 0.3, islands: true, grow: 2, edge: 'snap' }) as SubjectMask;
+    expect(subjectRefineOf(kept)).toEqual({ tolerance: 0.3, islands: true, grow: 2, edge: 'snap' });
+  });
+
+  it('are compared and cloned, a written default equal to none', () => {
+    expect(sameMask(base, { ...base, tolerance: 0.5, grow: 0, islands: false })).toBe(true);
+    expect(sameMask(base, { ...base, tolerance: 0.6 })).toBe(false);
+    expect(sameMask(base, { ...base, islands: true })).toBe(false);
+    expect(sameMask(base, { ...base, grow: 1 })).toBe(false);
+    expect(sameMask(base, { ...base, edge: 'soft' })).toBe(false);
+    const held = cloneMask({ ...base, tolerance: 0.7, islands: true, grow: 5, edge: 'snap' }) as SubjectMask;
+    expect(subjectRefineOf(held)).toEqual({ tolerance: 0.7, islands: true, grow: 5, edge: 'snap' });
   });
 });
 

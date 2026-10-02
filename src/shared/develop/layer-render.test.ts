@@ -269,13 +269,23 @@ describe('makeLayerPassCache', () => {
     expect(cache.overlay(layer({ mask: null, except: 's' }), 1.5, null, 'outline', cut)).not.toBeNull();
   });
 
-  it('keeps the blink for the same raster and lets it go with none', () => {
+  it('keeps the blink for the same tap and lets it go with none', () => {
     const cache = makeLayerPassCache();
     const r: BrushRaster = { data: new Uint8Array(4), width: 2, height: 2 };
-    const first = cache.flash(r, 1.5);
+    const blink = { raster: r, tone: 'add' as const };
+    const first = cache.flash(blink, 1.5);
     expect(first).not.toBeNull();
-    expect(cache.flash(r, 1.5)).toBe(first);
+    expect(cache.flash(blink, 1.5)).toBe(first);
     expect(cache.flash(null, 1.5)).toBeNull();
+  });
+
+  it('blinks a region taken OUT in another cube than one added', () => {
+    const cache = makeLayerPassCache();
+    const r: BrushRaster = { data: new Uint8Array(4), width: 2, height: 2 };
+    const added = cache.flash({ raster: r, tone: 'add' }, 1.5);
+    const removed = cache.flash({ raster: r, tone: 'remove' }, 1.5);
+    expect(added?.id).toBe('mask-flash-add');
+    expect(removed?.id).toBe('mask-flash-remove');
   });
 });
 
