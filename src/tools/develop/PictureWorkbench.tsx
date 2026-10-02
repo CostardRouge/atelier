@@ -172,6 +172,7 @@ import DeliverBar from '../../shared/ui/DeliverBar';
 import { runClock } from '../../shared/ui/RunLockNotice';
 import CropStage from './CropStage';
 import { useCropZone } from './use-crop-zone';
+import { useSubjectCrop } from './use-subject-crop';
 import { CROP_VIEW_FIT, CROP_VIEW_MAX } from './crop-view';
 import type { RollExports } from './use-roll-export';
 
@@ -183,6 +184,14 @@ function withShadeCentre(m: ShadeMask, point: readonly [number, number]): ShadeM
 
 /** How long the picture rests before its filmstrip cell is redrawn. */
 const SNAPSHOT_DELAY_MS = 700;
+
+/**
+ * Which grid column of the host the stage and the inspector take — the band
+ * under the picture leaves the stage first, a band standing at the LEFT
+ * pushes it to the second (`StripPrefs.place`); the inspector keeps the last.
+ */
+const COLUMN_CLASS = { 1: 'col-start-1', 2: 'col-start-2', 3: 'col-start-3' } as const;
+const STAGE_COLUMNS = { stage: 1, panel: 2 } as const;
 
 const NO_FILES: readonly File[] = [];
 const NO_LAYERS: readonly AdjustLayer[] = [];
@@ -285,6 +294,16 @@ export default function PictureWorkbench({
   timelapseOpen = false,
   onTimelapseOpen,
   onMakingOf,
+  selecting = false,
+  onSelectMode,
+  onSelectAll,
+  onEscape,
+  onBand,
+  onSheet,
+  onThumbs,
+  focused = false,
+  onFocusMode,
+  columns = STAGE_COLUMNS,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
   picture: RollPicture;
@@ -363,6 +382,30 @@ export default function PictureWorkbench({
   onTimelapseOpen?: (open: boolean) => void;
   /** The picture's own making-of edits — a chapter hidden, a caption rewritten. */
   onMakingOf?: (change: { hidden?: string[]; captions?: Record<string, string> }) => void;
+  /** The band's selection is on (`RollEditor`): ⌘A takes every shown picture, P / U / M act on the marked ones. */
+  selecting?: boolean;
+  /** `S` — the band's selection on ↔ off. */
+  onSelectMode?: () => void;
+  /** ⌘A while the selection is on. */
+  onSelectAll?: () => void;
+  /** Escape with nothing of the stage's to let go: the host's turn (the selection, the sheet, the focus). True when it took it. */
+  onEscape?: () => boolean;
+  /** `B` — the band folded to its rail ↔ back to its size. */
+  onBand?: () => void;
+  /** `G` — the contact sheet over the stage ↔ closed. */
+  onSheet?: () => void;
+  /** The picture alone (`F`): the inspector is not drawn and the ⤢ verb says so. */
+  focused?: boolean;
+  /** `F`, and the ⤢ verb — focus on ↔ off. */
+  onFocusMode?: () => void;
+  /**
+   * Which grid columns the stage and the inspector take in the host's grid:
+   * the first and the second by default; one further right each when the
+   * roll's band stands in a column at the left (`RollEditor`).
+   */
+  columns?: { stage: 1 | 2; panel: 2 | 3 };
+  /** `-` / `=` — the band's thumbnails one step smaller or larger. */
+  onThumbs?: (direction: 1 | -1) => void;
   /** What the stage says while the picture's bytes are not in hand. */
   emptyText?: string;
 }) {
@@ -1115,8 +1158,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1307,6 +1350,14 @@ export default function PictureWorkbench({
     onAspect: setAspectDraft,
     onFraming: setFramingDraft,
   });
+  const subjectCrop = useSubjectCrop({
+    picture,
+    crop,
+    layers: layersDraft,
+    rasters: resolvedSubjects,
+    taskScope,
+    onTold: tell,
+  });
   useEffect(() => {
     if (!source) return;
     const t = window.setTimeout(() => {
@@ -1320,8 +1371,8 @@ export default function PictureWorkbench({
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
   // --- keys --------------------------------------------------------------------
-  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing });
-  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing };
+  const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
+  keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
@@ -1337,6 +1388,7 @@ export default function PictureWorkbench({
         targetTypes: targetOwnsTyping(describeKeyTarget(e.target)),
         hasSelection: Boolean(window.getSelection()?.toString()),
         layersTab: keyState.current.tab === 'layers',
+        selecting: keyState.current.selecting,
       });
       if (!action) return;
       const { draft: d, picture: pic, tell: say, crop: c, tab: open } = keyState.current;
@@ -1415,6 +1467,37 @@ export default function PictureWorkbench({
           e.preventDefault();
           keyState.current.setFactsOn(!keyState.current.factsOn);
           return;
+        case 'select':
+          if (!callbacks.current.onSelectMode) return;
+          e.preventDefault();
+          callbacks.current.onSelectMode();
+          return;
+        case 'select-all':
+          if (!callbacks.current.onSelectAll) return;
+          e.preventDefault();
+          callbacks.current.onSelectAll();
+          return;
+        case 'band':
+          if (!callbacks.current.onBand) return;
+          e.preventDefault();
+          callbacks.current.onBand();
+          return;
+        case 'sheet':
+          if (!callbacks.current.onSheet) return;
+          e.preventDefault();
+          callbacks.current.onSheet();
+          return;
+        case 'focus':
+          if (!callbacks.current.onFocusMode) return;
+          e.preventDefault();
+          callbacks.current.onFocusMode();
+          return;
+        case 'thumbs-smaller':
+        case 'thumbs-larger':
+          if (!callbacks.current.onThumbs) return;
+          e.preventDefault();
+          callbacks.current.onThumbs(action === 'thumbs-larger' ? 1 : -1);
+          return;
         case 'clipping':
           e.preventDefault();
           keyState.current.setClipping((on) => !on);
@@ -1464,7 +1547,10 @@ export default function PictureWorkbench({
           if (keyState.current.repairing) {
             e.preventDefault();
             setRepairing(false);
+            return;
           }
+          // Then the host's: the band's selection, its sheet, the focus.
+          if (callbacks.current.onEscape?.()) e.preventDefault();
           return;
       }
     };
@@ -1774,7 +1860,7 @@ export default function PictureWorkbench({
 
   return (
     <>
-      <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : 'col-start-1 row-start-1 min-w-0 min-h-0 flex flex-col gap-2'}>
+      <div className={compact ? 'flex-1 min-h-0 flex flex-col gap-2' : `${COLUMN_CLASS[columns.stage]} row-start-1 min-w-0 min-h-0 flex flex-col gap-2`}>
         {/* One row above a phone: the name gives way first, the verbs never
             wrap. On a phone the name gave way ENTIRELY ("D…" at 390px), so
             the verbs take a line of their own under it — `contents` at every
@@ -1911,6 +1997,26 @@ export default function PictureWorkbench({
                 A/B
               </button>
             )}
+            {/* FOCUS — the picture alone, the band, the inspector and the page
+                bar away (`docs/develop-roll-browser.md`, face D): a verb at
+                every width, since a phone has no F and the way back must be
+                where the way in was. Lit while on, like the A/B. */}
+            {onFocusMode && (
+              <button
+                type="button"
+                className={`${helpVerb} ${
+                  focused
+                    ? 'border-accent bg-accent-wash text-accent-ink'
+                    : 'border-transparent bg-transparent text-muted hover:text-accent-ink'
+                }`}
+                onClick={onFocusMode}
+                aria-pressed={focused}
+                title={focused ? 'Focus — the picture alone; F or Esc brings the rest back' : 'Focus — the picture alone, nothing else on screen (F)'}
+                aria-label="Focus — the picture alone"
+              >
+                ⤢
+              </button>
+            )}
             {/* The legend that used to run along the bottom of the editor, as a
                 verb. Drawn at every width: on a phone there are no keys, but the
                 GESTURES it lists are exactly the ones a finger has to
@@ -1992,12 +2098,13 @@ export default function PictureWorkbench({
         // exists to judge — the colour that will leave — cannot be seen while
         // it is being set (`frontend.md`).
         compactAs="drawer"
-        open={sheetOpen}
+        open={sheetOpen && !focused}
         onClose={() => onSheetOpen(false)}
         title={`${tabLabel} · ${pictureLabel(entry)}`}
         // The docked inspector wears the frame both editors' inspectors wear
         // (`frontend.md`): the tab strip pinned, the sections scrolling under it.
-        className="col-start-2 row-start-1 row-span-2 min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3"
+        // In focus it is not drawn — kept mounted, so its folds and fields hold.
+        className={`${focused ? 'hidden' : `${COLUMN_CLASS[columns.panel]} row-start-1 row-span-2`} min-h-0 flex flex-col gap-3 border border-line rounded-paper bg-surface p-3`}
       >
         {!compact && (
           <Segmented fill size="sm" label="Inspector" value={tab} onChange={onTabChange} options={tabs} className="flex-none" />
@@ -2216,6 +2323,7 @@ export default function PictureWorkbench({
               verbs={cropApplyTo}
               borderVerbs={borderApplyTo}
               clip={clip}
+              subjectCrop={subjectCrop}
               onTold={tell}
             />
           ) : null}

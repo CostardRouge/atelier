@@ -1,4 +1,5 @@
 import { isDefaultFraming, type Framing } from '../../shared/media/framing';
+import { LEVEL_SAMPLE_EDGE, describeTilt, levelFine, lumaOf, measureTilt } from '../../shared/develop/auto-level';
 import { splitRotation } from '../../shared/develop/crop-rect';
 import { describeAspect } from '../../shared/develop/crop-aspect';
 import { developButtonClass } from '../../shared/develop/develop-classes';
@@ -13,6 +14,7 @@ import type { RollBorder } from '../../shared/develop/border-layout';
 import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import BorderSection, { type BorderApplyVerb } from './BorderSection';
 import type { CropZoneApi } from './use-crop-zone';
+import type { SubjectCropVerb } from './use-subject-crop';
 
 /** A batch verb of the Crop tab: handed this picture's crop on its click. */
 export interface CropApplyVerb {
@@ -49,6 +51,7 @@ export default function CropPanel({
   verbs = [],
   borderVerbs = [],
   clip = false,
+  subjectCrop,
   onTold,
 }: {
   picture: DevelopPicture;
@@ -61,10 +64,24 @@ export default function CropPanel({
   borderVerbs?: readonly BorderApplyVerb[];
   /** A CLIP: the crop is held still over every frame, and it wears no border (`roll-types.ts`, `isClipPicture`). */
   clip?: boolean;
+  /** Crop to the subject (`use-subject-crop.ts`); omitted, the row is not drawn. */
+  subjectCrop?: SubjectCropVerb;
   onTold?: (message: string) => void;
 }) {
   const { framing, zone } = crop;
   const touched = !isDefaultFraming(framing) || aspect !== 'original';
+  // Auto level: the picture as shot, read whole and once, on the click.
+  const autoLevel = () => {
+    const sample = picture.asShotSample(LEVEL_SAMPLE_EDGE);
+    const ctx = sample?.getContext('2d', { willReadFrequently: true });
+    if (!sample || !ctx) {
+      onTold?.('the picture has not been read yet');
+      return;
+    }
+    const tilt = measureTilt(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
+    if (tilt && tilt.tilt !== 0) crop.straighten(levelFine(tilt, framing.flipX, framing.flipY));
+    onTold?.(`auto level · ${describeTilt(tilt)}`);
+  };
   return (
     <>
       <DevelopFold
@@ -89,7 +106,15 @@ export default function CropPanel({
               <strong>Straighten</strong> turns the picture under the zone, which shrinks just enough to
               keep clear of the corners — and grows back to what you drew when you straighten back.
               <strong> Level</strong>: draw a line along the horizon (or an upright) and the angle is
-              corrected by it. The quarter turns take the zone with the picture.
+              corrected by it. <strong>Auto</strong> finds that line by itself — the strongest straight
+              edge within 15° of level, a horizon or a wall — and says when the picture holds none it can
+              trust. The quarter turns take the zone with the picture.
+            </p>
+            <p>
+              <strong>Crop to subject</strong> draws the zone around the subject — what your Subject
+              layers point at, else what the model finds at the centre, and the line says which — with
+              room around it, in the format chosen above, slid inside the picture rather than shrunk;
+              a speck and a subject that is the whole picture are refused with the reason.
             </p>
             <p>The flips mirror what the frame shows, whatever the picture’s rotation.</p>
             {clip && (
@@ -150,12 +175,46 @@ export default function CropPanel({
           >
             {crop.levelling ? 'Draw the line…' : 'Level'}
           </Button>
+          <Button
+            size="sm"
+            onClick={autoLevel}
+            disabled={!picture.source}
+            title="Find the horizon, or an upright, by itself — the strongest line near level — and straighten on it"
+          >
+            Auto
+          </Button>
           {splitRotation(framing.rotation).fine !== 0 && (
             <Button size="sm" variant="ghost" onClick={() => crop.straighten(0)}>
               Straight
             </Button>
           )}
         </FieldRow>
+        {subjectCrop && (
+          <FieldRow
+            label="Subject"
+            hint={
+              subjectCrop.named
+                ? 'The subject is what your Subject layers point at.'
+                : 'No subject picked: the model is asked what sits at the centre. Pick one on the Layers tab for another.'
+            }
+          >
+            <Button
+              size="sm"
+              onClick={subjectCrop.run}
+              disabled={!picture.source || subjectCrop.busy}
+              title={
+                subjectCrop.named
+                  ? 'Crop around what your Subject layers point at, in the format chosen above'
+                  : 'Crop around what the model finds at the centre of the picture, in the format chosen above'
+              }
+            >
+              {subjectCrop.busy ? 'Finding…' : 'Crop to subject'}
+            </Button>
+            <span className="font-mono text-3xs text-faint leading-relaxed">
+              {subjectCrop.named ? 'from your Subject layers' : 'from the centre'}
+            </span>
+          </FieldRow>
+        )}
         <FieldRow label="Turn">
           <Button size="sm" onClick={() => crop.quarterTurn(-1)} title="Turn a quarter anticlockwise">
             −90°

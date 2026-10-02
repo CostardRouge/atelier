@@ -427,6 +427,13 @@ export interface DevelopPicture {
    */
   pickAt: (clientX: number, clientY: number) => [number, number, number] | null;
   /**
+   * The picture AS SHOT drawn small, within `longEdge`, on a fresh canvas —
+   * for a verb that reads the whole picture once on a click (Auto level's
+   * gradients, a subject asked about with no point). Null while nothing is
+   * decoded. The stats' own read, made on demand at the size the caller asks.
+   */
+  asShotSample: (longEdge: number) => HTMLCanvasElement | null;
+  /**
    * The colour at a [0,1] point as the layer `layerId` sees it — the picture
    * under that layer, before anything above it — ENCODED 0..1, for a colour
    * range's sample. Null off a picture.
@@ -1254,6 +1261,49 @@ export function useDevelopPicture({
     }
   }, [source, restedFrame]);
 
+  const asShotSample = useCallback(
+    (longEdge: number): HTMLCanvasElement | null => {
+      if (!source || source.width <= 0 || source.height <= 0) return null;
+      const k = Math.min(1, longEdge / Math.max(source.width, source.height));
+      const w = Math.max(1, Math.round(source.width * k));
+      const h = Math.max(1, Math.round(source.height * k));
+      // Halved step by step, never in one draw: the browser's default
+      // downscale is a bilinear SUBSAMPLE, and at 3× it turned a 4° horizon
+      // into a staircase that Auto level read as 5.9° (measured, headless).
+      // Each halving averages every source pixel, so an edge stays an edge.
+      let image: CanvasImageSource = source.image;
+      let cw = source.width;
+      let ch = source.height;
+      try {
+        while (cw > 2 * w) {
+          const nw = Math.max(w, Math.round(cw / 2));
+          const nh = Math.max(h, Math.round(ch / 2));
+          const step = document.createElement('canvas');
+          step.width = nw;
+          step.height = nh;
+          const sctx = step.getContext('2d');
+          if (!sctx) return null;
+          sctx.imageSmoothingQuality = 'high';
+          sctx.drawImage(image, 0, 0, cw, ch, 0, 0, nw, nh);
+          image = step;
+          cw = nw;
+          ch = nh;
+        }
+        const canvas = document.createElement('canvas');
+        canvas.width = w;
+        canvas.height = h;
+        const ctx = canvas.getContext('2d', { willReadFrequently: true });
+        if (!ctx) return null;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(image, 0, 0, cw, ch, 0, 0, w, h);
+        return canvas;
+      } catch {
+        return null;
+      }
+    },
+    [source],
+  );
+
   // --- the eyedropper -------------------------------------------------------
   const setPicking = setPickingState;
   const pickRef = useRef<HTMLCanvasElement | null>(null);
@@ -1916,6 +1966,7 @@ export function useDevelopPicture({
     picking,
     setPicking,
     pickAt,
+    asShotSample,
     sampleColour,
     segmentView,
     redecode,
