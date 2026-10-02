@@ -11,7 +11,7 @@ import type { Patch } from '../../shared/render/repair';
 import type { AdjustLayer } from '../../shared/develop/layer';
 import type { Framing } from '../../shared/media/framing';
 import {
-  openAfterRemoval,
+  openAfterRemovals,
   openPictureId,
   sameDevelop,
   selectionAfterClick,
@@ -28,6 +28,26 @@ import {
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
 import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
+import {
+  STRIP_FILTERS,
+  STRIP_METRICS,
+  autoBandHeight,
+  bandAfterDrag,
+  cellAspect,
+  columnsForWidth,
+  heightForRows,
+  maxBandHeight,
+  maxBandWidth,
+  medianAspect,
+  passesStripFilter,
+  rowsForHeight,
+  stepThumb,
+  stripFilterLabel,
+  widthForColumns,
+  type StripFilterKey,
+  type StripKind,
+  type StripPlace,
+} from '../../shared/develop/roll-strip';
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
 import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
@@ -69,6 +89,7 @@ import { dropDirectoryHandles, filesFromDataTransfer } from '../../shared/source
 import { useWinnowConnection } from '../../shared/sources/winnow/use-connection';
 import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
+import IconButton from '../../shared/ui/IconButton';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
@@ -78,7 +99,9 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../../shared/ui/use-local-flag';
 import type { ExportVerb } from './ExportPanel';
-import Filmstrip from './Filmstrip';
+import RollBand from './RollBand';
+import SelectionBar, { type SelectionVerbs } from './SelectionBar';
+import { useThumbAspects } from './use-thumb-aspects';
 import type { CropApplyVerb } from './CropPanel';
 import type { BorderApplyVerb } from './BorderSection';
 import type { RollBorder } from '../../shared/develop/border-layout';
@@ -104,16 +127,11 @@ import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
 import { useRollCulling } from './use-roll-culling';
-import {
-  CULL_FILTERS,
-  NO_CULL_FILTER,
-  countCulling,
-  cullFilterKey,
-  cullFilterLabel,
-  passesCull,
-  readCullFilter,
-  type CullFilter,
-} from '../../shared/sources/winnow/culling';
+import { countCulling } from '../../shared/sources/winnow/culling';
+import { useElementSize } from '../../shared/ui/use-element-width';
+import BandGrip from './BandGrip';
+import ContactSheet from './ContactSheet';
+import { useStripPrefs } from './use-strip-prefs';
 import { useRollPreviews } from './use-roll-previews';
 import RollPicker from './RollPicker';
 
@@ -161,9 +179,37 @@ const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs —
 export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
+  // The band's numbers for this shell (`roll-strip.ts`): a phone's and a desktop's differ.
+  const stripKind: StripKind = compact ? 'phone' : 'desktop';
+  const stripMetrics = STRIP_METRICS[stripKind];
+  // How THIS device wants the band — size, folded, the thumbnails — never the roll.
+  const [strip, patchStrip] = useStripPrefs(stripKind);
+  // The column the stage and the band share, and the band's own width: what
+  // the band may take, and what "height follows the roll" is sized against.
+  const [columnRef, columnBox] = useElementSize<HTMLDivElement>();
+  const [bandRef, bandBox] = useElementSize<HTMLDivElement>();
+  // The status lines over the band, measured on their own: a measurement
+  // that included the band would feed the band's height back into itself.
+  const [statusRef, statusBox] = useElementSize<HTMLDivElement>();
   const [notice, setNotice] = useState<string | null>(null);
   const [adding, setAdding] = useState(false);
-  const [confirmRemove, setConfirmRemove] = useState<RollPicture | null>(null);
+  // The pictures a removal is asking about — one from a cell's menu, several
+  // from the selection — when any of them carries work that would go with it.
+  const [confirmRemove, setConfirmRemove] = useState<readonly string[] | null>(null);
+  // The band's SELECTION (`docs/develop-roll-browser.md` §5): a mode in
+  // which a plain click on a cell marks it and the band's header is the bar
+  // of verbs acting on every marked picture. Shift / ⌘-click, S, the header's
+  // Select, a cell's menu or a finger held on a cell turn it on; Done, S
+  // again or Escape turn it off and clear it.
+  const [selecting, setSelecting] = useState(false);
+  // The CONTACT SHEET (`ContactSheet`): the roll large over the stage, to
+  // sort and to act on many — `G`, the band's ▦; a click on a picture opens
+  // it and closes the sheet.
+  const [contactOpen, setContactOpen] = useState(false);
+  // FOCUS: the picture alone — the band, the inspector and the page bar not
+  // drawn (`F`, the ⤢ verb in the stage bar; Escape, either, brings them back).
+  const [focus, setFocus] = useState(false);
+  const toggleFocus = useCallback(() => setFocus((f) => !f), []);
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
@@ -219,9 +265,21 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     (id: string, mods: SelectionModifiers) => {
       setSelected((s) => selectionAfterClick(latest.current.pictures, s, anchor ?? openIdRef.current ?? id, id, mods));
       if (mods.metaKey || mods.ctrlKey) setAnchor(id);
+      // A modified click is already a selection: the mode comes on with it,
+      // so the bar of verbs is there for what was just marked.
+      setSelecting(true);
     },
     [anchor],
   );
+  const startSelecting = useCallback((id?: string) => {
+    setSelecting(true);
+    if (id) setSelected((s) => (s.has(id) ? s : new Set([...s, id])));
+  }, []);
+  const stopSelecting = useCallback(() => {
+    setSelecting(false);
+    setSelected(new Set());
+    setAnchor(null);
+  }, []);
   const selectionTargets = useMemo(
     () => [...visibleSelected].filter((id) => id !== openId),
     [visibleSelected, openId],
@@ -254,14 +312,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // Winnow's picks and stars, read-only (item 33): shown on the strip and
   // filtered on — the filter is this sitting's, never the roll's.
   const culling = useRollCulling(roll.pictures);
-  const [cullFilter, setCullFilter] = useState<CullFilter>(NO_CULL_FILTER);
-  const filtering = culling.reachable && cullFilter.kind !== 'all';
+  // What the band SHOWS (`roll-strip.ts`, `StripFilterKey`): the roll's own
+  // states, the ignored alone, or Winnow's culling — the sitting's, never the
+  // roll's. The arrows and every "Apply to N other pictures" follow it.
+  const [stripFilter, setStripFilter] = useState<StripFilterKey>('all');
+  const filtering = stripFilter !== 'all';
   const cullingRef = useRef(culling.byPicture);
   cullingRef.current = culling.byPicture;
-  const cullFilterRef = useRef(cullFilter);
-  cullFilterRef.current = filtering ? cullFilter : NO_CULL_FILTER;
-  const shownByCull = useCallback(
-    (p: RollPicture) => passesCull(cullingRef.current.get(p.id), cullFilterRef.current),
+  const stripFilterRef = useRef(stripFilter);
+  stripFilterRef.current = stripFilter;
+  const passesFilter = useCallback(
+    (p: RollPicture) => passesStripFilter(p, stripFilterRef.current, cullingRef.current.get(p.id)),
     [],
   );
   const { retryFailed, remoteThumb } = media;
@@ -381,6 +442,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     void putRollThumb(id, blob);
     setThumbs((cur) => new Map(cur).set(id, blob));
   }, []);
+  // Each thumbnail's shape, which is its cell's (`roll-strip.ts`).
+  const thumbAspects = useThumbAspects(thumbs);
 
   // --- the shell's verb: "Develop" under a picture being looked at (D10) ---
   // `run` is called with the picture already ACTIVE in the Library — but in
@@ -528,32 +591,42 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     void Promise.all([listed, handles]).then(([dropped, folderHandles]) => takeLocal(folders.accept(dropped, folderHandles)));
   };
 
-  function remove(picture: RollPicture) {
-    const nextOpen = openAfterRemoval(latest.current.pictures, picture.id, openId);
-    update((r) => removePictures(r, [picture.id]));
-    void deleteRollThumbs([picture.id]);
-    previews.forget([picture.id]);
+  /** Pictures off the roll — one, or the selection; what was done to them goes with them, the files stay. */
+  function removeMany(ids: readonly string[]) {
+    const nextOpen = openAfterRemovals(latest.current.pictures, ids, openId);
+    update((r) => removePictures(r, ids));
+    void deleteRollThumbs(ids);
+    previews.forget(ids);
+    // A selection that just left the roll is done with: the mode ends with it.
+    const remaining = [...visibleSelected].filter((id) => !ids.includes(id));
+    if (selecting && remaining.length === 0) stopSelecting();
+    else setSelected(new Set(remaining));
     if (nextOpen !== openId) onOpenPicture(nextOpen);
+  }
+  /** Asked first where any of them carries work; a plain picture goes at once. */
+  function removeAsked(ids: readonly string[]) {
+    const pictures = latest.current.pictures.filter((p) => ids.includes(p.id));
+    if (pictures.some(isEdited)) setConfirmRemove(ids);
+    else removeMany(ids);
   }
 
   const step = useCallback(
     (by: number) => {
       // The arrows walk the roll's WORK: an ignored picture is stepped over,
       // and so is one Winnow's filter has taken off the strip.
-      const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !shownByCull(p));
+      const next = stepPicture(latest.current.pictures, openIdRef.current, by, (p) => isIgnored(p) || !passesFilter(p));
       if (next && next !== openIdRef.current) onOpenPicture(next);
     },
-    [onOpenPicture, shownByCull],
+    [onOpenPicture, passesFilter],
   );
 
-  // A VARIANT of the open picture (item 30): Lightroom's virtual copy when it
-  // is cloned, Capture One's New Variant when it starts as shot. It is opened
+  // A VARIANT of a picture (item 30): Lightroom's virtual copy when it is
+  // cloned, Capture One's New Variant when it starts as shot. It is opened
   // at once — making a copy is always to work on it — and wears the source's
-  // thumbnail until its own is taken.
-  const makeVariant = useCallback(
-    (start: VariantStart) => {
-      const from = openIdRef.current;
-      if (!from) return;
+  // thumbnail until its own is taken. From the keys and the Add menu it is
+  // the open picture's; a cell's menu asks for any picture's.
+  const makeVariantOf = useCallback(
+    (from: string, start: VariantStart) => {
       const id = newRollId();
       update((r) => addVariant(r, from, start, id));
       if (!latest.current.pictures.some((p) => p.id === id)) return;
@@ -564,6 +637,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       onOpenPicture(id);
     },
     [update, onOpenPicture],
+  );
+  const makeVariant = useCallback(
+    (start: VariantStart) => {
+      if (openIdRef.current) makeVariantOf(openIdRef.current, start);
+    },
+    [makeVariantOf],
   );
 
   const handleDevelop = useCallback(
@@ -818,10 +897,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           (p) =>
             p.id !== openId &&
             !isIgnored(p) &&
-            (!filtering || passesCull(culling.byPicture.get(p.id), cullFilter)),
+            (!filtering || passesStripFilter(p, stripFilter, culling.byPicture.get(p.id))),
         )
         .map((p) => p.id),
-    [roll.pictures, openId, filtering, culling.byPicture, cullFilter],
+    [roll.pictures, openId, filtering, culling.byPicture, stripFilter],
   );
   const others = otherIds.length;
   // The pictures a BORDER can be written onto: never a clip (`isClipPicture`
@@ -958,6 +1037,348 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ];
   }, [openId, frameOtherIds, selectionTargets, frameSelection, update]);
 
+  // --- the selection's verbs (`SelectionBar`), on every marked picture at once
+  const selectedIds = useMemo(() => [...visibleSelected], [visibleSelected]);
+  const selectedPictures = useMemo(() => roll.pictures.filter((p) => visibleSelected.has(p.id)), [roll.pictures, visibleSelected]);
+  // What the band SHOWS — the same reading as the band's own — for ⌘A.
+  const shownIds = useMemo(
+    () =>
+      roll.pictures
+        .filter((p) => p.id === openId || ((showIgnored || !isIgnored(p)) && (!filtering || passesStripFilter(p, stripFilter, culling.byPicture.get(p.id)))))
+        .map((p) => p.id),
+    [roll.pictures, openId, showIgnored, filtering, culling.byPicture, stripFilter],
+  );
+  const selectAll = useCallback(() => setSelected(new Set(shownIds)), [shownIds]);
+  const ignoreSelection = useCallback(() => {
+    if (exportRunning.current) {
+      setNotice(LOCKED_DELIVERY);
+      return;
+    }
+    const ids = selectedIds;
+    const back = selectedPictures.every(isIgnored);
+    update((r) => setDelivery(r, ids, back ? 'auto' : 'ignore'));
+    setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} ${back ? 'back into the roll’s work' : 'ignored — the arrows step over them'}`);
+  }, [selectedIds, selectedPictures, update]);
+  const ruleSelection = useCallback(() => {
+    if (exportRunning.current) {
+      setNotice(LOCKED_DELIVERY);
+      return;
+    }
+    const ids = selectedPictures.filter((p) => !isIgnored(p)).map((p) => p.id);
+    update((r) => setDelivery(r, ids, 'auto'));
+    setNotice(`${ids.length} picture${ids.length === 1 ? '' : 's'} back on the roll’s rule — each leaves if it is edited`);
+  }, [selectedPictures, update]);
+  const pasteSectionsTo = useCallback(
+    (ids: readonly string[]) => {
+      const held = copiedSettings();
+      if (!held || ids.length === 0) return;
+      update((r) => applySections(r, held.from, ids, held.sections), 'paste');
+      setNotice(`pasted ${sectionNames(held.sections)} from ${pictureLabel(held.from)} onto ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
+    },
+    [update],
+  );
+  const variantsOf = useCallback(
+    (ids: readonly string[]) => {
+      // One id per source, decided before the write, so the thumbnails can
+      // follow their pictures; nothing is opened — a batch is not a start.
+      const made = ids.map((from) => [from, newRollId()] as const);
+      update((r) => made.reduce((acc, [from, id]) => addVariant(acc, from, 'clone', id), r));
+      setThumbs((cur) => {
+        const next = new Map(cur);
+        for (const [from, id] of made) {
+          const blob = cur.get(from);
+          if (blob) next.set(id, blob);
+        }
+        return next;
+      });
+      setNotice(`${made.length} variant${made.length === 1 ? '' : 's'} made, each after its picture`);
+    },
+    [update],
+  );
+  // The delivery keys (P, U, M) act on the selection while it is on and
+  // holds something; else on the open picture, as they always did.
+  const deliverSelection = useCallback(
+    (action: DeliverAction) => {
+      if (action === 'ignore') ignoreSelection();
+      else if (action === 'auto') ruleSelection();
+      else handleDeliverAll(selectedIds, !selectedPictures.every(delivers));
+    },
+    [ignoreSelection, ruleSelection, handleDeliverAll, selectedIds, selectedPictures],
+  );
+  const selectionVerbs = useMemo<SelectionVerbs>(
+    () => ({
+      count: selectedIds.length,
+      openLabel: open ? pictureLabel(open) : null,
+      applyCount: open ? selectionTargets.length : 0,
+      allIgnored: selectedPictures.length > 0 && selectedPictures.every(isIgnored),
+      canPaste: copied !== null,
+      onAll: selectAll,
+      onNone: () => setSelected(new Set()),
+      onSend: () => handleDeliverAll(selectedIds, true),
+      onHold: () => handleDeliverAll(selectedIds, false),
+      onIgnore: ignoreSelection,
+      onRule: ruleSelection,
+      onApply: () => {
+        if (open) writeDevelopTo(selectionTargets, open.develop);
+      },
+      onPaste: () => pasteSectionsTo(selectedIds),
+      onVariants: () => variantsOf(selectedIds),
+      onRemove: () => removeAsked(selectedIds),
+      onDone: stopSelecting,
+    }),
+    // `removeAsked` is a plain function over refs; it reads nothing stale.
+    [selectedIds, selectedPictures, open, selectionTargets, copied, selectAll, handleDeliverAll, ignoreSelection, ruleSelection, writeDevelopTo, pasteSectionsTo, variantsOf, stopSelecting],
+  );
+  // --- the band's size: the device's preference, held to what the column allows
+  const drawerBand = compact && sheetOpen;
+  // Where the band stands on THIS device (`StripPrefs.place`, his Q1): under
+  // the picture by default, or a COLUMN at its left or right on a desktop —
+  // a phone's preference is read as `bottom` whatever it says.
+  const side = !compact && strip.place !== 'bottom';
+  const left = side && strip.place === 'left';
+  // What the column holds besides the picture and the band: the grid's row
+  // gap, the workbench's toolbar (one 28 px row and an 8 px gap on a desktop;
+  // the name row, the verbs row and their gaps on a phone — its own markup's
+  // numbers) and whatever status lines sit over the band in its cell.
+  const toolbarAbove = compact ? 76 : 36;
+  const statusAbove = statusBox.height > 0 ? statusBox.height + 4 : 0;
+  const columnHeight = Math.max(0, columnBox.height - 8 - toolbarAbove - statusAbove);
+  // Beside the picture the room is the grid's width less the inspector's
+  // column (22rem, 18rem under the 880 px container query) and the two gaps.
+  const roomBeside = Math.max(0, columnBox.width - (columnBox.width > 880 ? 352 : 288) - 2 * 16);
+  const maxBand = side
+    ? columnBox.width > 0
+      ? maxBandWidth(roomBeside, stripMetrics)
+      : Number.POSITIVE_INFINITY
+    : columnHeight > 0
+      ? maxBandHeight(columnHeight, stripMetrics)
+      : Number.POSITIVE_INFINITY;
+  const rollAspect = useMemo(
+    () => medianAspect(roll.pictures.map((p) => ({ id: p.id, aspect: cellAspect(p, thumbAspects.get(p.id)) }))),
+    [roll.pictures, thumbAspects],
+  );
+  /** The band's extent on its axis: its height under the picture, its width beside it. */
+  const bandSizeNow = drawerBand
+    ? // With a phone's drawer up every row is the photograph's: one short row
+      // of cells and no header, the size the strip had before it could be pulled.
+      56 + 2 * stripMetrics.pad
+    : strip.folded
+      ? side
+        ? stripMetrics.rail
+        : stripMetrics.head
+      : side
+        ? Math.min(maxBand, Math.max(stripMetrics.columnMin, strip.width ?? widthForColumns(1, stripMetrics)))
+        : strip.auto && bandBox.width > 0 && columnHeight > 0
+          ? Math.round(autoBandHeight({ columnWidth: bandBox.width, columnHeight, aspect: rollAspect, metrics: stripMetrics }))
+          : Math.min(maxBand, strip.height ?? heightForRows(1, stripMetrics, strip.thumb));
+  const dragFrom = useRef<number | null>(null);
+  const onGripDrag = useCallback(
+    ({ dx, dy }: { dx: number; dy: number }) => {
+      dragFrom.current ??= bandSizeNow;
+      // Under the picture the grip is the band's top edge, so up is more; at
+      // the left its right edge, so right is more; at the right, left is.
+      const travel = side ? (left ? dx : -dx) : -dy;
+      const { folded, size } = bandAfterDrag(dragFrom.current + travel, stripMetrics, side, maxBand);
+      patchStrip({ folded, auto: false, ...(size === null ? {} : side ? { width: size } : { height: size }) });
+    },
+    // `bandSizeNow` is read only to seed the drag; the ref holds it after.
+    [bandSizeNow, side, left, stripMetrics, maxBand, patchStrip],
+  );
+  const onGripEnd = useCallback(() => {
+    dragFrom.current = null;
+  }, []);
+  const toggleFolded = useCallback(() => patchStrip({ folded: !strip.folded }), [patchStrip, strip.folded]);
+  // A column's cells are sized by how many stand side by side (`columnLayout`
+  // takes no thumbnail height): what the band shows as one, two or three.
+  const columnsNow = side && !strip.folded ? columnsForWidth(bandSizeNow, stripMetrics) : 0;
+  const setColumns = useCallback(
+    (n: number) => patchStrip({ folded: false, auto: false, width: Math.min(maxBand, widthForColumns(n, stripMetrics)) }),
+    [patchStrip, maxBand, stripMetrics],
+  );
+  // `-` / `=` step whichever thumbnails are on screen: the sheet's while it
+  // is open, else the band's — a column one column narrower or wider.
+  const stepThumbs = useCallback(
+    (direction: 1 | -1) =>
+      contactOpen
+        ? patchStrip({ sheet: stepThumb(strip.sheet, direction, stripMetrics, 'sheet') })
+        : side
+          ? setColumns(Math.max(1, columnsNow + direction))
+          : patchStrip({ thumb: stepThumb(strip.thumb, direction, stripMetrics, 'band') }),
+    [patchStrip, strip.thumb, strip.sheet, stripMetrics, contactOpen, side, columnsNow, setColumns],
+  );
+  const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
+  const chipSize = compact ? 'md' : 'sm';
+  /** A menu row that says whether it is the state: a dot before the one in force. */
+  const marked = (on: boolean, text: string, key?: string) => (
+    <span className="inline-flex items-center gap-3 whitespace-pre">
+      <span>
+        {on ? '· ' : '  '}
+        {text}
+      </span>
+      {key && <span className="ml-auto font-mono text-3xs text-faint">{key}</span>}
+    </span>
+  );
+  const rowsNow = side || strip.folded || strip.auto ? 0 : rowsForHeight(bandSizeNow - stripMetrics.head, stripMetrics, strip.thumb);
+  const COUNT = ['One', 'Two', 'Three'];
+  const bandMenu: OverflowItem[] = [
+    { id: 'fold', label: marked(strip.folded, 'Folded to its rail', 'B'), onSelect: toggleFolded },
+    ...(side
+      ? [1, 2, 3].map((n) => ({
+          id: `columns-${n}`,
+          label: marked(columnsNow === n, `${COUNT[n - 1]} column${n === 1 ? '' : 's'}`),
+          disabled: widthForColumns(n, stripMetrics) > maxBand,
+          onSelect: () => setColumns(n),
+        }))
+      : [1, 2, 3].map((n) => ({
+          id: `rows-${n}`,
+          label: marked(rowsNow === n, `${COUNT[n - 1]} row${n === 1 ? '' : 's'}`),
+          onSelect: () => patchStrip({ folded: false, auto: false, height: Math.min(maxBand, heightForRows(n, stripMetrics, strip.thumb)) }),
+        }))),
+    ...(side
+      ? [
+          { id: 'narrower', label: marked(false, 'One column fewer', '−'), disabled: columnsNow <= 1, onSelect: () => stepThumbs(-1) },
+          { id: 'wider', label: marked(false, 'One column more', '='), disabled: widthForColumns(columnsNow + 1, stripMetrics) > maxBand, onSelect: () => stepThumbs(1) },
+        ]
+      : [
+          {
+            id: 'auto',
+            label: marked(strip.auto, 'Height follows the roll'),
+            title: 'The band takes the room the roll’s typical picture leaves under itself — sized on the roll, so stepping to a portrait moves nothing',
+            onSelect: () => patchStrip({ auto: !strip.auto, folded: false }),
+          },
+          { id: 'smaller', label: marked(false, 'Smaller thumbnails', '−'), disabled: strip.thumb <= stripMetrics.thumbMin, onSelect: () => stepThumbs(-1) },
+          { id: 'larger', label: marked(false, 'Larger thumbnails', '='), disabled: strip.thumb >= stripMetrics.thumbMax, onSelect: () => stepThumbs(1) },
+        ]),
+    // Where the band stands, remembered per device (his Q1): a phone's is
+    // always under the picture, so the choice is a desktop's alone.
+    ...(compact
+      ? []
+      : (
+          [
+            ['bottom', 'Under the picture'],
+            ['left', 'A column at the left'],
+            ['right', 'A column at the right'],
+          ] as const
+        ).map(([place, text]: readonly [StripPlace, string]) => ({
+          id: `place-${place}`,
+          label: marked(strip.place === place, text),
+          title: 'On this screen — the band on a phone stays under the picture',
+          onSelect: () => patchStrip({ place, folded: false }),
+        }))),
+  ];
+  const filterMenu: OverflowItem[] = [
+    ...STRIP_FILTERS.filter((f) => !f.winnow || culling.reachable).map((f) => ({
+      id: f.key,
+      label: marked(stripFilter === f.key, f.label),
+      onSelect: () => setStripFilter(f.key),
+    })),
+    {
+      id: 'ignored-view',
+      label: marked(false, showIgnored ? 'Ignored pictures: dimmed' : 'Ignored pictures: hidden'),
+      title: showIgnored ? 'Leave the ignored pictures out of the band' : 'Show the ignored pictures in the band, dimmed',
+      onSelect: () => setShowIgnored(!showIgnored),
+    },
+    ...(culling.reachable
+      ? [
+          {
+            id: 'refresh',
+            label: marked(false, culling.asking ? 'Asking Winnow…' : 'Ask Winnow again'),
+            title: 'Winnow’s picks, stars and labels are asked by themselves when you come back to this tab',
+            disabled: culling.asking,
+            onSelect: culling.refresh,
+          },
+        ]
+      : []),
+  ];
+  // ONE filter chip, drawn in the band's header and in the sheet's.
+  const filterChip = (
+    <OverflowMenu
+      label="What the band shows"
+      items={filterMenu}
+      align="start"
+      trigger={{ text: stripFilterLabel(stripFilter), size: chipSize, variant: filtering ? 'primary' : 'default' }}
+    />
+  );
+  // The band's header: where it stands in its pictures, what the roll holds,
+  // what the band shows and the way into the selection — or, the selection
+  // on, its bar of verbs.
+  const bandHeader = useCallback(
+    ({ at, shown, width }: { at: number; shown: number; width: number }) => {
+      if (selecting) return <SelectionBar compact={compact} dense={width < 800} narrow={side} verbs={selectionVerbs} />;
+      const size = compact ? 'md' : 'sm';
+      if (side && strip.folded) {
+        // The column's RAIL: a stack of three — unfold, the count read down
+        // the rail, the sheet — and the menu, so the band can be moved from here.
+        return (
+          <>
+            <IconButton size={size} variant="ghost" label="Show the band (B)" onClick={toggleFolded}>
+              {left ? Icons.chevronRight : Icons.back}
+            </IconButton>
+            <span className="[writing-mode:vertical-rl] font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
+              {at >= 0 ? at + 1 : '–'} / {shown}
+            </span>
+            <IconButton size={size} variant="ghost" label="Contact sheet (G)" onClick={toggleSheet}>
+              {Icons.grid}
+            </IconButton>
+            <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side="below" />
+          </>
+        );
+      }
+      const progress = rollProgress(roll);
+      const leaving = roll.pictures.filter(delivers).length;
+      const changed = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
+      const looks = roll.pictures.filter((p) => p.grade).length;
+      const cull = culling.reachable ? countCulling(roll.pictures.map((p) => culling.byPicture.get(p.id))) : null;
+      const summary = [
+        `${progress.developed} edited`,
+        `${leaving} to export`,
+        changed > 0 ? `${changed} changed since exported` : '',
+        progress.ignored > 0 ? `${progress.ignored} ignored` : '',
+        looks > 0 ? `${looks} with a look` : '',
+        cull
+          ? cull.known === 0 && culling.asking
+            ? 'asking Winnow…'
+            : `Winnow ${[cull.picks > 0 ? `${cull.picks} pick${cull.picks === 1 ? '' : 's'}` : '', cull.rejects > 0 ? `${cull.rejects} rejected` : ''].filter(Boolean).join(', ') || 'nothing culled'}`
+          : '',
+        filtering ? `${shown} shown` : '',
+      ]
+        .filter(Boolean)
+        .join(' · ');
+      return (
+        <>
+          <IconButton size={size} variant="ghost" label={strip.folded ? 'Show the band (B)' : 'Fold the band to its rail (B)'} onClick={toggleFolded}>
+            {side ? (left ? Icons.back : Icons.chevronRight) : strip.folded ? Icons.up : Icons.down}
+          </IconButton>
+          <span className="flex-none font-mono text-2xs text-ink tabular-nums whitespace-nowrap" aria-live="polite">
+            {at >= 0 ? at + 1 : '–'} / {shown}
+          </span>
+          {!compact && !side && (
+            <span className="min-w-0 truncate font-mono text-2xs text-muted tabular-nums" title={summary}>
+              · {summary}
+            </span>
+          )}
+          {filterChip}
+          <span className="flex-1" />
+          <Button size={size} onClick={() => startSelecting()} title="Pick several pictures, then act on them all (S)">
+            Select
+          </Button>
+          {compact || side ? (
+            <IconButton size={size} label="Contact sheet (G)" onClick={toggleSheet}>
+              {Icons.grid}
+            </IconButton>
+          ) : (
+            <Button size="sm" icon={Icons.grid} onClick={toggleSheet} title="The whole roll large over the picture, to sort and to act on many (G)">
+              Sheet
+            </Button>
+          )}
+          <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side={side ? 'below' : 'above'} />
+        </>
+      );
+    },
+    // The menus are rebuilt per render on purpose: they read the band's state.
+    [selecting, compact, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
+  );
+
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
   // Detail or Layers tab onto a clip lands on Adjust, and back on the
   // photograph the tab is whatever it was last on a picture that had it.
@@ -980,6 +1401,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onSelect: (id: string) => {
                 setTab(id as WorkbenchTab);
                 setSheetOpen(true);
+                // A section asked for from the bar is the drawer asked for: the focus ends.
+                setFocus(false);
               },
             }
           : null,
@@ -987,11 +1410,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ),
   );
 
-  const progress = rollProgress(roll);
-  const withLook = roll.pictures.filter((p) => p.grade).length;
-  const leavingCount = roll.pictures.filter(delivers).length;
-  // Delivered from here once, and edited since — the ones a re-export is for.
-  const changedCount = roll.pictures.filter((p) => !isIgnored(p) && exportState(p, exportMarks) === 'changed').length;
   const addLabel =
     newPhotos.length === 0 ? 'Add from Library' : `Add ${newPhotos.length} from the Library`;
   // The ways a picture gets onto the roll. One is a button; two are a menu.
@@ -1036,6 +1454,137 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     const days = roll.pictures.flatMap((p) => (p.ref.lastModified > 0 ? [pictureDay(p.ref.lastModified)] : [])).sort();
     return days.length ? { from: days[0], to: days[days.length - 1] } : null;
   }, [roll.pictures]);
+  const removing = confirmRemove ? roll.pictures.filter((p) => confirmRemove.includes(p.id)) : [];
+  // The status lines: in the band's cell under the picture; a grid item of
+  // their own under the stage once the band stands beside it (the band's
+  // cell spans both rows then). Drawn once, in whichever place.
+  const statusLines = (
+    <div
+      ref={statusRef}
+      className={`flex flex-col gap-1 empty:hidden ${side ? `${left ? 'col-start-2' : 'col-start-1'} row-start-2 mt-2` : ''}`}
+    >
+    {/* What STATE is in the band's header now (how far the roll has
+        got, what it shows); this line keeps what asks for a click —
+        a fetch that failed, a folder to reopen, a notice — and is
+        not drawn at all when nothing does. */}
+    {(reach.fetching + reach.failed + reach.gone + reach.unconnected + reach.previewed + reach.local > 0 || notice || culling.problem) && (
+    <p className="m-0 font-mono text-2xs text-muted tabular-nums">
+      {culling.problem && (
+        <span className="text-danger">
+          Winnow {culling.problem}{' '}
+          <button type="button" onClick={culling.refresh} disabled={culling.asking} className="underline underline-offset-2 cursor-pointer">
+            {culling.asking ? 'asking…' : 'Try again'}
+          </button>{' '}
+        </span>
+      )}
+      {reach.fetching > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · fetching {reach.fetching} from {availabilityHost(availability, 'fetching')}
+        </span>
+      )}
+      {reach.failed > 0 && (
+        <span className="text-danger">
+          {' '}
+          · {reach.failed} could not be fetched — {reach.problem}{' '}
+          {reach.loginUrl && (
+            <a href={reach.loginUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">
+              Sign in
+            </a>
+          )}{' '}
+          <button type="button" onClick={retryFailed} className="underline underline-offset-2 cursor-pointer">
+            Try again
+          </button>
+        </span>
+      )}
+      {reach.gone > 0 && (
+        <span className="text-danger">
+          {' '}
+          · {reach.gone} no longer on {reach.sourceId}
+        </span>
+      )}
+      {reach.unconnected > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · {reach.unconnected} on {reach.unconnectedSourceId}, not connected —{' '}
+          <a href="#/sources" className="underline underline-offset-2">
+            Sources
+          </a>
+        </span>
+      )}
+      {reach.previewed > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · {reach.previewed} from {reach.previewed === 1 ? 'its' : 'their'} working preview
+          {reach.previewed === 1 ? '' : 's'} — reopen the folder for full size
+        </span>
+      )}
+      {reach.local > 0 && (
+        <span className="text-ink-soft">
+          {' '}
+          · {reach.local} from this computer, not open —{' '}
+          {folders.waiting.length > 0 ? (
+            <button
+              type="button"
+              onClick={() => void folders.reopen()}
+              className="underline underline-offset-2 cursor-pointer text-accent-ink"
+            >
+              Reopen {folders.waiting.length === 1 ? folders.waiting[0].name : `${folders.waiting.length} folders`}
+            </button>
+          ) : (
+            'drop their folder here'
+          )}
+        </span>
+      )}
+      {notice && <span className="text-ink-soft"> · {notice}</span>}
+      {/* The shortcuts used to run along here as a seventh clause.
+          They are behind `H` and the stage bar's `?` now
+          (`DevelopShortcuts.tsx`): a legend read once still cost the
+          photograph three wrapped lines every day after. What stays
+          on this line is STATE — how far the roll has got, and what
+          could not be reached, which is the half that asks for a
+          click. */}
+    </p>
+    )}
+    {/* Housekeeping, and it wraps to three lines at 390px: on a
+        phone with the drawer up those are three lines taken off the
+        photograph. It is back as soon as the drawer is down, which
+        is when a roll's upkeep is read anyway. */}
+    {localCount > 0 && !(compact && sheetOpen) && (
+      <p className="m-0 font-mono text-2xs text-faint tabular-nums">
+        working previews ·{' '}
+        {previews.enabled ? (
+          <>
+            {previews.files.size} of {localCount} kept · {formatBytes(previews.bytes)}
+            {previews.pending > 0 && ` · making ${previews.pending}`} ·{' '}
+            <button
+              type="button"
+              onClick={() => previews.setEnabled(false)}
+              className="underline underline-offset-2 cursor-pointer"
+              title="Delete this roll's working previews from this browser"
+            >
+              Stop keeping them
+            </button>
+          </>
+        ) : (
+          <>
+            off ·{' '}
+            <button
+              type="button"
+              onClick={() => previews.setEnabled(true)}
+              className="underline underline-offset-2 cursor-pointer text-accent-ink"
+              title="Keep a 2048 px copy of each picture from this computer, in this browser, so the roll can be developed while its files are away"
+            >
+              Keep them
+            </button>{' '}
+            (≈ {formatBytes(localCount * WORKING_PREVIEW_ESTIMATE_BYTES)} for {localCount} picture
+            {localCount === 1 ? '' : 's'} from this computer)
+          </>
+        )}
+      </p>
+    )}
+    </div>
+  );
 
   return (
     <div
@@ -1060,44 +1609,47 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           it wraps to two and the photograph pays ~50px for it: the back is its
           chevron, the name one step smaller, and Add is its glyph (the menu
           still names every way in). The Trips overview's bar, the same fix. */}
-      <PageBar
-        back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
-        trailing={
-          <>
-            {headerExtra}
-            {/* The Library's item only when it holds something the roll does
-                not: a ticked picture already on the roll is nothing to add. */}
-            {adding ? (
-              <Button variant="primary" icon={Icons.plus} disabled aria-label="Adding…">
-                {compact ? null : 'Adding…'}
-              </Button>
-            ) : addItems.length > 1 ? (
-              <OverflowMenu
-                label="Add pictures to this roll"
-                items={addItems}
-                trigger={{ text: compact ? null : 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
-              />
-            ) : addItems[0] ? (
-              <Button
-                icon={Icons.plus}
-                onClick={addItems[0].onSelect}
-                aria-label={compact ? addButtonLabel[addItems[0].id] : undefined}
-                title={compact ? addButtonLabel[addItems[0].id] : undefined}
-              >
-                {compact ? null : addButtonLabel[addItems[0].id]}
-              </Button>
-            ) : null}
-          </>
-        }
-      >
-        <span className="min-w-0 flex-1">
-          <RollTitle
-            name={roll.name}
-            size={compact ? 'md' : 'lg'}
-            onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))}
-          />
-        </span>
-      </PageBar>
+      {/* In focus the bar goes with the band and the inspector: the picture, its own row, nothing else. */}
+      {!focus && (
+        <PageBar
+          back={{ label: 'Rolls', onClick: onBack, iconOnly: compact }}
+          trailing={
+            <>
+              {headerExtra}
+              {/* The Library's item only when it holds something the roll does
+                  not: a ticked picture already on the roll is nothing to add. */}
+              {adding ? (
+                <Button variant="primary" icon={Icons.plus} disabled aria-label="Adding…">
+                  {compact ? null : 'Adding…'}
+                </Button>
+              ) : addItems.length > 1 ? (
+                <OverflowMenu
+                  label="Add pictures to this roll"
+                  items={addItems}
+                  trigger={{ text: compact ? null : 'Add', icon: Icons.plus, variant: newPhotos.length > 0 ? 'primary' : 'default' }}
+                />
+              ) : addItems[0] ? (
+                <Button
+                  icon={Icons.plus}
+                  onClick={addItems[0].onSelect}
+                  aria-label={compact ? addButtonLabel[addItems[0].id] : undefined}
+                  title={compact ? addButtonLabel[addItems[0].id] : undefined}
+                >
+                  {compact ? null : addButtonLabel[addItems[0].id]}
+                </Button>
+              ) : null}
+            </>
+          }
+        >
+          <span className="min-w-0 flex-1">
+            <RollTitle
+              name={roll.name}
+              size={compact ? 'md' : 'lg'}
+              onRename={(name) => update((r) => ({ ...r, name, updatedAt: Date.now() }))}
+            />
+          </span>
+        </PageBar>
+      )}
 
       {!open ? (
         <EmptyState
@@ -1129,10 +1681,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         // width a viewport query cannot see).
         <div className="@container flex-1 min-h-0 flex flex-col">
           <div
+            ref={columnRef}
             className={
               compact
                 ? 'flex-1 min-h-0 flex flex-col gap-2'
-                : 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4 gap-y-2'
+                : focus
+                  ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)] grid-rows-[minmax(0,1fr)_auto] gap-y-2'
+                  : // The band standing beside the stage is a column of its own
+                    // (sized by its content: the band's own width), both rows tall;
+                    // the status lines then sit under the stage in row 2.
+                    left
+                    ? 'flex-1 min-h-0 grid grid-cols-[auto_minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[auto_minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4'
+                    : side
+                      ? 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_auto_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_auto_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4'
+                      : 'flex-1 min-h-0 grid grid-cols-[minmax(0,1fr)_22rem] @max-[880px]:grid-cols-[minmax(0,1fr)_18rem] grid-rows-[minmax(0,1fr)_auto] gap-x-4 gap-y-2'
             }
           >
             <PictureWorkbench
@@ -1175,7 +1737,32 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob) => handleSnapshot(open.id, blob)}
               onStep={step}
-              onDeliver={(action) => handleDeliver(open.id, action)}
+              onDeliver={(action) => (selecting && selectedIds.length > 0 ? deliverSelection(action) : handleDeliver(open.id, action))}
+              selecting={selecting}
+              onSelectMode={() => (selecting ? stopSelecting() : startSelecting())}
+              onSelectAll={selectAll}
+              onBand={toggleFolded}
+              onThumbs={stepThumbs}
+              onSheet={toggleSheet}
+              focused={focus}
+              onFocusMode={toggleFocus}
+              columns={side && !focus ? (left ? { stage: 2, panel: 3 } : { stage: 1, panel: 3 }) : undefined}
+              onEscape={() => {
+                // In order: the selection, then the sheet, then the focus — each one step back.
+                if (selecting) {
+                  stopSelecting();
+                  return true;
+                }
+                if (contactOpen) {
+                  setContactOpen(false);
+                  return true;
+                }
+                if (focus) {
+                  setFocus(false);
+                  return true;
+                }
+                return false;
+              }}
               onWords={(words) => handleWords(open.id, words)}
               onSettings={() => setSettingsOpen(true)}
               timelapseOpen={timelapseOpen}
@@ -1199,183 +1786,97 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               }
               emptyText={availabilityText(open.ref.name, availability.get(open.id))}
             />
-            <div className={`flex flex-col gap-1 min-w-0 ${compact ? 'flex-none' : 'col-start-1 row-start-2'}`}>
-              <p className="m-0 font-mono text-2xs text-muted tabular-nums">
-                {progress.developed} of {progress.total} developed
-                {leavingCount > 0 && <span className="text-faint"> · {leavingCount} to export</span>}
-                {changedCount > 0 && <span className="text-faint"> · {changedCount} changed since exported</span>}
-                {progress.ignored > 0 && (
-                  <span className="text-faint">
-                    {' '}
-                    · {progress.ignored} ignored{' '}
-                    <button
-                      type="button"
-                      onClick={() => setShowIgnored(!showIgnored)}
-                      className="underline underline-offset-2 cursor-pointer"
-                      title={showIgnored ? 'Leave the ignored pictures out of the strip' : 'Show the ignored pictures in the strip, dimmed'}
-                    >
-                      {showIgnored ? 'Hide' : 'Show'}
-                    </button>
-                  </span>
-                )}
-                {culling.reachable && (
-                  <CullLine
-                    counts={countCulling(roll.pictures.map((p) => culling.byPicture.get(p.id)))}
-                    filter={cullFilter}
-                    onFilter={setCullFilter}
-                    shown={filtering ? roll.pictures.filter((p) => !isIgnored(p) && shownByCull(p)).length : null}
-                    asking={culling.asking}
-                    problem={culling.problem}
-                    onRefresh={culling.refresh}
-                  />
-                )}
-                {withLook > 0 && (
-                  <span className="text-faint">
-                    {' '}
-                    · {withLook} with a look
-                  </span>
-                )}
-                {visibleSelected.size > 0 && (
-                  <span className="text-accent-ink">
-                    {' '}
-                    · {visibleSelected.size} selected{' '}
-                    <button
-                      type="button"
-                      onClick={() => setSelected(new Set())}
-                      className="underline underline-offset-2 cursor-pointer"
-                    >
-                      Clear
-                    </button>
-                  </span>
-                )}
-                {reach.fetching > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · fetching {reach.fetching} from {availabilityHost(availability, 'fetching')}
-                  </span>
-                )}
-                {reach.failed > 0 && (
-                  <span className="text-danger">
-                    {' '}
-                    · {reach.failed} could not be fetched — {reach.problem}{' '}
-                    {reach.loginUrl && (
-                      <a href={reach.loginUrl} target="_blank" rel="noreferrer" className="underline underline-offset-2">
-                        Sign in
-                      </a>
-                    )}{' '}
-                    <button type="button" onClick={retryFailed} className="underline underline-offset-2 cursor-pointer">
-                      Try again
-                    </button>
-                  </span>
-                )}
-                {reach.gone > 0 && (
-                  <span className="text-danger">
-                    {' '}
-                    · {reach.gone} no longer on {reach.sourceId}
-                  </span>
-                )}
-                {reach.unconnected > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · {reach.unconnected} on {reach.unconnectedSourceId}, not connected —{' '}
-                    <a href="#/sources" className="underline underline-offset-2">
-                      Sources
-                    </a>
-                  </span>
-                )}
-                {reach.previewed > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · {reach.previewed} from {reach.previewed === 1 ? 'its' : 'their'} working preview
-                    {reach.previewed === 1 ? '' : 's'} — reopen the folder for full size
-                  </span>
-                )}
-                {reach.local > 0 && (
-                  <span className="text-ink-soft">
-                    {' '}
-                    · {reach.local} from this computer, not open —{' '}
-                    {folders.waiting.length > 0 ? (
-                      <button
-                        type="button"
-                        onClick={() => void folders.reopen()}
-                        className="underline underline-offset-2 cursor-pointer text-accent-ink"
-                      >
-                        Reopen {folders.waiting.length === 1 ? folders.waiting[0].name : `${folders.waiting.length} folders`}
-                      </button>
-                    ) : (
-                      'drop their folder here'
-                    )}
-                  </span>
-                )}
-                {notice && <span className="text-ink-soft"> · {notice}</span>}
-                {/* The shortcuts used to run along here as a seventh clause.
-                    They are behind `H` and the stage bar's `?` now
-                    (`DevelopShortcuts.tsx`): a legend read once still cost the
-                    photograph three wrapped lines every day after. What stays
-                    on this line is STATE — how far the roll has got, and what
-                    could not be reached, which is the half that asks for a
-                    click. */}
-              </p>
-              {/* Housekeeping, and it wraps to three lines at 390px: on a
-                  phone with the drawer up those are three lines taken off the
-                  photograph. It is back as soon as the drawer is down, which
-                  is when a roll's upkeep is read anyway. */}
-              {localCount > 0 && !(compact && sheetOpen) && (
-                <p className="m-0 font-mono text-2xs text-faint tabular-nums">
-                  working previews ·{' '}
-                  {previews.enabled ? (
-                    <>
-                      {previews.files.size} of {localCount} kept · {formatBytes(previews.bytes)}
-                      {previews.pending > 0 && ` · making ${previews.pending}`} ·{' '}
-                      <button
-                        type="button"
-                        onClick={() => previews.setEnabled(false)}
-                        className="underline underline-offset-2 cursor-pointer"
-                        title="Delete this roll's working previews from this browser"
-                      >
-                        Stop keeping them
-                      </button>
-                    </>
-                  ) : (
-                    <>
-                      off ·{' '}
-                      <button
-                        type="button"
-                        onClick={() => previews.setEnabled(true)}
-                        className="underline underline-offset-2 cursor-pointer text-accent-ink"
-                        title="Keep a 2048 px copy of each picture from this computer, in this browser, so the roll can be developed while its files are away"
-                      >
-                        Keep them
-                      </button>{' '}
-                      (≈ {formatBytes(localCount * WORKING_PREVIEW_ESTIMATE_BYTES)} for {localCount} picture
-                      {localCount === 1 ? '' : 's'} from this computer)
-                    </>
-                  )}
-                </p>
-              )}
-              {/* V4: the strip is the run's queue — each cell marked, and the
+            {side && statusLines}
+            <div
+              ref={bandRef}
+              className={
+                focus
+                  ? 'hidden'
+                  : compact
+                    ? 'flex flex-col gap-1 min-w-0 flex-none'
+                    : side
+                      ? `flex min-w-0 min-h-0 ${left ? 'col-start-1' : 'col-start-2'} row-start-1 row-span-2`
+                      : 'flex flex-col gap-1 min-w-0 col-start-1 row-start-2'
+              }
+            >
+              {!side && statusLines}
+              {/* V4: the band is the run's queue — each cell marked, and the
                   run's own hairline along its top (`TaskEdge`, the run's scope). */}
-              <div className="relative">
-                <TaskEdge scope={runScope(roll.id)} edge="top" />
-              <Filmstrip
+              <div className={side ? `relative flex-1 min-h-0 min-w-0 flex ${left ? 'flex-row-reverse' : 'flex-row'}` : 'relative flex-none flex flex-col'}>
+                {/* The grip: the band's size by a drag, its rail by a
+                    double-click (`BandGrip`); gone with a phone's drawer up,
+                    where the band is one fixed row. Beside the stage it is
+                    the band's edge that faces the picture. */}
+                {!drawerBand && (
+                  <BandGrip axis={side ? 'x' : 'y'} size={stripMetrics.grip} label="Resize the band" onDrag={onGripDrag} onEnd={onGripEnd} onToggle={toggleFolded} />
+                )}
+                <div className={side ? 'relative min-h-0 h-full' : 'relative'}>
+                  <TaskEdge scope={runScope(roll.id)} edge="top" />
+                  <RollBand
+                    pictures={roll.pictures}
+                    run={exports.progress}
+                    openId={openId}
+                    selectedIds={visibleSelected}
+                    thumbs={thumbs}
+                    aspects={thumbAspects}
+                    availability={availability}
+                    remoteThumb={remoteThumb}
+                    kind={stripKind}
+                    place={side ? strip.place : 'bottom'}
+                    size={bandSizeNow}
+                    folded={!drawerBand && strip.folded}
+                    thumb={strip.thumb}
+                    header={drawerBand ? null : bandHeader}
+                    selecting={selecting}
+                  onOpen={(id) => onOpenPicture(id)}
+                  onSelectClick={handleSelectClick}
+                  onPress={startSelecting}
+                  onSelect={startSelecting}
+                    onRemove={(p) => removeAsked([p.id])}
+                    onDeliver={handleDeliver}
+                    onVariant={(id) => makeVariantOf(id, 'clone')}
+                    hideIgnored={!showIgnored}
+                    culling={culling.byPicture}
+                    shows={filtering ? passesFilter : undefined}
+                  />
+                </div>
+              </div>
+            </div>
+            {contactOpen && (
+              <ContactSheet
+                compact={compact}
+                span={side ? 2 : 1}
                 pictures={roll.pictures}
                 run={exports.progress}
                 openId={openId}
                 selectedIds={visibleSelected}
                 thumbs={thumbs}
+                aspects={thumbAspects}
                 availability={availability}
                 remoteThumb={remoteThumb}
-                compact={compact}
-                onOpen={(id) => onOpenPicture(id)}
+                kind={stripKind}
+                selecting={selecting}
+                thumb={strip.sheet}
+                onThumb={stepThumbs}
+                filter={filterChip}
+                bar={selecting ? <SelectionBar compact={compact} dense={bandBox.width < 800} verbs={selectionVerbs} /> : null}
+                onSelecting={() => startSelecting()}
+                onClose={() => setContactOpen(false)}
+                onOpen={(id) => {
+                  onOpenPicture(id);
+                  setContactOpen(false);
+                }}
                 onSelectClick={handleSelectClick}
-                onRemove={(p) => (isEdited(p) ? setConfirmRemove(p) : remove(p))}
+                onPress={startSelecting}
+                onSelect={startSelecting}
+                onRemove={(p) => removeAsked([p.id])}
                 onDeliver={handleDeliver}
+                onVariant={(id) => makeVariantOf(id, 'clone')}
                 hideIgnored={!showIgnored}
                 culling={culling.byPicture}
-                shows={filtering ? shownByCull : undefined}
+                shows={filtering ? passesFilter : undefined}
               />
-              </div>
-            </div>
+            )}
           </div>
         </div>
       )}
@@ -1406,94 +1907,25 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      {confirmRemove && (
+      {confirmRemove && removing.length > 0 && (
         <ConfirmDialog
-          title={`Take ${pictureLabel(confirmRemove)} off the roll?`}
+          title={removing.length === 1 ? `Take ${pictureLabel(removing[0])} off the roll?` : `Take ${removing.length} pictures off the roll?`}
           confirmLabel="Remove"
           danger
           onCancel={() => setConfirmRemove(null)}
           onConfirm={() => {
-            remove(confirmRemove);
+            removeMany(confirmRemove);
             setConfirmRemove(null);
           }}
         >
           <p>
-            What was done to it goes with it — {pictureEdits(confirmRemove).join(', ')}. The file stays where it
-            is.
+            {removing.length === 1
+              ? `What was done to it goes with it — ${pictureEdits(removing[0]).join(', ')}. The file stays where it is.`
+              : `What was done to them goes with them — ${removing.filter(isEdited).length} of them carry work. The files stay where they are.`}
           </p>
         </ConfirmDialog>
       )}
     </div>
-  );
-}
-
-/**
- * Winnow's word on the roll, in the status line: how many picks and rejects
- * it answered, and the strip's filter on them. Read-only — the filter shows
- * and hides, it never writes to Winnow (item 33 of `docs/lightroom-gaps.md`).
- */
-function CullLine({
-  counts,
-  filter,
-  onFilter,
-  shown,
-  asking,
-  problem,
-  onRefresh,
-}: {
-  counts: ReturnType<typeof countCulling>;
-  filter: CullFilter;
-  onFilter: (f: CullFilter) => void;
-  /** How many pictures the filter leaves in the strip, or null with none on. */
-  shown: number | null;
-  asking: boolean;
-  problem: string | null;
-  onRefresh: () => void;
-}) {
-  const said = [
-    counts.picks > 0 && `${counts.picks} pick${counts.picks === 1 ? '' : 's'}`,
-    counts.rejects > 0 && `${counts.rejects} rejected`,
-    counts.starred > 0 && `${counts.starred} starred`,
-  ].filter(Boolean);
-  return (
-    <span className="text-faint">
-      {' '}
-      · Winnow{' '}
-      {problem ? (
-        <span className="text-danger">{problem}</span>
-      ) : asking && counts.known === 0 ? (
-        'asking…'
-      ) : said.length ? (
-        said.join(', ')
-      ) : (
-        'nothing culled'
-      )}{' '}
-      <select
-        value={cullFilterKey(filter)}
-        onChange={(e) => onFilter(readCullFilter(e.target.value))}
-        aria-label="Show in the strip, by Winnow's culling"
-        title="Show in the strip, by Winnow's culling — read-only: culling stays Winnow's"
-        className={`bg-transparent border-0 border-b border-dotted font-mono text-2xs cursor-pointer ${
-          filter.kind === 'all' ? 'border-line-strong text-muted' : 'border-accent text-accent-ink'
-        }`}
-      >
-        {CULL_FILTERS.map((f) => (
-          <option key={cullFilterKey(f)} value={cullFilterKey(f)}>
-            {f.kind === 'all' ? 'show all' : `show ${cullFilterLabel(f).toLowerCase()}`}
-          </option>
-        ))}
-      </select>
-      {shown !== null && <> ({shown} shown)</>}{' '}
-      <button
-        type="button"
-        onClick={onRefresh}
-        disabled={asking}
-        className="underline underline-offset-2 cursor-pointer disabled:cursor-default disabled:no-underline"
-        title="Ask Winnow again — it is asked by itself when you come back to this tab"
-      >
-        {asking ? 'asking…' : 'Refresh'}
-      </button>
-    </span>
   );
 }
 

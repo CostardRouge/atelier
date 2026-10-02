@@ -75,11 +75,25 @@ export function openAfterRemoval(
   removedId: string,
   openId: string | null,
 ): string | null {
-  if (openId !== removedId) return openId;
-  const at = pictures.findIndex((p) => p.id === removedId);
-  const rest = pictures.filter((p) => p.id !== removedId);
+  return openAfterRemovals(pictures, [removedId], openId);
+}
+
+/**
+ * The same for SEVERAL pictures leaving at once (the selection's "take off
+ * the roll"): the open one stays if it is not among them, else the first
+ * survivor after it in strip order, else the last survivor.
+ */
+export function openAfterRemovals(
+  pictures: readonly { id: string }[],
+  removedIds: readonly string[],
+  openId: string | null,
+): string | null {
+  if (openId === null || !removedIds.includes(openId)) return openId;
+  const at = pictures.findIndex((p) => p.id === openId);
+  const rest = pictures.filter((p) => !removedIds.includes(p.id));
   if (rest.length === 0) return null;
-  return rest[Math.min(Math.max(at, 0), rest.length - 1)].id;
+  const after = pictures.slice(at + 1).find((p) => !removedIds.includes(p.id));
+  return after ? after.id : rest[rest.length - 1].id;
 }
 
 /**
@@ -142,6 +156,8 @@ export interface EditorKeyPress {
   hasSelection: boolean;
   /** The Layers tab is open — where `P` and `M` are the mask's keys, not the delivery's. */
   layersTab?: boolean;
+  /** The band's selection is on — where ⌘A takes every picture it shows. */
+  selecting?: boolean;
 }
 
 export type EditorKeyAction =
@@ -168,6 +184,13 @@ export type EditorKeyAction =
   | 'clipping'
   | 'mono'
   | 'variant'
+  | 'select'
+  | 'select-all'
+  | 'band'
+  | 'sheet'
+  | 'focus'
+  | 'thumbs-smaller'
+  | 'thumbs-larger'
   | null;
 
 /**
@@ -190,7 +213,10 @@ const TAB_KEYS: Readonly<Record<string, WorkbenchTab>> = {
  * (`TAB_KEYS`, answered as `{ tab }`), `X` swaps the crop's orientation, ⇧C
  * crops to the zoomed view (the caller decides whether there is one), `H`
  * (or `?`) the shortcuts, `I` the facts over the picture, `J` the clipping
- * painted on it, `V` black and white, `M` the mask's view
+ * painted on it, `V` black and white, `S` the band's selection (and ⌘A every
+ * shown picture while it is on), `B` the band folded to its rail, `G` the
+ * contact sheet, `F` the picture alone, `-` and `=` the thumbnails smaller
+ * and larger, `M` the mask's view
  * and `P` Pick / Paint (both on the Layers tab, the caller's rule), ⌘/Ctrl-C and -V
  * copy and paste the develop — the chord is read first, so ⌘C stays copy while
  * a bare `C` opens the crop. Delete or Backspace REMOVES what is selected on
@@ -218,6 +244,9 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
     if (k === "'") return press.repeat ? null : 'variant';
     if (k === 'c') return press.hasSelection ? null : 'copy';
     if (k === 'v') return 'paste';
+    // ⌘A takes every picture the band shows — only while its selection is
+    // on, so the page's own select-all is left alone the rest of the time.
+    if (k === 'a') return press.selecting && !press.repeat ? 'select-all' : null;
     return null;
   }
   // `?` is the one key reached WITH shift on most layouts, so it is read
@@ -240,6 +269,20 @@ export function editorKeyAction(press: EditorKeyPress): EditorKeyAction {
   if (press.key === 'x' || press.key === 'X') return 'swap';
   if (press.key === 'h' || press.key === 'H') return 'help';
   if (press.key === 'i' || press.key === 'I') return 'facts';
+  // `S` turns the band's SELECTION on and off (`docs/develop-roll-browser.md`
+  // §5): pick several pictures, then act on them all — the two-step gesture
+  // that took the verbs off the cells.
+  if (press.key === 's' || press.key === 'S') return 'select';
+  // `B` folds the band to its rail and back; `-` and `=` (the `+` key
+  // unshifted, on QWERTY and on AZERTY alike) step its thumbnails — the
+  // grid's keys in Lightroom, where the stage keeps Z and the wheel.
+  if (press.key === 'b' || press.key === 'B') return 'band';
+  // `G` — the contact sheet over the stage and back: Lightroom's Grid.
+  if (press.key === 'g' || press.key === 'G') return 'sheet';
+  // `F` — the picture alone: the band, the inspector and the page bar away.
+  if (press.key === 'f' || press.key === 'F') return 'focus';
+  if (press.key === '-' || press.key === '_') return 'thumbs-smaller';
+  if (press.key === '=' || press.key === '+') return 'thumbs-larger';
   // `J` paints what is clipped over the picture — Lightroom's own letter, so
   // a hand that learnt it there finds it here.
   if (press.key === 'j' || press.key === 'J') return 'clipping';

@@ -20,14 +20,19 @@
  * container clips it on the bottom row. Both were reported on the Develop
  * gallery. A portal answers the two at once, and makes the same menu safe in a
  * rail, a header or a sheet, which no per-card `z-index` could.
+ *
+ * The portalled half is its own component, `AnchoredMenu`, anchored to any
+ * rect the caller measures — a right-click's point on a filmstrip cell as well
+ * as a trigger button — so a menu that opens from a gesture rather than a
+ * button is the same menu, not a second one.
  */
 
-import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode } from 'react';
+import { useCallback, useEffect, useLayoutEffect, useRef, useState, type ReactNode, type RefObject } from 'react';
 import { createPortal } from 'react-dom';
 import Button, { type ButtonSize, type ButtonVariant } from './Button';
 import IconButton from './IconButton';
 import { Icons } from './icons';
-import { menuAnchor, type MenuAnchor } from './menu-anchor';
+import { menuAnchor, type AnchorRect, type MenuAnchor } from './menu-anchor';
 
 export interface OverflowItem {
   id: string;
@@ -37,6 +42,132 @@ export interface OverflowItem {
   /** Painted red, and separated from the rest by a rule. */
   danger?: boolean;
   disabled?: boolean;
+}
+
+export interface AnchoredMenuProps {
+  /** Where the menu hangs from, measured by the caller — called again on scroll and resize. */
+  anchorRect: () => AnchorRect | null;
+  items: readonly OverflowItem[];
+  /** Asked to close: Escape, a press outside, or an item taken. */
+  onClose: () => void;
+  /** Where the menu PREFERS to open — it flips when the screen says otherwise. */
+  side?: 'below' | 'above';
+  align?: 'end' | 'start';
+  /** An element a press inside of does NOT close the menu — the trigger that opened it. */
+  within?: RefObject<HTMLElement | null>;
+  /** Names the menu for a screen reader. */
+  label?: string;
+}
+
+/**
+ * The menu itself, in a portal at fixed coordinates, placed by `menuAnchor`
+ * from whatever rect the caller hands it. `OverflowMenu` is a trigger over
+ * this; a filmstrip cell opens it from a right-click.
+ */
+export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align = 'end', within, label }: AnchoredMenuProps) {
+  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
+  const menuRef = useRef<HTMLDivElement>(null);
+  const latest = useRef({ onClose, anchorRect });
+  latest.current = { onClose, anchorRect };
+
+  useEffect(() => {
+    const close = (e: PointerEvent) => {
+      const target = e.target as Node;
+      if (within?.current?.contains(target) || menuRef.current?.contains(target)) return;
+      latest.current.onClose();
+    };
+    const onKey = (e: KeyboardEvent) => {
+      if (e.key === 'Escape') latest.current.onClose();
+    };
+    window.addEventListener('pointerdown', close);
+    window.addEventListener('keydown', onKey);
+    return () => {
+      window.removeEventListener('pointerdown', close);
+      window.removeEventListener('keydown', onKey);
+    };
+  }, [within]);
+
+  /** Measure the anchor and the menu, and say where the menu goes. */
+  const place = useCallback(() => {
+    const rect = latest.current.anchorRect();
+    const el = menuRef.current;
+    if (!rect || !el) return;
+    setAnchor(
+      menuAnchor({
+        trigger: rect,
+        // `scrollHeight` stays the menu's natural height once `maxHeight`
+        // clamps it, so re-placing cannot chase its own output.
+        menu: { width: el.offsetWidth, height: el.scrollHeight },
+        viewport: { width: window.innerWidth, height: window.innerHeight },
+        side,
+        align,
+      }),
+    );
+  }, [side, align]);
+
+  // A fixed menu is attached to an anchor that travels: the gallery under it
+  // scrolls, the window resizes, a phone rotates. `capture` is what sees a
+  // scroll in an ancestor — a scroll event does not bubble to the window.
+  useLayoutEffect(() => {
+    place();
+    window.addEventListener('scroll', place, true);
+    window.addEventListener('resize', place);
+    return () => {
+      window.removeEventListener('scroll', place, true);
+      window.removeEventListener('resize', place);
+    };
+  }, [place]);
+
+  const plain = items.filter((i) => !i.danger);
+  const dangerous = items.filter((i) => i.danger);
+
+  const item = (it: OverflowItem) => (
+    <button
+      key={it.id}
+      type="button"
+      role="menuitem"
+      disabled={it.disabled}
+      title={it.title}
+      onClick={(e) => {
+        e.stopPropagation();
+        latest.current.onClose();
+        it.onSelect();
+      }}
+      className={`shrink-0 text-left font-sans text-sm border-0 bg-transparent px-2.5 py-2 rounded-[8px] cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-default ${
+        it.danger
+          ? 'text-danger hover:bg-danger-wash hover:text-danger-ink'
+          : 'text-ink-soft hover:bg-paper-2 hover:text-ink'
+      }`}
+    >
+      {it.label}
+    </button>
+  );
+
+  return createPortal(
+    <div
+      ref={menuRef}
+      role="menu"
+      aria-label={label}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      // A menu is above every other overlay by construction: modals and
+      // the shell's own sheets are z-50 (the library sheet z-[60]), and
+      // a menu opened from one of them must not be swallowed by it.
+      className="fixed z-[70] min-w-[12rem] flex flex-col p-1.5 overflow-y-auto bg-surface border border-line-strong rounded-paper shadow-paper"
+      style={
+        anchor
+          ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight }
+          : // The first paint of a menu nobody has measured yet: the
+            // layout effect places it before the browser draws.
+            { left: 0, top: 0, visibility: 'hidden' }
+      }
+    >
+      {plain.map(item)}
+      {dangerous.length > 0 && plain.length > 0 && <span className="block flex-none h-px bg-line mx-2 my-1.5" />}
+      {dangerous.map(item)}
+    </div>,
+    document.body,
+  );
 }
 
 interface OverflowMenuProps {
@@ -65,6 +196,7 @@ interface OverflowMenuProps {
     text: ReactNode;
     icon?: ReactNode;
     variant?: ButtonVariant;
+    size?: ButtonSize;
     bare?: boolean;
     className?: string;
     /** The tooltip, for a bare trigger whose text is truncated. */
@@ -94,87 +226,9 @@ export default function OverflowMenu({
   disabled = false,
 }: OverflowMenuProps) {
   const [open, setOpen] = useState(false);
-  const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
   const rootRef = useRef<HTMLDivElement>(null);
-  const menuRef = useRef<HTMLDivElement>(null);
-
-  useEffect(() => {
-    if (!open) return;
-    const close = (e: PointerEvent) => {
-      const target = e.target as Node;
-      if (rootRef.current?.contains(target) || menuRef.current?.contains(target)) return;
-      setOpen(false);
-    };
-    const onKey = (e: KeyboardEvent) => {
-      if (e.key === 'Escape') setOpen(false);
-    };
-    window.addEventListener('pointerdown', close);
-    window.addEventListener('keydown', onKey);
-    return () => {
-      window.removeEventListener('pointerdown', close);
-      window.removeEventListener('keydown', onKey);
-    };
-  }, [open]);
-
-  /** Measure the trigger and the menu, and say where the menu goes. */
-  const place = useCallback(() => {
-    const rect = rootRef.current?.getBoundingClientRect();
-    const el = menuRef.current;
-    if (!rect || !el) return;
-    setAnchor(
-      menuAnchor({
-        trigger: rect,
-        // `scrollHeight` stays the menu's natural height once `maxHeight`
-        // clamps it, so re-placing cannot chase its own output.
-        menu: { width: el.offsetWidth, height: el.scrollHeight },
-        viewport: { width: window.innerWidth, height: window.innerHeight },
-        side,
-        align,
-      }),
-    );
-  }, [side, align]);
-
-  // A fixed menu is attached to a trigger that travels: the gallery under it
-  // scrolls, the window resizes, a phone rotates. `capture` is what sees a
-  // scroll in an ancestor — a scroll event does not bubble to the window.
-  useLayoutEffect(() => {
-    if (!open) {
-      setAnchor(null);
-      return;
-    }
-    place();
-    window.addEventListener('scroll', place, true);
-    window.addEventListener('resize', place);
-    return () => {
-      window.removeEventListener('scroll', place, true);
-      window.removeEventListener('resize', place);
-    };
-  }, [open, place]);
-
-  const plain = items.filter((i) => !i.danger);
-  const dangerous = items.filter((i) => i.danger);
-
-  const item = (it: OverflowItem) => (
-    <button
-      key={it.id}
-      type="button"
-      role="menuitem"
-      disabled={it.disabled}
-      title={it.title}
-      onClick={(e) => {
-        e.stopPropagation();
-        setOpen(false);
-        it.onSelect();
-      }}
-      className={`shrink-0 text-left font-sans text-sm border-0 bg-transparent px-2.5 py-2 rounded-[8px] cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-default ${
-        it.danger
-          ? 'text-danger hover:bg-danger-wash hover:text-danger-ink'
-          : 'text-ink-soft hover:bg-paper-2 hover:text-ink'
-      }`}
-    >
-      {it.label}
-    </button>
-  );
+  const anchorRect = useCallback(() => rootRef.current?.getBoundingClientRect() ?? null, []);
+  const close = useCallback(() => setOpen(false), []);
 
   return (
     <div ref={rootRef} className={`relative inline-flex ${className}`}>
@@ -198,12 +252,14 @@ export default function OverflowMenu({
         ) : (
           <Button
             variant={trigger.variant ?? 'default'}
+            size={trigger.size}
             icon={trigger.icon}
             trailing={Icons.down}
             aria-label={label}
             aria-expanded={open}
             aria-haspopup="menu"
             disabled={disabled}
+            className={trigger.className}
             onClick={(e) => {
               e.stopPropagation();
               setOpen((o) => !o);
@@ -229,32 +285,7 @@ export default function OverflowMenu({
           {icon ?? Icons.more}
         </IconButton>
       )}
-      {open &&
-        createPortal(
-          <div
-            ref={menuRef}
-            role="menu"
-            onClick={(e) => e.stopPropagation()}
-            // A menu is above every other overlay by construction: modals and
-            // the shell's own sheets are z-50 (the library sheet z-[60]), and
-            // a menu opened from one of them must not be swallowed by it.
-            className="fixed z-[70] min-w-[12rem] flex flex-col p-1.5 overflow-y-auto bg-surface border border-line-strong rounded-paper shadow-paper"
-            style={
-              anchor
-                ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight }
-                : // The first paint of a menu nobody has measured yet: the
-                  // layout effect places it before the browser draws.
-                  { left: 0, top: 0, visibility: 'hidden' }
-            }
-          >
-            {plain.map(item)}
-            {dangerous.length > 0 && plain.length > 0 && (
-              <span className="block flex-none h-px bg-line mx-2 my-1.5" />
-            )}
-            {dangerous.map(item)}
-          </div>,
-          document.body,
-        )}
+      {open && <AnchoredMenu anchorRect={anchorRect} items={items} onClose={close} side={side} align={align} within={rootRef} />}
     </div>
   );
 }

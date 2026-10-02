@@ -302,16 +302,16 @@ end, the pictures edited meanwhile are NAMED first in the note
 the table's `changed` cannot disagree) and "Export new or changed" sends
 them. Rejected: locking a queued picture's retouching (L3 — it blocks the
 very pictures one wants to fix) and a blocking window (V3).
-**E3, the filmstrip badge**: bottom-right of each cell (the "unreachable" `!`
-moved to the top-right to make room); a click toggles, a right-click or a
-550 ms touch hold ignores ↔ brings back, and the click that ends a hold is
-swallowed so it is not a second gesture. Filled = the author decided, dashed =
-the rule answers; a picture on the rule that stays OUT (a big roll's untouched
-majority) shows its badge only under the pointer — always on a touch screen —
-so the strip does not wear a hundred grey rings. Ignored cells are dimmed, or
-left out by the status line's Hide (`atelier.develop.showIgnored`, a
-`localStorage` view pref, never the roll's), the OPEN picture always staying
-in the strip.
+**E3's badge LEFT the cell (2026-10-02, his Q6)**: a cell wears ONE pill
+reading its state (`↑` leaves, `–` held, `⊘` ignored, beside `●`, the variant
+number, `▶`, `!`) and no button; what is DONE to a picture from the band is
+its ⋯ menu (right-click too — send ↔ hold, back to the rule, ignore, a
+variant, off the roll) or the selection's bar for several, and `P` / `U` /
+`M` on the stage — the Pictures table stays the other door. A held finger now
+SELECTS (his Q3), it no longer ignores. Ignored cells are dimmed, or left out
+by the band filter's "Ignored pictures: hidden" (`atelier.develop.showIgnored`,
+a `localStorage` view pref, never the roll's), the OPEN picture always staying
+in the band — «The roll's pictures are a BAND» below.
 
 ## The filmstrip's batch is a Shift/⌘-click selection, apart from the open picture (2026-09-16, D7)
 
@@ -353,6 +353,13 @@ wrote +1.5 EV to the three non-open targets only (the other two, unselected,
 stayed as shot); Copy on the open picture then a fresh ⌘-click pair then
 "Paste to 2 selected" wrote the same +1.5 EV to those two; Clear dropped the
 badges and the verb reverted to "Apply to 5 other pictures".
+
+**Since 2026-10-02 the selection is also a MODE** (`docs/develop-roll-browser.md`,
+built): `selectionAfterClick`'s rules are unchanged, a Shift/⌘-click just
+turns the mode on; the `Clear` link, the count in the progress line and the
+verbs' "N selected" reading are the `SelectionBar`'s now — «The roll's
+pictures are a BAND» below. Do not add a mark or a button to a cell: a cell
+is READ, the menu and the bar ACT.
 
 ## The crop is a second tab over the SAME delivered picture (2026-09-16, D8; rev. 2026-09-19)
 
@@ -1209,18 +1216,13 @@ there is one, still names every way in). The Trips overview's bar, the same
 fix; a wide screen keeps every word. Measured: the stage's top moved from 214
 to 172 css px.
 
-The filmstrip's × badge overhangs its cell by 4px, and a scroller that clips
-x clips y too — on a touch screen, where the badge is always drawn at 28px,
-its top was sliced flat. The strip pays `pt-1.5 pr-1.5` for it; any badge
-overhanging a cell in a horizontal scroller needs the same room.
-
 ## A run writes each picture as it lands (2026-09-28)
 
 `exportPictures` used to render the whole run into memory — every JPEG and every second target's — and write it all at the end, then keep the files in `lastRun` until the NEXT run: gigabytes on a big roll, and on a phone where a long roll died. Each picture is now handed to `deliverFilesTo` as soon as it is rendered (its main file and its other targets' together), the counts and refusals are accumulated, and only the NAMES are kept (`RollRun.names`, for the unplugged send home, which can read them back from the folder). The folder is still picked at the click, before anything renders (`deliver-files.ts`). A cancel keeps what was already written — as it always said.
 
-## The filmstrip's cells are memoised (2026-09-28)
+## The band's cells are memoised (2026-09-28, kept through the 2026-10-02 rebuild)
 
-Every cell re-rendered on every tick of the open picture's sliders — a roll of hundreds of cells for one picture's change. `Cell` is `memo`, and what it is handed is kept stable: the host's four callbacks are read through a ref and handed as ONE `CellHandlers` for the strip's life (RollEditor passes inline arrows), the Winnow thumbnail as a client and an id rather than a fresh object, and the availability as its KIND alone — `use-roll-media` rebuilds that map, objects and all, on every roll change. A new prop on a cell must be stable too, or the memo quietly stops holding.
+Every cell re-rendered on every tick of the open picture's sliders — a roll of hundreds of cells for one picture's change. `Cell` (`RollBand.tsx`) is `memo`, and what it is handed is kept stable: the host's callbacks are read through a ref and handed as ONE handlers object for the strip's life (RollEditor passes inline arrows), the Winnow thumbnail as a client and an id rather than a fresh object, the availability as its KIND alone — `use-roll-media` rebuilds that map, objects and all, on every roll change — and the cell's rectangle from the layout (a new layout object only when the items, the width or the size changed). The picture's ⋯ menu is ONE `AnchoredMenu` for the whole strip, never one per cell. A new prop on a cell must be stable too, or the memo quietly stops holding.
 
 ## The crop's ASPECT rides a draft too (2026-09-28)
 
@@ -1372,3 +1374,57 @@ encode (this Chromium has none — the encoder was swapped to VP9 for the run,
 
 - **The sheet's preview STICKS** (2026-10-01, his report: it scrolled away): the whole preview column is `sticky` inside the sheet (the sheet is the scroller; a sticky child of the column alone would leave with the column on a phone, where the columns stack), on the paper so the settings scroll under it, and its picture is sized from a HEIGHT budget — `--tl-preview-h`, 60 % of the measured `--app-h` up to 36rem on a desktop, 34 % on a phone — through `width: min(100%, budget × aspect)`, so a 9:16 preview never outgrows the screen it must stay on.
 - **A making-of is a PHOTOGRAPH's** (2026-10-01, the merge with clips): its states are graded as stills, so a clip gets no Making-of row, no menu verb and no sheet (`isClipPicture`).
+
+## The roll's pictures are a BAND, a COLUMN or a CONTACT SHEET; a cell is calm and the selection is a MODE (2026-10-02)
+
+His *«les miniatures sont trop petites»* → `docs/develop-roll-browser.md`, face
+D picked with its §7 recommendations, built C1–C7 the same day (`Filmstrip.tsx`
+is gone; `RollBand.tsx`, `ContactSheet.tsx`, `SelectionBar.tsx`, `BandGrip.tsx`,
+`use-strip-prefs.ts`, `use-thumb-aspects.ts` over `shared/develop/roll-strip.ts`).
+The rules a later agent must keep:
+
+- **Geometry is pure** (`roll-strip.ts`, tested): Flickr-style justified rows,
+  one scrolling row, the column, the sheet, rows ↔ height, columns ↔ width, the
+  fold threshold, the auto height from the roll's MEDIAN aspect, the prefs
+  reader, the filter. A cell is drawn at the rectangle the layout answers,
+  never by CSS flow, so the host knows every size before it paints. Aspects
+  are MEASURED from the thumbnail blob (`use-thumb-aspects.ts`, batched) and
+  fall back to the picture's own; the layout re-justifies as they land.
+- **Preferences are PER DEVICE**, `localStorage['atelier.develop.strip.<desktop|phone>']`
+  (`StripPrefs`: place, height, width, folded, auto, thumb, sheet), never on
+  the roll; a phone's `place` is read as `bottom` whatever it says, and its
+  menu offers no placement.
+- **The size is the DRAGGED one by default** (his Q2), "height follows the
+  roll" a menu option; a drag under the fold threshold folds to the rail
+  (`bandAfterDrag`). Trap: the box that sizes the band must be measured APART
+  from the band — the status lines have their own `useElementSize` and the
+  toolbar is a constant — or the auto height reads its own output and
+  flickers (707 ↔ 743 px; Playwright's "element is not stable" was that).
+- **The column** (his Q1): `place: left | right`, the band's cell `row-span-2`
+  in a grid column of its own (`auto`), the stage handed its column through
+  `PictureWorkbench`'s `columns` — never in focus, where the grid has ONE
+  column and a `col-start-2` would make an implicit one —, the status lines a
+  grid item of their own under the stage. The grip is the band's stage-facing
+  edge, `−` / `=` step the COLUMN COUNT (`columnLayout` takes no thumbnail
+  height), and `maxBandWidth` keeps the stage 320 px: two columns are a
+  DISABLED menu row at 1270 px with the Library docked, not a silent clamp.
+- **A cell is CALM**: one pill (`⊘ ● ↑ – variant ▶ !`), Winnow's mark, the
+  run's mark at the centre, a caption from 112 px (his Q5; always in the
+  sheet). The delivery badge and `×` LEFT it (Q6). Acting is the picture's
+  ⋯ menu (a right-click too; one portalled `AnchoredMenu`, extracted from
+  `OverflowMenu`, for the whole strip) or the SELECTION — a mode (`S`, Select,
+  a Shift/⌘-click, a finger held on touch: `press-intent.ts`'s
+  `LONG_PRESS_MS` / `PRESS_SLOP`, the click after the hold swallowed, the
+  touch `contextmenu` suppressed) whose header is the `SelectionBar`: words on
+  a desktop, glyphs on a phone and in the column (`narrow`), Apply folded into
+  More under 800 px (`dense`). `⌘A` only while selecting; a removal that
+  empties the selection ends the mode; `openAfterRemovals` picks the next open
+  picture for a bulk removal.
+- **The sheet** (`G`, ▦) covers the stage and the band and NEVER the inspector
+  (Q4; `span=2` beside a column), full screen on a phone. **Focus** (`F`, ⤢)
+  hides the band, the inspector and the page bar; Escape steps selection →
+  sheet → focus → the stage's own (`onEscape` returns whether it took it).
+- Keys live in `editorKeyAction` (S, ⌘A while selecting, B, G, F, −, =) and
+  are relayed through `callbacks.current`, like every other.
+- Driven headless at 1270 × 1300, 1700 × 1200 and 390 × 844 (touch) — NOT on
+  his Mac or his iPhone. §7 of the brief stays his to overrule.
