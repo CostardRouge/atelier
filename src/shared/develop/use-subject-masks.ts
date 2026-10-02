@@ -8,7 +8,9 @@ import {
   type SegmentSource,
   type SegmenterState,
 } from '../segment/segmenter';
+import { isConstrainedDevice } from '../lib/device-class';
 import { subjectLayersToSegment, type AdjustLayer } from './layer';
+import type { SegmentView } from './segment-view';
 import { knownSubjectPoints, type KnownPoints } from './subject-known';
 
 /**
@@ -24,15 +26,22 @@ import { knownSubjectPoints, type KnownPoints } from './subject-known';
  *
  * - **One inference at a time, across every layer.** The task has a single
  *   result slot; two in flight can have their answers swapped.
- * - **Cached per POINT, not per request.** A layer's mask is the union of its
- *   points, so a third tap costs ONE inference rather than three, un-picking a
- *   point costs none, and two layers pointing at the same spot segment once.
- *   Nudging a slider never re-runs a four-second inference.
+ * - **Cached per POINT and per VIEW, not per request.** A layer's mask is the
+ *   union of its points, so a third tap costs ONE inference rather than three,
+ *   un-picking a point costs none, and two layers pointing at the same spot
+ *   segment once. Nudging a slider never re-runs a four-second inference. The
+ *   VIEW is the frame the model was shown (`SegmentView.key`): a lens
+ *   correction or a keystone moves the subject in that frame, so a point is
+ *   asked again there — and only there, never for a vignette or a colour.
+ * - **The cache is the SESSION's, not the hook's.** The workbench is mounted
+ *   per picture; a cache that died with it re-asked the model for every point
+ *   on every landing. A picture come back to, unchanged, is instant.
  * - **The last good raster stays up while a new one is computed.** A mask that
  *   blinked empty for four seconds on every added point would read as broken.
  * - **The cache is BOUNDED.** A mask is about 0.75 MB at the model's input size;
- *   the newest `POINT_CACHE_SIZE` are kept and the oldest dropped, so a long
- *   session cannot fill the heap with subjects nobody is looking at.
+ *   the newest `POINT_CACHE_SIZE` are kept (a quarter of that on a constrained
+ *   device) and the oldest dropped, so a long session cannot fill the heap
+ *   with subjects nobody is looking at.
  */
 export interface SubjectMasks {
   /** Layer id → its alpha map. Absent while the first answer is still coming. */
@@ -51,6 +60,16 @@ export interface SubjectMasks {
 
 /** How many points' masks are kept — ~50 MB at the model's input size, at most. */
 export const POINT_CACHE_SIZE = 64;
+/** The same on a phone (`device-memory.md`): ~12 MB. */
+const POINT_CACHE_SIZE_CONSTRAINED = 16;
+
+// View + point → its mask, for the session, bounded. Never cleared on a layer
+// change: an undo that brings a subject back must not pay for it twice.
+const pointCache = new Map<string, BrushRaster>();
+
+function pointCacheSize(): number {
+  return isConstrainedDevice() ? POINT_CACHE_SIZE_CONSTRAINED : POINT_CACHE_SIZE;
+}
 
 type Point = readonly [number, number];
 
@@ -80,12 +99,12 @@ function lruSet<V>(cache: Map<string, V>, key: string, value: V, cap: number): v
 
 export function useSubjectMasks({
   layers,
-  source,
+  view,
   pictureKey,
 }: {
   layers: readonly AdjustLayer[] | null | undefined;
-  /** What the model is shown. Null while the picture is decoding. */
-  source: TexImageSource | null;
+  /** What the model is shown, and the name of its frame. Null while the picture is decoding. */
+  view: SegmentView | null;
   /** Changes when the open picture does, so one picture's masks never serve another. */
   pictureKey: string;
 }): SubjectMasks {
@@ -99,9 +118,8 @@ export function useSubjectMasks({
     picture: pictureKey,
     points: new Map(),
   });
-  // Point key → its mask, for the session, bounded. Never cleared on a layer
-  // change: an undo that brings a subject back must not pay for it twice.
-  const cache = useRef(new Map<string, BrushRaster>());
+  const source = view?.image ?? null;
+  const viewKey = view?.key ?? '';
   // The source as the model is shown it, made once per source rather than
   // once per tap — a stage-budget picture resampled to 1024 per point was a
   // second of work before the model even started.
@@ -142,7 +160,7 @@ export function useSubjectMasks({
       let added: BrushRaster | null = null;
       for (const point of want.points) {
         const key = pointKey(pictureKey, want.model, point);
-        const hit = lruGet(cache.current, key);
+        const hit = lruGet(pointCache, `${viewKey}#${key}`);
         if (!hit) {
           complete = false;
           break;
@@ -178,11 +196,11 @@ export function useSubjectMasks({
         for (const point of want.points) {
           if (cancelled || runId.current !== run) return;
           const key = pointKey(pictureKey, want.model, point);
-          let mask = lruGet(cache.current, key) ?? null;
+          let mask = lruGet(pointCache, `${viewKey}#${key}`) ?? null;
           if (!mask) {
             mask = await segmentPoint(input.image, { x: point[0], y: point[1] });
             setState(segmenterState());
-            if (mask) lruSet(cache.current, key, mask, POINT_CACHE_SIZE);
+            if (mask) lruSet(pointCache, `${viewKey}#${key}`, mask, pointCacheSize());
           }
           if (mask && isNew(want.id, key) && !cancelled && runId.current === run) {
             setFresh({ layerId: want.id, raster: mask });
@@ -207,13 +225,15 @@ export function useSubjectMasks({
     };
     // Keyed on `signature`, the string form of `wanted` — listing the array
     // itself would re-run this on every render, and a re-run is an inference.
-  }, [signature, source]);
+  }, [signature, source, viewKey]);
 
   // Record every subject layer's points — those with none included, which is
   // what makes the FIRST tap on a fresh layer a new point — after the effect
-  // above has read what stood before. Not a point tapped while the model has
-  // no view yet: that is the very first tap of all, and recording it before
-  // the view arrived is what kept it from blinking (`subject-known.ts`).
+  // above has read what stood before. Not a point a KNOWN layer gained while
+  // the model has no view yet: that is the very first tap of all, and
+  // recording it before the view arrived is what kept it from blinking. A
+  // layer that arrives with its points — this picture just opened, the record
+  // below starting empty for it — records them whole (`subject-known.ts`).
   const everySubject = (layers ?? [])
     .filter((l) => l.mask?.kind === 'subject')
     .map((l) => {

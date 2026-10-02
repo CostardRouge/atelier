@@ -27,6 +27,22 @@ import { geometryPasses, hasGeometry, type PictureGeometry } from '../render/pic
 import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
 import { SEGMENT_INPUT_LONG_EDGE } from '../segment/segmenter';
 
+/**
+ * What the subject model is shown on the stage, with the VALUE that names its
+ * frame — made together, so the two can never disagree.
+ *
+ * The key is the decoded file, its size and where the geometry puts the
+ * picture (`placementKey`): equal exactly when a mask segmented on one view
+ * lands right on the other. `use-subject-masks.ts` keys its cache on it, which
+ * is what makes a lens correction re-ask the model for a subject picked before
+ * it (2026-10-02 — the cache had been keyed on the point alone, and served the
+ * unbent mask until the picture was opened again).
+ */
+export interface SegmentView {
+  image: TexImageSource;
+  key: string;
+}
+
 export function segmentationView(
   image: GradeSource,
   size: { width: number; height: number },

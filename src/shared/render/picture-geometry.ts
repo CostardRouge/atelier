@@ -78,6 +78,32 @@ export function sameGeometry(
   );
 }
 
+/**
+ * A name for WHERE this geometry puts the picture: equal for two geometries
+ * that land every point of the frame in the same place, whatever else they
+ * do. The frame is where GREEN lands — lateral CA scales red and blue against
+ * it and a vignette lift brightens, so neither moves a point — while the
+ * camera's warp, the lens's distortion terms (slider and profile) and the
+ * keystone all do.
+ *
+ * What a mask computed in the warped frame is keyed on (`use-subject-masks.ts`):
+ * served again on the same frame, never on another — and not re-asked of a
+ * four-second model for a vignette slider.
+ */
+export function placementKey(g: PictureGeometry | null | undefined): string {
+  const lens = g?.lens;
+  const profile = g?.lensProfile;
+  const keystone = g?.keystone;
+  return JSON.stringify([
+    isIdentityWarp(g?.cameraWarp) ? null : g?.cameraWarp,
+    lens && (lens.distortion || lens.distortion2) ? [lens.distortion, lens.distortion2] : null,
+    profile && profile.distortion.some((k) => k !== 0) ? profile.distortion : null,
+    keystone && !isDefaultKeystone(keystone)
+      ? [keystone.vertical, keystone.horizontal, keystone.rotation, keystone.aspect, keystone.scale]
+      : null,
+  ]);
+}
+
 /** A copy that can be held against the next one without aliasing a caller's draft. */
 export function cloneGeometry(g: PictureGeometry | null | undefined): PictureGeometry {
   return {

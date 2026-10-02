@@ -56,9 +56,22 @@ three accepted as drawn.
   only made once a subject HAS a point, so that tap met no view, the mask
   effect returned early, and the known-points record advanced in the same
   commit — the point was "known" by the time the view arrived. Rule
-  (`subject-known.ts`, pure, tested): while there is no view, a point tapped
-  on the same picture is not recorded; a picture just opened is recorded
-  whole, view or not.
+  (`subject-known.ts`, pure, tested, rev. 2026-10-02): while there is no
+  view, a point GAINED by a layer the record already held is not recorded; a
+  layer that ARRIVES with its points (a picture just opened, an undo, a
+  paste) is recorded whole, view or not. **The first version of that rule
+  made EVERY landing blink** (his report, 2026-10-02: *«tous les masques
+  flashent dès qu'on atterrit sur une photo»*): it told a picture just opened
+  by a null record, but `PictureWorkbench` is MOUNTED per picture
+  (`key={open.id}`) and the hook's record starts as THIS picture, empty — so
+  every subject was recorded with no points and its region blinked as a
+  fresh tap when the model's view arrived. The blink never served the
+  re-segmentation: it was the classifier, nothing else. With two subjects
+  only ONE region was seen blinking on a landing — the layer listed FIRST in
+  the panel, which lists the stack top-down, so the last one segmented; why
+  the other's 90 ms blink never reached the screen was not pinned down, and no
+  longer matters. Driven headless both ways (testing.md, «The subject model
+  runs headless»).
 
 **The export dropped every Subject layer, and nobody had noticed.**
 `renderRollPicture` built its layers with no rasters, and a subject with no
@@ -75,7 +88,8 @@ silence.
 stray, 0 missed of 672). To run it here without a dev server left behind: Vite
 `createServer().listen()` in one process and the gate as an ASYNC child —
 `spawnSync` blocks the loop serving the page and every `goto` times out.
-Not driven in the UI: the model needs a GPU and a real picture on a roll.
+Not driven in the UI then — since 2026-10-02 the model is known to run
+headless here (testing.md).
 
 ## The model is shown the WARPED frame (2026-09-24)
 
@@ -87,12 +101,37 @@ grader's order is `[cube, …geometry, …layers]`, `render-layers.md`), but
 **Rule**: whatever a mask is computed FROM must be the frame it is sampled IN.
 `segment-view.ts` renders the source through `geometryPasses` alone (camera
 warp, lens + profile, keystone) at the model's 1024 px, and all three readers
-use it — the stage (`useDevelopPicture.segmentSource`, made at once the first
+use it — the stage (`useDevelopPicture.segmentView`, made at once the first
 time and SETTLED 300 ms after a geometry change so a slider drag does not
 re-ask the model per step), the JPEG export and the RAW export (through its
 cube, `withCalibration` so the DNG's own warp is in it). Stored points are
 screen positions in that frame: after a geometry change the subject is
 re-segmented from the same spot on the new picture, like every other mask kind
 stays where it was drawn. Measured: a line at 0.8950 of the source lands at
-0.8725 in both the model's view and the stage under distortion 60. Not driven
-with the model itself (it needs a real GPU).
+0.8725 in both the model's view and the stage under distortion 60.
+
+**The stage did not re-segment until 2026-10-02**: `useSubjectMasks` cached
+per POINT alone, so a new view hit the cache and the old frame's mask stayed
+up until the picture was opened again — the remount, not the geometry, was
+what refreshed it, and the EXPORT (its own view) disagreed with the stage
+meanwhile. Measured headless at distortion 100 on an off-centre disc: 14.5 %
+of grey covered and 0 model calls, against 1.3 % (the edge) and 1 call now.
+**Rule**: a cache of anything computed from a FRAME is keyed on the frame's
+VALUE. `SegmentView` carries the image AND its key, set in one call — the
+decoded file (recorded with the source, since `file` and `source` change in
+different commits), its size and `placementKey(geometry)`, which names where
+GREEN lands: CA and a vignette move no point, so their sliders cost no
+inference (0 calls at vignetting 60). And the cache is MODULE state, not the
+hook's: the workbench is mounted per picture, so the per-hook cache re-asked
+the model for every point on every landing (2 calls → 0 measured). Bounded:
+64 masks (~50 MB), 16 on a constrained device.
+
+## Taking a subject BACK — proposed, not built (2026-10-02)
+
+His report: the model only adds, and sometimes adds too much. Measured in the
+code: `magic_touch` takes a `keypoint` or a `scribble`, never a negative
+point; `loadSegmenter` asks for the CATEGORY mask (cut at the model's own
+threshold) and not the confidence masks it can return. The proposal and the
+order of work are `docs/mask-ui-redesign.md`. If it is built, the rules above
+bind it: a negative point is cached per point and per VIEW, the export removes
+exactly what the stage removes, and the blink stays for what a tap changed.

@@ -1124,8 +1124,9 @@ export default function PictureWorkbench({
     // The picture as its GEOMETRY bends it, never the raw source: a tap lands
     // in the warped frame and the layer pass samples the mask there, so the
     // model must see that frame too (his report, 2026-09-24 — a lens
-    // correction bent the subject away from what it had picked).
-    source: picture.segmentSource,
+    // correction bent the subject away from what it had picked). Named by its
+    // frame, so a mask is never served on a view it was not segmented on.
+    view: picture.segmentView,
     // Per PICTURE: one picture's subject must never be shown on another.
     pictureKey: entry.id,
   });

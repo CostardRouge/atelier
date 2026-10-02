@@ -12,8 +12,17 @@
  * So while there is no view, a point tapped on the same picture is NOT
  * recorded: it stays new until the model can answer it.
  *
- * A picture just OPENED records everything it holds, view or not: its points
- * were put there on another visit, and re-opening a picture blinks nothing.
+ * A layer that ARRIVES with its points — on a picture just opened, by an undo
+ * that brings it back, by a paste — records them all, view or not: nobody
+ * tapped them here, and re-opening a picture blinks nothing. Only a point
+ * GAINED by a layer the record already held can be a tap.
+ *
+ * The trap the first version of that rule fell into (2026-10-02, his report
+ * "every subject mask flashes as soon as I land on a picture"): it told a
+ * picture just opened by a `previous` of null, but the workbench is mounted
+ * per picture and its record starts as THIS picture with nothing in it — so
+ * every layer of a picture just opened was recorded with no points, and each
+ * point blinked as a fresh tap the moment the model's view arrived.
  */
 export type KnownPoints = ReadonlyMap<string, ReadonlySet<string>>;
 
@@ -33,7 +42,8 @@ export function knownSubjectPoints(
 ): Map<string, Set<string>> {
   const points = new Map<string, Set<string>>();
   for (const { id, keys } of entries) {
-    const held = !viewReady && previous ? keys.filter((k) => previous.get(id)?.has(k)) : keys;
+    const before = previous?.get(id);
+    const held = !viewReady && before ? keys.filter((k) => before.has(k)) : keys;
     // Every subject layer is recorded, pointless ones included: that is what
     // makes the FIRST tap on a fresh layer a new point.
     points.set(id, new Set(held));
