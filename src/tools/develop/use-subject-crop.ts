@@ -81,7 +81,7 @@ export function useSubjectCrop({
     }
     // No subject named: the model is shown the picture as its geometry bends
     // it when that view exists, else the picture as shot, drawn small.
-    const source = p.segmentSource ?? p.asShotSample(SEGMENT_INPUT_LONG_EDGE);
+    const source = p.segmentView?.image ?? p.asShotSample(SEGMENT_INPUT_LONG_EDGE);
     if (!source) {
       live.current.onTold('the picture has not been read yet');
       return;
