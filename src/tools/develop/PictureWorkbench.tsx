@@ -10,6 +10,7 @@ import { developButtonClass } from '../../shared/develop/develop-classes';
 import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/DevelopAuto';
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import { useAutoMemory } from '../../shared/develop/use-auto-memory';
+import { useCropSwitches } from './use-crop-switches';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopMixer from '../../shared/develop/DevelopMixer';
 import { straightMono } from '../../shared/develop/mixer';
@@ -1353,6 +1354,8 @@ export default function PictureWorkbench({
     onAspect: setAspectDraft,
     onFraming: setFramingDraft,
   });
+  // The Crop tab's Auto level and Crop to subject are switches like the Auto row's.
+  const cropSwitches = useCropSwitches({ pictureKey: entry.id, crop, aspect: aspectDraft, onTold: tell });
   const subjectCrop = useSubjectCrop({
     picture,
     crop,
@@ -1360,6 +1363,7 @@ export default function PictureWorkbench({
     rasters: resolvedSubjects,
     taskScope,
     onTold: tell,
+    record: (write) => cropSwitches.record('subject', write),
   });
   useEffect(() => {
     if (!source) return;
@@ -2326,6 +2330,7 @@ export default function PictureWorkbench({
               borderVerbs={borderApplyTo}
               clip={clip}
               subjectCrop={subjectCrop}
+              switches={cropSwitches}
               onTold={tell}
             />
           ) : null}

@@ -1569,7 +1569,10 @@ subject** draws the zone around the subject — what your Subject layers point
 at, else what the model finds at the centre of the picture, and the line says
 which — with room around it, in the format chosen, slid inside the picture
 rather than shrunk; a speck and a subject that is the whole picture are
-refused with the reason. The quarter
+refused with the reason. Both are **switches** like the Adjust tab's Auto
+row: a second click puts back the crop from before that verb — so Auto level,
+then Crop to subject, then the crop turned off gives back the levelled
+picture. The quarter
 turns take the zone with the picture, and the two flips
 mirror what the frame shows. A pinch, the wheel or the ± pill looks closer at
 the picture without touching the crop. The crop belongs to the picture, is

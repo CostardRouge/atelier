@@ -47,11 +47,7 @@ export interface AutoMemo {
   verb: AutoVerb;
   before: SlotValues;
   after: SlotValues;
-  /**
-   * Set when the switch was turned off. From then on a hand moving the fields
-   * is not an edit of the verb's answer, so the switch stays off — unless the
-   * fields come back to `after` exactly, which is an undo of the turn-off.
-   */
+  /** Turned off (`SwitchMemo.off`). */
   off?: boolean;
 }
 
@@ -80,21 +76,46 @@ export function sameSlotValues(slot: AutoSlot, a: SlotValues, b: SlotValues): bo
   return keys.every((k) => (a[k] ?? 0) === (b[k] ?? 0));
 }
 
+/**
+ * The record of one click of ANY automatic verb, over values of any shape —
+ * the develop's slots here, the crop's aspect and framing in the Crop tab.
+ */
+export interface SwitchMemo<T> {
+  before: T;
+  after: T;
+  /**
+   * Set when the switch was turned off. From then on a hand moving the values
+   * is not an edit of the verb's answer, so the switch stays off — unless the
+   * values come back to `after` exactly, which is an undo of the turn-off.
+   */
+  off?: boolean;
+}
+
+/** What a click's switch shows over the values `now`. The one rule every automatic verb reads. */
+export function switchState<T>(memo: SwitchMemo<T>, now: T, same: (a: T, b: T) => boolean): AutoState {
+  if (memo.off) return !same(memo.before, memo.after) && same(now, memo.after) ? 'on' : 'off';
+  // A click that changed nothing is said only while nothing has moved since;
+  // once a hand moves the values, the memo is about nothing on screen.
+  if (same(memo.before, memo.after)) return same(now, memo.after) ? 'nothing' : 'off';
+  if (same(now, memo.after)) return 'on';
+  if (same(now, memo.before)) return 'off';
+  return 'edited';
+}
+
+/**
+ * The `before` a new click records over `now`: while an earlier click still
+ * holds the values (on, or edited since) its `before` is INHERITED, so turning
+ * the newer one off returns to the values from before ANY automatic verb.
+ */
+function inheritedBefore<T>(held: SwitchMemo<T> | undefined, now: T, same: (a: T, b: T) => boolean): T {
+  if (!held) return now;
+  const state = switchState(held, now, same);
+  return state === 'on' || state === 'edited' ? held.before : now;
+}
+
 function memoState(memo: AutoMemo, develop: DevelopSettings): AutoState {
   const slot = AUTO_SLOT[memo.verb];
-  const now = slotValues(develop, slot);
-  if (memo.off) {
-    const wrote = !sameSlotValues(slot, memo.before, memo.after);
-    return wrote && sameSlotValues(slot, now, memo.after) ? 'on' : 'off';
-  }
-  if (sameSlotValues(slot, memo.before, memo.after)) {
-    // A click that changed nothing is said only while nothing has moved since;
-    // once a hand moves the fields, the memo is about nothing on screen.
-    return sameSlotValues(slot, now, memo.after) ? 'nothing' : 'off';
-  }
-  if (sameSlotValues(slot, now, memo.after)) return 'on';
-  if (sameSlotValues(slot, now, memo.before)) return 'off';
-  return 'edited';
+  return switchState(memo, slotValues(develop, slot), (a, b) => sameSlotValues(slot, a, b));
 }
 
 /** What a verb's switch shows over this develop. Off whenever its slot's memo is another verb's. */
@@ -114,9 +135,7 @@ export function autoState(memos: AutoMemos, verb: AutoVerb, develop: DevelopSett
  */
 export function recordAuto(memos: AutoMemos, verb: AutoVerb, develop: DevelopSettings, answer: SlotValues): AutoMemos {
   const slot = AUTO_SLOT[verb];
-  const held = memos[slot];
-  const state = held ? memoState(held, develop) : 'off';
-  const before = held && (state === 'on' || state === 'edited') ? held.before : slotValues(develop, slot);
+  const before = inheritedBefore(memos[slot], slotValues(develop, slot), (a, b) => sameSlotValues(slot, a, b));
   const after = slot === 'tone' ? { levels: cloneLevels(answer.levels) } : pickSlot(slot, answer);
   return { ...memos, [slot]: { verb, before, after } };
 }

@@ -276,6 +276,21 @@ specced) + `use-auto-memory.ts` + `AutoSwitch.tsx`. Rules:
   — measured `rgb(210,200,179)` on a lit switch; the old armed-dropper look had
   the same bug. `AutoSwitch` picks each state's colours whole.
 
+**The Crop tab's Auto level and Crop to subject are switches too** (his
+question 3, same day): `tools/develop/crop-switches.ts` (pure, specced) over
+the generic `switchState` of `auto-slots.ts`, `use-crop-switches.ts` held by
+the WORKBENCH (the panel exists only on the Crop tab; the memory must outlive
+a visit to Adjust), and two members on `CropZoneApi` — `stored()` (current
+inside the click that wrote, read off `live`) and `restore()` (written like an
+undo: zone re-derived as the intent, chip moved only if the format did). Both
+verbs write the ONE stored crop, yet the memo is PER VERB, not one slot: level
+then subject then subject off must give back the LEVELLED picture (a shared
+slot inheriting `before` threw the level away — measured, then reversed). A
+crop to the subject waits on the model, so `useSubjectCrop` takes a `record`
+callback read through its `live` ref at the write, never a stale closure.
+Driven headless: a 4° horizon levelled (lit), off → uncropped, ⌘Z relit, Crop
+to subject from the centre (lit), off → the levelled crop with Auto lit again.
+
 Driven headless in the Develop tool (flat warm JPEG): tone + colour lit, tone
 off kept colour, ⌘Z relit tone, ⇧⌘Z dimmed it, bands dashed, Pick grey took
 the slot and its turn-off gave back as shot, a hand nudge read edited and the

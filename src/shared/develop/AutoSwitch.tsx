@@ -15,13 +15,28 @@ const SHAPE = {
   control: 'h-7 px-2.5 rounded-control font-medium',
 } as const;
 
-const LOOK: Readonly<Record<AutoState | 'armed', string>> = {
-  off: 'border-line-strong bg-paper text-ink-soft hover:border-accent hover:text-accent-ink',
-  on: 'border-accent bg-accent-wash text-accent-ink',
-  nothing: 'border-dashed border-line-strong bg-paper text-muted hover:text-accent-ink',
-  edited: 'border-accent bg-paper text-ink hover:text-accent-ink',
-  armed: 'border-accent bg-paper text-accent-ink',
-};
+/**
+ * Each state's colours, whole. `ground` is the shape's own (the workbench's
+ * pill sits on paper, a `Button` on surface), so an unlit switch looks like
+ * the buttons beside it.
+ */
+function look(state: AutoState | 'armed', shape: keyof typeof SHAPE): string {
+  const ground = shape === 'pill' ? 'bg-paper' : 'bg-surface';
+  switch (state) {
+    case 'on':
+      return 'border-accent bg-accent-wash text-accent-ink';
+    case 'nothing':
+      return `border-dashed border-line-strong ${ground} text-muted hover:text-accent-ink`;
+    case 'edited':
+      return `border-accent ${ground} text-ink hover:text-accent-ink`;
+    case 'armed':
+      return `border-accent ${ground} text-accent-ink`;
+    default:
+      return shape === 'pill'
+        ? 'border-line-strong bg-paper text-ink-soft hover:border-accent hover:text-accent-ink'
+        : 'border-line-strong bg-surface text-ink hover:bg-paper-2 hover:border-muted';
+  }
+}
 
 /** What a switch says under the pointer, by its state; off says the verb's own hint. */
 export const AUTO_SWITCH_TITLE: Readonly<Record<Exclude<AutoState, 'off'>, string>> = {
@@ -63,7 +78,7 @@ export default function AutoSwitch({
   return (
     <button
       type="button"
-      className={`inline-flex items-center gap-1.5 border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default ${SHAPE[shape]} ${LOOK[armed ? 'armed' : state]}`}
+      className={`inline-flex items-center gap-1.5 border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
       aria-pressed={armed || state !== 'off'}
       disabled={disabled}
       title={armed ? undefined : state === 'off' ? hint : AUTO_SWITCH_TITLE[state]}
