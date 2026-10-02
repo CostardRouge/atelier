@@ -4,6 +4,7 @@ import { renditionsOf } from '../media/renditions';
 import {
   departsFromRoll,
   followsRoll,
+  ontoRollSensor,
   ownChoice,
   readRollChoice,
   resolveRollChoice,
@@ -60,6 +61,20 @@ describe('a picture’s own choice', () => {
     expect(readRollChoice('proxy')).toBeNull();
     expect(readRollChoice(undefined)).toBeNull();
     expect(readRollChoice(42)).toBeNull();
+  });
+});
+
+describe('a batch onto a picture on the roll’s sensor', () => {
+  it('keeps it there with a sensor’s numbers, its gain left to be metered', () => {
+    expect(ontoRollSensor('sensor', photo(), true, brighter)).toEqual({ ...brighter, base: 'gain', rawGain: null });
+  });
+
+  it('leaves everything else as the batch wrote it', () => {
+    // Numbers made on a render, a roll on the camera file, a picture with a choice of its own, nothing at all.
+    expect(ontoRollSensor('sensor', photo(), false, brighter)).toBe(brighter);
+    expect(ontoRollSensor('delivered', photo(), true, brighter)).toBe(brighter);
+    expect(ontoRollSensor('sensor', photo({ rendition: 'proxy' }), true, brighter)).toBe(brighter);
+    expect(ontoRollSensor('sensor', photo(), true, null)).toBeNull();
   });
 });
 

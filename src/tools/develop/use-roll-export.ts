@@ -70,12 +70,15 @@ import { heldOriginal, heldVersion, holdOriginal, subscribeHeld } from '../../sh
 import { formatBytes } from '../../shared/lib/format';
 import {
   BASE_LABELS,
+  DEFAULT_DEVELOP,
   baseRung,
   developBase,
   isRawDevelop,
   rawGainOf,
   withoutBase,
 } from '../../shared/develop/develop';
+import { resolveRollChoice, rollChoiceFor } from '../../shared/develop/roll-choice';
+import { captureRenditions, meterRawGain } from '../../shared/develop/roll-choice-source';
 import {
   calibrationAt,
   readRawCalibration,
@@ -226,7 +229,7 @@ export function useRollExport({
   const { plan, lines } = useMemo<{ plan: RunPlan; lines: ReadonlyMap<string, string> }>(() => {
     const factsFor = (picture: RollPicture): PictureFacts => {
       const file = files.get(picture.id) ?? null;
-      if (!file) return { file: null, proxy: false, sensor: null, delivered: null, original: null };
+      if (!file) return { file: null, proxy: false, sensor: null, delivered: null, original: null, follows: null };
       const origin = mediaOrigin(file);
       const assetId = knownIdentity(file)?.assetId ?? null;
       const beside = siblingsOf?.(file) ?? [];
@@ -240,6 +243,8 @@ export function useRollExport({
           proxy && origin?.name
             ? { name: origin.name, bytes: origin.bytes ?? null, held: assetId ? heldOriginal(assetId) !== null : false }
             : null,
+        // The roll's choice, for a picture with none of its own.
+        follows: rollChoiceFor(roll.opensOn, picture).choice,
       };
     };
     // The run the roll's own verb makes: the pictures that LEAVE
@@ -251,7 +256,7 @@ export function useRollExport({
       plan: planRun(roll.pictures.filter(delivers), factsFor, proxiesOnly, formatBytes),
       lines: new Map(every.pictures.map((p) => [p.id, p.line])),
     };
-  }, [roll.pictures, files, siblingsOf, proxiesOnly, held]);
+  }, [roll.pictures, roll.opensOn, files, siblingsOf, proxiesOnly, held]);
 
   // --- the open picture's own size, measured once per file, for the Delivers line
   const [openSize, setOpenSize] = useState<{ file: File; size: MeasuredPicture } | null>(null);
@@ -301,7 +306,31 @@ export function useRollExport({
     };
   }, [openFile, siblingsOf]);
 
-  const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
+  const stored = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
+  // The roll's choice, for an open picture with none of its own, read the
+  // way the run will read it — the camera's file needs the capture's sizes,
+  // the sensor only a RAW in reach (`roll-choice.ts`).
+  const openHanded = stored ? rollChoiceFor(roll.opensOn, stored).choice : null;
+  const [openFollow, setOpenFollow] = useState<{ file: File; rendition: string | null } | null>(null);
+  useEffect(() => {
+    if (!openFile || openHanded !== 'delivered') return;
+    let alive = true;
+    void captureRenditions(openFile, mediaOrigin(openFile), siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null).then(
+      (rows) => {
+        if (alive) setOpenFollow({ file: openFile, rendition: resolveRollChoice(rows, 'delivered').row?.id ?? null });
+      },
+    );
+    return () => {
+      alive = false;
+    };
+  }, [openFile, openHanded, siblingsOf]);
+  let open = stored;
+  if (stored && openFile && openHanded === 'sensor') {
+    const reach = sensorSourceFor(openFile, mediaOrigin(openFile), siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null);
+    if (reach) open = { ...stored, develop: { ...(stored.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null } };
+  } else if (stored && openHanded === 'delivered' && openFollow?.file === openFile && openFollow.rendition) {
+    open = { ...stored, rendition: openFollow.rendition };
+  }
   let openDelivery: DeliverySummary | null = null;
   if (open && openFile && openSize && openSize.file === openFile) {
     const origin = mediaOrigin(openFile);
@@ -439,7 +468,11 @@ export function useRollExport({
     // chosen. Case-folded, like the volume it will land on.
     const named = new Set<string>();
     try {
-      for (const [i, picture] of targets.entries()) {
+      for (const [i, stored] of targets.entries()) {
+        // What the picture leaves as: its own record, with the roll's choice
+        // read onto it below where it has none — and `stored` is what the
+        // marks record, never that reading.
+        let picture = stored;
         if (controller.signal.aborted) break;
         const step = `${i + 1}/${targets.length}`;
         at = { i, count: step };
@@ -570,7 +603,7 @@ export function useRollExport({
             }
             const mainName = variantDir ? `${variantDir}/${name}` : name;
             const ok = delivery.method !== 'folder' || !delivery.failed.includes(mainName);
-            if (ok) landed.push(picture);
+            if (ok) landed.push(stored);
             finish(ok);
             names.push(mainName);
             assetIds.push(key);
@@ -584,6 +617,18 @@ export function useRollExport({
           // never the RAW with numbers nobody has seen on it, and never
           // silently the wrong material.
           const beside = latest.current.siblingsOf?.(file) ?? [];
+          // The roll's choice, for a picture with none of its own
+          // (`roll-choice.ts`), read from the sizes its stage reads — the
+          // camera's file only where it beats the proxy, the sensor only for
+          // numbers that were never set on the render.
+          const handed = onlyProxies ? null : rollChoiceFor(r.opensOn, picture).choice;
+          if (handed === 'delivered') {
+            say('fetch', 'Reading the capture’s files');
+            const answer = resolveRollChoice(await captureRenditions(file, origin, beside, identity?.assetId ?? null), 'delivered');
+            if (answer.row) picture = { ...picture, rendition: answer.row.id };
+          } else if (handed === 'sensor' && sensorSourceFor(file, origin, beside, identity?.assetId ?? null)) {
+            picture = { ...picture, develop: { ...(picture.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null } };
+          }
           let raw: { file: File; gain: number } | null = null;
           if (isRawDevelop(picture.develop)) {
             if (onlyProxies) {
@@ -598,6 +643,17 @@ export function useRollExport({
                 rawFile = await fetchSourceFile(sensor, identity?.assetId ?? null, controller.signal).catch(() => null);
               }
               if (controller.signal.aborted) break;
+              // A picture on the roll's sensor, or put on a sensor by a batch,
+              // has no stored gain: it is metered as its stage meters it, and
+              // leaves with that number rather than with none.
+              if (rawFile && picture.develop && !(picture.develop.rawGain && picture.develop.rawGain > 0)) {
+                say('develop', 'Metering the RAW');
+                const develop = picture.develop;
+                const gain = await meterRawGain(rawFile, controller.signal).catch(() => null);
+                if (controller.signal.aborted) break;
+                if (gain) picture = { ...picture, develop: { ...develop, rawGain: gain } };
+                else rawFile = null;
+              }
               if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
               else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
             }
@@ -845,7 +901,7 @@ export function useRollExport({
           // What LANDED is what gets marked: a file the folder refused was not delivered.
           const mainName = variantDir ? `${variantDir}/${name}` : name;
           const ok = delivery.method !== 'folder' || !delivery.failed.includes(mainName);
-          if (ok) landed.push(picture);
+          if (ok) landed.push(stored);
           finish(ok);
           names.push(mainName);
           assetIds.push(identity?.assetId ?? null);

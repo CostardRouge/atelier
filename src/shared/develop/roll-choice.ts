@@ -105,6 +105,23 @@ export function rollChoiceFor(
   return { choice, reason: null };
 }
 
+/**
+ * A batch's develop (Apply to, Paste) onto a picture that FOLLOWS the roll's
+ * sensor. Numbers made on a sensor keep it there: they are written with the
+ * base — the gain measured at its next decode, or by the run — since a
+ * develop with numbers and no base reads as set on the render and would take
+ * the picture off the roll's sensor. `target` is the picture BEFORE the batch.
+ */
+export function ontoRollSensor(
+  choice: RollChoice | null | undefined,
+  target: ChoosingPicture,
+  fromSensor: boolean,
+  develop: DevelopSettings | null,
+): DevelopSettings | null {
+  if (!develop || !fromSensor || isRawDevelop(develop) || rollChoiceFor(choice, target).choice !== 'sensor') return develop;
+  return { ...develop, base: 'gain', rawGain: null };
+}
+
 export interface RollAnswer {
   /** The rendition the roll's choice lands on for this capture; null where the picture stays where it opens. */
   row: Rendition | null;

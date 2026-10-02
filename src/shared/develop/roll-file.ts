@@ -46,6 +46,7 @@ export function toRollFile(roll: RollDoc, exportedAt: number = Date.now()): Roll
     name: roll.name,
     pictures: structuredClone(roll.pictures),
     export: structuredClone(roll.export),
+    opensOn: roll.opensOn ?? null,
   };
 }
 
@@ -110,6 +111,7 @@ export function parseRollFile(text: string): RollParseResult {
       name: read.name,
       pictures: read.pictures,
       export: read.export,
+      opensOn: read.opensOn ?? null,
     },
   };
 }
@@ -135,5 +137,6 @@ export function rollDocFromFile(
     // the other's.
     pictures: structuredClone(file.pictures).map((p) => ({ ...p, id: makeId() })),
     export: structuredClone(file.export),
+    opensOn: file.opensOn ?? null,
   };
 }

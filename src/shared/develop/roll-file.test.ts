@@ -56,8 +56,15 @@ describe('the roll file', () => {
     const file = toRollFile(sample(), 0);
     expect(file.kind).toBe(ROLL_FILE_KIND);
     expect(file.version).toBe(ROLL_DOC_VERSION);
-    expect(Object.keys(file).sort()).toEqual(['export', 'exportedAt', 'kind', 'name', 'pictures', 'version']);
+    expect(Object.keys(file).sort()).toEqual(['export', 'exportedAt', 'kind', 'name', 'opensOn', 'pictures', 'version']);
     expect(file.pictures[0].ref.hash).toBe('h1');
+  });
+
+  it('carries the roll’s choice of file, and reads an unknown one as none', () => {
+    const parsed = parseRollFile(serializeRollFile(toRollFile({ ...sample(), opensOn: 'sensor' }, 0)));
+    expect(parsed.ok && rollDocFromFile(parsed.file, 0, 'local').opensOn).toBe('sensor');
+    const odd = parseRollFile(JSON.stringify({ ...toRollFile(sample(), 0), opensOn: 'everything' }));
+    expect(odd.ok && odd.file.opensOn).toBeNull();
   });
 
   it('comes back as a NEW roll on the importing source, holding exactly what was written', () => {

@@ -2,6 +2,7 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { ontoRollSensor } from '../../shared/develop/roll-choice';
 import { hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
 import type { LensCorrection } from '../../shared/render/lens';
@@ -828,7 +829,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           pictures: r.pictures.map((p) => {
             if (!targets.includes(p.id)) return p;
             const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain } : null;
-            return { ...p, develop: value || own ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null };
+            const next = value || own ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null;
+            // Onto a picture on the roll's sensor, a sensor's numbers keep it there.
+            return { ...p, develop: ontoRollSensor(r.opensOn, p, isRawDevelop(develop), next) };
           }),
           updatedAt: Date.now(),
         }),
@@ -1728,6 +1731,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onLayers={(layers) => handleLayers(open.id, layers)}
               onAspect={(aspect) => handleAspect(open.id, aspect)}
               onRendition={(rendition) => handleRendition(open.id, rendition)}
+              rollChoice={roll.opensOn ?? null}
               siblings={openSiblings}
               exportSettings={roll.export}
               onExportSettings={handleExportSettings}
