@@ -744,7 +744,8 @@ trip's legs by hand is some three hundred gestures, most of them archaeology
 about where you were on a given day — so the legs can be *deduced* instead,
 and a picture can place a single day.
 
-**Deduce** (in the stages header, for any connected Winnow) asks the instance
+**Deduce** (in the trip's bar beside Trip settings, in the calendar and on the
+map alike; on a phone, in the Stages sheet; for any connected Winnow) asks the instance
 for **one position per day** over the trip's span — a few kilobytes for a
 hundred days; no photograph is fetched and nothing is read from your media. A
 halt is a run of consecutive days whose position stays inside a radius of the

@@ -868,10 +868,25 @@ export default function TripOverview({
       onRememberCode={rememberCode}
       timelineSources={timelineSources}
       onCompleteFrom={onCompleteFrom}
-      deduceSources={deduceSources}
-      onDeduceFrom={onDeduceFrom}
     />
   );
+
+  // Deduce lives in the trip's own bar, so it is there in the calendar AND on
+  // the map (the stages panel, its old home, is not drawn beside the map).
+  // One button per connected instance; a phone reaches it from the legs
+  // sheet, whose cell is in the bottom bar whatever the middle shows.
+  const deduceButtons =
+    onDeduceFrom &&
+    (deduceSources ?? []).map((id) => (
+      <Button
+        key={`deduce-${id}`}
+        onClick={() => onDeduceFrom(id)}
+        title={`Work the stages out from where ${id} says each day was`}
+        icon={Icons.search}
+      >
+        Deduce
+      </Button>
+    ));
 
   const dayPanel = selected && (
     <DayPanel
@@ -1254,6 +1269,7 @@ export default function TripOverview({
                 { id: 'pictures', label: 'Pictures', icon: Icons.image, title: 'Each told day as the hook of its piece' },
               ]}
             />
+            {deduceButtons}
             <Button
               onClick={() => setEditingDetails(true)}
               icon={Icons.settings}
