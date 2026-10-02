@@ -266,6 +266,7 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 - 2026-10-01 — **The ONE Winnow picker is BUILT** — the Library's *browse all* and Develop's *Add a day* are the same modal (`docs/winnow-day-sheet-verdicts.md` §7, `winnow-picker.md`, labs https://claude.ai/artifact/9hZnWW5Kog8nzwmNk1WXdw and https://claude.ai/artifact/R99xvWQAi3bHWt3hehv2i1), his §7.4 answered by its recommendations. Open: driving it against his REAL instance (stub only here), merging and deploying Winnow #277 so a burst's picked frame is listed without an unfold, and re-reading the capabilities sheet (`#/sources`) once it is.
 - 2026-10-02 — **Develop's filmstrip was MEASURED, four faces drawn, and face D is BUILT the same day, C1–C7** (`docs/develop-roll-browser.md`, lab https://claude.ai/artifact/SKGeL5LXQ7ZAnZ5pH3xrUS), from his *«les miniatures sont trop petites»* and his *«on part sur la D, avec tes recommandations»*: a band of cells at their own aspects pulled from its grip (rail → one row → a justified grid), a column at the left or right as a per-device choice in the band's ⋯ menu, a contact sheet on `G` over the stage, focus on `F`, calm cells whose verbs moved to a ⋯ menu and a selection MODE (`S`, a held finger) with a bulk bar — `develop-roll.md`, «The roll's pictures are a BAND». §7's six answers are the brief's own recommendations and stay his to overrule; driven headless only, not on his Mac or his iPhone.
 - 2026-10-02 — **Automating the develop is BRIEFED and approach 1 is BUILT** (`docs/auto-develop.md`): he said *"Go, écris le brief et commence par l'approche 1"*. §5's three verbs are in (Auto bands, Auto level, Crop to subject — `develop.md`, `develop-roll.md`; the last two driven headless on a synthetic picture, none on a photograph of his); §6's collection (the as-shot vignette beside the record, the training dump) comes next and before any model, because every day without it is dataset lost — his Capture One projects are gone, only the exports survive; §7 (the LLM assistant, his own key) WAITS on his answer to a fourth network exception and on where the key lives (browser or a Winnow relay). Taste constants (A1 thresholds, A2 confidence floor) are to be moved from his pictures.
+- 2026-10-02 — **Develop's mask UI and a subject that can be taken back are PROPOSED, not built** (`docs/mask-ui-redesign.md`, lab https://claude.ai/artifact/5jy9NnEg1SoRdUNjDcAMas), from his report that the model «ne fait que de l'addition… ça en rajoute trop». Recommended first: negative points as region arithmetic over the same `magic_touch` (0 MB more), its CONFIDENCE masks for a real Tolerance, island cleanup, Grow/Shrink and a guided-filter edge; a SAM-family model (native negative points, a click preview) costs 14.2–28.3 MB of ONNX runtime before its weights and waits on a measurement. Four questions are his (§6).
 - No secret has ever been tracked in this repository (checked 2026-08-20 across the working tree), so there is nothing to rotate.
 
 ## Topic files — read before touching the area
@@ -448,6 +449,17 @@ anything about media sources or document storage:
   them at four screen sizes), the measured table, and **his pick, A, built
   the same day**. §7 holds the two questions still his. Read it before
   touching `LutGalleryModal.tsx`, `LookScene.tsx` or `look-scene.ts`.
+- **`docs/mask-ui-redesign.md`** — Develop's layers and masks measured
+  against their code (2026-10-02: 22 mask-kind buttons on one screen, a layer
+  row that cannot be renamed, the layer's sliders 857 px down, a subject that
+  only adds, the model asked for its category mask only) and ONE proposed face
+  (lab https://claude.ai/artifact/5jy9NnEg1SoRdUNjDcAMas): one `+ Layer`
+  palette, rows with the real mask's thumbnail, Mask | Adjust, the mask as a
+  recipe of terms, and a subject that ADDS and REMOVES with Tolerance,
+  islands, Grow/Shrink and Edge; the model's four paths with ONNX Runtime
+  measured. **Nothing built**; §6 is his. Read it before touching
+  `LayersPanel.tsx`, `MaskPanel.tsx`, `use-subject-masks.ts` or
+  `segment/segmenter.ts`.
 - **`docs/develop-roll-browser.md`** — Develop's filmstrip measured against
   its code (2026-10-02) and four faces to redraw it (band, column, contact
   sheet, their synthesis), with what each costs the picture on four screens,

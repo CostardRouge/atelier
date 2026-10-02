@@ -125,3 +125,13 @@ inference (0 calls at vignetting 60). And the cache is MODULE state, not the
 hook's: the workbench is mounted per picture, so the per-hook cache re-asked
 the model for every point on every landing (2 calls → 0 measured). Bounded:
 64 masks (~50 MB), 16 on a constrained device.
+
+## Taking a subject BACK — proposed, not built (2026-10-02)
+
+His report: the model only adds, and sometimes adds too much. Measured in the
+code: `magic_touch` takes a `keypoint` or a `scribble`, never a negative
+point; `loadSegmenter` asks for the CATEGORY mask (cut at the model's own
+threshold) and not the confidence masks it can return. The proposal and the
+order of work are `docs/mask-ui-redesign.md`. If it is built, the rules above
+bind it: a negative point is cached per point and per VIEW, the export removes
+exactly what the stage removes, and the blink stays for what a tap changed.
