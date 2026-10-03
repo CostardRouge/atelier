@@ -1484,3 +1484,19 @@ answered the centre, the told line read *cropped to what the model finds at
 the centre*, the Shape row went 1.33:1 → 1.70:1 and the straighten stayed
 — the plumbing, not the taste, since a synthetic picture has no subject to
 judge. Not driven on a photograph with a Subject layer.
+
+## Both section switches end on a `never`; no key acts under a modal sheet (2026-10-02)
+
+`sectionValues` (`journal.ts`) and `readSectionValues` (`roll-types.ts`)
+end on `unreachedSection(s: never)`: a `PictureEdit` member a switch
+forgets now fails `tsc` instead of being read as `{}` — which made
+`sameSection` compare `{}` with `{}`, so `sectionsChanged` was blind to the
+new section and the journal missed it (`docs/audit-2026-10-02.md`, ARC-05;
+the whole fix, one `SECTIONS` record the three id lists derive from, is
+still open). And the workbench's window key handler stands down for ANY
+`[aria-modal="true"]`, not only an `alertdialog`: with the keys sheet, the
+settings or the making-of open, ←/→ changed the picture and P/M/U, V and
+Delete changed its delivery, its mono and its patches behind the sheet, into
+the export (UX-01). A sheet drawn OVER the editor is `aria-modal`; a drawer
+or a bottom sheet the author edits THROUGH (the phone's `DockedDrawer`, the
+palette) is not, and must stay not, or the keys die with it.

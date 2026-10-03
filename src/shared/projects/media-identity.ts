@@ -139,8 +139,15 @@ export function mediaHash(file: File): Promise<string | null> {
   if (vouched) return Promise.resolve(vouched);
   let pending = cache.get(key);
   if (!pending) {
-    pending = partialHash(file).catch(() => null);
-    cache.set(key, pending);
+    const attempt = partialHash(file).catch(() => null);
+    pending = attempt;
+    cache.set(key, attempt);
+    // A read that FAILED is not remembered: a folder whose permission was
+    // being re-granted, a drive that was asleep, answered null once, and a
+    // remembered null left every document saved that session without a hash.
+    void attempt.then((hash) => {
+      if (hash === null && cache.get(key) === attempt) cache.delete(key);
+    });
   }
   return pending;
 }

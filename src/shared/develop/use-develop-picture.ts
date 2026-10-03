@@ -13,6 +13,7 @@ import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
+import { canvasPixelAt, canvasPointAt } from '../ui/pan-zoom';
 import { frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { decodeStill, stageBudget } from '../media/still-decode';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
@@ -20,6 +21,12 @@ import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './his
 
 /** The long edge a colour-range sample is read at: fine enough to aim, coarse enough to average grain away. */
 const COLOUR_SAMPLE_EDGE = 512;
+/**
+ * The long edge the picture is rendered at AS A LAYER SEES IT (`drawBelow`) —
+ * the colour sample's own size, and four times a row's thumbnail, so the
+ * small render is drawn down with smoothing rather than sampled sparsely.
+ */
+const BELOW_RENDER_EDGE = 512;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection, LensProfileTerms } from '../render/lens';
@@ -50,6 +57,7 @@ import type { CameraWarp } from '../render/camera-warp';
 import { maxRenderSize } from '../render/graph-grader';
 import type { BandPreference } from '../render/band-policy';
 import { useBandPreference } from '../render/use-band-preference';
+import { fitRenderSize } from '../render/render-size';
 import { clipPass } from '../render/clip-pass';
 import { makePostVignettePass } from '../render/post-vignette-pass';
 import type { FrameAffine, PostCropVignette } from '../render/post-vignette';
@@ -213,11 +221,16 @@ function graderFrom(
       // the only thing that draws it, so "no lut and no pass" stopped meaning
       // "nothing to do" the day the film node arrived.
       !isSilentTexture(film);
-    if (!needsGpu) {
-      cur?.grader.dispose();
-      slot.current = null;
-      return null;
-    }
+    // Nothing to render: the source is handed back as it is. The grader the
+    // slot already holds is KEPT, never disposed here — it goes with the
+    // source or the hook. Disposing it was the stage's freeze (2026-10-02):
+    // with a mask outline or a blink as the ONLY reason for the GPU, every
+    // histogram read, snapshot and `delivered()` asks for the picture WITHOUT
+    // those looking passes, found nothing to render, threw the context away,
+    // and the next paint built a new one — shaders compiled, the 4K source or
+    // the RAW's half-floats uploaded again, on every slider step and every
+    // blink. Measured headless: 22 contexts for a 12-step drag of Tolerance.
+    if (!needsGpu) return null;
     // Compared by VALUE: the panel hands down a new object on every slider
     // step, and identity would rebuild the grader per frame of a drag.
     // A new LOOK on the same picture is swapped in place: a develop slider
@@ -1093,8 +1106,17 @@ export function useDevelopPicture({
   };
   const paintRef = useRef(paintStage);
   paintRef.current = paintStage;
+  // The readout's re-read, set once the readout exists (further down): after
+  // THIS effect's paint, never on every render — the hook's host re-renders
+  // several times per slider step (the draft, the deferred layers, a raster
+  // landing, the thumbnails), and each read of one pixel off a 2D canvas that
+  // was just drawn from the WebGL one is a GPU sync; six per step, measured
+  // (2026-10-02). A clip's own frame loop reads nothing: a pointer at rest
+  // over a playing clip would pay that sync per presented frame.
+  const readAfterPaint = useRef<() => void>(() => {});
   useEffect(() => {
     paintRef.current();
+    readAfterPaint.current();
   }, [
     source,
     canvasSize,
@@ -1201,6 +1223,23 @@ export function useDevelopPicture({
   // that comes to rest on another frame (`restedFrame`) is measured again.
   const [histogram, setHistogram] = useState<Histogram | null>(null);
   const sampleRef = useRef<HTMLCanvasElement | null>(null);
+  // Measured through a grader of ITS OWN at the sample's size, never the
+  // stage's: the stage draws with the looking passes (a mask's wash, a blink,
+  // the clipping) and this asks without them, so measuring through the
+  // stage's slot swapped its passes twice per slider step and rendered the
+  // whole stage twice — and with nothing shown, the second render of an
+  // unchanged picture is what makes the held grader copy the stage to the
+  // CPU (`held-grader.ts`), every step (the 2026-10-02 audit, PERF-02). A
+  // 160 px render instead, borrowing the stage cache's cubes like the
+  // thumbnails' slot; the kernels scale with it, which at this size is noise.
+  const histSlot = useRef<GraderSlot | null>(null);
+  useEffect(
+    () => () => {
+      histSlot.current?.current?.grader.dispose();
+      histSlot.current = null;
+    },
+    [],
+  );
   useEffect(() => {
     if (!source || source.width <= 0 || source.height <= 0) {
       setHistogram(null);
@@ -1209,9 +1248,9 @@ export function useDevelopPicture({
     const measure = () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
-      const k = Math.min(1, HISTOGRAM_SAMPLE_EDGE / Math.max(source.width, source.height));
-      const w = Math.max(1, Math.round(source.width * k));
-      const h = Math.max(1, Math.round(source.height * k));
+      const fitted = fitRenderSize(source.width, source.height, HISTOGRAM_SAMPLE_EDGE);
+      const w = Math.max(1, fitted.width);
+      const h = Math.max(1, fitted.height);
       if (!sampleRef.current) sampleRef.current = document.createElement('canvas');
       const sample = sampleRef.current;
       if (sample.width !== w || sample.height !== h) {
@@ -1221,11 +1260,34 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, gainField);
+        if (!histSlot.current) histSlot.current = { cache: makeLayerPassCache(stageSlot.current.cache), current: null };
+        const sized: BadgeSource = { ...source, width: w, height: h };
+        // The picture as delivered — the post-crop vignette included, which
+        // the stage's call passed and this one used to leave out.
+        const grader = graderFrom(
+          histSlot.current,
+          cube,
+          sized,
+          geometry,
+          stack,
+          null,
+          subjectMasks,
+          detail,
+          pixelScale * (w / source.width),
+          repair,
+          film,
+          gainField,
+          null,
+          false,
+          false,
+          postVignette,
+        );
         const graded = grader
           ? grader.render(source.gpu ?? source.image, video ? video.currentTime : undefined)
           : source.image;
-        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        const gw = grader ? w : source.width;
+        const gh = grader ? h : source.height;
+        ctx.drawImage(graded, 0, 0, gw, gh, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
       } catch {
         // A frame released under us, or a picture the canvas may not read
@@ -1240,7 +1302,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, graderFor, video, restedFrame]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, video, restedFrame]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the
@@ -1324,16 +1386,16 @@ export function useDevelopPicture({
     (clientX: number, clientY: number): [number, number, number] | null => {
       const canvas = canvasRef.current;
       if (!canvas || !source || !canvasSize) return null;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return null;
       const { w, h } = canvasSize;
       // `object-contain` letterboxes the BITMAP inside the element box, and the
-      // element box already carries the zoom/pan transform — so undo the
-      // letterbox here and the transform is undone for free by the rect.
-      const scale = Math.min(rect.width / w, rect.height / h);
-      const x = Math.round((clientX - rect.left - (rect.width - w * scale) / 2) / scale);
-      const y = Math.round((clientY - rect.top - (rect.height - h * scale) / 2) / scale);
-      if (x < 0 || y < 0 || x >= w || y >= h) return null;
+      // element box already carries the zoom/pan transform — `canvasPointAt`
+      // undoes the letterbox and the rect undoes the transform for free. The
+      // PIXEL is a floor (`canvasPixelAt`), the same one the readout names:
+      // this used to round, and sampled one pixel over in the second half.
+      const point = canvasPointAt(canvas.getBoundingClientRect(), w, h, clientX, clientY);
+      const pixel = point && canvasPixelAt(point, w, h);
+      if (!pixel) return null;
+      const [x, y] = pixel;
 
       // The UNGRADED picture, drawn through the very same branch the viewport
       // paints with — so no inverse of the framing transform has to be derived,
@@ -1389,6 +1451,22 @@ export function useDevelopPicture({
    * mask's own wash — a sample taken there would move the range every time a
    * slider did. A 5×5 average at a small size, like the white-balance dropper.
    */
+  // Drawn through a grader of ITS OWN, small (`BELOW_RENDER_EDGE`), never the
+  // stage's: this used to call `graderFor` on the stage slot, which swapped
+  // the stage's passes to the layers below — releasing every pass above, the
+  // overlay, the film — and, where nothing below needed the GPU, disposed the
+  // stage's whole context. Every thumbnail pass then cost the stage a rebuild
+  // (2026-10-02). The slot borrows the stage cache's CUBES (`cubeOf`) so a
+  // layer's 33³ bake is never made twice; its passes are its own, since a
+  // pass holds textures on the one context it drew on.
+  const belowSlot = useRef<GraderSlot | null>(null);
+  useEffect(
+    () => () => {
+      belowSlot.current?.current?.grader.dispose();
+      belowSlot.current = null;
+    },
+    [],
+  );
   const drawBelow = useCallback(
     (layerId: string, canvas: HTMLCanvasElement, longEdge: number): CanvasRenderingContext2D | null => {
       if (!source || source.width <= 0 || source.height <= 0) return null;
@@ -1404,24 +1482,29 @@ export function useDevelopPicture({
       }
       const ctx = canvas.getContext('2d', { willReadFrequently: true });
       if (!ctx) return null;
-      // The finishing passes run after every layer, so none of them is what a
-      // layer reads: the sharpen and presence are cleared, the grain is not
-      // passed, and the vignette the ref would hand in is held back.
-      const unfinished = detail ? { ...detail, sharpen: 0, texture: 0, clarity: 0, dehaze: 0 } : null;
-      const keepVignette = postVignetteRef.current;
-      postVignetteRef.current = null;
       try {
-        const grader = graderFor(cube, source, geometry, below, null, subjectMasks, unfinished, pixelScale, repair, null, gainField);
+        if (!belowSlot.current) belowSlot.current = { cache: makeLayerPassCache(stageSlot.current.cache), current: null };
+        // The render size: the sample's, never the stage's — a mask's
+        // thumbnail and a 5×5 colour average need no 4K render. The source
+        // itself is uploaded whole, once per identity, like the stage's.
+        const fitted = fitRenderSize(source.width, source.height, BELOW_RENDER_EDGE);
+        const sized: BadgeSource = { ...source, width: fitted.width, height: fitted.height };
+        // The finishing passes run after every layer, so none of them is what
+        // a layer reads: no detail, no film, no post-crop vignette. The
+        // repair and the camera's shading come first and are kept, as is the
+        // geometry: a mask is measured on the warped frame it is drawn in.
+        const grader = graderFrom(belowSlot.current, cube, sized, geometry, below, null, subjectMasks, null, 1, repair, null, gainField);
         const graded = grader ? grader.render(source.gpu ?? source.image) : source.image;
-        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        const gw = grader ? fitted.width : source.width;
+        const gh = grader ? fitted.height : source.height;
+        ctx.imageSmoothingQuality = 'high';
+        ctx.drawImage(graded, 0, 0, gw, gh, 0, 0, w, h);
         return ctx;
       } catch {
         return null;
-      } finally {
-        postVignetteRef.current = keepVignette;
       }
     },
-    [source, layers, cube, geometry, subjectMasks, detail, pixelScale, repair, gainField, graderFor],
+    [source, layers, cube, geometry, subjectMasks, repair, gainField],
   );
   const colourRef = useRef<HTMLCanvasElement | null>(null);
   const sampleColour = useCallback(
@@ -1486,14 +1569,12 @@ export function useDevelopPicture({
     (clientX: number, clientY: number, unbounded = false): [number, number] | null => {
       const canvas = canvasRef.current;
       if (!canvas || !source || !canvasSize) return null;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return null;
       const { w, h } = canvasSize;
-      // The same letterbox undo as `pickAt`: the element box carries the
-      // zoom/pan transform, so the rect undoes it for free.
-      const scale = Math.min(rect.width / w, rect.height / h);
-      const x = (clientX - rect.left - (rect.width - w * scale) / 2) / scale;
-      const y = (clientY - rect.top - (rect.height - h * scale) / 2) / scale;
+      // The same letterbox undo as `pickAt`, fractional: a mask's point is
+      // placed between pixels, and a drag may leave the picture.
+      const point = canvasPointAt(canvas.getBoundingClientRect(), w, h, clientX, clientY);
+      if (!point) return null;
+      const [x, y] = point;
       if (!unbounded && (x < 0 || y < 0 || x > w || y > h)) return null;
       if (!frameRatio || !framing) {
         return [x / w, y / h];
@@ -1844,17 +1925,16 @@ export function useDevelopPicture({
       readout.set(null);
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
     const { w, h } = size;
-    // The letterbox undo `pickAt` makes; the rect carries the zoom.
-    const scale = Math.min(rect.width / w, rect.height / h);
-    const x = Math.floor((at.x - rect.left - (rect.width - w * scale) / 2) / scale);
-    const y = Math.floor((at.y - rect.top - (rect.height - h * scale) / 2) / scale);
-    if (x < 0 || y < 0 || x >= w || y >= h) {
+    // The letterbox undo `pickAt` makes, the same pixel it samples.
+    const point = canvasPointAt(canvas.getBoundingClientRect(), w, h, at.x, at.y);
+    if (!point) return;
+    const pixel = canvasPixelAt(point, w, h);
+    if (!pixel) {
       readout.set(null);
       return;
     }
+    const [x, y] = pixel;
     try {
       const [r, g, b, a] = canvas.getContext('2d')?.getImageData(x, y, 1, 1).data ?? [];
       // A transparent pixel is outside the delivered frame (a crop's margin
@@ -1876,10 +1956,11 @@ export function useDevelopPicture({
     if (!readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
   };
   // A new picture, a slider step, the clipping view: the pixel under a
-  // pointer that has not moved is read again from what is now drawn.
-  useEffect(() => {
+  // pointer that has not moved is read again from what is now drawn — once
+  // per PAINT of the stage (the effect above), not per render.
+  readAfterPaint.current = () => {
     if (readoutAt.current && !readoutFrame.current) readoutFrame.current = requestAnimationFrame(readPixel);
-  });
+  };
   useEffect(
     () => () => {
       cancelAnimationFrame(readoutFrame.current);

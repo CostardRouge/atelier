@@ -183,6 +183,44 @@ export function containedSize(natural: Box | null, viewport: Box): Box {
 }
 
 /**
+ * A client point on a canvas drawn `object-contain` in its element box, as
+ * canvas COORDINATES: the letterbox undone, the element's own zoom/pan
+ * transform undone for free by the rect it was measured through. Fractional,
+ * unbounded — the caller decides whether a point past the edge means anything
+ * (a drag may leave the picture; a pick may not). Null when the box has no
+ * size yet.
+ *
+ * ONE function, because the Develop stage used to undo its letterbox in three
+ * places that rounded three ways, and the eyedropper then sampled beside the
+ * pixel the readout named.
+ */
+export function canvasPointAt(
+  rect: { left: number; top: number; width: number; height: number },
+  w: number,
+  h: number,
+  clientX: number,
+  clientY: number,
+): [number, number] | null {
+  if (!(rect.width > 0) || !(rect.height > 0) || !(w > 0) || !(h > 0)) return null;
+  const scale = Math.min(rect.width / w, rect.height / h);
+  return [
+    (clientX - rect.left - (rect.width - w * scale) / 2) / scale,
+    (clientY - rect.top - (rect.height - h * scale) / 2) / scale,
+  ];
+}
+
+/**
+ * The canvas PIXEL under a canvas point, or null outside the canvas. Pixel `i`
+ * covers `[i, i + 1)`, so this is a floor and never a round: rounding put a
+ * pointer in the second half of a pixel on the next one.
+ */
+export function canvasPixelAt(point: readonly [number, number], w: number, h: number): [number, number] | null {
+  const x = Math.floor(point[0]);
+  const y = Math.floor(point[1]);
+  return x < 0 || y < 0 || x >= w || y >= h ? null : [x, y];
+}
+
+/**
  * How far the picture may be moved off centre before an edge would come into
  * the box: half of whatever the scaled picture has over the viewport.
  */

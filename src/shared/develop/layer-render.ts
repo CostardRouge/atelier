@@ -21,9 +21,8 @@ import type { Interpolation } from '../lut/interpolate';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeLayerPass } from '../render/layer-pass';
 import type { RenderPass } from '../render/graph';
-import type { BrushRaster } from '../render/brush-raster';
+import { rasteriseBrushFrom, releaseBrushWorking, type BrushRaster, type BrushRasterState } from '../render/brush-raster';
 import { cloneMask, sameMask, type BrushStroke, type Mask } from '../render/mask';
-import { rasteriseBrush } from '../render/brush-raster';
 import { cloneParts, drawingLayers, sameParts, type AdjustLayer, type MaskPart } from './layer';
 import { cloneDevelop, sameDevelop, type DevelopSettings } from './develop';
 
@@ -305,6 +304,14 @@ export interface LayerPassCache {
    * input event. `passes` then finds the cube already made. Idempotent.
    */
   prime(layers: readonly AdjustLayer[] | null | undefined, interpolation?: Interpolation): void;
+  /**
+   * The cube this cache already holds for `layer` — held by a pass, or baked
+   * ahead by `prime` — while the layer's develop is the one it was baked
+   * from; `undefined` otherwise. What a SECOND cache over the same picture
+   * (a thumbnail's grader beside the stage's) asks before baking its own: a
+   * 33³ bake is ~40 ms, and the two graders see the same layers.
+   */
+  cubeOf(layer: AdjustLayer, interpolation?: Interpolation): CubeLut | null | undefined;
 }
 
 interface Held {
@@ -315,6 +322,8 @@ interface Held {
   strokes: readonly BrushStroke[] | null;
   rasterAspect: number;
   raster: BrushRaster | null;
+  /** The raster's incremental state, so the next point of a live stroke costs its segment (`brush-raster.ts`). */
+  brushState: BrushRasterState | null;
   /** What the pass was built from. */
   mask: Mask | null;
   invert: boolean;
@@ -322,9 +331,10 @@ interface Held {
   aspectRatio: number;
   passRaster: BrushRaster | null;
   passExcept: BrushRaster | null;
-  /** Each part's painted map and the strokes it was walked from, by index. */
+  /** Each part's painted map, its state, and the strokes it was walked from, by index. */
   partStrokes: (readonly BrushStroke[] | null)[];
   partRasters: (BrushRaster | null)[];
+  partStates: (BrushRasterState | null)[];
   parts: MaskPart[];
   pass: RenderPass | null;
 }
@@ -333,40 +343,92 @@ interface HeldOverlay {
   mask: Mask | null;
   parts: MaskPart[];
   partRasters: (BrushRaster | null)[];
+  partStates: (BrushRasterState | null)[];
   invert: boolean;
   aspectRatio: number;
   raster: BrushRaster | null;
+  /** The overlay's own incremental state, for a painted layer that does not draw yet (its sliders at zero). */
+  brushState: BrushRasterState | null;
   style: MaskOverlayStyle;
   except: BrushRaster | null;
   pass: RenderPass | null;
 }
 
+/** A raster stepped from its previous state — the one step the pointer asks for — or built whole. */
+type BrushStep = (prev: BrushRasterState | null | undefined, strokes: readonly BrushStroke[], aspectRatio: number) => BrushRasterState;
+
 /**
  * Each painted part's map, reused from the last call while its strokes are the
- * same array at the same aspect — a part being painted re-walks itself alone.
+ * same array at the same aspect — a part being painted steps itself alone.
  */
 function partRasterFor(
   parts: readonly MaskPart[],
   strokes: readonly (readonly BrushStroke[] | null)[],
-  prev: Held | undefined,
+  prev: { partStrokes: (readonly BrushStroke[] | null)[]; partRasters: (BrushRaster | null)[]; partStates: (BrushRasterState | null)[]; rasterAspect: number } | undefined,
   aspectRatio: number,
-): (BrushRaster | null)[] {
-  return parts.map((_, i) => {
+  step: BrushStep,
+): { rasters: (BrushRaster | null)[]; states: (BrushRasterState | null)[] } {
+  const rasters: (BrushRaster | null)[] = [];
+  const states: (BrushRasterState | null)[] = [];
+  parts.forEach((_, i) => {
     const s = strokes[i];
-    if (!s) return null;
-    if (prev && prev.partStrokes[i] === s && prev.rasterAspect === aspectRatio) return prev.partRasters[i];
-    return s.length ? rasteriseBrush(s, aspectRatio) : null;
+    if (!s || !s.length) {
+      rasters.push(null);
+      states.push(null);
+      return;
+    }
+    if (prev && prev.partStrokes[i] === s && prev.rasterAspect === aspectRatio) {
+      rasters.push(prev.partRasters[i]);
+      states.push(prev.partStates[i]);
+      return;
+    }
+    const state = step(prev?.partStates[i], s, aspectRatio);
+    rasters.push(state.raster);
+    states.push(state);
   });
+  return { rasters, states };
 }
 
-export function makeLayerPassCache(): LayerPassCache {
+export function makeLayerPassCache(
+  /**
+   * Another cache over the SAME picture whose cubes this one may borrow
+   * (`cubeOf`) rather than bake again — the stage's, for the small grader
+   * that draws the picture as a layer sees it. A pass is never shared: it
+   * holds textures on the one context it drew on; a cube is plain data.
+   */
+  lender: Pick<LayerPassCache, 'cubeOf'> | null = null,
+): LayerPassCache {
   const held = new Map<string, Held>();
   /** Cubes baked by `prime`, by layer id, with the develop they were baked from. */
   const baked = new Map<string, { develop: DevelopSettings; interpolation: Interpolation; cube: CubeLut | null }>();
   let overlay: { id: string; held: HeldOverlay } | null = null;
   let flash: { flash: MaskFlash; aspectRatio: number; pass: RenderPass | null } | null = null;
+  /**
+   * The ONE painted map whose working arrays are kept (`brush-raster.ts`,
+   * 8.4 MB at a 1024 map): the stroke being painted. Stepping another releases
+   * this one's, and its next step is a whole build — today's cost, once.
+   */
+  let liveBrush: BrushRasterState | null = null;
+  const step: BrushStep = (prev, strokes, aspectRatio) => {
+    const state = rasteriseBrushFrom(prev, strokes, aspectRatio);
+    if (state !== liveBrush) {
+      releaseBrushWorking(liveBrush);
+      liveBrush = state;
+    }
+    return state;
+  };
+
+  const cubeOf = (layer: AdjustLayer, interpolation: Interpolation = getDefaultLutInterpolation()): CubeLut | null | undefined => {
+    const prev = held.get(layer.id);
+    if (prev && prev.interpolation === interpolation && sameDevelop(prev.develop, layer.develop)) return prev.cube;
+    const primed = baked.get(layer.id);
+    if (primed && primed.interpolation === interpolation && sameDevelop(primed.develop, layer.develop)) return primed.cube;
+    return undefined;
+  };
 
   return {
+    cubeOf,
+
     passes(layers, aspectRatio, rasters = null, interpolation = getDefaultLutInterpolation()) {
       const drawing = drawingLayers(layers);
       const keep = new Set<string>();
@@ -375,24 +437,25 @@ export function makeLayerPassCache(): LayerPassCache {
         keep.add(layer.id);
         const prev = held.get(layer.id);
 
-        const primed = baked.get(layer.id);
-        const cube =
-          prev && prev.interpolation === interpolation && sameDevelop(prev.develop, layer.develop)
-            ? prev.cube
-            : primed && primed.interpolation === interpolation && sameDevelop(primed.develop, layer.develop)
-              ? primed.cube
-              : layerCube(layer.develop, interpolation);
+        const own = cubeOf(layer, interpolation);
+        const cube = own !== undefined ? own : (lender?.cubeOf(layer, interpolation) ?? layerCube(layer.develop, interpolation));
 
         let raster: BrushRaster | null;
+        let brushState: BrushRasterState | null = null;
         let strokes: readonly BrushStroke[] | null = null;
         if (layer.mask?.kind === 'brush') {
           strokes = layer.mask.strokes;
-          raster =
-            prev && prev.strokes === strokes && prev.rasterAspect === aspectRatio
-              ? prev.raster
-              : strokes.length
-                ? rasteriseBrush(strokes, aspectRatio)
-                : null;
+          if (prev && prev.strokes === strokes && prev.rasterAspect === aspectRatio) {
+            raster = prev.raster;
+            brushState = prev.brushState;
+          } else if (strokes.length) {
+            // A pointer move hands the same strokes with the last one longer:
+            // stepped from the previous state, the new segment's box alone.
+            brushState = step(prev?.brushState, strokes, aspectRatio);
+            raster = brushState.raster;
+          } else {
+            raster = null;
+          }
         } else if (layer.mask?.kind === 'subject') {
           raster = rasters?.get(layer.id) ?? null;
         } else {
@@ -402,7 +465,7 @@ export function makeLayerPassCache(): LayerPassCache {
         const except = exceptRaster(layer, rasters);
         const parts = layer.parts ?? [];
         const partStrokes = parts.map((p) => (p.mask.kind === 'brush' ? p.mask.strokes : null));
-        const partRasters = partRasterFor(parts, partStrokes, prev, aspectRatio);
+        const { rasters: partRasters, states: partStates } = partRasterFor(parts, partStrokes, prev, aspectRatio, step);
         const reusable =
           prev?.pass &&
           prev.cube === cube &&
@@ -440,6 +503,7 @@ export function makeLayerPassCache(): LayerPassCache {
           strokes,
           rasterAspect: aspectRatio,
           raster,
+          brushState,
           mask: cloneMask(layer.mask),
           invert: layer.invert,
           opacity: layer.opacity,
@@ -448,6 +512,7 @@ export function makeLayerPassCache(): LayerPassCache {
           passExcept: except,
           partStrokes,
           partRasters,
+          partStates,
           parts: cloneParts(parts),
           pass,
         });
@@ -482,30 +547,43 @@ export function makeLayerPassCache(): LayerPassCache {
       // painted walks nothing twice; a subject's is the caller's.
       const own = held.get(layer.id);
       const mask = layer.mask;
-      const ownMap =
-        mask?.kind === 'brush'
-          ? own && own.strokes === mask.strokes && own.rasterAspect === aspectRatio
-            ? own.raster
-            : prev && prev.mask?.kind === 'brush' && sameMask(prev.mask, mask) && prev.aspectRatio === aspectRatio
-              ? prev.raster
-              : mask.strokes.length
-                ? rasteriseBrush(mask.strokes, aspectRatio)
-                : null
-          : mask?.kind === 'subject'
-            ? raster
-            : null;
+      // A layer that does not draw yet (a fresh painted mask, its sliders at
+      // zero) has no held entry, so the overlay keeps a state of its own and
+      // steps it per pointer move, exactly as `passes` does for one that draws.
+      let ownMap: BrushRaster | null = null;
+      let brushState: BrushRasterState | null = null;
+      if (mask?.kind === 'brush') {
+        if (own && own.strokes === mask.strokes && own.rasterAspect === aspectRatio) {
+          ownMap = own.raster;
+        } else if (prev && prev.mask?.kind === 'brush' && sameMask(prev.mask, mask) && prev.aspectRatio === aspectRatio) {
+          ownMap = prev.raster;
+          brushState = prev.brushState;
+        } else if (mask.strokes.length) {
+          brushState = step(prev?.brushState, mask.strokes, aspectRatio);
+          ownMap = brushState.raster;
+        }
+      } else if (mask?.kind === 'subject') {
+        ownMap = raster;
+      }
       const parts = layer.parts ?? [];
-      const partRasters = parts.map((p, i) =>
-        p.mask.kind !== 'brush'
-          ? null
-          : own && own.partStrokes[i] === p.mask.strokes && own.rasterAspect === aspectRatio
-            ? own.partRasters[i]
-            : prev && prev.parts[i]?.mask.kind === 'brush' && sameMask(prev.parts[i].mask, p.mask) && prev.aspectRatio === aspectRatio
-              ? prev.partRasters[i]
-              : p.mask.strokes.length
-                ? rasteriseBrush(p.mask.strokes, aspectRatio)
-                : null,
-      );
+      const partRasters: (BrushRaster | null)[] = [];
+      const partStates: (BrushRasterState | null)[] = [];
+      parts.forEach((p, i) => {
+        if (p.mask.kind !== 'brush' || !p.mask.strokes.length) {
+          partRasters.push(null);
+          partStates.push(null);
+        } else if (own && own.partStrokes[i] === p.mask.strokes && own.rasterAspect === aspectRatio) {
+          partRasters.push(own.partRasters[i]);
+          partStates.push(null);
+        } else if (prev && prev.parts[i]?.mask.kind === 'brush' && sameMask(prev.parts[i].mask, p.mask) && prev.aspectRatio === aspectRatio) {
+          partRasters.push(prev.partRasters[i]);
+          partStates.push(prev.partStates[i]);
+        } else {
+          const state = step(prev?.partStates[i], p.mask.strokes, aspectRatio);
+          partRasters.push(state.raster);
+          partStates.push(state);
+        }
+      });
       if (
         prev?.pass &&
         sameParts(prev.parts, parts) &&
@@ -526,9 +604,11 @@ export function makeLayerPassCache(): LayerPassCache {
           mask: cloneMask(layer.mask),
           parts: cloneParts(parts),
           partRasters,
+          partStates,
           invert: layer.invert,
           aspectRatio,
           raster: ownMap,
+          brushState,
           style,
           except,
           pass,

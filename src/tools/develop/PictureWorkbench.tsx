@@ -1508,8 +1508,11 @@ export default function PictureWorkbench({
   useEffect(() => {
     const onDown = (e: KeyboardEvent) => {
       if (e.defaultPrevented) return;
-      // A question over the editor keeps every key.
-      if (document.querySelector('[role="alertdialog"]')) return;
+      // A question over the editor keeps every key — and so does any modal
+      // sheet over it (the keys sheet, the settings, the making-of): with one
+      // open, ←/→, P/M/U, V and Delete used to act on the picture behind it,
+      // out of sight and into the export.
+      if (document.querySelector('[role="alertdialog"], [aria-modal="true"]')) return;
       const action = editorKeyAction({
         key: e.key,
         repeat: e.repeat,

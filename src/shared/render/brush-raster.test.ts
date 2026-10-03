@@ -1,6 +1,15 @@
 import { describe, expect, it } from 'vitest';
-import { BRUSH_RASTER_LONG_EDGE, brushAt, brushRasterSize, rasteriseBrush } from './brush-raster';
+import {
+  BRUSH_RASTER_LONG_EDGE,
+  brushAt,
+  brushRasterSize,
+  rasteriseBrush,
+  rasteriseBrushFrom,
+  releaseBrushWorking,
+  type BrushRasterState,
+} from './brush-raster';
 import { maskAt, strokeCoverage, type BrushStroke } from './mask';
+import { mulberry32 } from '../lib/prng';
 
 const dab = (over: Partial<BrushStroke> = {}): BrushStroke => ({
   points: [[0.5, 0.5]],
@@ -132,5 +141,93 @@ describe('the raster', () => {
   it('is empty for no strokes at all', () => {
     const r = rasteriseBrush([], 1, 32);
     expect(r.data.every((v) => v === 0)).toBe(true);
+  });
+});
+
+describe('rasteriseBrushFrom is rasteriseBrush, step by step, bit for bit', () => {
+  const EDGE = 96;
+  const AR = 1.5;
+
+  /** A drag the way the editor hands it in: the finished strokes by identity, the live one longer by a point. */
+  function* drag(seed: number, plan: { radius: number; hardness: number; erase: boolean; points: number }[]) {
+    const rnd = mulberry32(seed);
+    const finished: BrushStroke[] = [];
+    for (const p of plan) {
+      let x = 0.15 + rnd() * 0.7;
+      let y = 0.15 + rnd() * 0.7;
+      let live: BrushStroke = { points: [[x, y]], radius: p.radius, hardness: p.hardness, erase: p.erase };
+      yield [...finished, live];
+      for (let k = 1; k < p.points; k += 1) {
+        x = Math.min(1, Math.max(0, x + (rnd() - 0.5) * 0.12));
+        y = Math.min(1, Math.max(0, y + (rnd() - 0.5) * 0.12));
+        live = { ...live, points: [...live.points, [x, y]] };
+        yield [...finished, live];
+      }
+      finished.push(live);
+    }
+  }
+
+  const PLAN = [
+    { radius: 0.15, hardness: 0.4, erase: false, points: 30 },
+    { radius: 0.08, hardness: 1, erase: true, points: 12 },
+    { radius: 0.2, hardness: 0, erase: false, points: 20 },
+    { radius: 0.05, hardness: 0.7, erase: true, points: 1 },
+    { radius: 0.12, hardness: 0.5, erase: false, points: 8 },
+  ];
+
+  it('agrees with the whole build on every pointer move of five strokes, erasers and dabs included', () => {
+    let state: BrushRasterState | null = null;
+    let steps = 0;
+    for (const strokes of drag(7, PLAN)) {
+      state = rasteriseBrushFrom(state, strokes, AR, EDGE);
+      expect(state.raster.data).toEqual(rasteriseBrush(strokes, AR, EDGE).data);
+      steps += 1;
+    }
+    expect(steps).toBe(71);
+  });
+
+  it('steps in place: a grown stroke is a NEW raster over the SAME bytes, an unchanged one the same raster', () => {
+    const it = drag(3, [{ radius: 0.1, hardness: 0.5, erase: false, points: 3 }]);
+    const a = rasteriseBrushFrom(null, it.next().value as BrushStroke[], AR, EDGE);
+    const grown = it.next().value as BrushStroke[];
+    const b = rasteriseBrushFrom(a, grown, AR, EDGE);
+    expect(b.raster).not.toBe(a.raster);
+    expect(b.raster.data).toBe(a.raster.data);
+    // The same strokes again, as a new array of the same content: nothing to
+    // step, so the raster's identity holds and nothing downstream rebuilds.
+    const c = rasteriseBrushFrom(b, [...grown], AR, EDGE);
+    expect(c.raster).toBe(b.raster);
+  });
+
+  it('builds whole, and still agrees, when the change is not a step: an undo, another frame, a released state', () => {
+    const steps = [...drag(11, PLAN)];
+    const at = steps[40];
+    const state = rasteriseBrushFrom(null, at, AR, EDGE);
+    // An undo: the live stroke one point shorter — not an extension.
+    const undone = steps[39];
+    const back = rasteriseBrushFrom(state, undone, AR, EDGE);
+    expect(back.raster.data).toEqual(rasteriseBrush(undone, AR, EDGE).data);
+    expect(back.raster.data).not.toBe(state.raster.data);
+    // Another frame shape.
+    const portrait = rasteriseBrushFrom(back, undone, 0.8, EDGE);
+    expect(portrait.raster.data).toEqual(rasteriseBrush(undone, 0.8, EDGE).data);
+    // A state whose working arrays were let go steps as a whole build.
+    releaseBrushWorking(portrait);
+    expect(portrait.working).toBeNull();
+    const next = rasteriseBrushFrom(portrait, steps[41], 0.8, EDGE);
+    expect(next.raster.data).toEqual(rasteriseBrush(steps[41], 0.8, EDGE).data);
+    expect(next.working).not.toBeNull();
+  });
+
+  it('agrees on a stroke painted back over an eraser, point by point', () => {
+    let state: BrushRasterState | null = null;
+    for (const strokes of drag(5, [
+      { radius: 0.3, hardness: 1, erase: false, points: 2 },
+      { radius: 0.2, hardness: 1, erase: true, points: 4 },
+      { radius: 0.1, hardness: 0.2, erase: false, points: 6 },
+    ])) {
+      state = rasteriseBrushFrom(state, strokes, 1, 64);
+      expect(state.raster.data).toEqual(rasteriseBrush(strokes, 1, 64).data);
+    }
   });
 });

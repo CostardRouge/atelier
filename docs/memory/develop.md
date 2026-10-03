@@ -122,6 +122,21 @@ readout over them shows numbers. The view is never remembered past the session
 a PNG with white, black, a red-only clip and a mid grey: every mark where the
 rule says, the readout decoding each, J and the end words toggling.
 
+**The histogram renders through a slot of its OWN** (2026-10-02, the audit's
+PERF-02): `histSlot`, a 160 px grader (`fitRenderSize` to
+`HISTOGRAM_SAMPLE_EDGE`) borrowing the stage cache's cubes like the
+thumbnails' `belowSlot`. Measuring through the stage's slot — asking WITHOUT
+the looking passes the stage draws with (a mask's wash, a blink, the
+clipping) — swapped the stage's passes twice per slider step and rendered
+the whole stage twice; and with nothing shown, the second render of an
+unchanged picture is exactly what makes the held grader copy the stage to
+the CPU every step (`held-grader.ts`) — the 2026-09-22 pass had recorded it
+and left it. The kernels scale with the sample (`pixelScale × 160 / stage`),
+which at this size is noise; the post-crop vignette is passed now, as the
+stage's own call does — it is part of the picture and the histogram had left
+it out. A mechanism, not a timing: the bench's counters cannot tell a 4K
+render from a 160 px one.
+
 ## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
 
 `DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`
@@ -543,6 +558,34 @@ release skips whatever `source` currently is, and that one waits its turn.
 Otherwise the next paint draws a bitmap of width 0 and the cube pass logs
 `GL error 0x501` on its first draw.
 
+## The stage's grader LIVES with the source — never disposed for want of work (2026-10-02)
+
+**The freeze he reported (*"ui / app freeze"* while editing his DNGs with
+layers).** `graderFrom` used to DISPOSE the stage slot's grader whenever a
+call needed no GPU. Every caller that measures or delivers — the histogram
+one frame after each paint, `delivered()` for the crop stage and the
+snapshot, a thumbnail's `layerInput` — asks for the picture WITHOUT the
+looking passes (the mask's outline or wash, a tap's blink, the clipping
+view). So on a picture whose ONLY reason for the GPU was such a pass — a
+fresh Subject layer with its sliders at zero, on a photograph with no look
+or develop yet, which is exactly how a mask session starts — each measure
+threw the WebGL2 context away and the next paint built a new one: shaders
+compiled, the 4K bitmap or the RAW's half-floats uploaded again, on every
+slider step and every blink. Measured headless (`testing.md`'s layers
+bench): a 12-step drag of Tolerance made **22 contexts**, 33 stage paints
+and 159 s of long tasks under SwiftShader. **Rule**: once a slot holds a
+grader it is kept until the hook unmounts (the loupe's slot has its own
+release); a call that needs nothing returns null and leaves it. The context
+is one per stage and its programs are cached by pass id, so keeping it is
+what makes a swap cheap; disposing was never a saving.
+
+**The readout re-reads once per PAINT, never per render** (same day): the
+pixel under a resting pointer was read again by an effect with no deps, so
+every render of the workbench — six per slider step, measured, with a mask
+being refined — cost a one-pixel `getImageData` off a 2D canvas just drawn
+from the WebGL one, each a GPU sync. It now follows the paint effect alone;
+a clip's own frame loop reads nothing.
+
 ## A picture is read by its NAME before its type (2026-09-21)
 
 `pictureFidelity` asked `file.type` before anything else, and a JPEG fetched
@@ -642,3 +685,17 @@ still writes both bands to 0 — leaving a stale value where no reason for one
 was found would be a nudge. The bands act BEFORE levels in `developLinear`,
 so Tone then Bands compounds, each still SET from the source. Not driven in
 a browser: the module is pure and the button is one `onPatch`.
+
+## A canvas pixel is a FLOOR, found by ONE function (2026-10-02)
+
+`canvasPointAt` (the letterbox of an `object-contain` canvas undone, the
+element's zoom/pan undone for free by the rect — fractional, unbounded) and
+`canvasPixelAt` (floor, null outside the canvas) in `shared/ui/pan-zoom.ts`
+are what the eyedropper, a mask's point and the pointer readout read
+through. The stage hook used to undo the letterbox in three hand-written
+copies that rounded three ways (`round`, nothing, `floor`): pixel *i* covers
+[i, i+1), so `round` put a pointer in the second half of a pixel on the next
+one, and the 5×5 dropper sampled beside the pixel the readout named, worst
+under the loupe. **How to apply.** A surface that maps a client point onto
+a canvas calls these two and never re-derives the arithmetic; specs in
+`pan-zoom.test.ts`.

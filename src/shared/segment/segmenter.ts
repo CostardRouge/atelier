@@ -26,12 +26,19 @@
  * "Background" is not a second model either — it is this mask inverted, which
  * a layer already has a flag for.
  *
+ * **And it runs in a WORKER where one can be made** (2026-10-02,
+ * `segment-worker.ts`): `segment()` blocks the thread it runs on for the whole
+ * inference, and on the main thread that was every tap and every re-ask after
+ * a geometry change standing the interface still. The main thread keeps the
+ * model only where no worker can run it.
+ *
  * The raster it produces is exactly the shape `brush-raster.ts` produces, so
  * the layer pass needs nothing new to draw it.
  */
 
 import type { BrushRaster } from '../render/brush-raster';
 import { exceedsRenderSize, fitRenderSize } from '../render/render-size';
+import { startSegmentWorker, type SegmentWorker } from './segment-worker-client';
 import {
   cutConfidence,
   finishEdge,
@@ -88,27 +95,55 @@ interface InteractiveSegmenterTask {
   close?(): void;
 }
 
-let task: InteractiveSegmenterTask | null = null;
-let loading: Promise<InteractiveSegmenterTask | null> | null = null;
+/** Where the model runs: a worker of its own, or this very thread. */
+export type SegmentEngine = { kind: 'worker'; worker: SegmentWorker } | { kind: 'page'; task: InteractiveSegmenterTask };
+
+let engine: SegmentEngine | null = null;
+let loading: Promise<SegmentEngine | null> | null = null;
 let state: SegmenterState = 'idle';
 
 export function segmenterState(): SegmenterState {
   return state;
 }
 
+/** Where the loaded model runs, for a status line — null before it is loaded. */
+export function segmenterPlace(): 'worker' | 'page' | null {
+  return engine?.kind ?? null;
+}
+
 /**
- * Load the model, once, on the first ask.
- *
- * The GPU delegate is tried first and the CPU one is the fallback — a machine
- * without a usable WebGL delegate should segment slowly rather than not at all,
- * which is the same degradation the render core makes.
+ * `localStorage['atelier.segment'] = 'page'` keeps the model on the main
+ * thread — a browser preference for diagnosis, never a document's.
  */
-export async function loadSegmenter(): Promise<InteractiveSegmenterTask | null> {
-  if (task) return task;
+function workerAllowed(): boolean {
+  try {
+    return typeof localStorage === 'undefined' || localStorage.getItem('atelier.segment') !== 'page';
+  } catch {
+    return true;
+  }
+}
+
+/**
+ * Load the model, once, on the first ask — in a worker where one can be made,
+ * else here. In both places the GPU delegate is tried first and the CPU one
+ * is the fallback: a machine without a usable WebGL delegate should segment
+ * slowly rather than not at all, which is the same degradation the render
+ * core makes.
+ */
+export async function loadSegmenter(): Promise<SegmentEngine | null> {
+  if (engine) return engine;
   if (loading) return loading;
   state = 'loading';
   loading = (async () => {
     try {
+      if (workerAllowed()) {
+        const worker = await startSegmentWorker(MEDIAPIPE_BASE);
+        if (worker) {
+          engine = { kind: 'worker', worker };
+          state = 'ready';
+          return engine;
+        }
+      }
       const bundle = (await import(
         /* @vite-ignore */ `${MEDIAPIPE_BASE}/vision_bundle.js`
       )) as unknown as VisionBundle;
@@ -122,13 +157,15 @@ export async function loadSegmenter(): Promise<InteractiveSegmenterTask | null> 
           outputCategoryMask: false,
           outputConfidenceMasks: true,
         });
+      let task: InteractiveSegmenterTask;
       try {
         task = await create('GPU');
       } catch {
         task = await create('CPU');
       }
+      engine = { kind: 'page', task };
       state = 'ready';
-      return task;
+      return engine;
     } catch (e) {
       // A missing model is not a crash: the panel says the subject mask is
       // unavailable and every other kind keeps working.
@@ -144,8 +181,9 @@ export async function loadSegmenter(): Promise<InteractiveSegmenterTask | null> 
 
 /** Free the model. The next ask loads it again. */
 export function disposeSegmenter(): void {
-  task?.close?.();
-  task = null;
+  if (engine?.kind === 'worker') engine.worker.dispose();
+  else engine?.task.close?.();
+  engine = null;
   state = 'idle';
 }
 
@@ -157,7 +195,7 @@ export function disposeSegmenter(): void {
  * `inverse` flag defaulting to true; reading the category the obvious way
  * selects the BACKGROUND. The map has no such trap, and is stored as a byte.
  */
-const toByte = (confidence: number): number => Math.round(Math.min(1, Math.max(0, confidence)) * 255);
+export const toConfidenceByte = (confidence: number): number => Math.round(Math.min(1, Math.max(0, confidence)) * 255);
 
 /**
  * The long edge the model is SHOWN, and so the size of the mask it returns.
@@ -224,6 +262,17 @@ export async function segmentPoint(
 ): Promise<BrushRaster | null> {
   const model = await loadSegmenter();
   if (!model) return null;
+  if (model.kind === 'worker') return model.worker.segment(source, point, timeoutMs);
+  return segmentHere(model.task, source, point, timeoutMs);
+}
+
+/** One point asked of the model on THIS thread — the path a worker spares the interface. */
+function segmentHere(
+  model: InteractiveSegmenterTask,
+  source: TexImageSource,
+  point: SubjectPoint,
+  timeoutMs: number,
+): Promise<BrushRaster | null> {
   return new Promise((resolve) => {
     let settled = false;
     const timer = setTimeout(() => {
@@ -254,7 +303,7 @@ export async function segmentPoint(
         // after the result is closed is reading freed memory.
         const confidence = mask.getAsFloat32Array();
         const data = new Uint8Array(confidence.length);
-        for (let i = 0; i < confidence.length; i += 1) data[i] = toByte(confidence[i]);
+        for (let i = 0; i < confidence.length; i += 1) data[i] = toConfidenceByte(confidence[i]);
         const { width, height } = mask;
         for (const m of masks) m.close();
         result.close?.();
@@ -269,6 +318,7 @@ export async function segmentPoint(
     }
   });
 }
+
 
 /**
  * UNION: a second point ADDS to the subject, it does not replace it. A mask of

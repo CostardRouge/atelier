@@ -36,6 +36,18 @@ describe('mediaHash', () => {
     });
     expect(await mediaHash(broken)).toBeNull();
   });
+
+  it('does not remember a failed read: the next ask reads the file again', async () => {
+    const flaky = file('flaky.mp4', 4);
+    const spy = vi.spyOn(flaky, 'slice').mockImplementationOnce(() => {
+      throw new Error('drive asleep');
+    });
+    expect(await mediaHash(flaky)).toBeNull();
+    spy.mockRestore();
+    // The same file (same name, size and mtime) asked again: a hash, not the
+    // remembered null — a document saved now carries it.
+    expect(await mediaHash(file('flaky.mp4', 4))).toBe(await partialHash(file('flaky.mp4', 4)));
+  });
 });
 
 describe('hashedMediaRef', () => {

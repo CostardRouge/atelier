@@ -19,7 +19,7 @@
  *   name.
  */
 
-import { ASPECT_PRESETS } from './project-types';
+import { ASPECT_PRESETS } from './aspect-presets';
 import { even } from '../media/compose-layout';
 import { resolveSpeed, speedSuffix, type ExportFrameRate } from '../media/frame-rate';
 

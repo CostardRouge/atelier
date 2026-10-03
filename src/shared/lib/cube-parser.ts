@@ -43,6 +43,16 @@ const DOMAIN_MAX_RE = /^DOMAIN_MAX\s+(\S+)\s+(\S+)\s+(\S+)/;
 const TRIPLET_RE = /^(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s+(-?[\d.eE+-]+)\s*$/;
 
 /**
+ * The largest lattice the parser will allocate for. Real LUTs are 17, 33 or
+ * 65 a side (a few tools write 129); the table is `size³ × 3` floats, so 129
+ * is 26 MB and 256 would be 201 MB — and the size is read from the text
+ * before a single row is, so a 30-byte file claiming 4096 used to ask for
+ * 800 MB on the spot. The parser also runs on `customText` stored inside a
+ * document, which is why the bound matters beyond a file the user picked.
+ */
+export const MAX_CUBE_SIZE = 129;
+
+/**
  * Parse the contents of a `.cube` file into a {@link CubeLut}.
  *
  * @param text Raw file contents.
@@ -60,8 +70,8 @@ export function parseCube(text: string): CubeLut | null {
   let data: Float32Array | null = null;
   let writeIndex = 0;
 
-  for (const raw of lines) {
-    const line = raw.trim();
+  for (let at = 0; at < lines.length; at += 1) {
+    const line = lines[at].trim();
     // Skip blanks and comments.
     if (line === '' || line.startsWith('#')) continue;
 
@@ -82,6 +92,9 @@ export function parseCube(text: string): CubeLut | null {
       const sizeMatch = line.match(SIZE_3D_RE);
       if (sizeMatch) {
         size = Number(sizeMatch[1]);
+        // Bounded before anything is allocated: a lattice needs two points a
+        // side to interpolate at all, and `MAX_CUBE_SIZE` says the ceiling.
+        if (!Number.isInteger(size) || size < 2 || size > MAX_CUBE_SIZE) return null;
         continue;
       }
       const minMatch = line.match(DOMAIN_MIN_RE);
@@ -100,6 +113,10 @@ export function parseCube(text: string): CubeLut | null {
 
     // Data row. We must have seen LUT_3D_SIZE first.
     if (size <= 0) return null;
+    // One row per line: a text with fewer lines left than the table has rows
+    // cannot be a whole lattice, so it is refused before the table exists
+    // rather than after it was filled part way.
+    if (!data && lines.length - at < size * size * size) return null;
     if (!data) data = new Float32Array(size * size * size * 3);
 
     const triplet = line.match(TRIPLET_RE);

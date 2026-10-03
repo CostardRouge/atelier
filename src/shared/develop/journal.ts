@@ -100,9 +100,19 @@ export function sectionValues(p: RollPicture, sections: readonly PictureEdit[]):
       case 'layers':
         out.layers = p.layers ?? [];
         break;
+      default:
+        // A section the compiler knows and this switch does not: without this
+        // arm a new `PictureEdit` member compiled, read as `{}` here, and so
+        // never reached the journal (`sameSection` compared `{}` with `{}`).
+        unreachedSection(s);
     }
   }
   return out;
+}
+
+/** The type-level guard the two section switches end on: a `never` that is reached is a programming error. */
+export function unreachedSection(section: never): never {
+  throw new Error(`Unknown picture section: ${String(section)}`);
 }
 
 /** The picture wearing `values` — the sections named, every other field as it was. */

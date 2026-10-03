@@ -270,3 +270,7 @@ make, model or lens on purpose).
 
 **A capabilities sheet may lack a whole group** (2026-09-28): an instance that answers `/api/capabilities` without `documents` (older, or not Winnow) crashed every screen reading `caps?.documents.bucket` — found by a stub answering `{}`. Read a group with `?.` too (`caps?.documents?.bucket`), as `client.ts` already did.
 
+**No runtime import cycle** (2026-10-02): `project-types.ts` and `export-variants.ts` imported each other and held only because `ASPECT_PRESETS` was read inside a function — a top-level read would have crashed at load depending on which module came first (`crop-aspect.ts` already reads it at the top level). The presets live in `projects/aspect-presets.ts`, re-exported from the types so no reader moved. A shared constant two modules both read goes in its own module; the audit's Tarjan scan over value imports (`docs/audit-2026-10-02.md`, ARC-03) found this one cycle in 729 modules and should find none.
+
+**`mediaHash` forgets a FAILED read** (2026-10-02): the memo (`media-identity.ts`, keyed name + size + mtime) used to keep a `null` for the session, so a folder re-granting its permission, or a drive asleep, left every document saved afterwards without a hash and reconcile fell from id → hash → name to the name alone. A null is dropped from the memo as it resolves; the next ask reads the file again.
+

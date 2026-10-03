@@ -250,7 +250,10 @@ export default function TripMapView({
       paths +=
         `<path d="${d}" fill="none" style="stroke:${PAPER};stroke-width:6.5;stroke-linecap:round;stroke-linejoin:round"/>` +
         `<path d="${d}" fill="none" style="stroke:${line};stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round"/>` +
-        `<path d="${d}" fill="none" data-leg="${s.stage.id}" data-hover="s:${s.stage.id}" style="stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer"/>`;
+        // Escaped like every other id written into this string (the dials, the
+        // names): a stage id comes from a document — an import, a Winnow pull
+        // — and an unescaped one here was a script in the page.
+        `<path d="${d}" fill="none" data-leg="${esc(s.stage.id)}" data-hover="s:${esc(s.stage.id)}" style="stroke:transparent;stroke-width:14;pointer-events:stroke;cursor:pointer"/>`;
       for (const p of pts) {
         paths += `<circle cx="${f(p.x)}" cy="${f(p.y)}" r="2.8" style="fill:${PAPER};stroke:${line};stroke-width:1.6"/>`;
       }

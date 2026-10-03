@@ -58,27 +58,10 @@ export interface SavedMediaRef {
   hash?: string;
 }
 
-export interface AspectPreset {
-  id: string;
-  /** Destination-named, the way a creator thinks ("Reels", not "1080×1920"). */
-  label: string;
-  w: number;
-  h: number;
-}
-
-export const ASPECT_PRESETS: readonly AspectPreset[] = [
-  { id: '9:16', label: 'Reels · TikTok · Shorts', w: 9, h: 16 },
-  { id: '16:9', label: 'YouTube · landscape', w: 16, h: 9 },
-  { id: '1:1', label: 'Square post', w: 1, h: 1 },
-  { id: '4:5', label: 'Portrait post', w: 4, h: 5 },
-  // The shapes a photograph is SHOT in, so a still can go out whole. Added in
-  // portrait/landscape pairs so the two-column pickers keep reading as pairs;
-  // a picker wanting them by shape sorts by w / h rather than reordering this.
-  { id: '3:4', label: 'Phone photo · portrait', w: 3, h: 4 },
-  { id: '4:3', label: 'Phone & drone photo', w: 4, h: 3 },
-  { id: '2:3', label: 'Pinterest · camera portrait', w: 2, h: 3 },
-  { id: '3:2', label: 'Camera photo · landscape', w: 3, h: 2 },
-];
+// The frame shapes live in their own module (`aspect-presets.ts`) so this file
+// and `export-variants.ts` no longer import each other; re-exported here for
+// the many readers that always found them on the document's types.
+export { ASPECT_PRESETS, type AspectPreset } from './aspect-presets';
 
 export interface ProjectSettings {
   /**
