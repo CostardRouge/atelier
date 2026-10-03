@@ -43,3 +43,7 @@ Read before adding anything that could touch the network, read files, or persist
 ## A future native shell is an accepted direction, not a plan (2026-08-20)
 
 **Fact.** The README states a future Tauri app would bundle ffmpeg for guaranteed decoding and real thumbnails, and the code is arranged for it (DOM-free logic, one file-access brick). Nothing is scheduled. **How to apply**: keep the arrangement; do not start the native shell without asking.
+
+## A document is UNTRUSTED input, wherever it comes from (2026-10-02)
+
+**Decision.** A stored, imported or pulled document — a trip, a roll, a pack index, a `.cube` carried inside one as `customText` — is read the way a network answer is: an id written into an HTML string is escaped (`TripMapView.tsx`'s `esc` on EVERY interpolation; the one line that forgot was a stored XSS a `.roadtrip.json` could plant), a parser bounds what it allocates BEFORE it allocates (`parseCube`: a size under 2 or over `MAX_CUBE_SIZE` = 129 refused, and a text with fewer lines than the table has rows refused first — a 30-byte file used to ask for 800 MB), and a link is kept only when `webUrl` says http(s) (`lut-pack.ts`, on read and on build). **Why.** `docs/audit-2026-10-02.md`, SEC-01/02/03/07. **How to apply.** A new field on a document is read by a `read*` function that drops what does not fit (`readCarSpec` is the model); the trip's stages and posts still ride a type cast (SEC-02) and are the next to convert; an `innerHTML` string takes `esc()` on every value, or is built with `createElementNS`.
