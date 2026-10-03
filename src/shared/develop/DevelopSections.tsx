@@ -15,7 +15,9 @@ import IconButton from '../ui/IconButton';
 import { Icons } from '../ui/icons';
 import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
 import { useVerb, type Verb } from '../ui/use-verb';
-import type { VerbReturn } from '../ui/verb';
+import type { VerbOutcome, VerbReturn } from '../ui/verb';
+import VerbWord, { useVerbWord } from '../ui/VerbWord';
+import { useIsCompact } from '../ui/use-layout-mode';
 import { VERB_GROUND, VERB_INK, VerbButton } from '../ui/VerbMarks';
 import DevelopFold from './DevelopFold';
 import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develop';
@@ -71,6 +73,7 @@ export function DevelopActionsGroup({
   clipboard = true,
   clip,
   verbs,
+  onOutcome,
   children,
 }: {
   draft: DevelopSettings;
@@ -90,6 +93,12 @@ export function DevelopActionsGroup({
    * group owns its own.
    */
   verbs?: { copy: Verb; paste: Verb };
+  /**
+   * Where the group's own verbs say how they went (`VerbWord` beside the
+   * well). Given, a verb's word goes there and not to `onTold` — a fact said
+   * twice is said once.
+   */
+  onOutcome?: (outcome: VerbOutcome) => void;
   /** The host's own verbs, past a hairline. */
   children?: ReactNode;
 }) {
@@ -97,11 +106,20 @@ export function DevelopActionsGroup({
   // Each glyph LIVES its verb: down while it runs and the picture catches up,
   // ✓ or – after (`docs/press-feedback.md`, C2). Copy is instant and says ✓;
   // a paste or a reset re-renders the picture, which is what the wait is.
-  const ownCopy = useVerb();
-  const ownPaste = useVerb();
-  const reset = useVerb();
+  const ownCopy = useVerb(onOutcome);
+  const ownPaste = useVerb(onOutcome);
+  const reset = useVerb(onOutcome);
   const copy = verbs?.copy ?? ownCopy;
   const paste = verbs?.paste ?? ownPaste;
+  const told = (word: string) => {
+    if (!onOutcome) onTold(word);
+    return word;
+  };
+  // A grey glyph keeps the touch and says why it is grey (C3): its title was
+  // the only place that lived, and a finger never shows a title.
+  const copyRefusal = (clip ? !clip.canCopy : asShot) ? 'nothing to copy — this picture is as shot' : null;
+  const pasteRefusal = (clip ? !clip.canPaste : !canPaste) ? 'nothing copied yet — copy an edited picture first' : null;
+  const resetRefusal = asShot ? 'nothing to reset — this picture is as shot' : null;
   return (
     <div
       className={`inline-flex items-center gap-0.5 p-0.5 rounded-control border border-line bg-paper-2 ${className}`}
@@ -118,14 +136,16 @@ export function DevelopActionsGroup({
               : 'Copy ⌘C — keep these numbers for the next picture, in this session'
         }
         size={size}
-        disabled={clip ? !clip.canCopy : asShot}
+        aria-disabled={copyRefusal ? true : undefined}
         phase={copy.phase}
         onClick={() =>
-          copy.run(() => {
-            if (clip) return clip.onCopy();
-            copyDevelop(draft);
-            onTold('copied');
-          })
+          copyRefusal
+            ? copy.refuse(copyRefusal)
+            : copy.run(() => {
+                if (clip) return clip.onCopy();
+                copyDevelop(draft);
+                return told('copied');
+              })
         }
       >
         {Icons.copy}
@@ -134,16 +154,18 @@ export function DevelopActionsGroup({
         label={clip ? 'Paste onto this picture' : 'Paste a develop onto this picture'}
         title={clip ? clip.pasteTitle : canPaste ? 'Paste ⌘V — replace these numbers with the copied ones' : 'Nothing copied yet'}
         size={size}
-        disabled={clip ? !clip.canPaste : !canPaste}
+        aria-disabled={pasteRefusal ? true : undefined}
         phase={paste.phase}
         onClick={() =>
-          paste.run(() => {
-            if (clip) return clip.onPaste();
-            const pasted = pasteDevelop();
-            if (!pasted) return false;
-            onReplace(pasted);
-            onTold('pasted');
-          })
+          pasteRefusal
+            ? paste.refuse(pasteRefusal)
+            : paste.run(() => {
+                if (clip) return clip.onPaste();
+                const pasted = pasteDevelop();
+                if (!pasted) return false;
+                onReplace(pasted);
+                return told('pasted');
+              })
         }
       >
         {Icons.paste}
@@ -163,13 +185,15 @@ export function DevelopActionsGroup({
         title="Reset to as shot — throw these numbers away"
         variant="ghost"
         size={size}
-        disabled={asShot}
+        aria-disabled={resetRefusal ? true : undefined}
         phase={reset.phase}
         onClick={() =>
-          reset.run(() => {
-            onReplace({ ...DEFAULT_DEVELOP });
-            onTold('reset');
-          })
+          resetRefusal
+            ? reset.refuse(resetRefusal)
+            : reset.run(() => {
+                onReplace({ ...DEFAULT_DEVELOP });
+                return told('reset — ⌘Z brings it back');
+              })
         }
       >
         {Icons.reset}
@@ -190,24 +214,31 @@ export function DevelopClipboardActions({
   draft,
   asShot,
   onReplace,
-  onTold,
 }: {
   draft: DevelopSettings;
   asShot: boolean;
   onReplace: (next: DevelopSettings) => void;
-  onTold: (message: string) => void;
 }) {
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
   // The modal's three links live their verbs like the tool's glyphs (C2): in
-  // Trips and the Studio a paste re-renders the sheet's picture too.
+  // Trips and the Studio a paste re-renders the sheet's picture too. Their
+  // word is drawn BESIDE them (C3) rather than in the footer, a sheet's width
+  // away; a grey link keeps the touch and says why. The footer's told line
+  // stays for the sheet's other verbs.
+  const [word, say] = useVerbWord();
+  // On a phone the links open the sheet's second row, near the left edge:
+  // the word goes above them there.
+  const compact = useIsCompact();
   return (
-    <>
+    <span className="relative inline-flex items-center gap-2.5">
+      <VerbWord word={word} side={compact ? 'aboveEnd' : 'left'} />
       <VerbButton
         onRun={() => {
           copyDevelop(draft);
-          onTold('copied');
+          return 'copied';
         }}
-        disabled={asShot}
+        onOutcome={say}
+        refusal={asShot ? 'nothing to copy — this picture is as shot' : null}
         className={`${developLinkClass} ${VERB_INK} whitespace-nowrap`}
         title="Keep these numbers for the next picture, in this session"
       >
@@ -216,11 +247,12 @@ export function DevelopClipboardActions({
       <VerbButton
         onRun={() => {
           const pasted = pasteDevelop();
-          if (!pasted) return false;
+          if (!pasted) return { ok: false, word: 'nothing copied yet' };
           onReplace(pasted);
-          onTold('pasted');
+          return 'pasted';
         }}
-        disabled={!canPaste}
+        onOutcome={say}
+        refusal={canPaste ? null : 'nothing copied yet — copy a corrected picture first'}
         className={`${developLinkClass} ${VERB_INK} whitespace-nowrap`}
         title={canPaste ? 'Replace these numbers with the copied ones' : 'Nothing copied yet'}
       >
@@ -229,14 +261,15 @@ export function DevelopClipboardActions({
       <VerbButton
         onRun={() => {
           onReplace({ ...DEFAULT_DEVELOP });
-          onTold('as shot');
+          return 'as shot';
         }}
-        disabled={asShot}
+        onOutcome={say}
+        refusal={asShot ? 'already as shot' : null}
         className={`${developLinkClass} ${VERB_INK} whitespace-nowrap`}
       >
         As shot
       </VerbButton>
-    </>
+    </span>
   );
 }
 

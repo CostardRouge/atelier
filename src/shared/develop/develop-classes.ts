@@ -17,9 +17,10 @@ export const developTouchPillClass =
 // under a finger there is no hover, and these are the sheet's verbs in Trips
 // and the Studio. A link has no ground to sink, so it takes the accent ink.
 export const developButtonClass =
-  'px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default ' +
+  'px-3 py-[0.4rem] rounded-full border border-line-strong bg-paper text-xs font-semibold text-ink-soft cursor-pointer hover:border-accent hover:text-accent-ink disabled:opacity-50 disabled:cursor-default aria-disabled:opacity-50 aria-disabled:cursor-default ' +
   'transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ' +
   `${PRESS_LOOK} data-pressed:bg-paper-2 data-pressed:border-accent data-pressed:text-accent-ink`;
 export const developLinkClass =
   'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink disabled:opacity-50 disabled:cursor-default disabled:no-underline ' +
+  'aria-disabled:opacity-50 aria-disabled:cursor-default aria-disabled:no-underline ' +
   'data-pressed:text-accent-ink data-pressed:translate-y-px';

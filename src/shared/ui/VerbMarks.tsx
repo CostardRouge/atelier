@@ -72,6 +72,13 @@ export interface VerbButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   verb?: Verb;
   /** A leading glyph, swapped for ✓ or – after a run. */
   glyph?: ReactNode;
+  /**
+   * Why the verb cannot run now. Set, the button LOOKS disabled
+   * (`aria-disabled`) but keeps the touch, and a press says this instead of
+   * running — a tooltip is the only other place it lived, and a finger never
+   * shows one. The recipe styles `aria-disabled:`.
+   */
+  refusal?: string | null;
   children?: ReactNode;
 }
 
@@ -79,7 +86,7 @@ export interface VerbButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
  * A raw `<button>` that is a verb: for a recipe that is a class string. It
  * owns its life (`useVerb`) unless the host hands one in.
  */
-export function VerbButton({ onRun, onOutcome, verb, glyph, className = '', children, type = 'button', ...rest }: VerbButtonProps) {
+export function VerbButton({ onRun, onOutcome, verb, glyph, refusal, className = '', children, type = 'button', ...rest }: VerbButtonProps) {
   const own = useVerb(onOutcome);
   const v = verb ?? own;
   return (
@@ -87,8 +94,9 @@ export function VerbButton({ onRun, onOutcome, verb, glyph, className = '', chil
       type={type}
       {...rest}
       {...verbAttrs(v.phase)}
+      aria-disabled={refusal ? true : undefined}
       className={`relative ${VERB_SHAPE} ${className}`}
-      onClick={() => v.run(onRun)}
+      onClick={() => (refusal ? v.refuse(refusal) : v.run(onRun))}
     >
       {glyph !== undefined && verbGlyph(v.phase, glyph)}
       {children}

@@ -24,12 +24,14 @@ export type ButtonVariant = 'primary' | 'default' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
 // Pressed is `PRESS_LOOK` (`press.ts`) — it replaced `active:scale-[0.98]`,
-// a quarter of a pixel a side that a finger never saw.
+// a quarter of a pixel a side that a finger never saw. `aria-disabled` looks
+// disabled but keeps the touch, so a tap can say WHY it is grey (`VerbWord`);
+// `disabled` swallows it.
 const BASE =
   'inline-flex items-center justify-center shrink-0 whitespace-nowrap font-sans font-medium ' +
   'rounded-control border cursor-pointer select-none ' +
   'transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ' +
-  `${PRESS_LOOK} disabled:opacity-45 disabled:pointer-events-none ` +
+  `${PRESS_LOOK} disabled:opacity-45 disabled:pointer-events-none aria-disabled:opacity-45 aria-disabled:cursor-default ` +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 const SIZES: Record<ButtonSize, string> = {

@@ -158,3 +158,17 @@ puts the word to the LEFT of the glyph, the side the hand does not cover.
   Studio's frame capture. Driven headless in a real roll: copy working → ✓ in
   64 ms, a paste down for ~430 ms while the picture re-renders, ⌘C lighting
   the copy glyph.
+- **C3 · the word beside the glyph, and a grey glyph says why.**
+  `shared/ui/VerbWord.tsx`: `useVerbWord()` keeps a verb's outcome 1.6 s and
+  `VerbWord` draws it as a pill that OVERLAYS its anchor (absolute, blind to
+  the pointer, a live region kept mounted) — left of the verbs, or above them
+  on a phone, growing from the end that has the screen's room. Develop's well
+  speaks there (copy, paste, reset, ⌘C / ⌘V); the status line keeps the full
+  sentence as the log, and the name row's told no longer repeats it. The
+  Trips / Studio sheet's Copy / Paste / As shot speak beside themselves
+  instead of in the footer. A grey glyph or link is `aria-disabled` rather
+  than `disabled`: it looks the same, keeps the touch, and a press says why
+  (`Verb.refuse`, `VerbButton`'s `refusal`); `Button` styles `aria-disabled:`
+  as it styles `disabled:`. Driven headless at 1180 and 390 px in a real roll
+  and on the sheet mounted alone: a tap on a grey copy glyph shows – and
+  «nothing to copy — this picture is as shot» beside it, inside the screen.

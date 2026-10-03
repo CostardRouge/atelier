@@ -9,6 +9,7 @@ import { usePixelView } from '../ui/use-pixel-view';
 import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
+import { PRESS_LOOK } from '../ui/press';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
 import { usePresetBookHost } from './use-preset-book';
 import {
@@ -220,14 +221,14 @@ export default function DevelopSheet({
           <div className={compact ? 'basis-full order-last flex items-center gap-2.5 min-w-0' : 'contents'}>
             {chip && <span className={developPillClass}>{chip}</span>}
             <span className="flex-1" />
-            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} />
             {/* The compare as a switch, the Develop tool's `A/B` with the
                 Studio's colours — one wipe control across the suite. Kept at
                 the zoom pill's height, in the row a phone wraps to. */}
             {picture.source && (
               <button
                 type="button"
-                className={`flex-none inline-flex items-center justify-center h-[2.125rem] px-2.5 rounded-full border font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors ${
+                className={`flex-none inline-flex items-center justify-center h-[2.125rem] px-2.5 rounded-full border font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${
                   compareHeld
                     ? 'border-line-strong border-dashed bg-paper-2 text-faint'
                     : compareOn
@@ -371,7 +372,7 @@ export default function DevelopSheet({
           <button
             type="button"
             onClick={done}
-            className="px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent"
+            className={`px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent transition-[background-color,border-color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-accent data-pressed:border-accent`}
           >
             Done
             <span className="ml-1.5 font-mono text-3xs opacity-70">↵</span>

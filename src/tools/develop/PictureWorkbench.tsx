@@ -85,6 +85,7 @@ import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 import { PRESS_LOOK } from '../../shared/ui/press';
 import { useVerb } from '../../shared/ui/use-verb';
+import VerbWord, { useVerbWord } from '../../shared/ui/VerbWord';
 import type { VerbOutcome, VerbReturn } from '../../shared/ui/verb';
 import { MASK_VIEW_LABELS, nextMaskView, shownMaskView, type MaskView } from './mask-view';
 import type { BrushRaster } from '../../shared/render/brush-raster';
@@ -1515,8 +1516,11 @@ export default function PictureWorkbench({
   // --- the clipboard's two verbs ------------------------------------------------
   // Held HERE rather than in the well, so ⌘C and ⌘V light the very glyph a
   // press would (`useVerb`, `docs/press-feedback.md` C2).
-  const copyVerb = useVerb();
-  const pasteVerb = useVerb();
+  // Their WORD is drawn beside the well (`VerbWord`, C3), left of the glyphs —
+  // the side the hand does not cover — where the eye already is.
+  const [clipWord, sayClip] = useVerbWord();
+  const copyVerb = useVerb(sayClip);
+  const pasteVerb = useVerb(sayClip);
   /** A paste: the picture held by the roll, else the numbers a Trips or Studio sheet copied. */
   const pasteNow = (): VerbReturn => {
     const held = onPaste();
@@ -1524,7 +1528,6 @@ export default function PictureWorkbench({
     const pasted = pasteDevelop();
     if (!pasted) return { ok: false, word: 'nothing copied yet' };
     draft.setDraft(pasted);
-    tell('pasted');
     return 'pasted';
   };
   const clipVerbs = useRef({ copy: copyVerb, paste: pasteVerb, pasteNow, canPaste: clipboard.canPaste });
@@ -2169,6 +2172,10 @@ export default function PictureWorkbench({
               While a mask tool holds the pointer the hook has suspended it
               anyway, and the button draws that (dashed, faint) rather than
               lying about a divider nobody can see. */}
+          <span className="relative flex-none inline-flex">
+          {/* Left of the glyphs where the bar has room; on a phone the well
+              starts near the screen's edge, so the word sits above it. */}
+          <VerbWord word={clipWord} side={compact ? 'aboveStart' : 'left'} />
           <DevelopActionsGroup
             className="flex-none"
             size={compact ? 'md' : 'sm'}
@@ -2184,6 +2191,7 @@ export default function PictureWorkbench({
               onPaste: pasteNow,
             }}
             verbs={{ copy: copyVerb, paste: pasteVerb }}
+            onOutcome={sayClip}
           >
             {!cropping && (
               <IconButton
@@ -2279,6 +2287,7 @@ export default function PictureWorkbench({
               ?
             </button>
           </DevelopActionsGroup>
+          </span>
           </div>
         </div>
         <DevelopViewport
