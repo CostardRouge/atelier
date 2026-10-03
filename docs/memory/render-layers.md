@@ -331,6 +331,34 @@ so it is written out inline, the row's y once per row. `brushAt` still goes
 through `framePoint`; the loop must keep saying the same thing, which the
 gate's brush row holds it to (0.0008).
 
+**A stroke being painted costs its NEW segment, and a whole build costs its
+segments' boxes** (2026-10-02, the audit's PERF-01). `rasteriseBrushFrom`
+(`brush-raster.ts`) keeps, beside the bytes, the float composite of every
+finished stroke and the live stroke's own DISTANCE map (a `Float64Array` of
+the min distance to any of its segments — a min over the same numbers is
+exact, where a max over coverages would agree only up to an ulp); a pointer
+move walks the one new segment's box, takes the min there, recomposites
+those texels and rewrites those bytes IN PLACE, handing back a NEW
+`BrushRaster` over the SAME buffer so the layer pass and the overlay pass,
+keyed on identity, rebuild and upload. A dab becoming a line drops the dab's
+map first, because the whole build measures a two-point stroke by its
+segment alone. The whole build (`rasteriseBrush`, its answer unchanged) now
+walks each stroke segment by segment into a scratch map too, instead of the
+stroke's whole box against every segment: an 80-point diagonal walked 56
+million distances and walks 5 million. Measured in Node at the 1024 map,
+per pointer move: a diagonal stroke 2 195 ms → 4 ms; over five earlier
+strokes 5 452 ms → 4 ms after a 142 ms first build; the spec holds every
+step of a five-stroke drag (erasers, dabs, an undo, another frame, a
+released state) to `rasteriseBrush` bit for bit. The working arrays weigh
+8.4 MB at 1024, so `makeLayerPassCache` keeps them on ONE state — the stroke
+being painted (`liveBrush`); stepping another layer, part or overlay
+releases them (`releaseBrushWorking`), and that one's next step is a whole
+build, today's cost once. The overlay of a layer that does not draw yet (a
+fresh painted mask, its sliders at zero) keeps a state of its own, having no
+held entry to borrow from. **Rule**: a raster's bytes are the state's and
+are rewritten by its next step — a consumer that keeps them past that
+copies them (the GPU upload is a copy; nothing else keeps them today).
+
 ## A raster's `null` and `undefined` are two answers (2026-09-28)
 
 `makeLayerPass` reads its `raster` (and each of `partRasters`) as `undefined` =

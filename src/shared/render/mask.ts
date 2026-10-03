@@ -499,25 +499,38 @@ export function coverageAt(
   px: number,
   py: number,
 ): number {
-  const r = Math.max(radius, 1e-6);
   if (points.length === 0) return 0;
-  let best: number;
-  if (points.length === 1) {
-    best = Math.hypot(points[0][0] - px, points[0][1] - py);
-  } else {
-    best = Infinity;
-    for (let i = 1; i < points.length; i += 1) {
-      const d = distanceToSegment(px, py, points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
-      if (d < best) best = d;
-      // Nothing beyond here can be closer than the spine itself.
-      if (best === 0) break;
-    }
+  return coverageOfDistance(distanceToStroke(points, px, py), radius, hardness);
+}
+
+/**
+ * The distance from a centred point to a stroke's spine: to its one point
+ * for a dab, else the nearest of its segments. Exported apart from
+ * `coverageAt` because the incremental raster (`brush-raster.ts`) keeps the
+ * MIN of these per texel as a stroke grows — a min over the same numbers is
+ * exact, where a max over coverages would be exact only up to an ulp.
+ */
+export function distanceToStroke(points: readonly (readonly [number, number])[], px: number, py: number): number {
+  if (points.length === 0) return Infinity;
+  if (points.length === 1) return Math.hypot(points[0][0] - px, points[0][1] - py);
+  let best = Infinity;
+  for (let i = 1; i < points.length; i += 1) {
+    const d = distanceToSegment(px, py, points[i - 1][0], points[i - 1][1], points[i][0], points[i][1]);
+    if (d < best) best = d;
+    // Nothing beyond here can be closer than the spine itself.
+    if (best === 0) break;
   }
-  if (best >= r) return 0;
+  return best;
+}
+
+/** The brush's falloff, from the distance `distanceToStroke` measured. */
+export function coverageOfDistance(distance: number, radius: number, hardness: number): number {
+  const r = Math.max(radius, 1e-6);
+  if (distance >= r) return 0;
   // The solid core, as a fraction of the radius. Capped below 1 so even the
   // hardest brush keeps one soft hair and does not draw a jagged edge.
   const core = clamp(hardness, 0, 1) * 0.95;
-  return smoothStep01((1 - best / r) / (1 - core));
+  return smoothStep01((1 - distance / r) / (1 - core));
 }
 
 /** The same, from the stroke itself — for a spec, or a one-off question. */
