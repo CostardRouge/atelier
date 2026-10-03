@@ -59,6 +59,11 @@ export interface DevelopClipVerbs {
   canPaste: boolean;
   pasteTitle: string;
   onPaste: () => VerbReturn;
+  /**
+   * Whether a paste lands on the picture ON SCREEN (false when it goes to a
+   * selection that leaves it out): only then does the stage echo it.
+   */
+  pasteLandsHere?: boolean;
   /** What a paste carries, as toggles — the ▾ beside the paste glyph. */
   pasteMenu: readonly OverflowItem[];
 }
@@ -74,6 +79,7 @@ export function DevelopActionsGroup({
   clip,
   verbs,
   onOutcome,
+  echo = null,
   children,
 }: {
   draft: DevelopSettings;
@@ -99,6 +105,8 @@ export function DevelopActionsGroup({
    * twice is said once.
    */
   onOutcome?: (outcome: VerbOutcome) => void;
+  /** The task scope of the picture on the stage: a paste or a reset echoes on its edge (C4). */
+  echo?: string | null;
   /** The host's own verbs, past a hairline. */
   children?: ReactNode;
 }) {
@@ -159,13 +167,16 @@ export function DevelopActionsGroup({
         onClick={() =>
           pasteRefusal
             ? paste.refuse(pasteRefusal)
-            : paste.run(() => {
-                if (clip) return clip.onPaste();
-                const pasted = pasteDevelop();
-                if (!pasted) return false;
-                onReplace(pasted);
-                return told('pasted');
-              })
+            : paste.run(
+                () => {
+                  if (clip) return clip.onPaste();
+                  const pasted = pasteDevelop();
+                  if (!pasted) return false;
+                  onReplace(pasted);
+                  return told('pasted');
+                },
+                { echo: clip?.pasteLandsHere === false ? null : echo },
+              )
         }
       >
         {Icons.paste}
@@ -190,10 +201,13 @@ export function DevelopActionsGroup({
         onClick={() =>
           resetRefusal
             ? reset.refuse(resetRefusal)
-            : reset.run(() => {
-                onReplace({ ...DEFAULT_DEVELOP });
-                return told('reset — ⌘Z brings it back');
-              })
+            : reset.run(
+                () => {
+                  onReplace({ ...DEFAULT_DEVELOP });
+                  return told('reset — ⌘Z brings it back');
+                },
+                { echo },
+              )
         }
       >
         {Icons.reset}
@@ -214,10 +228,13 @@ export function DevelopClipboardActions({
   draft,
   asShot,
   onReplace,
+  echo = null,
 }: {
   draft: DevelopSettings;
   asShot: boolean;
   onReplace: (next: DevelopSettings) => void;
+  /** The task scope of the sheet's picture: a paste or As shot echoes on its edge (C4). */
+  echo?: string | null;
 }) {
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
   // The modal's three links live their verbs like the tool's glyphs (C2): in
@@ -252,6 +269,7 @@ export function DevelopClipboardActions({
           return 'pasted';
         }}
         onOutcome={say}
+        echo={echo}
         refusal={canPaste ? null : 'nothing copied yet — copy a corrected picture first'}
         className={`${developLinkClass} ${VERB_INK} whitespace-nowrap`}
         title={canPaste ? 'Replace these numbers with the copied ones' : 'Nothing copied yet'}
@@ -264,6 +282,7 @@ export function DevelopClipboardActions({
           return 'as shot';
         }}
         onOutcome={say}
+        echo={echo}
         refusal={asShot ? 'already as shot' : null}
         className={`${developLinkClass} ${VERB_INK} whitespace-nowrap`}
       >

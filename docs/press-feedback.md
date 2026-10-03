@@ -172,3 +172,14 @@ puts the word to the LEFT of the glyph, the side the hand does not cover.
   as it styles `disabled:`. Driven headless at 1180 and 390 px in a real roll
   and on the sheet mounted alone: a tap on a grey copy glyph shows – and
   «nothing to copy — this picture is as shot» beside it, inside the screen.
+- **C4 · the echo on the target.** A task can be an ECHO (`tasks.md`): drawn
+  on its media's edge at once, never in the pill. `useVerb().run(work,
+  { echo })` starts one with the press — Develop's paste (only when it lands
+  on the picture on screen, `pasteLandsHere`), reset and Auto switches; the
+  Trips / Studio sheet's Paste, As shot and Auto on the sheet's picture.
+  `RollBand` echoes what the stage cannot: the picture the clipboard holds
+  wears the copy mark while it is held (`heldId`), and the cells a paste, an
+  Apply to (develop, sections, crop, look) just wrote tick for 900 ms
+  (`written`, `animate-verb-tick`). Driven headless: the copied picture's cell
+  marked, a paste drawing the stage's hairline 79 ms after the tap and the
+  written cell's tick, the masthead's pill silent throughout.

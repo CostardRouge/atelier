@@ -66,6 +66,7 @@ export default function AutoSwitch({
   hint,
   disabled,
   instant = false,
+  echo = null,
   onClick,
   children,
 }: {
@@ -82,6 +83,8 @@ export default function AutoSwitch({
    * (`useVerb`): down while that runs, ✓ when the picture has caught up.
    */
   instant?: boolean;
+  /** The task scope of the picture it re-renders: its edge echoes the work (C4). */
+  echo?: string | null;
   /** A promise keeps the verb down until it settles (a model asked). */
   onClick: () => void | Promise<unknown>;
   children: ReactNode;
@@ -95,7 +98,7 @@ export default function AutoSwitch({
       disabled={disabled}
       title={armed ? undefined : state === 'off' ? hint : AUTO_SWITCH_TITLE[state]}
       {...verbAttrs(verb.phase)}
-      onClick={() => (instant || armed ? void onClick() : verb.run(async () => void (await onClick())))}
+      onClick={() => (instant || armed ? void onClick() : verb.run(async () => void (await onClick()), { echo }))}
     >
       {!armed && <Dot state={state} />}
       {children}

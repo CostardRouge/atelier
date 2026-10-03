@@ -32,6 +32,14 @@ export interface Task {
   scope: string | null;
   /** Present only where the work can really stop. Never drawn otherwise. */
   cancel: (() => void) | null;
+  /**
+   * An ECHO (`docs/press-feedback.md`, C4): work the person caused THIS
+   * instant on a media in front of them — a paste re-rendering the picture.
+   * Its media's edge draws it at once, without the `SHOW_AFTER_MS` wait (the
+   * wait is for what nobody asked for), and the masthead's pill never lists
+   * it: a second of re-rendering is the picture's news, not a task to list.
+   */
+  echo: boolean;
   startedAt: number;
 }
 
@@ -41,6 +49,8 @@ export interface TaskInit {
   progress?: number | null;
   detail?: string | null;
   cancel?: (() => void) | null;
+  /** Drawn on its media's edge at once, never in the pill (`Task.echo`). */
+  echo?: boolean;
 }
 
 export interface TaskPatch {
@@ -86,6 +96,7 @@ export function startTask(init: TaskInit, now: number = Date.now()): TaskHandle 
     detail: init.detail ?? null,
     scope: init.scope ?? null,
     cancel: init.cancel ?? null,
+    echo: init.echo ?? false,
     startedAt: now,
   });
   changed();
@@ -146,15 +157,24 @@ export function clearTasks(): void {
 
 // --- what a surface draws, pure ----------------------------------------------
 
-/** The tasks old enough to be drawn — a bar that flashes on every fetch is noise. */
+/**
+ * The tasks old enough to be drawn — a bar that flashes on every fetch is
+ * noise — and every ECHO at once, since the person just asked for it.
+ */
 export function visibleTasks(all: readonly Task[], now: number, showAfter: number = SHOW_AFTER_MS): Task[] {
-  return all.filter((t) => now - t.startedAt >= showAfter);
+  return all.filter((t) => t.echo || now - t.startedAt >= showAfter);
+}
+
+/** What the masthead's pill lists: never an echo, which is its media's news alone. */
+export function pillTasks(all: readonly Task[]): Task[] {
+  return all.filter((t) => !t.echo);
 }
 
 /** Milliseconds until the youngest hidden task becomes visible, or null when none is hidden. */
 export function nextReveal(all: readonly Task[], now: number, showAfter: number = SHOW_AFTER_MS): number | null {
   let wait: number | null = null;
   for (const t of all) {
+    if (t.echo) continue;
     const left = showAfter - (now - t.startedAt);
     if (left > 0 && (wait === null || left < wait)) wait = left;
   }

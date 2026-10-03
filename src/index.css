@@ -95,6 +95,9 @@
   /* A working verb's hairline arrives only once the verb has lasted
      `VERB_WAIT_MS` (80 ms, `shared/ui/verb.ts`): a quicker one never blinks it. */
   --animate-verb-wait: verb-wait 160ms ease-out 80ms both;
+  /* A cell a verb just wrote ticks (`RollBand`): in, held, out, in the
+     verb's own `VERB_DONE_MS` (900 ms, `shared/ui/verb.ts`). */
+  --animate-verb-tick: verb-tick 900ms ease-out both;
 }
 
 /* The DARK theme: Studio Papier at night — warm ink instead of warm paper,
@@ -188,6 +191,22 @@ html[data-surface='darkroom'] {
 
 /* A sliver sweeping the width, twice as fast at the ends as in the middle —
    an indeterminate bar, for a load whose length nothing can know. */
+@keyframes verb-tick {
+  0% {
+    opacity: 0;
+    transform: scale(0.8);
+  }
+  15%,
+  75% {
+    opacity: 1;
+    transform: scale(1);
+  }
+  100% {
+    opacity: 0;
+    transform: scale(1);
+  }
+}
+
 @keyframes verb-wait {
   from {
     opacity: 0;

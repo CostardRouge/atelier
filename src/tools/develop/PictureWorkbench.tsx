@@ -1530,8 +1530,11 @@ export default function PictureWorkbench({
     draft.setDraft(pasted);
     return 'pasted';
   };
-  const clipVerbs = useRef({ copy: copyVerb, paste: pasteVerb, pasteNow, canPaste: clipboard.canPaste });
-  clipVerbs.current = { copy: copyVerb, paste: pasteVerb, pasteNow, canPaste: clipboard.canPaste };
+  // A paste that lands on the picture on screen ECHOES on the stage's edge
+  // at once (C4); one that goes to a selection leaving it out does not.
+  const pasteEcho = clipboard.pasteLandsHere === false ? null : taskScope;
+  const clipVerbs = useRef({ copy: copyVerb, paste: pasteVerb, pasteNow, pasteEcho, canPaste: clipboard.canPaste });
+  clipVerbs.current = { copy: copyVerb, paste: pasteVerb, pasteNow, pasteEcho, canPaste: clipboard.canPaste };
 
   // --- keys --------------------------------------------------------------------
   const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
@@ -1607,7 +1610,7 @@ export default function PictureWorkbench({
           // Nothing held anywhere: the key is not ours.
           if (!clipVerbs.current.canPaste) return;
           e.preventDefault();
-          clipVerbs.current.paste.run(clipVerbs.current.pasteNow);
+          clipVerbs.current.paste.run(clipVerbs.current.pasteNow, { echo: clipVerbs.current.pasteEcho });
           return;
         }
         case 'help':
@@ -2192,6 +2195,7 @@ export default function PictureWorkbench({
             }}
             verbs={{ copy: copyVerb, paste: pasteVerb }}
             onOutcome={sayClip}
+            echo={taskScope}
           >
             {!cropping && (
               <IconButton
@@ -2415,6 +2419,7 @@ export default function PictureWorkbench({
                 auto={auto}
                 picking={picture.picking}
                 onPicking={picture.setPicking}
+                echo={taskScope}
               />
               {wantsRaw && rawWhite && (
                 <WhiteBalancePanel

@@ -186,3 +186,19 @@ tool's strip wears; `shared/ui/RunLockNotice.tsx` is the sticky line over a
 locked Export tab (`LockSections`), `runClock` the time both say. **How to apply**: a new tool with a multi-file export
 drives the model through one `say(phase, words, ratio)` feeding the bar, the
 task pill and its status line alike, and never draws a fourth kind of bar.
+
+## An ECHO: work the person just caused, drawn at once on its media (2026-10-03)
+
+**Decision** (`docs/press-feedback.md` C4, his «go with the recommendations»).
+`startTask({ …, echo: true })` marks work the person caused THIS instant on a
+media in front of them — a paste or a reset re-rendering the picture, an Auto
+measuring it. `visibleTasks` draws an echo at once (the 400 ms wait is for
+what nobody asked for), `nextReveal` ignores it, and `pillTasks` keeps it out
+of the masthead's pill: a second of re-rendering is the picture's news, not a
+task to list. `useVerb().run(work, { echo: scope })` starts one with the press
+and ends it when the verb settles; the Develop stage, the Auto switches and
+the Trips / Studio sheet (whose viewport now takes `fileIdentity(file)` as
+its scope) pass it. **How to apply**: an echo is never a long or cancellable
+job — those stay ordinary tasks with their wait and their pill; a write that
+lands OFF the stage (a paste onto a selection) echoes on what it wrote
+instead (`RollBand`'s `written` tick), never on a stage that does not change.

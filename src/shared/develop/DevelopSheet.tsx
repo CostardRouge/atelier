@@ -4,6 +4,7 @@ import { describeKeyTarget, targetOwnsSpace } from '../media/transport-keys';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { useIsCompact } from '../ui/use-layout-mode';
+import { fileIdentity } from '../library/assets';
 import { useLocalFlag } from '../ui/use-local-flag';
 import { usePixelView } from '../ui/use-pixel-view';
 import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
@@ -127,6 +128,9 @@ export default function DevelopSheet({
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
   const compact = useIsCompact();
+  // The picture's task scope: its edge draws what is happening to it — a
+  // verb's re-render, at once (`docs/press-feedback.md` C4), as in the tool.
+  const scope = file ? fileIdentity(file) : null;
   // The clipping view and the readout ride the shared strip: seeing what has
   // clipped is a way of looking, not a panel (§4.2).
   const [clipping, setClipping] = useState(false);
@@ -221,7 +225,7 @@ export default function DevelopSheet({
           <div className={compact ? 'basis-full order-last flex items-center gap-2.5 min-w-0' : 'contents'}>
             {chip && <span className={developPillClass}>{chip}</span>}
             <span className="flex-1" />
-            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} />
+            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} echo={scope} />
             {/* The compare as a switch, the Develop tool's `A/B` with the
                 Studio's colours — one wipe control across the suite. Kept at
                 the zoom pill's height, in the row a phone wraps to. */}
@@ -288,6 +292,7 @@ export default function DevelopSheet({
           <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 max-[820px]:flex-none">
             <DevelopViewport
               picture={picture}
+              scope={scope}
               hasFile={Boolean(file)}
               emptyText={emptyText}
               pixelView={pixelView}
@@ -324,6 +329,7 @@ export default function DevelopSheet({
               auto={auto}
               picking={picture.picking}
               onPicking={picture.setPicking}
+              echo={scope}
             />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
             <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />

@@ -1,4 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { startTask } from '../tasks/tasks';
 import {
   VERB_DONE_MS,
   VERB_SETTLE_MAX_MS,
@@ -15,10 +16,17 @@ export interface Verb {
   /**
    * Runs the verb: the button goes down and stays down while `work` runs and
    * the picture catches up, then says ✓ or –. Ignored while it already runs.
+   * `echo` names the media the work changes in front of the person (a task
+   * scope): its edge draws a hairline from the press to the end (`Task.echo`).
    */
-  run: (work: () => VerbReturn | Promise<VerbReturn>) => void;
+  run: (work: () => VerbReturn | Promise<VerbReturn>, options?: VerbRunOptions) => void;
   /** The verb was refused before it ran (a greyed glyph tapped): – and why. */
   refuse: (why: string) => void;
+}
+
+export interface VerbRunOptions {
+  /** The task scope of the media this verb re-renders — its edge echoes the work at once. */
+  echo?: string | null;
 }
 
 /** One frame painted: the state set before it is on screen. */
@@ -100,11 +108,14 @@ export function useVerb(onOutcome?: (outcome: VerbOutcome) => void): Verb {
   }, []);
 
   const run = useCallback(
-    (work: () => VerbReturn | Promise<VerbReturn>) => {
+    (work: () => VerbReturn | Promise<VerbReturn>, options?: VerbRunOptions) => {
       if (running.current) return;
       running.current = true;
       window.clearTimeout(timer.current);
       setPhase('working');
+      // The echo starts with the press: the media in front of the person says
+      // it is being worked on before the work has even begun (C4).
+      const echo = options?.echo ? startTask({ label: 'Updating the picture', scope: options.echo, echo: true }) : null;
       void (async () => {
         let outcome: VerbOutcome;
         try {
@@ -114,6 +125,7 @@ export function useVerb(onOutcome?: (outcome: VerbOutcome) => void): Verb {
         } catch (error) {
           outcome = { ok: false, word: wordOf(error) };
         }
+        echo?.done();
         end(outcome);
       })();
     },

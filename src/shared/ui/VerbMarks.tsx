@@ -79,6 +79,8 @@ export interface VerbButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
    * shows one. The recipe styles `aria-disabled:`.
    */
   refusal?: string | null;
+  /** The task scope of a media the verb re-renders: its edge echoes the work (`useVerb`). */
+  echo?: string | null;
   children?: ReactNode;
 }
 
@@ -86,7 +88,7 @@ export interface VerbButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
  * A raw `<button>` that is a verb: for a recipe that is a class string. It
  * owns its life (`useVerb`) unless the host hands one in.
  */
-export function VerbButton({ onRun, onOutcome, verb, glyph, refusal, className = '', children, type = 'button', ...rest }: VerbButtonProps) {
+export function VerbButton({ onRun, onOutcome, verb, glyph, refusal, echo, className = '', children, type = 'button', ...rest }: VerbButtonProps) {
   const own = useVerb(onOutcome);
   const v = verb ?? own;
   return (
@@ -96,7 +98,7 @@ export function VerbButton({ onRun, onOutcome, verb, glyph, refusal, className =
       {...verbAttrs(v.phase)}
       aria-disabled={refusal ? true : undefined}
       className={`relative ${VERB_SHAPE} ${className}`}
-      onClick={() => (refusal ? v.refuse(refusal) : v.run(onRun))}
+      onClick={() => (refusal ? v.refuse(refusal) : v.run(onRun, { echo }))}
     >
       {glyph !== undefined && verbGlyph(v.phase, glyph)}
       {children}
