@@ -1,9 +1,12 @@
 # Feedback on a touch screen, measured, and six faces for Develop's verbs
 
-**Status: a proposal, nothing built (2026-10-03).** The lab, a Develop mock you
-press with the six faces and a timeline measuring what the finger saw:
-<https://claude.ai/artifact/2Ew4j2xFPm1xa7ceRxGxa8>. §1 is fact, read in `main`
-26bf5de; §2–§4 are the proposal; §5 is his. Read it before touching
+**Status: he chose the recommendations the same day (2026-10-03, *«commence
+l'implémentation avec les recommandations et n'oublie pas d'appliquer à peu
+près la même chose sur Trips et Studio»*): E, and §5 answered by its own
+recommendations. Being built, commit by commit — §6 says what is in.** The lab,
+a Develop mock you press with the six faces and a timeline measuring what the
+finger saw: <https://claude.ai/artifact/2Ew4j2xFPm1xa7ceRxGxa8>. §1 is fact,
+read in `main` 26bf5de; §2–§4 are the proposal; §5 his answers; §6 the build. Read it before touching
 `Button.tsx`, `IconButton.tsx`, `Segmented.tsx`, `DevelopActionsGroup`
 (`shared/develop/DevelopSections.tsx`) or any verb that takes time.
 
@@ -115,12 +118,24 @@ puts the word to the LEFT of the glyph, the side the hand does not cover.
 - **Ignore reduced motion.** Under `prefers-reduced-motion` the sweeps become a
   still bar, the ripple goes, the ring stops turning.
 
-## 5. His questions
+## 5. His questions, answered by the recommendations (2026-10-03)
 
-1. Which face, or which mix (the lab's «Composer» gives each axis)?
-2. Does a 1 px sink on PRESS respect «nothing moves under the pointer»? Read
-   here as yes.
-3. The stage's hairline at once, without the 400 ms wait, when he asked for
-   the render?
-4. 34 px glyphs under a finger on a tablet, though the well grows by about
-   48 px?
+1. Which face? **E**, in Develop, and about the same in Trips and the Studio.
+2. Does a 1 px sink on PRESS respect «nothing moves under the pointer»?
+   **Yes** — that rule is about a hover.
+3. The stage's hairline at once when he asked for the render? **Yes.**
+4. 34 px glyphs under a finger on a tablet? **Yes.**
+
+## 6. What is built
+
+- **C1 · the shared press.** `shared/ui/press.ts` (the hold, `PRESS_LOOK`,
+  tested) and `press-dom.ts` (one capture listener from `main.tsx` setting
+  `data-pressed` on the control under the pointer, held 120 ms after a
+  finger's lift, topped up to 120 ms for a quick click, dropped at once on a
+  `pointercancel`, flashed for a keyboard activation). Styled by `Button` and
+  `IconButton` (every variant has a pressed ground), `Segmented`, a menu row,
+  the Develop well's own verbs and the sheet's `developButtonClass` /
+  `developLinkClass` — so Develop, Trips and the Studio all press the same.
+  `active:scale-[0.98]` is gone from the recipe. Driven headless with a CDP
+  touch on a real `Button`: `translate: 0px 1px` and the inset shade while
+  down, still there 60 ms after the lift, gone by 210 ms.

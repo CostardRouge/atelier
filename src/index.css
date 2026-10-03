@@ -82,6 +82,10 @@
 
   --shadow-paper: 0 18px 40px -28px rgba(43, 33, 18, 0.45);
   --shadow-paper-soft: 0 10px 30px -24px rgba(43, 33, 18, 0.4);
+  /* A control pressed (`data-pressed`, `shared/ui/press.ts`): the key going
+     down — an inset shade under its top edge, redefined where the ground is
+     dark, where a light shade would vanish. */
+  --shadow-press: inset 0 1.5px 2.5px rgba(27, 24, 19, 0.22);
 
   --ease-paper: cubic-bezier(0.16, 1, 0.3, 1);
 
@@ -137,6 +141,7 @@ html[data-theme='dark'] {
   --color-info-line: #2b3d52;
   --shadow-paper: 0 18px 40px -28px rgba(0, 0, 0, 0.85);
   --shadow-paper-soft: 0 10px 30px -24px rgba(0, 0, 0, 0.75);
+  --shadow-press: inset 0 1.5px 3px rgba(0, 0, 0, 0.6);
 }
 
 /* The DARKROOM: the same tokens, neutral, under a grading screen.
@@ -175,6 +180,7 @@ html[data-surface='darkroom'] {
   --color-info-line: rgba(143, 180, 214, 0.35);
   --shadow-paper: 0 18px 40px -28px rgba(0, 0, 0, 0.8);
   --shadow-paper-soft: 0 10px 30px -24px rgba(0, 0, 0, 0.7);
+  --shadow-press: inset 0 1.5px 3px rgba(0, 0, 0, 0.65);
 }
 
 /* A sliver sweeping the width, twice as fast at the ends as in the middle —

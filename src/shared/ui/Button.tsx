@@ -16,15 +16,18 @@
  */
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
+import { PRESS_LOOK } from './press';
 
 export type ButtonVariant = 'primary' | 'default' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
 
+// Pressed is `PRESS_LOOK` (`press.ts`) — it replaced `active:scale-[0.98]`,
+// a quarter of a pixel a side that a finger never saw.
 const BASE =
   'inline-flex items-center justify-center shrink-0 whitespace-nowrap font-sans font-medium ' +
   'rounded-control border cursor-pointer select-none ' +
-  'transition-[background-color,border-color,color,transform,box-shadow] duration-150 ease-paper ' +
-  'active:scale-[0.98] disabled:opacity-45 disabled:pointer-events-none ' +
+  'transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ' +
+  `${PRESS_LOOK} disabled:opacity-45 disabled:pointer-events-none ` +
   'focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent';
 
 const SIZES: Record<ButtonSize, string> = {
@@ -43,17 +46,24 @@ const PADDINGS: Record<ButtonSize, string> = {
   lg: 'px-4',
 };
 
+// Each variant's PRESSED ground too: under a finger there is no hover
+// (Tailwind v4 draws `hover:` only where the device can hover), so the press
+// is the only state a touch screen ever shows — the primary takes the accent
+// a mouse sees on hover.
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     'border-ink bg-ink text-paper font-semibold shadow-[0_2px_10px_-4px_rgba(27,24,19,0.4)] ' +
-    'hover:bg-accent hover:border-accent',
+    'hover:bg-accent hover:border-accent data-pressed:bg-accent data-pressed:border-accent',
   default:
     'border-line-strong bg-surface text-ink shadow-[0_1px_1.5px_rgba(27,24,19,0.04)] ' +
-    'hover:bg-paper-2 hover:border-muted',
-  ghost: 'border-transparent bg-transparent text-ink-soft hover:bg-paper-2 hover:text-ink',
+    'hover:bg-paper-2 hover:border-muted data-pressed:bg-paper-2 data-pressed:border-muted',
+  ghost:
+    'border-transparent bg-transparent text-ink-soft hover:bg-paper-2 hover:text-ink ' +
+    'data-pressed:bg-paper-2 data-pressed:text-ink',
   danger:
     'border-line-strong bg-surface text-danger ' +
-    'hover:bg-danger-wash hover:border-danger-line hover:text-danger-ink',
+    'hover:bg-danger-wash hover:border-danger-line hover:text-danger-ink ' +
+    'data-pressed:bg-danger-wash data-pressed:border-danger-line data-pressed:text-danger-ink',
 };
 
 /** The whole recipe as one string, for a control that cannot be a `<button>`. */

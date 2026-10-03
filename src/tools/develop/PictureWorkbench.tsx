@@ -83,6 +83,7 @@ import {
 import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
+import { PRESS_LOOK } from '../../shared/ui/press';
 import { MASK_VIEW_LABELS, nextMaskView, shownMaskView, type MaskView } from './mask-view';
 import type { BrushRaster } from '../../shared/render/brush-raster';
 import type { MaskFlash } from '../../shared/develop/layer-render';
@@ -1978,13 +1979,16 @@ export default function PictureWorkbench({
   const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
   /** A layer is open on the Layers tab: there is a mask to show. */
   const maskOpen = tab === 'layers' && selectedLayer !== null && !clip;
+  // Both press like `IconButton` (`PRESS_LOOK`): they sit in its well.
+  const verbPress =
+    `transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2`;
   const abPill =
     `${verbHeight} px-2 flex-none inline-flex items-center justify-center rounded-control border ` +
-    'font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors';
+    `font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer ${verbPress}`;
   /** The `?`, square like the glyphs it sits beside rather than a pill of its own. */
   const helpVerb =
     `${verbHeight} ${compact ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
-    'rounded-control border font-mono text-xs cursor-pointer transition-colors';
+    `rounded-control border font-mono text-xs cursor-pointer ${verbPress}`;
   /** The wipe is suspended, and the pill says so rather than claiming to be on. */
   const abHeld = compareOn && (picture.painting || picture.picking);
 
