@@ -56,6 +56,14 @@ export default function App() {
   const tool = sourcesPath ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
 
+  // The tab's title names the screen: a browser's tab strip, its history and
+  // a screen reader's "page changed" all read it, and it never changed before
+  // (WCAG 2.4.2, the 2026-10-02 audit). The document's own name is the
+  // tool's to add, if it ever does.
+  useEffect(() => {
+    document.title = tool ? `${tool.label} — Atelier` : sourcesPath ? 'Sources — Atelier' : 'Atelier — a studio for your captures';
+  }, [tool, sourcesPath]);
+
   // The active view, guarded so a single tool's crash shows a recoverable
   // panel instead of blanking the suite. Keyed by route, so navigating to
   // another tool clears a prior error and mounts the next one fresh.
