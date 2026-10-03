@@ -1223,6 +1223,23 @@ export function useDevelopPicture({
   // that comes to rest on another frame (`restedFrame`) is measured again.
   const [histogram, setHistogram] = useState<Histogram | null>(null);
   const sampleRef = useRef<HTMLCanvasElement | null>(null);
+  // Measured through a grader of ITS OWN at the sample's size, never the
+  // stage's: the stage draws with the looking passes (a mask's wash, a blink,
+  // the clipping) and this asks without them, so measuring through the
+  // stage's slot swapped its passes twice per slider step and rendered the
+  // whole stage twice — and with nothing shown, the second render of an
+  // unchanged picture is what makes the held grader copy the stage to the
+  // CPU (`held-grader.ts`), every step (the 2026-10-02 audit, PERF-02). A
+  // 160 px render instead, borrowing the stage cache's cubes like the
+  // thumbnails' slot; the kernels scale with it, which at this size is noise.
+  const histSlot = useRef<GraderSlot | null>(null);
+  useEffect(
+    () => () => {
+      histSlot.current?.current?.grader.dispose();
+      histSlot.current = null;
+    },
+    [],
+  );
   useEffect(() => {
     if (!source || source.width <= 0 || source.height <= 0) {
       setHistogram(null);
@@ -1231,9 +1248,9 @@ export function useDevelopPicture({
     const measure = () => {
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
-      const k = Math.min(1, HISTOGRAM_SAMPLE_EDGE / Math.max(source.width, source.height));
-      const w = Math.max(1, Math.round(source.width * k));
-      const h = Math.max(1, Math.round(source.height * k));
+      const fitted = fitRenderSize(source.width, source.height, HISTOGRAM_SAMPLE_EDGE);
+      const w = Math.max(1, fitted.width);
+      const h = Math.max(1, fitted.height);
       if (!sampleRef.current) sampleRef.current = document.createElement('canvas');
       const sample = sampleRef.current;
       if (sample.width !== w || sample.height !== h) {
@@ -1243,11 +1260,34 @@ export function useDevelopPicture({
       const ctx = sample.getContext('2d', { willReadFrequently: true });
       if (!ctx) return;
       try {
-        const grader = graderFor(cube, source, geometry, stack, null, subjectMasks, detail, pixelScale, repair, film, gainField);
+        if (!histSlot.current) histSlot.current = { cache: makeLayerPassCache(stageSlot.current.cache), current: null };
+        const sized: BadgeSource = { ...source, width: w, height: h };
+        // The picture as delivered — the post-crop vignette included, which
+        // the stage's call passed and this one used to leave out.
+        const grader = graderFrom(
+          histSlot.current,
+          cube,
+          sized,
+          geometry,
+          stack,
+          null,
+          subjectMasks,
+          detail,
+          pixelScale * (w / source.width),
+          repair,
+          film,
+          gainField,
+          null,
+          false,
+          false,
+          postVignette,
+        );
         const graded = grader
           ? grader.render(source.gpu ?? source.image, video ? video.currentTime : undefined)
           : source.image;
-        ctx.drawImage(graded, 0, 0, source.width, source.height, 0, 0, w, h);
+        const gw = grader ? w : source.width;
+        const gh = grader ? h : source.height;
+        ctx.drawImage(graded, 0, 0, gw, gh, 0, 0, w, h);
         setHistogram(luminanceHistogram(ctx.getImageData(0, 0, w, h).data));
       } catch {
         // A frame released under us, or a picture the canvas may not read
@@ -1262,7 +1302,7 @@ export function useDevelopPicture({
       cancelAnimationFrame(raf);
       window.clearTimeout(fallback);
     };
-  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, graderFor, video, restedFrame]);
+  }, [source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette, video, restedFrame]);
 
   // The AS-SHOT measurement Auto reads. Keyed on the source alone — no cube,
   // no grader — so it is one read per picture and is unmoved by anything the

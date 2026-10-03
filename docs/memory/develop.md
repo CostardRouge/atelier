@@ -122,6 +122,21 @@ readout over them shows numbers. The view is never remembered past the session
 a PNG with white, black, a red-only clip and a mid grey: every mark where the
 rule says, the readout decoding each, J and the end words toggling.
 
+**The histogram renders through a slot of its OWN** (2026-10-02, the audit's
+PERF-02): `histSlot`, a 160 px grader (`fitRenderSize` to
+`HISTOGRAM_SAMPLE_EDGE`) borrowing the stage cache's cubes like the
+thumbnails' `belowSlot`. Measuring through the stage's slot — asking WITHOUT
+the looking passes the stage draws with (a mask's wash, a blink, the
+clipping) — swapped the stage's passes twice per slider step and rendered
+the whole stage twice; and with nothing shown, the second render of an
+unchanged picture is exactly what makes the held grader copy the stage to
+the CPU every step (`held-grader.ts`) — the 2026-09-22 pass had recorded it
+and left it. The kernels scale with the sample (`pixelScale × 160 / stage`),
+which at this size is noise; the post-crop vignette is passed now, as the
+stage's own call does — it is part of the picture and the histogram had left
+it out. A mechanism, not a timing: the bench's counters cannot tell a 4K
+render from a 160 px one.
+
 ## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
 
 `DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`
