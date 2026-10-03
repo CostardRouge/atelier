@@ -57,12 +57,42 @@ export default function YearMap({ startDate, endDate, days, blocks, span, loupe,
   const [boxRef, width] = useElementWidth<HTMLDivElement>();
   // The press in flight: where it began, and how far into the frame it took hold.
   const press = useRef<{ id: number; x: number; grab: number; dragging: boolean } | null>(null);
-  if (!weeks.length) return null;
 
   // A cell is the box's share of the weeks, 3..7px: at 358px a year is 50
   // columns of 6 (5 + the gutter), which is the band the design measured.
-  const column = width > 0 ? Math.max(4, Math.min(8, Math.floor(width / weeks.length))) : 6;
+  const column = width > 0 && weeks.length ? Math.max(4, Math.min(8, Math.floor(width / weeks.length))) : 6;
   const cell = column - GAP;
+
+  // The band's 350-odd cells, built once per trip and cell size: the frame
+  // over them moves on every scroll frame, and the cells never do. Built
+  // BEFORE the empty-trip return below: a hook after an early return is a
+  // hook React counts on some renders and not others, and the map threw the
+  // moment a trip went from no weeks to some while it was mounted.
+  const grid = useMemo(
+    () => (
+      <div className="flex" style={{ gap: GAP }} aria-hidden="true">
+        {weeks.map((week, w) => (
+          <div key={w} className="flex flex-col" style={{ gap: GAP }}>
+            {week.map((date, row) => (
+              <span
+                key={row}
+                style={{
+                  width: cell,
+                  height: cell,
+                  borderRadius: 1,
+                  background: date ? LEVELS[levels.get(date) ?? 0] : 'transparent',
+                }}
+              />
+            ))}
+          </div>
+        ))}
+      </div>
+    ),
+    [weeks, levels, cell],
+  );
+
+  if (!weeks.length) return null;
+
   const lead = weeks[0].findIndex((d) => d !== null);
   const dayColumn = (date: IsoDate) => {
     const first = weeks[0].find((d) => d !== null);
@@ -120,31 +150,6 @@ export default function YearMap({ startDate, endDate, days, blocks, span, loupe,
     press.current = null;
     if (p.dragging && e.currentTarget.hasPointerCapture(e.pointerId)) e.currentTarget.releasePointerCapture(e.pointerId);
   };
-
-  // The band's 350-odd cells, built once per trip and cell size: the frame
-  // over them moves on every scroll frame, and the cells never do.
-  const grid = useMemo(
-    () => (
-      <div className="flex" style={{ gap: GAP }} aria-hidden="true">
-        {weeks.map((week, w) => (
-          <div key={w} className="flex flex-col" style={{ gap: GAP }}>
-            {week.map((date, row) => (
-              <span
-                key={row}
-                style={{
-                  width: cell,
-                  height: cell,
-                  borderRadius: 1,
-                  background: date ? LEVELS[levels.get(date) ?? 0] : 'transparent',
-                }}
-              />
-            ))}
-          </div>
-        ))}
-      </div>
-    ),
-    [weeks, levels, cell],
-  );
 
   return (
     <div ref={boxRef} className="relative py-1.5" aria-label="The whole trip">

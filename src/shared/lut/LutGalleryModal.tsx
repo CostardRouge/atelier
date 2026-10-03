@@ -514,8 +514,6 @@ export default function LutGalleryModal({
   const showNone =
     allowNone && (!q || 'no look'.includes(q) || 'original'.includes(q) || 'none'.includes(q));
 
-  if (packsOpen) return <LutPackImportModal onClose={() => setPacksOpen(false)} />;
-
   const creditsFor = nodes.find((n) => n.id === credits)?.pack ?? null;
 
   /**
@@ -611,6 +609,12 @@ export default function LutGalleryModal({
       ?.querySelector<HTMLElement>('[aria-pressed="true"]')
       ?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
   }, [open?.id]);
+
+  // After the LAST hook: this return used to sit above the two hooks of the
+  // crumb strip, so opening the import rendered fewer hooks than the gallery
+  // had — React's "rendered fewer hooks than expected", straight into the
+  // error boundary — the moment *Import a pack…* was clicked.
+  if (packsOpen) return <LutPackImportModal onClose={() => setPacksOpen(false)} />;
 
   const filterField = (
     <input

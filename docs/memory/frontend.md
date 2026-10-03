@@ -740,3 +740,25 @@ from the column. And a child placed with `col-start-2` in a grid that has one
 explicit column does not fail: it makes an implicit column and silently
 reshapes the page — hand a column index only under the grid that owns it
 (Develop's focus grid is one column, so the column index is withheld there).
+
+## 2026-10-02 — A hook after an early return is a crash on the render that crosses it; the tab's title names the screen
+
+React counts hooks per render: a `return` above a `useRef`, `useEffect` or
+`useMemo` makes the component render fewer or more hooks when its condition
+flips, and React throws («Rendered fewer hooks than expected»). Found by
+running `eslint-plugin-react-hooks` over `src` from the scratchpad (3
+`rules-of-hooks`, 67 `exhaustive-deps`; the recipe is in `testing.md`): the
+look gallery crashed into the error boundary on *Import a pack…* — its
+return sat above the crumb strip's two hooks, added with the 2026-10-01
+workbench — and `YearMap` would have on a trip going from no weeks to some
+while mounted. **How to apply.** Every hook above the first conditional
+return; a memo that needs a value computed after a guard takes the guard
+INSIDE the computation (`weeks.length ? … : 6`). Adding the plugin to the
+lint is the maintainer's call (`docs/audit-2026-10-02.md`, DX-01).
+
+And `document.title` is written per route in `App.tsx` (`<Tool> — Atelier`,
+`Sources — Atelier`, the home line otherwise): a tab strip, a history entry
+and a screen reader's "page changed" all read it, and it never changed before
+(WCAG 2.4.2). A tool that wants its document's name there adds it; none does
+yet. The focus move onto `<main>` on a route change was left out on purpose:
+it would fight a tool's own first focus.
