@@ -1,5 +1,5 @@
 import { useCallback, useEffect, useRef, useState, type PointerEvent as ReactPointerEvent } from 'react';
-import { cancelTask, overallProgress, pillWord, tasksSentence } from '../tasks/tasks';
+import { cancelTask, overallProgress, pillTasks, pillWord, tasksSentence } from '../tasks/tasks';
 import { useTasks } from '../tasks/use-tasks';
 import { TaskBar } from './TaskEdge';
 
@@ -23,7 +23,8 @@ const HOVER_CLOSE_MS = 160;
  * media's own edge (`TaskEdge`) is the surface a thumb reads there.
  */
 export default function TaskPill({ compact = false }: { compact?: boolean }) {
-  const tasks = useTasks();
+  // An echo is its media's news, drawn on that media's edge alone (`Task.echo`).
+  const tasks = pillTasks(useTasks());
   const [open, setOpen] = useState(false);
   const [offset, setOffset] = useState(0);
   const rootRef = useRef<HTMLDivElement>(null);

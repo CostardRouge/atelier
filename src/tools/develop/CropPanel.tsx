@@ -215,9 +215,8 @@ export default function CropPanel({
             <AutoSwitch
               shape="control"
               state={subjectCrop.busy ? 'off' : subjectState}
-              onClick={() => {
-                if (!switches?.turnOff('subject')) subjectCrop.run();
-              }}
+              // The verb lasts as long as the model takes to answer: its promise.
+              onClick={() => (switches?.turnOff('subject') ? undefined : subjectCrop.run())}
               disabled={(!picture.source && subjectState === 'off') || subjectCrop.busy}
               hint={
                 subjectCrop.named

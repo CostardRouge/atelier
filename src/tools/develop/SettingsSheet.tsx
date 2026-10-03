@@ -9,7 +9,12 @@ import { pictureLabel, type RollPicture } from '../../shared/develop/roll-types'
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
+import { useVerb } from '../../shared/ui/use-verb';
+import type { VerbOutcome } from '../../shared/ui/verb';
 import { setCarriedSections, useCarriedSections } from './carried-sections';
+
+/** How long the sheet stays after a verb's ✓, so the answer is seen before it goes. */
+const CLOSE_AFTER_MS = 450;
 
 /**
  * The one picker for every verb that carries MORE than the develop
@@ -60,10 +65,17 @@ export default function SettingsSheet({
   const toggle = (id: PictureSection) => set(ticked.includes(id) ? ticked.filter((x) => x !== id) : [...ticked, id]);
   const none = ticked.length === 0;
   const pasteFrom = copied;
-  const act = (fn: () => void) => () => {
-    fn();
-    onClose();
+  // Each verb LIVES on its button (`useVerb`, `docs/press-feedback.md` C2):
+  // the sheet stays while it runs — an Apply to many re-bakes each picture —
+  // and closes a beat after its ✓, so the answer is seen before it goes.
+  const closeSoon = (outcome: VerbOutcome) => {
+    if (outcome.ok) window.setTimeout(onClose, CLOSE_AFTER_MS);
   };
+  const pasteVerb = useVerb(closeSoon);
+  const resetVerb = useVerb(closeSoon);
+  const copyVerb = useVerb(closeSoon);
+  const applySelected = useVerb(closeSoon);
+  const applyOthers = useVerb(closeSoon);
 
   return (
     <div
@@ -95,7 +107,7 @@ export default function SettingsSheet({
               Copied from <span className="text-ink">{pictureLabel(pasteFrom.from)}</span>:{' '}
               {pasteFrom.sections.map((id) => PICTURE_SECTIONS.find((s) => s.id === id)?.label).join(', ')}
             </span>
-            <Button size="sm" icon={Icons.paste} onClick={act(onPaste)} title="Paste — these sections onto this picture">
+            <Button size="sm" icon={Icons.paste} phase={pasteVerb.phase} onClick={() => pasteVerb.run(onPaste)} title="Paste — these sections onto this picture">
               Paste
             </Button>
           </div>
@@ -161,22 +173,23 @@ export default function SettingsSheet({
             variant="ghost"
             icon={Icons.reset}
             disabled={none || !ticked.some((id) => edited.has(id))}
-            onClick={act(() => onReset(ticked))}
+            phase={resetVerb.phase}
+            onClick={() => resetVerb.run(() => onReset(ticked))}
             title="Reset — the ticked sections of this picture back to as shot (⌘Z brings them back)"
           >
             Reset
           </Button>
           <span className="flex-1" />
-          <Button size="sm" icon={Icons.copy} disabled={none} onClick={act(() => onCopy(ticked))} title="Copy — hold the ticked sections for another picture, as shot ones included, in this session">
+          <Button size="sm" icon={Icons.copy} disabled={none} phase={copyVerb.phase} onClick={() => copyVerb.run(() => onCopy(ticked))} title="Copy — hold the ticked sections for another picture, as shot ones included, in this session">
             Copy
           </Button>
           {selectedIds.length > 0 && (
-            <Button size="sm" disabled={none} onClick={act(() => onApply(selectedIds, ticked))}>
+            <Button size="sm" disabled={none} phase={applySelected.phase} onClick={() => applySelected.run(() => onApply(selectedIds, ticked))}>
               Apply to {selectedIds.length} selected
             </Button>
           )}
           {otherIds.length > 0 && (
-            <Button size="sm" disabled={none} onClick={act(() => onApply(otherIds, ticked))} title="Every other picture of the roll that is not ignored">
+            <Button size="sm" disabled={none} phase={applyOthers.phase} onClick={() => applyOthers.run(() => onApply(otherIds, ticked))} title="Every other picture of the roll that is not ignored">
               Apply to {otherIds.length} other picture{otherIds.length === 1 ? '' : 's'}
             </Button>
           )}

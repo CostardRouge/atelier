@@ -83,6 +83,11 @@ import {
 import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
+import { PRESS_LOOK, fingerSize } from '../../shared/ui/press';
+import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
+import { useVerb } from '../../shared/ui/use-verb';
+import VerbWord, { useVerbWord } from '../../shared/ui/VerbWord';
+import type { VerbOutcome, VerbReturn } from '../../shared/ui/verb';
 import { MASK_VIEW_LABELS, nextMaskView, shownMaskView, type MaskView } from './mask-view';
 import type { BrushRaster } from '../../shared/render/brush-raster';
 import type { MaskFlash } from '../../shared/develop/layer-render';
@@ -411,10 +416,10 @@ export default function PictureWorkbench({
   onSettings: () => void;
   /** The copy and paste glyphs' state and the paste's ▾ — the editor's, which holds the roll. */
   clipboard: Omit<DevelopClipVerbs, 'onCopy' | 'onPaste'>;
-  /** ⌘C: hold this picture as it stands — `develop` is the draft, a beat ahead of the roll. */
-  onCopy: (develop: DevelopSettings) => void;
-  /** ⌘V: paste what is held onto the selection or this picture. False when no picture is held. */
-  onPaste: () => boolean;
+  /** ⌘C: hold this picture as it stands — `develop` is the draft, a beat ahead of the roll. Says how it went. */
+  onCopy: (develop: DevelopSettings) => VerbReturn;
+  /** ⌘V: paste what is held onto the selection or this picture, and say how it went. Null when no picture is held. */
+  onPaste: () => VerbOutcome | null;
   /** Make a variant of this picture as it stands (item 30); ⌘'. */
   onVariant?: () => void;
   /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
@@ -1509,6 +1514,31 @@ export default function PictureWorkbench({
     return () => window.clearTimeout(t);
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
+  // --- the clipboard's two verbs ------------------------------------------------
+  // Held HERE rather than in the well, so ⌘C and ⌘V light the very glyph a
+  // press would (`useVerb`, `docs/press-feedback.md` C2).
+  // Their WORD is drawn beside the well (`VerbWord`, C3), left of the glyphs —
+  // the side the hand does not cover — where the eye already is.
+  // Whether a finger holds the device: the well's size follows it (C5).
+  const coarse = useCoarsePointer();
+  const [clipWord, sayClip] = useVerbWord();
+  const copyVerb = useVerb(sayClip);
+  const pasteVerb = useVerb(sayClip);
+  /** A paste: the picture held by the roll, else the numbers a Trips or Studio sheet copied. */
+  const pasteNow = (): VerbReturn => {
+    const held = onPaste();
+    if (held) return held;
+    const pasted = pasteDevelop();
+    if (!pasted) return { ok: false, word: 'nothing copied yet' };
+    draft.setDraft(pasted);
+    return 'pasted';
+  };
+  // A paste that lands on the picture on screen ECHOES on the stage's edge
+  // at once (C4); one that goes to a selection leaving it out does not.
+  const pasteEcho = clipboard.pasteLandsHere === false ? null : taskScope;
+  const clipVerbs = useRef({ copy: copyVerb, paste: pasteVerb, pasteNow, pasteEcho, canPaste: clipboard.canPaste });
+  clipVerbs.current = { copy: copyVerb, paste: pasteVerb, pasteNow, pasteEcho, canPaste: clipboard.canPaste };
+
   // --- keys --------------------------------------------------------------------
   const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
   keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
@@ -1561,10 +1591,13 @@ export default function PictureWorkbench({
           if (pic.view.zoomed) pic.view.zoom.reset();
           else pic.view.zoom.zoomIn();
           return;
-        case 'copy':
+        case 'copy': {
           e.preventDefault();
-          callbacks.current.onCopy(d.draft);
+          // The glyph lives the verb a key started, the same as a press (C2).
+          const settings = d.draft;
+          clipVerbs.current.copy.run(() => callbacks.current.onCopy(settings));
           return;
+        }
         case 'mono':
           // Lightroom's V: the treatment flips; the colour mixer is kept either way.
           e.preventDefault();
@@ -1577,16 +1610,10 @@ export default function PictureWorkbench({
           callbacks.current.onVariant();
           return;
         case 'paste': {
-          if (callbacks.current.onPaste()) {
-            e.preventDefault();
-            return;
-          }
-          // No picture held: the numbers a Trips or Studio sheet copied.
-          const pasted = pasteDevelop();
-          if (!pasted) return;
+          // Nothing held anywhere: the key is not ours.
+          if (!clipVerbs.current.canPaste) return;
           e.preventDefault();
-          d.setDraft(pasted);
-          say('pasted');
+          clipVerbs.current.paste.run(clipVerbs.current.pasteNow, { echo: clipVerbs.current.pasteEcho });
           return;
         }
         case 'help':
@@ -1975,16 +2002,22 @@ export default function PictureWorkbench({
    * list's (`frontend.md`). The height is `IconButton`'s to the pixel, so the
    * well reads as one family, and the colours are the Studio's A/B.
    */
-  const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
+  // The well's targets follow the HAND, not the width (C5): an iPad in
+  // landscape is a wide shell under a finger, and it was given 28 px.
+  const touchSized = fingerSize(compact, coarse) === 'md';
+  const verbHeight = touchSized ? 'h-[2.125rem]' : 'h-7';
   /** A layer is open on the Layers tab: there is a mask to show. */
   const maskOpen = tab === 'layers' && selectedLayer !== null && !clip;
+  // Both press like `IconButton` (`PRESS_LOOK`): they sit in its well.
+  const verbPress =
+    `transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2`;
   const abPill =
     `${verbHeight} px-2 flex-none inline-flex items-center justify-center rounded-control border ` +
-    'font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors';
+    `font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer ${verbPress}`;
   /** The `?`, square like the glyphs it sits beside rather than a pill of its own. */
   const helpVerb =
-    `${verbHeight} ${compact ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
-    'rounded-control border font-mono text-xs cursor-pointer transition-colors';
+    `${verbHeight} ${touchSized ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
+    `rounded-control border font-mono text-xs cursor-pointer ${verbPress}`;
   /** The wipe is suspended, and the pill says so rather than claiming to be on. */
   const abHeld = compareOn && (picture.painting || picture.picking);
 
@@ -2148,9 +2181,13 @@ export default function PictureWorkbench({
               While a mask tool holds the pointer the hook has suspended it
               anyway, and the button draws that (dashed, faint) rather than
               lying about a divider nobody can see. */}
+          <span className="relative flex-none inline-flex">
+          {/* Left of the glyphs where the bar has room; on a phone the well
+              starts near the screen's edge, so the word sits above it. */}
+          <VerbWord word={clipWord} side={compact ? 'aboveStart' : 'left'} />
           <DevelopActionsGroup
             className="flex-none"
-            size={compact ? 'md' : 'sm'}
+            size={touchSized ? 'md' : 'sm'}
             clipboard={!cropping}
             draft={draft.draft}
             asShot={draft.asShot}
@@ -2160,20 +2197,17 @@ export default function PictureWorkbench({
               ...clipboard,
               canCopy: clipboard.canCopy || !draft.asShot,
               onCopy: () => onCopy(draft.draft),
-              onPaste: () => {
-                if (onPaste()) return;
-                const pasted = pasteDevelop();
-                if (!pasted) return;
-                draft.setDraft(pasted);
-                tell('pasted');
-              },
+              onPaste: pasteNow,
             }}
+            verbs={{ copy: copyVerb, paste: pasteVerb }}
+            onOutcome={sayClip}
+            echo={taskScope}
           >
             {!cropping && (
               <IconButton
                 label="Apply or reset sections"
                 title="Sections — apply some of this picture to other pictures, or reset them here"
-                size={compact ? 'md' : 'sm'}
+                size={touchSized ? 'md' : 'sm'}
                 onClick={onSettings}
               >
                 {Icons.settings}
@@ -2263,6 +2297,7 @@ export default function PictureWorkbench({
               ?
             </button>
           </DevelopActionsGroup>
+          </span>
           </div>
         </div>
         <DevelopViewport
@@ -2390,6 +2425,7 @@ export default function PictureWorkbench({
                 auto={auto}
                 picking={picture.picking}
                 onPicking={picture.setPicking}
+                echo={taskScope}
               />
               {wantsRaw && rawWhite && (
                 <WhiteBalancePanel

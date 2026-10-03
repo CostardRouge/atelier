@@ -6,6 +6,7 @@ import {
   listTasks,
   nextReveal,
   overallProgress,
+  pillTasks,
   pillWord,
   startTask,
   subscribeTasks,
@@ -96,5 +97,27 @@ describe('what a surface draws', () => {
     startTask({ label: 'Exporting the roll' });
     expect(pillWord(listTasks())).toBe('2 running');
     expect(tasksSentence(listTasks())).toBe('2 things running — Fetching DJI_0101.DNG, Exporting the roll');
+  });
+});
+
+describe('an echo', () => {
+  it('is drawn on its media at once, and never waits to be revealed', () => {
+    startTask({ label: 'Opening a file', scope: 'a' }, 1000);
+    startTask({ label: 'Updating the picture', scope: 'a', echo: true }, 1000);
+    expect(visibleTasks(listTasks(), 1000).map((t) => t.label)).toEqual(['Updating the picture']);
+    expect(nextReveal(listTasks().filter((t) => t.echo), 1000)).toBeNull();
+    expect(nextReveal(listTasks(), 1000)).toBe(SHOW_AFTER_MS);
+  });
+
+  it('is never listed in the masthead pill', () => {
+    startTask({ label: 'Fetching DJI_0202.DNG', scope: 'a' }, 0);
+    startTask({ label: 'Updating the picture', scope: 'a', echo: true }, 0);
+    expect(pillTasks(listTasks()).map((t) => t.label)).toEqual(['Fetching DJI_0202.DNG']);
+    expect(tasksFor('a').length).toBe(2);
+  });
+
+  it('is an ordinary task unless asked', () => {
+    startTask({ label: 'Exporting', scope: 'a' }, 0);
+    expect(listTasks()[0].echo).toBe(false);
   });
 });

@@ -2,6 +2,8 @@ import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
+import { fingerSize } from '../../shared/ui/press';
+import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 
 export interface SelectionVerbs {
   /** How many pictures are marked. */
@@ -66,7 +68,7 @@ export default function SelectionBar({
     { id: 'variants', label: 'A variant of each, as edited', disabled: none, onSelect: verbs.onVariants },
     { id: 'remove', label: `Take ${n === 1 ? 'it' : 'them'} off the roll…`, title: 'The files stay where they are', danger: true, disabled: none, onSelect: verbs.onRemove },
   ];
-  const size = compact ? 'md' : 'sm';
+  const size = fingerSize(compact, useCoarsePointer());
   return (
     <div
       className={`flex items-center gap-1.5 w-full min-w-0 px-1 rounded-control bg-accent-wash ${narrow ? 'flex-wrap py-1' : 'h-full'}`}

@@ -4,11 +4,13 @@ import { describeKeyTarget, targetOwnsSpace } from '../media/transport-keys';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { useIsCompact } from '../ui/use-layout-mode';
+import { fileIdentity } from '../library/assets';
 import { useLocalFlag } from '../ui/use-local-flag';
 import { usePixelView } from '../ui/use-pixel-view';
 import { describeZoomKey, zoomKeyAction } from '../ui/zoom-keys';
 import type { DevelopSettings } from './develop';
 import { developButtonClass, developLegendClass, developPillClass } from './develop-classes';
+import { PRESS_LOOK } from '../ui/press';
 import type { DevelopApplyVerb, DevelopPresets } from './develop-host';
 import { usePresetBookHost } from './use-preset-book';
 import {
@@ -126,6 +128,9 @@ export default function DevelopSheet({
   const [naming, setNaming] = useState(false);
   const [pixelView, setPixelView] = usePixelView();
   const compact = useIsCompact();
+  // The picture's task scope: its edge draws what is happening to it — a
+  // verb's re-render, at once (`docs/press-feedback.md` C4), as in the tool.
+  const scope = file ? fileIdentity(file) : null;
   // The clipping view and the readout ride the shared strip: seeing what has
   // clipped is a way of looking, not a panel (§4.2).
   const [clipping, setClipping] = useState(false);
@@ -220,14 +225,14 @@ export default function DevelopSheet({
           <div className={compact ? 'basis-full order-last flex items-center gap-2.5 min-w-0' : 'contents'}>
             {chip && <span className={developPillClass}>{chip}</span>}
             <span className="flex-1" />
-            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} onTold={tell} />
+            <DevelopClipboardActions draft={draft.draft} asShot={draft.asShot} onReplace={draft.setDraft} echo={scope} />
             {/* The compare as a switch, the Develop tool's `A/B` with the
                 Studio's colours — one wipe control across the suite. Kept at
                 the zoom pill's height, in the row a phone wraps to. */}
             {picture.source && (
               <button
                 type="button"
-                className={`flex-none inline-flex items-center justify-center h-[2.125rem] px-2.5 rounded-full border font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-colors ${
+                className={`flex-none inline-flex items-center justify-center h-[2.125rem] px-2.5 rounded-full border font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${
                   compareHeld
                     ? 'border-line-strong border-dashed bg-paper-2 text-faint'
                     : compareOn
@@ -287,6 +292,7 @@ export default function DevelopSheet({
           <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 max-[820px]:flex-none">
             <DevelopViewport
               picture={picture}
+              scope={scope}
               hasFile={Boolean(file)}
               emptyText={emptyText}
               pixelView={pixelView}
@@ -323,6 +329,7 @@ export default function DevelopSheet({
               auto={auto}
               picking={picture.picking}
               onPicking={picture.setPicking}
+              echo={scope}
             />
             <DevelopSliders value={draft.draft} onChange={draft.set} />
             <DevelopLevelsSection value={draft.draft.levels} onChange={(levels) => draft.patch({ levels })} />
@@ -371,7 +378,7 @@ export default function DevelopSheet({
           <button
             type="button"
             onClick={done}
-            className="px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent"
+            className={`px-4 py-[0.4rem] rounded-full border border-ink bg-ink text-paper text-xs font-semibold cursor-pointer hover:bg-accent hover:border-accent transition-[background-color,border-color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-accent data-pressed:border-accent`}
           >
             Done
             <span className="ml-1.5 font-mono text-3xs opacity-70">↵</span>

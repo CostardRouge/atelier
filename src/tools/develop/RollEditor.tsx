@@ -91,6 +91,8 @@ import { useWinnowConnection } from '../../shared/sources/winnow/use-connection'
 import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
+import { useFingerSize } from '../../shared/ui/use-coarse-pointer';
+import { VERB_DONE_MS, type VerbOutcome } from '../../shared/ui/verb';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
@@ -142,6 +144,8 @@ import RollPicker from './RollPicker';
 
 /** One empty answer, so a memo keyed on it holds. */
 const NO_SIBLINGS: readonly File[] = [];
+/** No cell is ticking: one empty set, so the band's memo holds. */
+const NO_IDS: ReadonlySet<string> = new Set();
 
 /**
  * The file of a Library asset a roll can take (2026-09-30): a photograph's
@@ -184,6 +188,7 @@ const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs —
 export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
+  const finger = useFingerSize();
   // The band's numbers for this shell (`roll-strip.ts`): a phone's and a desktop's differ.
   const stripKind: StripKind = compact ? 'phone' : 'desktop';
   const stripMetrics = STRIP_METRICS[stripKind];
@@ -839,8 +844,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     return verbs;
   }, [openId, visibleSelected, roll.pictures, exportPictures, exportMarks]);
 
+  // The ECHO on the band (`docs/press-feedback.md` C4): the cells a verb
+  // just wrote tick for a moment, so a paste onto a selection — which leaves
+  // the stage as it was — is still seen to have landed.
+  const [written, setWritten] = useState<ReadonlySet<string>>(NO_IDS);
+  const writtenTimer = useRef(0);
+  useEffect(() => () => window.clearTimeout(writtenTimer.current), []);
+  const markWritten = useCallback((ids: readonly string[]) => {
+    window.clearTimeout(writtenTimer.current);
+    setWritten(new Set(ids));
+    writtenTimer.current = window.setTimeout(() => setWritten(NO_IDS), VERB_DONE_MS);
+  }, []);
   const writeDevelopTo = useCallback(
     (targets: readonly string[], develop: DevelopSettings | null, via: JournalVia = 'apply') => {
+      markWritten(targets);
       // The NUMBERS travel, never the material: a base and its metered gain
       // are facts about the one picture they were measured on. A target's
       // own base is kept, so a batch onto a RAW keeps it on the RAW.
@@ -861,7 +878,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         via,
       );
     },
-    [update],
+    [update, markWritten],
   );
   const canPaste = useSyncExternalStore(subscribeDevelopClipboard, hasCopiedDevelop);
   // --- the sections: ⌘C / ⌘V and "apply to others" for any part of a picture
@@ -892,40 +909,45 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
    * section it has something in, with no dialog. The develop numbers also go
    * to the develop clipboard, so a Trips or Studio sheet can paste them.
    */
-  const copyPicture = useCallback((develop: DevelopSettings) => {
+  // Each verb says how it went (`VerbOutcome`): the glyph that ran it shows ✓
+  // or –, and the words are the status line's.
+  const copyPicture = useCallback((develop: DevelopSettings): VerbOutcome => {
     const p = latest.current.pictures.find((x) => x.id === openIdRef.current);
-    if (!p) return;
+    if (!p) return { ok: false, word: 'no picture open' };
     const now = { ...p, develop };
     const sections = copiedSectionsOf(now);
     if (sections.length === 0) {
-      setNotice('nothing to copy — this picture is as shot');
-      return;
+      const word = 'nothing to copy — this picture is as shot';
+      setNotice(word);
+      return { ok: false, word };
     }
     copySettings(now, sections);
     copyDevelop(develop);
     const left = sections.filter((id) => !carriedSections().includes(id));
     setNotice(`copied ${sectionNames(sections)}${left.length ? ` — ⌘V leaves ${sectionNames(left)} behind (▾ beside paste)` : ''}`);
+    return { ok: true, word: `copied ${sectionNames(sections)}` };
   }, []);
-  /** The held picture onto `ids`, carrying what the ▾ says. */
+  /** The held picture onto `ids`, carrying what the ▾ says. Null when nothing is held. */
   const pasteOnto = useCallback(
-    (ids: readonly string[]): boolean => {
+    (ids: readonly string[]): VerbOutcome | null => {
       const held = copiedSettings();
-      if (!held || ids.length === 0) return false;
+      if (!held || ids.length === 0) return null;
       const sections = pastedSections(held.sections, carriedSections());
       if (sections.length === 0) {
         setNotice(`nothing to paste — ${sectionNames(held.sections)} ${held.sections.length === 1 ? 'is' : 'are'} left behind (▾ beside paste)`);
-        return true;
+        return { ok: false, word: 'nothing to paste — the ▾ leaves it all behind' };
       }
       update((r) => applySections(r, held.from, ids, sections), 'paste');
+      markWritten(ids);
       const onto = ids.length === 1 && ids[0] === openIdRef.current ? '' : ` onto ${ids.length} picture${ids.length === 1 ? '' : 's'}`;
       setNotice(`pasted ${sectionNames(sections)} from ${pictureLabel(held.from)}${onto}`);
-      return true;
+      return { ok: true, word: `pasted ${sectionNames(sections)}${onto}` };
     },
-    [update],
+    [update, markWritten],
   );
-  const pasteSections = useCallback((): boolean => {
+  const pasteSections = useCallback((): VerbOutcome | null => {
     const id = openIdRef.current;
-    return id ? pasteOnto([id]) : false;
+    return id ? pasteOnto([id]) : null;
   }, [pasteOnto]);
   /**
    * The copy and paste glyphs' state, and the ▾ of what a paste carries —
@@ -960,6 +982,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       canCopy: !!open && isEdited(open),
       copyTitle: 'Copy ⌘C — everything done to this picture, held for the next one',
       canPaste: !!copied || canPaste,
+      // A paste goes to the selection when there is one: the stage echoes it
+      // only when the picture on screen is among what it writes.
+      pasteLandsHere: n === 0 || (open !== null && selectionTargets.includes(open.id)),
       pasteTitle: copied
         ? goes.length
           ? `Paste ⌘V — ${sectionNames(goes)} from ${pictureLabel(copied.from)}${n ? `, onto the ${n} selected` : ''}`
@@ -984,9 +1009,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       const source = latest.current.pictures.find((x) => x.id === openIdRef.current);
       if (!source) return;
       update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, sections), 'apply');
+      markWritten(ids);
       setNotice(`${sectionNames(sections)} applied to ${ids.length} picture${ids.length === 1 ? '' : 's'}`);
     },
-    [update],
+    [update, markWritten],
   );
   // "The others" are the pictures still in the roll's WORK: an ignored one is
   // never written by an Apply-to-all (`docs/lightroom-gaps.md` §10) — a picture
@@ -1057,8 +1083,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
 
   const cropApplyTo = useMemo<CropApplyVerb[]>(() => {
     if (!openId) return [];
-    const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) =>
+    const write = (targets: readonly string[]) => (crop: { aspect: string; framing: Framing }) => {
       update((r) => copyCropTo(r, targets, crop), 'apply');
+      markWritten(targets);
+    };
     if (selectionTargets.length > 0) {
       const n = selectionTargets.length;
       return [
@@ -1079,15 +1107,17 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         run: write(otherIds),
       },
     ];
-  }, [openId, others, otherIds, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update, markWritten]);
 
   // The look's own verbs, apart from the develop's: a look is chosen per
   // picture, and this is the one gesture that dresses others with it. They
   // copy the open picture's STORED look, which the stack writes through.
   const lookApplyTo = useMemo<LookApplyVerb[]>(() => {
     if (!openId) return [];
-    const write = (targets: readonly string[]) => () =>
+    const write = (targets: readonly string[]) => () => {
       update((r) => copyGradeTo(r, targets, r.pictures.find((p) => p.id === openId)?.grade ?? null), 'apply');
+      markWritten(targets);
+    };
     if (selectionTargets.length > 0) {
       const n = selectionTargets.length;
       return [
@@ -1108,7 +1138,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         run: write(otherIds),
       },
     ];
-  }, [openId, others, otherIds, selectionTargets, update]);
+  }, [openId, others, otherIds, selectionTargets, update, markWritten]);
 
   // The border's own verbs, apart from the crop's: a roll can wear ONE border
   // over crops that each differ (the maintainer's change to the prototype).
@@ -1178,7 +1208,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
    */
   const selectionRef = useRef(selectionTargets);
   selectionRef.current = selectionTargets;
-  const pastePicture = useCallback((): boolean => {
+  const pastePicture = useCallback((): VerbOutcome | null => {
     const marked = selectionRef.current;
     return marked.length > 0 ? pasteOnto(marked) : pasteSections();
   }, [pasteOnto, pasteSections]);
@@ -1312,7 +1342,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [patchStrip, strip.thumb, strip.sheet, stripMetrics, contactOpen, side, columnsNow, setColumns],
   );
   const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
-  const chipSize = compact ? 'md' : 'sm';
+  // A finger's size under a finger, a phone's shell or a tablet's (C5).
+  const chipSize = finger;
   /** A menu row that says whether it is the state: a dot before the one in force. */
   const marked = (on: boolean, text: string, key?: string) => (
     <span className="inline-flex items-center gap-3 whitespace-pre">
@@ -1410,7 +1441,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const bandHeader = useCallback(
     ({ at, shown, width }: { at: number; shown: number; width: number }) => {
       if (selecting) return <SelectionBar compact={compact} dense={width < 800} narrow={side} verbs={selectionVerbs} />;
-      const size = compact ? 'md' : 'sm';
+      const size = finger;
       if (side && strip.folded) {
         // The column's RAIL: a stack of three — unfold, the count read down
         // the rail, the sheet — and the menu, so the band can be moved from here.
@@ -1481,7 +1512,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       );
     },
     // The menus are rebuilt per render on purpose: they read the band's state.
-    [selecting, compact, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
+    [selecting, compact, finger, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
   );
 
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
@@ -1949,6 +1980,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                     culling={culling.byPicture}
                     rollChoice={roll.opensOn ?? null}
                     shows={filtering ? passesFilter : undefined}
+                    heldId={copied?.from.id ?? null}
+                    written={written}
                   />
                 </div>
               </div>
@@ -1987,6 +2020,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 culling={culling.byPicture}
                 rollChoice={roll.opensOn ?? null}
                 shows={filtering ? passesFilter : undefined}
+                heldId={copied?.from.id ?? null}
+                written={written}
               />
             )}
           </div>

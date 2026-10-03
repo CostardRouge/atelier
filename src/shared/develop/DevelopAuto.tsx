@@ -37,6 +37,7 @@ export function DevelopAutoSection({
   auto,
   picking,
   onPicking,
+  echo = null,
 }: {
   stats: SourceStats | null;
   /** The row's memory of its clicks, held by the host per picture (`useAutoMemory`). */
@@ -44,6 +45,8 @@ export function DevelopAutoSection({
   /** Whether the eyedropper is armed; omitted, no dropper is drawn. */
   picking?: boolean;
   onPicking?: (on: boolean) => void;
+  /** The task scope of the picture on the stage: a verb's re-render echoes on its edge (C4). */
+  echo?: string | null;
 }) {
   const ready = Boolean(stats && stats.total > 0);
   const notRead = 'the picture has not been read yet';
@@ -117,6 +120,7 @@ export function DevelopAutoSection({
               state={state}
               disabled={!ready && state === 'off'}
               hint={ready ? hint : notRead}
+              echo={echo}
               onClick={() => toggle(verb, run)}
             >
               {label}
@@ -129,6 +133,7 @@ export function DevelopAutoSection({
             armed={picking}
             disabled={!ready && pickState === 'off'}
             hint={ready ? 'Click something in the picture that should be grey' : notRead}
+            instant
             onClick={() => {
               if (!picking && auto.turnOff('pick')) return;
               onPicking(!picking);

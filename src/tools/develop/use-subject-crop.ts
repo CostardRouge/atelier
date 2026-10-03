@@ -9,8 +9,8 @@ import type { DevelopPicture } from '../../shared/develop/use-develop-picture';
 import type { CropZoneApi } from './use-crop-zone';
 
 export interface SubjectCropVerb {
-  /** Build the zone and write it; reports through `onTold`. */
-  run: () => void;
+  /** Build the zone and write it; reports through `onTold`. Settles once the model has answered. */
+  run: () => Promise<void> | void;
   /** The model is being asked. */
   busy: boolean;
   /** The picture has Subject layers with points: the crop will use those. */
@@ -95,7 +95,7 @@ export function useSubjectCrop({
     }
     setBusy(true);
     const task = startTask({ label: 'Finding the subject', scope });
-    void segmentSubject(source, [{ x: 0.5, y: 0.5 }])
+    return segmentSubject(source, [{ x: 0.5, y: 0.5 }])
       .then((raster) => write(raster, 'centre'))
       .catch(() => live.current.onTold('the subject model could not answer'))
       .finally(() => {

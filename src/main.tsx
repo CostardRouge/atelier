@@ -6,6 +6,7 @@ import { AssetLibraryProvider } from './shared/library/AssetLibraryContext';
 import { MediaScopeProvider } from './shared/sources/media-scope';
 import { SectionBarProvider } from './shared/ui/section-rail';
 import { LayoutModeProvider } from './shared/ui/use-layout-mode';
+import { installPressFeedback } from './shared/ui/press-dom';
 // The four faces, served from our OWN origin (2026-09-24, his call): they
 // used to come from Google Fonts on every page load, a request to a third
 // party the README's network callout never named. Exactly the weights the
@@ -46,6 +47,11 @@ window.addEventListener('vite:preloadError', (event) => {
   event.preventDefault();
   location.reload();
 });
+
+// A control goes down under a finger and stays down a beat after the lift
+// (`shared/ui/press.ts`): one listener for the whole suite, styled by the
+// recipes.
+installPressFeedback();
 
 // A boundary around EVERYTHING, and not only around the tool and the
 // library inside `App`: the masthead, the bottom bar, the providers and the

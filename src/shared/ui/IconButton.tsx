@@ -8,7 +8,9 @@
  */
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
-import { buttonClass, type ButtonSize, type ButtonVariant } from './Button';
+import { VERB_CLASSES, buttonClass, type ButtonSize, type ButtonVariant } from './Button';
+import type { VerbPhase } from './verb';
+import { VerbHairline, verbAttrs, verbGlyph } from './VerbMarks';
 
 // The glyph is sized in pixels, not from the text: a 28px button holding a
 // 12px-text-derived 14px icon read as a dash. Winnow draws 18px in 36px.
@@ -23,11 +25,13 @@ export interface IconButtonProps extends Omit<ButtonHTMLAttributes<HTMLButtonEle
   label: string;
   variant?: ButtonVariant;
   size?: ButtonSize;
+  /** The life of the verb it runs (`useVerb`): down while it works, ✓ or – in place of the glyph after. */
+  phase?: VerbPhase;
   children: ReactNode;
 }
 
 const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconButton(
-  { label, variant = 'default', size = 'md', className = '', children, type = 'button', ...rest },
+  { label, variant = 'default', size = 'md', phase, className = '', children, type = 'button', ...rest },
   ref,
 ) {
   return (
@@ -36,10 +40,12 @@ const IconButton = forwardRef<HTMLButtonElement, IconButtonProps>(function IconB
       type={type}
       aria-label={label}
       title={label}
-      className={buttonClass(variant, size, `${SQUARE[size]} ${className}`, { square: true })}
+      className={buttonClass(variant, size, `${SQUARE[size]} ${phase ? VERB_CLASSES : ''} ${className}`, { square: true })}
+      {...verbAttrs(phase)}
       {...rest}
     >
-      {children}
+      {verbGlyph(phase, children)}
+      <VerbHairline phase={phase} />
     </button>
   );
 });

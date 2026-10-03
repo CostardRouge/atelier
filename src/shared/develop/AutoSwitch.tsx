@@ -1,4 +1,7 @@
 import type { ReactNode } from 'react';
+import { PRESS_LOOK } from '../ui/press';
+import { useVerb } from '../ui/use-verb';
+import { VERB_GROUND, VERB_SHAPE, VerbHairline, verbAttrs } from '../ui/VerbMarks';
 import type { AutoState } from './auto-slots';
 
 /**
@@ -62,6 +65,8 @@ export default function AutoSwitch({
   shape = 'pill',
   hint,
   disabled,
+  instant = false,
+  echo = null,
   onClick,
   children,
 }: {
@@ -72,20 +77,32 @@ export default function AutoSwitch({
   /** The title while off — what the verb does. */
   hint?: string;
   disabled?: boolean;
-  onClick: () => void;
+  /**
+   * A switch that only ARMS a tool (Pick grey's dropper) answers at once; the
+   * others measure the picture and re-render it, so they live as a verb
+   * (`useVerb`): down while that runs, ✓ when the picture has caught up.
+   */
+  instant?: boolean;
+  /** The task scope of the picture it re-renders: its edge echoes the work (C4). */
+  echo?: string | null;
+  /** A promise keeps the verb down until it settles (a model asked). */
+  onClick: () => void | Promise<unknown>;
   children: ReactNode;
 }) {
+  const verb = useVerb();
   return (
     <button
       type="button"
-      className={`inline-flex items-center gap-1.5 border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
+      className={`relative inline-flex items-center gap-1.5 border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_SHAPE} ${VERB_GROUND} ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
       aria-pressed={armed || state !== 'off'}
       disabled={disabled}
       title={armed ? undefined : state === 'off' ? hint : AUTO_SWITCH_TITLE[state]}
-      onClick={onClick}
+      {...verbAttrs(verb.phase)}
+      onClick={() => (instant || armed ? void onClick() : verb.run(async () => void (await onClick()), { echo }))}
     >
       {!armed && <Dot state={state} />}
       {children}
+      <VerbHairline phase={verb.phase} />
     </button>
   );
 }

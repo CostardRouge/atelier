@@ -142,8 +142,8 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
       }}
       className={`shrink-0 text-left font-sans text-sm border-0 bg-transparent px-2.5 py-2 rounded-[8px] cursor-pointer whitespace-nowrap disabled:opacity-45 disabled:cursor-default ${
         it.danger
-          ? 'text-danger hover:bg-danger-wash hover:text-danger-ink'
-          : 'text-ink-soft hover:bg-paper-2 hover:text-ink'
+          ? 'text-danger hover:bg-danger-wash hover:text-danger-ink data-pressed:bg-danger-wash data-pressed:text-danger-ink'
+          : 'text-ink-soft hover:bg-paper-2 hover:text-ink data-pressed:bg-paper-2 data-pressed:text-ink'
       }`}
     >
       {it.checked === undefined ? (

@@ -13,6 +13,7 @@
 
 import type { ReactNode } from 'react';
 import type { ButtonSize } from './Button';
+import { PRESS_LOOK } from './press';
 
 export interface SegmentedOption<T extends string> {
   id: T;
@@ -79,12 +80,12 @@ export default function Segmented<T extends string>({
             disabled={disabled}
             title={typeof option.disabled === 'string' ? option.disabled : option.title}
             onClick={() => onChange(option.id)}
-            className={`inline-flex items-center justify-center whitespace-nowrap rounded-[8px] border font-sans cursor-pointer select-none transition-[background-color,color,box-shadow,border-color] duration-150 ease-paper focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-45 disabled:cursor-default ${
+            className={`inline-flex items-center justify-center whitespace-nowrap rounded-[8px] border font-sans cursor-pointer select-none transition-[background-color,color,box-shadow,border-color,translate] duration-150 ease-paper ${PRESS_LOOK} focus-visible:outline-2 focus-visible:outline-offset-1 focus-visible:outline-accent disabled:opacity-45 disabled:cursor-default ${
               SEG_SIZES[size]
             } ${stretch ? 'flex-1 min-w-0' : ''} ${
               on
                 ? 'bg-surface text-ink font-semibold border-line-strong shadow-[0_1px_3px_rgba(27,24,19,0.12)]'
-                : 'bg-transparent text-ink-soft font-medium border-transparent hover:text-ink'
+                : 'bg-transparent text-ink-soft font-medium border-transparent hover:text-ink data-pressed:bg-line data-pressed:text-ink'
             }`}
           >
             {option.icon && (

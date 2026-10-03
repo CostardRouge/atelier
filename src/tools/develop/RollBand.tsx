@@ -90,6 +90,13 @@ export interface StripCellsProps {
   shows?: (picture: RollPicture) => boolean;
   /** The roll's choice of file (`RollDoc.opensOn`): a cell whose picture chose otherwise marks it. */
   rollChoice?: RollChoice | null;
+  /**
+   * The picture the clipboard HOLDS: its cell wears the copy mark for as long
+   * as it is held, so ⌘V's source is in sight (`docs/press-feedback.md` C4).
+   */
+  heldId?: string | null;
+  /** The pictures a verb has just written: each cell ticks for a moment — the echo of a paste or an Apply to. */
+  written?: ReadonlySet<string>;
 }
 
 /** The pictures a band or a sheet SHOWS: the filter's, the ignored where asked, the open one always. */
@@ -245,6 +252,8 @@ export function StripCells({
   onVariant,
   culling,
   rollChoice = null,
+  heldId = null,
+  written,
 }: StripCellsProps & { shown: readonly RollPicture[]; layout: StripLayout }) {
   // The cells are MEMOISED, so what they are handed must be stable: the
   // host's callbacks are read through a ref, and every cell gets the same
@@ -292,6 +301,8 @@ export function StripCells({
               menuOpen={menu?.id === p.id}
               selecting={selecting}
               departs={rollChoice && departsFromRoll(rollChoice, p) ? CHOICE_WORDS[rollChoice] : null}
+              held={p.id === heldId}
+              written={written?.has(p.id) ?? false}
               handlers={handlers}
             />
           );
@@ -380,6 +391,8 @@ const Cell = memo(function Cell({
   menuOpen,
   selecting,
   departs,
+  held,
+  written,
   handlers,
 }: {
   picture: RollPicture;
@@ -397,6 +410,10 @@ const Cell = memo(function Cell({
   selecting: boolean;
   /** The roll's choice, in words, when this picture chose another file — else null. */
   departs: string | null;
+  /** The clipboard holds this picture: the copy mark. */
+  held: boolean;
+  /** A verb has just written this picture: a tick, for a moment. */
+  written: boolean;
   handlers: CellHandlers;
 }) {
   const remote = remoteClient && remoteId !== null ? { client: remoteClient, id: remoteId } : null;
@@ -555,6 +572,28 @@ const Cell = memo(function Cell({
           </span>
         )}
         {runState && <RunMark state={runState} />}
+        {/* The ECHO of a verb (`docs/press-feedback.md` C4): the picture
+            ⌘V would paste FROM wears the copy mark while it is held, and a
+            picture a paste or an Apply to just wrote ticks for a moment —
+            the stage cannot say it when the write went to the selection. */}
+        {held && (
+          <span
+            className="absolute right-1 bottom-1 w-[18px] h-[18px] grid place-items-center rounded-full bg-surface/85 text-ink pointer-events-none [&>svg]:w-3 [&>svg]:h-3"
+            title="Copied — ⌘V pastes from this picture"
+          >
+            {Icons.copy}
+          </span>
+        )}
+        {written && (
+          <span
+            className="absolute inset-0 grid place-items-center pointer-events-none animate-verb-tick motion-reduce:animate-none"
+            aria-hidden="true"
+          >
+            <span className="w-7 h-7 grid place-items-center rounded-full bg-ok text-paper shadow-paper-soft [&>svg]:w-4 [&>svg]:h-4">
+              {Icons.check}
+            </span>
+          </span>
+        )}
       </button>
       {/* The picture's menu, under a pointer that can hover; a finger reaches
           the same verbs by a long press (the selection) and the bulk bar. It
