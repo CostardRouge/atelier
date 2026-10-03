@@ -9,7 +9,9 @@ import {
   lookIn,
   lookLabel,
   looksUnder,
+  migratePackIndex,
   nodeLabelPath,
+  webUrl,
   prettyName,
   readPackRef,
   slug,
@@ -65,6 +67,31 @@ const authentic = () =>
     author: 'Victor Jimenes',
     url: 'https://victorjim.gumroad.com/l/authentic_lut',
   });
+
+describe('a pack’s link is a WEB address or nothing', () => {
+  it('keeps http(s) and refuses every other scheme', () => {
+    expect(webUrl('https://victorjim.gumroad.com/l/authentic_lut')).toBe('https://victorjim.gumroad.com/l/authentic_lut');
+    expect(webUrl('http://localhost:3000/')).toBe('http://localhost:3000/');
+    expect(webUrl('javascript:alert(1)')).toBeNull();
+    expect(webUrl('data:text/html,hi')).toBeNull();
+    expect(webUrl('not a url')).toBeNull();
+    expect(webUrl('')).toBeNull();
+    expect(webUrl(42)).toBeNull();
+  });
+
+  it('is what a stored or remote index is read through', () => {
+    // An index off a Winnow is untrusted input; the gallery draws its link.
+    const hostile = migratePackIndex({ id: 'pk', looks: [], url: 'javascript:alert(document.domain)' });
+    expect(hostile?.url).toBeUndefined();
+    const fine = migratePackIndex({ id: 'pk', looks: [], url: 'https://example.com/pack' });
+    expect(fine?.url).toBe('https://example.com/pack');
+  });
+
+  it('and what a built index writes', () => {
+    expect(buildPackIndex([], { id: 'pk', name: 'P', author: 'A', url: 'javascript:1' }).url).toBeUndefined();
+    expect(authentic().url).toBe('https://victorjim.gumroad.com/l/authentic_lut');
+  });
+});
 
 describe('buildPackIndex', () => {
   it('keeps the looks and leaves everything else out', () => {

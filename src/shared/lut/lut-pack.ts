@@ -149,12 +149,27 @@ export function migratePackIndex(raw: unknown): LutPackIndex | null {
     id: p.id,
     name: typeof p.name === 'string' ? p.name : '',
     author: typeof p.author === 'string' ? p.author : '',
-    ...(typeof p.url === 'string' && p.url ? { url: p.url } : {}),
+    ...(webUrl(p.url) ? { url: webUrl(p.url)! } : {}),
     tree: Array.isArray(p.tree) ? p.tree.filter(isNodeish).map(readNode) : [],
     looks,
     hidden: Array.isArray(p.hidden) ? p.hidden.filter((h): h is string => typeof h === 'string') : [],
     ...(typeof p.sourceId === 'string' && p.sourceId ? { sourceId: p.sourceId } : {}),
   };
+}
+
+/**
+ * A pack's "where it came from" link, kept only when it is a web address: the
+ * gallery renders it as an `<a href>`, and an index read off a Winnow or out
+ * of a file could carry a `javascript:` or `data:` scheme there.
+ */
+export function webUrl(value: unknown): string | null {
+  if (typeof value !== 'string' || !value) return null;
+  try {
+    const url = new URL(value);
+    return url.protocol === 'https:' || url.protocol === 'http:' ? value : null;
+  } catch {
+    return null;
+  }
 }
 
 function isLookish(value: unknown): value is Record<string, unknown> {
@@ -513,7 +528,7 @@ export function buildPackIndex(
     id: options.id,
     name,
     author,
-    ...(options.url ? { url: options.url } : {}),
+    ...(webUrl(options.url) ? { url: webUrl(options.url)! } : {}),
     tree,
     looks,
     hidden: [...(options.hidden ?? [])],
