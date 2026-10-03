@@ -627,9 +627,17 @@ function readSectionValues(raw: unknown, sections: readonly PictureEdit[]): Sect
       case 'layers':
         out.layers = readLayers(r.layers);
         break;
+      default:
+        // Exhaustive by type: a new `PictureEdit` member fails here at
+        // compile time instead of being read as nothing (`journal.ts`).
+        unreachedSection(s);
     }
   }
   return out;
+}
+
+function unreachedSection(section: never): never {
+  throw new Error(`Unknown picture section: ${String(section)}`);
 }
 
 /**
