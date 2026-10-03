@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { parseCube } from './cube-parser';
+import { MAX_CUBE_SIZE, parseCube } from './cube-parser';
 
 /** A minimal valid 2×2×2 identity LUT (red varies fastest). */
 const IDENTITY_2 = `# Generated for tests
@@ -14,6 +14,31 @@ LUT_3D_SIZE 2
 0.0 1.0 1.0
 1.0 1.0 1.0
 `;
+
+describe('parseCube refuses a lattice it should not allocate', () => {
+  it('a size past the ceiling, before a single row is read', () => {
+    // 4096³ × 3 floats is 800 MB; the old parser asked for it on the first row.
+    expect(parseCube('LUT_3D_SIZE 4096\n0 0 0\n')).toBeNull();
+    expect(parseCube(`LUT_3D_SIZE ${MAX_CUBE_SIZE + 1}\n0 0 0\n`)).toBeNull();
+  });
+
+  it('a size under two, which no lattice can interpolate', () => {
+    expect(parseCube('LUT_3D_SIZE 1\n0 0 0\n')).toBeNull();
+    expect(parseCube('LUT_3D_SIZE 0\n0 0 0\n')).toBeNull();
+  });
+
+  it('a text with fewer lines than the table has rows, before the table exists', () => {
+    // A legal size whose rows are not there: refused at the first row, not
+    // after a 65³ table was filled part way.
+    expect(parseCube('LUT_3D_SIZE 65\n0 0 0\n0 0 0\n')).toBeNull();
+  });
+
+  it('still reads a whole table at the ceiling', () => {
+    const size = 3;
+    const rows = Array.from({ length: size ** 3 }, () => '0.5 0.5 0.5').join('\n');
+    expect(parseCube(`LUT_3D_SIZE ${size}\n${rows}\n`)?.size).toBe(size);
+  });
+});
 
 describe('parseCube', () => {
   it('parses a valid 2×2×2 LUT with the right size and length', () => {
