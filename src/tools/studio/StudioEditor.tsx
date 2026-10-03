@@ -175,6 +175,13 @@ import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 
 /**
+ * A transport tool's touch geometry and press (`docs/press-feedback.md` C1,
+ * C5): 34 px under a finger whatever the width — a tablet is a wide shell held
+ * by one — and down a pixel when pressed, like every control of the suite.
+ */
+const TRANSPORT_TOUCH = `pointer-coarse:min-h-[2.125rem] pointer-coarse:min-w-[2.125rem] pointer-coarse:px-3 transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2`;
+
+/**
  * Clips with or without telemetry, and stills — the studio edits all three.
  * A photo is not a second kind of project: it is a media a project can hold
  * beside its clips, and stepping ‹/› between a rush and a frame you shot the
@@ -2417,7 +2424,7 @@ export default function StudioEditor({
                 type="button"
                 onClick={() => setLoop((l) => !l)}
                 aria-pressed={loop}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer transition-colors ${
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer ${TRANSPORT_TOUCH} ${
                   loop
                     ? 'border-accent bg-accent-wash text-accent-ink'
                     : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
@@ -2431,7 +2438,7 @@ export default function StudioEditor({
               <VerbButton
                 onRun={handleGrabFrame}
                 disabled={grabbing}
-                className={`flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-xs text-muted cursor-pointer hover:text-accent-ink hover:border-accent transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper disabled:opacity-50 disabled:cursor-default ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_GROUND}`}
+                className={`flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-xs text-muted cursor-pointer hover:text-accent-ink hover:border-accent disabled:opacity-50 disabled:cursor-default ${TRANSPORT_TOUCH} ${VERB_GROUND}`}
                 title="Save this frame as a JPEG, overlays and look burned in"
                 aria-label="Capture frame"
               >
@@ -2446,7 +2453,7 @@ export default function StudioEditor({
                     e.target.value === 'realtime' ? 'realtime' : Number(e.target.value),
                   )
                 }
-                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-2xs tracking-[0.06em] cursor-pointer transition-colors focus:outline-none ${
+                className={`flex-none pl-2 pr-1 py-1 rounded-full border font-mono text-2xs tracking-[0.06em] cursor-pointer focus:outline-none pointer-coarse:min-h-[2.125rem] transition-colors ${
                   previewRate === 1
                     ? 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'
                     : 'border-accent bg-accent-wash text-accent-ink'
@@ -2469,7 +2476,7 @@ export default function StudioEditor({
                 type="button"
                 onClick={() => setCompareOn((c) => !c)}
                 aria-pressed={compareOn}
-                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer transition-colors ${
+                className={`flex-none px-2.5 py-1 rounded-full border font-mono text-2xs tracking-[0.1em] cursor-pointer ${TRANSPORT_TOUCH} ${
                   compareOn
                     ? 'border-accent bg-accent-wash text-accent-ink'
                     : 'border-line-strong bg-paper text-muted hover:text-accent-ink hover:border-accent'

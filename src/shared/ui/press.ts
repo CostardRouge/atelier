@@ -78,3 +78,13 @@ export function canPress(el: PressCandidate): boolean {
   if (el.inert) return false;
   return true;
 }
+
+/**
+ * The size a control takes under the hand that uses it (C5): a finger's
+ * (`md`, 34 px) on a phone's shell or wherever the pointer is coarse — an
+ * iPad in landscape is a WIDE shell held by a finger, and it was given the
+ * mouse's 28 px — else a mouse's (`sm`).
+ */
+export function fingerSize(compact: boolean, coarse: boolean): 'md' | 'sm' {
+  return compact || coarse ? 'md' : 'sm';
+}

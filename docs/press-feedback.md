@@ -3,7 +3,7 @@
 **Status: he chose the recommendations the same day (2026-10-03, *«commence
 l'implémentation avec les recommandations et n'oublie pas d'appliquer à peu
 près la même chose sur Trips et Studio»*): E, and §5 answered by its own
-recommendations. Being built, commit by commit — §6 says what is in.** The lab,
+recommendations. Built, C1 → C5, the same day — §6 says what is in.** The lab,
 a Develop mock you press with the six faces and a timeline measuring what the
 finger saw: <https://claude.ai/artifact/2Ew4j2xFPm1xa7ceRxGxa8>. §1 is fact,
 read in `main` 26bf5de; §2–§4 are the proposal; §5 his answers; §6 the build. Read it before touching
@@ -183,3 +183,20 @@ puts the word to the LEFT of the glyph, the side the hand does not cover.
   (`written`, `animate-verb-tick`). Driven headless: the copied picture's cell
   marked, a paste drawing the stage's hairline 79 ms after the tap and the
   written cell's tick, the masthead's pill silent throughout.
+- **C5 · the size follows the pointer.** `fingerSize(compact, coarse)`
+  (`press.ts`, tested) and `useFingerSize` / `useCoarsePointer`
+  (`use-coarse-pointer.ts`, live on `(pointer: coarse)`): Develop's well and
+  its raw verbs, the selection bar, the contact sheet and the band's chips
+  take `md` under a finger at any width; Trips' deck takes its phone pills,
+  play button and grips (the words beside the glyphs stay, a tablet has the
+  room); the Studio's transport tools take 34 px through `pointer-coarse:`
+  (`TRANSPORT_TOUCH`), and the sheet's links and buttons a finger's padding.
+  Driven headless at 1180 px: 34 × 34 glyphs with a touch pointer, 28 × 28
+  with a mouse, the well still on one row. The deck and the transport also
+  took the press look here. The README's Develop section says all of it.
+
+**The plan is built, C1 → C5 (2026-10-03).** Not driven on his iPad or his
+phone; Trips' deck and the Studio's transport were type-checked and read, not
+driven. A press on a RAW is the case to watch there: the quiet test
+(`settled`) ends the latch when the thread has three short frames in a row,
+which a GPU that answers late could end before the picture lands.

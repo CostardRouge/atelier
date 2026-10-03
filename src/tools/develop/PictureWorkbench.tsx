@@ -83,7 +83,8 @@ import {
 import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
-import { PRESS_LOOK } from '../../shared/ui/press';
+import { PRESS_LOOK, fingerSize } from '../../shared/ui/press';
+import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 import { useVerb } from '../../shared/ui/use-verb';
 import VerbWord, { useVerbWord } from '../../shared/ui/VerbWord';
 import type { VerbOutcome, VerbReturn } from '../../shared/ui/verb';
@@ -1518,6 +1519,8 @@ export default function PictureWorkbench({
   // press would (`useVerb`, `docs/press-feedback.md` C2).
   // Their WORD is drawn beside the well (`VerbWord`, C3), left of the glyphs —
   // the side the hand does not cover — where the eye already is.
+  // Whether a finger holds the device: the well's size follows it (C5).
+  const coarse = useCoarsePointer();
   const [clipWord, sayClip] = useVerbWord();
   const copyVerb = useVerb(sayClip);
   const pasteVerb = useVerb(sayClip);
@@ -1999,7 +2002,10 @@ export default function PictureWorkbench({
    * list's (`frontend.md`). The height is `IconButton`'s to the pixel, so the
    * well reads as one family, and the colours are the Studio's A/B.
    */
-  const verbHeight = compact ? 'h-[2.125rem]' : 'h-7';
+  // The well's targets follow the HAND, not the width (C5): an iPad in
+  // landscape is a wide shell under a finger, and it was given 28 px.
+  const touchSized = fingerSize(compact, coarse) === 'md';
+  const verbHeight = touchSized ? 'h-[2.125rem]' : 'h-7';
   /** A layer is open on the Layers tab: there is a mask to show. */
   const maskOpen = tab === 'layers' && selectedLayer !== null && !clip;
   // Both press like `IconButton` (`PRESS_LOOK`): they sit in its well.
@@ -2010,7 +2016,7 @@ export default function PictureWorkbench({
     `font-mono text-2xs tracking-[0.06em] whitespace-nowrap cursor-pointer ${verbPress}`;
   /** The `?`, square like the glyphs it sits beside rather than a pill of its own. */
   const helpVerb =
-    `${verbHeight} ${compact ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
+    `${verbHeight} ${touchSized ? 'w-[2.125rem]' : 'w-7'} flex-none inline-flex items-center justify-center ` +
     `rounded-control border font-mono text-xs cursor-pointer ${verbPress}`;
   /** The wipe is suspended, and the pill says so rather than claiming to be on. */
   const abHeld = compareOn && (picture.painting || picture.picking);
@@ -2181,7 +2187,7 @@ export default function PictureWorkbench({
           <VerbWord word={clipWord} side={compact ? 'aboveStart' : 'left'} />
           <DevelopActionsGroup
             className="flex-none"
-            size={compact ? 'md' : 'sm'}
+            size={touchSized ? 'md' : 'sm'}
             clipboard={!cropping}
             draft={draft.draft}
             asShot={draft.asShot}
@@ -2201,7 +2207,7 @@ export default function PictureWorkbench({
               <IconButton
                 label="Apply or reset sections"
                 title="Sections — apply some of this picture to other pictures, or reset them here"
-                size={compact ? 'md' : 'sm'}
+                size={touchSized ? 'md' : 'sm'}
                 onClick={onSettings}
               >
                 {Icons.settings}

@@ -1428,7 +1428,16 @@ for the deliberate gestures: *Apply to N selected / N other pictures* writes
 them across the roll, its **Copy** also carries a section left as shot (so the
 paste resets it), and **Reset** puts the ticked sections of
 the picture on screen back to as shot — its look and its layers included —
-one ⌘Z away. A **preset** saved here can carry the picture's look too (tick
+one ⌘Z away. **Every glyph answers the hand that presses it, a finger
+included**: it goes down a pixel at the touch and stays there a beat after
+the lift; a verb that takes time — a paste re-rendering a RAW, an Auto, an
+Apply to — keeps it down while it runs, with a hairline along the picture's
+edge, then shows ✓ (or – when it could not) and says a word beside the
+glyphs. A grey glyph, tapped, says why it is grey. In the band, the picture
+⌘V would paste from wears a copy mark, and the pictures a paste or an Apply
+to just wrote tick. Under a finger the glyphs take a finger's 34 px whatever
+the screen's width — a tablet too. Trips' and the Studio's Develop sheets,
+Trips' deck and the Studio's transport answer the same way. A **preset** saved here can carry the picture's look too (tick
 *+ look* when naming it): the chip then dresses a picture in both. In the
 Trips and Studio sheets, where a look lives elsewhere, the same chip applies
 the numbers alone and says so. **⌘Z** undoes across the whole roll, and an

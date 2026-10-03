@@ -60,6 +60,8 @@ import { Icons } from '../../shared/ui/icons';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 import RunMark from '../../shared/ui/RunMark';
 import type { RunUnitState } from '../../shared/tasks/run-progress';
+import { PRESS_LOOK } from '../../shared/ui/press';
+import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 
 /** The open slide's clip, when it is one. */
 export interface StripClip {
@@ -149,7 +151,9 @@ const TAP_SLOP_PX = 5;
 const SNAP_PX = 10;
 
 const pillBase =
-  'flex-none rounded-full border font-mono tracking-[0.04em] cursor-pointer transition-colors focus:outline-none focus-visible:ring-2 focus-visible:ring-accent';
+  'flex-none rounded-full border font-mono tracking-[0.04em] cursor-pointer focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ' +
+  // Pressed like every control of the suite (`PRESS_LOOK`, `shared/ui/press.ts`).
+  `transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2`;
 /**
  * The pill's geometry: a caption's height beside a mouse, a finger's on a
  * phone — 34px, `Button`'s `md`, the height every pill of the page bar above
@@ -201,6 +205,7 @@ export default function DeckStrip({
   runAt,
   orderLocked = false,
 }: DeckStripProps) {
+  const coarse = useCoarsePointer();
   const pxPerSecond = compact ? 30 : 42;
   // While an end of the open cell is dragged, the band is drawn at the draft
   // length; the document hears about it once, on release.
@@ -461,14 +466,18 @@ export default function DeckStrip({
     slide?.kind !== 'cta' &&
     (clip ? clip.duration > 0 : Boolean(resize));
   // A finger's width on a phone, a pointer's beside a mouse.
-  const gripPx = compact ? 16 : 10;
+  const gripPx = compact || coarse ? 16 : 10;
 
   // The row's geometry on this shell. On a phone every control is a finger's
   // target: the play button a size up from the 34px pills beside it (the same
   // step the 32/28 desktop pair makes), ⋯ and + at `md`. The row grows from
   // 32px to 40px for it, which the stage column pays.
-  const pill = `${pillBase} ${compact ? pillCompact : pillWide}`;
-  const iconSize = compact ? 'md' : 'sm';
+  // The TARGETS follow the hand, the layout the width (C5 of
+  // `docs/press-feedback.md`): a tablet held by a finger is a wide shell, so
+  // it keeps the words beside the glyphs and takes the phone's 34px pills.
+  const finger = compact || coarse;
+  const pill = `${pillBase} ${finger ? pillCompact : pillWide}`;
+  const iconSize = finger ? 'md' : 'sm';
 
   const lockedWhy = orderLocked ? 'Locked while exporting — the run follows the deck’s order' : undefined;
   const menu: OverflowItem[] = [];
@@ -516,8 +525,8 @@ export default function DeckStrip({
         <button
           type="button"
           onClick={onTogglePlay}
-          className={`flex-none border-0 rounded-full bg-ink text-paper cursor-pointer inline-flex items-center justify-center hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent ${
-            compact ? 'w-10 h-10 [&>svg]:w-4 [&>svg]:h-4' : 'w-8 h-8 [&>svg]:w-3.5 [&>svg]:h-3.5'
+          className={`flex-none border-0 rounded-full bg-ink text-paper cursor-pointer inline-flex items-center justify-center hover:bg-accent focus:outline-none focus-visible:ring-2 focus-visible:ring-accent transition-[background-color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-accent ${
+            finger ? 'w-10 h-10 [&>svg]:w-4 [&>svg]:h-4' : 'w-8 h-8 [&>svg]:w-3.5 [&>svg]:h-3.5'
           }`}
           aria-label={playing ? 'Pause' : trimming ? 'Play the cut' : slideLoop ? 'Play this slide' : 'Play the piece'}
           title={
@@ -596,7 +605,7 @@ export default function DeckStrip({
             aria-pressed={sound.on}
             aria-label={sound.on ? 'Mute the opener’s ticks' : 'Hear the opener’s ticks'}
             title={sound.on ? 'Mute the ticks (M)' : 'Hear the ticks (M)'}
-            className={`${pillBase} ${pillWide} text-2xs w-7 px-0 inline-flex items-center justify-center ${sound.on ? pillOn : pillOff}`}
+            className={`${pillBase} ${finger ? 'h-[2.125rem] w-[2.125rem]' : `${pillWide} w-7`} text-2xs px-0 inline-flex items-center justify-center ${sound.on ? pillOn : pillOff}`}
           >
             <svg viewBox="0 0 16 16" width="13" height="13" aria-hidden="true" fill="none">
               <path d="M2.5 6h2.2L8 3.2v9.6L4.7 10H2.5z" fill="currentColor" />

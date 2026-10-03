@@ -5,6 +5,8 @@ import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import { StripCells, shownPictures, stripItems, useScrollToOpen, type StripCellsProps } from './RollBand';
+import { fingerSize } from '../../shared/ui/press';
+import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 
 /**
  * The roll laid out LARGE over the stage (`docs/develop-roll-browser.md`,
@@ -46,7 +48,7 @@ export default function ContactSheet({
   const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
   const layout = useMemo(() => sheetLayout({ items, width, thumb, metrics }), [items, width, thumb, metrics]);
   useScrollToOpen(bodyRef, openId);
-  const size = compact ? 'md' : 'sm';
+  const size = fingerSize(compact, useCoarsePointer());
   const head = (
     <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
       <h2 className="m-0 font-serif text-xl leading-none whitespace-nowrap">Contact sheet</h2>

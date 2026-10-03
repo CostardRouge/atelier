@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { PRESS_HOLD_MS, canPress, releaseDelay } from './press';
+import { PRESS_HOLD_MS, canPress, fingerSize, releaseDelay } from './press';
 
 describe('releaseDelay', () => {
   it('holds a finger’s press for the whole hold after the lift, however long it lasted', () => {
@@ -30,5 +30,17 @@ describe('canPress', () => {
     expect(canPress({ disabled: true })).toBe(false);
     expect(canPress({ ariaDisabled: 'true' })).toBe(false);
     expect(canPress({ inert: true })).toBe(false);
+  });
+});
+
+describe('fingerSize', () => {
+  it('gives a finger its size on a phone and under any coarse pointer', () => {
+    expect(fingerSize(true, false)).toBe('md');
+    expect(fingerSize(false, true)).toBe('md');
+    expect(fingerSize(true, true)).toBe('md');
+  });
+
+  it('keeps a mouse’s size on a wide shell with a fine pointer', () => {
+    expect(fingerSize(false, false)).toBe('sm');
   });
 });

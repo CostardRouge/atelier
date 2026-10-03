@@ -91,6 +91,7 @@ import { useWinnowConnection } from '../../shared/sources/winnow/use-connection'
 import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
+import { useFingerSize } from '../../shared/ui/use-coarse-pointer';
 import { VERB_DONE_MS, type VerbOutcome } from '../../shared/ui/verb';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
@@ -187,6 +188,7 @@ const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs —
 export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
+  const finger = useFingerSize();
   // The band's numbers for this shell (`roll-strip.ts`): a phone's and a desktop's differ.
   const stripKind: StripKind = compact ? 'phone' : 'desktop';
   const stripMetrics = STRIP_METRICS[stripKind];
@@ -1340,7 +1342,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [patchStrip, strip.thumb, strip.sheet, stripMetrics, contactOpen, side, columnsNow, setColumns],
   );
   const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
-  const chipSize = compact ? 'md' : 'sm';
+  // A finger's size under a finger, a phone's shell or a tablet's (C5).
+  const chipSize = finger;
   /** A menu row that says whether it is the state: a dot before the one in force. */
   const marked = (on: boolean, text: string, key?: string) => (
     <span className="inline-flex items-center gap-3 whitespace-pre">
@@ -1438,7 +1441,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const bandHeader = useCallback(
     ({ at, shown, width }: { at: number; shown: number; width: number }) => {
       if (selecting) return <SelectionBar compact={compact} dense={width < 800} narrow={side} verbs={selectionVerbs} />;
-      const size = compact ? 'md' : 'sm';
+      const size = finger;
       if (side && strip.folded) {
         // The column's RAIL: a stack of three — unfold, the count read down
         // the rail, the sheet — and the menu, so the band can be moved from here.
@@ -1509,7 +1512,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       );
     },
     // The menus are rebuilt per render on purpose: they read the band's state.
-    [selecting, compact, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
+    [selecting, compact, finger, side, left, selectionVerbs, startSelecting, roll, exportMarks, culling, filtering, stripFilter, strip.folded, toggleFolded, toggleSheet, showIgnored, bandSizeNow, strip.thumb, strip.auto, strip.place],
   );
 
   // A clip has three tabs (`workbenchTabsFor`): stepping from a photograph's
