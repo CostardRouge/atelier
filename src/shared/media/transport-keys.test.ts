@@ -1,5 +1,5 @@
 import { describe, it, expect } from 'vitest';
-import { targetOwnsSpace, targetOwnsTyping, type KeyTarget } from './transport-keys';
+import { targetOwnsSpace, targetOwnsTyping, targetTakesText, type KeyTarget } from './transport-keys';
 
 function t(tagName: string, extra: Partial<KeyTarget> = {}): KeyTarget {
   return { tagName, isContentEditable: false, role: null, ...extra };
@@ -81,5 +81,24 @@ describe('targetOwnsTyping', () => {
     expect(targetOwnsTyping(t('BUTTON'))).toBe(false);
     expect(targetOwnsTyping(t('DIV', { role: 'slider' }))).toBe(false);
     expect(targetOwnsTyping(t('CANVAS'))).toBe(false);
+  });
+});
+
+describe('targetTakesText', () => {
+  it('claims ⌘C / ⌘V only where there is text to copy', () => {
+    expect(targetTakesText(null)).toBe(false);
+    expect(targetTakesText(t('INPUT'))).toBe(true);
+    expect(targetTakesText(t('INPUT', { inputType: 'number' }))).toBe(true);
+    expect(targetTakesText(t('TEXTAREA'))).toBe(true);
+    expect(targetTakesText(t('DIV', { isContentEditable: true }))).toBe(true);
+  });
+
+  it('leaves the chord to the editor on a slider a click left focused', () => {
+    // The Develop tool's ⌘C was dead after every slider drag: the range kept
+    // the focus, and a range counted as typing.
+    expect(targetTakesText(t('INPUT', { inputType: 'range' }))).toBe(false);
+    expect(targetTakesText(t('INPUT', { inputType: 'checkbox' }))).toBe(false);
+    expect(targetTakesText(t('SELECT'))).toBe(false);
+    expect(targetTakesText(t('BUTTON'))).toBe(false);
   });
 });

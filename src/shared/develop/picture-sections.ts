@@ -1,7 +1,7 @@
 /**
  * A picture's settings in SECTIONS — the one picker every multi-part verb of
  * the Develop tool goes through (`docs/lightroom-gaps.md` §2, items 4, 5 and
- * 7): copy and paste (⌘⇧C / ⌘⇧V), apply to other pictures, reset.
+ * 7): copy and paste (⌘C / ⌘V), apply to other pictures, reset.
  *
  * Before it, ⌘C carried the develop numbers alone, and "apply to the others"
  * existed for four of nine groups — a roll shot with one body and one lens
@@ -68,6 +68,25 @@ export function readSections(raw: unknown, fallback: readonly PictureSection[] =
   if (!Array.isArray(raw)) return [...fallback];
   const wanted = new Set(raw.filter((x): x is string => typeof x === 'string' && IDS.has(x)));
   return PICTURE_SECTIONS.map((s) => s.id).filter((id) => wanted.has(id));
+}
+
+/**
+ * What ⌘C holds of a picture: every section it has something IN — "what I
+ * did here", never a section left as shot, so a paste never resets a target
+ * by surprise. Copying is not a choice; what travels is decided at the paste.
+ */
+export function copiedSectionsOf(picture: RollPicture): PictureSection[] {
+  return pictureEdits(picture);
+}
+
+/**
+ * What ⌘V writes: what was copied, less what the author leaves behind
+ * (`carried`, a standing preference the paste glyph's ▾ edits) — in the
+ * inspector's order.
+ */
+export function pastedSections(copied: readonly PictureSection[], carried: readonly PictureSection[]): PictureSection[] {
+  const on = new Set(carried);
+  return readSections(copied.filter((s) => on.has(s)), []);
 }
 
 /** The develop a target keeps under `numbers`: its OWN base and gain, never the source's. */
@@ -177,7 +196,7 @@ export function sectionsWithEdits(picture: RollPicture): ReadonlySet<PictureSect
 
 // --- the settings clipboard -------------------------------------------------
 
-/** What ⌘⇧C holds: a picture's settings as they were, and which sections of them. */
+/** What ⌘C (or the sheet's Copy) holds: a picture's settings as they were, and which sections of them. */
 export interface CopiedSettings {
   /** The picture as it was when copied — a snapshot, so a later edit of it changes nothing. */
   from: RollPicture;

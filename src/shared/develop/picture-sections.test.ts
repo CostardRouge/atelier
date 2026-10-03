@@ -6,8 +6,10 @@ import {
   CLIP_SECTIONS,
   PICTURE_SECTIONS,
   applySections,
+  copiedSectionsOf,
   copiedSettings,
   copySettings,
+  pastedSections,
   readSections,
   resetSections,
   sectionsFor,
@@ -124,5 +126,38 @@ describe('a clip’s sections', () => {
     expect(dressed.layers).toEqual([]);
     // A reset of everything on a clip touches its three and leaves the rest as it was.
     expect(pictureEdits(withoutSections(dressed, PICTURE_SECTIONS.map((s) => s.id)))).toEqual([]);
+  });
+});
+
+describe('⌘C / ⌘V', () => {
+  it('copies what was DONE to a picture, never a section left as shot', () => {
+    const doc = roll();
+    const id = doc.pictures[0].id;
+    const looked: RollDoc = {
+      ...doc,
+      pictures: doc.pictures.map((p) => (p.id === id ? { ...p, develop: { ...DEFAULT_DEVELOP, exposure: 1 }, aspect: '4:5' as const } : p)),
+    };
+    expect(copiedSectionsOf(looked.pictures[0])).toEqual(['develop', 'crop']);
+    expect(copiedSectionsOf(doc.pictures[1])).toEqual([]);
+  });
+
+  it('pastes what was copied less what the author leaves behind, in the inspector order', () => {
+    expect(pastedSections(['develop', 'crop', 'lens'], ['lens', 'develop', 'look'])).toEqual(['develop', 'lens']);
+    expect(pastedSections(['crop'], ['develop'])).toEqual([]);
+    expect(pastedSections([], ['develop'])).toEqual([]);
+  });
+
+  it('leaves a target\'s untouched-at-source sections alone', () => {
+    // The whole point of copying "what I did": the target's own crop survives
+    // a paste from a picture that has none.
+    let doc = everything(roll(), 'p' + (n - 1));
+    const target = doc.pictures[1];
+    const source = { ...doc.pictures[0], develop: { ...DEFAULT_DEVELOP, exposure: 2 } };
+    const sections = pastedSections(copiedSectionsOf(source), ['develop', 'crop', 'look']);
+    doc = applySections(doc, structuredClone(source), [target.id], sections);
+    const after = doc.pictures.find((p) => p.id === target.id)!;
+    expect(after.develop?.exposure).toBe(2);
+    expect(after.aspect).toBe('4:5');
+    expect(after.grade).not.toBeNull();
   });
 });

@@ -4,6 +4,7 @@ import {
   DevelopApplySection,
   DevelopLookSection,
   DevelopPresetsSection,
+  type DevelopClipVerbs,
 } from '../../shared/develop/DevelopSections';
 import DevelopCurve from '../../shared/develop/DevelopCurve';
 import { developButtonClass } from '../../shared/develop/develop-classes';
@@ -34,7 +35,7 @@ import {
   rungsFor,
   type RawCalibration,
 } from '../../shared/raw/calibration';
-import { copyDevelop, pasteDevelop } from '../../shared/develop/develop-clipboard';
+import { pasteDevelop } from '../../shared/develop/develop-clipboard';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
@@ -122,7 +123,7 @@ import {
 import { usePresetBookHost } from '../../shared/develop/use-preset-book';
 import type { LutStack } from '../../shared/lut/use-lut-stack';
 import { DEFAULT_FRAMING, isDefaultFraming, sameFraming, type Framing } from '../../shared/media/framing';
-import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../../shared/media/transport-keys';
+import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping, targetTakesText } from '../../shared/media/transport-keys';
 import PanelHost from '../../shared/ui/PanelHost';
 import Segmented from '../../shared/ui/Segmented';
 import Button from '../../shared/ui/Button';
@@ -314,8 +315,10 @@ export default function PictureWorkbench({
   deliveryTable = null,
   onWords,
   onSettings,
+  clipboard,
+  onCopy,
+  onPaste,
   onVariant,
-  onPasteSettings,
   onLook,
   timelapseOpen = false,
   onTimelapseOpen,
@@ -404,10 +407,14 @@ export default function PictureWorkbench({
   deliveryTable?: ReactNode;
   /** The picture's title and caption, written into its delivered file (M2). */
   onWords: (words: { title?: string; caption?: string }) => void;
-  /** Open the sections sheet — copy, paste, apply to others (`picture-sections.ts`); ⌘⇧C. */
+  /** Open the sections sheet — the deliberate copy, apply to others, reset (`picture-sections.ts`). */
   onSettings: () => void;
-  /** Paste the copied sections onto this picture; ⌘⇧V. False when nothing is held. */
-  onPasteSettings: () => boolean;
+  /** The copy and paste glyphs' state and the paste's ▾ — the editor's, which holds the roll. */
+  clipboard: Omit<DevelopClipVerbs, 'onCopy' | 'onPaste'>;
+  /** ⌘C: hold this picture as it stands — `develop` is the draft, a beat ahead of the roll. */
+  onCopy: (develop: DevelopSettings) => void;
+  /** ⌘V: paste what is held onto the selection or this picture. False when no picture is held. */
+  onPaste: () => boolean;
   /** Make a variant of this picture as it stands (item 30); ⌘'. */
   onVariant?: () => void;
   /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
@@ -1281,8 +1288,8 @@ export default function PictureWorkbench({
   // copy changes the stored value without this editor's doing, and a draft that
   // ignored it would keep showing numbers the roll no longer holds — and write
   // them back over the step at the next nudge.
-  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode });
-  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onPasteSettings, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode };
+  const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode });
+  callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
@@ -1521,6 +1528,7 @@ export default function PictureWorkbench({
         altKey: e.altKey,
         shiftKey: e.shiftKey,
         targetTypes: targetOwnsTyping(describeKeyTarget(e.target)),
+        targetTakesText: targetTakesText(describeKeyTarget(e.target)),
         hasSelection: Boolean(window.getSelection()?.toString()),
         layersTab: keyState.current.tab === 'layers',
         selecting: keyState.current.selecting,
@@ -1554,10 +1562,8 @@ export default function PictureWorkbench({
           else pic.view.zoom.zoomIn();
           return;
         case 'copy':
-          if (d.asShot) return;
           e.preventDefault();
-          copyDevelop(d.draft);
-          say('copied');
+          callbacks.current.onCopy(d.draft);
           return;
         case 'mono':
           // Lightroom's V: the treatment flips; the colour mixer is kept either way.
@@ -1565,20 +1571,17 @@ export default function PictureWorkbench({
           d.patch({ mono: d.draft.mono ? null : straightMono() });
           say(d.draft.mono ? 'colour' : 'black and white');
           return;
-        case 'copy-settings':
-          e.preventDefault();
-          callbacks.current.onSettings();
-          return;
         case 'variant':
           if (!callbacks.current.onVariant) return;
           e.preventDefault();
           callbacks.current.onVariant();
           return;
-        case 'paste-settings':
-          if (!callbacks.current.onPasteSettings()) return;
-          e.preventDefault();
-          return;
         case 'paste': {
+          if (callbacks.current.onPaste()) {
+            e.preventDefault();
+            return;
+          }
+          // No picture held: the numbers a Trips or Studio sheet copied.
           const pasted = pasteDevelop();
           if (!pasted) return;
           e.preventDefault();
@@ -2153,11 +2156,23 @@ export default function PictureWorkbench({
             asShot={draft.asShot}
             onReplace={draft.setDraft}
             onTold={tell}
+            clip={{
+              ...clipboard,
+              canCopy: clipboard.canCopy || !draft.asShot,
+              onCopy: () => onCopy(draft.draft),
+              onPaste: () => {
+                if (onPaste()) return;
+                const pasted = pasteDevelop();
+                if (!pasted) return;
+                draft.setDraft(pasted);
+                tell('pasted');
+              },
+            }}
           >
             {!cropping && (
               <IconButton
-                label="Copy, paste or apply settings"
-                title="Settings ⌘⇧C — copy this picture’s sections, paste them, or apply them to other pictures"
+                label="Apply or reset sections"
+                title="Sections — apply some of this picture to other pictures, or reset them here"
                 size={compact ? 'md' : 'sm'}
                 onClick={onSettings}
               >
