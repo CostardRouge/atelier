@@ -13,6 +13,7 @@ import { drawDelivered, drawPictureIn } from './border-paint';
 import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
+import { canvasPixelAt, canvasPointAt } from '../ui/pan-zoom';
 import { frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { decodeStill, stageBudget } from '../media/still-decode';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
@@ -1345,16 +1346,16 @@ export function useDevelopPicture({
     (clientX: number, clientY: number): [number, number, number] | null => {
       const canvas = canvasRef.current;
       if (!canvas || !source || !canvasSize) return null;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return null;
       const { w, h } = canvasSize;
       // `object-contain` letterboxes the BITMAP inside the element box, and the
-      // element box already carries the zoom/pan transform — so undo the
-      // letterbox here and the transform is undone for free by the rect.
-      const scale = Math.min(rect.width / w, rect.height / h);
-      const x = Math.round((clientX - rect.left - (rect.width - w * scale) / 2) / scale);
-      const y = Math.round((clientY - rect.top - (rect.height - h * scale) / 2) / scale);
-      if (x < 0 || y < 0 || x >= w || y >= h) return null;
+      // element box already carries the zoom/pan transform — `canvasPointAt`
+      // undoes the letterbox and the rect undoes the transform for free. The
+      // PIXEL is a floor (`canvasPixelAt`), the same one the readout names:
+      // this used to round, and sampled one pixel over in the second half.
+      const point = canvasPointAt(canvas.getBoundingClientRect(), w, h, clientX, clientY);
+      const pixel = point && canvasPixelAt(point, w, h);
+      if (!pixel) return null;
+      const [x, y] = pixel;
 
       // The UNGRADED picture, drawn through the very same branch the viewport
       // paints with — so no inverse of the framing transform has to be derived,
@@ -1528,14 +1529,12 @@ export function useDevelopPicture({
     (clientX: number, clientY: number, unbounded = false): [number, number] | null => {
       const canvas = canvasRef.current;
       if (!canvas || !source || !canvasSize) return null;
-      const rect = canvas.getBoundingClientRect();
-      if (rect.width <= 0 || rect.height <= 0) return null;
       const { w, h } = canvasSize;
-      // The same letterbox undo as `pickAt`: the element box carries the
-      // zoom/pan transform, so the rect undoes it for free.
-      const scale = Math.min(rect.width / w, rect.height / h);
-      const x = (clientX - rect.left - (rect.width - w * scale) / 2) / scale;
-      const y = (clientY - rect.top - (rect.height - h * scale) / 2) / scale;
+      // The same letterbox undo as `pickAt`, fractional: a mask's point is
+      // placed between pixels, and a drag may leave the picture.
+      const point = canvasPointAt(canvas.getBoundingClientRect(), w, h, clientX, clientY);
+      if (!point) return null;
+      const [x, y] = point;
       if (!unbounded && (x < 0 || y < 0 || x > w || y > h)) return null;
       if (!frameRatio || !framing) {
         return [x / w, y / h];
@@ -1886,17 +1885,16 @@ export function useDevelopPicture({
       readout.set(null);
       return;
     }
-    const rect = canvas.getBoundingClientRect();
-    if (rect.width <= 0 || rect.height <= 0) return;
     const { w, h } = size;
-    // The letterbox undo `pickAt` makes; the rect carries the zoom.
-    const scale = Math.min(rect.width / w, rect.height / h);
-    const x = Math.floor((at.x - rect.left - (rect.width - w * scale) / 2) / scale);
-    const y = Math.floor((at.y - rect.top - (rect.height - h * scale) / 2) / scale);
-    if (x < 0 || y < 0 || x >= w || y >= h) {
+    // The letterbox undo `pickAt` makes, the same pixel it samples.
+    const point = canvasPointAt(canvas.getBoundingClientRect(), w, h, at.x, at.y);
+    if (!point) return;
+    const pixel = canvasPixelAt(point, w, h);
+    if (!pixel) {
       readout.set(null);
       return;
     }
+    const [x, y] = pixel;
     try {
       const [r, g, b, a] = canvas.getContext('2d')?.getImageData(x, y, 1, 1).data ?? [];
       // A transparent pixel is outside the delivered frame (a crop's margin

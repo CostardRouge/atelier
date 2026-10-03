@@ -670,3 +670,17 @@ still writes both bands to 0 — leaving a stale value where no reason for one
 was found would be a nudge. The bands act BEFORE levels in `developLinear`,
 so Tone then Bands compounds, each still SET from the source. Not driven in
 a browser: the module is pure and the button is one `onPatch`.
+
+## A canvas pixel is a FLOOR, found by ONE function (2026-10-02)
+
+`canvasPointAt` (the letterbox of an `object-contain` canvas undone, the
+element's zoom/pan undone for free by the rect — fractional, unbounded) and
+`canvasPixelAt` (floor, null outside the canvas) in `shared/ui/pan-zoom.ts`
+are what the eyedropper, a mask's point and the pointer readout read
+through. The stage hook used to undo the letterbox in three hand-written
+copies that rounded three ways (`round`, nothing, `floor`): pixel *i* covers
+[i, i+1), so `round` put a pointer in the second half of a pixel on the next
+one, and the 5×5 dropper sampled beside the pixel the readout named, worst
+under the loupe. **How to apply.** A surface that maps a client point onto
+a canvas calls these two and never re-derives the arithmetic; specs in
+`pan-zoom.test.ts`.

@@ -4,6 +4,8 @@ import {
   INSPECT_MAX_ZOOM,
   MAX_VIEW_ZOOM,
   MIN_VIEW_ZOOM,
+  canvasPixelAt,
+  canvasPointAt,
   clampView,
   clampViewZoom,
   containedSize,
@@ -25,6 +27,40 @@ import {
 } from './pan-zoom';
 
 const viewport = { width: 800, height: 600 };
+
+describe('canvasPointAt / canvasPixelAt', () => {
+  it('undoes the letterbox of an object-contain canvas', () => {
+    // A 200×100 canvas in a 400×400 box: scale 2, a 100px band above and below.
+    const rect = { left: 10, top: 20, width: 400, height: 400 };
+    expect(canvasPointAt(rect, 200, 100, 10, 120)).toEqual([0, 0]);
+    expect(canvasPointAt(rect, 200, 100, 410, 320)).toEqual([200, 100]);
+    expect(canvasPointAt(rect, 200, 100, 210, 220)).toEqual([100, 50]);
+  });
+
+  it('is fractional and unbounded, so a drag may leave the picture', () => {
+    const rect = { left: 0, top: 0, width: 400, height: 100 };
+    expect(canvasPointAt(rect, 100, 25, 14.5, 0)![0]).toBeCloseTo(3.625);
+    expect(canvasPointAt(rect, 100, 25, -40, 0)![0]).toBe(-10);
+  });
+
+  it('answers null for a box or a canvas with no size yet', () => {
+    expect(canvasPointAt({ left: 0, top: 0, width: 0, height: 0 }, 10, 10, 0, 0)).toBeNull();
+    expect(canvasPointAt({ left: 0, top: 0, width: 10, height: 10 }, 0, 0, 0, 0)).toBeNull();
+  });
+
+  it('names the pixel by FLOOR — pixel i covers [i, i+1) — never by rounding', () => {
+    // 400 px over a 100 px canvas: client x 14.5 is 3.625, in pixel 3. Rounding
+    // said 4, and the eyedropper sampled beside the pixel the readout named.
+    expect(canvasPixelAt([3.625, 0.2], 100, 25)).toEqual([3, 0]);
+    expect(canvasPixelAt([99.9, 24.9], 100, 25)).toEqual([99, 24]);
+  });
+
+  it('answers null past the last pixel and before the first', () => {
+    expect(canvasPixelAt([100, 0], 100, 25)).toBeNull();
+    expect(canvasPixelAt([-0.1, 0], 100, 25)).toBeNull();
+    expect(canvasPixelAt([0, 25], 100, 25)).toBeNull();
+  });
+});
 
 describe('clampViewZoom', () => {
   it('holds the fit as the floor and 8× as the ceiling', () => {
