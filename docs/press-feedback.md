@@ -139,3 +139,22 @@ puts the word to the LEFT of the glyph, the side the hand does not cover.
   `active:scale-[0.98]` is gone from the recipe. Driven headless with a CDP
   touch on a real `Button`: `translate: 0px 1px` and the inset shade while
   down, still there 60 ms after the lift, gone by 210 ms.
+- **C2 · a verb's life on its button.** `shared/ui/verb.ts` (the outcome's
+  shape, the quiet test, tested) and `use-verb.ts`: `run(work)` draws the
+  button down (`data-state="working"`, `aria-busy`), runs the work a frame
+  LATER so the latch is on screen before a synchronous paste blocks the
+  thread, waits for three quiet frames in a row (the re-bake and the repaint
+  are long frames; ceiling 10 s), then ✓ or – for 900 ms; a second press
+  while it runs is ignored. `VerbMarks.tsx` holds the shape (`VERB_SHAPE`),
+  the inks (`VERB_INK`, `VERB_GROUND`), the delayed hairline and the glyph
+  swap (a text button keeps its width and says it in its ink); `Button` and
+  `IconButton` take `phase`, `VerbButton` serves a class-string recipe. Wired
+  in Develop: copy, paste and reset in the well (⌘C / ⌘V drive the SAME verbs
+  as the glyphs), the Auto switches (Crop to subject lasts until the model
+  answers), the Sections sheet (stays open while it works, closes 450 ms
+  after its ✓) and Apply to. In Trips and the Studio: the Develop sheet's
+  Copy / Paste / As shot and its Apply to, Trips' bridge to the Studio (send,
+  send without leaving, give the project the grade, create a project) and the
+  Studio's frame capture. Driven headless in a real roll: copy working → ✓ in
+  64 ms, a paste down for ~430 ms while the picture re-renders, ⌘C lighting
+  the copy glyph.

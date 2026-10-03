@@ -84,6 +84,8 @@ import { centreAxis, placedCentre } from '../../shared/shades/shade-shape';
 import { useSubjectMasks } from '../../shared/develop/use-subject-masks';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 import { PRESS_LOOK } from '../../shared/ui/press';
+import { useVerb } from '../../shared/ui/use-verb';
+import type { VerbOutcome, VerbReturn } from '../../shared/ui/verb';
 import { MASK_VIEW_LABELS, nextMaskView, shownMaskView, type MaskView } from './mask-view';
 import type { BrushRaster } from '../../shared/render/brush-raster';
 import type { MaskFlash } from '../../shared/develop/layer-render';
@@ -412,10 +414,10 @@ export default function PictureWorkbench({
   onSettings: () => void;
   /** The copy and paste glyphs' state and the paste's ▾ — the editor's, which holds the roll. */
   clipboard: Omit<DevelopClipVerbs, 'onCopy' | 'onPaste'>;
-  /** ⌘C: hold this picture as it stands — `develop` is the draft, a beat ahead of the roll. */
-  onCopy: (develop: DevelopSettings) => void;
-  /** ⌘V: paste what is held onto the selection or this picture. False when no picture is held. */
-  onPaste: () => boolean;
+  /** ⌘C: hold this picture as it stands — `develop` is the draft, a beat ahead of the roll. Says how it went. */
+  onCopy: (develop: DevelopSettings) => VerbReturn;
+  /** ⌘V: paste what is held onto the selection or this picture, and say how it went. Null when no picture is held. */
+  onPaste: () => VerbOutcome | null;
   /** Make a variant of this picture as it stands (item 30); ⌘'. */
   onVariant?: () => void;
   /** Dress this picture in a look — a preset's (`DevelopPreset.look`). */
@@ -1510,6 +1512,24 @@ export default function PictureWorkbench({
     return () => window.clearTimeout(t);
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
+  // --- the clipboard's two verbs ------------------------------------------------
+  // Held HERE rather than in the well, so ⌘C and ⌘V light the very glyph a
+  // press would (`useVerb`, `docs/press-feedback.md` C2).
+  const copyVerb = useVerb();
+  const pasteVerb = useVerb();
+  /** A paste: the picture held by the roll, else the numbers a Trips or Studio sheet copied. */
+  const pasteNow = (): VerbReturn => {
+    const held = onPaste();
+    if (held) return held;
+    const pasted = pasteDevelop();
+    if (!pasted) return { ok: false, word: 'nothing copied yet' };
+    draft.setDraft(pasted);
+    tell('pasted');
+    return 'pasted';
+  };
+  const clipVerbs = useRef({ copy: copyVerb, paste: pasteVerb, pasteNow, canPaste: clipboard.canPaste });
+  clipVerbs.current = { copy: copyVerb, paste: pasteVerb, pasteNow, canPaste: clipboard.canPaste };
+
   // --- keys --------------------------------------------------------------------
   const keyState = useRef({ draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting });
   keyState.current = { draft, picture, tell, crop, tab, tabs, factsOn, setFactsOn, setClipping, selectedLayer, activeMask, painting, selectedPatchId, removeSelectedPatch, repairing, selecting };
@@ -1562,10 +1582,13 @@ export default function PictureWorkbench({
           if (pic.view.zoomed) pic.view.zoom.reset();
           else pic.view.zoom.zoomIn();
           return;
-        case 'copy':
+        case 'copy': {
           e.preventDefault();
-          callbacks.current.onCopy(d.draft);
+          // The glyph lives the verb a key started, the same as a press (C2).
+          const settings = d.draft;
+          clipVerbs.current.copy.run(() => callbacks.current.onCopy(settings));
           return;
+        }
         case 'mono':
           // Lightroom's V: the treatment flips; the colour mixer is kept either way.
           e.preventDefault();
@@ -1578,16 +1601,10 @@ export default function PictureWorkbench({
           callbacks.current.onVariant();
           return;
         case 'paste': {
-          if (callbacks.current.onPaste()) {
-            e.preventDefault();
-            return;
-          }
-          // No picture held: the numbers a Trips or Studio sheet copied.
-          const pasted = pasteDevelop();
-          if (!pasted) return;
+          // Nothing held anywhere: the key is not ours.
+          if (!clipVerbs.current.canPaste) return;
           e.preventDefault();
-          d.setDraft(pasted);
-          say('pasted');
+          clipVerbs.current.paste.run(clipVerbs.current.pasteNow);
           return;
         }
         case 'help':
@@ -2164,14 +2181,9 @@ export default function PictureWorkbench({
               ...clipboard,
               canCopy: clipboard.canCopy || !draft.asShot,
               onCopy: () => onCopy(draft.draft),
-              onPaste: () => {
-                if (onPaste()) return;
-                const pasted = pasteDevelop();
-                if (!pasted) return;
-                draft.setDraft(pasted);
-                tell('pasted');
-              },
+              onPaste: pasteNow,
             }}
+            verbs={{ copy: copyVerb, paste: pasteVerb }}
           >
             {!cropping && (
               <IconButton

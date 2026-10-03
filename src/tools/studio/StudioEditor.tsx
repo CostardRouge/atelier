@@ -158,6 +158,8 @@ import { putProject } from '../../shared/projects/project-store';
 import type { Reconciliation } from '../../shared/projects/reconcile';
 import PageBar, { barPill } from '../../shared/ui/PageBar';
 import Button from '../../shared/ui/Button';
+import { PRESS_LOOK } from '../../shared/ui/press';
+import { VERB_GROUND, VerbButton } from '../../shared/ui/VerbMarks';
 import DeliverBar, { type ExportVerb } from '../../shared/ui/DeliverBar';
 import PanelHost from '../../shared/ui/PanelHost';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
@@ -2424,16 +2426,17 @@ export default function StudioEditor({
               >
                 ↻
               </button>
-              <button
-                type="button"
-                onClick={() => void handleGrabFrame()}
+              {/* A capture renders the frame with its overlays and look: the
+                  verb stays down until the file is saved (`useVerb`). */}
+              <VerbButton
+                onRun={handleGrabFrame}
                 disabled={grabbing}
-                className="flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-xs text-muted cursor-pointer hover:text-accent-ink hover:border-accent transition-colors disabled:opacity-50 disabled:cursor-default"
+                className={`flex-none px-2.5 py-1 rounded-full border border-line-strong bg-paper text-xs text-muted cursor-pointer hover:text-accent-ink hover:border-accent transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper disabled:opacity-50 disabled:cursor-default ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_GROUND}`}
                 title="Save this frame as a JPEG, overlays and look burned in"
                 aria-label="Capture frame"
               >
                 {grabbing ? '…' : '⌾'}
-              </button>
+              </VerbButton>
               {/* Preview speed. Viewing only — it moves no readout and no
                   export; the delivered speed lives in the Export tab. */}
               <select

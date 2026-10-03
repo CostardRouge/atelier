@@ -20,6 +20,8 @@ import type { HookBlock, Shade } from '../../shared/shades/shades';
 import type { TripGrade, TripPost } from '../../shared/roadtrip/trip-types';
 import type { GradeScope } from './use-trip-grade';
 import Button, { buttonClass } from '../../shared/ui/Button';
+import { useVerb } from '../../shared/ui/use-verb';
+import { VERB_INK, VerbButton } from '../../shared/ui/VerbMarks';
 
 interface StudioLinkProps {
   post: TripPost;
@@ -79,6 +81,7 @@ export default function StudioLink({
   const [linked, setLinked] = useState<ProjectDoc | null>(null);
   const [busy, setBusy] = useState<string | null>(null);
   const [note, setNote] = useState<string | null>(null);
+  const sendOpen = useVerb();
 
   const refresh = useCallback(async () => {
     const all = await listProjects();
@@ -90,9 +93,9 @@ export default function StudioLink({
     void refresh();
   }, [refresh]);
 
-  /** Write the badge into the project as its intro scene. */
-  async function send(openAfter: boolean) {
-    if (!post.projectId) return;
+  /** Write the badge into the project as its intro scene. True once it is there. */
+  async function send(openAfter: boolean): Promise<boolean> {
+    if (!post.projectId) return false;
     setNote(null);
     setBusy('Sending…');
     try {
@@ -100,7 +103,7 @@ export default function StudioLink({
       if (!doc) {
         setNote('That project is gone from this browser. Link another one.');
         onChangePost({ ...post, projectId: null });
-        return;
+        return false;
       }
       let next = withHook(
         doc,
@@ -134,19 +137,20 @@ export default function StudioLink({
       const ok = await putProject(next);
       if (!ok) {
         setNote('The browser refused to save the project.');
-        return;
+        return false;
       }
       setLinked(next);
       const held = [ctaHeld, developHeld].filter(Boolean).join(' ');
       if (openAfter) navigate(`/studio/open/${encodeURIComponent(next.id)}`);
       else setNote(held ? `Sent. ${held}` : 'Sent. Open the Studio to export.');
+      return true;
     } finally {
       setBusy(null);
     }
   }
 
-  /** A project around this piece's clip, ready to grade. */
-  async function create() {
+  /** A project around this piece's clip, ready to grade. True once it is saved. */
+  async function create(): Promise<boolean> {
     setNote(null);
     setBusy('Creating…');
     try {
@@ -163,7 +167,7 @@ export default function StudioLink({
       const ok = await putProject(doc);
       if (!ok) {
         setNote('The browser refused to save a new project.');
-        return;
+        return false;
       }
       onChangePost({ ...post, projectId: doc.id });
       setLinked(doc);
@@ -173,6 +177,7 @@ export default function StudioLink({
           : 'Project created. Send the hook when the badge is right.',
       );
       await refresh();
+      return true;
     } finally {
       setBusy(null);
     }
@@ -191,23 +196,23 @@ export default function StudioLink({
     setNote(null);
   }
 
-  /** Give a project that has no grade this piece's, so both exports agree. */
-  async function pushGrade() {
-    if (!linked) return;
+  /** Give a project that has no grade this piece's, so both exports agree. True once it is in. */
+  async function pushGrade(): Promise<boolean> {
+    if (!linked) return false;
     setNote(null);
     setBusy('Sending the grade…');
     try {
       const doc = await getProject(linked.id);
       if (!doc) {
         setNote('That project is gone from this browser. Link another one.');
-        return;
+        return false;
       }
       // Never over an existing grade: the project's is the author's, exactly
       // as their own outro is (see withCtaOutro).
       if (doc.lutStack.length) {
         setNote('The project already has a grade of its own; it was left as it is.');
         setLinked(doc);
-        return;
+        return false;
       }
       const next = {
         ...doc,
@@ -218,6 +223,7 @@ export default function StudioLink({
       const ok = await putProject(next);
       setNote(ok ? 'The grade is in the project now.' : 'The browser refused to save the project.');
       if (ok) setLinked(next);
+      return ok;
     } finally {
       setBusy(null);
     }
@@ -261,23 +267,25 @@ export default function StudioLink({
             </span>
           </div>
 
+          {/* Each verb lives on its button while the project is read and
+              written (`useVerb`, `docs/press-feedback.md`): down, then ✓ or –. */}
           <Button
             variant="primary"
             disabled={busy !== null || !elements.length}
-            onClick={() => void send(true)}
+            phase={sendOpen.phase}
+            onClick={() => sendOpen.run(() => send(true))}
           >
             {busy ?? (hasHook(linked) ? 'Update the hook and open the Studio' : 'Send the hook and open the Studio')}
           </Button>
 
           <div className="flex flex-wrap items-center gap-3">
-            <button
-              type="button"
-              className={link}
+            <VerbButton
+              className={`${link} ${VERB_INK}`}
               disabled={busy !== null || !elements.length}
-              onClick={() => void send(false)}
+              onRun={() => send(false)}
             >
               Send without leaving
-            </button>
+            </VerbButton>
             <button
               type="button"
               className={link}
@@ -319,14 +327,9 @@ export default function StudioLink({
             {!projectGraded && hereGraded && (
               <>
                 {' '}
-                <button
-                  type="button"
-                  className={link}
-                  disabled={busy !== null}
-                  onClick={() => void pushGrade()}
-                >
+                <VerbButton className={`${link} ${VERB_INK}`} disabled={busy !== null} onRun={pushGrade}>
                   Give the project {whose}
-                </button>
+                </VerbButton>
               </>
             )}
           </p>
@@ -361,14 +364,9 @@ export default function StudioLink({
             </div>
           )}
 
-          <button
-            type="button"
-            className={button}
-            disabled={busy !== null}
-            onClick={() => void create()}
-          >
+          <VerbButton className={button} disabled={busy !== null} onRun={create}>
             {busy ?? (candidates.length ? '+ Or create one for this clip' : '+ Create a project for this clip')}
-          </button>
+          </VerbButton>
           {projects !== null && candidates.length === 0 && (
             <span className="text-2xs text-faint">
               No Studio projects in this browser yet.

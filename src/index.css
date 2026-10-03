@@ -92,6 +92,9 @@
   --animate-pulse-dot: pulse-dot 2.4s var(--ease-paper) infinite;
   /* The indeterminate bar over a media still loading (`MediaLightbox`). */
   --animate-deck-load: deck-load 1.15s ease-in-out infinite;
+  /* A working verb's hairline arrives only once the verb has lasted
+     `VERB_WAIT_MS` (80 ms, `shared/ui/verb.ts`): a quicker one never blinks it. */
+  --animate-verb-wait: verb-wait 160ms ease-out 80ms both;
 }
 
 /* The DARK theme: Studio Papier at night — warm ink instead of warm paper,
@@ -185,6 +188,15 @@ html[data-surface='darkroom'] {
 
 /* A sliver sweeping the width, twice as fast at the ends as in the middle —
    an indeterminate bar, for a load whose length nothing can know. */
+@keyframes verb-wait {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
 @keyframes deck-load {
   0% {
     transform: translateX(-110%);

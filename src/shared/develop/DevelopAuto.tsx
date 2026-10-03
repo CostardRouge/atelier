@@ -129,6 +129,7 @@ export function DevelopAutoSection({
             armed={picking}
             disabled={!ready && pickState === 'off'}
             hint={ready ? 'Click something in the picture that should be grey' : notRead}
+            instant
             onClick={() => {
               if (!picking && auto.turnOff('pick')) return;
               onPicking(!picking);

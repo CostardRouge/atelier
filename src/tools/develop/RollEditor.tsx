@@ -91,6 +91,7 @@ import { useWinnowConnection } from '../../shared/sources/winnow/use-connection'
 import { usePublishMediaActions, type MediaActions, type MediaView } from '../../shared/sources/media-scope';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
+import type { VerbOutcome } from '../../shared/ui/verb';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
@@ -892,40 +893,44 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
    * section it has something in, with no dialog. The develop numbers also go
    * to the develop clipboard, so a Trips or Studio sheet can paste them.
    */
-  const copyPicture = useCallback((develop: DevelopSettings) => {
+  // Each verb says how it went (`VerbOutcome`): the glyph that ran it shows ✓
+  // or –, and the words are the status line's.
+  const copyPicture = useCallback((develop: DevelopSettings): VerbOutcome => {
     const p = latest.current.pictures.find((x) => x.id === openIdRef.current);
-    if (!p) return;
+    if (!p) return { ok: false, word: 'no picture open' };
     const now = { ...p, develop };
     const sections = copiedSectionsOf(now);
     if (sections.length === 0) {
-      setNotice('nothing to copy — this picture is as shot');
-      return;
+      const word = 'nothing to copy — this picture is as shot';
+      setNotice(word);
+      return { ok: false, word };
     }
     copySettings(now, sections);
     copyDevelop(develop);
     const left = sections.filter((id) => !carriedSections().includes(id));
     setNotice(`copied ${sectionNames(sections)}${left.length ? ` — ⌘V leaves ${sectionNames(left)} behind (▾ beside paste)` : ''}`);
+    return { ok: true, word: `copied ${sectionNames(sections)}` };
   }, []);
-  /** The held picture onto `ids`, carrying what the ▾ says. */
+  /** The held picture onto `ids`, carrying what the ▾ says. Null when nothing is held. */
   const pasteOnto = useCallback(
-    (ids: readonly string[]): boolean => {
+    (ids: readonly string[]): VerbOutcome | null => {
       const held = copiedSettings();
-      if (!held || ids.length === 0) return false;
+      if (!held || ids.length === 0) return null;
       const sections = pastedSections(held.sections, carriedSections());
       if (sections.length === 0) {
         setNotice(`nothing to paste — ${sectionNames(held.sections)} ${held.sections.length === 1 ? 'is' : 'are'} left behind (▾ beside paste)`);
-        return true;
+        return { ok: false, word: 'nothing to paste — the ▾ leaves it all behind' };
       }
       update((r) => applySections(r, held.from, ids, sections), 'paste');
       const onto = ids.length === 1 && ids[0] === openIdRef.current ? '' : ` onto ${ids.length} picture${ids.length === 1 ? '' : 's'}`;
       setNotice(`pasted ${sectionNames(sections)} from ${pictureLabel(held.from)}${onto}`);
-      return true;
+      return { ok: true, word: `pasted ${sectionNames(sections)}${onto}` };
     },
     [update],
   );
-  const pasteSections = useCallback((): boolean => {
+  const pasteSections = useCallback((): VerbOutcome | null => {
     const id = openIdRef.current;
-    return id ? pasteOnto([id]) : false;
+    return id ? pasteOnto([id]) : null;
   }, [pasteOnto]);
   /**
    * The copy and paste glyphs' state, and the ▾ of what a paste carries —
@@ -1178,7 +1183,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
    */
   const selectionRef = useRef(selectionTargets);
   selectionRef.current = selectionTargets;
-  const pastePicture = useCallback((): boolean => {
+  const pastePicture = useCallback((): VerbOutcome | null => {
     const marked = selectionRef.current;
     return marked.length > 0 ? pasteOnto(marked) : pasteSections();
   }, [pasteOnto, pasteSections]);

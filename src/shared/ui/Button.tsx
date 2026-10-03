@@ -17,6 +17,8 @@
 
 import { forwardRef, type ButtonHTMLAttributes, type ReactNode } from 'react';
 import { PRESS_LOOK } from './press';
+import type { VerbPhase } from './verb';
+import { VERB_SHAPE, VerbHairline, verbAttrs, verbGlyph } from './VerbMarks';
 
 export type ButtonVariant = 'primary' | 'default' | 'ghost' | 'danger';
 export type ButtonSize = 'sm' | 'md' | 'lg';
@@ -49,21 +51,29 @@ const PADDINGS: Record<ButtonSize, string> = {
 // Each variant's PRESSED ground too: under a finger there is no hover
 // (Tailwind v4 draws `hover:` only where the device can hover), so the press
 // is the only state a touch screen ever shows — the primary takes the accent
-// a mouse sees on hover.
+// a mouse sees on hover. And each variant's VERB colours (`phase`): working,
+// done, failed — the primary's ink ground turns green or red whole, where the
+// others keep their ground and say it in their ink.
 const VARIANTS: Record<ButtonVariant, string> = {
   primary:
     'border-ink bg-ink text-paper font-semibold shadow-[0_2px_10px_-4px_rgba(27,24,19,0.4)] ' +
-    'hover:bg-accent hover:border-accent data-pressed:bg-accent data-pressed:border-accent',
+    'hover:bg-accent hover:border-accent data-pressed:bg-accent data-pressed:border-accent ' +
+    'data-[state=working]:bg-accent data-[state=working]:border-accent data-[state=working]:shadow-press ' +
+    'data-[state=done]:bg-ok data-[state=done]:border-ok data-[state=failed]:bg-danger data-[state=failed]:border-danger',
   default:
     'border-line-strong bg-surface text-ink shadow-[0_1px_1.5px_rgba(27,24,19,0.04)] ' +
-    'hover:bg-paper-2 hover:border-muted data-pressed:bg-paper-2 data-pressed:border-muted',
+    'hover:bg-paper-2 hover:border-muted data-pressed:bg-paper-2 data-pressed:border-muted ' +
+    'data-[state=working]:bg-paper-2 data-[state=working]:shadow-press ' +
+    'data-[state=done]:text-ok data-[state=failed]:text-danger data-[state=failed]:border-danger-line',
   ghost:
     'border-transparent bg-transparent text-ink-soft hover:bg-paper-2 hover:text-ink ' +
-    'data-pressed:bg-paper-2 data-pressed:text-ink',
+    'data-pressed:bg-paper-2 data-pressed:text-ink data-[state=working]:bg-paper-2 ' +
+    'data-[state=done]:text-ok data-[state=failed]:text-danger',
   danger:
     'border-line-strong bg-surface text-danger ' +
     'hover:bg-danger-wash hover:border-danger-line hover:text-danger-ink ' +
-    'data-pressed:bg-danger-wash data-pressed:border-danger-line data-pressed:text-danger-ink',
+    'data-pressed:bg-danger-wash data-pressed:border-danger-line data-pressed:text-danger-ink ' +
+    'data-[state=working]:bg-danger-wash data-[state=working]:shadow-press data-[state=done]:text-ok',
 };
 
 /** The whole recipe as one string, for a control that cannot be a `<button>`. */
@@ -84,19 +94,35 @@ export interface ButtonProps extends ButtonHTMLAttributes<HTMLButtonElement> {
   icon?: ReactNode;
   /** A trailing one — a chevron on a menu button, a shortcut hint. */
   trailing?: ReactNode;
+  /**
+   * The life of the verb this button runs (`useVerb`): down with a hairline
+   * while it works, ✓ or – in place of the icon after. Without an icon the
+   * label stays and its ink says it — the button keeps its width.
+   */
+  phase?: VerbPhase;
 }
 
+/** The classes a button running a verb adds to its recipe; its colours are the variant's. */
+export const VERB_CLASSES = `relative ${VERB_SHAPE}`;
+
 const Button = forwardRef<HTMLButtonElement, ButtonProps>(function Button(
-  { variant = 'default', size = 'md', icon, trailing, className = '', children, type = 'button', ...rest },
+  { variant = 'default', size = 'md', icon, trailing, phase, className = '', children, type = 'button', ...rest },
   ref,
 ) {
   return (
-    <button ref={ref} type={type} className={buttonClass(variant, size, className)} {...rest}>
-      {icon && <span className="inline-flex shrink-0 [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{icon}</span>}
+    <button
+      ref={ref}
+      type={type}
+      className={buttonClass(variant, size, phase ? `${VERB_CLASSES} ${className}` : className)}
+      {...verbAttrs(phase)}
+      {...rest}
+    >
+      {icon && <span className="inline-flex shrink-0 [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{verbGlyph(phase, icon)}</span>}
       {children}
       {trailing && (
         <span className="inline-flex shrink-0 [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{trailing}</span>
       )}
+      <VerbHairline phase={phase} />
     </button>
   );
 });
