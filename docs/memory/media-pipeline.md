@@ -308,3 +308,36 @@ portrait, not a RAW matter.
 - **Resolve once** (`makeDevelopShapers`, passed into `developLinear`; `developStage` does it): the bake calls it tens of thousands of times — the `makeTransfer` rule.
 - **The record is no longer flat numbers, and two habits had to change.** `{ ...settings }` now SHARES a point list, so a preset and the picture it was saved from would hold the same one and an editor moving a point would move both — the clipboard, `savePresetIn` and any keeper clone through `cloneDevelop`. And a key-by-key `===` calls two structurally identical curves different, so equality is `sameDevelop` (engine-level, re-exported by `roll-editor.ts` where it used to live) and compares shapes by value. `DevelopKey` now EXCLUDES them: they are not sliders, and a panel must not try to draw one.
 - **The 33 floor stays, measured rather than assumed.** Worst error against the exact stage, in 8-bit codes, at 33³ / 49³ / 64³: a gentle S on luma 2.63 / 1.70 / 1.36, the same on rgb 0.13 / 0.06 / 0.03, a hard S on rgb 0.53 / 0.24 / 0.15, lifted blacks and a red cast under 0.06 throughout — the luma path is the worst because it is a ratio, and all of it is at or under the quantisation step for a ~40 ms bake against ~250 ms at 64³. A near-vertical cliff costs 10.7 codes at 33³ and STILL 3.2 at 64³, so the lattice is not its remedy and raising the floor would buy visible banding at the price of the freeze this file already forbids. **A curve steeper than roughly 1:10 is an approximation until the render core evaluates it per pixel** (`docs/photo-editor.md` P4, which retires this error class). The numbers live beside the spec that pins them in `lut-stack.test.ts`.
+
+## A HEIF's 10 bits are NOT read yet — the calls exist, the file to measure on does not (2026-10-05)
+
+**Fact, read in `node_modules/libheif-js` 1.23**: the wasm EXPORTS what a
+16-bit decode needs — `_heif_image_handle_get_luma_bits_per_pixel(handle)`
+(the file's depth before any decode), `_heif_decode_image(err, handle, out,
+colorspace 1 = RGB, chroma 14 = interleaved RRGGBB little-endian, options 0)`
+and `_heif_image_get_bits_per_pixel_range(img, channel)` to scale by — the
+same raw-C route `heifThumbnail` in `wasm-still.ts` already takes with
+chroma 11. The JS `display()` path is 8-bit by construction (an `ImageData`).
+**The build, when it can be measured**: `heifDecode` asks the depth; past 8
+it decodes RRGGBB_LE, hands back the 8-bit `ImageData` every 2D draw takes
+(from the same plane, ×255/(2^bits − 1)) AND a `HalfImage` (sRGB-ENCODED
+halves of the file's codes, the transfer the file names left as it is —
+exactly today's reading, with more bits); `WasmStill` and `DecodedStill`
+carry it as `half`; the stage's source takes it as `gpu` (the RAW seam,
+`use-develop-picture.ts`), the export renders it as `renderFromRaw` renders
+`decoded.half`; a ROOMY device only (a 33 MP half is 200 MB beside the
+ImageData), box-averaged to the stage budget by a pure `downscaleHalf`
+(encoded space, as the browser's resize is), and `pictureFidelity` says
+`HEIF · 10-bit`. **Why it is not built**: this container cannot make a
+HEIF — ImageMagick 6.9 here reads HEIC and writes none, ffmpeg has no HEVC
+encoder and no HEIF muxer, the wasm bundles libde265 alone so a 10-bit AVIF
+(which ffmpeg CAN write) cannot stand in — and the repo holds no `.hif`
+fixture. A decode path nobody has run on one file is the kind of
+"working feature" `render-core.md` warns about. **What it needs**: one
+`.HIF` off his A7C II (10-bit, six HEVC tiles — `raw.md` §14), and his
+answer on whether his HIFs are HLG: a 10-bit HLG file read as sRGB is wrong
+in the same way today's 8-bit read is, and that is a transfer question
+before a bit-depth one. Worth stating: the ARW beside it already gives the
+sensor, so the gain is for a HEIF opened ALONE (an iPhone HEIC is 8-bit
+unless HDR).
+
