@@ -474,32 +474,57 @@ export const TEMPERATURE_REACH = 0.25;
 /** Tint ±100 → the green gain moves ∓20 %. */
 export const TINT_REACH = 0.2;
 
-function clamp01(x: number): number {
-  return x < 0 ? 0 : x > 1 ? 1 : x;
+// --- the tone domain ---------------------------------------------------------
+//
+// The tone curve works on ENCODED luminance, and that domain is EXTENDED above
+// white (2026-10-05): the sRGB encode up to 1, then `1 + TONE_EXT_K × log2(Y)`
+// — a logarithm whose slope at white is the encode's own, so the domain is C¹
+// there and a RAW's headroom (a value the sensor kept above the displayed
+// white) is a NUMBER the bands and the contrast act on, where it used to be
+// clamped to white before the curve ever saw it. 0.3047 per stop: the sRGB
+// encode's derivative at 1, `1.055 / 2.4`, times `ln 2`.
+
+/** Encoded luminance per STOP above white. */
+export const TONE_EXT_K = 0.3047;
+
+/** Linear luminance (≥ 0, white at 1, no ceiling) → the extended encoded domain. */
+export function encodeTone(Y: number): number {
+  if (Y <= 1) return fromLinear(Y, 'srgb');
+  return 1 + TONE_EXT_K * Math.log2(Y);
+}
+
+/** The inverse of `encodeTone`. */
+export function decodeTone(L: number): number {
+  if (L <= 1) return toLinear(L, 'srgb');
+  return Math.pow(2, (L - 1) / TONE_EXT_K);
 }
 
 /**
- * The four band weights over an encoded luminance L in [0,1]. Each band is
- * zero outside its half and at the end the neighbouring band owns, so the
- * controls do not fight: shadows and highlights are bumps peaking at 1/4 and
- * 3/4 (zero at both ends of their half), blacks and whites ramp to the
- * extreme and are zero at mid-grey.
+ * The four band weights over an encoded luminance L. Each band is zero in the
+ * half the other pair owns, so shadows never move a highlight: in the lower
+ * half, shadows is a bump peaking at 1/4 and ZERO at black (a lifted black is
+ * fog, not a shadow) while blacks ramps up to black itself; in the upper half,
+ * HIGHLIGHTS RISES ALL THE WAY TO WHITE and rests there — zero at mid-grey,
+ * full at white and above, with no slope at white — while whites ramps up to
+ * white and rests there too. Highlights used to be the shadows' mirror, a bump
+ * zero at white: then "highlights −100" darkened a sky's three-quarter tones
+ * and left its brightest tenth where it was, which read as a burned HOLE ringed
+ * by the recovery (the maintainer's report, 2026-10-05). Above white the two
+ * upper bands hold their value at white: the shift is the same, and what
+ * brings the headroom down is the shoulder, through `ToneShape.top`.
  */
 export function bandWeights(L: number): { hi: number; sh: number; wh: number; bl: number } {
   if (L <= 0.5) {
     const u = L / 0.5; // 0..1 across the lower half
     return { hi: 0, wh: 0, sh: 4 * u * (1 - u), bl: (1 - u) * (1 - u) };
   }
+  if (L >= 1) return { hi: 1, wh: 1, sh: 0, bl: 0 };
   const u = (L - 0.5) / 0.5; // 0..1 across the upper half
-  return { hi: 4 * u * (1 - u), wh: u * u, sh: 0, bl: 0 };
+  return { hi: u * (2 - u), wh: u * u, sh: 0, bl: 0 };
 }
 
-/**
- * The luminance curve: encoded luminance in, encoded luminance out. Bands,
- * then contrast, then brightness — each stage sees the previous one's
- * result, and the order is fixed so two documents never disagree.
- */
-export function toneCurve(L: number, d: DevelopSettings): number {
+/** The bands and the contrast line, with no clamp: where the curve would send L, left to the toe and the shoulder. */
+function rawTone(L: number, d: DevelopSettings): number {
   let v = L;
   if (d.highlights || d.shadows || d.whites || d.blacks) {
     const w = bandWeights(v);
@@ -508,12 +533,120 @@ export function toneCurve(L: number, d: DevelopSettings): number {
       (d.shadows / 100) * SHADOWS_REACH * w.sh +
       (d.whites / 100) * WHITES_REACH * w.wh +
       (d.blacks / 100) * BLACKS_REACH * w.bl;
-    v = clamp01(v);
   }
   if (d.contrast) {
     const slope = 1 + (d.contrast / 100) * CONTRAST_REACH;
-    v = clamp01(CONTRAST_PIVOT + (v - CONTRAST_PIVOT) * slope);
+    v = CONTRAST_PIVOT + (v - CONTRAST_PIVOT) * slope;
   }
+  return v;
+}
+
+/**
+ * How far past white (or black) the shoulder (or the toe) reaches, in the
+ * encoded domain: two stops. What the sliders push further than that is a
+ * burn, said by the clipping view, never a slope of nothing.
+ */
+export const TONE_ROLLOFF_STOPS = 2;
+const ROLLOFF_REACH = TONE_EXT_K * TONE_ROLLOFF_STOPS;
+/** The knee is three quarters of the overshoot, and never more than 0.35 of the encoded range. */
+const KNEE_RATE = 0.75;
+const KNEE_MAX = 0.35;
+
+/**
+ * The shape of one develop's tone curve at its two ends, resolved ONCE per
+ * develop (the `makeTransfer` rule) — what turns a clip into a rolloff.
+ *
+ * `top` is the extended encoded luminance the curve maps to white: everything
+ * from `knee` up to it is compressed into [knee, 1] by a cubic that leaves the
+ * knee at slope 1 and reaches white at slope 0, and what the curve sends above
+ * `top` is white. It is where the curve sends the REFERENCE white — the
+ * displayed white after the gains (so exposure +1 rolls off instead of
+ * clipping at half the picture), extended into a RAW's headroom by the
+ * RECOVERY the author asked for: highlights −100 or whites −100 moves the
+ * reference up to the sensor's own top, so the whole headroom comes under
+ * white with its detail, and −50 brings half of it. `top` is 1 — no shoulder,
+ * every pixel bit-identical — unless a slider or a gain pushed the reference
+ * past white, and it grows continuously with them. `bottom` and `toe` are the
+ * mirror at black, for a contrast or a blacks slider that used to crush.
+ *
+ * Null when no slider and no gain touches the luminance: the stage is skipped
+ * entirely, and a value above white passes through as the headroom it is.
+ */
+export interface ToneShape {
+  /** The extended encoded luminance of the brightest possible input — the tone table's domain, ≥ 1. */
+  domain: number;
+  /** Where the shoulder starts (≤ 1) and the value it maps to white (≥ 1; 1 means no shoulder). */
+  knee: number;
+  top: number;
+  /** The value the toe maps to black (≤ 0; 0 means no toe) and where the toe ends (≥ 0). */
+  bottom: number;
+  toe: number;
+}
+
+/** Luminance of the displayed white after the white balance and the gains — `developLinear`'s own order on [1, 1, 1]. */
+function whiteLuminance(d: DevelopSettings): number {
+  let w: [number, number, number] = [1, 1, 1];
+  if (d.rawWb && isRawDevelop(d)) {
+    w = apply3(d.rawWb.matrix, w);
+    w = [Math.max(0, w[0]), Math.max(0, w[1]), Math.max(0, w[2])];
+  }
+  const t = (d.temperature / 100) * TEMPERATURE_REACH;
+  const tint = (d.tint / 100) * TINT_REACH;
+  const gain = d.exposure ? Math.pow(2, d.exposure) : 1;
+  return gain * (LUM_R * w[0] * (1 + t) + LUM_G * w[1] * (1 - tint) + LUM_B * w[2] * (1 - t));
+}
+
+export function toneShape(d: DevelopSettings): ToneShape | null {
+  const yWhite = whiteLuminance(d);
+  const sliders = d.highlights || d.shadows || d.whites || d.blacks || d.contrast || d.brightness;
+  if (!sliders && yWhite <= 1) return null;
+  const lWhite = encodeTone(yWhite);
+  // A RAW's sensor keeps `gain` above the displayed white; a render keeps nothing.
+  const lTop = encodeTone(yWhite * rawGainOf(d));
+  const recovery = Math.min(1, Math.max(0, -d.highlights / 100) + Math.max(0, -d.whites / 100));
+  const lRef = lWhite + (lTop - lWhite) * recovery;
+  const top = Math.min(1 + ROLLOFF_REACH, Math.max(1, rawTone(lRef, d)));
+  const bottom = Math.max(-ROLLOFF_REACH, Math.min(0, rawTone(0, d)));
+  return {
+    domain: Math.max(1, lTop),
+    knee: 1 - Math.min(KNEE_MAX, KNEE_RATE * (top - 1)),
+    top,
+    bottom,
+    toe: Math.min(KNEE_MAX, KNEE_RATE * -bottom),
+  };
+}
+
+/**
+ * A cubic Hermite from (a, fa) at slope sa to (b, fb) at slope sb, read at x
+ * in [a, b]. Monotone as long as the slopes stay under three times the
+ * chord's (Fritsch–Carlson): the knee's rate and cap keep the shoulder's and
+ * the toe's under 2.8.
+ */
+function hermite(x: number, a: number, b: number, fa: number, fb: number, sa: number, sb: number): number {
+  const h = b - a;
+  const t = (x - a) / h;
+  const t2 = t * t;
+  const t3 = t2 * t;
+  return (2 * t3 - 3 * t2 + 1) * fa + (t3 - 2 * t2 + t) * h * sa + (-2 * t3 + 3 * t2) * fb + (t3 - t2) * h * sb;
+}
+
+/**
+ * The luminance curve: extended encoded luminance in (`encodeTone`), encoded
+ * luminance in [0,1] out. Bands, then contrast, then the toe and the shoulder
+ * that bound them softly, then brightness — each stage sees the previous
+ * one's result, and the order is fixed so two documents never disagree. A
+ * value the chain does not move comes back as the very same number.
+ */
+export function toneCurve(L: number, d: DevelopSettings, shape: ToneShape | null = toneShape(d)): number {
+  if (!shape) return L;
+  let v = rawTone(L, d);
+  // The toe: [bottom, toe] → [0, toe], black kept at black, slope 1 at the end.
+  if (shape.bottom < 0 && v < shape.toe) v = v <= shape.bottom ? 0 : hermite(v, shape.bottom, shape.toe, 0, shape.toe, 0, 1);
+  if (v < 0) v = 0; // a bump's dip under black where no toe was asked (shadows −100 on a near-black)
+  // The shoulder: [knee, top] → [knee, 1], slope 1 at the knee, 0 at white,
+  // white above. With no shoulder a value above white is left as it is — the
+  // headroom a slider did not reach passes through, as the contract says.
+  if (shape.top > 1 && v > shape.knee) v = v >= shape.top ? 1 : hermite(v, shape.knee, shape.top, shape.knee, 1, 1, 0);
   if (d.brightness) {
     // A gamma keeps both ends fixed: +100 lifts a mid-grey, −100 sinks it.
     const gamma = 1 / (1 + (d.brightness / 100) * BRIGHTNESS_REACH);
@@ -523,21 +656,61 @@ export function toneCurve(L: number, d: DevelopSettings): number {
 }
 
 /**
+ * What a pixel a display cannot show becomes. Its HUE is kept whatever
+ * happens — a per-channel clip, what every render did until 2026-10-05,
+ * rotates it (a warm highlight turns yellow, then white), against the one
+ * rule the whole develop keeps elsewhere. Between brightness and colour the
+ * answer is a blend of two projections onto the same hue line: SCALED, the
+ * pixel divided by its brightest channel (saturation kept, brightness given
+ * up), and KEPT, the pixel pulled toward the grey of its own luminance until
+ * that channel is white (brightness kept, saturation given up; white when it
+ * is brighter than white). The weight on KEPT is `max(max − 1, min) / max`:
+ * a saturated colour just past white stays its colour and gives up a little
+ * brightness, a colour far past white or close to grey goes to white, and a
+ * ramp through the clip never darkens on its way to white. Measured why it
+ * is not KEPT alone (the gate, 2026-10-05): pure yellow's luminance is 0.93,
+ * so keeping it turns a clipped yellow near-white at once, and half a code
+ * of red moved blue by twenty. Identity under white.
+ */
+export function clipToDisplay(rgb: readonly [number, number, number]): [number, number, number] {
+  const [r, g, b] = rgb;
+  const max = r > g ? (r > b ? r : b) : g > b ? g : b;
+  if (max <= 1) return [r, g, b];
+  const min = r < g ? (r < b ? r : b) : g < b ? g : b;
+  const Y = LUM_R * r + LUM_G * g + LUM_B * b;
+  const w = Math.max(max - 1, min) / max;
+  let kr = 1;
+  let kg = 1;
+  let kb = 1;
+  if (Y < 1) {
+    const t = (1 - Y) / (max - Y);
+    kr = Y + (r - Y) * t;
+    kg = Y + (g - Y) * t;
+    kb = Y + (b - Y) * t;
+  }
+  const s = (1 - w) / max;
+  return [r * s + kr * w, g * s + kg * w, b * s + kb * w];
+}
+
+/**
  * The curve and level maps a develop needs, resolved ONCE — the `makeTransfer`
- * rule. A develop with neither is the common case and pays nothing.
+ * rule. A develop with none is the common case and pays nothing.
  */
 export interface DevelopShapers {
+  /** The tone curve's ends — null when no slider and no gain reaches the luminance. */
+  tone: ToneShape | null;
   /** The luma curve on encoded LUMINANCE, applied as a ratio. */
   luma: ((L: number) => number) | null;
   /** Levels and the rgb / per-channel curves, on encoded channel values. */
   channels: ChannelShaper | null;
 }
 
-const NO_SHAPERS: DevelopShapers = Object.freeze({ luma: null, channels: null });
+const NO_SHAPERS: DevelopShapers = Object.freeze({ tone: null, luma: null, channels: null });
 
 export function makeDevelopShapers(d: DevelopSettings): DevelopShapers {
-  if (isDefaultCurves(d.curves) && isDefaultLevels(d.levels)) return NO_SHAPERS;
-  return { luma: makeLumaShaper(d.curves), channels: makeChannelShaper(d.curves, d.levels) };
+  const tone = toneShape(d);
+  if (!tone && isDefaultCurves(d.curves) && isDefaultLevels(d.levels)) return NO_SHAPERS;
+  return { tone, luma: makeLumaShaper(d.curves), channels: makeChannelShaper(d.curves, d.levels) };
 }
 
 /**
@@ -556,7 +729,9 @@ function shapeChannel(lin: number, channel: 0 | 1 | 2, shape: ChannelShaper): nu
 /**
  * Develop one pixel in LINEAR light. Input is ≥ 0 and may exceed 1 (a RAW's
  * headroom); output is ≥ 0 and is NOT clamped — the caller encodes and
- * clamps for its own medium. The identity when every field is 0.
+ * clamps for its own medium (`clipToDisplay`, then the encode). The identity
+ * when every field is 0, and a value above white passes through untouched
+ * when nothing reaches the luminance.
  *
  * Order: white balance → exposure → the luminance curve as one ratio → the
  * luma curve, also as a ratio → levels and the per-channel curves → saturation
@@ -604,17 +779,16 @@ export function developLinear(
   }
 
   const Y = LUM_R * r + LUM_G * g + LUM_B * b;
-  if (Y > 0 && (d.highlights || d.shadows || d.whites || d.blacks || d.contrast || d.brightness)) {
-    // The curve is defined on [0,1]; a pixel above white is pulled by the
-    // same ratio its clipped luminance would be, which is how "whites −100"
-    // reaches into a RAW's headroom.
-    const Yc = Y > 1 ? 1 : Y;
-    const L = fromLinear(Yc, 'srgb');
-    const Lout = toneCurve(L, d);
+  if (Y > 0 && shapers.tone) {
+    // The curve reads the EXTENDED domain: a pixel above white is a number
+    // the bands and the shoulder act on, which is how "highlights −100"
+    // brings a RAW's headroom under white with its detail (`ToneShape`).
+    const L = encodeTone(Y);
+    const Lout = toneCurve(L, d, shapers.tone);
     // A pixel the curve did not move is left bit-identical: the encode/decode
     // pair is not exact to the last ulp, and "untouched" must mean untouched.
     if (Lout !== L) {
-      const ratio = toLinear(Lout, 'srgb') / Yc;
+      const ratio = decodeTone(Lout) / Y;
       r *= ratio;
       g *= ratio;
       b *= ratio;
@@ -696,10 +870,8 @@ export function developStage(
   // the displayed white is still there for "highlights −100" to reach.
   const gain = rawGainOf(d);
   return (r, g, b) => {
-    const out = developLinear(
-      [toLinear(r, 'srgb') * gain, toLinear(g, 'srgb') * gain, toLinear(b, 'srgb') * gain],
-      d,
-      shapers,
+    const out = clipToDisplay(
+      developLinear([toLinear(r, 'srgb') * gain, toLinear(g, 'srgb') * gain, toLinear(b, 'srgb') * gain], d, shapers),
     );
     return [fromLinear(out[0], 'srgb'), fromLinear(out[1], 'srgb'), fromLinear(out[2], 'srgb')];
   };

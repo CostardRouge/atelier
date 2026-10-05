@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_DEVELOP, developStage, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, developLinear, developStage, encodeTone, type DevelopSettings } from './develop';
 import { HEAD_TABLE_SIZE, developHead, developTail, isDefaultTail } from './develop-head';
 import { fromLinear, toLinear } from '../lut/transfer';
 
@@ -135,13 +135,16 @@ describe('developHead', () => {
     expect(developHead({ ...DEFAULT_DEVELOP, blacks: 30 })!.tone![0]).toBeGreaterThan(0);
     expect(head.tone![HEAD_TABLE_SIZE - 1]).toBeLessThanOrEqual(1);
     // The GPU reads the table and divides per pixel: on a grey, that is the
-    // stage's own ratio.
+    // stage's own ratio. A render's develop spans [0, 1] exactly (toneTop 1).
+    const render = { ...DEFAULT_DEVELOP, shadows: 80, blacks: 30, contrast: 40 };
+    const table = developHead(render)!;
+    expect(table.toneTop).toBe(1);
     const L = 0.3;
     const Y = toLinear(L, 'srgb');
     const i = L * (HEAD_TABLE_SIZE - 1);
     const lo = Math.floor(i);
-    const tone = head.tone![lo] + (head.tone![lo + 1] - head.tone![lo]) * (i - lo);
-    const expected = developStage({ ...DEFAULT_DEVELOP, shadows: 80, blacks: 30, contrast: 40 })(L, L, L)[0];
+    const tone = table.tone![lo] + (table.tone![lo + 1] - table.tone![lo]) * (i - lo);
+    const expected = developStage(render)(L, L, L)[0];
     expect(fromLinear(Y * (tone / Y), 'srgb')).toBeCloseTo(expected, 4);
   });
 
@@ -155,7 +158,26 @@ describe('developHead', () => {
     expect(head.channels![n + mid]).toBeCloseTo(head.channels![2 * n + mid], 12);
     expect(head.channels![mid]).toBeGreaterThan(head.channels![n + mid]);
     expect(developHead({ ...DEFAULT_DEVELOP, exposure: 1 })!.channels).toBeNull();
-    expect(developHead({ ...DEFAULT_DEVELOP, exposure: 1 })!.tone).toBeNull();
+    // A gain that pushes white PAST white carries a tone table — the shoulder
+    // that rolls it off — spanning the extended domain; one that does not
+    // carries none.
+    expect(developHead({ ...DEFAULT_DEVELOP, exposure: -1 })!.tone).toBeNull();
+    const lifted = developHead({ ...DEFAULT_DEVELOP, exposure: 1 })!;
+    expect(lifted.tone).not.toBeNull();
+    expect(lifted.toneTop).toBeCloseTo(encodeTone(2), 9);
+    expect(lifted.tone![HEAD_TABLE_SIZE - 1]).toBe(1);
+  });
+
+  it('spans a RAW’s headroom: the table’s domain is the sensor’s top after the gains', () => {
+    const head = developHead(RAW)!;
+    expect(head.toneTop).toBeGreaterThan(1.9);
+    // Read at L / toneTop, the table is the stage's own ratio on a grey above white.
+    const Y = 2.5;
+    const x = (encodeTone(Y) / head.toneTop) * (HEAD_TABLE_SIZE - 1);
+    const lo = Math.floor(x);
+    const tone = head.tone![lo] + (head.tone![lo + 1] - head.tone![lo]) * (x - lo);
+    const want = developLinear([Y, Y, Y], { ...RAW, temperature: 0, tint: 0, exposure: 0, rawWb: null, saturation: 0, vibrance: 0, curves: null, levels: null, grading: null }, );
+    expect(tone).toBeCloseTo(0.2126 * want[0] + 0.7152 * want[1] + 0.0722 * want[2], 4);
   });
 });
 

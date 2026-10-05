@@ -145,6 +145,7 @@ describe('a cube with a head', () => {
       gain: 1,
       matrix: null,
       gains: [1, 1, 1],
+      toneTop: 1,
       tone: null,
       luma: null,
       channels: null,

@@ -288,6 +288,30 @@ Toggle it in the Grade tab and watch a sky or a gradient — that is where it
 shows. It is used by both the bake and the shader, so the preview and the
 export never disagree.
 
+**Nothing burns that a slider did not send past the picture's own top.** The
+tone sliders — exposure, contrast, highlights, shadows, whites, blacks — used
+to clip: contrast +100 made everything above 80 % white, exposure +1 burned
+half the picture, and *highlights −100* darkened a sky's three-quarter tones
+while leaving its brightest tenth where it was, which read as a burned hole
+ringed by the recovery. Since 2026-10-05 the curve works on a luminance scale
+that **continues above white** — a logarithm of the stops a RAW's sensor kept
+past the displayed white — and ends in a **shoulder**: wherever the sliders
+push the displayed white past white, the top of the range is compressed into
+it by a smooth cubic that reaches white at zero slope, so a near-white keeps
+its order and its detail instead of flattening; a **toe** does the same at
+black for a contrast or a blacks slider that used to crush. *Highlights* now
+reaches white itself, and on a RAW it is **recovery**: −100 brings the whole
+headroom under white with its detail, −50 brings one stop of two. The rolloff
+reaches two stops; what is pushed further is a burn, and the clipping view
+(**J**) says so. Where a channel still cannot be shown, the pixel keeps its
+**hue** whatever happens — a per-channel clip turned a warm highlight yellow,
+then white — and trades between its colour and its brightness: a saturated
+colour just past white stays its colour and gives up a little brightness, a
+colour far past white or close to grey goes to white, and a ramp of one colour
+through the clip never darkens on its way there. A picture whose sliders push
+nothing past white is bit-identical to before; one with highlights set will
+render a touch differently at its top, on purpose.
+
 **The develop is not in the cube.** A correction's white balance, exposure,
 tone curve, luma and channel curves, saturation and vibrance — everything up to
 the colour mixer — runs **per pixel**, before the lattice, in the shader and in

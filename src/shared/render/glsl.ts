@@ -12,6 +12,8 @@
  * uniforms, the chunks it needs and a `main`.
  */
 
+import { TONE_EXT_K } from '../develop/develop';
+
 export const GLSL_VERSION = '#version 300 es';
 
 /** The full-screen quad's vertex shader. `u_flipY` is the ImageBitmap rule. */
@@ -100,6 +102,7 @@ uniform bool u_headHasMatrix;
 uniform mat3 u_headMatrix;
 uniform vec3 u_headGains;
 uniform bool u_headTone;
+uniform float u_headToneTop; // the tone table's domain (CubeHead.toneTop)
 uniform bool u_headLuma;
 uniform bool u_headChannels;
 uniform float u_headSat;
@@ -112,14 +115,17 @@ uniform float u_headTableSize;
  * The develop's head, per pixel — the GLSL twin of `developLinear`'s first
  * stages (`develop/develop-head.ts` says why they left the cube). Every step
  * mirrors the TypeScript line by line, on the encoded input the lattice would
- * have taken, in linear light, and hands back an encoded value clamped to
- * [0,1] as `developStage` does; the render gate holds it to the CPU on a
- * RAW's dark pixels. Private names, so a pass that also includes
+ * have taken, in linear light, and hands back an encoded value in [0,1] as
+ * `developStage` does — through `clipToDisplay`'s rule, a colour yielding
+ * before its brightness; the render gate holds it to the CPU on a RAW's dark
+ * pixels and on its headroom. Private names, so a pass that also includes
  * `SRGB_TRANSFER` compiles.
  */
 export const HEAD_APPLY = `
 float _headToLinear(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
 float _headToSrgb(float c) { return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055; }
+/** The tone curve's domain: the sRGB encode to white, a log of \`TONE_EXT_K\` per stop above it (\`encodeTone\`). */
+float _headEncodeTone(float Y) { return Y <= 1.0 ? _headToSrgb(Y) : 1.0 + ${TONE_EXT_K.toFixed(4)} * log2(Y); }
 /** One table, read linearly between its entries — what a 1D curve costs. */
 float _headTable(int row, float x) {
   float p = clamp(x, 0.0, 1.0) * (u_headTableSize - 1.0);
@@ -135,13 +141,12 @@ vec3 applyHead(vec3 enc) {
   vec3 lin = vec3(_headToLinear(c.r), _headToLinear(c.g), _headToLinear(c.b)) * u_headGain;
   if (u_headHasMatrix) lin = max(u_headMatrix * lin, vec3(0.0));
   lin *= u_headGains;
-  // The tone curve as ONE ratio over luminance, so a grey stays grey.
+  // The tone curve as ONE ratio over luminance, so a grey stays grey — read
+  // on the extended domain, where a RAW's headroom is a number the shoulder
+  // brings under white.
   if (u_headTone) {
     float Y = dot(lin, _HEAD_LUM);
-    if (Y > 0.0) {
-      float Yc = min(Y, 1.0);
-      lin *= _headTable(0, _headToSrgb(Yc)) / Yc;
-    }
+    if (Y > 0.0) lin *= _headTable(0, _headEncodeTone(Y) / u_headToneTop) / Y;
   }
   if (u_headLuma) {
     float Y = dot(lin, _HEAD_LUM);
@@ -171,7 +176,18 @@ vec3 applyHead(vec3 enc) {
     }
     if (amount != 0.0) lin = max(Y2 + (lin - Y2) * (1.0 + amount), vec3(0.0));
   }
-  vec3 top = min(lin, vec3(1.0));
+  // What the display cannot show (clipToDisplay): the hue kept, a blend on
+  // that hue line between the pixel SCALED under white (its colour kept) and
+  // the pixel pulled toward the grey of its luminance (its brightness kept),
+  // weighted toward the latter far past white and near grey.
+  float mx = max(lin.r, max(lin.g, lin.b));
+  if (mx > 1.0) {
+    float mn = min(lin.r, min(lin.g, lin.b));
+    float Yd = dot(lin, _HEAD_LUM);
+    vec3 kept = Yd >= 1.0 ? vec3(1.0) : Yd + (lin - Yd) * ((1.0 - Yd) / (mx - Yd));
+    lin = mix(lin / mx, kept, max(mx - 1.0, mn) / mx);
+  }
+  vec3 top = clamp(lin, vec3(0.0), vec3(1.0));
   return vec3(_headToSrgb(top.r), _headToSrgb(top.g), _headToSrgb(top.b));
 }
 `;

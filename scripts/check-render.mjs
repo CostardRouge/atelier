@@ -1595,6 +1595,51 @@ const out = await page.evaluate(async () => {
       }
     }
     results.head = { twin, truth, moved, twinGraded, size: cube.size, own: cube.data === look.data, gradedSize: graded.size };
+
+    // --- the tone engine's TOP (develop.ts, ToneShape + clipToDisplay): a
+    // RAW's two stops of headroom under highlights −100, contrast +20 and a
+    // warm balance, in four hue mixes — the GPU held to the CPU twin, the
+    // headroom brought under white WITH its order, a warm highlight kept warm.
+    {
+      const recover = { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, exposure: 0, highlights: -100, contrast: 20, temperature: 40, vibrance: 30 };
+      const toned = composeLutStack(layerOf(look), 'none', 'tetrahedral', recover);
+      // Encoded 0.5 … 1 across x on the SENSOR's own scale — at gain 4 that is
+      // linear 0.86 … 4, white near the left edge — the same four mixes down y.
+      const srcTop = (x, y) => { const e = 0.5 + (x / (HW - 1)) * 0.5; const v = Math.pow((e + 0.055) / 1.055, 2.4); const m = mixes[Math.floor((y * mixes.length) / HH)]; return [v * m[0], v * m[1], v * m[2]]; };
+      const dataTop = new Uint16Array(HW * HH * 3);
+      for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) { const [r, g, b] = srcTop(x, y); dataTop.set([toHalf(r), toHalf(g), toHalf(b)], (y * HW + x) * 3); }
+      const grader = makeGraphGrader(toned, HW, HH, 1, 'tetrahedral');
+      setDitherForTest(false);
+      let gpuTop;
+      try {
+        const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(grader.render(halfImg.kind === 'half' ? { kind: 'half', width: HW, height: HH, data: dataTop } : null), 0, 0);
+        gpuTop = oc.getImageData(0, 0, HW, HH).data;
+      } finally { setDitherForTest(null); grader.dispose(); }
+      let twinTop = 0, dips = 0, warmWrong = 0, underWhite = 0, atWhite = 0;
+      const greyRow = Math.floor(HH / mixes.length / 2);
+      const warmRow = Math.floor((HH / mixes.length) * 1.5);
+      // The "grey" row wears the warm balance, so its top is a warm near-white:
+      // the clip puts its brightest channel AT white and keeps a hint of the
+      // warmth (luminance within a few codes). Luminance says whether a column
+      // is under white; the brightest channel says whether it reached it.
+      const lumAt = (i) => 0.2126 * gpuTop[i] + 0.7152 * gpuTop[i + 1] + 0.0722 * gpuTop[i + 2];
+      for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+        const [r, g, b] = srcTop(x, y);
+        const cpu = sampleWith(toned, r, g, b, 'tetrahedral');
+        const i = (y * HW + x) * 4;
+        for (let c = 0; c < 3; c++) twinTop = Math.max(twinTop, Math.abs(gpuTop[i + c] - code(cpu[c])));
+        if (y === greyRow) {
+          // The ramp: never a step DOWN along x, under white until the sensor's last codes.
+          if (x > 0 && lumAt(i) < lumAt(i - 4) - 1) dips += 1;
+          if (x < HW - 8 && lumAt(i) < 251) underWhite += 1;
+          if (Math.max(gpuTop[i], gpuTop[i + 1], gpuTop[i + 2]) >= 254) atWhite += 1;
+        }
+        if (y === warmRow && !(gpuTop[i] >= gpuTop[i + 1] - 1 && gpuTop[i + 1] >= gpuTop[i + 2] - 1)) warmWrong += 1;
+      }
+      results.tone = { twin: twinTop, dips, underWhite, atWhite, warmWrong, width: HW };
+    }
   }
 
   // --- the 16-bit read-back (RenderGraph.readHalf): the chain's own floats,
@@ -1946,8 +1991,11 @@ const hs = out.half;
   // 8-bit canvas as k−1 on this GPU (measured — the untouched pictures already
   // differ by one code in places), and a steep curve makes that two. An 8-bit
   // source never meets it, since its values are exactly k/255; a RAW's values
-  // are continuous and meet it everywhere, harmlessly.
-  const okGrade = hs.graded <= 2 && hs.plainDiff <= 1;
+  // are continuous and meet it everywhere, harmlessly. Three since the
+  // display clip (`clipToDisplay`, 2026-10-05): at the onset of a saturated
+  // yellow's clip the blue channel answers red more steeply than any curve
+  // does — measured 3 on one pixel of the ramp, 85 two codes off.
+  const okGrade = hs.graded <= 3 && hs.plainDiff <= 1;
   if (!upright || !okRamp || !okGrade) bad += 1;
   console.log(
     `\n  ${upright && okRamp && okGrade ? 'ok  ' : 'FAIL'}  a half-float source (191×97, odd): ` +
@@ -2095,6 +2143,15 @@ const hd = out.head;
   say(hd.own && hd.size === 33, `the look keeps its own lattice (${hd.size}³, shared with the file's)${hd.own ? '' : ' — it was RESAMPLED'}`);
   say(hd.moved > 20, `and the develop moved the shadows by ${hd.moved} code(s) (must be past 20)`);
   say(hd.twinGraded <= 1.5, `with the wheels as a TAIL baked under the head (${hd.gradedSize}³): GPU against the CPU twin worst ${hd.twinGraded.toFixed(2)} code(s) (allowed 1.5)`);
+  const tn = out.tone;
+  console.log("\n  the tone engine's TOP (develop.ts): two stops of a RAW's headroom under highlights −100, contrast +20, a warm balance:");
+  say(tn.twin <= 1.5, `the GPU against the CPU twin on the headroom and its clip: worst ${tn.twin.toFixed(2)} code(s) (allowed 1.5)`);
+  say(tn.dips === 0, `the grey ramp through the headroom never steps down (${tn.dips} dip(s))`);
+  // The shoulder reaches white at slope 0, so the ramp's last fifth (the
+  // brightest half-stop) sits within four codes of it: three quarters of the
+  // columns under white is the shape, not a loss.
+  say(tn.underWhite > tn.width * 0.7 && tn.atWhite > 0, `${tn.underWhite} of ${tn.width} columns land under white with their order, and the sensor's top lands AT white (${tn.atWhite} column(s) with a channel there)`);
+  say(tn.warmWrong === 0, `a warm highlight stays warm through the clip — R ≥ G ≥ B on every column (${tn.warmWrong} wrong)`);
 }
 
 const rh = out.readHalf;

@@ -177,6 +177,87 @@ drag from mid-diagonal to 0.12 stored
 pixels moved (26→49, 89→177, 150→255 on the ramp), the settled row read
 `curve luma`, the tab wore its dot, and no page error fired.
 
+## The tone curve rolls off at both ends and never clips a hue (2026-10-05)
+
+**His report**: moving highlights, shadows or whites left parts of the picture
+burned where Capture One stays soft and controlled; he wants that *«pour
+toutes les expositions»*. **Read in the code, four causes**: `toneCurve`
+clamped to [0,1] after the bands AND after contrast (contrast +100 made every
+code above 0.80 white, blacks −100 every code under 0.2 black); `developLinear`
+clamped the luminance to 1 BEFORE the curve, so a RAW's headroom was never a
+number the curve could act on; the highlights band was the shadows' mirror, a
+bump ZERO at white — so highlights −100 darkened the three-quarter tones and
+left the top tenth untouched, a burned hole ringed by the recovery (the sky
+case he saw); and the end of the stage clipped PER CHANNEL, which rotates
+hue (a warm highlight turns yellow, then white) while every other stage keeps
+«a grey stays grey, no hue rotates».
+
+**Decision — the engine** (`develop.ts`, the GLSL twin in `glsl.ts`
+`HEAD_APPLY`, the table in `develop-head.ts`): (1) the curve's domain is
+EXTENDED above white, `encodeTone`/`decodeTone` — sRGB to 1, then
+`1 + 0.3047·log2(Y)`, C¹ at white (the encode's slope there times ln 2). (2)
+`bandWeights.hi` is `u(2 − u)`: zero at mid-grey, 1 at white with zero slope,
+held at 1 above; whites `u²`, held at 1 above; the lower half unchanged (a
+lifted black is fog, a burned white is a defect — the asymmetry is on
+purpose). (3) `ToneShape` (`toneShape(d)`, once per develop, on
+`DevelopShapers.tone`): `top` is where the bands + contrast send the REFERENCE
+white — the displayed white after the gains (so exposure +1 rolls off), moved
+up to the sensor's top (`rawGain`) by the RECOVERY `min(1, −highlights/100 +
+−whites/100)` — and the shoulder is a cubic Hermite `[knee, top] → [knee, 1]`
+(slope 1 at the knee, 0 at white, white above), `knee = 1 − min(0.35,
+0.75·(top − 1))`; `bottom`/`toe` mirror it at black. `top` is 1 — no shoulder,
+every pixel bit-identical — unless a slider or a gain pushes the reference
+past white, and it grows continuously with them; it is capped two stops up
+(`TONE_ROLLOFF_STOPS`), past which a burn is a burn and the J view says so.
+Fritsch–Carlson: the compression ratio stays under 2.8, so the cubic is
+monotone. Order: bands → contrast → toe → shoulder → brightness (a gamma that
+keeps both ends, so it never overshoots what the shoulder bounded). (4)
+`clipToDisplay` at the stage's end, the HUE kept always: a blend on the hue
+line between the pixel SCALED by its brightest channel (colour kept,
+brightness given up) and the pixel pulled toward the grey of its luminance
+until that channel is white (brightness kept, colour given up; white when
+brighter than white), weighted `max(max − 1, min) / max` toward the latter —
+so a saturated colour just past white keeps its colour, far past white or
+near grey it goes to white, and a ramp through the clip never darkens. One
+rule in the CPU stage and the shader, applied once at the HEAD's end (and at
+the tail's, for a wheel that pushes past white). **Why not the
+luminance-keeping projection alone** (the first version, caught by the
+gate's half-source row at 20 codes): pure yellow's luminance is 0.93 of
+white's, so keeping it turns a clipped yellow near-white at once — a cliff
+where half a code of red moved blue by twenty.
+
+**What changed for stored documents, accepted**: any develop with highlights
+≠ 0 renders differently at its top (the band's shape); any with exposure > 0,
+contrast > 0 or whites > 0 rolls off where it clipped; a clipped saturated
+highlight keeps its hue where it shifted toward a secondary. A develop that
+pushes nothing past white is the same to the ulp. `auto-develop.ts` solves
+`autoBands` against `bandWeights` and needed no change (the shoulder never
+engages on a render with a negative band).
+
+**What C1 does that this does not**: its default curve already carries a
+shoulder (Film Standard), so its as-shot RAW rolls off before any slider;
+here the as-shot is linear to the display and the rolloff attaches to the
+sliders — the metered `rawGain` keeps its meaning, and «untouched is
+bit-identical» holds. Lightroom's Highlights is a LOCAL (edge-aware) tone
+mapper; this one is global, like C1's HDR tool.
+
+**Measured** (`develop.test.ts`, «the toe, the shoulder and the display
+clip»; the gate's «the tone engine's TOP» rows in `check-render.mjs`): the
+GPU twin on two stops of headroom with highlights −100, contrast +20,
+temperature +40 — worst 0.64 code against the CPU, no step down along the
+ramp, the sensor's top at white (its last fifth within four codes of it,
+the shoulder's zero slope), R ≥ G ≥ B kept on the warm row; the gate's
+half-source row now allows 3 codes (one pixel at a yellow's clip onset).
+The one cost found: the TAIL's lattice (a grading wheel under the head) now
+bends in all three channels where one crosses white, and 33³ interpolates
+across it at up to 2.65 codes in its last cell (`lut-stack.test.ts`);
+nothing elsewhere moved past 0.35 of a code.
+
+**How to apply**: a new tonal control is a term of `rawTone` and, if it can
+push past white, a term of `toneShape`'s reference — never a `clamp01`; never
+clamp the luminance before the curve; a tone table on `CubeHead` spans
+`[0, toneTop]` and the GPU reads it at `L / u_headToneTop`.
+
 ## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
 
 `auto-develop.ts` (pure, 20 specs) + the `Auto` and `Levels` sections of

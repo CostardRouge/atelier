@@ -32,7 +32,9 @@ export interface CubeHead {
   matrix: readonly number[] | null;
   /** One gain per channel: temperature, tint and exposure folded. */
   gains: readonly [number, number, number];
-  /** Output LINEAR luminance over encoded luminance, applied as a ratio — the tone sliders; or null. */
+  /** The tone table's domain: the extended encoded luminance (`encodeTone`) its last entry stands at, ≥ 1. */
+  toneTop: number;
+  /** Output LINEAR luminance over extended encoded luminance in [0, toneTop], applied as a ratio — the tone sliders and the gains' rolloff; or null. */
   tone: Float32Array | null;
   /** The same for the luma curve; or null. */
   luma: Float32Array | null;

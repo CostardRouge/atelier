@@ -41,7 +41,12 @@ what makes a pixel-identical result possible at all. **Measured, on a real GPU:
 worst 0 codes against `makeFrameGrader`, for a canvas source AND an
 ImageBitmap; a cube + passthrough round trip through float16 costs at most 1
 code.** Re-run `node scripts/check-render.mjs` (dev server up) after touching
-any of it.
+any of it — **with the tree QUIET** (2026-10-05): the dev server full-reloads
+the gate's page on ANY file saved under the repo, a markdown file or a
+script included (`page reload docs/memory/develop.md` in Vite's log), and
+`npm run build` rewriting `dist/index.html` counts too; the gate then dies
+on «Execution context was destroyed» at its first `evaluate`. Edit nothing
+and build nothing while it runs.
 
 The plan is pure and tested apart because both ways of getting it wrong are
 SILENT: a pass that reads and writes one target samples what it is drawing, and
@@ -130,7 +135,13 @@ inside `gradeThroughLut` so all three shaders (cube pass, layer pass,
 `lut-gl.ts`) take it with `bindHead` (`cube-pass.ts`, unit 8, R32F tables read
 by `texelFetch`). Gate rows in `check-render.mjs`: GPU vs CPU twin 0.55 code
 on the dark ramp, vs the per-pixel develop + the look's own lattice 0.55, the
-look's data shared with the file's, and the wheels as a tail 0.54. **One
+look's data shared with the file's, and the wheels as a tail 0.54. **Since
+the tone engine's rolloff (2026-10-05, `develop.md`)** the tone table spans
+the EXTENDED luminance domain `[0, CubeHead.toneTop]` (`encodeTone`, a RAW's
+headroom included), the shader reads it at `_headEncodeTone(Y) /
+u_headToneTop` with no `min(Y, 1)` before it, and ends in `clipToDisplay`'s
+rule instead of `min(lin, 1)`; the «tone engine's TOP» rows hold both to the
+CPU on two stops of headroom. **One
 semantic change, accepted**: the tail now sees the head's output CLAMPED to
 [0,1] (the lattice's domain) where `developLinear` ran the wheels on the
 headroom — a pixel above white is clipped either way; under white it is the

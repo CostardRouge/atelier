@@ -36,16 +36,28 @@
 
 import type { CubeHead } from '../lib/cube-parser';
 import { toLinear } from '../lut/transfer';
-import { developStage, isDefaultDevelop, isRawDevelop, makeDevelopShapers, rawGainOf, toneCurve, type DevelopSettings } from './develop';
+import {
+  decodeTone,
+  developStage,
+  isDefaultDevelop,
+  isRawDevelop,
+  makeDevelopShapers,
+  rawGainOf,
+  toneCurve,
+  toneShape,
+  type DevelopSettings,
+} from './develop';
 import { isDefaultGrading } from './grading';
 import { isDefaultMixer } from './mixer';
 
 /**
  * Entries per 1D table. A tone curve is bands (quadratic bumps), a contrast
- * line and a brightness power; a luma or channel curve a monotone cubic
- * through at most 32 points: all smooth, so a linear read between 2048
- * entries strays by a few millionths — under 0.01 of an 8-bit code, and under
- * one code of a 16-bit file.
+ * line, a cubic toe and shoulder and a brightness power; a luma or channel
+ * curve a monotone cubic through at most 32 points: all smooth, so a linear
+ * read between 2048 entries strays by a few millionths — under 0.01 of an
+ * 8-bit code, and under one code of a 16-bit file. The tone table spans the
+ * extended domain (up to ~2.2 for four stops of headroom), so the displayed
+ * range keeps at least 900 of them.
  */
 export const HEAD_TABLE_SIZE = 2048;
 
@@ -104,8 +116,12 @@ export function developHead(d: DevelopSettings | null | undefined): CubeHead | n
   const t = (d.temperature / 100) * 0.25;
   const tint = (d.tint / 100) * 0.2;
   const exposure = d.exposure ? Math.pow(2, d.exposure) : 1;
-  const toned = Boolean(d.highlights || d.shadows || d.whites || d.blacks || d.contrast || d.brightness);
   const shapers = makeDevelopShapers(d);
+  // The tone table spans the EXTENDED domain (`encodeTone`), up to the
+  // brightest input the gains can make: a RAW's headroom is in it, and the
+  // GPU reads the table at `L / toneTop`.
+  const shape = toneShape(d);
+  const toneTop = shape?.domain ?? 1;
   let channels: Float32Array | null = null;
   if (shapers.channels) {
     channels = new Float32Array(3 * HEAD_TABLE_SIZE);
@@ -121,7 +137,8 @@ export function developHead(d: DevelopSettings | null | undefined): CubeHead | n
     gain: rawGainOf(d),
     matrix: isRawDevelop(d) && d.rawWb ? d.rawWb.matrix : null,
     gains: [(1 + t) * exposure, (1 - tint) * exposure, (1 - t) * exposure],
-    tone: toned ? tabulate((L) => toLinear(toneCurve(L, d), 'srgb')) : null,
+    toneTop,
+    tone: shape ? tabulate((x) => decodeTone(toneCurve(x * toneTop, d, shape))) : null,
     luma: shapers.luma ? tabulate((L) => toLinear(shapers.luma!(L), 'srgb')) : null,
     channels,
     saturation: d.saturation,

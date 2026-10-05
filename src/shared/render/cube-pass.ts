@@ -189,6 +189,7 @@ export function bindHead(
   gl.uniformMatrix3fv(at('u_headMatrix'), false, [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
   gl.uniform3f(at('u_headGains'), head.gains[0], head.gains[1], head.gains[2]);
   gl.uniform1i(at('u_headTone'), head.tone ? 1 : 0);
+  gl.uniform1f(at('u_headToneTop'), head.toneTop);
   gl.uniform1i(at('u_headLuma'), head.luma ? 1 : 0);
   gl.uniform1i(at('u_headChannels'), head.channels ? 1 : 0);
   gl.uniform1f(at('u_headSat'), head.saturation);
