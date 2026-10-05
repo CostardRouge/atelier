@@ -198,6 +198,8 @@ import { borderLayout, type RollBorder } from '../../shared/develop/border-layou
 import { zoneFromView } from '../../shared/develop/crop-rect';
 import { visibleWindow } from '../../shared/ui/pan-zoom';
 import ExportPanel, { type ExportVerb } from './ExportPanel';
+import HdrPreviewSheet from './HdrPreviewSheet';
+import { previewUltraHdr, type HdrPreview } from '../../shared/hdr/hdr-preview';
 import DeliverBar from '../../shared/ui/DeliverBar';
 import { runClock } from '../../shared/ui/RunLockNotice';
 import CropStage from './CropStage';
@@ -539,6 +541,7 @@ export default function PictureWorkbench({
   // hours spent on a mask are exactly the hours it is in the way.
   const [compareOn, setCompareOn] = useLocalFlag('atelier.develop.compare', true);
   const [helpOpen, setHelpOpen] = useState(false);
+  const [hdrPreviewOpen, setHdrPreviewOpen] = useState(false);
   // The subject rasters come BACK through state, because the two hooks need
   // each other: the stage decodes the picture the model segments, and the model
   // produces the map the stage draws. One extra commit per answer, which is
@@ -1787,6 +1790,24 @@ export default function PictureWorkbench({
   // across a caption typed; the row on the Export tab, and the sheet.
   const chapters = usePictureChapters(entry, exports.openSize ? exports.openSize.width / exports.openSize.height : 1);
   const identity = useDeliveryIdentity();
+  // The HDR preview (`hdr-preview.ts`): the picture as delivered and, where it
+  // is developed on its sensor, the same picture the roll's stops darker —
+  // the darker one FIRST, copied out, since both come off the one held
+  // grader's canvas — framed as the crop stage shows it and wrapped as the
+  // export would. A render alone has nothing above white, and says so.
+  const hdrStops = exportSettings.hdrStops;
+  const makeHdrPreview = useCallback(async (): Promise<HdrPreview | null> => {
+    const dark = onSensor
+      ? picture.deliveredWith(stack.composeWith({ ...developNow, exposure: developNow.exposure - hdrStops }))
+      : null;
+    const sdr = picture.delivered();
+    if (!sdr) return null;
+    const size = sdr as { width?: unknown; height?: unknown };
+    const width = typeof size.width === 'number' ? size.width : 0;
+    const height = typeof size.height === 'number' ? size.height : 0;
+    if (!(width > 0 && height > 0)) return null;
+    return previewUltraHdr({ sdr, dark, source: { width, height }, framing: framingDraft, aspect: aspectDraft, border, stops: hdrStops });
+  }, [onSensor, picture, stack, developNow, hdrStops, framingDraft, aspectDraft, border]);
   // The making-of's own run (`use-timelapse-export.ts`): a task on this
   // picture's edge, one unit on the same Deliver bar as the roll's export,
   // the two never running at once. The states are graded through the
@@ -2686,6 +2707,7 @@ export default function PictureWorkbench({
               picture={entry}
               onWords={onWords}
               makingOf={clip ? null : makingOfRow}
+              onHdrPreview={clip ? null : () => setHdrPreviewOpen(true)}
             />
           ) : null}
           {/* Inside the drawer's own scroll on a phone, where `sticky` pins it. */}
@@ -2699,6 +2721,9 @@ export default function PictureWorkbench({
       </PanelHost>
 
       {helpOpen && <DevelopShortcuts onClose={() => setHelpOpen(false)} />}
+      {hdrPreviewOpen && !clip && (
+        <HdrPreviewSheet title={pictureLabel(entry)} make={makeHdrPreview} stops={exportSettings.hdrStops} onClose={() => setHdrPreviewOpen(false)} />
+      )}
       {timelapseOpen && onTimelapseOpen && !clip && (
         <TimelapseSheet
           picture={entry}

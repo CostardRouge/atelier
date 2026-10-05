@@ -518,6 +518,14 @@ export interface DevelopPicture {
    */
   delivered: () => CanvasImageSource | null;
   /**
+   * The picture AS DELIVERED under ANOTHER cube — the same source, passes
+   * and instant, a different look — COPIED out, since the held grader's
+   * canvas is only its last render and the stage's own cube goes back in
+   * before this returns. What the HDR preview renders its darker rendition
+   * with (`hdr-preview.ts`): one GPU pass, no second decode.
+   */
+  deliveredWith: (cube: CubeLut | null) => HTMLCanvasElement | null;
+  /**
    * The loupe (`loupe` option): a viewport-sized canvas drawn over the stage
    * with the file's own pixels while the view is past the stage's 1:1.
    */
@@ -1637,6 +1645,25 @@ export function useDevelopPicture({
     const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
     return grader ? grader.render(s.gpu ?? s.image, isVideoElement(s.image) ? s.image.currentTime : undefined) : s.image;
   }, [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette]);
+  const deliveredWith = useCallback(
+    (lut: CubeLut | null): HTMLCanvasElement | null => {
+      const { source: s, cube: own, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
+      if (!s || s.width <= 0 || s.height <= 0) return null;
+      const grader = graderFor(lut, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
+      const graded = grader ? grader.render(s.gpu ?? s.image, isVideoElement(s.image) ? s.image.currentTime : undefined) : s.image;
+      const out = document.createElement('canvas');
+      out.width = s.width;
+      out.height = s.height;
+      const ctx = out.getContext('2d');
+      if (!ctx) return null;
+      ctx.drawImage(graded, 0, 0);
+      // The stage's own cube back in the slot: the next paint, and the next
+      // `delivered()`, then render the picture as it is and not as asked here.
+      graderFor(own, s, geo, ly, null, rs, dt, sc, rp, fx, gn);
+      return out;
+    },
+    [graderFor, source, cube, geometry, stack, subjectMasks, detail, pixelScale, repair, film, gainField, postVignette],
+  );
   const snapshot = useCallback(
     async (longEdge = THUMB_LONG_EDGE): Promise<Blob | null> => {
       const { source: s, cube: lut, geometry: geo, stack: ly, subjectMasks: rs, detail: dt, pixelScale: sc, repair: rp, film: fx, gain: gn } = latest.current;
@@ -2113,6 +2140,7 @@ export function useDevelopPicture({
     divider,
     snapshot,
     delivered,
+    deliveredWith,
     loupe: {
       canvasRef: loupeCanvasRef,
       active: loupeActive,

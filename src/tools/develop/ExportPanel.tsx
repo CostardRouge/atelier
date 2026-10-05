@@ -17,6 +17,8 @@ const WATERMARK_POSITION_OPTIONS: readonly { id: WatermarkPosition; label: strin
   { id: 'top-left', label: 'Top left' },
 ];
 import { hdrSupport } from '../../shared/hdr/hdr-display';
+import Button from '../../shared/ui/Button';
+import { Icons } from '../../shared/ui/icons';
 import { formatBytes } from '../../shared/lib/format';
 import { heldCeilingBytes } from '../../shared/sources/original-cache';
 import type { RollRun } from './use-roll-export';
@@ -78,6 +80,7 @@ export default function ExportPanel({
   picture = null,
   onWords,
   makingOf = null,
+  onHdrPreview = null,
 }: {
   settings: RollExport;
   onSettings: (patch: Partial<RollExport>) => void;
@@ -114,6 +117,8 @@ export default function ExportPanel({
   onWords?: (words: { title?: string; caption?: string }) => void;
   /** The open picture's making-of row (`TimelapseSheet`) — the workbench builds it, since it holds the picture's bytes. */
   makingOf?: ReactNode;
+  /** Open the HDR preview of the picture in hand (`HdrPreviewSheet`), or null where there is none to show. */
+  onHdrPreview?: (() => void) | null;
 }) {
   const identity = useDeliveryIdentity();
   // The line on the picture in hand, as the run will draw it.
@@ -403,6 +408,14 @@ export default function ExportPanel({
                 onChange={(id) => onSettings({ hdrStops: Number(id) })}
               />
             </FieldRow>
+          )}
+          {settings.hdr && onHdrPreview && !clip && (
+            <div className="flex items-center gap-2">
+              <Button size="sm" icon={Icons.eye} onClick={onHdrPreview}>
+                Look at it on this screen
+              </Button>
+              <span className="font-mono text-2xs text-muted min-w-0">the file as an image, lit by a browser that reads gain maps</span>
+            </div>
           )}
           {hdrRun && !exporting && (
             <p className="m-0 font-mono text-2xs text-ink-soft" role="status">

@@ -1540,6 +1540,21 @@ photograph's and do not reach a clip; the run says so once. Not built,
 deliberately: a crop that moves or a per-frame mask on a clip, and a second
 target for one.
 
+**HDR.** A photograph developed on its RAW can leave as an **Ultra HDR
+JPEG** — an ordinary JPEG every viewer shows, carrying a small *gain map*
+that a phone or a browser on an HDR screen lifts the highlights with. The
+map is measured, never invented: the sensor is developed again, the stops
+you ask darker, and where the file ran out at white the map holds what the
+sensor kept above it; the file is read back and its map checked before the
+run calls it Ultra HDR. **Look at it on this screen**, in the Export tab's
+HDR section, shows that very file before it is written: the picture as the
+stage renders it, twice, wrapped the way the export wraps it and handed to
+an image the browser lights where it can — Chrome, Edge and Safari on an
+HDR display — with a *Base · HDR* switch and the measured line (how far
+above white, how far it read back). On an SDR screen both views look the
+same, and the sheet says so rather than pretending; a picture not on its
+sensor shows the base and why.
+
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
 *brightness*, a *colour* range, a mask *painted* by hand, a *subject* found by
