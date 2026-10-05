@@ -61,6 +61,41 @@ Rendering *into* half-float is an extension even in WebGL2
 `graph.precision` says `'byte'`. What is lost is the headroom, and a caller
 that promises it must ask.
 
+## The canvas is DITHERED where more than 8 bits reach it (2026-10-05)
+
+**Decision** (his «go 1 et 2» after the 8-bit audit of the same day): the
+last pass, when it writes the CANVAS, adds a noise strictly inside ±0.5 code
+(`DITHER_LSB` = 7/16, `dither.ts`) before the 8-bit rounding — only where
+the chain carried more: a `HalfImage` source, or ≥ 2 passes over float16
+targets (`wantsDither`). **Why**: float16 everywhere upstream bought nothing
+at the last rounding — a pushed sky still came out in flat one-code steps.
+**How**: every program is linked through `ditherFragment` (renames `main`,
+wraps it; `u_dither` 0 = untouched to the bit), `u_dither` set on EVERY draw
+(a program keeps uniforms between frames), `RenderPass.exact` opts a pass out
+(the clipping view, whose test IS the canvas's rounding), `setDitherForTest`
+for the gate. Rules the numbers fixed: (1) **one 1-pass 8-bit chain stays
+the old renderer pixel for pixel** — its steps are the source's, no output
+dither fills them, and the gate's 0-code rows hold; (2) **an exact code
+stays exact** — 7/16 + float16's 1/16 storage error < 0.5 (gate: an 8-bit
+picture through two float16 passes, worst 0); (3) **one value for the three
+channels, per 2 × 2 block** — measured on an 8-code ramp through
+`canvas.toBlob` at 0.92, the column-average error is 0.50 undithered,
+0.42 with per-pixel-per-channel noise (JPEG erases chroma and the finest
+frequencies), 0.22 with this pattern (0.14 on the canvas); bytes ±0.2 % on a
+photograph; (4) **`gl_FragCoord` is right HERE** and nowhere else: a canvas
+write has the frame's viewport at y = 0, so the coordinate is the frame's
+pixel whole or banded (`check-bands.mjs` unchanged). **Limits, measured,
+not fixed**: at JPEG 0.85 any dither does worse than none on the ramp's
+8 × 8 means (0.69 vs 0.44) — only a full-size target at 0.85 meets it, the
+Web preset is resized first; and a RESIZED target (`deliverOne` draws the
+render into a smaller 2D canvas) is rounded again by the resize, so the
+dither reaches the stage, the full-size file and the Ultra HDR base only.
+Dithering a resized target needs the graph to render AT the target size, not
+a dither after it. The gate: three rows at the end of `check-render.mjs` (the
+GPU's noise against the `ditherNoise` twin, exact codes, the ramp before and
+after a JPEG); the half-source row now measures with the dither off, since
+its 8-bit twin is never dithered.
+
 ## Three GL traps, all measured, none of which any test could see
 
 - **A `sampler3D` must be bound even with NO look.** Left unset it defaults to

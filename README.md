@@ -1747,6 +1747,19 @@ Interpolation — *Auto* (bands on a phone, whole on a computer, and it says
 which this one is), *Whole*, *In bands* — and the loupe redraws the moment it
 changes, so a striped loupe is one click from a whole one.
 
+**Smooth skies stay smooth.** Between its steps the graphics card works in
+half-floats, so a RAW or a picture with a layer, a warp or detail carries
+more than 8 bits right up to the screen and the file — which are 8-bit, and
+where a plain rounding would cut a pushed sky into flat steps a whole code
+apart. That last rounding is **dithered**: a noise under half a code, the same
+on the three channels and drawn per 2 × 2 pixels so a JPEG keeps it, turns
+each step back into the gradient it was (measured on a ramp of 8 codes: half
+a code of error at every step undithered, a fifth of that dithered, still a
+fifth after a JPEG at 0.92). An 8-bit picture with no more than its global
+develop and look is left exactly as it was — its steps are the file's own —,
+a full-size file keeps the dither, and a smaller target (Web, Feed) is
+rounded again by its resize.
+
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —
 libheif for an iPhone's `.HEIC` or a Sony or Canon `.HIF`, jxl-oxide for a

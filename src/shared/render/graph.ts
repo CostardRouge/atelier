@@ -30,6 +30,7 @@
 import { deviceClass } from '../lib/device-class';
 import { bandFragment, nearRows, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
 import { BAND_PREFERENCE_KEY, bandsWanted, readBandPreference, type BandPreference } from './band-policy';
+import { DITHER_LSB, ditherFragment, wantsDither } from './dither';
 import { VERTEX_SRC } from './glsl';
 import { isHalfImage, type HalfImage } from './half-image';
 import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
@@ -95,6 +96,12 @@ export interface RenderPass {
    * colour pass is `OWN_ROWS`, a blur `nearRows(r)`, a warp `warpRows(map)`.
    */
   rows?: RowNeed | null;
+  /**
+   * What this pass writes must reach the canvas AS IT IS, so it is never
+   * dithered when it draws last (`dither.ts`): the clipping view, whose test
+   * is made against the very rounding a dither would move.
+   */
+  exact?: boolean;
 }
 
 /**
@@ -124,6 +131,17 @@ let bandsLastDrawn = 1;
 /** How many bands the last render of any graph was drawn in — 1 for a whole one. For the gate. */
 export function bandsLastDrawnForTest(): number {
   return bandsLastDrawn;
+}
+
+let ditherOverride: boolean | null = null;
+
+/**
+ * Force the canvas dither on or off (`dither.ts`) — for the render gate, which
+ * measures a gradient with and without it and holds the old renderer to the
+ * new one pixel for pixel. `null` restores the rule.
+ */
+export function setDitherForTest(next: boolean | null): void {
+  ditherOverride = next;
 }
 
 let bandPreference: BandPreference | null = null;
@@ -544,9 +562,12 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     if (!programs.has(pass.id)) {
       // Every program is linked band-aware where it can be: at rest the map
       // is the identity to the bit, so a whole render is what it always was.
+      // And dither-aware: `u_dither` left at 0 adds nothing, so a pass
+      // drawn into a target writes what it always wrote.
       const banded = bandFragment(pass.fragment);
       if (banded) bandable.add(pass.id);
-      programs.set(pass.id, linkProgram(gl, banded ?? pass.fragment));
+      const fragment = banded ?? pass.fragment;
+      programs.set(pass.id, linkProgram(gl, ditherFragment(fragment) ?? fragment));
     }
     return programs.get(pass.id) ?? null;
   };
@@ -575,7 +596,7 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     pass: RenderPass,
     program: WebGLProgram,
     input: { texture: WebGLTexture | null; flipY: number; band: readonly [number, number, number, number] },
-    output: { framebuffer: WebGLFramebuffer | null; y: number; scissor: RowSpan | null },
+    output: { framebuffer: WebGLFramebuffer | null; y: number; scissor: RowSpan | null; dither: number },
     width: number,
     height: number,
   ) => {
@@ -598,6 +619,10 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     if (uSrc) gl.uniform1i(uSrc, 0);
     const uTexel = gl.getUniformLocation(program, 'u_texel');
     if (uTexel) gl.uniform2f(uTexel, 1 / Math.max(1, width), 1 / Math.max(1, height));
+    // Set on EVERY draw: a program keeps its uniforms, and the pass that drew
+    // last (and dithered) one frame may draw into a target the next.
+    const uDither = gl.getUniformLocation(program, 'u_dither');
+    if (uDither) gl.uniform1f(uDither, output.dither);
 
     pass.setUniforms?.(gl, program);
 
@@ -703,6 +728,11 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
       }
 
       const WHOLE_SRC = [0, 0, 0, 0] as const;
+      // The canvas is the one 8-bit buffer left; where more than 8 bits reach
+      // it, its rounding is dithered (`dither.ts`).
+      const ditherWanted =
+        ditherOverride ?? (wantsDither({ precision, halfSource: half !== null, passes: list.length }) && !list[list.length - 1].exact);
+      const dither = ditherWanted ? DITHER_LSB : 0;
       const bands = bandPlanFor(list, width, height);
       bandsLastDrawn = bands ? bands.bands.length : 1;
 
@@ -721,7 +751,9 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
             pass,
             program,
             { texture: fromTex, flipY: slot.from === 'source' ? bitmapSource : 0, band: WHOLE_SRC },
-            { framebuffer: slot.to === 'canvas' ? null : (targets[slot.to]?.fbo ?? null), y: 0, scissor: null },
+            slot.to === 'canvas'
+              ? { framebuffer: null, y: 0, scissor: null, dither }
+              : { framebuffer: targets[slot.to]?.fbo ?? null, y: 0, scissor: null, dither: 0 },
             width,
             height,
           );
@@ -756,12 +788,13 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
                 band: inRegion ? [inRegion.y0 / height, allocated - 1, edge[0], edge[1]] : WHOLE_SRC,
               },
               slot.to === 'canvas'
-                ? { framebuffer: null, y: 0, scissor: region }
+                ? { framebuffer: null, y: 0, scissor: region, dither }
                 : {
                     framebuffer: targets[slot.to]?.fbo ?? null,
                     // Frame row `region.y0` lands on the target's row 0.
                     y: -region.y0,
                     scissor: { y0: 0, y1: rows },
+                    dither: 0,
                   },
               width,
               height,

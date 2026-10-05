@@ -760,7 +760,7 @@ const out = await page.evaluate(async () => {
   // bytes through the cube.
   {
     const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
-    const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const { makeGraphGrader, setDitherForTest } = await import('/atelier/src/shared/render/graph-grader.ts');
     const HW = 191, HH = 97; // odd on purpose
     const cvs = document.createElement('canvas'); cvs.width = HW; cvs.height = HH;
     const hg = cvs.getContext('2d');
@@ -793,9 +793,17 @@ const out = await page.evaluate(async () => {
     const p = readAll(plain.render(halfImg));
     plain.dispose();
     const at = (d, x, y) => [d[(y * HW + x) * 4], d[(y * HW + x) * 4 + 1], d[(y * HW + x) * 4 + 2]];
-    // Through the look, both ways.
+    // Through the look, both ways — undithered, since a half source is
+    // dithered at the canvas and the 8-bit one is not (`dither.ts`): this row
+    // measures the upload path, and the dither has rows of its own below.
     const gHalf = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
-    const a = readAll(gHalf.render(halfImg));
+    setDitherForTest(false);
+    let a;
+    try {
+      a = readAll(gHalf.render(halfImg));
+    } finally {
+      setDitherForTest(null);
+    }
     gHalf.dispose();
     const gCanvas = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
     const b = readAll(gCanvas.render(cvs));
@@ -1522,6 +1530,99 @@ const out = await page.evaluate(async () => {
     results.halfCube = { ...worst(a, b), format: formatSeen, mean: sum / (b.length / 4) / 3 };
   }
 
+  // --- the canvas dither: does the GPU add the noise dither.ts says, and does
+  // it take the steps out of a gradient that more than 8 bits reached? ------
+  {
+    const { createRenderGraph, passthroughPass, setDitherForTest } = await import('/atelier/src/shared/render/graph.ts');
+    const { DITHER_LSB, ditherNoise } = await import('/atelier/src/shared/render/dither.ts');
+    const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const DW = 1024, DH = 256;
+    const halfOf = (codesAt) => {
+      const data = new Uint16Array(DW * DH * 3);
+      for (let y = 0; y < DH; y += 1) for (let x = 0; x < DW; x += 1) {
+        const h = toHalf(codesAt(x) / 255);
+        data.set([h, h, h], (y * DW + x) * 3);
+      }
+      return { kind: 'half', width: DW, height: DH, data };
+    };
+    const draw = (source, passes, dither) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(DW, DH);
+      setDitherForTest(dither);
+      try {
+        graph.render(source, passes);
+      } finally {
+        setDitherForTest(null);
+      }
+      const o = document.createElement('canvas'); o.width = DW; o.height = DH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      graph.dispose();
+      return { canvas: o, data: oc.getImageData(0, 0, DW, DH).data };
+    };
+    const twoPasses = [passthroughPass, passthroughPass];
+
+    // 1. The shader's noise IS the twin's: a flat 100.3 codes, every pixel
+    //    predicted. `gl_FragCoord` counts rows from the BOTTOM of the canvas.
+    const flat = draw(halfOf(() => 100.3), twoPasses, true).data;
+    let agree = 0, total = 0, flatWorst = 0;
+    for (let r = 0; r < DH; r += 1) for (let x = 0; x < DW; x += 1) {
+      for (let c = 0; c < 3; c += 1) {
+        const want = Math.round(100.3 + 2 * DITHER_LSB * ditherNoise(x, DH - 1 - r));
+        const got = flat[(r * DW + x) * 4 + c];
+        if (got === want) agree += 1;
+        flatWorst = Math.max(flatWorst, Math.abs(got - want));
+        total += 1;
+      }
+    }
+
+    // 2. An exact code comes home: an 8-bit picture through two float16
+    //    passes, dithered, is the picture.
+    const exactSrc = document.createElement('canvas'); exactSrc.width = DW; exactSrc.height = DH;
+    const eg = exactSrc.getContext('2d', { willReadFrequently: true });
+    for (let x = 0; x < 256; x += 1) { eg.fillStyle = `rgb(${x},${255 - x},${(x * 7) % 256})`; eg.fillRect(x * 4, 0, 4, DH); }
+    const exactIn = eg.getImageData(0, 0, DW, DH).data;
+    const exactOut = draw(exactSrc, twoPasses, null).data;
+    let exactWorst = 0;
+    for (let i = 0; i < exactIn.length; i += 1) if (i % 4 !== 3) exactWorst = Math.max(exactWorst, Math.abs(exactIn[i] - exactOut[i]));
+
+    // 3. A gentle ramp (8 codes over 1024 px, a RAW's sky): the error of each
+    //    column's average against the ramp, without and with the dither, and
+    //    after a JPEG at the roll's default quality.
+    const ideal = (x) => 100 + (8 * x) / DW;
+    const ramp = halfOf(ideal);
+    const columnError = (data) => {
+      let w = 0;
+      for (let x = 0; x < DW; x += 1) {
+        let s = 0;
+        for (let r = 0; r < DH; r += 1) s += data[(r * DW + x) * 4 + 1];
+        w = Math.max(w, Math.abs(s / DH - ideal(x)));
+      }
+      return w;
+    };
+    const viaJpeg = async (canvas) => {
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
+      const bmp = await createImageBitmap(blob);
+      const o = document.createElement('canvas'); o.width = DW; o.height = DH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(bmp, 0, 0);
+      bmp.close();
+      return oc.getImageData(0, 0, DW, DH).data;
+    };
+    const plain = draw(ramp, [passthroughPass], false);
+    const dithered = draw(ramp, [passthroughPass], null);
+    results.dither = {
+      agree: agree / total,
+      flatWorst,
+      exactWorst,
+      plain: columnError(plain.data),
+      dithered: columnError(dithered.data),
+      plainJpeg: columnError(await viaJpeg(plain.canvas)),
+      ditheredJpeg: columnError(await viaJpeg(dithered.canvas)),
+    };
+  }
+
   return results;
 });
 
@@ -1866,6 +1967,26 @@ const half = out.halfCube;
     `\n  ${okFormat && okValue ? 'ok  ' : 'FAIL'}  without OES_texture_float_linear the cube is ${half.format}` +
       `, worst ${half.worst} code${half.worst === 1 ? '' : 's'} from the float path (allowed 1)` +
       (half.mean > 16 ? '' : ' — and the picture is BLACK'),
+  );
+}
+
+const dz = out.dither;
+{
+  console.log('\n  the canvas dither (dither.ts), on a RAW-like half-float source:');
+  const say = (ok, text) => {
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${text}`);
+  };
+  say(
+    dz.flatWorst <= 1 && dz.agree > 0.99,
+    `the GPU's noise is the twin's: ${(dz.agree * 100).toFixed(2)} % of the values equal, worst ${dz.flatWorst} code(s) (allowed 1)`,
+  );
+  say(dz.exactWorst === 0, `an 8-bit picture through two float16 passes comes back whole: worst ${dz.exactWorst} code(s) (allowed 0)`);
+  say(
+    dz.plain > 0.4 && dz.dithered < 0.2 && dz.ditheredJpeg < 0.3,
+    `a ramp of 8 codes over 1024 × 256 px: a column's average strays ${dz.plain.toFixed(3)} code from it undithered, ` +
+      `${dz.dithered.toFixed(3)} dithered (allowed 0.2); after a JPEG at 0.92, ${dz.plainJpeg.toFixed(3)} undithered ` +
+      `and ${dz.ditheredJpeg.toFixed(3)} dithered (allowed 0.3)`,
   );
 }
 
