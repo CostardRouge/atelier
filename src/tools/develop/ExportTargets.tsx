@@ -11,11 +11,13 @@ import {
   type ExportTarget,
   type OutputSharpen,
   type SizeMode,
+  type ExportFormat,
 } from '../../shared/develop/export-targets';
 import { FieldRow, RangeField, SelectField, SwitchRow, TextField, fieldClass } from '../../shared/ui/Inspector';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
+import { deviceClass } from '../../shared/lib/device-class';
 
 const SIZE_MODES: readonly { id: 'full' | SizeMode; label: string }[] = [
   { id: 'full', label: 'Full size' },
@@ -31,6 +33,11 @@ const SHARPEN_OPTIONS: readonly { id: OutputSharpen; label: string }[] = OUTPUT_
   id,
   label: id === 'off' ? 'Off' : id[0].toUpperCase() + id.slice(1),
 }));
+
+const FORMAT_OPTIONS: readonly { id: ExportFormat; label: string }[] = [
+  { id: 'jpeg', label: 'JPEG' },
+  { id: 'png16', label: 'PNG 16-bit' },
+];
 
 /**
  * A size's number, typed and COMMITTED on blur or Enter: clamped per
@@ -93,6 +100,10 @@ export default function ExportTargets({
 }) {
   const patch = (i: number, change: Partial<ExportTarget>) =>
     onTargets(targets.map((t, k) => (k === i ? { ...t, ...change } : t)));
+  // A 16-bit picture is read back whole off the GPU: 8 bytes a pixel, and a
+  // phone's tab has no room for a 48-megapixel one. The run writes a JPEG
+  // there and says so; the panel says it first.
+  const phone = deviceClass() === 'constrained';
   const names = new Set<string>();
   return (
     <div className="flex flex-col gap-3">
@@ -134,20 +145,46 @@ export default function ExportTargets({
                 {t.size && <SizeValue mode={t.size.mode} value={t.size.value} onCommit={(value) => patch(i, { size: { mode: t.size!.mode, value } })} />}
               </div>
             </FieldRow>
-            <FieldRow label="Quality">
-              <RangeField
-                label="JPEG quality"
-                min={QUALITY_LIMITS.min}
-                max={QUALITY_LIMITS.max}
-                step={0.01}
-                value={t.quality}
-                onChange={(q) => patch(i, { quality: q })}
-                format={(v) => `${Math.round(v * 100)} %`}
+            <FieldRow
+              label="Format"
+              hint={
+                t.format === 'png16'
+                  ? phone
+                    ? 'a 16-bit file is not made on a phone: this target writes a JPEG here'
+                    : '16 bits a channel off the render itself — a master to keep or edit again, several times a JPEG’s weight'
+                  : undefined
+              }
+            >
+              <Segmented
+                size="sm"
+                label="File format"
+                value={t.format}
+                onChange={(v) => patch(i, v === 'png16' ? { format: 'png16', sharpen: 'off' } : { format: 'jpeg' })}
+                options={FORMAT_OPTIONS}
               />
             </FieldRow>
-            <FieldRow label="Sharpen" hint={t.sharpen === 'off' ? undefined : 'for a screen, after the resize'}>
-              <Segmented size="sm" label="Sharpen for screen" value={t.sharpen} onChange={(v) => patch(i, { sharpen: v as OutputSharpen })} options={SHARPEN_OPTIONS} />
-            </FieldRow>
+            {t.format === 'jpeg' && (
+              <FieldRow label="Quality">
+                <RangeField
+                  label="JPEG quality"
+                  min={QUALITY_LIMITS.min}
+                  max={QUALITY_LIMITS.max}
+                  step={0.01}
+                  value={t.quality}
+                  onChange={(q) => patch(i, { quality: q })}
+                  format={(v) => `${Math.round(v * 100)} %`}
+                />
+              </FieldRow>
+            )}
+            {t.format === 'jpeg' ? (
+              <FieldRow label="Sharpen" hint={t.sharpen === 'off' ? undefined : 'for a screen, after the resize'}>
+                <Segmented size="sm" label="Sharpen for screen" value={t.sharpen} onChange={(v) => patch(i, { sharpen: v as OutputSharpen })} options={SHARPEN_OPTIONS} />
+              </FieldRow>
+            ) : (
+              <FieldRow label="Sharpen" hint="a 16-bit master is not sharpened for a screen">
+                <span className="font-mono text-2xs text-muted">off</span>
+              </FieldRow>
+            )}
             <SwitchRow
               label="Watermark"
               name={`Watermark ${i === 0 ? 'the chosen folder' : folder}`}

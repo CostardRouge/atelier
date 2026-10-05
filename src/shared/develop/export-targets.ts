@@ -42,6 +42,18 @@ export type OutputSharpen = 'off' | 'low' | 'standard' | 'high';
 
 export const OUTPUT_SHARPEN_LEVELS: readonly OutputSharpen[] = ['off', 'low', 'standard', 'high'];
 
+/**
+ * What a target writes: a JPEG (8 bits, the quality below), or a **16-bit
+ * PNG** — the graded picture read off the render chain's own float buffers
+ * (`deliver-half.ts`, `png-write.ts`), for an archive master or a file that
+ * will be edited again. A 16-bit file takes no quality, no screen sharpening
+ * (a master is not sharpened for a screen) and no gain map; its border, its
+ * watermark and its metadata are a JPEG's.
+ */
+export type ExportFormat = 'jpeg' | 'png16';
+
+export const EXPORT_FORMATS: readonly ExportFormat[] = ['jpeg', 'png16'];
+
 export interface ExportTarget {
   /**
    * The sub-folder it writes into — ignored for the first target, which
@@ -50,7 +62,9 @@ export interface ExportTarget {
   name: string;
   /** Null is the picture's own size. */
   size: ExportSize | null;
-  /** JPEG quality, 0.5..1. */
+  /** JPEG, or a 16-bit PNG. */
+  format: ExportFormat;
+  /** JPEG quality, 0.5..1 — unread by a 16-bit PNG. */
   quality: number;
   sharpen: OutputSharpen;
   /** Draw the roll's watermark (`watermark.ts`) on this target's files — the web copy, not the archive. */
@@ -72,6 +86,7 @@ export const QUALITY_LIMITS = { min: 0.5, max: 1 } as const;
 export const DEFAULT_TARGET: Readonly<ExportTarget> = Object.freeze({
   name: '',
   size: null,
+  format: 'jpeg',
   quality: 0.92,
   sharpen: 'off',
   watermark: false,
@@ -83,11 +98,12 @@ export const DEFAULT_TARGET: Readonly<ExportTarget> = Object.freeze({
  * afterwards, every field its own.
  */
 export const TARGET_PRESETS: readonly { id: string; label: string; target: ExportTarget }[] = [
-  { id: 'full', label: 'Full size', target: { name: 'Full', size: null, quality: 0.92, sharpen: 'off', watermark: false } },
-  { id: 'web', label: 'Web · 2048 px', target: { name: 'Web', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'standard', watermark: false } },
-  { id: 'feed', label: 'Feed · 1080 px across', target: { name: 'Feed', size: { mode: 'short', value: 1080 }, quality: 0.9, sharpen: 'standard', watermark: false } },
-  { id: 'mail', label: 'Mail · 2 MP', target: { name: 'Mail', size: { mode: 'megapixels', value: 2 }, quality: 0.8, sharpen: 'low', watermark: false } },
-  { id: 'half', label: 'Half · 50 %', target: { name: 'Half', size: { mode: 'percent', value: 50 }, quality: 0.9, sharpen: 'low', watermark: false } },
+  { id: 'full', label: 'Full size', target: { name: 'Full', size: null, format: 'jpeg', quality: 0.92, sharpen: 'off', watermark: false } },
+  { id: 'web', label: 'Web · 2048 px', target: { name: 'Web', size: { mode: 'long', value: 2048 }, format: 'jpeg', quality: 0.85, sharpen: 'standard', watermark: false } },
+  { id: 'feed', label: 'Feed · 1080 px across', target: { name: 'Feed', size: { mode: 'short', value: 1080 }, format: 'jpeg', quality: 0.9, sharpen: 'standard', watermark: false } },
+  { id: 'mail', label: 'Mail · 2 MP', target: { name: 'Mail', size: { mode: 'megapixels', value: 2 }, format: 'jpeg', quality: 0.8, sharpen: 'low', watermark: false } },
+  { id: 'half', label: 'Half · 50 %', target: { name: 'Half', size: { mode: 'percent', value: 50 }, format: 'jpeg', quality: 0.9, sharpen: 'low', watermark: false } },
+  { id: 'master', label: 'Master · 16-bit PNG', target: { name: 'Master', size: null, format: 'png16', quality: 0.92, sharpen: 'off', watermark: false } },
 ];
 
 function clamp(v: number, lo: number, hi: number): number {
@@ -210,8 +226,11 @@ export function readTarget(raw: unknown): ExportTarget | null {
   return {
     name: typeof src.name === 'string' ? src.name.slice(0, 64) : '',
     size: readSize(src.size),
+    // Absent on every target stored before the format existed: a JPEG.
+    format: src.format === 'png16' ? 'png16' : 'jpeg',
     quality: clamp(finite(src.quality, DEFAULT_TARGET.quality), QUALITY_LIMITS.min, QUALITY_LIMITS.max),
-    sharpen: OUTPUT_SHARPEN_LEVELS.includes(src.sharpen as OutputSharpen) ? (src.sharpen as OutputSharpen) : 'off',
+    // A 16-bit master is never sharpened for a screen, whatever was stored.
+    sharpen: src.format === 'png16' ? 'off' : OUTPUT_SHARPEN_LEVELS.includes(src.sharpen as OutputSharpen) ? (src.sharpen as OutputSharpen) : 'off',
     watermark: src.watermark === true,
   };
 }
@@ -237,6 +256,7 @@ export function readTargets(raw: unknown, legacy?: { longEdge?: unknown; quality
 export function sameTarget(a: ExportTarget, b: ExportTarget): boolean {
   return (
     a.name === b.name &&
+    a.format === b.format &&
     a.quality === b.quality &&
     a.sharpen === b.sharpen &&
     a.watermark === b.watermark &&

@@ -70,7 +70,7 @@ describe('holdGrades', () => {
   it('forgets the held copy when the film texture is swapped, and only where it can be', () => {
     const { grader, render } = fakeGrader();
     const setFilm = vi.fn();
-    const swappable: PassGrader = { ...grader, setPasses: vi.fn(), setFilm, setLut: vi.fn() };
+    const swappable: PassGrader = { ...grader, setPasses: vi.fn(), setFilm, setLut: vi.fn(), renderHalf: () => null };
     const held = holdGrades(swappable, fakeCopy());
     const photo = picture('photo');
     held.render(photo);
@@ -89,7 +89,7 @@ describe('holdGrades', () => {
   it('forgets the held copy when the look is swapped in place', () => {
     const { grader, render } = fakeGrader();
     const setLut = vi.fn();
-    const held = holdGrades({ ...grader, setPasses: vi.fn(), setFilm: vi.fn(), setLut } as PassGrader, fakeCopy());
+    const held = holdGrades({ ...grader, setPasses: vi.fn(), setFilm: vi.fn(), setLut, renderHalf: () => null } as PassGrader, fakeCopy());
     const photo = picture('photo');
     held.render(photo);
     held.render(photo);

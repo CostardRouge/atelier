@@ -771,7 +771,8 @@ export function useRollExport({
           // on the base JPEG before any HDR container is written round it;
           // its account is kept here for the run's sentence.
           const stamped: { account: ExifAccount } = { account: 'none' };
-          const stamp = async (jpeg: Blob, delivered: PictureSize) => {
+          // The same block for a JPEG's segments and a 16-bit PNG's chunks.
+          const exifFor = (delivered: PictureSize) => {
             const exif = exportExifBlock(head, origin?.exif ?? null, delivered, {
               identity: signer,
               title: picture.title,
@@ -781,8 +782,9 @@ export function useRollExport({
             });
             stamped.account = exif.account;
             if (placeOf && exif.located && !exif.place?.city) unplaced.push(picture.ref.name);
-            return stampExif(jpeg, exif, delivered);
+            return exif;
           };
+          const stamp = async (jpeg: Blob, delivered: PictureSize) => stampExif(jpeg, exifFor(delivered), delivered);
           // The watermark's line for THIS picture: the identity, the year it
           // was taken, its own title. Resolved only when a target draws it.
           let watermark: { text: string; style: Watermark } | null = null;
@@ -821,6 +823,7 @@ export function useRollExport({
             calibration,
             hdr,
             stamp,
+            exifFor,
             onSubjects: () => say('develop', 'Finding the subject'),
           });
           // A subject layer the model did not answer draws nothing — in the
@@ -873,19 +876,24 @@ export function useRollExport({
             failures.push(`${picture.ref.name} carries no camera EXIF — nothing is known about the picture it came from, only the signature is written`);
           }
           const blob = out.blob;
+          // A target that asked for 16 bits and got a JPEG (a phone) is said once per picture.
+          for (const o of out.outputs) if (o.note) failures.push(`${picture.ref.name}: ${o.note}`);
           // Unique within its own folder: a variant's `Variant 2/DJI_0101.jpg`
-          // does not collide with the first's `DJI_0101.jpg`.
+          // does not collide with the first's `DJI_0101.jpg`. Each target
+          // names the file by what it WROTE — `.png` for a 16-bit master.
           const variantDir = variantFolder(picture);
           const inDir = (n: string) => `${variantDir}/${n}`.toLowerCase();
-          const name = uniqueName(exportName(picture.ref.name), (c) => named.has(inDir(c)));
+          const first = out.outputs[0];
+          const name = uniqueName(exportName(picture.ref.name, first.format), (c) => named.has(inDir(c)));
           named.add(inDir(name));
+          const mimeOf = (format: 'jpeg' | 'png16') => (format === 'png16' ? 'image/png' : 'image/jpeg');
           // The capture's own instant, never the moment it was rendered.
-          const main = new File([blob], name, { type: 'image/jpeg', lastModified: file.lastModified });
+          const main = new File([blob], name, { type: mimeOf(first.format), lastModified: file.lastModified });
           const others: FolderedFile[] = out.outputs.slice(1).map((o, k) => {
             const targetDir = targetFolder(r.export.targets[k + 1].name, k + 1);
             return {
               folder: variantDir ? `${targetDir}/${variantDir}` : targetDir,
-              file: new File([o.blob], name, { type: 'image/jpeg', lastModified: file.lastModified }),
+              file: new File([o.blob], exportName(name, o.format), { type: mimeOf(o.format), lastModified: file.lastModified }),
             };
           });
           renderedCount += 1;

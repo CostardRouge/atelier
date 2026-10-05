@@ -1597,6 +1597,52 @@ const out = await page.evaluate(async () => {
     results.head = { twin, truth, moved, twinGraded, size: cube.size, own: cube.data === look.data, gradedSize: graded.size };
   }
 
+  // --- the 16-bit read-back (RenderGraph.readHalf): the chain's own floats,
+  // held to the 8-bit canvas it also draws, and a half source round-tripped --
+  {
+    const { createRenderGraph, passthroughPass, setDitherForTest } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeCubePass } = await import('/atelier/src/shared/render/cube-pass.ts');
+    const { toHalf, fromHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const RW = 256, RH = 96;
+    const cv = document.createElement('canvas');
+    const graph = createRenderGraph(cv);
+    graph.resize(RW, RH);
+    const chain = [makeCubePass({ lut: cube, intensity: 1, interpolation: 'tetrahedral' }), passthroughPass];
+    // From the 8-bit bitmap source: the canvas (undithered) against the read-back, rounded.
+    const rs = document.createElement('canvas'); rs.width = RW; rs.height = RH;
+    const rg = rs.getContext('2d');
+    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) { rg.fillStyle = `rgb(${x},${Math.round(y * 255 / RH)},${(x * 3 + y) % 256})`; rg.fillRect(x, y, 1, 1); }
+    const rbm = await createImageBitmap(rs);
+    setDitherForTest(false);
+    let canvasBytes, halfOut, roundTrip;
+    try {
+      graph.render(rbm, chain);
+      const o = document.createElement('canvas'); o.width = RW; o.height = RH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      canvasBytes = oc.getImageData(0, 0, RW, RH).data;
+      halfOut = graph.readHalf(rbm, chain);
+      // A half source through a passthrough: the bits come back.
+      const hd = new Uint16Array(RW * RH * 3);
+      for (let i = 0; i < RW * RH; i++) { hd[i * 3] = toHalf((i % RW) / RW); hd[i * 3 + 1] = toHalf(0.37); hd[i * 3 + 2] = toHalf(1.5); }
+      roundTrip = graph.readHalf({ kind: 'half', width: RW, height: RH, data: hd }, [passthroughPass]);
+      results.readHalf = { got: Boolean(halfOut), worst: 0, trip: 0, headroom: roundTrip ? fromHalf(roundTrip.data[2]) : null };
+      if (halfOut) {
+        for (let i = 0; i < RW * RH; i++) for (let c = 0; c < 3; c++) {
+          const v = Math.min(255, Math.max(0, fromHalf(halfOut.data[i * 3 + c]) * 255));
+          results.readHalf.worst = Math.max(results.readHalf.worst, Math.abs(v - canvasBytes[i * 4 + c]));
+        }
+      }
+      if (roundTrip) {
+        for (let i = 0; i < RW * RH * 3; i++) results.readHalf.trip = Math.max(results.readHalf.trip, Math.abs(fromHalf(roundTrip.data[i]) - fromHalf(hd[i])));
+      }
+    } finally {
+      setDitherForTest(null);
+      graph.dispose();
+      rbm.close();
+    }
+  }
+
   // --- the canvas dither: does the GPU add the noise dither.ts says, and does
   // it take the steps out of a gradient that more than 8 bits reached? ------
   {
@@ -2049,6 +2095,16 @@ const hd = out.head;
   say(hd.own && hd.size === 33, `the look keeps its own lattice (${hd.size}³, shared with the file's)${hd.own ? '' : ' — it was RESAMPLED'}`);
   say(hd.moved > 20, `and the develop moved the shadows by ${hd.moved} code(s) (must be past 20)`);
   say(hd.twinGraded <= 1.5, `with the wheels as a TAIL baked under the head (${hd.gradedSize}³): GPU against the CPU twin worst ${hd.twinGraded.toFixed(2)} code(s) (allowed 1.5)`);
+}
+
+const rh = out.readHalf;
+{
+  const ok = rh.got && rh.worst <= 1 && rh.trip < 0.002 && rh.headroom !== null && rh.headroom > 1.4;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  the 16-bit read-back: ${rh.got ? `worst ${rh.worst.toFixed(2)} code(s) from the undithered canvas (allowed 1)` : 'NOTHING came back'}` +
+      `, a half source round-trips within ${rh.trip.toFixed(4)}, headroom ${rh.headroom === null ? 'lost' : rh.headroom.toFixed(2)} kept above white`,
+  );
 }
 
 const dz = out.dither;

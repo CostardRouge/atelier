@@ -35,7 +35,7 @@ function sample(): RollDoc {
   return {
     ...doc,
     export: {
-      targets: [{ name: '', size: { mode: 'long', value: 2048 }, quality: 0.85, sharpen: 'off', watermark: false }, { name: 'Web', size: { mode: 'short', value: 1080 }, quality: 0.8, sharpen: 'standard', watermark: true }],
+      targets: [{ name: '', size: { mode: 'long', value: 2048 }, format: 'jpeg', quality: 0.85, sharpen: 'off', watermark: false }, { name: 'Web', size: { mode: 'short', value: 1080 }, format: 'jpeg', quality: 0.8, sharpen: 'standard', watermark: true }],
       replace: true,
       hdr: true,
       hdrStops: 3,

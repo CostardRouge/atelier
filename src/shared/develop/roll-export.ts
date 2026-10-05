@@ -464,11 +464,12 @@ export function fixedFrameDelivery(
  * meet, by `shared/sources/unique-name.ts`: inside a run, and against the
  * folder being written into.
  */
-export function exportName(refName: string): string {
+export function exportName(refName: string, format: 'jpeg' | 'png16' = 'jpeg'): string {
   const base = refName.replace(/\.[^.]+$/, '') || 'picture';
   // A clip leaves as an MP4 (H.264, its sound copied) under the same rule:
   // the capture's exact name, the extension the delivery deserves.
-  return isClipName(refName) ? `${base}.mp4` : `${base}.jpg`;
+  if (isClipName(refName)) return `${base}.mp4`;
+  return format === 'png16' ? `${base}.png` : `${base}.jpg`;
 }
 
 /**

@@ -47,7 +47,12 @@ import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
-import { decodeEdgeFor, longEdgeFor, type ExportTarget } from './export-targets';
+import { decodeEdgeFor, longEdgeFor, type ExportFormat, type ExportTarget } from './export-targets';
+import { codes16FromBytes, compositeBytesOver, resampleHalfInto, snapRect } from './deliver-half';
+import { encodePng16 } from '../media/png-write';
+import { toHalf, type HalfImage } from '../render/half-image';
+import type { ExportExif } from '../exif/stamp-exif';
+import { srgbIcc } from '../exif/icc-srgb';
 import { OUTPUT_SHARPEN_AMOUNT, sharpenBands } from './output-sharpen';
 import { watermarkLayout, type Watermark } from './watermark';
 import { makeGainMapPass } from '../render/gain-map-pass';
@@ -138,10 +143,17 @@ export interface RollRenderOptions {
   stamp?: ((jpeg: Blob, delivered: PictureSize) => Promise<Blob>) | null;
   /** Called once, before the model is asked for this picture's subjects — the run's progress line says so. */
   onSubjects?: (() => void) | null;
+  /**
+   * The metadata a 16-bit PNG carries, for its delivered size — the same
+   * block, packet and profile `stamp` writes into a JPEG, as chunks
+   * (`png-write.ts`). A run that stamps passes both; a PNG target with
+   * neither leaves bare.
+   */
+  exifFor?: ((delivered: PictureSize) => ExportExif) | null;
 }
 
-/** What `deliver` needs of a target: its size, its quality, its screen sharpening. */
-export type DeliverTarget = Pick<ExportTarget, 'size' | 'quality' | 'sharpen'> & { watermark?: boolean };
+/** What `deliver` needs of a target: its size, its quality, its screen sharpening, its format. */
+export type DeliverTarget = Pick<ExportTarget, 'size' | 'quality' | 'sharpen'> & { watermark?: boolean; format?: ExportFormat };
 
 /** One target's file. */
 export interface RollOutput {
@@ -149,6 +161,10 @@ export interface RollOutput {
   width: number;
   height: number;
   hdr: Pick<UltraHdrResult, 'ultra' | 'headroom' | 'checked' | 'reason'> | null;
+  /** What was written — a target asking for a 16-bit PNG this device could not make left a JPEG, said in `note`. */
+  format: ExportFormat;
+  /** Why the file is not what the target asked, when it is not. */
+  note: string | null;
 }
 
 export interface RollRendered {
@@ -345,7 +361,11 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
     try {
       const graded = grader && fit ? grader.render(fit.image) : bitmap;
       const darker = darkGrader && fit ? copyOf(darkGrader.render(fit.image)) : null;
-      return { ...(await deliver(graded, source, gradedAt, opts, darker)), subjects, ...(capped ? { sensor: natural, capped } : {}) };
+      // The 16-bit picture, read off the chain's float buffers AFTER the 8-bit
+      // render (the graph's targets are its own; a read-back draws the chain
+      // again, whole) — only where a target asks for it.
+      const half = wantsHalf(opts) ? (grader && fit ? grader.renderHalf(fit.image) : halfOfBitmap(bitmap)) : null;
+      return { ...(await deliver(graded, source, gradedAt, opts, darker, half)), subjects, ...(capped ? { sensor: natural, capped } : {}) };
     } finally {
       grader?.dispose();
       darkGrader?.dispose();
@@ -367,7 +387,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const klass = deviceClass();
   // Known before the decode only when every target asks a long edge: a short
   // edge, an area or a percentage waits for the picture's own shape.
-  const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '', watermark: Boolean(t.watermark) })));
+  const decodeEdge = decodeEdgeFor(opts.targets.map((t) => ({ ...t, name: '', watermark: Boolean(t.watermark), format: t.format ?? 'jpeg' })));
   const gpuMax = maxRenderSize();
   const decoded = await decodeRaw(raw.file, {
     minLongEdge: decodeEdge ? decodeEdge * 2 : null,
@@ -414,7 +434,9 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
     // read by `deliver` after the darker has drawn, and a grader's canvas is
     // only its LAST render.
     const darker = darkGrader ? copyOf(darkGrader.render(decoded.half)) : null;
-    return { ...(await deliver(grader.render(decoded.half), source, source, opts, darker)), sensor, capped, subjects };
+    const graded = grader.render(decoded.half);
+    const half = wantsHalf(opts) ? grader.renderHalf(decoded.half) : null;
+    return { ...(await deliver(graded, source, source, opts, darker, half)), sensor, capped, subjects };
   } finally {
     grader.dispose();
     darkGrader?.dispose();
@@ -454,6 +476,32 @@ function copyOf(image: CanvasImageSource): HTMLCanvasElement {
   return canvas;
 }
 
+/** Whether any target wants the picture in 16 bits — and this device can hold one whole. */
+function wantsHalf(opts: RollRenderOptions): boolean {
+  return opts.targets.some((t) => t.format === 'png16') && deviceClass() !== 'constrained';
+}
+
+/** An 8-bit picture as half-floats — a 16-bit file of a picture nothing graded holds the file's 8 bits, widened. */
+function halfOfBitmap(bitmap: ImageBitmap): HalfImage | null {
+  const canvas = document.createElement('canvas');
+  canvas.width = bitmap.width;
+  canvas.height = bitmap.height;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) return null;
+  ctx.drawImage(bitmap, 0, 0);
+  const { data } = ctx.getImageData(0, 0, bitmap.width, bitmap.height);
+  const out = new Uint16Array(bitmap.width * bitmap.height * 3);
+  // A half-float of k/255 for each code: the same encoded value the GPU reads.
+  const table = new Uint16Array(256);
+  for (let k = 0; k < 256; k += 1) table[k] = halfBits(k / 255);
+  for (let i = 0, o = 0; i < bitmap.width * bitmap.height; i += 1, o += 3) {
+    out[o] = table[data[i * 4]];
+    out[o + 1] = table[data[i * 4 + 1]];
+    out[o + 2] = table[data[i * 4 + 2]];
+  }
+  return { kind: 'half', width: bitmap.width, height: bitmap.height, data: out };
+}
+
 /** Cut, border and encode a graded picture for every target — the one place the file's frame is made. */
 async function deliver(
   graded: CanvasImageSource,
@@ -461,10 +509,17 @@ async function deliver(
   gradedAt: PictureSize,
   opts: RollRenderOptions,
   darker: HTMLCanvasElement | null = null,
+  half: HalfImage | null = null,
 ): Promise<RollRendered> {
   if (opts.targets.length === 0) throw new Error('This export has no target.');
   const outputs: RollOutput[] = [];
-  for (const target of opts.targets) outputs.push(await deliverOne(graded, source, gradedAt, opts, target, darker));
+  for (const target of opts.targets) {
+    outputs.push(
+      target.format === 'png16'
+        ? await deliverPng16(half, graded, source, gradedAt, opts, target)
+        : await deliverOne(graded, source, gradedAt, opts, target, darker),
+    );
+  }
   const first = outputs[0];
   return { outputs, blob: first.blob, width: first.width, height: first.height, source, gradedAt, hdr: first.hdr, sensor: null, capped: null };
 }
@@ -515,12 +570,75 @@ async function deliverOne(
       width: out.w,
       height: out.h,
       hdr: { ultra: result.ultra, headroom: result.headroom, checked: result.checked, reason: result.reason },
+      format: 'jpeg',
+      note: null,
     };
   }
   const encoded = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', target.quality));
   if (!encoded) throw new Error('The browser could not encode this picture.');
   const blob = opts.stamp ? await opts.stamp(encoded, { width: out.w, height: out.h }) : encoded;
-  return { blob, width: out.w, height: out.h, hdr: null };
+  return { blob, width: out.w, height: out.h, hdr: null, format: 'jpeg', note: null };
+}
+
+/**
+ * A target's 16-bit PNG: the frame `deliverOne` makes, cut in FLOAT
+ * (`deliver-half.ts`) from the chain's own buffers rather than drawn through
+ * an 8-bit canvas. The border is painted by the same painter on a canvas
+ * with no picture in it and widened; the picture is resampled into the
+ * crop's rectangle at 16 bits; a watermark is drawn on a cleared canvas and
+ * laid over by its alpha. No screen sharpening and no gain map: a master.
+ * Without a half-float render — a phone, or a GPU that cannot read its
+ * float target back — the target's JPEG leaves instead, and says so.
+ */
+async function deliverPng16(
+  half: HalfImage | null,
+  graded: CanvasImageSource,
+  source: PictureSize,
+  gradedAt: PictureSize,
+  opts: RollRenderOptions,
+  target: DeliverTarget,
+): Promise<RollOutput> {
+  if (!half) {
+    const jpeg = await deliverOne(graded, source, gradedAt, { ...opts, hdr: null }, { ...target, format: 'jpeg', sharpen: 'off' }, null);
+    return {
+      ...jpeg,
+      note: deviceClass() === 'constrained' ? 'a 16-bit PNG is not made on a phone, so its JPEG left' : 'this GPU could not hand its 16-bit picture back, so a JPEG left',
+    };
+  }
+  const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
+  const framing = opts.framing ?? DEFAULT_FRAMING;
+  const cap = longEdgeFor(target.size, deliveredLayout(source, ratio, opts.framing, opts.border, null).out);
+  const { out, layout } = deliveredLayout(source, ratio, opts.framing, opts.border, cap);
+  if (out.w <= 0 || out.h <= 0) throw new Error('This picture has no pixels to deliver.');
+  // The border alone, by the one painter, with nothing where the picture goes.
+  const canvas = document.createElement('canvas');
+  canvas.width = out.w;
+  canvas.height = out.h;
+  const ctx = canvas.getContext('2d', { willReadFrequently: true });
+  if (!ctx) throw new Error('Could not create a 2D canvas for export.');
+  ctx.imageSmoothingQuality = 'high';
+  const blank = document.createElement('canvas');
+  blank.width = 1;
+  blank.height = 1;
+  // A blur border is blurred FROM the picture: the graded 8-bit render serves
+  // for that, as it does the file's thumbnail — only the crop is in 16 bits.
+  drawDelivered(ctx, opts.border?.fill === 'blur' ? graded : blank, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  const codes = codes16FromBytes(ctx.getImageData(0, 0, out.w, out.h).data, out.w, out.h);
+  resampleHalfInto(codes, out.w, snapRect(layout, out.w, out.h), half, framing);
+  const mark = target.watermark && opts.watermark?.text ? opts.watermark : null;
+  if (mark) {
+    ctx.clearRect(0, 0, out.w, out.h);
+    drawWatermark(ctx, out.w, out.h, mark.text, mark.style);
+    compositeBytesOver(codes, out.w, out.h, ctx.getImageData(0, 0, out.w, out.h).data);
+  }
+  const exif = opts.exifFor ? opts.exifFor({ width: out.w, height: out.h }) : null;
+  const bytes = await encodePng16(codes, out.w, out.h, { exif: exif?.block ?? null, xmp: exif?.xmp ?? null, icc: srgbIcc() });
+  return { blob: new Blob([bytes as BlobPart], { type: 'image/png' }), width: out.w, height: out.h, hdr: null, format: 'png16', note: null };
+}
+
+/** IEEE binary16 bits of a number in [0,1] — `half-image.ts`'s `toHalf`, named for what it does here. */
+function halfBits(v: number): number {
+  return toHalf(v);
 }
 
 /** The fonts a mark is drawn in: the suite's own sans where the page has it, else the system's. */

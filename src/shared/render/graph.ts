@@ -32,7 +32,7 @@ import { bandFragment, nearRows, OWN_ROWS, planBands, type BandPlan, type RowNee
 import { BAND_PREFERENCE_KEY, bandsWanted, readBandPreference, type BandPreference } from './band-policy';
 import { DITHER_LSB, ditherFragment, wantsDither } from './dither';
 import { VERTEX_SRC } from './glsl';
-import { isHalfImage, type HalfImage } from './half-image';
+import { isHalfImage, toHalf, type HalfImage } from './half-image';
 import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
 
 /** What the intermediate buffers can hold. */
@@ -323,6 +323,15 @@ export interface RenderGraph {
    * a bitmap, once per identity.
    */
   render(source: RenderSource, passes: readonly RenderPass[]): HTMLCanvasElement | OffscreenCanvas;
+  /**
+   * Draw `source` through `passes` and read the LAST pass back as half-floats
+   * — the chain's own buffers, never the 8-bit canvas: what a 16-bit file is
+   * made of (`deliver-half.ts`). Whole, never in bands, and undithered by
+   * construction (the dither is the canvas write's). Null where the targets
+   * are bytes (`precision: 'byte'`): there is nothing past 8 bits to read.
+   * The canvas is left as it was.
+   */
+  readHalf(source: RenderSource, passes: readonly RenderPass[]): HalfImage | null;
   resize(width: number, height: number): void;
   /** Run a pass's own `dispose` against this graph's context. */
   releasePass(pass: RenderPass): void;
@@ -656,6 +665,45 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     }
   };
 
+  /**
+   * The source onto unit 0. `UNPACK_FLIP_Y_WEBGL` is IGNORED for an
+   * ImageBitmap, whose orientation is fixed at creation — so a decoded photo
+   * arrives in image order while a video or a canvas arrives flipped, and the
+   * vertex shader's `u_flipY` compensates. The rule `lut-gl.ts` learnt the
+   * hard way; an FBO round trip is neutral under one UV convention, so only
+   * the FIRST pass has to care.
+   */
+  const upload = (source: RenderSource): { half: HalfImage | null; bitmapSource: number } => {
+    gl.bindVertexArray(vao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sourceTex);
+    const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
+    const half = isHalfImage(source) ? source : null;
+    // Both are immutable, so both are keyed by identity and uploaded once.
+    const keyed = bitmap ?? half;
+    const bitmapSource = bitmap ? 1 : 0;
+    if (!keyed || keyed !== uploaded) {
+      const size = sourceSize(source);
+      if (size && (size.width > maxSize || size.height > maxSize)) {
+        tooBig('the source', size.width, size.height);
+      }
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      if (half) {
+        // A typed array HONOURS the flip flag (only a bitmap ignores it), so
+        // a top-row-first picture lands like a canvas does and `u_flipY`
+        // stays 0. Three half-floats per texel are 6 bytes, so an odd width
+        // makes a row that is not a multiple of the default alignment of 4.
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB16F, half.width, half.height, 0, gl.RGB, gl.HALF_FLOAT, half.data);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+      } else {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
+      }
+      uploaded = keyed;
+    }
+    return { half, bitmapSource };
+  };
+
   return {
     precision,
     maxSize,
@@ -672,6 +720,83 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     releasePass(pass) {
       if (disposed) return;
       pass.dispose?.(gl);
+    },
+
+    readHalf(source, passes) {
+      if (disposed || !canFloat || gl.isContextLost()) return null;
+      const list = passes.length ? passes : [PASSTHROUGH];
+      const width = canvas.width;
+      const height = canvas.height;
+      // The plan with its last slot turned onto a TARGET: for one pass the
+      // only one, else the one the last pass does not read.
+      const plan = planPasses(list.length);
+      const lastTo = (list.length === 1 ? 0 : (list.length - 1) % 2) as 0 | 1;
+      plan[plan.length - 1] = { ...plan[plan.length - 1], to: lastTo };
+      for (let i = 0; i <= Math.max(0, lastTo); i += 1) {
+        if (!targetAt(i as 0 | 1, width, height)) return null;
+      }
+      upload(source);
+      const bitmapSource = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? 1 : 0;
+      for (let i = 0; i < plan.length; i += 1) {
+        const slot = plan[i];
+        const program = programFor(list[i]);
+        if (!program) continue;
+        drawPass(
+          list[i],
+          program,
+          { texture: slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null), flipY: slot.from === 'source' ? bitmapSource : 0, band: [0, 0, 0, 0] },
+          { framebuffer: targets[slot.to as 0 | 1]?.fbo ?? null, y: 0, scissor: null, dither: 0 },
+          width,
+          height,
+        );
+      }
+      // Read in bands of rows, so the transient RGBA buffer stays small
+      // beside the picture: what this GPU hands back for a float target is
+      // its own choice — half-floats, or floats converted here.
+      const fbo = targets[lastTo]?.fbo ?? null;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      const readType = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE) as number;
+      const readFormat = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT) as number;
+      const out = new Uint16Array(width * height * 3);
+      const rows = Math.max(1, Math.min(height, Math.floor(4_000_000 / Math.max(1, width))));
+      const useHalf = readType === gl.HALF_FLOAT && readFormat === gl.RGBA;
+      const buf = useHalf ? new Uint16Array(width * rows * 4) : new Float32Array(width * rows * 4);
+      let ok = true;
+      for (let y0 = 0; y0 < height && ok; y0 += rows) {
+        const n = Math.min(rows, height - y0);
+        // A target is drawn top row first (`u_flipY` 0 past the source), so
+        // GL's bottom-up read lands row y0 of the picture at buffer row 0 of
+        // the band read from height − y0 − n.
+        gl.readPixels(0, height - y0 - n, width, n, gl.RGBA, useHalf ? gl.HALF_FLOAT : gl.FLOAT, buf);
+        if (gl.getError() !== gl.NO_ERROR) {
+          ok = false;
+          break;
+        }
+        for (let r = 0; r < n; r += 1) {
+          const picRow = y0 + n - 1 - r;
+          const src = r * width * 4;
+          const dst = picRow * width * 3;
+          for (let x = 0; x < width; x += 1) {
+            const s = src + x * 4;
+            const d = dst + x * 3;
+            if (useHalf) {
+              out[d] = buf[s];
+              out[d + 1] = buf[s + 1];
+              out[d + 2] = buf[s + 2];
+            } else {
+              out[d] = toHalf(buf[s]);
+              out[d + 1] = toHalf(buf[s + 1]);
+              out[d + 2] = toHalf(buf[s + 2]);
+            }
+          }
+        }
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (!ok) {
+        console.error('[render] this GPU refused to read its float target back; no 16-bit picture');
+        return null;
+      }
+      return { kind: 'half', width, height, data: out };
     },
 
     render(source, passes) {
@@ -693,39 +818,7 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
 
       // The source, uploaded once for the whole chain — and, for a bitmap,
       // once for its LIFETIME on this graph.
-      gl.bindVertexArray(vao);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, sourceTex);
-      // `UNPACK_FLIP_Y_WEBGL` is IGNORED for an ImageBitmap, whose orientation
-      // is fixed at creation — so a decoded photo arrives in image order while
-      // a video or a canvas arrives flipped, and the vertex shader's `u_flipY`
-      // compensates. The rule `lut-gl.ts` learnt the hard way; an FBO round
-      // trip is neutral under one UV convention, so only the FIRST pass has to
-      // care.
-      const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
-      const half = isHalfImage(source) ? source : null;
-      // Both are immutable, so both are keyed by identity and uploaded once.
-      const keyed = bitmap ?? half;
-      const bitmapSource = bitmap ? 1 : 0;
-      if (!keyed || keyed !== uploaded) {
-        const size = sourceSize(source);
-        if (size && (size.width > maxSize || size.height > maxSize)) {
-          tooBig('the source', size.width, size.height);
-        }
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        if (half) {
-          // A typed array HONOURS the flip flag (only a bitmap ignores it), so
-          // a top-row-first picture lands like a canvas does and `u_flipY`
-          // stays 0. Three half-floats per texel are 6 bytes, so an odd width
-          // makes a row that is not a multiple of the default alignment of 4.
-          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB16F, half.width, half.height, 0, gl.RGB, gl.HALF_FLOAT, half.data);
-          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-        } else {
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
-        }
-        uploaded = keyed;
-      }
+      const { half, bitmapSource } = upload(source);
 
       const WHOLE_SRC = [0, 0, 0, 0] as const;
       // The canvas is the one 8-bit buffer left; where more than 8 bits reach

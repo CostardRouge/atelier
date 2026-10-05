@@ -19,7 +19,10 @@ import { makeExportCanvas } from '../media/webcodecs-export';
 import { makeCubePass } from './cube-pass';
 import { makeFilmPass } from './film-pass';
 import { createRenderGraph, type RenderPass, type RenderPrecision, type RenderSource } from './graph';
-import { isHalfImage } from './half-image';
+import { isHalfImage, type HalfImage } from './half-image';
+
+/** What a grader takes: any picture a canvas can draw, or a half-float picture of our own. */
+type GradeSource = CanvasImageSource | HalfImage;
 
 // The banding hooks, re-exported so a gate that imports THIS module reaches the
 // very instance of the graph it renders through (a dev server that has
@@ -57,6 +60,12 @@ export interface GraphGrader extends FrameGrader {
    * the uploaded source all survive; only the cube's texture is new.
    */
   setLut(lut: CubeLut | null): void;
+  /**
+   * The graded picture read back as HALF-FLOATS from the chain's own
+   * buffers (`RenderGraph.readHalf`) — never the 8-bit canvas — for a 16-bit
+   * file. Null without a float16 chain or without WebGL2.
+   */
+  renderHalf(source: GradeSource, sourceSeconds?: number): HalfImage | null;
 }
 
 let probed: { maxSize: number; precision: RenderPrecision | null } | null = null;
@@ -128,6 +137,7 @@ export function makeGraphGrader(
       setExtraPasses() {},
       setFilm() {},
       setLut() {},
+      renderHalf: () => null,
       dispose() {},
     };
   }
@@ -175,6 +185,10 @@ export function makeGraphGrader(
         filmPass ? [...pre, cube, ...extra, filmPass] : [...pre, cube, ...extra],
       );
       return canvas;
+    },
+    renderHalf(source, sourceSeconds) {
+      if (filmPass && sourceSeconds !== undefined) filmPass.setSourceSeconds(sourceSeconds);
+      return graph.readHalf(source as RenderSource, filmPass ? [...pre, cube, ...extra, filmPass] : [...pre, cube, ...extra]);
     },
     dispose() {
       for (const pass of extra) graph.releasePass(pass);

@@ -1555,6 +1555,19 @@ above white, how far it read back). On an SDR screen both views look the
 same, and the sheet says so rather than pretending; a picture not on its
 sensor shows the base and why.
 
+**A 16-bit master.** A target's **Format** is JPEG or **PNG 16-bit**: the
+graded picture read off the render chain's own float buffers — never the
+8-bit canvas — cut in float to the crop the stage shows, bordered, marked
+and written with 16 bits a channel, carrying the same EXIF, XMP packet and
+sRGB profile a JPEG does, as PNG chunks. It is the file to keep or to edit
+again: a correction made on it later has sixteen bits of room where a JPEG
+has eight. It takes no quality and no screen sharpening (a master is not
+sharpened for a screen) and no gain map; a blur border is blurred from the
+8-bit render, as the thumbnail is. Several times a JPEG's weight. Not on a
+phone — a 48-megapixel picture read back whole is more than a tab holds
+there — where the target writes its JPEG and the run says so. The *Master ·
+16-bit PNG* preset adds one.
+
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
 *brightness*, a *colour* range, a mask *painted* by hand, a *subject* found by
