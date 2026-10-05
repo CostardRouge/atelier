@@ -38,6 +38,7 @@ import {
 import { pasteDevelop } from '../../shared/develop/develop-clipboard';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { pictureFidelity } from '../../shared/develop/picture-fidelity';
+import { renderPrecisionHere } from '../../shared/render/graph-grader';
 import { DevelopBaseMenu } from '../../shared/develop/DevelopBase';
 import { captureInput } from '../../shared/develop/capture-files';
 import { useSiblingFacts } from '../../shared/develop/use-sibling-facts';
@@ -1247,7 +1248,7 @@ export default function PictureWorkbench({
       full: shownFile === file ? (sensorSize ?? proxyOriginalSize) : null,
     };
   }, [wantsRaw, rawSize, measured, sensorSize, proxyOriginalSize, shownFile, file]);
-  const fidelity = pictureFidelity(shownFile, developNow.base, fidelityPixels);
+  const fidelity = pictureFidelity(shownFile, developNow.base, fidelityPixels, renderPrecisionHere());
   const subject = useSubjectMasks({
     layers: layersDraft,
     // `BadgeSource.image` is typed as `CanvasImageSource`, which admits an

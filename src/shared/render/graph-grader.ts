@@ -59,11 +59,21 @@ export interface GraphGrader extends FrameGrader {
   setLut(lut: CubeLut | null): void;
 }
 
-let probedMaxSize: number | null = null;
+let probed: { maxSize: number; precision: RenderPrecision | null } | null = null;
+
+/** What this machine's GPU can do, asked ONCE and kept for the page: a 1×1 graph is built, read and released. */
+function probeGpu(): { maxSize: number; precision: RenderPrecision | null } {
+  if (probed) return probed;
+  const graph = createRenderGraph(makeExportCanvas(1, 1));
+  probed = graph
+    ? { maxSize: graph.maxSize, precision: graph.precision }
+    : { maxSize: Number.POSITIVE_INFINITY, precision: null };
+  graph?.dispose();
+  return probed;
+}
 
 /**
- * The longest edge this machine's GPU can render, asked ONCE and kept for the
- * page: a 1×1 graph is built, read and released. Infinity where there is no
+ * The longest edge this machine's GPU can render. Infinity where there is no
  * WebGL2, since the pass-through grader then has nothing to fit.
  *
  * What a full-density export asks BEFORE decoding what to grade at
@@ -71,11 +81,18 @@ let probedMaxSize: number | null = null;
  * black picture that says nothing.
  */
 export function maxRenderSize(): number {
-  if (probedMaxSize !== null) return probedMaxSize;
-  const graph = createRenderGraph(makeExportCanvas(1, 1));
-  probedMaxSize = graph ? graph.maxSize : Number.POSITIVE_INFINITY;
-  graph?.dispose();
-  return probedMaxSize;
+  return probeGpu().maxSize;
+}
+
+/**
+ * What this machine's render chain computes in between two passes —
+ * `float16`, or `byte` where the GPU cannot render to half-floats (the graph
+ * then falls to 8 bits rather than failing). Null where there is no WebGL2 at
+ * all, and so no chain. What the picture's fidelity line says
+ * (`picture-fidelity.ts`), so a fallback is never silent.
+ */
+export function renderPrecisionHere(): RenderPrecision | null {
+  return probeGpu().precision;
 }
 
 /**

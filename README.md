@@ -1758,7 +1758,11 @@ a code of error at every step undithered, a fifth of that dithered, still a
 fifth after a JPEG at 0.92). An 8-bit picture with no more than its global
 develop and look is left exactly as it was — its steps are the file's own —,
 a full-size file keeps the dither, and a smaller target (Web, Feed) is
-rounded again by its resize.
+rounded again by its resize. **A graphics card that cannot compute in
+half-floats** (rare, on an old or a software GPU) falls back to 8 bits between
+steps rather than failing, and says so: the chip above the photograph ends in
+`· 8-bit GPU`, and the picture's notes say what it costs — a highlight a step
+pushes above white is clipped before the next step can bring it back.
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —

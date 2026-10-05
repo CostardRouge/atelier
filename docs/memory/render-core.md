@@ -58,8 +58,14 @@ phase that needs one, not a side effect of changing buffer format** — do not
 
 Rendering *into* half-float is an extension even in WebGL2
 (`EXT_color_buffer_half_float`); absent it, the chain runs at 8 bits and
-`graph.precision` says `'byte'`. What is lost is the headroom, and a caller
-that promises it must ask.
+`graph.precision` says `'byte'`. What is lost is the headroom between passes.
+**Since 2026-10-05 the picture SAYS it** (his «go 2» offered «signal or
+refuse»; signal, because a refused render is a black stage): `renderPrecisionHere()`
+(`graph-grader.ts`, one 1×1 probe per page shared with `maxRenderSize`)
+feeds `pictureFidelity`'s fourth argument, and on `byte` every chip ends in
+`· 8-bit GPU` with one sentence in the note — in the Develop tool and the
+Trips/Studio sheet. Null (no WebGL2) adds nothing: no chain is not an 8-bit
+chain. Driven headless with the two extensions stripped from the prototype.
 
 ## The canvas is DITHERED where more than 8 bits reach it (2026-10-05)
 
