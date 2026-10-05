@@ -1530,6 +1530,73 @@ const out = await page.evaluate(async () => {
     results.halfCube = { ...worst(a, b), format: formatSeen, mean: sum / (b.length / 4) / 3 };
   }
 
+  // --- the develop's HEAD (develop-head.ts): per pixel on the GPU, held to
+  // the CPU twin and to the per-pixel develop itself, on a RAW's shadows ----
+  {
+    const { makeGraphGrader, setDitherForTest } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const { composeLutStack } = await import('/atelier/src/shared/lut/lut-stack.ts');
+    const { sampleWith, sampleTetrahedral } = await import('/atelier/src/shared/lut/interpolate.ts');
+    const { developStage, DEFAULT_DEVELOP } = await import('/atelier/src/shared/develop/develop.ts');
+    const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const { parseCube } = await import('/atelier/src/shared/lib/cube-parser.ts');
+    const look = parseCube(await (await fetch('/atelier/luts/dji/dji_mavic_4_pro_d-log_m-to-rec709_v1.cube')).text());
+    const raw = {
+      ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, exposure: 1.5, shadows: 80, blacks: 30, contrast: 40,
+      temperature: -20, tint: 10, saturation: 15, vibrance: 20,
+      curves: { luma: [{x:0,y:0},{x:0.15,y:0.3},{x:0.6,y:0.7},{x:1,y:1}], rgb: null, red: [{x:0,y:0},{x:0.5,y:0.6},{x:1,y:1}], green: null, blue: null },
+      levels: { rgb: { inBlack: 0.02, inWhite: 0.98, gamma: 1.1, outBlack: 0, outWhite: 1 }, red: null, green: null, blue: null },
+      rawWb: { kelvin: 4500, tint: 5, matrix: [1.1, 0.02, -0.05, 0.01, 0.98, 0.03, -0.04, 0.05, 1.15] },
+      grading: { shadows: { hue: 220, saturation: 30, luminance: 0 }, midtones: { hue: 0, saturation: 0, luminance: 0 },
+                 highlights: { hue: 40, saturation: 20, luminance: -10 }, global: { hue: 0, saturation: 0, luminance: 0 }, blending: 50, balance: 0 },
+    };
+    const layerOf = (lut) => [{ id: 'l', source: 'builtin:x', name: 'look', lut, intensity: 1, enabled: true }];
+    // Head only: the look keeps its own lattice. With the wheels (a TAIL) the
+    // look is baked through them, and that cube is held to its CPU twin alone.
+    const { grading, ...headOnly } = raw;
+    const cube = composeLutStack(layerOf(look), 'none', 'tetrahedral', headOnly);
+    const graded = composeLutStack(layerOf(look), 'none', 'tetrahedral', raw);
+    const plain = composeLutStack(layerOf(look), 'none', 'tetrahedral', null);
+    // A dark half-float picture: encoded 0..0.06 across x (a RAW's shadows at
+    // gain 4 are all under lattice index 1), four hue mixes down y.
+    const HW = 512, HH = 48;
+    const mixes = [[1, 1, 1], [1, 0.45, 0.17], [0.2, 0.9, 0.5], [0.3, 0.3, 1]];
+    const src = (x, y) => { const v = (x / (HW - 1)) * 0.06; const m = mixes[Math.floor((y * mixes.length) / HH)]; return [v * m[0], v * m[1], v * m[2]]; };
+    const data = new Uint16Array(HW * HH * 3);
+    for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) { const [r, g, b] = src(x, y); data.set([toHalf(r), toHalf(g), toHalf(b)], (y * HW + x) * 3); }
+    const halfImg = { kind: 'half', width: HW, height: HH, data };
+    const draw = (lut) => {
+      const grader = makeGraphGrader(lut, HW, HH, 1, 'tetrahedral');
+      setDitherForTest(false);
+      try {
+        const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(grader.render(halfImg), 0, 0);
+        return oc.getImageData(0, 0, HW, HH).data;
+      } finally { setDitherForTest(null); grader.dispose(); }
+    };
+    const gpu = draw(cube);
+    const gpuGraded = draw(graded);
+    const headless = draw(plain);
+    const stage = developStage(headOnly);
+    const code = (v) => Math.min(255, Math.max(0, v * 255));
+    let twin = 0, truth = 0, moved = 0, twinGraded = 0;
+    for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+      const [r, g, b] = src(x, y);
+      const cpu = sampleWith(cube, r, g, b, 'tetrahedral');
+      const cpuGraded = sampleWith(graded, r, g, b, 'tetrahedral');
+      const d = stage(r, g, b);
+      const direct = sampleTetrahedral(look, d[0], d[1], d[2]);
+      for (let c = 0; c < 3; c++) {
+        const i = (y * HW + x) * 4 + c;
+        twin = Math.max(twin, Math.abs(gpu[i] - code(cpu[c])));
+        truth = Math.max(truth, Math.abs(gpu[i] - code(direct[c])));
+        moved = Math.max(moved, Math.abs(gpu[i] - headless[i]));
+        twinGraded = Math.max(twinGraded, Math.abs(gpuGraded[i] - code(cpuGraded[c])));
+      }
+    }
+    results.head = { twin, truth, moved, twinGraded, size: cube.size, own: cube.data === look.data, gradedSize: graded.size };
+  }
+
   // --- the canvas dither: does the GPU add the noise dither.ts says, and does
   // it take the steps out of a gradient that more than 8 bits reached? ------
   {
@@ -1968,6 +2035,20 @@ const half = out.halfCube;
       `, worst ${half.worst} code${half.worst === 1 ? '' : 's'} from the float path (allowed 1)` +
       (half.mean > 16 ? '' : ' — and the picture is BLACK'),
   );
+}
+
+const hd = out.head;
+{
+  console.log("\n  the develop's HEAD (develop-head.ts), a RAW's lifted shadows through a look:");
+  const say = (ok, text) => {
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${text}`);
+  };
+  say(hd.twin <= 1.5, `the GPU against the CPU twin (head, then lattice): worst ${hd.twin.toFixed(2)} code(s) (allowed 1.5)`);
+  say(hd.truth <= 1.5, `against the per-pixel develop then the look's own lattice: worst ${hd.truth.toFixed(2)} code(s) (allowed 1.5)`);
+  say(hd.own && hd.size === 33, `the look keeps its own lattice (${hd.size}³, shared with the file's)${hd.own ? '' : ' — it was RESAMPLED'}`);
+  say(hd.moved > 20, `and the develop moved the shadows by ${hd.moved} code(s) (must be past 20)`);
+  say(hd.twinGraded <= 1.5, `with the wheels as a TAIL baked under the head (${hd.gradedSize}³): GPU against the CPU twin worst ${hd.twinGraded.toFixed(2)} code(s) (allowed 1.5)`);
 }
 
 const dz = out.dither;

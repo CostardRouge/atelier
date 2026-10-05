@@ -15,6 +15,36 @@
  * entry point, exactly like the SRT parser's `unknown` branch.
  */
 
+/**
+ * A develop's HEAD, carried on a composed cube and applied PER PIXEL before
+ * the lattice — by every CPU sampler (`interpolate.ts`) and the shared GLSL
+ * lookup (`render/glsl.ts`) alike, so a reader of a `CubeLut` need not know
+ * it is there. Built by `develop/develop-head.ts`, which says why: a lattice
+ * cannot hold the tone stage's bend at black. Every stage runs in LINEAR
+ * light on the cube's encoded input, in this order.
+ */
+export interface CubeHead {
+  /** Entries in each table; a table is read at `x × (tableSize − 1)`, linearly between entries. */
+  tableSize: number;
+  /** A RAW's metered gain, 1 otherwise — first. */
+  gain: number;
+  /** A 3×3 row-major white balance, or null. */
+  matrix: readonly number[] | null;
+  /** One gain per channel: temperature, tint and exposure folded. */
+  gains: readonly [number, number, number];
+  /** Output LINEAR luminance over encoded luminance, applied as a ratio — the tone sliders; or null. */
+  tone: Float32Array | null;
+  /** The same for the luma curve; or null. */
+  luma: Float32Array | null;
+  /** Three tables, encoded out over encoded in, per channel — levels and curves; or null. */
+  channels: Float32Array | null;
+  /** −100..100, as `developLinear` takes them. */
+  saturation: number;
+  vibrance: number;
+  /** The head as a stage, encoded in and out — what the CPU samplers call. */
+  stage: (r: number, g: number, b: number) => [number, number, number];
+}
+
 export interface CubeLut {
   /** Grid size N along each axis (LUT_3D_SIZE), typically 17, 33 or 65. */
   size: number;
@@ -31,6 +61,8 @@ export interface CubeLut {
   domainMin: [number, number, number];
   /** Input domain upper bound (defaults to [1,1,1]). */
   domainMax: [number, number, number];
+  /** A develop's head, applied per pixel before the lattice (`CubeHead`); a parsed file never has one. */
+  head?: CubeHead | null;
 }
 
 /** Matches `KEYWORD` at the start of a (trimmed) line. */

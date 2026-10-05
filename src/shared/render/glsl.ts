@@ -92,6 +92,88 @@ uniform bool u_tetra;    // tetrahedral lookup instead of hardware trilinear
 uniform float u_intensity; // LUT strength: 0 = original, 1 = full, >1 over-applied
 uniform vec3 u_domainMin;  // the cube's DOMAIN_MIN, (0,0,0) unless declared
 uniform vec3 u_domainMax;  // the cube's DOMAIN_MAX, (1,1,1) unless declared
+// The develop's HEAD (CubeHead), run per pixel before the lattice; all off by
+// default, so a cube with no head is looked up exactly as it always was.
+uniform bool u_hasHead;
+uniform float u_headGain;
+uniform bool u_headHasMatrix;
+uniform mat3 u_headMatrix;
+uniform vec3 u_headGains;
+uniform bool u_headTone;
+uniform bool u_headLuma;
+uniform bool u_headChannels;
+uniform float u_headSat;
+uniform float u_headVib;
+uniform sampler2D u_headTables; // R32F, tableSize × 5 rows: tone, luma, red, green, blue
+uniform float u_headTableSize;
+`;
+
+/**
+ * The develop's head, per pixel — the GLSL twin of `developLinear`'s first
+ * stages (`develop/develop-head.ts` says why they left the cube). Every step
+ * mirrors the TypeScript line by line, on the encoded input the lattice would
+ * have taken, in linear light, and hands back an encoded value clamped to
+ * [0,1] as `developStage` does; the render gate holds it to the CPU on a
+ * RAW's dark pixels. Private names, so a pass that also includes
+ * `SRGB_TRANSFER` compiles.
+ */
+export const HEAD_APPLY = `
+float _headToLinear(float c) { return c <= 0.04045 ? c / 12.92 : pow((c + 0.055) / 1.055, 2.4); }
+float _headToSrgb(float c) { return c <= 0.0031308 ? c * 12.92 : 1.055 * pow(c, 1.0 / 2.4) - 0.055; }
+/** One table, read linearly between its entries — what a 1D curve costs. */
+float _headTable(int row, float x) {
+  float p = clamp(x, 0.0, 1.0) * (u_headTableSize - 1.0);
+  int i = int(floor(p));
+  int j = min(i + 1, int(u_headTableSize) - 1);
+  float a = texelFetch(u_headTables, ivec2(i, row), 0).r;
+  float b = texelFetch(u_headTables, ivec2(j, row), 0).r;
+  return mix(a, b, p - float(i));
+}
+const vec3 _HEAD_LUM = vec3(0.2126, 0.7152, 0.0722);
+vec3 applyHead(vec3 enc) {
+  vec3 c = clamp(enc, 0.0, 1.0);
+  vec3 lin = vec3(_headToLinear(c.r), _headToLinear(c.g), _headToLinear(c.b)) * u_headGain;
+  if (u_headHasMatrix) lin = max(u_headMatrix * lin, vec3(0.0));
+  lin *= u_headGains;
+  // The tone curve as ONE ratio over luminance, so a grey stays grey.
+  if (u_headTone) {
+    float Y = dot(lin, _HEAD_LUM);
+    if (Y > 0.0) {
+      float Yc = min(Y, 1.0);
+      lin *= _headTable(0, _headToSrgb(Yc)) / Yc;
+    }
+  }
+  if (u_headLuma) {
+    float Y = dot(lin, _HEAD_LUM);
+    if (Y > 0.0) {
+      float Yc = min(Y, 1.0);
+      lin *= _headTable(1, _headToSrgb(Yc)) / Yc;
+    }
+  }
+  // Levels and the per-channel curves, on encoded values; a channel the map
+  // leaves alone keeps its LINEAR value, so headroom survives a curve that
+  // does not reach it.
+  if (u_headChannels) {
+    for (int k = 0; k < 3; k += 1) {
+      float e = _headToSrgb(min(lin[k], 1.0));
+      float o = _headTable(2 + k, e);
+      if (abs(o - e) > 1e-6) lin[k] = _headToLinear(o);
+    }
+  }
+  if (u_headSat != 0.0 || u_headVib != 0.0) {
+    float Y2 = dot(lin, _HEAD_LUM);
+    float amount = u_headSat / 100.0;
+    if (u_headVib != 0.0) {
+      float mx = max(lin.r, max(lin.g, lin.b));
+      float mn = min(lin.r, min(lin.g, lin.b));
+      float sat = mx > 0.0 ? (mx - mn) / mx : 0.0;
+      amount += (u_headVib / 100.0) * (1.0 - sat);
+    }
+    if (amount != 0.0) lin = max(Y2 + (lin - Y2) * (1.0 + amount), vec3(0.0));
+  }
+  vec3 top = min(lin, vec3(1.0));
+  return vec3(_headToSrgb(top.r), _headToSrgb(top.g), _headToSrgb(top.b));
+}
 `;
 
 /**
@@ -100,6 +182,7 @@ uniform vec3 u_domainMax;  // the cube's DOMAIN_MAX, (1,1,1) unless declared
  * kept with the code they explain.
  */
 export const LUT_LOOKUP = `
+${HEAD_APPLY}
 /**
  * Map a colour onto the cube's declared input domain, exactly as
  * latticeCoords does in interpolate.ts — including its span==0 gives 0 rule.
@@ -165,9 +248,11 @@ vec3 lookupTetrahedral(vec3 rgb) {
 /** The graded colour: the look, mixed toward by intensity. */
 vec3 gradeThroughLut(vec3 rgb) {
   if (!u_hasLut) return rgb;
+  // The head first, per pixel; the lattice reads what it hands over.
+  vec3 headed = u_hasHead ? applyHead(rgb) : rgb;
   vec3 looked;
   if (u_tetra) {
-    looked = lookupTetrahedral(rgb);
+    looked = lookupTetrahedral(headed);
   } else {
     // Map the domain-normalized value onto the texel centres so the edges
     // of the cube aren't clipped: scale = (N-1)/N, offset = 0.5/N. The
@@ -175,7 +260,7 @@ vec3 gradeThroughLut(vec3 rgb) {
     // to get this subtly wrong.
     float scale = (u_lutSize - 1.0) / u_lutSize;
     float offset = 0.5 / u_lutSize;
-    vec3 coord = normalizeDomain(rgb) * scale + offset;
+    vec3 coord = normalizeDomain(headed) * scale + offset;
     looked = texture(u_lut, coord).rgb;
   }
   // Blend toward the look. >1 extrapolates past it (stronger than the LUT

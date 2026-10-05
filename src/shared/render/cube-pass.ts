@@ -10,7 +10,7 @@
  */
 
 import { OWN_ROWS } from './band-plan';
-import type { CubeLut } from '../lib/cube-parser';
+import type { CubeHead, CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
 import type { RenderPass } from './graph';
@@ -50,6 +50,7 @@ export interface CubePassOptions {
 export function makeCubePass(options: CubePassOptions): RenderPass {
   const { lut, intensity = 1, interpolation = 'tetrahedral' } = options;
   let uploaded: { gl: WebGL2RenderingContext; tex: WebGLTexture; lut: CubeLut | null } | null = null;
+  let head: HeadTexture | null = null;
 
   return {
     id: 'cube',
@@ -77,14 +78,16 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
         gl.bindTexture(gl.TEXTURE_3D, uploaded.tex);
       }
       gl.uniform1i(gl.getUniformLocation(program, 'u_lut'), 1);
+      head = bindHead(gl, program, lut?.head ?? null, head);
       // Put the unit back, or the NEXT pass's `u_src` binding lands on unit 1.
       gl.activeTexture(gl.TEXTURE0);
     },
     // A grader that swaps its LOOK in place (`GraphGrader.setLut`) replaces
-    // this pass; its cube is a texture of up to 64³ half-floats, freed here.
+    // this pass; its cube is a texture of up to 65³ half-floats, freed here.
     dispose(gl) {
       if (uploaded && uploaded.gl === gl) gl.deleteTexture(uploaded.tex);
       uploaded = null;
+      head = releaseHead(gl, head);
     },
   };
 }
@@ -121,6 +124,83 @@ export function createCubeTexture(
   uploadCube(gl, lut);
   gl.activeTexture(gl.TEXTURE0);
   return tex;
+}
+
+/** The texture unit the head's tables sit on: past the cube (1) and the layer pass's maps (2 to 7). */
+export const HEAD_UNIT = 8;
+
+/** The head's tables as an R32F texture on this context, keyed on the head's identity. */
+export interface HeadTexture {
+  gl: WebGL2RenderingContext;
+  tex: WebGLTexture;
+  head: CubeHead;
+}
+
+/**
+ * Bind a cube's develop head for the program in use — its tables uploaded
+ * once per head object on `HEAD_UNIT`, read by `texelFetch` (so the format is
+ * plain R32F, which needs no filtering extension), and every `u_head*`
+ * uniform set. ONE function for the three shaders that look a cube up, as
+ * `uploadCube` is, and for the same reason. Returns what to hold for the
+ * next call; the unit is left on 0. With no head every flag goes off, so a
+ * program that showed a headed cube a frame ago looks a plain one up plainly.
+ */
+export function bindHead(
+  gl: WebGL2RenderingContext,
+  program: WebGLProgram,
+  head: CubeHead | null,
+  held: HeadTexture | null,
+): HeadTexture | null {
+  const at = (name: string) => gl.getUniformLocation(program, name);
+  if (!head) {
+    gl.uniform1i(at('u_hasHead'), 0);
+    return held && held.gl === gl ? held : null;
+  }
+  let keep = held && held.gl === gl ? held : null;
+  if (!keep || keep.head !== head) {
+    const tex = keep?.tex ?? gl.createTexture();
+    if (!tex) return null;
+    const n = head.tableSize;
+    const rows = new Float32Array(n * 5);
+    if (head.tone) rows.set(head.tone, 0);
+    if (head.luma) rows.set(head.luma, n);
+    if (head.channels) rows.set(head.channels.subarray(0, 3 * n), 2 * n);
+    gl.activeTexture(gl.TEXTURE0 + HEAD_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D, tex);
+    gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, false);
+    gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_S, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_WRAP_T, gl.CLAMP_TO_EDGE);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MIN_FILTER, gl.NEAREST);
+    gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.NEAREST);
+    gl.texImage2D(gl.TEXTURE_2D, 0, gl.R32F, n, 5, 0, gl.RED, gl.FLOAT, rows);
+    keep = { gl, tex, head };
+  } else {
+    gl.activeTexture(gl.TEXTURE0 + HEAD_UNIT);
+    gl.bindTexture(gl.TEXTURE_2D, keep.tex);
+  }
+  gl.uniform1i(at('u_headTables'), HEAD_UNIT);
+  gl.uniform1f(at('u_headTableSize'), head.tableSize);
+  gl.uniform1i(at('u_hasHead'), 1);
+  gl.uniform1f(at('u_headGain'), head.gain);
+  gl.uniform1i(at('u_headHasMatrix'), head.matrix ? 1 : 0);
+  // Row-major in the record, column-major for GLSL: transposed on the way in.
+  const m = head.matrix ?? [1, 0, 0, 0, 1, 0, 0, 0, 1];
+  gl.uniformMatrix3fv(at('u_headMatrix'), false, [m[0], m[3], m[6], m[1], m[4], m[7], m[2], m[5], m[8]]);
+  gl.uniform3f(at('u_headGains'), head.gains[0], head.gains[1], head.gains[2]);
+  gl.uniform1i(at('u_headTone'), head.tone ? 1 : 0);
+  gl.uniform1i(at('u_headLuma'), head.luma ? 1 : 0);
+  gl.uniform1i(at('u_headChannels'), head.channels ? 1 : 0);
+  gl.uniform1f(at('u_headSat'), head.saturation);
+  gl.uniform1f(at('u_headVib'), head.vibrance);
+  gl.activeTexture(gl.TEXTURE0);
+  return keep;
+}
+
+/** Free a head's texture on its context; null to hold afterwards. */
+export function releaseHead(gl: WebGL2RenderingContext, held: HeadTexture | null): null {
+  if (held && held.gl === gl) gl.deleteTexture(held.tex);
+  return null;
 }
 
 /**

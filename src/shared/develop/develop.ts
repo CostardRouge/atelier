@@ -499,7 +499,7 @@ export function bandWeights(L: number): { hi: number; sh: number; wh: number; bl
  * then contrast, then brightness — each stage sees the previous one's
  * result, and the order is fixed so two documents never disagree.
  */
-function toneCurve(L: number, d: DevelopSettings): number {
+export function toneCurve(L: number, d: DevelopSettings): number {
   let v = L;
   if (d.highlights || d.shadows || d.whites || d.blacks) {
     const w = bandWeights(v);

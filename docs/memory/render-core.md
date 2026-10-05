@@ -102,6 +102,44 @@ GPU's noise against the `ditherNoise` twin, exact codes, the ramp before and
 after a JPEG); the half-source row now measures with the dither off, since
 its 8-bit twin is never dithered.
 
+## The develop's HEAD runs per pixel; only its TAIL is in the lattice (2026-10-05)
+
+**Measured** (the scratch bench that decided it, numbers in
+`develop-head.ts`): the whole develop baked into the composed cube was up to
+**42 codes** off `developStage` in a RAW's dark saturated pixels (+1.5 EV,
+shadows +80, blacks +30, a steep luma curve, gain ×4, 64³), 26 on a render
+through 33³, 9 for a MILD develop under the DJI conversion look. Cause: at
+gain 4 the displayed picture below code 8 is lattice index < 0.5 — one cell
+— and the tone stage is a ratio over luminance that bends hardest there, so
+tetrahedral interpolation hands back the chord of a curve. A lattice packed
+towards black (γ 1.5–2.5 on the axes) cut the develop's error to 3–8 codes
+but made the LOOK worse (a log → 709 cube bends in the low mids: 10–20 codes
+in the shadows at γ 2) — the two want different grids, so one cube cannot hold
+both well. **Decision**: split. `developHead(d)` (`CubeHead` on
+`CubeLut.head`) holds gain, Kelvin matrix, temp/tint/exposure gains, the TONE
+and LUMA curves as 2048-entry tables of output LUMINANCE (an output table is
+bounded where a ratio table is ∞ at black with lifted blacks; the ratio is
+divided per pixel), levels + channel curves as three tables, saturation and
+vibrance; `developTail(d)` (mixer, mono, grading) is what `composeLutStack`
+bakes, at the transform's floor. A look alone under a head-only develop is
+`{ ...look, head }` — the look's OWN data, exact, no bake per slider step —
+and a head with nothing else rides a 2³ identity. **One truth, two twins**:
+the CPU applies the head through `developStage(headDevelop)` itself (every
+sampler in `interpolate.ts`), the GPU through `HEAD_APPLY` in `glsl.ts`,
+inside `gradeThroughLut` so all three shaders (cube pass, layer pass,
+`lut-gl.ts`) take it with `bindHead` (`cube-pass.ts`, unit 8, R32F tables read
+by `texelFetch`). Gate rows in `check-render.mjs`: GPU vs CPU twin 0.55 code
+on the dark ramp, vs the per-pixel develop + the look's own lattice 0.55, the
+look's data shared with the file's, and the wheels as a tail 0.54. **One
+semantic change, accepted**: the tail now sees the head's output CLAMPED to
+[0,1] (the lattice's domain) where `developLinear` ran the wheels on the
+headroom — a pixel above white is clipped either way; under white it is the
+same arithmetic to the ulp (`develop-head.test.ts`). **How to apply**: a new
+develop STAGE goes in the head if it is 1D or per-pixel and bends near black,
+in the tail if it is smooth in 3D; `MAX_COMPOSED_SIZE` is 65 so a purchased
+65³ look under a transform keeps its lattice; a `.cube` parsed from a file
+never has a head.
+
 ## Three GL traps, all measured, none of which any test could see
 
 - **A `sampler3D` must be bound even with NO look.** Left unset it defaults to

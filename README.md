@@ -288,6 +288,20 @@ Toggle it in the Grade tab and watch a sky or a gradient — that is where it
 shows. It is used by both the bake and the shader, so the preview and the
 export never disagree.
 
+**The develop is not in the cube.** A correction's white balance, exposure,
+tone curve, luma and channel curves, saturation and vibrance — everything up to
+the colour mixer — runs **per pixel**, before the lattice, in the shader and in
+every CPU bake alike. It was baked into the cube until 2026-10-05, and
+measured: on a RAW with its shadows lifted (+1.5 EV, shadows +80, blacks +30, a
+steep curve, a metered gain of ×4) the baked develop was up to 42 codes off the
+true maths in dark saturated pixels, 26 on a JPEG through 33³, 9 even for a
+mild correction under a conversion look — because the whole displayed picture
+below code 8 sits in the FIRST cell of the lattice at that gain, and the tone
+stage bends hardest exactly there. The per-pixel head costs a few table reads;
+what stays in the cube — the mixer, black and white, the grading wheels, every
+look, the output transform — is smooth and interpolates well, and a look under
+a develop now keeps its own lattice exactly instead of being resampled.
+
 The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what

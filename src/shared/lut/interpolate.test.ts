@@ -137,3 +137,23 @@ describe('sampleWith', () => {
     );
   });
 });
+
+describe('a cube with a head', () => {
+  it('runs the head per pixel before the lattice, in both samplers', () => {
+    const lut: CubeLut = { ...identity(5), head: {
+      tableSize: 2,
+      gain: 1,
+      matrix: null,
+      gains: [1, 1, 1],
+      tone: null,
+      luma: null,
+      channels: null,
+      saturation: 0,
+      vibrance: 0,
+      stage: (r, g, b) => [b, g, r],
+    } };
+    expect(sampleTetrahedral(lut, 0.2, 0.5, 0.8)).toEqual([0.8, 0.5, 0.2]);
+    expect(sampleTrilinear(lut, 0.2, 0.5, 0.8).map((v) => Math.round(v * 1e6) / 1e6)).toEqual([0.8, 0.5, 0.2]);
+    expect(sampleWith({ ...lut, head: null }, 0.2, 0.5, 0.8, 'tetrahedral')).toEqual([0.2, 0.5, 0.8]);
+  });
+});

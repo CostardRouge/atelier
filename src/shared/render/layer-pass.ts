@@ -27,7 +27,7 @@ import { GLSL_VERSION, IMAGE_UV, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
 import { REC709_LUMA, colourReach, lumaOf, type Mask, type MaskOp } from './mask';
 import { rasteriseBrush, type BrushRaster } from './brush-raster';
 import { rasteriseShade } from './shade-raster';
-import { createCubeTexture } from './cube-pass';
+import { bindHead, createCubeTexture, releaseHead, type HeadTexture } from './cube-pass';
 import type { RenderPass } from './graph';
 
 /**
@@ -375,6 +375,8 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
   ];
 
   let uploaded: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
+  // The layer's develop head (`CubeHead`): its tone and curves per pixel, before its lattice.
+  let headTex: HeadTexture | null = null;
   // One alpha map per component, and the subtracted subject's.
   let maskTex: ({ gl: WebGL2RenderingContext; tex: WebGLTexture } | null)[] = [];
   let exceptTex: { gl: WebGL2RenderingContext; tex: WebGLTexture } | null = null;
@@ -403,6 +405,7 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
       gl.bindTexture(gl.TEXTURE_3D, uploaded?.tex ?? null);
       gl.uniform1i(at('u_lut'), 1);
       gl.activeTexture(gl.TEXTURE0);
+      headTex = bindHead(gl, program, lut.head ?? null, headTex);
 
       // Unit 3: the subtracted subject. Bound even when there is none, like
       // every sampler here — an unbound one reads unit 0, where the source is.
@@ -454,6 +457,7 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
       if (uploaded?.gl === gl) gl.deleteTexture(uploaded.tex);
       for (const t of maskTex) if (t?.gl === gl) gl.deleteTexture(t.tex);
       if (exceptTex?.gl === gl) gl.deleteTexture(exceptTex.tex);
+      headTex = releaseHead(gl, headTex);
       uploaded = null;
       maskTex = [];
       exceptTex = null;

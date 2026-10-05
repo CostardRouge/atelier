@@ -7,6 +7,7 @@ import {
   sampleLut,
   type LutLayer,
 } from './lut-stack';
+import { sampleWith } from './interpolate';
 import { applyTransfer } from './transfer';
 import { DEFAULT_DEVELOP, developStage } from '../develop/develop';
 import type { CubeLut } from '../lib/cube-parser';
@@ -227,18 +228,12 @@ describe('composeLutStack — develop', () => {
     expect(composeLutStack([], 'none', 'trilinear', null)).toBeNull();
   });
 
-  it('bakes a tone curve faithfully at the 33 floor, which is why the floor is not raised', () => {
-    // MEASURED (2026-09-17) against the exact stage over a grey ramp and 4000
-    // colours, worst error in 8-bit codes at 33 / 49 / 64:
-    //   gentle S on luma  2.63 / 1.70 / 1.36     gentle S on rgb  0.13 / 0.06 / 0.03
-    //   hard S on rgb     0.53 / 0.24 / 0.15     lifted blacks    0.03 / 0.01 / 0.01
-    // — all at or under the quantisation step, for a bake of ~40 ms against
-    // ~250 ms at 64. A near-vertical cliff costs 10.7 codes at 33 and STILL
-    // 3.2 at 64, so the lattice is not its remedy and raising the floor would
-    // buy visible banding at the price of the freeze the strength slider had.
-    // The render core (`docs/photo-editor.md`) evaluates the curve per pixel
-    // and retires this error class; until then a curve steeper than about
-    // 1:10 is an approximation.
+  it('carries a tone curve in the HEAD, per pixel, where a lattice used to hold it', () => {
+    // MEASURED (2026-09-17) against the exact stage, worst error in 8-bit
+    // codes at 33 / 49 / 64: a gentle S on luma 2.63 / 1.70 / 1.36, a
+    // near-vertical cliff 10.7 / – / 3.2. Since 2026-10-05 the curve is not
+    // in the lattice at all (`develop-head.ts`): the cube is the 2³ identity
+    // with the head on it, and the error is the 1D table's — nil.
     const sShaped = {
       ...DEFAULT_DEVELOP,
       curves: {
@@ -250,7 +245,8 @@ describe('composeLutStack — develop', () => {
       },
     };
     const cube = composeLutStack([], 'none', 'tetrahedral', sShaped)!;
-    expect(cube.size).toBe(33);
+    expect(cube.size).toBe(2);
+    expect(cube.head).not.toBeNull();
     const exact = developStage(sShaped);
     let worst = 0;
     for (let i = 0; i <= 64; i += 1) {
@@ -259,15 +255,51 @@ describe('composeLutStack — develop', () => {
       const got = sampleLut(cube, v, v, v);
       for (let k = 0; k < 3; k += 1) worst = Math.max(worst, Math.abs(want[k] - got[k]) * 255);
     }
-    expect(worst).toBeLessThan(3);
+    expect(worst).toBeLessThan(1e-6);
+  });
+
+  it('the head: a RAW\'s lifted shadows are exact, where the lattice was 42 codes off', () => {
+    // MEASURED 2026-10-05, the bake as it was: this develop through the 64³
+    // cube strayed up to 42 codes from the per-pixel stage in dark saturated
+    // pixels (26 for a render through 33³), because the displayed picture
+    // below code 8 sits in the lattice's FIRST cell at a gain of 4 and the
+    // tone ratio bends hardest there. The head runs per pixel instead.
+    const raw = {
+      ...DEFAULT_DEVELOP,
+      base: 'gain' as const,
+      rawGain: 4,
+      exposure: 1.5,
+      shadows: 80,
+      blacks: 30,
+      contrast: 40,
+      curves: { luma: [{ x: 0, y: 0 }, { x: 0.15, y: 0.3 }, { x: 0.6, y: 0.7 }, { x: 1, y: 1 }], rgb: null, red: null, green: null, blue: null },
+    };
+    const cube = composeLutStack([layer({ lut: half(9) })], 'none', 'tetrahedral', raw)!;
+    // The look's OWN lattice, with the head riding on it.
+    expect(cube.size).toBe(9);
+    expect(cube.head?.gain).toBe(4);
+    const exact = developStage(raw);
+    let worst = 0;
+    for (let i = 0; i <= 256; i += 1) {
+      const v = (i / 256) * 0.05;
+      const want = exact(v, v * 0.45, v * 0.17).map((x) => x / 2);
+      const got = sampleWith(cube, v, v * 0.45, v * 0.17, 'tetrahedral');
+      for (let k = 0; k < 3; k += 1) worst = Math.max(worst, Math.abs(want[k] - got[k]) * 255);
+    }
+    expect(worst).toBeLessThan(0.01);
   });
 
   it('bypasses the single-layer fast path and bakes an empty stack', () => {
     const only = half(9);
     expect(composeLutStack([layer({ lut: only })], 'none', 'trilinear', asShot)).toBe(only);
-    expect(composeLutStack([layer({ lut: only })], 'none', 'trilinear', lifted)).not.toBe(only);
+    const headed = composeLutStack([layer({ lut: only })], 'none', 'trilinear', lifted)!;
+    expect(headed).not.toBe(only);
+    // …but it SHARES the look's lattice: nothing was baked.
+    expect(headed.data).toBe(only.data);
+    expect(headed.head).not.toBeNull();
     const alone = composeLutStack([], 'none', 'trilinear', lifted)!;
     expect(alone).not.toBeNull();
+    expect(alone.size).toBe(2);
     // +1 EV on a mid code: 0.5 → linear 0.214 → 0.428 → code ~0.69.
     expect(sampleLut(alone, 0.5, 0.5, 0.5)[0]).toBeCloseTo(developStage(lifted)(0.5, 0.5, 0.5)[0], 3);
   });
@@ -286,7 +318,9 @@ describe('composeLutStack — develop', () => {
     const composed = composeLutStack([], 'rec709-to-srgb', 'trilinear', lifted)!;
     const expected = applyTransfer(developStage(lifted)(0.5, 0.5, 0.5)[0], 'rec709-to-srgb');
     expect(sampleLut(composed, 0.5, 0.5, 0.5)[0]).toBeCloseTo(expected, 3);
-    expect(composeLutStack([layer({ lut: half(9) })], 'none', 'trilinear', lifted)!.size).toBe(33);
+    // The floor is the TRANSFORM's: a head alone imposes none.
+    expect(composeLutStack([layer({ lut: half(9) })], 'rec709-to-srgb', 'trilinear', lifted)!.size).toBe(33);
+    expect(composeLutStack([layer({ lut: half(9) })], 'none', 'trilinear', lifted)!.size).toBe(9);
     expect(composeLutStack([layer({ lut: half(64) })], 'none', 'trilinear', lifted)!.size).toBe(64);
   });
 
@@ -352,18 +386,42 @@ describe('reorderLayer', () => {
 });
 
 describe('a RAW develop in the bake', () => {
-  it('takes the densest lattice and applies the metered gain before the sliders', () => {
+  it('applies the metered gain before the sliders, in the head', () => {
     const cube = composeLutStack([], 'none', 'tetrahedral', { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2 });
     expect(cube).not.toBeNull();
-    expect(cube!.size).toBe(64);
-    // The lattice point at encoded 1/3 of the way (index 21 of 64 → 21/63):
-    // the same answer as the stage, gain and all.
+    // Nothing for a lattice to hold: the gain is the head's.
+    expect(cube!.size).toBe(2);
+    expect(cube!.head?.gain).toBe(2);
     const stage = developStage({ ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2 });
-    const i = 21;
-    const v = i / 63;
-    const o = (i + i * 64 + i * 64 * 64) * 3;
-    expect(cube!.data[o]).toBeCloseTo(stage(v, v, v)[0], 6);
-    // A render's develop of the same sliders keeps its 33.
-    expect(composeLutStack([], 'none', 'tetrahedral', { ...DEFAULT_DEVELOP, exposure: 0.5 })!.size).toBe(33);
+    const v = 1 / 3;
+    expect(sampleWith(cube!, v, v, v, 'tetrahedral')[0]).toBeCloseTo(stage(v, v, v)[0], 9);
+  });
+
+  it('bakes the TAIL — the wheels — into the lattice under the head, at the floor', () => {
+    const graded = {
+      ...DEFAULT_DEVELOP,
+      exposure: 0.5,
+      grading: {
+        shadows: { hue: 220, saturation: 40, luminance: 0 },
+        midtones: { hue: 0, saturation: 0, luminance: 0 },
+        highlights: { hue: 40, saturation: 20, luminance: 0 },
+        global: { hue: 0, saturation: 0, luminance: 0 },
+        blending: 50,
+        balance: 0,
+      },
+    };
+    const cube = composeLutStack([], 'none', 'tetrahedral', graded)!;
+    expect(cube.size).toBe(33);
+    expect(cube.head).not.toBeNull();
+    expect(cube.title).toBe('Develop');
+    const exact = developStage(graded);
+    let worst = 0;
+    for (let i = 0; i <= 32; i += 1) {
+      const v = i / 32;
+      const want = exact(v, v * 0.7, v * 0.4);
+      const got = sampleWith(cube, v, v * 0.7, v * 0.4, 'tetrahedral');
+      for (let k = 0; k < 3; k += 1) worst = Math.max(worst, Math.abs(want[k] - got[k]) * 255);
+    }
+    expect(worst).toBeLessThan(1.5);
   });
 });
