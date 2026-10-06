@@ -98,11 +98,14 @@ write has the frame's viewport at y = 0, so the coordinate is the frame's
 pixel whole or banded (`check-bands.mjs` unchanged). **Limits, measured,
 not fixed**: at JPEG 0.85 any dither does worse than none on the ramp's
 8 × 8 means (0.69 vs 0.44) — only a full-size target at 0.85 meets it, the
-Web preset is resized first; and a RESIZED target (`deliverOne` draws the
-render into a smaller 2D canvas) is rounded again by the resize, so the
-dither reaches the stage, the full-size file and the Ultra HDR base only.
-Dithering a resized target needs the graph to render AT the target size, not
-a dither after it. The gate: three rows at the end of `check-render.mjs` (the
+Web preset is resized first. **A RESIZED target is rounded ONCE since
+2026-10-06** (`develop-output.md`, «A reduced target is cut from the float
+picture»): on a computer it is resampled from `renderHalf`'s float picture and
+dithered on the CPU by `ditherNoise`'s own pattern (`bytesFromCodes16`), from
+JPEG quality 0.9 up — a dither AFTER a float resize is one rounding, which is
+all the rule asks; the earlier note that it needed the graph to render at the
+target size was wrong. A phone and an Ultra HDR base still resize the 8-bit
+render. The gate: three rows at the end of `check-render.mjs` (the
 GPU's noise against the `ditherNoise` twin, exact codes, the ramp before and
 after a JPEG); the half-source row now measures with the dither off, since
 its 8-bit twin is never dithered.

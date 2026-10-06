@@ -17,6 +17,7 @@
  * PNG writer takes the buffer as it is.
  */
 
+import { DITHER_LSB, ditherNoise } from '../render/dither';
 import { fromHalf } from '../render/half-image';
 import type { HalfImage } from '../render/half-image';
 import { unframePoint, type Framing } from '../media/framing';
@@ -153,4 +154,32 @@ export function compositeBytesOver(out: Uint16Array, w: number, h: number, over:
       out[o + c] = Math.round(out[o + c] * (1 - a) + top * a);
     }
   }
+}
+
+/**
+ * 16-bit RGB codes brought down to the 8-bit RGBA bytes a canvas takes —
+ * ROUNDED ONCE, at the size the file is written (2026-10-06): a reduced JPEG
+ * target cut from the float picture instead of from the full-size 8-bit
+ * render, whose resize rounded a second time and undithered. With `dither`,
+ * the same noise the GPU adds at its last rounding (`dither.ts`: one value
+ * per 2 × 2 block for the three channels, strictly inside ±0.5 code, counted
+ * from the bottom row like `gl_FragCoord`), so an exact code stays exact and
+ * a smooth sky's average survives the rounding.
+ */
+export function bytesFromCodes16(codes: Uint16Array, w: number, h: number, dither: boolean): Uint8ClampedArray<ArrayBuffer> {
+  const out = new Uint8ClampedArray(w * h * 4);
+  const reach = 2 * DITHER_LSB;
+  for (let y = 0; y < h; y += 1) {
+    const fromBottom = h - 1 - y;
+    for (let x = 0; x < w; x += 1) {
+      const i = y * w + x;
+      const noise = dither ? ditherNoise(x, fromBottom) * reach : 0;
+      for (let c = 0; c < 3; c += 1) {
+        // Clamped by the array itself; rounded half up, as a canvas does.
+        out[i * 4 + c] = Math.floor((codes[i * 3 + c] * 255) / 65535 + noise + 0.5);
+      }
+      out[i * 4 + 3] = 255;
+    }
+  }
+  return out;
 }
