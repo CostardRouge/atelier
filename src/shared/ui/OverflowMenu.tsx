@@ -48,6 +48,8 @@ export interface OverflowItem {
    * visit — closing per tick is a menu reopened for every row.
    */
   checked?: boolean;
+  /** Drawn after a rule: the first item of a second group of the same kind. */
+  rule?: boolean;
 }
 
 export interface AnchoredMenuProps {
@@ -127,7 +129,8 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
   const plain = items.filter((i) => !i.danger);
   const dangerous = items.filter((i) => i.danger);
 
-  const item = (it: OverflowItem) => (
+  const item = (it: OverflowItem) => [
+    it.rule && <span key={`${it.id}:rule`} className="block flex-none h-px bg-line mx-2 my-1.5" />,
     <button
       key={it.id}
       type="button"
@@ -159,8 +162,8 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
           <span className="min-w-0 flex-1">{it.label}</span>
         </span>
       )}
-    </button>
-  );
+    </button>,
+  ];
 
   return createPortal(
     <div

@@ -25,7 +25,9 @@
  *   the rules `frontend.md` already carries for a row mixing fixed-height
  *   pills with something elastic: an item drops to its own line rather than
  *   the text inside one, and a growing spacer would claim a whole line of its
- *   own the moment the row breaks.
+ *   own the moment the row breaks. The trailing group wraps INSIDE itself
+ *   too, flush right: a `flex` with no wrap held whatever a screen put there
+ *   on one line however wide, and pushed the row past a phone's edge.
  */
 
 import type { ReactNode } from 'react';
@@ -89,7 +91,7 @@ export default function PageBar({ back, children, trailing }: PageBarProps) {
         ))}
       {children}
       {trailing && (
-        <span className="flex items-center gap-2 ml-auto min-w-0">{trailing}</span>
+        <span className="flex flex-wrap items-center justify-end gap-2 ml-auto min-w-0">{trailing}</span>
       )}
     </div>
   );
