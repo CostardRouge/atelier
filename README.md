@@ -1824,16 +1824,16 @@ post from a 48-megapixel still is decoded at 1800 px — often the picture
 already on the stage — instead of the whole file, which on a computer took an
 export of that post from thirteen seconds to under one. A browser cannot
 ask a phone how much memory a tab may take, so the rule is coarse: iPhone,
-iPad and Android count as phones, and `localStorage['atelier.device']`
-(`constrained` or `roomy`) overrides it. On a phone a big picture — a
+iPad and Android count as phones, and *Device class* in Develop's settings
+(below) overrides it. On a phone a big picture — a
 full-size export, anything past 12 megapixels — is also graded in **bands**:
 the graphics card holds a slice of the picture at a time rather than two full
 copies of it, which on a 48-megapixel still is a few hundred megabytes instead
 of three quarters of a gigabyte — with exactly the same pixels (a film stock's
 halation still needs the whole picture at once). A computer draws it whole: it
 has the memory, and the one Mac measured drew the loupe's bands striped. The
-rule is a preference of this browser, **Big pictures** under the Look panel's
-Interpolation — *Auto* (bands on a phone, whole on a computer, and it says
+rule is a preference of this browser, **Big pictures** in Develop's settings
+and under the Look panel's Interpolation — *Auto* (bands on a phone, whole on a computer, and it says
 which this one is), *Whole*, *In bands* — and the loupe redraws the moment it
 changes, so a striped loupe is one click from a whole one.
 
@@ -1848,11 +1848,20 @@ a code of error at every step undithered, a fifth of that dithered, still a
 fifth after a JPEG at 0.92). An 8-bit picture with no more than its global
 develop and look is left exactly as it was — its steps are the file's own —,
 a full-size file keeps the dither, and a smaller target (Web, Feed) is
-rounded again by its resize. **A graphics card that cannot compute in
+rounded again by its resize. *Dither the last rounding* in Develop's settings
+turns it **Off** on this device: the rounding is then plain, as it was before. **A graphics card that cannot compute in
 half-floats** (rare, on an old or a software GPU) falls back to 8 bits between
 steps rather than failing, and says so: the chip above the photograph ends in
 `· 8-bit GPU`, and the picture's notes say what it costs — a highlight a step
 pushes above white is clipped before the next step can bring it back.
+
+**Develop's settings** (the ⚙ in a roll's bar) gather what belongs to this
+device rather than to a roll, and never travel with it, a preset or a paste:
+*Rendering* — the dither, the look interpolation, Big pictures, how a
+picture past 1:1 is drawn —, *Device* — the device class (applied on reload)
+and where the subject model runs —, and *Network* — whether lens profiles are
+fetched from Lensfun. A change reaches the picture open behind the sheet at
+once.
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —

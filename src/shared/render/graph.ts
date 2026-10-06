@@ -30,7 +30,7 @@
 import { deviceClass } from '../lib/device-class';
 import { bandFragment, nearRows, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
 import { BAND_PREFERENCE_KEY, bandsWanted, readBandPreference, type BandPreference } from './band-policy';
-import { DITHER_LSB, ditherFragment, wantsDither } from './dither';
+import { DITHER_LSB, DITHER_PREFERENCE_KEY, ditherFragment, readDitherPreference, wantsDither, type DitherPreference } from './dither';
 import { VERTEX_SRC } from './glsl';
 import { isHalfImage, toHalf, type HalfImage } from './half-image';
 import { planPasses, planResume, targetsNeeded, type PassSlot } from './pass-plan';
@@ -168,6 +168,31 @@ let ditherOverride: boolean | null = null;
  */
 export function setDitherForTest(next: boolean | null): void {
   ditherOverride = next;
+}
+
+let ditherPreference: DitherPreference | null = null;
+
+/**
+ * Whether this device dithers the canvas at all — `auto` (the rule in
+ * `dither.ts`) or `off`. Read from `localStorage` once per page, asked at
+ * render time like the band preference, so a render after the switch takes it.
+ */
+export function getDitherPreference(): DitherPreference {
+  if (ditherPreference === null) {
+    let stored: string | null = null;
+    try {
+      stored = typeof localStorage !== 'undefined' ? localStorage.getItem(DITHER_PREFERENCE_KEY) : null;
+    } catch {
+      stored = null;
+    }
+    ditherPreference = readDitherPreference(stored);
+  }
+  return ditherPreference;
+}
+
+/** Set the preference new renders read. Owned by `useDitherPreference`, which also persists it. */
+export function setDitherPreference(next: DitherPreference): void {
+  ditherPreference = next;
 }
 
 let bandPreference: BandPreference | null = null;
@@ -878,7 +903,8 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
       // The canvas is the one 8-bit buffer left; where more than 8 bits reach
       // it, its rounding is dithered (`dither.ts`).
       const ditherWanted =
-        ditherOverride ?? (wantsDither({ precision, halfSource: half !== null, passes: list.length }) && !list[list.length - 1].exact);
+        ditherOverride ??
+        (getDitherPreference() !== 'off' && wantsDither({ precision, halfSource: half !== null, passes: list.length }) && !list[list.length - 1].exact);
       const dither = ditherWanted ? DITHER_LSB : 0;
       const bands = bandPlanFor(list, width, height);
       bandsLastDrawn = bands ? bands.bands.length : 1;
@@ -890,6 +916,11 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
         // holds what the pass before it wrote, to the bit — so the picture
         // is the same either way; `check-render.mjs` holds the two equal.
         const keys = list.map((pass) => pass.key ?? null);
+        // The last pass writes the canvas WITH the dither: a switch of the
+        // device's dither preference changes what it draws, so it is part of
+        // its key, or a render with nothing else changed would keep the old.
+        const lastKey = keys[keys.length - 1];
+        if (lastKey !== null && lastKey !== undefined) keys[keys.length - 1] = `${lastKey}|dither:${dither}`;
         const sameSource = keyed !== null && keyed === held.source && held.width === width && held.height === height;
         const heldTarget = held.slot >= 0 ? targets[held.slot] : null;
         const heldAt = sameSource && held.at >= 0 && heldTarget?.width === width && heldTarget?.height === height ? held.at : -1;

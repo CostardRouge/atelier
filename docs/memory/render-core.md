@@ -107,6 +107,8 @@ GPU's noise against the `ditherNoise` twin, exact codes, the ramp before and
 after a JPEG); the half-source row now measures with the dither off, since
 its 8-bit twin is never dithered.
 
+**It can be switched OFF per device (2026-10-06)** — `atelier.render.dither` (`auto` · `off`, `readDitherPreference`), read by the graph at render time like the band preference and set in Develop's settings; `off` rounds as before 2026-10-05. The dither amount is folded into the LAST pass's resume key, or a render with nothing else changed would keep the canvas drawn under the old setting. The gate (`check-render.mjs`) imports `playwright`, which the repo does not install (TEST-01): run a copy importing `playwright-core` from a scratchpad until he decides.
+
 ## The kept upstream: a render resumes after the last pass that did not change (2026-10-06)
 
 **Measured** (the bench in `testing.md`, «The GPU-work bench»; the numbers

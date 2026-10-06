@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { bandFragment } from './band-plan';
-import { DITHER_LSB, ditherFragment, ditherNoise, wantsDither } from './dither';
+import { DITHER_LSB, ditherFragment, ditherNoise, readDitherPreference, wantsDither } from './dither';
 
 const PASS = `#version 300 es
 precision highp float;
@@ -113,5 +113,14 @@ describe('ditherNoise', () => {
     expect(plainWorst).toBeGreaterThan(0.45);
     // Only a fraction within 1/16 of a code is never moved (`DITHER_LSB`).
     expect(ditheredWorst).toBeLessThan(0.2);
+  });
+});
+
+describe('readDitherPreference', () => {
+  it('reads off as off and anything else as the rule as built', () => {
+    expect(readDitherPreference('off')).toBe('off');
+    expect(readDitherPreference('auto')).toBe('auto');
+    expect(readDitherPreference(null)).toBe('auto');
+    expect(readDitherPreference('always')).toBe('auto');
   });
 });

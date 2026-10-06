@@ -773,3 +773,6 @@ and a screen reader's "page changed" all read it, and it never changed before
 (WCAG 2.4.2). A tool that wants its document's name there adds it; none does
 yet. The focus move onto `<main>` on a route change was left out on purpose:
 it would fight a tool's own first focus.
+
+**A browser preference has ONE value for every reader (2026-10-06).** `shared/ui/local-pref.ts` holds it in the module and hands it out through `useSyncExternalStore`; `useLocalFlag`, `usePixelView` and `useLutInterpolation` sit on it. Each used to read `localStorage` into its own `useState`, which held while every choice had one control beside its one reader — Develop's settings sheet changes them from elsewhere, and the picture behind it kept the old value until it remounted. **How to apply**: never read a preference into a component's own state; declare a `localPref` and `useLocalPref` it.
+

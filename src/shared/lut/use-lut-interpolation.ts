@@ -13,20 +13,19 @@
  * old behaviour let a channel-asymmetric look tint neutral greys.
  */
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect } from 'react';
+import { localPref, useLocalPref } from '../ui/local-pref';
 import type { Interpolation } from './interpolate';
 import { setDefaultLutInterpolation } from './lut-gl';
 
 const KEY = 'atelier.lut.interpolation';
 
-function read(): Interpolation {
-  try {
-    return localStorage.getItem(KEY) === 'trilinear' ? 'trilinear' : 'tetrahedral';
-  } catch {
-    // Private mode, disabled storage — the preference simply does not persist.
-    return 'tetrahedral';
-  }
-}
+/** One value for every reader — the look panel, the stage, the settings page (`local-pref.ts`). */
+export const lutInterpolationPref = localPref<Interpolation>(
+  KEY,
+  (raw) => (raw === 'trilinear' ? 'trilinear' : 'tetrahedral'),
+  (mode) => mode,
+);
 
 export interface LutInterpolationPref {
   interpolation: Interpolation;
@@ -34,7 +33,7 @@ export interface LutInterpolationPref {
 }
 
 export function useLutInterpolation(): LutInterpolationPref {
-  const [interpolation, setState] = useState<Interpolation>(read);
+  const [interpolation, write] = useLocalPref(lutInterpolationPref, 'tetrahedral');
 
   // Renderers built later (every export job builds its own) read the module
   // default, so it has to track the preference — synchronously enough that an
@@ -43,15 +42,13 @@ export function useLutInterpolation(): LutInterpolationPref {
     setDefaultLutInterpolation(interpolation);
   }, [interpolation]);
 
-  const setInterpolation = useCallback((mode: Interpolation) => {
-    setDefaultLutInterpolation(mode);
-    setState(mode);
-    try {
-      localStorage.setItem(KEY, mode);
-    } catch {
-      // Not persisting is survivable; the session still honours the choice.
-    }
-  }, []);
+  const setInterpolation = useCallback(
+    (mode: Interpolation) => {
+      setDefaultLutInterpolation(mode);
+      write(mode);
+    },
+    [write],
+  );
 
   return { interpolation, setInterpolation };
 }

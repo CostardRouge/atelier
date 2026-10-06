@@ -1584,3 +1584,8 @@ Delete changed its delivery, its mono and its patches behind the sheet, into
 the export (UX-01). A sheet drawn OVER the editor is `aria-modal`; a drawer
 or a bottom sheet the author edits THROUGH (the phone's `DockedDrawer`, the
 palette) is not, and must stay not, or the keys die with it.
+
+## Develop's SETTINGS are the device's, opened from inside the roll (2026-10-06)
+
+**Decision** (his pick of the three places in the lab https://claude.ai/artifact/Ts6hWzvxxybV67QAR9Z6D8): a sheet opened by a ⚙ in the roll's `PageBar` (`DevelopSettingsSheet.tsx`, not the picture-sections `SettingsSheet.tsx`), never a route and never from the rolls gallery. It gathers what belongs to this DEVICE — Rendering (the dither switch, look interpolation, Big pictures, past 1:1), Device (the class, applied on reload; the subject model's worker), Network (Lensfun) — and none of it travels with a roll, a preset or a paste. **Not ⌘,**: Chrome on a Mac owns it (its own preferences), and the suite takes no chord a browser may own. Toolbar STATE (facts with `I`, the A/B split, ignored pictures) stays on its toolbar, not here: a fact said twice is said once. **Next, in order**: the browser encoder's «Max» (q 100, full colour), smaller targets rendered at their size, MozJPEG in a worker in bands (its section and the Export tab's one-line «Encoder … › Change» come with it); a per-picture deband slider only if asked — noise on an 8-bit SOURCE was REJECTED (his «ça risque beaucoup de dégrader les images»: a develop stretches it into grain). **How to apply**: a new per-device choice is a `localPref` (`shared/ui/local-pref.ts`) shown in this sheet, never a `useState` of its own.
+
