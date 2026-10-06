@@ -29,6 +29,7 @@ import { rasteriseBrush, type BrushRaster } from './brush-raster';
 import { rasteriseShade } from './shade-raster';
 import { bindHead, createCubeTexture, releaseHead, type HeadTexture } from './cube-pass';
 import type { RenderPass } from './graph';
+import { freshKey } from './pass-key';
 
 /**
  * What `u_k<i>` means. 0 is "no mask", which covers the whole picture; −1 is a
@@ -383,6 +384,9 @@ export function makeLayerPass(options: LayerPassOptions): RenderPass | null {
 
   return {
     id,
+    // Built afresh whenever a layer's inputs change (`layer-render.ts`), so a
+    // key of its own is the right one: the same object draws the same picture.
+    key: freshKey(id),
     fragment: finish === 'outline' ? fragment(MAIN_OUTLINE) : fragment(MAIN_GRADE),
     // The outline reads its neighbours a texel and a half away.
     rows: finish === 'outline' ? nearRows(2) : OWN_ROWS,

@@ -312,6 +312,19 @@ through the clip never darkens on its way there. A picture whose sliders push
 nothing past white is bit-identical to before; one with highlights set will
 render a touch differently at its top, on purpose.
 
+**A slider step redraws only what it moved.** The stage's render is a chain
+of passes — the camera's shading, the repairs, the denoise and defringe, the
+develop and the look, the lens and the perspective, the layers, the sharpen,
+the vignette — and until 2026-10-06 every step of every slider drew all of it
+again, on the stage and on the histogram's small copy. The chain now keeps the
+output of the last pass that did not change between two renders and resumes
+from there: a drag of the exposure draws the develop and what follows, never
+the denoise before it; a sharpen drag draws the sharpen and the vignette; a
+blink of a mask draws itself alone. The picture is the same to the bit as a
+whole render — the gate holds it so — and the one texture it costs is kept
+only for an interactive stage, never for an export or a thumbnail, and never
+past a phone's stage size.
+
 **The develop is not in the cube.** A correction's white balance, exposure,
 tone curve, luma and channel curves, saturation and vibrance — everything up to
 the colour mixer — runs **per pixel**, before the lattice, in the shader and in

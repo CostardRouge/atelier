@@ -107,6 +107,38 @@ GPU's noise against the `ditherNoise` twin, exact codes, the ramp before and
 after a JPEG); the half-source row now measures with the dither off, since
 its 8-bit twin is never dithered.
 
+## The kept upstream: a render resumes after the last pass that did not change (2026-10-06)
+
+**Measured** (the bench in `testing.md`, «The GPU-work bench»; the numbers
+in `docs/develop-performance.md` §1): every step of every slider redrew the
+WHOLE chain — on a developed photograph 10 passes on the stage and 10 more
+on the histogram's slot, 20 `drawArrays` per step — and a tone slider never
+touches the four neighbourhood passes (chroma ×2, bilateral, defringe) that
+run before the cube and cost the most. **Decision**: `RenderPass.key` names
+what a pass draws with (`pass-key.ts`: `dataKey` for plain parameters,
+`identityKey` for an immutable object — a cube, a gain field —, `freshKey`
+for a pass rebuilt whenever its inputs change, which is how the layer,
+overlay and blink passes are keyed); the graph keeps ONE pass's output in a
+third target and, on the next render, skips the prefix whose keys match up
+to it (`planResume` in `pass-plan.ts`, pure, specced), then moves the
+checkpoint to the input of the first pass that changed — so from the third
+render of a drag each step draws the changed pass and what follows. A cube
+step fell 20 → 12, a sharpen step to 4 once the checkpoint sits before it;
+nothing changed draws 0 (the canvas holds the picture,
+`preserveDrawingBuffer`). **Rules**: a resumed render is the whole render to
+the bit (a target holds what the pass before it wrote), held by the gate's
+«kept upstream» rows at worst 0; a pass with NO key (the film node — its
+grain re-rolls per instant) is never skipped nor anything after it; the
+checkpoint is placed only from the SECOND render of the same source at the
+same size (an export or a thumbnail draws once and allocates nothing) and
+only under `CHECKPOINT_MAX_PIXELS` (4.2 MP constrained, 9 MP roomy — one
+more RGBA16F target, 29 MB at a phone's stage, 66 MB at 4K); bands, a new
+source, a resize and `readHalf` invalidate it. **How to apply**: a new pass
+factory gives its pass a key from its parameters, or none if it reads a
+clock; a pass whose `setUniforms` reads MUTABLE state must have no key or a
+fresh one per change, or the graph will serve a stale checkpoint; the
+`drawnLastForTest()` hook counts what a render drew.
+
 ## The develop's HEAD runs per pixel; only its TAIL is in the lattice (2026-10-05)
 
 **Measured** (the scratch bench that decided it, numbers in

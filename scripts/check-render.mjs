@@ -1642,6 +1642,76 @@ const out = await page.evaluate(async () => {
     }
   }
 
+  // --- the kept upstream (graph.ts, planResume): a render resumed from the
+  // checkpoint is the whole render to the bit, and draws only what changed --
+  {
+    const { createRenderGraph, drawnLastForTest, setDitherForTest } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeCubePass } = await import('/atelier/src/shared/render/cube-pass.ts');
+    const { detailPasses } = await import('/atelier/src/shared/render/detail-pass.ts');
+    const { makeKeystonePass } = await import('/atelier/src/shared/render/keystone-pass.ts');
+    const { composeLutStack } = await import('/atelier/src/shared/lut/lut-stack.ts');
+    const { DEFAULT_DEVELOP } = await import('/atelier/src/shared/develop/develop.ts');
+    const UW = 256, UH = 192;
+    const bitmap = await createImageBitmap(src);
+    const detail = { luminance: 40, colour: 30, defringe: 0, sharpen: 50, sharpenRadius: 1, sharpenDetail: 25, sharpenMasking: 0, texture: 0, clarity: 0, dehaze: 0 };
+    const det = detailPasses(detail, 1);
+    const det2 = detailPasses({ ...detail, sharpen: 80 }, 1);
+    const det3 = detailPasses({ ...detail, luminance: 60 }, 1);
+    const ks = makeKeystonePass({ vertical: 15, horizontal: 0, rotation: 0, aspect: 0, scale: 1 }, UW / UH);
+    const lutB = composeLutStack([], 'rec709-to-srgb', 'tetrahedral', { ...DEFAULT_DEVELOP, exposure: 0.8, contrast: 20 });
+    const lutC = composeLutStack([], 'rec709-to-srgb', 'tetrahedral', { ...DEFAULT_DEVELOP, exposure: -0.4, highlights: -50 });
+    const chainOf = (lut, d = det) => [...d.pre, makeCubePass({ lut, intensity: 1, interpolation: 'tetrahedral' }), ks, ...d.post];
+    const n = chainOf(cube).length;
+    const readOf = (graph) => {
+      const o = document.createElement('canvas'); o.width = UW; o.height = UH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(graph.canvas, 0, 0);
+      return oc.getImageData(0, 0, UW, UH).data;
+    };
+    const whole = (chain) => {
+      const g = createRenderGraph(document.createElement('canvas'));
+      g.resize(UW, UH);
+      g.render(bitmap, chain);
+      const px = readOf(g);
+      g.dispose();
+      return px;
+    };
+    setDitherForTest(false);
+    const live = createRenderGraph(document.createElement('canvas'));
+    live.resize(UW, UH);
+    try {
+      live.render(bitmap, chainOf(cube));
+      const first = drawnLastForTest();
+      live.render(bitmap, chainOf(lutB));
+      const second = drawnLastForTest();
+      live.render(bitmap, chainOf(lutC));
+      const resumed = drawnLastForTest();
+      const resumedPx = readOf(live);
+      const wholeC = worst(resumedPx, whole(chainOf(lutC))).worst;
+      // A later pass changes: the checkpoint moves forward, the cube is not redrawn next time.
+      live.render(bitmap, chainOf(lutC, det2));
+      const moved = drawnLastForTest();
+      const movedPx = readOf(live);
+      const wholeMoved = worst(movedPx, whole(chainOf(lutC, det2))).worst;
+      live.render(bitmap, chainOf(lutC, { pre: det2.pre, post: detailPasses({ ...detail, sharpen: 90 }, 1).post }));
+      const movedAgain = drawnLastForTest();
+      // Nothing changes: nothing is drawn, the canvas holds the picture.
+      const keep = chainOf(lutC, det2);
+      live.render(bitmap, keep);
+      live.render(bitmap, keep);
+      const nothing = drawnLastForTest();
+      const nothingPx = worst(readOf(live), whole(keep)).worst;
+      // The FIRST pass changes: start over, whole.
+      live.render(bitmap, chainOf(lutC, det3));
+      const restart = drawnLastForTest();
+      const restartPx = worst(readOf(live), whole(chainOf(lutC, det3))).worst;
+      results.upstream = { n, pre: det.pre.length, first, second, resumed, wholeC, moved, wholeMoved, movedAgain, nothing, nothingPx, restart, restartPx };
+    } finally {
+      setDitherForTest(null);
+      live.dispose();
+    }
+  }
+
   // --- the 16-bit read-back (RenderGraph.readHalf): the chain's own floats,
   // held to the 8-bit canvas it also draws, and a half source round-tripped --
   {
@@ -2152,6 +2222,23 @@ const hd = out.head;
   // columns under white is the shape, not a loss.
   say(tn.underWhite > tn.width * 0.7 && tn.atWhite > 0, `${tn.underWhite} of ${tn.width} columns land under white with their order, and the sensor's top lands AT white (${tn.atWhite} column(s) with a channel there)`);
   say(tn.warmWrong === 0, `a warm highlight stays warm through the clip — R ≥ G ≥ B on every column (${tn.warmWrong} wrong)`);
+}
+
+const up = out.upstream;
+{
+  console.log(`\n  the kept upstream (graph.ts, planResume), a ${up.n}-pass chain — ${up.pre} denoise passes, the cube, a keystone, a sharpen:`);
+  const say = (ok, text) => {
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${text}`);
+  };
+  say(up.first === up.n && up.second === up.n, `the first two renders draw whole (${up.first}, ${up.second} passes), the second placing the checkpoint`);
+  say(up.resumed === up.n - up.pre && up.wholeC === 0, `a new cube then draws ${up.resumed} passes, not ${up.n} — and matches a whole render to the bit (worst ${up.wholeC})`);
+  // From the checkpoint before the cube: the cube, the keystone and the new
+  // sharpen; the checkpoint then moves to the keystone's output, so the next
+  // sharpen draws itself alone.
+  say(up.moved === up.n - up.pre && up.wholeMoved === 0 && up.movedAgain === 1, `a new sharpen draws ${up.moved} from the old checkpoint (worst ${up.wholeMoved}), and the next sharpen ${up.movedAgain} alone`);
+  say(up.nothing === 0 && up.nothingPx === 0, `nothing changed draws ${up.nothing} and the canvas holds the picture (worst ${up.nothingPx})`);
+  say(up.restart === up.n && up.restartPx === 0, `a changed FIRST pass starts over: ${up.restart} passes, worst ${up.restartPx}`);
 }
 
 const rh = out.readHalf;

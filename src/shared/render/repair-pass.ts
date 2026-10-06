@@ -19,6 +19,7 @@
 
 import { GLSL_VERSION, IMAGE_UV } from './glsl';
 import type { RenderPass } from './graph';
+import { dataKey } from './pass-key';
 import { MAX_PATCHES, MEAN_GRID, RING_REACH, type Patch } from './repair';
 
 const FRAGMENT = `${GLSL_VERSION}
@@ -104,6 +105,7 @@ export function makeRepairPass(patches: readonly Patch[] | null | undefined, asp
   });
   return {
     id: 'repair',
+    key: dataKey('repair', list, ar),
     fragment: FRAGMENT,
     // A band reads its own rows and, for each patch that COVERS one of them,
     // that part of the disc moved by the offset — and, to heal, the whole ring

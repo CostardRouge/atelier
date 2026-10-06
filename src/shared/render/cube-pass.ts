@@ -14,6 +14,7 @@ import type { CubeHead, CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from '../lut/interpolate';
 import { GLSL_VERSION, LUT_LOOKUP, LUT_UNIFORMS } from './glsl';
 import type { RenderPass } from './graph';
+import { identityKey } from './pass-key';
 
 const FRAGMENT = `${GLSL_VERSION}
 precision highp float;
@@ -54,6 +55,7 @@ export function makeCubePass(options: CubePassOptions): RenderPass {
 
   return {
     id: 'cube',
+    key: `cube:${identityKey(lut)}:${intensity}:${interpolation}`,
     fragment: FRAGMENT,
     rows: OWN_ROWS,
     setUniforms(gl, program) {

@@ -9,6 +9,7 @@
 import { OWN_ROWS } from './band-plan';
 import { GLSL_VERSION, IMAGE_UV, SRGB_TRANSFER } from './glsl';
 import type { RenderPass } from './graph';
+import { dataKey } from './pass-key';
 import { postVignetteTerms, type FrameAffine, type PostCropVignette } from './post-vignette';
 
 const FRAGMENT = `${GLSL_VERSION}
@@ -67,6 +68,7 @@ export function makePostVignettePass(
   const t = postVignetteTerms(vignette);
   return {
     id: 'post-vignette',
+    key: dataKey('post-vignette', t, affine, frameAspect),
     fragment: FRAGMENT,
     rows: OWN_ROWS,
     setUniforms(gl, program) {

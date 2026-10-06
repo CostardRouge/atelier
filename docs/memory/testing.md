@@ -145,6 +145,27 @@ kills the chain (exit 144) — kill the node process by `^node bench`; a palette
 is clicked INSIDE `role="dialog"`, since `getByRole('button', { name:
 'Brightness' })` lands on the develop slider's `Reset Brightness` first.
 
+## The GPU-work bench: passes drawn per slider step (2026-10-06)
+
+**Recipe**, the layers bench's counters (`drawArrays`, `texImage2D` with
+data, `getContext('webgl2')`) read per interaction — the session
+scratchpad's `perf-bench.mjs`, never in the repo. Two things it needed:
+**the picture's settings are SEEDED before the drop** — the roll is created
+with `addPictures(createRollDoc(…), [{ name, size, lastModified }])` and the
+picture's `detail`, `lens`, `keystone`, `vignette`, `layers` and `develop`
+written on it, then the route opened and a `File` of the SAME name and bytes
+dropped: `addPictures` keeps a picture already on the roll (name + size),
+`use-roll-media` links the file to it, and the stage opens on the seeded
+settings. A `putRoll` after the drop and a reload loses the dropped file
+(the stage stays 300 × 150, black) and an external `putRoll` under a mounted
+editor is never read. And **a step is measured by polling the counters
+until they stop moving**, not by a fixed wait: a 1 MP chain of ten passes
+is seconds under SwiftShader. Traps: a COLD dev server re-optimises its
+dependencies on the first load and full-reloads the page mid-flow (the
+drop is lost; run a gate first, or load the route once before the run); the
+Layers tab's row and its Mask | Adjust switch were not found by role here,
+so the layer-slider step is unmeasured.
+
 ## Clips through the Develop tool, and an export encoded here (2026-09-30)
 
 **Recipe, headless in this container.** The SYSTEM `ffmpeg` (`/usr/bin/ffmpeg`, unlike Playwright's) has `lavfi` and `libvpx-vp9`: `-f lavfi -i testsrc2=size=640x360:rate=25:duration=4 -c:v libvpx proxy.webm` for a stand-in proxy, and `-c:v libvpx-vp9 -pix_fmt yuv420p -c:a aac -movflags +faststart rush.mp4` for a RUSH that mp4box demuxes and WebCodecs decodes here (VP9 in MP4), so the roll's clip export runs end to end — with the ENCODER swapped for the run: this Chromium has no H.264 encoder, so `webcodecs-export.ts` was patched locally to `codec: 'vp9'` on the muxer and `'vp09.00.10.08'` in place of `pickAvcCodec`, and reverted with `git checkout` before the commit. Seed the roll without the UI (`putRoll(addPictures(createRollDoc(…), [rowMediaRef(host, row)]))` through `/atelier/src/...` imports), stub `/api/assets/7`, `/proxy`, `/download`, `/thumb` with `context.route` and the CORS headers of the stub recipe, deliver into OPFS (`window.showDirectoryPicker = () => navigator.storage.getDirectory()`), and read the file back with a `<video>` for its frame, then `drawImage` at 1 s for a luminance against the source. A LOCAL clip is dropped by dispatching `dragover` + `drop` with a `DataTransfer` on any element inside the roll editor (the event bubbles to its root). Read the stage's luminance off the 2D canvas `[aria-label="The picture, corrected"]`; with A/B on, half of it is as shot, so a grade reads smaller there than in the file. The lone-file name is TEXT (`[title=name]`), a capture with rows is a `button[title=name]`. The crop stage's canvas has no label of its own: it is `div[aria-label^="Crop:"] canvas`; the Format segments are `[aria-label="Format"] button` pressed by text (`1:1`); the pinned export verb reads `Export this picture` or `Export N pictures`, so match `/^Export (1 |this )/`.
