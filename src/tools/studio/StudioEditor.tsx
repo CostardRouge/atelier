@@ -2598,7 +2598,7 @@ export default function StudioEditor({
             open={inspectorOpen}
             onClose={() => setInspectorOpen(false)}
             title={TABS.find((t) => t.id === tab)?.label ?? 'Inspector'}
-            className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[45dvh] border border-line rounded-paper bg-surface p-3"
+            className="flex flex-col gap-3 @min-[800px]:w-[340px] flex-none min-h-0 @max-[800px]:max-h-[calc(var(--app-h)*0.45)] border border-line rounded-paper bg-surface p-3"
           >
             {!compact && (
               <Segmented

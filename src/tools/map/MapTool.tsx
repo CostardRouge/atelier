@@ -204,7 +204,7 @@ export default function MapTool() {
             src={videoUrl ?? undefined}
             controls
             playsInline
-            className="flex-none w-full max-h-[34vh] rounded-paper bg-frame object-contain"
+            className="flex-none w-full max-h-[calc(var(--app-h)*0.34)] rounded-paper bg-frame object-contain"
           />
         ) : (
           <p className="flex-none m-0 px-4 py-[0.7rem] rounded-paper bg-surface border border-line text-sm text-muted text-center">

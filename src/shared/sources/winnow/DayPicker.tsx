@@ -181,7 +181,7 @@ export default function DayPicker({
       // popover and not itself: `useDialogKeys` stands down on it.
       e.preventDefault();
       setOpen(false);
-      valueRef.current?.focus();
+      valueRef.current?.focus({ preventScroll: true });
     }
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKey);
@@ -258,7 +258,7 @@ export default function DayPicker({
           onPick={(iso) => {
             onDay(iso);
             setOpen(false);
-            valueRef.current?.focus();
+            valueRef.current?.focus({ preventScroll: true });
           }}
         />
       )}
@@ -535,12 +535,12 @@ function walkDays(e: React.KeyboardEvent<HTMLDivElement>, columns: number) {
     const inward = e.key === 'Home' ? 1 : -1;
     let to = e.key === 'Home' ? 0 : days.length - 1;
     while (to >= 0 && to < days.length && days[to].disabled) to += inward;
-    days[to]?.focus();
+    days[to]?.focus({ preventScroll: true });
     return;
   }
   const to = at + jump;
   if (to < 0 || to >= days.length || days[to].disabled) return;
-  days[to].focus();
+  days[to].focus({ preventScroll: true });
 }
 
 /** The busy dress: dimmed, pulsing, and nothing to click. */

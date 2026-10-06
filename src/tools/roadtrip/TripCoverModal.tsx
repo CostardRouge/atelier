@@ -31,7 +31,7 @@ export default function TripCoverModal({ trip, onCancel, onSave }: TripCoverModa
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[34rem] max-h-[90dvh] flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-auto">
+      <div className="w-full max-w-[34rem] max-h-[calc(var(--app-h)*0.9)] flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper p-6 overflow-auto">
         <div>
           <h2 className="m-0 font-serif text-2xl">Cover</h2>
           <p className="m-0 mt-1 text-sm text-muted">

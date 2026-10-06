@@ -427,7 +427,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[78rem] h-[min(92dvh,54rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
+      <div className="w-full max-w-[78rem] h-[min(calc(var(--app-h)*0.92),54rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         <div className="flex-none flex items-baseline gap-3 px-5 pt-4 pb-3 border-b border-line">
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Stops on the map</h2>
           <span className="min-w-0 font-mono text-2xs text-muted truncate">

@@ -506,7 +506,7 @@ export default function LutGalleryModal({
     e.preventDefault();
     const tile = tiles[next];
     const id = tile.dataset.tile!;
-    tile.querySelector<HTMLElement>('button')?.focus();
+    tile.querySelector<HTMLElement>('button')?.focus({ preventScroll: true });
     revealInScroller(tile, { block: 'nearest', inline: 'nearest' });
     if (scene) setAimed(id);
   };

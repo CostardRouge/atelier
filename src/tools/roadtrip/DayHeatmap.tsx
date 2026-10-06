@@ -91,7 +91,7 @@ function stageLine(stage: DayStage): string {
 export function DayMenu({ menu, onClose }: { menu: Menu; onClose: () => void }) {
   const first = useRef<HTMLButtonElement>(null);
   useEffect(() => {
-    first.current?.focus();
+    first.current?.focus({ preventScroll: true });
   }, []);
 
   const WIDTH = 230;

@@ -230,7 +230,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         if (e.key === 'ArrowDown' || e.key === 'ArrowUp') {
           e.preventDefault();
           const next = cards[Math.max(0, Math.min(cards.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
-          next?.focus();
+          next?.focus({ preventScroll: true });
           revealInScroller(next);
           return;
         }

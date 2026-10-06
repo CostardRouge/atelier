@@ -100,11 +100,11 @@ Layers/Crop/Export contents in depth.
 
 ## 5. Proposed order, in commits
 
-1. **Guards first** — the lint rules, with the existing offenders fixed in
+1. **BUILT (2026-10-06)** **Guards first** — the lint rules, with the existing offenders fixed in
    the same commit (A-02, A-03, A-04's plain focuses, the three `autoFocus`,
    A-05). Verified by `npm run lint` going red on a planted
    `scrollIntoView` and green on the tree.
-2. **The 16px rule on every coarse pointer** (A-01) — one media query;
+2. **BUILT (2026-10-06)** **The 16px rule on every coarse pointer** (A-01) — one media query;
    checked headless with an iPad and a landscape-phone viewport.
 3. **The page bar's trailing group, and the trip overview's header**
    (B-02, TRIP-01): the trailing group wraps; on a phone the overview's two

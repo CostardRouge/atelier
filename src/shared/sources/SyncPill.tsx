@@ -160,7 +160,7 @@ export default function SyncPill({
     function onKey(e: KeyboardEvent) {
       if (e.key !== 'Escape') return;
       close();
-      triggerRef.current?.focus();
+      triggerRef.current?.focus({ preventScroll: true });
     }
     document.addEventListener('pointerdown', onPointerDown);
     document.addEventListener('keydown', onKey);

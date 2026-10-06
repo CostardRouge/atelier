@@ -536,11 +536,14 @@ html[data-surface='darkroom'] {
   page never zooms back (`frontend.md`, «Touch sizing»). The rule used to be
   written per field as `max-[820px]:text-base`, and every sheet that forgot
   it — the Library's filter, a leg's name, a place, the deck's speed — zoomed
-  the phone. Once, here, for every text field on a coarse pointer at the
-  phone breakpoint; a field already at 16px or more is left as it is. Outside
-  any layer on purpose: an unlayered rule outranks the utilities.
+  the phone. Once, here, for every text field under a FINGER, whatever the
+  width — it was capped at 820px, and every iPhone on its side (844–932 CSS
+  px) and every iPad were left to zoom (2026-10-06,
+  `docs/audit-mobile-layout-2026-10-06.md`, A-01). A field already at 16px
+  or more is left as it is. Outside any layer on purpose: an unlayered rule
+  outranks the utilities.
 */
-@media (max-width: 820px) and (pointer: coarse) {
+@media (pointer: coarse) {
   input:not([type='range'], [type='checkbox'], [type='radio'], [type='file'], [type='color']),
   select,
   textarea {

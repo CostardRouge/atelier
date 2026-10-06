@@ -212,7 +212,7 @@ export default function DevelopSheet({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[64rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-[64rem] h-[min(calc(var(--app-h)*0.9),54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {/* Header: what, what it is, the clipboard, the zoom, close. On a
             phone the row WRAPS into two — the name with Close, then the chip
             and the verbs — because one row of five things left the name as

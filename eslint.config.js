@@ -47,6 +47,41 @@ const tokenRules = [
   },
 ];
 
+/**
+ * The page that moves under the app (`docs/audit-mobile-layout-2026-10-06.md`).
+ * A tool screen locks the document and its frame CLIPS, and code can still
+ * scroll a clipping box: `scrollIntoView` scrolls every ancestor, a plain
+ * `focus()` (and React's `autoFocus`, which is one) scrolls them to show the
+ * field — and on a phone nothing scrolls them back, a band of nothing under
+ * the bottom menu. A height in `vh`/`dvh` is the other road there: inside a
+ * locked page a stale viewport unit is never corrected, which is why every
+ * full-screen box reads the MEASURED `--app-h` (`app-height.ts`).
+ */
+const VIEWPORT_HEIGHT = /\b(?:min-|max-)?h-(?:screen|dvh|svh|lvh)\b|\[(?![^\]]*var\(--app-h)[^\]]*\d(?:d|s|l)?vh\b/;
+
+const layoutRules = [
+  {
+    selector: "CallExpression[callee.property.name='scrollIntoView']",
+    message: 'scrollIntoView also scrolls the clipping frame and the locked page: use revealInScroller (shared/ui/reveal.ts).',
+  },
+  {
+    selector: "CallExpression[callee.property.name='focus'][arguments.length=0]",
+    message: 'A plain focus() scrolls every ancestor to the field: write focus({ preventScroll: true }).',
+  },
+  {
+    selector: "JSXOpeningElement[name.name=/^[a-z]/] > JSXAttribute[name.name='autoFocus']",
+    message: 'autoFocus is a plain focus(): use ref={focusOnMount} (shared/ui/focus.ts), which does not scroll.',
+  },
+  {
+    selector: `Literal[value=${VIEWPORT_HEIGHT}]`,
+    message: 'A viewport unit is never corrected inside a locked page: size by var(--app-h) (calc(var(--app-h)*0.9)), never vh/dvh.',
+  },
+  {
+    selector: `TemplateElement[value.raw=${VIEWPORT_HEIGHT}]`,
+    message: 'A viewport unit is never corrected inside a locked page: size by var(--app-h) (calc(var(--app-h)*0.9)), never vh/dvh.',
+  },
+];
+
 export default tseslint.config(
   { ignores: ['dist'] },
   {
@@ -56,7 +91,7 @@ export default tseslint.config(
       ecmaVersion: 2020,
     },
     rules: {
-      'no-restricted-syntax': ['error', ...tokenRules],
+      'no-restricted-syntax': ['error', ...tokenRules, ...layoutRules],
     },
   },
 );

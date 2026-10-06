@@ -52,7 +52,7 @@ export default function ImportDocumentModal({
   const buttonRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    buttonRef.current?.focus();
+    buttonRef.current?.focus({ preventScroll: true });
     // Mount-only: the modal is short-lived.
   }, []);
 

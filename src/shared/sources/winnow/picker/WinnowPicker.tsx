@@ -493,7 +493,7 @@ export default function WinnowPicker({
         if (e.target === e.currentTarget) close();
       }}
     >
-      <div className="relative w-full max-w-[68rem] h-[min(90dvh,54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-5 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="relative w-full max-w-[68rem] h-[min(calc(var(--app-h)*0.9),54rem)] flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-5 overflow-hidden max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:p-3 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         {/* --- the header: title, destination, scope, the one date control --- */}
         <div className="flex-none flex items-center gap-2 flex-wrap">
           <h2 className="m-0 font-serif text-2xl leading-tight min-w-0 truncate max-[820px]:text-xl max-[820px]:flex-1">

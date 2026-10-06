@@ -1614,7 +1614,7 @@ export default function BadgeStage({
       <div
         ref={frameRef}
         className={`relative flex items-center justify-center min-h-0 w-full @min-[860px]:h-auto @min-[860px]:flex-1 ${
-          compactShell ? 'flex-1' : 'h-[min(62vh,calc(100cqw/var(--aspect)))]'
+          compactShell ? 'flex-1' : 'h-[min(calc(var(--app-h)*0.62),calc(100cqw/var(--aspect)))]'
         }`}
       >
         <div
