@@ -1441,6 +1441,18 @@ The rules a later agent must keep:
   are relayed through `callbacks.current`, like every other.
 - Driven headless at 1270 × 1300, 1700 × 1200 and 390 × 844 (touch) — NOT on
   his Mac or his iPhone. §7 of the brief stays his to overrule.
+- **On a phone (2026-10-06, his screenshots)**: the sheet's header is TWO rows
+  (title · count · ✕, then filter · size · Select) — one `flex-none` row could
+  not wrap and pushed Select and ✕ off the screen; its bottom room is paid
+  INSIDE the scroller. A band of ROWS snaps (`snap-y snap-mandatory`, cells
+  `snap-start`, `scroll-padding` = the layout's `pad`), so it rests on whole
+  rows with breathing room under the header instead of a row sliced flush
+  against it; the reveal of the open cell is scoped to the band's own body
+  with the same `pad` as margin. The stage bar's ± fold into the zoom pill's
+  menu on a phone (`StageZoomControl` `folded`), and Focus and Keys and
+  gestures join that menu and leave the well — at 390 px the pill (128) and
+  the nine-verb well (324) were 86 px wider than the row, so `?` and Focus
+  sat off-screen. Driven at 390 × 844 touch: nothing past the right edge.
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the

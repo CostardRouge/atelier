@@ -2037,6 +2037,8 @@ export default function PictureWorkbench({
       <span className="font-mono text-3xs text-faint leading-relaxed max-w-[18rem] whitespace-normal">{hint}</span>
     </span>
   );
+  // A phone folds the zoom's ± and the view's verbs into one menu (`StageZoomControl`'s `folded`).
+  const foldView = compact && !cropping;
   const atOnePixel = Math.abs(picture.view.zoom.scale - picture.view.onePixel) < 0.005;
   const zoomItems: OverflowItem[] = [
     {
@@ -2071,6 +2073,17 @@ export default function PictureWorkbench({
       disabled: !cropToView,
       onSelect: () => cropToView?.(),
     },
+    // On a phone the bar cannot hold the zoom pill and the whole well (a
+    // 390 px screen lost Focus and Keys off its right edge): the view's own
+    // two verbs join the view's menu there, and leave the well.
+    ...(foldView
+      ? [
+          ...(onFocusMode
+            ? [{ id: 'focus', label: zoomRow(!!focused, 'Focus', 'the picture alone, nothing else on screen'), onSelect: onFocusMode }]
+            : []),
+          { id: 'keys', label: zoomRow(false, 'Keys and gestures', 'what a finger and the keyboard can do here'), onSelect: () => setHelpOpen(true) },
+        ]
+      : []),
   ];
 
   return (
@@ -2169,6 +2182,7 @@ export default function PictureWorkbench({
                 hint="wheel, pinch, or Z"
                 className="flex-none"
                 items={zoomItems}
+                folded={foldView}
               />
             ))}
           {/* ONE well of verbs ends the row (variant E2): the three clipboard
@@ -2267,7 +2281,7 @@ export default function PictureWorkbench({
                 bar away (`docs/develop-roll-browser.md`, face D): a verb at
                 every width, since a phone has no F and the way back must be
                 where the way in was. Lit while on, like the A/B. */}
-            {onFocusMode && (
+            {onFocusMode && !foldView && (
               <button
                 type="button"
                 className={`${helpVerb} ${
@@ -2287,6 +2301,7 @@ export default function PictureWorkbench({
                 verb. Drawn at every width: on a phone there are no keys, but the
                 GESTURES it lists are exactly the ones a finger has to
                 discover. */}
+            {!foldView && (
             <button
               type="button"
               className={`${helpVerb} border-transparent bg-transparent text-muted hover:text-accent-ink`}
@@ -2296,6 +2311,7 @@ export default function PictureWorkbench({
             >
               ?
             </button>
+            )}
           </DevelopActionsGroup>
           </span>
           </div>
