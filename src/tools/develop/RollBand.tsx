@@ -49,6 +49,7 @@ import type { AnchorRect } from '../../shared/ui/menu-anchor';
 import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
+import { revealInScroller } from '../../shared/ui/reveal';
 
 /**
  * What the band and the contact sheet both take about the roll's pictures,
@@ -223,8 +224,12 @@ const ALWAYS = () => true;
 /** The open picture's cell kept in view as ←/→ step along the roll. */
 export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null) {
   useEffect(() => {
-    const cell = openId ? ref.current?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
-    cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    const body = ref.current;
+    const cell = openId ? body?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
+    // The band's body and nothing else — never `scrollIntoView`, which also
+    // scrolled the clipping frame and the locked page under the band and
+    // lifted the whole tool (`reveal.ts`).
+    revealInScroller(cell, { block: 'nearest', inline: 'nearest', scroller: body });
   }, [openId, ref]);
 }
 

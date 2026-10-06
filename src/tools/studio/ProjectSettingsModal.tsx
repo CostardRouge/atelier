@@ -18,6 +18,7 @@ import {
 import { Icons } from '../../shared/ui/icons';
 import type { ProjectHouseStyle } from '../../shared/projects/house-style';
 import ProjectHouseStylePanel from './ProjectHouseStylePanel';
+import { revealInScroller } from '../../shared/ui/reveal';
 
 export interface ProjectSettingsDraft {
   name: string;
@@ -114,7 +115,7 @@ export default function ProjectSettingsModal({
   // short window the confirmation would otherwise appear below the fold and
   // read as "nothing happened".
   useEffect(() => {
-    if (pending) confirmRef.current?.scrollIntoView({ block: 'nearest' });
+    if (pending) revealInScroller(confirmRef.current);
   }, [pending]);
 
   function draft(): ProjectSettingsDraft {

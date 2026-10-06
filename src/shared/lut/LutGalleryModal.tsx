@@ -113,6 +113,7 @@ import LutThumb from './LutThumb';
 import { useLutFavourites, toggleFavourite } from './use-lut-favourites';
 import { useLutInterpolation } from './use-lut-interpolation';
 import { useLutPacks } from './use-lut-packs';
+import { revealInScroller } from '../ui/reveal';
 
 /**
  * Anything the modal can crop a preview sample from — a bare bitmap or
@@ -506,7 +507,7 @@ export default function LutGalleryModal({
     const tile = tiles[next];
     const id = tile.dataset.tile!;
     tile.querySelector<HTMLElement>('button')?.focus();
-    tile.scrollIntoView?.({ block: 'nearest', inline: 'nearest' });
+    revealInScroller(tile, { block: 'nearest', inline: 'nearest' });
     if (scene) setAimed(id);
   };
 
@@ -605,9 +606,7 @@ export default function LutGalleryModal({
   // progress. `nearest` moves nothing when it is already on screen.
   const crumbStrip = useRef<HTMLElement>(null);
   useEffect(() => {
-    crumbStrip.current
-      ?.querySelector<HTMLElement>('[aria-pressed="true"]')
-      ?.scrollIntoView?.({ inline: 'nearest', block: 'nearest' });
+    revealInScroller(crumbStrip.current?.querySelector<HTMLElement>('[aria-pressed="true"]'), { inline: 'nearest', block: 'nearest' });
   }, [open?.id]);
 
   // After the LAST hook: this return used to sit above the two hooks of the

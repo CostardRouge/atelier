@@ -15,6 +15,7 @@ import SectionRail from '../shared/ui/SectionRail';
 import { DEFAULT_SNAPS } from '../shared/ui/sheet-snap';
 import { useSectionBar } from '../shared/ui/section-rail';
 import { useAppHeight } from '../shared/ui/use-app-height';
+import { usePinnedDocument } from '../shared/ui/use-pinned-document';
 import { useLayoutMode } from '../shared/ui/use-layout-mode';
 import { useLocalFlag } from '../shared/ui/use-local-flag';
 import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
@@ -170,6 +171,10 @@ export default function App() {
       delete root.dataset.shell;
     };
   }, [tool]);
+  // And what a finger cannot scroll, code still can — a `scrollIntoView`, iOS
+  // lifting a field above its keyboard — so the locked page is put back at the
+  // top whenever it moves (`use-pinned-document.ts`).
+  usePinnedDocument(!!tool);
 
   const [libraryOpen, setLibraryOpen] = useState(false);
   // A sheet belongs to the screen it was opened on: switching tool or growing
@@ -205,14 +210,18 @@ export default function App() {
   // rather than patches. On a phone the library is a sheet instead of a
   // column, so nothing needs the page to grow.
   //
+  // It CLIPS (`overflow: clip`), never `hidden`: a hidden box can still be
+  // scrolled by code, and a cell kept in view by `scrollIntoView` slid the
+  // whole frame up under its own masthead, leaving a band of paper below.
+  //
   // Sideways it clips at every width, as before: a control row that outgrows
   // the screen should wrap (they are built to), and the one that someday
   // doesn't must not hand the whole document a horizontal scrollbar and let
   // the interface drift into the margin. Anything legitimately wider than the
   // screen scrolls inside its own container, untouched by this.
   const toolShell = compact
-    ? 'h-[var(--app-h)] flex flex-col min-h-0 overflow-hidden w-full pt-[env(safe-area-inset-top)]'
-    : 'h-[var(--app-h)] flex flex-col min-h-0 overflow-hidden w-full px-4 pt-3 pb-3';
+    ? 'h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full pt-[env(safe-area-inset-top)]'
+    : 'h-[var(--app-h)] flex flex-col min-h-0 overflow-clip w-full px-4 pt-3 pb-3';
 
   return (
     <>
