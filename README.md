@@ -1526,7 +1526,8 @@ at the band's smallest. Pull the **handle** above it and the band grows into a
 grid of two or three rows, justified like a photo site's; pull it down past
 its header and it folds to a **rail** (one line: where you are in the roll,
 the filter, *Select*, the sheet and the band's ⋯ menu), **B** does the same
-from the keyboard and a double-click on the handle too. The ⋯ menu names the
+from the keyboard and a double-click on the handle too. The ⋯ opens a small
+panel of glyphs — a choice applies and closes it — that sets the
 rows, lets the band's **height follow the roll** (it takes the room the roll's
 typical picture leaves under itself, so stepping to a portrait moves
 nothing), makes the thumbnails smaller or larger (**−** / **=**), and says

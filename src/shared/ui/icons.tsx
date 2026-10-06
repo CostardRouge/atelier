@@ -232,6 +232,37 @@ export const Icons = {
     </>,
   ),
   crop: icon(<path d="M7 3v14h14M3 7h14v14" />),
+
+  // --- the view panels (band, contact sheet, day picker): a frame and where
+  //     the pictures stand in it, or the grid they make. ---------------------
+  bandUnder: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 15h18M6.5 17.5h2M10.5 17.5h2M14.5 17.5h2" /></>),
+  bandLeft: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M5.5 8v2M5.5 12v2M5.5 16v1" /></>),
+  bandRight: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M15 4v16M18.5 8v2M18.5 12v2M18.5 16v1" /></>),
+  rowsOne: icon(<rect x="3" y="9" width="18" height="6" rx="1.5" />),
+  rowsTwo: icon(<><rect x="3" y="5" width="18" height="6" rx="1.5" /><rect x="3" y="13" width="18" height="6" rx="1.5" /></>),
+  rowsThree: icon(<><rect x="3" y="3.5" width="18" height="4.6" rx="1.2" /><rect x="3" y="9.7" width="18" height="4.6" rx="1.2" /><rect x="3" y="15.9" width="18" height="4.6" rx="1.2" /></>),
+  colsOne: icon(<rect x="9" y="3" width="6" height="18" rx="1.5" />),
+  colsTwo: icon(<><rect x="5" y="3" width="6" height="18" rx="1.5" /><rect x="13" y="3" width="6" height="18" rx="1.5" /></>),
+  colsThree: icon(<><rect x="3.5" y="3" width="4.6" height="18" rx="1.2" /><rect x="9.7" y="3" width="4.6" height="18" rx="1.2" /><rect x="15.9" y="3" width="4.6" height="18" rx="1.2" /></>),
+  thumbSmaller: icon(<><rect x="4" y="4" width="16" height="16" rx="2" strokeDasharray="2 2.6" opacity={0.55} /><rect x="8.5" y="8.5" width="7" height="7" rx="1.2" /></>),
+  thumbLarger: icon(<><rect x="4" y="4" width="16" height="16" rx="2" /><rect x="8.5" y="8.5" width="7" height="7" rx="1.2" strokeDasharray="2 2.2" opacity={0.55} /></>),
+  heightAuto: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 14h18M12 7v4.5M10.2 8.8 12 7l1.8 1.8M10.2 9.7 12 11.5l1.8-1.8" /></>),
+  foldUnder: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M3 17h18M9 10.5l3 3 3-3" /></>),
+  foldSide: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M7 4v16M14 9l-3 3 3 3" /></>),
+  sizeS: icon(<><rect x="4.00" y="4.00" width="3.10" height="3.10" rx="0.78" /><rect x="8.30" y="4.00" width="3.10" height="3.10" rx="0.78" /><rect x="12.60" y="4.00" width="3.10" height="3.10" rx="0.78" /><rect x="16.90" y="4.00" width="3.10" height="3.10" rx="0.78" /><rect x="4.00" y="8.30" width="3.10" height="3.10" rx="0.78" /><rect x="8.30" y="8.30" width="3.10" height="3.10" rx="0.78" /><rect x="12.60" y="8.30" width="3.10" height="3.10" rx="0.78" /><rect x="16.90" y="8.30" width="3.10" height="3.10" rx="0.78" /><rect x="4.00" y="12.60" width="3.10" height="3.10" rx="0.78" /><rect x="8.30" y="12.60" width="3.10" height="3.10" rx="0.78" /><rect x="12.60" y="12.60" width="3.10" height="3.10" rx="0.78" /><rect x="16.90" y="12.60" width="3.10" height="3.10" rx="0.78" /><rect x="4.00" y="16.90" width="3.10" height="3.10" rx="0.78" /><rect x="8.30" y="16.90" width="3.10" height="3.10" rx="0.78" /><rect x="12.60" y="16.90" width="3.10" height="3.10" rx="0.78" /><rect x="16.90" y="16.90" width="3.10" height="3.10" rx="0.78" /></>),
+  sizeM: icon(<><rect x="4.00" y="4.00" width="4.27" height="4.27" rx="1.07" /><rect x="9.87" y="4.00" width="4.27" height="4.27" rx="1.07" /><rect x="15.73" y="4.00" width="4.27" height="4.27" rx="1.07" /><rect x="4.00" y="9.87" width="4.27" height="4.27" rx="1.07" /><rect x="9.87" y="9.87" width="4.27" height="4.27" rx="1.07" /><rect x="15.73" y="9.87" width="4.27" height="4.27" rx="1.07" /><rect x="4.00" y="15.73" width="4.27" height="4.27" rx="1.07" /><rect x="9.87" y="15.73" width="4.27" height="4.27" rx="1.07" /><rect x="15.73" y="15.73" width="4.27" height="4.27" rx="1.07" /></>),
+  sizeL: icon(<><rect x="4.00" y="4.00" width="7.00" height="7.00" rx="1.50" /><rect x="13.00" y="4.00" width="7.00" height="7.00" rx="1.50" /><rect x="4.00" y="13.00" width="7.00" height="7.00" rx="1.50" /><rect x="13.00" y="13.00" width="7.00" height="7.00" rx="1.50" /></>),
+  sizeXL: icon(<rect x="4" y="4" width="16" height="16" rx="2" />),
+  star: icon(<path d="M12 4l2.4 5 5.4.6-4 3.7 1.1 5.3L12 16l-4.9 2.6 1.1-5.3-4-3.7 5.4-.6z" />),
+  flag: icon(<path d="M5 21V4h11l-2 4 2 4H5" />),
+  circleCheck: icon(<><circle cx="12" cy="12" r="8" /><path d="M8.5 12l2.5 2.5 4.5-5" /></>),
+  stack: icon(<><rect x="4" y="7" width="13" height="10" rx="1.5" /><path d="M7 4h13v10" /></>),
+  sliders: icon(<><path d="M4 7h7M15 7h5M4 17h3M11 17h9" /><circle cx="13" cy="7" r="2" /><circle cx="9" cy="17" r="2" /></>),
+  held: icon(<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M10 9v6M14 9v6" /></>),
+  filter: icon(<path d="M4 5h16l-6 8v5l-4 2v-7z" />),
+  tickAll: icon(<><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12l3 3 5-6" /></>),
+  railFilters: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M5.3 8h1.4M5.3 11h1.4M5.3 14h1.4" /></>),
+  sheetClose: icon(<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9l6 6M15 9l-6 6" /></>),
 } as const;
 
 export type IconName = keyof typeof Icons;
