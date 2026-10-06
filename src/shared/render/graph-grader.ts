@@ -27,7 +27,7 @@ type GradeSource = CanvasImageSource | HalfImage;
 // The banding hooks, re-exported so a gate that imports THIS module reaches the
 // very instance of the graph it renders through (a dev server that has
 // hot-reloaded `graph.ts` serves it under a second URL).
-export { bandsDrawRightHere, bandsLastDrawnForTest, getBandPreference, setBandingForTest, setBandPreference, setDitherForTest } from './graph';
+export { bandsDrawRightHere, bandsLastDrawnForTest, getBandPreference, getDitherPreference, setBandingForTest, setBandPreference, setDitherForTest, setDitherPreference } from './graph';
 
 export interface GraphGrader extends FrameGrader {
   /** What the intermediate buffers really are here — 'byte' where float16 cannot be rendered to. */

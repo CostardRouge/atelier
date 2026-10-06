@@ -60,6 +60,22 @@ export function wantsDither(chain: {
   return chain.precision === 'float16' && chain.passes >= 2;
 }
 
+/**
+ * Whether this DEVICE dithers at all (2026-10-06, the maintainer: «est-ce qu'on
+ * a bien pensé à ce qu'on puisse le désactiver ?»): `auto` follows the rule
+ * above, `off` never dithers — the canvas then rounds exactly as it did before
+ * 2026-10-05. A browser preference like the band policy, set in Develop's
+ * settings page, never a document's.
+ */
+export type DitherPreference = 'auto' | 'off';
+
+export const DITHER_PREFERENCE_KEY = 'atelier.render.dither';
+
+/** A stored value read back — anything but `off` is `auto`, the rule as built. */
+export function readDitherPreference(stored: string | null | undefined): DitherPreference {
+  return stored === 'off' ? 'off' : 'auto';
+}
+
 const MAIN = /\bvoid\s+main\s*\(\s*(?:void\s*)?\)/g;
 
 /**

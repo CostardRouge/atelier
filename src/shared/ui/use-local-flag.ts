@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useState } from 'react';
+import { localPref, useLocalPref, type LocalPref } from './local-pref';
 
 /**
  * A boolean the BROWSER remembers — a panel left open, an overlay left on.
@@ -8,36 +8,23 @@ import { useCallback, useEffect, useState } from 'react';
  * the LUT interpolation mode and the gallery's card/band choice; this is the
  * shape of it, so the next one costs a line instead of another module.
  *
- * Every access is wrapped: a private window, blocked site data or a thumbnail
- * capture can throw on read AND on write, and neither is an error — the flag
- * simply holds for this session. It reads again on mount for the same reason
- * `use-pixel-view.ts` does.
+ * One value per key for every reader (`local-pref.ts`): a flag set in Develop's
+ * settings page reaches the picture open behind it at once. Every access is
+ * wrapped there — a private window or blocked site data is not an error, the
+ * flag simply holds for this session.
  */
+const flags = new Map<string, LocalPref<boolean>>();
+
+/** The shared preference behind a key; the first caller's fallback is the key's. */
+export function localFlag(key: string, fallback = false): LocalPref<boolean> {
+  let pref = flags.get(key);
+  if (!pref) {
+    pref = localPref<boolean>(key, (raw) => (raw === null ? fallback : raw === '1'), (on) => (on ? '1' : '0'));
+    flags.set(key, pref);
+  }
+  return pref;
+}
+
 export function useLocalFlag(key: string, fallback = false): [boolean, (next: boolean) => void] {
-  const read = useCallback((): boolean => {
-    if (typeof localStorage === 'undefined') return fallback;
-    try {
-      const raw = localStorage.getItem(key);
-      return raw === null ? fallback : raw === '1';
-    } catch {
-      return fallback;
-    }
-  }, [key, fallback]);
-
-  const [on, setOn] = useState<boolean>(read);
-  useEffect(() => setOn(read()), [read]);
-
-  const write = useCallback(
-    (next: boolean) => {
-      setOn(next);
-      try {
-        localStorage.setItem(key, next ? '1' : '0');
-      } catch {
-        /* the choice still holds for this session */
-      }
-    },
-    [key],
-  );
-
-  return [on, write];
+  return useLocalPref(localFlag(key, fallback), fallback);
 }
