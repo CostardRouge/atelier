@@ -188,3 +188,32 @@ export function nearestCity(
 
   return best.city;
 }
+
+function folded(name: string): string {
+  return name.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
+}
+
+/**
+ * Every city of the index bearing this name — «Exmouth» is a town in
+ * Western Australia AND in Devon — nearest `near` first (the pictures, or
+ * the stage), else biggest first. Accents and case are forgiven; a suburb
+ * is listed too, since a person may have meant exactly it. This is what a
+ * place picked by the search in the wrong country is corrected FROM,
+ * offline: the index already knows both.
+ */
+export function homonyms(
+  cities: readonly GazetteerCity[],
+  name: string,
+  near: GeoPoint | null,
+  limit = 8,
+): { city: GazetteerCity; km: number | null }[] {
+  const key = folded(name);
+  if (!key) return [];
+  const found = cities
+    .filter((c) => folded(c.name) === key)
+    .map((city) => ({ city, km: near ? haversineKm(near, city) : null }));
+  found.sort((a, b) =>
+    a.km !== null && b.km !== null ? a.km - b.km : b.city.population - a.city.population,
+  );
+  return found.slice(0, Math.max(0, limit));
+}

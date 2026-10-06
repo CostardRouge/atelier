@@ -67,13 +67,17 @@ export const PLACE_RESULT_LIMIT = 5;
  * code, the county, the country — which is the SAME request (nothing more of
  * ours leaves) answered in more fields, so a picked place can keep them.
  */
-export function nominatimUrl(query: string, limit = PLACE_RESULT_LIMIT): string {
+export function nominatimUrl(query: string, limit = PLACE_RESULT_LIMIT, countryCodes = ''): string {
   const params = new URLSearchParams({
     q: query.trim(),
     format: 'jsonv2',
     addressdetails: '1',
     limit: String(Math.max(1, Math.trunc(limit))),
   });
+  // Bounded to the trip's country when the caller says so: two more letters
+  // leave the machine, and «Exmouth» stops answering Devon first.
+  const codes = countryCodes.trim().toLowerCase();
+  if (/^[a-z]{2}(,[a-z]{2})*$/.test(codes)) params.set('countrycodes', codes);
   return `${NOMINATIM_SEARCH}?${params.toString()}`;
 }
 
@@ -165,11 +169,12 @@ export function parsePlaceResults(json: unknown): PlaceResult[] {
 export async function searchPlaces(
   query: string,
   signal?: AbortSignal,
+  countryCodes = '',
 ): Promise<PlaceResult[]> {
   if (!query.trim()) return [];
   let response: Response;
   try {
-    response = await fetch(nominatimUrl(query), {
+    response = await fetch(nominatimUrl(query, PLACE_RESULT_LIMIT, countryCodes), {
       signal,
       headers: { Accept: 'application/json' },
       // Nothing of ours belongs in a third-party request.

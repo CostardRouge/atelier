@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import type { PlaceResult } from '../map/geocode';
-import { adoptSearchResult } from './place-search';
+import { adoptSearchResult, replacePlace, searchFacts } from './place-search';
 import { createTripPlace } from './trip-types';
 
 const kalbarri: PlaceResult = {
@@ -56,5 +56,48 @@ describe('adoptSearchResult', () => {
     expect(place.id).toBe(own.id);
     expect(place.stateCode).toBe('KAL');
     expect(place.arrived).toBe('2025-11-07');
+  });
+});
+
+describe('replacePlace', () => {
+  const devon = createTripPlace('Exmouth', 'England', { lat: 50.62, lon: -3.41 }, {
+    area: 'Devon',
+    searchCode: 'ENG',
+    stateCode: 'ENG',
+    codeFrom: 'own',
+    country: 'United Kingdom',
+    countryCode: 'GB',
+    arrived: '2025-11-22',
+    style: 'full',
+    source: 'search',
+  });
+
+  it('takes the new town whole and keeps what belongs to the visit', () => {
+    const next = replacePlace(devon, {
+      name: 'Exmouth',
+      state: 'Western Australia',
+      countryCode: 'au',
+      coords: { lat: -21.93, lon: 114.13 },
+      source: 'deduced',
+    });
+    expect(next).toMatchObject({ id: devon.id, name: 'Exmouth', state: 'Western Australia', countryCode: 'AU', arrived: '2025-11-22', style: 'full', source: 'deduced', coords: { lat: -21.93, lon: 114.13 } });
+    // The wrong town's facts do not survive: its county, its country's name, its codes.
+    expect(next.area).toBeUndefined();
+    expect(next.country).toBeUndefined();
+    expect(next.searchCode).toBeUndefined();
+    expect(next.stateCode).toBeUndefined();
+    expect(next.codeFrom).toBeUndefined();
+  });
+
+  it('keeps the author’s own code while the state is the same', () => {
+    const next = replacePlace(devon, { name: 'Exmouth', state: 'England', coords: { lat: 50.6, lon: -3.4 }, source: 'search' });
+    expect(next.stateCode).toBe('ENG');
+    expect(next.codeFrom).toBe('own');
+  });
+
+  it('reads a search’s answer as facts', () => {
+    expect(
+      searchFacts({ name: 'Exmouth', region: 'Western Australia, Australia', lat: -21.9, lon: 114.1, area: '', state: 'Western Australia', stateCode: 'WA', country: 'Australia', countryCode: 'AU' }),
+    ).toEqual({ name: 'Exmouth', state: 'Western Australia', area: '', searchCode: 'WA', country: 'Australia', countryCode: 'AU', coords: { lat: -21.9, lon: 114.1 }, source: 'search' });
   });
 });

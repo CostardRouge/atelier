@@ -27,6 +27,13 @@ export interface PlaceSearchFieldProps {
   autoFocus?: boolean;
   className?: string;
   inputClassName?: string;
+  /**
+   * The trip's country (ISO, «AU»): the search asks inside it first, with
+   * «Everywhere» one click away for a trip that crosses a border.
+   */
+  country?: string;
+  /** Says the country's name in that line («In Australia»). */
+  countryLabel?: string;
 }
 
 const noticeClass = 'm-0 text-2xs text-faint leading-snug';
@@ -40,19 +47,23 @@ export default function PlaceSearchField({
   autoFocus = false,
   className = '',
   inputClassName = '',
+  country = '',
+  countryLabel,
 }: PlaceSearchFieldProps) {
   const { enabled, setEnabled } = usePlaceSearchPref();
   const [results, setResults] = useState<PlaceResult[] | null>(null);
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState<string | null>(null);
   const [asking, setAsking] = useState(false);
+  const [everywhere, setEverywhere] = useState(false);
+  const bounded = !!country && !everywhere;
   const abort = useRef<AbortController | null>(null);
 
   // A search in flight when the field goes away would resolve into a dead
   // component and, worse, keep a request alive nobody asked for any more.
   useEffect(() => () => abort.current?.abort(), []);
 
-  const run = useCallback(async () => {
+  const run = useCallback(async (scope: string = bounded ? country : '') => {
     const query = value.trim();
     if (!query) return;
     abort.current?.abort();
@@ -61,10 +72,10 @@ export default function PlaceSearchField({
     setBusy(true);
     setError(null);
     try {
-      const found = await searchPlaces(query, controller.signal);
+      const found = await searchPlaces(query, controller.signal, scope);
       if (controller.signal.aborted) return;
       setResults(found);
-      if (found.length === 0) setError(`Nothing found for “${query}”.`);
+      if (found.length === 0) setError(`Nothing found for “${query}”${scope ? ` in ${countryLabel || scope}` : ''}.`);
     } catch (err) {
       if (controller.signal.aborted) return;
       setResults(null);
@@ -74,7 +85,7 @@ export default function PlaceSearchField({
     } finally {
       if (!controller.signal.aborted) setBusy(false);
     }
-  }, [value]);
+  }, [value, bounded, country, countryLabel]);
 
   function choose(result: PlaceResult) {
     onPick(result);
@@ -135,6 +146,24 @@ export default function PlaceSearchField({
             </button>
           </div>
         </div>
+      )}
+
+      {country && (results !== null || error) && (
+        <p className="m-0 text-2xs text-muted">
+          {bounded ? `In ${countryLabel || country} only` : 'Everywhere'}
+          {' · '}
+          <button
+            type="button"
+            onClick={() => {
+              const next = !everywhere;
+              setEverywhere(next);
+              void run(next ? '' : country);
+            }}
+            className="p-0 border-0 bg-transparent text-2xs text-accent-ink underline underline-offset-[2px] cursor-pointer"
+          >
+            {bounded ? 'Search everywhere' : `Only in ${countryLabel || country}`}
+          </button>
+        </p>
       )}
 
       {error && (
