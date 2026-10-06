@@ -403,7 +403,8 @@ export default function PictureWorkbench({
   /** The roll's still export — its state and what the open picture delivers. */
   exports: RollExports;
   exportVerbs: readonly ExportVerb[];
-  onSnapshot: (thumb: Blob) => void;
+  /** The open picture's cell, retaken as delivered — its bytes and its aspect (`roll-thumb.ts`). */
+  onSnapshot: (thumb: Blob, aspect: number) => void;
   onStep: (step: number) => void;
   /**
    * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
@@ -1511,8 +1512,8 @@ export default function PictureWorkbench({
     const t = window.setTimeout(() => {
       const image = delivered();
       if (!image) return;
-      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft, border).then((blob) => {
-        if (blob) callbacks.current.onSnapshot(blob);
+      void framedThumbnail(image, source.width, source.height, aspectRatio, framingDraft, border).then((baked) => {
+        if (baked) callbacks.current.onSnapshot(baked.blob, baked.aspect);
       });
     }, SNAPSHOT_DELAY_MS);
     return () => window.clearTimeout(t);

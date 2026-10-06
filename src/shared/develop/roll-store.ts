@@ -53,6 +53,20 @@ interface ThumbRecord {
   id: string;
   blob: Blob;
   updatedAt: number;
+  /**
+   * The thumbnail's width over its height, measured once and kept beside
+   * the bytes (2026-10-06): the cell's shape is laid out from it, and a
+   * roll reopened then decodes nothing to lay its band out. Absent on a
+   * thumbnail stored before it was kept — measured on the next open and
+   * written back (`setRollThumbAspect`).
+   */
+  aspect?: number;
+}
+
+/** A stored thumbnail: its bytes, and its aspect when it is known. */
+export interface StoredThumb {
+  blob: Blob;
+  aspect: number | null;
 }
 
 function openDb(): Promise<IDBDatabase> {
@@ -157,18 +171,41 @@ export async function deleteSyncRecord(id: string): Promise<void> {
 // --- picture thumbnails -----------------------------------------------------
 
 /** Save one picture's thumbnail. Silent on failure: a thumbnail is a cache. */
-export async function putRollThumb(pictureId: string, blob: Blob, now: number = Date.now()): Promise<void> {
+export async function putRollThumb(pictureId: string, blob: Blob, now: number = Date.now(), aspect: number | null = null): Promise<void> {
   try {
-    const record: ThumbRecord = { id: pictureId, blob, updatedAt: now };
+    const record: ThumbRecord = { id: pictureId, blob, updatedAt: now, ...(aspect && aspect > 0 ? { aspect } : {}) };
     await withStore(THUMBS, 'readwrite', (s) => s.put(record));
   } catch {
     /* a missing thumbnail costs a cell its picture, never the roll */
   }
 }
 
-/** The thumbnails that exist for these pictures, by picture id. */
+/** Keep a thumbnail's measured aspect beside its bytes, in one transaction; a thumbnail that is gone is left alone. */
+export async function setRollThumbAspect(pictureId: string, aspect: number): Promise<void> {
+  if (!(aspect > 0)) return;
+  try {
+    const db = await openDb();
+    try {
+      const store = db.transaction(THUMBS, 'readwrite').objectStore(THUMBS);
+      const record = await requestAsPromise(store.get(pictureId) as IDBRequest<ThumbRecord | undefined>);
+      if (record && record.aspect !== aspect) await requestAsPromise(store.put({ ...record, aspect }));
+    } finally {
+      db.close();
+    }
+  } catch {
+    /* the aspect is measured again on the next open */
+  }
+}
+
+/** The thumbnails that exist for these pictures, by picture id — their bytes alone. */
 export async function getRollThumbs(pictureIds: readonly string[]): Promise<Map<string, Blob>> {
-  const out = new Map<string, Blob>();
+  const entries = await getRollThumbEntries(pictureIds);
+  return new Map([...entries].map(([id, e]) => [id, e.blob]));
+}
+
+/** The thumbnails that exist for these pictures, by picture id, each with its aspect when it was kept. */
+export async function getRollThumbEntries(pictureIds: readonly string[]): Promise<Map<string, StoredThumb>> {
+  const out = new Map<string, StoredThumb>();
   if (pictureIds.length === 0) return out;
   try {
     const db = await openDb();
@@ -177,7 +214,7 @@ export async function getRollThumbs(pictureIds: readonly string[]): Promise<Map<
       const records = await Promise.all(
         pictureIds.map((id) => requestAsPromise(store.get(id) as IDBRequest<ThumbRecord | undefined>)),
       );
-      for (const r of records) if (r) out.set(r.id, r.blob);
+      for (const r of records) if (r) out.set(r.id, { blob: r.blob, aspect: r.aspect && r.aspect > 0 ? r.aspect : null });
     } finally {
       db.close();
     }

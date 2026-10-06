@@ -1515,7 +1515,10 @@ nothing), makes the thumbnails smaller or larger (**−** / **=**), and says
 its left or right — the same cells in one, two or three columns, the handle
 on its edge, the rail a thin strip when folded. All of that is remembered
 per device in the browser and never written to the roll; a phone keeps the
-band under the picture. A **filter** chip shows the roll whole or only the
+band under the picture. The band draws only the cells near what you see and
+lays itself out from the shape each thumbnail was kept with, so a roll of
+hundreds opens on a dozen cells and decodes nothing to measure them. A
+**filter** chip shows the roll whole or only the
 pictures *edited*, *to export*, *held back*, *ignored* — or by your Winnow's
 culling (*picks*, *rejected*, starred), when the roll came from one. A cell
 is calm: a small pill reads its state (**●** edited, **↑** leaves at export,

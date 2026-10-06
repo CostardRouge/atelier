@@ -163,6 +163,37 @@ export interface StripItem {
   aspect: number;
 }
 
+/** What a scroller shows of its layout: the scroll position and the box's size, in layout pixels. */
+export interface ViewBox {
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+}
+
+/**
+ * The cells a scroller must DRAW: those within ONE view of the visible box
+ * on the scroll axis, and the open picture's cell always (it is scrolled to,
+ * so it must exist). A roll of hundreds used to put every cell in the DOM at
+ * open and re-render all of them for each thumbnail that arrived
+ * (`docs/audit-2026-10-02.md`, PERF-03); a band shows a few dozen at once.
+ * A view with no size yet (the box unmeasured) draws the open cell alone —
+ * one frame, never the whole roll.
+ */
+export function cellsInView(cells: readonly StripCell[], view: ViewBox, axis: 'x' | 'y', openId: string | null): StripCell[] {
+  const start = axis === 'x' ? view.x : view.y;
+  const extent = axis === 'x' ? view.w : view.h;
+  if (!(extent > 0)) return cells.filter((c) => c.id === openId);
+  const from = start - extent;
+  const to = start + 2 * extent;
+  return cells.filter((c) => {
+    if (c.id === openId) return true;
+    const a = axis === 'x' ? c.x : c.y;
+    const b = axis === 'x' ? c.x + c.w : c.y + c.h + c.cap;
+    return b > from && a < to;
+  });
+}
+
 export interface StripCell {
   id: string;
   x: number;

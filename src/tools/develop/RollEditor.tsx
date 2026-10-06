@@ -28,7 +28,7 @@ import {
   summarizeAvailability,
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
-import { deleteRollThumbs, getRollThumbs, putRollThumb } from '../../shared/develop/roll-store';
+import { deleteRollThumbs, getRollThumbEntries, putRollThumb, setRollThumbAspect } from '../../shared/develop/roll-store';
 import {
   STRIP_FILTERS,
   STRIP_METRICS,
@@ -406,13 +406,21 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [thumbs, setThumbs] = useState<ReadonlyMap<string, Blob>>(new Map());
   const thumbsRef = useRef(thumbs);
   thumbsRef.current = thumbs;
+  // The aspects kept beside the stored thumbnails: what lets the band be laid
+  // out without decoding a single one (`use-thumb-aspects.ts`).
+  const [storedAspects, setStoredAspects] = useState<ReadonlyMap<string, number>>(new Map());
   const [loadedFor, setLoadedFor] = useState<string | null>(null);
   const idsKey = roll.pictures.map((p) => p.id).join('|');
   useEffect(() => {
     let alive = true;
-    void getRollThumbs(latest.current.pictures.map((p) => p.id)).then((stored) => {
+    void getRollThumbEntries(latest.current.pictures.map((p) => p.id)).then((stored) => {
       if (!alive) return;
-      setThumbs((cur) => new Map([...cur, ...stored]));
+      setThumbs((cur) => new Map([...cur, ...[...stored].map(([id, e]) => [id, e.blob] as const)]));
+      setStoredAspects((cur) => {
+        const next = new Map(cur);
+        for (const [id, e] of stored) if (e.aspect) next.set(id, e.aspect);
+        return next;
+      });
       setLoadedFor(idsKey);
     });
     return () => {
@@ -420,14 +428,27 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     };
   }, [idsKey]);
 
+  /**
+   * A thumbnail just baked, with the aspect its canvas had: kept beside the
+   * bytes, and handed to the band with its aspect in the SAME render, so the
+   * cell takes its shape without decoding the blob to measure it.
+   */
+  const keepThumb = useCallback((id: string, blob: Blob, aspect: number) => {
+    void putRollThumb(id, blob, Date.now(), aspect);
+    setThumbs((cur) => new Map(cur).set(id, blob));
+    if (aspect > 0) setStoredAspects((cur) => new Map(cur).set(id, aspect));
+  }, []);
   /** Tried once per picture per visit, so a file the browser cannot decode is not retried on every render. */
   const tried = useRef(new Set<string>());
   useEffect(() => {
     if (loadedFor !== idsKey) return;
-    const due = latest.current.pictures.filter(
-      (p) => files.has(p.id) && !thumbsRef.current.has(p.id) && !tried.current.has(p.id),
-    );
+    const pictures = latest.current.pictures;
+    const due = pictures.filter((p) => files.has(p.id) && !thumbsRef.current.has(p.id) && !tried.current.has(p.id));
     if (due.length === 0) return;
+    // The cells nearest the open picture first: they are the ones on screen.
+    const at = Math.max(0, pictures.findIndex((p) => p.id === openIdRef.current));
+    const index = new Map(pictures.map((p, i) => [p.id, i]));
+    due.sort((a, b) => Math.abs((index.get(a.id) ?? 0) - at) - Math.abs((index.get(b.id) ?? 0) - at));
     let alive = true;
     void (async () => {
       // One decode at a time: a roll of big stills never holds two at once.
@@ -436,24 +457,30 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         tried.current.add(p.id);
         // The open picture draws its own, graded, from the stage.
         if (p.id === openIdRef.current) continue;
-        const blob = await pictureThumbnail(files.get(p.id)!);
-        if (!blob || thumbsRef.current.has(p.id)) continue;
-        await putRollThumb(p.id, blob);
-        setThumbs((cur) => new Map(cur).set(p.id, blob));
+        const baked = await pictureThumbnail(files.get(p.id)!);
+        if (!baked || thumbsRef.current.has(p.id)) continue;
+        keepThumb(p.id, baked.blob, baked.aspect);
       }
     })();
     return () => {
       alive = false;
     };
-  }, [files, loadedFor, idsKey]);
+  }, [files, loadedFor, idsKey, keepThumb]);
 
-  const handleSnapshot = useCallback((id: string, blob: Blob) => {
-    tried.current.add(id);
-    void putRollThumb(id, blob);
-    setThumbs((cur) => new Map(cur).set(id, blob));
+  const handleSnapshot = useCallback(
+    (id: string, blob: Blob, aspect: number) => {
+      tried.current.add(id);
+      keepThumb(id, blob, aspect);
+    },
+    [keepThumb],
+  );
+  // Each thumbnail's shape, which is its cell's (`roll-strip.ts`) — read from
+  // the store where it was kept, measured once and kept where it was not
+  // (a thumbnail stored before the aspect was kept beside it).
+  const keepAspect = useCallback((id: string, aspect: number) => {
+    void setRollThumbAspect(id, aspect);
   }, []);
-  // Each thumbnail's shape, which is its cell's (`roll-strip.ts`).
-  const thumbAspects = useThumbAspects(thumbs);
+  const thumbAspects = useThumbAspects(thumbs, storedAspects, keepAspect);
 
   // --- the shell's verb: "Develop" under a picture being looked at (D10) ---
   // `run` is called with the picture already ACTIVE in the Library — but in
@@ -1874,7 +1901,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               onProxiesOnly={setProxiesOnly}
               exports={exports}
               exportVerbs={exportVerbs}
-              onSnapshot={(blob) => handleSnapshot(open.id, blob)}
+              onSnapshot={(blob, aspect) => handleSnapshot(open.id, blob, aspect)}
               onStep={step}
               onDeliver={(action) => (selecting && selectedIds.length > 0 ? deliverSelection(action) : handleDeliver(open.id, action))}
               selecting={selecting}

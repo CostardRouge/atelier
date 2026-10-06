@@ -3,8 +3,7 @@ import { STRIP_METRICS, sheetLayout } from '../../shared/develop/roll-strip';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
-import { useElementWidth } from '../../shared/ui/use-element-width';
-import { StripCells, shownPictures, stripItems, useScrollToOpen, type StripCellsProps } from './RollBand';
+import { StripCells, shownPictures, stripItems, useScrollToOpen, useScrollView, type StripCellsProps } from './RollBand';
 import { fingerSize } from '../../shared/ui/press';
 import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 
@@ -42,12 +41,13 @@ export default function ContactSheet({
   onClose: () => void;
 }) {
   const metrics = STRIP_METRICS[cells.kind];
-  const [bodyRef, width] = useElementWidth<HTMLDivElement>();
+  const [bodyRef, view] = useScrollView<HTMLDivElement>();
+  const width = view.w;
   const { pictures, openId, hideIgnored = false, shows = ALWAYS, aspects } = cells;
   const shown = useMemo(() => shownPictures(pictures, openId, hideIgnored, shows), [pictures, openId, hideIgnored, shows]);
   const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
   const layout = useMemo(() => sheetLayout({ items, width, thumb, metrics }), [items, width, thumb, metrics]);
-  useScrollToOpen(bodyRef, openId);
+  useScrollToOpen(bodyRef, openId, layout);
   const size = fingerSize(compact, useCoarsePointer());
   const head = (
     <div className="flex-none flex flex-wrap items-center gap-x-2 gap-y-1.5 min-w-0">
@@ -93,7 +93,7 @@ export default function ContactSheet({
         {bar ?? head}
       </div>
       <div ref={bodyRef} className="relative flex-1 min-h-0 min-w-0 overflow-y-auto overflow-x-hidden overscroll-contain border-t border-line pt-1 [scrollbar-width:thin]">
-        <StripCells shown={shown} layout={layout} {...cells} />
+        <StripCells shown={shown} layout={layout} view={view} {...cells} />
       </div>
     </div>
   );

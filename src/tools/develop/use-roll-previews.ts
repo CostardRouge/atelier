@@ -100,9 +100,9 @@ export function useRollPreviews({
       for (const p of due) {
         if (!alive) return;
         tried.current.add(p.id);
-        const blob = await pictureThumbnail(realFiles.get(p.id)!, WORKING_PREVIEW_EDGE, WORKING_PREVIEW_QUALITY);
-        if (!blob) continue;
-        if (await putRollPreview(p.id, rollId, blob)) setBlobs((m) => new Map(m).set(p.id, blob));
+        const baked = await pictureThumbnail(realFiles.get(p.id)!, WORKING_PREVIEW_EDGE, WORKING_PREVIEW_QUALITY);
+        if (!baked) continue;
+        if (await putRollPreview(p.id, rollId, baked.blob)) setBlobs((m) => new Map(m).set(p.id, baked.blob));
       }
     })();
     return () => {

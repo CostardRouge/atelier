@@ -4,9 +4,9 @@
 results, «qu'on sépare peut-être les units of work … créer du cache, créer des
 tailles, des miniatures, y aller petit à petit, utiliser l'index DB s'il le
 faut … je suis très ambitieux pour que ce projet fonctionne sur mobile».
-§1 is fact, measured headless on the render core's own counters; §2 is the
-first unit, built; §3 the plan in commits; §4 what is his to decide. Sized in
-commits, never in days.*
+§1 is fact, measured headless on the render core's own counters; §2 the
+units built, one per commit, each with its counts; §3 the plan in commits;
+§4 what is his to decide. Sized in commits, never in days.*
 
 ## 1. What a slider step cost (fact, measured 2026-10-06)
 
@@ -43,7 +43,9 @@ layer's cube, raster and pass while its values stand still, the stage works
 to a pixel budget (3.7 MP on a phone), a RAW decodes in bands and tiles
 (`device-memory.md`), and the band's cells are memoised.
 
-## 2. The first unit: the kept upstream (built)
+## 2. The units built
+
+### 2.1 The kept upstream (P1)
 
 `RenderPass.key` names everything a pass draws with (`pass-key.ts`: plain
 parameters as JSON, an immutable object — a composed cube, a gain field — by
@@ -75,15 +77,51 @@ Rules it fixes:
   half-float read-back invalidate it.
 - **The histogram's slot benefits for free**: it is a graph like the stage's.
 
+### 2.2 The band's cells on demand (P2, audit PERF-03)
+
+The roll band put every cell in the DOM at open, decoded every stored
+thumbnail to measure its shape, and re-rendered every cell for each
+thumbnail that landed. Counted headless on a seeded roll of 300 pictures
+with their thumbnails stored (`li[data-picture]` cells, `createImageBitmap`
+calls, `<img src>` sets, IndexedDB `get`s), the stage at 1400 × 900 and at a
+phone's 390 × 844:
+
+| At | Cells before | Cells after | Decodes before | Decodes after | JS heap |
+| --- | --- | --- | --- | --- | --- |
+| The roll opened, desktop | 300 | **15** | 300 | **0** | 69 → **43 MB** |
+| The roll opened, phone | 300 | **8** | 300 | **0** | 43 MB |
+| → one picture | 300 | 15 | 0 | 0 | |
+| The last picture, by its route | 300 | 15, its own in view | 0 | 0 | |
+| The contact sheet (G) | 600 | **60** (76 on a phone) | 0 | 0 | |
+| Reopened | 300 | 15 | 0 | 0 | |
+| A roll whose thumbnails predate the aspect | — | 15 | 300, once | 0 from then on | |
+
+What it is (`roll-strip.ts`, `RollBand.tsx`, `roll-store.ts`,
+`roll-thumb.ts`, `use-thumb-aspects.ts`; the rules in
+`docs/memory/develop-roll.md`, «The band draws the cells near the view»):
+
+- **Cells within one box of the scroll view** on the scroll axis, and the
+  open one always (`cellsInView`, pure, specced). The scroller publishes its
+  position and its box (`useScrollView`: read once per frame, published past
+  a quarter of the box), the layout stays whole so the scrollbar keeps its
+  length. No `IntersectionObserver` after all: the layout already answers
+  every rectangle, and a filter over them is one pass with no observer to
+  attach per cell.
+- **A cell's rectangle as plain numbers**, so the memo holds while the
+  layout is rebuilt; **`<img loading="lazy">`** in the margin.
+- **The thumbnail's aspect kept beside its bytes** (`ThumbRecord.aspect`,
+  known from the canvas the bake drew on), so a reopened roll lays its band
+  out from the store and decodes nothing; a thumbnail stored before is
+  measured once at the next open and written back.
+- **The open cell scrolled to by its rectangle**, nearest edge, once per
+  open picture — never again on a later layout, which would pull the band
+  back under a hand that scrolled away.
+- **The bake order** is the open picture first, then outward.
+
 ## 3. The plan, in commits
 
-- **P1 — the kept upstream.** Built (§2).
-- **P2 — the band's cells on demand** (audit PERF-03). The roll band renders
-  every cell and fetches every stored thumbnail at once; on a phone a roll of
-  hundreds of pictures pays for all of them before the first appears. Cells
-  observed (`IntersectionObserver`), `<img loading="lazy">`, thumbnails read
-  for the cells on screen first, the memo kept while thumbnails arrive.
-  Verified by counting `getAll`/decodes per roll open in the bench.
+- **P1 — the kept upstream.** Built (§2.1).
+- **P2 — the band's cells on demand** (audit PERF-03). Built (§2.2).
 - **P3 — the stage under the hand.** While a pointer is down on a slider, a
   pinch or a wheel, render at half the stage's size and draw it up; the full
   render on rest. Lightroom's way. To be MEASURED first on his phone with P1
