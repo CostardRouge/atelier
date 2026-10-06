@@ -262,6 +262,7 @@ export const Icons = {
   filter: icon(<path d="M4 5h16l-6 8v5l-4 2v-7z" />),
   tickAll: icon(<><rect x="4" y="4" width="16" height="16" rx="3" /><path d="M8 12l3 3 5-6" /></>),
   railFilters: icon(<><rect x="3" y="4" width="18" height="16" rx="2" /><path d="M9 4v16M5.3 8h1.4M5.3 11h1.4M5.3 14h1.4" /></>),
+  refresh: icon(<path d="M19 12a7 7 0 1 1-2.05-4.95M19 4v4h-4" />),
   sheetClose: icon(<><rect x="4" y="4" width="16" height="16" rx="2" /><path d="M9 9l6 6M15 9l-6 6" /></>),
 } as const;
 

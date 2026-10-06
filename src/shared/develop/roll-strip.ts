@@ -66,11 +66,15 @@ export interface StripMetrics {
   thumbMin: number;
   thumbMax: number;
   thumbStep: number;
-  /** The contact sheet's, same shape. */
+  /**
+   * The contact sheet's, as four NAMED sizes (S · M · L · XL, the panel's
+   * glyphs) rather than a step: `sheet` is one of them, `sheetMin` and
+   * `sheetMax` the first and the last.
+   */
   sheet: number;
   sheetMin: number;
   sheetMax: number;
-  sheetStep: number;
+  sheetSizes: readonly [number, number, number, number];
   /** A column folded to its rail, and a column at rest. */
   rail: number;
   column: number;
@@ -102,9 +106,9 @@ export const STRIP_METRICS: Readonly<Record<StripKind, Readonly<StripMetrics>>> 
     thumbMax: 220,
     thumbStep: 16,
     sheet: 176,
-    sheetMin: 96,
+    sheetMin: 120,
     sheetMax: 320,
-    sheetStep: 24,
+    sheetSizes: [120, 176, 240, 320],
     rail: 30,
     column: 188,
     columnCell: 168,
@@ -124,9 +128,9 @@ export const STRIP_METRICS: Readonly<Record<StripKind, Readonly<StripMetrics>>> 
     thumbMax: 150,
     thumbStep: 10,
     sheet: 104,
-    sheetMin: 70,
+    sheetMin: 80,
     sheetMax: 180,
-    sheetStep: 14,
+    sheetSizes: [80, 104, 140, 180],
     rail: 30,
     column: 150,
     columnCell: 140,
@@ -414,9 +418,17 @@ export function sheetLayout({
 
 /** A thumbnail size one step up or down, held in its reach. */
 export function stepThumb(value: number, direction: 1 | -1, metrics: Readonly<StripMetrics>, which: 'band' | 'sheet'): number {
-  const [min, max, step] =
-    which === 'sheet' ? [metrics.sheetMin, metrics.sheetMax, metrics.sheetStep] : [metrics.thumbMin, metrics.thumbMax, metrics.thumbStep];
-  return Math.min(max, Math.max(min, value + direction * step));
+  if (which === 'sheet') return metrics.sheetSizes[Math.max(0, Math.min(3, sheetSizeIndex(value, metrics) + direction))];
+  return Math.min(metrics.thumbMax, Math.max(metrics.thumbMin, value + direction * metrics.thumbStep));
+}
+
+/** Which of the sheet's four sizes a height is — the nearest, so a height kept from before the sizes had names still reads as one. */
+export function sheetSizeIndex(value: number, metrics: Readonly<StripMetrics>): number {
+  let best = 0;
+  metrics.sheetSizes.forEach((size, i) => {
+    if (Math.abs(size - value) < Math.abs(metrics.sheetSizes[best] - value)) best = i;
+  });
+  return best;
 }
 
 /** The most a band under the picture may take: what leaves the stage its least. */
@@ -585,4 +597,24 @@ export function passesStripFilter(p: RollPicture, key: StripFilterKey, culling?:
   const cull = cullFilterOf(key);
   if (cull) return !isIgnored(p) && passesCull(culling, cull);
   return matchesDeliveryFilter(p, key as DeliveryFilter);
+}
+
+/**
+ * How many pictures each filter would show — the number the filter panel
+ * writes beside each row. The band's own rule: an ignored picture counts
+ * only while ignored pictures are shown.
+ */
+export function stripFilterCounts(
+  pictures: readonly RollPicture[],
+  cullingOf: (id: string) => Culling | null | undefined,
+  showIgnored: boolean,
+  keys: readonly StripFilterKey[] = STRIP_FILTERS.map((f) => f.key),
+): Map<StripFilterKey, number> {
+  const counts = new Map<StripFilterKey, number>(keys.map((k) => [k, 0]));
+  for (const p of pictures) {
+    if (!showIgnored && isIgnored(p)) continue;
+    const culling = cullingOf(p.id);
+    for (const k of keys) if (passesStripFilter(p, k, culling)) counts.set(k, (counts.get(k) ?? 0) + 1);
+  }
+  return counts;
 }

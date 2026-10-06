@@ -43,6 +43,8 @@ import {
   passesStripFilter,
   rowsForHeight,
   stepThumb,
+  cullFilterOf,
+  stripFilterCounts,
   stripFilterLabel,
   widthForColumns,
   type StripFilterKey,
@@ -138,7 +140,7 @@ import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
 import { useRollCulling } from './use-roll-culling';
-import { countCulling } from '../../shared/sources/winnow/culling';
+import { countCulling, cullFilterLabel } from '../../shared/sources/winnow/culling';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import BandGrip from './BandGrip';
 import ContactSheet from './ContactSheet';
@@ -189,6 +191,15 @@ const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs —
  * look and a batch landing in the same tick compose instead of the last one
  * replacing a roll the others already moved on.
  */
+/** The roll's own filters, one glyph each; Winnow's take theirs from their kind. */
+const FILTER_ICONS: Partial<Record<StripFilterKey, ReactNode>> = {
+  all: Icons.stack,
+  edited: Icons.sliders,
+  leaving: Icons.export,
+  held: Icons.held,
+  ignored: Icons.eyeOff,
+};
+
 export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
@@ -1407,16 +1418,6 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
   // A finger's size under a finger, a phone's shell or a tablet's (C5).
   const chipSize = finger;
-  /** A menu row that says whether it is the state: a dot before the one in force. */
-  const marked = (on: boolean, text: string, key?: string) => (
-    <span className="inline-flex items-center gap-3 whitespace-pre">
-      <span>
-        {on ? '· ' : '  '}
-        {text}
-      </span>
-      {key && <span className="ml-auto font-mono text-3xs text-faint">{key}</span>}
-    </span>
-  );
   const rowsNow = side || strip.folded || strip.auto ? 0 : rowsForHeight(bandSizeNow - stripMetrics.head, stripMetrics, strip.thumb);
   const COUNT = ['One', 'Two', 'Three'];
   // The band's settings as a panel of glyphed rows (his pick B of the band
@@ -1502,37 +1503,63 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       onSelect: toggleFolded,
     },
   ];
-  const filterMenu: OverflowItem[] = [
-    ...STRIP_FILTERS.filter((f) => !f.winnow || culling.reachable).map((f) => ({
+  // What each filter would show, written beside its row in the panel —
+  // counted only while the panel can be opened, never per slider tick.
+  const filterCounts = useMemo(
+    () => stripFilterCounts(roll.pictures, (id) => culling.byPicture.get(id), showIgnored),
+    [roll.pictures, culling.byPicture, showIgnored],
+  );
+  const filterRow = (f: (typeof STRIP_FILTERS)[number]) => {
+    const cull = cullFilterOf(f.key);
+    return {
       id: f.key,
-      label: marked(stripFilter === f.key, f.label),
+      icon: FILTER_ICONS[f.key] ?? (cull?.kind === 'picks' ? Icons.flag : cull?.kind === 'unrejected' ? Icons.circleCheck : Icons.star),
+      label: cull ? cullFilterLabel(cull) : f.label,
+      on: stripFilter === f.key,
+      note: String(filterCounts.get(f.key) ?? 0),
       onSelect: () => setStripFilter(f.key),
-    })),
+    };
+  };
+  const filterSections: SettingsSection[] = [
+    { kind: 'list', id: 'roll', items: STRIP_FILTERS.filter((f) => !f.winnow).map(filterRow) },
+    ...(culling.reachable
+      ? ([
+          { kind: 'rule', id: 'r-winnow' },
+          { kind: 'list', id: 'winnow', heading: 'Winnow', items: STRIP_FILTERS.filter((f) => f.winnow).map(filterRow) },
+        ] satisfies SettingsSection[])
+      : []),
+    { kind: 'rule', id: 'r-ignored' },
     {
+      kind: 'switch',
       id: 'ignored-view',
-      label: marked(false, showIgnored ? 'Ignored pictures: dimmed' : 'Ignored pictures: hidden'),
-      title: showIgnored ? 'Leave the ignored pictures out of the band' : 'Show the ignored pictures in the band, dimmed',
-      onSelect: () => setShowIgnored(!showIgnored),
+      label: 'Ignored',
+      text: showIgnored ? 'Shown, dimmed' : 'Hidden',
+      on: showIgnored,
+      title: showIgnored ? 'Leave the ignored pictures out' : 'Show the ignored pictures, dimmed',
+      onToggle: () => setShowIgnored(!showIgnored),
     },
     ...(culling.reachable
-      ? [
+      ? ([
           {
+            kind: 'action',
             id: 'refresh',
-            label: marked(false, culling.asking ? 'Asking Winnow…' : 'Ask Winnow again'),
+            icon: Icons.refresh,
+            label: culling.asking ? 'Asking Winnow…' : 'Ask Winnow again',
             title: 'Winnow’s picks, stars and labels are asked by themselves when you come back to this tab',
-            disabled: culling.asking,
-            onSelect: culling.refresh,
+            onSelect: () => {
+              if (!culling.asking) culling.refresh();
+            },
           },
-        ]
+        ] satisfies SettingsSection[])
       : []),
   ];
   // ONE filter chip, drawn in the band's header and in the sheet's.
   const filterChip = (
-    <OverflowMenu
+    <SettingsMenu
       label="What the band shows"
-      items={filterMenu}
+      sections={filterSections}
       align="start"
-      trigger={{ text: stripFilterLabel(stripFilter), size: chipSize, variant: filtering ? 'primary' : 'default' }}
+      trigger={{ text: stripFilterLabel(stripFilter), icon: Icons.filter, size: chipSize, variant: filtering ? 'primary' : 'default' }}
     />
   );
   // The band's header: where it stands in its pictures, what the roll holds,
@@ -2106,7 +2133,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 kind={stripKind}
                 selecting={selecting}
                 thumb={strip.sheet}
-                onThumb={stepThumbs}
+                onSize={(px) => patchStrip({ sheet: px })}
                 filter={filterChip}
                 bar={selecting ? <SelectionBar compact={compact} dense={bandBox.width < 800} verbs={selectionVerbs} /> : null}
                 onSelecting={() => startSelecting()}

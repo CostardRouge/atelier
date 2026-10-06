@@ -22,11 +22,13 @@ import {
   medianAspect,
   oneRow,
   passesStripFilter,
+  stripFilterCounts,
   readStripFilter,
   readStripPrefs,
   rowsForHeight,
   sheetLayout,
   stepThumb,
+  sheetSizeIndex,
   stripFilterLabel,
   widthForColumns,
   type StripItem,
@@ -151,6 +153,15 @@ describe('the column and the sheet', () => {
     expect(stepThumb(D.thumbMax, 1, D, 'band')).toBe(D.thumbMax);
     expect(stepThumb(D.sheetMin, -1, D, 'sheet')).toBe(D.sheetMin);
   });
+
+  it('steps the sheet through its four named sizes, from the nearest one', () => {
+    expect(D.sheetSizes).toContain(D.sheet);
+    expect(stepThumb(D.sheet, 1, D, 'sheet')).toBe(D.sheetSizes[2]);
+    expect(stepThumb(D.sheetMax, 1, D, 'sheet')).toBe(D.sheetMax);
+    // A height kept from before the sizes had names lands on its neighbour.
+    expect(sheetSizeIndex(150, D)).toBe(1);
+    expect(stepThumb(150, -1, D, 'sheet')).toBe(D.sheetSizes[0]);
+  });
 });
 
 describe('cellsInView', () => {
@@ -262,5 +273,19 @@ describe('the band’s filter', () => {
     expect(passesStripFilter(plain, 'cull:picks', { verdict: 'pick', star: 0, color: null })).toBe(true);
     expect(passesStripFilter(ignored, 'cull:picks', { verdict: 'pick', star: 0, color: null })).toBe(false);
     expect(passesStripFilter(plain, 'cull:unrejected')).toBe(true);
+  });
+
+  it('counts what each filter would show, ignored ones only while they are shown', () => {
+    const pick = { verdict: 'pick', star: 0, color: null } as const;
+    const all = [plain, edited, held, ignored];
+    const cullingOf = (id: string) => (id === plain.id ? pick : null);
+    const hidden = stripFilterCounts(all, cullingOf, false);
+    expect(hidden.get('all')).toBe(3);
+    expect(hidden.get('ignored')).toBe(0);
+    expect(hidden.get('edited')).toBe([plain, edited, held].filter((p) => passesStripFilter(p, 'edited')).length);
+    expect(hidden.get('cull:picks')).toBe(1);
+    const shown = stripFilterCounts(all, cullingOf, true);
+    expect(shown.get('all')).toBe(4);
+    expect(shown.get('ignored')).toBe(1);
   });
 });

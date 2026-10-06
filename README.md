@@ -1541,9 +1541,11 @@ hundreds opens on a dozen cells and decodes nothing to measure them; and
 **←/→** land on a picture already decoded — the two beside the open one are
 decoded ahead in the background, and the last few are kept for the session
 (three on a phone, eight on a computer). A
-**filter** chip shows the roll whole or only the
+**filter** chip opens a panel of glyphed rows, each with how many pictures it
+would show: the roll whole or only the
 pictures *edited*, *to export*, *held back*, *ignored* — or by your Winnow's
-culling (*picks*, *rejected*, starred), when the roll came from one. A cell
+culling (*picks*, *rejected*, starred), when the roll came from one — and the
+switch that hides the ignored ones or shows them dimmed. A cell
 is calm: a small pill reads its state (**●** edited, **↑** leaves at export,
 **–** held back, **⊘** ignored, its variant number, **▶** a clip, **!** not
 reachable), Winnow's mark sits in the other corner, the name is written under
@@ -1559,7 +1561,8 @@ verbs for the marked pictures — *Send*, *Hold*, *Ignore* / *Bring back*,
 paste settings, a variant of each, take them off the roll. *Done*, **S** or
 **Esc** leaves it. The **contact sheet** (**G**, or the ▦ button) lays the
 whole roll large over the picture — every name written, the same filter, the
-same selection and bar, the cells sized with **−** / **=** — to sort and to
+same selection and bar, the cells in four sizes from its ⋯ panel or with
+**−** / **=** — to sort and to
 act on many; it covers the picture and the band and leaves the inspector, so
 the numbers you are about to apply stay in view, and a click on a picture
 opens it and closes the sheet (on a phone it is the whole screen). **Focus**
