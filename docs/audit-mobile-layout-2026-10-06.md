@@ -106,11 +106,13 @@ Layers/Crop/Export contents in depth.
    `scrollIntoView` and green on the tree.
 2. **BUILT (2026-10-06)** **The 16px rule on every coarse pointer** (A-01) — one media query;
    checked headless with an iPad and a landscape-phone viewport.
-3. **The page bar's trailing group, and the trip overview's header**
+3. **BUILT (2026-10-06)** **The page bar's trailing group, and the trip overview's header**
    (B-02, TRIP-01): the trailing group wraps; on a phone the overview's two
    view switches fold into one ⋯ (or under the title, the PageBar rule), and
    the "days of silence" link leaves the truncated line for a chip of its
-   own. Swept at 360 and 390.
+   own. Swept at 360 and 390. Built with the ⋯ (his pick): the name whole
+   at 360, the chip "N days silent" inside the screen, the menu switching
+   both views.
 4. **The Studio clip header** (B-01) — needs a WebM clip in the sweep to see.
 5. **`overflow-clip` on the structural shells and the dvh caps** (A-06,
    A-07), each shell checked for a sticky child first.
@@ -121,7 +123,7 @@ Layers/Crop/Export contents in depth.
 
 - `playwright` as a devDependency and a browser job in CI (TEST-01 again,
   now carrying the layout sweep too).
-- On a phone, where the trip overview's two view switches go: a ⋯ menu, or
-  a second row under the title.
+- ~~On a phone, where the trip overview's two view switches go~~ — a ⋯ menu,
+  his answer (2026-10-06).
 - A real-device pass: the only test of the iOS-only half (toolbar, keyboard,
   zoom) is his iPhone. The sweep cannot see it; the guards stop the causes.

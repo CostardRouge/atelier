@@ -58,6 +58,7 @@ import Segmented from '../../shared/ui/Segmented';
 import { isShortTrip, tripBlocks, weekIndexOf, type MonthBlock } from '../../shared/roadtrip/month-grid';
 import BottomSheet from '../../shared/ui/BottomSheet';
 import IconButton from '../../shared/ui/IconButton';
+import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import LegsSheet from './LegsSheet';
@@ -915,6 +916,28 @@ export default function TripOverview({
     />
   );
 
+  // The phone's ⋯: the same two choices as the two switches, one item each.
+  const viewItem = (id: string, icon: ReactNode, text: string, title: string, current: boolean, onSelect: () => void, rule = false): OverflowItem => ({
+    id,
+    rule,
+    title,
+    onSelect,
+    label: (
+      <span className="flex items-center gap-2.5">
+        <span aria-hidden="true" className="inline-flex text-muted [&>svg]:w-4 [&>svg]:h-4">{icon}</span>
+        <span className="flex-1">{text}</span>
+        <span aria-hidden="true" className={`inline-flex text-accent-ink [&>svg]:w-4 [&>svg]:h-4 ${current ? '' : 'invisible'}`}>{Icons.check}</span>
+        {current && <span className="sr-only">(shown)</span>}
+      </span>
+    ),
+  });
+  const viewItems: OverflowItem[] = [
+    viewItem('calendar', Icons.calendar, 'Calendar', 'The trip as its months: which days were told', overview === 'calendar', () => chooseOverview('calendar')),
+    viewItem('map', Icons.map, 'Map', 'The trip as its route: each stage at its place, with its days', overview === 'map', () => chooseOverview('map')),
+    viewItem('rungs', Icons.grid, 'Days as rungs', 'Each day as its rung: nothing, drafted, published once, twice, more', view === 'rungs', () => chooseView('rungs'), true),
+    viewItem('pictures', Icons.image, 'Days as pictures', 'Each told day as the hook of its piece', view === 'pictures', () => chooseView('pictures')),
+  ];
+
   // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
   const overviewSwitch = (
     <Segmented
@@ -1030,20 +1053,11 @@ export default function TripOverview({
           trailing={
             <>
               {headerExtra}
-              {/* The told/total chip lived here; on a phone the bar is full,
-                  so the view switch takes its place and the figure moves
-                  into the line under the bar. */}
-              {overviewSwitch}
-              <Segmented
-                size="sm"
-                label="How the days are drawn"
-                value={view}
-                onChange={chooseView}
-                options={[
-                  { id: 'rungs', label: <span className="sr-only">Rungs</span>, icon: Icons.grid, title: 'Each day as its rung: nothing, drafted, published once, twice, more' },
-                  { id: 'pictures', label: <span className="sr-only">Pictures</span>, icon: Icons.image, title: 'Each told day as the hook of its piece' },
-                ]}
-              />
+              {/* The two view switches fold into ONE ⋯ on a phone: as two
+                  segmented pills they left the trip's name a few letters
+                  ("Australi…" at 360px). The view itself is on screen, so the
+                  switch need not say which one is shown. */}
+              <OverflowMenu label="How the trip is shown" items={viewItems} size="md" variant="default" />
             </>
           }
         >
@@ -1079,27 +1093,29 @@ export default function TripOverview({
             </Button>
           </div>
         ) : (
-        <p className="m-0 mt-1.5 mb-1 font-mono text-2xs text-muted truncate">
-          <span className="text-ink-soft" title="Days told, of the trip's days">
-            {coverage.toldDays}/{coverage.totalDays} told
-          </span>
-          {' · '}
-          {coverage.publishedPosts} published
-          {drafted > 0 && ` · ${drafted} drafted`}
+        // The figures may truncate; the jump to the longest silence may not —
+        // it is a VERB, and at the end of a truncated line it was cut off the
+        // screen. It is a chip of its own, pinned right.
+        <div className="flex items-center gap-2 mt-1.5 mb-1 min-w-0">
+          <p className="m-0 flex-1 min-w-0 font-mono text-2xs text-muted truncate">
+            <span className="text-ink-soft" title="Days told, of the trip's days">
+              {coverage.toldDays}/{coverage.totalDays} told
+            </span>
+            {' · '}
+            {coverage.publishedPosts} published
+            {drafted > 0 && ` · ${drafted} drafted`}
+          </p>
           {coverage.longestGap && (
-            <>
-              {' · '}
-              <button
-                type="button"
-                onClick={() => selectDate(coverage.longestGap!.start)}
-                title={`${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
-                className="p-0 border-0 bg-transparent font-mono text-2xs text-accent-ink underline underline-offset-2 decoration-accent/60 cursor-pointer"
-              >
-                {coverage.longestGap.length} day{coverage.longestGap.length === 1 ? '' : 's'} of silence at most
-              </button>
-            </>
+            <button
+              type="button"
+              onClick={() => selectDate(coverage.longestGap!.start)}
+              title={`The longest silence, ${formatIsoDate(coverage.longestGap.start)} → ${formatIsoDate(coverage.longestGap.end)} — go there`}
+              className="flex-none inline-flex items-center h-7 px-2.5 rounded-full border border-accent/40 bg-accent-wash font-mono text-2xs text-accent-ink whitespace-nowrap cursor-pointer"
+            >
+              {coverage.longestGap.length} day{coverage.longestGap.length === 1 ? '' : 's'} silent
+            </button>
           )}
-        </p>
+        </div>
         )}
         </div>
 
