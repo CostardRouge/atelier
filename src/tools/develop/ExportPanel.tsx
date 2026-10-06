@@ -2,7 +2,7 @@ import type { DeliverySummary } from '../../shared/develop/roll-export';
 import type { RollExport, RollPicture } from '../../shared/develop/roll-types';
 import ExportTargets from './ExportTargets';
 import type { RunPlan } from '../../shared/develop/run-plan';
-import { FieldRow, InspectorSection, LockSections, RangeField, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
+import { FieldRow, InspectorSection, LockSections, RangeField, Readout, SelectField, SwitchRow, TextField } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
 import { DEFAULT_WATERMARK, WATERMARK_LIMITS, resolveWatermarkText, type WatermarkPosition, type WatermarkTone } from '../../shared/develop/watermark';
 import { targetFolder } from '../../shared/develop/export-targets';
@@ -26,7 +26,6 @@ import type { ReactNode } from 'react';
 import MetadataSection from './MetadataSection';
 import type { ExifData } from '../../shared/exif/exif-parser';
 import { useDeliveryIdentity, setDeliveryIdentity } from '../../shared/develop/use-preset-book';
-import { useFullColourFrom } from '../../shared/media/browser-jpeg';
 import { openDevelopSettings } from './develop-settings-open';
 
 const HDR_STOPS: readonly { id: string; label: string }[] = [
@@ -52,13 +51,14 @@ export type { ExportVerb } from '../../shared/ui/DeliverBar';
 /**
  * Which code writes the JPEG, in one line, and the way to its settings —
  * the encoder is the device's (`DevelopSettingsSheet`), never the roll's.
+ * What it keeps of the colour is said under each JPEG target's quality,
+ * where the quality is set; the line names the engine and nothing twice.
  */
 function EncoderLine() {
-  const from = useFullColourFrom();
-  const colour = from === undefined ? '' : from === null ? ' · never full colour' : ` · full colour at ${Math.round(from * 100)} %`;
   return (
     <FieldRow label="Encoder">
-      <span className="flex-1 min-w-0 font-mono text-2xs leading-snug text-ink-soft">Browser{colour}</span>
+      <Readout>Browser</Readout>
+      <span className="flex-1" />
       <Button size="sm" variant="ghost" trailing={Icons.forward} onClick={() => openDevelopSettings('encoder')}>
         Settings
       </Button>

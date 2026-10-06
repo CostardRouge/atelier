@@ -1,16 +1,18 @@
-import { useState, type ReactNode } from 'react';
+import { useId, useState, type ReactNode } from 'react';
 import { DEVICE_CLASS_KEY, deviceClass, deviceClassFor, readDeviceFacts } from '../../shared/lib/device-class';
 import { setLensfunAllowed, useLensfunAllowed } from '../../shared/lens/lensfun-store';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
+import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
+import { chromaWords } from '../../shared/media/jpeg-chroma';
 import { autoBandsMean } from '../../shared/render/band-policy';
 import { useBandPreference } from '../../shared/render/use-band-preference';
 import { useDitherPreference } from '../../shared/render/use-dither-preference';
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
-import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
-import { chromaWords } from '../../shared/media/jpeg-chroma';
+import { InfoDotButton } from '../../shared/ui/InfoDot';
 import { localPref, useLocalPref } from '../../shared/ui/local-pref';
 import Segmented from '../../shared/ui/Segmented';
+import { useFingerSize } from '../../shared/ui/use-coarse-pointer';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
@@ -28,13 +30,18 @@ import { openedOnSection, settingsSectionPref, type SettingsSection } from './de
  * travels with a roll, a preset or a paste. It gathers what already existed —
  * some of it reachable only by hand in the console — the dither's switch, and
  * the ENCODER: what this browser's JPEG writer keeps of the colour, measured.
+ *
+ * A row reads like the inspector's: the name, its control, and under the
+ * control ONE line saying what the choice in hand does. The standing why
+ * folds behind an ⓘ beside the name, so the pane is a list of choices and
+ * never a manual.
  */
 
 const SECTIONS: readonly { id: SettingsSection; name: string; sub: string }[] = [
   { id: 'encoder', name: 'Encoder', sub: 'How a JPEG is written' },
   { id: 'rendering', name: 'Rendering', sub: 'Tones, looks, big pictures' },
   { id: 'device', name: 'Device', sub: 'Phone or computer' },
-  { id: 'privacy', name: 'Network', sub: 'What may be fetched' },
+  { id: 'network', name: 'Network', sub: 'What may be fetched' },
 ];
 
 type DeviceChoice = 'auto' | 'constrained' | 'roomy';
@@ -47,54 +54,75 @@ const devicePref = localPref<DeviceChoice>(
 /** `segmenter.ts` reads `'page'` to keep the subject model off its worker — a diagnosis switch. */
 const segmentPref = localPref<'worker' | 'page'>('atelier.segment', (raw) => (raw === 'page' ? 'page' : 'worker'), (v) => (v === 'page' ? 'page' : null));
 
-/** One setting: what it is, its control, and one line of why. */
-function Row({ label, hint, children }: { label: string; hint?: ReactNode; children: ReactNode }) {
+/** The qualities a photographer reaches for, and the one at which Chrome switches. */
+const CHROMA_QUALITIES = [0.85, 0.92, 0.99, 1];
+
+/**
+ * One setting: its name, its control, and what the choice in hand DOES.
+ * `state` is one line under the control that changes with the value and
+ * stays in the open; `info` is the standing why, behind the ⓘ beside the
+ * name — the split `FieldRow` makes under `FoldHints`, at a label width a
+ * setting's name needs.
+ */
+function Row({ label, state, info, children }: { label: string; state?: ReactNode; info?: ReactNode; children: ReactNode }) {
+  const [open, setOpen] = useState(false);
+  const id = useId();
   return (
-    <div className="grid grid-cols-[minmax(0,13rem)_minmax(0,1fr)] gap-x-5 gap-y-1.5 py-3 border-t border-line first:border-t-0 max-[820px]:grid-cols-1">
-      <span className="text-sm font-medium text-ink pt-1">{label}</span>
+    <div className="grid grid-cols-[minmax(0,12rem)_minmax(0,1fr)] items-start gap-x-5 gap-y-1.5 py-3 border-t border-line first:border-t-0 max-[820px]:grid-cols-1">
+      <span className="flex items-center gap-1.5 min-w-0 pt-1 max-[820px]:pt-0">
+        <span className="text-sm font-medium text-ink leading-tight">{label}</span>
+        {info && <InfoDotButton about={label.toLowerCase()} open={open} controls={id} onToggle={() => setOpen((o) => !o)} />}
+      </span>
       <div className="flex flex-col gap-1.5 min-w-0">
         {children}
-        {hint && <span className="font-mono text-3xs leading-relaxed text-muted">{hint}</span>}
+        {state && <span className="text-xs leading-relaxed text-muted">{state}</span>}
+        {info && open && (
+          <div id={id} className="text-xs leading-relaxed text-ink-soft [&>p]:m-0 [&>p+p]:mt-1.5">
+            {info}
+          </div>
+        )}
       </div>
     </div>
   );
 }
 
-/** One quality, and what this browser writes at it. */
+/** A value to read, not to set — the engine's name, aligned with a control's text. */
+function Fact({ children }: { children: ReactNode }) {
+  return <span className="text-sm text-ink pt-1">{children}</span>;
+}
+
+/** One quality, and what this browser writes at it: three cells of the table. */
 function ChromaAt({ quality }: { quality: number }) {
   const chroma = useBrowserChroma(quality);
   return (
-    <span className="grid grid-cols-[3.5rem_3.5rem_minmax(0,1fr)] gap-x-2 font-mono text-xs tabular-nums">
-      <span className="text-ink">{Math.round(quality * 100)} %</span>
+    <>
+      <span className="text-ink text-right">{Math.round(quality * 100)} %</span>
       <span className={chroma === '4:4:4' ? 'text-ok' : 'text-ink-soft'}>{chroma ?? '…'}</span>
       <span className="text-muted min-w-0 truncate">{chroma ? chromaWords(chroma) : 'measuring'}</span>
-    </span>
+    </>
   );
 }
 
 function Encoder() {
   const from = useFullColourFrom();
-  const qualities = [0.85, 0.92, 0.99, 1];
   return (
     <>
-      <Row
-        label="Engine"
-        hint="The JPEG writer built into this browser. Its one setting is the quality, set per target in the Export tab: a target at Max (100 %) keeps the colour of every pixel."
-      >
-        <span className="text-sm text-ink pt-1">This browser’s own</span>
+      <Row label="Engine" info={<p>The JPEG writer built into this browser. Its one setting is a target’s quality, chosen in the Export tab.</p>}>
+        <Fact>This browser’s own</Fact>
       </Row>
       <Row
         label="Colour it keeps"
-        hint={
-          from === undefined
-            ? 'Measuring, by writing a small picture at each quality and reading its header.'
-            : from === null
-              ? 'Measured here: this browser never writes full colour. A quarter of the colour is what draws blocks along a saturated edge and in a smooth sky.'
-              : `Measured here: full colour from ${Math.round(from * 100)} %. Below, a quarter of the colour, which is what draws blocks along a saturated edge and in a smooth sky.`
+        state={from === undefined ? 'Measuring…' : from === null ? 'Never full colour on this browser' : `Full colour from ${Math.round(from * 100)} %`}
+        info={
+          <p>
+            Measured here, by writing a small picture at each quality and reading its header. A JPEG may keep the colour of
+            one pixel in four (4:2:0): that is what draws blocks along a saturated edge and in a smooth sky. Full colour
+            (4:4:4) costs several times the weight.
+          </p>
         }
       >
-        <div className="flex flex-col gap-1 pt-1">
-          {qualities.map((q) => (
+        <div className="grid grid-cols-[3rem_3.25rem_minmax(0,1fr)] gap-x-3 gap-y-0.5 pt-1 font-mono text-xs tabular-nums">
+          {CHROMA_QUALITIES.map((q) => (
             <ChromaAt key={q} quality={q} />
           ))}
         </div>
@@ -104,23 +132,33 @@ function Encoder() {
 }
 
 function Rendering() {
+  const size = useFingerSize();
   const dither = useDitherPreference();
   const { interpolation, setInterpolation } = useLutInterpolation();
   const bands = useBandPreference();
   const [pixelView, setPixelView] = usePixelView();
+  const autoBands = autoBandsMean(deviceClass()) === 'bands';
+  const banded = bands.preference === 'bands' || (bands.preference === 'auto' && autoBands);
   return (
     <>
       <Row
         label="Dither the last rounding"
-        hint={
+        state={
           dither.preference === 'auto'
-            ? 'Where more than 8 bits reach the screen or the file (a RAW, or several passes), a noise under half a code breaks the steps of a smooth sky. It never moves an exact value.'
-            : 'Off: the last rounding is plain, as before 5 October. Smooth skies from a RAW can show steps.'
+            ? 'On where more than 8 bits reach the file — a RAW, a layer, a warp, detail'
+            : 'Off: a plain rounding, and a pushed sky from a RAW can show its steps'
+        }
+        info={
+          <p>
+            A noise under half a code, the same on the three channels and drawn per 2 × 2 pixels so a JPEG keeps it,
+            turns each step of a smooth gradient back into the gradient it was. It never moves an exact value, and an
+            8-bit picture with no more than its develop and look is left exactly as it was.
+          </p>
         }
       >
         <Segmented
           className="self-start max-w-full"
-          size="sm"
+          size={size}
           label="Dither the last rounding"
           value={dither.preference}
           onChange={dither.setPreference}
@@ -132,15 +170,17 @@ function Rendering() {
       </Row>
       <Row
         label="Look interpolation"
-        hint={
-          interpolation === 'tetrahedral'
-            ? 'Reads the 4 lattice corners that matter, so greys stay grey: what Resolve uses.'
-            : 'Averages all 8 corners: it can tint greys. Look at skies and gradients.'
+        state={interpolation === 'tetrahedral' ? 'Greys stay grey' : 'Can tint greys — look at skies and gradients'}
+        info={
+          <p>
+            How a look’s lattice is read between its points: the four corners that matter (tetrahedral, what Resolve
+            uses) or all eight averaged (trilinear).
+          </p>
         }
       >
         <Segmented
           className="self-start max-w-full"
-          size="sm"
+          size={size}
           label="Look interpolation"
           value={interpolation}
           onChange={setInterpolation}
@@ -152,25 +192,42 @@ function Rendering() {
       </Row>
       <Row
         label="Big pictures"
-        hint="Past 12 megapixels a picture can be drawn in bands, to spare a phone's GPU memory. The result is the same; a computer has no need of it."
+        state={
+          banded
+            ? 'Past 12 megapixels, drawn a band at a time: a few hundred MB of GPU memory, the same pixels'
+            : 'Drawn whole: two copies on the GPU, three quarters of a gigabyte at 48 megapixels'
+        }
+        info={
+          <p>
+            Past 12 megapixels a picture can be drawn in bands to spare a phone’s GPU memory; the result is the same. A
+            computer has the memory, and one Mac drew the loupe striped in bands, so it draws whole unless asked.
+          </p>
+        }
       >
         <Segmented
           className="self-start max-w-full"
-          size="sm"
+          size={size}
           label="Big pictures"
           value={bands.preference}
           onChange={bands.setPreference}
           options={[
-            { id: 'auto', label: `Auto · ${autoBandsMean(deviceClass()) === 'bands' ? 'bands' : 'whole'}` },
+            { id: 'auto', label: `Auto · ${autoBands ? 'bands' : 'whole'}` },
             { id: 'whole', label: 'Whole' },
             { id: 'bands', label: 'In bands' },
           ]}
         />
       </Row>
-      <Row label="Past 1:1" hint="How a magnified picture is drawn: smooth, or its pixels as pixels to judge noise and edges.">
+      <Row
+        label="Past 1:1"
+        state={
+          pixelView === 'smooth'
+            ? 'Smoothed: the gradients between pixels are the browser’s, not the picture’s'
+            : 'Each pixel a square: to judge noise, an edge, a dust speck'
+        }
+      >
         <Segmented
           className="self-start max-w-full"
-          size="sm"
+          size={size}
           label="Past 1:1"
           value={pixelView}
           onChange={setPixelView}
@@ -185,32 +242,30 @@ function Rendering() {
 }
 
 function Device() {
+  const size = useFingerSize();
   const [choice, setChoice] = useLocalPref(devicePref, 'auto');
   const [segment, setSegment] = useLocalPref(segmentPref, 'worker');
   // The class is read once per page (`device-class.ts`): a change is said, and applied by a reload.
   const [loaded] = useState(choice);
+  const pending = choice !== loaded;
   const detected = deviceClassFor(readDeviceFacts());
   const word = (c: 'constrained' | 'roomy') => (c === 'constrained' ? 'phone' : 'computer');
   return (
     <>
       <Row
         label="Device class"
-        hint={
-          <>
-            Decides the memory budgets: a phone-class device decodes a RAW to 2560 px on the stage and 4096 px in an
-            export, and lets the decoder go after 8 s. This one is detected as a {word(detected)}.
-            {choice !== loaded && (
-              <>
-                {' '}
-                <span className="text-accent-ink">Applies when the page reloads.</span>
-              </>
-            )}
-          </>
+        state={pending ? <span className="text-accent-ink">Applies when the page reloads.</span> : `Detected as a ${word(detected)}`}
+        info={
+          <p>
+            Decides the memory budgets. A phone-class device decodes a RAW to 2560 px on the stage and 4096 px in an
+            export, holds fewer fetched files, and lets the decoder go after 8 s; a computer-class one works at the
+            file’s own size.
+          </p>
         }
       >
         <div className="flex flex-wrap items-center gap-2">
           <Segmented
-            size="sm"
+            size={size}
             label="Device class"
             value={choice}
             onChange={setChoice}
@@ -220,17 +275,25 @@ function Device() {
               { id: 'roomy', label: 'Computer' },
             ]}
           />
-          {choice !== loaded && (
-            <Button size="sm" icon={Icons.reset} onClick={() => window.location.reload()}>
+          {pending && (
+            <Button size={size} icon={Icons.reset} onClick={() => window.location.reload()}>
               Reload
             </Button>
           )}
         </div>
       </Row>
-      <Row label="Subject model" hint="Off only to diagnose: the model then runs on the page and the picture stalls while it thinks. Applies the next time the model loads.">
+      <Row
+        label="Subject model"
+        state={
+          segment === 'page'
+            ? 'On the page: the picture stalls while it thinks — for a diagnosis only'
+            : 'In a worker: the picture stays live while it thinks'
+        }
+        info={<p>Where the segmentation model runs when a Subject mask asks it. A change applies the next time the model loads.</p>}
+      >
         <Segmented
           className="self-start max-w-full"
-          size="sm"
+          size={size}
           label="Subject model"
           value={segment}
           onChange={setSegment}
@@ -245,11 +308,27 @@ function Device() {
 }
 
 function Network() {
+  const size = useFingerSize();
   const lensfun = useLensfunAllowed();
   return (
-    <Row label="Lens profiles" hint="Fetches Lensfun's file for a lens's maker the first time a lens is met; only the answer is kept on this device. Off: no request, the manual lens sliders stay.">
+    <Row
+      label="Lens profiles"
+      state={
+        lensfun
+          ? 'Lensfun’s file for a maker is fetched the first time a lens is met; only the answer is kept on this device'
+          : 'No request leaves this device; the manual lens sliders stay'
+      }
+      info={
+        <p>
+          A measured profile corrects a lens’s distortion, colour fringing and vignetting — by itself on a RAW, on
+          request over a camera render. The database never ships: a profile is kept here, keyed by the body and the
+          lens.
+        </p>
+      }
+    >
       <Segmented
-        size="sm"
+        className="self-start max-w-full"
+        size={size}
         label="Lens profiles"
         value={lensfun ? 'on' : 'off'}
         onChange={(v) => setLensfunAllowed(v === 'on')}
@@ -262,7 +341,7 @@ function Network() {
   );
 }
 
-const PANES: Record<SettingsSection, () => ReactNode> = { encoder: Encoder, rendering: Rendering, device: Device, privacy: Network };
+const PANES: Record<SettingsSection, () => ReactNode> = { encoder: Encoder, rendering: Rendering, device: Device, network: Network };
 
 export default function DevelopSettingsSheet({ onClose }: { onClose: () => void }) {
   const compact = useIsCompact();
@@ -270,7 +349,9 @@ export default function DevelopSettingsSheet({ onClose }: { onClose: () => void 
   // On a phone: one pane at a time, the list first (the suite's drill-down
   // rule) — unless the sheet was opened ON a section, which it then shows.
   const [drilled, setDrilled] = useState(openedOnSection);
-  useDialogKeys({ onCancel: onClose });
+  // Every row writes at once, so the sheet's primary action IS closing it:
+  // Enter says "done" like Escape does, the Trip settings' rule.
+  useDialogKeys({ onCancel: onClose, onConfirm: onClose });
   const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
   const Pane = PANES[current.id];
   const showList = !compact || !drilled;
@@ -295,7 +376,7 @@ export default function DevelopSettingsSheet({ onClose }: { onClose: () => void 
           )}
           <h2 className="m-0 font-serif text-lg min-w-0 truncate">{compact && drilled ? current.name : 'Develop settings'}</h2>
           <span className="flex-1" />
-          {!compact && <span className="font-mono text-3xs text-muted">On this device only</span>}
+          {!compact && <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted">On this device only</span>}
           <button
             type="button"
             onClick={onClose}
@@ -307,7 +388,7 @@ export default function DevelopSettingsSheet({ onClose }: { onClose: () => void 
         </div>
         <div className="flex-1 min-h-0 flex">
           {showList && (
-            <nav aria-label="Sections" className={`flex-none flex flex-col gap-0.5 p-2 overflow-y-auto bg-paper-2 ${compact ? 'flex-1' : 'w-56 border-r border-line'}`}>
+            <nav aria-label="Sections" className={`flex flex-col gap-0.5 p-2 overflow-y-auto bg-paper-2 ${compact ? 'flex-1' : 'flex-none w-56 border-r border-line'}`}>
               {SECTIONS.map((s) => {
                 const on = !compact && s.id === current.id;
                 return (
@@ -323,13 +404,13 @@ export default function DevelopSettingsSheet({ onClose }: { onClose: () => void 
                   >
                     <span className="flex-1 min-w-0 flex flex-col">
                       <span className="text-sm font-medium text-ink">{s.name}</span>
-                      <span className="font-mono text-3xs text-muted">{s.sub}</span>
+                      <span className="text-xs text-muted">{s.sub}</span>
                     </span>
                     {compact && <span className="inline-flex text-muted">{Icons.forward}</span>}
                   </button>
                 );
               })}
-              {compact && <p className="m-0 mt-3 px-3 font-mono text-3xs leading-relaxed text-muted">Kept on this device. Never on a roll, a preset or a paste.</p>}
+              {compact && <p className="m-0 mt-3 px-3 text-xs leading-relaxed text-muted">Kept on this device. Never on a roll, a preset or a paste.</p>}
             </nav>
           )}
           {showPane && (

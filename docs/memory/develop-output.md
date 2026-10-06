@@ -152,6 +152,17 @@ The Export tab's *Encoder* line and the settings sheet's *Encoder* section
 read the same probe. **How to apply**: a claim about what an encoder writes
 is measured on the browser in hand; MozJPEG (next) will be an engine beside
 this one, not a replacement — its section rows go in `DevelopSettingsSheet`.
+**Rev. 2026-10-06 (the polish pass)**: the fact is said ONCE in the tab — the
+quality row's line says the state at THIS quality and where full colour starts
+(`4:2:0 · a quarter of the colour — full from 100 %`; at 100 `4:4:4 · full
+colour — several times the weight of 92 %`; `never full on this browser` where
+it is), the *Encoder* line names the engine alone. Every target reads *Into ·
+Size · Format · Quality · Sharpen · Watermark* through `FieldRow`: the first's
+*Into* is a muted `Readout` («the folder you choose»), the others' the
+sub-folder field, a `/` and a ghost trash; a clash is the row's hint in
+danger. A target is ADDED from an `OverflowMenu` of the presets (*Add a
+target*, a ghost verb with a chevron) — the `<select>` whose value was always
+«Add a target…» was a control that lies (`frontend.md`).
 
 ## A reduced target is cut from the FLOAT picture, rounded once (2026-10-06)
 

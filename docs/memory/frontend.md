@@ -776,3 +776,11 @@ it would fight a tool's own first focus.
 
 **A browser preference has ONE value for every reader (2026-10-06).** `shared/ui/local-pref.ts` holds it in the module and hands it out through `useSyncExternalStore`; `useLocalFlag`, `usePixelView` and `useLutInterpolation` sit on it. Each used to read `localStorage` into its own `useState`, which held while every choice had one control beside its one reader — Develop's settings sheet changes them from elsewhere, and the picture behind it kept the old value until it remounted. **How to apply**: never read a preference into a component's own state; declare a `localPref` and `useLocalPref` it.
 
+## 2026-10-06 — UI copy says what a thing does NOW, never when it changed; a settings row is name · control · one state line · ⓘ
+
+**Rule, from a hint that shipped** (Develop's settings, *Dither* off: «as before 5 October»): a label, a hint or a state line never carries a date, a version or a session fact — the reader has no calendar of the code, and `git log` and this memory carry the history. A sentence that would need one is a sentence about the past; say what the choice DOES instead («Off: a plain rounding, and a pushed sky from a RAW can show its steps»).
+
+**A settings sheet's row** (`DevelopSettingsSheet.tsx`) follows the inspector's split (`FieldRow` under `FoldHints`) at the width a setting's name needs: the name with an ⓘ (`InfoDotButton`) beside it, the control, ONE line under the control that changes with the value (`text-xs text-muted`), the standing why under that only while the dot is open. The first cut stacked a mono `text-3xs` paragraph (9 px) under every control: a window that makes him READ is a defect, and at that size one that he could not. `text-3xs` mono is for a tracking legend or a tag, never for prose.
+
+**A `<select>` that always shows a placeholder is a control that lies**: Develop's *Also write — Add a target…* read as a value field that never held one. "Add one of these" is a VERB with a menu — `OverflowMenu`'s worded trigger (`+ Add a target ▾`, `align: 'start'`), the same shape as the roll bar's *Add*.
+
