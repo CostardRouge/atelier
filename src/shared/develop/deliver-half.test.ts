@@ -1,7 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_FRAMING } from '../media/framing';
 import { toHalf, type HalfImage } from '../render/half-image';
-import { codes16FromBytes, compositeBytesOver, halfToCode16, resampleHalfInto, snapRect } from './deliver-half';
+import { bytesFromCodes16, codes16FromBytes, compositeBytesOver, halfToCode16, resampleHalfInto, snapRect } from './deliver-half';
 
 function half(width: number, height: number, at: (x: number, y: number) => [number, number, number]): HalfImage {
   const data = new Uint16Array(width * height * 3);
@@ -96,5 +96,38 @@ describe('codes16FromBytes and compositeBytesOver', () => {
     compositeBytesOver(codes, 2, 1, over);
     expect(codes[0]).toBe(65535);
     expect(codes[3]).toBe(Math.round(2570 * (1 - 128 / 255) + 65535 * (128 / 255)));
+  });
+});
+
+describe('bytesFromCodes16', () => {
+  const flat = (w: number, h: number, code: number) => new Uint16Array(w * h * 3).fill(code);
+
+  it('rounds once to the nearest 8-bit code, opaque', () => {
+    const out = bytesFromCodes16(new Uint16Array([0, 257 * 100 + 100, 65535]), 1, 1, false);
+    expect([...out]).toEqual([0, 100, 255, 255]);
+  });
+
+  it('keeps an exact code exact under the dither', () => {
+    const out = bytesFromCodes16(flat(32, 32, 257 * 77), 32, 32, true);
+    for (let i = 0; i < 32 * 32; i += 1) expect(out[i * 4]).toBe(77);
+  });
+
+  it('keeps a fraction of a code on AVERAGE under the dither, where plain rounding drops it', () => {
+    // 100.3 codes, everywhere: rounded it is 100, dithered it averages back to 100.3.
+    const code = Math.round((100.3 / 255) * 65535);
+    const w = 64;
+    const plain = bytesFromCodes16(flat(w, w, code), w, w, false);
+    const dithered = bytesFromCodes16(flat(w, w, code), w, w, true);
+    const mean = (b: Uint8ClampedArray) => {
+      let sum = 0;
+      for (let i = 0; i < w * w; i += 1) sum += b[i * 4];
+      return sum / (w * w);
+    };
+    expect(mean(plain)).toBe(100);
+    expect(mean(dithered)).toBeGreaterThan(100.2);
+    expect(mean(dithered)).toBeLessThan(100.4);
+    // One value for the three channels, and the same for a 2 x 2 block.
+    expect(dithered[0]).toBe(dithered[1]);
+    expect(dithered[0]).toBe(dithered[4]);
   });
 });

@@ -41,14 +41,14 @@ import { isDefaultDetail, type DetailSettings } from '../render/detail';
 import { detailPasses } from '../render/detail-pass';
 import type { Patch } from '../render/repair';
 import { makeRepairPass } from '../render/repair-pass';
-import type { RenderPass } from '../render/graph';
+import { getDitherPreference, type RenderPass } from '../render/graph';
 import { maxRenderSize } from '../render/graph-grader';
 import { pictureAspectRatio } from './crop-aspect';
 import { drawDelivered } from './border-paint';
 import type { RollBorder } from './border-layout';
 import { deliveredLayout, type PictureSize } from './roll-export';
 import { decodeEdgeFor, longEdgeFor, type ExportFormat, type ExportTarget } from './export-targets';
-import { codes16FromBytes, compositeBytesOver, resampleHalfInto, snapRect } from './deliver-half';
+import { bytesFromCodes16, codes16FromBytes, compositeBytesOver, resampleHalfInto, snapRect } from './deliver-half';
 import { encodePng16 } from '../media/png-write';
 import { toHalf, type HalfImage } from '../render/half-image';
 import type { ExportExif } from '../exif/stamp-exif';
@@ -476,9 +476,29 @@ function copyOf(image: CanvasImageSource): HTMLCanvasElement {
   return canvas;
 }
 
+/**
+ * Whether a JPEG target is cut from the FLOAT picture (2026-10-06): one with a
+ * size — a reduced copy, Web or Feed — on a device that holds the float
+ * picture whole, and outside an HDR delivery, whose gain map is measured
+ * against the 8-bit base drawn the old way. Its resize then happens before
+ * the one rounding to 8 bits, dithered like the GPU's, instead of after it.
+ */
+function cutsFromFloat(target: DeliverTarget, opts: Pick<RollRenderOptions, 'hdr'>): boolean {
+  return (target.format ?? 'jpeg') === 'jpeg' && target.size !== null && !opts.hdr && deviceClass() !== 'constrained';
+}
+
+/**
+ * The JPEG quality under which a cut from the float picture rounds PLAINLY:
+ * measured on the gate's ramp, a dither at 0.85 does worse than none once the
+ * JPEG has quantised it (0.69 code of error against 0.44, `render-core.md`) —
+ * and 0.85 is the Web preset's. At 0.9 and up it does better.
+ */
+const DITHER_MIN_QUALITY = 0.9;
+
 /** Whether any target wants the picture in 16 bits — and this device can hold one whole. */
 function wantsHalf(opts: RollRenderOptions): boolean {
-  return opts.targets.some((t) => t.format === 'png16') && deviceClass() !== 'constrained';
+  if (deviceClass() === 'constrained') return false;
+  return opts.targets.some((t) => t.format === 'png16' || cutsFromFloat(t, opts));
 }
 
 /** An 8-bit picture as half-floats — a 16-bit file of a picture nothing graded holds the file's 8 bits, widened. */
@@ -517,7 +537,7 @@ async function deliver(
     outputs.push(
       target.format === 'png16'
         ? await deliverPng16(half, graded, source, gradedAt, opts, target)
-        : await deliverOne(graded, source, gradedAt, opts, target, darker),
+        : await deliverOne(graded, source, gradedAt, opts, target, darker, half),
     );
   }
   const first = outputs[0];
@@ -531,6 +551,7 @@ async function deliverOne(
   opts: RollRenderOptions,
   target: DeliverTarget,
   darker: HTMLCanvasElement | null,
+  half: HalfImage | null = null,
 ): Promise<RollOutput> {
   const ratio = pictureAspectRatio(opts.aspect, source.width, source.height);
   const framing = opts.framing ?? DEFAULT_FRAMING;
@@ -541,10 +562,28 @@ async function deliverOne(
   const canvas = document.createElement('canvas');
   canvas.width = out.w;
   canvas.height = out.h;
-  const ctx = canvas.getContext('2d', target.sharpen === 'off' ? undefined : { willReadFrequently: true });
+  // A reduced copy is cut from the float picture: read back in this case.
+  const fromFloat = Boolean(half) && cap !== null && cutsFromFloat(target, opts);
+  const ctx = canvas.getContext('2d', target.sharpen === 'off' && !fromFloat ? undefined : { willReadFrequently: true });
   if (!ctx) throw new Error('Could not create a 2D canvas for export.');
   ctx.imageSmoothingQuality = 'high';
-  drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  if (fromFloat && half) {
+    // The border alone by the one painter, the picture resampled into the
+    // crop's rectangle in float (`deliver-half.ts`, the 16-bit PNG's own cut),
+    // then rounded to 8 bits ONCE, at this size — with the GPU's dither where
+    // the JPEG keeps it.
+    const blank = document.createElement('canvas');
+    blank.width = 1;
+    blank.height = 1;
+    drawDelivered(ctx, opts.border?.fill === 'blur' ? graded : blank, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+    const codes = codes16FromBytes(ctx.getImageData(0, 0, out.w, out.h).data, out.w, out.h);
+    resampleHalfInto(codes, out.w, snapRect(layout, out.w, out.h), half, framing);
+    const dither = getDitherPreference() !== 'off' && target.quality >= DITHER_MIN_QUALITY;
+    const bytes = bytesFromCodes16(codes, out.w, out.h, dither);
+    ctx.putImageData(new ImageData(bytes, out.w, out.h), 0, 0);
+  } else {
+    drawDelivered(ctx, graded, gradedAt.width, gradedAt.height, framing, layout, opts.border);
+  }
   // Sharpened for the SCREEN after the resize — the resize is what softened it.
   sharpenCanvas(ctx, out.w, out.h, OUTPUT_SHARPEN_AMOUNT[target.sharpen]);
   // The mark AFTER the sharpening — it is not detail to bring back.

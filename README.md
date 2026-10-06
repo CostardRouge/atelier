@@ -1865,8 +1865,11 @@ each step back into the gradient it was (measured on a ramp of 8 codes: half
 a code of error at every step undithered, a fifth of that dithered, still a
 fifth after a JPEG at 0.92). An 8-bit picture with no more than its global
 develop and look is left exactly as it was — its steps are the file's own —,
-a full-size file keeps the dither, and a smaller target (Web, Feed) is
-rounded again by its resize. *Dither the last rounding* in Develop's settings
+a full-size file keeps the dither, and on a computer a smaller target (Web,
+Feed) is resized from the picture's floating-point render and rounded **once**,
+at its own size — dithered at 90 % and above, rounded plainly below, where a
+JPEG measurably erases the dither and leaves only its noise (a phone, short of
+memory for the float picture, still resizes the 8-bit render). *Dither the last rounding* in Develop's settings
 turns it **Off** on this device: the rounding is then plain, as it was before. **A graphics card that cannot compute in
 half-floats** (rare, on an old or a software GPU) falls back to 8 bits between
 steps rather than failing, and says so: the chip above the photograph ends in

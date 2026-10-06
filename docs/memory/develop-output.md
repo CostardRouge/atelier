@@ -152,3 +152,26 @@ The Export tab's *Encoder* line and the settings sheet's *Encoder* section
 read the same probe. **How to apply**: a claim about what an encoder writes
 is measured on the browser in hand; MozJPEG (next) will be an engine beside
 this one, not a replacement — its section rows go in `DevelopSettingsSheet`.
+
+## A reduced target is cut from the FLOAT picture, rounded once (2026-10-06)
+
+**Decision** (step 3 of his settings plan, «une seule arrondi au lieu de
+deux»): a JPEG target with a size, on a device that is not constrained and
+outside an HDR delivery (`cutsFromFloat` in `roll-render.ts`), is resampled
+from `renderHalf`'s float picture into the crop's rectangle by the 16-bit
+PNG's own cut (`resampleHalfInto`, border painted first by `drawDelivered`
+with a blank picture, a blur border from the 8-bit render), then brought to
+8 bits ONCE by `bytesFromCodes16` — the GPU's dither pattern on the CPU, at
+quality ≥ 0.9 only (`DITHER_MIN_QUALITY`: under it a JPEG erases the dither,
+measured). Sharpening, watermark and stamp follow on the canvas as before.
+**Measured headless** on 24 flat grey bands lifted by +0.13 EV between two
+codes (2400 → 600 px): the reduced file's band means sit within 0.04 code of
+the full-size dithered file (RMS 0.013) against 0.24 (RMS 0.13) the old way;
+with the dither off it is plain rounding, as asked. A crop at 4:5, zoom 1.4,
+7° rotation, a flip and a white border land in the same place on both paths
+(mean 0.41 code apart; the 0.26 % above 24 codes are hard edges, the box
+supersample against Chrome's canvas filter). **Cost**: one more pass of the
+chain read back whole (8 B/px) — on SwiftShader 2.9 → 6.9 s for 3.8 MP, much
+less on a real GPU; the reason a phone keeps the old path. **How to apply**:
+a cut that changes size goes through float before its rounding; a new
+consumer of `deliverOne` passes the half or accepts the second rounding.
