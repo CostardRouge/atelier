@@ -93,6 +93,15 @@ Rules a later phase must keep:
   id that no longer resolves answers null and the caller falls back.
 - **`pixels` is null until something MEASURED it.** The module never derives a
   render's size from a sensor's, because no rule predicts it.
+- **A picture OPENS on the file in hand, not on the smallest render in hand**
+  (2026-10-06). `openingRendition` is: the proxy, else the row marked `open`
+  (the file `CaptureInput.open` names — what the stage draws when nothing was
+  chosen), else the smallest row in hand. By size alone a local
+  `DJI_0202.JPG` beside its `.DNG` opened on the DNG's 960 × 540 render: the
+  menu marked a row the stage was not showing, and picking that render stored
+  "where it opens" (null), which put the JPG back — the render could not be
+  chosen at all. **How to apply**: a row's place in the sort is about the
+  list, never about what is on screen; ask `open`.
 - **`companionOf` refuses a `live_photo`**, on the kind AND on the media type,
   so a Live Photo's `.mov` can never be offered as the sensor's data. It costs
   no request: the primary's row already carries the companion's id, name and

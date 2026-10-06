@@ -118,6 +118,11 @@ export interface Rendition {
   assetId: string | null;
   /** Why it cannot be used, in the words a person reads, or null. */
   blocked: string | null;
+  /**
+   * A row of the file the tool is HOLDING (`CaptureInput.open`) — what the
+   * stage draws when nothing was chosen. Absent on every other row.
+   */
+  open?: true;
 }
 
 const ROLE_ORDER: Record<RenditionRole, number> = { proxy: 0, delivered: 1, sensor: 2 };
@@ -242,7 +247,10 @@ export function renditionsOf(input: CaptureInput): Rendition[] {
       blocked: null,
     });
   } else {
-    rows.push(...rowsFor(input.open, canDraw));
+    // The open file's own picture is marked: it is what the stage draws when
+    // nothing was chosen, so it is where the picture OPENS — not a smaller
+    // sibling's render that happens to be in hand too.
+    rows.push(...rowsFor(input.open, canDraw).map((row) => (row.role === 'sensor' ? row : { ...row, open: true as const })));
   }
   const seen = new Set(rows.map((r) => r.id));
   for (const other of input.others ?? []) {
@@ -271,17 +279,22 @@ export function renditionById(rows: readonly Rendition[], id: string | null | un
 }
 
 /**
- * Where a picture OPENS: the cheapest rendition that can actually be drawn —
- * the proxy when there is one, else the smallest delivered row in hand.
+ * Where a picture OPENS: the proxy when there is one, else the file in hand
+ * (the row the stage draws when nothing was chosen), else the smallest
+ * delivered row in hand.
  *
  * The maintainer's own rule (`docs/capture-renditions.md` §9): *"le proxy,
  * c'est vraiment pour la performance"* — where a picture opens, and never
- * where it is trapped.
+ * where it is trapped. The file in hand comes before a sibling's smaller
+ * render (2026-10-06): a local `DJI_0202.JPG` beside its `.DNG` opened, by
+ * size alone, on the DNG's 960 × 540 render — the menu marked a row the
+ * stage was not showing, and picking that render stored "where it opens",
+ * which put the JPG back.
  */
 export function openingRendition(rows: readonly Rendition[]): Rendition | null {
   const usable = rows.filter((r) => !r.blocked && r.role !== 'sensor');
   const here = usable.filter((r) => r.here);
-  return here[0] ?? usable[0] ?? null;
+  return here.find((r) => r.role === 'proxy') ?? here.find((r) => r.open) ?? here[0] ?? usable[0] ?? null;
 }
 
 /** `7008 × 4672 · 2.7 MB`, or as much of it as was measured. */

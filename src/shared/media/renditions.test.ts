@@ -192,6 +192,16 @@ describe('openingRendition', () => {
     expect(openingRendition(rows)?.name).toBe('A.ARW');
   });
 
+  it('opens on the file in hand before a sibling’s smaller render', () => {
+    const rows = renditionsOf({
+      open: { name: 'DJI_0202.JPG', here: true, pixels: { width: 4032, height: 2268 } },
+      others: [{ name: 'DJI_0202.DNG', here: true, render: { width: 960, height: 540 }, sensor: { width: 8064, height: 4536 } }],
+    });
+    // The render sorts first by size; the picture still opens on the JPG it holds.
+    expect(rows.find((r) => r.role === 'delivered')?.name).toBe('DJI_0202.DNG');
+    expect(openingRendition(rows)?.name).toBe('DJI_0202.JPG');
+  });
+
   it('never opens on the sensor, and never on a blocked row', () => {
     const rows = renditionsOf({ open: { name: 'SCAN_1.TIF', here: true }, canDraw: chrome });
     expect(openingRendition(rows)).toBeNull();
