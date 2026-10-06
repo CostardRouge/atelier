@@ -33,6 +33,7 @@ import { useDevelopDraft, useTold } from './use-develop-draft';
 import { useDevelopPicture } from './use-develop-picture';
 import { usePicturePixels } from './use-picture-pixels';
 import { pictureFidelity } from './picture-fidelity';
+import { renderPrecisionHere } from '../render/graph-grader';
 
 export interface DevelopSheetProps {
   /** The picture, or null when the slide has none — the controls still show. */
@@ -119,7 +120,7 @@ export default function DevelopSheet({
   // but neither does: the sheet is where the file is, so this is where the
   // measurement belongs.
   const pixels = usePicturePixels(file);
-  const own = pictureFidelity(file, draft.draft.base, pixels);
+  const own = pictureFidelity(file, draft.draft.base, pixels, renderPrecisionHere());
   const chip = fidelity ?? own.chip;
   const caption = note ?? own.note;
   const [told, tell] = useTold();

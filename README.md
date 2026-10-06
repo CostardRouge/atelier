@@ -288,6 +288,57 @@ Toggle it in the Grade tab and watch a sky or a gradient — that is where it
 shows. It is used by both the bake and the shader, so the preview and the
 export never disagree.
 
+**Nothing burns that a slider did not send past the picture's own top.** The
+tone sliders — exposure, contrast, highlights, shadows, whites, blacks — used
+to clip: contrast +100 made everything above 80 % white, exposure +1 burned
+half the picture, and *highlights −100* darkened a sky's three-quarter tones
+while leaving its brightest tenth where it was, which read as a burned hole
+ringed by the recovery. Since 2026-10-05 the curve works on a luminance scale
+that **continues above white** — a logarithm of the stops a RAW's sensor kept
+past the displayed white — and ends in a **shoulder**: wherever the sliders
+push the displayed white past white, the top of the range is compressed into
+it by a smooth cubic that reaches white at zero slope, so a near-white keeps
+its order and its detail instead of flattening; a **toe** does the same at
+black for a contrast or a blacks slider that used to crush. *Highlights* now
+reaches white itself, and on a RAW it is **recovery**: −100 brings the whole
+headroom under white with its detail, −50 brings one stop of two. The rolloff
+reaches two stops; what is pushed further is a burn, and the clipping view
+(**J**) says so. Where a channel still cannot be shown, the pixel keeps its
+**hue** whatever happens — a per-channel clip turned a warm highlight yellow,
+then white — and trades between its colour and its brightness: a saturated
+colour just past white stays its colour and gives up a little brightness, a
+colour far past white or close to grey goes to white, and a ramp of one colour
+through the clip never darkens on its way there. A picture whose sliders push
+nothing past white is bit-identical to before; one with highlights set will
+render a touch differently at its top, on purpose.
+
+**A slider step redraws only what it moved.** The stage's render is a chain
+of passes — the camera's shading, the repairs, the denoise and defringe, the
+develop and the look, the lens and the perspective, the layers, the sharpen,
+the vignette — and until 2026-10-06 every step of every slider drew all of it
+again, on the stage and on the histogram's small copy. The chain now keeps the
+output of the last pass that did not change between two renders and resumes
+from there: a drag of the exposure draws the develop and what follows, never
+the denoise before it; a sharpen drag draws the sharpen and the vignette; a
+blink of a mask draws itself alone. The picture is the same to the bit as a
+whole render — the gate holds it so — and the one texture it costs is kept
+only for an interactive stage, never for an export or a thumbnail, and never
+past a phone's stage size.
+
+**The develop is not in the cube.** A correction's white balance, exposure,
+tone curve, luma and channel curves, saturation and vibrance — everything up to
+the colour mixer — runs **per pixel**, before the lattice, in the shader and in
+every CPU bake alike. It was baked into the cube until 2026-10-05, and
+measured: on a RAW with its shadows lifted (+1.5 EV, shadows +80, blacks +30, a
+steep curve, a metered gain of ×4) the baked develop was up to 42 codes off the
+true maths in dark saturated pixels, 26 on a JPEG through 33³, 9 even for a
+mild correction under a conversion look — because the whole displayed picture
+below code 8 sits in the FIRST cell of the lattice at that gain, and the tone
+stage bends hardest exactly there. The per-pixel head costs a few table reads;
+what stays in the cube — the mixer, black and white, the grading wheels, every
+look, the output transform — is smooth and interpolates well, and a look under
+a develop now keeps its own lattice exactly instead of being resampled.
+
 The stage, element model and
 export come from the shared overlay engine (`src/shared/overlay/`) — the same
 renderer draws the preview and the export, so what you place is exactly what
@@ -596,7 +647,8 @@ on the map instead of its dial. On a phone the leg sits over the foot of the map
 with its days in one row and arrows to the leg before and after. The map is
 drawn **offline**: the coastline is Natural Earth's world outline shipped with
 the app (fetched from this site the first time the map opens, 175 kB) and the
-towns come from the same city index as the itinerary's names; the
+towns come from the same city index as the itinerary's names, read and
+sorted in the background so the map never freezes while it arrives; the
 OpenStreetMap background is the usual opt-in, off every time. *Natural Earth is
 in the public domain; `scripts/gen-coastline.mjs` rebuilds the file.*
 
@@ -1464,7 +1516,13 @@ nothing), makes the thumbnails smaller or larger (**−** / **=**), and says
 its left or right — the same cells in one, two or three columns, the handle
 on its edge, the rail a thin strip when folded. All of that is remembered
 per device in the browser and never written to the roll; a phone keeps the
-band under the picture. A **filter** chip shows the roll whole or only the
+band under the picture. The band draws only the cells near what you see and
+lays itself out from the shape each thumbnail was kept with, so a roll of
+hundreds opens on a dozen cells and decodes nothing to measure them; and
+**←/→** land on a picture already decoded — the two beside the open one are
+decoded ahead in the background, and the last few are kept for the session
+(three on a phone, eight on a computer). A
+**filter** chip shows the roll whole or only the
 pictures *edited*, *to export*, *held back*, *ignored* — or by your Winnow's
 culling (*picks*, *rejected*, starred), when the roll came from one. A cell
 is calm: a small pill reads its state (**●** edited, **↑** leaves at export,
@@ -1525,6 +1583,34 @@ is on. Quality, borders, HDR, the watermark and the metadata groups are a
 photograph's and do not reach a clip; the run says so once. Not built,
 deliberately: a crop that moves or a per-frame mask on a clip, and a second
 target for one.
+
+**HDR.** A photograph developed on its RAW can leave as an **Ultra HDR
+JPEG** — an ordinary JPEG every viewer shows, carrying a small *gain map*
+that a phone or a browser on an HDR screen lifts the highlights with. The
+map is measured, never invented: the sensor is developed again, the stops
+you ask darker, and where the file ran out at white the map holds what the
+sensor kept above it; the file is read back and its map checked before the
+run calls it Ultra HDR. **Look at it on this screen**, in the Export tab's
+HDR section, shows that very file before it is written: the picture as the
+stage renders it, twice, wrapped the way the export wraps it and handed to
+an image the browser lights where it can — Chrome, Edge and Safari on an
+HDR display — with a *Base · HDR* switch and the measured line (how far
+above white, how far it read back). On an SDR screen both views look the
+same, and the sheet says so rather than pretending; a picture not on its
+sensor shows the base and why.
+
+**A 16-bit master.** A target's **Format** is JPEG or **PNG 16-bit**: the
+graded picture read off the render chain's own float buffers — never the
+8-bit canvas — cut in float to the crop the stage shows, bordered, marked
+and written with 16 bits a channel, carrying the same EXIF, XMP packet and
+sRGB profile a JPEG does, as PNG chunks. It is the file to keep or to edit
+again: a correction made on it later has sixteen bits of room where a JPEG
+has eight. It takes no quality and no screen sharpening (a master is not
+sharpened for a screen) and no gain map; a blur border is blurred from the
+8-bit render, as the thumbnail is. Several times a JPEG's weight. Not on a
+phone — a 48-megapixel picture read back whole is more than a tab holds
+there — where the target writes its JPEG and the run says so. The *Master ·
+16-bit PNG* preset adds one.
 
 **Layers.** The **Layers** tab (**L**) adds a develop that applies only
 somewhere: a *linear* or *radial* gradient, a *shade*, a band of
@@ -1746,6 +1832,23 @@ rule is a preference of this browser, **Big pictures** under the Look panel's
 Interpolation — *Auto* (bands on a phone, whole on a computer, and it says
 which this one is), *Whole*, *In bands* — and the loupe redraws the moment it
 changes, so a striped loupe is one click from a whole one.
+
+**Smooth skies stay smooth.** Between its steps the graphics card works in
+half-floats, so a RAW or a picture with a layer, a warp or detail carries
+more than 8 bits right up to the screen and the file — which are 8-bit, and
+where a plain rounding would cut a pushed sky into flat steps a whole code
+apart. That last rounding is **dithered**: a noise under half a code, the same
+on the three channels and drawn per 2 × 2 pixels so a JPEG keeps it, turns
+each step back into the gradient it was (measured on a ramp of 8 codes: half
+a code of error at every step undithered, a fifth of that dithered, still a
+fifth after a JPEG at 0.92). An 8-bit picture with no more than its global
+develop and look is left exactly as it was — its steps are the file's own —,
+a full-size file keeps the dither, and a smaller target (Web, Feed) is
+rounded again by its resize. **A graphics card that cannot compute in
+half-floats** (rare, on an old or a software GPU) falls back to 8 bits between
+steps rather than failing, and says so: the chip above the photograph ends in
+`· 8-bit GPU`, and the picture's notes say what it costs — a highlight a step
+pushes above white is clipped before the next step can bring it back.
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —

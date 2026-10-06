@@ -17,12 +17,13 @@ import {
   STRIP_METRICS,
   bandLayout,
   cellAspect,
+  cellsInView,
   columnLayout,
-  type StripCell,
   type StripItem,
   type StripKind,
   type StripLayout,
   type StripPlace,
+  type ViewBox,
 } from '../../shared/develop/roll-strip';
 import {
   deliverState,
@@ -47,9 +48,8 @@ import { AnchoredMenu, type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { CHOICE_WORDS, departsFromRoll, type RollChoice } from '../../shared/develop/roll-choice';
 import type { AnchorRect } from '../../shared/ui/menu-anchor';
 import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
-import { useElementWidth } from '../../shared/ui/use-element-width';
+import { useElementSize } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
-import { revealInScroller } from '../../shared/ui/reveal';
 
 /**
  * What the band and the contact sheet both take about the roll's pictures,
@@ -168,7 +168,8 @@ export default function RollBand({
 }) {
   const metrics = STRIP_METRICS[cells.kind];
   const side = place !== 'bottom';
-  const [bodyRef, width] = useElementWidth<HTMLDivElement>();
+  const [bodyRef, view] = useScrollView<HTMLDivElement>();
+  const width = view.w;
   const { pictures, openId, hideIgnored = false, shows = ALWAYS, aspects } = cells;
   const shown = useMemo(() => shownPictures(pictures, openId, hideIgnored, shows), [pictures, openId, hideIgnored, shows]);
   const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
@@ -181,7 +182,7 @@ export default function RollBand({
         : bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
     [side, items, folded, width, bodyHeight, metrics, target],
   );
-  useScrollToOpen(bodyRef, openId, metrics.pad);
+  useScrollToOpen(bodyRef, openId, layout, metrics.pad);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
   return (
     <div
@@ -219,7 +220,7 @@ export default function RollBand({
         }`}
         style={layout.axis === 'y' ? { scrollPaddingBlock: metrics.pad } : undefined}
       >
-        {!folded && <StripCells shown={shown} layout={layout} {...cells} />}
+        {!folded && <StripCells shown={shown} layout={layout} view={view} {...cells} />}
       </div>
     </div>
   );
@@ -227,26 +228,90 @@ export default function RollBand({
 
 const ALWAYS = () => true;
 
-/** The open picture's cell kept in view as ←/→ step along the roll. */
-export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null, margin = 0) {
+/**
+ * What a scroller SHOWS of its content — its scroll position and its box,
+ * in layout pixels — for the cells to be drawn from (`cellsInView`). The
+ * position is read on scroll, once per frame, and published only once it
+ * has moved a quarter of the box since the last reading: the drawn set
+ * carries one box of margin on each side, so a fling re-renders the strip
+ * a few times and never per frame. The box is the `ResizeObserver`'s.
+ */
+export function useScrollView<T extends HTMLElement>(): [RefObject<T>, ViewBox] {
+  const [ref, size] = useElementSize<T>();
+  const [scroll, setScroll] = useState({ x: 0, y: 0 });
+  const last = useRef({ x: 0, y: 0 });
   useEffect(() => {
-    const body = ref.current;
-    const cell = openId ? body?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
-    // The band's body and nothing else — never `scrollIntoView`, which also
-    // scrolled the clipping frame and the locked page under the band and
-    // lifted the whole tool (`reveal.ts`).
-    revealInScroller(cell, { block: 'nearest', inline: 'nearest', margin, scroller: body });
-  }, [openId, ref, margin]);
+    const el = ref.current;
+    if (!el) return;
+    let frame = 0;
+    const read = (force: boolean) => {
+      frame = 0;
+      const x = el.scrollLeft;
+      const y = el.scrollTop;
+      if (!force && Math.abs(x - last.current.x) < el.clientWidth / 4 && Math.abs(y - last.current.y) < el.clientHeight / 4) return;
+      last.current = { x, y };
+      setScroll((cur) => (cur.x === x && cur.y === y ? cur : { x, y }));
+    };
+    const onScroll = () => {
+      if (!frame) frame = requestAnimationFrame(() => read(false));
+    };
+    el.addEventListener('scroll', onScroll, { passive: true });
+    read(true);
+    return () => {
+      el.removeEventListener('scroll', onScroll);
+      if (frame) cancelAnimationFrame(frame);
+    };
+  }, [ref]);
+  const view = useMemo(() => ({ x: scroll.x, y: scroll.y, w: size.width, h: size.height }), [scroll, size]);
+  return [ref, view];
+}
+
+/**
+ * The open picture's cell kept in view as ←/→ step along the roll: scrolled
+ * to by the RECTANGLE the layout answers, to the nearest edge with `margin`
+ * of breathing room (a cell already in view moves nothing), once per open
+ * picture on each axis — the cell is not asked of the DOM, since the first
+ * layout is laid at no width and a later one must not pull the band back
+ * under a hand that scrolled away. The band's body and nothing else is
+ * scrolled — never `scrollIntoView`, which also scrolled the clipping frame
+ * and the locked page under the band and lifted the whole tool (`reveal.ts`).
+ */
+export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null, layout: StripLayout, margin = 0) {
+  const cell = openId ? layout.cells.find((c) => c.id === openId) : undefined;
+  const box = cell && cell.w > 0 && cell.h > 0 ? `${cell.x},${cell.y},${cell.w},${cell.h + cell.cap}` : null;
+  const axis = layout.axis;
+  const done = useRef<string | null>(null);
+  useEffect(() => {
+    const el = ref.current;
+    if (!el || !openId || !box) return;
+    const key = `${openId}:${axis}`;
+    if (done.current === key) return;
+    const [x, y, w, h] = box.split(',').map(Number);
+    if (axis === 'x') {
+      if (!(el.clientWidth > 0)) return;
+      if (x - margin < el.scrollLeft) el.scrollLeft = Math.max(0, x - margin);
+      else if (x + w + margin > el.scrollLeft + el.clientWidth) el.scrollLeft = x + w + margin - el.clientWidth;
+    } else {
+      if (!(el.clientHeight > 0)) return;
+      if (y - margin < el.scrollTop) el.scrollTop = Math.max(0, y - margin);
+      else if (y + h + margin > el.scrollTop + el.clientHeight) el.scrollTop = y + h + margin - el.clientHeight;
+    }
+    done.current = key;
+  }, [ref, openId, box, axis, margin]);
 }
 
 /**
  * The cells themselves, at the rectangles a layout answers, with the one
  * menu they share — the band's body and the contact sheet's alike. Drawn in
- * a `<ol>` the size of the layout, inside whichever scroller the host gives.
+ * a `<ol>` the size of the layout, inside whichever scroller the host gives
+ * — and only the cells NEAR what that scroller shows (`cellsInView`, one box
+ * of margin each side, the open cell always): a roll of hundreds put every
+ * cell in the DOM at open (`docs/audit-2026-10-02.md`, PERF-03).
  */
 export function StripCells({
   shown,
   layout,
+  view,
   run = null,
   openId,
   selectedIds,
@@ -265,7 +330,7 @@ export function StripCells({
   rollChoice = null,
   heldId = null,
   written,
-}: StripCellsProps & { shown: readonly RollPicture[]; layout: StripLayout }) {
+}: StripCellsProps & { shown: readonly RollPicture[]; layout: StripLayout; view: ViewBox }) {
   // The cells are MEMOISED, so what they are handed must be stable: the
   // host's callbacks are read through a ref, and every cell gets the same
   // handlers for the life of the strip. Without this every cell re-rendered
@@ -283,23 +348,30 @@ export function StripCells({
     }),
     [],
   );
-  const cellById = useMemo(() => new Map(layout.cells.map((c) => [c.id, c])), [layout]);
+  const pictureById = useMemo(() => new Map(shown.map((p) => [p.id, p])), [shown]);
+  const drawn = useMemo(() => cellsInView(layout.cells, view, layout.axis, openId), [layout, view, openId]);
   const menuPicture = menu ? shown.find((p) => p.id === menu.id) ?? null : null;
   const menuRect = useCallback(() => menu?.rect ?? null, [menu]);
   const closeMenu = useCallback(() => setMenu(null), []);
   return (
     <>
       <ol className="relative m-0 p-0 list-none" style={{ width: layout.width, height: layout.height }}>
-        {shown.map((p) => {
-          const cell = cellById.get(p.id);
-          if (!cell) return null;
-          // Handed as two values, not a fresh object per render, so the memo holds.
+        {drawn.map((cell) => {
+          const p = pictureById.get(cell.id);
+          if (!p) return null;
+          // Handed as plain values, not a fresh object per render, so the
+          // memo holds: the layout is rebuilt as thumbnails land, and a cell
+          // whose rectangle did not move must not redraw for it.
           const remote = thumbs.has(p.id) ? null : remoteThumb(p);
           return (
             <Cell
               key={p.id}
               picture={p}
-              cell={cell}
+              x={cell.x}
+              y={cell.y}
+              w={cell.w}
+              h={cell.h}
+              cap={cell.cap}
               open={p.id === openId}
               selected={selectedIds.has(p.id)}
               thumb={thumbs.get(p.id) ?? null}
@@ -390,7 +462,11 @@ function pictureMenu(
 
 const Cell = memo(function Cell({
   picture,
-  cell,
+  x,
+  y,
+  w,
+  h,
+  cap,
   open,
   selected,
   thumb,
@@ -407,7 +483,12 @@ const Cell = memo(function Cell({
   handlers,
 }: {
   picture: RollPicture;
-  cell: StripCell;
+  /** The cell's rectangle (`StripCell`): the picture's box, the caption's height under it. */
+  x: number;
+  y: number;
+  w: number;
+  h: number;
+  cap: number;
   open: boolean;
   selected: boolean;
   thumb: Blob | null;
@@ -494,7 +575,7 @@ const Cell = memo(function Cell({
   return (
     <li
       className={`group absolute snap-start select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
-      style={{ left: cell.x, top: cell.y, width: cell.w, height: cell.h + cell.cap }}
+      style={{ left: x, top: y, width: w, height: h + cap }}
       data-picture={picture.id}
       onContextMenu={onContextMenu}
       onPointerDown={onPointerDown}
@@ -515,12 +596,16 @@ const Cell = memo(function Cell({
           culling && describeCulling(culling) ? ` — Winnow: ${describeCulling(culling)}` : ''
         }${selecting ? ' — click to mark it' : ' — Shift or ⌘/Ctrl-click to select for a batch · right-click for its actions'}`}
         className="relative block w-full p-0 rounded-[6px] overflow-hidden bg-frame cursor-pointer border-0"
-        style={{ height: cell.h }}
+        style={{ height: h }}
       >
         {url ? (
+          // Lazy: a cell drawn in the margin beside the view loads its
+          // picture as it comes near, and never blocks the ones on screen.
           <img
             src={url}
             alt=""
+            loading="lazy"
+            decoding="async"
             className={`block w-full h-full object-cover ${unreachable ? 'opacity-45 grayscale' : ''}`}
             draggable={false}
           />
@@ -553,7 +638,7 @@ const Cell = memo(function Cell({
         )}
         {/* What is READ, and only while there is no caption to say it in: the
             state as one pill in a corner, Winnow's word in the other. */}
-        {cell.cap === 0 && pills.length > 0 && (
+        {cap === 0 && pills.length > 0 && (
           <span
             className="absolute left-1 bottom-1 inline-flex items-center gap-[3px] px-1.5 py-0.5 rounded-full bg-surface/85 font-mono text-3xs leading-none text-ink pointer-events-none"
             aria-hidden="true"
@@ -565,7 +650,7 @@ const Cell = memo(function Cell({
             ))}
           </span>
         )}
-        {cell.cap === 0 && (
+        {cap === 0 && (
           <span className={`absolute right-1 top-1 pointer-events-none ${menuOpen ? 'opacity-0' : selecting ? '' : 'pointer-fine:group-hover:opacity-0'}`}>
             <CullMark culling={culling} onMedia />
           </span>
@@ -630,10 +715,10 @@ const Cell = memo(function Cell({
           {Icons.more}
         </button>
       )}
-      {cell.cap > 0 && (
+      {cap > 0 && (
         <span
           className="absolute left-0.5 right-0.5 bottom-0 flex items-center gap-1 font-mono text-3xs leading-none text-ink-soft whitespace-nowrap overflow-hidden"
-          style={{ height: cell.cap }}
+          style={{ height: cap }}
           aria-hidden="true"
         >
           <span className={`min-w-0 overflow-hidden text-ellipsis ${open ? 'text-accent-ink font-medium' : ''}`}>{label}</span>

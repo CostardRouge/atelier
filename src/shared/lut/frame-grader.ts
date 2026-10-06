@@ -51,6 +51,11 @@ export interface PassGrader extends FrameGrader {
   setFilm(film: FilmTexture | null): void;
   /** The look, replaced in place — a new cube, the same context (`GraphGrader.setLut`). */
   setLut(lut: CubeLut | null): void;
+  /**
+   * The graded picture as HALF-FLOATS off the chain's own buffers, for a
+   * 16-bit file (`GraphGrader.renderHalf`); null where the GPU cannot.
+   */
+  renderHalf(source: GradeSource, sourceSeconds?: number): HalfImage | null;
 }
 
 /**
@@ -103,6 +108,7 @@ export function makeFrameGrader(
     setPasses: (next, nextBefore = []) => grader.setExtraPasses(next, nextBefore),
     setFilm: (next) => grader.setFilm(next),
     setLut: (next) => grader.setLut(next),
+    renderHalf: (source, sourceSeconds) => grader.renderHalf(source, sourceSeconds),
     dispose: () => grader.dispose(),
   };
 }

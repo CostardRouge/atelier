@@ -61,6 +61,9 @@ export function sampleTrilinear(
   g: number,
   b: number,
 ): [number, number, number] {
+  // A composed cube's develop head runs per pixel, BEFORE the lattice — the
+  // one rule every sampler and the shader share (`CubeHead`).
+  if (lut.head) [r, g, b] = lut.head.stage(r, g, b);
   const n = lut.size;
   const last = n - 1;
   const [x, y, z] = latticeCoords(lut, r, g, b);
@@ -115,6 +118,7 @@ export function sampleTetrahedral(
   g: number,
   b: number,
 ): [number, number, number] {
+  if (lut.head) [r, g, b] = lut.head.stage(r, g, b);
   const n = lut.size;
   const last = n - 1;
   const [x, y, z] = latticeCoords(lut, r, g, b);

@@ -53,3 +53,44 @@ export function targetsNeeded(count: number): number {
   if (n <= 1) return 0;
   return n === 2 ? 1 : 2;
 }
+
+/**
+ * Where a render RESUMES, and what it keeps for the next one — the kept
+ * upstream, as arithmetic.
+ *
+ * A render keeps the output of ONE pass (the checkpoint, `held`) in a texture
+ * of its own. The next render compares its passes' keys (`RenderPass.key`)
+ * with the last render's: the longest prefix whose keys match is work already
+ * done, and when the checkpoint sits inside that prefix the render starts
+ * right after it. The checkpoint is then moved to the input of the first
+ * pass that CHANGED — a slider being dragged changes the same pass on every
+ * step, so from the third render on each step draws that pass and what
+ * follows it, and nothing before.
+ *
+ * `start` is the first pass to draw (`keys.length` when nothing changed and
+ * the canvas already holds the picture); `keep` the pass whose output to hold
+ * afterwards, −1 for none. `keep ≥ start` means that pass's output is written
+ * into the checkpoint as it is drawn; `keep < start` means the checkpoint
+ * already holds it. The last pass is never kept: it writes the canvas.
+ */
+export interface ResumePlan {
+  start: number;
+  keep: number;
+}
+
+export function planResume(
+  prev: readonly (string | null)[],
+  keys: readonly (string | null)[],
+  held: number,
+): ResumePlan {
+  const n = keys.length;
+  let p = 0;
+  while (p < n && p < prev.length && keys[p] !== null && keys[p] === prev[p]) p += 1;
+  if (n > 0 && p === n) return { start: n, keep: held >= 0 && held < n - 1 ? held : -1 };
+  const valid = held >= 0 && held < p;
+  const start = valid ? held + 1 : 0;
+  // Nothing known about the last render: draw whole and keep nothing — a
+  // one-shot render (an export, a thumbnail) then never pays for a texture.
+  const keep = prev.length === 0 ? -1 : Math.min(p - 1, n - 2);
+  return { start, keep: keep >= 0 ? keep : -1 };
+}

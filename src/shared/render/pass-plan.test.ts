@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
+import { planPasses, planResume, targetsNeeded, type PassSlot } from './pass-plan';
 
 describe('planPasses', () => {
   it('is source → canvas at ONE pass, with no framebuffer at all', () => {
@@ -74,5 +74,69 @@ describe('planPasses', () => {
 
   it('rounds a fractional count rather than planning half a pass', () => {
     expect(planPasses(2.7)).toHaveLength(2);
+  });
+});
+
+describe('planResume — the kept upstream', () => {
+  const chain = ['chroma', 'denoise', 'cube:1', 'lens', 'layer#1', 'sharpen', 'vignette'];
+
+  it('draws everything and keeps nothing when nothing is known — an export pays for no texture', () => {
+    expect(planResume([], chain, -1)).toEqual({ start: 0, keep: -1 });
+  });
+
+  it('on the second render keeps the input of the first pass that changed', () => {
+    const next = [...chain];
+    next[2] = 'cube:2';
+    expect(planResume(chain, next, -1)).toEqual({ start: 0, keep: 1 });
+  });
+
+  it('from the third render on resumes right after the checkpoint and draws the changed pass onward', () => {
+    const next = [...chain];
+    next[2] = 'cube:3';
+    expect(planResume(chain, next, 1)).toEqual({ start: 2, keep: 1 });
+  });
+
+  it('moves the checkpoint forward when a later pass changes, drawing from the old one', () => {
+    const next = [...chain];
+    next[5] = 'sharpen:2';
+    // Passes 2..4 are drawn again from the checkpoint at 1; pass 4's output becomes the new one.
+    expect(planResume(chain, next, 1)).toEqual({ start: 2, keep: 4 });
+  });
+
+  it('starts over when a pass BEFORE the checkpoint changes', () => {
+    const next = [...chain];
+    next[0] = 'chroma:2';
+    expect(planResume(chain, next, 4)).toEqual({ start: 0, keep: -1 });
+    next[0] = chain[0];
+    next[1] = 'denoise:2';
+    expect(planResume(chain, next, 4)).toEqual({ start: 0, keep: 0 });
+  });
+
+  it('draws nothing when nothing changed — the canvas already holds the picture', () => {
+    expect(planResume(chain, [...chain], 3)).toEqual({ start: chain.length, keep: 3 });
+    expect(planResume(chain, [...chain], -1)).toEqual({ start: chain.length, keep: -1 });
+  });
+
+  it('never keeps the last pass, which writes the canvas', () => {
+    const next = [...chain];
+    next[6] = 'vignette:2';
+    expect(planResume(chain, next, 1)).toEqual({ start: 2, keep: 5 });
+    expect(planResume(['a', 'b'], ['a', 'c'], -1)).toEqual({ start: 0, keep: 0 });
+    expect(planResume(['a'], ['b'], -1)).toEqual({ start: 0, keep: -1 });
+  });
+
+  it('stops at a pass with no key, and at one whose key moved', () => {
+    const withClock: (string | null)[] = [...chain];
+    withClock[4] = null;
+    const again = [...withClock];
+    again[6] = 'vignette:2';
+    // The prefix ends before the unkeyed pass: the checkpoint can sit at 3 at most.
+    expect(planResume(withClock, again, 3)).toEqual({ start: 4, keep: 3 });
+    expect(planResume(withClock, again, -1)).toEqual({ start: 0, keep: 3 });
+  });
+
+  it('is sound for a one-pass chain and an empty one', () => {
+    expect(planResume(['a'], ['a'], -1)).toEqual({ start: 1, keep: -1 });
+    expect(planResume([], [], -1)).toEqual({ start: 0, keep: -1 });
   });
 });

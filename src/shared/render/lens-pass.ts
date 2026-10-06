@@ -33,6 +33,7 @@ import {
   type LensProfileTerms,
 } from './lens';
 import type { RenderPass } from './graph';
+import { dataKey } from './pass-key';
 
 const FRAGMENT = `${GLSL_VERSION}
 precision highp float;
@@ -153,6 +154,7 @@ export function makeLensPass(
 
   return {
     id: 'lens',
+    key: dataKey('lens', manual, p, ar),
     // Where the shader samples, in JavaScript — every channel's own scale.
     rows: warpRows((u, v) => {
       const sx = (ar / diagonal) * 2;

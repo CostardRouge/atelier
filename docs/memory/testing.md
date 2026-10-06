@@ -145,6 +145,91 @@ kills the chain (exit 144) — kill the node process by `^node bench`; a palette
 is clicked INSIDE `role="dialog"`, since `getByRole('button', { name:
 'Brightness' })` lands on the develop slider's `Reset Brightness` first.
 
+## The GPU-work bench: passes drawn per slider step (2026-10-06)
+
+**Recipe**, the layers bench's counters (`drawArrays`, `texImage2D` with
+data, `getContext('webgl2')`) read per interaction — the session
+scratchpad's `perf-bench.mjs`, never in the repo. Two things it needed:
+**the picture's settings are SEEDED before the drop** — the roll is created
+with `addPictures(createRollDoc(…), [{ name, size, lastModified }])` and the
+picture's `detail`, `lens`, `keystone`, `vignette`, `layers` and `develop`
+written on it, then the route opened and a `File` of the SAME name and bytes
+dropped: `addPictures` keeps a picture already on the roll (name + size),
+`use-roll-media` links the file to it, and the stage opens on the seeded
+settings. A `putRoll` after the drop and a reload loses the dropped file
+(the stage stays 300 × 150, black) and an external `putRoll` under a mounted
+editor is never read. And **a step is measured by polling the counters
+until they stop moving**, not by a fixed wait: a 1 MP chain of ten passes
+is seconds under SwiftShader. Traps: a COLD dev server re-optimises its
+dependencies on the first load and full-reloads the page mid-flow (the
+drop is lost; run a gate first, or load the route once before the run); the
+Layers tab's row and its Mask | Adjust switch were not found by role here,
+so the layer-slider step is unmeasured.
+
+## The band bench: what a roll of hundreds costs at open (2026-10-06)
+
+**Recipe**, the session scratchpad's `band-bench.mjs`, never in the repo:
+counters set in `addInitScript` — `createImageBitmap` wrapped, the
+`HTMLImageElement.prototype.src` setter wrapped (an `<img>` load per set),
+`IDBObjectStore.prototype.get` wrapped — read beside `document.querySelectorAll('li[data-picture]').length`
+and `performance.memory.usedJSHeapSize`. The roll is SEEDED whole before the
+route opens: `addPictures(createRollDoc(…), names)` for N pictures, then
+`putRollThumb(id, blob, now, aspect)` per picture with a small canvas JPEG at
+one of four aspects (and `aspect: null` to stand for a roll stored before the
+aspect was kept), through `/atelier/src/...` imports — no file is dropped,
+the cells draw the stored thumbnails and the stage says the file is not open,
+which the band does not care about. A picture far down the roll is opened by
+REWRITING THE HASH to `#/develop/<ref>/<pictureId>` (no Home/End key is
+bound), and "in view" is the cell's rect inside its scroller's
+(`cell.closest('.overflow-x-auto, .overflow-y-auto')`). A step settles by
+polling the counters until they stop moving. A phone is
+`{ viewport: 390 × 844, hasTouch, isMobile, deviceScaleFactor: 2 }`.
+
+## The switch bench: what ←/→ costs the stage (2026-10-06)
+
+**Recipe**, the scratchpad's `switch-bench.mjs`: N real JPEGs made in-page
+(a flat hue each, 1600 px or `BIG=1` for 6000 × 4000) dropped on an empty
+roll's editor root (`waitForSelector` on it FIRST — the first visit after a
+new module compiles for seconds and a drop on the body lands nowhere), then
+a key per step, a far picture by rewriting the hash. **The clock is the
+stage's own paint** — `CanvasRenderingContext2D.prototype.drawImage` wrapped
+and the draws onto `[aria-label="The picture, corrected"]` timestamped —
+never a pixel readback: the first version polled `getImageData` on that
+canvas and, under SwiftShader, a readback of a canvas just drawn from the
+WebGL one is a 200 ms GPU sync that the poll itself paid and attributed to
+the app (a CDP `Profiler` with self time per node, callers printed, is what
+named it: `getImageData < evaluate`). Decodes are `createImageBitmap`
+wrapped with a timestamp and the result's width, so a stage-size decode is
+told from a 640 px thumbnail. **A probe that `import()`s a module from the
+bench sees ITS OWN instance after an HMR** (the app's graph carries `?t=`,
+the bare URL does not): `stageStillsForTest` read 0 held while the app held
+eight — restart the dev server before trusting a module-state probe. The
+BEFORE of a change is measured by `git stash` / `git stash pop` around one
+run, on the task's own files only.
+
+## What the entry chunk reaches (2026-10-06)
+
+**Recipe**, the scratchpad's `trace-import.mjs <entry> <needle>`: a regex
+walk of `import … from` and `export … from` lines from `src/main.tsx`,
+relative paths resolved with `.ts` / `.tsx` / `index`, `import type` and
+dynamic `import()` skipped, printing the chain from the entry to every
+module whose path matches the needle. It named the sidebar → `media-identity`
+→ `project-types` → `film-texture` chain that a grep of `src/app` could not
+(the import was three hops down). Beside it, the built entry's own markers:
+`grep -o <symbol> dist/assets/index-*.js | wc -l` for a name only the heavy
+module defines (`halation`, `migrateRollDoc`, `hookSeconds`), and the
+chunk's bytes raw and through `gzip -c | wc -c`. The dev server's Home
+timing is not a measurement (a hundred modules served one by one).
+
+**The main thread's stalls** (the gazetteer bench, `gazetteer-bench.mjs`):
+the Long Tasks API (`PerformanceObserver` on `longtask`) reports NOTHING
+in this headless shell — a 5 ms `setTimeout` chain in an init script,
+every gap over 40 ms logged as a stall, is what measures a frozen main
+thread here; a `requestAnimationFrame` chain does the same where frames
+run. Warm the fetch once in a throwaway before timing (the index is
+6.5 MB); a `performance.memory` delta reads 0 across a worker's heap,
+which is the point.
+
 ## Clips through the Develop tool, and an export encoded here (2026-09-30)
 
 **Recipe, headless in this container.** The SYSTEM `ffmpeg` (`/usr/bin/ffmpeg`, unlike Playwright's) has `lavfi` and `libvpx-vp9`: `-f lavfi -i testsrc2=size=640x360:rate=25:duration=4 -c:v libvpx proxy.webm` for a stand-in proxy, and `-c:v libvpx-vp9 -pix_fmt yuv420p -c:a aac -movflags +faststart rush.mp4` for a RUSH that mp4box demuxes and WebCodecs decodes here (VP9 in MP4), so the roll's clip export runs end to end — with the ENCODER swapped for the run: this Chromium has no H.264 encoder, so `webcodecs-export.ts` was patched locally to `codec: 'vp9'` on the muxer and `'vp09.00.10.08'` in place of `pickAvcCodec`, and reverted with `git checkout` before the commit. Seed the roll without the UI (`putRoll(addPictures(createRollDoc(…), [rowMediaRef(host, row)]))` through `/atelier/src/...` imports), stub `/api/assets/7`, `/proxy`, `/download`, `/thumb` with `context.route` and the CORS headers of the stub recipe, deliver into OPFS (`window.showDirectoryPicker = () => navigator.storage.getDirectory()`), and read the file back with a `<video>` for its frame, then `drawImage` at 1 s for a luminance against the source. A LOCAL clip is dropped by dispatching `dragover` + `drop` with a `DataTransfer` on any element inside the roll editor (the event bubbles to its root). Read the stage's luminance off the 2D canvas `[aria-label="The picture, corrected"]`; with A/B on, half of it is as shot, so a grade reads smaller there than in the file. The lone-file name is TEXT (`[title=name]`), a capture with rows is a `button[title=name]`. The crop stage's canvas has no label of its own: it is `div[aria-label^="Crop:"] canvas`; the Format segments are `[aria-label="Format"] button` pressed by text (`1:1`); the pinned export verb reads `Export this picture` or `Export N pictures`, so match `/^Export (1 |this )/`.

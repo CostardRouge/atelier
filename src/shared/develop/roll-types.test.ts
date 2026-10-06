@@ -341,7 +341,7 @@ describe('reading a stored roll', () => {
     // `originals`, written by v1–v3, is left behind: which pixels is the picture's own (v4).
     // v5's one long edge and quality become the one target (v6), through their limits.
     expect(doc.export).toEqual({
-      targets: [{ name: '', size: { mode: 'long', value: 16384 }, quality: 1, sharpen: 'off', watermark: false }],
+      targets: [{ name: '', size: { mode: 'long', value: 16384 }, format: 'jpeg', quality: 1, sharpen: 'off', watermark: false }],
       replace: false,
       hdr: false,
       hdrStops: 2,
@@ -395,7 +395,7 @@ describe('reading a stored roll', () => {
 
   it('reads the export through its limits, and the source size as null', () => {
     expect(readRollExport({ longEdge: 1920.4, quality: 0.8, originals: 'proxies', replace: true })).toEqual({
-      targets: [{ name: '', size: { mode: 'long', value: 1920 }, quality: 0.8, sharpen: 'off', watermark: false }],
+      targets: [{ name: '', size: { mode: 'long', value: 1920 }, format: 'jpeg', quality: 0.8, sharpen: 'off', watermark: false }],
       replace: true,
       hdr: false,
       hdrStops: 2,

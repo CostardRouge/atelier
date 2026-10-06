@@ -760,7 +760,7 @@ const out = await page.evaluate(async () => {
   // bytes through the cube.
   {
     const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
-    const { makeGraphGrader } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const { makeGraphGrader, setDitherForTest } = await import('/atelier/src/shared/render/graph-grader.ts');
     const HW = 191, HH = 97; // odd on purpose
     const cvs = document.createElement('canvas'); cvs.width = HW; cvs.height = HH;
     const hg = cvs.getContext('2d');
@@ -793,9 +793,17 @@ const out = await page.evaluate(async () => {
     const p = readAll(plain.render(halfImg));
     plain.dispose();
     const at = (d, x, y) => [d[(y * HW + x) * 4], d[(y * HW + x) * 4 + 1], d[(y * HW + x) * 4 + 2]];
-    // Through the look, both ways.
+    // Through the look, both ways — undithered, since a half source is
+    // dithered at the canvas and the 8-bit one is not (`dither.ts`): this row
+    // measures the upload path, and the dither has rows of its own below.
     const gHalf = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
-    const a = readAll(gHalf.render(halfImg));
+    setDitherForTest(false);
+    let a;
+    try {
+      a = readAll(gHalf.render(halfImg));
+    } finally {
+      setDitherForTest(null);
+    }
     gHalf.dispose();
     const gCanvas = makeGraphGrader(cube, HW, HH, 1, 'tetrahedral');
     const b = readAll(gCanvas.render(cvs));
@@ -1522,6 +1530,327 @@ const out = await page.evaluate(async () => {
     results.halfCube = { ...worst(a, b), format: formatSeen, mean: sum / (b.length / 4) / 3 };
   }
 
+  // --- the develop's HEAD (develop-head.ts): per pixel on the GPU, held to
+  // the CPU twin and to the per-pixel develop itself, on a RAW's shadows ----
+  {
+    const { makeGraphGrader, setDitherForTest } = await import('/atelier/src/shared/render/graph-grader.ts');
+    const { composeLutStack } = await import('/atelier/src/shared/lut/lut-stack.ts');
+    const { sampleWith, sampleTetrahedral } = await import('/atelier/src/shared/lut/interpolate.ts');
+    const { developStage, DEFAULT_DEVELOP } = await import('/atelier/src/shared/develop/develop.ts');
+    const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const { parseCube } = await import('/atelier/src/shared/lib/cube-parser.ts');
+    const look = parseCube(await (await fetch('/atelier/luts/dji/dji_mavic_4_pro_d-log_m-to-rec709_v1.cube')).text());
+    const raw = {
+      ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, exposure: 1.5, shadows: 80, blacks: 30, contrast: 40,
+      temperature: -20, tint: 10, saturation: 15, vibrance: 20,
+      curves: { luma: [{x:0,y:0},{x:0.15,y:0.3},{x:0.6,y:0.7},{x:1,y:1}], rgb: null, red: [{x:0,y:0},{x:0.5,y:0.6},{x:1,y:1}], green: null, blue: null },
+      levels: { rgb: { inBlack: 0.02, inWhite: 0.98, gamma: 1.1, outBlack: 0, outWhite: 1 }, red: null, green: null, blue: null },
+      rawWb: { kelvin: 4500, tint: 5, matrix: [1.1, 0.02, -0.05, 0.01, 0.98, 0.03, -0.04, 0.05, 1.15] },
+      grading: { shadows: { hue: 220, saturation: 30, luminance: 0 }, midtones: { hue: 0, saturation: 0, luminance: 0 },
+                 highlights: { hue: 40, saturation: 20, luminance: -10 }, global: { hue: 0, saturation: 0, luminance: 0 }, blending: 50, balance: 0 },
+    };
+    const layerOf = (lut) => [{ id: 'l', source: 'builtin:x', name: 'look', lut, intensity: 1, enabled: true }];
+    // Head only: the look keeps its own lattice. With the wheels (a TAIL) the
+    // look is baked through them, and that cube is held to its CPU twin alone.
+    const { grading, ...headOnly } = raw;
+    const cube = composeLutStack(layerOf(look), 'none', 'tetrahedral', headOnly);
+    const graded = composeLutStack(layerOf(look), 'none', 'tetrahedral', raw);
+    const plain = composeLutStack(layerOf(look), 'none', 'tetrahedral', null);
+    // A dark half-float picture: encoded 0..0.06 across x (a RAW's shadows at
+    // gain 4 are all under lattice index 1), four hue mixes down y.
+    const HW = 512, HH = 48;
+    const mixes = [[1, 1, 1], [1, 0.45, 0.17], [0.2, 0.9, 0.5], [0.3, 0.3, 1]];
+    const src = (x, y) => { const v = (x / (HW - 1)) * 0.06; const m = mixes[Math.floor((y * mixes.length) / HH)]; return [v * m[0], v * m[1], v * m[2]]; };
+    const data = new Uint16Array(HW * HH * 3);
+    for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) { const [r, g, b] = src(x, y); data.set([toHalf(r), toHalf(g), toHalf(b)], (y * HW + x) * 3); }
+    const halfImg = { kind: 'half', width: HW, height: HH, data };
+    const draw = (lut) => {
+      const grader = makeGraphGrader(lut, HW, HH, 1, 'tetrahedral');
+      setDitherForTest(false);
+      try {
+        const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(grader.render(halfImg), 0, 0);
+        return oc.getImageData(0, 0, HW, HH).data;
+      } finally { setDitherForTest(null); grader.dispose(); }
+    };
+    const gpu = draw(cube);
+    const gpuGraded = draw(graded);
+    const headless = draw(plain);
+    const stage = developStage(headOnly);
+    const code = (v) => Math.min(255, Math.max(0, v * 255));
+    let twin = 0, truth = 0, moved = 0, twinGraded = 0;
+    for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+      const [r, g, b] = src(x, y);
+      const cpu = sampleWith(cube, r, g, b, 'tetrahedral');
+      const cpuGraded = sampleWith(graded, r, g, b, 'tetrahedral');
+      const d = stage(r, g, b);
+      const direct = sampleTetrahedral(look, d[0], d[1], d[2]);
+      for (let c = 0; c < 3; c++) {
+        const i = (y * HW + x) * 4 + c;
+        twin = Math.max(twin, Math.abs(gpu[i] - code(cpu[c])));
+        truth = Math.max(truth, Math.abs(gpu[i] - code(direct[c])));
+        moved = Math.max(moved, Math.abs(gpu[i] - headless[i]));
+        twinGraded = Math.max(twinGraded, Math.abs(gpuGraded[i] - code(cpuGraded[c])));
+      }
+    }
+    results.head = { twin, truth, moved, twinGraded, size: cube.size, own: cube.data === look.data, gradedSize: graded.size };
+
+    // --- the tone engine's TOP (develop.ts, ToneShape + clipToDisplay): a
+    // RAW's two stops of headroom under highlights −100, contrast +20 and a
+    // warm balance, in four hue mixes — the GPU held to the CPU twin, the
+    // headroom brought under white WITH its order, a warm highlight kept warm.
+    {
+      const recover = { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, exposure: 0, highlights: -100, contrast: 20, temperature: 40, vibrance: 30 };
+      const toned = composeLutStack(layerOf(look), 'none', 'tetrahedral', recover);
+      // Encoded 0.5 … 1 across x on the SENSOR's own scale — at gain 4 that is
+      // linear 0.86 … 4, white near the left edge — the same four mixes down y.
+      const srcTop = (x, y) => { const e = 0.5 + (x / (HW - 1)) * 0.5; const v = Math.pow((e + 0.055) / 1.055, 2.4); const m = mixes[Math.floor((y * mixes.length) / HH)]; return [v * m[0], v * m[1], v * m[2]]; };
+      const dataTop = new Uint16Array(HW * HH * 3);
+      for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) { const [r, g, b] = srcTop(x, y); dataTop.set([toHalf(r), toHalf(g), toHalf(b)], (y * HW + x) * 3); }
+      const grader = makeGraphGrader(toned, HW, HH, 1, 'tetrahedral');
+      setDitherForTest(false);
+      let gpuTop;
+      try {
+        const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+        const oc = o.getContext('2d', { willReadFrequently: true });
+        oc.drawImage(grader.render(halfImg.kind === 'half' ? { kind: 'half', width: HW, height: HH, data: dataTop } : null), 0, 0);
+        gpuTop = oc.getImageData(0, 0, HW, HH).data;
+      } finally { setDitherForTest(null); grader.dispose(); }
+      let twinTop = 0, dips = 0, warmWrong = 0, underWhite = 0, atWhite = 0;
+      const greyRow = Math.floor(HH / mixes.length / 2);
+      const warmRow = Math.floor((HH / mixes.length) * 1.5);
+      // The "grey" row wears the warm balance, so its top is a warm near-white:
+      // the clip puts its brightest channel AT white and keeps a hint of the
+      // warmth (luminance within a few codes). Luminance says whether a column
+      // is under white; the brightest channel says whether it reached it.
+      const lumAt = (i) => 0.2126 * gpuTop[i] + 0.7152 * gpuTop[i + 1] + 0.0722 * gpuTop[i + 2];
+      for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+        const [r, g, b] = srcTop(x, y);
+        const cpu = sampleWith(toned, r, g, b, 'tetrahedral');
+        const i = (y * HW + x) * 4;
+        for (let c = 0; c < 3; c++) twinTop = Math.max(twinTop, Math.abs(gpuTop[i + c] - code(cpu[c])));
+        if (y === greyRow) {
+          // The ramp: never a step DOWN along x, under white until the sensor's last codes.
+          if (x > 0 && lumAt(i) < lumAt(i - 4) - 1) dips += 1;
+          if (x < HW - 8 && lumAt(i) < 251) underWhite += 1;
+          if (Math.max(gpuTop[i], gpuTop[i + 1], gpuTop[i + 2]) >= 254) atWhite += 1;
+        }
+        if (y === warmRow && !(gpuTop[i] >= gpuTop[i + 1] - 1 && gpuTop[i + 1] >= gpuTop[i + 2] - 1)) warmWrong += 1;
+      }
+      results.tone = { twin: twinTop, dips, underWhite, atWhite, warmWrong, width: HW };
+    }
+  }
+
+  // --- the kept upstream (graph.ts, planResume): a render resumed from the
+  // checkpoint is the whole render to the bit, and draws only what changed --
+  {
+    const { createRenderGraph, drawnLastForTest, setDitherForTest } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeCubePass } = await import('/atelier/src/shared/render/cube-pass.ts');
+    const { detailPasses } = await import('/atelier/src/shared/render/detail-pass.ts');
+    const { makeKeystonePass } = await import('/atelier/src/shared/render/keystone-pass.ts');
+    const { composeLutStack } = await import('/atelier/src/shared/lut/lut-stack.ts');
+    const { DEFAULT_DEVELOP } = await import('/atelier/src/shared/develop/develop.ts');
+    const UW = 256, UH = 192;
+    const bitmap = await createImageBitmap(src);
+    const detail = { luminance: 40, colour: 30, defringe: 0, sharpen: 50, sharpenRadius: 1, sharpenDetail: 25, sharpenMasking: 0, texture: 0, clarity: 0, dehaze: 0 };
+    const det = detailPasses(detail, 1);
+    const det2 = detailPasses({ ...detail, sharpen: 80 }, 1);
+    const det3 = detailPasses({ ...detail, luminance: 60 }, 1);
+    const ks = makeKeystonePass({ vertical: 15, horizontal: 0, rotation: 0, aspect: 0, scale: 1 }, UW / UH);
+    const lutB = composeLutStack([], 'rec709-to-srgb', 'tetrahedral', { ...DEFAULT_DEVELOP, exposure: 0.8, contrast: 20 });
+    const lutC = composeLutStack([], 'rec709-to-srgb', 'tetrahedral', { ...DEFAULT_DEVELOP, exposure: -0.4, highlights: -50 });
+    const chainOf = (lut, d = det) => [...d.pre, makeCubePass({ lut, intensity: 1, interpolation: 'tetrahedral' }), ks, ...d.post];
+    const n = chainOf(cube).length;
+    const readOf = (graph) => {
+      const o = document.createElement('canvas'); o.width = UW; o.height = UH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(graph.canvas, 0, 0);
+      return oc.getImageData(0, 0, UW, UH).data;
+    };
+    const whole = (chain) => {
+      const g = createRenderGraph(document.createElement('canvas'));
+      g.resize(UW, UH);
+      g.render(bitmap, chain);
+      const px = readOf(g);
+      g.dispose();
+      return px;
+    };
+    setDitherForTest(false);
+    const live = createRenderGraph(document.createElement('canvas'));
+    live.resize(UW, UH);
+    try {
+      live.render(bitmap, chainOf(cube));
+      const first = drawnLastForTest();
+      live.render(bitmap, chainOf(lutB));
+      const second = drawnLastForTest();
+      live.render(bitmap, chainOf(lutC));
+      const resumed = drawnLastForTest();
+      const resumedPx = readOf(live);
+      const wholeC = worst(resumedPx, whole(chainOf(lutC))).worst;
+      // A later pass changes: the checkpoint moves forward, the cube is not redrawn next time.
+      live.render(bitmap, chainOf(lutC, det2));
+      const moved = drawnLastForTest();
+      const movedPx = readOf(live);
+      const wholeMoved = worst(movedPx, whole(chainOf(lutC, det2))).worst;
+      live.render(bitmap, chainOf(lutC, { pre: det2.pre, post: detailPasses({ ...detail, sharpen: 90 }, 1).post }));
+      const movedAgain = drawnLastForTest();
+      // Nothing changes: nothing is drawn, the canvas holds the picture.
+      const keep = chainOf(lutC, det2);
+      live.render(bitmap, keep);
+      live.render(bitmap, keep);
+      const nothing = drawnLastForTest();
+      const nothingPx = worst(readOf(live), whole(keep)).worst;
+      // The FIRST pass changes: start over, whole.
+      live.render(bitmap, chainOf(lutC, det3));
+      const restart = drawnLastForTest();
+      const restartPx = worst(readOf(live), whole(chainOf(lutC, det3))).worst;
+      results.upstream = { n, pre: det.pre.length, first, second, resumed, wholeC, moved, wholeMoved, movedAgain, nothing, nothingPx, restart, restartPx };
+    } finally {
+      setDitherForTest(null);
+      live.dispose();
+    }
+  }
+
+  // --- the 16-bit read-back (RenderGraph.readHalf): the chain's own floats,
+  // held to the 8-bit canvas it also draws, and a half source round-tripped --
+  {
+    const { createRenderGraph, passthroughPass, setDitherForTest } = await import('/atelier/src/shared/render/graph.ts');
+    const { makeCubePass } = await import('/atelier/src/shared/render/cube-pass.ts');
+    const { toHalf, fromHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const RW = 256, RH = 96;
+    const cv = document.createElement('canvas');
+    const graph = createRenderGraph(cv);
+    graph.resize(RW, RH);
+    const chain = [makeCubePass({ lut: cube, intensity: 1, interpolation: 'tetrahedral' }), passthroughPass];
+    // From the 8-bit bitmap source: the canvas (undithered) against the read-back, rounded.
+    const rs = document.createElement('canvas'); rs.width = RW; rs.height = RH;
+    const rg = rs.getContext('2d');
+    for (let y = 0; y < RH; y++) for (let x = 0; x < RW; x++) { rg.fillStyle = `rgb(${x},${Math.round(y * 255 / RH)},${(x * 3 + y) % 256})`; rg.fillRect(x, y, 1, 1); }
+    const rbm = await createImageBitmap(rs);
+    setDitherForTest(false);
+    let canvasBytes, halfOut, roundTrip;
+    try {
+      graph.render(rbm, chain);
+      const o = document.createElement('canvas'); o.width = RW; o.height = RH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      canvasBytes = oc.getImageData(0, 0, RW, RH).data;
+      halfOut = graph.readHalf(rbm, chain);
+      // A half source through a passthrough: the bits come back.
+      const hd = new Uint16Array(RW * RH * 3);
+      for (let i = 0; i < RW * RH; i++) { hd[i * 3] = toHalf((i % RW) / RW); hd[i * 3 + 1] = toHalf(0.37); hd[i * 3 + 2] = toHalf(1.5); }
+      roundTrip = graph.readHalf({ kind: 'half', width: RW, height: RH, data: hd }, [passthroughPass]);
+      results.readHalf = { got: Boolean(halfOut), worst: 0, trip: 0, headroom: roundTrip ? fromHalf(roundTrip.data[2]) : null };
+      if (halfOut) {
+        for (let i = 0; i < RW * RH; i++) for (let c = 0; c < 3; c++) {
+          const v = Math.min(255, Math.max(0, fromHalf(halfOut.data[i * 3 + c]) * 255));
+          results.readHalf.worst = Math.max(results.readHalf.worst, Math.abs(v - canvasBytes[i * 4 + c]));
+        }
+      }
+      if (roundTrip) {
+        for (let i = 0; i < RW * RH * 3; i++) results.readHalf.trip = Math.max(results.readHalf.trip, Math.abs(fromHalf(roundTrip.data[i]) - fromHalf(hd[i])));
+      }
+    } finally {
+      setDitherForTest(null);
+      graph.dispose();
+      rbm.close();
+    }
+  }
+
+  // --- the canvas dither: does the GPU add the noise dither.ts says, and does
+  // it take the steps out of a gradient that more than 8 bits reached? ------
+  {
+    const { createRenderGraph, passthroughPass, setDitherForTest } = await import('/atelier/src/shared/render/graph.ts');
+    const { DITHER_LSB, ditherNoise } = await import('/atelier/src/shared/render/dither.ts');
+    const { toHalf } = await import('/atelier/src/shared/render/half-image.ts');
+    const DW = 1024, DH = 256;
+    const halfOf = (codesAt) => {
+      const data = new Uint16Array(DW * DH * 3);
+      for (let y = 0; y < DH; y += 1) for (let x = 0; x < DW; x += 1) {
+        const h = toHalf(codesAt(x) / 255);
+        data.set([h, h, h], (y * DW + x) * 3);
+      }
+      return { kind: 'half', width: DW, height: DH, data };
+    };
+    const draw = (source, passes, dither) => {
+      const cv = document.createElement('canvas');
+      const graph = createRenderGraph(cv);
+      graph.resize(DW, DH);
+      setDitherForTest(dither);
+      try {
+        graph.render(source, passes);
+      } finally {
+        setDitherForTest(null);
+      }
+      const o = document.createElement('canvas'); o.width = DW; o.height = DH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(cv, 0, 0);
+      graph.dispose();
+      return { canvas: o, data: oc.getImageData(0, 0, DW, DH).data };
+    };
+    const twoPasses = [passthroughPass, passthroughPass];
+
+    // 1. The shader's noise IS the twin's: a flat 100.3 codes, every pixel
+    //    predicted. `gl_FragCoord` counts rows from the BOTTOM of the canvas.
+    const flat = draw(halfOf(() => 100.3), twoPasses, true).data;
+    let agree = 0, total = 0, flatWorst = 0;
+    for (let r = 0; r < DH; r += 1) for (let x = 0; x < DW; x += 1) {
+      for (let c = 0; c < 3; c += 1) {
+        const want = Math.round(100.3 + 2 * DITHER_LSB * ditherNoise(x, DH - 1 - r));
+        const got = flat[(r * DW + x) * 4 + c];
+        if (got === want) agree += 1;
+        flatWorst = Math.max(flatWorst, Math.abs(got - want));
+        total += 1;
+      }
+    }
+
+    // 2. An exact code comes home: an 8-bit picture through two float16
+    //    passes, dithered, is the picture.
+    const exactSrc = document.createElement('canvas'); exactSrc.width = DW; exactSrc.height = DH;
+    const eg = exactSrc.getContext('2d', { willReadFrequently: true });
+    for (let x = 0; x < 256; x += 1) { eg.fillStyle = `rgb(${x},${255 - x},${(x * 7) % 256})`; eg.fillRect(x * 4, 0, 4, DH); }
+    const exactIn = eg.getImageData(0, 0, DW, DH).data;
+    const exactOut = draw(exactSrc, twoPasses, null).data;
+    let exactWorst = 0;
+    for (let i = 0; i < exactIn.length; i += 1) if (i % 4 !== 3) exactWorst = Math.max(exactWorst, Math.abs(exactIn[i] - exactOut[i]));
+
+    // 3. A gentle ramp (8 codes over 1024 px, a RAW's sky): the error of each
+    //    column's average against the ramp, without and with the dither, and
+    //    after a JPEG at the roll's default quality.
+    const ideal = (x) => 100 + (8 * x) / DW;
+    const ramp = halfOf(ideal);
+    const columnError = (data) => {
+      let w = 0;
+      for (let x = 0; x < DW; x += 1) {
+        let s = 0;
+        for (let r = 0; r < DH; r += 1) s += data[(r * DW + x) * 4 + 1];
+        w = Math.max(w, Math.abs(s / DH - ideal(x)));
+      }
+      return w;
+    };
+    const viaJpeg = async (canvas) => {
+      const blob = await new Promise((res) => canvas.toBlob(res, 'image/jpeg', 0.92));
+      const bmp = await createImageBitmap(blob);
+      const o = document.createElement('canvas'); o.width = DW; o.height = DH;
+      const oc = o.getContext('2d', { willReadFrequently: true });
+      oc.drawImage(bmp, 0, 0);
+      bmp.close();
+      return oc.getImageData(0, 0, DW, DH).data;
+    };
+    const plain = draw(ramp, [passthroughPass], false);
+    const dithered = draw(ramp, [passthroughPass], null);
+    results.dither = {
+      agree: agree / total,
+      flatWorst,
+      exactWorst,
+      plain: columnError(plain.data),
+      dithered: columnError(dithered.data),
+      plainJpeg: columnError(await viaJpeg(plain.canvas)),
+      ditheredJpeg: columnError(await viaJpeg(dithered.canvas)),
+    };
+  }
+
   return results;
 });
 
@@ -1732,8 +2061,11 @@ const hs = out.half;
   // 8-bit canvas as k−1 on this GPU (measured — the untouched pictures already
   // differ by one code in places), and a steep curve makes that two. An 8-bit
   // source never meets it, since its values are exactly k/255; a RAW's values
-  // are continuous and meet it everywhere, harmlessly.
-  const okGrade = hs.graded <= 2 && hs.plainDiff <= 1;
+  // are continuous and meet it everywhere, harmlessly. Three since the
+  // display clip (`clipToDisplay`, 2026-10-05): at the onset of a saturated
+  // yellow's clip the blue channel answers red more steeply than any curve
+  // does — measured 3 on one pixel of the ramp, 85 two codes off.
+  const okGrade = hs.graded <= 3 && hs.plainDiff <= 1;
   if (!upright || !okRamp || !okGrade) bad += 1;
   console.log(
     `\n  ${upright && okRamp && okGrade ? 'ok  ' : 'FAIL'}  a half-float source (191×97, odd): ` +
@@ -1866,6 +2198,76 @@ const half = out.halfCube;
     `\n  ${okFormat && okValue ? 'ok  ' : 'FAIL'}  without OES_texture_float_linear the cube is ${half.format}` +
       `, worst ${half.worst} code${half.worst === 1 ? '' : 's'} from the float path (allowed 1)` +
       (half.mean > 16 ? '' : ' — and the picture is BLACK'),
+  );
+}
+
+const hd = out.head;
+{
+  console.log("\n  the develop's HEAD (develop-head.ts), a RAW's lifted shadows through a look:");
+  const say = (ok, text) => {
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${text}`);
+  };
+  say(hd.twin <= 1.5, `the GPU against the CPU twin (head, then lattice): worst ${hd.twin.toFixed(2)} code(s) (allowed 1.5)`);
+  say(hd.truth <= 1.5, `against the per-pixel develop then the look's own lattice: worst ${hd.truth.toFixed(2)} code(s) (allowed 1.5)`);
+  say(hd.own && hd.size === 33, `the look keeps its own lattice (${hd.size}³, shared with the file's)${hd.own ? '' : ' — it was RESAMPLED'}`);
+  say(hd.moved > 20, `and the develop moved the shadows by ${hd.moved} code(s) (must be past 20)`);
+  say(hd.twinGraded <= 1.5, `with the wheels as a TAIL baked under the head (${hd.gradedSize}³): GPU against the CPU twin worst ${hd.twinGraded.toFixed(2)} code(s) (allowed 1.5)`);
+  const tn = out.tone;
+  console.log("\n  the tone engine's TOP (develop.ts): two stops of a RAW's headroom under highlights −100, contrast +20, a warm balance:");
+  say(tn.twin <= 1.5, `the GPU against the CPU twin on the headroom and its clip: worst ${tn.twin.toFixed(2)} code(s) (allowed 1.5)`);
+  say(tn.dips === 0, `the grey ramp through the headroom never steps down (${tn.dips} dip(s))`);
+  // The shoulder reaches white at slope 0, so the ramp's last fifth (the
+  // brightest half-stop) sits within four codes of it: three quarters of the
+  // columns under white is the shape, not a loss.
+  say(tn.underWhite > tn.width * 0.7 && tn.atWhite > 0, `${tn.underWhite} of ${tn.width} columns land under white with their order, and the sensor's top lands AT white (${tn.atWhite} column(s) with a channel there)`);
+  say(tn.warmWrong === 0, `a warm highlight stays warm through the clip — R ≥ G ≥ B on every column (${tn.warmWrong} wrong)`);
+}
+
+const up = out.upstream;
+{
+  console.log(`\n  the kept upstream (graph.ts, planResume), a ${up.n}-pass chain — ${up.pre} denoise passes, the cube, a keystone, a sharpen:`);
+  const say = (ok, text) => {
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${text}`);
+  };
+  say(up.first === up.n && up.second === up.n, `the first two renders draw whole (${up.first}, ${up.second} passes), the second placing the checkpoint`);
+  say(up.resumed === up.n - up.pre && up.wholeC === 0, `a new cube then draws ${up.resumed} passes, not ${up.n} — and matches a whole render to the bit (worst ${up.wholeC})`);
+  // From the checkpoint before the cube: the cube, the keystone and the new
+  // sharpen; the checkpoint then moves to the keystone's output, so the next
+  // sharpen draws itself alone.
+  say(up.moved === up.n - up.pre && up.wholeMoved === 0 && up.movedAgain === 1, `a new sharpen draws ${up.moved} from the old checkpoint (worst ${up.wholeMoved}), and the next sharpen ${up.movedAgain} alone`);
+  say(up.nothing === 0 && up.nothingPx === 0, `nothing changed draws ${up.nothing} and the canvas holds the picture (worst ${up.nothingPx})`);
+  say(up.restart === up.n && up.restartPx === 0, `a changed FIRST pass starts over: ${up.restart} passes, worst ${up.restartPx}`);
+}
+
+const rh = out.readHalf;
+{
+  const ok = rh.got && rh.worst <= 1 && rh.trip < 0.002 && rh.headroom !== null && rh.headroom > 1.4;
+  if (!ok) bad += 1;
+  console.log(
+    `\n  ${ok ? 'ok  ' : 'FAIL'}  the 16-bit read-back: ${rh.got ? `worst ${rh.worst.toFixed(2)} code(s) from the undithered canvas (allowed 1)` : 'NOTHING came back'}` +
+      `, a half source round-trips within ${rh.trip.toFixed(4)}, headroom ${rh.headroom === null ? 'lost' : rh.headroom.toFixed(2)} kept above white`,
+  );
+}
+
+const dz = out.dither;
+{
+  console.log('\n  the canvas dither (dither.ts), on a RAW-like half-float source:');
+  const say = (ok, text) => {
+    if (!ok) bad += 1;
+    console.log(`  ${ok ? 'ok  ' : 'FAIL'}  ${text}`);
+  };
+  say(
+    dz.flatWorst <= 1 && dz.agree > 0.99,
+    `the GPU's noise is the twin's: ${(dz.agree * 100).toFixed(2)} % of the values equal, worst ${dz.flatWorst} code(s) (allowed 1)`,
+  );
+  say(dz.exactWorst === 0, `an 8-bit picture through two float16 passes comes back whole: worst ${dz.exactWorst} code(s) (allowed 0)`);
+  say(
+    dz.plain > 0.4 && dz.dithered < 0.2 && dz.ditheredJpeg < 0.3,
+    `a ramp of 8 codes over 1024 × 256 px: a column's average strays ${dz.plain.toFixed(3)} code from it undithered, ` +
+      `${dz.dithered.toFixed(3)} dithered (allowed 0.2); after a JPEG at 0.92, ${dz.plainJpeg.toFixed(3)} undithered ` +
+      `and ${dz.ditheredJpeg.toFixed(3)} dithered (allowed 0.3)`,
   );
 }
 

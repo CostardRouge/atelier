@@ -27,6 +27,17 @@ import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail
 export const CLIP_THUMB_SECONDS = 1;
 
 /**
+ * A baked thumbnail: its bytes, and its width over its height — known from
+ * the canvas it was drawn on, so it is kept beside the bytes
+ * (`roll-store.ts`, `ThumbRecord.aspect`) and the band is laid out from it
+ * without decoding the blob to measure it (`use-thumb-aspects.ts`).
+ */
+export interface BakedThumb {
+  blob: Blob;
+  aspect: number;
+}
+
+/**
  * The open picture's cell AS DELIVERED: the graded picture, framed into its
  * aspect box the way the export will frame it, never upscaled past the
  * source's own long edge. What the editor's own stage hands over
@@ -41,7 +52,7 @@ export async function framedThumbnail(
   framing: Framing,
   border: RollBorder | null = null,
   longEdge = THUMB_LONG_EDGE,
-): Promise<Blob | null> {
+): Promise<BakedThumb | null> {
   if (srcW <= 0 || srcH <= 0) return null;
   // The delivered canvas at the thumbnail's size: a small crop is drawn at the
   // cell's size too — a cell is looked at, not delivered.
@@ -62,7 +73,13 @@ export async function framedThumbnail(
   } catch {
     return null;
   }
-  return new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', THUMB_QUALITY));
+  return encodeBaked(canvas, THUMB_QUALITY);
+}
+
+/** The canvas as a JPEG at this quality, with its own aspect. */
+function encodeBaked(canvas: HTMLCanvasElement, quality: number): Promise<BakedThumb | null> {
+  const aspect = canvas.width / canvas.height;
+  return new Promise((resolve) => canvas.toBlob((blob) => resolve(blob ? { blob, aspect } : null), 'image/jpeg', quality));
 }
 
 /**
@@ -76,11 +93,22 @@ export async function framedThumbnail(
  */
 const ROLL_DECODES = makeDecodeQueue(1);
 
+/**
+ * A decode in the roll's one background slot, newest first — the
+ * thumbnails' and the working previews' queue, shared since 2026-10-06
+ * with the stage's warm of the pictures beside the open one
+ * (`stage-sources.ts`), so nothing in the background ever holds two
+ * decodes at once.
+ */
+export function enqueueRollDecode<T>(task: () => Promise<T>): Promise<T> {
+  return ROLL_DECODES.enqueue(task);
+}
+
 export function pictureThumbnail(
   file: File,
   longEdge = THUMB_LONG_EDGE,
   quality = THUMB_QUALITY,
-): Promise<Blob | null> {
+): Promise<BakedThumb | null> {
   return ROLL_DECODES.enqueue(() => bakeThumbnail(file, longEdge, quality));
 }
 
@@ -89,7 +117,7 @@ export function rollDecodesForTest(): { running: number; waiting: number } {
   return { running: ROLL_DECODES.running(), waiting: ROLL_DECODES.waiting() };
 }
 
-async function bakeThumbnail(file: File, longEdge: number, quality: number): Promise<Blob | null> {
+async function bakeThumbnail(file: File, longEdge: number, quality: number): Promise<BakedThumb | null> {
   if (isClipName(file.name) || file.type.startsWith('video/')) return bakeClipThumbnail(file, longEdge, quality);
   let bitmap: ImageBitmap | null = null;
   try {
@@ -107,7 +135,7 @@ async function bakeThumbnail(file: File, longEdge: number, quality: number): Pro
     if (!ctx) return null;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(bitmap, 0, 0, w, h);
-    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    return await encodeBaked(canvas, quality);
   } catch {
     return null;
   } finally {
@@ -121,7 +149,7 @@ async function bakeThumbnail(file: File, longEdge: number, quality: number): Pro
  * small and released. A clip the browser cannot decode (an HEVC rush here)
  * yields null and the cell says so, like a RAW without its render.
  */
-async function bakeClipThumbnail(file: File, longEdge: number, quality: number): Promise<Blob | null> {
+async function bakeClipThumbnail(file: File, longEdge: number, quality: number): Promise<BakedThumb | null> {
   let source: Awaited<ReturnType<typeof loadBadgeSource>> | null = null;
   try {
     source = await loadBadgeSource(file, CLIP_THUMB_SECONDS);
@@ -134,7 +162,7 @@ async function bakeClipThumbnail(file: File, longEdge: number, quality: number):
     if (!ctx) return null;
     ctx.imageSmoothingQuality = 'high';
     ctx.drawImage(source.image, 0, 0, w, h);
-    return await new Promise((resolve) => canvas.toBlob(resolve, 'image/jpeg', quality));
+    return await encodeBaked(canvas, quality);
   } catch {
     return null;
   } finally {

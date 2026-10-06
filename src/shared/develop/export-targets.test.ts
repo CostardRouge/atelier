@@ -64,9 +64,16 @@ describe('the record', () => {
     const many = Array.from({ length: 9 }, () => ({ name: 'W', size: { mode: 'megapixels', value: 999 }, quality: 3, sharpen: 'max' }));
     const read = readTargets([...many, 'junk']);
     expect(read).toHaveLength(MAX_TARGETS);
-    expect(read[0]).toEqual({ name: 'W', size: { mode: 'megapixels', value: 200 }, quality: 1, sharpen: 'off', watermark: false });
+    expect(read[0]).toEqual({ name: 'W', size: { mode: 'megapixels', value: 200 }, format: 'jpeg', quality: 1, sharpen: 'off', watermark: false });
     expect(readSize({ mode: 'percent', value: 1 })).toEqual({ mode: 'percent', value: 5 });
     expect(readSize({ mode: 'inches', value: 3 })).toBeNull();
+  });
+
+  it('reads a 16-bit PNG target, never sharpened, and a target with no format as a JPEG', () => {
+    const [png] = readTargets([{ name: 'Master', size: null, format: 'png16', quality: 0.9, sharpen: 'high', watermark: true }]);
+    expect(png).toEqual({ name: 'Master', size: null, format: 'png16', quality: 0.9, sharpen: 'off', watermark: true });
+    expect(readTargets([{ name: 'Old', size: null, quality: 0.9, sharpen: 'low', watermark: false }])[0].format).toBe('jpeg');
+    expect(readTargets([{ name: 'Odd', size: null, format: 'tiff', quality: 0.9, sharpen: 'low', watermark: false }])[0].format).toBe('jpeg');
   });
 
   it('compares by value, and says a size in words', () => {

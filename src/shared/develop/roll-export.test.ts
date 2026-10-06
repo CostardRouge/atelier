@@ -316,3 +316,13 @@ describe('a clip at the export door', () => {
     expect(deliverySummary(proxy720, true, rush, null, 16 / 9, null, { size: null, pixels: 'proxies' }).line).toBe('Proxy 1280 px → 1280 · exact · asked 3840');
   });
 });
+
+describe('exportName — the format', () => {
+  it('names a 16-bit PNG .png, a JPEG .jpg, and a clip .mp4 whatever is asked', () => {
+    expect(exportName('DJI_0101.JPG', 'png16')).toBe('DJI_0101.png');
+    expect(exportName('DJI_0101.JPG', 'jpeg')).toBe('DJI_0101.jpg');
+    expect(exportName('DJI_0101.JPG')).toBe('DJI_0101.jpg');
+    expect(exportName('DJI_0007.MP4', 'png16')).toBe('DJI_0007.mp4');
+  });
+});
+

@@ -90,3 +90,45 @@ Driven headless: a v5 roll (`longEdge: 1200`) read as its one target; the
 first set to 50 % and a Feed target added from the menu; one export
 downloaded `edge.jpg` 1500×1000 and `Feed-edge.jpg` 1620×1080, the second's
 edge 90 | 75 · 185 | 170 against the first's 91 · 169; the roll stored v6.
+
+## A 16-bit PNG target, cut in float off the chain's own buffers (2026-10-05)
+
+**Decision** (the fidelity audit's piste 6, his «fais les autres pistes»;
+TIFF stays his NO of 2026-09-23): `ExportTarget.format: 'jpeg' | 'png16'`
+(additive — `readTarget` reads an absent format as a JPEG and forces
+`sharpen: 'off'` on a PNG, `exportName(ref, format)` → `.png`, the *Master ·
+16-bit PNG* preset). **Where the bits come from**: `RenderGraph.readHalf`
+(`graph.ts`) draws the chain WHOLE with its last pass turned onto a target
+and reads that target back in row bands as RGB half-floats — what the GPU
+hands back is its own choice (`IMPLEMENTATION_COLOR_READ_TYPE`: half-floats
+taken as they are, floats converted) — undithered by construction (the
+dither is the canvas write's), null on a `byte` chain; exposed as
+`GraphGrader.renderHalf` and `PassGrader.renderHalf`, so `roll-render.ts`
+asks the one grader it already holds, AFTER the 8-bit render (a read-back
+redraws the chain). **The frame in float** is `deliver-half.ts` (pure,
+tested): `resampleHalfInto` asks `unframePoint` where every output pixel
+came from and reads the half picture bilinearly, supersampled k × k when the
+output is smaller than the source (a downscale averages, never skips), a
+tap off the picture the black of a `contain` framing's bars; samples stay
+ENCODED like the canvas path's resample. The border is painted by
+`drawDelivered` on a canvas with a blank picture (a blur border from the
+8-bit graded render, as the thumbnail is) and widened ×257; the watermark
+drawn on a cleared canvas and laid over by its alpha. **The file** is
+`png-write.ts` (pure, round-tripped through `png-read.ts` in node): 16-bit
+RGB, Paeth per row, `CompressionStream('deflate')`, chunks `iCCP` (the sRGB
+profile), `eXIf` (the very TIFF block `exif-block.ts` makes — a PNG's chunk
+holds it without `Exif\0\0`), `iTXt` `XML:com.adobe.xmp`; the run hands the
+render `exifFor(delivered)` beside `stamp`, so a PNG and a JPEG of one
+picture carry one block. **Refusals, said**: a constrained device never
+reads a picture back (8 B/px whole: a 48 MP still is 384 MB) — the target's
+JPEG leaves and `RollOutput.note` is a failure line; a GPU that refuses the
+read-back the same. No gain map on a PNG. **Driven headless**: a JPEG
+dropped on a roll with two targets (PNG 16, then a Web JPEG at 0.95),
+exposure +0.5 through the slider, the run into OPFS: `IMG_0001.png` beside
+`Web/IMG_0001.jpg`, 16-bit, chunks in order, signed, 96 % of samples off any
+8-bit code, mean 0.65 code from the JPEG (its own compression); the gate row
+in `check-render.mjs`: the read-back within 0.5 code of the undithered
+canvas, a half source round-tripped exactly, headroom above white kept.
+Not seen: a file opened in Lightroom or Photoshop (the eXIf chunk is read by
+both since 2017; XMP in iTXt by every Adobe reader).
+
