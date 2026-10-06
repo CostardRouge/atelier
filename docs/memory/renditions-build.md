@@ -55,6 +55,25 @@ map`, …), each row with its pixels and its weight, a blocked row disabled
 and saying why, a row not in hand saying what fetching it costs. Driven in
 headless Chromium on a JPEG + DNG + export-of-ours drop (`docs/run-sheet.md`).
 
+**Its FACE since 2026-10-06 is face B of the Renditions Drawer lab**
+(https://claude.ai/artifact/VPDyUGkGeD2ZMH6omgA9Ak, his pick, *"with the MP
+number"*): three groups, *Quick* · *The camera's file* · *The sensor*; a row
+is a radio, its title, its MEGAPIXELS in a right column and ONE line of facts
+(size · bits · `8.4× short` against the capture's biggest picture, from 1.5×
+on · `↓ 72 MB` when it must be fetched), the sentence about what it IS on the
+open row only. The rungs stopped being rows: a segmented control under the
+sensor row (*Gain · Gain map · + Warp*, each title the full name and what it
+adds), *Meter the exposure again* a link under it, the calibration behind an
+ⓘ on the group's label. The roll's choice is a scope switch at the top
+(*This picture · Whole roll · N*) over the same three roles, not a second list
+at the foot. Figures in `base-menu.ts` (pure, tested); the panel is
+`AnchoredPopover` — the portal, placement and dismissal under every
+`OverflowMenu`, now also usable by a panel holding controls of its own.
+Rejected in the lab: C (a ladder — a HEIF beside an ARW has no honest rung),
+D (1:1 crops need each file decoded, 72 MB to draw a card), E (role first —
+he thinks in files), F (letters in the bar). Driven headless on a JPEG +
+hand-built DNG drop at 1280 and 390, the rungs on the component alone.
+
 - **The choice is `RollPicture.rendition`**, a rendition id, null for where
   the picture opens (the opening row is stored as nothing, one spelling), and
   an id the capture no longer offers falls back silently. No version bump:

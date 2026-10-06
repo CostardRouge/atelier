@@ -1771,17 +1771,21 @@ it is sharpened and black where it is not, on the Detail tab only; it never
 reaches a thumbnail or an export.
 
 **Which file.** A chip above the photograph says what it is developed from
-(`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the list of the
-capture's files: the proxy your Winnow made, what the camera delivered — its
-JPEG, or the render written inside a RAW — and the sensor itself, with its
-calibration rungs nested under it (*Gain*, *Gain map*, *Gain map + warp*,
-each an amount of the camera's own calibration read from the DNG, offered
-only where the file carries it). A file that is not here is fetched from its
-instance and held for the session, its weight said before the click; a DNG
+(`JPEG · 8-bit`, `RAW · camera render · 960 × 540`…) and opens the
+capture's files in three groups: *Quick* (the proxy your Winnow made), *The
+camera's file* (its JPEG, or the render written inside a RAW) and *The
+sensor*. Each file shows its megapixels, its size, its bits and how far it
+falls short of the capture's biggest picture (`960 × 540 · 8.4× short`).
+Under the sensor, one control picks how much of the camera's own calibration
+to apply (*Gain*, *Gain map*, *+ Warp*, read from the DNG and offered only
+where the file carries it). A file that is not here is fetched from its
+instance and held for the session, its weight said before the click (`↓ 72
+MB`); a DNG
 beside a JPEG in a folder is the sensor with no fetch at all. The choice is
 saved on the picture, so another device shows the same one, and the export
-follows it. **For the whole roll**, the same list ends on *The whole roll
-opens on* — *Proxy*, *Camera render* or *Sensor (RAW)* — and choosing a file
+follows it. **For the whole roll**, a switch at the top of the same menu turns
+*This picture* into *Whole roll* — *Proxy*, *Camera render* or *Sensor (RAW)*
+— and choosing a file
 on one picture offers *Use Camera render for the whole roll* right beside its
 name (also asked when the roll is created). Every picture with no choice of
 its own then opens on that file, the ones added later too: the roll holds one
