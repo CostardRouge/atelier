@@ -22,12 +22,27 @@ import { APP_HEIGHT_VAR, appHeightFor, type ViewportReading } from './app-height
  */
 let published: number | null = null;
 
-function readViewport(): ViewportReading {
+function readViewport(probe: HTMLElement | null): ViewportReading {
   const visual = window.visualViewport;
   return {
     layout: window.innerHeight,
     visual: visual ? { height: visual.height, scale: visual.scale } : null,
+    fixed: probe ? probe.getBoundingClientRect().height : null,
   };
+}
+
+/**
+ * An empty `position: fixed` box from the top of the screen to its bottom: the
+ * area the engine lays fixed content into, read as a third opinion on the
+ * height and WATCHED — Safari 26 compacts its floating toolbar without firing
+ * a resize, and a `ResizeObserver` on this box is the one thing that hears it.
+ */
+function makeProbe(): HTMLElement {
+  const probe = document.createElement('div');
+  probe.setAttribute('aria-hidden', 'true');
+  probe.style.cssText = 'position:fixed;top:0;bottom:0;left:0;width:0;visibility:hidden;pointer-events:none;';
+  document.body.appendChild(probe);
+  return probe;
 }
 
 /**
@@ -45,8 +60,9 @@ export function useAppHeight(): void {
   useEffect(() => {
     if (typeof window === 'undefined') return;
     const root = document.documentElement;
+    const probe = makeProbe();
     const apply = () => {
-      const next = appHeightFor(readViewport());
+      const next = appHeightFor(readViewport(probe));
       if (next === null || next === published) return;
       published = next;
       root.style.setProperty(APP_HEIGHT_VAR, `${next}px`);
@@ -74,6 +90,10 @@ export function useAppHeight(): void {
     // the next one at which the browser has certainly laid its chrome out.
     // Two reads and a compare — nothing is written unless the height moved.
     window.addEventListener('pointerdown', apply, { capture: true, passive: true });
+    // And whenever the fixed area itself changes, whether or not the browser
+    // said so (`makeProbe`).
+    const watch = typeof ResizeObserver === 'undefined' ? null : new ResizeObserver(apply);
+    watch?.observe(probe);
 
     return () => {
       window.removeEventListener('resize', apply);
@@ -83,6 +103,8 @@ export function useAppHeight(): void {
       visual?.removeEventListener('resize', apply);
       if (!settled) window.removeEventListener('load', apply);
       window.removeEventListener('pointerdown', apply, { capture: true });
+      watch?.disconnect();
+      probe.remove();
     };
   }, []);
 }

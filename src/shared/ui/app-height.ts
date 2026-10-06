@@ -45,12 +45,21 @@ export interface ViewportReading {
    * the layout. Null where the browser has no such object.
    */
   visual: { height: number; scale: number } | null;
+  /**
+   * The height of a `position: fixed; top: 0; bottom: 0` box — the area the
+   * engine itself lays fixed content into. Safari 26's floating toolbar left
+   * BOTH readings above a compact bar's worth short (his iPhone, 2026-10-06:
+   * a band of nothing under the bottom menu) while this box reached the bar.
+   * It is also what a `ResizeObserver` can watch when the toolbar changes
+   * shape without a single event. Null where nothing was measured.
+   */
+  fixed?: number | null;
 }
 
 /**
  * The height to lay the app out at, or `null` for "keep the last one".
  *
- * **The larger of the two readings.** They agree in every ordinary moment; the
+ * **The largest of the readings.** They agree in every ordinary moment; the
  * two that matter are the ones where they don't:
  *
  * - the layout viewport is stale-short (the iOS bug above) — the visual
@@ -60,6 +69,9 @@ export interface ViewportReading {
  *   fingers typing in it. The layout viewport, which the keyboard does not
  *   move, wins.
  *
+ * - Safari 26's floating toolbar — both readings are stale-short and the
+ *   fixed box (`fixed`) is the one that knows the screen.
+ *
  * **Nothing reflows under a zoom.** While the page is pinched the visual
  * viewport describes the magnified region rather than the screen, and on some
  * engines `innerHeight` follows it — so the measurement stands still until the
@@ -68,7 +80,7 @@ export interface ViewportReading {
 export function appHeightFor(reading: ViewportReading): number | null {
   const { layout, visual } = reading;
   if (visual && Math.abs(visual.scale - 1) > 0.01) return null;
-  const heights = [layout, visual?.height ?? 0].filter((n) => Number.isFinite(n) && n > 0);
+  const heights = [layout, visual?.height ?? 0, reading.fixed ?? 0].filter((n) => Number.isFinite(n) && n > 0);
   if (heights.length === 0) return null;
   return Math.round(Math.max(...heights));
 }

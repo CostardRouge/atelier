@@ -262,6 +262,18 @@ export function useScrollView<T extends HTMLElement>(): [RefObject<T>, ViewBox] 
       if (frame) cancelAnimationFrame(frame);
     };
   }, [ref]);
+  // A box that changes SIZE can clamp its scroll without a scroll event (a
+  // band pulled up into a grid and folded back to one row): read it again, or
+  // the window stays on cells far from what is shown and the view is blank.
+  useEffect(() => {
+    const el = ref.current;
+    if (!el) return;
+    const x = el.scrollLeft;
+    const y = el.scrollTop;
+    if (x === last.current.x && y === last.current.y) return;
+    last.current = { x, y };
+    setScroll((cur) => (cur.x === x && cur.y === y ? cur : { x, y }));
+  }, [ref, size.width, size.height]);
   const view = useMemo(() => ({ x: scroll.x, y: scroll.y, w: size.width, h: size.height }), [scroll, size]);
   return [ref, view];
 }
@@ -599,18 +611,22 @@ const Cell = memo(function Cell({
         style={{ height: h }}
       >
         {url ? (
-          // Lazy: a cell drawn in the margin beside the view loads its
-          // picture as it comes near, and never blocks the ones on screen.
+          // Eager: the strip already draws only the cells near its view
+          // (`cellsInView`), and a lazy `<img>` inside a scroller is one
+          // iOS Safari may never start — no load, no error, an empty frame.
           <img
             src={url}
             alt=""
-            loading="lazy"
             decoding="async"
             className={`block w-full h-full object-cover ${unreachable ? 'opacity-45 grayscale' : ''}`}
             draggable={false}
           />
-        ) : remote && (kind === 'waiting' || kind === 'fetching') ? (
-          <WinnowThumb client={remote.client} id={remote.id} label={CELL_WORDS[kind]} box="w-full h-full" />
+        ) : remote ? (
+          // The instance's thumbnail whatever the picture's state: a picture
+          // fetched into the pool (the open one and its neighbours, `ready`)
+          // used to swap it for "…" until its own bake landed — one decode at
+          // a time on a phone, and never if the bake failed.
+          <WinnowThumb client={remote.client} id={remote.id} label={CELL_WORDS[kind]} box="w-full h-full" eager />
         ) : (
           <span className="absolute inset-0 grid place-items-center px-1 text-center font-mono text-3xs leading-tight text-muted">
             {CELL_WORDS[kind]}

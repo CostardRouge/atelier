@@ -38,6 +38,18 @@ describe('appHeightFor', () => {
     expect(appHeightFor(reading(843.33, 843.33))).toBe(843);
   });
 
+  it('trusts the fixed box when both viewports are stale-short (Safari 26)', () => {
+    expect(appHeightFor({ layout: 739, visual: { height: 739, scale: 1 }, fixed: 799 })).toBe(799);
+  });
+
+  it('keeps the keyboard out through the fixed box too, which the keyboard does not move', () => {
+    expect(appHeightFor({ layout: 844, visual: { height: 402, scale: 1 }, fixed: 844 })).toBe(844);
+  });
+
+  it('still freezes under a pinch whatever the fixed box says', () => {
+    expect(appHeightFor({ layout: 844, visual: { height: 402, scale: 2 }, fixed: 900 })).toBeNull();
+  });
+
   it('says nothing rather than zero when the readings are unusable', () => {
     expect(appHeightFor(reading(0, 0))).toBeNull();
     expect(appHeightFor(reading(Number.NaN))).toBeNull();
