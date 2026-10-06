@@ -3,6 +3,7 @@ import { drawFramed, type Framing } from '../../../shared/media/framing';
 import { cardLabel } from '../../../shared/media/motion-cards';
 import { loadBadgeSource, type BadgeSource } from '../../../shared/roadtrip/badge-render';
 import { Icons } from '../../../shared/ui/icons';
+import { revealInScroller } from '../../../shared/ui/reveal';
 
 /** The picture a card row draws its thumbnails from, and the frame each card sits in. */
 export interface CardThumbSource {
@@ -146,7 +147,7 @@ export default function MotionCards({ cards, arrivals, holdSeconds, selected, th
   useEffect(() => {
     if (selected === null) return;
     const el = canvases.current[selected]?.parentElement;
-    el?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
+    revealInScroller(el, { block: 'nearest', inline: 'nearest' });
   }, [selected]);
 
   const count = cards.length;

@@ -1443,6 +1443,18 @@ The rules a later agent must keep:
   are relayed through `callbacks.current`, like every other.
 - Driven headless at 1270 × 1300, 1700 × 1200 and 390 × 844 (touch) — NOT on
   his Mac or his iPhone. §7 of the brief stays his to overrule.
+- **On a phone (2026-10-06, his screenshots)**: the sheet's header is TWO rows
+  (title · count · ✕, then filter · size · Select) — one `flex-none` row could
+  not wrap and pushed Select and ✕ off the screen; its bottom room is paid
+  INSIDE the scroller. A band of ROWS snaps (`snap-y snap-mandatory`, cells
+  `snap-start`, `scroll-padding` = the layout's `pad`), so it rests on whole
+  rows with breathing room under the header instead of a row sliced flush
+  against it; the reveal of the open cell is scoped to the band's own body
+  with the same `pad` as margin. The stage bar's ± fold into the zoom pill's
+  menu on a phone (`StageZoomControl` `folded`), and Focus and Keys and
+  gestures join that menu and leave the well — at 390 px the pill (128) and
+  the nine-verb well (324) were 86 px wider than the row, so `?` and Focus
+  sat off-screen. Driven at 390 × 844 touch: nothing past the right edge.
 
 ## The band draws the cells near the view, and a thumbnail knows its shape (2026-10-06, P2 of `docs/develop-performance.md`)
 
@@ -1481,6 +1493,11 @@ view. Rules:
   still unmeasured waits for the one that is.
 - The bake order is the open picture first, then outward: the cells on
   screen get theirs first. The bench: `testing.md`, «The band bench».
+- **With the snap of the phone's band of rows** (above): the cells outside
+  the drawn window are no snap points, and the window is published every
+  quarter of the box while the hand scrolls, so the rows the scroll can rest
+  on are always drawn ahead of it; the reveal of the open cell takes the
+  same `pad` as its margin, by arithmetic on the body's own scroll position.
 
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 

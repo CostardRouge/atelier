@@ -24,6 +24,12 @@ import type { ZoomControls } from './stage-zoom';
  * this replaces was a second button INSERTED past 1:1, which slid the whole
  * bar sideways and put `pixels` under a finger that had pressed `+` twice.
  * The fitted size is then the menu's own first rung, so nothing is lost.
+ *
+ * `folded` (a phone, 2026-10-06) draws the menu ALONE, with `−` and `+` as its
+ * first two rows: a phone's stage bar could not hold the pill and the Develop
+ * well side by side, and pushed the last verbs off the screen. The pinch is
+ * the gesture there; the menu is the way in that always answers when the
+ * browser takes the fingers — Zoom in, Zoom out, Fit and 100 % all in it.
  */
 export default function StageZoomControl({
   zoom,
@@ -31,18 +37,51 @@ export default function StageZoomControl({
   className = '',
   items,
   menuLabel = 'Zoom, and how the picture is drawn',
+  folded = false,
 }: {
   zoom: ZoomControls;
   hint?: string;
   className?: string;
   items?: readonly OverflowItem[];
   menuLabel?: string;
+  /** The ± as the menu's first rows, the pill one control wide — needs `items`. */
+  folded?: boolean;
 }) {
   const button =
     'w-6 h-6 grid place-items-center rounded-full border border-line-strong bg-paper text-ink ' +
     'font-mono text-xs leading-none cursor-pointer transition-colors ' +
     'hover:border-accent hover:text-accent-ink disabled:opacity-40 disabled:cursor-default ' +
     'disabled:hover:border-line-strong disabled:hover:text-ink';
+
+  if (folded && items && items.length > 0) {
+    const steps: OverflowItem[] = [
+      { id: 'zoom-in', label: <span className="font-mono text-xs">+ Zoom in</span>, disabled: !zoom.canZoomIn, onSelect: zoom.zoomIn },
+      { id: 'zoom-out', label: <span className="font-mono text-xs">− Zoom out</span>, disabled: !zoom.canZoomOut, onSelect: zoom.zoomOut },
+    ];
+    return (
+      <div className={`flex items-center rounded-full border border-line bg-surface/86 backdrop-blur-[2px] px-1 py-1 ${className}`}>
+        <OverflowMenu
+          label={`${menuLabel} — ${zoom.label}`}
+          items={[...steps, ...items]}
+          align="start"
+          trigger={{
+            bare: true,
+            className:
+              'min-w-[3.9rem] h-6 px-1.5 inline-flex items-center justify-center gap-1 font-mono text-2xs ' +
+              'tracking-[0.06em] text-muted cursor-pointer bg-transparent border-0 hover:text-accent-ink',
+            text: (
+              <>
+                {zoom.label}
+                <span className="text-faint" aria-hidden="true">
+                  ▾
+                </span>
+              </>
+            ),
+          }}
+        />
+      </div>
+    );
+  }
 
   return (
     <div

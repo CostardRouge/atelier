@@ -182,7 +182,7 @@ export default function RollBand({
         : bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
     [side, items, folded, width, bodyHeight, metrics, target],
   );
-  useScrollToOpen(bodyRef, openId, layout);
+  useScrollToOpen(bodyRef, openId, layout, metrics.pad);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
   return (
     <div
@@ -210,9 +210,15 @@ export default function RollBand({
         // An ORDINARY scroll box declares no `touch-action` (`frontend.md`):
         // the browser already does both axes, and the gestures a cell takes
         // (a click, a press) write no drag.
+        //
+        // A band of ROWS rests on a row (`snap-y`): scrolled freely it stopped
+        // with one row sliced flush under the header and another against the
+        // screen's bottom bar — no breathing room at either end. The snap
+        // keeps the layout's own padding (`scroll-padding`) at rest.
         className={`relative flex-1 min-h-0 min-w-0 overscroll-contain [scrollbar-width:thin] ${
-          folded ? 'hidden' : layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'
+          folded ? 'hidden' : layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden snap-y snap-mandatory'
         }`}
+        style={layout.axis === 'y' ? { scrollPaddingBlock: metrics.pad } : undefined}
       >
         {!folded && <StripCells shown={shown} layout={layout} view={view} {...cells} />}
       </div>
@@ -262,12 +268,15 @@ export function useScrollView<T extends HTMLElement>(): [RefObject<T>, ViewBox] 
 
 /**
  * The open picture's cell kept in view as ←/→ step along the roll: scrolled
- * to by the RECTANGLE the layout answers, to the nearest edge (a cell already
- * in view moves nothing), once per open picture on each axis — the cell is
- * not asked of the DOM, since the first layout is laid at no width and a
- * later one must not pull the band back under a hand that scrolled away.
+ * to by the RECTANGLE the layout answers, to the nearest edge with `margin`
+ * of breathing room (a cell already in view moves nothing), once per open
+ * picture on each axis — the cell is not asked of the DOM, since the first
+ * layout is laid at no width and a later one must not pull the band back
+ * under a hand that scrolled away. The band's body and nothing else is
+ * scrolled — never `scrollIntoView`, which also scrolled the clipping frame
+ * and the locked page under the band and lifted the whole tool (`reveal.ts`).
  */
-export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null, layout: StripLayout) {
+export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null, layout: StripLayout, margin = 0) {
   const cell = openId ? layout.cells.find((c) => c.id === openId) : undefined;
   const box = cell && cell.w > 0 && cell.h > 0 ? `${cell.x},${cell.y},${cell.w},${cell.h + cell.cap}` : null;
   const axis = layout.axis;
@@ -280,15 +289,15 @@ export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: stri
     const [x, y, w, h] = box.split(',').map(Number);
     if (axis === 'x') {
       if (!(el.clientWidth > 0)) return;
-      if (x < el.scrollLeft) el.scrollLeft = x;
-      else if (x + w > el.scrollLeft + el.clientWidth) el.scrollLeft = x + w - el.clientWidth;
+      if (x - margin < el.scrollLeft) el.scrollLeft = Math.max(0, x - margin);
+      else if (x + w + margin > el.scrollLeft + el.clientWidth) el.scrollLeft = x + w + margin - el.clientWidth;
     } else {
       if (!(el.clientHeight > 0)) return;
-      if (y < el.scrollTop) el.scrollTop = y;
-      else if (y + h > el.scrollTop + el.clientHeight) el.scrollTop = y + h - el.clientHeight;
+      if (y - margin < el.scrollTop) el.scrollTop = Math.max(0, y - margin);
+      else if (y + h + margin > el.scrollTop + el.clientHeight) el.scrollTop = y + h + margin - el.clientHeight;
     }
     done.current = key;
-  }, [ref, openId, box, axis]);
+  }, [ref, openId, box, axis, margin]);
 }
 
 /**
@@ -565,7 +574,7 @@ const Cell = memo(function Cell({
   const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, departs, unreachable: unreachable && !!url });
   return (
     <li
-      className={`group absolute select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
+      className={`group absolute snap-start select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
       style={{ left: x, top: y, width: w, height: h + cap }}
       data-picture={picture.id}
       onContextMenu={onContextMenu}
