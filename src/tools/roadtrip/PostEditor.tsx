@@ -157,6 +157,7 @@ import { Icons } from '../../shared/ui/icons';
 import Segmented from '../../shared/ui/Segmented';
 import { useSurface } from '../../shared/ui/use-surface';
 import { FieldRow } from '../../shared/ui/Inspector';
+import { revealInScroller } from '../../shared/ui/reveal';
 
 interface PostEditorProps {
   trip: TripDoc;
@@ -1695,7 +1696,7 @@ export default function PostEditor({
     if (!field) return;
     focusTarget.current = null;
     field.focus({ preventScroll: true });
-    field.scrollIntoView({ block: 'nearest' });
+    revealInScroller(field);
   }, [focusSeq, tab, tripSheet]);
 
   // A selection names an element of ONE slide; another slide has other ids.

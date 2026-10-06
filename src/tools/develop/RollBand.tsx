@@ -49,6 +49,7 @@ import type { AnchorRect } from '../../shared/ui/menu-anchor';
 import { LONG_PRESS_MS, PRESS_SLOP } from '../../shared/ui/press-intent';
 import { useElementWidth } from '../../shared/ui/use-element-width';
 import type { DeliverAction } from './PictureWorkbench';
+import { revealInScroller } from '../../shared/ui/reveal';
 
 /**
  * What the band and the contact sheet both take about the roll's pictures,
@@ -180,7 +181,7 @@ export default function RollBand({
         : bandLayout({ items: folded ? [] : items, width, bodyHeight, metrics, thumb: target }),
     [side, items, folded, width, bodyHeight, metrics, target],
   );
-  useScrollToOpen(bodyRef, openId);
+  useScrollToOpen(bodyRef, openId, metrics.pad);
   const at = openId ? shown.findIndex((p) => p.id === openId) : -1;
   return (
     <div
@@ -208,9 +209,15 @@ export default function RollBand({
         // An ORDINARY scroll box declares no `touch-action` (`frontend.md`):
         // the browser already does both axes, and the gestures a cell takes
         // (a click, a press) write no drag.
+        //
+        // A band of ROWS rests on a row (`snap-y`): scrolled freely it stopped
+        // with one row sliced flush under the header and another against the
+        // screen's bottom bar — no breathing room at either end. The snap
+        // keeps the layout's own padding (`scroll-padding`) at rest.
         className={`relative flex-1 min-h-0 min-w-0 overscroll-contain [scrollbar-width:thin] ${
-          folded ? 'hidden' : layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden'
+          folded ? 'hidden' : layout.axis === 'x' ? 'overflow-x-auto overflow-y-hidden' : 'overflow-y-auto overflow-x-hidden snap-y snap-mandatory'
         }`}
+        style={layout.axis === 'y' ? { scrollPaddingBlock: metrics.pad } : undefined}
       >
         {!folded && <StripCells shown={shown} layout={layout} {...cells} />}
       </div>
@@ -221,11 +228,15 @@ export default function RollBand({
 const ALWAYS = () => true;
 
 /** The open picture's cell kept in view as ←/→ step along the roll. */
-export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null) {
+export function useScrollToOpen(ref: RefObject<HTMLElement | null>, openId: string | null, margin = 0) {
   useEffect(() => {
-    const cell = openId ? ref.current?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
-    cell?.scrollIntoView({ block: 'nearest', inline: 'nearest' });
-  }, [openId, ref]);
+    const body = ref.current;
+    const cell = openId ? body?.querySelector<HTMLElement>(`[data-picture="${CSS.escape(openId)}"]`) : null;
+    // The band's body and nothing else — never `scrollIntoView`, which also
+    // scrolled the clipping frame and the locked page under the band and
+    // lifted the whole tool (`reveal.ts`).
+    revealInScroller(cell, { block: 'nearest', inline: 'nearest', margin, scroller: body });
+  }, [openId, ref, margin]);
 }
 
 /**
@@ -482,7 +493,7 @@ const Cell = memo(function Cell({
   const pills = statePills({ developed, leaves, ignored, held: !leaves && deliverState(picture) === 'no', variant, clip, departs, unreachable: unreachable && !!url });
   return (
     <li
-      className={`group absolute select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
+      className={`group absolute snap-start select-none [-webkit-touch-callout:none] ${ignored && !open ? 'opacity-35 hover:opacity-70' : ''}`}
       style={{ left: cell.x, top: cell.y, width: cell.w, height: cell.h + cell.cap }}
       data-picture={picture.id}
       onContextMenu={onContextMenu}

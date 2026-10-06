@@ -173,6 +173,7 @@ import { deliveryFor } from '../../shared/develop/delivery-source';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
+import { revealInScroller } from '../../shared/ui/reveal';
 
 /**
  * A transport tool's touch geometry and press (`docs/press-feedback.md` C1,
@@ -1047,10 +1048,7 @@ export default function StudioEditor({
   // itself did not change (clicking the element that was already selected).
   useEffect(() => {
     if (!selectedElementId || tab !== 'overlay') return;
-    elementPanelRef.current?.scrollIntoView({
-      block: 'nearest',
-      behavior: 'smooth',
-    });
+    revealInScroller(elementPanelRef.current, { block: 'nearest', behavior: 'smooth' });
   }, [selectedElementId, tab]);
 
   function toggleVisible(id: string) {

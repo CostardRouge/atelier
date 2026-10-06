@@ -3,6 +3,7 @@ import { FIELD_KEYS, FIELD_SPECS, renderElementText } from './field-format';
 import type { Cue } from '../telemetry/srt-parser';
 import type { TimeShift } from '../telemetry/time-format';
 import type { OverlayElement, TelemetryFieldKey } from './overlay-types';
+import { revealInScroller } from '../ui/reveal';
 
 /**
  * The compact add row above the list — a field dropdown and four link buttons.
@@ -63,7 +64,7 @@ export default function ElementList({
   // the highlighted row where it can be seen.
   useEffect(() => {
     if (!selectedId) return;
-    activeRow.current?.scrollIntoView({ block: 'nearest' });
+    revealInScroller(activeRow.current);
   }, [selectedId]);
 
   return (

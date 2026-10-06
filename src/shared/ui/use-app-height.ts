@@ -68,6 +68,12 @@ export function useAppHeight(): void {
     // again, and it is a moment rather than a timer.
     const settled = document.readyState === 'complete';
     if (!settled) window.addEventListener('load', apply);
+    // And the first touch of every gesture: if BOTH readings were stale when
+    // the page settled (a band of paper under the bar after a reload, still
+    // reported once the `load` re-read was in), the moment a finger lands is
+    // the next one at which the browser has certainly laid its chrome out.
+    // Two reads and a compare — nothing is written unless the height moved.
+    window.addEventListener('pointerdown', apply, { capture: true, passive: true });
 
     return () => {
       window.removeEventListener('resize', apply);
@@ -76,6 +82,7 @@ export function useAppHeight(): void {
       document.removeEventListener('visibilitychange', apply);
       visual?.removeEventListener('resize', apply);
       if (!settled) window.removeEventListener('load', apply);
+      window.removeEventListener('pointerdown', apply, { capture: true });
     };
   }, []);
 }

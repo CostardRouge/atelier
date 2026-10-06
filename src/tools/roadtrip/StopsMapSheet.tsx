@@ -38,6 +38,7 @@ import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
 import { blockNativeZoom } from '../../shared/ui/native-gestures';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
+import { revealInScroller } from '../../shared/ui/reveal';
 
 type Place = { name: string; lat: number; lon: number };
 
@@ -401,7 +402,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
   useEffect(() => {
     if (!selectedId) return;
     const row = listRef.current?.querySelector<HTMLElement>(`[data-stop-row="${CSS.escape(selectedId)}"]`);
-    row?.scrollIntoView({ block: 'nearest' });
+    revealInScroller(row);
   }, [selectedId, draft.length]);
 
   // --- the opt-in background ---------------------------------------------------

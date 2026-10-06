@@ -29,6 +29,7 @@ import { plural } from './pieces';
 import { DEFAULT_SETTINGS, readSettings, readTab, writeSettings, writeTab, type DeduceSettings, type DeduceTab } from './settings';
 import { useDeduction } from './use-deduction';
 import type { DeduceActions, DeduceContext, DeduceIntent } from './context';
+import { revealInScroller } from '../../../shared/ui/reveal';
 
 /**
  * Deduce the itinerary — three windows over one draft.
@@ -171,7 +172,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
     const el = body.querySelector<HTMLElement>(`[data-key="${CSS.escape(landing)}"]`);
     setLanding(null);
     if (!el) return;
-    el.scrollIntoView({ block: 'center' });
+    revealInScroller(el, { block: 'center' });
     if (tab === 'grain') el.focus({ preventScroll: true });
     setHot(landing);
     setFlash(landing);
@@ -230,7 +231,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
           e.preventDefault();
           const next = cards[Math.max(0, Math.min(cards.length - 1, at + (e.key === 'ArrowDown' ? 1 : -1)))];
           next?.focus();
-          next?.scrollIntoView({ block: 'nearest' });
+          revealInScroller(next);
           return;
         }
         if (at >= 0 && (e.key === ' ' || key === 'e')) {
