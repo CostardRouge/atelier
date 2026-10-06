@@ -39,6 +39,16 @@ and reading belongs in a module the tests can hold.
   picture is drawn twice.
 - **Remembered per instance** in `browse-state.ts` (`facets`, `sort`), shared
   by every host — his question 2 of §7.4, answered yes by recommendation.
+- **The grid's VIEW is a ⋯ panel** (2026-10-06, his pick A of
+  https://claude.ai/artifact/NeMysG6QryTMpbtf2oKk8N; `SettingsMenu`,
+  `frontend.md`): the sort `<select>` became its *Order* glyphs (still
+  `browse-state`, per instance), and two new choices are PER DEVICE, never per
+  instance — tile size S · M · L (`atelier.winnow.picker.tiles`, three whole
+  `TILE_GRID` strings so Tailwind sees each, rows still pinned in pixels) and
+  the rail as a column or folded (`atelier.winnow.picker.rail`, a wide screen
+  only; folded, the phone's *Filters* button shows there too and unfolds it).
+  The lab's *Tick all shown* was left out: the footer's **All** already is
+  that verb.
 
 **`bursts: 'frames'` is GATED.** `AssetQuery.bursts` sends `collapse=pairs`
 (Winnow #277), which an older instance reads as no collapse at all — every

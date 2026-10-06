@@ -1993,7 +1993,10 @@ weeks), or a **folder** as Winnow ingested it. Every tile wears Winnow's word �
 the pick or reject flag, the stars, a label, a *Gallery* chip when a final
 already links to it — and a rail of filters narrows the list: Incoming ·
 Gallery · All, the verdict, a star floor, photos or clips, the extension, the
-body, Winnow's tags, *no final yet*, *not on the roll*, each with its count. A
+body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
+The grid's ⋯ orders it by capture time or by stars, sets the tiles small,
+medium or large, and folds the rail away on a wide screen (both remembered on
+this device). A
 **culled day opens with its picks ticked**, so taking what you kept is one
 click on *Add N to the roll*; an unculled day ticks everything the roll lacks
 but the rejects. The bar ticks among what is shown — **All**, **None**,
