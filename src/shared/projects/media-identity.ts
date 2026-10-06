@@ -18,7 +18,9 @@ import type { ExifData } from '../exif/exif-parser';
 import type { FetchFile } from '../sources/fetch-options';
 import { partialHash } from '../lib/partial-hash';
 import { fileIdentity } from '../library/assets';
-import { savedMediaRef, type SavedMediaRef } from './project-types';
+// From the record's own module, never the document's types: this file is on
+// the shell's first-paint path (`media-ref.ts` says why).
+import { savedMediaRef, type SavedMediaRef } from './media-ref';
 
 /** Keyed by `fileIdentity`, holding the promise so concurrent calls share one read. */
 const cache = new Map<string, Promise<string | null>>();

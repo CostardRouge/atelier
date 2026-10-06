@@ -207,6 +207,20 @@ eight — restart the dev server before trusting a module-state probe. The
 BEFORE of a change is measured by `git stash` / `git stash pop` around one
 run, on the task's own files only.
 
+## What the entry chunk reaches (2026-10-06)
+
+**Recipe**, the scratchpad's `trace-import.mjs <entry> <needle>`: a regex
+walk of `import … from` and `export … from` lines from `src/main.tsx`,
+relative paths resolved with `.ts` / `.tsx` / `index`, `import type` and
+dynamic `import()` skipped, printing the chain from the entry to every
+module whose path matches the needle. It named the sidebar → `media-identity`
+→ `project-types` → `film-texture` chain that a grep of `src/app` could not
+(the import was three hops down). Beside it, the built entry's own markers:
+`grep -o <symbol> dist/assets/index-*.js | wc -l` for a name only the heavy
+module defines (`halation`, `migrateRollDoc`, `hookSeconds`), and the
+chunk's bytes raw and through `gzip -c | wc -c`. The dev server's Home
+timing is not a measurement (a hundred modules served one by one).
+
 ## Clips through the Develop tool, and an export encoded here (2026-09-30)
 
 **Recipe, headless in this container.** The SYSTEM `ffmpeg` (`/usr/bin/ffmpeg`, unlike Playwright's) has `lavfi` and `libvpx-vp9`: `-f lavfi -i testsrc2=size=640x360:rate=25:duration=4 -c:v libvpx proxy.webm` for a stand-in proxy, and `-c:v libvpx-vp9 -pix_fmt yuv420p -c:a aac -movflags +faststart rush.mp4` for a RUSH that mp4box demuxes and WebCodecs decodes here (VP9 in MP4), so the roll's clip export runs end to end — with the ENCODER swapped for the run: this Chromium has no H.264 encoder, so `webcodecs-export.ts` was patched locally to `codec: 'vp9'` on the muxer and `'vp09.00.10.08'` in place of `pickAvcCodec`, and reverted with `git checkout` before the commit. Seed the roll without the UI (`putRoll(addPictures(createRollDoc(…), [rowMediaRef(host, row)]))` through `/atelier/src/...` imports), stub `/api/assets/7`, `/proxy`, `/download`, `/thumb` with `context.route` and the CORS headers of the stub recipe, deliver into OPFS (`window.showDirectoryPicker = () => navigator.storage.getDirectory()`), and read the file back with a `<video>` for its frame, then `drawImage` at 1 s for a luminance against the source. A LOCAL clip is dropped by dispatching `dragover` + `drop` with a `DataTransfer` on any element inside the roll editor (the event bubbles to its root). Read the stage's luminance off the 2D canvas `[aria-label="The picture, corrected"]`; with A/B on, half of it is as shot, so a grade reads smaller there than in the file. The lone-file name is TEXT (`[title=name]`), a capture with rows is a `button[title=name]`. The crop stage's canvas has no label of its own: it is `div[aria-label^="Crop:"] canvas`; the Format segments are `[aria-label="Format"] button` pressed by text (`1:1`); the pinned export verb reads `Export this picture` or `Export N pictures`, so match `/^Export (1 |this )/`.

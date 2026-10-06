@@ -31,32 +31,11 @@ import { DEFAULT_SOURCE_ID } from '../sources/source';
 
 export const PROJECT_DOC_VERSION = 16;
 
-/**
- * Identity of one media file, enough to re-match it wherever it lives.
- *
- * Resolution goes **id → hash → name** (`reconcile.ts`), most stable key first:
- *
- * - `assetId` — the id this file carries in the source holding it (a Winnow
- *   asset id today). Exact, but only meaningful inside that source.
- * - `hash` — Winnow's `content_hash`, recomputed locally by `partialHash()`.
- *   Survives a rename, and is what lets the same media resolve from a plain
- *   folder and from an instance alike — see `docs/winnow-bridge.md` §4.2.
- * - `name` + `size` + `lastModified` — the original keys, and still the
- *   tiebreak when a partial hash collides.
- *
- * Both new fields are optional, so a document written before they existed reads
- * back unchanged and resolves by name exactly as it used to: this is additive,
- * and needs no migration and no version bump.
- */
-export interface SavedMediaRef {
-  name: string;
-  size: number;
-  lastModified: number;
-  /** Id in the source that holds this file, when it came from one. */
-  assetId?: string;
-  /** Partial content hash (`shared/lib/partial-hash.ts`), when it was computed. */
-  hash?: string;
-}
+// The identity of one media file lives in its own module (`media-ref.ts`,
+// which says why: the shell's sidebar needs it and nothing else of this
+// model); re-exported here for the many readers that always found it here.
+export { savedMediaRef, type SavedMediaRef } from './media-ref';
+import type { SavedMediaRef } from './media-ref';
 
 // The frame shapes live in their own module (`aspect-presets.ts`) so this file
 // and `export-variants.ts` no longer import each other; re-exported here for
@@ -203,10 +182,6 @@ export interface ProjectDoc {
   // --- baked gallery facts (usable without the media) ----------------------
   thumbnail: Blob | null;
   durationSeconds: number | null;
-}
-
-export function savedMediaRef(file: File): SavedMediaRef {
-  return { name: file.name, size: file.size, lastModified: file.lastModified };
 }
 
 /** A fresh document; pass `template` to copy its portable half. */

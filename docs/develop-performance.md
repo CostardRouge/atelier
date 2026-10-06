@@ -155,6 +155,40 @@ What it is (`shared/media/borrowed-cache.ts`, `shared/develop/stage-sources.ts`,
   the exports and the thumbnails keep their own decodes and the RAW cache
   its own.
 
+### 2.4 The shell's start, first half: the entry chunk and the doors (P5a)
+
+The shell's first-paint chunk had grown back to **650 kB**: the Home doors
+and the Sources screen imported the three document stores statically
+(audit PERF-04), and the Library sidebar imported the project document's
+types for one eight-line record (`SavedMediaRef`), which dragged the
+overlay, the shades, the film texture, the export variants and the develop
+model with it — found with a static-import walk from `main.tsx`
+(`testing.md`, «What the entry chunk reaches»). Measured on `vite build`:
+
+| | Before | After |
+| --- | --- | --- |
+| Entry chunk, minified | 650 505 B | **424 883 B** (−35 %) |
+| Entry chunk, gzip | — | 139 139 B |
+| Modules reached statically from `main.tsx` | 149 | 136 |
+| `migrateRollDoc` / `halation` / `hookSeconds` in the entry | 0 / 36 / 8 | 0 / 0 / 0 |
+
+What it is: `src/app/documents-read.ts` — one document per door
+(`studioDoor`, `tripsDoor`, `developDoor`) and every document for Sources'
+count — imported with `import()` by Home and Sources, the types alone
+crossing statically; `shared/projects/media-ref.ts` holding the record and
+`project-types.ts` re-exporting it, so no reader changed.
+
+**PERF-05, measured and NOT cured by this**: each door read every document
+and migrated all to show one. `lastRoll` / `lastTrip` / `lastProject` now
+compare the raw records' `updatedAt` and migrate one — but on a 300-picture
+roll with 60 journal steps each (5.7 MB of JSON), `listRolls()` is 73–78 ms
+warm and `lastRoll()` 65–118: the cost is IndexedDB's structured clone of
+every record in `getAll()`, not the migration. The cure is an `updatedAt`
+index walked with a KEY cursor (no body read), which is a schema bump and
+so waits on DATA-09's version-change handling (`docs/audit-2026-10-02.md`).
+The one-document reads stay because they are the right shape, not because
+they measured.
+
 ## 3. The plan, in commits
 
 - **P1 — the kept upstream.** Built (§2.1).
@@ -166,9 +200,8 @@ What it is (`shared/media/borrowed-cache.ts`, `shared/develop/stage-sources.ts`,
   buy nothing visible. Never for the export, the histogram or a snapshot.
 - **P4 — the picture switch.** Built (§2.3).
 - **P5 — the shell's start on a phone** (audit PERF-04, PERF-05, PERF-06):
-  the entry chunk no longer importing the document stores, the Home doors
-  reading one document instead of migrating every one, the gazetteer parsed
-  in a worker.
+  the entry chunk and the doors built (§2.4); the gazetteer parsed and
+  sorted in a worker is the second half.
 - **P6 — a render off the main thread**, if P1–P3 leave a drag that still
   stutters on his phone: the stage's graph in a worker over an
   `OffscreenCanvas` (`transferControlToOffscreen`), the main thread free for

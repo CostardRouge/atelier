@@ -28,6 +28,7 @@
 
 import { migrateTripDoc, type TripDoc } from './trip-types';
 import type { SyncRecord } from '../sources/doc-sync';
+import { latestOf } from '../lib/latest-of';
 
 const DB_NAME = 'atelier-roadtrip';
 // Bumped only when an object store is added; a document migration runs on
@@ -91,6 +92,17 @@ export async function listTrips(): Promise<TripDoc[]> {
     return all.map(migrateTripDoc).sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
+  }
+}
+
+/** The trip touched last, alone — the Home door's read: one record migrated, not every one (`roll-store.ts`, `lastRoll`). */
+export async function lastTrip(): Promise<TripDoc | null> {
+  try {
+    const all = await withStore('readonly', (s) => s.getAll() as IDBRequest<TripDoc[]>);
+    const last = latestOf(all);
+    return last ? migrateTripDoc(last) : null;
+  } catch {
+    return null;
   }
 }
 

@@ -35,6 +35,7 @@ import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { readPresetBook, type PresetBook } from './preset-book';
 import { migrateRollDoc, type RollDoc } from './roll-types';
 import { readExportMarks, type ExportMarks } from './export-marks';
+import { latestOf } from '../lib/latest-of';
 
 const DB_NAME = 'atelier-develop';
 // Bumped only when an object store is added; a document migration runs on read.
@@ -112,6 +113,21 @@ export async function listRolls(): Promise<RollDoc[]> {
     return all.map(migrateRollDoc).sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
+  }
+}
+
+/**
+ * The roll touched last, alone — the Home door's read (audit PERF-05): the
+ * raw records' `updatedAt` compared and ONE migrated, where `listRolls`
+ * migrates every roll (a migration walks each picture's journal) to show one.
+ */
+export async function lastRoll(): Promise<RollDoc | null> {
+  try {
+    const all = await withStore(ROLLS, 'readonly', (s) => s.getAll() as IDBRequest<RollDoc[]>);
+    const last = latestOf(all);
+    return last ? migrateRollDoc(last) : null;
+  } catch {
+    return null;
   }
 }
 

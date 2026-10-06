@@ -26,9 +26,6 @@ import {
 } from '../shared/sources/source-ledger';
 import { describeAgo } from '../shared/sources/doc-sync';
 import { LOCAL_SOURCE } from '../shared/sources/source';
-import { listProjects } from '../shared/projects/project-store';
-import { listTrips } from '../shared/roadtrip/trip-store';
-import { listRolls } from '../shared/develop/roll-store';
 
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
 const AFTER_CONNECT = '/studio/home';
@@ -179,10 +176,12 @@ export default function SourcesScreen({ query }: { query: string }) {
   useEffect(() => setRaw(proposed), [proposed]);
 
   // What each source holds, so a forget can say it before it asks. Read once
-  // per visit — the two stores are local and small.
+  // per visit, through a module imported only now — a static import of the
+  // stores put their document models on the shell's chunk (`documents-read.ts`).
   const recount = useCallback(() => {
-    void Promise.all([listProjects(), listTrips(), listRolls()])
-      .then(([projects, trips, rolls]) => setCounts(countBySource({ projects, trips, rolls }, LOCAL_SOURCE.id)))
+    void import('./documents-read')
+      .then((m) => m.allDocuments())
+      .then((docs) => setCounts(countBySource(docs, LOCAL_SOURCE.id)))
       .catch(() => setCounts(new Map()));
   }, []);
   useEffect(recount, [recount]);
