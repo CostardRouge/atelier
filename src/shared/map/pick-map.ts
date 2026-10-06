@@ -48,10 +48,26 @@ export interface Town {
  * biggest first. Sorted ONCE, so a view is a scan that stops early.
  */
 export function townsByPopulation(cities: readonly GazetteerCity[]): Town[] {
-  return cities
-    .filter((city) => !city.section)
-    .map((city) => ({ name: city.name, lat: city.lat, lon: city.lon, population: city.population }))
-    .sort((a, b) => b.population - a.population || a.name.localeCompare(b.name));
+  return townsFromOrder(cities, townOrder(cities));
+}
+
+/**
+ * The ORDER of {@link townsByPopulation} as indices into `cities` — what the
+ * gazetteer worker hands back (`roadtrip/gazetteer-worker.ts`): a typed array
+ * crosses a thread for nothing, where a second list of a hundred thousand
+ * records would be cloned on the main thread, which is what the worker is
+ * there to spare it. Suburbs are left out here.
+ */
+export function townOrder(cities: readonly GazetteerCity[]): Uint32Array {
+  const kept: number[] = [];
+  for (let i = 0; i < cities.length; i += 1) if (!cities[i].section) kept.push(i);
+  kept.sort((a, b) => cities[b].population - cities[a].population || cities[a].name.localeCompare(cities[b].name));
+  return Uint32Array.from(kept);
+}
+
+/** The towns in `order`, each the city itself (a city IS a town, with more said about it). */
+export function townsFromOrder(cities: readonly GazetteerCity[], order: Uint32Array): Town[] {
+  return Array.from(order, (i) => cities[i]);
 }
 
 /** Whether a longitude lies inside a view's west..east, across the antimeridian too. */

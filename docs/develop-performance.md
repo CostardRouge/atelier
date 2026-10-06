@@ -189,6 +189,32 @@ so waits on DATA-09's version-change handling (`docs/audit-2026-10-02.md`).
 The one-document reads stay because they are the right shape, not because
 they measured.
 
+### 2.5 The shell's start, second half: the gazetteer off the main thread (P5b)
+
+The city index (135 233 rows, 6.5 MB) was fetched, parsed and its towns
+sorted on the main thread the first time a map opened (audit PERF-06).
+Measured headless with a 5 ms timer chain as the stall detector (the Long
+Tasks API reports nothing in the headless shell), the index and the sorted
+towns asked for back to back, then one `nearestCity`:
+
+| | Before (in thread) | After (`gazetteer-worker.ts`) |
+| --- | --- | --- |
+| Main thread blocked | **364 ms** (one stall of 324) | **127–169 ms** (one of ~130: the parsed list's structured clone on receipt) |
+| Wall to the sorted towns | 217 + 156 ms | 517–537 ms, off the thread (the worker's start, its fetch, the clone) |
+| The sort on the main thread | 156 ms | **0** (the order crosses as a transferred `Uint32Array`) |
+| One `nearestCity` after | 11 ms | 8–10 ms |
+
+What it is: the worker fetches, parses (`parseGazetteer`) and orders the
+towns (`townOrder`, pure, specced: indices into the list, suburbs left
+out), posts the list and the order, and is ended at once — the JSON text
+and its rows never touch the main heap. `loadGazetteer()` keeps its
+signature; `loadTowns()` is the maps' shared read (`TripMapView`,
+`StopsMapSheet` had each sorted on their own); no `Worker` falls back to
+this thread. **What remains is the clone**: a columnar index (names as
+one array, numbers as typed arrays, transferred) would bring the main
+thread to ~0 ms and needs `nearestCity` and the maps to read columns —
+the step to take if 130 ms still shows on his phone.
+
 ## 3. The plan, in commits
 
 - **P1 — the kept upstream.** Built (§2.1).
@@ -199,9 +225,9 @@ they measured.
   in place: a tone step is now six cheap passes, and a half-size render may
   buy nothing visible. Never for the export, the histogram or a snapshot.
 - **P4 — the picture switch.** Built (§2.3).
-- **P5 — the shell's start on a phone** (audit PERF-04, PERF-05, PERF-06):
-  the entry chunk and the doors built (§2.4); the gazetteer parsed and
-  sorted in a worker is the second half.
+- **P5 — the shell's start on a phone** (audit PERF-04, PERF-05, PERF-06).
+  Built (§2.4, §2.5); PERF-05's index and the columnar gazetteer are the
+  recorded next steps, each on a measurement.
 - **P6 — a render off the main thread**, if P1–P3 leave a drag that still
   stutters on his phone: the stage's graph in a worker over an
   `OffscreenCanvas` (`transferControlToOffscreen`), the main thread free for

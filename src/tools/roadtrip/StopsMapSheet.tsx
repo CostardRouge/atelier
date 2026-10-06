@@ -10,7 +10,6 @@ import {
   openingBounds,
   pointsCollection,
   stopsLine,
-  townsByPopulation,
   townsInView,
   type Town,
   type TownLabel,
@@ -24,7 +23,8 @@ import {
   setTiles,
 } from '../../shared/map/track-map';
 import type { GazetteerCity } from '../../shared/roadtrip/gazetteer';
-import { loadGazetteer } from '../../shared/roadtrip/load-gazetteer';
+// Read once per session and ordered once, off the main thread.
+import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
 import {
   MAP_MAX_STOPS,
   addStop,
@@ -68,20 +68,6 @@ const SNAP_PX = 16;
 let sessionTiles = false;
 /** Whether a tap near a town takes the town. Kept for the session likewise. */
 let sessionSnap = true;
-
-/** The town index, read once per session and sorted once. */
-let townIndex: Promise<{ cities: GazetteerCity[]; sorted: Town[] }> | null = null;
-function loadTowns() {
-  if (!townIndex) {
-    townIndex = loadGazetteer()
-      .then((cities) => ({ cities, sorted: townsByPopulation(cities) }))
-      .catch((error) => {
-        townIndex = null;
-        throw error;
-      });
-  }
-  return townIndex;
-}
 
 /**
  * The big picking map — tap one, two, three places and see them joined.

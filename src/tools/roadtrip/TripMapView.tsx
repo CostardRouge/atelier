@@ -1,9 +1,9 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { GeoJSONSource, Map as MlMap, StyleSpecification } from 'maplibre-gl';
 import { loadLand } from '../../shared/map/load-land';
-import { labelTowns, openingBounds, townsByPopulation, townsInView, type Town } from '../../shared/map/pick-map';
+import { labelTowns, openingBounds, townsInView, type Town } from '../../shared/map/pick-map';
 import { OSM_CREDIT, TILES_TOGGLE, setTiles } from '../../shared/map/track-map';
-import { loadGazetteer } from '../../shared/roadtrip/load-gazetteer';
+import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
 import type { RulerGap } from '../../shared/roadtrip/stage-ruler';
 import { STAGE_TINTS } from '../../shared/roadtrip/stage-ruler';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
@@ -94,20 +94,6 @@ const TOWNS_PER_VIEW = 400;
 
 /** The tiles choice for the session: OFF at every first open (`local-first.md`), never stored. */
 let sessionTiles = false;
-
-/** The town index, read once per session and sorted once. */
-let townIndex: Promise<Town[]> | null = null;
-function loadTowns(): Promise<Town[]> {
-  if (!townIndex) {
-    townIndex = loadGazetteer()
-      .then(townsByPopulation)
-      .catch((error) => {
-        townIndex = null;
-        throw error;
-      });
-  }
-  return townIndex;
-}
 
 const esc = (s: string) => s.replace(/[&<>"]/g, (c) => ({ '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;' })[c]!);
 const f = (n: number) => n.toFixed(1);
@@ -514,8 +500,9 @@ export default function TripMapView({
       });
       schedule();
     };
+    // Read once per session and ordered once, off the main thread (`load-gazetteer.ts`).
     loadTowns().then(
-      (sorted) => {
+      ({ sorted }) => {
         if (cancelled) return;
         towns.current = sorted;
         refresh();

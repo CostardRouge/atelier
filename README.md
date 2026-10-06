@@ -647,7 +647,8 @@ on the map instead of its dial. On a phone the leg sits over the foot of the map
 with its days in one row and arrows to the leg before and after. The map is
 drawn **offline**: the coastline is Natural Earth's world outline shipped with
 the app (fetched from this site the first time the map opens, 175 kB) and the
-towns come from the same city index as the itinerary's names; the
+towns come from the same city index as the itinerary's names, read and
+sorted in the background so the map never freezes while it arrives; the
 OpenStreetMap background is the usual opt-in, off every time. *Natural Earth is
 in the public domain; `scripts/gen-coastline.mjs` rebuilds the file.*
 
