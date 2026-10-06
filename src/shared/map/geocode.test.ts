@@ -25,6 +25,16 @@ describe('nominatimUrl', () => {
     expect(new URL(nominatimUrl('  Perth  ')).searchParams.get('q')).toBe('Perth');
   });
 
+  it('bounds the search to the trip’s country when asked — assert that URL in full too', () => {
+    expect(nominatimUrl('Exmouth', PLACE_RESULT_LIMIT, 'AU')).toBe(
+      'https://nominatim.openstreetmap.org/search' +
+        `?q=Exmouth&format=jsonv2&addressdetails=1&limit=${PLACE_RESULT_LIMIT}&countrycodes=au`,
+    );
+    // Anything that is not a list of two-letter codes never reaches the URL.
+    expect(new URL(nominatimUrl('Exmouth', 5, 'Australia')).searchParams.has('countrycodes')).toBe(false);
+    expect(new URL(nominatimUrl('Exmouth', 5, '')).searchParams.has('countrycodes')).toBe(false);
+  });
+
   it('never asks for fewer than one result', () => {
     expect(new URL(nominatimUrl('Perth', 0)).searchParams.get('limit')).toBe('1');
     expect(new URL(nominatimUrl('Perth', -4)).searchParams.get('limit')).toBe('1');

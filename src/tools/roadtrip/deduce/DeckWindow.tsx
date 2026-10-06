@@ -1,6 +1,6 @@
 import { GRAINS } from '../../../shared/roadtrip/deduce-grain';
-import { type DeduceVerb, type Proposal } from '../../../shared/roadtrip/deduce-draft';
-import { stageLabel } from '../../../shared/roadtrip/trip-places';
+import { haltText, type DeduceDraft, type DeduceVerb, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import type { TripDoc } from '../../../shared/roadtrip/trip-types';
 import Button from '../../../shared/ui/Button';
 import IconButton from '../../../shared/ui/IconButton';
 import { Icons } from '../../../shared/ui/icons';
@@ -8,7 +8,7 @@ import Segmented from '../../../shared/ui/Segmented';
 import DeduceMap from './DeduceMap';
 import FineSettings from './FineSettings';
 import ProposalEditor from './ProposalEditor';
-import { Flags, GoButton, HaltChips, legend, mono, num, plural, quoted, spanText } from './pieces';
+import { Flags, GoButton, HaltChips, legend, mono, num, plural, quoted, spanText, stageName } from './pieces';
 import type { DeduceContext } from './context';
 
 /**
@@ -27,24 +27,24 @@ interface Answer {
   disabled?: boolean;
 }
 
-function answersFor(p: Proposal): Answer[] {
+function answersFor(p: Proposal, draft: DeduceDraft, trip: TripDoc): Answer[] {
   const out: Answer[] = [
     {
       verb: 'stage',
       key: '1',
-      title: p.overlapping.length ? `Add, over ${quoted(p.overlapping)}` : 'One stage',
+      title: p.overlapping.length ? `Add, over ${quoted(p.overlapping, trip)}` : 'One stage',
       hint: `“${p.label}”, its ${plural(p.halts.length, 'place')} in order${p.overlapping.length ? ' · a stage of yours would be under it' : ''}`,
     },
   ];
   if (p.halts.length >= 2) out.push({ verb: 'split', key: '2', title: `Split into ${plural(p.halts.length, 'stage')}`, hint: 'One per halt' });
   if (p.verbs.includes('trim')) {
-    out.push({ verb: 'trim', key: '3', title: 'Only the free days', hint: `${plural(p.free.length, 'stage')} in the days ${quoted(p.overlapping)} leaves free` });
+    out.push({ verb: 'trim', key: '3', title: 'Only the free days', hint: `${plural(p.free.length, 'stage')} in the days ${quoted(p.overlapping, trip)} leaves free` });
   }
   out.push({
     verb: 'into',
     key: '4',
-    title: p.target ? `Its places into “${stageLabel(p.target)}”` : 'Its places into a stage',
-    hint: p.target ? (p.extra.length ? `${p.extra.map((h) => h.city?.name ?? 'an unnamed halt').join(', ')} · no new stage` : 'It already names them') : 'None of your stages covers these days',
+    title: p.target ? `Its places into “${stageName(p.target, trip)}”` : 'Its places into a stage',
+    hint: p.target ? (p.extra.length ? `${p.extra.map((h) => haltText(h, draft, trip) ?? 'an unnamed halt').join(', ')} · no new stage` : 'It already names them') : 'None of your stages covers these days',
     disabled: !p.verbs.includes('into'),
   });
   out.push({ verb: 'skip', key: '→', title: p.already ? 'Already in the trip' : 'Skip', hint: p.already ? 'Nothing to write for these days' : 'Write nothing for these days' });
@@ -115,7 +115,7 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
   }
 
   const p = proposals[k];
-  const answers = answersFor(p);
+  const answers = answersFor(p, draft, trip);
   return (
     <>
       {top}
@@ -125,9 +125,9 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
             {spanText(p.startDate, p.endDate)} · {p.dayCount} days{p.region ? ` · ${p.region}` : ''}
           </span>
           <h3 className="m-0 font-serif font-normal text-3xl leading-none break-words">{p.label}</h3>
-          <HaltChips p={p} draft={draft} />
+          <HaltChips p={p} draft={draft} trip={trip} />
           <span className={mono}>{num(p.count)} pictures and clips</span>
-          <Flags p={p} />
+          <Flags p={p} trip={trip} />
           <span className="flex flex-wrap items-center gap-1">
             <Button size="sm" variant="ghost" aria-expanded={editing === p.key} onClick={() => actions.setEditing(editing === p.key ? null : p.key)}>
               <kbd className={kbd}>E</kbd> {editing === p.key ? 'Close' : 'Edit this chapter'}
@@ -136,10 +136,10 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
             {p.overlapping.length > 0 && <GoButton tab="calque" label="Against mine" onClick={() => actions.goTo('calque', p.key)} />}
           </span>
         </div>
-        <DeduceMap proposals={proposals} draft={draft} points={points} ignored={ignored} land={land} focus={p} className="rounded-none border-0 max-[560px]:[&_svg]:max-h-[11rem]" />
+        <DeduceMap proposals={proposals} trip={trip} draft={draft} points={points} ignored={ignored} land={land} focus={p} className="rounded-none border-0 max-[560px]:[&_svg]:max-h-[11rem]" />
         {editing === p.key && (
           <div className="col-span-full px-4 pb-3.5 border-t border-line">
-            <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
+            <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
           </div>
         )}
       </div>

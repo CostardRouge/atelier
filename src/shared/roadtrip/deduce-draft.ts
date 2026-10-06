@@ -33,6 +33,7 @@
 import type { NamedLeg } from './group-legs';
 import type { TrackChapter } from './track-chapters';
 import { enumerateDays, isWithin, spanLength, type IsoDate } from './trip-days';
+import { placeText, stageRoute, type PlaceWritingTrip } from './place-style';
 import { PLACE_ARROW } from './trip-places';
 import {
   createTripPlace,
@@ -63,12 +64,33 @@ export interface ProposalEdit {
   halts?: string[];
 }
 
+/**
+ * The place the author chose for a halt instead of the index's — another
+ * town of the same name, a search's answer, or one typed by hand. Its
+ * position is where the PLACE is (a hand-typed one takes the halt's
+ * centroid, where the pictures were).
+ */
+export interface HaltPick {
+  name: string;
+  state: string;
+  /** The search's state code ("WA"), when it gave one. */
+  searchCode?: string;
+  /** ISO 3166-1, upper case. */
+  countryCode?: string;
+  country?: string;
+  area?: string;
+  coords: { lat: number; lon: number };
+  source: 'deduced' | 'search' | 'typed';
+}
+
 export interface DeduceDraft {
   /** By proposal key. A key not here takes the safe verb. */
   answers: Record<string, DeduceVerb>;
   edits: Record<string, ProposalEdit>;
   /** By halt key: a name given here to a halt the index could not name. */
   renames: Record<string, string>;
+  /** By halt key: the place chosen instead of the index's (Fix). Absent = none chosen. */
+  places?: Record<string, HaltPick>;
 }
 
 export const EMPTY_DRAFT: DeduceDraft = { answers: {}, edits: {}, renames: {} };
@@ -78,8 +100,15 @@ export const haltKey = (halt: NamedLeg): string => halt.leg.startDate;
 export const proposalKey = (entry: TrackChapter): string =>
   `${entry.chapter.startDate}..${entry.chapter.endDate}`;
 
-/** The name a halt goes by: its city's, else the one given here, else none. */
+/** The place chosen for a halt in this draft, if any. */
+export function haltPick(halt: NamedLeg, draft: DeduceDraft): HaltPick | null {
+  return draft.places?.[haltKey(halt)] ?? null;
+}
+
+/** The name a halt goes by: the place chosen for it, else its city's, else the one given here, else none. */
 export function haltName(halt: NamedLeg, draft: DeduceDraft): string | null {
+  const picked = haltPick(halt, draft)?.name.trim();
+  if (picked) return picked;
   const own = halt.city?.name.trim();
   if (own) return own;
   const given = draft.renames[haltKey(halt)]?.trim();
@@ -103,6 +132,17 @@ export function haltPlace(halt: NamedLeg, draft: DeduceDraft): TripPlace | null 
     dateFrom: 'photos' as const,
     source: 'deduced' as const,
   };
+  const pick = haltPick(halt, draft);
+  if (pick) {
+    return createTripPlace(name, pick.state, { ...pick.coords }, {
+      ...known,
+      source: pick.source,
+      searchCode: pick.searchCode,
+      countryCode: pick.countryCode,
+      country: pick.country,
+      area: pick.area,
+    });
+  }
   if (halt.city) {
     return createTripPlace(name, halt.city.region, { lat: halt.city.lat, lon: halt.city.lon }, {
       ...known,
@@ -112,8 +152,26 @@ export function haltPlace(halt: NamedLeg, draft: DeduceDraft): TripPlace | null 
   return createTripPlace(name, '', { lat: halt.leg.centroid.lat, lon: halt.leg.centroid.lon }, known);
 }
 
-/** "Perth → Broome", "Broome", or '' when no halt is named. */
-export function routeLabel(halts: readonly NamedLeg[], draft: DeduceDraft): string {
+/**
+ * A halt as the trip WRITES a place in a list («Kalbarri, WA»), through the
+ * one formatter every surface reads (`place-style.ts`); null when unnamed.
+ */
+export function haltText(halt: NamedLeg, draft: DeduceDraft, trip: PlaceWritingTrip): string | null {
+  const place = haltPlace(halt, draft);
+  return place ? placeText(place, null, trip, 'lists') || null : null;
+}
+
+/**
+ * "Perth → Broome", "Broome", or '' when no halt is named. Given the trip,
+ * the two ends are WRITTEN as its places are («Kalbarri → Exmouth, WA»),
+ * exactly as `stageRoute` names a stage of the trip.
+ */
+export function routeLabel(halts: readonly NamedLeg[], draft: DeduceDraft, trip?: PlaceWritingTrip): string {
+  if (trip) {
+    const places = halts.map((h) => haltPlace(h, draft)).filter((p): p is TripPlace => !!p);
+    if (!places.length) return '';
+    return stageRoute(createTripStage('', '', '' as IsoDate, '' as IsoDate, places), trip, 'lists');
+  }
   const names = halts.map((h) => haltName(h, draft)).filter((n): n is string => !!n);
   if (!names.length) return '';
   const first = names[0];
@@ -228,7 +286,7 @@ function freeSpans(
  * and the draft answers whatever still has the same span.
  */
 export function proposeDraft(
-  trip: Pick<TripDoc, 'stages'>,
+  trip: Pick<TripDoc, 'stages'> & PlaceWritingTrip,
   chapters: readonly TrackChapter[],
   draft: DeduceDraft,
   sourceId: string,
@@ -292,7 +350,7 @@ export function proposeDraft(
       index,
       region: entry.region,
       ownName,
-      label: ownName || routeLabel(halts, draft) || 'Unnamed stage',
+      label: ownName || routeLabel(halts, draft, trip) || 'Unnamed stage',
       startDate,
       endDate,
       dayCount: spanLength(startDate, endDate) ?? 0,
@@ -359,6 +417,16 @@ export function rename(draft: DeduceDraft, halt: string, name: string): DeduceDr
   return { ...draft, renames };
 }
 
+/** Choose a place for a halt instead of the index's, or drop the choice (null). */
+export function choosePlace(draft: DeduceDraft, halt: string, pick: HaltPick | null): DeduceDraft {
+  const places = { ...draft.places };
+  if (pick) places[halt] = pick;
+  else delete places[halt];
+  const next: DeduceDraft = { ...draft, places };
+  if (!Object.keys(places).length) delete next.places;
+  return next;
+}
+
 /** After a Write: a chapter skipped on purpose stays skipped, nothing else survives. */
 export function keepSkips(draft: DeduceDraft): DeduceDraft {
   const answers: Record<string, DeduceVerb> = {};
@@ -370,7 +438,7 @@ export function draftSize(draft: DeduceDraft): { answers: number; edits: number;
   return {
     answers: Object.keys(draft.answers).length,
     edits: Object.keys(draft.edits).length,
-    names: Object.keys(draft.renames).length,
+    names: Object.keys(draft.renames).length + Object.keys(draft.places ?? {}).length,
   };
 }
 

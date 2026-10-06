@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { nearestCity, parseGazetteer, type GazetteerCity } from './gazetteer';
+import { homonyms, nearestCity, parseGazetteer, type GazetteerCity } from './gazetteer';
 
 const city = (
   name: string,
@@ -194,5 +194,36 @@ describe('nearestCity', () => {
 
   it('has nothing to say about an empty index', () => {
     expect(nearestCity([], { lat: -31.95, lon: 115.86 })).toBeNull();
+  });
+});
+
+describe('homonyms', () => {
+  const town = (name: string, country: string, lat: number, lon: number, population = 1000): GazetteerCity => ({
+    name,
+    country,
+    lat,
+    lon,
+    population,
+    section: false,
+    regionKey: '',
+    region: '',
+  });
+  const index = [
+    town('Exmouth', 'GB', 50.62, -3.41, 34_000),
+    town('Exmouth', 'AU', -21.93, 114.13, 2_500),
+    town('Éxmouth', 'US', 40, -80, 10),
+    town('Kalbarri', 'AU', -27.71, 114.16),
+  ];
+
+  it('lists every town of the name, nearest the pictures first', () => {
+    const near = homonyms(index, 'exmouth', { lat: -24.6, lon: 113.9 });
+    expect(near.map((h) => h.city.country)).toEqual(['AU', 'GB', 'US']);
+    expect(near[0].km).toBeLessThan(400);
+  });
+
+  it('puts the biggest first with nothing to measure against, and keeps to its limit', () => {
+    expect(homonyms(index, 'Exmouth', null).map((h) => h.city.country)).toEqual(['GB', 'AU', 'US']);
+    expect(homonyms(index, 'Exmouth', null, 1)).toHaveLength(1);
+    expect(homonyms(index, '  ', null)).toEqual([]);
   });
 });

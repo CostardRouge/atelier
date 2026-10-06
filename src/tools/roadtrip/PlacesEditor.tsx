@@ -1,17 +1,23 @@
-import { useState } from 'react';
+import { useEffect, useState } from 'react';
 import PlaceSearchField from '../../shared/map/PlaceSearchField';
 import { moveItem } from '../../shared/roadtrip/deck';
-import { adoptSearchResult } from '../../shared/roadtrip/place-search';
+import { homonyms, type GazetteerCity } from '../../shared/roadtrip/gazetteer';
+import { gazetteerOrEmpty } from '../../shared/roadtrip/load-gazetteer';
+import { placeOddity, stageReference } from '../../shared/roadtrip/place-oddity';
+import { adoptSearchResult, replacePlace, searchFacts } from '../../shared/roadtrip/place-search';
 import {
   CODE_FROM_WORDS,
   PLACE_STYLE_OPTIONS,
   codeCandidates,
+  countryName,
   datesOutsideStage,
   placeDates,
+  placeLine,
   placeStyleFor,
   placeText,
   stateCodeFor,
   tableCode,
+  tripCountry,
 } from '../../shared/roadtrip/place-style';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { formatCoords, stageRegionLabel } from '../../shared/roadtrip/trip-places';
@@ -25,6 +31,8 @@ import {
   type TripStage,
 } from '../../shared/roadtrip/trip-types';
 import { DateField } from '../../shared/ui/DateField';
+import PlaceFixPanel, { type FixCandidate, type FixTab } from './PlaceFixPanel';
+import PlacesTable, { type PlacesTableRow } from './PlacesTable';
 
 interface PlacesEditorProps {
   trip: TripDoc;
@@ -87,154 +95,200 @@ export function PlaceStyleSelect({
  * and the last ARE the stage's start and end — there is no separate pair of
  * fields, because a second copy of that fact is a second thing to keep in sync.
  *
- * The order is a row of chips read left to right with the badge's own `→`
- * between them, so it reads as the route it is; one chip is open at a time
- * and its fields sit underneath. A chip is dragged to reorder — the same
- * gesture as the deck's slide rail — and, because drag is unreachable by
- * keyboard, a focused chip also moves with the arrow keys.
- *
- * A chip is WRITTEN as the trip's lists style says («Kalbarri, WA»), and
- * wears its dates when it has any — nothing where it has none.
+ * They are a TABLE (`PlacesTable`, the maintainer's variant B of 2026-10-06):
+ * a line per place with its state, its country and its distance to the rest
+ * of the stage, a town in the wrong country in orange. ↑ ↓ reorder; a click
+ * opens the place under the table, where Fix offers the other towns of its
+ * name (the shipped index), the search (inside the trip's country first) or
+ * the fields by hand.
  */
 export default function PlacesEditor({ trip, stage, onChange, onRememberCode }: PlacesEditorProps) {
   const places = stage.places ?? [];
   const [openId, setOpenId] = useState<string | null>(null);
-  // The chip just added gets its name field focused; an existing one opened
+  const [tab, setTab] = useState<FixTab>('hand');
+  // The place just added gets its name field focused; an existing one opened
   // by a click keeps the focus where the click put it.
   const [fresh, setFresh] = useState<string | null>(null);
-  const [dragFrom, setDragFrom] = useState<number | null>(null);
-  const [dragOver, setDragOver] = useState<number | null>(null);
+  // The index of towns, fetched the first time «Same name» is asked — never at boot.
+  const [cities, setCities] = useState<GazetteerCity[] | null>(null);
   const open = places.find((p) => p.id === openId) ?? null;
   const openIndex = open ? places.indexOf(open) : -1;
+  const home = tripCountry(trip);
+
+  useEffect(() => {
+    if (!open || tab !== 'same' || cities) return;
+    let live = true;
+    void gazetteerOrEmpty().then((list) => {
+      if (live) setCities(list);
+    });
+    return () => {
+      live = false;
+    };
+  }, [open, tab, cities]);
 
   function add() {
     const place = createTripPlace('', '', null, { source: 'typed' });
     onChange([...places, place]);
     setOpenId(place.id);
+    setTab('hand');
     setFresh(place.id);
   }
 
-  function move(from: number, to: number) {
-    onChange(moveItem(places, from, to));
+  function openPlace(id: string, as: FixTab) {
+    if (openId === id && tab === as) {
+      setOpenId(null);
+      return;
+    }
+    setOpenId(id);
+    setTab(as);
   }
+
+  const rows: PlacesTableRow[] = places.map((place) => {
+    const line = placeLine(place, stage, trip, 'lists');
+    const oddity = placeOddity(place, stageReference(stage, place.id, trip, home), home);
+    const dates = placeDates(place);
+    const outside = datesOutsideStage(place, stage);
+    return {
+      key: place.id,
+      name: place.name.trim(),
+      state: line.stateText,
+      countryCode: line.countryCode,
+      countryName: line.countryName,
+      km: oddity.km,
+      odd: oddity.odd,
+      note: dates ? (
+        <span
+          data-dates
+          className={`ml-2 inline-block whitespace-nowrap font-mono text-3xs font-normal px-1.5 rounded-full border ${
+            outside ? 'border-warn text-warn' : 'border-line-strong text-muted'
+          } ${place.dateFrom === 'photos' ? 'border-dashed' : ''}`}
+          title={`${place.dateFrom === 'photos' ? 'From your pictures' : 'Set by hand'}${outside ? ' · outside the stage' : ''}`}
+        >
+          {dates}
+        </span>
+      ) : undefined,
+    };
+  });
+
+  const replace = (next: TripPlace) => onChange(places.map((p) => (p.id === next.id ? next : p)));
+  // Nearest the REST of the stage, never the place's own position: that
+  // position is the very town being corrected.
+  const reference = open ? stageReference(stage, open.id, trip, home) : null;
+  const found = open && cities ? homonyms(cities, open.name, reference ?? open.coords) : null;
+  const candidates: FixCandidate[] | null = found
+    ? found.map(({ city, km }, i) => {
+        const code = city.country.toUpperCase();
+        const town = createTripPlace(city.name, city.region, { lat: city.lat, lon: city.lon }, { countryCode: code });
+        return {
+          key: String(i),
+          text: placeText(town, stage, trip, 'lists'),
+          countryCode: code,
+          countryName: countryName(code),
+          km,
+          current: !!open!.coords && open!.coords.lat === city.lat && open!.coords.lon === city.lon,
+        };
+      })
+    : null;
 
   return (
     <div className="flex flex-col gap-2">
-      <div
-        className="flex flex-wrap items-center gap-1.5"
-        role="listbox"
-        aria-label="Places of this stage, in the order they were lived"
-      >
-        {places.map((place, i) => {
-          const isOpen = place.id === openId;
-          const dropping = dragOver === i && dragFrom !== null && dragFrom !== i;
-          const name = place.name.trim();
-          const written = placeText(place, stage, trip, 'lists');
-          const dates = placeDates(place);
-          const outside = datesOutsideStage(place, stage);
-          return (
-            <span key={place.id} className="inline-flex items-center gap-1.5">
-              {i > 0 && (
-                <span className="font-mono text-xs text-faint" aria-hidden="true">
-                  →
-                </span>
-              )}
-              <button
-                type="button"
-                role="option"
-                aria-selected={isOpen}
-                onClick={() => setOpenId(isOpen ? null : place.id)}
-                draggable
-                onDragStart={(e) => {
-                  setDragFrom(i);
-                  e.dataTransfer.effectAllowed = 'move';
-                  // Firefox starts no drag at all without a payload.
-                  e.dataTransfer.setData('text/plain', String(i));
-                }}
-                onDragOver={(e) => {
-                  if (dragFrom === null) return;
-                  e.preventDefault();
-                  e.dataTransfer.dropEffect = 'move';
-                  setDragOver(i);
-                }}
-                onDrop={(e) => {
-                  if (dragFrom === null) return;
-                  e.preventDefault();
-                  move(dragFrom, i);
-                  setDragFrom(null);
-                  setDragOver(null);
-                }}
-                onDragEnd={() => {
-                  setDragFrom(null);
-                  setDragOver(null);
-                }}
-                onKeyDown={(e) => {
-                  if (e.altKey || e.metaKey || e.ctrlKey) return;
-                  const back = e.key === 'ArrowLeft';
-                  const on = e.key === 'ArrowRight';
-                  if (!back && !on) return;
-                  e.preventDefault();
-                  move(i, back ? i - 1 : i + 1);
-                }}
-                title={`${written || 'Unnamed place'}${place.state ? ` · ${place.state}` : ''}${place.country ? `, ${place.country}` : ''} — drag it, or move it with the arrow keys`}
-                className={`inline-flex items-center gap-1.5 h-[1.9rem] pl-2 pr-2.5 rounded-full border text-xs cursor-grab active:cursor-grabbing transition-colors ${
-                  dragFrom === i ? 'opacity-50 ' : ''
-                }${
-                  dropping
-                    ? 'border-accent border-dashed bg-paper'
-                    : isOpen
-                      ? 'border-accent bg-accent-wash text-accent-ink font-semibold'
-                      : 'border-line-strong bg-surface text-ink hover:border-accent'
-                }`}
-              >
-                <span
-                  className="font-mono text-xs leading-none text-faint tracking-[-0.1em]"
-                  aria-hidden="true"
-                >
-                  ⠿
-                </span>
-                <span className={name ? '' : 'text-muted italic'}>{written || 'Unnamed'}</span>
-                {dates && (
-                  <span
-                    data-dates
-                    className={`font-mono text-3xs font-normal px-1.5 rounded-full border ${
-                      outside ? 'border-warn text-warn' : 'border-line-strong text-muted'
-                    } ${place.dateFrom === 'photos' ? 'border-dashed' : ''}`}
-                    title={`${place.dateFrom === 'photos' ? 'From your pictures' : 'Set by hand'}${outside ? ' · outside the stage' : ''}`}
-                  >
-                    {dates}
-                  </span>
-                )}
-              </button>
-            </span>
-          );
-        })}
-        <button
-          type="button"
-          onClick={add}
-          className="inline-flex items-center h-[1.9rem] px-2.5 rounded-full border border-dashed border-line-strong bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
-        >
-          + Place
-        </button>
-      </div>
+      <PlacesTable
+        label="Places of this stage, in the order they were lived"
+        kmLabel="From the stage"
+        rows={rows}
+        openKey={openId}
+        editing
+        onOpen={(id) => openPlace(id, 'hand')}
+        onFix={(id) => openPlace(id, places.find((p) => p.id === id)?.name.trim() ? 'same' : 'hand')}
+        onMove={(id, delta) => {
+          const at = places.findIndex((p) => p.id === id);
+          const to = at + delta;
+          if (at < 0 || to < 0 || to >= places.length) return;
+          onChange(moveItem(places, at, to));
+        }}
+      />
 
       {open && (
-        <PlaceFields
+        <PlaceFixPanel
           key={open.id}
-          trip={trip}
-          stage={stage}
-          place={open}
-          index={openIndex}
-          autoFocus={open.id === fresh}
-          onChange={(next) => onChange(places.map((p) => (p.id === next.id ? next : p)))}
-          onDelete={() => {
-            onChange(places.filter((p) => p.id !== open.id));
-            setOpenId(null);
+          title={open.name.trim() ? `Which ${open.name.trim()}?` : 'A new place'}
+          tab={tab}
+          onTab={setTab}
+          candidates={open.name.trim() ? candidates : []}
+          home={home}
+          nearWord="nearest the stage"
+          onPick={(i) => {
+            const city = found?.[Number(i)]?.city;
+            if (!city) return;
+            const code = city.country.toUpperCase();
+            replace(
+              replacePlace(open, {
+                name: city.name,
+                state: city.region,
+                countryCode: code,
+                country: countryName(code),
+                coords: { lat: city.lat, lon: city.lon },
+                source: 'search',
+              }),
+            );
+            setTab('hand');
           }}
-          onRememberCode={onRememberCode}
+          onClose={() => setOpenId(null)}
+          search={
+            <SearchReplace
+              place={open}
+              home={home}
+              onPick={(next) => {
+                replace(next);
+                setTab('hand');
+              }}
+            />
+          }
+          hand={
+            <PlaceFields
+              trip={trip}
+              stage={stage}
+              place={open}
+              index={openIndex}
+              autoFocus={open.id === fresh}
+              country={home}
+              onChange={replace}
+              onDelete={() => {
+                onChange(places.filter((p) => p.id !== open.id));
+                setOpenId(null);
+              }}
+              onRememberCode={onRememberCode}
+            />
+          }
         />
       )}
+
+      <button
+        type="button"
+        onClick={add}
+        className="self-start inline-flex items-center h-[1.9rem] px-2.5 rounded-full border border-dashed border-line-strong bg-transparent text-xs text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
+      >
+        + Place
+      </button>
     </div>
+  );
+}
+
+/** «Search»: the online search for this place, its answer REPLACING the town it was. */
+function SearchReplace({ place, home, onPick }: { place: TripPlace; home: string; onPick: (next: TripPlace) => void }) {
+  const [query, setQuery] = useState(place.name);
+  return (
+    <PlaceSearchField
+      value={query}
+      onChange={setQuery}
+      onPick={(result) => onPick(replacePlace(place, searchFacts(result)))}
+      label="Search another place for this one"
+      placeholder="Kalbarri"
+      country={home}
+      countryLabel={countryName(home)}
+      autoFocus
+      inputClassName={inputClass}
+    />
   );
 }
 
@@ -256,6 +310,7 @@ function PlaceFields({
   place,
   index,
   autoFocus,
+  country,
   onChange,
   onDelete,
   onRememberCode,
@@ -265,6 +320,8 @@ function PlaceFields({
   place: TripPlace;
   index: number;
   autoFocus: boolean;
+  /** The trip's country — the search asks inside it first. */
+  country: string;
   onChange: (place: TripPlace) => void;
   onDelete: () => void;
   onRememberCode?: (state: string, code: string) => void;
@@ -303,6 +360,8 @@ function PlaceFields({
           placeholder="Kalbarri"
           label={`Place ${index + 1}`}
           autoFocus={autoFocus}
+          country={country}
+          countryLabel={countryName(country)}
           className="flex-1 min-w-[9rem]"
           inputClassName={inputClass}
         />

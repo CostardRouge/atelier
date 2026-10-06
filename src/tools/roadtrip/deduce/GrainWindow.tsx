@@ -17,7 +17,7 @@ import type { DeduceContext } from './context';
  */
 
 function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
-  const { actions, draft, editing, trip, flash } = ctx;
+  const { actions, draft, editing, trip, flash, deduction } = ctx;
   const skipped = p.verb === 'skip';
   return (
     <article
@@ -39,12 +39,12 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
             {spanText(p.startDate, p.endDate)} · {p.dayCount} d · {plural(p.halts.length, 'place')} · {num(p.count)} pictures
           </span>
         </div>
-        {p.already && skipped && p.verbs.length <= 2 ? <VerbPill p={p} /> : <VerbSelect p={p} onChange={(v) => actions.answer(p.key, v)} />}
+        {p.already && skipped && p.verbs.length <= 2 ? <VerbPill p={p} /> : <VerbSelect p={p} trip={trip} onChange={(v) => actions.answer(p.key, v)} />}
       </div>
       <div className={skipped ? 'opacity-50' : ''}>
-        <HaltChips p={p} draft={draft} />
+        <HaltChips p={p} draft={draft} trip={trip} />
       </div>
-      <Flags p={p} />
+      <Flags p={p} trip={trip} />
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="sm" variant="ghost" aria-expanded={editing === p.key} onClick={() => actions.setEditing(editing === p.key ? null : p.key)}>
           {editing === p.key ? 'Close' : 'Edit'}
@@ -56,7 +56,7 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
           {p.overlapping.length > 0 && <GoButton tab="calque" label="Against mine" onClick={() => actions.goTo('calque', p.key)} />}
         </span>
       </div>
-      {editing === p.key && <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />}
+      {editing === p.key && <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />}
     </article>
   );
 }
@@ -70,6 +70,8 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
   const over = proposals.filter((p) => p.verb === 'stage' && p.overlapping.length > 0);
   const ignored = track ? track.points.filter((p) => !points.includes(p)) : [];
   const hotProposal = hot ? (proposals.find((p) => p.key === hot) ?? null) : null;
+  // The stage being edited is what the map flies to and frames.
+  const editingProposal = ctx.editing ? (proposals.find((p) => p.key === ctx.editing) ?? null) : null;
 
   return (
     <>
@@ -157,11 +159,13 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
         <div className="sticky top-0 flex flex-col gap-1.5 max-[700px]:order-first max-[700px]:z-10 max-[700px]:bg-surface max-[700px]:pb-1.5">
           <DeduceMap
             proposals={proposals}
+            trip={ctx.trip}
             draft={draft}
             points={points}
             ignored={ignored}
             land={land}
             hot={hot}
+            focus={editingProposal}
             caption={hotProposal ? `${hotProposal.label} · ${spanText(hotProposal.startDate, hotProposal.endDate)}` : 'Hover or focus a stage'}
             className="max-[700px]:[&_svg]:max-h-[9.5rem]"
             legend="Colour: a new stage · green: places into one of yours · faint: left out · ✕: an ignored position"

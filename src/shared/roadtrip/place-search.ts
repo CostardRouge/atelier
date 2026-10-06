@@ -38,3 +38,53 @@ export function adoptSearchResult(place: TripPlace, result: PlaceResult): TripPl
   if (!result.stateCode) delete next.searchCode;
   return next;
 }
+
+/** What a place is REPLACED by when it is corrected: another town of its name, or a search's answer. */
+export interface PlaceFacts {
+  name: string;
+  state: string;
+  area?: string;
+  /** The service's state code ("WA"); none from the index. */
+  searchCode?: string;
+  country?: string;
+  countryCode?: string;
+  coords: { lat: number; lon: number };
+  source: NonNullable<TripPlace['source']>;
+}
+
+/**
+ * The place made another one — the Exmouth in Devon corrected to the one in
+ * Western Australia. Unlike `adoptSearchResult`, which only FILLS what a
+ * place lacks, this takes the new town's identity whole (name, state,
+ * area, codes, country, position), because every one of the old facts was
+ * the wrong town's. What belongs to the visit and not to the town stays:
+ * the id, the dates, the writing, and the author's own code where it names
+ * the same state.
+ */
+export function replacePlace(place: TripPlace, facts: PlaceFacts): TripPlace {
+  const next: TripPlace = { ...place, name: facts.name, state: facts.state, coords: { ...facts.coords }, source: facts.source };
+  for (const key of ['area', 'searchCode', 'country', 'countryCode'] as const) {
+    const value = (facts[key] ?? '').trim();
+    if (value) next[key] = key === 'countryCode' ? value.toUpperCase() : value;
+    else delete next[key];
+  }
+  if (place.state.trim() !== facts.state.trim()) {
+    delete next.stateCode;
+    delete next.codeFrom;
+  }
+  return next;
+}
+
+/** A search's answer as the facts a place is replaced by. */
+export function searchFacts(result: PlaceResult): PlaceFacts {
+  return {
+    name: result.name,
+    state: result.state || result.region,
+    area: result.area,
+    searchCode: result.stateCode,
+    country: result.country,
+    countryCode: result.countryCode,
+    coords: { lat: result.lat, lon: result.lon },
+    source: 'search',
+  };
+}

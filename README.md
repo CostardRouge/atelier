@@ -746,10 +746,17 @@ Above 820px the strip, the sheets and Adjust do not apply: the day and the
 leg are panels on the screen, and the ruler is what edits a leg.
 
 A stage lists **the places it went through, in the order you lived them**,
-as a row of chips joined by the badge's own arrow. The first is where the leg
-began and the last is where it ended, so a start and an end are the list
-itself rather than two more fields to keep in step; drag a chip (or move it
-with the arrow keys) to reorder, click one to edit it. Leave the stage's own
+as a table: one line per place with its number, its name, its state, its
+**country** (the code and the name) and how far it lies from the rest of the
+stage. The first is where the leg began and the last is where it ended, so a
+start and an end are the list itself rather than two more fields to keep in
+step; ↑ and ↓ reorder, a click on a line opens its fields under the table. A
+place in **another country than the trip's and more than 500 km from the rest
+of its stage** — the Exmouth in Devon that a search for "Exmouth" answers
+first — is drawn in orange with a ⚠, and **Fix** offers three ways out: the
+other towns of that name from the city index that ships with the app,
+nearest first (offline), the search, or the fields by hand. A correction
+takes the other town whole and keeps the place's dates. Leave the stage's own
 name empty and it writes itself from those two ends — "Perth → Cairns" — and
 typing a name over it always wins; clearing that name gives the derived one
 back rather than a blank. A place is a *point inside* a stage: the stage is
@@ -757,7 +764,7 @@ the dated thing a badge counts inside, so "Uluru on the 12th" inside a
 nine-day leg still means splitting the leg — which is what "start a stage
 here" on that day does. A place may nonetheless carry **its own two dates**,
 the day you reached it and the day you left, as a bonus: nothing is drawn
-until you add one (**+ date** under the open chip), the deduction writes the
+until you add one (**+ date** under the open place), the deduction writes the
 days your pictures say (a dashed chip), and a date outside the stage is kept
 and shown in orange, never corrected.
 
@@ -786,7 +793,10 @@ OpenStreetMap's Nominatim and fills in the name, the position and the
 structured address — the county, the state and its code, the country — never
 overwriting a field you typed yourself. That search is **off until you turn it
 on**, it says exactly what it will send before it sends anything, and it fires
-on Enter or the button — never as you type. Places are only ever typed on a
+on Enter or the button — never as you type. It asks **inside the trip's
+country first** (the country most of its places carry: two more letters,
+`countrycodes=au`, leave with the words), with **Search everywhere** beside the
+answers for a trip that crosses a border. Places are only ever typed on a
 leg: the New trip dialog asks for the name and the two dates and nothing else,
 so a trip starts with no leg at all and a day outside every leg names no place
 rather than claiming one.
@@ -815,7 +825,15 @@ what to check — that opens the details. Each proposal carries the safe verb fo
 where it falls — the places a stage of yours lacks, only the days none of your
 stages covers, or a new stage where nothing is — and you can change it, split
 it, correct its name, dates and places, or name a halt the city index could
-not. The thresholds (radius, long drive, big halt, blind days, outliers) sit
+not. Its places are the same table as a stage's, measured from the halt's own
+pictures, and **Fix** chooses another town of the name, a search's answer or a
+name typed — for this trip only, never on the instance. The map beside the
+cards **moves**: drag it, pinch it, wheel it or pinch the trackpad, with ± and
+a button to frame again; and it **flies** to the stage you edit (and back to
+the whole route on Done), to the paquet's chapter and to a place you just
+chose — framing everything that stage holds, even a town on another
+continent, which is then drawn in orange and tied to the pictures it should be
+near. The thresholds (radius, long drive, big halt, blind days, outliers) sit
 under *Fine settings*; moving any of them never asks the instance again. What
 the instance could not say is said rather than hidden: days without a position,
 a day placed far from the days around it (a drone that kept the GPS of home —

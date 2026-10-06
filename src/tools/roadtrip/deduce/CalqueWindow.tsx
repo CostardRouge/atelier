@@ -1,11 +1,12 @@
 import { GRAINS } from '../../../shared/roadtrip/deduce-grain';
-import { draftOutcome, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import { draftOutcome, haltText, type DeduceDraft, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import type { TripDoc } from '../../../shared/roadtrip/trip-types';
 import { stageLabel } from '../../../shared/roadtrip/trip-places';
 import Segmented from '../../../shared/ui/Segmented';
 import DeduceFrieze, { type FriezeItem } from './DeduceFrieze';
 import FineSettings from './FineSettings';
 import ProposalEditor from './ProposalEditor';
-import { GoButton, VerbPill, VerbSelect, legend, mono, plural, quoted, spanText } from './pieces';
+import { GoButton, VerbPill, VerbSelect, legend, mono, plural, quoted, spanText, stageName } from './pieces';
 import type { DeduceContext, DeduceIntent } from './context';
 
 /**
@@ -37,10 +38,10 @@ function tickedVerb(intent: DeduceIntent, p: Proposal) {
   return p.safe === 'skip' ? (p.target && p.extra.length ? 'into' : 'stage') : p.safe;
 }
 
-function sentence(p: Proposal): string {
+function sentence(p: Proposal, draft: DeduceDraft, trip: TripDoc): string {
   switch (p.verb) {
     case 'into':
-      return `Add ${p.extra.map((h) => h.city?.name ?? 'an unnamed halt').join(', ')} to “${stageLabel(p.target!)}”`;
+      return `Add ${p.extra.map((h) => haltText(h, draft, trip) ?? 'an unnamed halt').join(', ')} to “${stageName(p.target!, trip)}”`;
     case 'trim':
       return `Add ${plural(p.free.length, 'stage')} in the free days of “${p.label}”`;
     case 'split':
@@ -48,7 +49,7 @@ function sentence(p: Proposal): string {
     case 'skip':
       return `Leave “${p.label}”`;
     default:
-      return p.overlapping.length ? `Add, over ${quoted(p.overlapping)}, “${p.label}”` : `Add “${p.label}”`;
+      return p.overlapping.length ? `Add, over ${quoted(p.overlapping, trip)}, “${p.label}”` : `Add “${p.label}”`;
   }
 }
 
@@ -137,18 +138,18 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
                     className="w-4 h-4 accent-ink"
                     checked={on}
                     onChange={(e) => actions.answer(p.key, e.target.checked ? tickedVerb(intent, p) : 'skip')}
-                    aria-label={sentence(p)}
+                    aria-label={sentence(p, draft, trip)}
                   />
                   <span className={`min-w-0 ${on ? '' : 'opacity-50'}`}>
-                    {sentence(p)}
+                    {sentence(p, draft, trip)}
                     <span className={`block ${mono} normal-case`}>
-                      {spanText(p.startDate, p.endDate)} · {p.halts.map((h) => h.city?.name ?? 'unnamed').join(' · ')}
+                      {spanText(p.startDate, p.endDate)} · {p.halts.map((h) => haltText(h, draft, trip) ?? 'unnamed').join(' · ')}
                       {p.doubtful ? ' · stops on the way or guesses only' : ''}
                       {p.unnamed.length ? <span className="text-warn"> · {plural(p.unnamed.length, 'unnamed halt')}</span> : null}
                       {p.edited ? <span className="text-accent-ink"> · edited</span> : null}
                     </span>
                     <span className="mt-1 flex flex-wrap items-center gap-1.5">
-                      {intent === 'all' && p.verbs.length > 2 && <VerbSelect p={p} onChange={(v) => actions.answer(p.key, v)} />}
+                      {intent === 'all' && p.verbs.length > 2 && <VerbSelect p={p} trip={trip} onChange={(v) => actions.answer(p.key, v)} />}
                       <GoButton tab="paquet" label="One by one" onClick={() => actions.goTo('paquet', p.key)} />
                     </span>
                   </span>
@@ -165,7 +166,7 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
                 </div>
                 {editing === p.key && (
                   <div className="pb-3">
-                    <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
+                    <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
                   </div>
                 )}
               </li>

@@ -1,6 +1,10 @@
 import { describe, expect, it } from 'vitest';
 import {
   codeCandidates,
+  countryName,
+  majorityCountry,
+  placeLine,
+  tripCountry,
   datesOutsideStage,
   deriveStateCode,
   placeDates,
@@ -206,5 +210,43 @@ describe('placeDates / datesOutsideStage', () => {
     expect(datesOutsideStage({ arrived: '2025-11-04' }, stage)).toBe(true);
     expect(datesOutsideStage({ arrived: '2025-11-06', left: '2025-11-10' }, stage)).toBe(true);
     expect(datesOutsideStage({}, stage)).toBe(false);
+  });
+});
+
+describe('the country of a place', () => {
+  it('names a country from its code by the engine’s own table, and keeps an unknown code', () => {
+    expect(countryName('AU')).toBe('Australia');
+    expect(countryName('gb')).toBe('United Kingdom');
+    expect(countryName('')).toBe('');
+    expect(countryName('XYZ')).toBe('XYZ');
+  });
+
+  it('takes the code most places carry, the first met on a tie', () => {
+    expect(majorityCountry(['AU', 'gb', 'AU', undefined, ''])).toBe('AU');
+    expect(majorityCountry(['US', 'AU'])).toBe('US');
+    expect(majorityCountry([])).toBe('');
+  });
+
+  it('reads the trip’s country from its places', () => {
+    const t = trip();
+    t.stages = [
+      createTripStage('', '', '2025-11-02', '2025-11-04', [
+        createTripPlace('Kalbarri', 'Western Australia', null, { countryCode: 'AU' }),
+        createTripPlace('Exmouth', 'England', null, { countryCode: 'GB' }),
+      ]),
+      createTripStage('', '', '2025-11-05', '2025-11-06', [createTripPlace('Broome', 'Western Australia', null, { countryCode: 'AU' })]),
+    ];
+    expect(tripCountry(t)).toBe('AU');
+  });
+
+  it('writes a line with the trip’s writing, its country code and a name', () => {
+    const t = trip();
+    const place = createTripPlace('Exmouth', 'England', null, { searchCode: 'ENG', countryCode: 'gb' });
+    expect(placeLine(place, null, t, 'lists')).toEqual({ text: 'Exmouth, ENG', stateText: 'ENG', countryCode: 'GB', countryName: 'United Kingdom' });
+    // Written in full, the state column says the state in full.
+    expect(placeLine({ ...place, style: 'full' }, null, t, 'lists').stateText).toBe('England');
+    // The place's own country name wins over the engine's.
+    expect(placeLine({ ...place, country: 'Royaume-Uni' }, null, t, 'lists').countryName).toBe('Royaume-Uni');
+    expect(placeLine(createTripPlace('Somewhere', ''), null, t, 'lists')).toEqual({ text: 'Somewhere', stateText: '', countryCode: '', countryName: '' });
   });
 });
