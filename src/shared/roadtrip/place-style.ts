@@ -299,6 +299,11 @@ export function tripCountry(trip: Pick<TripDoc, 'stages'>): string {
 export interface PlaceLine {
   /** `placeText` — «Exmouth, WA». */
   text: string;
+  /**
+   * The state as a column says it: in full where the writing is «Name,
+   * state», else its code («WA»), else the state, else ''.
+   */
+  stateText: string;
   /** ISO 3166-1, upper case; '' when the place does not say. */
   countryCode: string;
   /** The place's own country name, else the code's, else ''. */
@@ -308,8 +313,12 @@ export interface PlaceLine {
 /** What every surface listing places reads, so the trip's writing is applied everywhere alike. */
 export function placeLine(place: TripPlace, stage: TripStage | null, trip: PlaceWritingTrip, surface: PlaceSurface): PlaceLine {
   const code = (place.countryCode ?? '').trim().toUpperCase();
+  const t = whole(trip);
+  const state = place.state.trim();
+  const full = placeStyleFor(place, stage, t, surface).style === 'full';
   return {
     text: placeText(place, stage, trip, surface),
+    stateText: full ? state : stateCodeFor(place, t).code || state,
     countryCode: code,
     countryName: (place.country ?? '').trim() || countryName(code),
   };

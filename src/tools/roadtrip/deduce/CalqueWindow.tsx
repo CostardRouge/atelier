@@ -166,7 +166,7 @@ export default function CalqueWindow({ ctx }: { ctx: DeduceContext }) {
                 </div>
                 {editing === p.key && (
                   <div className="pb-3">
-                    <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
+                    <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
                   </div>
                 )}
               </li>

@@ -1,4 +1,4 @@
-import type { DeduceDraft, DeduceVerb, Proposal, ProposalEdit } from '../../../shared/roadtrip/deduce-draft';
+import type { DeduceDraft, DeduceVerb, HaltPick, Proposal, ProposalEdit } from '../../../shared/roadtrip/deduce-draft';
 import type { TripDoc } from '../../../shared/roadtrip/trip-types';
 import type { DeduceSettings, DeduceTab } from './settings';
 import type { Deduction } from './use-deduction';
@@ -16,6 +16,8 @@ export interface DeduceActions {
   edit: (p: Pick<Proposal, 'key' | 'chapter'>, patch: ProposalEdit) => void;
   resetEdit: (key: string) => void;
   rename: (haltKey: string, name: string) => void;
+  /** A place chosen for a halt instead of the index's (Fix), or null to give it back. */
+  choose: (haltKey: string, pick: HaltPick | null) => void;
   setDraft: (draft: DeduceDraft) => void;
   setSettings: (patch: Partial<DeduceSettings>) => void;
   resetSettings: () => void;

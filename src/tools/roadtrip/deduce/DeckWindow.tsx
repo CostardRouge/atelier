@@ -139,7 +139,7 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
         <DeduceMap proposals={proposals} trip={trip} draft={draft} points={points} ignored={ignored} land={land} focus={p} className="rounded-none border-0 max-[560px]:[&_svg]:max-h-[11rem]" />
         {editing === p.key && (
           <div className="col-span-full px-4 pb-3.5 border-t border-line">
-            <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
+            <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />
           </div>
         )}
       </div>

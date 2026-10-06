@@ -242,9 +242,11 @@ describe('the country of a place', () => {
   it('writes a line with the trip’s writing, its country code and a name', () => {
     const t = trip();
     const place = createTripPlace('Exmouth', 'England', null, { searchCode: 'ENG', countryCode: 'gb' });
-    expect(placeLine(place, null, t, 'lists')).toEqual({ text: 'Exmouth, ENG', countryCode: 'GB', countryName: 'United Kingdom' });
+    expect(placeLine(place, null, t, 'lists')).toEqual({ text: 'Exmouth, ENG', stateText: 'ENG', countryCode: 'GB', countryName: 'United Kingdom' });
+    // Written in full, the state column says the state in full.
+    expect(placeLine({ ...place, style: 'full' }, null, t, 'lists').stateText).toBe('England');
     // The place's own country name wins over the engine's.
     expect(placeLine({ ...place, country: 'Royaume-Uni' }, null, t, 'lists').countryName).toBe('Royaume-Uni');
-    expect(placeLine(createTripPlace('Somewhere', ''), null, t, 'lists')).toEqual({ text: 'Somewhere', countryCode: '', countryName: '' });
+    expect(placeLine(createTripPlace('Somewhere', ''), null, t, 'lists')).toEqual({ text: 'Somewhere', stateText: '', countryCode: '', countryName: '' });
   });
 });

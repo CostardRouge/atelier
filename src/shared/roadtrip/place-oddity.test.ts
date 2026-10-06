@@ -51,4 +51,15 @@ describe('stageReference', () => {
     expect(stageReference(alone, exmouth.id, t2)!.lat).toBeCloseTo((-27.71 - 24.88) / 2, 5);
     expect(stageReference(alone, exmouth.id, { stages: [alone] })).toBeNull();
   });
+
+  it('leaves a town of another country out of its neighbours’ centre', () => {
+    const kalbarri = createTripPlace('Kalbarri', 'Western Australia', KALBARRI, { countryCode: 'AU' });
+    const carnarvon = createTripPlace('Carnarvon', 'Western Australia', { lat: -24.88, lon: 113.66 }, { countryCode: 'AU' });
+    const devon = createTripPlace('Exmouth', 'England', EXMOUTH_DEVON, { countryCode: 'GB' });
+    const stage = createTripStage('', '', '2025-11-20', '2025-11-24', [kalbarri, carnarvon, devon]);
+    const trip = { stages: [stage] };
+    expect(stageReference(stage, kalbarri.id, trip, 'AU')).toEqual({ lat: -24.88, lon: 113.66 });
+    // Without the trip's country, every neighbour counts.
+    expect(stageReference(stage, kalbarri.id, trip)!.lat).toBeGreaterThan(0);
+  });
 });

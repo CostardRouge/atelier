@@ -55,17 +55,21 @@ function centroid(points: readonly GeoPoint[]): GeoPoint | null {
  * What a place of a stage is measured against when there are no pictures
  * to hand: the centre of its stage's OTHER located places, else of every
  * other located place of the trip — so a stage of one place is still
- * compared with something.
+ * compared with something. Places in the trip's own country (`home`) are
+ * preferred where there are any: a town in the wrong country must not drag
+ * the centre half-way round the world and make its neighbours look far.
  */
 export function stageReference(
   stage: Pick<TripStage, 'places'>,
   placeId: string,
   trip: Pick<TripDoc, 'stages'>,
+  home = '',
 ): GeoPoint | null {
-  const others = (places: readonly TripPlace[]) =>
-    places.filter((p) => p.id !== placeId && p.coords).map((p) => p.coords!);
-  return (
-    centroid(others(stage.places ?? [])) ??
-    centroid(others((trip.stages ?? []).flatMap((s) => s.places ?? [])))
-  );
+  const at = (places: readonly TripPlace[]): GeoPoint | null => {
+    const located = places.filter((p) => p.id !== placeId && p.coords);
+    const code = home.trim().toUpperCase();
+    const own = code ? located.filter((p) => !p.countryCode || p.countryCode.toUpperCase() === code) : [];
+    return centroid((own.length ? own : located).map((p) => p.coords!));
+  };
+  return at(stage.places ?? []) ?? at((trip.stages ?? []).flatMap((s) => s.places ?? []));
 }

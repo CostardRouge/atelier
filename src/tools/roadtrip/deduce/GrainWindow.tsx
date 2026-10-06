@@ -17,7 +17,7 @@ import type { DeduceContext } from './context';
  */
 
 function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
-  const { actions, draft, editing, trip, flash } = ctx;
+  const { actions, draft, editing, trip, flash, deduction } = ctx;
   const skipped = p.verb === 'skip';
   return (
     <article
@@ -56,7 +56,7 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
           {p.overlapping.length > 0 && <GoButton tab="calque" label="Against mine" onClick={() => actions.goTo('calque', p.key)} />}
         </span>
       </div>
-      {editing === p.key && <ProposalEditor p={p} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />}
+      {editing === p.key && <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />}
     </article>
   );
 }
