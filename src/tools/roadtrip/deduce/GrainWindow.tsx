@@ -70,6 +70,8 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
   const over = proposals.filter((p) => p.verb === 'stage' && p.overlapping.length > 0);
   const ignored = track ? track.points.filter((p) => !points.includes(p)) : [];
   const hotProposal = hot ? (proposals.find((p) => p.key === hot) ?? null) : null;
+  // The stage being edited is what the map flies to and frames.
+  const editingProposal = ctx.editing ? (proposals.find((p) => p.key === ctx.editing) ?? null) : null;
 
   return (
     <>
@@ -163,6 +165,7 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
             ignored={ignored}
             land={land}
             hot={hot}
+            focus={editingProposal}
             caption={hotProposal ? `${hotProposal.label} · ${spanText(hotProposal.startDate, hotProposal.endDate)}` : 'Hover or focus a stage'}
             className="max-[700px]:[&_svg]:max-h-[9.5rem]"
             legend="Colour: a new stage · green: places into one of yours · faint: left out · ✕: an ignored position"
