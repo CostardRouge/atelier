@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  clipToDisplay,
   cloneDevelop,
   DEFAULT_DEVELOP,
   DEVELOP_KEYS,
@@ -70,9 +71,23 @@ describe('developLinear — identity and exposure', () => {
     }
   });
 
-  it('exposure +1 doubles linear light, −1 halves it, with no clamp', () => {
-    expect(developLinear([0.2, 0.4, 0.6], dev({ exposure: 1 }))).toEqual([0.4, 0.8, 1.2]);
+  it('exposure −1 halves linear light exactly; +1 doubles it under the knee and rolls the top off into white', () => {
     expect(developLinear([0.2, 0.4, 0.6], dev({ exposure: -1 }))).toEqual([0.1, 0.2, 0.3]);
+    expect(developLinear([0.05, 0.1, 0.15], dev({ exposure: 1 }))).toEqual([0.1, 0.2, 0.3]);
+    // Above the knee the doubling is a shoulder: brighter than it was, under
+    // the straight ×2, and what the gain sends past white lands AT white
+    // instead of clipping there — the picture's top keeps its order.
+    const rolled = developLinear([0.2, 0.4, 0.6], dev({ exposure: 1 }));
+    expect(rolled[1]).toBeGreaterThan(0.4);
+    expect(rolled[1]).toBeLessThan(0.8);
+    expect(lum(developLinear(grey(1), dev({ exposure: 1 })))).toBeCloseTo(1, 9);
+    let prev = 0;
+    for (const L of [0.7, 0.8, 0.9, 0.97]) {
+      const y = lum(developLinear(grey(L), dev({ exposure: 1 })));
+      expect(y).toBeGreaterThan(prev);
+      expect(y).toBeLessThan(1);
+      prev = y;
+    }
   });
 
   it('never returns a negative channel and treats a negative input as black', () => {
@@ -128,12 +143,125 @@ describe('developLinear — the tone bands stay in their half', () => {
     expect(developLinear(grey(0.5), dev({ blacks: 100 }))).toEqual(grey(0.5));
   });
 
-  it('whites −100 pulls a pixel ABOVE white down by the same ratio as white', () => {
-    // A RAW's headroom: the curve is defined on [0,1], and a super-white takes
-    // white's ratio — that is what makes highlight recovery reach it.
-    const white = developLinear([1, 1, 1], dev({ whites: -100 }));
-    const bright = developLinear([2, 2, 2], dev({ whites: -100 }));
-    expect(bright[0] / 2).toBeCloseTo(white[0], 9);
+  it('highlights −100 reaches white itself: a gradient into white comes down whole, with no hole', () => {
+    // The band used to be zero at white, so a sky's three-quarter tones came
+    // down and its brightest tenth stayed put — a burned hole ringed by the
+    // recovery. Now the top comes down with the rest and the gradient's span
+    // SHRINKS rather than growing.
+    const at = (L: number) => encodedLum(developLinear(grey(L), dev({ highlights: -100 })));
+    expect(at(1)).toBeCloseTo(0.85, 6);
+    expect(at(0.9)).toBeLessThan(0.9);
+    expect(at(0.75)).toBeLessThan(0.75);
+    expect(at(1) - at(0.75)).toBeLessThan(0.25);
+    expect(at(1)).toBeGreaterThan(at(0.9));
+    expect(at(0.9)).toBeGreaterThan(at(0.75));
+  });
+
+  it('whites −100 on a RAW brings its headroom under white, the sensor’s top landing at white', () => {
+    // developLinear takes LINEAR values after the metered gain: at rawGain 2
+    // the sensor's top is 2, one stop above the displayed white.
+    const d = dev({ base: 'gain', rawGain: 2, whites: -100 });
+    const white = developLinear([1, 1, 1], d);
+    const mid = developLinear([1.5, 1.5, 1.5], d);
+    const top = developLinear([2, 2, 2], d);
+    expect(white[0]).toBeCloseTo(toLinear(0.8, 'srgb'), 9);
+    expect(top[0]).toBeCloseTo(1, 9);
+    expect(mid[0]).toBeGreaterThan(white[0]);
+    expect(mid[0]).toBeLessThan(1);
+  });
+
+  it('highlights recovers a RAW’s headroom by halves: −100 all of it, −50 one stop of two', () => {
+    const all = dev({ base: 'gain', rawGain: 4, highlights: -100 });
+    expect(lum(developLinear([4, 4, 4], all))).toBeCloseTo(1, 9);
+    expect(lum(developLinear([2, 2, 2], all))).toBeLessThan(1);
+    expect(lum(developLinear([2, 2, 2], all))).toBeGreaterThan(lum(developLinear([1, 1, 1], all)));
+    const half = dev({ base: 'gain', rawGain: 4, highlights: -50 });
+    // One stop above white lands at white; the stop above that is a burn.
+    expect(lum(developLinear([2, 2, 2], half))).toBeCloseTo(1, 9);
+    expect(lum(developLinear([4, 4, 4], half))).toBeCloseTo(1, 9);
+    expect(lum(developLinear([1.5, 1.5, 1.5], half))).toBeLessThan(1);
+  });
+
+  it('leaves a RAW’s headroom untouched where no slider reaches it, and as shot', () => {
+    expect(developLinear([3, 3, 3], dev({ base: 'gain', rawGain: 4 }))).toEqual([3, 3, 3]);
+    expect(developLinear([3, 3, 3], dev({ base: 'gain', rawGain: 4, shadows: 50 }))).toEqual([3, 3, 3]);
+  });
+});
+
+describe('developLinear — the toe, the shoulder and the display clip', () => {
+  it('contrast +100 rolls off at both ends instead of clipping: near-whites and deep shadows keep their order', () => {
+    // Before: everything above 0.80 was white and everything under 0.17 black.
+    const c = dev({ contrast: 100 });
+    let prev = 0;
+    for (const L of [0.05, 0.1, 0.15, 0.85, 0.95, 1]) {
+      const y = encodedLum(developLinear(grey(L), c));
+      expect(y).toBeGreaterThan(prev);
+      prev = y;
+    }
+    expect(encodedLum(developLinear(grey(0.85), c))).toBeLessThan(1);
+    expect(encodedLum(developLinear(grey(0.05), c))).toBeGreaterThan(0);
+    expect(developLinear([0, 0, 0], c)).toEqual([0, 0, 0]);
+    expect(encodedLum(developLinear(grey(1), c))).toBeCloseTo(1, 9);
+  });
+
+  it('whites +100 lands white on white and keeps a near-white under it', () => {
+    const w = dev({ whites: 100 });
+    expect(encodedLum(developLinear(grey(1), w))).toBeCloseTo(1, 9);
+    expect(encodedLum(developLinear(grey(0.92), w))).toBeLessThan(1);
+    expect(encodedLum(developLinear(grey(0.92), w))).toBeGreaterThan(0.92);
+  });
+
+  it('is continuous in the sliders: a hair of contrast moves a near-white by a hair', () => {
+    const y0 = encodedLum(developLinear(grey(0.98), dev({})));
+    const y1 = encodedLum(developLinear(grey(0.98), dev({ contrast: 1 })));
+    expect(Math.abs(y1 - y0)).toBeLessThan(0.01);
+  });
+
+  it('clipToDisplay keeps the hue, puts the brightest channel at white, and is the identity under it', () => {
+    expect(clipToDisplay([0.3, 0.6, 0.9])).toEqual([0.3, 0.6, 0.9]);
+    const hue = (p: readonly [number, number, number]) => (p[0] - p[1]) / (p[1] - p[2]);
+    for (const hot of [
+      [1.4, 0.9, 0.2],
+      [1.05, 0.95, 0.9],
+      [3, 2, 0.3],
+      [1.2, 1.2, 0],
+    ] as [number, number, number][]) {
+      const out = clipToDisplay(hot);
+      expect(Math.max(...out)).toBeCloseTo(1, 12);
+      expect(Math.min(...out)).toBeGreaterThanOrEqual(0);
+      if (hot[1] !== hot[2]) expect(hue(out)).toBeCloseTo(hue(hot), 9);
+      // Brightness lands between the scaled pixel's and the source's.
+      expect(lum(out)).toBeGreaterThanOrEqual(lum(hot) / Math.max(...hot) - 1e-12);
+      expect(lum(out)).toBeLessThanOrEqual(Math.min(1, lum(hot)) + 1e-12);
+    }
+  });
+
+  it('clipToDisplay: a saturated colour just past white keeps its colour, far past white it goes to white, a grey past white is white', () => {
+    // A yellow a fifth past white is still a yellow: keeping its luminance
+    // (0.93 of white's) would have made it near-white at once.
+    const yellow = clipToDisplay([1.2, 1.2, 0]);
+    expect(yellow[2]).toBeLessThan(0.2);
+    // Two stops past white it is pale; four stops, nearly white.
+    expect(clipToDisplay([4, 4, 0])[2]).toBeGreaterThan(0.7);
+    expect(clipToDisplay([16, 16, 0])[2]).toBeGreaterThan(0.9);
+    expect(clipToDisplay([2, 2, 2])).toEqual([1, 1, 1]);
+    // A near-grey keeps its brightness rather than dipping as it crosses white.
+    const pale = clipToDisplay([1.05, 0.95, 0.9]);
+    expect(lum(pale)).toBeGreaterThan(0.95);
+    // A ramp of one colour through the clip never darkens on its way to white.
+    let prev = 0;
+    for (const k of [0.6, 0.8, 1, 1.3, 1.8, 2.5, 4, 8]) {
+      const y = lum(clipToDisplay([1.5 * k, k, 0.3 * k]));
+      expect(y).toBeGreaterThanOrEqual(prev - 1e-12);
+      prev = y;
+    }
+    // And the stage encodes through it: no channel past 1, a warm highlight
+    // stays warm rather than turning yellow.
+    const stage = developStage(dev({ exposure: 1, temperature: 60 }));
+    const [r, g, b] = stage(0.9, 0.8, 0.7);
+    expect(r).toBeLessThanOrEqual(1);
+    expect(r).toBeGreaterThanOrEqual(g);
+    expect(g).toBeGreaterThanOrEqual(b);
   });
 });
 

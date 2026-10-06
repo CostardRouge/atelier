@@ -114,7 +114,7 @@ export async function loadBadgeSource(
   videoTimeSeconds = 0,
   fit?: StillFit | null,
 ): Promise<BadgeSource> {
-  if (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)) {
+  if (isVideoSource(file)) {
     return loadVideoFrame(file, videoTimeSeconds);
   }
   // A still, decoded AT the size its caller works on (`still-decode.ts`): a
@@ -134,10 +134,18 @@ export async function loadBadgeSource(
       release: () => bitmap.close(),
     };
   } catch {
-    throw new Error(
-      `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`,
-    );
+    throw new Error(undecodableMessage(file));
   }
+}
+
+/** A file a stage plays as a CLIP — by its type, else by its name. */
+export function isVideoSource(file: File): boolean {
+  return file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name);
+}
+
+/** The sentence a still the browser cannot decode gets, on every stage that tries. */
+export function undecodableMessage(file: File): string {
+  return `The browser cannot decode ${file.name}, and the file carries no render of its own — point this at an exported JPEG instead.`;
 }
 
 function loadVideoFrame(file: File, timeSeconds: number): Promise<BadgeSource> {

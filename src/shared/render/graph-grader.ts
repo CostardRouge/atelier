@@ -19,12 +19,15 @@ import { makeExportCanvas } from '../media/webcodecs-export';
 import { makeCubePass } from './cube-pass';
 import { makeFilmPass } from './film-pass';
 import { createRenderGraph, type RenderPass, type RenderPrecision, type RenderSource } from './graph';
-import { isHalfImage } from './half-image';
+import { isHalfImage, type HalfImage } from './half-image';
+
+/** What a grader takes: any picture a canvas can draw, or a half-float picture of our own. */
+type GradeSource = CanvasImageSource | HalfImage;
 
 // The banding hooks, re-exported so a gate that imports THIS module reaches the
 // very instance of the graph it renders through (a dev server that has
 // hot-reloaded `graph.ts` serves it under a second URL).
-export { bandsDrawRightHere, bandsLastDrawnForTest, getBandPreference, setBandingForTest, setBandPreference } from './graph';
+export { bandsDrawRightHere, bandsLastDrawnForTest, getBandPreference, setBandingForTest, setBandPreference, setDitherForTest } from './graph';
 
 export interface GraphGrader extends FrameGrader {
   /** What the intermediate buffers really are here — 'byte' where float16 cannot be rendered to. */
@@ -57,13 +60,29 @@ export interface GraphGrader extends FrameGrader {
    * the uploaded source all survive; only the cube's texture is new.
    */
   setLut(lut: CubeLut | null): void;
+  /**
+   * The graded picture read back as HALF-FLOATS from the chain's own
+   * buffers (`RenderGraph.readHalf`) — never the 8-bit canvas — for a 16-bit
+   * file. Null without a float16 chain or without WebGL2.
+   */
+  renderHalf(source: GradeSource, sourceSeconds?: number): HalfImage | null;
 }
 
-let probedMaxSize: number | null = null;
+let probed: { maxSize: number; precision: RenderPrecision | null } | null = null;
+
+/** What this machine's GPU can do, asked ONCE and kept for the page: a 1×1 graph is built, read and released. */
+function probeGpu(): { maxSize: number; precision: RenderPrecision | null } {
+  if (probed) return probed;
+  const graph = createRenderGraph(makeExportCanvas(1, 1));
+  probed = graph
+    ? { maxSize: graph.maxSize, precision: graph.precision }
+    : { maxSize: Number.POSITIVE_INFINITY, precision: null };
+  graph?.dispose();
+  return probed;
+}
 
 /**
- * The longest edge this machine's GPU can render, asked ONCE and kept for the
- * page: a 1×1 graph is built, read and released. Infinity where there is no
+ * The longest edge this machine's GPU can render. Infinity where there is no
  * WebGL2, since the pass-through grader then has nothing to fit.
  *
  * What a full-density export asks BEFORE decoding what to grade at
@@ -71,11 +90,18 @@ let probedMaxSize: number | null = null;
  * black picture that says nothing.
  */
 export function maxRenderSize(): number {
-  if (probedMaxSize !== null) return probedMaxSize;
-  const graph = createRenderGraph(makeExportCanvas(1, 1));
-  probedMaxSize = graph ? graph.maxSize : Number.POSITIVE_INFINITY;
-  graph?.dispose();
-  return probedMaxSize;
+  return probeGpu().maxSize;
+}
+
+/**
+ * What this machine's render chain computes in between two passes —
+ * `float16`, or `byte` where the GPU cannot render to half-floats (the graph
+ * then falls to 8 bits rather than failing). Null where there is no WebGL2 at
+ * all, and so no chain. What the picture's fidelity line says
+ * (`picture-fidelity.ts`), so a fallback is never silent.
+ */
+export function renderPrecisionHere(): RenderPrecision | null {
+  return probeGpu().precision;
 }
 
 /**
@@ -111,6 +137,7 @@ export function makeGraphGrader(
       setExtraPasses() {},
       setFilm() {},
       setLut() {},
+      renderHalf: () => null,
       dispose() {},
     };
   }
@@ -158,6 +185,10 @@ export function makeGraphGrader(
         filmPass ? [...pre, cube, ...extra, filmPass] : [...pre, cube, ...extra],
       );
       return canvas;
+    },
+    renderHalf(source, sourceSeconds) {
+      if (filmPass && sourceSeconds !== undefined) filmPass.setSourceSeconds(sourceSeconds);
+      return graph.readHalf(source as RenderSource, filmPass ? [...pre, cube, ...extra, filmPass] : [...pre, cube, ...extra]);
     },
     dispose() {
       for (const pass of extra) graph.releasePass(pass);

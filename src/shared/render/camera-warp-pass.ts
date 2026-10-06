@@ -25,6 +25,7 @@ import { GLSL_VERSION, IMAGE_UV } from './glsl';
 import { planeOf, warpNormRadius, warpSourceUv, type CameraWarp } from './camera-warp';
 import { isIdentityWarp } from '../exif/dng-opcodes';
 import type { RenderPass } from './graph';
+import { dataKey } from './pass-key';
 
 const FRAGMENT = `${GLSL_VERSION}
 precision highp float;
@@ -102,6 +103,7 @@ export function makeCameraWarpPass(
   }
   return {
     id: 'camera-warp',
+    key: dataKey('camera-warp', radius, radial, tangential),
     // The same map, in JavaScript, for the three planes.
     rows: warpRows((u, v, flipY) => {
       const imgY = flipY ? v : 1 - v;

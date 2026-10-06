@@ -218,7 +218,7 @@ path for denoise *only*, if and when a measurement asks for one.
 SOURCE     8-bit picture → linearise → RGBA16F        (RAW → 16-bit linear, §7.10)
   ↓
 1 GEOMETRY   ONE inverse warp: lens distortion → keystone homography → rotate/flip → crop
-2 BASE       the global develop + curves/levels          ← TODAY'S CUBE, unchanged
+2 BASE       the global develop + curves/levels          ← TODAY'S CUBE, unchanged (since 2026-10-05: its HEAD per pixel, `CubeLut.head`)
 3 LAYERS     N × { mask, develop, curves, opacity, blend }
 4 REPAIR     healing / clone / dust — a patch list, one composite pass
 5 DETAIL     denoise → defringe → sharpen

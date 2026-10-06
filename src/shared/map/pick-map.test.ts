@@ -8,7 +8,9 @@ import {
   nearestWithin,
   openingBounds,
   stopsLine,
+  townOrder,
   townsByPopulation,
+  townsFromOrder,
   townsInView,
 } from './pick-map';
 
@@ -38,6 +40,15 @@ describe('the towns a view is handed', () => {
 
   it('leaves the suburbs out and puts the biggest first', () => {
     expect(sorted.map((t) => t.name)).toEqual(['Perth', 'Auckland', 'Suva', 'Apia', 'Geraldton', 'Kalbarri']);
+  });
+
+  it('is the same list read from its order — indices into the index, the cities themselves', () => {
+    const order = townOrder(INDEX);
+    expect(order).toBeInstanceOf(Uint32Array);
+    expect([...order]).toEqual([1, 4, 5, 6, 3, 0]);
+    const towns = townsFromOrder(INDEX, order);
+    expect(towns).toEqual(sorted);
+    expect(towns[0]).toBe(INDEX[1]);
   });
 
   it('keeps only what is inside, biggest first, up to the limit', () => {

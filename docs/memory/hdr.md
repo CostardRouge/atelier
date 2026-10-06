@@ -96,3 +96,31 @@ section (a switch with the support line as its hint, the reach, the last
 run's line: "1 of 2 left as Ultra HDR · up to 0.7 stops above white · read
 back within 0.03 stops"). The Develop tool only; Trips and the Studio
 deliver stills as before.
+
+## Looked at BEFORE it is written: the file in an `<img>` (2026-10-05)
+
+**Decision** (the fidelity audit's piste 4, his «fais les autres pistes»):
+no browser grants an HDR canvas, but every current one DRAWS an Ultra HDR
+JPEG in an `<img>` with its gain map on a display with headroom — Chrome,
+Edge and Safari on his Mac and iPhone. So the preview IS the file:
+`hdr-preview.ts` takes the stage's `delivered()` and the same picture
+rendered through the stage's own grader with the roll's stops taken off
+the exposure (`useDevelopPicture.deliveredWith(cube)` — the look swapped in
+place, the render COPIED out, the stage's cube put back; one GPU pass, no
+second decode), frames both as the crop stage shows them (`deliveredLayout`
++ `drawDelivered`, the export's own painter) at a 2048 px edge, and wraps
+them with the very `encodeUltraHdr` the export runs. `HdrPreviewSheet`
+shows it as an image with a `Base · HDR` switch (the base is the file's own
+primary, cut out by `readUltraHdr`), the measured line (stops above white,
+read back within), and what THIS display is (`hdrSupport().display`): on an
+SDR screen both views look the same and the sheet says so. Opened from
+*Look at it on this screen* in the Export tab's HDR section, stills only; a
+picture not on its sensor gets the base and the reason. **Order matters**:
+the darker render is taken FIRST — both come off the one held grader's
+canvas, and `delivered()` is not copied. Driven headless over a synthetic
+DNG the decoder reads (`testing.md`'s recipe): the sheet's file read back as
+Ultra HDR, the switch swapped files, Escape closed it; the module alone on
+two canvases gave 1.24 stops read back within 0.06. Not seen on an HDR
+screen: whether Chrome's `<img>` lights a gain map written by us is the one
+thing this container cannot measure.
+

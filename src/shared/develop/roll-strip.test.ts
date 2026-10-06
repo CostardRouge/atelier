@@ -10,6 +10,7 @@ import {
   bandLayout,
   bandSize,
   cellAspect,
+  cellsInView,
   clampAspect,
   columnLayout,
   columnsForWidth,
@@ -149,6 +150,27 @@ describe('the column and the sheet', () => {
     expect(stepThumb(D.thumb, 1, D, 'band')).toBe(D.thumb + D.thumbStep);
     expect(stepThumb(D.thumbMax, 1, D, 'band')).toBe(D.thumbMax);
     expect(stepThumb(D.sheetMin, -1, D, 'sheet')).toBe(D.sheetMin);
+  });
+});
+
+describe('cellsInView', () => {
+  const row = Array.from({ length: 10 }, (_, i) => ({ id: `p${i}`, x: i * 100, y: 0, w: 90, h: 60, cap: 0 }));
+
+  it('draws the cells within one box on each side of the view, and the open one always', () => {
+    const ids = cellsInView(row, { x: 300, y: 0, w: 200, h: 60 }, 'x', 'p9').map((c) => c.id);
+    expect(ids).toEqual(['p1', 'p2', 'p3', 'p4', 'p5', 'p6', 'p9']);
+    expect(cellsInView(row, { x: 0, y: 0, w: 200, h: 60 }, 'x', null).map((c) => c.id)).toEqual(['p0', 'p1', 'p2', 'p3']);
+  });
+
+  it('reads the other axis for a grid, a caption counted in the cell', () => {
+    const grid = [0, 100, 300, 600].map((y, i) => ({ id: `g${i}`, x: 0, y, w: 90, h: 60, cap: 20 }));
+    expect(cellsInView(grid, { x: 0, y: 270, w: 90, h: 100 }, 'y', null).map((c) => c.id)).toEqual(['g1', 'g2']);
+    expect(cellsInView(grid.map((c) => ({ ...c, cap: 0 })), { x: 0, y: 270, w: 90, h: 100 }, 'y', null).map((c) => c.id)).toEqual(['g2']);
+  });
+
+  it('draws the open cell alone in a box with no size yet', () => {
+    expect(cellsInView(row, { x: 0, y: 0, w: 0, h: 0 }, 'x', 'p4').map((c) => c.id)).toEqual(['p4']);
+    expect(cellsInView(row, { x: 0, y: 0, w: 0, h: 0 }, 'x', null)).toEqual([]);
   });
 });
 

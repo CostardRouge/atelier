@@ -23,7 +23,11 @@ const glslColour = ([r, g, b]: readonly [number, number, number]) =>
 
 export const clipPass: RenderPass = {
   id: 'clipping',
+  key: 'clipping',
   rows: OWN_ROWS,
+  // Its test is made against the canvas's own rounding, so that rounding is
+  // left alone while the view is on (`dither.ts`).
+  exact: true,
   fragment: `${GLSL_VERSION}
 precision highp float;
 in vec2 v_uv;

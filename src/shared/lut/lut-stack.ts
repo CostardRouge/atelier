@@ -32,12 +32,17 @@
  */
 
 import type { CubeLut } from '../lib/cube-parser';
-import { developStage, isDefaultDevelop, isRawDevelop, type DevelopSettings } from '../develop/develop';
+import { developStage, type DevelopSettings } from '../develop/develop';
+import { developHead, developTail, isDefaultTail } from '../develop/develop-head';
 import { sampleTrilinear, sampleWith, type Interpolation } from './interpolate';
 import { makeTransfer, transformLabel, type OutputTransform } from './transfer';
 
-/** Upper bound on the composed lattice: 64³ ≈ 3 MB of floats, plenty. */
-const MAX_COMPOSED_SIZE = 64;
+/**
+ * Upper bound on the composed lattice: 65³ ≈ 3.3 MB of floats, plenty — and
+ * 65 rather than 64 so a purchased 65³ look baked under a transform keeps its
+ * own lattice instead of being resampled a point short of it.
+ */
+const MAX_COMPOSED_SIZE = 65;
 
 /** Floor when an output transform is baked in; see `composeLutStack`. */
 const TRANSFORM_MIN_SIZE = 33;
@@ -119,13 +124,27 @@ export function composeLutStack(
 ): CubeLut | null {
   const active = activeLayers(layers);
   const transform = output !== 'none';
-  const developed = !isDefaultDevelop(develop);
+  // The develop in two parts (`develop-head.ts`): the HEAD — white balance,
+  // gains, the tone, luma and channel curves, saturation — rides on the cube
+  // and runs per pixel before the lattice, in every sampler and in the shader;
+  // only the TAIL — mixer, mono, grading — is baked into the lattice. A
+  // lattice cannot hold the head: measured at up to 42 codes off in a RAW's
+  // shadows when it did.
+  const head = developHead(develop);
+  const tail = develop && !isDefaultTail(develop) ? developTail(develop) : null;
   // Resolved once: inside the lattice walk each runs 3× (or 1×) per point.
   const transfer = makeTransfer(output);
-  const correct = developed && develop ? developStage(develop) : null;
+  const correct = tail ? developStage(tail) : null;
+  const developed = Boolean(head || correct);
   if (active.length === 0 && !transform && !developed) return null;
-  if (!transform && !developed && active.length === 1 && active[0].intensity === 1) {
-    return active[0].lut;
+  // One look at full strength with nothing to bake into it keeps its OWN
+  // lattice — exact, no resample — and a head rides on it as it is.
+  if (!transform && !correct && active.length === 1 && active[0].intensity === 1) {
+    return head ? { ...active[0].lut, head } : active[0].lut;
+  }
+  // A head alone: nothing a lattice needs to hold.
+  if (!transform && !correct && active.length === 0) {
+    return { ...identityCube(), head, title: 'Develop' };
   }
 
   const largest = active.reduce((max, l) => Math.max(max, l.lut.size), 2);
@@ -135,20 +154,9 @@ export function composeLutStack(
   // 64³ costs ~180 ms per bake, and the strength slider re-bakes on every drag
   // step, which froze the UI. At the shipped 33³ the error is 0.77 of an 8-bit
   // code against 0.35 at 64³ — both under the quantisation step, and not worth
-  // eight times the lattice. A develop's tone curve has the same shape near
-  // black, so it takes the same floor.
-  // A RAW develop takes the densest lattice there is: its [0,1] is the
-  // SENSOR's range, so the displayed picture comes from the lower part of it
-  // (a measured gain of ×4 puts white at a quarter) and the same 33 points
-  // that hold a render's curve would hold a RAW's over a fraction of them.
-  const size = Math.min(
-    MAX_COMPOSED_SIZE,
-    developed && isRawDevelop(develop)
-      ? MAX_COMPOSED_SIZE
-      : transform || developed
-        ? Math.max(largest, TRANSFORM_MIN_SIZE)
-        : largest,
-  );
+  // eight times the lattice. The tail is smooth in three dimensions and takes
+  // the same floor; the head, which is not, is never in the lattice.
+  const size = Math.min(MAX_COMPOSED_SIZE, transform || correct ? Math.max(largest, TRANSFORM_MIN_SIZE) : largest);
   const last = size - 1;
   const data = new Float32Array(size * size * size * 3);
 
@@ -159,7 +167,8 @@ export function composeLutStack(
         let g = gi / last;
         let b = bi / last;
 
-        // The correction FIRST: every look then sees the developed picture.
+        // The tail FIRST (the head already ran, per pixel): every look then
+        // sees the developed picture.
         if (correct) [r, g, b] = correct(r, g, b);
 
         for (const layer of active) {
@@ -200,6 +209,7 @@ export function composeLutStack(
     title: names.join(' → '),
     domainMin: [0, 0, 0],
     domainMax: [1, 1, 1],
+    head,
   };
 }
 

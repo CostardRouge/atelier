@@ -18,6 +18,7 @@
 import { nearRows, OWN_ROWS } from './band-plan';
 import { GLSL_VERSION, SRGB_TRANSFER } from './glsl';
 import type { RenderPass } from './graph';
+import { dataKey } from './pass-key';
 import {
   CONTRAST_GAIN,
   DEHAZE_FLOOR,
@@ -136,6 +137,7 @@ export function makePresencePasses(op: PresenceOp, amount: number): RenderPass[]
   return [
     {
       id: 'presence-blur',
+      key: dataKey('presence-blur', op, frac),
       // A blur along X: a band reads its own rows.
       rows: OWN_ROWS,
       fragment: BLUR_FRAGMENT,
@@ -146,6 +148,7 @@ export function makePresencePasses(op: PresenceOp, amount: number): RenderPass[]
     },
     {
       id: 'presence-apply',
+      key: dataKey('presence-apply', op, amount),
       // Along Y, as far as the kernel reaches — the GLSL's own `geometry()`.
       rows: nearRows((frame) => presenceReach(frac, frame.width, frame.height)),
       fragment: APPLY_FRAGMENT,

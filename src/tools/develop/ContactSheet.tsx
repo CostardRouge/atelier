@@ -3,8 +3,7 @@ import { STRIP_METRICS, sheetLayout } from '../../shared/develop/roll-strip';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import { Icons } from '../../shared/ui/icons';
-import { useElementWidth } from '../../shared/ui/use-element-width';
-import { StripCells, shownPictures, stripItems, useScrollToOpen, type StripCellsProps } from './RollBand';
+import { StripCells, shownPictures, stripItems, useScrollToOpen, useScrollView, type StripCellsProps } from './RollBand';
 import { fingerSize } from '../../shared/ui/press';
 import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
 
@@ -42,12 +41,13 @@ export default function ContactSheet({
   onClose: () => void;
 }) {
   const metrics = STRIP_METRICS[cells.kind];
-  const [bodyRef, width] = useElementWidth<HTMLDivElement>();
+  const [bodyRef, view] = useScrollView<HTMLDivElement>();
+  const width = view.w;
   const { pictures, openId, hideIgnored = false, shows = ALWAYS, aspects } = cells;
   const shown = useMemo(() => shownPictures(pictures, openId, hideIgnored, shows), [pictures, openId, hideIgnored, shows]);
   const items = useMemo(() => stripItems(shown, aspects), [shown, aspects]);
   const layout = useMemo(() => sheetLayout({ items, width, thumb, metrics }), [items, width, thumb, metrics]);
-  useScrollToOpen(bodyRef, openId, metrics.pad);
+  useScrollToOpen(bodyRef, openId, layout, metrics.pad);
   const size = fingerSize(compact, useCoarsePointer());
   const title = (
     <>
@@ -132,7 +132,7 @@ export default function ContactSheet({
           compact ? 'pb-[max(1rem,env(safe-area-inset-bottom))]' : 'pb-3'
         }`}
       >
-        <StripCells shown={shown} layout={layout} {...cells} />
+        <StripCells shown={shown} layout={layout} view={view} {...cells} />
       </div>
     </div>
   );

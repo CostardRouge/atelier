@@ -1401,8 +1401,10 @@ The rules a later agent must keep:
   fold threshold, the auto height from the roll's MEDIAN aspect, the prefs
   reader, the filter. A cell is drawn at the rectangle the layout answers,
   never by CSS flow, so the host knows every size before it paints. Aspects
-  are MEASURED from the thumbnail blob (`use-thumb-aspects.ts`, batched) and
-  fall back to the picture's own; the layout re-justifies as they land.
+  are the thumbnail's own (`use-thumb-aspects.ts`: KNOWN from the store or
+  the bake since 2026-10-06, measured once and written back where not —
+  «The band draws the cells near the view» below) and fall back to the
+  picture's; the layout re-justifies as they land.
 - **Preferences are PER DEVICE**, `localStorage['atelier.develop.strip.<desktop|phone>']`
   (`StripPrefs`: place, height, width, folded, auto, thumb, sheet), never on
   the roll; a phone's `place` is read as `bottom` whatever it says, and its
@@ -1453,6 +1455,50 @@ The rules a later agent must keep:
   gestures join that menu and leave the well — at 390 px the pill (128) and
   the nine-verb well (324) were 86 px wider than the row, so `?` and Focus
   sat off-screen. Driven at 390 × 844 touch: nothing past the right edge.
+
+## The band draws the cells near the view, and a thumbnail knows its shape (2026-10-06, P2 of `docs/develop-performance.md`)
+
+Audit PERF-03: a roll of 300 put 300 cells in the DOM at open, decoded 300
+thumbnails to measure them, and re-rendered every cell for each one that
+landed. Measured headless on a seeded roll of 300 with stored thumbnails:
+at open 300 → 15 cells and 300 → 0 decodes on a desktop, 8 cells on a phone,
+the JS heap 69 → 43 MB; the contact sheet 600 → 60 cells; a picture opened
+far down the roll by its route draws 15 cells around it with its own in
+view. Rules:
+
+- **The cells DRAWN are those within one box of the scroll view on the
+  scroll axis, and the open one always** (`cellsInView`, pure, specs): the
+  host's scroller publishes its position and its box (`useScrollView`, read
+  once per frame and published only past a quarter of the box, so a fling
+  re-renders the strip a few times and never per frame) and `StripCells`
+  filters the layout's rectangles — the layout itself stays whole, so the
+  `<ol>` keeps its full extent and the scrollbar its length.
+- **A cell takes its rectangle as plain numbers** (`x y w h cap`), never the
+  layout's object: the layout is rebuilt as thumbnails land, and the memo
+  held on nothing while every cell was handed a fresh `StripCell`.
+- **The `<img>` is `loading="lazy"`**: a cell in the margin loads its picture
+  as it comes near and never ahead of the ones on screen.
+- **A thumbnail knows its shape**: the aspect is kept BESIDE the bytes
+  (`ThumbRecord.aspect`, from the canvas the bake drew on — `BakedThumb` —
+  or the snapshot's, handed to the band in the SAME render as the blob
+  through `keepThumb`); one stored before it was kept is measured once at
+  the next open and written back (`setRollThumbAspect`), so the 300 decodes
+  are paid once per old roll and never again. `useThumbAspects` trusts
+  `known` for a blob it has not measured: the host keeps the two maps in
+  step, or a stale aspect would shape a cell until the next open.
+- **The open cell is scrolled to by its RECTANGLE** (`useScrollToOpen`),
+  nearest edge, once per open picture per axis — never asked of the DOM
+  (the first layout is laid at no width) and never again on a later layout,
+  which would pull the band back under a hand that scrolled away. A box
+  still unmeasured waits for the one that is.
+- The bake order is the open picture first, then outward: the cells on
+  screen get theirs first. The bench: `testing.md`, «The band bench».
+- **With the snap of the phone's band of rows** (above): the cells outside
+  the drawn window are no snap points, and the window is published every
+  quarter of the box while the hand scrolls, so the rows the scroll can rest
+  on are always drawn ahead of it; the reveal of the open cell takes the
+  same `pad` as its margin, by arithmetic on the body's own scroll position.
+
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
 `shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the

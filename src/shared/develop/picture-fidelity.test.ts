@@ -84,4 +84,18 @@ describe('pictureFidelity', () => {
     expect(f.chip).toBe('RAW · 16-bit linear · 8064 × 4536');
     expect(f.note).toContain('8064 × 4536 · 36.6 MP');
   });
+
+  it('says so when this GPU fell to 8 bits, on every picture, and only then', () => {
+    const raw = pictureFidelity(file('DJI_0101.DNG', ''), 'gain', { width: 8064, height: 4536 }, 'byte');
+    expect(raw.chip).toBe('RAW · 16-bit linear · 8064 × 4536 · 8-bit GPU');
+    expect(raw.note).toContain('36.6 MP');
+    expect(raw.note).toContain('computes in 8 bits, not float16');
+    // A clip has no note of its own: the GPU's sentence stands alone.
+    const clip = pictureFidelity(file('DJI_0001.MP4', ''), null, null, 'byte');
+    expect(clip.note).toMatch(/^this device’s GPU/);
+    expect(pictureFidelity(file('A.jpg'), null, null, 'float16')).toEqual(pictureFidelity(file('A.jpg')));
+    // No WebGL2 means no chain at all, which is not an 8-bit one.
+    expect(pictureFidelity(file('A.jpg'), null, null, null)).toEqual(pictureFidelity(file('A.jpg')));
+    expect(pictureFidelity(null, null, null, 'byte')).toEqual({ chip: null, note: null });
+  });
 });

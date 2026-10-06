@@ -28,6 +28,7 @@ import {
   type Matrix3,
 } from './geometry';
 import type { RenderPass } from './graph';
+import { dataKey } from './pass-key';
 
 const FRAGMENT = `${GLSL_VERSION}
 precision highp float;
@@ -73,6 +74,7 @@ export function keystonePassFromMatrix(sample: Matrix3): RenderPass {
   const columns = toColumnMajor(sample);
   return {
     id: 'keystone',
+    key: dataKey('keystone', sample),
     // The shader's map in JavaScript: image point → where it came from.
     rows: warpRows((u, v, flipY) => {
       const imgY = flipY ? v : 1 - v;

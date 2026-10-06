@@ -30,9 +30,10 @@
 import { deviceClass } from '../lib/device-class';
 import { bandFragment, nearRows, OWN_ROWS, planBands, type BandPlan, type RowNeed, type RowSpan } from './band-plan';
 import { BAND_PREFERENCE_KEY, bandsWanted, readBandPreference, type BandPreference } from './band-policy';
+import { DITHER_LSB, ditherFragment, wantsDither } from './dither';
 import { VERTEX_SRC } from './glsl';
-import { isHalfImage, type HalfImage } from './half-image';
-import { planPasses, targetsNeeded, type PassSlot } from './pass-plan';
+import { isHalfImage, toHalf, type HalfImage } from './half-image';
+import { planPasses, planResume, targetsNeeded, type PassSlot } from './pass-plan';
 
 /** What the intermediate buffers can hold. */
 export type RenderPrecision = 'float16' | 'byte';
@@ -95,6 +96,22 @@ export interface RenderPass {
    * colour pass is `OWN_ROWS`, a blur `nearRows(r)`, a warp `warpRows(map)`.
    */
   rows?: RowNeed | null;
+  /**
+   * What this pass writes must reach the canvas AS IT IS, so it is never
+   * dithered when it draws last (`dither.ts`): the clipping view, whose test
+   * is made against the very rounding a dither would move.
+   */
+  exact?: boolean;
+  /**
+   * Everything this pass draws with, as one string (`pass-key.ts`): two
+   * passes with the same key draw the same picture from the same input. The
+   * graph keeps the output of one pass between renders and SKIPS the prefix
+   * of passes whose keys did not change (`planResume`) — a slider step then
+   * redraws the pass it moved and what follows, never the denoise before it.
+   * Absent for a pass that reads a clock or a counter at draw time (the film
+   * node's grain): it is drawn every time, and so is everything after it.
+   */
+  key?: string;
 }
 
 /**
@@ -124,6 +141,33 @@ let bandsLastDrawn = 1;
 /** How many bands the last render of any graph was drawn in — 1 for a whole one. For the gate. */
 export function bandsLastDrawnForTest(): number {
   return bandsLastDrawn;
+}
+
+let drawnLast = 0;
+
+/** How many passes the last whole render of any graph DREW — what the kept upstream saved. For the gate and the bench. */
+export function drawnLastForTest(): number {
+  return drawnLast;
+}
+
+/**
+ * The checkpoint (`planResume`) is one more texture at the render size — 8
+ * bytes a pixel in float16 — so it is kept only for an interactive render
+ * under the stage's size: 4.2 MP on a phone (its 2560 × 1440 stage), 9 MP on
+ * a computer (the 4K frame); a loupe window or an export past that draws
+ * whole, as it always did.
+ */
+const CHECKPOINT_MAX_PIXELS = { constrained: 4_200_000, roomy: 9_000_000 } as const;
+
+let ditherOverride: boolean | null = null;
+
+/**
+ * Force the canvas dither on or off (`dither.ts`) — for the render gate, which
+ * measures a gradient with and without it and holds the old renderer to the
+ * new one pixel for pixel. `null` restores the rule.
+ */
+export function setDitherForTest(next: boolean | null): void {
+  ditherOverride = next;
 }
 
 let bandPreference: BandPreference | null = null;
@@ -305,6 +349,15 @@ export interface RenderGraph {
    * a bitmap, once per identity.
    */
   render(source: RenderSource, passes: readonly RenderPass[]): HTMLCanvasElement | OffscreenCanvas;
+  /**
+   * Draw `source` through `passes` and read the LAST pass back as half-floats
+   * — the chain's own buffers, never the 8-bit canvas: what a 16-bit file is
+   * made of (`deliver-half.ts`). Whole, never in bands, and undithered by
+   * construction (the dither is the canvas write's). Null where the targets
+   * are bytes (`precision: 'byte'`): there is nothing past 8 bits to read.
+   * The canvas is left as it was.
+   */
+  readHalf(source: RenderSource, passes: readonly RenderPass[]): HalfImage | null;
   resize(width: number, height: number): void;
   /** Run a pass's own `dispose` against this graph's context. */
   releasePass(pass: RenderPass): void;
@@ -313,6 +366,7 @@ export interface RenderGraph {
 
 const PASSTHROUGH: RenderPass = {
   id: 'passthrough',
+  key: 'passthrough',
   rows: OWN_ROWS,
   fragment: `#version 300 es
 precision highp float;
@@ -389,6 +443,10 @@ interface Target {
   width: number;
   height: number;
 }
+
+/** The graph's three targets: two ping-pong, one for the kept upstream. */
+type Slot = 0 | 1 | 2;
+const SLOTS: readonly Slot[] = [0, 1, 2];
 
 /** A source's pixel size, for the kinds that say it; null for the rest. */
 function sourceSize(source: RenderSource): { width: number; height: number } | null {
@@ -489,7 +547,25 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
   gl.texParameteri(gl.TEXTURE_2D, gl.TEXTURE_MAG_FILTER, gl.LINEAR);
 
   const programs = new Map<string, WebGLProgram | null>();
-  const targets: (Target | null)[] = [null, null];
+  // Two ping-pong targets, and a third that holds the kept upstream — made
+  // only once a checkpoint is placed (`planResume`), never for a one-shot
+  // render.
+  const targets: (Target | null)[] = [null, null, null];
+  const checkpointMaxPixels = CHECKPOINT_MAX_PIXELS[deviceClass()];
+  /**
+   * The kept upstream: the last whole render's pass keys, the source and
+   * size they were drawn for, and which pass's output sits in which target
+   * (`at` −1 when none). Valid for the next render only while the source,
+   * the size and the texture it points at are all the same.
+   */
+  let held: { source: object | null; width: number; height: number; keys: (string | null)[]; at: number; slot: Slot | -1 } = {
+    source: null,
+    width: 0,
+    height: 0,
+    keys: [],
+    at: -1,
+    slot: -1,
+  };
   let disposed = false;
   /**
    * The source the texture on unit 0 currently holds, when that is knowable.
@@ -507,7 +583,7 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
   const checked = new Set<string>();
   let lostSaid = false;
 
-  const targetAt = (index: 0 | 1, width: number, height: number): Target | null => {
+  const targetAt = (index: Slot, width: number, height: number): Target | null => {
     const held = targets[index];
     if (held && held.width === width && held.height === height) return held;
     if (held) {
@@ -544,9 +620,12 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     if (!programs.has(pass.id)) {
       // Every program is linked band-aware where it can be: at rest the map
       // is the identity to the bit, so a whole render is what it always was.
+      // And dither-aware: `u_dither` left at 0 adds nothing, so a pass
+      // drawn into a target writes what it always wrote.
       const banded = bandFragment(pass.fragment);
       if (banded) bandable.add(pass.id);
-      programs.set(pass.id, linkProgram(gl, banded ?? pass.fragment));
+      const fragment = banded ?? pass.fragment;
+      programs.set(pass.id, linkProgram(gl, ditherFragment(fragment) ?? fragment));
     }
     return programs.get(pass.id) ?? null;
   };
@@ -575,7 +654,7 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     pass: RenderPass,
     program: WebGLProgram,
     input: { texture: WebGLTexture | null; flipY: number; band: readonly [number, number, number, number] },
-    output: { framebuffer: WebGLFramebuffer | null; y: number; scissor: RowSpan | null },
+    output: { framebuffer: WebGLFramebuffer | null; y: number; scissor: RowSpan | null; dither: number },
     width: number,
     height: number,
   ) => {
@@ -598,6 +677,10 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     if (uSrc) gl.uniform1i(uSrc, 0);
     const uTexel = gl.getUniformLocation(program, 'u_texel');
     if (uTexel) gl.uniform2f(uTexel, 1 / Math.max(1, width), 1 / Math.max(1, height));
+    // Set on EVERY draw: a program keeps its uniforms, and the pass that drew
+    // last (and dithered) one frame may draw into a target the next.
+    const uDither = gl.getUniformLocation(program, 'u_dither');
+    if (uDither) gl.uniform1f(uDither, output.dither);
 
     pass.setUniforms?.(gl, program);
 
@@ -631,6 +714,45 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     }
   };
 
+  /**
+   * The source onto unit 0. `UNPACK_FLIP_Y_WEBGL` is IGNORED for an
+   * ImageBitmap, whose orientation is fixed at creation — so a decoded photo
+   * arrives in image order while a video or a canvas arrives flipped, and the
+   * vertex shader's `u_flipY` compensates. The rule `lut-gl.ts` learnt the
+   * hard way; an FBO round trip is neutral under one UV convention, so only
+   * the FIRST pass has to care.
+   */
+  const upload = (source: RenderSource): { half: HalfImage | null; bitmapSource: number } => {
+    gl.bindVertexArray(vao);
+    gl.activeTexture(gl.TEXTURE0);
+    gl.bindTexture(gl.TEXTURE_2D, sourceTex);
+    const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
+    const half = isHalfImage(source) ? source : null;
+    // Both are immutable, so both are keyed by identity and uploaded once.
+    const keyed = bitmap ?? half;
+    const bitmapSource = bitmap ? 1 : 0;
+    if (!keyed || keyed !== uploaded) {
+      const size = sourceSize(source);
+      if (size && (size.width > maxSize || size.height > maxSize)) {
+        tooBig('the source', size.width, size.height);
+      }
+      gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
+      if (half) {
+        // A typed array HONOURS the flip flag (only a bitmap ignores it), so
+        // a top-row-first picture lands like a canvas does and `u_flipY`
+        // stays 0. Three half-floats per texel are 6 bytes, so an odd width
+        // makes a row that is not a multiple of the default alignment of 4.
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB16F, half.width, half.height, 0, gl.RGB, gl.HALF_FLOAT, half.data);
+        gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
+      } else {
+        gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
+      }
+      uploaded = keyed;
+    }
+    return { half, bitmapSource };
+  };
+
   return {
     precision,
     maxSize,
@@ -647,6 +769,85 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
     releasePass(pass) {
       if (disposed) return;
       pass.dispose?.(gl);
+    },
+
+    readHalf(source, passes) {
+      if (disposed || !canFloat || gl.isContextLost()) return null;
+      const list = passes.length ? passes : [PASSTHROUGH];
+      const width = canvas.width;
+      const height = canvas.height;
+      // The plan with its last slot turned onto a TARGET: for one pass the
+      // only one, else the one the last pass does not read.
+      const plan = planPasses(list.length);
+      const lastTo = (list.length === 1 ? 0 : (list.length - 1) % 2) as 0 | 1;
+      plan[plan.length - 1] = { ...plan[plan.length - 1], to: lastTo };
+      for (let i = 0; i <= Math.max(0, lastTo); i += 1) {
+        if (!targetAt(i as 0 | 1, width, height)) return null;
+      }
+      upload(source);
+      const bitmapSource = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? 1 : 0;
+      for (let i = 0; i < plan.length; i += 1) {
+        const slot = plan[i];
+        const program = programFor(list[i]);
+        if (!program) continue;
+        drawPass(
+          list[i],
+          program,
+          { texture: slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null), flipY: slot.from === 'source' ? bitmapSource : 0, band: [0, 0, 0, 0] },
+          { framebuffer: targets[slot.to as 0 | 1]?.fbo ?? null, y: 0, scissor: null, dither: 0 },
+          width,
+          height,
+        );
+      }
+      // Read in bands of rows, so the transient RGBA buffer stays small
+      // beside the picture: what this GPU hands back for a float target is
+      // its own choice — half-floats, or floats converted here.
+      const fbo = targets[lastTo]?.fbo ?? null;
+      gl.bindFramebuffer(gl.FRAMEBUFFER, fbo);
+      const readType = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_TYPE) as number;
+      const readFormat = gl.getParameter(gl.IMPLEMENTATION_COLOR_READ_FORMAT) as number;
+      const out = new Uint16Array(width * height * 3);
+      const rows = Math.max(1, Math.min(height, Math.floor(4_000_000 / Math.max(1, width))));
+      const useHalf = readType === gl.HALF_FLOAT && readFormat === gl.RGBA;
+      const buf = useHalf ? new Uint16Array(width * rows * 4) : new Float32Array(width * rows * 4);
+      let ok = true;
+      for (let y0 = 0; y0 < height && ok; y0 += rows) {
+        const n = Math.min(rows, height - y0);
+        // A target is drawn top row first (`u_flipY` 0 past the source), so
+        // GL's bottom-up read lands row y0 of the picture at buffer row 0 of
+        // the band read from height − y0 − n.
+        gl.readPixels(0, height - y0 - n, width, n, gl.RGBA, useHalf ? gl.HALF_FLOAT : gl.FLOAT, buf);
+        if (gl.getError() !== gl.NO_ERROR) {
+          ok = false;
+          break;
+        }
+        for (let r = 0; r < n; r += 1) {
+          const picRow = y0 + n - 1 - r;
+          const src = r * width * 4;
+          const dst = picRow * width * 3;
+          for (let x = 0; x < width; x += 1) {
+            const s = src + x * 4;
+            const d = dst + x * 3;
+            if (useHalf) {
+              out[d] = buf[s];
+              out[d + 1] = buf[s + 1];
+              out[d + 2] = buf[s + 2];
+            } else {
+              out[d] = toHalf(buf[s]);
+              out[d + 1] = toHalf(buf[s + 1]);
+              out[d + 2] = toHalf(buf[s + 2]);
+            }
+          }
+        }
+      }
+      gl.bindFramebuffer(gl.FRAMEBUFFER, null);
+      if (!ok) {
+        console.error('[render] this GPU refused to read its float target back; no 16-bit picture');
+        return null;
+      }
+      // The read-back drew over the ping-pong targets: nothing kept survives it.
+      held = { ...held, at: -1, slot: -1 };
+      return { kind: 'half', width, height, data: out };
     },
 
     render(source, passes) {
@@ -668,65 +869,79 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
 
       // The source, uploaded once for the whole chain — and, for a bitmap,
       // once for its LIFETIME on this graph.
-      gl.bindVertexArray(vao);
-      gl.activeTexture(gl.TEXTURE0);
-      gl.bindTexture(gl.TEXTURE_2D, sourceTex);
-      // `UNPACK_FLIP_Y_WEBGL` is IGNORED for an ImageBitmap, whose orientation
-      // is fixed at creation — so a decoded photo arrives in image order while
-      // a video or a canvas arrives flipped, and the vertex shader's `u_flipY`
-      // compensates. The rule `lut-gl.ts` learnt the hard way; an FBO round
-      // trip is neutral under one UV convention, so only the FIRST pass has to
-      // care.
-      const bitmap = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : null;
-      const half = isHalfImage(source) ? source : null;
-      // Both are immutable, so both are keyed by identity and uploaded once.
-      const keyed = bitmap ?? half;
-      const bitmapSource = bitmap ? 1 : 0;
-      if (!keyed || keyed !== uploaded) {
-        const size = sourceSize(source);
-        if (size && (size.width > maxSize || size.height > maxSize)) {
-          tooBig('the source', size.width, size.height);
-        }
-        gl.pixelStorei(gl.UNPACK_FLIP_Y_WEBGL, true);
-        if (half) {
-          // A typed array HONOURS the flip flag (only a bitmap ignores it), so
-          // a top-row-first picture lands like a canvas does and `u_flipY`
-          // stays 0. Three half-floats per texel are 6 bytes, so an odd width
-          // makes a row that is not a multiple of the default alignment of 4.
-          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 2);
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGB16F, half.width, half.height, 0, gl.RGB, gl.HALF_FLOAT, half.data);
-          gl.pixelStorei(gl.UNPACK_ALIGNMENT, 4);
-        } else {
-          gl.texImage2D(gl.TEXTURE_2D, 0, gl.RGBA, gl.RGBA, gl.UNSIGNED_BYTE, source as TexImageSource);
-        }
-        uploaded = keyed;
-      }
+      const { half, bitmapSource } = upload(source);
+      // What the kept upstream is keyed on: an immutable source. A canvas or
+      // a video changes under its identity, so nothing is kept across them.
+      const keyed: object | null = typeof ImageBitmap !== 'undefined' && source instanceof ImageBitmap ? source : half;
 
       const WHOLE_SRC = [0, 0, 0, 0] as const;
+      // The canvas is the one 8-bit buffer left; where more than 8 bits reach
+      // it, its rounding is dithered (`dither.ts`).
+      const ditherWanted =
+        ditherOverride ?? (wantsDither({ precision, halfSource: half !== null, passes: list.length }) && !list[list.length - 1].exact);
+      const dither = ditherWanted ? DITHER_LSB : 0;
       const bands = bandPlanFor(list, width, height);
       bandsLastDrawn = bands ? bands.bands.length : 1;
 
       if (!bands) {
-        const needed = targetsNeeded(list.length);
-        for (let i = 0; i < needed; i += 1) {
-          if (!targetAt(i as 0 | 1, width, height)) return canvas;
+        // The kept upstream (`planResume`): the passes whose keys match the
+        // last render's, up to the checkpoint, are not drawn again. Resumed
+        // or whole, every pass reads exactly what it read before — a target
+        // holds what the pass before it wrote, to the bit — so the picture
+        // is the same either way; `check-render.mjs` holds the two equal.
+        const keys = list.map((pass) => pass.key ?? null);
+        const sameSource = keyed !== null && keyed === held.source && held.width === width && held.height === height;
+        const heldTarget = held.slot >= 0 ? targets[held.slot] : null;
+        const heldAt = sameSource && held.at >= 0 && heldTarget?.width === width && heldTarget?.height === height ? held.at : -1;
+        const resume = planResume(sameSource ? held.keys : [], keys, heldAt);
+        const keep = keyed !== null && width * height <= checkpointMaxPixels ? resume.keep : -1;
+        drawnLast = 0;
+        if (resume.start >= list.length) {
+          // Nothing changed: the canvas still holds the picture
+          // (`preserveDrawingBuffer`), and so does the checkpoint.
+          held = { ...held, keys };
+          return canvas;
         }
-        for (let i = 0; i < plan.length; i += 1) {
-          const slot: PassSlot = plan[i];
+        const heldSlot = held.slot;
+        let input: 'source' | Slot = resume.start === 0 || heldSlot === -1 ? 'source' : heldSlot;
+        // The checkpoint's texture is never written over until a new one is placed.
+        let protect: Slot | -1 = heldAt >= 0 ? held.slot : -1;
+        let next: { at: number; slot: Slot | -1 } = heldAt >= 0 && keep === heldAt ? { at: heldAt, slot: held.slot } : { at: -1, slot: -1 };
+        for (let i = resume.start; i < list.length; i += 1) {
           const pass = list[i];
           const program = programFor(pass);
           if (!program) continue;
-          const fromTex = slot.from === 'source' ? sourceTex : (targets[slot.from]?.tex ?? null);
+          let out: Slot | 'canvas' = 'canvas';
+          if (i < list.length - 1) {
+            // Any target but the one being read and the one being kept: with
+            // three there is always one, and the third is only ever made here.
+            const slot = SLOTS.find((s) => s !== input && s !== protect);
+            if (slot === undefined || !targetAt(slot, width, height)) return canvas;
+            out = slot;
+          }
           drawPass(
             pass,
             program,
-            { texture: fromTex, flipY: slot.from === 'source' ? bitmapSource : 0, band: WHOLE_SRC },
-            { framebuffer: slot.to === 'canvas' ? null : (targets[slot.to]?.fbo ?? null), y: 0, scissor: null },
+            { texture: input === 'source' ? sourceTex : (targets[input]?.tex ?? null), flipY: input === 'source' ? bitmapSource : 0, band: WHOLE_SRC },
+            out === 'canvas'
+              ? { framebuffer: null, y: 0, scissor: null, dither }
+              : { framebuffer: targets[out]?.fbo ?? null, y: 0, scissor: null, dither: 0 },
             width,
             height,
           );
+          drawnLast += 1;
+          if (out !== 'canvas') {
+            if (i === keep) {
+              next = { at: i, slot: out };
+              protect = out;
+            }
+            input = out;
+          }
         }
+        held = { source: keyed, width, height, keys, at: next.at, slot: next.slot };
       } else {
+        // Bands re-make the targets a band tall: nothing kept survives them.
+        held = { source: null, width: 0, height: 0, keys: [], at: -1, slot: -1 };
         // BANDS: the targets are a band tall (plus what the passes after it
         // read around it), never the whole frame, and the canvas is written a
         // band at a time. The source stays whole — the first pass reads it.
@@ -756,12 +971,13 @@ function buildGraph(canvas: HTMLCanvasElement | OffscreenCanvas, options: GraphO
                 band: inRegion ? [inRegion.y0 / height, allocated - 1, edge[0], edge[1]] : WHOLE_SRC,
               },
               slot.to === 'canvas'
-                ? { framebuffer: null, y: 0, scissor: region }
+                ? { framebuffer: null, y: 0, scissor: region, dither }
                 : {
                     framebuffer: targets[slot.to]?.fbo ?? null,
                     // Frame row `region.y0` lands on the target's row 0.
                     y: -region.y0,
                     scissor: { y0: 0, y1: rows },
+                    dither: 0,
                   },
               width,
               height,

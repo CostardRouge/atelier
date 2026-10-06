@@ -264,6 +264,31 @@ make, model or lens on purpose).
 - `parseExif` takes `ArrayBufferLike` since, so a `Uint8Array`'s `.buffer` goes
   in without a cast and the writer is read back by the reader in one line.
 
+## The shell reads the stores through one dynamically imported module (2026-10-06, P5a of `docs/develop-performance.md`)
+
+Audit PERF-04: `Home.tsx` and `SourcesScreen.tsx` imported `roll-store`,
+`trip-store` and `project-store` statically, and a store brings its whole
+document model (the migrations over every version reach the editors' code);
+the sidebar's `media-identity.ts` imported `project-types.ts` for
+`savedMediaRef` alone. The entry chunk was 650 kB; it is 425 kB. Rules:
+
+- **`src/app/documents-read.ts` is the one door to the stores from the
+  shell** — a door's facts (`studioDoor`, `tripsDoor`, `developDoor`) and
+  Sources' `allDocuments` — and it is reached by `import()` only; the
+  TYPES cross statically (erased). A new shell screen that needs a document
+  adds a reader there, never a static import.
+- **A record the shell needs lives apart from the model** (`media-ref.ts`,
+  re-exported by `project-types.ts` so no reader moved): a value import of a
+  document's types module is the whole model on the first paint.
+- **A door reads ONE document** (`lastRoll` / `lastTrip` / `lastProject`,
+  over the pure `lib/latest-of.ts`: the raw records' `updatedAt` compared,
+  one migrated). Measured at no gain yet (PERF-05): `getAll()`'s structured
+  clone of a 5.7 MB roll is 70–100 ms whatever is migrated; the cure is an
+  `updatedAt` index read with a key cursor — a schema bump, after DATA-09.
+- The Home's timing on the DEV server (5 s to fill the doors) is Vite
+  serving a hundred modules one by one, not the build; measure starts on
+  `vite preview` or the deployed site.
+
 ## Long lists: one observer, batches, and a Cancel that stops (2026-09-28)
 
 `useInViewport` shares ONE `IntersectionObserver` across every element that asks (a callback per target) instead of one per row — a Library of two thousand files had two thousand. The Winnow picker's grid (formerly `WinnowBrowser`'s) mounts its tiles 240 at a time and the next batch when a sentinel at its end nears the view (keyed by the count, fired once), back to one batch when the list is replaced — not a full virtualisation, which the grid's auto-fill columns make dear, but it keeps a 2 000-media chapter from mounting every tile at once. And its Cancel (the button, Escape, a click outside, "reconnect") now ABORTS an add in flight through `MaterializeOptions.signal`, joined with the task's own Cancel: before, the sheet closed while the downloads went on and landed in the Library afterwards. What landed before the Cancel is kept, like a cancelled export's. Unmounting the browser aborts the add too (2026-09-28). The sidebar's OWN add (files, a folder, a drop) SAYS a failure under its verbs and in the rail's label — it was an unhandled rejection — and never greys its verbs while a picker is open: an `<input type=file>` resolves only on `change` or `cancel`, a browser without `cancel` never settles it, and the verbs stayed disabled for good; only the latest add clears `busy`. The focus/timeout guess for a dismissed picker stays rejected (`file-sources.ts`: it raced `change` and dropped real picks). Driven headless against a stub: 240 tiles mounted of 1 000, 1 000 after scrolling to the end; one proxy asked and nothing added after a Cancel.

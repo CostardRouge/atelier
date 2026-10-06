@@ -17,6 +17,7 @@
 
 import { migrateProjectDoc, type ProjectDoc } from './project-types';
 import type { SyncRecord } from '../sources/doc-sync';
+import { latestOf } from '../lib/latest-of';
 
 const DB_NAME = 'atelier-studio';
 // Bumped only when an object store is added; a document migration runs on
@@ -69,6 +70,17 @@ export async function listProjects(): Promise<ProjectDoc[]> {
     return all.map(migrateProjectDoc).sort((a, b) => b.updatedAt - a.updatedAt);
   } catch {
     return [];
+  }
+}
+
+/** The project touched last, alone — the Home door's read: one record migrated, not every one (`roll-store.ts`, `lastRoll`). */
+export async function lastProject(): Promise<ProjectDoc | null> {
+  try {
+    const all = await withStore('readonly', (s) => s.getAll() as IDBRequest<ProjectDoc[]>);
+    const last = latestOf(all);
+    return last ? migrateProjectDoc(last) : null;
+  } catch {
+    return null;
   }
 }
 

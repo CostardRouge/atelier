@@ -19,6 +19,7 @@ import { captureFileType, classifyPart, isClipName, isRawImage } from '../librar
 import { baseRung, type DevelopBase } from './develop';
 import { imageTypeLabel } from '../media/image-meta';
 import { mediaOrigin } from '../projects/media-identity';
+import type { RenderPrecision } from '../render/graph';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from './working-preview';
 
 export interface PictureFidelity {
@@ -101,11 +102,32 @@ function sizeClause(pixels: FidelityPixels | null | undefined): string {
  *
  * `pixels` is what the host measured, and is optional on purpose: the
  * sentence never invents a size it was not given.
+ *
+ * `gpu` is what this machine's render chain computes in between two passes
+ * (`renderPrecisionHere`). Where it is `byte` — a GPU that cannot render to
+ * half-floats, so the graph fell to 8 bits rather than failing — every
+ * picture says so, the chip in two words and the note in one sentence: the
+ * picture's own bits are not the whole story when every step after the first
+ * rounds them again. Absent or `float16`, nothing is added.
  */
 export function pictureFidelity(
   file: File | null,
   base: DevelopBase | null | undefined = null,
   pixels: FidelityPixels | null = null,
+  gpu: RenderPrecision | null = null,
+): PictureFidelity {
+  const own = fidelityOf(file, base, pixels);
+  if (gpu !== 'byte' || !own.chip) return own;
+  return {
+    chip: `${own.chip} · 8-bit GPU`,
+    note: `${own.note ? `${own.note}. And ` : ''}this device’s GPU computes in 8 bits, not float16: what a step pushes above white is clipped before the next can bring it back, and a smooth sky may band`,
+  };
+}
+
+function fidelityOf(
+  file: File | null,
+  base: DevelopBase | null | undefined,
+  pixels: FidelityPixels | null,
 ): PictureFidelity {
   if (!file) return { chip: null, note: null };
   if (baseRung(base) > 0) {

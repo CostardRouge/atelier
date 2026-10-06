@@ -1,13 +1,15 @@
 import { useEffect, useState, type ComponentType } from 'react';
-import { getRollThumbs, listRolls } from '../shared/develop/roll-store';
-import { rollProgress } from '../shared/develop/roll-types';
-import { listProjects } from '../shared/projects/project-store';
-import { listTrips } from '../shared/roadtrip/trip-store';
-import { tripCoverage } from '../shared/roadtrip/trip-coverage';
-import { formatIsoDate } from '../shared/roadtrip/trip-days';
 import { useObjectUrl } from '../shared/media/use-object-url';
 import { Icons } from '../shared/ui/icons';
+import type { DevelopDoorFacts, StudioDoorFacts, TripsDoorFacts } from './documents-read';
 import { TOOLS, type Tool } from './tools';
+
+/**
+ * The stores are read through `documents-read.ts`, imported HERE and only
+ * when a door mounts: a static import put the three document models on the
+ * shell's first-paint chunk (audit PERF-04). The types alone cross statically.
+ */
+const readDocuments = () => import('./documents-read');
 
 /**
  * Home page for the Atelier suite: a door per editor, and the instruments
@@ -120,13 +122,15 @@ function DoorHead({ tool, last }: { tool: Tool; last: string | null }) {
 
 /** The Studio's door: the project this browser touched last, with its preview. */
 function StudioDoor({ tool }: { tool: Tool }) {
-  const [last, setLast] = useState<{ name: string; updatedAt: number; thumbnail: Blob | null } | null>(null);
+  const [last, setLast] = useState<StudioDoorFacts | null>(null);
   useEffect(() => {
     let alive = true;
-    void listProjects().then((all) => {
-      const p = all[0];
-      if (alive && p) setLast({ name: p.name, updatedAt: p.updatedAt, thumbnail: p.thumbnail });
-    });
+    void readDocuments()
+      .then((m) => m.studioDoor())
+      .then((facts) => {
+        if (alive && facts) setLast(facts);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -148,28 +152,15 @@ function StudioDoor({ tool }: { tool: Tool }) {
 
 /** The Trips' door: the trip touched last, its days as a strip. */
 function TripsDoor({ tool }: { tool: Tool }) {
-  const [last, setLast] = useState<{
-    name: string;
-    told: number;
-    total: number;
-    cells: number[];
-    start: string;
-  } | null>(null);
+  const [last, setLast] = useState<TripsDoorFacts | null>(null);
   useEffect(() => {
     let alive = true;
-    void listTrips().then((all) => {
-      const t = all[0];
-      if (!alive || !t) return;
-      const coverage = tripCoverage(t);
-      // At most 60 cells: a year is bucketed, a fortnight is a day each.
-      const size = Math.max(1, Math.ceil(coverage.days.length / 60));
-      const cells: number[] = [];
-      for (let i = 0; i < coverage.days.length; i += size) {
-        const slice = coverage.days.slice(i, i + size);
-        cells.push(slice.some((d) => d.posts.length > 0) ? 1 : 0);
-      }
-      setLast({ name: t.name, told: coverage.toldDays, total: coverage.totalDays, cells, start: t.startDate });
-    });
+    void readDocuments()
+      .then((m) => m.tripsDoor())
+      .then((facts) => {
+        if (alive && facts) setLast(facts);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };
@@ -190,7 +181,7 @@ function TripsDoor({ tool }: { tool: Tool }) {
       </div>
       <DoorHead
         tool={tool}
-        last={last ? `${last.name} · ${last.told}/${last.total} days told · from ${formatIsoDate(last.start)}` : null}
+        last={last ? `${last.name} · ${last.told}/${last.total} days told · from ${last.start}` : null}
       />
     </a>
   );
@@ -198,17 +189,15 @@ function TripsDoor({ tool }: { tool: Tool }) {
 
 /** The Develop door: the roll touched last, its first pictures as a strip. */
 function DevelopDoor({ tool }: { tool: Tool }) {
-  const [last, setLast] = useState<{ name: string; developed: number; total: number; thumbs: Blob[] } | null>(null);
+  const [last, setLast] = useState<DevelopDoorFacts | null>(null);
   useEffect(() => {
     let alive = true;
-    void listRolls().then(async (all) => {
-      const r = all[0];
-      if (!r) return;
-      const ids = r.pictures.slice(0, 5).map((p) => p.id);
-      const map = await getRollThumbs(ids);
-      const { developed, total } = rollProgress(r);
-      if (alive) setLast({ name: r.name, developed, total, thumbs: ids.flatMap((id) => map.get(id) ?? []) });
-    });
+    void readDocuments()
+      .then((m) => m.developDoor())
+      .then((facts) => {
+        if (alive && facts) setLast(facts);
+      })
+      .catch(() => {});
     return () => {
       alive = false;
     };

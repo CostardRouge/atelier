@@ -28,7 +28,7 @@
 import type { CubeLut } from '../lib/cube-parser';
 import type { Interpolation } from './interpolate';
 import { GLSL_VERSION, LUT_LOOKUP, LUT_UNIFORMS, VERTEX_SRC } from '../render/glsl';
-import { uploadCube } from '../render/cube-pass';
+import { HEAD_UNIT, bindHead, releaseHead, uploadCube, type HeadTexture } from '../render/cube-pass';
 
 const VERT_SRC = VERTEX_SRC;
 
@@ -191,6 +191,7 @@ export function createLutRenderer(
   let lutTex: WebGLTexture | null = null;
   let lutSize = 0;
   let hasLut = false;
+  let headTex: HeadTexture | null = null;
 
   function uploadLut(lut: CubeLut) {
     if (!lutTex) lutTex = gl!.createTexture();
@@ -219,6 +220,8 @@ export function createLutRenderer(
     // too or preview and bake disagree.
     gl!.uniform3f(uDomainMin, lut.domainMin[0], lut.domainMin[1], lut.domainMin[2]);
     gl!.uniform3f(uDomainMax, lut.domainMax[0], lut.domainMax[1], lut.domainMax[2]);
+    // A composed cube's develop head, per pixel before the lattice (`CubeHead`).
+    headTex = bindHead(gl!, program, lut.head ?? null, headTex);
   }
 
   return {
@@ -229,6 +232,7 @@ export function createLutRenderer(
         hasLut = false;
         gl.useProgram(program);
         gl.uniform1i(uHasLut, 0);
+        headTex = bindHead(gl, program, null, headTex);
       }
     },
 
@@ -270,6 +274,11 @@ export function createLutRenderer(
         gl.activeTexture(gl.TEXTURE1);
         gl.bindTexture(gl.TEXTURE_3D, lutTex);
       }
+      if (headTex) {
+        gl.activeTexture(gl.TEXTURE0 + HEAD_UNIT);
+        gl.bindTexture(gl.TEXTURE_2D, headTex.tex);
+      }
+      gl.activeTexture(gl.TEXTURE0);
 
       gl.drawArrays(gl.TRIANGLE_STRIP, 0, 4);
     },
@@ -285,6 +294,7 @@ export function createLutRenderer(
     dispose() {
       gl.deleteTexture(videoTex);
       if (lutTex) gl.deleteTexture(lutTex);
+      headTex = releaseHead(gl, headTex);
       gl.deleteBuffer(buffer);
       gl.deleteVertexArray(vao);
       gl.deleteProgram(program);
