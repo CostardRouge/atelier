@@ -65,7 +65,7 @@ export default function DetailView({ photo, onBack }: DetailViewProps) {
             <img
               src={url}
               alt={photo.baseName}
-              className="block w-full max-h-[70vh] object-contain"
+              className="block w-full max-h-[calc(var(--app-h)*0.7)] object-contain"
               onLoad={(e) =>
                 setNatural({
                   w: e.currentTarget.naturalWidth,

@@ -87,7 +87,7 @@ export default function SettingsSheet({
         if (e.target === e.currentTarget) onClose();
       }}
     >
-      <div className="w-full max-w-[30rem] max-h-[min(90dvh,44rem)] overflow-y-auto overscroll-contain flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:max-h-none max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-[30rem] max-h-[min(calc(var(--app-h)*0.9),44rem)] overflow-y-auto overscroll-contain flex flex-col gap-3 bg-surface border border-line rounded-paper-lg shadow-paper p-4 max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:max-h-none max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
         <div className="flex-none flex items-center gap-2.5 min-w-0">
           <h2 className="m-0 font-serif text-lg min-w-0 truncate">Settings of {pictureLabel(picture)}</h2>
           <span className="flex-1" />

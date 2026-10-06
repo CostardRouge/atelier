@@ -1,6 +1,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { OFFLINE_MESSAGE, searchPlaces, type PlaceResult } from './geocode';
 import { PLACE_SEARCH_NOTICE, usePlaceSearchPref } from './use-place-search-pref';
+import { focusOnMount } from '../ui/focus';
 
 /**
  * A place name, with an optional lookup behind it.
@@ -95,7 +96,7 @@ export default function PlaceSearchField({
           }}
           placeholder={placeholder}
           aria-label={label}
-          autoFocus={autoFocus}
+          ref={autoFocus ? focusOnMount : undefined}
           className={`flex-1 min-w-0 ${inputClassName}`}
         />
         <button

@@ -106,7 +106,7 @@ export default function LocatePicturePanel({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[32rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 max-[820px]:max-w-none max-[820px]:max-h-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-4">
+      <div className="w-full max-w-[32rem] max-h-[calc(var(--app-h)*0.9)] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 max-[820px]:max-w-none max-[820px]:max-h-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-4">
         <div className="min-w-0">
           <h2 className="m-0 font-serif text-2xl">Locate this picture</h2>
           <p className="m-0 mt-1 text-sm text-muted break-words">

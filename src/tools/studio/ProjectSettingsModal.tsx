@@ -107,7 +107,7 @@ export default function ProjectSettingsModal({
           .join(' · ');
 
   useEffect(() => {
-    nameRef.current?.focus();
+    nameRef.current?.focus({ preventScroll: true });
     // Mount-only: the modal is short-lived.
   }, []);
 
@@ -170,7 +170,7 @@ export default function ProjectSettingsModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[28rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
+      <div className="w-full max-w-[28rem] max-h-[calc(var(--app-h)*0.9)] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-2xl">Project settings</h2>
         </div>

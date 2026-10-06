@@ -187,7 +187,7 @@ export default function LutPackImportModal({ onClose, onImported }: LutPackImpor
         if (e.target === e.currentTarget && !progress) onClose();
       }}
     >
-      <div className="w-full max-w-[42rem] max-h-[min(88dvh,46rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0 max-[820px]:max-w-none max-[820px]:h-[var(--app-h,100dvh)] max-[820px]:max-h-none max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-[max(1rem,env(safe-area-inset-top))] max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
+      <div className="w-full max-w-[42rem] max-h-[min(calc(var(--app-h)*0.88),46rem)] flex flex-col gap-4 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6 pb-5 min-h-0 max-[820px]:max-w-none max-[820px]:h-[var(--app-h,100dvh)] max-[820px]:max-h-none max-[820px]:rounded-none max-[820px]:border-0 max-[820px]:px-4 max-[820px]:pt-[max(1rem,env(safe-area-inset-top))] max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))]">
         <div className="flex items-start justify-between gap-3">
           <div>
             <h2 className="m-0 font-serif text-2xl">Your packs</h2>

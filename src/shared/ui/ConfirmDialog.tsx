@@ -52,7 +52,7 @@ export default function ConfirmDialog({
   const safeRef = useRef<HTMLButtonElement>(null);
 
   useEffect(() => {
-    safeRef.current?.focus();
+    safeRef.current?.focus({ preventScroll: true });
   }, []);
 
   useDialogKeys({

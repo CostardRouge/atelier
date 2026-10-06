@@ -36,7 +36,7 @@ export default function TelemetryPlayer({
           src={videoUrl}
           controls
           onError={() => setVideoError(true)}
-          className="block w-full max-h-[64vh] bg-frame rounded-paper"
+          className="block w-full max-h-[calc(var(--app-h)*0.64)] bg-frame rounded-paper"
         />
       ) : (
         <div className="w-full aspect-video flex items-center justify-center bg-surface border border-line rounded-paper text-muted text-center p-4 font-mono text-sm">

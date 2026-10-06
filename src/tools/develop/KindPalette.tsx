@@ -158,7 +158,7 @@ function Popover({
 
   // The first kind takes the focus, so the keyboard lands in the choice.
   useEffect(() => {
-    ref.current?.querySelector<HTMLButtonElement>('button[data-kind]')?.focus();
+    ref.current?.querySelector<HTMLButtonElement>('button[data-kind]')?.focus({ preventScroll: true });
   }, []);
 
   return createPortal(

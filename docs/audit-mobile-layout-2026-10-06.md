@@ -100,7 +100,7 @@ Layers/Crop/Export contents in depth.
 
 ## 5. Proposed order, in commits
 
-1. **Guards first** — the lint rules, with the existing offenders fixed in
+1. **BUILT (2026-10-06)** **Guards first** — the lint rules, with the existing offenders fixed in
    the same commit (A-02, A-03, A-04's plain focuses, the three `autoFocus`,
    A-05). Verified by `npm run lint` going red on a planted
    `scrollIntoView` and green on the tree.

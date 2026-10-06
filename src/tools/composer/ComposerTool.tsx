@@ -558,7 +558,7 @@ export default function ComposerTool() {
           </div>
 
           {/* Composite preview. */}
-          <div className="flex-none grid place-items-center bg-frame rounded-paper overflow-hidden border border-line p-2 max-h-[52vh]">
+          <div className="flex-none grid place-items-center bg-frame rounded-paper overflow-hidden border border-line p-2 max-h-[calc(var(--app-h)*0.52)]">
             <canvas
               ref={canvasRef}
               width={pw}
@@ -567,7 +567,7 @@ export default function ComposerTool() {
               onPointerMove={onPointerMove}
               onPointerUp={onPointerUp}
               onPointerCancel={onPointerUp}
-              className="block max-w-full max-h-[48vh] object-contain touch-none cursor-grab"
+              className="block max-w-full max-h-[calc(var(--app-h)*0.48)] object-contain touch-none cursor-grab"
               title="Drag the telemetry readout to reposition it"
             />
           </div>

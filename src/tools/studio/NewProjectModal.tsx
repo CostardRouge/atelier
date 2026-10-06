@@ -67,7 +67,7 @@ export default function NewProjectModal({
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    nameRef.current?.focus();
+    nameRef.current?.focus({ preventScroll: true });
     nameRef.current?.select();
     // Mount-only: the modal is short-lived.
   }, []);
@@ -112,7 +112,7 @@ export default function NewProjectModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[30rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
+      <div className="w-full max-w-[30rem] max-h-[calc(var(--app-h)*0.9)] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-2xl">New project</h2>
           <p className="m-0 mt-1 text-sm text-muted">

@@ -100,7 +100,7 @@ export default function TripDetailsModal({
   const nameRef = useRef<HTMLInputElement>(null);
 
   useEffect(() => {
-    nameRef.current?.focus();
+    nameRef.current?.focus({ preventScroll: true });
     // Mount-only: the modal is short-lived.
   }, []);
 
@@ -148,7 +148,7 @@ export default function TripDetailsModal({
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[34rem] max-h-[90dvh] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
+      <div className="w-full max-w-[34rem] max-h-[calc(var(--app-h)*0.9)] overflow-auto flex flex-col gap-5 bg-surface border border-line rounded-paper-lg shadow-paper px-6 pt-6">
         <div>
           <h2 className="m-0 font-serif text-2xl">{editing ? 'Trip dates' : 'New trip'}</h2>
           <p className="m-0 mt-1 text-sm text-muted">

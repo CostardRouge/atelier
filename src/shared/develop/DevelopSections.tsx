@@ -24,6 +24,7 @@ import { DEFAULT_DEVELOP, describeDevelop, type DevelopSettings } from './develo
 import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
 import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './develop-host';
+import { focusOnMount } from '../ui/focus';
 
 /**
  * The same three verbs as ONE GROUP of glyphs, for a host whose room is the
@@ -407,7 +408,7 @@ export function DevelopPresetsSection({
             }}
             placeholder="Name this light"
             aria-label="Preset name"
-            autoFocus
+            ref={focusOnMount}
             className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
           />
           {canSaveLook && (
