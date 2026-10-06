@@ -208,8 +208,9 @@ says what it ADDS, and the foot of the menu says what the FILE asks for in
 the numbers a person can check (`gain map up to 5.93× · warp ×1.049 · CA
 0.9 px at the corner`) rather than a promise. Drawn only where a RAW is
 REACHABLE (the file itself is one, or a proxy's original is —
-`MediaOrigin.name`), and hidden under 880px of tool width as the chip always
-was. The modal hosts (Trips, the Studio) never see it — the maintainer's
+`MediaOrigin.name`). Drawn at every width since it moved onto the file's
+NAME (2026-09-22); the rungs are a segmented control under the sensor row
+since 2026-10-06 (`renditions-build.md`). The modal hosts (Trips, the Studio) never see it — the maintainer's
 call that they keep the simple sheet.
 
 - **`useDevelopPicture` takes a `raw` option** (the file and the stored gain)

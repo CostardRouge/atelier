@@ -67,12 +67,42 @@ export interface AnchoredMenuProps {
   label?: string;
 }
 
+export interface AnchoredPopoverProps {
+  /** Where the panel hangs from, measured by the caller — called again on scroll and resize. */
+  anchorRect: () => AnchorRect | null;
+  /** Asked to close: Escape or a press outside. */
+  onClose: () => void;
+  side?: 'below' | 'above';
+  align?: 'end' | 'start';
+  /** An element a press inside of does NOT close the panel — the trigger that opened it. */
+  within?: RefObject<HTMLElement | null>;
+  /** `menu` for a list of verbs; `dialog` for a panel that holds controls of its own. */
+  role?: 'menu' | 'dialog';
+  label?: string;
+  /** The panel's own size and padding; the menu's are the default. */
+  className?: string;
+  children: ReactNode;
+}
+
 /**
- * The menu itself, in a portal at fixed coordinates, placed by `menuAnchor`
- * from whatever rect the caller hands it. `OverflowMenu` is a trigger over
- * this; a filmstrip cell opens it from a right-click.
+ * The PORTALLED panel under every menu: fixed coordinates placed by
+ * `menuAnchor`, re-placed on scroll and resize, closed by Escape or a press
+ * outside it and its trigger. `AnchoredMenu` fills it with verbs; a panel
+ * that holds its own controls — the name menu's grouped files and their rungs
+ * (`DevelopBase.tsx`) — fills it with those, and gets the same placement and
+ * the same dismissal rather than a second copy of them.
  */
-export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align = 'end', within, label }: AnchoredMenuProps) {
+export function AnchoredPopover({
+  anchorRect,
+  onClose,
+  side = 'below',
+  align = 'end',
+  within,
+  role = 'menu',
+  label,
+  className = 'min-w-[12rem] p-1.5',
+  children,
+}: AnchoredPopoverProps) {
   const [anchor, setAnchor] = useState<MenuAnchor | null>(null);
   const menuRef = useRef<HTMLDivElement>(null);
   const latest = useRef({ onClose, anchorRect });
@@ -126,6 +156,40 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
     };
   }, [place]);
 
+  return createPortal(
+    <div
+      ref={menuRef}
+      role={role}
+      aria-label={label}
+      onClick={(e) => e.stopPropagation()}
+      onContextMenu={(e) => e.preventDefault()}
+      // A menu is above every other overlay by construction: modals and
+      // the shell's own sheets are z-50 (the library sheet z-[60]), and
+      // a menu opened from one of them must not be swallowed by it.
+      className={`fixed z-[70] flex flex-col overflow-y-auto bg-surface border border-line-strong rounded-paper shadow-paper ${className}`}
+      style={
+        anchor
+          ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight }
+          : // The first paint of a menu nobody has measured yet: the
+            // layout effect places it before the browser draws.
+            { left: 0, top: 0, visibility: 'hidden' }
+      }
+    >
+      {children}
+    </div>,
+    document.body,
+  );
+}
+
+/**
+ * The menu itself, in a portal at fixed coordinates, placed by `menuAnchor`
+ * from whatever rect the caller hands it. `OverflowMenu` is a trigger over
+ * this; a filmstrip cell opens it from a right-click.
+ */
+export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align = 'end', within, label }: AnchoredMenuProps) {
+  const latest = useRef({ onClose });
+  latest.current = { onClose };
+
   const plain = items.filter((i) => !i.danger);
   const dangerous = items.filter((i) => i.danger);
 
@@ -165,30 +229,12 @@ export function AnchoredMenu({ anchorRect, items, onClose, side = 'below', align
     </button>,
   ];
 
-  return createPortal(
-    <div
-      ref={menuRef}
-      role="menu"
-      aria-label={label}
-      onClick={(e) => e.stopPropagation()}
-      onContextMenu={(e) => e.preventDefault()}
-      // A menu is above every other overlay by construction: modals and
-      // the shell's own sheets are z-50 (the library sheet z-[60]), and
-      // a menu opened from one of them must not be swallowed by it.
-      className="fixed z-[70] min-w-[12rem] flex flex-col p-1.5 overflow-y-auto bg-surface border border-line-strong rounded-paper shadow-paper"
-      style={
-        anchor
-          ? { left: anchor.left, top: anchor.top, maxHeight: anchor.maxHeight }
-          : // The first paint of a menu nobody has measured yet: the
-            // layout effect places it before the browser draws.
-            { left: 0, top: 0, visibility: 'hidden' }
-      }
-    >
+  return (
+    <AnchoredPopover anchorRect={anchorRect} onClose={onClose} side={side} align={align} within={within} label={label}>
       {plain.map(item)}
       {dangerous.length > 0 && plain.length > 0 && <span className="block flex-none h-px bg-line mx-2 my-1.5" />}
       {dangerous.map(item)}
-    </div>,
-    document.body,
+    </AnchoredPopover>
   );
 }
 

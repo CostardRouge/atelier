@@ -1,9 +1,13 @@
-import OverflowMenu, { type OverflowItem } from '../ui/OverflowMenu';
+import { useCallback, useRef, useState, type ReactNode } from 'react';
+import { AnchoredPopover } from '../ui/OverflowMenu';
+import InfoDot from '../ui/InfoDot';
+import Segmented from '../ui/Segmented';
 import { formatBytes } from '../lib/format';
 import { isClipName } from '../library/assets';
-import { renditionFacts, type Rendition } from '../media/renditions';
+import type { Rendition, RenditionRole } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
 import { CHOICE_WORDS, type RollChoice } from './roll-choice';
+import { fullPixels, groupRenditions, rowFigures } from './base-menu';
 
 export type { DevelopBase } from './develop';
 
@@ -42,35 +46,122 @@ export interface RollChoiceMenu {
   follows: boolean;
   /** Why the roll's choice did not land on this picture, where it follows; null when it did. */
   reason: string | null;
+  /** How many pictures the roll holds, for the scope switch's word. */
+  count?: number;
 }
 
-/** What a delivered row IS, in the words under its name. */
+/** What a delivered row IS, in the words under its name once it is open. */
 function describeDelivered(row: Rendition): string {
   if (row.blocked) return row.blocked;
-  const fetched = row.here ? '' : ' — fetched from its instance and held for this session';
-  if (isClipName(row.name)) return `the clip as recorded, every frame at its own size${fetched}`;
-  if (row.reach === 'embedded') return `the 8-bit render your camera wrote inside the RAW${fetched}`;
-  return `the file itself, 8-bit, drawn as it is${fetched}`;
+  if (isClipName(row.name)) return 'the clip as recorded, every frame at its own size';
+  if (row.reach === 'embedded') return 'the 8-bit render your camera wrote inside the RAW';
+  return 'the file itself, 8-bit, drawn as it is';
+}
+
+/** The group's word, above its rows. */
+const GROUP_WORDS: Readonly<Record<RenditionRole, string>> = Object.freeze({
+  proxy: 'Quick',
+  delivered: 'The camera’s file',
+  sensor: 'The sensor',
+});
+
+/** A rung's word on the segmented control under the sensor — short, the full name in its tooltip. */
+const RUNG_WORDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
+  proxy: 'Proxy',
+  gain: 'Gain',
+  gainMap: 'Gain map',
+  gainMapWarp: '+ Warp',
+});
+
+/**
+ * One row of the menu: a radio, the title, its megapixels in the right-hand
+ * column, one line of facts under them, and — on the open row only — the
+ * sentence saying what it is. A row that cannot be chosen says why and is
+ * `aria-disabled`, never `disabled` (`frontend.md`, press feedback).
+ */
+function Choice({
+  on,
+  title,
+  figure,
+  facts,
+  sentence,
+  hint,
+  blocked = false,
+  onPick,
+}: {
+  on: boolean;
+  title: string;
+  figure: string | null;
+  facts: ReactNode;
+  sentence?: string | null;
+  hint?: string;
+  blocked?: boolean;
+  onPick: () => void;
+}) {
+  return (
+    <button
+      type="button"
+      role="radio"
+      aria-checked={on}
+      aria-disabled={blocked || undefined}
+      title={hint}
+      onClick={() => {
+        if (!blocked) onPick();
+      }}
+      className={`w-full grid grid-cols-[0.875rem_minmax(0,1fr)_auto] items-center gap-x-2.5 gap-y-0.5 px-2.5 py-2 rounded-[8px] border-0 bg-transparent text-left ${
+        blocked ? 'opacity-45 cursor-default' : 'cursor-pointer hover:bg-paper-2 data-pressed:bg-paper-2'
+      }`}
+    >
+      <span
+        aria-hidden="true"
+        className={`w-3.5 h-3.5 rounded-full justify-self-center ${on ? 'border-[4.5px] border-accent' : 'border-[1.5px] border-line-strong'}`}
+      />
+      <span className="min-w-0 truncate font-sans text-sm font-medium text-ink">{title}</span>
+      <span className="font-mono text-2xs tabular-nums text-ink-soft text-right">{figure}</span>
+      <span className="col-start-2 col-span-2 min-w-0 font-mono text-3xs leading-relaxed text-muted">{facts}</span>
+      {sentence && <span className="col-start-2 col-span-2 min-w-0 text-xs leading-snug text-ink-soft">{sentence}</span>}
+    </button>
+  );
+}
+
+/** `8064 × 4536 · 8-bit · 8.4× short · ↓ 72 MB · the roll’s`, the shortfall and the cost marked. */
+function Facts({ parts, short, cost }: { parts: readonly (string | null)[]; short?: string | null; cost?: string | null }) {
+  const plain = parts.filter(Boolean) as string[];
+  const all: ReactNode[] = plain.map((p) => <span key={p}>{p}</span>);
+  if (short) all.push(<span key="short" className="text-warn">{short}</span>);
+  if (cost) all.push(<span key="cost" className="text-accent-ink">↓ {cost}</span>);
+  return (
+    <>
+      {all.map((node, i) => (
+        <span key={i}>
+          {i > 0 && ' · '}
+          {node}
+        </span>
+      ))}
+    </>
+  );
 }
 
 /**
- * THE CAPTURE'S FILES, under the fidelity chip (2026-09-21, replacing the
- * four-rung ladder of 2026-09-20 — `docs/capture-renditions.md` §9.1).
+ * THE CAPTURE'S FILES, under the picture's name (2026-09-21; drawn as GROUPS
+ * since 2026-10-06 — face B of the Renditions Drawer lab, his pick, "with the
+ * MP number").
  *
- * One list: the source's proxy where there is one, then what the camera
- * delivered — a JPEG, a HEIF, the render inside a RAW — then the sensor,
- * with the calibration rungs (`raw/calibration.ts`) nested under it, since
- * they are amounts of the SENSOR's own calibration and mean nothing on a
- * render. A row this browser cannot draw is listed blocked and says why; a
- * row not in hand says what fetching it costs before it is pressed.
+ * Three groups — Quick (the source's proxy), the camera's file (a JPEG, a
+ * HEIF, the render inside a RAW), the sensor — each row a radio with its
+ * megapixels on the right and one line of facts: its size, its bits, how far
+ * it falls short of the capture's biggest picture, and what fetching it costs
+ * (`↓ 72 MB`). The sentence about what a row IS is said once, on the open
+ * row. The calibration rungs are a CONTROL of the sensor (a segmented row
+ * under it), not rows of their own: the file and the amount of its
+ * calibration are two questions. In a roll a switch at the top answers for
+ * THIS picture or the WHOLE roll, with the same rows' roles, replacing the
+ * second list the menu used to end on.
  *
  * It hangs off the NAME of the file (2026-09-22, variant B2 of the stage-bar
  * study): the name and the chip answer the same question — which bytes are on
- * screen — so they are one control, at the left of the bar, and the menu
- * lists the capture's other files under the one that is open. It costs no
- * pill of its own, which is what lets it be drawn at every width: as a
- * separate chip it was hidden under 880px, and a phone could not reach the
- * rendition at all.
+ * screen — so they are one control, at the left of the bar. It costs no pill
+ * of its own, which is what lets it be drawn at every width.
  */
 export function DevelopBaseMenu({
   name,
@@ -117,127 +208,39 @@ export function DevelopBaseMenu({
   /** What the RAW's own calibration asks for, once read; null when it carries none. */
   calibration?: string | null;
   /**
-   * The ROLL's choice (`roll-choice.ts`), listed at the foot: which file every
-   * picture with no choice of its own opens on. The question is this menu's —
-   * which bytes — asked once for all of them. Absent outside a roll.
+   * The ROLL's choice (`roll-choice.ts`): which file every picture with no
+   * choice of its own opens on. The question is this menu's — which bytes —
+   * asked once for all of them. Absent outside a roll.
    */
   roll?: RollChoiceMenu | null;
   className?: string;
 }) {
+  const [open, setOpen] = useState(false);
+  const [scope, setScope] = useState<'picture' | 'roll'>('picture');
+  const rootRef = useRef<HTMLSpanElement>(null);
+  const anchorRect = useCallback(() => rootRef.current?.getBoundingClientRect() ?? null, []);
+  const close = useCallback(() => setOpen(false), []);
+  const pick = (act: () => void) => {
+    setOpen(false);
+    act();
+  };
+
   const onSensor = baseRung(base) > 0;
   const ev = gain ? Math.log2(gain) : 0;
   const sensor = rows.find((r) => r.role === 'sensor') ?? null;
+  const steps = sensor ? rungs.filter((r) => r !== 'proxy') : [];
+  const full = fullPixels(rows);
+  const clipped = isClipName(name);
   // The row on screen says when it is there by the roll's choice — only
-  // where that choice LANDED: a picture the roll could not move says why at
-  // the foot, and its proxy is then where it opens, not the roll's.
-  const byRoll = (marked: boolean, facts: string) =>
-    marked && roll?.follows && roll.choice && !roll.reason ? [facts, 'the roll’s'].filter(Boolean).join(' · ') : facts;
+  // where that choice LANDED: a picture the roll could not move says why in
+  // the roll's own list, and its proxy is then where it opens, not the roll's.
+  const byRoll = (marked: boolean) => (marked && roll?.follows && roll.choice && !roll.reason ? 'the roll’s' : null);
 
-  const item = (id: string, marked: boolean, title: string, facts: string, hint: string, onSelect: () => void, disabled = false): OverflowItem => ({
-    id,
-    title: hint,
-    disabled,
-    onSelect,
-    label: (
-      <span className="flex flex-col items-start gap-0.5 text-left">
-        <span className="font-mono text-xs">
-          {marked ? '· ' : '  '}
-          {title}
-          {facts && <span className="text-faint"> · {facts}</span>}
-        </span>
-        <span className="font-mono text-3xs text-faint leading-relaxed max-w-[22rem] whitespace-normal">{hint}</span>
-      </span>
-    ),
-  });
-
-  const items: OverflowItem[] = rows
-    .filter((r) => r.role !== 'sensor')
-    .map((row) => {
-      const marked = !onSensor && row.id === current;
-      const hint =
-        marked && status
-          ? status
-          : row.role === 'proxy'
-            ? isClipName(row.name) || isClipName(name)
-              ? CLIP_PROXY_ADDS
-              : BASE_ADDS.proxy
-            : describeDelivered(row);
-      return item(
-        row.id,
-        marked,
-        row.role === 'proxy' ? 'Proxy' : row.name,
-        byRoll(marked, renditionFacts(row, formatBytes)),
-        hint,
-        () => onRendition(row.id),
-        Boolean(row.blocked),
-      );
-    });
-
-  if (sensor) {
-    for (const rung of rungs) {
-      if (rung === 'proxy') continue;
-      const marked = onSensor && rung === base;
-      let hint: string;
-      if (marked) {
-        hint = gain ? `metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}` : (status ?? 'decoding the sensor’s data…');
-      } else if (rung === 'gain' && !onSensor && !sensor.here) {
-        hint = `opens ${sensor.name} from its instance${sensor.bytes ? ` · ${formatBytes(sensor.bytes)}` : ''}, held for this session`;
-      } else {
-        hint = BASE_ADDS[rung];
-      }
-      items.push(
-        item(
-          rung,
-          marked,
-          rung === 'gain' ? `${sensor.name} → ${BASE_LABELS.gain}` : `→ ${BASE_LABELS[rung]}`,
-          byRoll(marked, rung === 'gain' ? renditionFacts(sensor, formatBytes) : ''),
-          hint,
-          () => onBase(rung),
-        ),
-      );
-    }
-    if (onSensor && gain && onRemeter) {
-      items.push(
-        item(
-          'remeter',
-          false,
-          'Meter the exposure again',
-          '',
-          'measures the sensor’s exposure anew and stores the number — for a picture metered by an earlier decoder, or one that opens a touch dark',
-          onRemeter,
-        ),
-      );
-    }
-  }
-
-  // What the FILE asks for, said once at the foot: the numbers a person can
-  // check against the picture, rather than a promise.
-  if (calibration) {
-    items.push({
-      id: 'calibration',
-      disabled: true,
-      onSelect: () => {},
-      label: (
-        <span className="font-mono text-3xs text-faint whitespace-normal max-w-[22rem]">this file asks for {calibration}</span>
-      ),
-    });
-  }
-
-  if (roll) {
-    items.push({
-      id: 'roll-head',
-      disabled: true,
-      onSelect: () => {},
-      label: <span className="font-mono text-3xs tracking-[0.12em] uppercase text-faint">The whole roll opens on</span>,
-    });
-    for (const role of ['proxy', 'delivered', 'sensor'] as const) {
-      const value = role === 'proxy' ? null : role;
-      const marked = roll.choice === value;
-      // Where the roll's choice did not land on THIS picture, its row says why.
-      const hint = marked && roll.follows && roll.reason ? `not this picture: ${roll.reason}` : ROLL_ADDS[role];
-      items.push(item(`roll-${role}`, marked, CHOICE_WORDS[role], '', hint, () => roll.onChoice(value)));
-    }
-  }
+  // Nothing to choose — one file, no rung, no roll: the name stays TEXT. A
+  // chevron over a menu that cannot change anything is an invitation to a
+  // dead end.
+  const choices =
+    rows.filter((r) => r.role !== 'sensor' && !r.blocked).length + steps.length + (roll ? 3 : 0) + (onSensor && gain && onRemeter ? 1 : 0);
 
   const words = (
     <>
@@ -250,9 +253,7 @@ export function DevelopBaseMenu({
     </>
   );
 
-  // Nothing to choose — one file, no rung: the name stays TEXT. A chevron over
-  // a menu that cannot change anything is an invitation to a dead end.
-  if (items.filter((i) => !i.disabled).length <= 1) {
+  if (choices <= 1) {
     return (
       <span className={`min-w-0 flex items-baseline gap-2 ${className}`} title={name}>
         {words}
@@ -260,26 +261,173 @@ export function DevelopBaseMenu({
     );
   }
 
+  const fileRow = (row: Rendition) => {
+    const marked = !onSensor && row.id === current;
+    const figures = rowFigures(row, full);
+    const sentence = marked
+      ? (status ?? (row.role === 'proxy' ? (clipped || isClipName(row.name) ? CLIP_PROXY_ADDS : BASE_ADDS.proxy) : describeDelivered(row)))
+      : null;
+    const sub = row.reach === 'embedded' ? 'render inside the RAW' : null;
+    return (
+      <Choice
+        key={row.id}
+        on={marked}
+        title={row.role === 'proxy' ? 'Proxy' : row.name}
+        figure={figures.megapixels}
+        blocked={Boolean(row.blocked)}
+        hint={row.blocked ?? (row.here ? undefined : 'fetched from its instance once, and held for this session')}
+        facts={
+          row.blocked ? (
+            row.blocked
+          ) : (
+            <Facts
+              parts={[figures.size, sub, figures.depth, byRoll(marked)]}
+              short={figures.short}
+              cost={!row.here && row.bytes != null ? formatBytes(row.bytes) : null}
+            />
+          )
+        }
+        sentence={sentence}
+        onPick={() => pick(() => onRendition(row.id))}
+      />
+    );
+  };
+
+  const sensorGroup = sensor && steps.length > 0 && (
+    <>
+      <Choice
+        on={onSensor}
+        title={sensor.name}
+        figure={rowFigures(sensor, full).megapixels}
+        hint={sensor.here ? undefined : 'fetched from its instance once, and held for this session'}
+        facts={
+          <Facts
+            parts={[rowFigures(sensor, full).size, rowFigures(sensor, full).depth, byRoll(onSensor)]}
+            cost={!onSensor && !sensor.here && sensor.bytes != null ? formatBytes(sensor.bytes) : null}
+          />
+        }
+        sentence={
+          onSensor
+            ? gain
+              ? `Metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}.`
+              : (status ?? 'Decoding the sensor’s data…')
+            : null
+        }
+        onPick={() => {
+          if (!onSensor) pick(() => onBase(steps[0]));
+        }}
+      />
+      {steps.length > 1 && (
+        <div className="pl-[2.125rem] pr-2.5 pb-1.5">
+          <Segmented<DevelopBase | 'none'>
+            size="sm"
+            fill
+            label="How much of the camera’s calibration"
+            value={onSensor ? base : 'none'}
+            onChange={(next) => {
+              if (next !== 'none') pick(() => onBase(next));
+            }}
+            options={steps.map((r) => ({ id: r, label: RUNG_WORDS[r], title: `${BASE_LABELS[r]} — ${BASE_ADDS[r]}` }))}
+          />
+        </div>
+      )}
+      {onSensor && gain && onRemeter && (
+        <button
+          type="button"
+          onClick={() => pick(onRemeter)}
+          title="measures the sensor’s exposure anew and stores the number — for a picture metered by an earlier decoder, or one that opens a touch dark"
+          className="self-start ml-[2.125rem] mb-1 px-0 py-1 border-0 bg-transparent font-mono text-3xs text-muted underline underline-offset-2 decoration-line-strong cursor-pointer hover:text-accent-ink"
+        >
+          Meter the exposure again
+        </button>
+      )}
+    </>
+  );
+
+  const groups = groupRenditions(rows);
+  const pictureScope = groups.map((group, i) => {
+    if (group.role === 'sensor' && !sensorGroup) return null;
+    return (
+      <div key={group.role} role="radiogroup" aria-label={GROUP_WORDS[group.role]} className={`flex flex-col ${i > 0 ? 'mt-1 pt-1 border-t border-line' : ''}`}>
+        <div className="flex flex-wrap items-center gap-x-1.5 px-2.5 pt-1.5 pb-0.5">
+          <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted">{GROUP_WORDS[group.role]}</span>
+          {group.role === 'sensor' && calibration && <InfoDot about="the camera’s calibration">This file asks for {calibration}.</InfoDot>}
+        </div>
+        {group.role === 'sensor' ? sensorGroup : group.rows.map(fileRow)}
+      </div>
+    );
+  });
+
+  const rollScope = roll && (
+    <div role="radiogroup" aria-label="The whole roll opens on" className="flex flex-col">
+      {(['proxy', 'delivered', 'sensor'] as const).map((role) => {
+        const value = role === 'proxy' ? null : role;
+        const marked = roll.choice === value;
+        // Where the roll's choice did not land on THIS picture, its row says why.
+        const line = marked && roll.follows && roll.reason ? `not this picture: ${roll.reason}` : ROLL_ADDS[role];
+        return (
+          <Choice
+            key={role}
+            on={marked}
+            title={CHOICE_WORDS[role]}
+            figure={null}
+            facts={line}
+            onPick={() => pick(() => roll.onChoice(value))}
+          />
+        );
+      })}
+      <p className="m-0 px-2.5 pt-1 pb-1.5 font-mono text-3xs text-muted">A picture you set yourself keeps its file.</p>
+    </div>
+  );
+
   return (
-    <OverflowMenu
-      label="What this picture is developed from"
-      className={`min-w-0 ${className}`}
-      size="sm"
-      align="start"
-      trigger={{
-        bare: true,
-        title: name,
-        className: 'group min-w-0 flex items-baseline gap-2 p-0 border-0 bg-transparent text-left cursor-pointer',
-        text: (
-          <>
-            {words}
-            <span className="flex-none font-mono text-3xs text-faint group-hover:text-accent-ink" aria-hidden="true">
-              ▾
-            </span>
-          </>
-        ),
-      }}
-      items={items}
-    />
+    <span ref={rootRef} className={`min-w-0 inline-flex ${className}`}>
+      <button
+        type="button"
+        title={name}
+        aria-label="What this picture is developed from"
+        aria-expanded={open}
+        aria-haspopup="dialog"
+        onClick={(e) => {
+          e.stopPropagation();
+          if (!open) setScope('picture');
+          setOpen((o) => !o);
+        }}
+        className="group min-w-0 flex items-baseline gap-2 p-0 border-0 bg-transparent text-left cursor-pointer"
+      >
+        {words}
+        <span className="flex-none font-mono text-3xs text-faint group-hover:text-accent-ink" aria-hidden="true">
+          ▾
+        </span>
+      </button>
+      {open && (
+        <AnchoredPopover
+          anchorRect={anchorRect}
+          onClose={close}
+          align="start"
+          within={rootRef}
+          role="dialog"
+          label="What this picture is developed from"
+          className="w-[22rem] max-w-[calc(100vw-1rem)] p-1.5"
+        >
+          {roll && (
+            <div className="flex items-center justify-between gap-2 px-2.5 pt-1 pb-2 mb-1 border-b border-line">
+              <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted">Developed from</span>
+              <Segmented<'picture' | 'roll'>
+                size="sm"
+                label="For this picture or the whole roll"
+                value={scope}
+                onChange={setScope}
+                options={[
+                  { id: 'picture', label: 'This picture' },
+                  { id: 'roll', label: roll.count ? `Whole roll · ${roll.count}` : 'Whole roll' },
+                ]}
+              />
+            </div>
+          )}
+          {scope === 'roll' && roll ? rollScope : pictureScope}
+        </AnchoredPopover>
+      )}
+    </span>
   );
 }

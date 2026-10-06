@@ -2172,7 +2172,7 @@ export default function PictureWorkbench({
               calibration={calibration?.summary ?? null}
               roll={
                 onRollChoice && rollPhotos > 1 && !clip
-                  ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason }
+                  ? { choice: rollChoice, onChoice: onRollChoice, follows: followsRoll(rollChoice, entry), reason: rollReason, count: rollPhotos }
                   : null
               }
             />

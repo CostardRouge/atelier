@@ -51,8 +51,9 @@ Rules a later change must keep:
   wipe, and with the crop verb a zoom brings — on a 390 px phone they met.
   Measured headless; the loupe's status pill (under the crop verb, zoomed
   past 1:1) was not.
-- **Where it lives on screen**: the foot of the name menu (*The whole roll
-  opens on*), the line after a pick (*Use Camera render for the whole roll*,
+- **Where it lives on screen**: the name menu's *Whole roll* side — a scope
+  switch at its top since 2026-10-06, the same three roles, where it used to
+  be a second list at the foot (`renditions-build.md`) —, the line after a pick (*Use Camera render for the whole roll*,
   dismissed by ✕, never a mode), New roll's *Pictures open on*. Put in the
   name menu rather than the band's ⋯ — that menu is per-DEVICE layout, this
   is the document's. Not built, by the brief's own recommendation: prefetching
