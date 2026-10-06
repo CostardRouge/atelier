@@ -60,9 +60,16 @@ export interface WinnowThumbProps {
    */
   box: string;
   alt?: string;
+  /**
+   * Load now, not when the browser thinks it is near. For a list that already
+   * draws only the cells near its view (Develop's band): there a lazy `<img>`
+   * inside a scroller is one WebKit may never start — no load, no error, so
+   * no retry either, and the cell stays an empty frame.
+   */
+  eager?: boolean;
 }
 
-export default function WinnowThumb({ client, id, label, box, alt = '' }: WinnowThumbProps) {
+export default function WinnowThumb({ client, id, label, box, alt = '', eager = false }: WinnowThumbProps) {
   const [attempt, setAttempt] = useState(0);
   const timer = useRef<number | null>(null);
   // A heal is awaited, not timed, so the timer cannot speak for it.
@@ -100,7 +107,7 @@ export default function WinnowThumb({ client, id, label, box, alt = '' }: Winnow
       // Served with the session cookie, so the browser is told to send it
       // cross-origin. Cross-ORIGIN and same-SITE (`docs/winnow-bridge.md`).
       crossOrigin="use-credentials"
-      loading="lazy"
+      loading={eager ? 'eager' : 'lazy'}
       decoding="async"
       className={`block object-cover ${box}`}
       onError={() => {

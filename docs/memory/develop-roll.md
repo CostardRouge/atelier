@@ -1473,6 +1473,19 @@ view. Rules:
   re-renders the strip a few times and never per frame) and `StripCells`
   filters the layout's rectangles — the layout itself stays whole, so the
   `<ol>` keeps its full extent and the scrollbar its length.
+- **A drawn cell's picture is EAGER, and the instance's thumbnail stays
+  until a local one replaces it** (2026-10-06, his iPhone: «certaines
+  miniatures ne chargent pas»). A `loading="lazy"` `<img>` inside a scroller
+  may never start in WebKit — no load, no error, so `WinnowThumb`'s retry
+  never runs and the cell is an empty frame (headless too: lazy cells still
+  pending after 6 s); the window already limits what is drawn, so the band's
+  blob `<img>` and its `WinnowThumb` (`eager`) load at once. And a remote
+  picture fetched into the pool (the open one and its neighbours, `ready`)
+  used to swap its instance thumbnail for "…" until its own bake landed —
+  one decode at a time, never if the bake failed; now any cell with a
+  `remote` and no local thumbnail draws the instance's, whatever its state.
+  `useScrollView` also re-reads the position when its box changes SIZE: a
+  resize can clamp the scroll without a scroll event.
 - **A cell takes its rectangle as plain numbers** (`x y w h cap`), never the
   layout's object: the layout is rebuilt as thumbnails land, and the memo
   held on nothing while every cell was handed a fresh `StripCell`.
