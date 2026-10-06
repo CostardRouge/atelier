@@ -26,6 +26,8 @@ import type { ReactNode } from 'react';
 import MetadataSection from './MetadataSection';
 import type { ExifData } from '../../shared/exif/exif-parser';
 import { useDeliveryIdentity, setDeliveryIdentity } from '../../shared/develop/use-preset-book';
+import { useFullColourFrom } from '../../shared/media/browser-jpeg';
+import { openDevelopSettings } from './develop-settings-open';
 
 const HDR_STOPS: readonly { id: string; label: string }[] = [
   { id: '1', label: '1 stop' },
@@ -46,6 +48,23 @@ function describeHdrRun(hdr: RollRun['hdr']): string | null {
 }
 
 export type { ExportVerb } from '../../shared/ui/DeliverBar';
+
+/**
+ * Which code writes the JPEG, in one line, and the way to its settings —
+ * the encoder is the device's (`DevelopSettingsSheet`), never the roll's.
+ */
+function EncoderLine() {
+  const from = useFullColourFrom();
+  const colour = from === undefined ? '' : from === null ? ' · never full colour' : ` · full colour at ${Math.round(from * 100)} %`;
+  return (
+    <FieldRow label="Encoder">
+      <span className="flex-1 min-w-0 font-mono text-2xs leading-snug text-ink-soft">Browser{colour}</span>
+      <Button size="sm" variant="ghost" trailing={Icons.forward} onClick={() => openDevelopSettings('encoder')}>
+        Settings
+      </Button>
+    </FieldRow>
+  );
+}
 
 /**
  * The Develop tool's Export tab: the roll's delivery settings (a long edge,
@@ -194,6 +213,7 @@ export default function ExportPanel({
           }
         >
           <ExportTargets targets={settings.targets} onTargets={(targets) => onSettings({ targets })} />
+          {!clip && settings.targets.some((t) => t.format === 'jpeg') && <EncoderLine />}
           <FieldRow label="Delivers" align="start">
             {/* The run's sentence. Every picture's own line is in the Pictures
                 table below, where it is also where a picture is sent or held. */}

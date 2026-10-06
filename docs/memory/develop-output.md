@@ -132,3 +132,23 @@ canvas, a half source round-tripped exactly, headroom above white kept.
 Not seen: a file opened in Lightroom or Photoshop (the eXIf chunk is read by
 both since 2017; XMP in iTXt by every Adobe reader).
 
+
+## A JPEG target says the COLOUR it keeps, measured (2026-10-06)
+
+**Fact, measured in Chromium**: `canvas.toBlob('image/jpeg', q)` writes
+**4:2:0** (a quarter of the colour) for every q < 1 — 0.99 included — and
+**4:4:4** at exactly 1; there is no way to ask for 4:4:4 at 95. That, with
+q 0.92, is most of his «nuances pixelisées» and of the files' lightness
+against Lightroom (libjpeg on a 32.7 MP picture: q92 4:2:0 10.2 MB, q95 4:4:4
+17.7 MB, q100 4:4:4 44.2 MB). Safari's encoder is unmeasured. **Decision**:
+the panel never ASSUMES Chrome — `shared/media/browser-jpeg.ts` writes a
+16 × 16 colour canvas at the quality and reads the sampling off the frame
+header (`jpeg-chroma.ts`, pure), memoised per hundredth; `fullColourFrom()`
+bisects 0.50–1.00. The quality row says `4:2:0 · a quarter of the colour on
+this browser — full colour from 100 %`, a **Max** button beside the slider
+sets 1 (always drawn, `aria-pressed` at 1 — a toolbar never inserts a
+control), and the **Max · quality 100** preset is a full-size target at 1.
+The Export tab's *Encoder* line and the settings sheet's *Encoder* section
+read the same probe. **How to apply**: a claim about what an encoder writes
+is measured on the browser in hand; MozJPEG (next) will be an engine beside
+this one, not a replacement — its section rows go in `DevelopSettingsSheet`.
