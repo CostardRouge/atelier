@@ -1,11 +1,11 @@
 import type { ReactNode } from 'react';
 import type { DraftOutcome } from '../../../shared/roadtrip/deduce-draft';
-import { stageLabel } from '../../../shared/roadtrip/trip-places';
+import { placeText, type PlaceWritingTrip } from '../../../shared/roadtrip/place-style';
 import type { TripStage } from '../../../shared/roadtrip/trip-types';
 import { stageTint } from '../../../shared/roadtrip/stage-ruler';
 import Button from '../../../shared/ui/Button';
 import Segmented from '../../../shared/ui/Segmented';
-import { formatIsoDate, mono, note, num, plural, spanText } from './pieces';
+import { formatIsoDate, mono, note, num, plural, spanText, stageName } from './pieces';
 import type { DeduceContext } from './context';
 
 /**
@@ -31,8 +31,8 @@ function Heading({ children, count }: { children: ReactNode; count: number }) {
   );
 }
 
-function placesText(stage: TripStage): string {
-  return stage.places.map((p) => p.name).join(' · ');
+function placesText(stage: TripStage, trip: PlaceWritingTrip): string {
+  return stage.places.map((p) => placeText(p, stage, trip, 'lists')).join(' · ');
 }
 
 export function ReviewPane({ ctx, outcome }: { ctx: DeduceContext; outcome: DraftOutcome }) {
@@ -52,10 +52,10 @@ export function ReviewPane({ ctx, outcome }: { ctx: DeduceContext; outcome: Draf
               <li key={`${a.stage.startDate}-${i}`} className={row}>
                 <span className="w-2.5 h-full min-h-5 rounded-sm" style={{ background: stageTint(a.from.index) }} aria-hidden="true" />
                 <span className="min-w-0">
-                  <b className="font-medium">{stageLabel(a.stage) || 'Unnamed stage'}</b>
+                  <b className="font-medium">{stageName(a.stage, ctx.trip, 'Unnamed stage')}</b>
                   <span className={`block ${mono}`}>
                     {spanText(a.stage.startDate, a.stage.endDate)}
-                    {a.stage.places.length ? ` · ${placesText(a.stage)}` : ' · no place: its halts are unnamed'}
+                    {a.stage.places.length ? ` · ${placesText(a.stage, ctx.trip)}` : ' · no place: its halts are unnamed'}
                   </span>
                 </span>
                 <span className={`${pill} ${a.from.verb === 'stage' && a.from.overlapping.length ? 'bg-warn-wash text-warn' : 'bg-accent-wash text-accent-ink'}`}>
@@ -74,9 +74,9 @@ export function ReviewPane({ ctx, outcome }: { ctx: DeduceContext; outcome: Draf
               <li key={c.stage.id + c.from.key} className={row}>
                 <span className="w-2.5 h-full min-h-5 rounded-sm bg-ok" aria-hidden="true" />
                 <span className="min-w-0">
-                  <b className="font-medium">{stageLabel(c.stage) || 'Unnamed stage'}</b>
+                  <b className="font-medium">{stageName(c.stage, ctx.trip, 'Unnamed stage')}</b>
                   <span className={`block ${mono}`}>
-                    {spanText(c.stage.startDate, c.stage.endDate)} · {placesText(c.stage)} <span className="text-ok">+ {c.places.map((p) => p.name).join(', ')}</span> · after yours
+                    {spanText(c.stage.startDate, c.stage.endDate)} · {placesText(c.stage, ctx.trip)} <span className="text-ok">+ {c.places.map((p) => placeText(p, c.stage, ctx.trip, 'lists')).join(', ')}</span> · after yours
                   </span>
                 </span>
                 <span className={`${pill} bg-ok-wash text-ok`}>places</span>
@@ -125,8 +125,8 @@ export function DonePane({ ctx, outcome }: { ctx: DeduceContext; outcome: DraftO
               <li key={`${a.stage.startDate}-${i}`} className={row}>
                 <span className="w-2.5 h-full min-h-5 rounded-sm bg-accent" aria-hidden="true" />
                 <span className="min-w-0">
-                  <b className="font-medium">{stageLabel(a.stage) || 'Unnamed stage'}</b>
-                  <span className={`block ${mono}`}>{spanText(a.stage.startDate, a.stage.endDate)}{a.stage.places.length ? ` · ${placesText(a.stage)}` : ''}</span>
+                  <b className="font-medium">{stageName(a.stage, ctx.trip, 'Unnamed stage')}</b>
+                  <span className={`block ${mono}`}>{spanText(a.stage.startDate, a.stage.endDate)}{a.stage.places.length ? ` · ${placesText(a.stage, ctx.trip)}` : ''}</span>
                 </span>
                 <span className={`${pill} bg-accent-wash text-accent-ink`}>deduced</span>
               </li>
@@ -142,7 +142,7 @@ export function DonePane({ ctx, outcome }: { ctx: DeduceContext; outcome: DraftO
               <li key={c.stage.id + c.from.key} className={row}>
                 <span className="w-2.5 h-full min-h-5 rounded-sm bg-ok" aria-hidden="true" />
                 <span className="min-w-0">
-                  <b className="font-medium">{stageLabel(c.stage) || 'Unnamed stage'}</b>
+                  <b className="font-medium">{stageName(c.stage, ctx.trip, 'Unnamed stage')}</b>
                   <span className={`block ${mono}`}>+ {c.places.map((p) => p.name).join(', ')}</span>
                 </span>
                 <span className={`${pill} bg-ok-wash text-ok`}>places</span>

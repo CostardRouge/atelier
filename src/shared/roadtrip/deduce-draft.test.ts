@@ -3,11 +3,14 @@ import {
   EMPTY_DRAFT,
   answer,
   applyDraft,
+  choosePlace,
   deducedStages,
   draftOutcome,
   draftSize,
   edit,
+  haltName,
   haltPlace,
+  haltText,
   keepSkips,
   proposeDraft,
   removeDeduced,
@@ -82,7 +85,8 @@ describe('proposeDraft — the safe verb', () => {
   it('adds a proposal that touches no stage, as it stands', () => {
     const [p] = regions(trip());
     expect(p).toMatchObject({ key: '2025-11-02..2025-11-20', relation: 'free', safe: 'stage', verb: 'stage', already: false });
-    expect(p.label).toBe('Perth → Broome');
+    // Written as the trip's lists write a stage: the shared state said once.
+    expect(p.label).toBe('Perth → Broome, WA');
     expect(p.verbs).toEqual(['stage', 'split', 'skip']);
     expect(p.unnamed).toHaveLength(1);
     expect(p.count).toBe(1900);
@@ -263,5 +267,36 @@ describe('draftOutcome and applyDraft', () => {
     const named: NamedLeg[] = trackChapters(LEGS, INDEX)[0].halts;
     expect(routeLabel(named.slice(1, 3), EMPTY_DRAFT)).toBe('Kalbarri → Exmouth');
     expect(routeLabel([named[3]], EMPTY_DRAFT)).toBe('');
+  });
+
+  it('writes the route as the trip writes its places, given the trip', () => {
+    const named: NamedLeg[] = trackChapters(LEGS, INDEX)[0].halts;
+    const t = { ...trip(), stateCodes: { 'Western Australia': 'WA' } };
+    expect(routeLabel(named.slice(1, 3), EMPTY_DRAFT, t)).toBe('Kalbarri → Exmouth, WA');
+    expect(haltText(named[1], EMPTY_DRAFT, t)).toBe('Kalbarri, WA');
+    expect(haltText(named[3], EMPTY_DRAFT, t)).toBeNull();
+  });
+
+  it('lets a halt take another place than the index’s, and give it back', () => {
+    const named: NamedLeg[] = trackChapters(LEGS, INDEX)[0].halts;
+    const key = named[2].leg.startDate;
+    const draft = choosePlace(EMPTY_DRAFT, key, {
+      name: 'Exmouth',
+      state: 'England',
+      searchCode: 'ENG',
+      countryCode: 'GB',
+      coords: { lat: 50.62, lon: -3.41 },
+      source: 'search',
+    });
+    expect(haltName(named[2], draft)).toBe('Exmouth');
+    const place = haltPlace(named[2], draft)!;
+    expect(place).toMatchObject({ name: 'Exmouth', state: 'England', countryCode: 'GB', source: 'search', coords: { lat: 50.62, lon: -3.41 } });
+    // The halt's own days still travel with the place chosen for it.
+    expect(place.arrived).toBe(named[2].leg.startDate);
+    expect(draftSize(draft).names).toBe(1);
+    expect(choosePlace(draft, key, null)).toEqual(EMPTY_DRAFT);
+    // A halt the index could not name takes a chosen place too.
+    const named3 = choosePlace(EMPTY_DRAFT, named[3].leg.startDate, { name: 'Halls Creek', state: '', coords: { lat: -18.2, lon: 127.7 }, source: 'typed' });
+    expect(haltName(named[3], named3)).toBe('Halls Creek');
   });
 });

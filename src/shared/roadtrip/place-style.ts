@@ -244,3 +244,73 @@ export function datesOutsideStage(
     !!iso && parseIsoDate(iso) !== null && !isWithin(stage.startDate, stage.endDate, iso);
   return outside(place.arrived) || outside(place.left);
 }
+
+// --- the country, said on every line that writes a place -------------------
+
+let regionNames: Intl.DisplayNames | null | undefined;
+
+/**
+ * A country's name from its ISO code — «AU» → «Australia» — by the
+ * browser's own table (`Intl.DisplayNames`), so no list of countries ships.
+ * The code itself where the engine has no table or does not know it.
+ */
+export function countryName(code: string | undefined): string {
+  const cc = (code ?? '').trim().toUpperCase();
+  if (!/^[A-Z]{2}$/.test(cc)) return cc;
+  if (regionNames === undefined) {
+    try {
+      regionNames = new Intl.DisplayNames(['en'], { type: 'region' });
+    } catch {
+      regionNames = null;
+    }
+  }
+  try {
+    return regionNames?.of(cc) ?? cc;
+  } catch {
+    return cc;
+  }
+}
+
+/** The code most of these places carry — the trip's country; '' when none says one. */
+export function majorityCountry(codes: Iterable<string | undefined>): string {
+  const count = new Map<string, number>();
+  let best = '';
+  let most = 0;
+  for (const raw of codes) {
+    const cc = (raw ?? '').trim().toUpperCase();
+    if (!cc) continue;
+    const n = (count.get(cc) ?? 0) + 1;
+    count.set(cc, n);
+    // The first to reach a count keeps it: ties go to the country met first.
+    if (n > most) {
+      most = n;
+      best = cc;
+    }
+  }
+  return best;
+}
+
+/** The trip's country: the code most of its places carry. */
+export function tripCountry(trip: Pick<TripDoc, 'stages'>): string {
+  return majorityCountry((trip.stages ?? []).flatMap((s) => (s.places ?? []).map((p) => p.countryCode)));
+}
+
+/** A place as one LINE of a list: its writing, and its country as a code and a name. */
+export interface PlaceLine {
+  /** `placeText` — «Exmouth, WA». */
+  text: string;
+  /** ISO 3166-1, upper case; '' when the place does not say. */
+  countryCode: string;
+  /** The place's own country name, else the code's, else ''. */
+  countryName: string;
+}
+
+/** What every surface listing places reads, so the trip's writing is applied everywhere alike. */
+export function placeLine(place: TripPlace, stage: TripStage | null, trip: PlaceWritingTrip, surface: PlaceSurface): PlaceLine {
+  const code = (place.countryCode ?? '').trim().toUpperCase();
+  return {
+    text: placeText(place, stage, trip, surface),
+    countryCode: code,
+    countryName: (place.country ?? '').trim() || countryName(code),
+  };
+}

@@ -1,7 +1,8 @@
 import { useMemo } from 'react';
 import type { LandCollection } from '../../../shared/map/land';
 import type { DayPoint } from '../../../shared/roadtrip/day-track';
-import { haltName, type DeduceDraft, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import { haltName, haltText, type DeduceDraft, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import type { PlaceWritingTrip } from '../../../shared/roadtrip/place-style';
 import { fitProjection, type GeoPoint } from '../../../shared/roadtrip/hooks/geo';
 import { enumerateDays } from '../../../shared/roadtrip/trip-days';
 import { proposalColour } from './pieces';
@@ -22,6 +23,8 @@ export const MAP_H = 300;
 
 interface DeduceMapProps {
   proposals: readonly Proposal[];
+  /** How the trip writes its places — the labels read it. */
+  trip: PlaceWritingTrip;
   draft: DeduceDraft;
   /** The days the deduction ran over, in calendar order. */
   points: readonly DayPoint[];
@@ -86,6 +89,7 @@ function coastPath(land: LandCollection, project: Project): string {
 
 export default function DeduceMap({
   proposals,
+  trip,
   draft,
   points,
   ignored,
@@ -198,7 +202,7 @@ export default function DeduceMap({
           .map((p) =>
             p.halts.map((h) => {
               const q = project(h.leg.centroid);
-              const name = haltName(h, draft);
+              const name = haltText(h, draft, trip);
               if (!name) return null;
               return (
                 <text

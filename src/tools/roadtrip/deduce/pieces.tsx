@@ -1,9 +1,8 @@
 import type { ReactNode } from 'react';
-import { haltName, VERB_WORDS, type DeduceDraft, type DeduceVerb, type Proposal } from '../../../shared/roadtrip/deduce-draft';
-import type { NamedLeg } from '../../../shared/roadtrip/group-legs';
+import { haltText, VERB_WORDS, type DeduceDraft, type DeduceVerb, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import { stageRoute, type PlaceWritingTrip } from '../../../shared/roadtrip/place-style';
 import { stageTint } from '../../../shared/roadtrip/stage-ruler';
 import { formatIsoDate, parseIsoDate, type IsoDate } from '../../../shared/roadtrip/trip-days';
-import { stageLabel } from '../../../shared/roadtrip/trip-places';
 import type { TripStage } from '../../../shared/roadtrip/trip-types';
 import type { DeduceTab } from './settings';
 
@@ -40,17 +39,21 @@ export function proposalColour(p: Proposal): string {
   return stageTint(p.index);
 }
 
+/** A stage of the trip as every list names it — its own name, else its places WRITTEN («Kalbarri → Exmouth, WA»). */
+export const stageName = (stage: TripStage, trip: PlaceWritingTrip, fallback = 'an unnamed stage'): string =>
+  stageRoute(stage, trip, 'lists') || fallback;
+
 /** The stages' own names, quoted and joined. */
-export const quoted = (stages: readonly TripStage[]): string =>
-  stages.map((s) => `“${stageLabel(s) || 'an unnamed stage'}”`).join(', ');
+export const quoted = (stages: readonly TripStage[], trip: PlaceWritingTrip): string =>
+  stages.map((s) => `“${stageName(s, trip)}”`).join(', ');
 
 export const legend = 'font-mono text-3xs tracking-[0.14em] uppercase text-muted';
 export const note = 'text-2xs text-muted leading-snug';
 export const mono = 'font-mono text-2xs text-muted tabular-nums';
 
 /** What a verb says on a proposal, in its context. */
-export function verbWord(p: Proposal, verb: DeduceVerb): string {
-  if (verb === 'into' && p.target) return `Into “${stageLabel(p.target) || 'that stage'}”`;
+export function verbWord(p: Proposal, verb: DeduceVerb, trip: PlaceWritingTrip): string {
+  if (verb === 'into' && p.target) return `Into “${stageName(p.target, trip, 'that stage')}”`;
   if (verb === 'stage' && p.overlapping.length) return 'Add over';
   if (verb === 'split') return `Split into ${p.halts.length}`;
   return VERB_WORDS[verb];
@@ -80,7 +83,7 @@ export function VerbPill({ p }: { p: Proposal }) {
 }
 
 /** A native select of the verbs a proposal can take — compact, keyboard-reachable, one per card. */
-export function VerbSelect({ p, onChange }: { p: Proposal; onChange: (verb: DeduceVerb) => void }) {
+export function VerbSelect({ p, trip, onChange }: { p: Proposal; trip: PlaceWritingTrip; onChange: (verb: DeduceVerb) => void }) {
   // The select IS the card's verb now (the pill beside it said the same thing
   // twice), so it wears the pill's tone: the one that needs a look — over a
   // stage of yours — is the one that stands out.
@@ -101,7 +104,7 @@ export function VerbSelect({ p, onChange }: { p: Proposal; onChange: (verb: Dedu
     >
       {p.verbs.map((v) => (
         <option key={v} value={v}>
-          {verbWord(p, v)}
+          {verbWord(p, v, trip)}
         </option>
       ))}
     </select>
@@ -109,11 +112,11 @@ export function VerbSelect({ p, onChange }: { p: Proposal; onChange: (verb: Dedu
 }
 
 /** The proposal's halts as chips, each with its days; a halt the index could not name is dashed. */
-export function HaltChips({ p, draft }: { p: Proposal; draft: DeduceDraft }) {
+export function HaltChips({ p, draft, trip }: { p: Proposal; draft: DeduceDraft; trip: PlaceWritingTrip }) {
   return (
     <div className="flex flex-wrap gap-1">
       {p.halts.map((h) => {
-        const name = haltName(h, draft);
+        const name = haltText(h, draft, trip);
         const extra = p.verb === 'into' && p.extra.includes(h);
         return (
           <span
@@ -137,12 +140,12 @@ export function HaltChips({ p, draft }: { p: Proposal; draft: DeduceDraft }) {
 }
 
 /** What a proposal would like the author to know — nothing drawn when there is nothing. */
-export function Flags({ p }: { p: Proposal }) {
+export function Flags({ p, trip }: { p: Proposal; trip: PlaceWritingTrip }) {
   const flags: ReactNode[] = [];
   if (p.already) {
     flags.push(
       <span key="already" className="text-muted">
-        already in the trip{p.relation === 'inside' && p.target ? ` (inside “${stageLabel(p.target)}”)` : ''}
+        already in the trip{p.relation === 'inside' && p.target ? ` (inside “${stageName(p.target, trip)}”)` : ''}
         {p.written ? ' · written by Deduce' : ''}
       </span>,
     );
@@ -150,21 +153,21 @@ export function Flags({ p }: { p: Proposal }) {
   if (p.verb === 'stage' && p.overlapping.length) {
     flags.push(
       <span key="over" className="text-danger">
-        would sit over {quoted(p.overlapping)}
+        would sit over {quoted(p.overlapping, trip)}
       </span>,
     );
   }
   if (p.verb === 'trim') {
     flags.push(
       <span key="trim" className="text-ok">
-        {plural(p.free.length, 'stage')} in the days {quoted(p.overlapping)} leaves free
+        {plural(p.free.length, 'stage')} in the days {quoted(p.overlapping, trip)} leaves free
       </span>,
     );
   }
   if (p.verb === 'into' && p.target) {
     flags.push(
       <span key="into" className="text-ok">
-        {plural(p.extra.length, 'place')} into “{stageLabel(p.target)}”
+        {plural(p.extra.length, 'place')} into “{stageName(p.target, trip)}”
       </span>,
     );
   }
@@ -207,10 +210,6 @@ export function GoButton({
       {label} ›
     </button>
   );
-}
-
-export function placeTitle(h: NamedLeg): string {
-  return h.city ? `${h.city.name}${h.city.region ? `, ${h.city.region}` : ''}` : 'Unnamed halt';
 }
 
 export { formatIsoDate };

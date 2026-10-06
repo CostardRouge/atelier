@@ -39,12 +39,12 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
             {spanText(p.startDate, p.endDate)} · {p.dayCount} d · {plural(p.halts.length, 'place')} · {num(p.count)} pictures
           </span>
         </div>
-        {p.already && skipped && p.verbs.length <= 2 ? <VerbPill p={p} /> : <VerbSelect p={p} onChange={(v) => actions.answer(p.key, v)} />}
+        {p.already && skipped && p.verbs.length <= 2 ? <VerbPill p={p} /> : <VerbSelect p={p} trip={trip} onChange={(v) => actions.answer(p.key, v)} />}
       </div>
       <div className={skipped ? 'opacity-50' : ''}>
-        <HaltChips p={p} draft={draft} />
+        <HaltChips p={p} draft={draft} trip={trip} />
       </div>
-      <Flags p={p} />
+      <Flags p={p} trip={trip} />
       <div className="flex flex-wrap items-center gap-1.5">
         <Button size="sm" variant="ghost" aria-expanded={editing === p.key} onClick={() => actions.setEditing(editing === p.key ? null : p.key)}>
           {editing === p.key ? 'Close' : 'Edit'}
@@ -157,6 +157,7 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
         <div className="sticky top-0 flex flex-col gap-1.5 max-[700px]:order-first max-[700px]:z-10 max-[700px]:bg-surface max-[700px]:pb-1.5">
           <DeduceMap
             proposals={proposals}
+            trip={ctx.trip}
             draft={draft}
             points={points}
             ignored={ignored}
