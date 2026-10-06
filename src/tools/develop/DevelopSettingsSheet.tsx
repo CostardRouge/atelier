@@ -7,11 +7,14 @@ import { useBandPreference } from '../../shared/render/use-band-preference';
 import { useDitherPreference } from '../../shared/render/use-dither-preference';
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
+import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
+import { chromaWords } from '../../shared/media/jpeg-chroma';
 import { localPref, useLocalPref } from '../../shared/ui/local-pref';
 import Segmented from '../../shared/ui/Segmented';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { usePixelView } from '../../shared/ui/use-pixel-view';
+import { openedOnSection, settingsSectionPref, type SettingsSection } from './develop-settings-open';
 
 /**
  * DEVELOP'S SETTINGS — the choices that belong to this DEVICE, never to a roll
@@ -22,24 +25,17 @@ import { usePixelView } from '../../shared/ui/use-pixel-view';
  * Each row is a browser preference kept in `localStorage` and shared with
  * every reader (`local-pref.ts`, the graph's own band and dither preferences),
  * so a switch here reaches the picture open behind the sheet at once. None
- * travels with a roll, a preset or a paste. The encoder's section comes with
- * the encoder itself; this first page gathers what already existed — some of
- * it reachable only by hand in the console — plus the dither's switch.
+ * travels with a roll, a preset or a paste. It gathers what already existed —
+ * some of it reachable only by hand in the console — the dither's switch, and
+ * the ENCODER: what this browser's JPEG writer keeps of the colour, measured.
  */
 
-type SectionId = 'rendering' | 'device' | 'privacy';
-
-const SECTIONS: readonly { id: SectionId; name: string; sub: string }[] = [
+const SECTIONS: readonly { id: SettingsSection; name: string; sub: string }[] = [
+  { id: 'encoder', name: 'Encoder', sub: 'How a JPEG is written' },
   { id: 'rendering', name: 'Rendering', sub: 'Tones, looks, big pictures' },
   { id: 'device', name: 'Device', sub: 'Phone or computer' },
   { id: 'privacy', name: 'Network', sub: 'What may be fetched' },
 ];
-
-const sectionPref = localPref<SectionId>(
-  'atelier.develop.settings.section',
-  (raw) => (raw === 'device' || raw === 'privacy' ? raw : 'rendering'),
-  (id) => id,
-);
 
 type DeviceChoice = 'auto' | 'constrained' | 'roomy';
 const devicePref = localPref<DeviceChoice>(
@@ -61,6 +57,49 @@ function Row({ label, hint, children }: { label: string; hint?: ReactNode; child
         {hint && <span className="font-mono text-3xs leading-relaxed text-muted">{hint}</span>}
       </div>
     </div>
+  );
+}
+
+/** One quality, and what this browser writes at it. */
+function ChromaAt({ quality }: { quality: number }) {
+  const chroma = useBrowserChroma(quality);
+  return (
+    <span className="grid grid-cols-[3.5rem_3.5rem_minmax(0,1fr)] gap-x-2 font-mono text-xs tabular-nums">
+      <span className="text-ink">{Math.round(quality * 100)} %</span>
+      <span className={chroma === '4:4:4' ? 'text-ok' : 'text-ink-soft'}>{chroma ?? '…'}</span>
+      <span className="text-muted min-w-0 truncate">{chroma ? chromaWords(chroma) : 'measuring'}</span>
+    </span>
+  );
+}
+
+function Encoder() {
+  const from = useFullColourFrom();
+  const qualities = [0.85, 0.92, 0.99, 1];
+  return (
+    <>
+      <Row
+        label="Engine"
+        hint="The JPEG writer built into this browser. Its one setting is the quality, set per target in the Export tab: a target at Max (100 %) keeps the colour of every pixel."
+      >
+        <span className="text-sm text-ink pt-1">This browser’s own</span>
+      </Row>
+      <Row
+        label="Colour it keeps"
+        hint={
+          from === undefined
+            ? 'Measuring, by writing a small picture at each quality and reading its header.'
+            : from === null
+              ? 'Measured here: this browser never writes full colour. A quarter of the colour is what draws blocks along a saturated edge and in a smooth sky.'
+              : `Measured here: full colour from ${Math.round(from * 100)} %. Below, a quarter of the colour, which is what draws blocks along a saturated edge and in a smooth sky.`
+        }
+      >
+        <div className="flex flex-col gap-1 pt-1">
+          {qualities.map((q) => (
+            <ChromaAt key={q} quality={q} />
+          ))}
+        </div>
+      </Row>
+    </>
   );
 }
 
@@ -223,13 +262,14 @@ function Network() {
   );
 }
 
-const PANES: Record<SectionId, () => ReactNode> = { rendering: Rendering, device: Device, privacy: Network };
+const PANES: Record<SettingsSection, () => ReactNode> = { encoder: Encoder, rendering: Rendering, device: Device, privacy: Network };
 
 export default function DevelopSettingsSheet({ onClose }: { onClose: () => void }) {
   const compact = useIsCompact();
-  const [section, setSection] = useLocalPref(sectionPref, 'rendering');
-  // On a phone: one pane at a time, the list first (the suite's drill-down rule).
-  const [drilled, setDrilled] = useState(false);
+  const [section, setSection] = useLocalPref(settingsSectionPref, 'encoder');
+  // On a phone: one pane at a time, the list first (the suite's drill-down
+  // rule) — unless the sheet was opened ON a section, which it then shows.
+  const [drilled, setDrilled] = useState(openedOnSection);
   useDialogKeys({ onCancel: onClose });
   const current = SECTIONS.find((s) => s.id === section) ?? SECTIONS[0];
   const Pane = PANES[current.id];

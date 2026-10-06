@@ -116,6 +116,7 @@ import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useExportMarks } from './use-export-marks';
 import SettingsSheet from './SettingsSheet';
 import DevelopSettingsSheet from './DevelopSettingsSheet';
+import { closeDevelopSettings, openDevelopSettings, useDevelopSettingsOpen } from './develop-settings-open';
 import { carriedSections, setCarriedSections, useCarriedSections } from './carried-sections';
 import type { DevelopClipVerbs } from '../../shared/develop/DevelopSections';
 import {
@@ -940,7 +941,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // --- the sections: ⌘C / ⌘V and "apply to others" for any part of a picture
   const [settingsOpen, setSettingsOpen] = useState(false);
   // Develop's own settings — this device's, never the roll's (`DevelopSettingsSheet.tsx`).
-  const [deviceSettingsOpen, setDeviceSettingsOpen] = useState(false);
+  // A module store, so the Export tab's Encoder line opens the same sheet; a
+  // sheet left open is closed with the roll, not carried into the next one.
+  const deviceSettingsOpen = useDevelopSettingsOpen();
+  useEffect(() => closeDevelopSettings, []);
   // The making-of sheet: opened from the Export tab's row or the bar's menu,
   // drawn by the workbench, which holds the picture's bytes.
   const [timelapseOpen, setTimelapseOpen] = useState(false);
@@ -1811,8 +1815,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             <>
               {headerExtra}
               {/* Develop's settings open from inside the roll (his pick): the
-                  device's choices, not the roll's — rendering, device, network. */}
-              <IconButton label="Develop settings" onClick={() => setDeviceSettingsOpen(true)}>
+                  device's choices, not the roll's — encoder, rendering, device, network. */}
+              <IconButton label="Develop settings" onClick={() => openDevelopSettings()}>
                 {Icons.settings}
               </IconButton>
               {/* The Library's item only when it holds something the roll does
@@ -2117,7 +2121,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           onClose={() => setSettingsOpen(false)}
         />
       )}
-      {deviceSettingsOpen && <DevelopSettingsSheet onClose={() => setDeviceSettingsOpen(false)} />}
+      {deviceSettingsOpen && <DevelopSettingsSheet onClose={closeDevelopSettings} />}
       {confirmRemove && removing.length > 0 && (
         <ConfirmDialog
           title={removing.length === 1 ? `Take ${pictureLabel(removing[0])} off the roll?` : `Take ${removing.length} pictures off the roll?`}

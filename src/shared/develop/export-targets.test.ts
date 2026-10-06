@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   DEFAULT_TARGET,
   MAX_TARGETS,
+  QUALITY_LIMITS,
   TARGET_PRESETS,
   convertSize,
   decodeEdgeFor,
@@ -74,6 +75,11 @@ describe('the record', () => {
     expect(png).toEqual({ name: 'Master', size: null, format: 'png16', quality: 0.9, sharpen: 'off', watermark: true });
     expect(readTargets([{ name: 'Old', size: null, quality: 0.9, sharpen: 'low', watermark: false }])[0].format).toBe('jpeg');
     expect(readTargets([{ name: 'Odd', size: null, format: 'tiff', quality: 0.9, sharpen: 'low', watermark: false }])[0].format).toBe('jpeg');
+  });
+
+  it('offers Max as a full-size JPEG at the top quality — where Chrome keeps every colour', () => {
+    const max = TARGET_PRESETS.find((p) => p.id === 'max')!.target;
+    expect(max).toMatchObject({ size: null, format: 'jpeg', quality: QUALITY_LIMITS.max, sharpen: 'off' });
   });
 
   it('compares by value, and says a size in words', () => {

@@ -1875,6 +1875,8 @@ pushes above white is clipped before the next step can bring it back.
 
 **Develop's settings** (the ⚙ in a roll's bar) gather what belongs to this
 device rather than to a roll, and never travel with it, a preset or a paste:
+*Encoder* — which code writes a JPEG and, measured, the colour it keeps at
+85, 92, 99 and 100 % (the Export tab's *Encoder* line opens it) —,
 *Rendering* — the dither, the look interpolation, Big pictures, how a
 picture past 1:1 is drawn —, *Device* — the device class (applied on reload)
 and where the subject model runs —, and *Network* — whether lens profiles are
@@ -2058,8 +2060,14 @@ first target writes into the folder you choose, each other one into a folder
 inside it named after the target, and every file keeps its picture's name —
 `DJI_0101.jpg` and `Web/DJI_0101.jpg` are the same photograph (a download,
 where there is no folder picker, becomes `Web-DJI_0101.jpg`). A new target
-starts from a preset — Full size, Web · 2048 px, Feed · 1080 px across,
-Mail · 2 MP, Half · 50 %. A target can carry a **watermark**: a line such as
+starts from a preset — Full size, Max · quality 100, Web · 2048 px, Feed ·
+1080 px across, Mail · 2 MP, Half · 50 %. Under a JPEG target's quality, the
+panel says how much of the **colour** this browser's encoder keeps at it —
+measured by writing a small picture and reading its header, never assumed:
+Chrome keeps a quarter of it (4:2:0) below 100 % and all of it (4:4:4) at
+100 %, and that halved colour is what draws blocks along a saturated edge and
+in a smooth sky. **Max** sets 100 %, a file of Lightroom's weight at its own
+100. A target can carry a **watermark**: a line such as
 `© {year} {creator}` (the name set under Metadata, the year the picture was
 taken, `{title}` its own title) in a corner or along the bottom, sized as a
 share of the file's short side and drawn after the sharpening; its style is

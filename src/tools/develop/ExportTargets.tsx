@@ -14,6 +14,9 @@ import {
   type ExportFormat,
 } from '../../shared/develop/export-targets';
 import { FieldRow, RangeField, SelectField, SwitchRow, TextField, fieldClass } from '../../shared/ui/Inspector';
+import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
+import { chromaWords } from '../../shared/media/jpeg-chroma';
+import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
@@ -82,6 +85,40 @@ function SizeValue({
         {UNIT[mode]}
       </span>
     </span>
+  );
+}
+
+/**
+ * A JPEG target's quality, and what this browser's encoder keeps of the
+ * COLOUR at it — measured (`browser-jpeg.ts`), because it is the colour, not
+ * the number, that draws blocks in a sky. `Max` is the one value at which
+ * Chrome keeps every pixel's colour.
+ */
+function QualityRow({ quality, onQuality }: { quality: number; onQuality: (quality: number) => void }) {
+  const chroma = useBrowserChroma(quality);
+  const from = useFullColourFrom();
+  const max = quality >= QUALITY_LIMITS.max;
+  let hint: string | undefined;
+  if (chroma === '4:4:4') hint = `${chroma} · full colour, at several times the weight of 92 %`;
+  else if (chroma) {
+    const until = from ? ` — full colour from ${Math.round(from * 100)} %` : ' — this browser never writes full colour';
+    hint = `${chroma} · ${chromaWords(chroma)} on this browser${until}`;
+  }
+  return (
+    <FieldRow label="Quality" hint={hint} hintShown>
+      <RangeField
+        label="JPEG quality"
+        min={QUALITY_LIMITS.min}
+        max={QUALITY_LIMITS.max}
+        step={0.01}
+        value={quality}
+        onChange={onQuality}
+        format={(v) => `${Math.round(v * 100)} %`}
+      />
+      <Button size="sm" aria-pressed={max} variant={max ? 'default' : 'ghost'} onClick={() => onQuality(QUALITY_LIMITS.max)}>
+        Max
+      </Button>
+    </FieldRow>
   );
 }
 
@@ -163,19 +200,7 @@ export default function ExportTargets({
                 options={FORMAT_OPTIONS}
               />
             </FieldRow>
-            {t.format === 'jpeg' && (
-              <FieldRow label="Quality">
-                <RangeField
-                  label="JPEG quality"
-                  min={QUALITY_LIMITS.min}
-                  max={QUALITY_LIMITS.max}
-                  step={0.01}
-                  value={t.quality}
-                  onChange={(q) => patch(i, { quality: q })}
-                  format={(v) => `${Math.round(v * 100)} %`}
-                />
-              </FieldRow>
-            )}
+            {t.format === 'jpeg' && <QualityRow quality={t.quality} onQuality={(quality) => patch(i, { quality })} />}
             {t.format === 'jpeg' ? (
               <FieldRow label="Sharpen" hint={t.sharpen === 'off' ? undefined : 'for a screen, after the resize'}>
                 <Segmented size="sm" label="Sharpen for screen" value={t.sharpen} onChange={(v) => patch(i, { sharpen: v as OutputSharpen })} options={SHARPEN_OPTIONS} />

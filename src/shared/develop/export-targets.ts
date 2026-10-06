@@ -99,6 +99,10 @@ export const DEFAULT_TARGET: Readonly<ExportTarget> = Object.freeze({
  */
 export const TARGET_PRESETS: readonly { id: string; label: string; target: ExportTarget }[] = [
   { id: 'full', label: 'Full size', target: { name: 'Full', size: null, format: 'jpeg', quality: 0.92, sharpen: 'off', watermark: false } },
+  // Quality 100: the one value at which Chrome's encoder keeps the colour of
+  // every pixel (`browser-jpeg.ts` measures it on the browser in hand) — a
+  // file of Lightroom's weight at its own 100.
+  { id: 'max', label: 'Max · quality 100', target: { name: 'Max', size: null, format: 'jpeg', quality: 1, sharpen: 'off', watermark: false } },
   { id: 'web', label: 'Web · 2048 px', target: { name: 'Web', size: { mode: 'long', value: 2048 }, format: 'jpeg', quality: 0.85, sharpen: 'standard', watermark: false } },
   { id: 'feed', label: 'Feed · 1080 px across', target: { name: 'Feed', size: { mode: 'short', value: 1080 }, format: 'jpeg', quality: 0.9, sharpen: 'standard', watermark: false } },
   { id: 'mail', label: 'Mail · 2 MP', target: { name: 'Mail', size: { mode: 'megapixels', value: 2 }, format: 'jpeg', quality: 0.8, sharpen: 'low', watermark: false } },
