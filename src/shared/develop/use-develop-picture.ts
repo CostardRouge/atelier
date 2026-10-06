@@ -14,8 +14,9 @@ import { holdGrades, type HeldGrader } from '../lut/held-grader';
 import { stageFrameSize } from '../overlay/stage-size';
 import { THUMB_LONG_EDGE, THUMB_QUALITY, thumbSize } from '../roadtrip/thumbnail';
 import { canvasPixelAt, canvasPointAt } from '../ui/pan-zoom';
-import { frameSize, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
+import { frameSize, isVideoSource, loadBadgeSource, type BadgeSource } from '../roadtrip/badge-render';
 import { decodeStill, stageBudget } from '../media/still-decode';
+import { openStageStill } from './stage-sources';
 import { usePictureZoom, type PictureZoom } from '../ui/use-picture-zoom';
 import { HISTOGRAM_SAMPLE_EDGE, luminanceHistogram, type Histogram } from './histogram';
 
@@ -866,7 +867,12 @@ export function useDevelopPicture({
           }
           return { image: canvas, width: d.width, height: d.height, gpu: d.half, release: () => {} };
         })
-      : loadBadgeSource(file, videoTimeSeconds, { budgetPixels: stageBudget() });
+      : isVideoSource(file)
+        ? loadBadgeSource(file, videoTimeSeconds, { budgetPixels: stageBudget() })
+        : // A still is held for the session and BORROWED (`stage-sources.ts`):
+          // a picture stepped back to, or warmed ahead by the roll, is not
+          // decoded again, and `release` hands it back rather than closing it.
+          openStageStill(file);
     void load
       .then((s) => {
         if (cancelled) {
@@ -1715,7 +1721,7 @@ export function useDevelopPicture({
   const loupeCanvasRef = useRef<HTMLCanvasElement>(null);
   const [full, setFull] = useState<{ source: BadgeSource; file: File; rawFile: File | null; fileWidth: number } | null>(null);
   const [loupeState, setLoupeState] = useState<LoupeState>('idle');
-  const isClip = Boolean(file && (file.type.startsWith('video/') || /\.(mp4|mov|m4v|webm)$/i.test(file.name)));
+  const isClip = Boolean(file && isVideoSource(file));
   const loupeWanted = loupe && Boolean(source) && view.magnifying && !isClip;
   const sourceRef = useRef(source);
   sourceRef.current = source;

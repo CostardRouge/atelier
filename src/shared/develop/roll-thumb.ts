@@ -93,6 +93,17 @@ function encodeBaked(canvas: HTMLCanvasElement, quality: number): Promise<BakedT
  */
 const ROLL_DECODES = makeDecodeQueue(1);
 
+/**
+ * A decode in the roll's one background slot, newest first — the
+ * thumbnails' and the working previews' queue, shared since 2026-10-06
+ * with the stage's warm of the pictures beside the open one
+ * (`stage-sources.ts`), so nothing in the background ever holds two
+ * decodes at once.
+ */
+export function enqueueRollDecode<T>(task: () => Promise<T>): Promise<T> {
+  return ROLL_DECODES.enqueue(task);
+}
+
 export function pictureThumbnail(
   file: File,
   longEdge = THUMB_LONG_EDGE,

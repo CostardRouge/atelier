@@ -118,6 +118,43 @@ What it is (`roll-strip.ts`, `RollBand.tsx`, `roll-store.ts`,
   back under a hand that scrolled away.
 - **The bake order** is the open picture first, then outward.
 
+### 2.3 The picture switch (P4)
+
+←/→ decoded the next picture at the stage's budget every time, and a picture
+stepped back to again — TWICE, measured: the stage made two stage-size
+decodes of the same file per switch. Counted headless (the stage's own
+paint into its 2D canvas as the clock, never a pixel readback — §2.3's
+first version read `getImageData` and measured its own 200 ms GPU sync),
+on rolls dropped as real JPEGs, SwiftShader so the ms are relative:
+
+| Step | Before | After |
+| --- | --- | --- |
+| → the next picture, 24 MP files (6000 × 4000, decoded at 4K) | 750–1 316 ms, 2 decodes | **53–112 ms, 0 decodes** (one step 204) |
+| ← back to a picture seen, 24 MP | ~1 250 ms, 2 decodes | **90–95 ms, 0 decodes** |
+| A picture far down the roll by its route, 24 MP (cold) | 1 023 ms, 2 decodes | 636 ms, 1 decode, its two neighbours warmed after |
+| → the next picture, 1600 px files | 90–155 ms, 2 decodes | **33–67 ms, 0 decodes** |
+| Ten 24 MP pictures held | — | 8 of 10 under the 256 MiB ceiling; the two oldest let go (the second decoded again when opened, measured) |
+
+What it is (`shared/media/borrowed-cache.ts`, `shared/develop/stage-sources.ts`,
+`still-fit.ts`'s `stageHoldFor`, the roll editor's `warmNeighbours`; the rules in
+`docs/memory/develop.md`, «The stage's stills are HELD across a switch»):
+
+- **A borrowed cache**: a still decoded for the stage is held under a byte
+  ceiling (48 MiB on a phone — three at its budget —, 256 MiB on a
+  computer), the open picture BORROWED and never disposed under the stage,
+  the rest least recently used first, the newest never; a `clear()` (a
+  phone's tab hidden) dooms the borrowed one to its last release. One decode
+  per key at a time: the stage and a warm asking for the same picture share
+  it, which is also what folded the second decode per switch.
+- **The roll warms the two neighbours** once the open picture has rendered
+  (its snapshot is the signal), in the one background slot the thumbnails
+  and the previews use, the next before the previous; a clip, a sensor
+  develop, a picture that opens on a chosen file and a roll that opens on a
+  role are left alone — the stage would not decode the file in hand.
+- The hook's `release` hands a still back instead of closing it; the loupe,
+  the exports and the thumbnails keep their own decodes and the RAW cache
+  its own.
+
 ## 3. The plan, in commits
 
 - **P1 — the kept upstream.** Built (§2.1).
@@ -127,12 +164,7 @@ What it is (`roll-strip.ts`, `RollBand.tsx`, `roll-store.ts`,
   render on rest. Lightroom's way. To be MEASURED first on his phone with P1
   in place: a tone step is now six cheap passes, and a half-size render may
   buy nothing visible. Never for the export, the histogram or a snapshot.
-- **P4 — the picture switch.** ←/→ decodes the next picture at the stage
-  budget every time. Keep the last decoded stage sources in a session LRU
-  under a byte ceiling (`decoded-cache.ts` does it for a RAW; a still's
-  `ImageBitmap` is the same shape), pre-decode the two neighbours in the
-  roll's one background slot, release the far ones. Verified by the decode
-  count per switch.
+- **P4 — the picture switch.** Built (§2.3).
 - **P5 — the shell's start on a phone** (audit PERF-04, PERF-05, PERF-06):
   the entry chunk no longer importing the document stores, the Home doors
   reading one document instead of migrating every one, the gazetteer parsed

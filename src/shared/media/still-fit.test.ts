@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { MAX_STAGE_PIXELS } from '../overlay/stage-size';
-import { CONSTRAINED_STAGE_PIXELS, fitStill, stageBudgetFor } from './still-fit';
+import { CONSTRAINED_STAGE_HOLD, CONSTRAINED_STAGE_PIXELS, ROOMY_STAGE_HOLD, fitStill, stageBudgetFor, stageHoldFor } from './still-fit';
 
 describe('fitStill', () => {
   it('never enlarges, and answers the picture itself when every bound holds', () => {
@@ -37,5 +37,13 @@ describe('the stage budget per device', () => {
     expect(stageBudgetFor('constrained')).toBe(CONSTRAINED_STAGE_PIXELS);
     expect(CONSTRAINED_STAGE_PIXELS).toBeGreaterThan(2796 * 1290);
     expect(CONSTRAINED_STAGE_PIXELS).toBeLessThan(MAX_STAGE_PIXELS / 2);
+  });
+
+  it('holds three stage stills on a phone and eight 4K frames on a computer', () => {
+    expect(stageHoldFor('constrained')).toBe(CONSTRAINED_STAGE_HOLD);
+    expect(stageHoldFor('roomy')).toBe(ROOMY_STAGE_HOLD);
+    expect(CONSTRAINED_STAGE_HOLD).toBeGreaterThanOrEqual(3 * CONSTRAINED_STAGE_PIXELS * 4);
+    expect(CONSTRAINED_STAGE_HOLD).toBeLessThan(4 * CONSTRAINED_STAGE_PIXELS * 4);
+    expect(ROOMY_STAGE_HOLD).toBeGreaterThanOrEqual(8 * MAX_STAGE_PIXELS * 4);
   });
 });

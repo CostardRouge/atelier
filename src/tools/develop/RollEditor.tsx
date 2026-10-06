@@ -1,7 +1,7 @@
 import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
-import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
@@ -52,6 +52,7 @@ import {
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
 import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
+import { warmStageStill } from '../../shared/develop/stage-sources';
 import {
   addPictures,
   addVariant,
@@ -467,12 +468,39 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     };
   }, [files, loadedFor, idsKey, keepThumb]);
 
+  // The two pictures beside the open one, decoded for the stage AHEAD of
+  // ←/→ (P4 of `docs/develop-performance.md`, `stage-sources.ts`): once the
+  // open picture has rendered — its snapshot is the signal — in the roll's
+  // one background slot, the next before the previous. Left alone: a clip
+  // (a video element, never held), a picture developed from its sensor (its
+  // RAW has its own cache), and one that opens on a chosen file of its own
+  // or the roll's — the stage would not decode the file in hand.
+  const filesRef = useRef(files);
+  filesRef.current = files;
+  const warmNeighbours = useCallback(
+    (id: string) => {
+      const { pictures, opensOn } = latest.current;
+      if (opensOn) return;
+      const skip = (p: RollPicture) => isIgnored(p) || !passesFilter(p);
+      // Newest first in the slot, so the previous is queued first.
+      for (const by of [-1, 1]) {
+        const nid = stepPicture(pictures, id, by, skip);
+        if (!nid || nid === id) continue;
+        const p = pictures.find((x) => x.id === nid);
+        const file = filesRef.current.get(nid);
+        if (!p || !file || isClipPicture(p) || baseRung(p.develop?.base) > 0 || p.rendition) continue;
+        warmStageStill(file);
+      }
+    },
+    [passesFilter],
+  );
   const handleSnapshot = useCallback(
     (id: string, blob: Blob, aspect: number) => {
       tried.current.add(id);
       keepThumb(id, blob, aspect);
+      warmNeighbours(id);
     },
-    [keepThumb],
+    [keepThumb, warmNeighbours],
   );
   // Each thumbnail's shape, which is its cell's (`roll-strip.ts`) — read from
   // the store where it was kept, measured once and kept where it was not

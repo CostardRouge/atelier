@@ -639,6 +639,44 @@ release skips whatever `source` currently is, and that one waits its turn.
 Otherwise the next paint draws a bitmap of width 0 and the cube pass logs
 `GL error 0x501` on its first draw.
 
+## The stage's stills are HELD across a switch, and the neighbours warmed (2026-10-06, P4 of `docs/develop-performance.md`)
+
+←/→ decoded the next picture at the stage's budget every time, twice
+(measured: two stage-size decodes of one file per switch), and a picture
+stepped back to again — 750–1 316 ms a step on 24 MP files headless, 53–112
+after, 0 decodes. Rules:
+
+- **A still decoded for the stage lives in a BORROWED cache**
+  (`media/borrowed-cache.ts`, pure, specced; the instance in
+  `develop/stage-sources.ts`, keyed `fileKey@budget`), under a byte ceiling
+  (`still-fit.ts`, `stageHoldFor`: 48 MiB on a phone, three stage pictures;
+  256 MiB on a computer). The open picture is BORROWED — counted, never
+  evicted under the stage — and `BadgeSource.release` HANDS IT BACK instead
+  of closing it; the cache closes a bitmap only once nobody holds it and the
+  room is needed, least recently used first, the newest never. `clear()`
+  (a phone's tab hidden, the RAW cache's rule) disposes the free ones now
+  and dooms a borrowed one to its last release. A value given under a key
+  already held is disposed unless it IS the held one: two decodes of one
+  picture never both stay.
+- **One decode per key at a time** (`inFlight`): the stage and a warm
+  asking for the same picture share it. That is what folded the second
+  decode per switch.
+- **The roll warms the two pictures beside the open one** (`warmNeighbours`
+  in `RollEditor.tsx`) once the open picture has RENDERED — its snapshot is
+  the signal, 700 ms after the paint — in the one background slot
+  (`enqueueRollDecode`, newest first, the next queued after the previous so
+  it decodes first). Left alone: a clip (a video element, never held), a
+  picture developed from its sensor (its RAW has its own cache, `raw.md`),
+  one that opens on a chosen file of its own (`rendition`) and a roll that
+  opens on a role (`opensOn`) — the stage would not decode the file in hand.
+- **Only the stage's own decode goes through the cache**: `isVideoSource`
+  (one rule in `badge-render.ts`, read by the hook too) sends a clip to
+  `loadBadgeSource`; the loupe, the exports, the thumbnails and the RAW keep
+  their own decodes and are never held here.
+- Not driven on his phone; the ceiling at 48 MiB is arithmetic on the
+  budget, not a measurement there. Bench and its two traps: `testing.md`,
+  «The switch bench».
+
 ## The stage's grader LIVES with the source — never disposed for want of work (2026-10-02)
 
 **The freeze he reported (*"ui / app freeze"* while editing his DNGs with

@@ -89,7 +89,12 @@ is where a phone dies and why the rules below are about RAWs first.
   decode, never the gain: the stage stores the gain the first decode
   measured, so its second ask is the same picture. Media bytes are still
   never persisted (`local-first.md`); this is a session cache like the held
-  originals.
+  originals. **A STILL decoded for the stage is held the same way since
+  2026-10-06** (`develop/stage-sources.ts` over `media/borrowed-cache.ts`,
+  `stageHoldFor`: 48 MiB on a phone — three at the 3.7 MP budget —, 256 MiB
+  on a computer), the open one borrowed and never let go under the stage,
+  the free ones dropped when the tab is hidden — `develop.md`, «The stage's
+  stills are HELD across a switch».
 
 **The held originals follow the same class**: a constrained device gets a
 flat 192 MiB ceiling (`CONSTRAINED_HELD_CEILING`) whatever the browser

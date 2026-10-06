@@ -71,3 +71,20 @@ export const CONSTRAINED_STAGE_PIXELS = 2560 * 1440;
 export function stageBudgetFor(klass: DeviceClass): number {
   return klass === 'constrained' ? CONSTRAINED_STAGE_PIXELS : MAX_STAGE_PIXELS;
 }
+
+const MIB = 1024 * 1024;
+
+/**
+ * How much the session may HOLD of stills decoded for the stage
+ * (`develop/stage-sources.ts`), so a picture stepped back to — or warmed
+ * ahead by the roll — is not decoded again. A phone holds three at its
+ * budget (3.7 MP × 4 B = 15 MB each: the open picture and its two
+ * neighbours); a computer eight 4K frames (33 MB each). The open picture is
+ * borrowed and counted, never let go under the stage.
+ */
+export const CONSTRAINED_STAGE_HOLD = 48 * MIB;
+export const ROOMY_STAGE_HOLD = 256 * MIB;
+
+export function stageHoldFor(klass: DeviceClass): number {
+  return klass === 'constrained' ? CONSTRAINED_STAGE_HOLD : ROOMY_STAGE_HOLD;
+}
