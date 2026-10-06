@@ -916,8 +916,11 @@ export default function TripOverview({
     />
   );
 
-  // The phone's ⋯: the same two choices as the two switches, one item each.
-  const viewItem = (id: string, icon: ReactNode, text: string, title: string, current: boolean, onSelect: () => void, rule = false): OverflowItem => ({
+  // The phone's ⋯: the same two choices as the two switches, one item each,
+  // then the trip's own verbs the wide bar draws as buttons (Deduce, Trip
+  // settings) — the ⋯ took the bar's room, so it carries the bar's verbs. A
+  // verb (`current` null) wears no tick.
+  const viewItem = (id: string, icon: ReactNode, text: string, title: string, current: boolean | null, onSelect: () => void, rule = false): OverflowItem => ({
     id,
     rule,
     title,
@@ -926,7 +929,9 @@ export default function TripOverview({
       <span className="flex items-center gap-2.5">
         <span aria-hidden="true" className="inline-flex text-muted [&>svg]:w-4 [&>svg]:h-4">{icon}</span>
         <span className="flex-1">{text}</span>
-        <span aria-hidden="true" className={`inline-flex text-accent-ink [&>svg]:w-4 [&>svg]:h-4 ${current ? '' : 'invisible'}`}>{Icons.check}</span>
+        {current !== null && (
+          <span aria-hidden="true" className={`inline-flex text-accent-ink [&>svg]:w-4 [&>svg]:h-4 ${current ? '' : 'invisible'}`}>{Icons.check}</span>
+        )}
         {current && <span className="sr-only">(shown)</span>}
       </span>
     ),
@@ -936,6 +941,20 @@ export default function TripOverview({
     viewItem('map', Icons.map, 'Map', 'The trip as its route: each stage at its place, with its days', overview === 'map', () => chooseOverview('map')),
     viewItem('rungs', Icons.grid, 'Days as rungs', 'Each day as its rung: nothing, drafted, published once, twice, more', view === 'rungs', () => chooseView('rungs'), true),
     viewItem('pictures', Icons.image, 'Days as pictures', 'Each told day as the hook of its piece', view === 'pictures', () => chooseView('pictures')),
+    ...(onDeduceFrom
+      ? (deduceSources ?? []).map((id, i) =>
+          viewItem(
+            `deduce-${id}`,
+            Icons.search,
+            (deduceSources ?? []).length > 1 ? `Deduce from ${id}` : 'Deduce stages',
+            `Work the stages out from where ${id} says each day was`,
+            null,
+            () => onDeduceFrom(id),
+            i === 0,
+          ),
+        )
+      : []),
+    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => setEditingDetails(true), !onDeduceFrom || !(deduceSources ?? []).length),
   ];
 
   // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
@@ -1057,7 +1076,7 @@ export default function TripOverview({
                   segmented pills they left the trip's name a few letters
                   ("Australi…" at 360px). The view itself is on screen, so the
                   switch need not say which one is shown. */}
-              <OverflowMenu label="How the trip is shown" items={viewItems} size="md" variant="default" />
+              <OverflowMenu label="Views and actions for this trip" items={viewItems} size="md" variant="default" />
             </>
           }
         >
