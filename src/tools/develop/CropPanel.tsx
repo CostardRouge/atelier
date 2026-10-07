@@ -1,5 +1,4 @@
 import { isDefaultFraming, type Framing } from '../../shared/media/framing';
-import { LEVEL_SAMPLE_EDGE, describeTilt, levelFine, lumaOf, measureTilt } from '../../shared/develop/auto-level';
 import { splitRotation } from '../../shared/develop/crop-rect';
 import { describeAspect } from '../../shared/develop/crop-aspect';
 import { developButtonClass } from '../../shared/develop/develop-classes';
@@ -55,6 +54,7 @@ export default function CropPanel({
   clip = false,
   subjectCrop,
   switches,
+  onAutoLevel,
   onTold,
 }: {
   picture: DevelopPicture;
@@ -71,26 +71,12 @@ export default function CropPanel({
   subjectCrop?: SubjectCropVerb;
   /** Auto level and Crop to subject as switches (`use-crop-switches.ts`); omitted, they only apply. */
   switches?: CropSwitches;
+  /** Auto level's run — held by the workbench, so the one `Auto` can run it too (`use-auto-all.ts`). */
+  onAutoLevel: () => void;
   onTold?: (message: string) => void;
 }) {
   const { framing, zone } = crop;
   const touched = !isDefaultFraming(framing) || aspect !== 'original';
-  // Auto level: the picture as shot, read whole and once, on the click.
-  const autoLevel = () => {
-    const sample = picture.asShotSample(LEVEL_SAMPLE_EDGE);
-    const ctx = sample?.getContext('2d', { willReadFrequently: true });
-    if (!sample || !ctx) {
-      onTold?.('the picture has not been read yet');
-      return;
-    }
-    const tilt = measureTilt(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
-    const write = () => {
-      if (tilt && tilt.tilt !== 0) crop.straighten(levelFine(tilt, framing.flipX, framing.flipY));
-    };
-    if (switches) switches.record('level', write);
-    else write();
-    onTold?.(`auto level · ${describeTilt(tilt)}`);
-  };
   const levelState = switches?.state('level') ?? 'off';
   const subjectState = switches?.state('subject') ?? 'off';
   return (
@@ -190,7 +176,7 @@ export default function CropPanel({
             shape="control"
             state={levelState}
             onClick={() => {
-              if (!switches?.turnOff('level')) autoLevel();
+              if (!switches?.turnOff('level')) onAutoLevel();
             }}
             disabled={!picture.source && levelState === 'off'}
             hint="Find the horizon, or an upright, by itself — the strongest line near level — and straighten on it"

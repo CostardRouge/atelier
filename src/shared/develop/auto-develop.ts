@@ -52,6 +52,16 @@ export const TONE_CLIP = 0.0025;
 /** Where the median is aimed, and how far it is actually pulled there. */
 const MID_TARGET = 0.5;
 const MID_PULL = 0.6;
+/**
+ * How far Auto may BEND the midtones, as a gamma: a stop and a half either
+ * way, about what Lightroom's Auto moves an exposure. The slider itself
+ * reaches 0.1..10 (`curves.ts`); a median sitting at the white point — a
+ * snow field, a white wall, a page — asks the solve for a gamma near 0 and
+ * the slider's own floor still crushed the picture to black (measured on a
+ * high-key façade: gamma 0.1). Taste constants, named for his pictures.
+ */
+export const AUTO_GAMMA_MIN = 0.55;
+export const AUTO_GAMMA_MAX = 1.8;
 /** Narrower than this and there is no range to stretch — a flat grey card, a blank frame. */
 const MIN_TONE_SPAN = 0.02;
 
@@ -138,7 +148,7 @@ export function autoTone(stats: SourceStats): Levels | null {
   if (mapped > 0.001 && mapped < 0.999) {
     const target = mapped + (MID_TARGET - mapped) * MID_PULL;
     if (target > 0.001 && target < 0.999) {
-      gamma = clamp(Math.log(mapped) / Math.log(target), MIN_LEVEL_GAMMA, MAX_LEVEL_GAMMA);
+      gamma = clamp(Math.log(mapped) / Math.log(target), Math.max(AUTO_GAMMA_MIN, MIN_LEVEL_GAMMA), Math.min(AUTO_GAMMA_MAX, MAX_LEVEL_GAMMA));
     }
   }
 

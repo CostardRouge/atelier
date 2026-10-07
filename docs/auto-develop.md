@@ -117,7 +117,7 @@ through the Batch API. Price is not the issue; local-first is.
    maths, never a textbook's; a clamp or a refusal said out loud; nothing
    written where nothing was measured.
 
-## 5. Approach 1 — three commits
+## 5. Approach 1 — three commits, then more
 
 Each verb lives in a pure module beside a `.test.ts`, is drawn by the panel
 it belongs to, and reports what it did (or why not) through the told line.
@@ -157,6 +157,32 @@ locked format's ratio about its centre, fitted inside the picture through
 covers almost nothing or almost everything is refused with the reason. The
 model's answer is a task (`tasks.md`) while it comes.
 
+**A4 — Auto detail — BUILT 2026-10-07** (`auto-detail.ts`, the head of the
+Detail tab), from his «everything that could be autodevelop». The noise
+reduction per STOP of ISO above a floor and the sharpen by the MATERIAL the
+picture is developed from (the sensor, the camera's file, a proxy — the
+last said, not hidden), the masking rising with the ISO, the radius and the
+Detail left to the hand; no ISO → the sharpen alone, said. A switch over the
+whole detail record (`value-switch.ts`). Constants named for his pictures.
+
+**A5 — Auto upright — BUILT 2026-10-07** (`auto-keystone.ts`, the Perspective
+fold): the converging verticals and horizontals read from the as-shot sample
+and the two perspective sliders SOLVED against `keystoneMatrix` — the spec
+proves the lines come out parallel through the matrix itself —, the zoom
+that hides the emptied corners re-solved, a confidence that refuses lines
+which do not agree on one vanishing point. The three passes of the
+measurement and the two biases they cured: `docs/memory/develop-roll.md`.
+
+**ONE `Auto`, and Auto at open — BUILT 2026-10-07** (`auto-plan.ts`,
+`use-auto-all.ts`, the *Automatic* section of Develop's settings): the plan
+is the device's — which of the six steps the one `Auto` runs, in a fixed
+order, each through its own switch, and whether an untouched photograph gets
+it the first time it opens (journaled `via: 'auto'`, one undo). Tone, bands
+and detail start ticked; colour, level and upright wait for his tick, each
+having a picture it is exactly wrong on. Auto tone gained a reach on the way
+(a high-key picture asked it for a gamma near 0). Rules and the drive in
+`docs/memory/develop-roll.md`, «ONE `Auto`».
+
 Verified: the pure modules by their specs; the panels driven in headless
 Chromium against the dev server where a picture can be dropped on a roll
 (the model needs a GPU and a real picture, so A3's segmentation is driven
@@ -164,16 +190,27 @@ only where the gate already runs it).
 
 ## 6. Approach 2 — collect first, train outside, infer inside
 
-**B1 — The vignette as shot, beside the record.** When a picture is developed
-in a roll, a small vignette of it AS SHOT (256 px long edge, JPEG, a few kB)
-is baked once and kept in the roll store's thumbs beside the delivered one,
-keyed by picture id and never on the document — the same store, the same
-pruning. Cheap, local, no document migration. Without it there is no pair.
+**B1 — The vignette as shot, beside the record — BUILT 2026-10-07**
+(`shot-record.ts`, `shot-bake.ts`, `use-roll-shots.ts`, the `shots` store at
+`atelier-develop` v5, the *Learning* section of Develop's settings). Every
+photograph whose file is in hand — developed or not: the pair is worth more
+when the record is still empty, since the develop then arrives on top of it —
+gets a 256 px JPEG of it as decoded, the `SourceStats` the Auto verbs read
+measured off that canvas, and the camera's facts (`shotExifOf`: never the GPS,
+never a caption), keyed by picture id, never on the document, pruned with the
+picture. A device choice, kept by DEFAULT (his instruction of the day: a
+question becomes a settings row); Off clears the store. Driven headless;
+details and rules in `docs/memory/develop-roll.md`.
 
-**B2 — The training dump.** A verb on the roll gallery writes ONE file: every
-roll's pictures as `{ vignette, stats, exif summary, develop, crop, layers
-without rasters }`, the records normalised. He takes it to a trainer outside
-the browser. Nothing leaves by itself.
+**B2 — The training dump — BUILT 2026-10-07** (`training-dump.ts`, the
+*Training file* row of Develop's settings → Learning, beside the switch
+rather than on the gallery: one place, on every device). ONE file, every
+roll's paired pictures as `{ roll, picture, edits, shot: { vignette, stats,
+exif }, record: { develop, crop, keystone, lens, detail, vignette, border,
+repair, layers, look } }`, the records normalised through the roll's own
+readers, an untouched picture a line too, a look's lattice left out, the
+unpaired counted and said. He takes it to a trainer outside the browser.
+Nothing leaves by itself. Driven headless; `docs/memory/develop-roll.md`.
 
 **B3 — Outside the repo.** A script (PyTorch or similar, not in this
 repository) trains a small network — a vignette and the as-shot stats in,
@@ -224,7 +261,7 @@ tests, and it goes toward "the browser is the runtime today, not forever".
   Anthropic, opt-in?
 - If yes, the key's home: the browser (`localStorage`, no Winnow change) or
   a Winnow relay (cleaner, one route on his server).
-- Whether B1's vignette may be kept with the roll (a few kB per picture,
-  local, pruned with it).
+- ~~Whether B1's vignette may be kept with the roll~~ — a settings row since
+  2026-10-07 (Develop's settings → Learning), kept by default, his to switch.
 - The A1 thresholds and the A2 confidence floor are taste constants, named
   in their modules; move them from his pictures, not from an argument.

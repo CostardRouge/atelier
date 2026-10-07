@@ -1,7 +1,28 @@
+import AutoSwitch from '../../shared/develop/AutoSwitch';
 import DevelopFold from '../../shared/develop/DevelopFold';
 import { RangeSlider } from '../../shared/develop/DevelopSliders';
+import type { AutoState } from '../../shared/develop/auto-slots';
+import type { DetailFacts } from '../../shared/develop/auto-detail';
 import { developLinkClass } from '../../shared/develop/develop-classes';
 import { DEFAULT_DETAIL, DETAIL_RANGES, describeDetail, isDefaultDetail, type DetailSettings } from '../../shared/render/detail';
+import { FieldRow } from '../../shared/ui/Inspector';
+
+const AUTO_HINT =
+  'Auto sets the noise reduction from the ISO the file says — nothing under ISO 800 for luminance, a little colour from 400, each stop above adding more and holding the sharpen off the strong edges — and the sharpen from what the picture is developed from: the most on the sensor’s own data, less on the camera’s JPEG, none on a proxy. The radius and Detail are yours. A switch: a second click puts back what was there.';
+
+const MATERIAL_WORDS: Readonly<Record<DetailFacts['material'], string>> = {
+  sensor: 'the sensor',
+  camera: 'the camera’s file',
+  proxy: 'a proxy',
+};
+
+/** The Detail tab's automatic verb, held by the workbench (`use-value-switch.ts`): its switch and what it reads. */
+export interface AutoDetailVerb {
+  state: AutoState;
+  facts: DetailFacts;
+  /** Apply, or take back when on. */
+  onClick: () => void;
+}
 
 const NOISE_HINT =
   'Luminance smooths the grain of a high ISO while keeping every edge — a pixel is averaged only with neighbours of a similar brightness, so a wall goes quiet and a hairline stays a hairline. Colour removes the coloured speckle on its own; it can go much further than luminance without softening anything the eye reads, because edges live in the luminance. Both run on the picture BEFORE the develop, where the noise is what the sensor left rather than what a lift made of it.';
@@ -87,12 +108,15 @@ export default function DetailPanel({
   onChange,
   maskView = false,
   onMaskView,
+  auto,
 }: {
   value: DetailSettings | null;
   onChange: (detail: DetailSettings | null) => void;
   /** The stage paints the sharpen's Masking weight instead of the picture. */
   maskView?: boolean;
   onMaskView?: (on: boolean) => void;
+  /** Auto detail from the ISO and the material; omitted, the tab is the sliders alone. */
+  auto?: AutoDetailVerb;
 }) {
   const detail: DetailSettings = value ?? { ...DEFAULT_DETAIL };
   const write = (key: Key, v: number) => {
@@ -116,6 +140,23 @@ export default function DetailPanel({
 
   return (
     <>
+      {auto && (
+        <DevelopFold id="auto-detail" title="Auto" info={<p>{AUTO_HINT}</p>} foldable={false}>
+          <FieldRow label="From">
+            <AutoSwitch
+              shape="control"
+              state={auto.state}
+              onClick={auto.onClick}
+              hint="Set the noise reduction from the ISO and the sharpen from what the picture is developed from"
+            >
+              Auto detail
+            </AutoSwitch>
+            <span className="font-mono text-3xs text-faint leading-relaxed">
+              {auto.facts.iso !== null ? `ISO ${Math.round(auto.facts.iso)}` : 'no ISO in the file'} · {MATERIAL_WORDS[auto.facts.material]}
+            </span>
+          </FieldRow>
+        </DevelopFold>
+      )}
       <DevelopFold
         id="noise"
         title="Noise"

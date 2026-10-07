@@ -269,8 +269,8 @@ export interface RollPicture {
   makingOf?: MakingOf;
 }
 
-/** How a step came to be, when it was not the author's own gesture on this picture. */
-export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier';
+/** How a step came to be, when it was not the author's own gesture on this picture: `auto` is the `Auto` switch run at open. */
+export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier' | 'auto';
 
 /**
  * A step's VALUES: the sections it changed, as they stood after it — the
@@ -584,7 +584,7 @@ export const PICTURE_EDITS: readonly PictureEdit[] = [
 ];
 
 const EDIT_IDS: ReadonlySet<string> = new Set(PICTURE_EDITS);
-const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier']);
+const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier', 'auto']);
 
 /** A step's stored values read through the same readers a picture's fields are. */
 function readSectionValues(raw: unknown, sections: readonly PictureEdit[]): SectionValues {
