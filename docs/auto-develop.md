@@ -165,6 +165,14 @@ last said, not hidden), the masking rising with the ISO, the radius and the
 Detail left to the hand; no ISO → the sharpen alone, said. A switch over the
 whole detail record (`value-switch.ts`). Constants named for his pictures.
 
+**A5 — Auto upright — BUILT 2026-10-07** (`auto-keystone.ts`, the Perspective
+fold): the converging verticals and horizontals read from the as-shot sample
+and the two perspective sliders SOLVED against `keystoneMatrix` — the spec
+proves the lines come out parallel through the matrix itself —, the zoom
+that hides the emptied corners re-solved, a confidence that refuses lines
+which do not agree on one vanishing point. The three passes of the
+measurement and the two biases they cured: `docs/memory/develop-roll.md`.
+
 Verified: the pure modules by their specs; the panels driven in headless
 Chromium against the dev server where a picture can be dropped on a roll
 (the model needs a GPU and a real picture, so A3's segmentation is driven

@@ -1679,7 +1679,8 @@ is `proxy` → a proxy; else the camera's file). Rules:
   detail record yet) is not "nothing to put back" — the first turn-off left
   every number standing; the restore is BOXED (`{ value }`) since.
 - The Auto row's three verbs keep `auto-slots.ts` (disjoint fields on one
-  record); a verb that writes a RECORD whole takes the value switch.
+  record); a verb that writes a RECORD whole takes the value switch. Auto
+  upright is its second user.
 
 Driven headless (`detail.mjs`, a canvas JPEG stamped ISO 3200 through
 `buildExifBlock` + `withExifBlock`): the caption `ISO 3200 · the camera’s
@@ -1689,3 +1690,55 @@ into the sliders and, after the autosave, the roll; off → every number 0 and
 to the picture's hash right after a drop races the editor's remount and its
 tab click is lost — click after the drop settles, and retry until the tab's
 own sliders exist.
+
+## Auto upright: the keystone solved from the lines that converge (2026-10-07, A5 of `docs/auto-develop.md`)
+
+`shared/develop/auto-keystone.ts` (pure, 11 specs) + an *Auto upright*
+switch at the head of the Perspective fold (`KeystonePanel`'s `auto`), held
+by the workbench over the whole keystone through `use-value-switch.ts`.
+Lightroom's Upright and Capture One's Keystone as ONE verb that SETS
+Vertical, Horizontal and Zoom and leaves Turn and Stretch to the hand. Rules:
+
+- **Solved against the matrix, not a textbook.** `keystoneMatrix` divides by
+  `1 + h·x + v·y` in its SQUARE space (both axes in heights), and a line
+  `x = u·(1 − y/Y)` converging to a vanishing point `Y` goes vertical under
+  it exactly when `v = −1/Y`. So every near-vertical edge is read as a tilt
+  `t = dx/dy` and the crossing `u = x − t·y` of the middle row, and the
+  REGRESSION of `t` on `u` (weighted by edge strength) gives `v` directly;
+  `vertical = 100·v / PERSPECTIVE_REACH` (exported for it). The horizontal
+  axis is the same reading with x and y swapped. The spec maps a converging
+  line's two ends through `keystoneMatrix` with the solved value and asserts
+  they land within a hundredth of the width of each other.
+- **Three passes, two of them found by measuring.** Pass 1 reads the edges
+  within `MAX_LEAN` (15°) and is what the answer is TRUSTED on (its r² is the
+  confidence, under `CONFIDENCE_FLOOR` 0.35 the lines do not agree on one
+  point; `MIN_AXIS_SHARE` 0.08 of the strong edges and a `MIN_SPREAD` of 0.12
+  heights between crossings, or there is nothing to right). Pass 2 takes back
+  every edge within `RESIDUAL_LEAN` (4°) of that slope's line, out to twice
+  the lean — the hard cut had kept only the inner pixels of a line leaning
+  14° and read every slope 2 % low. Pass 3 reads each LINE from where its
+  PIXELS are (edges clustered by crossing within `CLUSTER_GAP`, each line
+  fitted `pos = a + b·depth`, the lines' slopes regressed on their
+  crossings): the gradient's angle is exact near the axis and a few tenths of
+  a degree off at 14°, which still read the slope 1.3 % low; a position fit
+  has no such bias and the spec holds the slope to 0.005.
+- **Lines that spread but do not lean say upright already** (r² under the
+  floor with a slope under two slider units: value 0, dashed); a lean the
+  lines do not agree on is REFUSED and said (`no lines to right on`); one
+  pole or a flat field is nothing. Nothing to right is recorded as a press
+  that changed nothing, never a stale warp.
+- **The zoom is re-solved to cover** (`zoomToCover`): the smallest scale,
+  1..3, at which the inverse matrix maps every point of the frame's boundary
+  inside the source — bisection over the matrix's own `keystoneSampleMatrix`
+  on the SOURCE's aspect, the one `picture-geometry.ts` hands the pass. The
+  corrected frame is then whole, and not a pixel more than it takes.
+- The picture is read AS SHOT (`asShotSample(512)`, before any warp), so the
+  verb SETS and a second press is the same answer; a flip or a quarter turn
+  need no account — the keystone lives in the source's frame, before the
+  crop.
+
+Driven headless (`upright.mjs`, a 1800 × 1200 façade of five verticals
+converging 2.5 heights above the centre): *Auto upright* wrote `vertical 89`
+(the matrix's 88.9 for `k = 0.4`), `horizontal 0`, `zoom 1.21`, stored after
+the autosave; off → 0 / 0 / 1; ⌘Z → relit with the numbers back. Not driven on
+a photograph of his, where the taste constants are to be moved from.

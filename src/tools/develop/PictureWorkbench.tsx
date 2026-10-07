@@ -63,7 +63,8 @@ import { fetchHeld } from '../../shared/sources/held-fetch';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
 import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
-import { sameKeystone, type Keystone } from '../../shared/render/geometry';
+import { isDefaultKeystone, sameKeystone, type Keystone } from '../../shared/render/geometry';
+import { UPRIGHT_SAMPLE_EDGE, describeUpright, lumaOf, measureUpright, uprightKeystone } from '../../shared/develop/auto-keystone';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
   DEFAULT_BRUSH_HARDNESS,
@@ -2058,6 +2059,46 @@ export default function PictureWorkbench({
     [detailSwitch, detailFacts, detailDraft],
   );
 
+  // --- Auto upright (`auto-keystone.ts`) ----------------------------------------
+  // The picture AS SHOT, read whole and once on the click — the source before
+  // any warp, so the verb SETS the perspective rather than nudging a warped
+  // view —, the two sliders solved against the matrix, the zoom re-solved on
+  // the source's own frame (the one the keystone pass hands the matrix).
+  const uprightSwitch = useValueSwitch<Keystone | null>({
+    pictureKey: entry.id,
+    verb: 'upright',
+    value: keystoneDraft,
+    same: sameKeystone,
+    write: setKeystoneDraft,
+    onTold: tell,
+    label: 'auto upright',
+    words: 'the perspective',
+  });
+  const autoUprightVerb = useMemo(
+    () => ({
+      state: uprightSwitch.state,
+      disabled: !source,
+      onClick: () => {
+        if (uprightSwitch.turnOff()) return;
+        const sample = picture.asShotSample(UPRIGHT_SAMPLE_EDGE);
+        const ctx = sample?.getContext('2d', { willReadFrequently: true });
+        if (!sample || !ctx) {
+          tell('auto upright · the picture has not been read yet');
+          return;
+        }
+        const up = measureUpright(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
+        const next = uprightKeystone(up, keystoneDraft, source ? source.width / source.height : 1);
+        // Nothing to right: recorded as a press that changed nothing (dashed), never a stale warp.
+        if (!next) {
+          uprightSwitch.record(keystoneDraft, `auto upright · ${describeUpright(up)}`);
+          return;
+        }
+        uprightSwitch.record(isDefaultKeystone(next) ? null : next, `auto upright · ${describeUpright(up)} · zoom ${next.scale.toFixed(2)}×`);
+      },
+    }),
+    [uprightSwitch, picture, keystoneDraft, source, tell],
+  );
+
   /**
    * The two verbs the HOST puts in the well beside the clipboard glyphs: their
    * SHAPE here, their colour at the call site.
@@ -2734,7 +2775,7 @@ export default function PictureWorkbench({
           {/* The warps are a photograph's: a clip's Crop tab is the crop alone. */}
           {tab === 'crop' && !clip ? (
             <>
-              <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
+              <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} auto={autoUprightVerb} />
               <LensPanel
                 value={lensDraft}
                 onChange={setLensDraft}
