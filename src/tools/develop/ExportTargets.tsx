@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, type ReactNode } from 'react';
 import {
   MAX_TARGETS,
   OUTPUT_SHARPEN_LEVELS,
@@ -13,11 +13,12 @@ import {
   type SizeMode,
   type ExportFormat,
 } from '../../shared/develop/export-targets';
-import { FieldRow, RangeField, SelectField, SwitchRow, TextField, fieldClass } from '../../shared/ui/Inspector';
+import { FieldRow, RangeField, Readout, SelectField, SwitchRow, TextField, fieldClass } from '../../shared/ui/Inspector';
 import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
 import { chromaWords } from '../../shared/media/jpeg-chroma';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
+import OverflowMenu from '../../shared/ui/OverflowMenu';
 import Segmented from '../../shared/ui/Segmented';
 import { Icons } from '../../shared/ui/icons';
 import { deviceClass } from '../../shared/lib/device-class';
@@ -91,18 +92,18 @@ function SizeValue({
 /**
  * A JPEG target's quality, and what this browser's encoder keeps of the
  * COLOUR at it — measured (`browser-jpeg.ts`), because it is the colour, not
- * the number, that draws blocks in a sky. `Max` is the one value at which
- * Chrome keeps every pixel's colour.
+ * the number, that draws blocks in a sky. The line under the slider says the
+ * state at THIS quality and where full colour starts; `Max` is that value.
  */
 function QualityRow({ quality, onQuality }: { quality: number; onQuality: (quality: number) => void }) {
   const chroma = useBrowserChroma(quality);
   const from = useFullColourFrom();
   const max = quality >= QUALITY_LIMITS.max;
   let hint: string | undefined;
-  if (chroma === '4:4:4') hint = `${chroma} · full colour, at several times the weight of 92 %`;
+  if (chroma === '4:4:4') hint = '4:4:4 · full colour — several times the weight of 92 %';
   else if (chroma) {
-    const until = from ? ` — full colour from ${Math.round(from * 100)} %` : ' — this browser never writes full colour';
-    hint = `${chroma} · ${chromaWords(chroma)} on this browser${until}`;
+    const until = from === null ? ' — never full on this browser' : from ? ` — full from ${Math.round(from * 100)} %` : '';
+    hint = `${chroma} · ${chromaWords(chroma)}${until}`;
   }
   return (
     <FieldRow label="Quality" hint={hint} hintShown>
@@ -115,7 +116,7 @@ function QualityRow({ quality, onQuality }: { quality: number; onQuality: (quali
         onChange={onQuality}
         format={(v) => `${Math.round(v * 100)} %`}
       />
-      <Button size="sm" aria-pressed={max} variant={max ? 'default' : 'ghost'} onClick={() => onQuality(QUALITY_LIMITS.max)}>
+      <Button size="sm" aria-pressed={max} variant={max ? 'default' : 'ghost'} title="Quality 100 %" onClick={() => onQuality(QUALITY_LIMITS.max)}>
         Max
       </Button>
     </FieldRow>
@@ -127,6 +128,10 @@ function QualityRow({ quality, onQuality }: { quality: number; onQuality: (quali
  * at the click, each other one into a sub-folder named after it, every file
  * keeping its picture's own name. Each picture is rendered once and cut to
  * every target.
+ *
+ * Every target reads the same way — *Into · Size · Format · Quality ·
+ * Sharpen · Watermark* — the first's *Into* being the folder itself, the
+ * others' the name of their sub-folder.
  */
 export default function ExportTargets({
   targets,
@@ -137,6 +142,13 @@ export default function ExportTargets({
 }) {
   const patch = (i: number, change: Partial<ExportTarget>) =>
     onTargets(targets.map((t, k) => (k === i ? { ...t, ...change } : t)));
+  const add = (preset: ExportTarget) => {
+    // A second target of one name would share its sub-folder.
+    const taken = new Set(targets.slice(1).map((t, k) => targetFolder(t.name, k + 1).toLowerCase()));
+    let name = preset.name;
+    for (let n = 2; taken.has(name.toLowerCase()); n += 1) name = `${preset.name} ${n}`;
+    onTargets([...targets, { ...preset, name }]);
+  };
   // A 16-bit picture is read back whole off the GPU: 8 bytes a pixel, and a
   // phone's tab has no room for a 48-megapixel one. The run writes a JPEG
   // there and says so; the panel says it first.
@@ -148,29 +160,25 @@ export default function ExportTargets({
         const folder = targetFolder(t.name, i);
         const clash = i > 0 && names.has(folder.toLowerCase());
         if (i > 0) names.add(folder.toLowerCase());
+        let where: ReactNode = <Readout muted>the folder you choose</Readout>;
+        if (i > 0) {
+          where = (
+            <>
+              <TextField label="Sub-folder" value={t.name} placeholder={`Target ${i + 1}`} onChange={(name) => patch(i, { name })} />
+              <span className="flex-none font-mono text-xs text-faint" aria-hidden="true">
+                /
+              </span>
+              <IconButton size="sm" variant="ghost" label={`Remove the ${folder} target`} onClick={() => onTargets(targets.filter((_, k) => k !== i))}>
+                {Icons.trash}
+              </IconButton>
+            </>
+          );
+        }
         return (
           <div key={i} className={`flex flex-col gap-1.5 ${i > 0 ? 'border-t border-line pt-3' : ''}`}>
-            <div className="flex items-center gap-2">
-              {i === 0 ? (
-                <span className="flex-1 font-mono text-2xs text-muted">
-                  {targets.length > 1 ? 'The chosen folder' : 'Where you choose, at the click'}
-                </span>
-              ) : (
-                <>
-                  <span className="font-mono text-3xs text-faint">into</span>
-                  <span className="flex-1 min-w-0">
-                    <TextField label="Sub-folder" value={t.name} placeholder={`Target ${i + 1}`} onChange={(name) => patch(i, { name })} />
-                  </span>
-                  <span className="font-mono text-3xs text-faint">/</span>
-                  <IconButton size="sm" label={`Remove the ${folder} target`} onClick={() => onTargets(targets.filter((_, k) => k !== i))}>
-                    {Icons.trash}
-                  </IconButton>
-                </>
-              )}
-            </div>
-            {clash && (
-              <span className="font-mono text-3xs text-danger">two targets write into {folder}/ — the second numbers its files</span>
-            )}
+            <FieldRow label="Into" hintShown hint={clash ? <span className="text-danger">two targets write into {folder}/ — the second numbers its files</span> : undefined}>
+              {where}
+            </FieldRow>
             <FieldRow label="Size">
               <div className="flex flex-1 min-w-0 items-center gap-1.5">
                 <SelectField
@@ -207,7 +215,7 @@ export default function ExportTargets({
               </FieldRow>
             ) : (
               <FieldRow label="Sharpen" hint="a 16-bit master is not sharpened for a screen">
-                <span className="font-mono text-2xs text-muted">off</span>
+                <Readout muted>off</Readout>
               </FieldRow>
             )}
             <SwitchRow
@@ -220,22 +228,15 @@ export default function ExportTargets({
         );
       })}
       {targets.length < MAX_TARGETS && (
-        <FieldRow label="Also write">
-          <SelectField
-            label="Add a target"
-            value="none"
-            options={[{ id: 'none', label: 'Add a target…' }, ...TARGET_PRESETS.map((p) => ({ id: p.id, label: p.label }))]}
-            onChange={(id) => {
-              const preset = TARGET_PRESETS.find((p) => p.id === id);
-              if (!preset) return;
-              // A second target of one name would share its sub-folder.
-              const taken = new Set(targets.slice(1).map((t, k) => targetFolder(t.name, k + 1).toLowerCase()));
-              let name = preset.target.name;
-              for (let n = 2; taken.has(name.toLowerCase()); n += 1) name = `${preset.target.name} ${n}`;
-              onTargets([...targets, { ...preset.target, name }]);
-            }}
-          />
-        </FieldRow>
+        // A verb with a menu of presets, not a select that never holds a
+        // value: the same shape as the roll bar's Add.
+        <OverflowMenu
+          label="Add a target"
+          align="start"
+          className="self-start"
+          trigger={{ text: 'Add a target', icon: Icons.plus, variant: 'ghost', size: 'sm' }}
+          items={TARGET_PRESETS.map((p) => ({ id: p.id, label: p.label, onSelect: () => add(p.target) }))}
+        />
       )}
     </div>
   );

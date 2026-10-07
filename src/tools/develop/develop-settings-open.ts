@@ -7,14 +7,15 @@ import { localPref } from '../../shared/ui/local-pref';
  * opens without a callback threaded through the workbench.
  */
 
-export type SettingsSection = 'encoder' | 'rendering' | 'device' | 'privacy';
+export type SettingsSection = 'encoder' | 'rendering' | 'device' | 'network';
 
-const SECTION_IDS: readonly SettingsSection[] = ['encoder', 'rendering', 'device', 'privacy'];
+const SECTION_IDS: readonly SettingsSection[] = ['encoder', 'rendering', 'device', 'network'];
 
 /** The section last looked at, kept on this device like the settings themselves. */
 export const settingsSectionPref = localPref<SettingsSection>(
   'atelier.develop.settings.section',
-  (raw) => SECTION_IDS.find((id) => id === raw) ?? 'encoder',
+  // `privacy` was the Network section's first id; a device that stored it opens there still.
+  (raw) => (raw === 'privacy' ? 'network' : (SECTION_IDS.find((id) => id === raw) ?? 'encoder')),
   (id) => id,
 );
 
