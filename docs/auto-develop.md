@@ -173,6 +173,16 @@ that hides the emptied corners re-solved, a confidence that refuses lines
 which do not agree on one vanishing point. The three passes of the
 measurement and the two biases they cured: `docs/memory/develop-roll.md`.
 
+**ONE `Auto`, and Auto at open — BUILT 2026-10-07** (`auto-plan.ts`,
+`use-auto-all.ts`, the *Automatic* section of Develop's settings): the plan
+is the device's — which of the six steps the one `Auto` runs, in a fixed
+order, each through its own switch, and whether an untouched photograph gets
+it the first time it opens (journaled `via: 'auto'`, one undo). Tone, bands
+and detail start ticked; colour, level and upright wait for his tick, each
+having a picture it is exactly wrong on. Auto tone gained a reach on the way
+(a high-key picture asked it for a gamma near 0). Rules and the drive in
+`docs/memory/develop-roll.md`, «ONE `Auto`».
+
 Verified: the pure modules by their specs; the panels driven in headless
 Chromium against the dev server where a picture can be dropped on a roll
 (the model needs a GPU and a real picture, so A3's segmentation is driven

@@ -7,9 +7,9 @@ import { localPref } from '../../shared/ui/local-pref';
  * opens without a callback threaded through the workbench.
  */
 
-export type SettingsSection = 'encoder' | 'rendering' | 'device' | 'network' | 'learning';
+export type SettingsSection = 'automatic' | 'encoder' | 'rendering' | 'device' | 'network' | 'learning';
 
-const SECTION_IDS: readonly SettingsSection[] = ['encoder', 'rendering', 'device', 'network', 'learning'];
+const SECTION_IDS: readonly SettingsSection[] = ['automatic', 'encoder', 'rendering', 'device', 'network', 'learning'];
 
 /** The section last looked at, kept on this device like the settings themselves. */
 export const settingsSectionPref = localPref<SettingsSection>(

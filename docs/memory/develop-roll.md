@@ -1742,3 +1742,66 @@ converging 2.5 heights above the centre): *Auto upright* wrote `vertical 89`
 (the matrix's 88.9 for `k = 0.4`), `horizontal 0`, `zoom 1.21`, stored after
 the autosave; off → 0 / 0 / 1; ⌘Z → relit with the numbers back. Not driven on
 a photograph of his, where the taste constants are to be moved from.
+
+## ONE `Auto`, the author's recipe, and a picture auto-developed as it opens (2026-10-07, `docs/auto-develop.md` §5)
+
+**Decision** (his «everything that could be autodevelop … a settings panel so
+options let the user choose»). `shared/develop/auto-plan.ts` (pure, 6 specs)
++ `use-auto-all.ts` + an `Auto` switch drawn FIRST in the Auto row of both
+hosts, before a hairline and the single verbs; the *Automatic* section of
+Develop's settings holds the plan. Rules:
+
+- **The plan is the DEVICE's** (`autoPlanPref`, `atelier.develop.auto`):
+  which of six steps `Auto` runs — tone, colour, bands, detail, level,
+  upright, always in that order — and whether an untouched photograph gets it
+  the first time it opens. Lightroom's one Auto is a fixed recipe; here the
+  recipe is his, because colour is wrong on a sunset, level on a tilted
+  composition and upright on a picture with no building, so those three
+  START UNTICKED (`DEFAULT_AUTO_PLAN`: tone, bands, detail). The chips are
+  `Button aria-pressed`; the state line says the recipe in words
+  (`describeSteps`).
+- **`Auto` runs every ticked step THIS host can run, each through its OWN
+  switch** (`AutoAllStep`: state, apply, turnOff): so each lights, each is
+  taken back alone afterwards, and `Auto`'s own state is READ off theirs
+  (`allState`: off / on / nothing / edited). The Trips/Studio sheet has the
+  three develop verbs; a clip the same; the tool's photograph all six. The
+  Auto row's three verbs run through ONE `runAutoVerb` the buttons and
+  `Auto` share, and Auto level moved from `CropPanel`'s closure to the
+  workbench (`runAutoLevel`, handed down as `onAutoLevel`) for the same
+  reason.
+- **Trap, found by driving**: two verbs run in one tick wrote their memos
+  over each other's STALE render — `useAutoMemory.apply` recorded over the
+  memos of the render that made the closure, so bands' write dropped tone's
+  memo and tone's switch came up unlit after `Auto`. Every switch memory
+  (`use-auto-memory.ts`, `use-crop-switches.ts`) now reads its memos as of
+  the LAST WRITE through a ref kept synchronously; `use-value-switch.ts` holds
+  one memo and cannot race itself.
+- **Auto at open** (`plan.onOpen`): the workbench runs `Auto` when the stats
+  of an UNTOUCHED photograph are first read (never a clip, never an edited
+  picture), ONCE per picture per session (`firstOpen`, a module set) — so a
+  turn-off, an undo or a reset does not bring it back the next time ←/→
+  lands there. Its writes go through the ordinary write-throughs with
+  `via: 'auto'` (a `pendingVia` ref set before the run and let go three
+  write delays after; `onDevelop`/`onFraming`/`onKeystone`/`onDetail`/
+  `onAspect` take the `via` and the editor's handlers pass it to `update`),
+  so the journal says it and the making-of captions the step `by Auto, as it
+  opened`. The state line says ONE undo takes it back — measured: the three
+  writes land inside the history's 700 ms coalescing window.
+- **Auto tone gained a REACH** (`AUTO_GAMMA_MIN` 0.55, `AUTO_GAMMA_MAX` 1.8):
+  a median sitting at the white point — a snow field, a white wall, the
+  façade of the drive — asked the solve for a gamma near 0 and the slider's
+  own floor (0.1) still crushed the picture to black; `Auto` at open would
+  have done it to every high-key picture. A stop and a half either way,
+  about what Lightroom's Auto moves an exposure; pinned by a spec that
+  develops the wall through the numbers and keeps it bright.
+
+Driven headless (`auto.mjs`): on a flat ISO-3200 picture, `Auto` lit tone,
+bands and detail and said `auto · tone, bands and detail`; a second click
+said `auto off · 3 steps back to before` and dimmed them all. The Automatic
+pane, opened by the ⚙, ticked colour, level and upright and *When a picture
+opens → Auto*; → on a façade opened untouched: `auto · tone, colour, bands,
+detail, level and upright`, every switch lit, `vertical 89 · zoom 1.21`, the
+journal's three steps `via: auto`, the stored levels' gamma 0.55. Drive trap:
+a module edited after the dev server started is a SECOND instance under
+`evaluate`'s `import()` (Vite's HMR serves the app a `?t=` copy), so a module
+STORE must be driven through the real control, never by importing it.

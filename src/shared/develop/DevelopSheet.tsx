@@ -1,4 +1,4 @@
-import { useEffect, useRef, useState, type ReactNode } from 'react';
+import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
 import { describeKeyTarget, targetOwnsSpace } from '../media/transport-keys';
 import StageZoomControl from '../ui/StageZoomControl';
@@ -20,7 +20,10 @@ import {
   DevelopPresetsSection,
 } from './DevelopSections';
 import DevelopCurve from './DevelopCurve';
-import { DevelopAutoSection, DevelopLevelsSection } from './DevelopAuto';
+import { DevelopAutoSection, DevelopLevelsSection, runAutoVerb } from './DevelopAuto';
+import { DEFAULT_AUTO_PLAN, autoPlanPref } from './auto-plan';
+import { useAutoAll, type AutoAllStep } from './use-auto-all';
+import { useLocalPref } from '../ui/local-pref';
 import { whiteBalanceFor } from './auto-develop';
 import { useAutoMemory } from './use-auto-memory';
 import DevelopHistogram from './DevelopHistogram';
@@ -153,6 +156,23 @@ export default function DevelopSheet({
     clipping,
     compare: compareOn,
   });
+  // The one `Auto` over the three verbs a sheet has (`use-auto-all.ts`); the
+  // plan's other steps belong to the Develop tool's tabs.
+  const [autoPlan] = useLocalPref(autoPlanPref, DEFAULT_AUTO_PLAN);
+  const stats = picture.stats;
+  const autoSteps = useMemo<AutoAllStep[]>(
+    () =>
+      (['tone', 'colour', 'bands'] as const).map((id) => ({
+        id,
+        state: auto.state(id),
+        apply: () => {
+          if (stats && stats.total > 0) runAutoVerb(id, stats, auto);
+        },
+        turnOff: () => auto.turnOff(id),
+      })),
+    [auto, stats],
+  );
+  const autoAll = useAutoAll({ plan: autoPlan, steps: autoSteps, onTold: tell });
   // The dropper holds the split while it is armed; the pill says so rather
   // than claiming a divider nobody can see.
   const compareHeld = compareOn && picture.picking;
@@ -328,6 +348,7 @@ export default function DevelopSheet({
             <DevelopAutoSection
               stats={picture.stats}
               auto={auto}
+              all={autoAll}
               picking={picture.picking}
               onPicking={picture.setPicking}
               echo={scope}

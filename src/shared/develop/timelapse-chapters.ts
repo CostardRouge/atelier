@@ -327,6 +327,7 @@ export function describeChange(section: PictureEdit, before: RollPicture, after:
 export function chapterCaption(sections: readonly PictureEdit[], before: RollPicture, after: RollPicture, via: JournalVia | null): string {
   if (via === 'reset') return `Reset ${sections.map((s) => sectionLabel(s).toLowerCase()).join(', ')}`;
   const body = sections.map((s) => describeChange(s, before, after)).join(' · ');
+  if (via === 'auto') return `${body} · by Auto, as it opened`;
   return via === 'apply' || via === 'paste' ? `${body} · from another picture` : body;
 }
 

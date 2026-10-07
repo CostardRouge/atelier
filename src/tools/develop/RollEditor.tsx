@@ -729,21 +729,24 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [makeVariantOf],
   );
 
+  // `via` is what the workbench says of a write the author did not make by
+  // hand on the picture — the `Auto` switch run as it opened — so the journal
+  // and the making-of say so (`journal.ts`).
   const handleDevelop = useCallback(
-    (id: string, develop: DevelopSettings | null) =>
+    (id: string, develop: DevelopSettings | null, via?: JournalVia) =>
       update((r) => {
         const p = r.pictures.find((x) => x.id === id);
         return !p || sameDevelop(p.develop, develop) ? r : patchPicture(r, id, { develop });
-      }),
+      }, via),
     [update],
   );
 
   const handleFraming = useCallback(
-    (id: string, framing: Framing | null) => update((r) => patchPicture(r, id, { framing })),
+    (id: string, framing: Framing | null, via?: JournalVia) => update((r) => patchPicture(r, id, { framing }), via),
     [update],
   );
   const handleKeystone = useCallback(
-    (id: string, keystone: Keystone | null) => update((r) => patchPicture(r, id, { keystone })),
+    (id: string, keystone: Keystone | null, via?: JournalVia) => update((r) => patchPicture(r, id, { keystone }), via),
     [update],
   );
   const handleRepair = useCallback(
@@ -751,7 +754,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const handleDetail = useCallback(
-    (id: string, detail: DetailSettings | null) => update((r) => patchPicture(r, id, { detail })),
+    (id: string, detail: DetailSettings | null, via?: JournalVia) => update((r) => patchPicture(r, id, { detail }), via),
     [update],
   );
   const handleVignette = useCallback(
@@ -771,7 +774,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const handleAspect = useCallback(
-    (id: string, aspect: string) => update((r) => patchPicture(r, id, { aspect })),
+    (id: string, aspect: string, via?: JournalVia) => update((r) => patchPicture(r, id, { aspect }), via),
     [update],
   );
   const handleRendition = useCallback(
@@ -1990,16 +1993,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               cropApplyTo={cropApplyTo}
               borderApplyTo={borderApplyTo}
               onBorder={(border) => handleBorder(open.id, border)}
-              onDevelop={(develop) => handleDevelop(open.id, develop)}
-              onFraming={(framing) => handleFraming(open.id, framing)}
-              onKeystone={(keystone) => handleKeystone(open.id, keystone)}
+              onDevelop={(develop, via) => handleDevelop(open.id, develop, via)}
+              onFraming={(framing, via) => handleFraming(open.id, framing, via)}
+              onKeystone={(keystone, via) => handleKeystone(open.id, keystone, via)}
               onLens={(lens) => handleLens(open.id, lens)}
               onLensProfile={(profile) => handleLensProfile(open.id, profile)}
-              onDetail={(detail) => handleDetail(open.id, detail)}
+              onDetail={(detail, via) => handleDetail(open.id, detail, via)}
               onVignette={(vignette) => handleVignette(open.id, vignette)}
               onRepair={(repair) => handleRepair(open.id, repair)}
               onLayers={(layers) => handleLayers(open.id, layers)}
-              onAspect={(aspect) => handleAspect(open.id, aspect)}
+              onAspect={(aspect, via) => handleAspect(open.id, aspect, via)}
               onRendition={(rendition) => handleRendition(open.id, rendition)}
               rollChoice={roll.opensOn ?? null}
               onRollChoice={handleRollChoice}

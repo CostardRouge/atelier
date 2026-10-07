@@ -1461,16 +1461,27 @@ Apply-to blocks; Borders starts closed). What a setting does is explained
 behind the small **ⓘ** beside its name rather than under it, so the column
 holds the controls; what a line says about the picture right now — why it
 leaves at this size, the copyright that will be written — stays in the open.
-Three **Auto** verbs
+The **Auto** verbs
 write numbers from the picture *as shot*, so pressing one twice gives the
 same answer: **Auto tone** stretches the range into Levels (a black point, a
-white point, a gamma) and touches no colour; **Auto colour** neutralises the
+white point, a gamma — bent by a stop and a half at most, so a snow field
+stays a snow field) and touches no colour; **Auto colour** neutralises the
 average cast as temperature and tint — the wrong answer on a sunset, which is
 why it is its own button, and **Pick grey** asks you for a neutral instead;
 **Auto bands** compresses the ends where the picture leans — a tenth of it
 against black lifts Shadows, a tenth against white pulls Highlights down —
 part of the way, so a picture dark on purpose keeps its character, and says
-when a band runs out before its target. Each is a **switch**: a second click
+when a band runs out before its target. Two more live where their sliders
+are: **Auto detail** (the Detail tab) sets the noise reduction from the ISO
+the file says — nothing under ISO 800 for luminance, each stop above adding
+more and holding the sharpen off the strong edges — and the sharpening from
+what the picture is developed from: the most on the sensor's own data, less
+on the camera's JPEG, none on a proxy, said; the radius and Detail are yours.
+**Auto upright** (the Perspective fold) reads the lines that stand and lie —
+a building's edges, a wall's courses — and where they converge writes the
+Vertical and Horizontal that make them parallel, with the Zoom that hides
+the corners it empties; lines that do not agree on one vanishing point are
+refused rather than guessed at. Each is a **switch**: a second click
 puts back what its own sliders held before it and leaves the others alone, so
 of Auto tone and Auto colour you keep the one that helped. A lit switch still
 holds its answer, a dashed one found nothing to change, a half-lit one has
@@ -1478,7 +1489,14 @@ been moved by hand since; ⌘Z lights and dims them by itself. Auto colour and
 Pick grey share the white balance — the newer replaces the older, and turning
 it off gives back the balance from before either. The switches remember
 their clicks for the session only: after a reload they are off and the values
-stay. Every setting belongs to the
+stay. And one **Auto**, first in the row, runs your recipe: the steps ticked
+in Settings › Automatic (tone, bands and detail until you say otherwise;
+colour, level and upright when you tick them), in a fixed order, each
+through its own switch — so any one can be taken back alone afterwards, and
+a second click on Auto takes them all back. With *When a picture opens →
+Auto*, an untouched photograph gets it the first time it opens, once per
+session; one undo takes it back, and the making-of says which steps were
+Auto's. Every setting belongs to the
 picture it was made on — the develop, the look, the crop, the masks — so the
 next picture keeps its own; **Apply look to N other pictures** (or to the
 marked ones) is how one look dresses several. There is no Done: what you set is saved on
@@ -1886,9 +1904,16 @@ device rather than to a roll, and never travel with it, a preset or a paste:
 85, 92, 99 and 100 % (the Export tab's *Encoder* line opens it) —,
 *Rendering* — the dither, the look interpolation, Big pictures, how a
 picture past 1:1 is drawn —, *Device* — the device class (applied on reload)
-and where the subject model runs —, and *Network* — whether lens profiles are
-fetched from Lensfun. A change reaches the picture open behind the sheet at
-once.
+and where the subject model runs —, *Network* — whether lens profiles are
+fetched from Lensfun —, *Automatic* — which steps the one Auto runs, and
+whether a picture gets it as it opens —, and *Learning* — whether each
+photograph is kept AS SHOT beside its develop (a 256 px picture, its light
+and its camera's facts, a few kilobytes on this device, pruned with the
+picture, never a position or a word; kept until you say no, and Off drops
+them), and the *Training file*: every pair of every roll written into one
+JSON file on your click, the records normalised, for a trainer outside the
+browser to learn your hand from — nothing leaves by itself. A change reaches
+the picture open behind the sheet at once.
 
 **HEIC, HEIF, HIF and JPEG XL open in every browser.** Safari reads them
 itself; Chrome and Firefox refuse them, so Atelier ships its own decoders —

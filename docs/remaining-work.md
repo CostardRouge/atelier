@@ -56,14 +56,14 @@ precondition of the row that depends on it.
 | Trips, five questions of the renditions brief | The first being whether a paired capture offers its RAW at all; Sony's lens calibration worth applying or not | `docs/capture-renditions.md` §9 | Him |
 | Trips, the map and Deduce | «Where the pictures were» (Q3), the replay (Q5), Deduce's thresholds on the trip or the device, V3/V4 of the camera plate | `roadtrip.md` «A MAP view of the overview», «The Deduce MODAL» | Him |
 | HEIF and HLG | One `.HIF` of his, and whether his are HLG; HLG footage flattened in silence (a notice is the honest cheap half) | `media-pipeline.md` «A HEIF's 10 bits are NOT read yet», `MEMORY.md` open item 2026-08-21 | Him |
-| Taste | The six film stocks' numbers on real photographs; the tone engine's knee rate and cap, its two-stop reach, and whether the shadows band reaches black; auto-develop's A1 thresholds and A2 confidence floor | `docs/film-simulation.md`, `docs/develop-tone.md` §5, `docs/auto-develop.md` §5 | Him |
+| Taste | The six film stocks' numbers on real photographs; the tone engine's knee rate and cap, its two-stop reach, and whether the shadows band reaches black; the Auto verbs' constants — A1's thresholds, A2's confidence floor, Auto tone's gamma reach, Auto detail's per-stop amounts, Auto upright's floors — and the default recipe of the one `Auto` (tone, bands, detail) | `docs/film-simulation.md`, `docs/develop-tone.md` §5, `docs/auto-develop.md` §5, `develop-roll.md` | Him |
 | A SAM-family model | Only if Tolerance + Remove do not hold on his photographs; 14–28 MB of runtime before the weights | `docs/mask-ui-redesign.md`, `subject-model.md` | Him, after his photos |
 
 ## 3. Work that needs no decision
 
 | What | Detail | Where | Who |
 | --- | --- | --- | --- |
-| Auto-develop §6, the collection | The as-shot vignette beside the record and the training dump — every day without it is dataset lost | `docs/auto-develop.md` §6 | Agent |
+| Auto-develop §6, the model | B1 and B2 are built (2026-10-07: the pairs kept, the training file written); B3 is a trainer OUTSIDE the repo and B4 its ONNX inference as a verb — both wait on a few hundred pairs of his | `docs/auto-develop.md` §6 | Him (the pairs), then agent |
 | Lightroom gaps, pass 5 | 29 a grid and reorder; 31 snapshots; 34 send a picture to Trips or the Studio | `docs/lightroom-gaps.md` §6 | Agent |
 | Audit batches 6–7 (data) | DATA-03 the resume race, DATA-04 `beforeunload`, DATA-09 the version-change handler; DATA-05/06 the mark-and-sweep, DATA-10 the lattice cache's ceiling, DATA-07 the previews index | `docs/audit-2026-10-02.md` «Batches» | Agent (DATA-01/02 wait on §2) |
 | Audit batch 12 (accessibility) | A11Y-03 `useModalFocus` over one `Modal` (24 modals trap no focus), A11Y-02 the menu's keyboard, A11Y-04 the switch, A11Y-06 reduced motion, UX-02 to UX-06 | `docs/audit-2026-10-02.md` «Batches» | Agent (A11Y-01 waits on §2) |
@@ -93,7 +93,7 @@ precondition of the row that depends on it.
 
 ## 5. If the order is the agent's to pick
 
-1. Auto-develop §6 (the dataset): the only item that loses value every day.
+1. ~~Auto-develop §6 (the dataset)~~ — built 2026-10-07; the pairs now accrue by themselves.
 2. Lightroom pass 5 (29, 31, 34): three commits, no question open.
 3. Audit batches 6–7 and 12 minus the two decisions: data safety and focus
    traps, each a small commit with a spec.

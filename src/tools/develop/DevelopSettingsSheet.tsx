@@ -1,5 +1,6 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { DEVICE_CLASS_KEY, deviceClass, deviceClassFor, readDeviceFacts } from '../../shared/lib/device-class';
+import { AUTO_STEPS, DEFAULT_AUTO_PLAN, autoPlanPref, describeSteps, withStep } from '../../shared/develop/auto-plan';
 import { clearRollShots, listRollShots, listRolls, rollShotsFootprint } from '../../shared/develop/roll-store';
 import { SHOT_LONG_EDGE, shotsPref } from '../../shared/develop/shot-record';
 import { buildTrainingDump, serializeTrainingFile, trainingFileName } from '../../shared/develop/training-dump';
@@ -44,6 +45,7 @@ import { openedOnSection, settingsSectionPref, type SettingsSection } from './de
  */
 
 const SECTIONS: readonly { id: SettingsSection; name: string; sub: string }[] = [
+  { id: 'automatic', name: 'Automatic', sub: 'What Auto runs, and when' },
   { id: 'encoder', name: 'Encoder', sub: 'How a JPEG is written' },
   { id: 'rendering', name: 'Rendering', sub: 'Tones, looks, big pictures' },
   { id: 'device', name: 'Device', sub: 'Phone or computer' },
@@ -106,6 +108,70 @@ function ChromaAt({ quality }: { quality: number }) {
       <span className="text-ink text-right">{Math.round(quality * 100)} %</span>
       <span className={chroma === '4:4:4' ? 'text-ok' : 'text-ink-soft'}>{chroma ?? '…'}</span>
       <span className="text-muted min-w-0 truncate">{chroma ? chromaWords(chroma) : 'measuring'}</span>
+    </>
+  );
+}
+
+/**
+ * What the one `Auto` runs, and whether it runs by itself as a picture opens
+ * (`auto-plan.ts`). Each step is one of the tool's own switches; a step a
+ * picture cannot take (a clip's crop) is simply not run on it.
+ */
+function Automatic() {
+  const size = useFingerSize();
+  const [plan, setPlan] = useLocalPref(autoPlanPref, DEFAULT_AUTO_PLAN);
+  return (
+    <>
+      <Row
+        label="Auto runs"
+        state={plan.steps.length ? `Runs ${describeSteps(plan.steps)}, in that order, each as its own switch` : 'Runs nothing: the Auto switch is idle until a step is ticked'}
+        info={
+          <>
+            <p>
+              One Auto, your recipe. Tone, bands and detail are almost always an improvement; colour is wrong on a
+              sunset, level on a tilted composition, upright on a picture with no building in it — so those three wait
+              for your tick. Every step lights its own switch, and any one can be taken back alone afterwards.
+            </p>
+          </>
+        }
+      >
+        <div className="flex flex-wrap gap-1.5" role="group" aria-label="Auto runs">
+          {AUTO_STEPS.map((step) => {
+            const on = plan.steps.includes(step.id);
+            return (
+              <Button key={step.id} size={size} variant={on ? 'primary' : 'default'} aria-pressed={on} title={step.hint} onClick={() => setPlan(withStep(plan, step.id, !on))}>
+                {step.label}
+              </Button>
+            );
+          })}
+        </div>
+      </Row>
+      <Row
+        label="When a picture opens"
+        state={
+          plan.onOpen
+            ? 'An untouched photograph gets Auto the first time it opens here — one undo takes it back; a clip, or a picture already touched, is left alone'
+            : 'Nothing happens until you press Auto'
+        }
+        info={
+          <p>
+            Lightroom’s “apply auto on import”, at the moment the picture is read instead: nothing is decoded that
+            would not have been. It runs once per picture per session, and the making-of says which steps were Auto’s.
+          </p>
+        }
+      >
+        <Segmented
+          className="self-start max-w-full"
+          size={size}
+          label="When a picture opens"
+          value={plan.onOpen ? 'auto' : 'nothing'}
+          onChange={(v) => setPlan({ ...plan, onOpen: v === 'auto' })}
+          options={[
+            { id: 'nothing', label: 'Nothing' },
+            { id: 'auto', label: 'Auto' },
+          ]}
+        />
+      </Row>
     </>
   );
 }
@@ -480,7 +546,7 @@ function TrainingFile({ kept }: { kept: number | null }) {
   );
 }
 
-const PANES: Record<SettingsSection, () => ReactNode> = { encoder: Encoder, rendering: Rendering, device: Device, network: Network, learning: Learning };
+const PANES: Record<SettingsSection, () => ReactNode> = { automatic: Automatic, encoder: Encoder, rendering: Rendering, device: Device, network: Network, learning: Learning };
 
 export default function DevelopSettingsSheet({ onClose }: { onClose: () => void }) {
   const compact = useIsCompact();
