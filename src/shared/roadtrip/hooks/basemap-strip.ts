@@ -17,7 +17,7 @@
 
 import { BASEMAP_FOR_EDGE, planTiles, type GeoBox } from '../../map/tile-math';
 import { planPyramid, tileBox, zoomForDensity, type PyramidTile, type StripSample } from '../../map/tile-strip';
-import { streamFor } from '../../map/tile-stream';
+import { holdingStream, streamFor } from '../../map/tile-stream';
 import { drawBasemap } from './basemap-paint';
 import type { CameraTrack } from './drive-plan';
 import type { HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
@@ -209,10 +209,10 @@ export const EXPORT_AHEAD = 1;
  * what an export awaits before a frame (`HookRender.ready`). Nothing to wait
  * for without a pyramid, or where the shell opened no stream (not allowed here).
  */
-export function readyGround(basemap: BasemapSet | null, t0: number, t1 = t0, signal?: AbortSignal): Promise<void> {
-  const stream = streamFor(basemap?.pyramid?.key);
-  if (!basemap || !stream) return Promise.resolve();
-  return stream.ready(basemap.tilesAt(t0, t1), signal);
+export async function readyGround(basemap: BasemapSet | null, t0: number, t1 = t0, signal?: AbortSignal): Promise<void> {
+  const key = basemap?.pyramid?.key;
+  if (!basemap || !key) return;
+  await holdingStream(key, (stream) => stream.ready(basemap.tilesAt(t0, t1), signal));
 }
 
 /**

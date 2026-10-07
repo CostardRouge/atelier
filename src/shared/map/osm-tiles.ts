@@ -55,6 +55,9 @@ export function decodedBudget(): number {
   return isConstrainedDevice() ? STREAM_DECODED_CONSTRAINED : STREAM_DECODED;
 }
 
+/** The tab's tile blobs by URL, a request in flight shared by every asker. */
+const blobs = new Map<string, Promise<Blob>>();
+
 // --- consent -----------------------------------------------------------------
 
 const listeners = new Set<() => void>();
@@ -83,7 +86,11 @@ export function tilesAllowed(): boolean {
  */
 export function allowTiles(on: boolean): void {
   allowed = on;
-  if (!on) void clearTiles();
+  if (!on) {
+    // The tab's copies go too: a no means nothing fetched is drawn again.
+    blobs.clear();
+    void clearTiles();
+  }
   try {
     localStorage.setItem(KEY, on ? 'on' : 'off');
   } catch {
@@ -109,8 +116,6 @@ export const TILES_IN_OPENER_NOTICE =
   `«${OSM_CREDIT}» as the licence requires.`;
 
 // --- tiles -------------------------------------------------------------------
-
-const blobs = new Map<string, Promise<Blob>>();
 
 function tileUrl(z: number, x: number, y: number): string {
   return OSM_TILES.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
@@ -139,7 +144,9 @@ async function keptOrFetched(key: string, url: string, signal?: AbortSignal): Pr
   if (kept?.fresh) return kept.blob;
   try {
     const blob = await fromServer(url, signal);
-    void writeTile(key, blob);
+    // A tile that lands after the yes was taken back is drawn by whoever
+    // asked, never kept: `allowTiles(false)` has already cleared the cache.
+    if (tilesAllowed()) void writeTile(key, blob);
     return blob;
   } catch (err) {
     if (kept && !signal?.aborted) return kept.blob;

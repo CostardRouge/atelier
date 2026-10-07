@@ -30,6 +30,8 @@ import type {
 import type { ExifData } from '../../../shared/exif/exif-parser';
 import CameraPanel from './CameraPanel';
 import SlideDelivery from './SlideDelivery';
+import { autoSeconds } from '../../../shared/roadtrip/slide-timing';
+import { MAX_HOOK_SECONDS } from '../../../shared/roadtrip/hook-video';
 import { hookVariantById } from '../../../shared/roadtrip/hooks/registry';
 import { inputClass, linkButton } from './ui';
 import { DateField } from '../../../shared/ui/DateField';
@@ -552,6 +554,24 @@ export default function ContentTab({
               }))}
             />
           </FieldRow>
+          {/* A counter that follows the drive adds the recap's beats to the
+              opener: on a length set by hand they would be cut, so it is said
+              HERE, where the change was made, and not only in the Slide section. */}
+          {badge.mode.startsWith('drive-') && opener && !slide.auto && opener.seconds - slide.seconds > 0.05 && (
+            <FieldRow label="">
+              <div className="flex flex-col gap-1.5 min-w-0">
+                <p className="m-0 text-xs text-accent-ink">
+                  With this counter {opener.name} takes {opener.seconds.toFixed(1)} s; the slide’s {slide.seconds.toFixed(1)} s set
+                  by hand cut its last {(opener.seconds - slide.seconds).toFixed(1)} s.
+                </p>
+                <div>
+                  <Button size="sm" onClick={() => (isHook ? patchBadge({ hookAuto: true }) : patchSlide({ auto: true }))}>
+                    Use {Math.min(autoSeconds(opener.seconds, slide.seconds), MAX_HOOK_SECONDS).toFixed(1)} s
+                  </Button>
+                </div>
+              </div>
+            </FieldRow>
+          )}
           {isHook && (
           <FieldRow
             label="Marker"

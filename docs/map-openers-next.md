@@ -4,8 +4,9 @@
 finer tiles along a tight follow, the Itinerary's own camera and the
 odometer digits; two gaps found that evening are built too — a stop that
 learns its state from the town index (§1) and the *Days + km* counter
-(§5). Only §5's «later» items are left: the picture of the DAY with a tick
-per day, Défilé's ribbon under the map, the distance comparison.** The maintainer answered two labs the same day: «Labo Virée»
+(§5), and the first of §5's «later» items, the picture of the DAY with a
+tick per day, and Défilé's ribbon under the map. Left: the distance
+comparison, his call («à garder pour une variante, si tu aimes»).** The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
@@ -14,7 +15,10 @@ fixed is in `docs/memory/roadtrip.md` («The stops panel…», «The trip RECAP�
 Of §5, the **odometer digits are built** (the badge stays text drawn by
 `drawOverlays`, which learnt to draw a numeral in fixed, rolling cells —
 «The counter's digits are an ODOMETER» in `docs/memory/roadtrip.md`). The
-picture of the DAY and Défilé's ribbon stay «later» as written.
+picture of the DAY and its tick per day are built too (`dayPictures`,
+`dayTicks`, «The trip RECAP» in `docs/memory/roadtrip.md`), and so is
+Défilé's ribbon under the map — as an option of Virée borrowing Défilé's
+painter, not as an opener stack (`drive-ribbon.ts`).
 
 Facts this rests on (read in the code on 2026-10-07): the stops editor is
 shared by both map openers (`shared/roadtrip/hooks/stops-editor.tsx`, the big

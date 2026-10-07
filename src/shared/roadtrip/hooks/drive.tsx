@@ -49,6 +49,7 @@ import {
   type DrivePlan,
   type DriveRoute,
 } from './drive-plan';
+import { driveRibbon } from './drive-ribbon';
 import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
@@ -692,7 +693,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       <Group title="Motion">
-        <FieldRow label="Driving" hint="The time on the road, shared between the stops by distance; halts come on top.">
+        <FieldRow
+          label="Driving"
+          hint={
+            plan && o.driveSeconds < plan.schedule.roadFloor - 1e-9
+              ? `${plan.schedule.phases.filter((p) => p.kind === 'run').length} hops in ${o.driveSeconds.toFixed(1)} s: each is shorter than a third of a second. Give the road ${Math.ceil(plan.schedule.roadFloor)} s, or group nearby places.`
+              : `The time on the road${count ? ', stays at the places included' : ''}, shared between the stops by distance${count ? ' and days' : ''}; halts${count && o.summary ? ' and the summary card' : ''} come on top.`
+          }
+        >
           <RangeField
             label="Driving length"
             min={DRIVE_LIMITS.driveSeconds.min}
@@ -818,7 +826,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               <FieldRow
                 label="On the way"
                 align="start"
-                hint={`A card — days · distance · stops — once the car has rested, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}.`}
+                hint={`A card — days · distance · stops — once the car has rested, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}. The ribbon is Défilé’s tape of the trip’s days under the map, its head on the counter’s day.${o.pictures !== 'none' ? ' While the car stays, a picture shot on a later day comes up on its day.' : ''}`}
               >
                 <div className="flex flex-col gap-1.5">
                   <ToggleField label="A summary card at the end" checked={o.summary} onChange={(summary) => set({ summary })}>
@@ -827,6 +835,22 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   <ToggleField label="Milestones on the road" checked={o.milestones} onChange={(milestones) => set({ milestones })}>
                     Milestones
                   </ToggleField>
+                  <ToggleField
+                    label="Défilé’s ribbon of the trip’s days under the map, its head following the car"
+                    checked={o.ribbon}
+                    onChange={(ribbon) => set({ ribbon })}
+                  >
+                    Ribbon of days
+                  </ToggleField>
+                  {o.pictures !== 'none' && (
+                    <ToggleField
+                      label="While the car stays, each picture on the day it was shot"
+                      checked={o.dayPictures}
+                      onChange={(dayPictures) => set({ dayPictures })}
+                    >
+                      Pictures on their day
+                    </ToggleField>
+                  )}
                 </div>
               </FieldRow>
             </>
@@ -856,6 +880,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           <FieldRow label="Shutter">
             <ToggleField label="A shutter click as each picture pops" checked={o.shutter} onChange={(shutter) => set({ shutter })}>
               A click as each picture lands
+            </ToggleField>
+          </FieldRow>
+        )}
+        {o.sound && plan?.clock && (
+          <FieldRow label="Days">
+            <ToggleField label="A light tick as each day of the trip passes" checked={o.dayTicks} onChange={(dayTicks) => set({ dayTicks })}>
+              A tick as each day passes
             </ToggleField>
           </FieldRow>
         )}
@@ -937,6 +968,8 @@ export const driveVariant: HookVariant = {
     // follow of before needs none.
     const track = o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null;
     const basemap = driveBasemap(plan, o, ctx.aspect, track, stripBudget());
+    // Défilé's ribbon under the map, on the recap's clock alone.
+    const ribbon = o.ribbon ? driveRibbon(plan, ctx.calendar ?? []) : null;
     // A stop's name is a place on the legs and on the author's own list — the
     // author's assertion there, the Itinerary's rule — and a day on pictures.
     const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
@@ -962,7 +995,7 @@ export const driveVariant: HookVariant = {
               return out;
             }
           : undefined,
-      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track),
+      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track, ribbon),
       // A streamed ground's tiles, decoded before an export draws (`basemap-strip.ts`).
       ready: basemap?.pyramid ? (t0, t1, signal) => readyGround(basemap, t0, t1, signal) : undefined,
       score: o.sound ? () => driveScore(plan, o) : undefined,

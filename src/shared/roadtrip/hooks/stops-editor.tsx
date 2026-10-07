@@ -184,18 +184,32 @@ export default function StopsEditor({
   // index, where it answers without doubt (`stop-index.ts`) — one change, so
   // one undo. The index is read on the click, never before.
   const lacking = stops.filter(lacksIndexFacts).length;
+  // The list as it stands NOW: the index's first read takes a while, and a
+  // stop added or moved meanwhile must not be written back over by the fill.
+  const latest = useRef({ stops, onChange });
+  useEffect(() => {
+    latest.current = { stops, onChange };
+  });
+  const alive = useRef(true);
+  useEffect(() => {
+    alive.current = true;
+    return () => {
+      alive.current = false;
+    };
+  }, []);
   const fillStates = async () => {
     setFilling(true);
     setFillNote(null);
     try {
       const cities = await loadGazetteer();
-      const out = fillFromIndex(stops, cities);
-      if (out.filled) onChange(out.places);
+      if (!alive.current) return;
+      const out = fillFromIndex(latest.current.stops, cities);
+      if (out.filled) latest.current.onChange(out.places);
       setFillNote({ text: fillSummary(out.filled, out.left), left: out.left });
     } catch {
-      setFillNote({ text: 'The town index could not be read here.', left: -1 });
+      if (alive.current) setFillNote({ text: 'The town index could not be read here.', left: -1 });
     } finally {
-      setFilling(false);
+      if (alive.current) setFilling(false);
     }
   };
 

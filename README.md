@@ -959,13 +959,23 @@ counter, which the panel counts. A **Pace** slider, Calendar ↔ Road (65 %
 toward the calendar by default), decides how the road time is shared: toward
 the calendar the car waits at a place while its days run on the counter —
 the "surplace" in Melbourne —, toward the road the days a place took pass as
-the car leaves it. The drive may take up to a minute. At the end a **summary
+the car leaves it. The drive may take up to a minute, and it takes the length
+you set however many places it stops at (the panel says when the hops get
+too short to read); counting with the car adds only the summary card's three
+seconds, and a piece whose length you set by hand says, beside the counter,
+when that cuts its end. At the end a **summary
 card** — days · distance · stops — and, on the road, **milestones** every
 50 days and 1 000 km (or miles), each a switch; the badge's words carry a
 *Stop* field for the stops' label. The recap's "map over photo" is the map on
 a **paper plate** over the picture filling the frame (a Map switch, for the
 *Behind* pictures or the picture ground), the picture pushing in slowly while
-it shows. Nothing of a piece whose badge counts something else changes.
+it shows. While the car stays at a place, a picture shot on a later day of
+the stay comes up **on its day**, as the counter turns to it (a switch, on by
+default), and a **light tick** marks each day the counter turns, never closer
+than a patter. A **Ribbon of days** switch (off by default) puts Défilé's
+tape under the map: one tick a day, a long one where a leg starts, its head
+standing on the day the badge counts — above the map where the frame has no
+room below it. Nothing of a piece whose badge counts something else changes.
 
 **The day is measured, not guessed.** Everything the badge draws is a
 subtraction from the day the piece is filed under, so the editor reads the
@@ -1219,7 +1229,8 @@ seek and the file see one camera —, the recap (when the
 badge's counter follows the drive — see *The badge can count WITH the car*
 above — its pace, its summary card and its milestones), and the sound: a tick
 at every stop on the same voices, deeper where a leg begins, the seat on
-arrival, a shutter click as each print lands.
+arrival, a shutter click as each print lands, and under a recap a lighter
+tick as each day of the trip passes.
 
 **The car is the trip's, and it has a garage.** One car per journey: every
 Virée of a trip drives the same one, and it travels in the trip's backup. Two

@@ -24,7 +24,7 @@
  * bundler's world.
  */
 
-import { haversineKm, type GeoPoint } from './hooks/geo';
+import { degreeWindow, haversineKm, type GeoPoint } from './hooks/geo';
 
 export interface GazetteerCity {
   /** The place as GeoNames says it out loud ("Kalbarri"). */
@@ -126,8 +126,6 @@ function lonGap(a: number, b: number): number {
   return gap > 180 ? 360 - gap : gap;
 }
 
-const KM_PER_DEGREE = 111.32;
-
 /**
  * The nearest city to `point`, or null when none is within `maxKm`.
  *
@@ -142,11 +140,10 @@ export function nearestCity(
   point: GeoPoint,
   maxKm: number = DEFAULT_MAX_KM,
 ): GazetteerCity | null {
-  const latWindow = maxKm / KM_PER_DEGREE;
   // Near a pole, and for a window that spans the globe, the longitude filter
-  // stops meaning anything — drop it rather than compute a wrong bound.
-  const cosLat = Math.cos((point.lat * Math.PI) / 180);
-  const lonWindow = cosLat > 0.02 ? maxKm / (KM_PER_DEGREE * cosLat) : 181;
+  // stops meaning anything — dropped rather than computed wrong.
+  const { dLat: latWindow, dLon } = degreeWindow(point.lat, maxKm);
+  const lonWindow = dLon ?? 181;
 
   const near: { city: GazetteerCity; km: number }[] = [];
   let bestKm = Infinity;
