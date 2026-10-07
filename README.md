@@ -1959,6 +1959,22 @@ past 24 megapixels). The sensor's white is white, whatever the picture
 holds: the decoder no longer scales a frame by its own brightest pixel, so a
 RAW metered before 2026-09-25 may open a touch dark under its stored
 exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+**The sensor's base curve.** Decoded from its sensor, a RAW is linear light,
+only encoded for the screen and brought to its metered exposure — Capture
+One's *Linear Response* — which is why it looks flatter than the camera's own
+render of the same capture: that render carries the camera's tone curve. A
+picture on its sensor can carry a **base curve** too: one monotone curve on
+brightness (a grey stays grey, no colour turns), applied after the metered
+gain and the exposure and before every tone slider, so highlights, shadows,
+contrast and the roll-off at white all act on what it hands over, and a
+RAW's headroom above white is still there to bring back. *Standard* (a
+moderate S, close to a camera's JPEG), *High contrast* and *Lifted shadows*
+are curves designed here — Capture One's own are unpublished and nothing
+here claims to be them — and *Linear* is the sensor as it was, to the bit.
+The curve is a choice about the numbers, so a preset and a paste carry it,
+but it acts only on a RAW's sensor: on a JPEG or a camera render it would
+apply the camera's curve twice, and waits there unused. A picture stored
+before the curve existed reads as *Linear* and does not change.
 A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed

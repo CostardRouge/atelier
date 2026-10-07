@@ -1,5 +1,6 @@
 import { useCallback, useEffect, useState } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
+import { landBaseCurve } from './base-curve';
 import { DEFAULT_DEVELOP, isDefaultDevelop, withoutBase, type DevelopKey, type DevelopSettings } from './develop';
 
 export interface DevelopDraft {
@@ -7,7 +8,8 @@ export interface DevelopDraft {
   /**
    * Replace every NUMBER at once — a paste, a preset, "As shot". The material
    * (`base`, `rawGain`) is kept: it is a fact about this picture's bytes, not
-   * a setting a preset carries (`withoutBase`).
+   * a setting a preset carries (`withoutBase`); so is the base curve, unless
+   * `next` carries one of its own (`landBaseCurve`).
    */
   setDraft: (next: DevelopSettings) => void;
   /** Replace the WHOLE record, material included — what the document hands back on an undo. */
@@ -48,7 +50,14 @@ export function useDevelopDraft(value: DevelopSettings | null, stack: LutStack):
 
   const setDraft = useCallback(
     (next: DevelopSettings) =>
-      setDraftState((d) => ({ ...DEFAULT_DEVELOP, ...next, base: d.base ?? null, rawGain: d.rawGain ?? null })),
+      setDraftState((d) => ({
+        ...DEFAULT_DEVELOP,
+        ...next,
+        base: d.base ?? null,
+        rawGain: d.rawGain ?? null,
+        // The base curve is kept unless the incoming numbers chose one.
+        baseCurve: landBaseCurve(next.baseCurve, d.baseCurve),
+      })),
     [],
   );
   const replace = useCallback((next: DevelopSettings) => setDraftState({ ...DEFAULT_DEVELOP, ...next }), []);

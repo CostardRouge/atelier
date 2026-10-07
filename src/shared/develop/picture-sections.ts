@@ -19,6 +19,7 @@
  */
 
 import { DEFAULT_DEVELOP, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from './develop';
+import { landBaseCurve } from './base-curve';
 import { ontoRollSensor } from './roll-choice';
 import { isClipPicture, pictureEdits, type PictureEdit, type RollDoc, type RollPicture } from './roll-types';
 
@@ -94,7 +95,10 @@ function developOnto(target: RollPicture, numbers: DevelopSettings | null): Deve
   const own = target.develop && isRawDevelop(target.develop) ? { base: target.develop.base, rawGain: target.develop.rawGain } : null;
   const value = numbers ? withoutBase(numbers) : null;
   const kept = value && !isDefaultDevelop(value) ? value : null;
-  return kept || own ? { ...(kept ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null;
+  // The base curve: the source's where it chose one, else the target's own.
+  return kept || own
+    ? { ...(kept ?? DEFAULT_DEVELOP), ...(own ?? {}), baseCurve: landBaseCurve(value?.baseCurve, target.develop?.baseCurve) }
+    : null;
 }
 
 /**

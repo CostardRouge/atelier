@@ -258,6 +258,41 @@ push past white, a term of `toneShape`'s reference — never a `clamp01`; never
 clamp the luminance before the curve; a tone table on `CubeHead` spans
 `[0, toneTop]` and the GPU reads it at `L / u_headToneTop`.
 
+## A RAW's BASE curve rides the head's tone table (2026-10-07)
+
+**His ask**: Capture One's *Base Characteristics → Curve* (Auto · Film Extra
+Shadow · Film High Contrast · Film Standard · Linear Response). On the sensor
+rung Atelier had NO base curve — the decode in linear light, sRGB-encoded,
+times `rawGain`: C1's Linear Response — while the camera render carries the
+camera's curve, which is why a sensor picture read flatter than its render.
+**Decision** (`base-curve.ts`, pure; `DevelopSettings.baseCurve`, optional):
+`linear` · `standard` · `contrast` · `shadows` · `auto`; ONE Fritsch–Carlson
+curve (`makeCurve`) on the EXTENDED encoded luminance, drawn on [0,1] and
+continued above white as a line at its own slope there (floored at 0.25) so a
+RAW's headroom stays a number for the recovery and the shoulder. Applied as
+the FIRST step of `toneCurve` (`rawTone(base(L))`), i.e. after the Kelvin
+matrix, temperature, tint and exposure, before the bands, contrast, toe,
+shoulder and brightness; `toneShape` sends its reference white and black
+through it, and exists (non-null) for a curve alone. The named three are OUR
+designs, said so on screen — C1's are unpublished, never claim them. **Why
+no shader change**: the head's tone table is `toneCurve` tabulated, so the
+curve is IN the table and `HEAD_APPLY` reads it as it reads the sliders — one
+truth, held by the gate's «a RAW's BASE curve» rows (GPU vs CPU ≤ 0.64 code
+on black → two stops past white, four cases; Linear = no curve, 0 codes).
+**Rules**: absent = Linear, so nothing stored changes; it acts only where
+`isRawDevelop` (`effectiveBaseCurve`) — on a render it would be the camera's
+curve twice; it is NOT an edit on a render (`isDefaultDevelop` ignores it) but
+IS worth carrying (`carriesDevelop`: the clipboard, a preset); `withoutBase`
+KEEPS it but strips an Auto's measured points (`portableBaseCurve`) — an
+unmeasured Auto draws Standard; numbers that LAND (paste, preset, apply-to,
+reset, `setDraft`) go through `landBaseCurve`: the source's curve where it
+chose one, else the target's own, and an incoming bare Auto keeps the
+target's own measurement. `developTail` zeroes it (head only). **How to
+apply**: a new tone stage that belongs to the MATERIAL goes before
+`rawTone` in `toneCurve` and through `toneShape`'s reference, never in the
+shader; any new door that writes a develop onto another picture uses
+`landBaseCurve`.
+
 ## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
 
 `auto-develop.ts` (pure) + the `Auto` and `Levels` sections of
