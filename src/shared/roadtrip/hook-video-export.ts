@@ -143,7 +143,7 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
       // The window spans the frame fed and those the decoder may still hold
       // back, oldest first: they are drawn first.
       prepareUnderOverlays: opts.hook
-        ? (t) => opts.hook!.ready(Math.max(0, t - CLIP_GROUND_WINDOW), t)
+        ? (t) => opts.hook!.ready(Math.max(0, t - CLIP_GROUND_WINDOW), t, opts.signal)
         : undefined,
       elementsAt: opts.elementsAt ?? undefined,
       bed: bedFor(opts.hook),

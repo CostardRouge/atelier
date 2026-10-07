@@ -1,5 +1,5 @@
-import { describe, expect, it } from 'vitest';
-import { TileStream, type StreamIO } from './tile-stream';
+import { describe, expect, it, vi } from 'vitest';
+import { TileStream, closeStream, holdingStream, openStream, streamFor, type StreamIO } from './tile-stream';
 import type { PyramidTile } from './tile-strip';
 
 /** A fake bitmap: which tile it is, and whether it was closed. */
@@ -126,5 +126,78 @@ describe('a streamed ground', () => {
     const stream = new TileStream('k', ROW, 8, fake);
     await stream.fetchAll();
     expect(stream.progress().coarser).toBe(1);
+  });
+
+  /** Decodes held until `open()` — so the lanes fill and a queue forms. */
+  function gated() {
+    const base = io();
+    let open!: () => void;
+    const gate = new Promise<void>((resolve) => (open = resolve));
+    const slow: StreamIO<Fake> = { ...base.io, decode: async (...args) => (await gate, base.io.decode(...args)) };
+    return { ...base, io: slow, open: () => open() };
+  }
+  const tick = () => new Promise((resolve) => setTimeout(resolve, 0));
+
+  it('drops a queued decode the preview no longer asks for', async () => {
+    const { io: slow, made, open } = gated();
+    const stream = new TileStream('k', ROW, 8, slow);
+    await stream.fetchAll();
+    // Three lanes run 4–6; 7 and 8 wait in the queue.
+    stream.request([4, 5, 6, 7, 8]);
+    // The playhead moved on before they ran.
+    stream.request([9, 10]);
+    open();
+    for (let k = 0; k < 6; k++) await tick();
+    const tiles = made.map((m) => m.tile);
+    expect(tiles).not.toContain('10/3/0');
+    expect(tiles).not.toContain('10/4/0');
+    expect(stream.get(9)).toBeDefined();
+    expect(stream.get(10)).toBeDefined();
+  });
+
+  it('never drops a decode an export awaits, whatever the preview asks since', async () => {
+    const { io: slow, open } = gated();
+    const stream = new TileStream('k', ROW, 8, slow);
+    await stream.fetchAll();
+    const export_ = stream.ready([4, 5, 6, 7, 8]);
+    stream.request([0]);
+    open();
+    await export_;
+    for (const i of [4, 5, 6, 7, 8]) expect(stream.get(i)).toBeDefined();
+  });
+
+  it('answers an export still waiting when the stream is let go', async () => {
+    const { io: slow, open } = gated();
+    const stream = new TileStream('k', ROW, 8, slow);
+    await stream.fetchAll();
+    // Three decodes hang on the gate, two are queued behind them.
+    const waiting = stream.ready([4, 5, 6, 7, 8]);
+    let answered = false;
+    void waiting.then(() => (answered = true));
+    stream.dispose();
+    open();
+    for (let k = 0; k < 6; k++) await tick();
+    expect(answered).toBe(true);
+    // Nothing decoded after the end is kept.
+    expect(stream.progress().decoded).toBe(0);
+  });
+
+  it('keeps a stream an export holds past the editor letting it go', async () => {
+    vi.useFakeTimers();
+    try {
+      const stream = openStream('held', ROW);
+      // The editor lets go (the camera changed under a frozen piece)…
+      closeStream('held');
+      // …while an export frame waits past the release delay.
+      await holdingStream('held', async () => {
+        await vi.advanceTimersByTimeAsync(10_000);
+      });
+      expect(streamFor('held')).toBe(stream);
+      // Once nobody holds it, it goes.
+      await vi.advanceTimersByTimeAsync(10_000);
+      expect(streamFor('held')).toBeUndefined();
+    } finally {
+      vi.useRealTimers();
+    }
   });
 });
