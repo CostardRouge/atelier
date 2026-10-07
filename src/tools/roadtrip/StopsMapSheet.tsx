@@ -32,9 +32,12 @@ import {
   numeralScale,
   patchStop,
   removeStop,
+  sameStopPlace,
   searchPlace,
   type MapStop,
 } from '../../shared/roadtrip/hooks/stops';
+import { cityPlace, fillFromIndex, fillSummary, lackingLine, lacksIndexFacts, withCityFacts } from '../../shared/roadtrip/hooks/stop-index';
+import { stateCodeFor } from '../../shared/roadtrip/place-style';
 import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
 import { groupStops, type GroupOptions } from '../../shared/roadtrip/hooks/stop-clusters';
 import { newId } from '../../shared/roadtrip/trip-types';
@@ -137,12 +140,16 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
   /** Asks the town names to be laid out again — set by the effect that owns them. */
   const relabel = useRef<() => void>(() => {});
 
+  // A state learnt from the town index is a change too (`sameStopPlace`).
   const changed =
     draft.length !== stops.length ||
     draft.some((stop, i) => {
       const was = stops[i];
-      return !was || was.id !== stop.id || was.lat !== stop.lat || was.lon !== stop.lon || was.name !== stop.name;
+      return !was || !sameStopPlace(was, stop);
     });
+  /** What the last «fill from the town index» did, said under the list. */
+  const [fillNote, setFillNote] = useState<{ text: string; left: number } | null>(null);
+  const lacking = draft.filter(lacksIndexFacts).length;
   const done = () => (changed ? onDone(draft) : onCancel());
   useDialogKeys({ onCancel, onConfirm: done });
 
@@ -249,18 +256,21 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
           if (!m) return;
           const { snap: snapping, places: trip } = latest.current;
           if (snapping) {
-            const project = (p: Place) => {
+            const project = (p: Place, town: Town | null) => {
               const at = m.project([p.lon, p.lat]);
-              return { place: p, x: at.x, y: at.y };
+              return { place: p, town, x: at.x, y: at.y };
             };
             // The trip's own places first: on a tie they win over a town.
             const hit = nearestWithin(
-              [...trip.map(project), ...inView.current.map(project)],
+              [...trip.map((p) => project(p, null)), ...inView.current.map((t) => project(t, t))],
               e.point,
               SNAP_PX,
             );
             if (hit) {
-              add({ name: hit.place.name, lat: hit.place.lat, lon: hit.place.lon });
+              // A trip place comes WHOLE — its state, codes and writing; a
+              // town of the index brings its state and country, so the stop
+              // is written «Sydney, NSW» like any place of the trip.
+              add(hit.town ? cityPlace(hit.town) : hit.place);
               return;
             }
           }
@@ -606,6 +616,11 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                           aria-label={`Name of stop ${index + 1}`}
                           className="min-w-0 flex-1 h-7 px-1.5 border border-transparent rounded-control bg-transparent text-sm text-ink focus:outline-none focus:border-accent focus:bg-surface"
                         />
+                        {stop.state?.trim() && (
+                          <span className="flex-none font-mono text-3xs text-muted" title={stop.state}>
+                            {stateCodeFor({ state: stop.state, stateCode: stop.stateCode, searchCode: stop.searchCode, countryCode: stop.countryCode }, { stateCodes: {} }).code || stop.state}
+                          </span>
+                        )}
                         {stop.picture && (
                           <span
                             className="flex-none inline-flex text-muted [&>svg]:w-3.5 [&>svg]:h-3.5"
@@ -649,12 +664,33 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                   })}
                 </ol>
               )}
+              {/* The fill's answer stands while the list is as it left it; the verb comes back after an edit. */}
+              {fillNote && fillNote.left === lacking ? (
+                <p className="m-0 text-2xs text-muted">{fillNote.text}</p>
+              ) : typeof towns === 'object' && lacking > 0 && (
+                <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
+                  <span>{lackingLine(lacking, draft.length)}</span>
+                  <Button
+                    size="sm"
+                    onClick={() => {
+                      const out = fillFromIndex(draft, towns.cities);
+                      if (out.filled) setDraft(out.places);
+                      setFillNote({ text: fillSummary(out.filled, out.left), left: out.left });
+                    }}
+                  >
+                    Fill from the town index
+                  </Button>
+                </div>
+              )}
               {selected && offer && (
                 <div className="flex flex-wrap items-center gap-2 text-xs text-muted">
                   <span>Stop {selectedIndex + 1} has no name.</span>
                   <Button
                     size="sm"
-                    onClick={() => setDraft(patchStop(draft, selected.id, { name: offer.name }))}
+                    onClick={() =>
+                      // Named after the town, it takes the town's state and country.
+                      setDraft(draft.map((s) => (s.id === selected.id ? withCityFacts({ ...s, name: offer.name }, offer.city) : s)))
+                    }
                   >
                     Call it {offer.name} · {offer.km < 1 ? '<1' : Math.round(offer.km)} km
                   </Button>

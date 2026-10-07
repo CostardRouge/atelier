@@ -823,6 +823,24 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     expect(driveCounterPieces(plan, o, 'places', 0, { day: 'Jour', of: 'sur' }).label).toBe('Stop');
   });
 
+  it('hands Days + km the day with the distance so far beside its total, in whole units', () => {
+    const o = quiet({ pace: 0.65 });
+    const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
+    expect(driveCounterPieces(plan, o, 'days-km', 0, WORDS)).toEqual({ label: 'Day', headline: '1', headlineValue: 1, counter: 'of 30 · 0 km' });
+    const whole = Math.round(plan.kmAtStop[4]);
+    const end = driveCounterPieces(plan, o, 'days-km', plan.seconds + 1, WORDS);
+    expect(end).toMatchObject({ label: 'Day', headline: '30', headlineValue: 30 });
+    expect(end.counter).toBe(`of 30 · ${String(whole).replace(/\B(?=(\d{3})+(?!\d))/g, ' ')} km`);
+    // The day and its value are exactly the Days mode's at every moment.
+    for (const t of [0.5, plan.seconds / 3, plan.seconds / 2]) {
+      const a = driveCounterPieces(plan, o, 'days', t, WORDS);
+      const b = driveCounterPieces(plan, o, 'days-km', t, WORDS);
+      expect([b.headline, b.headlineValue]).toEqual([a.headline, a.headlineValue]);
+      expect(b.counter!.startsWith(`${a.counter} · `)).toBe(true);
+    }
+    expect(driveCounterPieces(plan, { ...o, distance: 'mi' }, 'days-km', plan.seconds + 1, WORDS).counter).toMatch(/ mi$/);
+  });
+
   it('hands the odometer the value behind the numeral: the day on its continuous scale, the distance in the unit', () => {
     const o = quiet({ pace: 0.65 });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;

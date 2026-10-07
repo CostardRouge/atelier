@@ -31,11 +31,13 @@ import { FieldRow, NumberField, SelectField, TextField } from '../../ui/Inspecto
 import { AnchoredPopover } from '../../ui/OverflowMenu';
 import { revealInScroller } from '../../ui/reveal';
 import { useListReorder } from '../../ui/use-list-reorder';
+import { loadGazetteer } from '../load-gazetteer';
 import { PLACE_STYLE_OPTIONS, countryName, majorityCountry, type PlaceWritingTrip } from '../place-style';
 import { formatCoords } from '../trip-places';
 import { newId, type PlaceStyle } from '../trip-types';
 import type { HookPanelHost, HookPlace } from './hook-variant';
 import type { GroupOptions } from './stop-clusters';
+import { fillFromIndex, fillSummary, lackingLine, lacksIndexFacts } from './stop-index';
 import MapField from './map-field';
 import { resetLink } from './panel-ui';
 import {
@@ -107,6 +109,9 @@ export default function StopsEditor({
   const [selectedId, setSelectedId] = useState<string | null>(null);
   /** What the last pick did, when it did more than the stop it was asked from. */
   const [spread, setSpread] = useState<string | null>(null);
+  /** The town index being read for a fill, and what the last fill did. */
+  const [filling, setFilling] = useState(false);
+  const [fillNote, setFillNote] = useState<{ text: string; left: number } | null>(null);
   const listRef = useRef<HTMLUListElement | null>(null);
   const rowRefs = useRef(new Map<string, HTMLLIElement>());
 
@@ -173,6 +178,25 @@ export default function StopsEditor({
     : null;
 
   const written = (stop: HookPlace) => stopText(stop, placeStyle, writing);
+
+  // The stops that do not say their state learn it from the shipped town
+  // index, where it answers without doubt (`stop-index.ts`) — one change, so
+  // one undo. The index is read on the click, never before.
+  const lacking = stops.filter(lacksIndexFacts).length;
+  const fillStates = async () => {
+    setFilling(true);
+    setFillNote(null);
+    try {
+      const cities = await loadGazetteer();
+      const out = fillFromIndex(stops, cities);
+      if (out.filled) onChange(out.places);
+      setFillNote({ text: fillSummary(out.filled, out.left), left: out.left });
+    } catch {
+      setFillNote({ text: 'The town index could not be read here.', left: -1 });
+    } finally {
+      setFilling(false);
+    }
+  };
 
   return (
     <div className="flex flex-col gap-2">
@@ -292,6 +316,22 @@ export default function StopsEditor({
         </ul>
       )}
 
+      {/*
+        The fill's answer stands while the list is as it left it; the verb
+        comes back after an edit — or at once when the index could not be read.
+      */}
+      {fillNote && (fillNote.left === lacking || fillNote.left < 0) && (
+        <p className="m-0 text-2xs text-muted">{fillNote.text}</p>
+      )}
+      {stops.length > 0 && lacking > 0 && fillNote?.left !== lacking && (
+        <div className="flex flex-wrap items-center gap-x-2 gap-y-1 text-2xs text-muted">
+          <span>{lackingLine(lacking, stops.length)}</span>
+          <button type="button" disabled={filling} onClick={() => void fillStates()} className={resetLink}>
+            {filling ? 'Reading the town index…' : 'Fill from the town index'}
+          </button>
+        </div>
+      )}
+
       {selected && (
         <AnchoredPopover
           anchorRect={() => rowRefs.current.get(selected.id)?.getBoundingClientRect() ?? null}
@@ -409,7 +449,7 @@ function StopPopover({
         hint={
           stop.state?.trim()
             ? `Written “${stopText(stop, placeStyle, writing)}”${own === 'opener' ? ` — ${openerWord}, as the opener writes every stop.` : '.'}`
-            : 'The state or region, so the name can be written “Sydney, NSW” like the trip’s own places. A search fills it.'
+            : 'The state or region, so the name can be written “Sydney, NSW” like the trip’s own places. A search fills it, and so does “Fill from the town index” under the list.'
         }
       >
         <TextField

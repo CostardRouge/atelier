@@ -224,6 +224,22 @@ export function replaceStopPlace(stops: readonly MapStop[], id: string, place: H
   );
 }
 
+/**
+ * Whether two stops are the same place said the same way — id, position,
+ * name, writing and every fact. What the big map's Done compares, so a state
+ * learnt from the town index counts as a change.
+ */
+export function sameStopPlace(a: MapStop, b: MapStop): boolean {
+  return (
+    a.id === b.id &&
+    a.lat === b.lat &&
+    a.lon === b.lon &&
+    a.name === b.name &&
+    a.style === b.style &&
+    PLACE_FACTS.every((key) => (a[key] ?? '') === (b[key] ?? ''))
+  );
+}
+
 /** One stop changed in place; everything else, including its picture, kept. */
 export function patchStop(
   stops: readonly MapStop[],

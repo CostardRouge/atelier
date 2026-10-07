@@ -139,6 +139,7 @@ function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null)
   const n = route.stops.length;
   if (count === 'km') return `The badge counts the distance as the car drives, up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies.`;
   if (count === 'places') return `The badge counts the stops as the car reaches them, up to ${n}.`;
+  const km = count === 'days-km' ? `, the distance beside it up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies` : '';
   if (!plan.clock) {
     return route.stops.length
       ? 'No stop carries a date, so the day cannot count: the badge keeps the day of the trip. A stop put on one of the trip’s places, or given a picture, takes its date.'
@@ -146,7 +147,7 @@ function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null)
   }
   const from = counterDay(plan.clock.arrive[0], route.tripDays);
   const to = counterDay(plan.clock.leave[n - 1], route.tripDays);
-  return `The badge counts the day of the trip as the car drives, from day ${from} to day ${to} of ${route.tripDays}.`;
+  return `The badge counts the day of the trip as the car drives, from day ${from} to day ${to} of ${route.tripDays}${km}.`;
 }
 
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
@@ -782,13 +783,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         <Group title="Recap">
           {!count ? (
             <p className="m-0 text-xs text-muted">
-              To make the badge’s number count with the car — the day of the trip, the distance or the stops —
+              To make the badge’s number count with the car — the day of the trip, the distance, the stops, or the
+              day with the distance beside it —
               pick a counter that follows the drive under Content → Counter.
             </p>
           ) : (
             <>
               <p className="m-0 text-xs text-ink-soft">{recapLine(count, route, plan)}</p>
-              {count === 'days' && route.undated > 0 && route.undated < route.stops.length && (
+              {(count === 'days' || count === 'days-km') && route.undated > 0 && route.undated < route.stops.length && (
                 <p className="m-0 text-xs text-accent-ink">
                   {route.undated} {route.undated === 1 ? 'stop carries' : 'stops carry'} no date — the day holds across{' '}
                   {route.undated === 1 ? 'it' : 'them'}.{o.stopsOn === 'custom' ? ' A stop put on one of the trip’s places, or given a picture, takes its date.' : ''}

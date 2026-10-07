@@ -932,13 +932,15 @@ single day — give it an end date to count a range". The old fixed examples wer
 invented values, and three of the four counter modes looked broken because
 picking one changed nothing and said nothing.
 
-**The badge can count WITH the car — the trip recap.** Three more counter
+**The badge can count WITH the car — the trip recap.** Four more counter
 modes, offered as such in the Counter section and honoured only under the
 Virée opener (anywhere else they say why not): *Days, as the car drives*,
-*Kilometres, as the car drives*, *Stops, as the car drives*. The number then
-follows the car at every frame — the day of the trip (its total the trip's),
-the distance as the crow flies between the stops passed (never a road
-distance, which the app does not know), or the stops reached — with
+*Kilometres, as the car drives*, *Stops, as the car drives* and *Days + km, as
+the car drives*. The number then follows the car at every frame — the day of
+the trip (its total the trip's), the distance as the crow flies between the
+stops passed (never a road distance, which the app does not know), the stops
+reached, or the day with the distance so far beside its total
+(`Day · 54 · of 90 · 1 479 km`, the kilometres in whole units) — with
 **odometer digits**: each in a fixed cell, so the badge never shakes when 199
 turns 200, rolling like a car's as the next one comes — and a still of
 the piece shows the trip told whole. ONE clock drives all of it: each stop is
@@ -1274,8 +1276,13 @@ of the trip's places), its name with the same place search as the legs, its
 name alone, like every place of the suite, with *Written as* on the opener
 choosing for all the stops and a stop able to depart from it —, its latitude
 and longitude, its picture, and Earlier / Later. A stop adopted from one of
-the trip's places or found by the search knows its state and country from the
-start; a stop dropped by hand knows only where it is until you tell it. The towns come from the
+the trip's places, found by the search, tapped on a town of the big map or named
+after the town it offers knows its state and country from the start. For the
+others, **Fill from the town index** under either list writes the state of every
+named stop the shipped index answers for without doubt — a town of the same name
+within 15 km, else a town within 10 km whose neighbours all lie in one state, so a
+stop on the Queensland–New South Wales border is left to you and the line says
+how many were. A stop dropped by hand with no name knows only where it is. The towns come from the
 city index the app ships, so the map needs no network; the OpenStreetMap
 background is the optional one above, off until you turn it on. Nothing is
 written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one

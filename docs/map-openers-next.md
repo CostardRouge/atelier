@@ -2,7 +2,10 @@
 
 **Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5, then the
 finer tiles along a tight follow, the Itinerary's own camera and the
-odometer digits — nothing is left.** The maintainer answered two labs the same day: «Labo Virée»
+odometer digits; two gaps found that evening are built too — a stop that
+learns its state from the town index (§1) and the *Days + km* counter
+(§5). Only §5's «later» items are left: the picture of the DAY with a tick
+per day, Défilé's ribbon under the map, the distance comparison.** The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
@@ -46,7 +49,10 @@ must stay reachable from the panel because its PICTURE is chosen there.
   migration. Filled when the stop is adopted from one of the trip's places (a
   copy: `HookStage.places` must then carry those fields, additively), from the
   search (`placeDetails` / `adoptSearchResult`, which never overwrite a typed
-  field) and, where it can be read, from the town index. Written everywhere a
+  field) and, where it can be read, from the town index (**built late on
+  2026-10-07**: a town tapped on the big map, the town a stop is named after,
+  and *Fill from the town index* under both lists — `hooks/stop-index.ts`).
+  Written everywhere a
   stop's name is drawn — the openers' map labels, Virée's caption that follows
   the car, both lists — through `placeLine` / `writePlace` and the cascade stop
   → opener → trip. His words: «si je suis à Sydney, il faut afficher Sydney NSW
@@ -125,7 +131,7 @@ recommendations («ça me va aussi»).
   with the plan (pure, `trip-clock.ts`), so none can disagree in preview,
   seek or export.
 - **The counter** counts **Days** by default (also Kilometres, Places, Days +
-  km), with **odometer** digits — each in a fixed-width cell, so the badge
+  km — built: the day as the numeral, `of 90 · 1 479 km` beside it), with **odometer** digits — each in a fixed-width cell, so the badge
   never shakes when 199 turns 200.
 - **Declared where the counter lives**: a mode *Follows the drive* in the
   badge's Counter section, offered only under Virée — never a silent

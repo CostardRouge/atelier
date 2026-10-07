@@ -1452,7 +1452,7 @@ export function counterDay(day: number, tripDays: number): number {
 export function driveCounterPieces(
   plan: DrivePlan,
   o: DriveOptions,
-  count: 'days' | 'km' | 'places',
+  count: 'days' | 'km' | 'places' | 'days-km',
   t: number,
   words: CounterWords,
 ): Partial<Record<'label' | 'headline' | 'counter', string>> & { headlineValue?: number } {
@@ -1460,12 +1460,21 @@ export function driveCounterPieces(
   // The value behind the numeral, for the odometer's roll: the day on its
   // continuous scale, the distance in the piece's unit — the whole number
   // once the car has arrived, so the final reading rests.
-  if (count === 'days') {
+  if (count === 'days' || count === 'days-km') {
     if (m.day === null || !plan.clock) return {};
     const total = plan.route.tripDays;
     const day = counterDay(m.day, total);
     const value = m.over ? day : Math.max(1, Math.min(Math.max(1, total), m.day));
-    return { label: words.day, headline: String(day), headlineValue: value, counter: `${words.of} ${total}` };
+    const counter = `${words.of} ${total}`;
+    if (count === 'days') return { label: words.day, headline: String(day), headlineValue: value, counter };
+    // Days + km: the distance so far rides beside the day's total, in WHOLE
+    // units — a decimal ticking under the numeral reads as noise, and the
+    // counter is plain text, never an odometer.
+    const unit = o.distance === 'off' ? 'km' : o.distance;
+    const km = plan.kmAt(m.s);
+    // A space in the thousands, like every distance of the suite (`formatDistance`).
+    const shown = String(Math.round(unit === 'mi' ? km * 0.621371 : km)).replace(/\B(?=(\d{3})+(?!\d))/g, ' ');
+    return { label: words.day, headline: String(day), headlineValue: value, counter: `${counter} · ${shown} ${unit}` };
   }
   if (count === 'km') {
     const unit = o.distance === 'off' ? 'km' : o.distance;
