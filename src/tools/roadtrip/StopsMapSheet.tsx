@@ -134,15 +134,29 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
    */
   const apply = useCallback((edit: (current: MapStop[]) => MapStop[], merge?: string) => {
     const label = merge ?? `step${(steps.current += 1)}`;
-    setHistory((h) => record(h, edit(h.present), { now: Date.now(), label }));
+    setHistory((h) => {
+      const next = edit(h.present);
+      // An edit that changed nothing (a stop renumbered onto its own place,
+      // inserted beside itself) is no step: an undo must always undo something.
+      const same = next.length === h.present.length && next.every((stop, i) => stop === h.present[i]);
+      return same ? h : record(h, next, { now: Date.now(), label });
+    });
   }, []);
   /** What the last drop or tap did, said on the map for a moment — or what letting go will do. */
   const [note, setNote] = useState<{ text: string; undoable: boolean } | null>(null);
   const noteTimer = useRef<number | undefined>(undefined);
+  const said = useRef<string | null>(null);
   const say = useCallback((text: string | null, undoable = false, ms = 0) => {
     window.clearTimeout(noteTimer.current);
-    setNote(text ? { text, undoable } : null);
-    if (text && ms) noteTimer.current = window.setTimeout(() => setNote(null), ms);
+    // A drag says its line on every pointer move: the sheet re-renders only when it changes.
+    const key = text ? `${undoable ? 1 : 0}${text}` : null;
+    if (key !== said.current) setNote(text ? { text, undoable } : null);
+    said.current = key;
+    if (text && ms)
+      noteTimer.current = window.setTimeout(() => {
+        said.current = null;
+        setNote(null);
+      }, ms);
   }, []);
   /** The stop whose number is being typed in the list. */
   const [renumber, setRenumber] = useState<{ id: string; value: string } | null>(null);
@@ -535,12 +549,18 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
           const target = drop?.kind === 'swap' ? list[drop.index]?.id : null;
           for (const [sid, mk] of markers.current) litMarker(mk.getElement(), sid === target);
         };
+        // The landing last lit: the map is re-lit and the line re-said only when it changes.
+        let lit = '';
         created.on('dragstart', () => {
           held.current = el.dataset.stopMarker ?? null;
+          lit = '';
         });
         created.on('drag', () => {
           const at = landing();
           if (!at) return;
+          const key = JSON.stringify(at.drop);
+          if (key === lit) return;
+          lit = key;
           light(at.drop, at.list);
           say(dropLine(at.drop, (i) => at.list[i]?.name ?? '', at.index));
         });
@@ -824,8 +844,8 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                               } else if (e.key === 'Enter') {
                                 e.preventDefault();
                                 const n = Number(renumber.value);
-                                if (Number.isInteger(n) && n >= 1 && n !== index + 1) {
-                                  const to = Math.min(n, draft.length);
+                                const to = Math.min(n, draft.length);
+                                if (Number.isInteger(n) && n >= 1 && to !== index + 1) {
                                   apply((current) => moveStopTo(current, stop.id, to - 1));
                                   say(`${stop.name || `Stop ${index + 1}`} is now number ${to}`, true, 4000);
                                 }

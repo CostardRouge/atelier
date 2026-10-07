@@ -90,6 +90,19 @@ describe('the biggest town within reach, read through the grid', () => {
     }
   });
 
+  it('reaches a town at the very edge of the circle, across a cell, north and east', () => {
+    const small = { name: 'Small', lat: 1 - 50 / 111.32 - 0.0002, lon: 10.5, population: 10 };
+    // 49.99 km due north, in the next one-degree cell: a box on 111.32 km a degree stopped short.
+    const north = { name: 'North', lat: small.lat + (49.99 / 6371.0088) * (180 / Math.PI), lon: 10.5, population: 900 };
+    expect(haversineKm(small, north)).toBeLessThan(50);
+    expect(biggestTownWithin([small, north], small, 50)?.name).toBe('North');
+    // East at 60°, where the circle bulges past `km / cos(lat)`.
+    const at = { lat: 60.2, lon: 9.95 };
+    const east = { name: 'East', lat: 60.2, lon: 10.85, population: 900 };
+    const reach = haversineKm(at, east) + 0.01;
+    expect(biggestTownWithin([east], at, reach)?.name).toBe('East');
+  });
+
   it('finds nothing where nothing is within reach', () => {
     expect(biggestTownWithin([{ name: 'Far', lat: 10, lon: 10, population: 5 }], { lat: -40, lon: 100 }, 50)).toBeNull();
   });

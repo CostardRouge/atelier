@@ -21,7 +21,7 @@
  * Pure and DOM-free; the towns are handed in.
  */
 
-import { haversineKm, type GeoPoint } from './geo';
+import { degreeWindow, haversineKm, type GeoPoint } from './geo';
 
 export type GroupVisits = 'consecutive' | 'all';
 export type GroupName = 'town' | 'first' | 'central';
@@ -183,13 +183,11 @@ function gridOf(towns: readonly NamedTown[]): TownGrid {
  */
 export function biggestTownWithin(towns: readonly NamedTown[], centre: GeoPoint, reach: number): NamedTown | null {
   const { cells } = gridOf(towns);
-  const dLat = reach / 111.32;
-  const cosLat = Math.cos((centre.lat * Math.PI) / 180);
-  const lat0 = Math.floor((centre.lat - dLat) / CELL_DEG);
-  const lat1 = Math.floor((centre.lat + dLat) / CELL_DEG);
+  const window = degreeWindow(centre.lat, reach);
+  const lat0 = Math.floor((centre.lat - window.dLat) / CELL_DEG);
+  const lat1 = Math.floor((centre.lat + window.dLat) / CELL_DEG);
   // Near a pole, or for a reach past a few thousand km, every longitude.
-  const wide = cosLat < 0.05 || reach / (111.32 * Math.max(cosLat, 1e-6)) >= 180;
-  const dLon = wide ? 180 : reach / (111.32 * cosLat);
+  const dLon = window.dLon === null || window.dLon >= 180 ? 180 : window.dLon;
   const lon0 = Math.floor((centre.lon - dLon) / CELL_DEG);
   const lon1 = Math.floor((centre.lon + dLon) / CELL_DEG);
   const seen = new Set<number>();
