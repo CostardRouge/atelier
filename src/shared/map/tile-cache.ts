@@ -54,7 +54,7 @@ let opening: Promise<IDBDatabase | null> | null = null;
 /** The database, or null where this browser keeps none (a private window, a test). */
 function openDb(): Promise<IDBDatabase | null> {
   if (opening) return opening;
-  opening = new Promise((resolve) => {
+  const held: Promise<IDBDatabase | null> = new Promise((resolve) => {
     if (typeof indexedDB === 'undefined') {
       resolve(null);
       return;
@@ -67,14 +67,28 @@ function openDb(): Promise<IDBDatabase | null> {
           db.createObjectStore(STORE, { keyPath: 'key' }).createIndex(BY_USE, 'used');
         }
       };
-      req.onsuccess = () => resolve(req.result);
+      req.onsuccess = () => {
+        const db = req.result;
+        // A database the browser closes (storage cleared, a newer version
+        // elsewhere) is opened again on the next read, not failed forever.
+        const forget = () => {
+          if (opening === held) opening = null;
+        };
+        db.onversionchange = () => {
+          db.close();
+          forget();
+        };
+        db.onclose = forget;
+        resolve(db);
+      };
       req.onerror = () => resolve(null);
       req.onblocked = () => resolve(null);
     } catch {
       resolve(null);
     }
   });
-  return opening;
+  opening = held;
+  return held;
 }
 
 /**
@@ -201,11 +215,16 @@ export interface TileCacheSize {
 const listeners = new Set<() => void>();
 let size: TileCacheSize | null = null;
 let measuring = false;
+/** A change landed while measuring: measure once more when done. */
+let again = false;
 let measureTimer: ReturnType<typeof setTimeout> | null = null;
 
 /** Measured on demand and after changes, a burst at a time. */
 function measure(): void {
-  if (measuring) return;
+  if (measuring) {
+    again = true;
+    return;
+  }
   measuring = true;
   void (async () => {
     const db = await openDb();
@@ -213,11 +232,19 @@ function measure(): void {
     size = { tiles: all.length, bytes: all.reduce((sum, t) => sum + t.size, 0) };
     measuring = false;
     for (const listener of listeners) listener();
+    if (again) {
+      again = false;
+      measure();
+    }
   })();
 }
 
 function changed(): void {
-  if (!listeners.size) return;
+  // Nobody reading: the next reader measures afresh rather than see the old count.
+  if (!listeners.size) {
+    size = null;
+    return;
+  }
   if (measureTimer !== null) clearTimeout(measureTimer);
   measureTimer = setTimeout(() => {
     measureTimer = null;
