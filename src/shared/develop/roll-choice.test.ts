@@ -66,7 +66,9 @@ describe('a picture’s own choice', () => {
 
 describe('a batch onto a picture on the roll’s sensor', () => {
   it('keeps it there with a sensor’s numbers, its gain left to be metered', () => {
-    expect(ontoRollSensor('sensor', photo(), true, brighter)).toEqual({ ...brighter, base: 'gain', rawGain: null });
+    // On the opening curve the stage and the export put a roll's sensor on, or the batch's own.
+    expect(ontoRollSensor('sensor', photo(), true, brighter)).toEqual({ ...brighter, base: 'gain', rawGain: null, baseCurve: { kind: 'standard' } });
+    expect(ontoRollSensor('sensor', photo(), true, { ...brighter, baseCurve: { kind: 'linear' } })?.baseCurve).toEqual({ kind: 'linear' });
   });
 
   it('leaves everything else as the batch wrote it', () => {

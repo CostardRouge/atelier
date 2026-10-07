@@ -258,6 +258,95 @@ push past white, a term of `toneShape`'s reference — never a `clamp01`; never
 clamp the luminance before the curve; a tone table on `CubeHead` spans
 `[0, toneTop]` and the GPU reads it at `L / u_headToneTop`.
 
+## A RAW's BASE curve rides the head's tone table (2026-10-07)
+
+**His ask**: Capture One's *Base Characteristics → Curve* (Auto · Film Extra
+Shadow · Film High Contrast · Film Standard · Linear Response). On the sensor
+rung Atelier had NO base curve — the decode in linear light, sRGB-encoded,
+times `rawGain`: C1's Linear Response — while the camera render carries the
+camera's curve, which is why a sensor picture read flatter than its render.
+**Decision** (`base-curve.ts`, pure; `DevelopSettings.baseCurve`, optional):
+`linear` · `standard` · `contrast` · `shadows` · `auto`; ONE Fritsch–Carlson
+curve (`makeCurve`) on the EXTENDED encoded luminance, drawn on [0,1] and
+continued above white as a line at its own slope there (floored at 0.25) so a
+RAW's headroom stays a number for the recovery and the shoulder. Applied as
+the FIRST step of `toneCurve` (`rawTone(base(L))`), i.e. after the Kelvin
+matrix, temperature, tint and exposure, before the bands, contrast, toe,
+shoulder and brightness; `toneShape` sends its reference white and black
+through it, and exists (non-null) for a curve alone. The named three are OUR
+designs, said so on screen — C1's are unpublished, never claim them. **Why
+no shader change**: the head's tone table is `toneCurve` tabulated, so the
+curve is IN the table and `HEAD_APPLY` reads it as it reads the sliders — one
+truth, held by the gate's «a RAW's BASE curve» rows (GPU vs CPU ≤ 0.64 code
+on black → two stops past white, four cases; Linear = no curve, 0 codes).
+**Rules**: absent = Linear, so nothing stored changes; it acts only where
+`isRawDevelop` (`effectiveBaseCurve`) — on a render it would be the camera's
+curve twice; it is NOT an edit on a render (`isDefaultDevelop` ignores it) but
+IS worth carrying (`carriesDevelop`: the clipboard, a preset); `withoutBase`
+KEEPS it but strips an Auto's measured points (`portableBaseCurve`) — an
+unmeasured Auto draws Standard; numbers that LAND (paste, preset, apply-to,
+reset, `setDraft`) go through `landBaseCurve`: the source's curve where it
+chose one, else the target's own, and an incoming bare Auto keeps the
+target's own measurement. `developTail` zeroes it (head only). **How to
+apply**: a new tone stage that belongs to the MATERIAL goes before
+`rawTone` in `toneCurve` and through `toneShape`'s reference, never in the
+shader; any new door that writes a develop onto another picture uses
+`landBaseCurve`.
+
+**Where it is chosen** (`DevelopBase.tsx`): a *Base curve* row under the
+sensor's row in the file's menu — a `Segmented` of four fixed words drawn
+whether or not the picture is on the sensor (no control appears or moves),
+the chosen curve's sentence under it only while on the sensor, the prose
+behind an ⓘ; a pick from below the sensor CLIMBS to `steps[0]` first.
+**The opening curve** (`openingBaseCurve`: the picture's own, else
+Standard) is written by every door that PUTS a picture on its sensor and by
+nothing else — the menu's climb (`PictureWorkbench` `onBase`), the roll's
+sensor (`ontoRollSensor`, the follower's `developNow` and `inheritedRef`,
+both synthetic develops of `use-roll-export.ts`) — so the stage and the
+export agree for a follower never written, a remeter (rawGain → null) never
+adds one, and a develop stored before 2026-10-07 stays Linear. A follower
+that picks a curve is written (the write-through counts `baseCurve` like
+`rawWb`). Driven headless on a synthetic DNG LibRaw decodes (`testing.md`'s
+recipe): the climb wrote Standard, each pick stored and moved the stage's
+grey ramp (codes at 1/11 of it: Linear 9 · Standard 6 · Contrast 4 ·
+Shadows 12), no page error.
+
+**Auto, measured** (`base-curve-fit.ts` pure, `measure-base-curve.ts` the
+browser half): the stage's OWN decode (`RawDecodedInfo.half` + `file`, so
+nothing decodes twice) as linear luminance × the gain, against the render
+the file carries asked of `decodeStill` at 512 px (the one door — never the
+full-size bitmap), both read on a 72-cell grid, FLAT cells only (an edge
+mis-registered by a cell is a wild point), the render through a
+magnification searched over 0.98–1.08 about the centre (a DJI render is
+4.93 % tighter than its sensor), the median render tone per band of 24,
+pool-adjacent-violators, (0,0) and an extrapolated white. **Refusals, said
+and stored as Standard**: render long edge < 640 (`FIT_MIN_RENDER_EDGE` —
+NOT a fit limit: on synthetic data the grid reads the curve within 2 codes
+from 1920 down to 320 px; it guards against THUMBNAIL renders, a HIF's 160 ×
+120, a DNG's 256 px preview; a DJI's 960 × 540 passes), an aspect > 3 %
+apart, < 6 bands of tone, a median residual > 4 codes, or two HALVES of the
+frame (left/right, top/bottom) disagreeing by > 6 codes band by band — the
+median residual alone let a local lift through at 0.12 code, measured, so
+the halves are the real «one curve» test. **Measured, synthetic only**
+(`base-curve-fit.test.ts`): Sony-like same frame 0.07 code residual, 0.18
+worst gap to the true curve; DJI-like 960 × 540 at 4.93 % found scale 1.05,
+gap 1.9 codes (the 0.005 scale step); headless on a synthetic DNG LibRaw
+decodes, 0.22 code and the stored points on the S the render was made with.
+**Never on a real ARW or DNG of his** — a real camera's colour (saturation
+moving luminance per hue) may raise the residual and the halves' gap past
+their thresholds on some pictures; tune `FIT_MAX_ERROR` / `FIT_MAX_SPLIT` on
+his files before trusting a refusal rate. **Rules**: measured ONCE where an
+Auto has no points (newly on the sensor, picked, or a preset/paste's bare
+Auto — `needsMeasuring`), on the decode in hand, points stored with the
+median error like `rawGain`; picking Auto on a measured Auto keeps it (no
+silent re-measure; Standard then Auto measures anew); an unmeasured Auto
+draws Standard everywhere, the export included, and the export never
+measures. **Defaults** (his decision 1): the menu's climb writes a bare
+Auto (measured on the decode it causes, Standard on a refusal); the roll's
+sensor choice keeps `openingBaseCurve` = Standard, because a follower
+nobody opened has no decode to measure on and its export must equal its
+stage.
+
 ## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
 
 `auto-develop.ts` (pure) + the `Auto` and `Levels` sections of

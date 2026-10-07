@@ -477,6 +477,10 @@ describe('counterPieces — a mode that cannot count says why', () => {
     expect(counterPieces(doc, driven, 'drive-km', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'km', headline: '0', counter: null });
     expect(counterPieces(doc, driven, 'drive-places', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'Stop', headline: '1', counter: null });
     expect(counterPieces(doc, driven, 'drive-places', { ...DEFAULT_BADGE_WORDS, stop: 'Étape' })!.label).toBe('Étape');
+    // Days + km at rest: the day alone, the distance's unit being the opener's.
+    expect(counterPieces(doc, driven, 'drive-days-km', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'Day', headline: '27', counter: 'of 310', unavailable: null });
+    expect(counterPieces(doc, post('2025-03-27'), 'drive-days-km', DEFAULT_BADGE_WORDS)!.unavailable).toMatch(/Virée/);
+    expect(driveCountOf('drive-days-km')).toBe('days-km');
     expect(driveCountOf('drive-km')).toBe('km');
     expect(driveCountOf('day')).toBeNull();
   });

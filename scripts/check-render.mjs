@@ -1640,6 +1640,58 @@ const out = await page.evaluate(async () => {
       }
       results.tone = { twin: twinTop, dips, underWhite, atWhite, warmWrong, width: HW };
     }
+
+    // --- a RAW's BASE curve (base-curve.ts): it rides the head's tone table,
+    // so the GPU must equal the CPU twin with no shader of its own — on the
+    // sensor's whole range (black to two stops past white at gain 4), with no
+    // slider (the shape exists for the curve alone) and under highlights −100
+    // (the recovery acting on what the curve hands over); and Linear must be
+    // the picture with no curve at all, to the code.
+    {
+      const measured = { kind: 'auto', points: [{ x: 0, y: 0 }, { x: 0.25, y: 0.2 }, { x: 0.55, y: 0.62 }, { x: 0.85, y: 0.93 }, { x: 1, y: 1 }] };
+      const cases = [
+        ['standard', { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, baseCurve: { kind: 'standard' } }],
+        ['high contrast + highlights −100', { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, highlights: -100, baseCurve: { kind: 'contrast' } }],
+        ['lifted shadows + exposure +0.5', { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 2, exposure: 0.5, baseCurve: { kind: 'shadows' } }],
+        ['auto (measured points)', { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, baseCurve: measured }],
+      ];
+      const srcAll = (x, y) => { const e = x / (HW - 1); const v = Math.pow((e + 0.055) / 1.055, 2.4); const m = mixes[Math.floor((y * mixes.length) / HH)]; return [v * m[0], v * m[1], v * m[2]]; };
+      const dataAll = new Uint16Array(HW * HH * 3);
+      for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) { const [r, g, b] = srcAll(x, y); dataAll.set([toHalf(r), toHalf(g), toHalf(b)], (y * HW + x) * 3); }
+      const gpuOf = (lut) => {
+        const grader = makeGraphGrader(lut, HW, HH, 1, 'tetrahedral');
+        setDitherForTest(false);
+        try {
+          const o = document.createElement('canvas'); o.width = HW; o.height = HH;
+          const oc = o.getContext('2d', { willReadFrequently: true });
+          oc.drawImage(grader.render(halfImg.kind === 'half' ? { kind: 'half', width: HW, height: HH, data: dataAll } : null), 0, 0);
+          return oc.getImageData(0, 0, HW, HH).data;
+        } finally { setDitherForTest(null); grader.dispose(); }
+      };
+      const rows = [];
+      for (const [name, d] of cases) {
+        const lut = composeLutStack(layerOf(look), 'none', 'tetrahedral', d);
+        const gpu = gpuOf(lut);
+        let twin = 0, moved = 0;
+        const plain = gpuOf(composeLutStack(layerOf(look), 'none', 'tetrahedral', { ...d, baseCurve: null }));
+        for (let y = 0; y < HH; y++) for (let x = 0; x < HW; x++) {
+          const [r, g, b] = srcAll(x, y);
+          const cpu = sampleWith(lut, r, g, b, 'tetrahedral');
+          const i = (y * HW + x) * 4;
+          for (let c = 0; c < 3; c++) {
+            twin = Math.max(twin, Math.abs(gpu[i + c] - code(cpu[c])));
+            moved = Math.max(moved, Math.abs(gpu[i + c] - plain[i + c]));
+          }
+        }
+        rows.push({ name, twin, moved });
+      }
+      const linear = { ...DEFAULT_DEVELOP, base: 'gain', rawGain: 4, contrast: 15 };
+      const a = gpuOf(composeLutStack(layerOf(look), 'none', 'tetrahedral', { ...linear, baseCurve: { kind: 'linear' } }));
+      const b = gpuOf(composeLutStack(layerOf(look), 'none', 'tetrahedral', linear));
+      let linearDiff = 0;
+      for (let i = 0; i < a.length; i++) linearDiff = Math.max(linearDiff, Math.abs(a[i] - b[i]));
+      results.baseCurve = { rows, linearDiff };
+    }
   }
 
   // --- the kept upstream (graph.ts, planResume): a render resumed from the
@@ -2222,6 +2274,12 @@ const hd = out.head;
   // columns under white is the shape, not a loss.
   say(tn.underWhite > tn.width * 0.7 && tn.atWhite > 0, `${tn.underWhite} of ${tn.width} columns land under white with their order, and the sensor's top lands AT white (${tn.atWhite} column(s) with a channel there)`);
   say(tn.warmWrong === 0, `a warm highlight stays warm through the clip — R ≥ G ≥ B on every column (${tn.warmWrong} wrong)`);
+  const bc = out.baseCurve;
+  console.log("\n  a RAW's BASE curve (base-curve.ts), carried in the head's tone table — black to two stops past white:");
+  for (const row of bc.rows) {
+    say(row.twin <= 1.5 && row.moved > 4, `${row.name}: the GPU against the CPU twin worst ${row.twin.toFixed(2)} code(s) (allowed 1.5), and the curve moved the picture by ${row.moved} (must be past 4)`);
+  }
+  say(bc.linearDiff === 0, `Linear is the picture with no curve, to the code (worst ${bc.linearDiff})`);
 }
 
 const up = out.upstream;

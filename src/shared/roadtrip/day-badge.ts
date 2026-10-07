@@ -67,7 +67,8 @@ export type CounterMode =
   | 'stage-length'
   /**
    * FOLLOWS THE DRIVE (2026-10-07): the number counts as Virée's car goes —
-   * the day of the trip, the kilometres, or the stops reached. The badge
+   * the day of the trip, the kilometres, the stops reached, or the day
+   * with the distance beside its total («Day 27 · of 310 · 4,120 km»). The badge
    * says so here, where the counter lives, and never changes in secret:
    * the opener rewrites the pieces through its `content(t)`, the contract
    * Défilé's numeral and Virée's own caption already ride. Base pieces are
@@ -75,12 +76,19 @@ export type CounterMode =
    */
   | 'drive-days'
   | 'drive-km'
-  | 'drive-places';
+  | 'drive-places'
+  | 'drive-days-km';
 
 /** The counter modes an opener drives, and what each counts. */
-export type DriveCount = 'days' | 'km' | 'places';
+export type DriveCount = 'days' | 'km' | 'places' | 'days-km';
+const DRIVE_COUNTS: Partial<Record<CounterMode, DriveCount>> = {
+  'drive-days': 'days',
+  'drive-km': 'km',
+  'drive-places': 'places',
+  'drive-days-km': 'days-km',
+};
 export function driveCountOf(mode: CounterMode | undefined): DriveCount | null {
-  return mode === 'drive-days' ? 'days' : mode === 'drive-km' ? 'km' : mode === 'drive-places' ? 'places' : null;
+  return (mode && DRIVE_COUNTS[mode]) ?? null;
 }
 
 /**
@@ -101,6 +109,11 @@ export const COUNTER_MODES: readonly {
   { id: 'drive-days', label: 'Days, as the car drives', hint: 'The day of the trip, counting with Virée’s car' },
   { id: 'drive-km', label: 'Kilometres, as the car drives', hint: 'The distance so far, counting with Virée’s car' },
   { id: 'drive-places', label: 'Stops, as the car drives', hint: 'The stops reached, counting with Virée’s car' },
+  {
+    id: 'drive-days-km',
+    label: 'Days + km, as the car drives',
+    hint: 'The day of the trip with the distance so far beside it, counting with Virée’s car',
+  },
 ];
 
 /** The badge's pieces, top to bottom. */
@@ -399,10 +412,13 @@ export function counterPieces(
       // At rest, before the car moves: the day of the trip, no distance, the
       // first stop — true readings, each overwritten the moment the car is.
       // The distance's total is the road's, which only the opener knows.
+      // Days + km at rest is the day alone: the distance's unit is the
+      // opener's to choose, and it says it the moment the car moves.
+      const days = drive === 'days' || drive === 'days-km';
       return {
-        label: drive === 'days' ? w.day : drive === 'km' ? 'km' : w.stop?.trim() || 'Stop',
-        headline: drive === 'days' ? String(range.from) : drive === 'km' ? '0' : '1',
-        counter: drive === 'days' ? `${w.of} ${range.total}` : null,
+        label: days ? w.day : drive === 'km' ? 'km' : w.stop?.trim() || 'Stop',
+        headline: days ? String(range.from) : drive === 'km' ? '0' : '1',
+        counter: days ? `${w.of} ${range.total}` : null,
         caption: pin(place),
         unavailable: null,
       };

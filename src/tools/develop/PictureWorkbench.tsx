@@ -28,6 +28,9 @@ import {
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
+import { cloneBaseCurve, needsMeasuring, openingBaseCurve } from '../../shared/develop/base-curve';
+import { measureBaseCurve } from '../../shared/develop/measure-base-curve';
+import type { HalfImage } from '../../shared/render/half-image';
 import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import {
   calibrationAt,
@@ -852,8 +855,10 @@ export default function PictureWorkbench({
   const settling = isRawDevelop(stored) && !isRawDevelop(draft.draft);
   const developNow = useMemo<DevelopSettings>(() => {
     if (isRawDevelop(draft.draft)) return draft.draft;
-    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain };
-    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain } : draft.draft;
+    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain, baseCurve: stored.baseCurve ?? null };
+    // On the roll's sensor the picture opens on the opening curve, as the
+    // export does (`openingBaseCurve`), until it is given its own.
+    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain, baseCurve: openingBaseCurve(draft.draft.baseCurve) } : draft.draft;
   }, [followsSensor, settling, stored, draft.draft, followGain]);
   const inherited = developNow !== draft.draft;
   // On the roll's sensor and not yet on its own: what a cancel, a failed fetch
@@ -861,8 +866,8 @@ export default function PictureWorkbench({
   const following = inherited && !settling;
   const followingRef = useRef(following);
   followingRef.current = following;
-  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain'> | null>(null);
-  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain } : null;
+  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain' | 'baseCurve'> | null>(null);
+  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain, baseCurve: developNow.baseCurve ?? null } : null;
   // The stack grades what the picture is developed WITH: after the draft's
   // own effect, so the roll's base reaches the cube in the same commit.
   const { setDevelop: setStackDevelop } = stack;
@@ -903,6 +908,8 @@ export default function PictureWorkbench({
     };
   }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
   const rawGain = developNow.rawGain ?? null;
+  // The stage's last decode of the sensor — what an Auto base curve is measured on.
+  const [sensorDecode, setSensorDecode] = useState<{ file: File; half: HalfImage; gain: number } | null>(null);
   // The calibration the RAW carries, read from a megabyte of its head as soon
   // as it is in hand — it is what decides whether the two top rungs are
   // offered at all, and what the passes apply at them.
@@ -1241,6 +1248,8 @@ export default function PictureWorkbench({
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       setRawWhite(info.meta.white);
+      // Held for an Auto base curve, measured on this very decode (below).
+      setSensorDecode({ file: info.file, half: info.half, gain: info.gain });
       if (rawGain === null) {
         // On the roll's sensor the gain is held for the visit and written
         // only with the picture's first numbers (`inheritedRef`).
@@ -1252,6 +1261,35 @@ export default function PictureWorkbench({
     },
   });
   sampleColourRef.current = picture.sampleColour;
+  // An Auto base curve with no measurement yet — newly on the sensor, picked
+  // in the menu, or carried here by a preset or a paste — is MEASURED once,
+  // on the stage's own decode of this file against the render it carries,
+  // and stored like the gain (preview = export). Never re-measured: points
+  // once stored stay. A render too poor to measure falls back to Standard,
+  // stored, and the reason is said.
+  const curveToMeasure = wantsRaw && rawFile && sensorDecode?.file === rawFile && needsMeasuring(developNow.baseCurve);
+  const measuringFor = useRef<File | null>(null);
+  useEffect(() => {
+    if (!curveToMeasure || !sensorDecode || measuringFor.current === sensorDecode.file) return;
+    const { file: measured, half, gain } = sensorDecode;
+    measuringFor.current = measured;
+    let alive = true;
+    void measureBaseCurve(measured, half, rawGain ?? gain).then((fit) => {
+      if (!alive) return;
+      measuringFor.current = null;
+      if (fit.ok) {
+        patchDraft({ baseCurve: { kind: 'auto', points: fit.points, error: fit.error } });
+        tell(`Auto curve · measured on this file’s render · ${fit.error.toFixed(1)} code${fit.error === 1 ? '' : 's'} off`);
+      } else {
+        patchDraft({ baseCurve: { kind: 'standard' } });
+        tell(`No Auto curve: ${fit.reason} — Standard instead`);
+      }
+    });
+    return () => {
+      alive = false;
+      measuringFor.current = null;
+    };
+  }, [curveToMeasure, sensorDecode, rawGain, patchDraft, tell]);
   videoRef.current = picture.video;
   // Space plays and pauses the CLIP — the sheet's rule (`DevelopSheet.tsx`),
   // here on the tool's own window: a control the keyboard is on keeps its
@@ -1346,7 +1384,8 @@ export default function PictureWorkbench({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
     // A white balance set in kelvin is a number too, on the roll's sensor.
-    draft: isDefaultDevelop(draft.draft) && !(inherited && draft.draft.rawWb) ? null : draft.draft,
+    // So is a base curve picked there: it binds the material like a number.
+    draft: isDefaultDevelop(draft.draft) && !(inherited && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
     same: sameDevelop,
     // A picture on the roll's sensor writes the base WITH its first numbers:
     // they were set on the sensor's data and mean nothing on the render.
@@ -2352,7 +2391,11 @@ export default function PictureWorkbench({
                   return;
                 }
                 const climbing = baseRung(developNow.base) === 0;
-                patchDraft({ base: next });
+                // Newly on its sensor: the opening curve with it, so a RAW
+                // does not read flatter than its camera's JPEG by default.
+                // Auto, measured on the file's render once it is decoded —
+                // Standard where the render cannot be measured.
+                patchDraft(climbing ? { base: next, baseCurve: cloneBaseCurve(draft.draft.baseCurve) ?? { kind: 'auto' } } : { base: next });
                 setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');
@@ -2360,6 +2403,8 @@ export default function PictureWorkbench({
               }}
               status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
               gain={wantsRaw ? rawGain : null}
+              baseCurve={developNow.baseCurve ?? null}
+              onBaseCurve={(next) => patchDraft({ baseCurve: next })}
               calibration={calibration?.summary ?? null}
               roll={
                 onRollChoice && rollPhotos > 1 && !clip

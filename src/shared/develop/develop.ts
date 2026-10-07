@@ -62,6 +62,15 @@ import {
   type MonoMix,
 } from './mixer';
 import {
+  cloneBaseCurve,
+  describeBaseCurve,
+  makeBaseShaper,
+  normaliseBaseCurve,
+  portableBaseCurve,
+  sameBaseCurve,
+  type BaseCurve,
+} from './base-curve';
+import {
   cloneGrading,
   describeGrading,
   gradeLinear,
@@ -170,12 +179,23 @@ export interface DevelopSettings {
    * nowhere else (`withoutBase`).
    */
   rawWb?: RawWhiteBalance | null;
+  /**
+   * The BASE tone curve (`base-curve.ts`): the camera's curve the sensor's
+   * linear light lacks — our Standard, High contrast or Lifted shadows, or
+   * the camera's own MEASURED on this file's render (Auto). Applied on
+   * luminance after the gains and before every tone slider, and ONLY on a
+   * RAW base (`effectiveBaseCurve`): on a render it would apply the camera's
+   * curve twice. Unlike the base it is a choice about the NUMBERS, so a
+   * preset and a paste carry it (an Auto without its measurement). Absent
+   * reads as Linear — every develop stored before it is unchanged.
+   */
+  baseCurve?: BaseCurve | null;
 }
 
 /** The NUMERIC fields — a key a panel can draw as a slider. */
 export type DevelopKey = Exclude<
   keyof DevelopSettings,
-  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb'
+  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'baseCurve'
 >;
 
 /**
@@ -241,7 +261,27 @@ export function rawGainOf(d: DevelopSettings | null | undefined): number {
  * it onto a JPEG would apply a RAW's gain to a render, four stops too bright.
  */
 export function withoutBase(d: DevelopSettings): DevelopSettings {
-  return { ...d, base: null, rawGain: null, rawWb: null };
+  // The base CURVE is a choice about the numbers and travels — but an Auto's
+  // measurement was taken on one file's render, like the gain on its sensor.
+  return { ...d, base: null, rawGain: null, rawWb: null, baseCurve: portableBaseCurve(d.baseCurve) };
+}
+
+/**
+ * The base curve this develop APPLIES: its own on a RAW base, none on a
+ * render, whatever is stored — a curve that travelled onto a JPEG with a
+ * preset waits there, inert, for the picture to go to its sensor.
+ */
+export function effectiveBaseCurve(d: DevelopSettings | null | undefined): BaseCurve | null {
+  return d && isRawDevelop(d) && d.baseCurve && d.baseCurve.kind !== 'linear' ? d.baseCurve : null;
+}
+
+/**
+ * Whether there is anything in `d` to carry to another picture: numbers that
+ * change it, or a base curve chosen (which changes nothing on a render, and
+ * so is not "an edit" there, but is the author's choice for a RAW).
+ */
+export function carriesDevelop(d: DevelopSettings | null | undefined): boolean {
+  return Boolean(d) && (!isDefaultDevelop(d) || Boolean(d?.baseCurve));
 }
 
 /** The sliders, in the order every panel draws them. */
@@ -306,6 +346,7 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   base: null,
   rawGain: null,
   rawWb: null,
+  baseCurve: null,
 });
 
 /**
@@ -342,6 +383,7 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   out.mono = cloneMono(src.mono);
   out.grading = cloneGrading(src.grading);
   out.rawWb = src.rawWb ? { ...src.rawWb, matrix: [...src.rawWb.matrix] } : null;
+  out.baseCurve = cloneBaseCurve(src.baseCurve);
   return out;
 }
 
@@ -362,7 +404,8 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     sameGrading(x.grading, y.grading) &&
     isRawDevelop(x) === isRawDevelop(y) &&
     rawGainOf(x) === rawGainOf(y) &&
-    JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null)
+    JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null) &&
+    sameBaseCurve(x.baseCurve, y.baseCurve)
   );
 }
 
@@ -385,6 +428,8 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
   out.mixer = mixerOrNull(src.mixer);
   out.mono = monoOrNull(src.mono);
   out.grading = gradingOrNull(src.grading);
+  // Read on any base: it travels with a preset, and waits on a render.
+  out.baseCurve = normaliseBaseCurve(src.baseCurve);
   const base = normaliseBase(src.base);
   if (base) {
     out.base = base;
@@ -581,6 +626,14 @@ export interface ToneShape {
   /** The value the toe maps to black (≤ 0; 0 means no toe) and where the toe ends (≥ 0). */
   bottom: number;
   toe: number;
+  /**
+   * The BASE curve (`base-curve.ts`), resolved, on the extended encoded
+   * domain — applied FIRST, before the bands; null for none (Linear, or a
+   * render). With one and no slider the shape is still there, so the head
+   * tabulates it; its own end above white is a line, so `top` stays 1 and
+   * the headroom passes through as numbers, as with no curve.
+   */
+  base: ((L: number) => number) | null;
 }
 
 /** Luminance of the displayed white after the white balance and the gains — `developLinear`'s own order on [1, 1, 1]. */
@@ -599,20 +652,24 @@ function whiteLuminance(d: DevelopSettings): number {
 export function toneShape(d: DevelopSettings): ToneShape | null {
   const yWhite = whiteLuminance(d);
   const sliders = d.highlights || d.shadows || d.whites || d.blacks || d.contrast || d.brightness;
-  if (!sliders && yWhite <= 1) return null;
+  const base = makeBaseShaper(effectiveBaseCurve(d));
+  if (!sliders && !base && yWhite <= 1) return null;
   const lWhite = encodeTone(yWhite);
   // A RAW's sensor keeps `gain` above the displayed white; a render keeps nothing.
   const lTop = encodeTone(yWhite * rawGainOf(d));
   const recovery = Math.min(1, Math.max(0, -d.highlights / 100) + Math.max(0, -d.whites / 100));
   const lRef = lWhite + (lTop - lWhite) * recovery;
-  const top = Math.min(1 + ROLLOFF_REACH, Math.max(1, rawTone(lRef, d)));
-  const bottom = Math.max(-ROLLOFF_REACH, Math.min(0, rawTone(0, d)));
+  // The reference white and black go through the base curve first, as every pixel does.
+  const curved = (L: number) => rawTone(base ? base(L) : L, d);
+  const top = Math.min(1 + ROLLOFF_REACH, Math.max(1, curved(lRef)));
+  const bottom = Math.max(-ROLLOFF_REACH, Math.min(0, curved(0)));
   return {
     domain: Math.max(1, lTop),
     knee: 1 - Math.min(KNEE_MAX, KNEE_RATE * (top - 1)),
     top,
     bottom,
     toe: Math.min(KNEE_MAX, KNEE_RATE * -bottom),
+    base,
   };
 }
 
@@ -632,14 +689,14 @@ function hermite(x: number, a: number, b: number, fa: number, fb: number, sa: nu
 
 /**
  * The luminance curve: extended encoded luminance in (`encodeTone`), encoded
- * luminance in [0,1] out. Bands, then contrast, then the toe and the shoulder
+ * luminance in [0,1] out. The base curve (a RAW's), then bands, then contrast, then the toe and the shoulder
  * that bound them softly, then brightness — each stage sees the previous
  * one's result, and the order is fixed so two documents never disagree. A
  * value the chain does not move comes back as the very same number.
  */
 export function toneCurve(L: number, d: DevelopSettings, shape: ToneShape | null = toneShape(d)): number {
   if (!shape) return L;
-  let v = rawTone(L, d);
+  let v = rawTone(shape.base ? shape.base(L) : L, d);
   // The toe: [bottom, toe] → [0, toe], black kept at black, slope 1 at the end.
   if (shape.bottom < 0 && v < shape.toe) v = v <= shape.bottom ? 0 : hermite(v, shape.bottom, shape.toe, 0, shape.toe, 0, 1);
   if (v < 0) v = 0; // a bump's dip under black where no toe was asked (shadows −100 on a near-black)
@@ -733,7 +790,8 @@ function shapeChannel(lin: number, channel: 0 | 1 | 2, shape: ChannelShaper): nu
  * when every field is 0, and a value above white passes through untouched
  * when nothing reaches the luminance.
  *
- * Order: white balance → exposure → the luminance curve as one ratio → the
+ * Order: white balance → exposure → the luminance curve as one ratio (a RAW's
+ * base curve first, then the bands and the contrast, `toneCurve`) → the
  * luma curve, also as a ratio → levels and the per-channel curves → saturation
  * and vibrance around the new luminance → the colour mixer (`mixer.ts`) →
  * colour grading (`grading.ts`).
@@ -926,6 +984,8 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
     const adds = rung === 'gainMapWarp' ? ' + gain map + warp' : rung === 'gainMap' ? ' + gain map' : '';
     parts.push(`RAW${adds}${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
     if (d.rawWb) parts.push(describeWhiteBalance(d.rawWb));
+    const curve = describeBaseCurve(d.baseCurve);
+    if (curve) parts.push(curve);
   }
   for (const k of DEVELOP_KEYS) {
     const v = d[k];

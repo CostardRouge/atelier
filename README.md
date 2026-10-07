@@ -932,13 +932,15 @@ single day — give it an end date to count a range". The old fixed examples wer
 invented values, and three of the four counter modes looked broken because
 picking one changed nothing and said nothing.
 
-**The badge can count WITH the car — the trip recap.** Three more counter
+**The badge can count WITH the car — the trip recap.** Four more counter
 modes, offered as such in the Counter section and honoured only under the
 Virée opener (anywhere else they say why not): *Days, as the car drives*,
-*Kilometres, as the car drives*, *Stops, as the car drives*. The number then
-follows the car at every frame — the day of the trip (its total the trip's),
-the distance as the crow flies between the stops passed (never a road
-distance, which the app does not know), or the stops reached — with
+*Kilometres, as the car drives*, *Stops, as the car drives* and *Days + km, as
+the car drives*. The number then follows the car at every frame — the day of
+the trip (its total the trip's), the distance as the crow flies between the
+stops passed (never a road distance, which the app does not know), the stops
+reached, or the day with the distance so far beside its total
+(`Day · 54 · of 90 · 1 479 km`, the kilometres in whole units) — with
 **odometer digits**: each in a fixed cell, so the badge never shakes when 199
 turns 200, rolling like a car's as the next one comes — and a still of
 the piece shows the trip told whole. ONE clock drives all of it: each stop is
@@ -1255,13 +1257,22 @@ frames cut at the map's box — and, with the background on, the finer tiles
 along the road come with it. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
-big one: pan, zoom and pinch it, and every tap is the next stop, joined to the
-one before as you go — one, two, three, as many as the trip holds (there is
-no cap: a three-digit number simply shrinks to stay inside its dot). A tap near a town takes the town and
-its name (a switch turns that off, to drop a stop exactly where you tap), a
-hollow ring is one of the trip's own places, a numbered stop is dragged to
-move it, a place can be searched for and added, and a stop you dropped with no
-name is offered the nearest town's (never given it). The list beside the map
+big one, drawn over the coastline the app ships (no network): pan, zoom and
+pinch it, and every tap on a town or on one of the trip's own places (a hollow
+ring) is the next stop, joined to the one before as you go — one, two, three,
+as many as the trip holds (there is no cap: a three-digit number simply
+shrinks to stay inside its dot). A tap on a **line** adds a stop between its
+two ends, on the nearest town; a tap on empty ground does nothing (a switch,
+*Snap to towns: off*, drops a stop exactly where you tap instead). A stop you
+**drag** does what its landing says, told while you hold it: dropped on
+another stop the two **swap** numbers, dropped on a line it is **inserted**
+between that line's two stops, dropped anywhere else it **moves** there. The
+small map in the panel follows the same three rules. A tap on the number of
+the stop already picked in the list lets you **type** its new number, the
+others making room. Every one of these is a real step of the map's own
+**undo and redo** (the arrows at the foot, ⌘Z and ⇧⌘Z), and a note on the map
+offers *Undo* right after a drop. A place can be searched for and added, and a
+stop you dropped with no name is offered the nearest town's (never given it). The list beside the map
 **reorders by drag and drop** — grab a row by its grip (⠿) and drop it
 anywhere; held near the list's top or bottom edge it scrolls, so stop 110 can
 go first without letting go — and its ↑ / ↓ arrows still move a stop one place;
@@ -1274,8 +1285,13 @@ of the trip's places), its name with the same place search as the legs, its
 name alone, like every place of the suite, with *Written as* on the opener
 choosing for all the stops and a stop able to depart from it —, its latitude
 and longitude, its picture, and Earlier / Later. A stop adopted from one of
-the trip's places or found by the search knows its state and country from the
-start; a stop dropped by hand knows only where it is until you tell it. The towns come from the
+the trip's places, found by the search, tapped on a town of the big map or named
+after the town it offers knows its state and country from the start. For the
+others, **Fill from the town index** under either list writes the state of every
+named stop the shipped index answers for without doubt — a town of the same name
+within 15 km, else a town within 10 km whose neighbours all lie in one state, so a
+stop on the Queensland–New South Wales border is left to you and the line says
+how many were. A stop dropped by hand with no name knows only where it is. The towns come from the
 city index the app ships, so the map needs no network; the OpenStreetMap
 background is the optional one above, off until you turn it on. Nothing is
 written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one
@@ -1959,6 +1975,39 @@ past 24 megapixels). The sensor's white is white, whatever the picture
 holds: the decoder no longer scales a frame by its own brightest pixel, so a
 RAW metered before 2026-09-25 may open a touch dark under its stored
 exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+**The sensor's base curve.** Decoded from its sensor, a RAW is linear light,
+only encoded for the screen and brought to its metered exposure — Capture
+One's *Linear Response* — which is why it looks flatter than the camera's own
+render of the same capture: that render carries the camera's tone curve. A
+picture on its sensor can carry a **base curve** too: one monotone curve on
+brightness (a grey stays grey, no colour turns), applied after the metered
+gain and the exposure and before every tone slider, so highlights, shadows,
+contrast and the roll-off at white all act on what it hands over, and a
+RAW's headroom above white is still there to bring back. *Standard* (a
+moderate S, close to a camera's JPEG), *High contrast* and *Lifted shadows*
+are curves designed here — Capture One's own are unpublished and nothing
+here claims to be them — and *Linear* is the sensor as it was, to the bit.
+The curve is a choice about the numbers, so a preset and a paste carry it,
+but it acts only on a RAW's sensor: on a JPEG or a camera render it would
+apply the camera's curve twice, and waits there unused. A picture stored
+before the curve existed reads as *Linear* and does not change. It is chosen
+in the file's menu, under *The sensor*: **Base curve** — *Auto*,
+*Standard*, *Contrast*, *Shadows*, *Linear* — with the chosen curve said in
+one line under it (*our curve: a moderate S…*); picking one while the
+picture is on a render takes it to its sensor. **Auto** is the camera's own
+curve, MEASURED on the render the file itself carries: the sensor as the
+stage decoded it and the camera's render of the same capture are read on a
+grid, pixel for pixel (the render's few percent of crop or magnification
+found by itself), and the render's brightness as a function of the
+sensor's is the camera's curve. It is measured once and kept on the
+picture, so the export applies exactly what you saw; where the render is a
+thumbnail (under 640 px), frames another shape, or does not follow one curve
+(a camera's local tone mapping), Auto says why and the picture takes
+*Standard*. A picture you put on its sensor opens on *Auto*; one the roll's
+*Sensor (RAW)* choice puts there opens on *Standard* (nothing is measured
+for a picture nobody opened), and a picture keeps the curve it already
+carries. A preset or a paste carries *Auto* as a choice, and it is measured
+again on the picture it lands on.
 A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed
