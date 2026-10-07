@@ -1526,7 +1526,8 @@ at the band's smallest. Pull the **handle** above it and the band grows into a
 grid of two or three rows, justified like a photo site's; pull it down past
 its header and it folds to a **rail** (one line: where you are in the roll,
 the filter, *Select*, the sheet and the band's ⋯ menu), **B** does the same
-from the keyboard and a double-click on the handle too. The ⋯ menu names the
+from the keyboard and a double-click on the handle too. The ⋯ opens a small
+panel of glyphs — a choice applies and closes it — that sets the
 rows, lets the band's **height follow the roll** (it takes the room the roll's
 typical picture leaves under itself, so stepping to a portrait moves
 nothing), makes the thumbnails smaller or larger (**−** / **=**), and says
@@ -1540,9 +1541,11 @@ hundreds opens on a dozen cells and decodes nothing to measure them; and
 **←/→** land on a picture already decoded — the two beside the open one are
 decoded ahead in the background, and the last few are kept for the session
 (three on a phone, eight on a computer). A
-**filter** chip shows the roll whole or only the
+**filter** chip opens a panel of glyphed rows, each with how many pictures it
+would show: the roll whole or only the
 pictures *edited*, *to export*, *held back*, *ignored* — or by your Winnow's
-culling (*picks*, *rejected*, starred), when the roll came from one. A cell
+culling (*picks*, *rejected*, starred), when the roll came from one — and the
+switch that hides the ignored ones or shows them dimmed. A cell
 is calm: a small pill reads its state (**●** edited, **↑** leaves at export,
 **–** held back, **⊘** ignored, its variant number, **▶** a clip, **!** not
 reachable), Winnow's mark sits in the other corner, the name is written under
@@ -1558,7 +1561,8 @@ verbs for the marked pictures — *Send*, *Hold*, *Ignore* / *Bring back*,
 paste settings, a variant of each, take them off the roll. *Done*, **S** or
 **Esc** leaves it. The **contact sheet** (**G**, or the ▦ button) lays the
 whole roll large over the picture — every name written, the same filter, the
-same selection and bar, the cells sized with **−** / **=** — to sort and to
+same selection and bar, the cells in four sizes from its ⋯ panel or with
+**−** / **=** — to sort and to
 act on many; it covers the picture and the band and leaves the inspector, so
 the numbers you are about to apply stay in view, and a click on a picture
 opens it and closes the sheet (on a phone it is the whole screen). **Focus**
@@ -1989,7 +1993,10 @@ weeks), or a **folder** as Winnow ingested it. Every tile wears Winnow's word �
 the pick or reject flag, the stars, a label, a *Gallery* chip when a final
 already links to it — and a rail of filters narrows the list: Incoming ·
 Gallery · All, the verdict, a star floor, photos or clips, the extension, the
-body, Winnow's tags, *no final yet*, *not on the roll*, each with its count. A
+body, Winnow's tags, *no final yet*, *not on the roll*, each with its count.
+The grid's ⋯ orders it by capture time or by stars, sets the tiles small,
+medium or large, and folds the rail away on a wide screen (both remembered on
+this device). A
 **culled day opens with its picks ticked**, so taking what you kept is one
 click on *Add N to the roll*; an unculled day ticks everything the roll lacks
 but the rejects. The bar ticks among what is shown — **All**, **None**,

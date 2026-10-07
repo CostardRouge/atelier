@@ -1,7 +1,8 @@
 import { useMemo, type ReactNode } from 'react';
-import { STRIP_METRICS, sheetLayout } from '../../shared/develop/roll-strip';
+import { STRIP_METRICS, sheetLayout, sheetSizeIndex } from '../../shared/develop/roll-strip';
 import Button from '../../shared/ui/Button';
 import IconButton from '../../shared/ui/IconButton';
+import SettingsMenu from '../../shared/ui/SettingsMenu';
 import { Icons } from '../../shared/ui/icons';
 import { StripCells, shownPictures, stripItems, useScrollToOpen, useScrollView, type StripCellsProps } from './RollBand';
 import { fingerSize } from '../../shared/ui/press';
@@ -16,11 +17,18 @@ import { useCoarsePointer } from '../../shared/ui/use-coarse-pointer';
  * covers the stage and the band and leaves the inspector, so the numbers
  * about to be applied stay in view; on a phone it is the whole screen.
  */
+const SIZE_GLYPHS: readonly (readonly [ReactNode, string])[] = [
+  [Icons.sizeS, 'Small'],
+  [Icons.sizeM, 'Medium'],
+  [Icons.sizeL, 'Large'],
+  [Icons.sizeXL, 'Extra large'],
+];
+
 export default function ContactSheet({
   compact,
   span = 1,
   thumb,
-  onThumb,
+  onSize,
   filter,
   bar,
   onSelecting,
@@ -32,7 +40,8 @@ export default function ContactSheet({
   span?: 1 | 2;
   /** The sheet's thumbnail height (`StripPrefs.sheet`), and the way to step it. */
   thumb: number;
-  onThumb: (direction: 1 | -1) => void;
+  /** Set it to one of the four sizes (`StripMetrics.sheetSizes`); `−` / `=` step them from the keyboard. */
+  onSize: (px: number) => void;
   /** The band's filter chip, drawn here too. */
   filter: ReactNode;
   /** The selection's bar while it is on, else null. */
@@ -57,18 +66,27 @@ export default function ContactSheet({
       </span>
     </>
   );
-  const stepper = (
-    <span className="flex-none inline-flex items-center rounded-control border border-line-strong bg-surface overflow-hidden" role="group" aria-label="Thumbnail size">
-      <IconButton size={size} variant="ghost" label="Smaller thumbnails (−)" className="rounded-none" onClick={() => onThumb(-1)} disabled={thumb <= metrics.sheetMin}>
-        {Icons.minus}
-      </IconButton>
-      <span className="font-mono text-3xs text-muted tabular-nums px-1.5 select-none" aria-hidden="true">
-        {Math.round(thumb)} px
-      </span>
-      <IconButton size={size} variant="ghost" label="Larger thumbnails (=)" className="rounded-none" onClick={() => onThumb(1)} disabled={thumb >= metrics.sheetMax}>
-        {Icons.plus}
-      </IconButton>
-    </span>
+  // The sheet's settings, the band's panel (his pick A): the four sizes as
+  // glyphs and the way out — a pick applies and closes it.
+  const sizeNow = sheetSizeIndex(thumb, metrics);
+  const settings = (
+    <SettingsMenu
+      label="The sheet: thumbnail size"
+      size={size}
+      className="flex-none"
+      sections={[
+        {
+          kind: 'choice',
+          id: 'size',
+          label: 'Thumbnails',
+          value: String(sizeNow),
+          onPick: (i) => onSize(metrics.sheetSizes[Number(i)]),
+          options: SIZE_GLYPHS.map(([icon, name], i) => ({ id: String(i), icon, label: `${name} thumbnails` })),
+        },
+        { kind: 'rule', id: 'r' },
+        { kind: 'action', id: 'close', icon: Icons.sheetClose, label: 'Close the sheet', hint: 'G', onSelect: onClose },
+      ]}
+    />
   );
   const select = (
     <Button size={size} className="flex-none" onClick={onSelecting} title="Pick several pictures, then act on them all (S)">
@@ -93,7 +111,7 @@ export default function ContactSheet({
       <div className="flex items-center gap-2 min-w-0">
         {filter}
         <span className="flex-1" />
-        {stepper}
+        {settings}
         {select}
       </div>
     </div>
@@ -102,7 +120,7 @@ export default function ContactSheet({
       {title}
       {filter}
       <span className="flex-1" />
-      {stepper}
+      {settings}
       {select}
       {close}
     </div>
