@@ -22,6 +22,7 @@
 
 import { useRef, useState } from 'react';
 import { arcControl, fitProjection, type LatLon, type MapStop } from './map-plan';
+import { DROP_ON_LINE_PX, DROP_ON_STOP_PX, dropLine, resolveDrop, type ScreenPoint, type StopDrop } from './stop-drop';
 import { numeralScale } from './stops';
 
 /** The field's own coordinate space. The container keeps the same aspect. */
@@ -39,8 +40,25 @@ export interface MapFieldProps {
   onDrop: (at: LatLon) => void;
   /** One of the trip's own places adopted as a stop. */
   onAdopt: (place: { name: string; lat: number; lon: number }) => void;
-  /** A stop dragged to a new position. */
+  /** A stop dragged to a new position — dropped off every line and every other stop. */
   onMove: (id: string, at: LatLon) => void;
+  /**
+   * A stop dropped ON another stop (`swap`) or ON a line (`insert`)
+   * (`stop-drop.ts`). Without it every drop is a move, as before.
+   */
+  onReorder?: (id: string, drop: Exclude<StopDrop, { kind: 'move' }>) => void;
+}
+
+/** A hop's bowed arc as the field draws it, sampled — what a drop is read against. */
+function arcPath(from: ScreenPoint, to: ScreenPoint, curve: number): ScreenPoint[] {
+  const c = arcControl(from, to, curve);
+  const out: ScreenPoint[] = [];
+  for (let k = 0; k <= 12; k += 1) {
+    const t = k / 12;
+    const u = 1 - t;
+    out.push({ x: u * u * from.x + 2 * u * t * c.x + t * t * to.x, y: u * u * from.y + 2 * u * t * c.y + t * t * to.y });
+  }
+  return out;
 }
 
 export default function MapField({
@@ -52,9 +70,12 @@ export default function MapField({
   onDrop,
   onAdopt,
   onMove,
+  onReorder,
 }: MapFieldProps) {
   const svgRef = useRef<SVGSVGElement | null>(null);
   const [dragging, setDragging] = useState<string | null>(null);
+  /** Where the held stop is, in the field's units, while it is held — written on the drop. */
+  const [ghost, setGhost] = useState<ScreenPoint | null>(null);
   /**
    * Where a press on EMPTY ground started. A pin is dropped on the way up and
    * only if the pointer stayed put: dropping on the way down would put a stop
@@ -67,7 +88,8 @@ export default function MapField({
   const fitted: LatLon[] = [...stops, ...places];
   const { project, unproject } = fitProjection(fitted, box, PAD);
 
-  const pointAt = (event: { clientX: number; clientY: number }): LatLon | null => {
+  /** A pointer in the field's own units, and how many of them make a CSS pixel. */
+  const fieldAt = (event: { clientX: number; clientY: number }): { p: ScreenPoint; scale: number } | null => {
     const svg = svgRef.current;
     if (!svg) return null;
     const rect = svg.getBoundingClientRect();
@@ -75,15 +97,38 @@ export default function MapField({
     // `preserveAspectRatio` is the default meet, and the container carries the
     // viewBox's own aspect, so one uniform scale maps the two spaces.
     const scale = VIEW.width / rect.width;
-    return unproject({ x: (event.clientX - rect.left) * scale, y: (event.clientY - rect.top) * scale });
+    return { p: { x: (event.clientX - rect.left) * scale, y: (event.clientY - rect.top) * scale }, scale };
+  };
+  const pointAt = (event: { clientX: number; clientY: number }): LatLon | null => {
+    const at = fieldAt(event);
+    return at ? unproject(at.p) : null;
   };
 
   const projected = stops.map((stop) => ({ stop, at: project(stop) }));
+  const paths = projected.slice(1).map(({ at }, i) => arcPath(projected[i].at, at, curve));
   const arcs = projected.slice(1).map(({ at }, i) => {
     const from = projected[i].at;
     const control = arcControl(from, at, curve);
     return `M ${from.x} ${from.y} Q ${control.x} ${control.y} ${at.x} ${at.y}`;
   });
+  /** What letting the held stop go at `p` does, read against the field as drawn. */
+  const landing = (p: ScreenPoint, scale: number): { index: number; drop: StopDrop } | null => {
+    const index = stops.findIndex((stop) => stop.id === dragging);
+    if (index < 0) return null;
+    if (!onReorder) return { index, drop: { kind: 'move' } };
+    const drop = resolveDrop(
+      projected.map(({ at }) => at),
+      index,
+      p,
+      { stopPx: DROP_ON_STOP_PX * scale, linePx: DROP_ON_LINE_PX * scale, paths },
+    );
+    return { index, drop };
+  };
+  const heldIndex = stops.findIndex((stop) => stop.id === dragging);
+  const heldDrop = ghost && dragging ? (() => {
+    const rect = svgRef.current?.getBoundingClientRect();
+    return landing(ghost, rect && rect.width > 0 ? VIEW.width / rect.width : 1)?.drop ?? null;
+  })() : null;
 
   return (
     <svg
@@ -108,11 +153,21 @@ export default function MapField({
       onPointerMove={(e) => {
         if (!dragging) return;
         press.current = null;
-        const at = pointAt(e);
-        if (at) onMove(dragging, at);
+        const at = fieldAt(e);
+        if (at) setGhost(at.p);
       }}
       onPointerUp={(e) => {
+        const id = dragging;
+        const held = ghost;
         setDragging(null);
+        setGhost(null);
+        if (id && held) {
+          // The drop decides: another stop → swap, a line → insert, else move.
+          const rect = svgRef.current?.getBoundingClientRect();
+          const land = landing(held, rect && rect.width > 0 ? VIEW.width / rect.width : 1);
+          if (land && land.drop.kind !== 'move') onReorder?.(id, land.drop);
+          else onMove(id, unproject(held));
+        }
         const from = press.current;
         press.current = null;
         if (!from || Math.hypot(e.clientX - from.x, e.clientY - from.y) > 4) return;
@@ -121,10 +176,16 @@ export default function MapField({
       }}
       onPointerLeave={() => {
         setDragging(null);
+        setGhost(null);
         press.current = null;
       }}
     >
       <Graticule />
+      {heldDrop && heldIndex >= 0 && (
+        <text x={VIEW.width / 2} y={VIEW.height - 6} textAnchor="middle" fontSize={8} className="fill-on-media">
+          {dropLine(heldDrop, (i) => stops[i]?.name ?? '', heldIndex)}
+        </text>
+      )}
 
       {/* The trip's own places, as landmarks to adopt. */}
       {places.map((place) => {
@@ -156,15 +217,18 @@ export default function MapField({
           key={i}
           d={d}
           fill="none"
-          className="stroke-on-media"
-          strokeWidth={1.6}
+          className={heldDrop?.kind === 'insert' && heldDrop.hop === i ? 'stroke-[var(--color-accent)]' : 'stroke-on-media'}
+          strokeWidth={heldDrop?.kind === 'insert' && heldDrop.hop === i ? 3.2 : 1.6}
           strokeLinecap="round"
           opacity={0.9}
         />
       ))}
 
-      {projected.map(({ stop, at }, index) => {
+      {projected.map(({ stop, at: placed }, index) => {
         const selected = stop.id === selectedId;
+        // The held stop follows the hand; the one it would swap with is ringed.
+        const at = stop.id === dragging && ghost ? ghost : placed;
+        const target = heldDrop?.kind === 'swap' && heldDrop.index === index;
         return (
           <g
             key={stop.id}
@@ -175,13 +239,12 @@ export default function MapField({
               setDragging(stop.id);
               (e.target as Element).setPointerCapture?.(e.pointerId);
             }}
-            onPointerUp={(e) => {
-              e.stopPropagation();
-              setDragging(null);
-            }}
             style={{ cursor: 'grab' }}
           >
-            <title>{`${index + 1}. ${stop.name || 'Unnamed stop'} — drag to move`}</title>
+            <title>{`${index + 1}. ${stop.name || 'Unnamed stop'} — drag to move, onto another stop to swap, onto a line to insert`}</title>
+            {target && (
+              <circle cx={at.x} cy={at.y} r={10} fill="none" className="stroke-ink" strokeWidth={1.8} />
+            )}
             {selected && (
               <circle
                 cx={at.x}

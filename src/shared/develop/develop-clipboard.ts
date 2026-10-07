@@ -10,7 +10,7 @@
  * Pure and DOM-free; `useSyncExternalStore`-shaped so a button can follow it.
  */
 
-import { cloneDevelop, isDefaultDevelop, withoutBase, type DevelopSettings } from './develop';
+import { carriesDevelop, cloneDevelop, withoutBase, type DevelopSettings } from './develop';
 
 let held: DevelopSettings | null = null;
 const listeners = new Set<() => void>();
@@ -24,7 +24,7 @@ export function copyDevelop(settings: DevelopSettings | null): void {
   // The NUMBERS travel, never the material: a base is a fact about one
   // picture's bytes, and its metered gain on a JPEG would be stops too bright.
   const numbers = settings ? withoutBase(settings) : null;
-  held = numbers && !isDefaultDevelop(numbers) ? cloneDevelop(numbers) : null;
+  held = numbers && carriesDevelop(numbers) ? cloneDevelop(numbers) : null;
   notify();
 }
 

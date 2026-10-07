@@ -7,7 +7,7 @@
  * A preset holds a COPY of numbers: applied, never followed. Pure and DOM-free.
  */
 
-import { DEFAULT_DEVELOP, cloneDevelop, isDefaultDevelop, withoutBase, type DevelopPreset, type DevelopSettings } from './develop';
+import { DEFAULT_DEVELOP, carriesDevelop, cloneDevelop, withoutBase, type DevelopPreset, type DevelopSettings } from './develop';
 import type { SavedGrade } from '../lut/saved-grade';
 
 /**
@@ -30,7 +30,7 @@ export function savePresetIn(
   // belong to the one picture they were measured on.
   const numbers = settings ? withoutBase(settings) : null;
   // A look alone is a preset too — "just Portra" is a name worth keeping.
-  if (!label || ((!numbers || isDefaultDevelop(numbers)) && !look)) return list;
+  if (!label || (!carriesDevelop(numbers) && !look)) return list;
   // A name is a name however it is cased: "dusk" replaces "Dusk", in the new spelling.
   const existing = list.findIndex((p) => p.name.trim().toLowerCase() === label.toLowerCase());
   const preset: DevelopPreset = {

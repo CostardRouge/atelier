@@ -2,6 +2,7 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { landBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
 import type { Keystone } from '../../shared/render/geometry';
@@ -948,7 +949,10 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           pictures: r.pictures.map((p) => {
             if (!targets.includes(p.id)) return p;
             const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain } : null;
-            const next = value || own ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}) } : null;
+            const next =
+              value || own
+                ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}), baseCurve: landBaseCurve(numbers?.baseCurve, p.develop?.baseCurve) }
+                : null;
             // Onto a picture on the roll's sensor, a sensor's numbers keep it there.
             return { ...p, develop: ontoRollSensor(r.opensOn, p, isRawDevelop(develop), next) };
           }),

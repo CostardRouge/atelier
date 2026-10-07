@@ -37,6 +37,13 @@ import {
   type MapStop,
 } from '../../shared/roadtrip/hooks/stops';
 import { cityPlace, fillFromIndex, fillSummary, lackingLine, lacksIndexFacts, withCityFacts } from '../../shared/roadtrip/hooks/stop-index';
+import { dropLine, hopAt, insertAtHop, resolveDrop, swapAt, type StopDrop } from '../../shared/roadtrip/hooks/stop-drop';
+import { canRedo, canUndo, newHistory, record, redo, undo, type HistoryState } from '../../shared/history/history';
+import UndoRedo from '../../shared/history/UndoRedo';
+import { focusOnMount } from '../../shared/ui/focus';
+import { undoKeyAction } from '../../shared/history/undo-keys';
+import { describeKeyTarget } from '../../shared/media/transport-keys';
+import { loadLand } from '../../shared/map/load-land';
 import { stateCodeFor } from '../../shared/roadtrip/place-style';
 import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
 import { groupStops, type GroupOptions } from '../../shared/roadtrip/hooks/stop-clusters';
@@ -64,6 +71,9 @@ interface StopsMapSheetProps {
 
 /** The paper's ink — the same brown Virée's paper map draws with. */
 const MAP_INK = '#3a332a';
+/** The shipped coastline's land and its edge, over the paper sea — the trip map's own. */
+const LAND = '#f4efe3';
+const COAST = '#9c8f78';
 
 /** How many towns the map is handed per view, and how many are named. */
 const TOWNS_PER_VIEW = 500;
@@ -87,9 +97,17 @@ let sessionSnap = true;
  * projection run backwards, and it is right for nudging a stop; it is no
  * place to FIND one, since it shows nothing but a graticule. This sheet is
  * the map for that (2026-09-28, the maintainer's ask): MapLibre, so it pans,
- * zooms and pinches like any map; a tap drops a stop at the end of the list,
- * a tap near a town takes the town's name, a numbered stop is dragged to
- * move it, and the line joins them in order as they come.
+ * zooms and pinches like any map; a tap on a town or one of the trip's places
+ * adds it at the end of the list, a tap on a LINE adds a stop between its two
+ * ends, a tap on empty ground does nothing (the maintainer, 2026-10-07: «toucher
+ * le vide ne fait rien»), and the line joins the stops in order.
+ *
+ * **A dropped stop does what its landing says** (`stop-drop.ts`): on another
+ * stop the two swap numbers, on a line it is inserted between that line's two
+ * stops, anywhere else it moves there — said live while it is held. Every
+ * edit is ONE step of the sheet's own undo and redo (`shared/history/`, ⌘Z /
+ * ⇧⌘Z while the sheet is up): the «Undo last» that removed the last stop of
+ * the list — one the author may never have added — is gone.
  *
  * **Offline by default.** The paper is drawn here and the towns come from the
  * gazetteer the app ships (our own origin, read when the sheet first opens);
@@ -103,7 +121,31 @@ let sessionSnap = true;
  * its place — its picture — rides along untouched.
  */
 export default function StopsMapSheet({ stops, places, title, grouping, onCancel, onDone }: StopsMapSheetProps) {
-  const [draft, setDraft] = useState<MapStop[]>(() => stops.map((stop) => ({ ...stop })));
+  // The draft IS a history: every edit one real step, undone and redone in
+  // the sheet; Done writes its present, Cancel drops it whole.
+  const [history, setHistory] = useState<HistoryState<MapStop[]>>(() =>
+    newHistory(stops.map((stop) => ({ ...stop }))),
+  );
+  const draft = history.present;
+  const steps = useRef(0);
+  /**
+   * One edit, applied to the newest draft. A discrete action is its own step;
+   * `merge` names a gesture whose bursts are one step (typing a name).
+   */
+  const apply = useCallback((edit: (current: MapStop[]) => MapStop[], merge?: string) => {
+    const label = merge ?? `step${(steps.current += 1)}`;
+    setHistory((h) => record(h, edit(h.present), { now: Date.now(), label }));
+  }, []);
+  /** What the last drop or tap did, said on the map for a moment — or what letting go will do. */
+  const [note, setNote] = useState<{ text: string; undoable: boolean } | null>(null);
+  const noteTimer = useRef<number | undefined>(undefined);
+  const say = useCallback((text: string | null, undoable = false, ms = 0) => {
+    window.clearTimeout(noteTimer.current);
+    setNote(text ? { text, undoable } : null);
+    if (text && ms) noteTimer.current = window.setTimeout(() => setNote(null), ms);
+  }, []);
+  /** The stop whose number is being typed in the list. */
+  const [renumber, setRenumber] = useState<{ id: string; value: string } | null>(null);
   // What the opener will make of the draft's stops: which merge, and the
   // halt each group sits on — marked on the markers, the list left alone.
   const marks = useMemo(() => {
@@ -132,6 +174,8 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
   /** MapLibre's marker class, once the library has loaded. */
   const markerClass = useRef<typeof MlMarker | null>(null);
   const markers = useRef(new Map<string, MlMarker>());
+  /** The stop being dragged: its marker is the hand's until it lands. */
+  const held = useRef<string | null>(null);
   /** The towns the current view was handed — what a tap snaps to. */
   const inView = useRef<Town[]>([]);
   // Handlers bound once on the map read the newest values through these.
@@ -155,17 +199,57 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
 
   // No cap on the list (2026-10-07): a three-month trip of 120 places was cut
   // at 99. A third digit shrinks inside its dot instead (`numeralScale`).
-  const add = useCallback((at: HookPlace) => {
-    // Functional: two taps inside one render must both land.
-    const id = newId();
-    setDraft((current) => addStop(current, at, id));
-    setSelectedId(id);
-  }, []);
+  const add = useCallback(
+    (at: HookPlace) => {
+      // Functional: two taps inside one render must both land.
+      const id = newId();
+      apply((current) => addStop(current, at, id));
+      setSelectedId(id);
+    },
+    [apply],
+  );
+  /** A stop added between the stops at `hop` and `hop + 1` — a tap on that line. */
+  const insert = useCallback(
+    (at: HookPlace, hop: number) => {
+      const id = newId();
+      apply((current) => moveStopTo(addStop(current, at, id), id, hop + 1));
+      setSelectedId(id);
+      say(`${at.name || 'A stop'} added as number ${hop + 2}, between ${hop + 1} and ${hop + 2}`, true, 4000);
+    },
+    [apply, say],
+  );
+  const stepBack = useCallback(() => setHistory(undo), []);
+  const stepForward = useCallback(() => setHistory(redo), []);
+
+  // ⌘Z / ⇧⌘Z belong to the SHEET while it is up: taken in the capture phase
+  // and marked handled, so the page's own undo behind it stands down
+  // (`undoKeyAction` reads `defaultPrevented`). A name being typed keeps its
+  // own text undo, as everywhere in the suite.
+  useEffect(() => {
+    const onKey = (e: KeyboardEvent) => {
+      const action = undoKeyAction({
+        key: e.key,
+        defaultPrevented: e.defaultPrevented,
+        altKey: e.altKey,
+        ctrlKey: e.ctrlKey,
+        metaKey: e.metaKey,
+        shiftKey: e.shiftKey,
+        target: describeKeyTarget(e.target),
+      });
+      if (!action) return;
+      e.preventDefault();
+      e.stopPropagation();
+      if (action === 'undo') stepBack();
+      else stepForward();
+    };
+    window.addEventListener('keydown', onKey, true);
+    return () => window.removeEventListener('keydown', onKey, true);
+  }, [stepBack, stepForward]);
 
   // A stop's row is dragged by its grip to anywhere in the list; the arrows
   // stay for one step, and for the keyboard.
   const reorder = useListReorder<HTMLOListElement>((id, to) => {
-    setDraft((current) => moveStopTo(current, id, to));
+    apply((current) => moveStopTo(current, id, to));
     setSelectedId(id);
   });
   const rows = reorder.held ? moveStopTo(draft, reorder.held.key, reorder.held.to) : draft;
@@ -201,9 +285,20 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
 
         map.on('load', () => {
           if (!map) return;
+          // The shipped coastline, offline (`public/geo/land.json`): the
+          // ground the stops are read against before any tile is asked for.
+          map.addSource('land', { type: 'geojson', data: { type: 'FeatureCollection', features: [] } });
+          map.addLayer({ id: 'land-fill', type: 'fill', source: 'land', paint: { 'fill-color': LAND } });
+          map.addLayer({
+            id: 'land-line',
+            type: 'line',
+            source: 'land',
+            paint: { 'line-color': COAST, 'line-width': ['interpolate', ['linear'], ['zoom'], 2, 0.6, 8, 1.4] },
+          });
           map.addSource('towns', { type: 'geojson', data: pointsCollection([]) });
           map.addSource('places', { type: 'geojson', data: pointsCollection(latest.current.places) });
           map.addSource('line', { type: 'geojson', data: stopsLine(latest.current.draft) });
+          map.addSource('hop', { type: 'geojson', data: stopsLine([]) });
           map.addLayer({
             id: 'towns-dot',
             type: 'circle',
@@ -232,6 +327,14 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
             layout: { 'line-cap': 'round', 'line-join': 'round' },
             paint: { 'line-color': MAP_ACCENT, 'line-width': 2.6, 'line-opacity': 0.9 },
           });
+          // The line a held stop would be inserted into, lit under the hand.
+          map.addLayer({
+            id: 'hop-lit',
+            type: 'line',
+            source: 'hop',
+            layout: { 'line-cap': 'round' },
+            paint: { 'line-color': '#1f1b16', 'line-width': 6, 'line-opacity': 0.55 },
+          });
           for (const layer of ['towns-dot', 'places-ring']) {
             map.on('mousemove', layer, (e) => {
               const name = e.features?.[0]?.properties?.name;
@@ -254,7 +357,8 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
           if (target?.closest?.('[data-stop-marker]')) return;
           const m = mapRef.current;
           if (!m) return;
-          const { snap: snapping, places: trip } = latest.current;
+          const { snap: snapping, places: trip, draft: current, towns: index } = latest.current;
+          let place: HookPlace | null = null;
           if (snapping) {
             const project = (p: Place, town: Town | null) => {
               const at = m.project([p.lon, p.lat]);
@@ -266,16 +370,37 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
               e.point,
               SNAP_PX,
             );
-            if (hit) {
-              // A trip place comes WHOLE — its state, codes and writing; a
-              // town of the index brings its state and country, so the stop
-              // is written «Sydney, NSW» like any place of the trip.
-              add(hit.town ? cityPlace(hit.town) : hit.place);
-              return;
-            }
+            // A trip place comes WHOLE — its state, codes and writing; a
+            // town of the index brings its state and country, so the stop
+            // is written «Sydney, NSW» like any place of the trip.
+            if (hit) place = hit.town ? cityPlace(hit.town) : hit.place;
           }
           const at = e.lngLat.wrap();
-          add({ name: '', lat: at.lat, lon: at.lng });
+          // A tap on a LINE adds a stop between its two ends: the town or
+          // place tapped, else the nearest town (`nameOffer`), else the point.
+          const hop = hopAt(
+            current.map((stop) => m.project([stop.lon, stop.lat])),
+            e.point,
+          );
+          if (hop !== null) {
+            if (!place && snapping && typeof index === 'object') {
+              const offer = nameOffer(index.cities, { lat: at.lat, lon: at.lng });
+              if (offer) place = cityPlace(offer.city);
+            }
+            insert(place ?? { name: '', lat: at.lat, lon: at.lng }, hop);
+            return;
+          }
+          if (place) {
+            add(place);
+            return;
+          }
+          // Snap off is the one mode that drops a stop exactly where it lands.
+          if (!snapping) {
+            add({ name: '', lat: at.lat, lon: at.lng });
+            return;
+          }
+          // Empty ground: nothing is added (his «toucher le vide ne fait rien»).
+          setSelectedId(null);
         });
       } catch {
         if (!cancelled) setMapState('error');
@@ -288,7 +413,7 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
       map?.remove();
       mapRef.current = null;
     };
-  }, [add]);
+  }, [add, insert]);
 
   // MapLibre answers a pinch itself; WebKit's own page zoom must not answer it
   // too, or it magnifies the app and cancels the pointers feeding the map
@@ -390,23 +515,68 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
         const created = new Marker({ element: el, draggable: true })
           .setLngLat([stop.lon, stop.lat])
           .addTo(map);
-        created.on('dragend', () => {
-          const at = created.getLngLat().wrap();
+        // Where the held stop would land, read against the stops as they
+        // stand (its own dot at its OLD place, the lines unmoved).
+        const landing = (): { id: string; index: number; drop: StopDrop; list: MapStop[] } | null => {
+          const m = mapRef.current;
           const id = el.dataset.stopMarker;
-          if (!id) return;
-          setDraft((current) => patchStop(current, id, { lat: at.lat, lon: at.lng }));
+          if (!m || !id) return null;
+          const list = latest.current.draft;
+          const index = list.findIndex((s) => s.id === id);
+          if (index < 0) return null;
+          const screen = list.map((s) => m.project([s.lon, s.lat]));
+          return { id, index, list, drop: resolveDrop(screen, index, m.project(created.getLngLat())) };
+        };
+        const light = (drop: StopDrop | null, list: MapStop[]) => {
+          const m = mapRef.current;
+          if (!m) return;
+          const hop = drop?.kind === 'insert' ? [list[drop.hop], list[drop.hop + 1]] : [];
+          (m.getSource('hop') as GeoJSONSource | undefined)?.setData(stopsLine(hop));
+          const target = drop?.kind === 'swap' ? list[drop.index]?.id : null;
+          for (const [sid, mk] of markers.current) litMarker(mk.getElement(), sid === target);
+        };
+        created.on('dragstart', () => {
+          held.current = el.dataset.stopMarker ?? null;
+        });
+        created.on('drag', () => {
+          const at = landing();
+          if (!at) return;
+          light(at.drop, at.list);
+          say(dropLine(at.drop, (i) => at.list[i]?.name ?? '', at.index));
+        });
+        created.on('dragend', () => {
+          held.current = null;
+          const at = landing();
+          if (!at) return;
+          light(null, at.list);
+          const { id, index, drop, list } = at;
+          const who = list[index].name || `Stop ${index + 1}`;
+          if (drop.kind === 'swap') {
+            apply((current) => swapAt(current, index, drop.index));
+            say(`${who} and ${list[drop.index].name || `stop ${drop.index + 1}`} swapped numbers`, true, 4000);
+          } else if (drop.kind === 'insert') {
+            const to = index < drop.hop + 1 ? drop.hop + 1 : drop.hop + 2;
+            apply((current) => insertAtHop(current, index, drop.hop));
+            say(`${who} is now number ${to}`, true, 4000);
+          } else {
+            const where = created.getLngLat().wrap();
+            apply((current) => patchStop(current, id, { lat: where.lat, lon: where.lng }));
+            say(`${who} moved`, true, 2500);
+          }
           setSelectedId(id);
         });
         markers.current.set(stop.id, created);
         marker = created;
-      } else {
+      } else if (held.current !== stop.id) {
+        // A swap or an insertion leaves the held stop where it stood: its
+        // marker goes back to the draft's place, as an undo's do.
         const at = marker.getLngLat();
         if (at.lat !== stop.lat || at.lng !== stop.lon) marker.setLngLat([stop.lon, stop.lat]);
       }
       paintMarker(marker.getElement(), index + 1, stop.name, stop.id === selectedId, marks.get(stop.id) ?? null);
     });
     relabel.current();
-  }, [draft, selectedId, mapState, marks]);
+  }, [draft, selectedId, mapState, marks, apply, say]);
 
   // The row of the stop just added or picked on the map is brought into view:
   // the list runs under the map, and the twenty-fifth tap lands below it.
@@ -422,7 +592,26 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
     const map = mapRef.current;
     if (mapState !== 'ready' || !map) return;
     setTiles(map, tilesOn, 'towns-dot');
+    // Under the tiles the drawn land would only hide them.
+    for (const id of ['land-fill', 'land-line']) {
+      if (map.getLayer(id)) map.setLayoutProperty(id, 'visibility', tilesOn ? 'none' : 'visible');
+    }
   }, [tilesOn, mapState]);
+
+  // The coastline, read once from our own origin: the ground every open shows.
+  useEffect(() => {
+    if (mapState !== 'ready') return;
+    let cancelled = false;
+    loadLand().then(
+      (land) => {
+        if (!cancelled) (mapRef.current?.getSource('land') as GeoJSONSource | undefined)?.setData(land);
+      },
+      () => {},
+    );
+    return () => {
+      cancelled = true;
+    };
+  }, [mapState]);
 
   useEffect(() => {
     sessionSnap = snap;
@@ -547,6 +736,28 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
               </div>
             </div>
 
+            {note && (
+              // What letting go will do, or what the last drop or tap did —
+              // with the sheet's own undo one press away.
+              <div
+                role="status"
+                className="absolute left-1/2 bottom-8 -translate-x-1/2 max-w-[calc(100%-1.5rem)] flex items-center gap-2 px-3 py-1.5 rounded-full bg-frame text-on-media text-xs shadow-paper"
+              >
+                <span className="min-w-0 truncate">{note.text}</span>
+                {note.undoable && canUndo(history) && (
+                  <button
+                    type="button"
+                    onClick={() => {
+                      stepBack();
+                      say(null);
+                    }}
+                    className="flex-none border-0 bg-transparent p-0 text-xs font-semibold text-on-media underline cursor-pointer"
+                  >
+                    Undo
+                  </button>
+                )}
+              </div>
+            )}
             {mapState !== 'ready' && (
               <div className="absolute inset-0 grid place-items-center text-sm text-muted">
                 {mapState === 'error' ? 'The map could not load here — the list and the inspector still work.' : 'Opening the map…'}
@@ -562,8 +773,8 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
             <div ref={listRef} className="flex-1 min-h-0 overflow-y-auto overscroll-contain p-3 flex flex-col gap-2">
               {draft.length === 0 ? (
                 <p className="m-0 text-sm text-muted">
-                  Tap the map: every tap is the next stop, joined to the one before. A tap near a
-                  town takes its name; a hollow ring is one of the trip’s own places.
+                  Tap a town or one of the trip’s places (a hollow ring): each tap is the next stop,
+                  joined to the one before. Empty ground takes nothing; the search finds the rest.
                 </p>
               ) : (
                 // `flex-none` is load-bearing: a column-flex child that clips
@@ -597,20 +808,61 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                         >
                           {Icons.grip}
                         </span>
-                        <button
-                          type="button"
-                          onClick={() => {
-                            setSelectedId(stop.id);
-                            flyTo(stop);
-                          }}
-                          aria-label={`Show stop ${index + 1} on the map`}
-                          className="flex-none w-6 h-6 grid place-items-center rounded-full border-0 bg-accent font-mono text-3xs text-white cursor-pointer"
-                        >
-                          <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
-                        </button>
+                        {renumber?.id === stop.id ? (
+                          // The selected stop's number, typed: it goes to that
+                          // place in the order and the others make room.
+                          <input
+                            ref={focusOnMount}
+                            inputMode="numeric"
+                            value={renumber.value}
+                            onChange={(e) => setRenumber({ id: stop.id, value: e.target.value.replace(/\D/g, '') })}
+                            onBlur={() => setRenumber(null)}
+                            onKeyDown={(e) => {
+                              if (e.key === 'Escape') {
+                                e.preventDefault();
+                                setRenumber(null);
+                              } else if (e.key === 'Enter') {
+                                e.preventDefault();
+                                const n = Number(renumber.value);
+                                if (Number.isInteger(n) && n >= 1 && n !== index + 1) {
+                                  const to = Math.min(n, draft.length);
+                                  apply((current) => moveStopTo(current, stop.id, to - 1));
+                                  say(`${stop.name || `Stop ${index + 1}`} is now number ${to}`, true, 4000);
+                                }
+                                setRenumber(null);
+                              }
+                            }}
+                            aria-label={`New number for stop ${index + 1} — Enter to move it there`}
+                            className="flex-none w-11 h-7 px-1 border border-accent rounded-control bg-surface font-mono text-sm text-ink text-center focus:outline-none"
+                          />
+                        ) : (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              // A first tap picks the stop; a tap on the number
+                              // of the picked one types its new number.
+                              if (on) {
+                                setRenumber({ id: stop.id, value: String(index + 1) });
+                                return;
+                              }
+                              setSelectedId(stop.id);
+                              flyTo(stop);
+                            }}
+                            title={on ? 'Type a new number' : 'Show it on the map'}
+                            aria-label={on ? `Change the number of stop ${index + 1}` : `Show stop ${index + 1} on the map`}
+                            className={`flex-none w-6 h-6 grid place-items-center rounded-full border-0 bg-accent font-mono text-3xs text-white cursor-pointer ${
+                              on ? 'ring-2 ring-offset-1 ring-accent' : ''
+                            }`}
+                          >
+                            <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
+                          </button>
+                        )}
                         <input
                           value={stop.name}
-                          onChange={(e) => setDraft(patchStop(draft, stop.id, { name: e.target.value }))}
+                          onChange={(e) => {
+                            const name = e.target.value;
+                            apply((current) => patchStop(current, stop.id, { name }), `name:${stop.id}`);
+                          }}
                           onFocus={() => setSelectedId(stop.id)}
                           placeholder="Unnamed stop"
                           aria-label={`Name of stop ${index + 1}`}
@@ -633,7 +885,7 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                         <button
                           type="button"
                           disabled={index === 0}
-                          onClick={() => setDraft(moveStop(draft, stop.id, -1))}
+                          onClick={() => apply((current) => moveStop(current, stop.id, -1))}
                           aria-label={`Move stop ${index + 1} earlier`}
                           className={rowIconClass}
                         >
@@ -642,7 +894,7 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                         <button
                           type="button"
                           disabled={index === rows.length - 1}
-                          onClick={() => setDraft(moveStop(draft, stop.id, 1))}
+                          onClick={() => apply((current) => moveStop(current, stop.id, 1))}
                           aria-label={`Move stop ${index + 1} later`}
                           className={rowIconClass}
                         >
@@ -651,7 +903,7 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                         <button
                           type="button"
                           onClick={() => {
-                            setDraft(removeStop(draft, stop.id));
+                            apply((current) => removeStop(current, stop.id));
                             if (on) setSelectedId(null);
                           }}
                           aria-label={`Remove stop ${index + 1}`}
@@ -674,7 +926,7 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                     size="sm"
                     onClick={() => {
                       const out = fillFromIndex(draft, towns.cities);
-                      if (out.filled) setDraft(out.places);
+                      if (out.filled) apply(() => out.places);
                       setFillNote({ text: fillSummary(out.filled, out.left), left: out.left });
                     }}
                   >
@@ -689,7 +941,9 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                     size="sm"
                     onClick={() =>
                       // Named after the town, it takes the town's state and country.
-                      setDraft(draft.map((s) => (s.id === selected.id ? withCityFacts({ ...s, name: offer.name }, offer.city) : s)))
+                      apply((current) =>
+                        current.map((s) => (s.id === selected.id ? withCityFacts({ ...s, name: offer.name }, offer.city) : s)),
+                      )
                     }
                   >
                     Call it {offer.name} · {offer.km < 1 ? '<1' : Math.round(offer.km)} km
@@ -702,22 +956,10 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
 
         <div className="flex-none flex items-center gap-2 flex-wrap px-5 py-3 border-t border-line bg-surface max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <span className="min-w-0 flex-1 text-xs text-muted max-[820px]:hidden">
-            Tap to add · drag a number to move it · drag a row’s grip to reorder · pinch or scroll to zoom
+            Tap a town or a line to add · drop a number on another to swap, on a line to insert, elsewhere to move
           </span>
-          <Button
-            size="sm"
-            variant="ghost"
-            disabled={draft.length === 0}
-            onClick={() => {
-              const last = draft[draft.length - 1];
-              if (!last) return;
-              setDraft(removeStop(draft, last.id));
-              if (selectedId === last.id) setSelectedId(null);
-            }}
-          >
-            Undo last
-          </Button>
-          <Button size="sm" variant="ghost" disabled={draft.length === 0} onClick={() => setDraft([])}>
+          <UndoRedo canUndo={canUndo(history)} canRedo={canRedo(history)} onUndo={stepBack} onRedo={stepForward} what="stop edit" />
+          <Button size="sm" variant="ghost" disabled={draft.length === 0} onClick={() => apply(() => [])}>
             Clear
           </Button>
           <span className="flex-1 min-[821px]:hidden" />
@@ -746,6 +988,14 @@ function chipClass(on: boolean): string {
  * it never depends on the CSS scanner seeing a class built at runtime — the
  * flight map's marker rule (`frontend.md`).
  */
+/** A stop marked as the one a held stop would swap with. */
+function litMarker(el: HTMLElement, on: boolean) {
+  const disc = el.firstElementChild as HTMLElement | null;
+  if (!disc) return;
+  disc.style.outline = on ? '3px solid #1f1b16' : '';
+  disc.style.outlineOffset = on ? '2px' : '';
+}
+
 function paintMarker(
   el: HTMLElement,
   n: number,

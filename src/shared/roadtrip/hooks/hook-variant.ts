@@ -489,8 +489,8 @@ export interface HookVariant {
   /**
    * The map backgrounds this variant would draw under its map, or none — the
    * OpenStreetMap tiles an author asked for on this piece (2026-09-28): one
-   * raster over the whole map, and, under a following camera, a STRIP of
-   * finer patches along its road (2026-10-07). The shell fetches them only
+   * raster over the whole map, and, under a following camera, a zoom
+   * PYRAMID of finer tiles along its road (2026-10-07). The shell fetches them only
    * where this DEVICE allows it, in the order given; the variant never
    * fetches, and names each raster by the key it will draw it by.
    */

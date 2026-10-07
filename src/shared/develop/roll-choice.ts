@@ -30,6 +30,7 @@
  */
 
 import { isDefaultDevelop, isRawDevelop, type DevelopSettings } from './develop';
+import { openingBaseCurve } from './base-curve';
 import { isClipName } from '../library/assets';
 import type { Rendition } from '../media/renditions';
 
@@ -119,7 +120,7 @@ export function ontoRollSensor(
   develop: DevelopSettings | null,
 ): DevelopSettings | null {
   if (!develop || !fromSensor || isRawDevelop(develop) || rollChoiceFor(choice, target).choice !== 'sensor') return develop;
-  return { ...develop, base: 'gain', rawGain: null };
+  return { ...develop, base: 'gain', rawGain: null, baseCurve: openingBaseCurve(develop.baseCurve) };
 }
 
 export interface RollAnswer {
