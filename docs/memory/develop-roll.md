@@ -1652,3 +1652,40 @@ verb, never silently dropped. Driven headless (`dump.mjs`): a developed and
 an untouched picture gave a 7 kB file with both, the line reading
 `atelier-training-2026-10-07.json · 2 pairs`. A trainer outside the repo (B3)
 reads it; the model it makes comes back as a verb (B4).
+
+## Auto detail: the noise and the sharpen seeded from the ISO and the material (2026-10-07, A4 of `docs/auto-develop.md`)
+
+`shared/develop/auto-detail.ts` (pure, 7 specs) + an *Auto detail* switch at
+the head of the Detail tab (`DetailPanel`'s `auto`), held by the workbench
+over the whole detail record through `use-value-switch.ts`. What it reads,
+never guesses: the ISO of the file ON SCREEN (`useEffectiveExif(shownFile)` —
+the vouched record for a proxy) and the MATERIAL the picture is developed
+from (`onSensor` → the sensor; a working preview or an origin whose fidelity
+is `proxy` → a proxy; else the camera's file). Rules:
+
+- **Per STOP above a floor**, like Lightroom's and Capture One's seeds:
+  luminance 12 a stop above ISO 800, colour 10 a stop above 400 (capped 80),
+  the sharpen's masking 12 a stop above 800 (capped 60); the sharpen by
+  material — 35 on a demosaiced sensor, 20 on a body's JPEG (sharpened
+  already), 0 on a proxy, SAID (`no sharpen on a proxy`). The radius and the
+  Detail are the lens's and the hand's and are never written. Every number is
+  a named taste constant (`docs/auto-develop.md` §8).
+- **No ISO → the sharpen alone**, and `no ISO in the file · noise left alone`:
+  nothing written where nothing was measured. A clamp is said.
+- **A VALUE switch** (`value-switch.ts`, pure, 6 specs; `use-value-switch.ts`,
+  a session map keyed picture|verb): `switchState` over the whole record, so
+  the radius a hand set comes back with the rest on a turn-off and ⌘Z lights
+  the switch. **Trap, found by the drive**: a `before` that is itself NULL (no
+  detail record yet) is not "nothing to put back" — the first turn-off left
+  every number standing; the restore is BOXED (`{ value }`) since.
+- The Auto row's three verbs keep `auto-slots.ts` (disjoint fields on one
+  record); a verb that writes a RECORD whole takes the value switch.
+
+Driven headless (`detail.mjs`, a canvas JPEG stamped ISO 3200 through
+`buildExifBlock` + `withExifBlock`): the caption `ISO 3200 · the camera’s
+file`, the click writing `noise 24 · colour 30 · sharpen 20 · masking 24`
+into the sliders and, after the autosave, the roll; off → every number 0 and
+`null` stored; ⌘Z → relit with the numbers back. A drive that re-navigates
+to the picture's hash right after a drop races the editor's remount and its
+tab click is lost — click after the drop settles, and retry until the tab's
+own sliders exist.

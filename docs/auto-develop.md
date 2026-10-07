@@ -117,7 +117,7 @@ through the Batch API. Price is not the issue; local-first is.
    maths, never a textbook's; a clamp or a refusal said out loud; nothing
    written where nothing was measured.
 
-## 5. Approach 1 — three commits
+## 5. Approach 1 — three commits, then more
 
 Each verb lives in a pure module beside a `.test.ts`, is drawn by the panel
 it belongs to, and reports what it did (or why not) through the told line.
@@ -156,6 +156,14 @@ locked format's ratio about its centre, fitted inside the picture through
 `fitAround`, and written through `setZone` so the chip is kept. A mask that
 covers almost nothing or almost everything is refused with the reason. The
 model's answer is a task (`tasks.md`) while it comes.
+
+**A4 — Auto detail — BUILT 2026-10-07** (`auto-detail.ts`, the head of the
+Detail tab), from his «everything that could be autodevelop». The noise
+reduction per STOP of ISO above a floor and the sharpen by the MATERIAL the
+picture is developed from (the sensor, the camera's file, a proxy — the
+last said, not hidden), the masking rising with the ISO, the radius and the
+Detail left to the hand; no ISO → the sharpen alone, said. A switch over the
+whole detail record (`value-switch.ts`). Constants named for his pictures.
 
 Verified: the pure modules by their specs; the panels driven in headless
 Chromium against the dev server where a picture can be dropped on a roll

@@ -163,7 +163,10 @@ import { dropDecodedRaws } from '../../shared/raw/raw-decoder';
 import type { RawWhite } from '../../shared/raw/white-balance';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
-import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
+import { describeDetail, isDefaultDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
+import { autoDetail, describeAutoDetail, withAutoDetail, type DetailFacts } from '../../shared/develop/auto-detail';
+import { isWorkingPreview } from '../../shared/develop/working-preview';
+import { useValueSwitch } from './use-value-switch';
 import {
   DUST_SCAN_EDGE,
   MAX_PATCHES,
@@ -2014,6 +2017,47 @@ export default function PictureWorkbench({
   const candidate = lookup?.kind === 'found' && shot ? profileFor(lookup.camera, lookup.lens, shot, !onSensor) : null;
   const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
 
+  // --- Auto detail (`auto-detail.ts`) -------------------------------------------
+  // What it reads: the ISO of the file ON SCREEN (the vouched record for a
+  // proxy), and the MATERIAL the picture is developed from — the sensor's
+  // own data, the camera's file, or a re-encode made to look at. A switch
+  // over the whole detail record (`use-value-switch.ts`): the radius and the
+  // Detail it leaves alone come back with the rest on a turn-off.
+  const detailFacts = useMemo<DetailFacts>(
+    () => ({
+      iso: typeof shotExif?.iso === 'number' && shotExif.iso > 0 ? shotExif.iso : null,
+      material: onSensor
+        ? 'sensor'
+        : shownFile && (isWorkingPreview(shownFile) || mediaOrigin(shownFile)?.fidelity === 'proxy')
+          ? 'proxy'
+          : 'camera',
+    }),
+    [shotExif, onSensor, shownFile],
+  );
+  const detailSwitch = useValueSwitch<DetailSettings | null>({
+    pictureKey: entry.id,
+    verb: 'detail',
+    value: detailDraft,
+    same: sameDetail,
+    write: setDetailDraft,
+    onTold: tell,
+    label: 'auto detail',
+    words: 'the detail',
+  });
+  const autoDetailVerb = useMemo(
+    () => ({
+      state: detailSwitch.state,
+      facts: detailFacts,
+      onClick: () => {
+        if (detailSwitch.turnOff()) return;
+        const found = autoDetail(detailFacts);
+        const next = withAutoDetail(detailDraft, found);
+        detailSwitch.record(isDefaultDetail(next) ? null : next, `auto detail · ${describeAutoDetail(found, detailFacts)}`);
+      },
+    }),
+    [detailSwitch, detailFacts, detailDraft],
+  );
+
   /**
    * The two verbs the HOST puts in the well beside the clipboard glyphs: their
    * SHAPE here, their colour at the call site.
@@ -2561,6 +2605,7 @@ export default function PictureWorkbench({
                 onChange={setDetailDraft}
                 maskView={sharpenMaskView}
                 onMaskView={setSharpenMaskView}
+                auto={autoDetailVerb}
               />
             </>
           ) : tab === 'layers' ? (
