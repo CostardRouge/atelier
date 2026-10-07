@@ -293,6 +293,24 @@ apply**: a new tone stage that belongs to the MATERIAL goes before
 shader; any new door that writes a develop onto another picture uses
 `landBaseCurve`.
 
+**Where it is chosen** (`DevelopBase.tsx`): a *Base curve* row under the
+sensor's row in the file's menu — a `Segmented` of four fixed words drawn
+whether or not the picture is on the sensor (no control appears or moves),
+the chosen curve's sentence under it only while on the sensor, the prose
+behind an ⓘ; a pick from below the sensor CLIMBS to `steps[0]` first.
+**The opening curve** (`openingBaseCurve`: the picture's own, else
+Standard) is written by every door that PUTS a picture on its sensor and by
+nothing else — the menu's climb (`PictureWorkbench` `onBase`), the roll's
+sensor (`ontoRollSensor`, the follower's `developNow` and `inheritedRef`,
+both synthetic develops of `use-roll-export.ts`) — so the stage and the
+export agree for a follower never written, a remeter (rawGain → null) never
+adds one, and a develop stored before 2026-10-07 stays Linear. A follower
+that picks a curve is written (the write-through counts `baseCurve` like
+`rawWb`). Driven headless on a synthetic DNG LibRaw decodes (`testing.md`'s
+recipe): the climb wrote Standard, each pick stored and moved the stage's
+grey ramp (codes at 1/11 of it: Linear 9 · Standard 6 · Contrast 4 ·
+Shadows 12), no page error.
+
 ## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
 
 `auto-develop.ts` (pure) + the `Auto` and `Levels` sections of

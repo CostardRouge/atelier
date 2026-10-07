@@ -1974,7 +1974,13 @@ here claims to be them — and *Linear* is the sensor as it was, to the bit.
 The curve is a choice about the numbers, so a preset and a paste carry it,
 but it acts only on a RAW's sensor: on a JPEG or a camera render it would
 apply the camera's curve twice, and waits there unused. A picture stored
-before the curve existed reads as *Linear* and does not change.
+before the curve existed reads as *Linear* and does not change. It is chosen
+in the file's menu, under *The sensor*: **Base curve** — *Standard*,
+*Contrast*, *Shadows*, *Linear* — with the chosen curve said in one line
+under it (*our curve: a moderate S…*); picking one while the picture is on
+a render takes it to its sensor. A picture put on its sensor by you, or by
+the roll's *Sensor (RAW)* choice, opens on *Standard* — the export applies
+the same — unless it already carries a curve of its own.
 A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed

@@ -199,6 +199,18 @@ export function landBaseCurve(incoming: BaseCurve | null | undefined, own: BaseC
   return cloneBaseCurve(incoming);
 }
 
+/**
+ * The curve a picture opens on when it is newly put on its sensor: its own
+ * where it already carries one (a preset's, a paste's, the author's Linear),
+ * else Standard — a RAW with no curve looks flatter than the camera's JPEG,
+ * and Linear is a choice, not a starting point. A develop stored before the
+ * field existed is never given one by this: only a door that PUTS a picture
+ * on its sensor calls it.
+ */
+export function openingBaseCurve(own: BaseCurve | null | undefined): BaseCurve {
+  return cloneBaseCurve(own) ?? { kind: 'standard' };
+}
+
 /** The auto curve is still to be measured on this picture. */
 export function needsMeasuring(c: BaseCurve | null | undefined): boolean {
   return c?.kind === 'auto' && !c.points;

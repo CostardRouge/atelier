@@ -10,6 +10,7 @@ import {
   namedCurvePoints,
   needsMeasuring,
   normaliseBaseCurve,
+  openingBaseCurve,
   portableBaseCurve,
   sameBaseCurve,
   type BaseCurve,
@@ -130,6 +131,12 @@ describe('travelling', () => {
     expect(landBaseCurve({ kind: 'shadows' }, { kind: 'contrast' })).toEqual({ kind: 'shadows' });
     expect(landBaseCurve({ kind: 'auto' }, MEASURED)).toEqual(MEASURED);
     expect(landBaseCurve({ kind: 'auto' }, { kind: 'standard' })).toEqual({ kind: 'auto' });
+  });
+
+  it('a picture newly on its sensor opens on its own curve, else Standard', () => {
+    expect(openingBaseCurve(null)).toEqual({ kind: 'standard' });
+    expect(openingBaseCurve({ kind: 'linear' })).toEqual({ kind: 'linear' });
+    expect(openingBaseCurve(MEASURED)).toEqual(MEASURED);
   });
 
   it('clones deep and survives normalise', () => {

@@ -78,6 +78,7 @@ import {
   withoutBase,
 } from '../../shared/develop/develop';
 import { resolveRollChoice, rollChoiceFor } from '../../shared/develop/roll-choice';
+import { openingBaseCurve } from '../../shared/develop/base-curve';
 import { captureRenditions, meterRawGain } from '../../shared/develop/roll-choice-source';
 import {
   calibrationAt,
@@ -327,7 +328,7 @@ export function useRollExport({
   let open = stored;
   if (stored && openFile && openHanded === 'sensor') {
     const reach = sensorSourceFor(openFile, mediaOrigin(openFile), siblingsOf?.(openFile) ?? [], knownIdentity(openFile)?.assetId ?? null);
-    if (reach) open = { ...stored, develop: { ...(stored.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null } };
+    if (reach) open = { ...stored, develop: { ...(stored.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null, baseCurve: openingBaseCurve(stored.develop?.baseCurve) } };
   } else if (stored && openHanded === 'delivered' && openFollow?.file === openFile && openFollow.rendition) {
     open = { ...stored, rendition: openFollow.rendition };
   }
@@ -627,7 +628,11 @@ export function useRollExport({
             const answer = resolveRollChoice(await captureRenditions(file, origin, beside, identity?.assetId ?? null), 'delivered');
             if (answer.row) picture = { ...picture, rendition: answer.row.id };
           } else if (handed === 'sensor' && sensorSourceFor(file, origin, beside, identity?.assetId ?? null)) {
-            picture = { ...picture, develop: { ...(picture.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null } };
+            // The curve the stage opened it on, so preview = export (`openingBaseCurve`).
+            picture = {
+              ...picture,
+              develop: { ...(picture.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null, baseCurve: openingBaseCurve(picture.develop?.baseCurve) },
+            };
           }
           let raw: { file: File; gain: number } | null = null;
           if (isRawDevelop(picture.develop)) {

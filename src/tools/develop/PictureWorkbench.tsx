@@ -28,6 +28,7 @@ import {
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
+import { openingBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import {
   calibrationAt,
@@ -852,8 +853,10 @@ export default function PictureWorkbench({
   const settling = isRawDevelop(stored) && !isRawDevelop(draft.draft);
   const developNow = useMemo<DevelopSettings>(() => {
     if (isRawDevelop(draft.draft)) return draft.draft;
-    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain };
-    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain } : draft.draft;
+    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain, baseCurve: stored.baseCurve ?? null };
+    // On the roll's sensor the picture opens on the opening curve, as the
+    // export does (`openingBaseCurve`), until it is given its own.
+    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain, baseCurve: openingBaseCurve(draft.draft.baseCurve) } : draft.draft;
   }, [followsSensor, settling, stored, draft.draft, followGain]);
   const inherited = developNow !== draft.draft;
   // On the roll's sensor and not yet on its own: what a cancel, a failed fetch
@@ -861,8 +864,8 @@ export default function PictureWorkbench({
   const following = inherited && !settling;
   const followingRef = useRef(following);
   followingRef.current = following;
-  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain'> | null>(null);
-  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain } : null;
+  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain' | 'baseCurve'> | null>(null);
+  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain, baseCurve: developNow.baseCurve ?? null } : null;
   // The stack grades what the picture is developed WITH: after the draft's
   // own effect, so the roll's base reaches the cube in the same commit.
   const { setDevelop: setStackDevelop } = stack;
@@ -1346,7 +1349,8 @@ export default function PictureWorkbench({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
     // A white balance set in kelvin is a number too, on the roll's sensor.
-    draft: isDefaultDevelop(draft.draft) && !(inherited && draft.draft.rawWb) ? null : draft.draft,
+    // So is a base curve picked there: it binds the material like a number.
+    draft: isDefaultDevelop(draft.draft) && !(inherited && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
     same: sameDevelop,
     // A picture on the roll's sensor writes the base WITH its first numbers:
     // they were set on the sensor's data and mean nothing on the render.
@@ -2352,7 +2356,9 @@ export default function PictureWorkbench({
                   return;
                 }
                 const climbing = baseRung(developNow.base) === 0;
-                patchDraft({ base: next });
+                // Newly on its sensor: the opening curve with it, so a RAW
+                // does not read flatter than its camera's JPEG by default.
+                patchDraft(climbing ? { base: next, baseCurve: openingBaseCurve(draft.draft.baseCurve) } : { base: next });
                 setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');
@@ -2360,6 +2366,8 @@ export default function PictureWorkbench({
               }}
               status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
               gain={wantsRaw ? rawGain : null}
+              baseCurve={developNow.baseCurve ?? null}
+              onBaseCurve={(next) => patchDraft({ baseCurve: next })}
               calibration={calibration?.summary ?? null}
               roll={
                 onRollChoice && rollPhotos > 1 && !clip
