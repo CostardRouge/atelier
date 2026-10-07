@@ -92,7 +92,7 @@ export function pastedSections(copied: readonly PictureSection[], carried: reado
 
 /** The develop a target keeps under `numbers`: its OWN base and gain, never the source's. */
 function developOnto(target: RollPicture, numbers: DevelopSettings | null): DevelopSettings | null {
-  const own = target.develop && isRawDevelop(target.develop) ? { base: target.develop.base, rawGain: target.develop.rawGain } : null;
+  const own = target.develop && isRawDevelop(target.develop) ? { base: target.develop.base, rawGain: target.develop.rawGain, rawProfile: target.develop.rawProfile ?? null } : null;
   const value = numbers ? withoutBase(numbers) : null;
   const kept = value && !isDefaultDevelop(value) ? value : null;
   // The base curve: the source's where it chose one, else the target's own.

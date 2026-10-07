@@ -2022,7 +2022,8 @@ but it acts only on a RAW's sensor: on a JPEG or a camera render it would
 apply the camera's curve twice, and waits there unused. A picture stored
 before the curve existed reads as *Linear* and does not change. It is chosen
 in the file's menu, under *The sensor*: **Base curve** — *Auto*,
-*Standard*, *Contrast*, *Shadows*, *Linear* — with the chosen curve said in
+*Profile* (only where the file carries one), *Standard*, *Contrast*,
+*Shadows*, *Linear* — with the chosen curve said in
 one line under it (*our curve: a moderate S…*); picking one while the
 picture is on a render takes it to its sensor. **Auto** is the camera's own
 curve, MEASURED on the render the file itself carries: the sensor as the
@@ -2033,7 +2034,21 @@ sensor's is the camera's curve. It is measured once and kept on the
 picture, so the export applies exactly what you saw; where the render is a
 thumbnail (under 640 px), frames another shape, or does not follow one curve
 (a camera's local tone mapping), Auto says why and the picture takes
-*Standard*. A picture you put on its sensor opens on *Auto*; one the roll's
+*Standard*. **Profile** is the tone curve a DNG's own colour profile carries
+(an Adobe *Camera Matching* profile, an iPhone ProRAW): read from the file,
+kept on the picture like Auto's, and applied the same way, on brightness —
+where Adobe applies it per channel.
+
+**Your own camera profile.** Under *Camera profile*, a RAW on its sensor can
+be developed with a `.dcp` you load from your own install (Adobe's *Adobe
+Standard* or *Camera Matching* profiles, or one you made from a colour
+chart): its matrices, hue/saturation map, look table and curve replace the
+file's own for that picture. The file is kept on this device only, under a
+fingerprint of its bytes; the picture stores that fingerprint and the
+profile's name, never the profile, so a roll kept on a Winnow carries none of
+it. Atelier ships no profile and downloads none. Opened on a device that does
+not hold it, the picture keeps the profile's colour matrix and says the rest
+is missing until the same `.dcp` is loaded there. A picture you put on its sensor opens on *Auto*; one the roll's
 *Sensor (RAW)* choice puts there opens on *Standard* (nothing is measured
 for a picture nobody opened), and a picture keeps the curve it already
 carries. A preset or a paste carries *Auto* as a choice, and it is measured
@@ -2141,6 +2156,23 @@ JPEG has no as-shot white to measure from, and its Temperature and Tint stay
 the relative nudge they always were (they also work on top of a kelvin
 balance). A white balance belongs to its picture, like the RAW's measured
 exposure: copy, paste, presets and *Apply to* leave it where it is.
+
+**Camera colour.** A picture put on its sensor is developed in its camera's
+colour the way the DNG specification describes it: a DNG's two calibrations
+(usually tungsten and daylight) blended for the light the picture was taken
+under, its forward matrix where it has one, and the white adapted in XYZ —
+LibRaw alone takes the daylight matrix whatever the light, which is a few to
+nearly twenty ΔE off on saturated colours under tungsten. It acts on the camera's own
+colour before anything is clipped to the screen's range — the decoder hands
+it over unconverted and the conversion is Atelier's. It is resolved once,
+with the measured exposure, and stored on the picture (the facts say *camera
+colour A + D65*); a picture already on its sensor before it existed keeps its
+colour. Where the DNG carries a hue/saturation map (an Adobe or Apple
+profile), that map is applied too, right after the matrix, blended for the
+same light (*camera colour A + D65 · hue/sat*), and so is a profile's look
+table, read at the picture's own exposure (*· look*); the exposure and white
+balance sliders act after it. The kelvin white balance reads and sets the light through the same
+calibrations.
 
 **Which pictures leave.** Every picture says whether it leaves: by default the
 ones you **edited** do, and you decide otherwise per picture — send one you did

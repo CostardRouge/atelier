@@ -25,7 +25,8 @@
  */
 
 import type { SavedGrade } from '../lut/saved-grade';
-import { apply3, describeWhiteBalance, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
+import { apply3, describeWhiteBalance, inverse3, mul3, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
+import { PROFILE_PENDING, rawProfileOrNull, type ProfileRequest, type RawProfile } from '../raw/dng-color';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   cloneCurves,
@@ -180,6 +181,20 @@ export interface DevelopSettings {
    */
   rawWb?: RawWhiteBalance | null;
   /**
+   * With a RAW base, the camera's colour as the DNG spec means it
+   * (`raw/dng-color.ts`): the 3×3 from LibRaw's single-matrix decode to the
+   * spec's — two illuminants interpolated, the forward matrix, Bradford —
+   * resolved at THIS picture's as-shot white. Written once, when the picture
+   * is first put on its sensor, never on a picture developed before it
+   * existed (absent = LibRaw's colour). A white balance in kelvin then
+   * REPLACES it (`rawWb.matrix` is computed through the same profile), so
+   * the two are never stacked. Calibration, like the gain: no preset, paste
+   * or batch carries it (`withoutBase`). `'pending'`: put on its sensor and
+   * not metered yet — resolved with the gain at the next metering, the
+   * stage's or the run's.
+   */
+  rawProfile?: RawProfile | typeof PROFILE_PENDING | null;
+  /**
    * The BASE tone curve (`base-curve.ts`): the camera's curve the sensor's
    * linear light lacks — our Standard, High contrast or Lifted shadows, or
    * the camera's own MEASURED on this file's render (Auto). Applied on
@@ -195,7 +210,7 @@ export interface DevelopSettings {
 /** The NUMERIC fields — a key a panel can draw as a slider. */
 export type DevelopKey = Exclude<
   keyof DevelopSettings,
-  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'baseCurve'
+  'curves' | 'levels' | 'mixer' | 'mono' | 'grading' | 'base' | 'rawGain' | 'rawWb' | 'rawProfile' | 'baseCurve'
 >;
 
 /**
@@ -263,7 +278,46 @@ export function rawGainOf(d: DevelopSettings | null | undefined): number {
 export function withoutBase(d: DevelopSettings): DevelopSettings {
   // The base CURVE is a choice about the numbers and travels — but an Auto's
   // measurement was taken on one file's render, like the gain on its sensor.
-  return { ...d, base: null, rawGain: null, rawWb: null, baseCurve: portableBaseCurve(d.baseCurve) };
+  return { ...d, base: null, rawGain: null, rawWb: null, rawProfile: null, baseCurve: portableBaseCurve(d.baseCurve) };
+}
+
+/**
+ * The ONE 3×3 a RAW develop applies first, or null. The camera profile is
+ * NOT here: the decoder folds it into the camera's matrix before the clip
+ * (C4, `decodeProfileOf`), so the head sees a picture already in the
+ * profile's colour. A kelvin balance is stored from LibRaw's colour
+ * (`rawWb.matrix`, the profile inside it on a profiled picture), so on a
+ * profiled picture the head applies it with the profile taken back out.
+ */
+export function rawMatrixOf(d: DevelopSettings | null | undefined): number[] | null {
+  if (!d || !isRawDevelop(d) || !d.rawWb) return null;
+  const profile = appliedProfile(d);
+  const inv = profile ? inverse3(profile.matrix) : null;
+  return inv ? mul3(d.rawWb.matrix, inv) : d.rawWb.matrix;
+}
+
+/**
+ * What this develop asks the RAW decoder to fold into the camera's matrix:
+ * its stored profile, `'resolve'` while it waits for one, nothing for a
+ * picture developed in LibRaw's colour. Every decode of a RAW develop reads
+ * it — the stage, the loupe, the export, the meter, the making-of — or the
+ * picture would wear two colours.
+ */
+export function decodeProfileOf(d: DevelopSettings | null | undefined): ProfileRequest {
+  if (!d || !isRawDevelop(d)) return null;
+  if (d.rawProfile === PROFILE_PENDING) return 'resolve';
+  return appliedProfile(d);
+}
+
+/** The camera profile a develop APPLIES — resolved, on a RAW base — or null. */
+export function appliedProfile(d: DevelopSettings | null | undefined): RawProfile | null {
+  const p = d && isRawDevelop(d) ? d.rawProfile : null;
+  return p && p !== PROFILE_PENDING ? p : null;
+}
+
+/** Whether this develop waits for its camera profile at the next metering. */
+export function profilePending(d: DevelopSettings | null | undefined): boolean {
+  return Boolean(d && isRawDevelop(d) && d.rawProfile === PROFILE_PENDING);
 }
 
 /**
@@ -346,6 +400,7 @@ export const DEFAULT_DEVELOP: Readonly<DevelopSettings> = Object.freeze({
   base: null,
   rawGain: null,
   rawWb: null,
+  rawProfile: null,
   baseCurve: null,
 });
 
@@ -383,6 +438,8 @@ export function cloneDevelop(d: DevelopSettings | null | undefined): DevelopSett
   out.mono = cloneMono(src.mono);
   out.grading = cloneGrading(src.grading);
   out.rawWb = src.rawWb ? { ...src.rawWb, matrix: [...src.rawWb.matrix] } : null;
+  out.rawProfile =
+    src.rawProfile && src.rawProfile !== PROFILE_PENDING ? { ...src.rawProfile, matrix: [...src.rawProfile.matrix] } : (src.rawProfile ?? null);
   out.baseCurve = cloneBaseCurve(src.baseCurve);
   return out;
 }
@@ -405,6 +462,7 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     isRawDevelop(x) === isRawDevelop(y) &&
     rawGainOf(x) === rawGainOf(y) &&
     JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null) &&
+    JSON.stringify(x.rawProfile ?? null) === JSON.stringify(y.rawProfile ?? null) &&
     sameBaseCurve(x.baseCurve, y.baseCurve)
   );
 }
@@ -440,6 +498,7 @@ export function normaliseDevelop(raw: unknown): DevelopSettings {
         : null;
     // Only with a base: a white balance in Kelvin is the RAW's, never a render's.
     out.rawWb = rawWhiteBalanceOrNull(src.rawWb);
+    out.rawProfile = rawProfileOrNull(src.rawProfile);
   }
   return out;
 }
@@ -639,8 +698,9 @@ export interface ToneShape {
 /** Luminance of the displayed white after the white balance and the gains — `developLinear`'s own order on [1, 1, 1]. */
 function whiteLuminance(d: DevelopSettings): number {
   let w: [number, number, number] = [1, 1, 1];
-  if (d.rawWb && isRawDevelop(d)) {
-    w = apply3(d.rawWb.matrix, w);
+  const raw = rawMatrixOf(d);
+  if (raw) {
+    w = apply3(raw, w);
     w = [Math.max(0, w[0]), Math.max(0, w[1]), Math.max(0, w[2])];
   }
   const t = (d.temperature / 100) * TEMPERATURE_REACH;
@@ -814,8 +874,9 @@ export function developLinear(
   // relative temperature and tint included — then works on that picture.
   // Only on a RAW base: a draft that left the sensor for the render may still
   // hold one for a moment, and on an 8-bit picture it would be a fabrication.
-  if (d.rawWb && isRawDevelop(d)) {
-    [r, g, b] = apply3(d.rawWb.matrix, [r, g, b]);
+  const rawMatrix = rawMatrixOf(d);
+  if (rawMatrix) {
+    [r, g, b] = apply3(rawMatrix, [r, g, b]);
     if (r < 0) r = 0;
     if (g < 0) g = 0;
     if (b < 0) b = 0;
@@ -983,6 +1044,8 @@ export function developLines(d: DevelopSettings | null | undefined): string[] {
     const rung = developBase(d);
     const adds = rung === 'gainMapWarp' ? ' + gain map + warp' : rung === 'gainMap' ? ' + gain map' : '';
     parts.push(`RAW${adds}${ev ? ` ${signed(ev, 1)} EV metered` : ''}`);
+    const profile = appliedProfile(d);
+    if (profile) parts.push(`camera colour ${profile.label || 'DNG'}`);
     if (d.rawWb) parts.push(describeWhiteBalance(d.rawWb));
     const curve = describeBaseCurve(d.baseCurve);
     if (curve) parts.push(curve);

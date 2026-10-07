@@ -818,7 +818,7 @@ export function addVariant(
     made = { ...rest, id: newId, deliver: 'auto', variant: number };
   } else {
     const base = from.develop && isRawDevelop(from.develop)
-      ? { ...DEFAULT_DEVELOP, base: from.develop.base, rawGain: from.develop.rawGain ?? null }
+      ? { ...DEFAULT_DEVELOP, base: from.develop.base, rawGain: from.develop.rawGain ?? null, rawProfile: from.develop.rawProfile ?? null }
       : null;
     made = {
       ...createRollPicture(from.ref, newId),

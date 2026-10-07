@@ -31,8 +31,10 @@
  */
 
 import { num, nums, parseIfd, type Entry } from '../exif/exif-parser';
+import { readDngProfile, type DngCalibration, type DngProfile } from '../exif/dng-profile';
+import { compiledHueSat, PROPHOTO_TO_SRGB, SRGB_TO_PROPHOTO, type HueSatTable } from './hue-sat-map';
 import { dcrawRgbCam } from './dng-color';
-import { inverse3, type RawWhite } from './white-balance';
+import { inverse3, mul3, type RawWhite } from './white-balance';
 
 const TAG = {
   subfileType: 254,
@@ -99,6 +101,10 @@ export interface LinearDng {
   asShotNeutral: [number, number, number] | null;
   make: string;
   model: string;
+  /** Every calibration IFD0 names (`dng-profile.ts`) — what the camera profile interpolates. */
+  calibrations?: DngCalibration[];
+  /** The file's whole camera profile, as far as the head holds it (the hue/sat map's table among it). */
+  profile?: DngProfile | null;
 }
 
 function ascii(view: DataView, entry: Entry | undefined): string {
@@ -200,11 +206,14 @@ export function readLinearDng(head: ArrayBuffer): LinearDng | null {
       asShotNeutral: three(nums(view, ifd0.get(TAG.asShotNeutral), little)),
       make: ascii(view, ifd0.get(TAG.make)),
       model: ascii(view, ifd0.get(TAG.model)) || ascii(view, ifd0.get(TAG.uniqueModel)),
+      ...profileOf(readDngProfile(view, ifd0, little)),
     };
   } catch {
     return null;
   }
 }
+
+const profileOf = (profile: DngProfile | null) => ({ calibrations: profile?.calibrations ?? [], profile });
 
 // --- Orientation --------------------------------------------------------------
 
@@ -263,6 +272,8 @@ export interface LinearDngColor {
   rgbCam: number[];
   /** What the white balance in kelvin reads (`white-balance.ts`), or null without a matrix. */
   white: RawWhite | null;
+  /** The profile's hue/sat map, blended, applied after `rgbCam` and before the clip (C5). */
+  hueSat?: HueSatTable | null;
 }
 
 /**
@@ -270,7 +281,7 @@ export interface LinearDngColor {
  * channels are taken for sRGB's — said by `white: null`, which takes the
  * kelvin controls away rather than inventing a camera.
  */
-export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeutral'>): LinearDngColor {
+export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeutral' | 'calibrations'>): LinearDngColor {
   const neutral = info.asShotNeutral && info.asShotNeutral.every((v) => v > 0) ? info.asShotNeutral : null;
   const raw: [number, number, number] = neutral ? [1 / neutral[0], 1 / neutral[1], 1 / neutral[2]] : [1, 1, 1];
   const least = Math.min(...raw);
@@ -281,7 +292,12 @@ export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeut
   const rgbCam = dcrawRgbCam(info.colorMatrix);
   if (!rgbCam) return { mul, rgbCam: identity, white: null };
   const white: RawWhite | null = inverse3(info.colorMatrix)
-    ? { asShot: [raw[0] / raw[1], 1, raw[2] / raw[1]], camXyz: [...info.colorMatrix], rgbCam }
+    ? {
+        asShot: [raw[0] / raw[1], 1, raw[2] / raw[1]],
+        camXyz: [...info.colorMatrix],
+        rgbCam,
+        ...(info.calibrations?.some((c) => c.colorMatrix) ? { calibrations: info.calibrations } : {}),
+      }
     : null;
   return { mul, rgbCam, white };
 }
@@ -347,7 +363,12 @@ export function developTile(tile: TileSpec, frame: FrameSpec, target: TileTarget
   const k1 = 1 / Math.max(1e-9, info.white - b1);
   const k2 = 1 / Math.max(1e-9, info.white - b2);
   const [m0, m1, m2] = color.mul;
-  const [M0, M1, M2, M3, M4, M5, M6, M7, M8] = color.rgbCam;
+  // The profile's hue/sat map (C5) works in linear ProPhoto: the way there
+  // is folded into the matrix, the way back is one 3×3 after the map.
+  const map = color.hueSat ? compiledHueSat(color.hueSat) : null;
+  const [M0, M1, M2, M3, M4, M5, M6, M7, M8] = map ? mul3(SRGB_TO_PROPHOTO, color.rgbCam) : color.rgbCam;
+  const [P0, P1, P2, P3, P4, P5, P6, P7, P8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
   const { samples, channels, tileWidth, x0, y0, validWidth, validHeight } = tile;
   const factor = target.kind === 'sums' ? target.factor : 1;
   const codes = target.kind === 'codes' ? target.rgb16 : null;
@@ -382,6 +403,15 @@ export function developTile(tile: TileSpec, frame: FrameSpec, target: TileTarget
       let R = M0 * r + M1 * g + M2 * b;
       let G = M3 * r + M4 * g + M5 * b;
       let B = M6 * r + M7 * g + M8 * b;
+      if (map) {
+        io[0] = R;
+        io[1] = G;
+        io[2] = B;
+        map(io);
+        R = P0 * io[0] + P1 * io[1] + P2 * io[2];
+        G = P3 * io[0] + P4 * io[1] + P5 * io[2];
+        B = P6 * io[0] + P7 * io[1] + P8 * io[2];
+      }
       R = R < 0 ? 0 : R > 1 ? 1 : R;
       G = G < 0 ? 0 : G > 1 ? 1 : G;
       B = B < 0 ? 0 : B > 1 ? 1 : B;

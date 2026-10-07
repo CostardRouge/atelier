@@ -24,6 +24,7 @@
  * `timelapse-script.ts` and `timelapse-chapters.ts`.
  */
 
+import type { ProfileRequest } from '../../shared/raw/dng-color';
 import { isDefaultDevelop, isRawDevelop, withoutBase } from '../../shared/develop/develop';
 import { drawingLayers } from '../../shared/develop/layer';
 import { picturePasses, type PassSettings } from '../../shared/develop/roll-render';
@@ -59,7 +60,7 @@ import type { RollCubes } from './roll-cubes';
 /** The bytes a making-of is made from — what the stage draws, and the sensor where the picture is developed on it. */
 export interface TimelapseSource {
   file: File;
-  raw: { file: File; gain: number } | null;
+  raw: { file: File; gain: number; profile?: ProfileRequest } | null;
   calibration: { gain: GainField | null; warp: CameraWarp | null } | null;
 }
 
@@ -210,7 +211,7 @@ async function renderStates(
   let scale: number;
   let bitmap: ImageBitmap | null = null;
   if (raw) {
-    const decoded = await decodeRaw(raw.file, { gain: raw.gain, maxEdge: opts.edge, signal: opts.signal, quiet: true, withBytes: false });
+    const decoded = await decodeRaw(raw.file, { gain: raw.gain, profile: raw.profile, maxEdge: opts.edge, signal: opts.signal, quiet: true, withBytes: false });
     src = decoded.half;
     width = decoded.width;
     height = decoded.height;

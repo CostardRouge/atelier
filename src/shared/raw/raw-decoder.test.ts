@@ -70,7 +70,7 @@ describe('wantsHalfSize', () => {
 describe('the decoder’s settings and its gate', () => {
   it('asks for linear 16-bit output with the camera’s white balance and no auto-bright', () => {
     const s = librawSettings(true);
-    expect(s).toMatchObject({ outputBps: 16, noAutoBright: true, useCameraWb: true, outputColor: 1, highlight: 0, halfSize: true });
+    expect(s).toMatchObject({ outputBps: 16, noAutoBright: true, useCameraWb: true, outputColor: 0, highlight: 0, halfSize: true });
     expect(librawSettings(false).halfSize).toBe(false);
   });
 
@@ -89,6 +89,22 @@ describe('what a decode is held under, and what is held', () => {
     expect(key).toBe('DJI_0101.DNG:8:1700000000000|budget=8294400|min=|edge=2560');
     expect(decodeCacheKey(file, { budgetPixels: 8_294_400, maxEdge: 2560, gain: 1 })).toBe(key);
     expect(decodeCacheKey(file, { maxEdge: 4096 })).not.toBe(key);
+  });
+
+  it('keys the camera profile by what it applies — its matrix, its map’s weight, its look', () => {
+    const file = new File([new Uint8Array(8)], 'DJI_0101.DNG', { lastModified: 1700000000000 });
+    const matrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    const plain = decodeCacheKey(file, { profile: { matrix } });
+    const keys = [
+      decodeCacheKey(file, {}),
+      decodeCacheKey(file, { profile: 'resolve' }),
+      plain,
+      decodeCacheKey(file, { profile: { matrix, hueSat: { weight: 0.5 } } }),
+      decodeCacheKey(file, { profile: { matrix, look: true } }),
+      decodeCacheKey(file, { profile: { matrix, dcp: { hash: 'b'.repeat(64), name: 'Mine' } } }),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(decodeCacheKey(file, { profile: { matrix: [...matrix] } })).toBe(plain);
   });
 
   it('holds nothing until a decode lands, and can be told to forget', () => {

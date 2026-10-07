@@ -9,6 +9,9 @@ import {
   makeBaseShaper,
   namedCurvePoints,
   needsMeasuring,
+  needsProfileCurve,
+  PROFILE_CURVE_POINTS,
+  profileCurvePoints,
   normaliseBaseCurve,
   openingBaseCurve,
   portableBaseCurve,
@@ -226,3 +229,80 @@ describe('in the develop', () => {
     for (const c of [0.02, 0.1, 0.3, 0.6, 0.9]) expect(tabled(c, c, c)[0]).toBeCloseTo(ref(c, c, c)[0], 12);
   });
 });
+
+describe('the PROFILE base curve (C7: a DNG profile’s own tone curve)', () => {
+  const enc = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow(v, 1 / 2.4) - 0.055);
+  const dec = (v: number) => (v <= 0.04045 ? v / 12.92 : Math.pow((v + 0.055) / 1.055, 2.4));
+
+  it('turns a linear identity into the encoded identity, in the fewest points', () => {
+    const pts = profileCurvePoints([
+      [0, 0],
+      [1, 1],
+    ])!;
+    expect(pts.length).toBeLessThanOrEqual(PROFILE_CURVE_POINTS);
+    for (const p of pts) expect(p.y).toBeCloseTo(p.x, 6);
+    const shape = makeBaseShaper({ kind: 'profile', points: pts })!;
+    for (let x = 0; x <= 1; x += 0.01) expect(Math.abs(shape(x) - x)).toBeLessThan(0.1 / 255);
+  });
+
+  it('draws a curve in light as the same curve on encoded values, within a tenth of a code', () => {
+    // Dense, the way Adobe writes them — a lift and a contrasty S, in linear light.
+    const lift = (x: number) => (1.5 * x) / (x + 0.5);
+    const s = (x: number) => x * x * (3 - 2 * x);
+    for (const fn of [lift, s]) {
+      const dense: [number, number][] = Array.from({ length: 257 }, (_, i) => [i / 256, fn(i / 256)]);
+      const pts = profileCurvePoints(dense)!;
+      expect(pts[0]).toEqual({ x: 0, y: 0 });
+      expect(pts[pts.length - 1].x).toBe(1);
+      expect(pts.length).toBeLessThanOrEqual(PROFILE_CURVE_POINTS);
+      const shape = makeBaseShaper({ kind: 'profile', points: pts })!;
+      for (let i = 0; i <= 200; i += 1) {
+        const x = i / 200;
+        expect(Math.abs(shape(x) - enc(fn(dec(x))))).toBeLessThan(0.15 / 255);
+      }
+    }
+  });
+
+  it('refuses what is not a curve on [0, 1]', () => {
+    expect(profileCurvePoints(null)).toBeNull();
+    expect(profileCurvePoints([[0, 0]])).toBeNull();
+    expect(
+      profileCurvePoints([
+        [0.1, 0],
+        [1, 1],
+      ]),
+    ).toBeNull();
+    expect(
+      profileCurvePoints([
+        [0, 0],
+        [Number.NaN, 0.5],
+        [1, 1],
+      ]),
+    ).toBeNull();
+  });
+
+  it('is read, stored and carried like Auto’s measurement — never carried to another file', () => {
+    expect(BASE_CURVE_KINDS).toContain('profile');
+    const points = profileCurvePoints([
+      [0, 0],
+      [0.5, 0.6],
+      [1, 1],
+    ])!;
+    const read: BaseCurve = { kind: 'profile', points };
+    expect(normaliseBaseCurve(JSON.parse(JSON.stringify(read)))).toEqual({ kind: 'profile', points, error: null });
+    expect(normaliseBaseCurve({ kind: 'profile' })).toEqual({ kind: 'profile' });
+    expect(portableBaseCurve(read)).toEqual({ kind: 'profile' });
+    expect(landBaseCurve({ kind: 'profile' }, read)).toEqual({ kind: 'profile', points, error: null });
+    expect(needsProfileCurve({ kind: 'profile' })).toBe(true);
+    expect(needsProfileCurve(read)).toBe(false);
+    expect(needsMeasuring({ kind: 'profile' })).toBe(false);
+    // Unread, it draws Standard and says so.
+    expect(drawnKind({ kind: 'profile' })).toBe('standard');
+    expect(baseCurvePoints({ kind: 'profile' })).toEqual(namedCurvePoints('standard'));
+    expect(describeBaseCurve({ kind: 'profile' })).toBe('curve Profile · not read, Standard');
+    expect(describeBaseCurve(read)).toBe('curve Profile');
+    expect(sameBaseCurve(read, { kind: 'profile', points: points.map((p) => ({ ...p })) })).toBe(true);
+    expect(sameBaseCurve(read, { kind: 'profile' })).toBe(false);
+  });
+});
+

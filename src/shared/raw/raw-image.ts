@@ -43,6 +43,8 @@
 
 import { fromLinear } from '../lut/transfer';
 import { toHalf, type HalfImage } from '../render/half-image';
+import { compiledHueSat, PROPHOTO_TO_SRGB, SRGB_TO_PROPHOTO, type HueSatTable } from './hue-sat-map';
+import { mul3 } from './white-balance';
 
 /** The three floats per pixel a RAW becomes before it is packed. */
 export interface LinearRgb {
@@ -462,5 +464,127 @@ export function packBytePixels(rgb16: Uint16Array, byteTable: Uint8ClampedArray,
     out[o + 1] = byteTable[rgb16[i + 1]];
     out[o + 2] = byteTable[rgb16[i + 2]];
     out[o + 3] = 255;
+  }
+}
+
+// --- The camera's matrix, ours (C4 of `docs/camera-profiles.md`) -------------
+
+let codeOfLinear: Uint16Array | null = null;
+
+/**
+ * Linear light quantised to 1/65535 → the 16-bit BT.709 code LibRaw writes
+ * for it, built once: what LibRaw's own output stage does after its matrix.
+ */
+function bt709CodeTable(): Uint16Array {
+  if (!codeOfLinear) {
+    codeOfLinear = new Uint16Array(65536);
+    for (let i = 0; i < 65536; i += 1) codeOfLinear[i] = Math.round(linearToBt709(i / 65535) * 65535);
+  }
+  return codeOfLinear;
+}
+
+/**
+ * Samples `[from, to)` (whole pixels, three samples each) of a decode asked
+ * of LibRaw in CAMERA colour (`outputColor: 0` — balanced as shot, no
+ * matrix), turned IN PLACE into what LibRaw would have written in sRGB with
+ * `matrix` as its `rgb_cam`: the code decoded to linear light, the matrix,
+ * a clip to [0, 1] — LibRaw's own clip, at the same place —, the code again.
+ * So everything downstream (the tables, the boxes, the meter, the bytes)
+ * reads the very kind of plane it always did, and a camera PROFILE folded
+ * into `matrix` acts BEFORE the clip rather than on a clipped picture.
+ * Measured against LibRaw's own sRGB output on synthetic DNGs: within one
+ * 8-bit code (max 53, mean ~1.5 of 65535 in sixteen bits).
+ */
+export function applyCameraMatrix(
+  rgb16: Uint16Array,
+  matrix: readonly number[],
+  from: number,
+  to: number,
+  hueSat: HueSatTable | null = null,
+): void {
+  const lin = bt709Table();
+  const code = bt709CodeTable();
+  // The profile's hue/sat map (C5) works in linear ProPhoto, on the camera's
+  // colour before the clip: the way there is folded into the matrix, the way
+  // back is one more 3×3 after the map.
+  const map = hueSat ? compiledHueSat(hueSat) : null;
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = map ? mul3(SRGB_TO_PROPHOTO, matrix as number[]) : matrix;
+  const [p0, p1, p2, p3, p4, p5, p6, p7, p8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
+  for (let i = from * 3, end = to * 3; i < end; i += 3) {
+    const r = lin[rgb16[i]];
+    const g = lin[rgb16[i + 1]];
+    const b = lin[rgb16[i + 2]];
+    let R = m0 * r + m1 * g + m2 * b;
+    let G = m3 * r + m4 * g + m5 * b;
+    let B = m6 * r + m7 * g + m8 * b;
+    if (map) {
+      io[0] = R;
+      io[1] = G;
+      io[2] = B;
+      map(io);
+      R = p0 * io[0] + p1 * io[1] + p2 * io[2];
+      G = p3 * io[0] + p4 * io[1] + p5 * io[2];
+      B = p6 * io[0] + p7 * io[1] + p8 * io[2];
+    }
+    R = R <= 0 ? 0 : R >= 1 ? 1 : R;
+    G = G <= 0 ? 0 : G >= 1 ? 1 : G;
+    B = B <= 0 ? 0 : B >= 1 ? 1 : B;
+    rgb16[i] = code[(R * 65535 + 0.5) | 0];
+    rgb16[i + 1] = code[(G * 65535 + 0.5) | 0];
+    rgb16[i + 2] = code[(B * 65535 + 0.5) | 0];
+  }
+}
+
+/**
+ * A profile's LOOK TABLE (C6) over a plane `applyCameraMatrix` already wrote —
+ * BT.709 codes, sRGB primaries — in place: decoded to light, through the
+ * compiled table in linear ProPhoto (`compiledHueSat`, its value axis at the
+ * picture's exposure), clipped and encoded again. A pass of its own because
+ * the table comes AFTER exposure, and the exposure is metered on the plane
+ * the matrix made.
+ */
+export function applyLookTable(rgb16: Uint16Array, look: (io: Float64Array) => void, from: number, to: number): void {
+  const lin = bt709Table();
+  const code = bt709CodeTable();
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = SRGB_TO_PROPHOTO;
+  const [p0, p1, p2, p3, p4, p5, p6, p7, p8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
+  for (let i = from * 3, end = to * 3; i < end; i += 3) {
+    const r = lin[rgb16[i]];
+    const g = lin[rgb16[i + 1]];
+    const b = lin[rgb16[i + 2]];
+    io[0] = m0 * r + m1 * g + m2 * b;
+    io[1] = m3 * r + m4 * g + m5 * b;
+    io[2] = m6 * r + m7 * g + m8 * b;
+    look(io);
+    let R = p0 * io[0] + p1 * io[1] + p2 * io[2];
+    let G = p3 * io[0] + p4 * io[1] + p5 * io[2];
+    let B = p6 * io[0] + p7 * io[1] + p8 * io[2];
+    R = R <= 0 ? 0 : R >= 1 ? 1 : R;
+    G = G <= 0 ? 0 : G >= 1 ? 1 : G;
+    B = B <= 0 ? 0 : B >= 1 ? 1 : B;
+    rgb16[i] = code[(R * 65535 + 0.5) | 0];
+    rgb16[i + 1] = code[(G * 65535 + 0.5) | 0];
+    rgb16[i + 2] = code[(B * 65535 + 0.5) | 0];
+  }
+}
+
+/** The same over LINEAR light (a box-averaged picture, sRGB primaries), in place; values are kept as they come, never clipped. */
+export function applyLookLinear(data: Float32Array, look: (io: Float64Array) => void, from: number, to: number): void {
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = SRGB_TO_PROPHOTO;
+  const [p0, p1, p2, p3, p4, p5, p6, p7, p8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
+  for (let i = from * 3, end = to * 3; i < end; i += 3) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    io[0] = m0 * r + m1 * g + m2 * b;
+    io[1] = m3 * r + m4 * g + m5 * b;
+    io[2] = m6 * r + m7 * g + m8 * b;
+    look(io);
+    data[i] = Math.max(0, p0 * io[0] + p1 * io[1] + p2 * io[2]);
+    data[i + 1] = Math.max(0, p3 * io[0] + p4 * io[1] + p5 * io[2]);
+    data[i + 2] = Math.max(0, p6 * io[0] + p7 * io[1] + p8 * io[2]);
   }
 }

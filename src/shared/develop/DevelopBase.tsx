@@ -6,11 +6,12 @@ import { formatBytes } from '../lib/format';
 import { isClipName } from '../library/assets';
 import type { Rendition, RenditionRole } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
-import { BASE_CURVE_ADDS, BASE_CURVE_LABELS, needsMeasuring, type BaseCurve, type BaseCurveKind } from './base-curve';
+import { BASE_CURVE_ADDS, BASE_CURVE_LABELS, needsMeasuring, needsProfileCurve, type BaseCurve, type BaseCurveKind } from './base-curve';
 
 /** The line under the curves: what the chosen one IS — for Auto, measured or about to be. */
 function curveLine(curve: BaseCurve | null): string {
   const kind = curve?.kind ?? 'linear';
+  if (needsProfileCurve(curve)) return 'reading the curve of this file’s colour profile… Standard meanwhile';
   if (kind !== 'auto') return BASE_CURVE_ADDS[kind];
   if (needsMeasuring(curve)) return 'measuring the camera’s curve on the render this file carries… Standard meanwhile';
   const off = curve?.error;
@@ -86,6 +87,7 @@ const RUNG_WORDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
 /** The curves the menu offers, in its order — a word each, the full name in the tooltip. */
 const CURVE_CHOICES: readonly { kind: BaseCurveKind; word: string }[] = [
   { kind: 'auto', word: 'Auto' },
+  { kind: 'profile', word: 'Profile' },
   { kind: 'standard', word: 'Standard' },
   { kind: 'contrast', word: 'Contrast' },
   { kind: 'shadows', word: 'Shadows' },
@@ -196,6 +198,7 @@ export function DevelopBaseMenu({
   gain,
   baseCurve = null,
   onBaseCurve = null,
+  offersProfileCurve = false,
   calibration,
   roll = null,
   className = '',
@@ -233,6 +236,8 @@ export function DevelopBaseMenu({
    */
   baseCurve?: BaseCurve | null;
   onBaseCurve?: ((next: BaseCurve) => void) | null;
+  /** The file's colour profile carries a tone curve (C7): `Profile` is offered among the curves. */
+  offersProfileCurve?: boolean;
   /** What the RAW's own calibration asks for, once read; null when it carries none. */
   calibration?: string | null;
   /**
@@ -274,6 +279,8 @@ export function DevelopBaseMenu({
     (onSensor && gain && onRemeter ? 1 : 0) +
     (steps.length > 0 && onBaseCurve ? CURVE_CHOICES.length : 0);
   const curveKind: BaseCurveKind = baseCurve?.kind ?? 'linear';
+  // `Profile` only where the file carries one — or where it is already chosen.
+  const curveChoices = CURVE_CHOICES.filter((c) => c.kind !== 'profile' || offersProfileCurve || curveKind === 'profile');
 
   const words = (
     <>
@@ -372,23 +379,26 @@ export function DevelopBaseMenu({
               The tone curve the sensor’s light gets before any slider — what a camera puts in its JPEG and a RAW
               decoded linear lacks. Auto measures the camera’s own curve on the render inside this file, once, and
               keeps it; where that render is too small or does not follow one curve it says so and uses Standard.
-              Standard, Contrast and Shadows are curves made here, not Capture One’s; Linear is the sensor as it is.
+              Profile is the curve a DNG’s own colour profile carries, where it carries one. Standard, Contrast and
+              Shadows are curves made here, not Capture One’s; Linear is the sensor as it is.
               It acts only on the sensor, on brightness alone, so no colour turns.
             </InfoDot>
           </div>
           <Segmented<BaseCurveKind>
             size="sm"
-            columns={CURVE_CHOICES.length}
+            // Five words fit a row of the menu, six do not: Profile makes two rows of three.
+            columns={curveChoices.length > 5 ? 3 : curveChoices.length}
             label="The sensor’s base curve"
             value={curveKind}
             onChange={(next) =>
               pick(() => {
                 if (!onSensor) onBase(steps[0]);
-                // Auto again on a measured Auto keeps its measurement: never re-measured silently.
-                if (next !== 'auto' || curveKind !== 'auto') onBaseCurve({ kind: next });
+                // Auto again on a measured Auto keeps its measurement, Profile on a read
+                // Profile its curve: never re-measured or re-read silently.
+                if (next !== curveKind || (next !== 'auto' && next !== 'profile')) onBaseCurve({ kind: next });
               })
             }
-            options={CURVE_CHOICES.map((c) => ({ id: c.kind, label: c.word, title: `${BASE_CURVE_LABELS[c.kind]} — ${BASE_CURVE_ADDS[c.kind]}` }))}
+            options={curveChoices.map((c) => ({ id: c.kind, label: c.word, title: `${BASE_CURVE_LABELS[c.kind]} — ${BASE_CURVE_ADDS[c.kind]}` }))}
           />
           {onSensor && <span className="font-mono text-3xs leading-relaxed text-muted">{curveLine(baseCurve)}</span>}
         </div>

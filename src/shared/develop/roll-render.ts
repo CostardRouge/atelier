@@ -18,6 +18,7 @@
  * applies, and is accepted for a delivery.
  */
 
+import type { ProfileRequest } from '../raw/dng-color';
 import { isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
 import { makeFrameGrader } from '../lut/frame-grader';
@@ -116,7 +117,8 @@ export interface RollRenderOptions {
    * edge asked for (a crop may keep a fraction of the frame). The file passed
    * beside it is then only what the picture IS; nothing of it is decoded.
    */
-  raw?: { file: File; gain: number } | null;
+  /** The sensor to develop from, its stored gain, and the camera profile its decode folds in (`decodeProfileOf`). */
+  raw?: { file: File; gain: number; profile?: ProfileRequest } | null;
   /**
    * The camera's own calibration to apply to that RAW (`raw/calibration.ts`),
    * at the rung the picture stands on — or the top one the file can reach,
@@ -383,7 +385,7 @@ export async function renderRollPicture(file: File, opts: RollRenderOptions): Pr
  * bordered exactly as a render is. Decode and delivery agree by construction:
  * both come from `deliver`.
  */
-async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRenderOptions): Promise<RollRendered> {
+async function renderFromRaw(raw: { file: File; gain: number; profile?: ProfileRequest }, opts: RollRenderOptions): Promise<RollRendered> {
   const klass = deviceClass();
   // Known before the decode only when every target asks a long edge: a short
   // edge, an area or a percentage waits for the picture's own shape.
@@ -392,6 +394,7 @@ async function renderFromRaw(raw: { file: File; gain: number }, opts: RollRender
   const decoded = await decodeRaw(raw.file, {
     minLongEdge: decodeEdge ? decodeEdge * 2 : null,
     gain: raw.gain,
+    profile: raw.profile,
     // The GPU's cap and, on a phone, the device's own export ceiling
     // (`raw-budget.ts`): a whole sensor is what a phone's tab dies of.
     maxEdge: rawDecodeEdge('export', klass, gpuMax),

@@ -26,6 +26,8 @@
  * Pure and DOM-free.
  */
 
+import type { DngCalibration } from '../exif/dng-profile';
+
 /** What the decoder knows about a RAW's white: row-major 3×3 matrices, multipliers normalised on green. */
 export interface RawWhite {
   /** The camera's as-shot multipliers, R G B, G = 1. */
@@ -34,6 +36,12 @@ export interface RawWhite {
   camXyz: number[];
   /** Camera → linear sRGB, 3×3 row-major (LibRaw's `rgb_cam`, the colour columns). */
   rgbCam: number[];
+  /**
+   * The file's own calibrations — a DNG's `ColorMatrix1/2` with their
+   * illuminants and forward matrices (`dng-color.ts`) — where the decoder
+   * gave them. Absent: the one matrix above, taken as calibrated under D65.
+   */
+  calibrations?: DngCalibration[];
 }
 
 /** A white balance stored on a develop: what was asked, and the matrix it came to for THIS picture. */

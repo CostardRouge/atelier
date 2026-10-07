@@ -24,6 +24,10 @@ import {
   type PixelRect,
 } from './linear-dng';
 import { linearToBt709, type LinearRgb } from './raw-image';
+import type { DngProfile } from '../exif/dng-profile';
+import { blendHueSat } from './hue-sat-map';
+import { resolveProfile, type ProfileRequest, type RawProfile } from './dng-color';
+import { mul3 } from './white-balance';
 
 export interface JxlDngPlane {
   /** The shown frame's size at full density. */
@@ -37,7 +41,10 @@ export interface JxlDngPlane {
   rgb16: Uint16Array | null;
   /** Box-averaged: linear light. */
   linear: LinearRgb | null;
+  /** The file's own colour, as LibRaw would read it — what the kelvin maths reads. */
   color: LinearDngColor;
+  /** The camera profile folded into the conversion (`dng-color.ts`), or null for LibRaw's colour. */
+  profile: RawProfile | null;
   tiles: number;
   exif: { iso: number | null; shutter: number | null; aperture: number | null; focal: number | null };
 }
@@ -50,6 +57,10 @@ export interface JxlDngRequest {
   signal: AbortSignal;
   cancelled: () => DOMException;
   task: TaskHandle | null;
+  /** The camera profile to fold into the matrix, before the clip (C4 of `docs/camera-profiles.md`). */
+  profile?: ProfileRequest;
+  /** Where the profile's tables come from — a loaded `.dcp` (C8) — when not the file's own. */
+  tables?: DngProfile | null;
 }
 
 let codes: Uint16Array | null = null;
@@ -84,7 +95,14 @@ export async function decodeJxlDngPlane(file: File, head: ArrayBuffer, info: Lin
   const height = factor === 1 ? region.h : Math.floor(region.h / factor);
   if (width <= 0 || height <= 0) throw new Error(`The region asked of ${file.name} is smaller than one pixel at this size.`);
 
-  const color = linearDngColor(info);
+  const own = linearDngColor(info);
+  // The profile acts on the camera's colour BEFORE the clip, like LibRaw's
+  // own matrix: folded into `rgbCam`, never applied to a clipped picture.
+  const tables = req.tables !== undefined ? req.tables : (info.profile ?? null);
+  const profile = resolveProfile(req.profile, own.white, tables);
+  // The hue/sat map at the stored weight (C5), after the matrix, before the clip.
+  const hueSat = profile?.hueSat ? blendHueSat(tables?.hueSatMap, profile.hueSat.weight) : null;
+  const color = profile ? { ...own, rgbCam: mul3(profile.matrix, own.rgbCam), hueSat } : own;
   const rgb16 = factor === 1 ? new Uint16Array(width * height * 3) : null;
   const sums = factor === 1 ? null : new Float32Array(width * height * 3);
   codes ??= codeTable(linearToBt709);
@@ -169,7 +187,8 @@ export async function decodeJxlDngPlane(file: File, head: ArrayBuffer, info: Lin
     height,
     rgb16,
     linear,
-    color,
+    color: own,
+    profile,
     tiles: total,
     exif: {
       iso: positive(exif?.iso),

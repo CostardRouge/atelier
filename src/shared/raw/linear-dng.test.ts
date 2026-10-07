@@ -204,4 +204,16 @@ describe('developTile', () => {
     expect(rgb16[3 * 3]).toBe(65535); // 30000 × 4 clipped
     expect(rgb16[1 * 3]).toBe(40000); // 10000 × 4
   });
+
+  it('runs the profile’s hue/sat map after the matrix (C5), an identity map changing nothing', () => {
+    const run = (shift: number | null) => {
+      const sums = new Float32Array(3);
+      const hueSat = shift === null ? null : { dims: [6, 2, 1] as [number, number, number], data: new Float32Array(36).map((_, i) => [shift, 1, 1][i % 3]), srgbValue: false };
+      developTile(tile, { info, color: { ...color, hueSat }, region: { x: 2, y: 0, w: 2, h: 2 }, outWidth: 1, outHeight: 1 }, { kind: 'sums', sums, factor: 2 });
+      return sums;
+    };
+    const plain = run(null);
+    run(0).forEach((v, i) => expect(v).toBeCloseTo(plain[i], 5));
+    expect(run(40)[0]).not.toBeCloseTo(plain[0], 3);
+  });
 });

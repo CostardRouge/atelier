@@ -74,12 +74,15 @@ import {
   baseRung,
   developBase,
   isRawDevelop,
+  decodeProfileOf,
+  profilePending,
   rawGainOf,
   withoutBase,
 } from '../../shared/develop/develop';
 import { resolveRollChoice, rollChoiceFor } from '../../shared/develop/roll-choice';
-import { openingBaseCurve } from '../../shared/develop/base-curve';
-import { captureRenditions, meterRawGain } from '../../shared/develop/roll-choice-source';
+import { needsProfileCurve, openingBaseCurve } from '../../shared/develop/base-curve';
+import { profileCurveFor } from '../../shared/develop/profile-curve';
+import { captureRenditions, meterRaw } from '../../shared/develop/roll-choice-source';
 import {
   calibrationAt,
   readRawCalibration,
@@ -623,18 +626,22 @@ export function useRollExport({
           // camera's file only where it beats the proxy, the sensor only for
           // numbers that were never set on the render.
           const handed = onlyProxies ? null : rollChoiceFor(r.opensOn, picture).choice;
+          // On the roll's sensor: metered below like its stage, the camera
+          // profile with the gain (`camera-profiles.md`).
+          let followed = false;
           if (handed === 'delivered') {
             say('fetch', 'Reading the capture’s files');
             const answer = resolveRollChoice(await captureRenditions(file, origin, beside, identity?.assetId ?? null), 'delivered');
             if (answer.row) picture = { ...picture, rendition: answer.row.id };
           } else if (handed === 'sensor' && sensorSourceFor(file, origin, beside, identity?.assetId ?? null)) {
+            followed = true;
             // The curve the stage opened it on, so preview = export (`openingBaseCurve`).
             picture = {
               ...picture,
               develop: { ...(picture.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null, baseCurve: openingBaseCurve(picture.develop?.baseCurve) },
             };
           }
-          let raw: { file: File; gain: number } | null = null;
+          let raw: { file: File; gain: number; profile: ReturnType<typeof decodeProfileOf> } | null = null;
           if (isRawDevelop(picture.develop)) {
             if (onlyProxies) {
               failures.push(`${picture.ref.name} left from its proxy: proxies only for this run, its RAW base set aside`);
@@ -654,12 +661,29 @@ export function useRollExport({
               if (rawFile && picture.develop && !(picture.develop.rawGain && picture.develop.rawGain > 0)) {
                 say('develop', 'Metering the RAW');
                 const develop = picture.develop;
-                const gain = await meterRawGain(rawFile, controller.signal).catch(() => null);
+                // Metered through the colour it will leave in (C4): a picture
+                // newly on its sensor resolves its camera profile here.
+                const resolving = followed || profilePending(develop);
+                const metered = await meterRaw(rawFile, controller.signal, resolving ? 'resolve' : decodeProfileOf(develop)).catch(() => null);
                 if (controller.signal.aborted) break;
-                if (gain) picture = { ...picture, develop: { ...develop, rawGain: gain } };
+                const gain = metered?.gain;
+                if (gain) {
+                  const profile = resolving ? metered.profile : null;
+                  picture = { ...picture, develop: { ...develop, rawGain: gain, ...(profile ? { rawProfile: profile } : {}) } };
+                }
                 else rawFile = null;
               }
-              if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
+              // A Profile curve chosen before its file was read (a preset, a paste,
+              // the roll's opening) takes the file's own here, as its stage would (C7).
+              if (rawFile && picture.develop && needsProfileCurve(picture.develop.baseCurve)) {
+                const dcp = picture.develop.rawProfile && picture.develop.rawProfile !== 'pending' ? picture.develop.rawProfile.dcp : null;
+                const points = await profileCurveFor(rawFile, dcp?.hash);
+                picture = {
+                  ...picture,
+                  develop: { ...picture.develop, baseCurve: points ? { kind: 'profile', points } : { kind: 'standard' } },
+                };
+              }
+              if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop), profile: decodeProfileOf(picture.develop) };
               else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
             }
           }

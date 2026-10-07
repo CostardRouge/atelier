@@ -26,8 +26,8 @@
  * Pure and DOM-free.
  */
 
-import type { DngCalibration } from '../exif/dng-profile';
-import { apply3, inverse3, mul3, XYZ_TO_SRGB, xyToTempTint } from './white-balance';
+import { illuminantName, type DngCalibration, type DngProfile } from '../exif/dng-profile';
+import { apply3, inverse3, mul3, tempTintToXy, XYZ_TO_SRGB, xyToTempTint, type RawWhite } from './white-balance';
 
 type M3 = number[];
 type V3 = [number, number, number];
@@ -307,4 +307,201 @@ export function calibrationsFromLibraw(dngColor: unknown): DngCalibration[] {
     });
   }
   return out;
+}
+
+// --- On a picture -------------------------------------------------------------
+
+/**
+ * The camera's colour AS THE DNG SPEC MEANS IT, resolved for ONE picture and
+ * stored on its develop (`DevelopSettings.rawProfile`): the 3×3 from LibRaw's
+ * decode to the spec's at the as-shot white (`dngCorrection`), and which
+ * calibrations it came from. Stored like the gain — preview = export, and a
+ * later decoder never moves a developed picture. Absent: LibRaw's colour,
+ * which is every picture developed before 2026-10-07 (his Q1: stored
+ * pictures do not move).
+ */
+export interface RawProfile {
+  matrix: number[];
+  /** `A + D65`, `D65` — the calibrations it interpolated, for the picture's facts. */
+  label: string;
+  /**
+   * The file's own hue/saturation map is applied too (C5, `hue-sat-map.ts`),
+   * its two illuminants' tables blended at `weight` (of the first) — the
+   * matrices' weight at the as-shot light. The table is read from the file
+   * at every decode, like the opcode lists; only the weight is stored. Absent:
+   * no map — every profile resolved before C5, or a file that carries none.
+   */
+  hueSat?: { weight: number } | null;
+  /**
+   * The file's own LOOK TABLE is applied too (C6): after the exposure, its
+   * value axis read at the picture's metered gain, in the decoder. Read from
+   * the file at every decode; only the fact is stored. Absent: none — every
+   * profile resolved before C6, or a file that carries none.
+   */
+  look?: boolean;
+  /**
+   * A profile the person LOADED (C8, `raw/profile-vault.ts`): the matrices,
+   * the hue/sat map, the look table and the curve came from that `.dcp`, not
+   * from the file. A reference only — the SHA-256 of its bytes and its name;
+   * the tables are read from this device's vault at every decode, and where
+   * the vault does not hold it the stored matrix still applies, alone.
+   */
+  dcp?: { hash: string; name: string } | null;
+}
+
+/** The calibrations a white carries, or LibRaw's one matrix taken as D65's. */
+export function calibrationsOf(white: RawWhite): DngCalibration[] {
+  const own = white.calibrations?.filter((c) => c.colorMatrix) ?? [];
+  if (own.length) return own;
+  return [{ illuminant: 21, colorMatrix: white.camXyz, forwardMatrix: null, cameraCalibration: null }];
+}
+
+/** The as-shot neutral in camera space: `1 / multiplier`. */
+function neutralOf(white: RawWhite): V3 {
+  return [1 / white.asShot[0], 1 / white.asShot[1], 1 / white.asShot[2]];
+}
+
+/** The profile for one decoded picture, or null where its data cannot say. */
+export function rawProfileFor(white: RawWhite | null | undefined, file: DngProfile | null = null): RawProfile | null {
+  if (!white) return null;
+  const cals = calibrationsOf(white);
+  const matrix = dngCorrection(cals, neutralOf(white), white.rgbCam);
+  if (!matrix || !matrix.every((v) => Number.isFinite(v))) return null;
+  const label = cals.map((c) => illuminantName(c.illuminant)).join(' + ');
+  const weight = hueSatWeight(white, file);
+  const look = Boolean(file?.lookTable?.data);
+  return {
+    matrix,
+    label: label + (weight !== null ? ' · hue/sat' : '') + (look ? ' · look' : ''),
+    ...(weight !== null ? { hueSat: { weight } } : {}),
+    ...(look ? { look: true } : {}),
+  };
+}
+
+/**
+ * The weight a file's hue/sat map is blended at for this white — of its
+ * first table, by the matrices' own rule at the as-shot light — or null
+ * when the file carries no map whose bytes are in hand.
+ */
+export function hueSatWeight(white: RawWhite, file: DngProfile | null): number | null {
+  const map = file?.hueSatMap;
+  if (!map?.data) return null;
+  const [c1, c2] = file!.calibrations;
+  if (!map.data2 || !c1 || !c2) return 1;
+  const shot = profiledAsShot(white);
+  return shot ? interpolationWeight(shot.kelvin, illuminantKelvin(c1.illuminant), illuminantKelvin(c2.illuminant)) : 1;
+}
+
+/**
+ * Resolve the profile at the picture's next metering — the stage's decode or
+ * the run's, whichever comes first, as for a gain stored as null. What a
+ * picture newly put on its sensor carries until then.
+ */
+export const PROFILE_PENDING = 'pending';
+
+/**
+ * What a decoder is asked to fold into the camera's matrix (C4): a profile
+ * already stored on the picture (its matrix), `'resolve'` to work it out from
+ * this very decode's own colour data, or nothing — LibRaw's colour.
+ */
+export type ProfileRequest = Pick<RawProfile, 'matrix' | 'hueSat' | 'look' | 'dcp'> | 'resolve' | null | undefined;
+
+/** The profile a request comes to for a decode whose white is `white`, or null. */
+export function resolveProfile(
+  request: ProfileRequest,
+  white: RawWhite | null | undefined,
+  file: DngProfile | null = null,
+): RawProfile | null {
+  if (!request) return null;
+  if (request === 'resolve') return rawProfileFor(white, file);
+  const { matrix, hueSat, look, dcp } = request;
+  if (matrix.length !== 9 || !matrix.every((v) => Number.isFinite(v))) return null;
+  return {
+    matrix: [...matrix],
+    label: '',
+    ...(hueSat ? { hueSat: { weight: hueSat.weight } } : {}),
+    ...(look ? { look: true } : {}),
+    ...(dcp ? { dcp: { hash: dcp.hash, name: dcp.name } } : {}),
+  };
+}
+
+/** A stored profile read back safely: nine finite numbers, the pending mark, or null. */
+export function rawProfileOrNull(raw: unknown): RawProfile | typeof PROFILE_PENDING | null {
+  if (raw === PROFILE_PENDING) return PROFILE_PENDING;
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const m = src.matrix;
+  if (!Array.isArray(m) || m.length !== 9 || !m.every((n) => typeof n === 'number' && Number.isFinite(n))) return null;
+  const hs = src.hueSat as Record<string, unknown> | null | undefined;
+  const weight = hs && typeof hs.weight === 'number' && Number.isFinite(hs.weight) ? Math.max(0, Math.min(1, hs.weight)) : null;
+  return {
+    matrix: [...(m as number[])],
+    label: typeof src.label === 'string' ? src.label.slice(0, 120) : '',
+    ...(weight !== null ? { hueSat: { weight } } : {}),
+    ...(src.look === true ? { look: true } : {}),
+    ...dcpRefOrNothing(src.dcp),
+  };
+}
+
+function dcpRefOrNothing(raw: unknown): { dcp?: { hash: string; name: string } } {
+  if (!raw || typeof raw !== 'object') return {};
+  const { hash, name } = raw as Record<string, unknown>;
+  if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) return {};
+  return { dcp: { hash, name: typeof name === 'string' ? name.slice(0, 80) : '' } };
+}
+
+/**
+ * The white a LOADED profile reads a picture through: the decode's own
+ * (its as-shot neutral, LibRaw's `rgb_cam`) with the profile's calibrations
+ * in place of the file's — what the kelvin maths and `rawProfileFor` then
+ * interpolate. A DCP's camera calibrations are its own (normally none): the
+ * DNG's `CameraCalibration` is for the DNG's profile.
+ */
+export function whiteThroughDcp(white: RawWhite, dcp: DngProfile): RawWhite {
+  return { ...white, calibrations: dcp.calibrations.filter((c) => c.colorMatrix) };
+}
+
+/** The profile a LOADED `.dcp` comes to for this picture (C8), referenced by its hash and named by its own name. */
+export function rawProfileFromDcp(
+  white: RawWhite | null | undefined,
+  dcp: DngProfile,
+  ref: { hash: string; name: string },
+): RawProfile | null {
+  if (!white) return null;
+  const p = rawProfileFor(whiteThroughDcp(white, dcp), dcp);
+  return p ? { ...p, label: `${ref.name} · ${p.label}`.slice(0, 120), dcp: { hash: ref.hash, name: ref.name } } : null;
+}
+
+/**
+ * The as-shot temperature and tint the SPEC reads — the white found through
+ * the interpolated matrices (`neutralToXy`), not through LibRaw's D65 one.
+ */
+export function profiledAsShot(white: RawWhite): { kelvin: number; tint: number } | null {
+  const xy = neutralToXy(calibrationsOf(white), neutralOf(white));
+  return xy ? xyToTempTint(xy[0], xy[1]) : null;
+}
+
+/**
+ * The white balance in kelvin on a PROFILED picture: the one 3×3 from the
+ * decoded picture (LibRaw's, balanced as shot) to the spec's rendering under
+ * the light asked for — `balancedToSrgb(n') · diag(n / n') · rgbCam⁻¹`, `n'`
+ * the camera's neutral under that light through the matrices interpolated at
+ * its temperature. At the as-shot light it IS the profile's matrix, so the
+ * kelvin panel replaces the profile's matrix rather than stacking on it.
+ */
+export function profiledWbMatrix(white: RawWhite, kelvin: number, tint: number): number[] | null {
+  const cals = calibrationsOf(white);
+  const at = profileAt(cals, kelvin);
+  if (!at) return null;
+  const [x, y] = tempTintToXy(kelvin, tint);
+  const raw = apply3(at.xyzToCamera, xyToXyz(x, y));
+  if (!raw.every((v) => v > 0)) return null;
+  const shot = neutralOf(white);
+  // Green held where it was, as `wbMatrix`'s multipliers are: a new light
+  // re-balances red and blue against green, it does not re-expose.
+  const next: V3 = [(raw[0] * shot[1]) / raw[1], shot[1], (raw[2] * shot[1]) / raw[1]];
+  const spec = balancedToSrgb(cals, next);
+  const inv = inverse3(white.rgbCam);
+  if (!spec || !inv) return null;
+  return mul3(spec, mul3(diag([shot[0] / next[0], shot[1] / next[1], shot[2] / next[2]]), inv));
 }

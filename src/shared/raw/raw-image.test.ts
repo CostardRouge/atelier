@@ -1,7 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { compileHueSat } from './hue-sat-map';
 import { fromHalf } from '../render/half-image';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
+  applyCameraMatrix,
+  applyLookLinear,
+  applyLookTable,
   autoBrightGain,
   autoBrightGainFromLibRaw,
   boxDownscale,
@@ -267,3 +271,67 @@ describe('the fused encode over a linear picture', () => {
     expect(halfTableFromLibRaw(bt709Table())).toBe(halfTableFromLibRaw(bt709Table()));
   });
 });
+
+describe('applyCameraMatrix (C4: the camera matrix is ours)', () => {
+  const code = (linear: number) => Math.round(linearToBt709(linear) * 65535);
+
+  it('with the identity, gives every code back within the quantisation LibRaw itself pays', () => {
+    const plane = new Uint16Array(3 * 4096);
+    for (let i = 0; i < plane.length; i += 1) plane[i] = (i * 16) % 65536;
+    const before = Uint16Array.from(plane);
+    applyCameraMatrix(plane, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 4096);
+    let worst = 0;
+    for (let i = 0; i < plane.length; i += 1) worst = Math.max(worst, Math.abs(plane[i] - before[i]));
+    // Linear light is held in 16 bits between the two curves, as LibRaw holds
+    // it; the worst is at the curve's knee, where its two branches meet a hair
+    // apart (0.081 against 0.0813) — 16 of 65535, a sixteenth of an 8-bit code.
+    expect(worst).toBeLessThanOrEqual(20);
+  });
+
+  it('applies the matrix in linear light and clips each channel to [0, 1], as LibRaw’s own output stage', () => {
+    const m = [1.6, -0.4, -0.2, -0.1, 1.5, -0.4, 0, -0.4, 1.4];
+    const plane = Uint16Array.from([code(0.2), code(0.2), code(0.2), code(0.9), code(0.3), code(0.02), code(0.01), code(0.5), code(0.9)]);
+    applyCameraMatrix(plane, m, 0, 2);
+    // A grey stays grey: the rows sum to one.
+    expect(Math.abs(plane[0] - code(0.2))).toBeLessThanOrEqual(3);
+    expect(Math.abs(plane[1] - code(0.2))).toBeLessThanOrEqual(3);
+    // A saturated red goes past white in red and below zero in blue: clipped.
+    expect(plane[3]).toBe(65535);
+    expect(plane[5]).toBe(0);
+    // Only the pixels asked are touched.
+    expect(plane[6]).toBe(code(0.01));
+  });
+
+  it('runs a hue/sat map after the matrix and before the clip (C5), an identity one changing nothing', () => {
+    const map = (shift: number) => ({ dims: [6, 2, 1] as [number, number, number], data: new Float32Array(36).map((_, i) => [shift, 1, 1][i % 3]), srgbValue: false });
+    const pixel = () => Uint16Array.from([code(0.5), code(0.2), code(0.1)]);
+    const plain = pixel();
+    applyCameraMatrix(plain, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 1);
+    const same = pixel();
+    applyCameraMatrix(same, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 1, map(0));
+    same.forEach((v, i) => expect(Math.abs(v - plain[i])).toBeLessThanOrEqual(2));
+    const turned = pixel();
+    applyCameraMatrix(turned, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 1, map(40));
+    // An orange turned 40° towards green: green rises past red's share.
+    expect(turned[1]).toBeGreaterThan(plain[1] + 1000);
+  });
+});
+
+describe('applyLookTable (C6: the look after exposure)', () => {
+  const code = (linear: number) => Math.round(linearToBt709(linear) * 65535);
+  // A 30° turn on every node: a grey has no hue and stays itself.
+  const turn = compileHueSat({ dims: [6, 2, 1], data: new Float32Array(36).map((_, i) => [30, 1, 1][i % 3]), srgbValue: false })!;
+
+  it('leaves a grey alone and turns a colour, on codes and on linear light alike', () => {
+    const plane = Uint16Array.from([code(0.3), code(0.3), code(0.3), code(0.6), code(0.2), code(0.1)]);
+    applyLookTable(plane, turn, 0, 2);
+    for (let c = 0; c < 3; c += 1) expect(Math.abs(plane[c] - code(0.3))).toBeLessThanOrEqual(20);
+    expect(plane[4]).toBeGreaterThan(code(0.2) + 2000);
+    const lin = Float32Array.from([0.3, 0.3, 0.3, 0.6, 0.2, 0.1]);
+    applyLookLinear(lin, turn, 0, 2);
+    for (let c = 0; c < 3; c += 1) expect(lin[c]).toBeCloseTo(0.3, 4);
+    // The same pixel, both ways, to the codes' own rounding.
+    expect(Math.abs(code(lin[4]) - plane[4])).toBeLessThanOrEqual(40);
+  });
+});
+

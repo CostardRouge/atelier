@@ -948,7 +948,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           ...r,
           pictures: r.pictures.map((p) => {
             if (!targets.includes(p.id)) return p;
-            const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain } : null;
+            const own = p.develop && isRawDevelop(p.develop) ? { base: p.develop.base, rawGain: p.develop.rawGain, rawProfile: p.develop.rawProfile ?? null } : null;
             const next =
               value || own
                 ? { ...(value ?? DEFAULT_DEVELOP), ...(own ?? {}), baseCurve: landBaseCurve(numbers?.baseCurve, p.develop?.baseCurve) }

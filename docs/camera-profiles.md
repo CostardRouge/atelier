@@ -7,7 +7,10 @@ evaluate what a profile is, where one could come from without breaking the
 local-first line, and what it costs in the render graph. §6 is the
 recommendation, §7 the questions that are his, §8 the plan in commits. C1 —
 reading a DNG's own profile and the spec's maths, applying nothing — is
-built with this brief, because it needs no answer of his.
+built with this brief, because it needs no answer of his. **He answered §7
+the same day: «go with your recommendations»** (§7.1), and C2 + C3 are
+built: a RAW put on its sensor from now on is developed in the spec's
+colour.
 
 **This REOPENS item 19 of `docs/lightroom-gaps.md`**, which he parked on
 2026-09-24 as overkill (§12 there): his reasons then were sRGB outputs and
@@ -174,8 +177,13 @@ use, either baked into a lattice. Two things make it a weaker fit than a DCP:
    RGB lattice sampled per pixel) at the head's start. Not bakeable into the
    tail cube, which runs AFTER the tone stages.
 3. **The look table** sits after exposure and before the tone curve — in the
-   MIDDLE of the head (`glsl.ts` `HEAD_APPLY`, `develop-head.ts`), the code
-   the parallel session is changing now. It waits for that work to land.
+   MIDDLE of the head (`glsl.ts` `HEAD_APPLY`, `develop-head.ts`). *Built
+   instead in the decoder (C6, 2026-10-07)*: the head is composed from
+   `DevelopSettings` alone by a dozen consumers that never hold the file, so
+   a table read from the file cannot reach it without a registry whose
+   arrival no cube cache would see. The decoder applies it after the gain
+   is known, its value axis read at that gain — exact at the picture's own
+   exposure; the exposure and white-balance sliders then act after it.
 4. **The profile tone curve overlaps the base tone curves exactly**: a DCP's
    `ProfileToneCurve` is what Capture One's *Curve* and Lightroom's base curve
    ARE. It must become ONE more choice in that menu (*Profile's own*), drawn
@@ -226,18 +234,35 @@ the middle of the gamut and only approximately right at its edge.
 7. **Where the choice lives**: per picture (like the rung) with a roll default
    (like `opensOn`), never carried by a preset — yes?
 
+### 7.1 His answers (2026-10-07: «go with your recommendations»)
+
+1. **Stored pictures do not move.** The profile is written when a picture is
+   put on its sensor from now on (by hand, by the roll, by a batch onto the
+   roll's sensor); one already on its sensor keeps LibRaw's colour.
+2. **All three bodies matter**; one file of each through `describeRaw` is
+   still needed to know what each carries — no file of his is here.
+3. **Loading his own `.dcp` / `.icc` is allowed**, his licence to judge;
+   Atelier ships and fetches neither, ever (C8).
+4. **The target is correct camera colour** (the DCP/DNG route); Capture
+   One's *ProStandard* itself stays C9, a spike after one ARW measures it.
+5. **LibRaw in camera colour: yes** — C4, next.
+6. **The profile tone curve is one more base-curve choice** (C7).
+7. **Per picture, calibration, carried by no preset or paste** — built that
+   way; a roll-wide default waits until there is more than one profile to
+   choose (C8).
+
 ## 8. Plan, in commits
 
 | # | commit | needs | verified by |
 | --- | --- | --- | --- |
 | C1 | **BUILT.** `exif/dng-profile.ts` reads a DNG's profile tags (both calibrations, forward matrices, hue/sat map, look table, tone curve, embed policy, third illuminant, gain table map; a table past the head NAMED in `unread`); `RawProbe.profile`; `describeRaw` says it. `raw/dng-color.ts`: the spec's maths, `dngCorrection`, `librawPick`, `calibrationsFromLibraw`. Applies nothing. | — | specs; LibRaw's measured `rgb_cam` rebuilt to 1e-4 |
-| C2 | The rung menu's foot names the file's profile (`profile "Adobe Standard" · A + D65`), and `RawMeta` carries `dng_color` | — (a fact said) | headless drive |
-| C3 | A: the resolved correction on the picture (`RollPicture.cameraProfile`, absent = today), composed in the head's matrix slot; kelvin through the interpolated matrix | Q1, Q7; the base-curve session landed | gate row CPU vs GPU; ΔE table re-run |
-| C4 | The decoder in camera colour, the matrix ours (LibRaw and the JPEG XL path alike) | Q5 | bytes vs today ≤ 1 code in gamut |
-| C5 | The hue/sat map as the head's first step (GPU + CPU twin) | C3, C4 | gate row |
-| C6 | The look table between exposure and tone | C5, coordination | gate row |
-| C7 | `ProfileToneCurve` as a base-curve choice | Q6 | spec |
-| C8 | `.dcp` loading into a vault, picked per picture | Q3 | a DCP of his |
+| C2 | **BUILT.** `RawMeta.white.calibrations` carries LibRaw's `dng_color` (and the JPEG XL path's IFD0); the picture's facts say `camera colour A + D65` | — | the decoder's real `dng_color` read back |
+| C3 | **BUILT.** `DevelopSettings.rawProfile` — the resolved correction, `'pending'` until the gain's metering (stage or run), absent = today — applied as the head's ONE matrix; a kelvin balance is solved through the profile and REPLACES its matrix | Q1, Q7 | specs: the matrix in the head and in `developLinear`, kelvin = profile at the as-shot light |
+| C4 | **BUILT.** LibRaw asked for camera colour (`outputColor: 0`); `applyCameraMatrix` turns the 16-bit plane into what LibRaw wrote in sRGB, in place, with the profile folded into its `rgb_cam` BEFORE the clip (the JPEG XL path folds it into its own `rgbCam`); the head stops applying the profile (`decodeProfileOf` feeds every decode) | Q5 | today's colour within 1 code in 8 bits (real decoder, synthetic DNGs); before vs after the clip up to 92 codes where LibRaw clipped |
+| C5 | **BUILT, in the DECODER rather than the head** (C4 made that the place: after the matrix, before the clip, in linear ProPhoto, as the SDK renders). `raw/hue-sat-map.ts` (the SDK's HSV and table lookup AS RECALLED — hue wraps, saturation and value clamped, bi/trilinear, saturation held at 1); the two illuminants' tables blended at the matrices' weight, stored as `RawProfile.hueSat.weight` and the table read from the file each time; LibRaw's plane and the JPEG XL tiles alike. A kelvin change does not re-blend it | C3, C4 | specs (identity, a 60° shift = one sextant, a node hit exactly, the blend); real decoder on two synthetic DNGs: an identity map = no map, a 40° map (weight 0.76) moves 99 % of the pixels; ~80 ns a pixel compiled (the plain matrix ~20) |
+| C6 | **BUILT, in the DECODER** (§5.3 says why): `RawProfile.look` (a fact; the table read from the file each time, `lookTableOf`), applied by `applyLookTable` / `applyLookLinear` as a pass AFTER the gain is known — the stored one, else metered on the matrix's plane before the look and handed on as the picture's gain, so every later decode reads the look at the same exposure; a tile plan without a stored gain decodes whole. LibRaw's plane and the JPEG XL path alike | C5 | specs (the value axis at the gain, the pass on codes and on light, the flag, the cache key); real decoder on synthetic DNGs: an identity look = no look to the bit, a 25° look moves every pixel, the first decode = a later one to the bit at gain 1 and at gain 3.94 |
+| C7 | **BUILT.** `profile` among the base curves (`base-curve.ts`), offered only where the file carries a `ProfileToneCurve`: read from the head (`profile-curve.ts`, held per file), turned into encoded-domain points by `profileCurvePoints` (the profile's points joined by the monotone cubic, then the fewest points the shaper draws within 0.1 code, 32 at most), stored on the picture like Auto's measurement, never carried to another file; unread it draws Standard; the stage and the export run fill it. Applied as every base curve is — on luminance, where the SDK applies it per channel | Q6 | specs: an identity stays identity, a lift and an S drawn within 0.15 code, the read from a TIFF head, the store rules |
+| C8 | **BUILT.** `exif/dcp.ts` reads a `.dcp` (`IIRC`/`MMCR`) through `readDngProfile`; `raw/profile-vault.ts` keeps it in IndexedDB under the SHA-256 of its bytes; `RawProfile.dcp` references it (hash + name), resolved on the decode's own white with the profile's calibrations (`rawProfileFromDcp`, `whiteThroughDcp`); the decoder reads its tables from the vault (`tablesFor`), the kelvin maths its calibrations, a `profile` curve its curve; a device without it keeps the matrix alone, said. Picked per picture in *Camera profile* (Develop) — the file's own, a vaulted one, or *Load a .dcp…*; a kelvin balance is re-solved through the new profile and the stage re-decodes on a change, an undo included. No roll default yet | Q3 | specs (the reader, the vault without IndexedDB, the reference, the cache key); real decoder: a DCP's 40° map moves 3 026 of 3 072 pixels, a DCP missing from the vault = its matrix alone to the bit. NOT a DCP of his |
 | C9 | ICC: a spike — LittleCMS wasm vs a TS subset, against one ARW Capture One exported | Q4 | ΔE vs Capture One's render |
 
 ## 9. Not measured

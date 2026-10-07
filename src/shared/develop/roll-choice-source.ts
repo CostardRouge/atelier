@@ -18,6 +18,7 @@ import { renditionsOf, type Rendition } from '../media/renditions';
 import type { MediaOrigin } from '../projects/media-identity';
 import { canStageDraw } from '../projects/media-rendition';
 import { rawDecodeEdge } from '../raw/raw-budget';
+import type { ProfileRequest, RawProfile } from '../raw/dng-color';
 import { decodeRaw } from '../raw/raw-decoder';
 import { maxRenderSize } from '../render/graph-grader';
 import { heldOriginal } from '../sources/original-cache';
@@ -62,7 +63,21 @@ export async function captureRenditions(
  * roll put on its sensor leaves with the gain its stage would show.
  */
 export async function meterRawGain(file: File, signal?: AbortSignal): Promise<number> {
+  return (await meterRaw(file, signal)).gain;
+}
+
+/**
+ * The gain AND the camera profile (`dng-color.ts`) of a RAW, from the one
+ * decode the stage would make — what a picture on the roll's sensor leaves
+ * with, as its stage shows it.
+ */
+export async function meterRaw(
+  file: File,
+  signal?: AbortSignal,
+  profile: ProfileRequest = null,
+): Promise<{ gain: number; profile: RawProfile | null }> {
   const decoded = await decodeRaw(file, {
+    profile,
     budgetPixels: stageBudget(),
     maxEdge: rawDecodeEdge('stage', deviceClass(), maxRenderSize()),
     signal,
@@ -70,5 +85,5 @@ export async function meterRawGain(file: File, signal?: AbortSignal): Promise<nu
     withBytes: false,
     hold: true,
   });
-  return decoded.gain;
+  return { gain: decoded.gain, profile: decoded.profile };
 }

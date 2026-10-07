@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DngCalibration } from '../exif/dng-profile';
+import type { DngCalibration, DngProfile } from '../exif/dng-profile';
 import {
   balancedToSrgb,
   calibrationsFromLibraw,
@@ -11,9 +11,17 @@ import {
   interpolationWeight,
   librawPick,
   neutralToXy,
+  PROFILE_PENDING,
   profileAt,
+  profiledAsShot,
+  profiledWbMatrix,
+  rawProfileFor,
+  rawProfileOrNull,
+  rawProfileFromDcp,
+  resolveProfile,
+  whiteThroughDcp,
 } from './dng-color';
-import { apply3, planckianXy } from './white-balance';
+import { apply3, planckianXy, type RawWhite } from './white-balance';
 
 // The synthetic pair the brief measured LibRaw against (`docs/camera-profiles.md` §2):
 // a D65 matrix of the shape Adobe publishes for a Sony body, and an invented
@@ -122,5 +130,123 @@ describe('calibrationsFromLibraw', () => {
     expect(cals[0].cameraCalibration).toBeNull();
     expect(calibrationsFromLibraw([{ illuminant: 0, colormatrix: [z4, z4, z4], forwardmatrix: [z4, z4, z4] }])).toEqual([]);
     expect(calibrationsFromLibraw(undefined)).toEqual([]);
+  });
+});
+
+describe('the camera profile on a picture', () => {
+  // A white as the decoder hands it: LibRaw's D65 matrix for `rgb_cam`, both calibrations beside it.
+  const whiteAt = (kelvin: number, cals: DngCalibration[]): RawWhite => {
+    const [x, y] = planckianXy(kelvin);
+    const n = apply3(profileAt(cals, kelvin)!.xyzToCamera, xyz(x, y));
+    return { asShot: [n[1] / n[0], 1, n[1] / n[2]], camXyz: D65, rgbCam: dcrawRgbCam(D65)!, calibrations: cals };
+  };
+
+  it('is the spec’s correction at the as-shot white, named by its calibrations', () => {
+    const white = whiteAt(2850, dual);
+    const p = rawProfileFor(white)!;
+    expect(p.label).toBe('A + D65');
+    const neutral = [1 / white.asShot[0], 1, 1 / white.asShot[2]];
+    close(p.matrix, dngCorrection(dual, neutral, white.rgbCam)!, 1e-12);
+    expect(rawProfileFor(null)).toBeNull();
+  });
+
+  it('takes LibRaw’s one matrix as D65’s when the file names none, and is then identity under D65', () => {
+    const white = { ...whiteAt(6500, [cal(21, D65)]), calibrations: undefined };
+    const neutral = apply3(D65, xyz(0.3127, 0.329));
+    const p = rawProfileFor({ ...white, asShot: [neutral[1] / neutral[0], 1, neutral[1] / neutral[2]] })!;
+    expect(p.label).toBe('D65');
+    expect(maxOff(p.matrix)).toBeLessThan(1e-3);
+  });
+
+  it('reads the as-shot light through the interpolated matrices', () => {
+    const shot = profiledAsShot(whiteAt(2850, dual))!;
+    expect(Math.abs(shot.kelvin - 2850)).toBeLessThan(2);
+    expect(Math.abs(shot.tint)).toBeLessThan(0.5);
+  });
+
+  it('solves a kelvin balance that IS the profile at the as-shot light, so the two never stack', () => {
+    const white = whiteAt(3500, dual);
+    const shot = profiledAsShot(white)!;
+    close(profiledWbMatrix(white, shot.kelvin, shot.tint)!, rawProfileFor(white)!.matrix, 2e-3);
+    // Another light moves the picture, and keeps green where it was on a grey.
+    const day = profiledWbMatrix(white, 5500, 10)!;
+    expect(maxOff(day)).toBeGreaterThan(0.05);
+  });
+
+  it('reads a stored profile back, the pending mark included, and refuses junk', () => {
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: 'D65' })).toEqual({ matrix: IDENTITY, label: 'D65' });
+    expect(rawProfileOrNull(PROFILE_PENDING)).toBe(PROFILE_PENDING);
+    expect(rawProfileOrNull({ matrix: [1, 2] })).toBeNull();
+    expect(rawProfileOrNull({ matrix: [NaN, 0, 0, 0, 1, 0, 0, 0, 1] })).toBeNull();
+    expect(rawProfileOrNull('nope')).toBeNull();
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: 'x', hueSat: { weight: 0.4 } })).toEqual({
+      matrix: IDENTITY,
+      label: 'x',
+      hueSat: { weight: 0.4 },
+    });
+  });
+
+  // C5: a file whose profile carries a hue/sat map, one table per illuminant.
+  const withMap = (data2: boolean): DngProfile =>
+    ({
+      calibrations: dual,
+      hueSatMap: { dims: [6, 2, 1], data: new Float32Array(36), data2: data2 ? new Float32Array(36) : null, srgbValue: false },
+    }) as unknown as DngProfile;
+
+  it('carries the weight its hue/sat map is blended at, and says so in its name', () => {
+    const white = whiteAt(2850, dual);
+    const p = rawProfileFor(white, withMap(true))!;
+    expect(p.label).toBe('A + D65 · hue/sat');
+    // Near standard light A, the A table (the first) weighs almost all.
+    expect(p.hueSat!.weight).toBeGreaterThan(0.95);
+    expect(rawProfileFor(whiteAt(6500, dual), withMap(true))!.hueSat!.weight).toBeLessThan(0.05);
+    expect(rawProfileFor(white, withMap(false))!.hueSat).toEqual({ weight: 1 });
+    // A map whose bytes are past the head is not one the profile can claim.
+    const unread = withMap(true);
+    unread.hueSatMap!.data = null;
+    expect(rawProfileFor(white, unread)!.hueSat).toBeUndefined();
+    expect(rawProfileFor(white)!.hueSat).toBeUndefined();
+  });
+
+  it('carries the file’s look table as a fact, said in its name (C6)', () => {
+    const white = whiteAt(2850, dual);
+    const file = { ...withMap(true), lookTable: { dims: [6, 2, 1], data: new Float32Array(36), data2: null, srgbValue: true } } as unknown as DngProfile;
+    const p = rawProfileFor(white, file)!;
+    expect(p.look).toBe(true);
+    expect(p.label).toBe('A + D65 · hue/sat · look');
+    expect(resolveProfile({ matrix: IDENTITY, look: true }, white)!.look).toBe(true);
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: '', look: true })).toEqual({ matrix: IDENTITY, label: '', look: true });
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: '', look: 'yes' })).toEqual({ matrix: IDENTITY, label: '' });
+    expect(rawProfileFor(white, withMap(true))!.look).toBeUndefined();
+  });
+
+  it('takes a LOADED profile’s calibrations in place of the file’s, and names it (C8)', () => {
+    const white = whiteAt(2850, dual);
+    // A profile whose calibrations differ from the file's: one D65 matrix only.
+    const loaded = { calibrations: [cal(21, D65)], hueSatMap: null, lookTable: null } as unknown as DngProfile;
+    const through = whiteThroughDcp(white, loaded);
+    expect(through.calibrations).toHaveLength(1);
+    const hash = 'a'.repeat(64);
+    const p = rawProfileFromDcp(white, loaded, { hash, name: 'Mine' })!;
+    expect(p.dcp).toEqual({ hash, name: 'Mine' });
+    expect(p.label).toBe('Mine · D65');
+    // Not the file's own: the file interpolates two calibrations under tungsten.
+    expect(maxOff(p.matrix.map((v, i) => v - rawProfileFor(white)!.matrix[i] + IDENTITY[i]))).toBeGreaterThan(1e-3);
+    expect(rawProfileFromDcp(null, loaded, { hash, name: 'Mine' })).toBeNull();
+    // Stored and read back: the reference only, a malformed one dropped.
+    expect(rawProfileOrNull(JSON.parse(JSON.stringify(p)))!).toMatchObject({ dcp: { hash, name: 'Mine' } });
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: '', dcp: { hash: 'nope', name: 'x' } })).toEqual({ matrix: IDENTITY, label: '' });
+    expect(resolveProfile({ matrix: IDENTITY, dcp: { hash, name: 'Mine' } }, white)!.dcp).toEqual({ hash, name: 'Mine' });
+  });
+
+  it('resolves a stored request with its weight, and works one out on resolve', () => {
+    const white = whiteAt(3500, dual);
+    expect(resolveProfile({ matrix: IDENTITY, hueSat: { weight: 0.3 } }, white)).toEqual({
+      matrix: IDENTITY,
+      label: '',
+      hueSat: { weight: 0.3 },
+    });
+    expect(resolveProfile('resolve', white, withMap(true))!.hueSat).toBeDefined();
+    expect(resolveProfile(null, white)).toBeNull();
   });
 });
