@@ -1631,3 +1631,24 @@ within a second, 64 bins each, the linear means telling the blue picture from
 the warm one, `natural` 1600 × 1000, the Learning pane reading `2 kept · 3.0
 KB`, Off → 0 records and the pane saying so, Keep → 2 again, no page error.
 Not driven: a RAW's pair (`viaRawPreview`), a real file's EXIF.
+
+**The TRAINING FILE (B2, same day)** — `training-dump.ts` (pure, specced) and
+a *Training file* row under the switch, in the SAME Learning section rather
+than on the gallery the brief named: one place, beside the choice it depends
+on, reachable on a phone (the gallery's header is not drawn there). One JSON
+file (`atelier-training-<day>.json`, `kind: atelier/training-pairs`, v1),
+one line per picture of EVERY roll that has its pair: the vignette as a data
+URL, its stats, the camera's facts, the sections edited, and the RECORD
+normalised through the very readers a roll uses (`normaliseDevelop`,
+`normaliseFraming`, `keystoneOrNull`, `lensOrNull`, `detailOrNull`,
+`postVignetteOrNull`, `readPatches`, `readLayers`, `readRollGrade`), so a
+script never guesses an absent field. Rules: an UNTOUCHED picture is a pair
+(«change nothing» is an answer to learn); a look's legacy inlined `.cube`
+text is replaced by its byte count (a lattice is not a label); the media's
+asset and source ids, the journal, the words and the delivery stay out; a
+vignette that cannot be read keeps its line with `vignette: null`; a picture
+without a pair (a clip, a file never in hand) is COUNTED in the line under the
+verb, never silently dropped. Driven headless (`dump.mjs`): a developed and
+an untouched picture gave a 7 kB file with both, the line reading
+`atelier-training-2026-10-07.json · 2 pairs`. A trainer outside the repo (B3)
+reads it; the model it makes comes back as a verb (B4).

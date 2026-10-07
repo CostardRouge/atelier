@@ -176,10 +176,15 @@ picture. A device choice, kept by DEFAULT (his instruction of the day: a
 question becomes a settings row); Off clears the store. Driven headless;
 details and rules in `docs/memory/develop-roll.md`.
 
-**B2 — The training dump.** A verb on the roll gallery writes ONE file: every
-roll's pictures as `{ vignette, stats, exif summary, develop, crop, layers
-without rasters }`, the records normalised. He takes it to a trainer outside
-the browser. Nothing leaves by itself.
+**B2 — The training dump — BUILT 2026-10-07** (`training-dump.ts`, the
+*Training file* row of Develop's settings → Learning, beside the switch
+rather than on the gallery: one place, on every device). ONE file, every
+roll's paired pictures as `{ roll, picture, edits, shot: { vignette, stats,
+exif }, record: { develop, crop, keystone, lens, detail, vignette, border,
+repair, layers, look } }`, the records normalised through the roll's own
+readers, an untouched picture a line too, a look's lattice left out, the
+unpaired counted and said. He takes it to a trainer outside the browser.
+Nothing leaves by itself. Driven headless; `docs/memory/develop-roll.md`.
 
 **B3 — Outside the repo.** A script (PyTorch or similar, not in this
 repository) trains a small network — a vignette and the as-shot stats in,

@@ -1,7 +1,10 @@
 import { useEffect, useId, useState, type ReactNode } from 'react';
 import { DEVICE_CLASS_KEY, deviceClass, deviceClassFor, readDeviceFacts } from '../../shared/lib/device-class';
-import { clearRollShots, rollShotsFootprint } from '../../shared/develop/roll-store';
+import { clearRollShots, listRollShots, listRolls, rollShotsFootprint } from '../../shared/develop/roll-store';
 import { SHOT_LONG_EDGE, shotsPref } from '../../shared/develop/shot-record';
+import { buildTrainingDump, serializeTrainingFile, trainingFileName } from '../../shared/develop/training-dump';
+import { downloadBlob } from '../../shared/media/save';
+import { blobToDataUrl } from '../../shared/media/data-url';
 import { setLensfunAllowed, useLensfunAllowed } from '../../shared/lens/lensfun-store';
 import { formatBytes } from '../../shared/lib/format';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
@@ -371,6 +374,7 @@ function Learning() {
       : 'none kept yet'
     : 'counting…';
   return (
+    <>
     <Row
       label="Pictures as shot"
       state={
@@ -385,7 +389,7 @@ function Learning() {
             roll’s thumbnails show the picture as delivered, so a small one as shot is kept beside each record — a few
             kilobytes, on this device, pruned with the picture. No place and no words go with it.
           </p>
-          <p>The rolls gallery’s ⋯ writes every pair into one training file; nothing leaves by itself.</p>
+          <p>The row under this one writes every pair into one training file; nothing leaves by itself.</p>
         </>
       }
     >
@@ -405,6 +409,73 @@ function Learning() {
           { id: 'off', label: 'Off' },
         ]}
       />
+    </Row>
+    <TrainingFile kept={footprint ? footprint.count : null} />
+    </>
+  );
+}
+
+/** How the training file's write ended, for the one line under its verb. */
+type Written = { pairs: number; unpaired: number; name: string } | { none: true };
+
+/**
+ * The training file (B2 of `docs/auto-develop.md` §6): every pair of every
+ * roll, in one JSON file, on the author's click — the dataset a trainer
+ * outside the browser learns his hand from. Written where a download goes;
+ * nothing leaves by itself.
+ */
+function TrainingFile({ kept }: { kept: number | null }) {
+  const size = useFingerSize();
+  const [written, setWritten] = useState<Written | null>(null);
+  const [busy, setBusy] = useState(false);
+  const write = async () => {
+    setBusy(true);
+    try {
+      const [rolls, shots] = await Promise.all([listRolls(), listRollShots()]);
+      const now = Date.now();
+      const dump = await buildTrainingDump(rolls, new Map(shots.map((s) => [s.id, s])), blobToDataUrl, now);
+      if (dump.file.pairs.length === 0) {
+        setWritten({ none: true });
+        return;
+      }
+      const name = trainingFileName(now);
+      downloadBlob(new Blob([serializeTrainingFile(dump.file)], { type: 'application/json' }), name);
+      setWritten({ pairs: dump.file.pairs.length, unpaired: dump.unpaired, name });
+    } finally {
+      setBusy(false);
+    }
+  };
+  const state = written
+    ? 'none' in written
+      ? 'Nothing to write: no picture has its pair yet'
+      : `${written.name} · ${written.pairs} pair${written.pairs === 1 ? '' : 's'}` +
+        (written.unpaired ? ` · ${written.unpaired} picture${written.unpaired === 1 ? '' : 's'} without one left out` : '')
+    : kept === null
+      ? 'Every pair of every roll, as one JSON file'
+      : kept
+        ? `Every pair of every roll, as one JSON file — ${kept} today`
+        : 'Every pair of every roll, as one JSON file — none to write yet';
+  return (
+    <Row
+      label="Training file"
+      state={state}
+      info={
+        <>
+          <p>
+            One line per picture: the vignette as shot, its light, its camera’s facts and the whole record over it — the
+            develop with every default filled, the crop, the warps, detail, the layers, the repair, the look by name.
+            An untouched picture is a line too: “change nothing” is an answer to learn.
+          </p>
+          <p>
+            Left out: a look’s own lattice, where the file came from, the journal, the words. A trainer outside the
+            browser reads it; a model it makes comes back as a verb here.
+          </p>
+        </>
+      }
+    >
+      <Button size={size} icon={Icons.export} disabled={busy} onClick={() => void write()}>
+        {busy ? 'Writing…' : 'Write the file'}
+      </Button>
     </Row>
   );
 }
