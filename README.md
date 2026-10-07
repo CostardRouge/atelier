@@ -1245,7 +1245,12 @@ switch far down the list is seen on the car the moment it flips.
 your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
-from stop to stop, waiting at each for as long as you ask. The small map in
+from stop to stop, waiting at each for as long as you ask. The **camera** can
+follow the pen too, with the same presets as Virée's (a view width in
+kilometres, a pull-back on long hops, an opening and a closing shot on the
+whole map, a centred smoothing and a look-ahead), north always up and what it
+frames cut at the map's box — and, with the background on, the finer tiles
+along the road come with it. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
 big one: pan, zoom and pinch it, and every tap is the next stop, joined to the

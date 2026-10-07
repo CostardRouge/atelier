@@ -1,8 +1,8 @@
 # The map openers' next round — the stops panel, the camera, grouping places, the recap
 
-**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5, and the
-finer tiles along a tight follow after them** (what is left: the Itinerary's
-own camera, the odometer digits). The maintainer answered two labs the same day: «Labo Virée»
+**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5, then the
+finer tiles along a tight follow and the Itinerary's own camera** (what is
+left: the odometer digits). The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
@@ -90,7 +90,9 @@ a tight follow needs finer tiles: its own commit, measured. **Built** (`map-came
 finer tiles too** — a strip of one-tile patches along the road at the
 follow's own zoom, inside a tile budget, fading to the wide raster as the
 camera pulls back (`shared/map/tile-strip.ts`, «Finer tiles along a tight
-follow»); the Itinerary's own camera is not.
+follow»); **and the Itinerary's own camera**, following the pen on the same
+track and presets, north up, clipped at the map's box, with the strip under
+it («The Itinerary's CAMERA follows the pen»).
 
 ## 4. Grouping nearby places — accepted, every option kept
 

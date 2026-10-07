@@ -79,6 +79,10 @@ describe('the arithmetic', () => {
   it('names the preset the settings are, and nothing when they are the author’s own', () => {
     expect(cameraPresetOf({ ...DRIVE_DEFAULTS, ...CAMERA_PRESETS.navigation.values })).toBe('navigation');
     expect(cameraPresetOf({ ...DRIVE_DEFAULTS, ...CAMERA_PRESETS.calm.values, viewKm: 121 })).toBeNull();
+    // An opener without a heading compares what it keeps: Navigation without its heading is still Navigation there.
+    const keys = (Object.keys(CAMERA_PRESETS.calm.values) as (keyof typeof CAMERA_PRESETS.calm.values)[]).filter((k) => k !== 'orientation');
+    expect(cameraPresetOf({ ...DRIVE_DEFAULTS, ...CAMERA_PRESETS.navigation.values, orientation: 'north' })).toBeNull();
+    expect(cameraPresetOf({ ...DRIVE_DEFAULTS, ...CAMERA_PRESETS.navigation.values, orientation: 'north' }, keys)).toBe('navigation');
   });
 });
 

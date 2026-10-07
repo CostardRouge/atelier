@@ -51,13 +51,12 @@ import {
   BASEMAP_FOR_EDGE,
   BASEMAP_MAX_PX,
   MERCATOR_MAX_LAT,
-  TILE_PX,
   basemapKey,
-  planTiles,
   rasterSize,
   type GeoBox,
 } from '../../map/tile-math';
-import { STRIP_BLOCK, STRIP_FADE_FROM, STRIP_FADE_TO, STRIP_TILES, planStrip, type StripSample } from '../../map/tile-strip';
+import { STRIP_TILES } from '../../map/tile-strip';
+import { patchAlpha, stripOver, visiblePatches, wideOnly, type BasemapSet } from './basemap-strip';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
 import { paintCount } from './map-paint';
 import { formatDistance, placeLabels } from './geo';
@@ -129,25 +128,8 @@ export function driveTrack(plan: DrivePlan, o: DriveOptions, aspect: number): Ca
   return cameraTrack(plan, o, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7);
 }
 
-/**
- * The OpenStreetMap ground a drive draws: ONE raster over everything the
- * camera can reach, and, under a following camera, a STRIP of finer patches
- * along its road at the follow's own zoom (`shared/map/tile-strip.ts`) —
- * since the wide raster, capped at `BASEMAP_MAX_PX`, gives a 35 km frame over
- * a 2 100 km route fifty pixels. `wants` is the list in the order the shell
- * fetches it: the wide one first, the road under the car next.
- */
-export interface DriveBasemap {
-  wide: HookBasemapWant;
-  patches: readonly HookBasemapWant[];
-  /** The patches' zoom, and the follow's own width in plan units — the fade's measure. */
-  patchZoom: number | null;
-  followUnits: number;
-  wants: readonly HookBasemapWant[];
-}
-
-/** How often the following camera's frames are sampled for the strip. */
-const STRIP_SAMPLES_PER_SECOND = 10;
+/** The drive's OpenStreetMap ground: the wide raster and the strip along the road (`basemap-strip.ts`). */
+export type DriveBasemap = BasemapSet;
 
 /**
  * The OpenStreetMap ground a drive's frame shows, or null unless its ground
@@ -156,8 +138,9 @@ const STRIP_SAMPLES_PER_SECOND = 10;
  * is the same at every size: the whole route as the camera frames it, or,
  * when the camera follows the car, the route with half a frame around it,
  * every place the view can reach. Sized so a 1920 delivery is not enlarged.
- * `budget` is the tiles the strip along a following camera's road may cost
- * (`stripBudget()`); 0 asks for no strip.
+ * Under a following camera a STRIP of finer patches along the road comes
+ * with it (`stripOver`); `budget` is the tiles it may cost (`stripBudget()`),
+ * 0 asks for no strip.
  */
 export function driveBasemap(
   plan: DrivePlan,
@@ -211,52 +194,16 @@ export function driveBasemap(
   const need = Math.max(x1 - x0, y1 - y0) * view.scale * (BASEMAP_FOR_EDGE / Math.max(w, h));
   const size = rasterSize(region, need, BASEMAP_MAX_PX);
   const wide: HookBasemapWant = { key: basemapKey(region, size.width, size.height), box: region, ...size };
-  const out: DriveBasemap = { wide, patches: [], patchZoom: null, followUnits: 0, wants: [wide] };
-  if (!track || o.camera !== 'follow' || !(budget > 0)) return out;
-
-  // The strip: every frame the following camera shows, sampled over the
-  // drive, as a region and the density a 1920 delivery of it asks. Under
-  // heading-up the frame's diagonal is what it can reach. A frame pulled
-  // back past `STRIP_FADE_TO` times the follow's own width — a long hop's
-  // middle, the wide shots — is not swept: it shows the wide raster.
-  const samples: StripSample[] = [];
-  const steps = Math.max(1, Math.ceil(track.seconds * STRIP_SAMPLES_PER_SECOND));
-  const diagonal = o.orientation === 'heading';
-  const followUnits = track.viewKm / Math.max(1e-9, kmPerPlanUnit(plan));
-  const widest = ((STRIP_FADE_TO * followUnits * (w / box.width)) / geo.scale) / geo.k;
-  for (let k = 0; k <= steps; k++) {
-    const f = track.at((track.seconds * k) / steps);
-    if (!(f.width > 0)) continue;
-    const unitsPerPx = f.width / box.width;
-    const reachX = (diagonal ? Math.hypot(w, h) : w) * unitsPerPx * 0.5;
-    const reachY = (diagonal ? Math.hypot(w, h) : h) * unitsPerPx * 0.5;
-    const sample = regionOf(f.centre.x - reachX, f.centre.x + reachX, f.centre.y - reachY, f.centre.y + reachY);
-    if (!(sample.east > sample.west) || !(sample.north > sample.south)) continue;
-    samples.push({ box: sample, pxPerDeg: (BASEMAP_FOR_EDGE / (w * unitsPerPx)) * geo.scale * geo.k });
-  }
-  const wideZoom = planTiles(region, size.width, size.height)?.z ?? 0;
-  const strip = planStrip(samples, budget, { deeperThan: wideZoom, widest });
-  if (!strip) return out;
-  const side = STRIP_BLOCK * TILE_PX;
-  const patches = strip.patches.map((patch): HookBasemapWant => {
-    const s = rasterSize(patch, side, side);
-    return { key: basemapKey(patch, s.width, s.height), box: patch, ...s, zoom: strip.z };
+  if (!track || o.camera !== 'follow') return wideOnly(wide);
+  return stripOver(wide, track, {
+    box,
+    frame: { width: w, height: h },
+    diagonal: o.orientation === 'heading',
+    regionOf,
+    unitsPerDegree: geo.scale * geo.k,
+    kmPerUnit: kmPerPlanUnit(plan),
+    budget,
   });
-  return { wide, patches, patchZoom: strip.z, followUnits, wants: [wide, ...patches] };
-}
-
-/**
- * How strongly the strip's patches show on a frame whose map box is
- * `boxUnits` plan units wide: whole up to `STRIP_FADE_FROM` times the
- * follow's own width, gone at `STRIP_FADE_TO` — where the sweep stopped.
- */
-export function patchAlpha(basemap: Pick<DriveBasemap, 'patches' | 'followUnits'>, boxUnits: number): number {
-  if (!basemap.patches.length || !(basemap.followUnits > 0)) return 0;
-  const times = boxUnits / basemap.followUnits;
-  const f = (times - STRIP_FADE_FROM) / (STRIP_FADE_TO - STRIP_FADE_FROM);
-  if (f <= 0) return 1;
-  if (f >= 1) return 0;
-  return 1 - f * f * (3 - 2 * f);
 }
 
 export function paintDrive(
@@ -421,11 +368,7 @@ function paintMap(
         if (fade <= 0) return;
         const reach = view.angle ? Math.hypot(w, h) / 2 : 0;
         const seen = { x0: Math.min(0, w / 2 - reach), y0: Math.min(0, h / 2 - reach), x1: Math.max(w, w / 2 + reach), y1: Math.max(h, h / 2 + reach) };
-        for (const patch of basemap.patches) {
-          const picture = pictures?.get(patch.key);
-          if (!picture) continue;
-          const rect = basemapRect(patch, project);
-          if (rect.x + rect.width < seen.x0 || rect.x > seen.x1 || rect.y + rect.height < seen.y0 || rect.y > seen.y1) continue;
+        for (const { picture, rect } of visiblePatches(basemap, pictures, (p) => basemapRect(p, project), seen)) {
           drawBasemap(g, picture, rect, o.basemapOpacity * fade);
         }
       });

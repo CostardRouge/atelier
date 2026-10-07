@@ -32,10 +32,46 @@
  *   over the first and last `WIDE_SECONDS`: an establishing shot, then the
  *   car, then the whole road once more.
  *
+ * The camera follows a SUBJECT (`CameraSubject`): Virée's car, read off the
+ * `DrivePlan` (`driveSubject`), or the Itinerary's pen, read off its timing
+ * and its projected stops (`map-plan.ts`, `mapSubject`) — the same track, the
+ * same presets, in each opener's own plan units. Heading-up is a car's: the
+ * Itinerary keeps north up.
+ *
  * Pure and DOM-free.
  */
 
 import { KM_PER_DEGREE, planBounds, type CameraFrame, type CameraTrack, type DrivePlan, type PlanPoint } from './drive-plan';
+
+/** What the camera follows: where it is, the run it is on, the ground it moves over. */
+export interface CameraSubject {
+  seconds: number;
+  /** Where the subject is at `t`, in its plan's units. */
+  at(t: number): PlanPoint;
+  /** The run the subject is on at `t` — how far along it, 0..1, and its length in km — or null at a halt. */
+  runAt(t: number): { f: number; km: number } | null;
+  /** The whole journey's bounds, in plan units. */
+  bounds: { x0: number; y0: number; x1: number; y1: number };
+  /** Kilometres per plan unit. */
+  kmPerUnit: number;
+}
+
+/** Virée's car as a subject. */
+export function driveSubject(plan: DrivePlan): CameraSubject {
+  const { phases } = plan.schedule;
+  return {
+    seconds: plan.seconds,
+    at: (t) => plan.at(t).point,
+    runAt: (t) => {
+      const phase = phases.find((p) => t >= p.start && t < p.end);
+      if (!phase || phase.kind !== 'run' || !(phase.s1 > phase.s0)) return null;
+      const m = plan.at(t);
+      return { f: Math.max(0, Math.min(1, (m.s - phase.s0) / (phase.s1 - phase.s0))), km: plan.kmAt(phase.s1) - plan.kmAt(phase.s0) };
+    },
+    bounds: planBounds(plan),
+    kmPerUnit: kmPerPlanUnit(plan),
+  };
+}
 
 export type CameraMode = 'whole' | 'follow';
 export type CameraZoom = 'fixed' | 'pull-back';
@@ -95,11 +131,19 @@ export const CAMERA_PRESETS: Record<CameraPresetId, { label: string; hint: strin
 
 export const CAMERA_PRESET_IDS: readonly CameraPresetId[] = ['calm', 'navigation', 'documentary'];
 
-/** The preset these options are exactly, or null when they are the author's own. */
-export function cameraPresetOf(o: CameraOptions): CameraPresetId | null {
+/** The keys a preset sets. */
+export type CameraPresetKey = keyof (typeof CAMERA_PRESETS)['calm']['values'];
+
+/**
+ * The preset these options are exactly, or null when they are the author's
+ * own — compared on `keys` (every key a preset sets by default; an opener
+ * without a heading compares what it has).
+ */
+export function cameraPresetOf(o: Pick<CameraOptions, CameraPresetKey>, keys?: readonly CameraPresetKey[]): CameraPresetId | null {
   for (const id of CAMERA_PRESET_IDS) {
     const v = CAMERA_PRESETS[id].values;
-    if ((Object.keys(v) as (keyof typeof v)[]).every((key) => v[key] === o[key])) return id;
+    const compared = keys ?? (Object.keys(v) as CameraPresetKey[]);
+    if (compared.every((key) => v[key] === o[key])) return id;
   }
   return null;
 }
@@ -184,7 +228,10 @@ export function kmPerPlanUnit(plan: DrivePlan): number {
  * less the margin — the same fit `viewAt` has always made.
  */
 export function wholeFrame(plan: DrivePlan, box: { width: number; height: number }, margin: number): CameraFrame {
-  const b = planBounds(plan);
+  return wholeFrameOf(planBounds(plan), box, margin);
+}
+
+export function wholeFrameOf(b: CameraSubject['bounds'], box: { width: number; height: number }, margin: number): CameraFrame {
   const w = Math.max(1e-6, b.x1 - b.x0);
   const h = Math.max(1e-6, b.y1 - b.y0);
   const roomW = Math.max(1, box.width - 2 * margin);
@@ -197,8 +244,8 @@ export function wholeFrame(plan: DrivePlan, box: { width: number; height: number
  * The follow view's width in plan units: the asked kilometres, or — for a
  * piece that stored a share — that share of what the whole route spans.
  */
-export function followWidth(plan: DrivePlan, o: Pick<CameraOptions, 'viewKm' | 'followZoom'>, whole: CameraFrame, box: { width: number }, margin: number): number {
-  if (o.viewKm !== null && o.viewKm > 0) return o.viewKm / kmPerPlanUnit(plan);
+export function followWidth(kmPerUnit: number, o: Pick<CameraOptions, 'viewKm' | 'followZoom'>, whole: CameraFrame, box: { width: number }, margin: number): number {
+  if (o.viewKm !== null && o.viewKm > 0) return o.viewKm / Math.max(1e-9, kmPerUnit);
   // The old rule: the whole-route scale divided by the share, over the room.
   const roomW = Math.max(1, box.width - 2 * margin);
   const wholeScale = box.width / whole.width;
@@ -206,7 +253,7 @@ export function followWidth(plan: DrivePlan, o: Pick<CameraOptions, 'viewKm' | '
 }
 
 /**
- * Bake the camera's track over the plan. `box` is the map's box in the
+ * Bake the camera's track over a drive. `box` is the map's box in the
  * frame; the frame's own height matters only for the lead room.
  */
 export function cameraTrack(
@@ -215,22 +262,32 @@ export function cameraTrack(
   box: { width: number; height: number },
   margin: number,
 ): CameraTrack {
-  const whole = wholeFrame(plan, box, margin);
+  return subjectTrack(driveSubject(plan), o, box, margin);
+}
+
+/** Bake the camera's track over any subject — `cameraTrack` for a drive. */
+export function subjectTrack(
+  plan: CameraSubject,
+  o: CameraOptions,
+  box: { width: number; height: number },
+  margin: number,
+): CameraTrack {
+  const whole = wholeFrameOf(plan.bounds, box, margin);
   const seconds = plan.seconds;
   if (o.camera !== 'follow' || !(seconds > 0)) {
-    return { seconds, whole, viewKm: whole.width * kmPerPlanUnit(plan), at: () => whole };
+    return { seconds, whole, viewKm: whole.width * plan.kmPerUnit, at: () => whole };
   }
   const fps = TRACK_FPS;
   const n = Math.ceil(seconds * fps) + 1;
-  const width = followWidth(plan, o, whole, box, margin);
-  const viewKm = width * kmPerPlanUnit(plan);
+  const width = followWidth(plan.kmPerUnit, o, whole, box, margin);
+  const viewKm = width * plan.kmPerUnit;
 
   // The centre: the car's position read `lookAhead` later, blurred over the
   // smoothing window — centred, so the camera leads as much as it lags.
   const px: number[] = [];
   const py: number[] = [];
   for (let k = 0; k < n; k++) {
-    const p = plan.at(k / fps + o.lookAhead).point;
+    const p = plan.at(k / fps + o.lookAhead);
     px.push(p.x);
     py.push(p.y);
   }
@@ -246,8 +303,8 @@ export function cameraTrack(
     const dx: number[] = [];
     const dy: number[] = [];
     for (let k = 0; k < n; k++) {
-      const a = plan.at(k / fps - 0.04).point;
-      const c = plan.at(k / fps + 0.04).point;
+      const a = plan.at(k / fps - 0.04);
+      const c = plan.at(k / fps + 0.04);
       dx.push(c.x - a.x);
       dy.push(c.y - a.y);
     }
@@ -270,18 +327,14 @@ export function cameraTrack(
   // The width: pulled back along the flyTo curve on every run, by the
   // strength, smoothed in log space so a hop's pull-back never snaps.
   const logWidth: number[] = [];
-  const kmPerUnit = kmPerPlanUnit(plan);
-  const { phases } = plan.schedule;
+  const kmPerUnit = plan.kmPerUnit;
   for (let k = 0; k < n; k++) {
     const t = k / fps;
     let w = width;
     if (o.zoom === 'pull-back' && o.pullBack > 0) {
-      const phase = phases.find((p) => t >= p.start && t < p.end);
-      if (phase && phase.kind === 'run' && phase.s1 > phase.s0) {
-        const m = plan.at(t);
-        const f = Math.max(0, Math.min(1, (m.s - phase.s0) / (phase.s1 - phase.s0)));
-        const hopKm = (plan.kmAt(phase.s1) - plan.kmAt(phase.s0));
-        const fly = flyToWidth(viewKm, hopKm, f) / kmPerUnit;
+      const run = plan.runAt(t);
+      if (run) {
+        const fly = flyToWidth(viewKm, run.km, run.f) / kmPerUnit;
         w = Math.exp(Math.log(width) + o.pullBack * (Math.log(fly) - Math.log(width)));
       }
     }
@@ -309,7 +362,7 @@ export function cameraTrack(
     // asked: a fast drive read 0.7 s ahead is hundreds of kilometres, and a
     // camera that leaves its car behind is no camera. The centre is kept
     // within `KEEP_IN_FRAME` of the box's half-height from the car.
-    const car = plan.at(t).point;
+    const car = plan.at(t);
     const dx = x - car.x;
     const dy = y - car.y;
     const reach = Math.hypot(dx, dy);

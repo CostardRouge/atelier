@@ -40,7 +40,8 @@ import {
   type DriveStop,
 } from './drive-plan';
 import { TICK_KITS } from './tick-kits';
-import { driveBasemap, driveTrack, patchAlpha } from './drive-paint';
+import { driveBasemap, driveTrack } from './drive-paint';
+import { patchAlpha } from './basemap-strip';
 import { TILE_PX, planTiles } from '../../map/tile-math';
 import { STRIP_BLOCK } from '../../map/tile-strip';
 
