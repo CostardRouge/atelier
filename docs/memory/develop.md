@@ -311,6 +311,42 @@ recipe): the climb wrote Standard, each pick stored and moved the stage's
 grey ramp (codes at 1/11 of it: Linear 9 · Standard 6 · Contrast 4 ·
 Shadows 12), no page error.
 
+**Auto, measured** (`base-curve-fit.ts` pure, `measure-base-curve.ts` the
+browser half): the stage's OWN decode (`RawDecodedInfo.half` + `file`, so
+nothing decodes twice) as linear luminance × the gain, against the render
+the file carries asked of `decodeStill` at 512 px (the one door — never the
+full-size bitmap), both read on a 72-cell grid, FLAT cells only (an edge
+mis-registered by a cell is a wild point), the render through a
+magnification searched over 0.98–1.08 about the centre (a DJI render is
+4.93 % tighter than its sensor), the median render tone per band of 24,
+pool-adjacent-violators, (0,0) and an extrapolated white. **Refusals, said
+and stored as Standard**: render long edge < 640 (`FIT_MIN_RENDER_EDGE` —
+NOT a fit limit: on synthetic data the grid reads the curve within 2 codes
+from 1920 down to 320 px; it guards against THUMBNAIL renders, a HIF's 160 ×
+120, a DNG's 256 px preview; a DJI's 960 × 540 passes), an aspect > 3 %
+apart, < 6 bands of tone, a median residual > 4 codes, or two HALVES of the
+frame (left/right, top/bottom) disagreeing by > 6 codes band by band — the
+median residual alone let a local lift through at 0.12 code, measured, so
+the halves are the real «one curve» test. **Measured, synthetic only**
+(`base-curve-fit.test.ts`): Sony-like same frame 0.07 code residual, 0.18
+worst gap to the true curve; DJI-like 960 × 540 at 4.93 % found scale 1.05,
+gap 1.9 codes (the 0.005 scale step); headless on a synthetic DNG LibRaw
+decodes, 0.22 code and the stored points on the S the render was made with.
+**Never on a real ARW or DNG of his** — a real camera's colour (saturation
+moving luminance per hue) may raise the residual and the halves' gap past
+their thresholds on some pictures; tune `FIT_MAX_ERROR` / `FIT_MAX_SPLIT` on
+his files before trusting a refusal rate. **Rules**: measured ONCE where an
+Auto has no points (newly on the sensor, picked, or a preset/paste's bare
+Auto — `needsMeasuring`), on the decode in hand, points stored with the
+median error like `rawGain`; picking Auto on a measured Auto keeps it (no
+silent re-measure; Standard then Auto measures anew); an unmeasured Auto
+draws Standard everywhere, the export included, and the export never
+measures. **Defaults** (his decision 1): the menu's climb writes a bare
+Auto (measured on the decode it causes, Standard on a refusal); the roll's
+sensor choice keeps `openingBaseCurve` = Standard, because a follower
+nobody opened has no decode to measure on and its export must equal its
+stage.
+
 ## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
 
 `auto-develop.ts` (pure) + the `Auto` and `Levels` sections of

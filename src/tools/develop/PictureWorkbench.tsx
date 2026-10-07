@@ -28,7 +28,9 @@ import {
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
-import { openingBaseCurve } from '../../shared/develop/base-curve';
+import { cloneBaseCurve, needsMeasuring, openingBaseCurve } from '../../shared/develop/base-curve';
+import { measureBaseCurve } from '../../shared/develop/measure-base-curve';
+import type { HalfImage } from '../../shared/render/half-image';
 import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
 import {
   calibrationAt,
@@ -906,6 +908,8 @@ export default function PictureWorkbench({
     };
   }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
   const rawGain = developNow.rawGain ?? null;
+  // The stage's last decode of the sensor — what an Auto base curve is measured on.
+  const [sensorDecode, setSensorDecode] = useState<{ file: File; half: HalfImage; gain: number } | null>(null);
   // The calibration the RAW carries, read from a megabyte of its head as soon
   // as it is in hand — it is what decides whether the two top rungs are
   // offered at all, and what the passes apply at them.
@@ -1244,6 +1248,8 @@ export default function PictureWorkbench({
     onRawDecoded: (info) => {
       setRawSize({ w: info.sourceWidth, h: info.sourceHeight });
       setRawWhite(info.meta.white);
+      // Held for an Auto base curve, measured on this very decode (below).
+      setSensorDecode({ file: info.file, half: info.half, gain: info.gain });
       if (rawGain === null) {
         // On the roll's sensor the gain is held for the visit and written
         // only with the picture's first numbers (`inheritedRef`).
@@ -1255,6 +1261,35 @@ export default function PictureWorkbench({
     },
   });
   sampleColourRef.current = picture.sampleColour;
+  // An Auto base curve with no measurement yet — newly on the sensor, picked
+  // in the menu, or carried here by a preset or a paste — is MEASURED once,
+  // on the stage's own decode of this file against the render it carries,
+  // and stored like the gain (preview = export). Never re-measured: points
+  // once stored stay. A render too poor to measure falls back to Standard,
+  // stored, and the reason is said.
+  const curveToMeasure = wantsRaw && rawFile && sensorDecode?.file === rawFile && needsMeasuring(developNow.baseCurve);
+  const measuringFor = useRef<File | null>(null);
+  useEffect(() => {
+    if (!curveToMeasure || !sensorDecode || measuringFor.current === sensorDecode.file) return;
+    const { file: measured, half, gain } = sensorDecode;
+    measuringFor.current = measured;
+    let alive = true;
+    void measureBaseCurve(measured, half, rawGain ?? gain).then((fit) => {
+      if (!alive) return;
+      measuringFor.current = null;
+      if (fit.ok) {
+        patchDraft({ baseCurve: { kind: 'auto', points: fit.points, error: fit.error } });
+        tell(`Auto curve · measured on this file’s render · ${fit.error.toFixed(1)} code${fit.error === 1 ? '' : 's'} off`);
+      } else {
+        patchDraft({ baseCurve: { kind: 'standard' } });
+        tell(`No Auto curve: ${fit.reason} — Standard instead`);
+      }
+    });
+    return () => {
+      alive = false;
+      measuringFor.current = null;
+    };
+  }, [curveToMeasure, sensorDecode, rawGain, patchDraft, tell]);
   videoRef.current = picture.video;
   // Space plays and pauses the CLIP — the sheet's rule (`DevelopSheet.tsx`),
   // here on the tool's own window: a control the keyboard is on keeps its
@@ -2358,7 +2393,9 @@ export default function PictureWorkbench({
                 const climbing = baseRung(developNow.base) === 0;
                 // Newly on its sensor: the opening curve with it, so a RAW
                 // does not read flatter than its camera's JPEG by default.
-                patchDraft(climbing ? { base: next, baseCurve: openingBaseCurve(draft.draft.baseCurve) } : { base: next });
+                // Auto, measured on the file's render once it is decoded —
+                // Standard where the render cannot be measured.
+                patchDraft(climbing ? { base: next, baseCurve: cloneBaseCurve(draft.draft.baseCurve) ?? { kind: 'auto' } } : { base: next });
                 setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');

@@ -6,7 +6,16 @@ import { formatBytes } from '../lib/format';
 import { isClipName } from '../library/assets';
 import type { Rendition, RenditionRole } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
-import { BASE_CURVE_ADDS, BASE_CURVE_LABELS, type BaseCurve, type BaseCurveKind } from './base-curve';
+import { BASE_CURVE_ADDS, BASE_CURVE_LABELS, needsMeasuring, type BaseCurve, type BaseCurveKind } from './base-curve';
+
+/** The line under the curves: what the chosen one IS — for Auto, measured or about to be. */
+function curveLine(curve: BaseCurve | null): string {
+  const kind = curve?.kind ?? 'linear';
+  if (kind !== 'auto') return BASE_CURVE_ADDS[kind];
+  if (needsMeasuring(curve)) return 'measuring the camera’s curve on the render this file carries… Standard meanwhile';
+  const off = curve?.error;
+  return `the camera’s own curve, measured on this file’s render${off != null ? ` · ${off.toFixed(1)} code${off === 1 ? '' : 's'} off` : ''}`;
+}
 import { CHOICE_WORDS, type RollChoice } from './roll-choice';
 import { fullPixels, groupRenditions, rowFigures } from './base-menu';
 
@@ -76,6 +85,7 @@ const RUNG_WORDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
 
 /** The curves the menu offers, in its order — a word each, the full name in the tooltip. */
 const CURVE_CHOICES: readonly { kind: BaseCurveKind; word: string }[] = [
+  { kind: 'auto', word: 'Auto' },
   { kind: 'standard', word: 'Standard' },
   { kind: 'contrast', word: 'Contrast' },
   { kind: 'shadows', word: 'Shadows' },
@@ -360,8 +370,10 @@ export function DevelopBaseMenu({
             <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted">Base curve</span>
             <InfoDot about="the base curve">
               The tone curve the sensor’s light gets before any slider — what a camera puts in its JPEG and a RAW
-              decoded linear lacks. Standard, Contrast and Shadows are curves made here, not Capture One’s; Linear is
-              the sensor as it is. It acts only on the sensor, on brightness alone, so no colour turns.
+              decoded linear lacks. Auto measures the camera’s own curve on the render inside this file, once, and
+              keeps it; where that render is too small or does not follow one curve it says so and uses Standard.
+              Standard, Contrast and Shadows are curves made here, not Capture One’s; Linear is the sensor as it is.
+              It acts only on the sensor, on brightness alone, so no colour turns.
             </InfoDot>
           </div>
           <Segmented<BaseCurveKind>
@@ -372,12 +384,13 @@ export function DevelopBaseMenu({
             onChange={(next) =>
               pick(() => {
                 if (!onSensor) onBase(steps[0]);
-                onBaseCurve({ kind: next });
+                // Auto again on a measured Auto keeps its measurement: never re-measured silently.
+                if (next !== 'auto' || curveKind !== 'auto') onBaseCurve({ kind: next });
               })
             }
             options={CURVE_CHOICES.map((c) => ({ id: c.kind, label: c.word, title: `${BASE_CURVE_LABELS[c.kind]} — ${BASE_CURVE_ADDS[c.kind]}` }))}
           />
-          {onSensor && <span className="font-mono text-3xs leading-relaxed text-muted">{BASE_CURVE_ADDS[curveKind]}</span>}
+          {onSensor && <span className="font-mono text-3xs leading-relaxed text-muted">{curveLine(baseCurve)}</span>}
         </div>
       )}
       {onSensor && gain && onRemeter && (
