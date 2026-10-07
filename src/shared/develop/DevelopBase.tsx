@@ -386,7 +386,8 @@ export function DevelopBaseMenu({
           </div>
           <Segmented<BaseCurveKind>
             size="sm"
-            columns={curveChoices.length}
+            // Five words fit a row of the menu, six do not: Profile makes two rows of three.
+            columns={curveChoices.length > 5 ? 3 : curveChoices.length}
             label="The sensor’s base curve"
             value={curveKind}
             onChange={(next) =>

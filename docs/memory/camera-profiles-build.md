@@ -119,7 +119,7 @@ every base curve. **Rules a later agent must keep:**
 - On LUMINANCE (a grey stays grey), where the SDK applies its curve per
   channel with the hue kept — the departure, in the brief.
 
-NOT seen in the browser (the menu's sixth choice) nor on a real profile.
+Driven headless on a synthetic DNG + DCP (2026-10-07): offered once the DCP with a curve was loaded, picked, 20 points stored; six words do not fit the menu's one row, so with Profile it lays out two rows of three. NOT seen on a real profile.
 
 ## C8: a loaded `.dcp`, kept by hash, chosen per picture (2026-10-07)
 
@@ -150,5 +150,5 @@ under their SHA-256. **Rules a later agent must keep:**
 
 Measured with the real decoder (synthetic DNG + DCP, headless): the DCP's
 map moves 3 026 of 3 072 pixels; one missing from the vault equals its
-matrix alone to the bit. NOT measured: a DCP of his, the panel in a browser.
+matrix alone to the bit. Driven headless in Develop: a DNG dropped on a roll, put on its sensor, *Load a .dcp…*, the profile chosen and named, its reference stored, no page error. NOT measured: a DCP of his.
 
