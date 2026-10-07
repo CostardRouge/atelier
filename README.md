@@ -1193,7 +1193,11 @@ no cap: a three-digit number simply shrinks to stay inside its dot). A tap near 
 its name (a switch turns that off, to drop a stop exactly where you tap), a
 hollow ring is one of the trip's own places, a numbered stop is dragged to
 move it, a place can be searched for and added, and a stop you dropped with no
-name is offered the nearest town's (never given it). The towns come from the
+name is offered the nearest town's (never given it). The list beside the map
+**reorders by drag and drop** — grab a row by its grip (⠿) and drop it
+anywhere; held near the list's top or bottom edge it scrolls, so stop 110 can
+go first without letting go — and its ↑ / ↓ arrows still move a stop one place;
+the list in the panel drags the same way. The towns come from the
 city index the app ships, so the map needs no network; the OpenStreetMap
 background is the optional one above, off until you turn it on. Nothing is
 written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one

@@ -38,7 +38,7 @@ import {
   wantsLabel,
   type MapStop,
 } from './map-plan';
-import { numeralScale } from './stops';
+import { moveStopTo, numeralScale } from './stops';
 import { TICK_KITS } from './tick-kits';
 
 const picture = (name: string): HookPickedPicture => ({
@@ -468,6 +468,22 @@ describe('editing the itinerary', () => {
     expect(moveStop(STOPS, 'c', -1).map((s) => s.id)).toEqual(['a', 'c', 'b']);
     expect(moveStop(STOPS, 'a', -1).map((s) => s.id)).toEqual(['a', 'b', 'c']);
     expect(moveStop(STOPS, 'c', 1).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('moves a stop to any place — a drag’s landing', () => {
+    expect(moveStopTo(STOPS, 'a', 2).map((s) => s.id)).toEqual(['b', 'c', 'a']);
+    expect(moveStopTo(STOPS, 'c', 0).map((s) => s.id)).toEqual(['c', 'a', 'b']);
+    expect(moveStopTo(STOPS, 'b', 1).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+    // Past an end is that end; an unknown stop or a non-number moves nothing.
+    expect(moveStopTo(STOPS, 'a', 99).map((s) => s.id)).toEqual(['b', 'c', 'a']);
+    expect(moveStopTo(STOPS, 'c', -4).map((s) => s.id)).toEqual(['c', 'a', 'b']);
+    expect(moveStopTo(STOPS, 'missing', 0).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+    expect(moveStopTo(STOPS, 'a', Number.NaN).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps a stop’s picture through a drag', () => {
+    const stops = [{ ...STOPS[0], picture: picture('one.jpg') }, STOPS[1], STOPS[2]];
+    expect(moveStopTo(stops, 'a', 2)[2].picture?.ref.name).toBe('one.jpg');
   });
 
   it('removes one', () => {

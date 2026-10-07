@@ -28,6 +28,7 @@ import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
 import {
   addStop,
   moveStop,
+  moveStopTo,
   numeralScale,
   patchStop,
   removeStop,
@@ -39,6 +40,7 @@ import { Icons } from '../../shared/ui/icons';
 import { blockNativeZoom } from '../../shared/ui/native-gestures';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { revealInScroller } from '../../shared/ui/reveal';
+import { useListReorder } from '../../shared/ui/use-list-reorder';
 
 type Place = { name: string; lat: number; lon: number };
 
@@ -136,6 +138,14 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
     setDraft((current) => addStop(current, at, id));
     setSelectedId(id);
   }, []);
+
+  // A stop's row is dragged by its grip to anywhere in the list; the arrows
+  // stay for one step, and for the keyboard.
+  const reorder = useListReorder<HTMLOListElement>((id, to) => {
+    setDraft((current) => moveStopTo(current, id, to));
+    setSelectedId(id);
+  });
+  const rows = reorder.held ? moveStopTo(draft, reorder.held.key, reorder.held.to) : draft;
 
   // --- the map, created once --------------------------------------------------
   useEffect(() => {
@@ -533,15 +543,32 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                 // height of 0, so it SHRANK to the scroller and cut its rows
                 // off instead of letting the scroller scroll — measured on a
                 // 25-stop list, where nothing past the 20th could be reached.
-                <ol className="flex-none m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden">
-                  {draft.map((stop, index) => {
+                <ol
+                  ref={reorder.listRef}
+                  className="flex-none m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden"
+                >
+                  {rows.map((stop, index) => {
                     const on = stop.id === selectedId;
+                    const lifted = reorder.held?.key === stop.id;
                     return (
                       <li
                         key={stop.id}
                         data-stop-row={stop.id}
-                        className={`flex items-center gap-1.5 px-2 py-1 border-b border-line last:border-b-0 ${on ? 'bg-accent-wash' : 'bg-paper'}`}
+                        data-reorder-row={stop.id}
+                        className={`flex items-center gap-1.5 pl-0.5 pr-2 py-1 border-b border-line last:border-b-0 ${
+                          lifted ? 'bg-accent-wash shadow-[inset_3px_0_0_var(--color-accent)]' : on ? 'bg-accent-wash' : 'bg-paper'
+                        }`}
                       >
+                        <span
+                          {...reorder.grip(stop.id, index)}
+                          title="Drag to reorder"
+                          aria-hidden="true"
+                          className={`flex-none w-5 h-7 pointer-coarse:w-9 pointer-coarse:h-9 grid place-items-center select-none [&>svg]:w-3.5 [&>svg]:h-3.5 ${
+                            lifted ? 'cursor-grabbing text-accent-ink' : 'cursor-grab text-faint hover:text-ink-soft'
+                          }`}
+                        >
+                          {Icons.grip}
+                        </span>
                         <button
                           type="button"
                           onClick={() => {
@@ -573,7 +600,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                         </button>
                         <button
                           type="button"
-                          disabled={index === draft.length - 1}
+                          disabled={index === rows.length - 1}
                           onClick={() => setDraft(moveStop(draft, stop.id, 1))}
                           aria-label={`Move stop ${index + 1} later`}
                           className={rowIconClass}
@@ -613,7 +640,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
 
         <div className="flex-none flex items-center gap-2 flex-wrap px-5 py-3 border-t border-line bg-surface max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <span className="min-w-0 flex-1 text-xs text-muted max-[820px]:hidden">
-            Tap to add · drag a number to move it · pinch or scroll to zoom
+            Tap to add · drag a number to move it · drag a row’s grip to reorder · pinch or scroll to zoom
           </span>
           <Button
             size="sm"

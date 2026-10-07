@@ -151,6 +151,21 @@ export function moveStop(stops: readonly MapStop[], id: string, delta: number): 
 }
 
 /**
+ * A stop moved to a place in the order — a DRAG's landing in the list, where
+ * {@link moveStop} is the arrows' one step. `index` is where it ends up, read
+ * in the list it ends up in; past either end means first or last.
+ */
+export function moveStopTo(stops: readonly MapStop[], id: string, index: number): MapStop[] {
+  const from = stops.findIndex((stop) => stop.id === id);
+  if (from < 0 || !Number.isFinite(index)) return [...stops];
+  const to = Math.max(0, Math.min(stops.length - 1, Math.trunc(index)));
+  const out = [...stops];
+  const [moved] = out.splice(from, 1);
+  out.splice(to, 0, moved);
+  return out;
+}
+
+/**
  * The pictures the chooser came back with, landing on the stops.
  *
  * The first goes to the stop the author asked from. The rest fill the stops

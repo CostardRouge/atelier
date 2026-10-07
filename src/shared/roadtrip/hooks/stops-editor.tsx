@@ -11,7 +11,8 @@
  *
  * Every gesture keeps its keyboard twin: the map is the quick way, never the
  * only way — chips for the trip's places, a search field, two number fields
- * for a position, buttons for the order.
+ * for a position, buttons for the order (a row's grip drags it anywhere in
+ * the list; the buttons are its one step, and the keyboard's).
  */
 
 import { useState } from 'react';
@@ -19,6 +20,7 @@ import PlaceSearchField from '../../map/PlaceSearchField';
 import Button from '../../ui/Button';
 import { Icons } from '../../ui/icons';
 import { FieldRow, NumberField } from '../../ui/Inspector';
+import { useListReorder } from '../../ui/use-list-reorder';
 import { formatCoords } from '../trip-places';
 import { newId } from '../trip-types';
 import type { HookPanelHost } from './hook-variant';
@@ -28,6 +30,7 @@ import {
   addStop,
   assignPictures,
   moveStop,
+  moveStopTo,
   numeralScale,
   patchStop,
   removeStop,
@@ -92,6 +95,14 @@ export default function StopsEditor({
 
   const selected = stops.find((stop) => stop.id === selectedId) ?? null;
   const selectedIndex = selected ? stops.findIndex((stop) => stop.id === selected.id) : -1;
+
+  // One drop, one write: the list is DRAWN in the held order while the grip
+  // travels, and the document changes once, on the drop.
+  const reorder = useListReorder<HTMLUListElement>((id, to) => {
+    onChange(moveStopTo(stops, id, to));
+    setSelectedId(id);
+  });
+  const rows = reorder.held ? moveStopTo(stops, reorder.held.key, reorder.held.to) : stops;
 
   const add = (at: Place) => {
     const id = newId();
@@ -186,29 +197,50 @@ export default function StopsEditor({
       )}
 
       {stops.length > 0 && (
-        <ul className="m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden">
-          {stops.map((stop, index) => (
-            <li key={stop.id} className="border-b border-line last:border-b-0">
-              <button
-                type="button"
-                onClick={() => setSelectedId(stop.id === selectedId ? null : stop.id)}
-                aria-pressed={stop.id === selectedId}
-                className={`w-full flex items-center gap-2 px-2 py-1.5 border-0 text-left cursor-pointer ${
-                  stop.id === selectedId ? 'bg-accent-wash' : 'bg-paper hover:bg-surface'
-                }`}
+        <ul
+          ref={reorder.listRef}
+          className="m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden"
+        >
+          {rows.map((stop, index) => {
+            const lifted = reorder.held?.key === stop.id;
+            const on = lifted || stop.id === selectedId;
+            return (
+              <li
+                key={stop.id}
+                data-reorder-row={stop.id}
+                className={`flex items-stretch border-b border-line last:border-b-0 ${
+                  on ? 'bg-accent-wash' : 'bg-paper hover:bg-surface'
+                } ${lifted ? 'shadow-[inset_3px_0_0_var(--color-accent)]' : ''}`}
               >
-                <span className="flex-none w-5 h-5 grid place-items-center rounded-full bg-frame font-mono text-3xs text-on-media">
-                  <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
+                <span
+                  {...reorder.grip(stop.id, index)}
+                  title="Drag to reorder"
+                  aria-hidden="true"
+                  className={`flex-none w-5 pointer-coarse:w-9 grid place-items-center select-none [&>svg]:w-3.5 [&>svg]:h-3.5 ${
+                    lifted ? 'cursor-grabbing text-accent-ink' : 'cursor-grab text-faint hover:text-ink-soft'
+                  }`}
+                >
+                  {Icons.grip}
                 </span>
-                <span className="min-w-0 flex-1 truncate text-xs text-ink">
-                  {stop.name.trim() || <span className="text-muted">Unnamed stop</span>}
-                </span>
-                <span className="flex-none font-mono text-3xs text-faint">
-                  {stop.picture ? 'photo' : '—'}
-                </span>
-              </button>
-            </li>
-          ))}
+                <button
+                  type="button"
+                  onClick={() => setSelectedId(stop.id === selectedId ? null : stop.id)}
+                  aria-pressed={stop.id === selectedId}
+                  className="min-w-0 flex-1 flex items-center gap-2 pl-0.5 pr-2 py-1.5 border-0 bg-transparent text-left cursor-pointer"
+                >
+                  <span className="flex-none w-5 h-5 grid place-items-center rounded-full bg-frame font-mono text-3xs text-on-media">
+                    <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
+                  </span>
+                  <span className="min-w-0 flex-1 truncate text-xs text-ink">
+                    {stop.name.trim() || <span className="text-muted">Unnamed stop</span>}
+                  </span>
+                  <span className="flex-none font-mono text-3xs text-faint">
+                    {stop.picture ? 'photo' : '—'}
+                  </span>
+                </button>
+              </li>
+            );
+          })}
         </ul>
       )}
 
