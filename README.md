@@ -1975,6 +1975,39 @@ past 24 megapixels). The sensor's white is white, whatever the picture
 holds: the decoder no longer scales a frame by its own brightest pixel, so a
 RAW metered before 2026-09-25 may open a touch dark under its stored
 exposure — *Meter the exposure again*, in the rung menu, measures it anew.
+**The sensor's base curve.** Decoded from its sensor, a RAW is linear light,
+only encoded for the screen and brought to its metered exposure — Capture
+One's *Linear Response* — which is why it looks flatter than the camera's own
+render of the same capture: that render carries the camera's tone curve. A
+picture on its sensor can carry a **base curve** too: one monotone curve on
+brightness (a grey stays grey, no colour turns), applied after the metered
+gain and the exposure and before every tone slider, so highlights, shadows,
+contrast and the roll-off at white all act on what it hands over, and a
+RAW's headroom above white is still there to bring back. *Standard* (a
+moderate S, close to a camera's JPEG), *High contrast* and *Lifted shadows*
+are curves designed here — Capture One's own are unpublished and nothing
+here claims to be them — and *Linear* is the sensor as it was, to the bit.
+The curve is a choice about the numbers, so a preset and a paste carry it,
+but it acts only on a RAW's sensor: on a JPEG or a camera render it would
+apply the camera's curve twice, and waits there unused. A picture stored
+before the curve existed reads as *Linear* and does not change. It is chosen
+in the file's menu, under *The sensor*: **Base curve** — *Auto*,
+*Standard*, *Contrast*, *Shadows*, *Linear* — with the chosen curve said in
+one line under it (*our curve: a moderate S…*); picking one while the
+picture is on a render takes it to its sensor. **Auto** is the camera's own
+curve, MEASURED on the render the file itself carries: the sensor as the
+stage decoded it and the camera's render of the same capture are read on a
+grid, pixel for pixel (the render's few percent of crop or magnification
+found by itself), and the render's brightness as a function of the
+sensor's is the camera's curve. It is measured once and kept on the
+picture, so the export applies exactly what you saw; where the render is a
+thumbnail (under 640 px), frames another shape, or does not follow one curve
+(a camera's local tone mapping), Auto says why and the picture takes
+*Standard*. A picture you put on its sensor opens on *Auto*; one the roll's
+*Sensor (RAW)* choice puts there opens on *Standard* (nothing is measured
+for a picture nobody opened), and a picture keeps the curve it already
+carries. A preset or a paste carries *Auto* as a choice, and it is measured
+again on the picture it lands on.
 A RAW is always
 shown from the render its camera wrote inside it, never from the browser's own
 decode of the whole file (Safari has one, and on an iPhone it was what closed

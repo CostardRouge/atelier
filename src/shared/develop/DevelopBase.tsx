@@ -6,6 +6,16 @@ import { formatBytes } from '../lib/format';
 import { isClipName } from '../library/assets';
 import type { Rendition, RenditionRole } from '../media/renditions';
 import { BASE_LABELS, baseRung, signed, type DevelopBase } from './develop';
+import { BASE_CURVE_ADDS, BASE_CURVE_LABELS, needsMeasuring, type BaseCurve, type BaseCurveKind } from './base-curve';
+
+/** The line under the curves: what the chosen one IS — for Auto, measured or about to be. */
+function curveLine(curve: BaseCurve | null): string {
+  const kind = curve?.kind ?? 'linear';
+  if (kind !== 'auto') return BASE_CURVE_ADDS[kind];
+  if (needsMeasuring(curve)) return 'measuring the camera’s curve on the render this file carries… Standard meanwhile';
+  const off = curve?.error;
+  return `the camera’s own curve, measured on this file’s render${off != null ? ` · ${off.toFixed(1)} code${off === 1 ? '' : 's'} off` : ''}`;
+}
 import { CHOICE_WORDS, type RollChoice } from './roll-choice';
 import { fullPixels, groupRenditions, rowFigures } from './base-menu';
 
@@ -72,6 +82,15 @@ const RUNG_WORDS: Readonly<Record<DevelopBase, string>> = Object.freeze({
   gainMap: 'Gain map',
   gainMapWarp: '+ Warp',
 });
+
+/** The curves the menu offers, in its order — a word each, the full name in the tooltip. */
+const CURVE_CHOICES: readonly { kind: BaseCurveKind; word: string }[] = [
+  { kind: 'auto', word: 'Auto' },
+  { kind: 'standard', word: 'Standard' },
+  { kind: 'contrast', word: 'Contrast' },
+  { kind: 'shadows', word: 'Shadows' },
+  { kind: 'linear', word: 'Linear' },
+];
 
 /**
  * One row of the menu: a radio, the title, its megapixels in the right-hand
@@ -175,6 +194,8 @@ export function DevelopBaseMenu({
   onRemeter = null,
   status,
   gain,
+  baseCurve = null,
+  onBaseCurve = null,
   calibration,
   roll = null,
   className = '',
@@ -205,6 +226,13 @@ export function DevelopBaseMenu({
   status: string | null;
   /** The metered exposure once the sensor is decoded, as `rawGain`; null before. */
   gain: number | null;
+  /**
+   * The sensor's BASE curve (`base-curve.ts`) as stored — null is Linear —
+   * and the verb that sets it; absent outside a host that develops a RAW.
+   * Picked while below the sensor, it takes the picture there.
+   */
+  baseCurve?: BaseCurve | null;
+  onBaseCurve?: ((next: BaseCurve) => void) | null;
   /** What the RAW's own calibration asks for, once read; null when it carries none. */
   calibration?: string | null;
   /**
@@ -240,7 +268,12 @@ export function DevelopBaseMenu({
   // chevron over a menu that cannot change anything is an invitation to a
   // dead end.
   const choices =
-    rows.filter((r) => r.role !== 'sensor' && !r.blocked).length + steps.length + (roll ? 3 : 0) + (onSensor && gain && onRemeter ? 1 : 0);
+    rows.filter((r) => r.role !== 'sensor' && !r.blocked).length +
+    steps.length +
+    (roll ? 3 : 0) +
+    (onSensor && gain && onRemeter ? 1 : 0) +
+    (steps.length > 0 && onBaseCurve ? CURVE_CHOICES.length : 0);
+  const curveKind: BaseCurveKind = baseCurve?.kind ?? 'linear';
 
   const words = (
     <>
@@ -329,6 +362,35 @@ export function DevelopBaseMenu({
             }}
             options={steps.map((r) => ({ id: r, label: RUNG_WORDS[r], title: `${BASE_LABELS[r]} — ${BASE_ADDS[r]}` }))}
           />
+        </div>
+      )}
+      {onBaseCurve && (
+        <div className="pl-[2.125rem] pr-2.5 pb-1.5 flex flex-col gap-1">
+          <div className="flex items-center gap-1.5">
+            <span className="font-mono text-3xs tracking-[0.12em] uppercase text-muted">Base curve</span>
+            <InfoDot about="the base curve">
+              The tone curve the sensor’s light gets before any slider — what a camera puts in its JPEG and a RAW
+              decoded linear lacks. Auto measures the camera’s own curve on the render inside this file, once, and
+              keeps it; where that render is too small or does not follow one curve it says so and uses Standard.
+              Standard, Contrast and Shadows are curves made here, not Capture One’s; Linear is the sensor as it is.
+              It acts only on the sensor, on brightness alone, so no colour turns.
+            </InfoDot>
+          </div>
+          <Segmented<BaseCurveKind>
+            size="sm"
+            columns={CURVE_CHOICES.length}
+            label="The sensor’s base curve"
+            value={curveKind}
+            onChange={(next) =>
+              pick(() => {
+                if (!onSensor) onBase(steps[0]);
+                // Auto again on a measured Auto keeps its measurement: never re-measured silently.
+                if (next !== 'auto' || curveKind !== 'auto') onBaseCurve({ kind: next });
+              })
+            }
+            options={CURVE_CHOICES.map((c) => ({ id: c.kind, label: c.word, title: `${BASE_CURVE_LABELS[c.kind]} — ${BASE_CURVE_ADDS[c.kind]}` }))}
+          />
+          {onSensor && <span className="font-mono text-3xs leading-relaxed text-muted">{curveLine(baseCurve)}</span>}
         </div>
       )}
       {onSensor && gain && onRemeter && (

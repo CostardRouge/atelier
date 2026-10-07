@@ -31,6 +31,7 @@ const BELOW_RENDER_EDGE = 512;
 import { measureSource, type SourceStats } from './auto-develop';
 import type { Keystone } from '../render/geometry';
 import type { LensCorrection, LensProfileTerms } from '../render/lens';
+import type { HalfImage } from '../render/half-image';
 import {
   cloneGeometry,
   geometryPasses,
@@ -368,6 +369,13 @@ export interface RawDecodedInfo {
   sourceHeight: number;
   halved: boolean;
   meta: RawMeta;
+  /**
+   * The decoded sensor itself — the stage's own plane, sRGB-encoded with the
+   * sensor's white at 1 — and the file it came from: what an Auto base curve
+   * is measured on (`measure-base-curve.ts`), so nothing decodes twice.
+   */
+  half: HalfImage;
+  file: File;
 }
 
 /** The crop a host wants the viewport to show: the aspect box and the framing inside it. */
@@ -878,7 +886,17 @@ export function useDevelopPicture({
           canvas.height = d.height;
           if (d.bytes) canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
           if (!cancelled) {
-            onRawDecodedRef.current?.({ gain: d.gain, width: d.width, height: d.height, sourceWidth: d.sourceWidth, sourceHeight: d.sourceHeight, halved: d.halved, meta: d.meta });
+            onRawDecodedRef.current?.({
+              gain: d.gain,
+              width: d.width,
+              height: d.height,
+              sourceWidth: d.sourceWidth,
+              sourceHeight: d.sourceHeight,
+              halved: d.halved,
+              meta: d.meta,
+              half: d.half,
+              file: rawFile,
+            });
           }
           return { image: canvas, width: d.width, height: d.height, gpu: d.half, release: () => {} };
         })

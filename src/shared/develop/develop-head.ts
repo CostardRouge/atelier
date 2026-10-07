@@ -19,7 +19,8 @@
  * What the head holds is every stage of `developLinear` up to saturation and
  * vibrance: the white balance in Kelvin (a 3×3 in linear light), the
  * temperature, tint and exposure (three gains), the tone curve and the luma
- * curve (each a 1D function of luminance, TABULATED), levels and the
+ * curve (each a 1D function of luminance, TABULATED — a RAW's base curve
+ * rides INSIDE the tone table, so the shader needs nothing of its own for it), levels and the
  * per-channel curves (three 1D functions), saturation and vibrance (a few
  * lines). Each is exact per pixel, or a 1D table whose interpolation error is
  * a fraction of a code (`HEAD_TABLE_SIZE`). The TAIL — the colour mixer, black
@@ -81,6 +82,7 @@ export function developTail(d: DevelopSettings): DevelopSettings {
     base: null,
     rawGain: null,
     rawWb: null,
+    baseCurve: null,
   };
 }
 
