@@ -1,7 +1,8 @@
 # The map openers' next round — the stops panel, the camera, grouping places, the recap
 
-**Status: DECIDED 2026-10-07; §1, §2, §3 and §5 BUILT the same day, §4
-next.** The maintainer answered two labs the same day: «Labo Virée»
+**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5** (what is
+left: the finer tiles along a tight follow, the Itinerary's own camera, the
+odometer digits). The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
@@ -105,7 +106,8 @@ stop list is never edited.
   today) and its dot carries `×N`.
 - For Virée's three sources (the trip's stages, your places, pictures — the
   150 m picture merge becomes this module's floor) and for the Itinerary too.
-  The big map marks the stops that merged.
+  The big map marks the stops that merged. **Built** («Nearby places are
+  GROUPED» in `docs/memory/roadtrip.md`).
 
 ## 5. The trip RECAP — the badge counts while the car drives
 

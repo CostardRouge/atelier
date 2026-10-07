@@ -30,6 +30,7 @@ import type { CarSpec } from '../car-spec';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
+import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
@@ -315,6 +316,12 @@ export interface HookContext {
   writing?: PlaceWritingTrip;
   /** The badge's words (`TripDoc.badgeWords`) — what a variant that rewrites a counter says «of» with. */
   badgeWords?: BadgeWords;
+  /**
+   * The shipped town index, biggest first, when it has been read in this
+   * session (`townsIfLoaded`) — what names a GROUP of nearby places by its
+   * town (`stop-clusters.ts`). Absent: the first member names it.
+   */
+  towns?: readonly NamedTown[] | null;
 }
 
 /** One sound the hook makes — see `shared/audio/sound-event.ts`. */
@@ -385,6 +392,8 @@ export interface HookStopsChoice {
   title?: string;
   /** Stops may hold a picture here; the sheet keeps them either way. */
   pictures?: boolean;
+  /** How the opener groups nearby places, so the sheet can mark the stops that merge. */
+  grouping?: GroupOptions;
 }
 
 /** How a variant wants the chooser to open. */

@@ -17,6 +17,7 @@ import {
   mapBox,
   mapMoved,
   mapOptions,
+  groupMapStops,
   mapScore,
   mapTiming,
   mapWants,
@@ -74,6 +75,32 @@ const STAGES: HookStage[] = [
     ],
   },
 ];
+
+describe('groupMapStops', () => {
+  const CITY: MapStop[] = [
+    { id: 'a', name: 'Melbourne', lat: -37.81, lon: 144.96 },
+    { id: 'b', name: 'Fitzroy', lat: -37.8, lon: 144.98, picture: { ref: { name: 'f.jpg', size: 1, lastModified: 0 }, date: '2025-03-02' } },
+    { id: 'c', name: 'St Kilda', lat: -37.87, lon: 144.98 },
+    { id: 'd', name: 'Sydney', lat: -33.87, lon: 151.21 },
+  ];
+
+  it('is the list itself when off, and folds nearby stops into one that counts and holds a picture', () => {
+    const o = mapOptions({ stops: CITY });
+    expect(groupMapStops(o.stops, o)).toEqual(o.stops);
+    const grouped = groupMapStops(o.stops, { ...o, groupKm: 10, groupName: 'first' });
+    expect(grouped.map((s) => s.name)).toEqual(['Melbourne', 'Sydney']);
+    expect(grouped[0].members).toBe(3);
+    expect(grouped[0].picture?.ref.name).toBe('f.jpg');
+    expect(grouped[1].members).toBeUndefined();
+    // Never stored: a stop read back carries no count.
+    expect(readStops(grouped).every((s) => s.members === undefined)).toBe(true);
+  });
+
+  it('reads the grouping options defensively, and the Route conversion starts them off', () => {
+    expect(mapOptions({ groupKm: 'ten' }).groupKm).toBe(0);
+    expect(mapOptions({ groupKm: 3, groupVisits: 'all', groupName: 'central' })).toMatchObject({ groupKm: 3, groupVisits: 'all', groupName: 'central' });
+  });
+});
 
 describe('mapOptions', () => {
   it('falls back on every unreadable value rather than throwing', () => {

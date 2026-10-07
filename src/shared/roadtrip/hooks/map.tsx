@@ -49,12 +49,14 @@ import {
   stopPictureKey,
   tripPlaces,
   writtenStops,
+  groupMapStops,
   mapShortestBeat,
   type MapOptions,
 } from './map-plan';
 import { BasemapStatus, enableBasemap } from './basemap-row';
 import { Group, MovedRow, resetLink } from './panel-ui';
 import { FitRow } from './fit-row';
+import { GroupRows } from './group-rows';
 import { fitRender } from '../slide-timing';
 import StopsEditor, { StopStyleRow } from './stops-editor';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
@@ -103,14 +105,16 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
 
   const places = tripPlaces(ctx.stages);
   const free = otherPlaces(ctx.stages, o.stops);
-  const timing = mapTiming(planarHops(o.stops), o);
+  // The stops as the opener will DRAW them: nearby ones grouped (`stop-clusters.ts`).
+  const shown = groupMapStops(o.stops, o, ctx.towns ?? null);
+  const timing = mapTiming(planarHops(shown), o);
   const withPictures = o.stops.filter((stop) => stop.picture).length;
   const keys = o.stops.flatMap((stop) => {
     const key = stopPictureKey(stop);
     return key ? [key] : [];
   });
   const line = o.media === 'off' ? null : pictureLine(keys, host?.pictureStatus);
-  const totalKm = hopKms(o.stops).reduce((sum, km) => sum + km, 0);
+  const totalKm = hopKms(shown).reduce((sum, km) => sum + km, 0);
 
   // What the itinerary will really do for this piece — the counter modes'
   // rule: the real reading, or the reason there is none.
@@ -144,6 +148,13 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           title="Itinerary"
           pictureHint={o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.'}
           picturesOffHint="The pictures are switched off below, so nothing a stop holds is drawn."
+          grouping={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
+        />
+        <GroupRows
+          value={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
+          onChange={(patch) => set(patch)}
+          count={{ stops: o.stops.length, halts: shown.length }}
+          townsReady={Boolean(ctx.towns?.length)}
         />
         {line && (
           <p
@@ -795,7 +806,8 @@ export const mapVariant: HookVariant = {
     // trip and the opener say — so the labels, the cards and the caption all
     // read the same text.
     const read = mapOptions(options);
-    const o = { ...read, stops: writtenStops(read.stops, read.placeStyle, ctx.writing) };
+    // …and nearby stops folded into one where the author asked (`stop-clusters.ts`).
+    const o = { ...read, stops: groupMapStops(writtenStops(read.stops, read.placeStyle, ctx.writing), read, ctx.towns ?? null) };
     if (o.stops.length === 0) return { seconds: 0 };
     const timing = mapTiming(planarHops(o.stops), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];

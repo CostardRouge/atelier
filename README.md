@@ -1146,7 +1146,16 @@ not, in your order, each able to hold a picture the car halts to show; or the
 **pictures you pick** — each one shot with a position in its EXIF is a stop, in
 the order they were shot, a run shot at one spot one stop. Your places follow
 you from one opener to the other: the stops picked for an Itinerary are the ones
-Virée drives when you switch, and back. At a stop with pictures the car
+Virée drives when you switch, and back. **Nearby places can be grouped** —
+six weeks in Melbourne and fifteen places a few kilometres apart are one
+halt: off by default, a distance with three shortcuts (2 km, a
+neighbourhood; 10 km, a city; 40 km, a metro area), only places that follow
+each other by default (a later return is a second halt) or every visit into
+the first, and the group named by the biggest town of the shipped index near
+it, its first place or its central one; the halt sits on a real place of the
+list, shows every picture of its group, wears `×N`, and the list itself is
+never changed — the Itinerary has the same switch, and the big picking map
+marks the stops that would merge. At a stop with pictures the car
 halts and they pop as **prints** beside it, piled like a stack on the map, or
 fill the frame, or take the paper's place behind the road while it halts; a
 picture without a position rides with the stop before it, or with the end of

@@ -55,6 +55,7 @@ import {
   rasterSize,
 } from '../../map/tile-math';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
+import { paintCount } from './map-paint';
 import { formatDistance, placeLabels } from './geo';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
@@ -396,6 +397,10 @@ function paintMap(
       g.lineWidth = 2.2 * u;
       g.strokeStyle = reached ? o.trailColor : ink;
       g.stroke();
+      // A halt standing for several places wears their count (`stop-clusters.ts`).
+      const members = plan.route.stops[i]?.members ?? 1;
+      // Above and to the LEFT: the name is placed on the right, at the dot's height.
+      if (members > 1) paintCount(g, p.x - dotR * 2.8, p.y - dotR * 2.2, members, u, reached ? o.trailColor : halo);
     });
   }
   // The milestones: a tick across the road, its number once the car has passed.

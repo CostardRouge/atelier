@@ -191,6 +191,7 @@ export default function HookPicker({
           stops={placing.stops}
           places={tripPlaces(ctx.stages)}
           title={placing.choice.title}
+          grouping={placing.choice.grouping}
           onCancel={() => settleStops(null)}
           onDone={(stops) => settleStops(stops)}
         />

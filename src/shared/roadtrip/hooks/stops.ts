@@ -30,6 +30,12 @@ export interface MapStop extends HookPlace {
   id: string;
   /** The one picture this stop shows, or nothing. */
   picture?: HookPickedPicture;
+  /**
+   * How many of the author's stops this one stands for, once nearby places
+   * are GROUPED at render time (`stop-clusters.ts`) — on a prepared copy
+   * only, never stored: `readStops` does not read it.
+   */
+  members?: number;
 }
 
 /** The facts a stop may know beside its name and position, as stored keys. */

@@ -18,6 +18,7 @@
 import type { BadgeContent, CounterMode } from '../day-badge';
 import type { TripDoc, TripPost } from '../trip-types';
 import { hookCalendar, hookStages } from './hook-calendar';
+import { townsIfLoaded } from '../load-gazetteer';
 import type { HookContext, HookLayer, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
 
@@ -88,6 +89,9 @@ export function hookContextFor(
     car: trip.car,
     writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
     badgeWords: trip.badgeWords,
+    // Read, never fetched here: the editor asks for the index when a piece
+    // groups by town, and every surface then names the same groups.
+    towns: townsIfLoaded(),
   };
 }
 

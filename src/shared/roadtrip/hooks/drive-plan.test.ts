@@ -870,6 +870,59 @@ describe('the recap — the stops are dated, and the badge counts with the car',
   });
 });
 
+describe('grouping nearby places (stop-clusters.ts)', () => {
+  const MELBOURNE = [
+    { id: 'a', name: 'Melbourne', lat: -37.81, lon: 144.96, picture: pic('a.jpg', 2) },
+    { id: 'b', name: 'Fitzroy', lat: -37.8, lon: 144.98, picture: pic('b.jpg', 3) },
+    { id: 'c', name: 'St Kilda', lat: -37.87, lon: 144.98 },
+    { id: 'd', name: 'Geelong', lat: -38.15, lon: 144.36, picture: pic('d.jpg', 4) },
+    { id: 'e', name: 'Sydney', lat: -33.87, lon: 151.21 },
+  ];
+  const base = opts({ stopsOn: 'custom', stops: MELBOURNE, includePieces: false });
+
+  it('leaves the route alone when off', () => {
+    const route = driveRoute(STAGES, CAL, dateOf(5), base);
+    expect(route.stops.map((s) => s.name)).toEqual(['Melbourne', 'Fitzroy', 'St Kilda', 'Geelong', 'Sydney']);
+    expect(route.stops.every((s) => s.members === undefined)).toBe(true);
+  });
+
+  it('folds nearby stops into one halt that holds every picture, counts its members and spans their days', () => {
+    const route = driveRoute(STAGES, CAL, dateOf(5), { ...base, groupKm: 10, groupName: 'first' });
+    expect(route.stops.map((s) => s.name)).toEqual(['Melbourne', 'Geelong', 'Sydney']);
+    expect(route.stops[0].members).toBe(3);
+    expect(route.stops[0].pictures.map((p) => p.key)).toEqual(['name:a.jpg:1', 'name:b.jpg:1']);
+    expect(route.stops[0].days).toEqual({ arrive: 2, leave: 4 });
+    expect(route.stops[1].members).toBeUndefined();
+    // The halt sits on a real place of the list.
+    expect(MELBOURNE.some((s) => s.lat === route.stops[0].lat && s.lon === route.stops[0].lon)).toBe(true);
+  });
+
+  it('names a group by the town index when it is at hand, and counts crowded pictures as one stop’s', () => {
+    const towns = [{ name: 'Greater Melbourne', lat: -37.81, lon: 144.96, population: 5_000_000 }];
+    const route = driveRoute(STAGES, CAL, dateOf(5), { ...base, groupKm: 10, groupName: 'town' }, undefined, towns);
+    expect(route.stops[0].name).toBe('Greater Melbourne');
+    const many = MELBOURNE.map((s, i) => ({ ...s, picture: pic(`m${i}.jpg`, 2) }));
+    // Seven places around Melbourne with a picture each (Geelong and Sydney stay apart): one picture past what a halt shows.
+    const seven = [
+      ...many,
+      { id: 'f', name: 'Carlton', lat: -37.8, lon: 144.97, picture: pic('f.jpg', 2) },
+      { id: 'g', name: 'Richmond', lat: -37.82, lon: 145.0, picture: pic('g.jpg', 2) },
+      { id: 'h', name: 'Kew', lat: -37.81, lon: 145.03, picture: pic('h.jpg', 2) },
+      { id: 'i', name: 'Hawthorn', lat: -37.82, lon: 145.03, picture: pic('i.jpg', 2) },
+    ];
+    const crowded = driveRoute(STAGES, CAL, dateOf(5), { ...base, stops: seven, groupKm: 10, groupVisits: 'all' });
+    expect(crowded.stops[0].pictures).toHaveLength(MAX_PICTURES_PER_STOP);
+    expect(crowded.leftOut.crowded).toBe(1);
+  });
+
+  it('reads the options defensively', () => {
+    expect(driveOptions({}).groupKm).toBe(0);
+    expect(driveOptions({ groupKm: 500 }).groupKm).toBe(80);
+    expect(driveOptions({ groupKm: -3 }).groupKm).toBe(0);
+    expect(driveOptions({ groupVisits: 'some', groupName: 'other' })).toMatchObject({ groupVisits: 'consecutive', groupName: 'town' });
+  });
+});
+
 describe('buildSchedule alone', () => {
   it('is empty with no stop', () => {
     const s = buildSchedule([], buildPath([], 'curved'), opts());

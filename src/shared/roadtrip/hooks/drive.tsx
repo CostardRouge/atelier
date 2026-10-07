@@ -52,6 +52,7 @@ import {
 import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
+import { GroupRows } from './group-rows';
 import { fitRender } from '../slide-timing';
 import { CAMERA_LIMITS, CAMERA_PRESETS, CAMERA_PRESET_IDS, cameraPresetOf } from './map-camera';
 import { useState } from 'react';
@@ -166,9 +167,11 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const set = (patch: Partial<DriveOptions>) => onChange({ ...o, ...patch });
   const stages = ctx.stages ?? [];
   const calendar = ctx.calendar ?? [];
-  const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing);
+  const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing, ctx.towns ?? null);
   const count = driveCountOf(ctx.counterMode);
   const plan = drivePlan(route, o, count !== null);
+  /** How many stops the road has BEFORE nearby ones are grouped — what the grouping row counts from. */
+  const ungrouped = o.groupKm > 0 ? driveRoute(stages, calendar, ctx.date, { ...o, groupKm: 0 }, ctx.writing).stops.length : route.stops.length;
   const wants = driveWants(route, o);
   const status = host?.pictureStatus;
   const line = pictureLine(wants.map((w) => w.key), status);
@@ -278,8 +281,15 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                 : 'Shown when the car halts here, before any picked picture shot nearby.'
             }
             picturesOffHint="The pictures are set to None below, so the car drives past without showing any."
+            grouping={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
           />
         )}
+        <GroupRows
+          value={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
+          onChange={(patch) => set(patch)}
+          count={{ stops: ungrouped, halts: route.stops.length }}
+          townsReady={Boolean(ctx.towns?.length)}
+        />
         <FieldRow label="Path">
           <Segmented
             size="sm"
@@ -1039,17 +1049,17 @@ export const driveVariant: HookVariant = {
   owns: 'frame',
   wantsPictures(options, ctx) {
     const o = driveOptions(options);
-    return driveWants(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o);
+    return driveWants(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o);
   },
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return null;
-    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o, driveCountOf(ctx.counterMode) !== null);
+    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, driveCountOf(ctx.counterMode) !== null);
     return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null) : null;
   },
   prepare(options, ctx) {
     const o = driveOptions(options);
-    const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing);
+    const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null);
     // The RECAP: the badge's counter follows the drive (declared in its own
     // Counter section, `day-badge.ts`), so the plan runs the stops' clock.
     const count = driveCountOf(ctx.counterMode);

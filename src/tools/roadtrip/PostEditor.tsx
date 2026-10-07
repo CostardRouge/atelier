@@ -67,6 +67,8 @@ import { countOwnGrades, pictureKeyOf } from '../../shared/roadtrip/post-grade';
 import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/registry';
 import { setHookOptions, type HookContext, type HookLayer, type HookShelf } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor, slideHookTiming } from '../../shared/roadtrip/hooks/hook-context';
+import { loadTowns, townsIfLoaded } from '../../shared/roadtrip/load-gazetteer';
+import { wantsTowns } from '../../shared/roadtrip/hooks/stop-clusters';
 import {
   slideBadgeContent,
   slideRender,
@@ -643,13 +645,36 @@ export default function PostEditor({
     [content, post.badge.layout, aspect],
   );
 
+  // An opener that names a GROUP of places by its town needs the shipped
+  // index (`stop-clusters.ts`): asked for here, once, and the context rebuilt
+  // when it lands — `hookContextFor` reads it, so the stage, the rail and
+  // the exports then name the same groups.
+  const [townsTick, setTownsTick] = useState(0);
+  const deckLayersForTowns = useMemo(
+    () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
+    [post.badge.hook, post.slides],
+  );
+  useEffect(() => {
+    if (!wantsTowns(deckLayersForTowns) || townsIfLoaded()) return;
+    let alive = true;
+    loadTowns()
+      .then(() => {
+        if (alive) setTownsTick((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [deckLayersForTowns]);
+
   // What every hook variant is prepared against — built by the one function
   // the deck, the rail and the exports use too — and what the picker hands to a
   // variant's options panel, so a control there can say a real value. The
   // pictures an opener asked for are decoded apart and joined in after.
   const baseHookCtx = useMemo<HookContext>(
     () => hookContextFor(trip, post, aspect, content),
-    [trip, post, aspect, content],
+    // `townsTick` is not read: it rebuilds the context once the town index lands.
+    [trip, post, aspect, content, townsTick],
   );
   // The grade is bound here, before the opener's pictures: a flashed picture
   // wears the HOOK's grade (without any one slide's develop), so a sweep and

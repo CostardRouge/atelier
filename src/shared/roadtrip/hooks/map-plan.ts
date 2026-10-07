@@ -40,6 +40,34 @@ import type { HookBasemapWant, HookPictureWant } from './hook-variant';
 import { hookPictureKey } from './hook-variant';
 import { STOP_STYLES, readStops, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
+import { GROUP_LIMITS, groupName, groupStops, type GroupName, type GroupVisits, type NamedTown } from './stop-clusters';
+
+/**
+ * The itinerary's stops with nearby ones folded into one (`stop-clusters.ts`),
+ * at render time: the stop sits on the member nearest the group's centre,
+ * named by the rule, holding the first picture a member holds, and says how
+ * many it stands for (`members`). The author's list is never touched.
+ */
+export function groupMapStops(
+  stops: readonly MapStop[],
+  o: Pick<MapOptions, 'groupKm' | 'groupVisits' | 'groupName'>,
+  towns: readonly NamedTown[] | null = null,
+): MapStop[] {
+  if (!(o.groupKm > 0) || stops.length < 2) return stops.slice();
+  const groups = groupStops(stops, o.groupKm, o.groupVisits);
+  if (groups.every((g) => g.members.length === 1)) return stops.slice();
+  return groups.map((group) => {
+    const anchor = stops[group.anchor];
+    if (group.members.length === 1) return anchor;
+    const picture = group.members.map((i) => stops[i].picture).find(Boolean);
+    return {
+      ...anchor,
+      name: groupName(stops, group, o.groupName, towns),
+      ...(picture ? { picture } : {}),
+      members: group.members.length,
+    };
+  });
+}
 
 // The stop model and its edits are shared with Virée since 2026-09-28; the
 // names the Itinerary grew them under stay importable from here.
@@ -117,6 +145,11 @@ export interface MapOptions {
   placeStyle: StopStyle;
   /** The trip's own located places that are NOT stops, drawn faint behind. */
   context: boolean;
+  // --- grouping (2026-10-07, `stop-clusters.ts`) -----------------------------
+  /** Nearby stops as ONE stop, within this many km; 0 is off. Applied at render time, the list untouched. */
+  groupKm: number;
+  groupVisits: GroupVisits;
+  groupName: GroupName;
   // --- motion --------------------------------------------------------------
   draw: boolean;
   drawSeconds: number;
@@ -183,6 +216,9 @@ export const MAP_DEFAULTS: MapOptions = {
   placeStyle: 'trip',
   labelSize: 1,
   context: false,
+  groupKm: 0,
+  groupVisits: 'consecutive',
+  groupName: 'town',
   draw: true,
   drawSeconds: 2.4,
   easing: 'ease-in-out',
@@ -273,6 +309,9 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     placeStyle: oneOf(o.placeStyle, STOP_STYLES, d.placeStyle),
     labelSize: clamp(Number(o.labelSize), L.labelSize.min, L.labelSize.max, d.labelSize),
     context: o.context === true,
+    groupKm: Number(o.groupKm) > 0 ? clamp(Number(o.groupKm), GROUP_LIMITS.groupKm.min, GROUP_LIMITS.groupKm.max, 0) : 0,
+    groupVisits: oneOf(o.groupVisits, ['consecutive', 'all'], d.groupVisits),
+    groupName: oneOf(o.groupName, ['town', 'first', 'central'], d.groupName),
     draw: o.draw !== false,
     drawSeconds: clamp(Number(o.drawSeconds), L.drawSeconds.min, L.drawSeconds.max, d.drawSeconds),
     easing: oneOf(o.easing, EASING_IDS, d.easing),
@@ -860,6 +899,9 @@ export function mapFromRoute(
     tickVolume: raw.tickVolume,
     mixWithClip: raw.mixWithClip,
     fit: false,
+    groupKm: 0,
+    groupVisits: 'consecutive',
+    groupName: 'town',
     // The Route had no pictures at all, and an itinerary whose stops hold
     // none would draw an empty card or an empty backdrop. Off is the honest
     // conversion; the author switches it on when a stop has a picture.

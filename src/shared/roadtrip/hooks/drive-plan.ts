@@ -52,6 +52,7 @@ import { STOP_STYLES, readStops, stopText, type MapStop, type StopStyle } from '
 import type { PlaceWritingTrip } from '../place-style';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 import { CAMERA_LIMITS, type CameraOrientation, type CameraZoom } from './map-camera';
+import { GROUP_LIMITS, groupName, groupStops, type GroupName, type GroupVisits, type NamedTown } from './stop-clusters';
 
 /** The legs' located places, the author's own places, or the picked pictures' positions. */
 export type DriveStopsOn = 'places' | 'custom' | 'pictures';
@@ -131,6 +132,11 @@ export interface DriveOptions {
   compass: boolean;
   scaleBar: boolean;
   distance: DistanceUnit;
+  // --- grouping (2026-10-07, `stop-clusters.ts`) ---------------------------------
+  /** Nearby places as ONE halt, within this many km; 0 is off. Applied at render time, the list untouched. */
+  groupKm: number;
+  groupVisits: GroupVisits;
+  groupName: GroupName;
   // --- motion ----------------------------------------------------------------
   driveSeconds: number;
   easing: HookEasing;
@@ -227,6 +233,9 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   compass: true,
   scaleBar: true,
   distance: 'km',
+  groupKm: 0,
+  groupVisits: 'consecutive',
+  groupName: 'town',
   driveSeconds: 4,
   easing: 'ease-in-out',
   delaySeconds: 0.4,
@@ -353,6 +362,9 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     compass: o.compass !== false,
     scaleBar: o.scaleBar !== false,
     distance: oneOf(o.distance, ['off', 'km', 'mi'], d.distance),
+    groupKm: Number(o.groupKm) > 0 ? clamp(Number(o.groupKm), GROUP_LIMITS.groupKm.min, GROUP_LIMITS.groupKm.max, 0) : 0,
+    groupVisits: oneOf(o.groupVisits, ['consecutive', 'all'], d.groupVisits),
+    groupName: oneOf(o.groupName, ['town', 'first', 'central'], d.groupName),
     driveSeconds: clamp(Number(o.driveSeconds), L.driveSeconds.min, L.driveSeconds.max, d.driveSeconds),
     easing: oneOf(o.easing, EASING_IDS, d.easing),
     delaySeconds: clamp(Number(o.delaySeconds), L.delaySeconds.min, L.delaySeconds.max, d.delaySeconds),
@@ -410,6 +422,8 @@ export interface DriveStop extends GeoPoint {
   /** The first stop of a leg (places), or of a day (pictures): the deeper tick. */
   accent: boolean;
   pictures: StopPicture[];
+  /** How many places this halt stands for, when nearby places are grouped (`stop-clusters.ts`); absent is one. */
+  members?: number;
   /**
    * WHEN the car is here, as days of the trip on a continuous scale — day
    * 1.0 is the morning of day 1, day N + 1.0 the end of day N — so `arrive`
@@ -760,6 +774,44 @@ function crowd(stops: DriveStop[], leftOut: LeftOut): void {
   }
 }
 
+/**
+ * Nearby stops folded into one halt each (`stop-clusters.ts`), applied to a
+ * built route — the three sources alike. The halt sits on the member nearest
+ * the group's centre, shows every member's pictures (trimmed and counted as
+ * one stop's are), spans the members' days, keeps the deeper tick if any
+ * member had it, and is named by the rule. A route with nothing to group
+ * comes back as it is.
+ */
+export function groupRoute(route: DriveRoute, o: Pick<DriveOptions, 'groupKm' | 'groupVisits' | 'groupName'>, towns: readonly NamedTown[] | null = null): DriveRoute {
+  if (!(o.groupKm > 0) || route.stops.length < 2) return route;
+  const groups = groupStops(route.stops, o.groupKm, o.groupVisits);
+  if (groups.every((g) => g.members.length === 1)) return route;
+  const leftOut = { ...route.leftOut };
+  const stops: DriveStop[] = groups.map((group) => {
+    const anchor = route.stops[group.anchor];
+    const members = group.members.map((i) => route.stops[i]);
+    const pictures = members.flatMap((s) => s.pictures);
+    let days: StopDays | undefined;
+    for (const m of members) {
+      if (!m.days) continue;
+      days = days ? { arrive: Math.min(days.arrive, m.days.arrive), leave: Math.max(days.leave, m.days.leave) } : { ...m.days };
+    }
+    return {
+      lat: anchor.lat,
+      lon: anchor.lon,
+      name: groupName(route.stops, group, o.groupName, towns),
+      kind: anchor.kind,
+      leg: route.stops[group.members[0]].leg,
+      accent: members.some((m) => m.accent),
+      pictures,
+      ...(group.members.length > 1 ? { members: group.members.length } : {}),
+      ...(days ? { days } : {}),
+    };
+  });
+  crowd(stops, leftOut);
+  return { ...route, stops, leftOut, named: stops.some((s) => s.name), undated: countUndated(stops) };
+}
+
 /** The route for a piece: its stops, and what could not be placed. */
 export function driveRoute(
   stages: readonly HookStage[],
@@ -768,10 +820,16 @@ export function driveRoute(
   o: DriveOptions,
   /** The trip's writing of a place, so a stop's name reads like every list's. */
   writing?: PlaceWritingTrip,
+  /** The town index, when loaded — names a group by its town. */
+  towns: readonly NamedTown[] | null = null,
 ): DriveRoute {
-  if (o.stopsOn === 'pictures') return pictureStops(calendar, date, o);
-  if (o.stopsOn === 'custom') return customStops(stages, calendar, date, o, writing);
-  return placeStops(stages, calendar, date, o, writing);
+  const route =
+    o.stopsOn === 'pictures'
+      ? pictureStops(calendar, date, o)
+      : o.stopsOn === 'custom'
+        ? customStops(stages, calendar, date, o, writing)
+        : placeStops(stages, calendar, date, o, writing);
+  return groupRoute(route, o, towns);
 }
 
 /** The pictures a route draws, once each, in the shape the style wants. */

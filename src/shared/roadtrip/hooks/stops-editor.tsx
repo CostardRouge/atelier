@@ -35,6 +35,7 @@ import { PLACE_STYLE_OPTIONS, countryName, majorityCountry, type PlaceWritingTri
 import { formatCoords } from '../trip-places';
 import { newId, type PlaceStyle } from '../trip-types';
 import type { HookPanelHost, HookPlace } from './hook-variant';
+import type { GroupOptions } from './stop-clusters';
 import MapField from './map-field';
 import { resetLink } from './panel-ui';
 import {
@@ -78,6 +79,8 @@ export interface StopsEditorProps {
   picturesOffHint?: string;
   /** The opener's name, for the big map's title. */
   title?: string;
+  /** How the opener groups nearby places — the big map marks the stops that merge. */
+  grouping?: GroupOptions;
 }
 
 /** A stop's own writing, as the popover's select offers it: the opener's, or one of its own. */
@@ -95,6 +98,7 @@ export default function StopsEditor({
   pictureHint,
   picturesOffHint = 'This opener shows no picture right now, so nothing a stop holds is drawn.',
   title,
+  grouping,
 }: StopsEditorProps) {
   // The open stop IS the popover: closing it selects nothing. (The selection
   // used to outlive the editor's unmount so a tab switch did not lose it; a
@@ -161,7 +165,7 @@ export default function StopsEditor({
   // when asked); the result replaces the list the way any edit here does.
   const openMap = host?.editStopsOnMap
     ? async () => {
-        const next = await host.editStopsOnMap?.(stops, { title });
+        const next = await host.editStopsOnMap?.(stops, { title, grouping });
         if (!next) return;
         onChange(next);
         if (selectedId && !next.some((stop) => stop.id === selectedId)) setSelectedId(null);

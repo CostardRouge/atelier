@@ -36,6 +36,7 @@ import {
   type MapStop,
 } from '../../shared/roadtrip/hooks/stops';
 import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
+import { groupStops, type GroupOptions } from '../../shared/roadtrip/hooks/stop-clusters';
 import { newId } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
@@ -52,6 +53,8 @@ interface StopsMapSheetProps {
   places: readonly Place[];
   /** The opener the stops belong to, for the title. */
   title?: string;
+  /** How the opener groups nearby places: the stops that merge are marked, the halt wearing their count. */
+  grouping?: GroupOptions;
   onCancel: () => void;
   onDone: (stops: MapStop[]) => void;
 }
@@ -96,8 +99,19 @@ let sessionSnap = true;
  * once, while Cancel and Escape leave it as it was. What a stop holds besides
  * its place — its picture — rides along untouched.
  */
-export default function StopsMapSheet({ stops, places, title, onCancel, onDone }: StopsMapSheetProps) {
+export default function StopsMapSheet({ stops, places, title, grouping, onCancel, onDone }: StopsMapSheetProps) {
   const [draft, setDraft] = useState<MapStop[]>(() => stops.map((stop) => ({ ...stop })));
+  // What the opener will make of the draft's stops: which merge, and the
+  // halt each group sits on — marked on the markers, the list left alone.
+  const marks = useMemo(() => {
+    const out = new Map<string, { count: number; anchor: boolean }>();
+    if (!grouping || !(grouping.groupKm > 0)) return out;
+    for (const group of groupStops(draft, grouping.groupKm, grouping.groupVisits)) {
+      if (group.members.length < 2) continue;
+      for (const i of group.members) out.set(draft[i].id, { count: group.members.length, anchor: i === group.anchor });
+    }
+    return out;
+  }, [draft, grouping]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [tilesOn, setTilesOn] = useState(sessionTiles);
@@ -379,10 +393,10 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
         const at = marker.getLngLat();
         if (at.lat !== stop.lat || at.lng !== stop.lon) marker.setLngLat([stop.lon, stop.lat]);
       }
-      paintMarker(marker.getElement(), index + 1, stop.name, stop.id === selectedId);
+      paintMarker(marker.getElement(), index + 1, stop.name, stop.id === selectedId, marks.get(stop.id) ?? null);
     });
     relabel.current();
-  }, [draft, selectedId, mapState]);
+  }, [draft, selectedId, mapState, marks]);
 
   // The row of the stop just added or picked on the map is brought into view:
   // the list runs under the map, and the twenty-fifth tap lands below it.
@@ -696,20 +710,37 @@ function chipClass(on: boolean): string {
  * it never depends on the CSS scanner seeing a class built at runtime — the
  * flight map's marker rule (`frontend.md`).
  */
-function paintMarker(el: HTMLElement, n: number, name: string, selected: boolean) {
+function paintMarker(
+  el: HTMLElement,
+  n: number,
+  name: string,
+  selected: boolean,
+  /** The stop merges into a group of `count`: the halt (`anchor`) wears the count, a member a dashed ring. */
+  mark: { count: number; anchor: boolean } | null = null,
+) {
   const label = name.trim();
-  const key = `${n}|${label}|${selected ? 1 : 0}`;
+  const key = `${n}|${label}|${selected ? 1 : 0}|${mark ? `${mark.count}${mark.anchor ? 'a' : 'm'}` : ''}`;
   if (el.dataset.painted === key) return;
   el.dataset.painted = key;
-  el.title = label ? `${n}. ${label} — drag to move` : `Stop ${n} — drag to move`;
+  const merged = mark ? (mark.anchor ? ` — the halt of ${mark.count} places grouped` : ' — grouped into a halt nearby') : '';
+  el.title = (label ? `${n}. ${label}` : `Stop ${n}`) + merged + ' — drag to move';
   el.replaceChildren();
   const disc = document.createElement('span');
   disc.textContent = String(n);
+  const member = mark !== null && !mark.anchor;
   disc.style.cssText =
     'position:absolute;inset:0;border-radius:9999px;display:grid;place-items:center;' +
-    `background:${MAP_ACCENT};color:#fff;font:600 ${(11 * numeralScale(n)).toFixed(1)}px/1 ui-monospace,monospace;` +
-    `border:2px solid #fff;box-shadow:${selected ? '0 0 0 3px rgba(217,68,42,0.45),' : ''}0 1px 3px rgba(0,0,0,0.45)`;
+    `background:${member ? '#fff' : MAP_ACCENT};color:${member ? MAP_ACCENT : '#fff'};font:600 ${(11 * numeralScale(n)).toFixed(1)}px/1 ui-monospace,monospace;` +
+    `border:2px ${member ? 'dashed' : 'solid'} ${member ? MAP_ACCENT : '#fff'};box-shadow:${selected ? '0 0 0 3px rgba(217,68,42,0.45),' : ''}0 1px 3px rgba(0,0,0,0.45)`;
   el.appendChild(disc);
+  if (mark?.anchor) {
+    const count = document.createElement('span');
+    count.textContent = `×${mark.count}`;
+    count.style.cssText =
+      'position:absolute;left:16px;top:-9px;padding:1px 5px;border-radius:9999px;pointer-events:none;' +
+      `background:#1f1b16;color:#fff;font:600 10px/1.2 ui-monospace,monospace;box-shadow:0 1px 2px rgba(0,0,0,0.4)`;
+    el.appendChild(count);
+  }
   if (label) {
     const tag = document.createElement('span');
     tag.textContent = label;
