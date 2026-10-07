@@ -41,6 +41,7 @@ import {
   type DriveOptions,
   type DriveStop,
 } from './drive-plan';
+import { driveRibbon } from './drive-ribbon';
 import { TICK_KITS } from './tick-kits';
 import { driveBasemap, driveTrack } from './drive-paint';
 import { groundNote, type BasemapSet } from './basemap-strip';
@@ -825,6 +826,18 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     const plain = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o)!;
     expect(plain.schedule.pops.map((p) => p.key)).toHaveLength(3);
     expect(plain.schedule.pops.every((p) => p.at <= plain.schedule.arrivedAt)).toBe(true);
+  });
+
+  it('stands the ribbon’s head on the day the badge counts, at every moment', () => {
+    const o = quiet({ pace: 0.65, ribbon: true });
+    const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
+    const ribbon = driveRibbon(plan, CAL)!;
+    expect(ribbon.totalDays).toBe(30);
+    expect(ribbon.legStarts).toEqual([1, 11, 16]);
+    for (let t = 0; t <= plan.seconds; t += 0.1) {
+      expect(Math.floor(ribbon.at(t).headDay + 1e-9)).toBe(counterDay(plan.at(t).day!, 30));
+    }
+    expect(driveRibbon(drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o)!, CAL)).toBeNull();
   });
 
   it('ticks lightly as each day turns, on the frame the counter turns, never in a buzz', () => {

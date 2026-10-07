@@ -193,6 +193,11 @@ export interface DriveOptions {
    * Read only under the recap's clock, where a stay has days to run.
    */
   dayPictures: boolean;
+  /**
+   * Défilé's RIBBON of the trip's days under the map, its head advancing with
+   * the car (`drive-ribbon.ts`). Read only under the recap's clock.
+   */
+  ribbon: boolean;
   // --- sound -----------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -272,6 +277,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   milestones: true,
   plate: false,
   dayPictures: true,
+  ribbon: false,
   sound: true,
   kit: 'wood',
   tickPitch: 1,
@@ -403,6 +409,7 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     milestones: o.milestones !== false,
     plate: o.plate === true,
     dayPictures: o.dayPictures !== false,
+    ribbon: o.ribbon === true,
     sound: o.sound !== false,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),

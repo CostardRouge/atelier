@@ -968,7 +968,10 @@ a **paper plate** over the picture filling the frame (a Map switch, for the
 it shows. While the car stays at a place, a picture shot on a later day of
 the stay comes up **on its day**, as the counter turns to it (a switch, on by
 default), and a **light tick** marks each day the counter turns, never closer
-than a patter. Nothing of a piece whose badge counts something else changes.
+than a patter. A **Ribbon of days** switch (off by default) puts Défilé's
+tape under the map: one tick a day, a long one where a leg starts, its head
+standing on the day the badge counts — above the map where the frame has no
+room below it. Nothing of a piece whose badge counts something else changes.
 
 **The day is measured, not guessed.** Everything the badge draws is a
 subtraction from the day the piece is filed under, so the editor reads the

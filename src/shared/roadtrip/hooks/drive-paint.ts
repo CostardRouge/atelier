@@ -60,6 +60,8 @@ import { paintGround, stripOver, wideOnly, type BasemapSet } from './basemap-str
 import { basemapRect, paintOsmCredit } from './basemap-paint';
 import { paintCount } from './map-paint';
 import { formatDistance, placeLabels } from './geo';
+import { paintTape } from './scrub-paint';
+import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
 
@@ -217,6 +219,8 @@ export function paintDrive(
   basemap: DriveBasemap | null = null,
   /** The baked camera (`map-camera.ts`); null keeps the plain follow of before. */
   track: CameraTrack | null = null,
+  /** The recap's ribbon of days under the map (`drive-ribbon.ts`), when asked. */
+  ribbon: DriveRibbon | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
@@ -224,18 +228,18 @@ export function paintDrive(
   if (moment.mapAlpha <= 0) return;
 
   if (moment.mapAlpha >= 1) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
     return;
   }
   // The reveal: the whole map at a falling alpha over the picture beneath.
   const buffer = bufferFor(scratch, w, h);
   const bg = buffer?.getContext('2d') as HookCtx2D | null;
   if (!buffer || !bg) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
     return;
   }
   bg.clearRect(0, 0, w, h);
-  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track);
+  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
   g.save();
   g.globalAlpha = moment.mapAlpha;
   g.drawImage(buffer, 0, 0);
@@ -268,6 +272,7 @@ function paintMap(
   frame: FrameBox,
   basemap: DriveBasemap | null,
   track: CameraTrack | null,
+  ribbon: DriveRibbon | null,
 ): void {
   const { width: w, height: h } = frame;
   const u = w / 1080;
@@ -602,6 +607,13 @@ function paintMap(
     g.strokeText(text, x, y);
     g.fillStyle = ink;
     g.fillText(text, x, y);
+  }
+
+  // Défilé's ribbon of days, its head on the recap's clock: on the paper it
+  // is inked like the map, over a picture it takes Défilé's own dark band.
+  if (ribbon) {
+    const overPicture = !onPaper || o.pictures === 'backdrop';
+    paintTape(g, ribbon.at(t), ribbonStyle(o, overPicture), ribbonGeometry(w, h, box, o, plated));
   }
 
   // The licence's credit, wherever the tiles are seen — under a picture that
