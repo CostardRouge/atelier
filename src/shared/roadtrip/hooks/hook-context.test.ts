@@ -6,6 +6,7 @@ import { hookContextFor, hookMoves, openerMoves, slideHookTiming } from './hook-
 import { hookElementsAt } from './hook-elements';
 import { resolveHook } from './registry';
 import { DEFAULT_BADGE_LAYOUT } from '../badge-layout';
+import { AUTO_TAIL_SECONDS } from '../slide-timing';
 
 /** A ten-day trip with pieces on days 2, 5 (twice, one published) and 8. */
 function fixture(): { trip: TripDoc; hero: TripPost } {
@@ -175,9 +176,15 @@ describe('an opener on another slide (v29)', () => {
     return { ...post, slides: [slide] };
   };
 
-  it('is told the SLIDE’s screen time, and no counter when the slide draws no badge', () => {
+  it('is told the SLIDE’s screen time once set by hand, none while the slide follows it, and no counter when the slide draws no badge', () => {
     const { trip, hero } = fixture();
     const p = withSlideOpener(hero, 'scrub');
+    // A new slide is born in Auto: the opener is told no screen time, since
+    // the slide will follow it (`slide-timing.ts`).
+    const auto = slideHookTiming(p.slides[0]);
+    expect(auto.auto).toBe(true);
+    expect(hookContextFor(trip, p, 1, null, undefined, auto).screenSeconds).toBeUndefined();
+    p.slides[0].auto = false;
     const timing = slideHookTiming(p.slides[0]);
     expect(timing.screenSeconds).toBe(6);
     expect(timing.durationSeconds).toBe(6);
@@ -186,6 +193,25 @@ describe('an opener on another slide (v29)', () => {
     expect(ctx.screenSeconds).toBe(6);
     expect(ctx.counterMode).toBeUndefined();
     expect(ctx.date).toBe(p.date);
+  });
+
+  it('the deck follows an Auto slide’s opener plus a hold, and keeps a set length as it is', () => {
+    const { trip, hero: plain } = fixture();
+    const hero = scrubbing(plain);
+    const opener = resolveHook(hero.badge.hook, hookContextFor(trip, hero, 1, null)).seconds;
+    expect(opener).toBeGreaterThan(0);
+    const auto = deckSlides(trip, { ...hero, badge: { ...hero.badge, hookAuto: true, hookSeconds: 2 } })[0];
+    expect(auto.auto).toBe(true);
+    expect(auto.openerSeconds).toBeCloseTo(opener, 9);
+    expect(auto.seconds).toBeCloseTo(opener + AUTO_TAIL_SECONDS, 9);
+    const set = deckSlides(trip, { ...hero, badge: { ...hero.badge, hookAuto: false, hookSeconds: 2 } })[0];
+    expect(set.auto).toBe(false);
+    expect(set.seconds).toBe(2);
+    expect(set.openerSeconds).toBeCloseTo(opener, 9);
+    // A piece written before the rule has no mark: set by hand, nothing changes.
+    const { hookAuto: _dropped, ...legacy } = hero.badge;
+    void _dropped;
+    expect(deckSlides(trip, { ...hero, badge: { ...legacy, hookSeconds: 2 } })[0].seconds).toBe(2);
   });
 
   it('is told the slide badge’s counter and life when it has one', () => {

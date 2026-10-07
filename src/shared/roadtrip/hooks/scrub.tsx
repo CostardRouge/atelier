@@ -34,6 +34,9 @@ import type {
   HookVariant,
 } from './hook-variant';
 import { Group, MovedRow } from './panel-ui';
+import { FitRow } from './fit-row';
+import { fitRender } from '../slide-timing';
+import type { HookRender } from './hook-variant';
 import { paintScrub } from './scrub-paint';
 import {
   EASINGS,
@@ -185,9 +188,6 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
                   ? `${pictured} of ${flashes} told days flash a picture — ${flashes - pictured} ${flashes - pictured === 1 ? 'piece has' : 'pieces have'} none yet`
                   : `${flashes} told ${flashes === 1 ? 'day flashes' : 'days flash'}`
         } · ${plan.sweepSeconds.toFixed(1)}s${plan.delaySeconds > 0 ? ` after ${plan.delaySeconds.toFixed(1)}s` : ''}`;
-  // The hook's screen time is a separate setting; say so when it would cut the
-  // sweep short, rather than delivering a scrub that never lands.
-  const cut = plan && ctx.screenSeconds !== undefined && plan.endSeconds > ctx.screenSeconds;
   // Past ~3 frames a flash, the pictures stop registering as pictures.
   const perStop = plan && plan.stops.length > 1 ? plan.sweepSeconds / (plan.stops.length - 1) : 1;
 
@@ -201,13 +201,6 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
   return (
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
       {summary && <p className="m-0 text-xs text-ink-soft">{summary}</p>}
-      {cut && (
-        <p className="m-0 text-xs text-accent-ink">
-          The hook is on screen for {ctx.screenSeconds?.toFixed(1)}s, shorter than the
-          sweep — the export would cut it before it lands. Lengthen the hook in Export, or
-          shorten the sweep.
-        </p>
-      )}
       {plan && plan.stops.length > 2 && perStop < 0.1 && (
         <p className="m-0 text-xs text-accent-ink">
           {Math.round(perStop * 1000)}ms a stop — under three frames, so the pictures read
@@ -368,6 +361,15 @@ function ScrubPanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => `${v.toFixed(1)}s`}
           />
         </FieldRow>
+        {plan && plan.endSeconds > 0 && (
+          <FitRow
+            seconds={plan.endSeconds}
+            screenSeconds={ctx.screenSeconds}
+            shortestBeat={perStop}
+            fit={o.fit}
+            onChange={(fit) => set({ fit })}
+          />
+        )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
           <SelectField
             label="How the head travels"
@@ -674,7 +676,7 @@ export const scrubVariant: HookVariant = {
     const plan = ctx.calendar ? scrubPlan(ctx.calendar, ctx.date, o) : null;
     if (!plan) return { seconds: 0 };
     const end = plan.endSeconds;
-    return {
+    const render: HookRender = {
       seconds: end,
       // Only under the trip-day counter, and only while the head moves: once
       // it rests the badge says its own value — a range post's "27–29" too.
@@ -688,6 +690,10 @@ export const scrubVariant: HookVariant = {
         : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
+    // A set slide shorter than the sweep: fitted into it when asked, under
+    // the flash floor (`slide-timing.ts`); an Auto slide follows the sweep.
+    const perStop = plan.stops.length > 1 ? plan.sweepSeconds / (plan.stops.length - 1) : end;
+    return o.fit ? fitRender(render, ctx.screenSeconds, perStop).render : render;
   },
   // The TAPE is what a click grabs and a drag moves: the flashes fill the frame
   // and the numeral is a badge piece, so neither has a place to be dragged to.

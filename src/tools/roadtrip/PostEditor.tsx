@@ -589,6 +589,23 @@ export default function PostEditor({
     [isCta, cta.qr, trip.cta.ink, trip.cta.background],
   );
 
+  // Each slide holds the screen for what it really delivers — a clip its cut,
+  // a still the seconds its inspector gives it or, in Auto, its opener plus a
+  // hold (`slide-timing.ts`) — and the durations of clips the stage has
+  // already decoded are remembered, so a stored 5s over a 3s clip reads 3 on
+  // the band before that slide is opened again.
+  const [clipDurations, setClipDurations] = useState<Record<string, number>>({});
+  const lengths = useMemo(
+    () =>
+      slides.map((s) =>
+        screenLength(s, s.media ? (clipDurations[s.media.name.toLowerCase()] ?? 0) : 0),
+      ),
+    [slides, clipDurations],
+  );
+  // What the badge's exit lands on: the first slide's END (`slide-timing.ts`),
+  // never an absolute life — so shortening the slide never cuts the exit.
+  const hookLife = lengths[0] ?? post.badge.hookSeconds;
+
   // The first slide's words: its own free text, then its badge over it (a
   // masked line must not mask the signature — `slide-render.ts`) — the
   // elements every export of the hook and the Studio bridge burn in.
@@ -600,7 +617,7 @@ export default function PostEditor({
           post.badge.layout,
           aspect,
           post.badge.pieceStyles,
-          post.badge.durationSeconds,
+          hookLife,
           post.badge.cascade,
         )
       : [];
@@ -609,7 +626,7 @@ export default function PostEditor({
     content,
     post.badge.layout,
     post.badge.pieceStyles,
-    post.badge.durationSeconds,
+    hookLife,
     post.badge.cascade,
     aspect,
     hookTexts,
@@ -677,7 +694,7 @@ export default function PostEditor({
       post.badge.layout,
       aspect,
       post.badge.pieceStyles,
-      post.badge.durationSeconds,
+      hookLife,
       post.badge.cascade,
     );
     // The free text rides along, or a counting numeral would hide it.
@@ -688,7 +705,7 @@ export default function PostEditor({
     post.badge.layout,
     aspect,
     post.badge.pieceStyles,
-    post.badge.durationSeconds,
+    hookLife,
     post.badge.cascade,
     hookTexts,
   ]);
@@ -702,21 +719,8 @@ export default function PostEditor({
   );
   /** The opener on the OPEN slide — the piece's on the first, the slide's own elsewhere. */
   const openHook = isHook ? hook : (openRender?.hook ?? null);
-  /** Each slide's opener length, for the band's marks: the first slide's is the piece's. */
-  const openerSecondsBySlide = useMemo(
-    () =>
-      slides.map((s) =>
-        s.kind === 'hook'
-          ? hook.seconds
-          : s.hook
-            ? resolveHook(
-                s.hook,
-                hookContextFor(trip, post, aspect, null, hookPictures, slideHookTiming(s)),
-              ).seconds
-            : 0,
-      ),
-    [slides, hook, trip, post, aspect, hookPictures],
-  );
+  /** Each slide's opener length, for the band's marks — the deck measured it once (`deckSlides`). */
+  const openerSecondsBySlide = useMemo(() => slides.map((s) => s.openerSeconds), [slides]);
 
   const patchBadge = useCallback(
     (patch: Partial<PostBadge>) =>
@@ -920,14 +924,15 @@ export default function PostEditor({
   const setClipRange = useCallback(
     (range: TrimRange) => {
       const seconds = screenSecondsOf(range, slide.speed);
+      // A cut made by hand is a length set by hand: the slide leaves Auto.
       if (slide.kind === 'hook') {
-        patchBadge({ videoTimeSeconds: range.start, hookSeconds: seconds });
+        patchBadge({ videoTimeSeconds: range.start, hookSeconds: seconds, hookAuto: false });
       } else if (slide.slideId) {
         onChangePost({
           ...post,
           slides: post.slides.map((s) =>
             s.id === slide.slideId
-              ? { ...s, videoTimeSeconds: range.start, seconds }
+              ? { ...s, videoTimeSeconds: range.start, seconds, auto: false }
               : s,
           ),
         });
@@ -950,12 +955,12 @@ export default function PostEditor({
         speed,
       );
       if (slide.kind === 'hook') {
-        patchBadge({ videoSpeed: speed, hookSeconds: seconds });
+        patchBadge({ videoSpeed: speed, hookSeconds: seconds, hookAuto: false });
       } else if (slide.slideId) {
         onChangePost({
           ...post,
           slides: post.slides.map((s) =>
-            s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds } : s,
+            s.id === slide.slideId ? { ...s, videoSpeed: speed, seconds, auto: false } : s,
           ),
         });
       }
@@ -970,14 +975,6 @@ export default function PostEditor({
   // still the seconds its inspector gives it — and the durations of clips the
   // stage has already decoded are remembered, so a stored 5s over a 3s clip
   // reads 3 on the band before that slide is opened again.
-  const [clipDurations, setClipDurations] = useState<Record<string, number>>({});
-  const lengths = useMemo(
-    () =>
-      slides.map((s) =>
-        screenLength(s, s.media ? (clipDurations[s.media.name.toLowerCase()] ?? 0) : 0),
-      ),
-    [slides, clipDurations],
-  );
   const slideKeys = useMemo(() => slides.map((s) => s.slideId ?? s.kind), [slides]);
   // Playback always loops; this says over what — the whole piece, or the slide
   // under the needle. The band's pill and `L` switch it.
@@ -1460,7 +1457,7 @@ export default function PostEditor({
   // gained a screen time. Still clamped on read — a stored 8s over a 3s clip
   // must not claim a file it cannot write.
   const hookLength = hookSecondsWithin(
-    post.badge.hookSeconds,
+    lengths[0] ?? post.badge.hookSeconds,
     post.badge.durationSeconds,
     hookInfo.duration,
     post.badge.videoTimeSeconds,
@@ -1891,13 +1888,16 @@ export default function PostEditor({
               min: MIN_HOOK_SECONDS,
               max: MAX_HOOK_SECONDS,
               onChange: (seconds, local) => {
-                if (isHook) patchBadge({ hookSeconds: seconds });
-                else patchSlide({ seconds });
+                // A grip dragged sets the length by hand: the slide leaves Auto.
+                if (isHook) patchBadge({ hookSeconds: seconds, hookAuto: false });
+                else patchSlide({ seconds, auto: false });
                 deck.goTo(slideIndex, local);
               },
             }
           : null
       }
+      // What a SET slide cuts off its opener, hatched at the cell's end.
+      overflowFor={(i) => (slides[i] && !slides[i].auto ? Math.max(0, (openerSecondsBySlide[i] ?? 0) - (lengths[i] ?? 0)) : 0)}
     />
   );
 
@@ -2346,6 +2346,7 @@ export default function PostEditor({
               aspect={aspect}
               hookFile={hookFile}
               hookIsVideo={hookIsVideo}
+              hookSeconds={hookLife}
               plan={shownPlan}
               undecodable={exports.undecodable}
               delivery={delivery}

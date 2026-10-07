@@ -142,6 +142,13 @@ export interface MapOptions {
   // --- extras --------------------------------------------------------------
   compass: boolean;
   distance: MapDistance;
+  /**
+   * FIT the journey into the slide when the slide is shorter — its clock
+   * scaled so the pen rests when the slide ends, under the readability floor
+   * (`slide-timing.ts`). Stored with the opener, so it follows the slide's
+   * length when that changes later. Nothing under an Auto slide.
+   */
+  fit: boolean;
   // --- sound ---------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -192,6 +199,7 @@ export const MAP_DEFAULTS: MapOptions = {
   nameInBadge: false,
   compass: false,
   distance: 'off',
+  fit: false,
   sound: false,
   kit: 'ratchet',
   tickPitch: 1,
@@ -281,12 +289,27 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     nameInBadge: o.nameInBadge === true,
     compass: o.compass === true,
     distance: oneOf(o.distance, ['off', 'km', 'mi'], d.distance),
+    fit: o.fit === true,
     sound: o.sound === true,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),
     tickVolume: clamp(Number(o.tickVolume), L.tickVolume.min, L.tickVolume.max, d.tickVolume),
     mixWithClip: o.mixWithClip === true,
   };
+}
+
+/**
+ * The shortest beat a fitted itinerary would scale: the wait at a stop (what
+ * a picture is looked at for), else the shortest hop. Infinity when the pen
+ * does not travel at all — nothing to flash, nothing to refuse.
+ */
+export function mapShortestBeat(timing: MapTiming): number {
+  let beat = Infinity;
+  for (const hop of timing.hops) {
+    if (hop.dwell > 0) beat = Math.min(beat, hop.dwell);
+    else if (hop.travel > 0) beat = Math.min(beat, hop.travel);
+  }
+  return beat;
 }
 
 // ---------------------------------------------------------------------------
@@ -836,6 +859,7 @@ export function mapFromRoute(
     tickPitch: raw.tickPitch,
     tickVolume: raw.tickVolume,
     mixWithClip: raw.mixWithClip,
+    fit: false,
     // The Route had no pictures at all, and an itinerary whose stops hold
     // none would draw an empty card or an empty backdrop. Off is the honest
     // conversion; the author switches it on when a stop has a picture.

@@ -169,6 +169,8 @@ export interface DriveOptions {
   /** A shutter click as each picture pops. */
   shutter: boolean;
   mixWithClip: boolean;
+  /** FIT the drive into a shorter slide — `MapOptions.fit`, the same rule. */
+  fit: boolean;
 }
 
 export const DRIVE_DEFAULTS: DriveOptions = {
@@ -224,6 +226,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   tickVolume: 1,
   shutter: true,
   mixWithClip: false,
+  fit: false,
 };
 
 /** The bounds each option is clamped to — a stored value is never trusted. */
@@ -339,7 +342,16 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     tickVolume: clamp(Number(o.tickVolume), L.tickVolume.min, L.tickVolume.max, d.tickVolume),
     shutter: o.shutter !== false,
     mixWithClip: o.mixWithClip === true,
+    fit: o.fit === true,
   };
+}
+
+/** The shortest beat a fitted drive would scale: a picture's time on screen, else the shortest run. */
+export function driveShortestBeat(plan: DrivePlan, o: DriveOptions): number {
+  if (o.pictures !== 'none' && plan.schedule.pops.length > 0) return o.secondsPerPicture;
+  let beat = Infinity;
+  for (const phase of plan.schedule.phases) if (phase.kind === 'run') beat = Math.min(beat, phase.end - phase.start);
+  return beat;
 }
 
 // --- the stops ------------------------------------------------------------------

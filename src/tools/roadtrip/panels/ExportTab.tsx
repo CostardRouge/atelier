@@ -26,6 +26,8 @@ interface ExportTabProps {
   hookFile: File | null;
   /** True when the hook's picture is a clip — which SOURCE, not which medium. */
   hookIsVideo: boolean;
+  /** How long the first slide is on screen — what the badge's exit lands on, sent with the scene. */
+  hookSeconds: number;
   /**
    * What the piece's primary export will write, slide by slide — computed by
    * the editor, which also draws the pinned bar that presses it.
@@ -81,6 +83,7 @@ export default function ExportTab({
   aspect,
   hookFile,
   hookIsVideo,
+  hookSeconds,
   plan,
   undecodable,
   delivery,
@@ -237,6 +240,7 @@ export default function ExportTab({
             cta={trip.cta}
             aspect={aspect}
             file={hookFile}
+            hookSeconds={hookSeconds}
             onChangePost={onChangePost}
             grade={grade}
             gradeScope={gradeScope}

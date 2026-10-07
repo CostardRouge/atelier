@@ -36,6 +36,8 @@ interface StudioLinkProps {
   aspect: number;
   /** The clip this piece is composed over, when it is loaded. */
   file: File | null;
+  /** The first slide's time on screen — the scene's length, where the badge's exit lands. */
+  hookSeconds: number;
   onChangePost: (post: TripPost) => void;
   /**
    * The grade Road Trip renders this piece with, and whose it is. A linked
@@ -73,6 +75,7 @@ export default function StudioLink({
   cta,
   aspect,
   file,
+  hookSeconds,
   onChangePost,
   grade,
   gradeScope,
@@ -107,7 +110,7 @@ export default function StudioLink({
       }
       let next = withHook(
         doc,
-        hookInjection(elements, post.badge.durationSeconds, shades, post.title || 'Trip hook', block),
+        hookInjection(elements, hookSeconds, shades, post.title || 'Trip hook', block),
       );
       // The closing card goes with the hook — into the project's outro slot —
       // when the piece closes with the CTA. Unticked, a previously sent card

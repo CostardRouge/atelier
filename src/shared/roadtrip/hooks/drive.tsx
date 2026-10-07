@@ -43,6 +43,7 @@ import {
   driveOptions,
   driveRoute,
   driveScore,
+  driveShortestBeat,
   driveWants,
   type DriveOptions,
   type DrivePlan,
@@ -50,9 +51,11 @@ import {
 } from './drive-plan';
 import { driveBasemap, driveScratch, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
+import { FitRow } from './fit-row';
+import { fitRender } from '../slide-timing';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
-import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
+import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { allowTiles } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
 import { Group } from './panel-ui';
@@ -199,7 +202,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         plan && o.distance !== 'off' ? ` · ${formatDistance(plan.kmAtStop[plan.kmAtStop.length - 1], o.distance)}` : ''
       }`;
   const leftOut = leftOutLine(route, o);
-  const cut = plan && ctx.screenSeconds !== undefined && plan.seconds > ctx.screenSeconds;
   const choose = host?.choosePictures
     ? async () => {
         const next = await host.choosePictures?.(o.picked);
@@ -213,13 +215,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
       <p className="m-0 text-xs text-ink-soft">{summary}</p>
       {leftOut && <p className="m-0 text-xs text-accent-ink">{leftOut}</p>}
-      {cut && (
-        <p className="m-0 text-xs text-accent-ink">
-          The hook is on screen for {ctx.screenSeconds?.toFixed(1)}s, shorter than the drive — the
-          export would cut it before the car arrives. Lengthen the hook in Export, or shorten the
-          drive.
-        </p>
-      )}
       {line && (
         <p className={`m-0 text-xs ${line.danger ? 'text-danger' : 'text-muted'}`} role={line.danger ? 'alert' : undefined}>
           {line.text}
@@ -685,6 +680,15 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => `${v.toFixed(1)}s`}
           />
         </FieldRow>
+        {plan && (
+          <FitRow
+            seconds={plan.seconds}
+            screenSeconds={ctx.screenSeconds}
+            shortestBeat={driveShortestBeat(plan, o)}
+            fit={o.fit}
+            onChange={(fit) => set({ fit })}
+          />
+        )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
           <SelectField
             label="How the car pulls away and stops"
@@ -925,7 +929,9 @@ export const driveVariant: HookVariant = {
     // author's assertion there, the Itinerary's rule — and a day on pictures.
     const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
     const counterWords = { day: words?.day ?? 'Day', of: words?.of ?? 'of', stop: words?.stop };
-    return {
+    // A set slide shorter than the drive: fitted into it when asked, the whole
+    // closure on one scaled clock (`slide-timing.ts`); an Auto slide follows.
+    const render: HookRender = {
       seconds: plan.seconds,
       // The badge's place reads the last stop the car passed, while it drives;
       // once it arrives the badge says its own — the leg's label. The counter,
@@ -948,6 +954,7 @@ export const driveVariant: HookVariant = {
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
+    return o.fit ? fitRender(render, ctx.screenSeconds, driveShortestBeat(plan, o)).render : render;
   },
   Sketch: DriveSketch,
   Panel: DrivePanel,

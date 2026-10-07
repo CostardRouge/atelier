@@ -30,6 +30,7 @@ import type {
 import type { ExifData } from '../../../shared/exif/exif-parser';
 import CameraPanel from './CameraPanel';
 import SlideDelivery from './SlideDelivery';
+import { hookVariantById } from '../../../shared/roadtrip/hooks/registry';
 import { inputClass, linkButton } from './ui';
 import { DateField } from '../../../shared/ui/DateField';
 import Button from '../../../shared/ui/Button';
@@ -70,7 +71,7 @@ interface ContentTabProps {
   /** The camera credit names a body on the TRIP, once for every piece. */
   onChangeTrip: (trip: TripDoc) => void;
   patchBadge: (patch: Partial<PostBadge>) => void;
-  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds'>>) => void;
+  patchSlide: (patch: Partial<Pick<PostSlide, 'caption' | 'medium' | 'seconds' | 'auto' | 'hook'>>) => void;
   /** Write the open slide's OWN badge — another slide's words, counter and line. */
   patchSlideBadge: (patch: Partial<SlideBadge>) => void;
   /** The open slide's lines of free text, and where they are written. */
@@ -125,6 +126,12 @@ export default function ContentTab({
   onEditClosingCard,
 }: ContentTabProps) {
   const isHook = slide.kind === 'hook';
+  /** The open slide's opener — the piece's on the first slide, the slide's own elsewhere — as the band and the deck read it. */
+  const openerLayers = isHook ? post.badge.hook : (post.slides.find((s) => s.id === slide.slideId)?.hook ?? null);
+  const openerVariant = openerLayers?.[0] ? hookVariantById(openerLayers[0].id) : undefined;
+  const opener = openerVariant && slide.openerSeconds > 0
+    ? { name: openerVariant.name, seconds: slide.openerSeconds, fit: openerLayers?.[0]?.options?.fit === true }
+    : null;
   /**
    * The badge this slide's words are written to: the piece's on the first
    * slide, the slide's own elsewhere, none where the slide draws no badge.
@@ -295,8 +302,20 @@ export default function ContentTab({
             clipSeconds={clipSeconds}
             clip={clip}
             onMedium={(medium) => (isHook ? patchBadge({ medium }) : patchSlide({ medium }))}
+            // The slider sets the length by hand: the slide leaves Auto.
             onSeconds={(seconds) =>
-              isHook ? patchBadge({ hookSeconds: seconds }) : patchSlide({ seconds })
+              isHook ? patchBadge({ hookSeconds: seconds, hookAuto: false }) : patchSlide({ seconds, auto: false })
+            }
+            onAuto={(auto) => (isHook ? patchBadge({ hookAuto: auto }) : patchSlide({ auto }))}
+            opener={opener}
+            onFit={
+              openerLayers?.length
+                ? () => {
+                    const fitted = openerLayers.map((layer, i) => (i === 0 ? { ...layer, options: { ...layer.options, fit: true } } : layer));
+                    if (isHook) patchBadge({ hook: fitted });
+                    else patchSlide({ hook: fitted });
+                  }
+                : null
             }
           />
         )}

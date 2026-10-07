@@ -29,8 +29,10 @@ import type { BadgeCascade, BadgePieceStyles } from './badge-layout';
 import { clipSpeed } from './hook-video';
 import { collageAnimates, collageCellsMove, type SlideCollage } from './collage';
 import type { SlideMedium, TripDoc, TripGrade, TripPost } from './trip-types';
-import { hookMoves, openerMoves, slideHookTiming } from './hooks/hook-context';
+import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
 import type { HookLayer } from './hooks/hook-variant';
+import { resolveHook } from './hooks/registry';
+import { slideTiming } from './slide-timing';
 import type { Shade } from '../shades/shades';
 import type { SlideBadge } from './slide-capacities';
 
@@ -111,6 +113,14 @@ export interface DeckSlide {
   /** What this slide is delivered as, `auto` already resolved. */
   medium: 'image' | 'video';
   /**
+   * The slide's length FOLLOWS its opener (`slide-timing.ts`): `seconds`
+   * below is then the opener's plus a hold, not what is stored; false means
+   * set by hand. The closing card's is structural.
+   */
+  auto: boolean;
+  /** What this slide's opener occupies; 0 for none or one that plays nothing. */
+  openerSeconds: number;
+  /**
    * What the author CHOSE, before resolution — so a panel can show which of
    * the three is pressed without knowing whether this slide's value lives on
    * the badge or on a `PostSlide`. Always `image` for the closing card, whose
@@ -175,6 +185,10 @@ export function hookAnimates(styles: BadgePieceStyles, cascade?: BadgeCascade | 
  * post asks for it AND the trip's template says something.
  */
 export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
+  // Each opener prepared ONCE here: its length is both what makes the slide
+  // leave as a video and, under Auto, what the slide lasts.
+  const hookSeconds = resolveHook(post.badge.hook, hookContextFor(trip, post, 1, null, undefined, pieceHookTiming(post))).seconds;
+  const hookTiming = slideTiming(post.badge.hookAuto === true, post.badge.hookSeconds, hookSeconds);
   const slides: DeckSlide[] = [
     {
       kind: 'hook',
@@ -197,7 +211,7 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
         // An opener that plays (the scrub) moves the hook exactly as an
         // animated piece does: left as `auto`, it must leave as a video.
         hookAnimates(post.badge.pieceStyles, post.badge.cascade) ||
-          hookMoves(trip, post) ||
+          hookSeconds > 0 ||
           collageAnimates(post.badge.collage) ||
           // A picture that moves in its frame moves the slide.
           hasMotion(post.badge.motion) ||
@@ -206,12 +220,18 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
         post.media?.name ?? null,
       ),
       chosen: post.badge.medium,
-      seconds: post.badge.hookSeconds,
+      seconds: hookTiming.seconds,
+      auto: hookTiming.owner === 'auto',
+      openerSeconds: hookSeconds,
       speed: isClip(post.media?.name) ? clipSpeed(post.badge.videoSpeed) : 1,
     },
   ];
 
   for (const slide of post.slides) {
+    const openerSeconds = slide.hook?.length
+      ? resolveHook(slide.hook, hookContextFor(trip, post, 1, null, undefined, slideHookTiming(slide))).seconds
+      : 0;
+    const timing = slideTiming(slide.auto === true, slide.seconds, openerSeconds);
     slides.push({
       kind: 'content',
       position: slides.length + 1,
@@ -236,14 +256,16 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
         collageAnimates(slide.collage) ||
           hasMotion(slide.motion) ||
           collageCellsMove(slide.collage) ||
-          openerMoves(trip, post, slide.hook ?? null, slideHookTiming(slide)) ||
+          openerSeconds > 0 ||
           (slide.badge !== null && slide.badge !== undefined &&
             hookAnimates(post.badge.pieceStyles, post.badge.cascade)) ||
           (slide.texts ?? []).some((el) => Boolean(el.animation)),
         slide.media?.name ?? null,
       ),
       chosen: slide.medium,
-      seconds: slide.seconds,
+      seconds: timing.seconds,
+      auto: timing.owner === 'auto',
+      openerSeconds,
       speed: isClip(slide.media?.name) ? clipSpeed(slide.videoSpeed) : 1,
     });
   }
@@ -277,6 +299,8 @@ export function deckSlides(trip: TripDoc, post: TripPost): DeckSlide[] {
       reason: 'plain',
       chosen: 'image',
       seconds: OUTRO_SECONDS_DEFAULT,
+      auto: false,
+      openerSeconds: 0,
       speed: 1,
     });
   }

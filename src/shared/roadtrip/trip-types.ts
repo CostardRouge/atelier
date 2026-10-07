@@ -341,6 +341,14 @@ export interface PostBadge {
    */
   hookSeconds: number;
   /**
+   * The hook slide's length is AUTO (2026-10-07, `slide-timing.ts`): it
+   * follows its opener plus a short hold, and `hookSeconds` above is only
+   * what the author last set. Absent or false = set by hand, so no piece
+   * written before the rule changes length; a new piece is born in Auto and
+   * leaves it the moment a grip or the slider is dragged.
+   */
+  hookAuto?: boolean;
+  /**
    * The darkening laid over the picture, under the badge — up to a handful of
    * layers. Replaces the old single vignette + single scrim, which were the
    * same thing seen twice and could not be combined (see `shades.ts`).
@@ -477,6 +485,8 @@ export interface HookDefaults {
   /** How the hook is delivered, and how long it is on screen — see `PostBadge`. */
   medium: SlideMedium;
   hookSeconds: number;
+  /** Whether that length followed the opener (`PostBadge.hookAuto`); absent reads as Auto for a new piece. */
+  hookAuto?: boolean;
   layout: BadgeLayout;
   pieceStyles: BadgePieceStyles;
   /** The one entrance the pieces share, cascaded — see `PostBadge.cascade`. */
@@ -500,6 +510,7 @@ export function hookDefaultsFrom(badge: PostBadge): HookDefaults {
     durationSeconds: badge.durationSeconds,
     medium: badge.medium,
     hookSeconds: badge.hookSeconds,
+    hookAuto: badge.hookAuto === true,
     layout: { ...badge.layout },
     pieceStyles: structuredClone(badge.pieceStyles),
     cascade: badge.cascade ? structuredClone(badge.cascade) : null,
@@ -540,6 +551,9 @@ export function defaultPostBadge(
     hookSeconds:
       defaults?.hookSeconds ??
       defaultHookSeconds(defaults?.durationSeconds ?? DEFAULT_BADGE_DURATION),
+    // A new piece follows its opener unless the defaults it starts from were
+    // saved from a piece whose length was set by hand.
+    hookAuto: defaults?.hookAuto ?? true,
     shades: (defaults?.shades ?? []).map((shade) => ({ ...shade, id: newId() })),
     aspectId: defaults?.aspectId ?? ASPECT_FOR_KIND[kind],
     videoTimeSeconds: 0,
@@ -592,6 +606,8 @@ export interface PostSlide {
   medium: SlideMedium;
   /** How long it is on screen when it is delivered as a video. */
   seconds: number;
+  /** Its length follows its opener — `PostBadge.hookAuto`'s twin, same rules. */
+  auto?: boolean;
   /**
    * An OPENER on this slide — the same list `PostBadge.hook` holds — or null
    * for none. A slide's position no longer decides what it may hold
@@ -633,6 +649,9 @@ export function createPostSlide(media: SavedMediaRef | null = null): PostSlide {
     caption: '',
     medium: 'auto',
     seconds: DEFAULT_SLIDE_SECONDS,
+    // Born in Auto: with nothing on it the slide keeps its 3 s, and an opener
+    // given to it later is followed rather than cut.
+    auto: true,
     // A new slide holds its picture and nothing else: an opener, a badge, a
     // shade or a line of text is a choice, never a default.
     hook: null,

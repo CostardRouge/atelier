@@ -29,7 +29,7 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import { EASINGS, EASING_IDS } from './easing';
-import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
+import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { paintMap } from './map-paint';
 import {
   MAP_DEFAULTS,
@@ -49,10 +49,13 @@ import {
   stopPictureKey,
   tripPlaces,
   writtenStops,
+  mapShortestBeat,
   type MapOptions,
 } from './map-plan';
 import { BasemapStatus, enableBasemap } from './basemap-row';
 import { Group, MovedRow, resetLink } from './panel-ui';
+import { FitRow } from './fit-row';
+import { fitRender } from '../slide-timing';
 import StopsEditor, { StopStyleRow } from './stops-editor';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
@@ -121,20 +124,12 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         : `${o.stops.length} stops · ${withPictures} with a picture · ${formatDistance(totalKm, o.distance === 'off' ? 'km' : o.distance)}${
             timing.total > 0 ? ` · ${timing.total.toFixed(1)}s` : ' · still'
           }`;
-  const cut = ctx.screenSeconds !== undefined && timing.total > ctx.screenSeconds;
   const coloursChanged =
     o.pathColor !== MAP_DEFAULTS.pathColor || o.aheadColor !== MAP_DEFAULTS.aheadColor;
 
   return (
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
       <p className="m-0 text-xs text-ink-soft">{summary}</p>
-      {cut && (
-        <p className="m-0 text-xs text-accent-ink">
-          The hook is on screen for {ctx.screenSeconds?.toFixed(1)}s, shorter than the
-          journey — the export would cut it before the pen arrives. Lengthen the hook in
-          Export, or shorten the drawing.
-        </p>
-      )}
 
       <Group title="Stops">
         <StopsEditor
@@ -579,6 +574,15 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.draw && (
+          <FitRow
+            seconds={timing.total}
+            screenSeconds={ctx.screenSeconds}
+            shortestBeat={mapShortestBeat(timing)}
+            fit={o.fit}
+            onChange={(fit) => set({ fit })}
+          />
+        )}
+        {o.draw && (
           <FieldRow
             label="Wait"
             hint={
@@ -796,7 +800,7 @@ export const mapVariant: HookVariant = {
     const timing = mapTiming(planarHops(o.stops), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];
     const basemap = mapBasemap(o, ctx.aspect);
-    return {
+    const render: HookRender = {
       seconds: timing.total,
       // The caption names the stop the pen is at — the last one once it
       // rests, where the pen really is. A stop's name is the author's own
@@ -819,6 +823,8 @@ export const mapVariant: HookVariant = {
         : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
+    // A set slide shorter than the journey: fitted into it when asked (`slide-timing.ts`).
+    return o.fit ? fitRender(render, ctx.screenSeconds, mapShortestBeat(timing)).render : render;
   },
   Sketch: MapSketch,
   Panel: MapPanel,

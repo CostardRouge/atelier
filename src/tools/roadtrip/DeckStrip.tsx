@@ -127,6 +127,11 @@ interface DeckStripProps {
   runAt?: (i: number) => { state: RunUnitState; ratio: number | null } | null;
   /** An export is running: the deck's order is its, so nothing is added, removed or moved. */
   orderLocked?: boolean;
+  /**
+   * Seconds slide `i`'s SET length cuts off its opener (`slide-timing.ts`) —
+   * hatched at the cell's end, where the length is set; 0 or absent for none.
+   */
+  overflowFor?: (i: number) => number;
 }
 
 /** A resize in progress: the end held, where the other end stays, the draft. */
@@ -204,6 +209,7 @@ export default function DeckStrip({
   resize,
   runAt,
   orderLocked = false,
+  overflowFor,
 }: DeckStripProps) {
   const coarse = useCoarsePointer();
   const pxPerSecond = compact ? 30 : 42;
@@ -675,10 +681,15 @@ export default function DeckStrip({
                 (s.kind === 'hook' ? 'Hook' : s.kind === 'cta' ? 'End' : String(s.position)) +
                 (holds ? ` ${holds}` : '') +
                 ` ${seconds(drawn[i] ?? 0)}` +
+                (s.auto && !sizing ? ' · auto' : '') +
                 (s.speed !== 1 ? ` · ${s.speed}×` : '');
               const gripped = grips && i === index;
               // Two grips never cover more than two thirds of a short cell.
               const grip = Math.min(gripPx, Math.floor(cell.width / 3));
+              // What a set length cuts off the opener: hatched at the end of
+              // the cell, at the band's own scale, never past half the cell.
+              const overflow = sizing && i === index ? 0 : (overflowFor?.(i) ?? 0);
+              const cutPx = overflow > 0.05 ? Math.min(cell.width / 2, Math.max(6, overflow * pxPerSecond)) : 0;
               return (
                 <div
                   key={s.slideId ?? s.kind}
@@ -721,6 +732,17 @@ export default function DeckStrip({
                     >
                       {Icons.loopOne}
                     </span>
+                  )}
+                  {cutPx > 0 && (
+                    <span
+                      className="absolute inset-y-0 right-0 pointer-events-none"
+                      style={{
+                        width: cutPx,
+                        background: 'repeating-linear-gradient(135deg, rgba(217,68,42,0.7) 0 2px, transparent 2px 6px)',
+                        boxShadow: 'inset 2px 0 0 rgba(217,68,42,0.9)',
+                      }}
+                      title={`${seconds(overflow)} of the opener is cut here`}
+                    />
                   )}
                   {(() => {
                     const run = runAt?.(i);
