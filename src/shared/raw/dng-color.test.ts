@@ -11,9 +11,14 @@ import {
   interpolationWeight,
   librawPick,
   neutralToXy,
+  PROFILE_PENDING,
   profileAt,
+  profiledAsShot,
+  profiledWbMatrix,
+  rawProfileFor,
+  rawProfileOrNull,
 } from './dng-color';
-import { apply3, planckianXy } from './white-balance';
+import { apply3, planckianXy, type RawWhite } from './white-balance';
 
 // The synthetic pair the brief measured LibRaw against (`docs/camera-profiles.md` §2):
 // a D65 matrix of the shape Adobe publishes for a Sony body, and an invented
@@ -122,5 +127,54 @@ describe('calibrationsFromLibraw', () => {
     expect(cals[0].cameraCalibration).toBeNull();
     expect(calibrationsFromLibraw([{ illuminant: 0, colormatrix: [z4, z4, z4], forwardmatrix: [z4, z4, z4] }])).toEqual([]);
     expect(calibrationsFromLibraw(undefined)).toEqual([]);
+  });
+});
+
+describe('the camera profile on a picture', () => {
+  // A white as the decoder hands it: LibRaw's D65 matrix for `rgb_cam`, both calibrations beside it.
+  const whiteAt = (kelvin: number, cals: DngCalibration[]): RawWhite => {
+    const [x, y] = planckianXy(kelvin);
+    const n = apply3(profileAt(cals, kelvin)!.xyzToCamera, xyz(x, y));
+    return { asShot: [n[1] / n[0], 1, n[1] / n[2]], camXyz: D65, rgbCam: dcrawRgbCam(D65)!, calibrations: cals };
+  };
+
+  it('is the spec’s correction at the as-shot white, named by its calibrations', () => {
+    const white = whiteAt(2850, dual);
+    const p = rawProfileFor(white)!;
+    expect(p.label).toBe('A + D65');
+    const neutral = [1 / white.asShot[0], 1, 1 / white.asShot[2]];
+    close(p.matrix, dngCorrection(dual, neutral, white.rgbCam)!, 1e-12);
+    expect(rawProfileFor(null)).toBeNull();
+  });
+
+  it('takes LibRaw’s one matrix as D65’s when the file names none, and is then identity under D65', () => {
+    const white = { ...whiteAt(6500, [cal(21, D65)]), calibrations: undefined };
+    const neutral = apply3(D65, xyz(0.3127, 0.329));
+    const p = rawProfileFor({ ...white, asShot: [neutral[1] / neutral[0], 1, neutral[1] / neutral[2]] })!;
+    expect(p.label).toBe('D65');
+    expect(maxOff(p.matrix)).toBeLessThan(1e-3);
+  });
+
+  it('reads the as-shot light through the interpolated matrices', () => {
+    const shot = profiledAsShot(whiteAt(2850, dual))!;
+    expect(Math.abs(shot.kelvin - 2850)).toBeLessThan(2);
+    expect(Math.abs(shot.tint)).toBeLessThan(0.5);
+  });
+
+  it('solves a kelvin balance that IS the profile at the as-shot light, so the two never stack', () => {
+    const white = whiteAt(3500, dual);
+    const shot = profiledAsShot(white)!;
+    close(profiledWbMatrix(white, shot.kelvin, shot.tint)!, rawProfileFor(white)!.matrix, 2e-3);
+    // Another light moves the picture, and keeps green where it was on a grey.
+    const day = profiledWbMatrix(white, 5500, 10)!;
+    expect(maxOff(day)).toBeGreaterThan(0.05);
+  });
+
+  it('reads a stored profile back, the pending mark included, and refuses junk', () => {
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: 'D65' })).toEqual({ matrix: IDENTITY, label: 'D65' });
+    expect(rawProfileOrNull(PROFILE_PENDING)).toBe(PROFILE_PENDING);
+    expect(rawProfileOrNull({ matrix: [1, 2] })).toBeNull();
+    expect(rawProfileOrNull({ matrix: [NaN, 0, 0, 0, 1, 0, 0, 0, 1] })).toBeNull();
+    expect(rawProfileOrNull('nope')).toBeNull();
   });
 });

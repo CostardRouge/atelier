@@ -41,7 +41,7 @@ import {
   decodeTone,
   developStage,
   isDefaultDevelop,
-  isRawDevelop,
+  rawMatrixOf,
   makeDevelopShapers,
   rawGainOf,
   toneCurve,
@@ -82,6 +82,7 @@ export function developTail(d: DevelopSettings): DevelopSettings {
     base: null,
     rawGain: null,
     rawWb: null,
+    rawProfile: null,
     baseCurve: null,
   };
 }
@@ -137,7 +138,7 @@ export function developHead(d: DevelopSettings | null | undefined): CubeHead | n
   return {
     tableSize: HEAD_TABLE_SIZE,
     gain: rawGainOf(d),
-    matrix: isRawDevelop(d) && d.rawWb ? d.rawWb.matrix : null,
+    matrix: rawMatrixOf(d),
     gains: [(1 + t) * exposure, (1 - tint) * exposure, (1 - t) * exposure],
     toneTop,
     tone: shape ? tabulate((x) => decodeTone(toneCurve(x * toneTop, d, shape))) : null,

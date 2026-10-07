@@ -87,6 +87,7 @@ import {
   type TileFlip,
   type TilePlan,
 } from './raw-tiles';
+import { calibrationsFromLibraw } from './dng-color';
 import { rawWhiteOrNull, type RawWhite } from './white-balance';
 import {
   autoBrightGain,
@@ -133,7 +134,11 @@ function whiteOf(metadata: Record<string, unknown> | undefined): RawWhite | null
   const color = metadata?.color_data ?? metadata?.color;
   if (!color || typeof color !== 'object') return null;
   const c = color as Record<string, unknown>;
-  return rawWhiteOrNull({ camMul: c.cam_mul, camXyz: c.cam_xyz, rgbCam: c.rgb_cam, preMul: c.pre_mul });
+  const white = rawWhiteOrNull({ camMul: c.cam_mul, camXyz: c.cam_xyz, rgbCam: c.rgb_cam, preMul: c.pre_mul });
+  // A DNG's own calibrations, both illuminants — LibRaw reads them and uses
+  // one (`dng-color.ts`); the camera profile interpolates them.
+  const calibrations = calibrationsFromLibraw(c.dng_color);
+  return white && calibrations.length ? { ...white, calibrations } : white;
 }
 
 function metaOf(metadata: Record<string, unknown> | undefined): RawMeta {

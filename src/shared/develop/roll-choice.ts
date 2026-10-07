@@ -31,6 +31,7 @@
 
 import { isDefaultDevelop, isRawDevelop, type DevelopSettings } from './develop';
 import { openingBaseCurve } from './base-curve';
+import { PROFILE_PENDING } from '../raw/dng-color';
 import { isClipName } from '../library/assets';
 import type { Rendition } from '../media/renditions';
 
@@ -120,7 +121,8 @@ export function ontoRollSensor(
   develop: DevelopSettings | null,
 ): DevelopSettings | null {
   if (!develop || !fromSensor || isRawDevelop(develop) || rollChoiceFor(choice, target).choice !== 'sensor') return develop;
-  return { ...develop, base: 'gain', rawGain: null, baseCurve: openingBaseCurve(develop.baseCurve) };
+  // The camera profile with the gain, at the next metering (`camera-profiles.md`).
+  return { ...develop, base: 'gain', rawGain: null, rawProfile: PROFILE_PENDING, baseCurve: openingBaseCurve(develop.baseCurve) };
 }
 
 export interface RollAnswer {

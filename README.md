@@ -2131,6 +2131,17 @@ the relative nudge they always were (they also work on top of a kelvin
 balance). A white balance belongs to its picture, like the RAW's measured
 exposure: copy, paste, presets and *Apply to* leave it where it is.
 
+**Camera colour.** A picture put on its sensor is developed in its camera's
+colour the way the DNG specification describes it: a DNG's two calibrations
+(usually tungsten and daylight) blended for the light the picture was taken
+under, its forward matrix where it has one, and the white adapted in XYZ —
+LibRaw alone takes the daylight matrix whatever the light, which is a few to
+nearly twenty ΔE off on saturated colours under tungsten. It is resolved once,
+with the measured exposure, and stored on the picture (the facts say *camera
+colour A + D65*); a picture already on its sensor before it existed keeps its
+colour. The kelvin white balance reads and sets the light through the same
+calibrations.
+
 **Which pictures leave.** Every picture says whether it leaves: by default the
 ones you **edited** do, and you decide otherwise per picture — send one you did
 not touch, hold back one you did. The **Pictures** table in the Export tab

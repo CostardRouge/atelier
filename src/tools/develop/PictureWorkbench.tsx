@@ -20,11 +20,13 @@ import DevelopSliders from '../../shared/develop/DevelopSliders';
 import DevelopViewport from '../../shared/develop/DevelopViewport';
 import {
   DEFAULT_DEVELOP,
+  appliedProfile,
   baseRung,
   developBase,
   developLines,
   isDefaultDevelop,
   isRawDevelop,
+  profilePending,
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
@@ -175,6 +177,7 @@ import VignettePanel from './VignettePanel';
 import WhiteBalancePanel from './WhiteBalancePanel';
 import { dropDecodedRaws } from '../../shared/raw/raw-decoder';
 import type { RawWhite } from '../../shared/raw/white-balance';
+import { PROFILE_PENDING, rawProfileFor, type RawProfile } from '../../shared/raw/dng-color';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, isDefaultDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
@@ -848,6 +851,9 @@ export default function PictureWorkbench({
   // decode and held for this visit, which is how the export meters it too.
   const followsSensor = handed === 'sensor' && sensor !== null && !rollOff && !clip;
   const [followGain, setFollowGain] = useState<number | null>(null);
+  // The camera profile (`dng-color.ts`) resolved on the same decode as the
+  // gain, held with it while following and written with the first numbers.
+  const [followProfile, setFollowProfile] = useState<RawProfile | null>(null);
   // The document already on a RAW base the draft has not been re-seeded
   // with yet — the render between the first write and its echo, or an undo
   // landing — is drawn on that base, never on the render for one frame.
@@ -855,19 +861,23 @@ export default function PictureWorkbench({
   const settling = isRawDevelop(stored) && !isRawDevelop(draft.draft);
   const developNow = useMemo<DevelopSettings>(() => {
     if (isRawDevelop(draft.draft)) return draft.draft;
-    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain, baseCurve: stored.baseCurve ?? null };
+    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain, rawProfile: stored.rawProfile ?? null, baseCurve: stored.baseCurve ?? null };
     // On the roll's sensor the picture opens on the opening curve, as the
     // export does (`openingBaseCurve`), until it is given its own.
-    return followsSensor ? { ...draft.draft, base: 'gain', rawGain: followGain, baseCurve: openingBaseCurve(draft.draft.baseCurve) } : draft.draft;
-  }, [followsSensor, settling, stored, draft.draft, followGain]);
+    return followsSensor
+      ? { ...draft.draft, base: 'gain', rawGain: followGain, rawProfile: followProfile, baseCurve: openingBaseCurve(draft.draft.baseCurve) }
+      : draft.draft;
+  }, [followsSensor, settling, stored, draft.draft, followGain, followProfile]);
   const inherited = developNow !== draft.draft;
   // On the roll's sensor and not yet on its own: what a cancel, a failed fetch
   // or the stage's meter answers for the visit rather than for the document.
   const following = inherited && !settling;
   const followingRef = useRef(following);
   followingRef.current = following;
-  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain' | 'baseCurve'> | null>(null);
-  inheritedRef.current = inherited ? { base: developNow.base, rawGain: developNow.rawGain, baseCurve: developNow.baseCurve ?? null } : null;
+  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain' | 'rawProfile' | 'baseCurve'> | null>(null);
+  inheritedRef.current = inherited
+    ? { base: developNow.base, rawGain: developNow.rawGain, rawProfile: developNow.rawProfile ?? null, baseCurve: developNow.baseCurve ?? null }
+    : null;
   // The stack grades what the picture is developed WITH: after the draft's
   // own effect, so the roll's base reaches the cube in the same commit.
   const { setDevelop: setStackDevelop } = stack;
@@ -1242,7 +1252,7 @@ export default function PictureWorkbench({
     // data never arrived is not a base.
     onRawAborted: () => {
       if (following) setRollOff(true);
-      else patchDraft({ base: null, rawGain: null, rawWb: null });
+      else patchDraft({ base: null, rawGain: null, rawWb: null, rawProfile: null });
       tell('Opening the RAW was cancelled — back on the render');
     },
     onRawDecoded: (info) => {
@@ -1253,8 +1263,20 @@ export default function PictureWorkbench({
       if (rawGain === null) {
         // On the roll's sensor the gain is held for the visit and written
         // only with the picture's first numbers (`inheritedRef`).
-        if (following) setFollowGain(info.gain);
-        else patchDraft({ base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base, rawGain: info.gain });
+        if (following) {
+          setFollowGain(info.gain);
+          setFollowProfile(rawProfileFor(info.meta.white));
+        } else {
+          // A picture put on its sensor since the profile existed carries
+          // `'pending'` and is resolved here with the gain; one on its
+          // sensor before keeps LibRaw's colour (his Q1, `camera-profiles.md`).
+          const pending = profilePending(draft.draft);
+          patchDraft({
+            base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base,
+            rawGain: info.gain,
+            ...(pending ? { rawProfile: rawProfileFor(info.meta.white) } : {}),
+          });
+        }
         const ev = Math.log2(info.gain);
         tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
       }
@@ -2395,7 +2417,13 @@ export default function PictureWorkbench({
                 // does not read flatter than its camera's JPEG by default.
                 // Auto, measured on the file's render once it is decoded —
                 // Standard where the render cannot be measured.
-                patchDraft(climbing ? { base: next, baseCurve: cloneBaseCurve(draft.draft.baseCurve) ?? { kind: 'auto' } } : { base: next });
+                // Newly on its sensor: the camera profile too, resolved on
+                // the coming decode with the gain (`camera-profiles.md`).
+                patchDraft(
+                  climbing
+                    ? { base: next, rawProfile: PROFILE_PENDING, baseCurve: cloneBaseCurve(draft.draft.baseCurve) ?? { kind: 'auto' } }
+                    : { base: next },
+                );
                 setOffer('sensor');
                 if (climbing && !draft.asShot) {
                   tell('your numbers now act on the RAW — another starting point');
@@ -2710,6 +2738,7 @@ export default function PictureWorkbench({
               {wantsRaw && rawWhite && (
                 <WhiteBalancePanel
                   white={rawWhite}
+                  profiled={Boolean(appliedProfile(developNow))}
                   value={draft.draft.rawWb ?? null}
                   onChange={(rawWb) => draft.patch({ rawWb })}
                 />

@@ -7,7 +7,10 @@ evaluate what a profile is, where one could come from without breaking the
 local-first line, and what it costs in the render graph. §6 is the
 recommendation, §7 the questions that are his, §8 the plan in commits. C1 —
 reading a DNG's own profile and the spec's maths, applying nothing — is
-built with this brief, because it needs no answer of his.
+built with this brief, because it needs no answer of his. **He answered §7
+the same day: «go with your recommendations»** (§7.1), and C2 + C3 are
+built: a RAW put on its sensor from now on is developed in the spec's
+colour.
 
 **This REOPENS item 19 of `docs/lightroom-gaps.md`**, which he parked on
 2026-09-24 as overkill (§12 there): his reasons then were sRGB outputs and
@@ -226,13 +229,30 @@ the middle of the gamut and only approximately right at its edge.
 7. **Where the choice lives**: per picture (like the rung) with a roll default
    (like `opensOn`), never carried by a preset — yes?
 
+### 7.1 His answers (2026-10-07: «go with your recommendations»)
+
+1. **Stored pictures do not move.** The profile is written when a picture is
+   put on its sensor from now on (by hand, by the roll, by a batch onto the
+   roll's sensor); one already on its sensor keeps LibRaw's colour.
+2. **All three bodies matter**; one file of each through `describeRaw` is
+   still needed to know what each carries — no file of his is here.
+3. **Loading his own `.dcp` / `.icc` is allowed**, his licence to judge;
+   Atelier ships and fetches neither, ever (C8).
+4. **The target is correct camera colour** (the DCP/DNG route); Capture
+   One's *ProStandard* itself stays C9, a spike after one ARW measures it.
+5. **LibRaw in camera colour: yes** — C4, next.
+6. **The profile tone curve is one more base-curve choice** (C7).
+7. **Per picture, calibration, carried by no preset or paste** — built that
+   way; a roll-wide default waits until there is more than one profile to
+   choose (C8).
+
 ## 8. Plan, in commits
 
 | # | commit | needs | verified by |
 | --- | --- | --- | --- |
 | C1 | **BUILT.** `exif/dng-profile.ts` reads a DNG's profile tags (both calibrations, forward matrices, hue/sat map, look table, tone curve, embed policy, third illuminant, gain table map; a table past the head NAMED in `unread`); `RawProbe.profile`; `describeRaw` says it. `raw/dng-color.ts`: the spec's maths, `dngCorrection`, `librawPick`, `calibrationsFromLibraw`. Applies nothing. | — | specs; LibRaw's measured `rgb_cam` rebuilt to 1e-4 |
-| C2 | The rung menu's foot names the file's profile (`profile "Adobe Standard" · A + D65`), and `RawMeta` carries `dng_color` | — (a fact said) | headless drive |
-| C3 | A: the resolved correction on the picture (`RollPicture.cameraProfile`, absent = today), composed in the head's matrix slot; kelvin through the interpolated matrix | Q1, Q7; the base-curve session landed | gate row CPU vs GPU; ΔE table re-run |
+| C2 | **BUILT.** `RawMeta.white.calibrations` carries LibRaw's `dng_color` (and the JPEG XL path's IFD0); the picture's facts say `camera colour A + D65` | — | the decoder's real `dng_color` read back |
+| C3 | **BUILT.** `DevelopSettings.rawProfile` — the resolved correction, `'pending'` until the gain's metering (stage or run), absent = today — applied as the head's ONE matrix; a kelvin balance is solved through the profile and REPLACES its matrix | Q1, Q7 | specs: the matrix in the head and in `developLinear`, kelvin = profile at the as-shot light |
 | C4 | The decoder in camera colour, the matrix ours (LibRaw and the JPEG XL path alike) | Q5 | bytes vs today ≤ 1 code in gamut |
 | C5 | The hue/sat map as the head's first step (GPU + CPU twin) | C3, C4 | gate row |
 | C6 | The look table between exposure and tone | C5, coordination | gate row |

@@ -31,6 +31,7 @@
  */
 
 import { num, nums, parseIfd, type Entry } from '../exif/exif-parser';
+import { readDngProfile, type DngCalibration } from '../exif/dng-profile';
 import { dcrawRgbCam } from './dng-color';
 import { inverse3, type RawWhite } from './white-balance';
 
@@ -99,6 +100,8 @@ export interface LinearDng {
   asShotNeutral: [number, number, number] | null;
   make: string;
   model: string;
+  /** Every calibration IFD0 names (`dng-profile.ts`) — what the camera profile interpolates. */
+  calibrations?: DngCalibration[];
 }
 
 function ascii(view: DataView, entry: Entry | undefined): string {
@@ -200,6 +203,7 @@ export function readLinearDng(head: ArrayBuffer): LinearDng | null {
       asShotNeutral: three(nums(view, ifd0.get(TAG.asShotNeutral), little)),
       make: ascii(view, ifd0.get(TAG.make)),
       model: ascii(view, ifd0.get(TAG.model)) || ascii(view, ifd0.get(TAG.uniqueModel)),
+      calibrations: readDngProfile(view, ifd0, little)?.calibrations ?? [],
     };
   } catch {
     return null;
@@ -270,7 +274,7 @@ export interface LinearDngColor {
  * channels are taken for sRGB's — said by `white: null`, which takes the
  * kelvin controls away rather than inventing a camera.
  */
-export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeutral'>): LinearDngColor {
+export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeutral' | 'calibrations'>): LinearDngColor {
   const neutral = info.asShotNeutral && info.asShotNeutral.every((v) => v > 0) ? info.asShotNeutral : null;
   const raw: [number, number, number] = neutral ? [1 / neutral[0], 1 / neutral[1], 1 / neutral[2]] : [1, 1, 1];
   const least = Math.min(...raw);
@@ -281,7 +285,12 @@ export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeut
   const rgbCam = dcrawRgbCam(info.colorMatrix);
   if (!rgbCam) return { mul, rgbCam: identity, white: null };
   const white: RawWhite | null = inverse3(info.colorMatrix)
-    ? { asShot: [raw[0] / raw[1], 1, raw[2] / raw[1]], camXyz: [...info.colorMatrix], rgbCam }
+    ? {
+        asShot: [raw[0] / raw[1], 1, raw[2] / raw[1]],
+        camXyz: [...info.colorMatrix],
+        rgbCam,
+        ...(info.calibrations?.some((c) => c.colorMatrix) ? { calibrations: info.calibrations } : {}),
+      }
     : null;
   return { mul, rgbCam, white };
 }

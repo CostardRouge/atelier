@@ -12,6 +12,7 @@ import {
   type RawWhite,
   type RawWhiteBalance,
 } from '../../shared/raw/white-balance';
+import { profiledAsShot, profiledWbMatrix } from '../../shared/raw/dng-color';
 
 const HINT =
   'On a RAW, white balance is a temperature in kelvin and a tint, as in Lightroom — the light the picture was lit by. Lower is bluer, higher warmer; tint above zero adds magenta, below adds green. The camera’s own reading is As shot, and every value is turned into the multipliers the camera would have used under that light, through its own matrix. The Temperature and Tint sliders further down still work on top, as a relative nudge.';
@@ -29,19 +30,26 @@ const toKelvin = (step: number) => Math.round(KELVIN_RANGE.min * Math.exp((step 
  */
 export default function WhiteBalancePanel({
   white,
+  profiled = false,
   value,
   onChange,
 }: {
   white: RawWhite;
+  /**
+   * The picture carries the camera profile (`DevelopSettings.rawProfile`):
+   * the as-shot light is read, and a new one solved, through the file's
+   * interpolated calibrations, so the matrix written REPLACES the profile's.
+   */
+  profiled?: boolean;
   value: RawWhiteBalance | null;
   onChange: (next: RawWhiteBalance | null) => void;
 }) {
-  const shot = useMemo(() => asShotTempTint(white), [white]);
+  const shot = useMemo(() => (profiled ? profiledAsShot(white) : asShotTempTint(white)), [white, profiled]);
   if (!shot) return null;
   const kelvin = value?.kelvin ?? shot.kelvin;
   const tint = value?.tint ?? shot.tint;
   const set = (k: number, t: number) => {
-    const matrix = wbMatrix(white, k, t);
+    const matrix = profiled ? profiledWbMatrix(white, k, t) : wbMatrix(white, k, t);
     if (matrix) onChange({ kelvin: k, tint: t, matrix });
   };
   const preset = value

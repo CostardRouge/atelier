@@ -26,8 +26,8 @@
  * Pure and DOM-free.
  */
 
-import type { DngCalibration } from '../exif/dng-profile';
-import { apply3, inverse3, mul3, XYZ_TO_SRGB, xyToTempTint } from './white-balance';
+import { illuminantName, type DngCalibration } from '../exif/dng-profile';
+import { apply3, inverse3, mul3, tempTintToXy, XYZ_TO_SRGB, xyToTempTint, type RawWhite } from './white-balance';
 
 type M3 = number[];
 type V3 = [number, number, number];
@@ -307,4 +307,93 @@ export function calibrationsFromLibraw(dngColor: unknown): DngCalibration[] {
     });
   }
   return out;
+}
+
+// --- On a picture -------------------------------------------------------------
+
+/**
+ * The camera's colour AS THE DNG SPEC MEANS IT, resolved for ONE picture and
+ * stored on its develop (`DevelopSettings.rawProfile`): the 3×3 from LibRaw's
+ * decode to the spec's at the as-shot white (`dngCorrection`), and which
+ * calibrations it came from. Stored like the gain — preview = export, and a
+ * later decoder never moves a developed picture. Absent: LibRaw's colour,
+ * which is every picture developed before 2026-10-07 (his Q1: stored
+ * pictures do not move).
+ */
+export interface RawProfile {
+  matrix: number[];
+  /** `A + D65`, `D65` — the calibrations it interpolated, for the picture's facts. */
+  label: string;
+}
+
+/** The calibrations a white carries, or LibRaw's one matrix taken as D65's. */
+export function calibrationsOf(white: RawWhite): DngCalibration[] {
+  const own = white.calibrations?.filter((c) => c.colorMatrix) ?? [];
+  if (own.length) return own;
+  return [{ illuminant: 21, colorMatrix: white.camXyz, forwardMatrix: null, cameraCalibration: null }];
+}
+
+/** The as-shot neutral in camera space: `1 / multiplier`. */
+function neutralOf(white: RawWhite): V3 {
+  return [1 / white.asShot[0], 1 / white.asShot[1], 1 / white.asShot[2]];
+}
+
+/** The profile for one decoded picture, or null where its data cannot say. */
+export function rawProfileFor(white: RawWhite | null | undefined): RawProfile | null {
+  if (!white) return null;
+  const cals = calibrationsOf(white);
+  const matrix = dngCorrection(cals, neutralOf(white), white.rgbCam);
+  if (!matrix || !matrix.every((v) => Number.isFinite(v))) return null;
+  return { matrix, label: cals.map((c) => illuminantName(c.illuminant)).join(' + ') };
+}
+
+/**
+ * Resolve the profile at the picture's next metering — the stage's decode or
+ * the run's, whichever comes first, as for a gain stored as null. What a
+ * picture newly put on its sensor carries until then.
+ */
+export const PROFILE_PENDING = 'pending';
+
+/** A stored profile read back safely: nine finite numbers, the pending mark, or null. */
+export function rawProfileOrNull(raw: unknown): RawProfile | typeof PROFILE_PENDING | null {
+  if (raw === PROFILE_PENDING) return PROFILE_PENDING;
+  if (!raw || typeof raw !== 'object') return null;
+  const src = raw as Record<string, unknown>;
+  const m = src.matrix;
+  if (!Array.isArray(m) || m.length !== 9 || !m.every((n) => typeof n === 'number' && Number.isFinite(n))) return null;
+  return { matrix: [...(m as number[])], label: typeof src.label === 'string' ? src.label.slice(0, 40) : '' };
+}
+
+/**
+ * The as-shot temperature and tint the SPEC reads — the white found through
+ * the interpolated matrices (`neutralToXy`), not through LibRaw's D65 one.
+ */
+export function profiledAsShot(white: RawWhite): { kelvin: number; tint: number } | null {
+  const xy = neutralToXy(calibrationsOf(white), neutralOf(white));
+  return xy ? xyToTempTint(xy[0], xy[1]) : null;
+}
+
+/**
+ * The white balance in kelvin on a PROFILED picture: the one 3×3 from the
+ * decoded picture (LibRaw's, balanced as shot) to the spec's rendering under
+ * the light asked for — `balancedToSrgb(n') · diag(n / n') · rgbCam⁻¹`, `n'`
+ * the camera's neutral under that light through the matrices interpolated at
+ * its temperature. At the as-shot light it IS the profile's matrix, so the
+ * kelvin panel replaces the profile's matrix rather than stacking on it.
+ */
+export function profiledWbMatrix(white: RawWhite, kelvin: number, tint: number): number[] | null {
+  const cals = calibrationsOf(white);
+  const at = profileAt(cals, kelvin);
+  if (!at) return null;
+  const [x, y] = tempTintToXy(kelvin, tint);
+  const raw = apply3(at.xyzToCamera, xyToXyz(x, y));
+  if (!raw.every((v) => v > 0)) return null;
+  const shot = neutralOf(white);
+  // Green held where it was, as `wbMatrix`'s multipliers are: a new light
+  // re-balances red and blue against green, it does not re-expose.
+  const next: V3 = [(raw[0] * shot[1]) / raw[1], shot[1], (raw[2] * shot[1]) / raw[1]];
+  const spec = balancedToSrgb(cals, next);
+  const inv = inverse3(white.rgbCam);
+  if (!spec || !inv) return null;
+  return mul3(spec, mul3(diag([shot[0] / next[0], shot[1] / next[1], shot[2] / next[2]]), inv));
 }

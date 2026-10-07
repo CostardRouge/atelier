@@ -55,6 +55,8 @@ export function useDevelopDraft(value: DevelopSettings | null, stack: LutStack):
         ...next,
         base: d.base ?? null,
         rawGain: d.rawGain ?? null,
+        // The camera profile is calibration, like the gain: the picture's own.
+        rawProfile: d.rawProfile ?? null,
         // The base curve is kept unless the incoming numbers chose one.
         baseCurve: landBaseCurve(next.baseCurve, d.baseCurve),
       })),
