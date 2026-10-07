@@ -932,13 +932,15 @@ single day — give it an end date to count a range". The old fixed examples wer
 invented values, and three of the four counter modes looked broken because
 picking one changed nothing and said nothing.
 
-**The badge can count WITH the car — the trip recap.** Three more counter
+**The badge can count WITH the car — the trip recap.** Four more counter
 modes, offered as such in the Counter section and honoured only under the
 Virée opener (anywhere else they say why not): *Days, as the car drives*,
-*Kilometres, as the car drives*, *Stops, as the car drives*. The number then
-follows the car at every frame — the day of the trip (its total the trip's),
-the distance as the crow flies between the stops passed (never a road
-distance, which the app does not know), or the stops reached — with
+*Kilometres, as the car drives*, *Stops, as the car drives* and *Days + km, as
+the car drives*. The number then follows the car at every frame — the day of
+the trip (its total the trip's), the distance as the crow flies between the
+stops passed (never a road distance, which the app does not know), the stops
+reached, or the day with the distance so far beside its total
+(`Day · 54 · of 90 · 1 479 km`, the kilometres in whole units) — with
 **odometer digits**: each in a fixed cell, so the badge never shakes when 199
 turns 200, rolling like a car's as the next one comes — and a still of
 the piece shows the trip told whole. ONE clock drives all of it: each stop is
