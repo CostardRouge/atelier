@@ -30,6 +30,7 @@ const GROUPS: readonly Group[] = [
       { keys: 'Z', what: 'closer, or back to the fit' },
       { keys: 'wheel · pinch', what: 'zoom about the pointer, to 4000 %' },
       { keys: 'drag', what: 'pan, once the picture is zoomed' },
+      { keys: 'swipe', what: 'at the fit with A/B off, the picture before or after this one — a flick, or past a quarter of the stage; a sideways trackpad sweep does the same, and the roll’s ends resist' },
       { keys: 'the % pill', what: 'the fit, 1:1, and whether a magnified pixel is drawn smooth or as a pixel' },
     ],
   },

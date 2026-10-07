@@ -1805,3 +1805,65 @@ journal's three steps `via: auto`, the stored levels' gamma 0.55. Drive trap:
 a module edited after the dev server started is a SECOND instance under
 `evaluate`'s `import()` (Vite's HMR serves the app a `?t=` copy), so a module
 STORE must be driven through the real control, never by importing it.
+## A swipe pages the roll when A/B is off (2026-10-07)
+
+**The maintainer: *"In develop: when A/B compare is not active let's have
+swipe gestures on, best practices best quality like we have in Winnow
+browser"*.** With the pill off the fitted stage had a DEAD pointer:
+`wipeClaims` claimed every fitted press for the wipe, whose own handler then
+returned at once. **Decision**: the roll is a DECK under the stage, the
+lightbox's own grammar read through the one gesture machine — `stage-deck.ts`
+(pure, tested) + `use-stage-deck.ts`, drawn by `DevelopViewport`'s `deck`
+prop, the two neighbours computed by `RollEditor` exactly as ←/→ step (an
+ignored picture and one off the band's filter are stepped over). With the A/B
+pill OFF, at the fit, no tool armed: a drag reveals the neighbour as the hand
+moves, a release pages by distance or by a flick (`swipeCommit`), a sideways
+trackpad sweep pages and its momentum is swallowed (`sweepCommit`,
+`sweepRestarts`), a page in flight lands under the next gesture, and the two
+ENDS of the roll RESIST (`rubberBand`) because the arrows clamp where the
+lightbox wraps. Zoomed, the same drag pans as before; A/B on, it places the
+divider; a tool armed keeps the pointer. A neighbour's slot draws its band
+cell's thumbnail (graded, framed as it leaves), else the instance's
+thumbnail, else its name; the landed stage opens on the SAME still under its
+canvas until it has decoded (`still` prop, the lightbox's 2 px bar above it).
+**How to apply**, and the traps:
+
+- **Who owns a fitted pointer is ONE boolean** — `free = !compare &&
+  !suspended && swipe` in `useDevelopPicture` — read by `wipeClaims` and by
+  the hook alike. Claimed → the wipe's or the tool's React handlers; free →
+  the machine offers the press through `usePictureZoom`'s new `drag`, and a
+  sideways `panBy(…, 'wheel')` at the fit goes to its `sweep`. The modal
+  sheet passes no `swipe` and is unchanged to the pixel.
+- **The PILL decides, not whether a divider is drawn.** A/B on over an
+  untouched picture (no cube, nothing to compare) keeps the pointer the
+  wipe's and dead, as before: making the pointer's meaning depend on the
+  sliders would be a second rule nobody can see.
+- **The deck lands by asking for the step and LEAVING the neighbour in the
+  middle slot.** The step changes the route, the route reaches React on
+  `hashchange` — a task later — and the workbench remounts on
+  `key={open.id}`; an offset snapped to 0 in `land()` shows the old picture
+  for a frame first. `LANDING_GRACE_MS` settles it back if nothing replaces
+  the stage. The object URLs of the three stills are made in `RollEditor`,
+  ABOVE the keyed workbench, so the still the new stage opens on is the very
+  URL its slot just showed — decoded already, no seam (measured: the still
+  mounts on every landing and is covered within milliseconds by the warmed
+  decode).
+- **A page REPLACES the stage element, and Chrome latches a wheel sequence
+  to the node it began on**: a second trackpad sweep started INSIDE the
+  first's momentum, pointer unmoved, is lost; a sweep after the momentum
+  ends works. The lightbox's cure (never unmount that node) is not available
+  while the workbench is keyed per picture — accepted, not fixed.
+- **The arrows stay INSTANT** (no slide): the switch bench's numbers and a
+  photographer stepping fast through a roll; the deck is the hand's.
+- **The viewport's layers are TWO groups under one offset**: the picture's
+  (the first child, as the canvas was — what is hit is unchanged, the modal
+  included) and the marks + rings (pointer-transparent itself, each mark
+  `pointer-events-auto`, the rings' circles `all`), so every pill drawn
+  between them in the frame keeps its press. The `offer` wrapper wears
+  `data-pan-ignore`: the machine listens natively and never sees a React
+  `stopPropagation`.
+- Driven headless (the scratchpad's `drive-swipe.mjs`: three JPEGs made in
+  the page and dropped on a new roll): a mouse drag, a short drag that
+  settles, a flick, the last picture's rubber band, the way back, a finger
+  through CDP `Input.dispatchTouchEvent`, a sideways `mouse.wheel`, A/B on →
+  the divider, zoomed → a pan, ←/→ unchanged. Not on his Mac, iPad or iPhone.

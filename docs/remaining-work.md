@@ -36,6 +36,7 @@ precondition of the row that depends on it.
 | Document sync: a network drop and a 401 mid-edit; the Studio project's §10 script on the deployed pair | Trips' sync was confirmed by him, but those two cases were never exercised; the Studio's was driven against a stub only | `docs/roadtrip-persistence.md` (status block, §10), `studio.md` | Him |
 | Gestures never driven: a collage's hold-to-swap and a free print's drag, the Studio's scene cascade; the roll band (face D) and the mask UI on his Mac and iPhone; Snap's worth on hair | Built and specced, never seen under a hand or on his photographs | `roadtrip.md` «A slide holds SEVERAL pictures», `develop-roll.md` «The roll's pictures are a BAND», `subject-model.md` | Him |
 | The real-device layout pass | The iOS-only half (toolbar, keyboard, zoom) is the one thing the headless sweep cannot see | `docs/audit-mobile-layout-2026-10-06.md` §6 | Him |
+| The Develop stage's swipe (A/B off) under a finger on the iPad and under his Mac's trackpad | Driven headless with a mouse, CDP touches and a synthetic wheel; a real trackpad's momentum after a page, and Chrome's wheel latch across the stage's remount, are reasoned, not seen | `develop-roll.md` «A swipe pages the roll when A/B is off» | Him |
 
 ## 2. Decisions that are his
 

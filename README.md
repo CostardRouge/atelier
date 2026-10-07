@@ -1442,7 +1442,13 @@ needs Chrome or Edge; elsewhere a pick or a drop lasts the session.)
 below), and beside it the same controls as the Develop sheet in
 Trips and the Studio — the histogram, the sliders, your presets, the
 before/after wipe and zoom, and the picture's **look** (LUTs, output
-transform, grain), applied after its correction. The histogram draws the
+transform, grain), applied after its correction. With **A/B** off, the
+picture at its fitted size **swipes** like the Winnow lightbox: a finger, a
+mouse drag or a sideways trackpad sweep slides the picture before or after
+in under the hand, a flick or a quarter of the stage turns to it, a shorter
+drag settles back, and the roll's two ends resist; it opens on its cell's
+still and sharpens as it decodes. Zoomed, the same drag pans, and with A/B
+on it places the divider, as ever. The histogram draws the
 three channels apart, so a sky whose red alone has gone is seen; **J** — or
 a click on its *blacks* / *whites* — paints on the picture what has gone to
 white (red) and to black (blue), and the pixel under the pointer is read
