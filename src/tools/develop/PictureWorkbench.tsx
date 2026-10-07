@@ -919,7 +919,7 @@ export default function PictureWorkbench({
         if (!alive) return;
         tell(`${source.name} could not be fetched: ${err instanceof Error ? err.message : String(err)}`);
         if (followingRef.current) setRollOff(true);
-        else patchDraft({ base: null, rawGain: null });
+        else patchDraft({ base: null, rawGain: null, rawProfile: null });
       });
     return () => {
       alive = false;
@@ -1291,6 +1291,10 @@ export default function PictureWorkbench({
         }
         const ev = Math.log2(info.gain);
         tell(`RAW · ${info.width}×${info.height}${info.halved ? ' (half size)' : ''} · metered ${ev ? `${signed(ev, 1)} EV` : 'at its white'}`);
+      } else if (!following && info.profile && profilePending(draft.draft)) {
+        // Pending beside a gain already stored: resolved all the same, so the
+        // picture stops asking every decode to work it out again.
+        patchDraft({ rawProfile: info.profile });
       }
     },
   });
@@ -2400,7 +2404,7 @@ export default function PictureWorkbench({
               onRendition={(id) => {
                 // A file below the sensor: the base comes off with it, and
                 // the opening row is stored as nothing, one spelling.
-                if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null });
+                if (baseRung(draft.draft.base) > 0) patchDraft({ base: null, rawGain: null, rawProfile: null });
                 // A row of this picture asked for and no longer wanted stops
                 // coming — this reader lets go; an export that joined keeps it.
                 if (flight.current && flight.current.id !== id) flight.current.controller.abort();
@@ -2422,7 +2426,7 @@ export default function PictureWorkbench({
               }}
               onBase={(next) => {
                 if (next === 'proxy') {
-                  patchDraft({ base: null, rawGain: null });
+                  patchDraft({ base: null, rawGain: null, rawProfile: null });
                   return;
                 }
                 const climbing = baseRung(developNow.base) === 0;

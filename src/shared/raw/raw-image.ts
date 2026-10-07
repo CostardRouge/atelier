@@ -43,7 +43,8 @@
 
 import { fromLinear } from '../lut/transfer';
 import { toHalf, type HalfImage } from '../render/half-image';
-import { mapSrgbThroughHueSat, type HueSatTable } from './hue-sat-map';
+import { compiledHueSat, PROPHOTO_TO_SRGB, SRGB_TO_PROPHOTO, type HueSatTable } from './hue-sat-map';
+import { mul3 } from './white-balance';
 
 /** The three floats per pixel a RAW becomes before it is packed. */
 export interface LinearRgb {
@@ -503,7 +504,13 @@ export function applyCameraMatrix(
 ): void {
   const lin = bt709Table();
   const code = bt709CodeTable();
-  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = matrix;
+  // The profile's hue/sat map (C5) works in linear ProPhoto, on the camera's
+  // colour before the clip: the way there is folded into the matrix, the way
+  // back is one more 3×3 after the map.
+  const map = hueSat ? compiledHueSat(hueSat) : null;
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = map ? mul3(SRGB_TO_PROPHOTO, matrix as number[]) : matrix;
+  const [p0, p1, p2, p3, p4, p5, p6, p7, p8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
   for (let i = from * 3, end = to * 3; i < end; i += 3) {
     const r = lin[rgb16[i]];
     const g = lin[rgb16[i + 1]];
@@ -511,8 +518,15 @@ export function applyCameraMatrix(
     let R = m0 * r + m1 * g + m2 * b;
     let G = m3 * r + m4 * g + m5 * b;
     let B = m6 * r + m7 * g + m8 * b;
-    // The profile's hue/sat map (C5), on the camera's colour before the clip.
-    if (hueSat) [R, G, B] = mapSrgbThroughHueSat(hueSat, [R, G, B]);
+    if (map) {
+      io[0] = R;
+      io[1] = G;
+      io[2] = B;
+      map(io);
+      R = p0 * io[0] + p1 * io[1] + p2 * io[2];
+      G = p3 * io[0] + p4 * io[1] + p5 * io[2];
+      B = p6 * io[0] + p7 * io[1] + p8 * io[2];
+    }
     R = R <= 0 ? 0 : R >= 1 ? 1 : R;
     G = G <= 0 ? 0 : G >= 1 ? 1 : G;
     B = B <= 0 ? 0 : B >= 1 ? 1 : B;

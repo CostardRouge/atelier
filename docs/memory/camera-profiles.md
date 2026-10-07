@@ -9,13 +9,9 @@ decoder».
 
 ## Item 19 is REOPENED (2026-10-07)
 
-He parked «DCP/ICC» as overkill on 2026-09-24 (`lightroom-gaps.md` §12:
-sRGB outputs, and a camera-matching profile would change every look already
-set). On 2026-10-07 he showed Capture One's *Base Characteristics* (*ICC
-Profile: «Sony A7C II ProStandard»*, and a *Curve* menu) and asked to start
-the profiles in a session of their own. **How to apply**: the second reason
-of the parking still stands — anything that moves a stored picture's colour
-waits for his answer to Q1 of the brief; reading and saying are free.
+Parked as overkill on 2026-09-24 (`lightroom-gaps.md` §12), reopened after he
+showed Capture One's *Base Characteristics*; his answers are the brief's
+§7.1. **How to apply**: a stored picture's colour never moves (his Q1).
 
 ## What LibRaw does with a DNG's colour — measured, not assumed (2026-10-07)
 
@@ -27,8 +23,7 @@ the output bytes identical). The full read's `color_data.dng_color` exposes
 BOTH slots (`illuminant`, `colormatrix` 4×3, `forwardmatrix` 3×4,
 `calibration` 4×4, zeros = absent) and `dng_levels` the as-shot neutral and
 analog balance — so the spec's maths needs no second parser for a CFA DNG.
-For an ARW the one matrix is LibRaw's built-in Adobe D65 table (`ILCE-7CM2`
-is named in the wasm; not decoded here). **Measured gap to the DNG spec**
+For an ARW the one matrix is LibRaw's built-in Adobe D65 table. **Measured gap to the DNG spec**
 (synthetic pair, so illustrative): up to 19 ΔE76 on saturated patches and a
 0.18 matrix term at 2850 K, ~1 ΔE at 6500 K, greys never; about half of it is
 the adaptation method (Bradford in XYZ vs dcraw's in camera RGB), not the
@@ -39,19 +34,15 @@ camera's colour reads `dng-color.ts`, not a second construction.
 
 ## The shape of the answer (2026-10-07, DECIDED: «go with your recommendations»)
 
-The matrices are ONE 3×3 in the decoded picture's space (`dngCorrection`),
-the slot `rawWb.matrix` already has in the develop head (moved into the
-DECODER by C4); the hue/sat map runs right after it (C5, decoder too); the look table sits between exposure and tone (the
-head's middle — the parallel base-curve session's code); a DCP's
-`ProfileToneCurve` is ONE more choice of the base-curve menu, never a second
-curve stage. A profile is CALIBRATION, stored RESOLVED on the picture like a
-lens profile, carried by no paste or preset. Adobe's DCPs and Capture One's
-ICCs are never shipped nor fetched — a user may load his own into a vault
-(his licence question). An ICC input profile needs camera RGB out of LibRaw
-(today clipped sRGB) and a CMM, and Capture One's are built for Capture One's
-own pipeline — the weakest fit. The common prerequisite for anything past a
-3×3 done right is LibRaw in camera/wide colour, the same change P3 needs
-(`lightroom-gaps.md` §11).
+The matrices are ONE 3×3 (`dngCorrection`) and the hue/sat map runs right
+after it, both in the DECODER before the clip (C4, C5); the look table sits
+between exposure and tone (the head's middle — the base-curve session's
+code); a DCP's `ProfileToneCurve` is ONE more choice of the base-curve menu,
+never a second curve stage. A profile is CALIBRATION, stored RESOLVED on the
+picture like a lens profile, carried by no paste or preset. Adobe's DCPs and
+Capture One's ICCs are never shipped nor fetched — a user may load his own
+into a vault (his licence question). An ICC input profile also needs a CMM,
+and Capture One's are built for its own pipeline — the weakest fit.
 
 ## C1: read and said, applied nowhere (2026-10-07)
 
@@ -150,7 +141,13 @@ keep:**
   the profile; a kelvin balance moves the matrix, never re-blends the table.
 - The decode cache key carries the weight (`profileToken`), and the stage's
   decode key is the request's JSON.
+- **The hot loop goes through `compiledHueSat`**, never `mapHsv` /
+  `mapSrgbThroughHueSat` (the readable reference a spec pins it to, to
+  1e-9): no array per pixel, the way into ProPhoto folded into the matrix,
+  an identity table skipped whole. Per-pixel tuples cost 265 ns/px against
+  the plain matrix's 20; compiled, 80 (≈ 1 s more on 12 MP, banded).
 
 Measured with the real decoder (synthetic DNGs, headless): an identity map
-gives the profile without a map; a 40° map at weight 0.76 moves 3 026 of
-3 072 pixels. NOT measured: a real Adobe/Apple profile, its look on his eyes.
+gives the profile without a map to the bit; a 40° map at weight 0.76 moves
+3 026 of 3 072 pixels. NOT measured: a real Adobe/Apple profile, its look
+on his eyes, a phone's cost.

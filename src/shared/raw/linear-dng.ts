@@ -32,9 +32,9 @@
 
 import { num, nums, parseIfd, type Entry } from '../exif/exif-parser';
 import { readDngProfile, type DngCalibration, type DngProfile } from '../exif/dng-profile';
-import { mapSrgbThroughHueSat, type HueSatTable } from './hue-sat-map';
+import { compiledHueSat, PROPHOTO_TO_SRGB, SRGB_TO_PROPHOTO, type HueSatTable } from './hue-sat-map';
 import { dcrawRgbCam } from './dng-color';
-import { inverse3, type RawWhite } from './white-balance';
+import { inverse3, mul3, type RawWhite } from './white-balance';
 
 const TAG = {
   subfileType: 254,
@@ -363,8 +363,12 @@ export function developTile(tile: TileSpec, frame: FrameSpec, target: TileTarget
   const k1 = 1 / Math.max(1e-9, info.white - b1);
   const k2 = 1 / Math.max(1e-9, info.white - b2);
   const [m0, m1, m2] = color.mul;
-  const [M0, M1, M2, M3, M4, M5, M6, M7, M8] = color.rgbCam;
-  const hueSat = color.hueSat ?? null;
+  // The profile's hue/sat map (C5) works in linear ProPhoto: the way there
+  // is folded into the matrix, the way back is one 3×3 after the map.
+  const map = color.hueSat ? compiledHueSat(color.hueSat) : null;
+  const [M0, M1, M2, M3, M4, M5, M6, M7, M8] = map ? mul3(SRGB_TO_PROPHOTO, color.rgbCam) : color.rgbCam;
+  const [P0, P1, P2, P3, P4, P5, P6, P7, P8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
   const { samples, channels, tileWidth, x0, y0, validWidth, validHeight } = tile;
   const factor = target.kind === 'sums' ? target.factor : 1;
   const codes = target.kind === 'codes' ? target.rgb16 : null;
@@ -399,7 +403,15 @@ export function developTile(tile: TileSpec, frame: FrameSpec, target: TileTarget
       let R = M0 * r + M1 * g + M2 * b;
       let G = M3 * r + M4 * g + M5 * b;
       let B = M6 * r + M7 * g + M8 * b;
-      if (hueSat) [R, G, B] = mapSrgbThroughHueSat(hueSat, [R, G, B]);
+      if (map) {
+        io[0] = R;
+        io[1] = G;
+        io[2] = B;
+        map(io);
+        R = P0 * io[0] + P1 * io[1] + P2 * io[2];
+        G = P3 * io[0] + P4 * io[1] + P5 * io[2];
+        B = P6 * io[0] + P7 * io[1] + P8 * io[2];
+      }
       R = R < 0 ? 0 : R > 1 ? 1 : R;
       G = G < 0 ? 0 : G > 1 ? 1 : G;
       B = B < 0 ? 0 : B > 1 ? 1 : B;

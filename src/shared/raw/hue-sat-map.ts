@@ -154,6 +154,138 @@ export function mapHsv(table: HueSatTable, r: number, g: number, b: number): [nu
   return hsvToRgb(h + (hueShift * 6) / 360, Math.min(1, s * satScale), v * valScale);
 }
 
+/**
+ * The table compiled for a hot loop: `map(io)` takes one linear ProPhoto
+ * pixel in `io[0..2]` and writes it back mapped — `mapHsv`'s arithmetic to
+ * the last bit, with no array made per pixel (a 12 MP plane is twelve
+ * million calls). Null for a table that changes nothing, so a caller skips
+ * the conversions too.
+ */
+export function compileHueSat(table: HueSatTable): ((io: Float64Array) => void) | null {
+  if (isIdentityHueSat(table)) return null;
+  const [hueDiv, satDiv, valDiv] = table.dims;
+  const data = table.data;
+  const hueStep = satDiv;
+  const valStep = hueDiv * satDiv;
+  const hueScale = hueDiv / 6;
+  const satMax = satDiv - 1;
+  const valMax = valDiv - 1;
+  const layered = valDiv > 1;
+  const srgbValue = table.srgbValue;
+  return (io) => {
+    const r = io[0] > 0 ? io[0] : 0;
+    const g = io[1] > 0 ? io[1] : 0;
+    const b = io[2] > 0 ? io[2] : 0;
+    const v = r > g ? (r > b ? r : b) : g > b ? g : b;
+    const gap = v - (r < g ? (r < b ? r : b) : g < b ? g : b);
+    // A grey (or black) has no hue: the SDK still scales its value, by the
+    // table's entry at hue 0, saturation 0.
+    let h = 0;
+    let s = 0;
+    if (gap > 0) {
+      if (r === v) {
+        h = (g - b) / gap;
+        if (h < 0) h += 6;
+      } else if (g === v) h = 2 + (b - r) / gap;
+      else h = 4 + (r - g) / gap;
+      s = gap / v;
+    }
+
+    const hScaled = h * hueScale;
+    let h0 = Math.floor(hScaled);
+    const hf = hScaled - h0;
+    if (h0 >= hueDiv) h0 -= hueDiv;
+    const h1 = h0 + 1 >= hueDiv ? 0 : h0 + 1;
+    const sScaled = Math.min(satMax, s * satMax);
+    const s0 = Math.min(satDiv - 2, Math.max(0, Math.floor(sScaled)));
+    const sf = sScaled - s0;
+
+    let o00 = h0 * hueStep + s0;
+    let o10 = h1 * hueStep + s0;
+    let vf = 0;
+    if (layered) {
+      const vIn = srgbValue ? srgbEncode(v < 1 ? v : 1) : v < 1 ? v : 1;
+      const vScaled = vIn * valMax;
+      const v0 = Math.min(valDiv - 2, Math.max(0, Math.floor(vScaled)));
+      vf = vScaled - v0;
+      o00 += v0 * valStep;
+      o10 += v0 * valStep;
+    }
+    const w00 = (1 - hf) * (1 - sf);
+    const w01 = (1 - hf) * sf;
+    const w10 = hf * (1 - sf);
+    const w11 = hf * sf;
+    let a = o00 * 3;
+    let c = o10 * 3;
+    let hueShift = w00 * data[a] + w01 * data[a + 3] + w10 * data[c] + w11 * data[c + 3];
+    let satScale = w00 * data[a + 1] + w01 * data[a + 4] + w10 * data[c + 1] + w11 * data[c + 4];
+    let valScale = w00 * data[a + 2] + w01 * data[a + 5] + w10 * data[c + 2] + w11 * data[c + 5];
+    if (layered) {
+      a += valStep * 3;
+      c += valStep * 3;
+      const u = 1 - vf;
+      hueShift = u * hueShift + vf * (w00 * data[a] + w01 * data[a + 3] + w10 * data[c] + w11 * data[c + 3]);
+      satScale = u * satScale + vf * (w00 * data[a + 1] + w01 * data[a + 4] + w10 * data[c + 1] + w11 * data[c + 4]);
+      valScale = u * valScale + vf * (w00 * data[a + 2] + w01 * data[a + 5] + w10 * data[c + 2] + w11 * data[c + 5]);
+    }
+
+    // hsvToRgb, inline.
+    const vv = v * valScale;
+    const ss = Math.min(1, s * satScale);
+    if (!(ss > 0)) {
+      io[0] = io[1] = io[2] = vv;
+      return;
+    }
+    let hh = (h + hueShift / 60) % 6;
+    if (hh < 0) hh += 6;
+    const i = Math.floor(hh);
+    const f = hh - i;
+    const p = vv * (1 - ss);
+    const q = vv * (1 - ss * f);
+    const t = vv * (1 - ss * (1 - f));
+    switch (i) {
+      case 0:
+        io[0] = vv;
+        io[1] = t;
+        io[2] = p;
+        break;
+      case 1:
+        io[0] = q;
+        io[1] = vv;
+        io[2] = p;
+        break;
+      case 2:
+        io[0] = p;
+        io[1] = vv;
+        io[2] = t;
+        break;
+      case 3:
+        io[0] = p;
+        io[1] = q;
+        io[2] = vv;
+        break;
+      case 4:
+        io[0] = t;
+        io[1] = p;
+        io[2] = vv;
+        break;
+      default:
+        io[0] = vv;
+        io[1] = p;
+        io[2] = q;
+    }
+  };
+}
+
+const compiled = new WeakMap<HueSatTable, ((io: Float64Array) => void) | null>();
+
+/** `compileHueSat`, once per table — a plane is converted a band at a time. */
+export function compiledHueSat(table: HueSatTable): ((io: Float64Array) => void) | null {
+  let fn = compiled.get(table);
+  if (fn === undefined) compiled.set(table, (fn = compileHueSat(table)));
+  return fn;
+}
+
 /** One linear sRGB pixel through the table, by way of linear ProPhoto. */
 export function mapSrgbThroughHueSat(table: HueSatTable, rgb: readonly [number, number, number]): [number, number, number] {
   const pro = apply3(SRGB_TO_PROPHOTO, rgb as [number, number, number]);

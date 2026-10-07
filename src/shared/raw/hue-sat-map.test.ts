@@ -1,6 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
   blendHueSat,
+  compileHueSat,
   hsvToRgb,
   isIdentityHueSat,
   mapHsv,
@@ -112,5 +113,28 @@ describe('a hue/sat map', () => {
     expect(blendHueSat(map, 0.25)!.data[0]).toBeCloseTo(25, 6);
     expect(blendHueSat({ ...map, data: null }, 0.5)).toBeNull();
     expect(blendHueSat(null, 0.5)).toBeNull();
+  });
+
+  it('compiles to the very arithmetic of mapHsv, with no array per pixel', () => {
+    let seed = 7;
+    const rand = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+    for (const [dims, srgbValue] of [
+      [[6, 4, 1], false],
+      [[90, 30, 1], false],
+      [[36, 8, 8], true],
+      [[36, 8, 8], false],
+    ] as [[number, number, number], boolean][]) {
+      const t = table(dims, () => [rand() * 40 - 20, 0.7 + rand() * 0.6, 0.8 + rand() * 0.4], srgbValue);
+      const map = compileHueSat(t)!;
+      const io = new Float64Array(3);
+      for (let k = 0; k < 2000; k += 1) {
+        const rgb: [number, number, number] = [rand() * 1.3 - 0.1, rand() * 1.3 - 0.1, rand() * 1.3 - 0.1];
+        if (k % 50 === 0) rgb[1] = rgb[2] = rgb[0]; // greys too
+        io.set(rgb);
+        map(io);
+        close(Array.from(io), mapHsv(t, ...rgb), 1e-9);
+      }
+    }
+    expect(compileHueSat(identity)).toBeNull();
   });
 });
