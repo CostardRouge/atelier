@@ -140,7 +140,7 @@ render from a 160 px one.
 ## The curve editor is a workbench block, and its drag taught two rules (2026-09-17, P1)
 
 `DevelopCurve.tsx` (the paint and the pointer plumbing) over `curve-edit.ts`
-(pure, 19 specs: `pointAt`, `moveCurvePoint`, `addCurvePoint`,
+(pure, specs on `pointAt`, `moveCurvePoint`, `addCurvePoint`,
 `removeCurvePoint`, `curvePath`). One square with the picture's own histogram
 behind it, the five channel tabs, and the `curves.ts` spline over the identity
 diagonal. Drawn by BOTH hosts from the same block — `DevelopSheet` and the
@@ -260,7 +260,7 @@ clamp the luminance before the curve; a tone table on `CubeHead` spans
 
 ## Auto is TWO verbs, measured on the picture as shot (2026-09-17, P2)
 
-`auto-develop.ts` (pure, 20 specs) + the `Auto` and `Levels` sections of
+`auto-develop.ts` (pure) + the `Auto` and `Levels` sections of
 `DevelopAuto.tsx`, drawn by both hosts; `useDevelopPicture` gained `stats`, an
 AS-SHOT read keyed on the source alone. Rules a later phase must keep:
 
@@ -395,7 +395,7 @@ and was NOT driven.
 
 ## A RAW draws today, from the render its camera wrote inside it (2026-09-17, P3)
 
-`shared/exif/raw-probe.ts` (pure, 12 specs) walks a RAW's IFDs through
+`shared/exif/raw-probe.ts` (pure) walks a RAW's IFDs through
 `exif-parser.ts`'s OWN reader — `parseIfd`, `num`, `nums` are exported for it,
 so the suite has one TIFF parser and not two — and `extractRawPreview` slices
 the camera's embedded JPEG out. **No decoder, no dependency, no network**: a

@@ -12,7 +12,7 @@ The WebGL glue above is not all out of reach: a pass's `setUniforms(gl, program)
 
 ## Specs sit beside their source; `tests/` holds only fixtures (2026-08-20)
 
-**Fact.** Every spec lives next to the module it covers (`src/**/<name>.test.ts`). The root `tests/` directory contains a single shared fixture, `tests/fixtures/sample.srt`, referenced by the telemetry and overlay specs through a `new URL(..., import.meta.url)` path. **How to apply**: do not read the near-empty `tests/` directory as "this project has no tests" — there are ~22 spec files under `src/`. New shared sample data goes in `tests/fixtures/`; new specs go beside their module.
+**Fact.** Every spec lives next to the module it covers (`src/**/<name>.test.ts`). The root `tests/` directory contains a single shared fixture, `tests/fixtures/sample.srt`, referenced by the telemetry and overlay specs through a `new URL(..., import.meta.url)` path. **How to apply**: do not read the near-empty `tests/` directory as "this project has no tests" — there are several hundred spec files under `src/` (`find src -name "*.test.ts"`). New shared sample data goes in `tests/fixtures/`; new specs go beside their module.
 
 ## What is worth testing here (2026-08-20)
 

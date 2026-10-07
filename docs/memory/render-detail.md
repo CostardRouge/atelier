@@ -7,7 +7,7 @@ the brief is `docs/photo-editor.md` P11.
 
 ## Four classic passes, one pure module (2026-09-20, P11 first commit)
 
-`detail.ts` (pure, 7 specs) holds the record — `luminance`, `colour`,
+`detail.ts` (pure) holds the record — `luminance`, `colour`,
 `defringe`, `sharpen`, `sharpenRadius` — and the per-pixel maths of each
 operation over a clamped image; `detail-pass.ts` is their GLSL, a
 TRANSCRIPTION tap for tap, and the render gate holds the GPU to the pure
@@ -77,7 +77,7 @@ the picture, a legacy `{ sharpen: 50 }` record reading Detail 100.
 
 ## Presence — texture, clarity, dehaze — rides the same record and passes (2026-09-23, audit item 13)
 
-`presence.ts` (pure twin, 12 specs) + `presence-pass.ts`, three more fields
+`presence.ts` (pure twin) + `presence-pass.ts`, three more fields
 on `DetailSettings` (−100..100, read as 0 when absent — no migration), so they
 share the record, the `detail` section of a copy and `detailPasses`, which puts
 them in `post` BEFORE the sharpen: dehaze → clarity → texture → sharpen. The

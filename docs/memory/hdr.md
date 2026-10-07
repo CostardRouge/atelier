@@ -20,14 +20,14 @@ shows the base. Three modules, all pure but the last:
   the picture really uses becoming `GainMapMin..Max` so the 256 codes cover
   the lifts present; `applyGainMap` is the decoder's side, for the check;
   `hdrRendition` builds the HDR picture (below); `linearFromBytes` decodes
-  sRGB bytes through a table. 6 specs, the round trip pinned to 2 decimals.
+  sRGB bytes through a table; its spec pins the round trip to 2 decimals.
 - `ultra-hdr.ts` — the container, by hand: the base gets an XMP `APP1`
   (a GContainer `Directory`: Primary + GainMap with its byte `Length`) and
   an MPF `APP2` (CIPA DC-007: a big-endian TIFF whose second MP entry gives
   the map's size and its offset FROM THE MP HEADER'S ENDIAN FIELD, not from
   the file's start); the map gets its own XMP with the `hdrgm:` numbers.
   `readUltraHdr` reads it back, by the MPF entry or, without one, by the
-  directory's `Length` counted from the end. 5 specs over JPEG-shaped byte
+  directory's `Length` counted from the end, specced over JPEG-shaped byte
   streams. `﻿` in the xpacket header must be written as an ESCAPE in
   the source: a literal BOM in a template literal trips ESLint's
   `no-irregular-whitespace`, and the Write tool turns the escape into the

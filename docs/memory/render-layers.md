@@ -7,8 +7,8 @@ the brief `docs/photo-editor.md` §6.
 
 ## Masks and layers, the engine (2026-09-18, P7 first commit)
 
-`render/mask.ts` (pure, 24 specs), `render/layer-pass.ts`,
-`develop/layer.ts` (pure, 14 specs), `develop/layer-render.ts`. Nothing on
+`render/mask.ts` (pure), `render/layer-pass.ts`,
+`develop/layer.ts` (pure), `develop/layer-render.ts`. Nothing on
 screen yet; the wiring commit follows.
 
 **A layer's adjustment IS a `DevelopSettings`.** Not a reduced set, not a
@@ -304,10 +304,11 @@ Three things the first P9 got wrong, none visible on a small test picture:
   the pure `unionMasks`, so a tap costs one inference, un-picking costs none,
   and a layer whose points are all cached is composed without the model.
 
-Still true and still open: `segment()` answers SYNCHRONOUSLY on the GPU
-delegate, so the main thread is blocked for the inference (1.5 s warm on
-SwiftShader, 4.8 s cold with the download). The brief's "in a worker" is not
-built; it needs an `OffscreenCanvas` and the model loaded there.
+`segment()` answers SYNCHRONOUSLY on the GPU delegate (1.5 s warm on
+SwiftShader, 4.8 s cold with the download), which is why the model now runs
+in a WORKER over an `OffscreenCanvas` (`segment-worker.ts` +
+`segment-worker-client.ts`, 2026-10-02), the main thread being only the
+fallback when a worker cannot start — `subject-model.md`.
 
 ## What a layer costs per change is now kept, not paid again (2026-09-20, the audit)
 

@@ -1516,7 +1516,7 @@ view. Rules:
 
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
-`shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the
+`shared/develop/auto-level.ts` (pure) + an **Auto** button in the
 Crop tab's Level row. `measureTilt(luma)`: a 5-tap binomial blur, a
 **Scharr** gradient per pixel, each edge's line direction folded to its
 deviation from the nearest axis (the fold `levelDelta` makes, so a leaning
@@ -1546,7 +1546,7 @@ agree), kept through a later crop, no page error.
 
 ## Crop to the subject (2026-10-02, A3 of `docs/auto-develop.md`)
 
-`shared/develop/subject-crop.ts` (pure, 11 specs) + `tools/develop/use-subject-crop.ts`
+`shared/develop/subject-crop.ts` (pure) + `tools/develop/use-subject-crop.ts`
 + a *Subject* row in the Crop tab. `maskBounds` reads the subject's box and
 covered share off a `BrushRaster`; `subjectZone` takes the box's corners into
 the TURNED picture's frame (`screen = R(θ)·M·q`, the zone's own, so a flip
@@ -1655,7 +1655,7 @@ reads it; the model it makes comes back as a verb (B4).
 
 ## Auto detail: the noise and the sharpen seeded from the ISO and the material (2026-10-07, A4 of `docs/auto-develop.md`)
 
-`shared/develop/auto-detail.ts` (pure, 7 specs) + an *Auto detail* switch at
+`shared/develop/auto-detail.ts` (pure) + an *Auto detail* switch at
 the head of the Detail tab (`DetailPanel`'s `auto`), held by the workbench
 over the whole detail record through `use-value-switch.ts`. What it reads,
 never guesses: the ISO of the file ON SCREEN (`useEffectiveExif(shownFile)` —
@@ -1672,7 +1672,7 @@ is `proxy` → a proxy; else the camera's file). Rules:
   a named taste constant (`docs/auto-develop.md` §8).
 - **No ISO → the sharpen alone**, and `no ISO in the file · noise left alone`:
   nothing written where nothing was measured. A clamp is said.
-- **A VALUE switch** (`value-switch.ts`, pure, 6 specs; `use-value-switch.ts`,
+- **A VALUE switch** (`value-switch.ts`, pure; `use-value-switch.ts`,
   a session map keyed picture|verb): `switchState` over the whole record, so
   the radius a hand set comes back with the rest on a turn-off and ⌘Z lights
   the switch. **Trap, found by the drive**: a `before` that is itself NULL (no
@@ -1693,7 +1693,7 @@ own sliders exist.
 
 ## Auto upright: the keystone solved from the lines that converge (2026-10-07, A5 of `docs/auto-develop.md`)
 
-`shared/develop/auto-keystone.ts` (pure, 11 specs) + an *Auto upright*
+`shared/develop/auto-keystone.ts` (pure) + an *Auto upright*
 switch at the head of the Perspective fold (`KeystonePanel`'s `auto`), held
 by the workbench over the whole keystone through `use-value-switch.ts`.
 Lightroom's Upright and Capture One's Keystone as ONE verb that SETS
@@ -1746,7 +1746,7 @@ a photograph of his, where the taste constants are to be moved from.
 ## ONE `Auto`, the author's recipe, and a picture auto-developed as it opens (2026-10-07, `docs/auto-develop.md` §5)
 
 **Decision** (his «everything that could be autodevelop … a settings panel so
-options let the user choose»). `shared/develop/auto-plan.ts` (pure, 6 specs)
+options let the user choose»). `shared/develop/auto-plan.ts` (pure)
 + `use-auto-all.ts` + an `Auto` switch drawn FIRST in the Auto row of both
 hosts, before a hairline and the single verbs; the *Automatic* section of
 Develop's settings holds the plan. Rules:
