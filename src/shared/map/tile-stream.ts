@@ -71,6 +71,10 @@ export class TileStream<B = ImageBitmap> {
   private pinned = new Set<number>();
   /** Tiles a paint asked for before their blob was in — decoded the moment it lands. */
   private awaiting = new Set<number>();
+  /** What the latest preview paint asked for: a queued decode outside it (and the pins) is dropped. */
+  private wanted = new Set<number>();
+  /** Decodes an export awaits (`ready`): never dropped, whatever the preview asks since. */
+  private required = new Set<number>();
   private readonly queue: (() => void)[] = [];
   private lanes = 0;
   private readonly listeners = new Set<() => void>();
@@ -142,7 +146,8 @@ export class TileStream<B = ImageBitmap> {
   /** Decode what is missing among `tiles` in the background; the pins stay as they are. */
   request(tiles: readonly number[]): void {
     const missing = new Set<number>();
-    for (const i of tiles.slice(0, this.cap)) {
+    this.wanted = new Set(tiles.slice(0, this.cap));
+    for (const i of this.wanted) {
       if (this.decoded.has(i)) continue;
       if (this.blobs[i]) void this.decode(i);
       else if (this.blobs[i] === undefined) missing.add(i);
@@ -160,7 +165,7 @@ export class TileStream<B = ImageBitmap> {
     this.pinned = new Set(pins);
     if (pins.some((i) => this.blobs[i] === undefined)) await this.fetchAll();
     if (signal?.aborted) throw new DOMException('Cancelled', 'AbortError');
-    await Promise.all(pins.filter((i) => this.blobs[i]).map((i) => this.decode(i)));
+    await Promise.all(pins.filter((i) => this.blobs[i]).map((i) => this.decode(i, true)));
   }
 
   progress(): StreamProgress {
@@ -177,17 +182,29 @@ export class TileStream<B = ImageBitmap> {
     this.stop.abort();
     for (const bitmap of this.decoded.values()) this.io.close(bitmap);
     this.decoded.clear();
-    this.queue.length = 0;
+    // Every queued decode is let go, so whoever awaits it (an export's
+    // `ready`) is answered rather than left waiting forever.
+    for (const job of this.queue.splice(0)) job();
   }
 
-  private decode(i: number): Promise<void> {
+  private decode(i: number, required = false): Promise<void> {
     if (this.decoded.has(i)) return Promise.resolve();
-    const running = this.decoding.get(i);
-    if (running) return running;
     const got = this.blobs[i];
     if (!got) return Promise.resolve();
+    if (required) this.required.add(i);
+    const running = this.decoding.get(i);
+    if (running) return running;
     const job = new Promise<void>((resolve) => {
       this.queue.push(() => {
+        // A preview racing ahead queues faster than tiles decode: one it no
+        // longer asks for would only evict one it does (a phone's window is
+        // 128), so it leaves the queue undecoded.
+        const stale = !this.required.has(i) && !this.pinned.has(i) && !this.wanted.has(i);
+        if (this.disposed || stale) {
+          this.decoding.delete(i);
+          resolve();
+          return;
+        }
         this.lanes += 1;
         this.io
           .decode(got.blob, got.zoom, this.tiles[i])
@@ -208,6 +225,7 @@ export class TileStream<B = ImageBitmap> {
           .finally(() => {
             this.lanes -= 1;
             this.decoding.delete(i);
+            this.required.delete(i);
             resolve();
             this.pump();
           });
@@ -290,6 +308,25 @@ export function closeStream(key: string): void {
     entry.stream.dispose();
     streams.delete(key);
   }, RELEASE_MS);
+}
+
+/**
+ * Hold the stream of `key` while `work` runs, if one is open — an export
+ * frame's wait. Between two frames the release timer starts and the next
+ * frame takes it back, so an export keeps its ground even when the editor
+ * let the stream go (the camera changed under a frozen piece).
+ */
+export async function holdingStream<T>(key: string, work: (stream: TileStream) => Promise<T>): Promise<T | undefined> {
+  const entry = streams.get(key);
+  if (!entry) return undefined;
+  if (entry.timer) clearTimeout(entry.timer);
+  entry.timer = null;
+  entry.holders += 1;
+  try {
+    return await work(entry.stream);
+  } finally {
+    closeStream(key);
+  }
 }
 
 /** The stream of a pyramid, if the shell opened one — what a painter reads. */
