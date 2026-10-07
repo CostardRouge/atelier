@@ -16,6 +16,9 @@ import { formatIsoDate } from '../../../roadtrip/trip-days';
 import Button from '../../../ui/Button';
 import IconButton from '../../../ui/IconButton';
 import Segmented from '../../../ui/Segmented';
+import SettingsMenu from '../../../ui/SettingsMenu';
+import { localPref, useLocalPref } from '../../../ui/local-pref';
+import { useIsCompact } from '../../../ui/use-layout-mode';
 import LoadingState from '../../../ui/LoadingState';
 import { Icons } from '../../../ui/icons';
 import useDialogKeys from '../../../ui/use-dialog-keys';
@@ -102,6 +105,20 @@ function typing(target: EventTarget | null): boolean {
  * It fetches only the list and the tiles' thumbnails; what an action does
  * with the ticked rows is the host's.
  */
+type TileSize = 's' | 'm' | 'l';
+const readTiles = (raw: string | null): TileSize => (raw === 's' || raw === 'l' ? raw : 'm');
+const tilesPref = localPref<TileSize>('atelier.winnow.picker.tiles', readTiles, (v) => (v === 'm' ? null : v));
+const railPref = localPref<boolean>('atelier.winnow.picker.rail', (raw) => raw !== 'folded', (v) => (v ? null : 'folded'));
+/**
+ * Rows pinned in pixels: an `auto` row in a scrolling tile grid is clipped
+ * to a sliver (`frontend.md`). Whole strings, so Tailwind sees each class.
+ */
+const TILE_GRID: Record<TileSize, string> = {
+  s: 'grid-cols-[repeat(auto-fill,minmax(6rem,1fr))] auto-rows-[4.5rem] max-[820px]:grid-cols-4 max-[820px]:auto-rows-[4.2rem]',
+  m: 'grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] auto-rows-[6rem] max-[820px]:grid-cols-3 max-[820px]:auto-rows-[5.6rem]',
+  l: 'grid-cols-[repeat(auto-fill,minmax(11rem,1fr))] auto-rows-[8.25rem] max-[820px]:grid-cols-2 max-[820px]:auto-rows-[8rem]',
+};
+
 export default function WinnowPicker({
   connection,
   client,
@@ -428,6 +445,12 @@ export default function WinnowPicker({
   useEffect(() => setLimit(BATCH), [rows, facets, sort]);
 
   const [railOpen, setRailOpen] = useState(false);
+  // The grid's own view, per device (the panel's tiles and the rail's
+  // column); a phone's rail is a sheet and never a column.
+  const [tiles, setTiles] = useLocalPref(tilesPref, 'm');
+  const [railShown, setRailShown] = useLocalPref(railPref, true);
+  const phone = useIsCompact();
+  const openFilters = () => (phone ? setRailOpen(true) : setRailShown(true));
   const active = activeFacets(facets);
   const session = sessions?.find((s) => s.id === sessionId) ?? null;
   const asking = rows === null && problem === null && !(scope === 'session' && sessionId === null);
@@ -584,7 +607,7 @@ export default function WinnowPicker({
             aria-label="Filters"
             className={`w-60 shrink-0 overflow-y-auto overscroll-contain pr-3 border-r border-line max-[820px]:fixed max-[820px]:inset-0 max-[820px]:z-[60] max-[820px]:w-auto max-[820px]:bg-surface max-[820px]:p-4 max-[820px]:pb-[max(1rem,env(safe-area-inset-bottom))] max-[820px]:border-0 ${
               railOpen ? '' : 'max-[820px]:hidden'
-            }`}
+            } ${railShown ? '' : 'min-[821px]:hidden'}`}
           >
             <PickerRail
               counts={counts}
@@ -608,8 +631,8 @@ export default function WinnowPicker({
             <div className="flex-none flex items-center gap-2">
               {/* A wrapper carries the breakpoint: a Button's own
                   `inline-flex` outranks `hidden` in the generated sheet. */}
-              <span className="hidden max-[820px]:contents">
-                <Button variant={active ? 'default' : 'ghost'} size="sm" onClick={() => setRailOpen(true)}>
+              <span className={railShown ? 'hidden max-[820px]:contents' : 'contents'}>
+                <Button variant={active ? 'default' : 'ghost'} size="sm" icon={Icons.filter} onClick={openFilters}>
                   Filters{active ? ` · ${active}` : ''}
                 </Button>
               </span>
@@ -617,15 +640,46 @@ export default function WinnowPicker({
                 {shownItems.length} shown of {counts.total}
               </span>
               <span className="flex-1" />
-              <select
-                value={sort}
-                onChange={(e) => setSort(e.target.value === 'stars' ? 'stars' : 'time')}
-                aria-label="Sort"
-                className="font-sans text-xs px-2.5 py-1 border border-line rounded-full bg-paper text-ink focus:outline-none focus:border-accent max-[820px]:text-base"
-              >
-                <option value="time">Capture time</option>
-                <option value="stars">Stars</option>
-              </select>
+<SettingsMenu
+                label="The grid: order, tile size, filters"
+                sections={[
+                  {
+                    kind: 'choice',
+                    id: 'sort',
+                    label: 'Order',
+                    value: sort,
+                    onPick: (v) => setSort(v === 'stars' ? 'stars' : 'time'),
+                    options: [
+                      { id: 'time', icon: Icons.clock, label: 'By capture time' },
+                      { id: 'stars', icon: Icons.star, label: 'By stars, most first' },
+                    ],
+                  },
+                  {
+                    kind: 'choice',
+                    id: 'tiles',
+                    label: 'Tiles',
+                    value: tiles,
+                    onPick: (v) => setTiles(readTiles(v)),
+                    options: [
+                      { id: 's', icon: Icons.sizeS, label: 'Small tiles' },
+                      { id: 'm', icon: Icons.sizeM, label: 'Medium tiles' },
+                      { id: 'l', icon: Icons.sizeL, label: 'Large tiles' },
+                    ],
+                  },
+                  ...(phone
+                    ? []
+                    : ([
+                        {
+                          kind: 'switch',
+                          id: 'rail',
+                          label: 'Filters',
+                          text: railShown ? 'A column at the left' : 'Folded',
+                          on: railShown,
+                          onToggle: () => setRailShown(!railShown),
+                        },
+                      ] as const)),
+                ]}
+              />
             </div>
             {/* The verdict mix, drawn once: a hidden bucket is dimmed, never removed. */}
             {counts.total > 0 && (
@@ -662,7 +716,7 @@ export default function WinnowPicker({
               ) : (
                 // Rows pinned in pixels: an `auto` row in a scrolling tile
                 // grid is clipped to a sliver (`frontend.md`).
-                <ul className="m-0 p-0 list-none grid grid-cols-[repeat(auto-fill,minmax(8rem,1fr))] auto-rows-[6rem] gap-2 max-[820px]:grid-cols-3 max-[820px]:auto-rows-[5.6rem] max-[820px]:gap-1.5">
+                <ul className={`m-0 p-0 list-none grid gap-2 max-[820px]:gap-1.5 ${TILE_GRID[tiles]}`}>
                   {shownItems.slice(0, limit).map((it) => {
                     const pile = it.pileId === null ? undefined : piles.get(it.pileId);
                     const row = pile && pile.coverId === it.id && unfolded.has(pile.id) ? framesUnder(items, pile) : null;

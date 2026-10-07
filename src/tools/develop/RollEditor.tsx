@@ -43,6 +43,8 @@ import {
   passesStripFilter,
   rowsForHeight,
   stepThumb,
+  cullFilterOf,
+  stripFilterCounts,
   stripFilterLabel,
   widthForColumns,
   type StripFilterKey,
@@ -97,6 +99,7 @@ import { VERB_DONE_MS, type VerbOutcome } from '../../shared/ui/verb';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
+import SettingsMenu, { type SettingsSection } from '../../shared/ui/SettingsMenu';
 import PageBar from '../../shared/ui/PageBar';
 import { Icons } from '../../shared/ui/icons';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
@@ -137,7 +140,7 @@ import { useRollGrade } from './use-roll-grade';
 import { useRollFolders } from './use-roll-folders';
 import { useRollMedia } from './use-roll-media';
 import { useRollCulling } from './use-roll-culling';
-import { countCulling } from '../../shared/sources/winnow/culling';
+import { countCulling, cullFilterLabel } from '../../shared/sources/winnow/culling';
 import { useElementSize } from '../../shared/ui/use-element-width';
 import BandGrip from './BandGrip';
 import ContactSheet from './ContactSheet';
@@ -188,6 +191,15 @@ const LOCKED_DELIVERY = 'Which pictures leave is locked while an export runs —
  * look and a batch landing in the same tick compose instead of the last one
  * replacing a roll the others already moved on.
  */
+/** The roll's own filters, one glyph each; Winnow's take theirs from their kind. */
+const FILTER_ICONS: Partial<Record<StripFilterKey, ReactNode>> = {
+  all: Icons.stack,
+  edited: Icons.sliders,
+  leaving: Icons.export,
+  held: Icons.held,
+  ignored: Icons.eyeOff,
+};
+
 export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPicture, headerExtra }: RollEditorProps) {
   const lib = useAssetLibrary();
   const compact = useIsCompact();
@@ -1406,95 +1418,148 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const toggleSheet = useCallback(() => setContactOpen((o) => !o), []);
   // A finger's size under a finger, a phone's shell or a tablet's (C5).
   const chipSize = finger;
-  /** A menu row that says whether it is the state: a dot before the one in force. */
-  const marked = (on: boolean, text: string, key?: string) => (
-    <span className="inline-flex items-center gap-3 whitespace-pre">
-      <span>
-        {on ? '· ' : '  '}
-        {text}
-      </span>
-      {key && <span className="ml-auto font-mono text-3xs text-faint">{key}</span>}
-    </span>
-  );
   const rowsNow = side || strip.folded || strip.auto ? 0 : rowsForHeight(bandSizeNow - stripMetrics.head, stripMetrics, strip.thumb);
   const COUNT = ['One', 'Two', 'Three'];
-  const bandMenu: OverflowItem[] = [
-    { id: 'fold', label: marked(strip.folded, 'Folded to its rail', 'B'), onSelect: toggleFolded },
-    ...(side
-      ? [1, 2, 3].map((n) => ({
-          id: `columns-${n}`,
-          label: marked(columnsNow === n, `${COUNT[n - 1]} column${n === 1 ? '' : 's'}`),
-          disabled: widthForColumns(n, stripMetrics) > maxBand,
-          onSelect: () => setColumns(n),
-        }))
-      : [1, 2, 3].map((n) => ({
-          id: `rows-${n}`,
-          label: marked(rowsNow === n, `${COUNT[n - 1]} row${n === 1 ? '' : 's'}`),
-          onSelect: () => patchStrip({ folded: false, auto: false, height: Math.min(maxBand, heightForRows(n, stripMetrics, strip.thumb)) }),
-        }))),
-    ...(side
-      ? [
-          { id: 'narrower', label: marked(false, 'One column fewer', '−'), disabled: columnsNow <= 1, onSelect: () => stepThumbs(-1) },
-          { id: 'wider', label: marked(false, 'One column more', '='), disabled: widthForColumns(columnsNow + 1, stripMetrics) > maxBand, onSelect: () => stepThumbs(1) },
-        ]
-      : [
-          {
-            id: 'auto',
-            label: marked(strip.auto, 'Height follows the roll'),
-            title: 'The band takes the room the roll’s typical picture leaves under itself — sized on the roll, so stepping to a portrait moves nothing',
-            onSelect: () => patchStrip({ auto: !strip.auto, folded: false }),
-          },
-          { id: 'smaller', label: marked(false, 'Smaller thumbnails', '−'), disabled: strip.thumb <= stripMetrics.thumbMin, onSelect: () => stepThumbs(-1) },
-          { id: 'larger', label: marked(false, 'Larger thumbnails', '='), disabled: strip.thumb >= stripMetrics.thumbMax, onSelect: () => stepThumbs(1) },
-        ]),
+  // The band's settings as a panel of glyphed rows (his pick B of the band
+  // menu lab): where it stands, how many rows or columns, the thumbnails'
+  // size and the height that follows the roll, then folding alone at the
+  // foot. A choice applies and closes, like a menu.
+  const countIcons = side ? [Icons.colsOne, Icons.colsTwo, Icons.colsThree] : [Icons.rowsOne, Icons.rowsTwo, Icons.rowsThree];
+  const bandSections: SettingsSection[] = [
     // Where the band stands, remembered per device (his Q1): a phone's is
     // always under the picture, so the choice is a desktop's alone.
     ...(compact
       ? []
-      : (
-          [
-            ['bottom', 'Under the picture'],
-            ['left', 'A column at the left'],
-            ['right', 'A column at the right'],
-          ] as const
-        ).map(([place, text]: readonly [StripPlace, string]) => ({
-          id: `place-${place}`,
-          label: marked(strip.place === place, text),
-          title: 'On this screen — the band on a phone stays under the picture',
-          onSelect: () => patchStrip({ place, folded: false }),
-        }))),
-  ];
-  const filterMenu: OverflowItem[] = [
-    ...STRIP_FILTERS.filter((f) => !f.winnow || culling.reachable).map((f) => ({
-      id: f.key,
-      label: marked(stripFilter === f.key, f.label),
-      onSelect: () => setStripFilter(f.key),
-    })),
+      : [
+          {
+            kind: 'choice' as const,
+            id: 'place',
+            label: 'Where',
+            value: strip.place,
+            options: (
+              [
+                ['bottom', Icons.bandUnder, 'Under the picture'],
+                ['left', Icons.bandLeft, 'A column at the left'],
+                ['right', Icons.bandRight, 'A column at the right'],
+              ] as const
+            ).map(([id, icon, label]) => ({ id, icon, label })),
+            onPick: (place: string) => patchStrip({ place: place as StripPlace, folded: false }),
+          },
+        ]),
+    side
+      ? {
+          kind: 'choice' as const,
+          id: 'columns',
+          label: 'Columns',
+          value: columnsNow ? String(columnsNow) : null,
+          options: [1, 2, 3].map((n) => ({
+            id: String(n),
+            icon: countIcons[n - 1],
+            label: `${COUNT[n - 1]} column${n === 1 ? '' : 's'}`,
+            disabled: widthForColumns(n, stripMetrics) > maxBand ? `No room for ${n} columns beside the picture on this screen` : false,
+          })),
+          onPick: (n: string) => setColumns(Number(n)),
+        }
+      : {
+          kind: 'choice' as const,
+          id: 'rows',
+          label: 'Rows',
+          value: rowsNow ? String(rowsNow) : null,
+          options: [1, 2, 3].map((n) => ({ id: String(n), icon: countIcons[n - 1], label: `${COUNT[n - 1]} row${n === 1 ? '' : 's'}` })),
+          onPick: (n: string) =>
+            patchStrip({ folded: false, auto: false, height: Math.min(maxBand, heightForRows(Number(n), stripMetrics, strip.thumb)) }),
+        },
+    ...(side
+      ? []
+      : [
+          {
+            kind: 'choice' as const,
+            id: 'thumbs',
+            label: 'Thumbnails',
+            value: null,
+            options: [
+              { id: '-1', icon: Icons.thumbSmaller, label: 'Smaller thumbnails (−)', disabled: strip.thumb <= stripMetrics.thumbMin ? 'Already the smallest' : false },
+              { id: '1', icon: Icons.thumbLarger, label: 'Larger thumbnails (=)', disabled: strip.thumb >= stripMetrics.thumbMax ? 'Already the largest' : false },
+            ],
+            onPick: (d: string) => stepThumbs(Number(d) as 1 | -1),
+          },
+          {
+            kind: 'switch' as const,
+            id: 'auto',
+            label: 'Height',
+            text: 'Follows the roll',
+            on: strip.auto,
+            title: 'The band takes the room the roll’s typical picture leaves under itself — sized on the roll, so stepping to a portrait moves nothing',
+            onToggle: () => patchStrip({ auto: !strip.auto, folded: false }),
+          },
+        ]),
+    { kind: 'rule', id: 'fold-rule' },
     {
+      kind: 'action',
+      id: 'fold',
+      icon: side ? Icons.foldSide : Icons.foldUnder,
+      label: strip.folded ? 'Show the band' : 'Fold to its rail',
+      hint: 'B',
+      onSelect: toggleFolded,
+    },
+  ];
+  // What each filter would show, written beside its row in the panel —
+  // counted only while the panel can be opened, never per slider tick.
+  const filterCounts = useMemo(
+    () => stripFilterCounts(roll.pictures, (id) => culling.byPicture.get(id), showIgnored),
+    [roll.pictures, culling.byPicture, showIgnored],
+  );
+  const filterRow = (f: (typeof STRIP_FILTERS)[number]) => {
+    const cull = cullFilterOf(f.key);
+    return {
+      id: f.key,
+      icon: FILTER_ICONS[f.key] ?? (cull?.kind === 'picks' ? Icons.flag : cull?.kind === 'unrejected' ? Icons.circleCheck : Icons.star),
+      label: cull ? cullFilterLabel(cull) : f.label,
+      on: stripFilter === f.key,
+      note: String(filterCounts.get(f.key) ?? 0),
+      onSelect: () => setStripFilter(f.key),
+    };
+  };
+  const filterSections: SettingsSection[] = [
+    { kind: 'list', id: 'roll', items: STRIP_FILTERS.filter((f) => !f.winnow).map(filterRow) },
+    ...(culling.reachable
+      ? ([
+          { kind: 'rule', id: 'r-winnow' },
+          { kind: 'list', id: 'winnow', heading: 'Winnow', items: STRIP_FILTERS.filter((f) => f.winnow).map(filterRow) },
+        ] satisfies SettingsSection[])
+      : []),
+    { kind: 'rule', id: 'r-ignored' },
+    {
+      kind: 'switch',
       id: 'ignored-view',
-      label: marked(false, showIgnored ? 'Ignored pictures: dimmed' : 'Ignored pictures: hidden'),
-      title: showIgnored ? 'Leave the ignored pictures out of the band' : 'Show the ignored pictures in the band, dimmed',
-      onSelect: () => setShowIgnored(!showIgnored),
+      label: 'Ignored',
+      text: showIgnored ? 'Shown, dimmed' : 'Hidden',
+      on: showIgnored,
+      title: showIgnored ? 'Leave the ignored pictures out' : 'Show the ignored pictures, dimmed',
+      onToggle: () => setShowIgnored(!showIgnored),
     },
     ...(culling.reachable
-      ? [
+      ? ([
           {
+            kind: 'action',
             id: 'refresh',
-            label: marked(false, culling.asking ? 'Asking Winnow…' : 'Ask Winnow again'),
+            icon: Icons.refresh,
+            label: culling.asking ? 'Asking Winnow…' : 'Ask Winnow again',
             title: 'Winnow’s picks, stars and labels are asked by themselves when you come back to this tab',
-            disabled: culling.asking,
-            onSelect: culling.refresh,
+            onSelect: () => {
+              if (!culling.asking) culling.refresh();
+            },
           },
-        ]
+        ] satisfies SettingsSection[])
       : []),
   ];
   // ONE filter chip, drawn in the band's header and in the sheet's.
   const filterChip = (
-    <OverflowMenu
+    <SettingsMenu
       label="What the band shows"
-      items={filterMenu}
+      sections={filterSections}
       align="start"
-      trigger={{ text: stripFilterLabel(stripFilter), size: chipSize, variant: filtering ? 'primary' : 'default' }}
+      trigger={{ text: stripFilterLabel(stripFilter), icon: Icons.filter, size: chipSize, variant: filtering ? 'primary' : 'default' }}
     />
   );
   // The band's header: where it stands in its pictures, what the roll holds,
@@ -1518,7 +1583,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             <IconButton size={size} variant="ghost" label="Contact sheet (G)" onClick={toggleSheet}>
               {Icons.grid}
             </IconButton>
-            <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side="below" />
+            <SettingsMenu label="The band: where, how many, how big" sections={bandSections} size={size} side="below" />
           </>
         );
       }
@@ -1569,7 +1634,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               Sheet
             </Button>
           )}
-          <OverflowMenu label="The band: its size and thumbnails" items={bandMenu} size={size} side={side ? 'below' : 'above'} />
+          <SettingsMenu label="The band: where, how many, how big" sections={bandSections} size={size} side={side ? 'below' : 'above'} />
         </>
       );
     },
@@ -2068,7 +2133,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
                 kind={stripKind}
                 selecting={selecting}
                 thumb={strip.sheet}
-                onThumb={stepThumbs}
+                onSize={(px) => patchStrip({ sheet: px })}
                 filter={filterChip}
                 bar={selecting ? <SelectionBar compact={compact} dense={bandBox.width < 800} verbs={selectionVerbs} /> : null}
                 onSelecting={() => startSelecting()}

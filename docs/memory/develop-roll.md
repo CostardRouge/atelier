@@ -1422,7 +1422,9 @@ The rules a later agent must keep:
   grid item of their own under the stage. The grip is the band's stage-facing
   edge, `−` / `=` step the COLUMN COUNT (`columnLayout` takes no thumbnail
   height), and `maxBandWidth` keeps the stage 320 px: two columns are a
-  DISABLED menu row at 1270 px with the Library docked, not a silent clamp.
+  GREYED glyph of the band's settings panel at 1270 px with the Library docked
+  (its reason as the tooltip), not a silent clamp — the panel itself is
+  `SettingsMenu`, `frontend.md`, «A view's settings are a PANEL».
 - **A cell is CALM**: one pill (`⊘ ● ↑ – variant ▶ !`), Winnow's mark, the
   run's mark at the centre, a caption from 112 px (his Q5; always in the
   sheet). The delivery badge and `×` LEFT it (Q6). Acting is the picture's
