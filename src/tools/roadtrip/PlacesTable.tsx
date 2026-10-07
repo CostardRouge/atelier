@@ -15,7 +15,11 @@ import { PRESS_LOOK } from '../../shared/ui/press';
  *
  * In a narrow container the state and the distance go under the name and
  * the country keeps its code alone — a container query, because the table
- * sits in a modal's column and a sidebar's alike.
+ * sits in a modal's column and a sidebar's alike. It never scrolls sideways
+ * (2026-10-07, his report of «un léger scroll»): no gutter before the number
+ * nor after the verbs, the country's NAME only from 38rem (its code says it,
+ * the name is its tooltip; under 24rem the code joins the state and the
+ * distance under the name), glyph verbs 24px under a mouse.
  */
 
 export interface PlacesTableRow {
@@ -55,12 +59,12 @@ interface PlacesTableProps {
 }
 
 const op =
-  `w-7 h-7 inline-grid place-items-center border-0 rounded-md bg-transparent text-xs text-muted cursor-pointer hover:bg-paper-2 hover:text-ink aria-disabled:opacity-25 aria-disabled:cursor-default aria-disabled:hover:bg-transparent ${PRESS_LOOK}`;
+  `w-6 h-7 [@media(pointer:coarse)]:w-8 [@media(pointer:coarse)]:h-8 inline-grid place-items-center border-0 rounded-md bg-transparent text-xs text-muted cursor-pointer hover:bg-paper-2 hover:text-ink aria-disabled:opacity-25 aria-disabled:cursor-default aria-disabled:hover:bg-transparent ${PRESS_LOOK}`;
 const fixOp = (odd: boolean) =>
-  `h-7 px-2 inline-grid place-items-center border-0 rounded-md bg-transparent text-2xs cursor-pointer hover:bg-paper-2 ${PRESS_LOOK} ${
+  `h-7 [@media(pointer:coarse)]:h-8 px-1.5 inline-grid place-items-center border-0 rounded-md bg-transparent text-2xs cursor-pointer hover:bg-paper-2 ${PRESS_LOOK} ${
     odd ? 'text-warn font-semibold' : 'text-accent-ink font-medium'
   }`;
-const th = 'px-2 pt-0.5 pb-1.5 border-b border-line-strong font-mono text-3xs font-medium tracking-[0.07em] uppercase text-muted text-left whitespace-nowrap';
+const th = 'px-1.5 first:pl-0 last:pr-0 pt-0.5 pb-1.5 border-b border-line-strong font-mono text-3xs font-medium tracking-[0.07em] uppercase text-muted text-left whitespace-nowrap';
 
 export function formatKm(km: number | null): string {
   if (km === null) return '—';
@@ -87,10 +91,10 @@ export default function PlacesTable({
       <table className="w-full border-collapse text-xs" aria-label={label}>
         <thead>
           <tr>
-            <th className={`${th} w-[1.6rem]`}>#</th>
+            <th className={`${th} w-[1.4rem] @max-[24rem]:w-[1rem]`}>#</th>
             <th className={th}>Place</th>
             <th className={`${th} @max-[30rem]:hidden`}>State</th>
-            <th className={th}>Country</th>
+            <th className={`${th} @max-[24rem]:hidden`}>Country</th>
             <th className={`${th} text-right @max-[30rem]:hidden`}>{kmLabel}</th>
             <th className={th}>
               <span className="sr-only">Verbs</span>
@@ -108,7 +112,7 @@ export default function PlacesTable({
                 ? 'bg-warn-wash text-warn'
                 : 'hover:bg-paper-2';
             const struck = r.out ? 'opacity-50 line-through decoration-faint' : '';
-            const td = `px-2 py-[7px] border-b border-line align-middle group-last/row:border-b-0`;
+            const td = `px-1.5 first:pl-0 last:pr-0 py-[7px] border-b border-line align-middle group-last/row:border-b-0`;
             const fix = onFix && !r.out && (editing || r.odd);
             return (
               <tr
@@ -124,22 +128,31 @@ export default function PlacesTable({
                   {r.note}
                   <span className="hidden @max-[30rem]:block font-mono text-3xs text-muted font-normal">
                     {[r.state, r.km !== null ? formatKm(r.km) : ''].filter(Boolean).join(' · ')}
+                    {/* Narrower still, the country's column folds here too. */}
+                    {r.countryCode && (
+                      <span className={`hidden @max-[24rem]:inline ${r.odd ? 'text-warn font-semibold' : ''}`}>
+                        {r.state || r.km !== null ? ' · ' : ''}
+                        {r.countryCode}
+                        {r.odd ? ' ⚠' : ''}
+                      </span>
+                    )}
                   </span>
                 </td>
                 <td className={`${td} ${struck} whitespace-nowrap text-ink-soft @max-[30rem]:hidden ${r.odd ? 'text-warn' : ''}`}>
                   {r.state ? <span className={r.state.length <= 4 ? 'font-mono text-2xs' : ''}>{r.state}</span> : <span className="text-faint">—</span>}
                 </td>
-                <td className={`${td} ${struck} whitespace-nowrap`}>
+                <td className={`${td} ${struck} whitespace-nowrap @max-[24rem]:hidden`}>
                   {r.countryCode ? (
                     <>
                       <span
-                        className={`font-mono text-3xs font-medium tracking-[0.04em] px-1.5 py-px rounded-full mr-1.5 ${
+                        title={r.countryName}
+                        className={`font-mono text-3xs font-medium tracking-[0.04em] px-1.5 py-px rounded-full mr-1.5 @max-[38rem]:mr-0 ${
                           r.odd ? 'bg-warn text-surface' : 'bg-paper-2 text-ink-soft'
                         }`}
                       >
                         {r.countryCode}
                       </span>
-                      <span className="@max-[30rem]:hidden">{r.countryName}</span>
+                      <span className="@max-[38rem]:hidden">{r.countryName}</span>
                       {r.odd && (
                         <span className="ml-1" aria-label="far from its stage, in another country" title="In another country than the trip, and far from its stage">
                           ⚠

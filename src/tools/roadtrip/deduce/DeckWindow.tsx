@@ -53,10 +53,9 @@ function answersFor(p: Proposal, draft: DeduceDraft, trip: TripDoc): Answer[] {
 
 export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
   const { trip, deduction, draft, settings, actions, editing, index } = ctx;
-  const { proposals, points, track, land } = deduction;
+  const { proposals, points, land } = deduction;
   const k = Math.min(index, proposals.length);
   const answered = proposals.filter((p) => draft.answers[p.key] !== undefined).length;
-  const ignored = track ? track.points.filter((p) => !points.includes(p)) : [];
 
   const top = (
     <div className="flex flex-wrap items-center justify-between gap-2.5">
@@ -136,7 +135,18 @@ export default function DeckWindow({ ctx }: { ctx: DeduceContext }) {
             {p.overlapping.length > 0 && <GoButton tab="calque" label="Against mine" onClick={() => actions.goTo('calque', p.key)} />}
           </span>
         </div>
-        <DeduceMap proposals={proposals} trip={trip} draft={draft} points={points} ignored={ignored} land={land} focus={p} className="rounded-none border-0 max-[560px]:[&_svg]:max-h-[11rem]" />
+        {/* As tall as a third of the body's view (`cqh`), its half filled at that shape:
+            a 4:3 picture in a wide window pushed the answers off the screen. */}
+        <DeduceMap
+          proposals={proposals}
+          trip={trip}
+          draft={draft}
+          points={points}
+          land={land}
+          focus={p}
+          fill
+          className="rounded-none border-0 h-[clamp(15rem,40cqh,28rem)] max-[560px]:h-[11rem]"
+        />
         {editing === p.key && (
           <div className="col-span-full px-4 pb-3.5 border-t border-line">
             <ProposalEditor p={p} trip={trip} cities={deduction.cities} draft={draft} actions={actions} first={trip.startDate} last={trip.endDate} />

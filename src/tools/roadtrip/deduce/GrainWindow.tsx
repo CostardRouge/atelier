@@ -2,6 +2,7 @@ import { GRAINS, grainAt, grainIndex } from '../../../shared/roadtrip/deduce-gra
 import type { Proposal } from '../../../shared/roadtrip/deduce-draft';
 import Button from '../../../shared/ui/Button';
 import OverflowMenu from '../../../shared/ui/OverflowMenu';
+import { useElementSize } from '../../../shared/ui/use-element-width';
 import DeduceFrieze from './DeduceFrieze';
 import DeduceMap from './DeduceMap';
 import FineSettings from './FineSettings';
@@ -15,6 +16,9 @@ import type { DeduceContext } from './context';
  * its own pencil, and two hand-offs: *Deck ›* opens the paquet on it,
  * *Against yours ›* the calque, where it overlaps a stage of the author's.
  */
+
+/** The window splits in two halves — the list, the map — from this width. */
+const SPLIT_PX = 880;
 
 function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
   const { actions, draft, editing, trip, flash, deduction } = ctx;
@@ -63,17 +67,21 @@ function Card({ p, ctx }: { p: Proposal; ctx: DeduceContext }) {
 
 export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
   const { deduction, draft, settings, actions, hot } = ctx;
-  const { proposals, days, points, track, land } = deduction;
+  const { proposals, days, points, land } = deduction;
   const grain = GRAINS[grainIndex(settings.grain)];
   const kept = proposals.filter((p) => p.verb !== 'skip');
   const oneDay = proposals.filter((p) => p.doubtful && p.verb !== 'skip');
   const over = proposals.filter((p) => p.verb === 'stage' && p.overlapping.length > 0);
-  const ignored = track ? track.points.filter((p) => !points.includes(p)) : [];
   const hotProposal = hot ? (proposals.find((p) => p.key === hot) ?? null) : null;
   // The stage being edited is what the map flies to and frames.
   const editingProposal = ctx.editing ? (proposals.find((p) => p.key === ctx.editing) ?? null) : null;
+  // A wide window gives the map HALF its width and the whole height the
+  // body shows (his ask: the map is a surface to travel in, not a stamp);
+  // a narrower one keeps it a column of 17rem, a phone puts it on top.
+  const [outerRef, outer] = useElementSize<HTMLDivElement>();
+  const split = outer.width >= SPLIT_PX;
 
-  return (
+  const dial = (
     <>
       {/* the dial */}
       <div className="flex flex-col gap-1.5">
@@ -126,6 +134,9 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
         </div>
       </div>
 
+    </>
+  );
+  const frieze = (
       <DeduceFrieze
         days={days}
         hot={hot}
@@ -144,37 +155,61 @@ export default function GrainWindow({ ctx }: { ctx: DeduceContext }) {
           },
         ]}
       />
+  );
+  const cards = (
+    <div className="flex flex-col gap-2 min-w-0" data-cards>
+      {proposals.length === 0 ? (
+        <p className="m-0 text-sm text-muted">
+          {points.length === 0 ? 'No day of this trip carries a position, so there is no itinerary to work out.' : 'These settings produce no stage — try a wider radius.'}
+        </p>
+      ) : (
+        proposals.map((p) => <Card key={p.key} p={p} ctx={ctx} />)
+      )}
+    </div>
+  );
+  const map = (
+    <DeduceMap
+      proposals={proposals}
+      trip={ctx.trip}
+      draft={draft}
+      points={points}
+      land={land}
+      hot={hot}
+      focus={editingProposal}
+      caption={hotProposal ? `${hotProposal.label} · ${spanText(hotProposal.startDate, hotProposal.endDate)}` : 'Hover or focus a stage'}
+      fill={split}
+      className={split ? 'flex-1 min-h-0' : 'max-[700px]:[&_svg]:max-h-[9.5rem]'}
+      legend="Colour: a new stage · green: places into one of yours · what you skip or leave out leaves the map"
+    />
+  );
 
-      {/* the cards, the map collée beside them */}
-      <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,17rem)] gap-3.5 items-start max-[700px]:grid-cols-1">
-        <div className="flex flex-col gap-2 min-w-0" data-cards>
-          {proposals.length === 0 ? (
-            <p className="m-0 text-sm text-muted">
-              {points.length === 0 ? 'No day of this trip carries a position, so there is no itinerary to work out.' : 'These settings produce no stage — try a wider radius.'}
-            </p>
-          ) : (
-            proposals.map((p) => <Card key={p.key} p={p} ctx={ctx} />)
-          )}
-        </div>
-        <div className="sticky top-0 flex flex-col gap-1.5 max-[700px]:order-first max-[700px]:z-10 max-[700px]:bg-surface max-[700px]:pb-1.5">
-          <DeduceMap
-            proposals={proposals}
-            trip={ctx.trip}
-            draft={draft}
-            points={points}
-            ignored={ignored}
-            land={land}
-            hot={hot}
-            focus={editingProposal}
-            caption={hotProposal ? `${hotProposal.label} · ${spanText(hotProposal.startDate, hotProposal.endDate)}` : 'Hover or focus a stage'}
-            className="max-[700px]:[&_svg]:max-h-[9.5rem]"
-            legend="Colour: a new stage · green: places into one of yours · faint: left out · ✕: an ignored position"
-          />
-
-        </div>
-      </div>
-
-      <FineSettings settings={settings} actions={actions} />
-    </>
+  return (
+    <div ref={outerRef} className={split ? 'grid grid-cols-2 gap-5 items-start' : 'flex flex-col gap-3.5'}>
+      {split ? (
+        <>
+          {/* Two halves: everything to read and answer on the left, the map
+              on the right as tall as the body's view (`100cqh`: the body is a
+              size container), held there while the left half scrolls. */}
+          <div className="flex flex-col gap-3.5 min-w-0">
+            {dial}
+            {frieze}
+            {cards}
+            <FineSettings settings={settings} actions={actions} />
+          </div>
+          <div className="sticky top-0 h-[100cqh] flex flex-col min-w-0">{map}</div>
+        </>
+      ) : (
+        <>
+          {dial}
+          {frieze}
+          {/* the cards, the map collée beside them */}
+          <div className="grid grid-cols-[minmax(0,1fr)_minmax(0,17rem)] gap-3.5 items-start max-[700px]:grid-cols-1">
+            {cards}
+            <div className="sticky top-0 flex flex-col gap-1.5 max-[700px]:order-first max-[700px]:z-10 max-[700px]:bg-surface max-[700px]:pb-1.5">{map}</div>
+          </div>
+          <FineSettings settings={settings} actions={actions} />
+        </>
+      )}
+    </div>
   );
 }

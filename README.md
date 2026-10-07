@@ -827,13 +827,18 @@ stages covers, or a new stage where nothing is — and you can change it, split
 it, correct its name, dates and places, or name a halt the city index could
 not. Its places are the same table as a stage's, measured from the halt's own
 pictures, and **Fix** chooses another town of the name, a search's answer or a
-name typed — for this trip only, never on the instance. The map beside the
-cards **moves**: drag it, pinch it, wheel it or pinch the trackpad, with ± and
-a button to frame again; and it **flies** to the stage you edit (and back to
-the whole route on Done), to the paquet's chapter and to a place you just
-chose — framing everything that stage holds, even a town on another
-continent, which is then drawn in orange and tied to the pictures it should be
-near. The thresholds (radius, long drive, big halt, blind days, outliers) sit
+name typed — for this trip only, never on the instance. On a computer the
+window takes most of the screen and the map takes **half** of it, as tall as
+the window. The map **moves**: drag it, pinch it, wheel it or pinch the
+trackpad, with ± and a button to frame again; and it **flies** to the stage you
+edit (and back to the whole route on Done), to the paquet's chapter and to a
+place you just chose — framing everything that stage holds, even a town on
+another continent, which is then drawn in orange and tied to the pictures it
+should be near. It shows the itinerary as it would be **written**: a stage you
+skip, a place you leave out (×) and a position Deduce ignored leave the map and
+its frame, so skipping what happened abroad brings the map back to the trip.
+A line from one stage into the next is the travel between them, drawn faint
+and dotted, and left out when one stage is framed. The thresholds (radius, long drive, big halt, blind days, outliers) sit
 under *Fine settings*; moving any of them never asks the instance again. What
 the instance could not say is said rather than hidden: days without a position,
 a day placed far from the days around it (a drone that kept the GPS of home —
