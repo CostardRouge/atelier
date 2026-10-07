@@ -1,6 +1,6 @@
 # The map openers' next round — the stops panel, the camera, grouping places, the recap
 
-**Status: DECIDED 2026-10-07; §1, §2 and §5 BUILT the same day, §3 and §4
+**Status: DECIDED 2026-10-07; §1, §2, §3 and §5 BUILT the same day, §4
 next.** The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
@@ -84,7 +84,9 @@ up, smoothing 1.1 s, look ahead 0.4 s, open and end wide; **Navigation** —
 1.4 s, 60 °/s, end wide; **Documentary** — 400 km, pull back 90 %, north up,
 smoothing 1.8 s, look ahead 0.2 s, open and end wide; **Whole route**. Calm is
 the default when Follow is chosen. The OpenStreetMap ground along the route at
-a tight follow needs finer tiles: its own commit, measured.
+a tight follow needs finer tiles: its own commit, measured. **Built** (`map-camera.ts`,
+«Virée's CAMERA is a baked track» in `docs/memory/roadtrip.md`); the finer
+tiles and the Itinerary's own camera are not.
 
 ## 4. Grouping nearby places — accepted, every option kept
 

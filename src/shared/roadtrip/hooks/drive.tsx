@@ -49,10 +49,12 @@ import {
   type DrivePlan,
   type DriveRoute,
 } from './drive-plan';
-import { driveBasemap, driveScratch, paintDrive } from './drive-paint';
+import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
 import { fitRender } from '../slide-timing';
+import { CAMERA_LIMITS, CAMERA_PRESETS, CAMERA_PRESET_IDS, cameraPresetOf } from './map-camera';
+import { useState } from 'react';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
 import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
@@ -88,7 +90,7 @@ function DriveSketch() {
 }
 
 const resetLink =
-  'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink';
+  'p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink self-start';
 
 /** How the shell is getting on with the pictures this drive shows. */
 function pictureLine(keys: readonly string[], status: HookPictureStatus | undefined): { text: string; danger: boolean } | null {
@@ -144,6 +146,12 @@ function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null)
   const from = counterDay(plan.clock.arrive[0], route.tripDays);
   const to = counterDay(plan.clock.leave[n - 1], route.tripDays);
   return `The badge counts the day of the trip as the car drives, from day ${from} to day ${to} of ${route.tripDays}.`;
+}
+
+/** A width in km rounded the way a slider should say it: whole below 100, tens below 1 000, fifties past. */
+function roundKm(km: number): number {
+  const step = km < 100 ? 1 : km < 1000 ? 10 : 50;
+  return Math.max(CAMERA_LIMITS.viewKm.min, Math.min(CAMERA_LIMITS.viewKm.max, Math.round(km / step) * step));
 }
 
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
@@ -210,6 +218,11 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
     : null;
   const coloursChanged = o.trailColor !== DRIVE_DEFAULTS.trailColor || o.aheadColor !== DRIVE_DEFAULTS.aheadColor;
   const paperChanged = o.paperColor !== DRIVE_DEFAULTS.paperColor || o.inkColor !== DRIVE_DEFAULTS.inkColor;
+  // The camera as the drive will really see it: the width a stored share
+  // resolves to, and which preset the settings are, if any.
+  const preset = cameraPresetOf(o);
+  const viewKm = o.viewKm ?? (plan ? driveTrack(plan, o, ctx.aspect).viewKm : CAMERA_PRESETS.calm.values.viewKm ?? 120);
+  const [fine, setFine] = useState(false);
 
   return (
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
@@ -735,32 +748,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
-        <FieldRow label="Camera" hint={o.camera === 'whole' ? 'The whole route fits the frame from the first frame; only the car moves.' : 'The map scrolls under a car held at the centre.'}>
-          <Segmented
-            size="sm"
-            fill
-            label="How the camera moves"
-            value={o.camera}
-            onChange={(camera) => set({ camera })}
-            options={[
-              { id: 'whole', label: 'Whole route' },
-              { id: 'follow', label: 'Follow the car' },
-            ]}
-          />
-        </FieldRow>
-        {o.camera === 'follow' && (
-          <FieldRow label="Zoom" hint="The share of the route the view spans while following.">
-            <RangeField
-              label="Follow zoom"
-              min={DRIVE_LIMITS.followZoom.min}
-              max={DRIVE_LIMITS.followZoom.max}
-              step={0.05}
-              value={o.followZoom}
-              onChange={(followZoom) => set({ followZoom })}
-              format={(v) => `${Math.round(v * 100)}%`}
-            />
-          </FieldRow>
-        )}
         {namesArePlaces && (
           <SwitchRow
             label="The badge’s place follows the car"
@@ -769,6 +756,156 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             onChange={(captionFollows) => set({ captionFollows })}
             hint="While the car drives, the badge’s place reads the last stop it passed; once it arrives the badge says its own."
           />
+        )}
+      </Group>
+
+      <Group title="Camera">
+        <FieldRow label="Camera" hint={o.camera === 'whole' ? 'The whole route fits the frame from the first frame; only the car moves.' : 'The map moves under the car, as the rows below say.'}>
+          <Segmented
+            size="sm"
+            fill
+            label="How the camera moves"
+            value={o.camera}
+            // A piece that never chose a width starts Follow on Calm; one
+            // stored with a share keeps the look it had.
+            onChange={(camera) => set(camera === 'follow' && o.viewKm === null && o.followZoom === DRIVE_DEFAULTS.followZoom ? { camera, ...CAMERA_PRESETS.calm.values } : { camera })}
+            options={[
+              { id: 'whole', label: 'Whole route' },
+              { id: 'follow', label: 'Follow the car' },
+            ]}
+          />
+        </FieldRow>
+        {o.camera === 'follow' && (
+          <>
+            <FieldRow label="Preset" hint={preset ? CAMERA_PRESETS[preset].hint : 'Your own settings — a preset puts its values back.'}>
+              <div className="flex items-center gap-1.5 flex-wrap">
+                {CAMERA_PRESET_IDS.map((id) => (
+                  <Button key={id} size="sm" variant={preset === id ? 'primary' : 'default'} onClick={() => set({ ...CAMERA_PRESETS[id].values })}>
+                    {CAMERA_PRESETS[id].label}
+                  </Button>
+                ))}
+              </div>
+            </FieldRow>
+            <FieldRow label="View width" hint="Kilometres across the map while the camera follows the car.">
+              <RangeField
+                label="View width"
+                min={Math.log10(CAMERA_LIMITS.viewKm.min)}
+                max={Math.log10(CAMERA_LIMITS.viewKm.max)}
+                step={0.01}
+                value={Math.log10(Math.max(CAMERA_LIMITS.viewKm.min, Math.min(CAMERA_LIMITS.viewKm.max, viewKm)))}
+                onChange={(v) => set({ viewKm: roundKm(10 ** v) })}
+                format={(v) => `${roundKm(10 ** v)} km`}
+              />
+            </FieldRow>
+            <FieldRow
+              label="Zoom"
+              hint={o.zoom === 'fixed' ? 'The same width all along the road.' : 'Over a long drive the camera pulls back just enough to see where the car came from and where it goes — a map’s own fly-to curve — and comes back as it arrives.'}
+            >
+              <Segmented
+                size="sm"
+                fill
+                label="How the zoom moves"
+                value={o.zoom}
+                onChange={(zoom) => set({ zoom })}
+                options={[
+                  { id: 'fixed', label: 'Fixed' },
+                  { id: 'pull-back', label: 'Pull back on long drives' },
+                ]}
+              />
+            </FieldRow>
+            {o.zoom === 'pull-back' && (
+              <FieldRow label="Pull back">
+                <RangeField
+                  label="Pull-back strength"
+                  min={CAMERA_LIMITS.pullBack.min}
+                  max={CAMERA_LIMITS.pullBack.max}
+                  step={0.05}
+                  value={o.pullBack}
+                  onChange={(pullBack) => set({ pullBack })}
+                  format={(v) => `${Math.round(v * 100)}%`}
+                />
+              </FieldRow>
+            )}
+            <FieldRow
+              label="Orientation"
+              hint={o.orientation === 'north' ? 'North stays up, as on the paper map.' : 'The map turns so the car drives up the frame, sitting two thirds down with the road ahead; the car is seen from behind.'}
+            >
+              <Segmented
+                size="sm"
+                fill
+                label="Which way is up"
+                value={o.orientation}
+                onChange={(orientation) => set({ orientation })}
+                options={[
+                  { id: 'north', label: 'North up' },
+                  { id: 'heading', label: 'Heading up' },
+                ]}
+              />
+            </FieldRow>
+            <FieldRow label="Wide shots" align="start" hint="The whole route first, then the car; and the whole road again as it arrives.">
+              <div className="flex flex-col gap-1.5">
+                <ToggleField label="Open on the whole route" checked={o.openWide} onChange={(openWide) => set({ openWide })}>
+                  Open wide
+                </ToggleField>
+                <ToggleField label="End on the whole route" checked={o.endWide} onChange={(endWide) => set({ endWide })}>
+                  End wide
+                </ToggleField>
+              </div>
+            </FieldRow>
+            <button type="button" className={resetLink} onClick={() => setFine((f) => !f)} aria-expanded={fine}>
+              {fine ? 'Hide the fine settings' : 'Fine settings…'}
+            </button>
+            {fine && (
+              <>
+                <FieldRow label="Smoothing" hint="A window centred on the car — the drive is known ahead, so the camera never trails it.">
+                  <RangeField
+                    label="Camera smoothing"
+                    min={CAMERA_LIMITS.smoothing.min}
+                    max={CAMERA_LIMITS.smoothing.max}
+                    step={0.1}
+                    value={o.smoothing}
+                    onChange={(smoothing) => set({ smoothing })}
+                    format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+                  />
+                </FieldRow>
+                <FieldRow label="Look ahead" hint="The camera reads the car this far ahead of now.">
+                  <RangeField
+                    label="Look ahead"
+                    min={CAMERA_LIMITS.lookAhead.min}
+                    max={CAMERA_LIMITS.lookAhead.max}
+                    step={0.1}
+                    value={o.lookAhead}
+                    onChange={(lookAhead) => set({ lookAhead })}
+                    format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
+                  />
+                </FieldRow>
+                {o.orientation === 'heading' && (
+                  <FieldRow label="Turning" hint="The heading is weighed by how far the car moves, so a halt never turns the map; then it turns no faster than the limit.">
+                    <div className="flex flex-col gap-1.5">
+                      <RangeField
+                        label="Turn smoothing"
+                        min={CAMERA_LIMITS.turnSmoothing.min}
+                        max={CAMERA_LIMITS.turnSmoothing.max}
+                        step={0.1}
+                        value={o.turnSmoothing}
+                        onChange={(turnSmoothing) => set({ turnSmoothing })}
+                        format={(v) => (v === 0 ? 'sharp' : `${v.toFixed(1)}s`)}
+                      />
+                      <RangeField
+                        label="Max turn speed"
+                        min={CAMERA_LIMITS.maxTurn.min}
+                        max={CAMERA_LIMITS.maxTurn.max}
+                        step={5}
+                        value={o.maxTurn}
+                        onChange={(maxTurn) => set({ maxTurn })}
+                        format={(v) => `${Math.round(v)}°/s`}
+                      />
+                    </div>
+                  </FieldRow>
+                )}
+              </>
+            )}
+          </>
         )}
       </Group>
 
@@ -908,7 +1045,7 @@ export const driveVariant: HookVariant = {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return null;
     const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o, driveCountOf(ctx.counterMode) !== null);
-    return plan ? driveBasemap(plan, o, ctx.aspect) : null;
+    return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null) : null;
   },
   prepare(options, ctx) {
     const o = driveOptions(options);
@@ -924,7 +1061,10 @@ export const driveVariant: HookVariant = {
       days: words?.days,
       stop: words?.stop,
     });
-    const basemap = driveBasemap(plan, o, ctx.aspect);
+    // The camera, baked once with the plan (`map-camera.ts`); the plain
+    // follow of before needs none.
+    const track = o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null;
+    const basemap = driveBasemap(plan, o, ctx.aspect, track);
     // A stop's name is a place on the legs and on the author's own list — the
     // author's assertion there, the Itinerary's rule — and a day on pictures.
     const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
@@ -950,7 +1090,7 @@ export const driveVariant: HookVariant = {
               return out;
             }
           : undefined,
-      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap),
+      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track),
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };

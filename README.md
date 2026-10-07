@@ -1165,8 +1165,17 @@ and at a strength that lets the paper show through —, where it sits and how bi
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time
 on the road, up to a minute, the five motions, a hold
-first, a beat at the end, whether the camera fits the whole route or follows
-the car at a zoom, the badge's place following the car), the recap (when the
+first, a beat at the end, the badge's place following the car), the
+**camera** — the whole route from the first frame, or **following the car**
+with a real camera: a view width in kilometres, a zoom that **pulls back on
+long drives** along the fly-to curve of a web map and comes back as the car
+arrives, **north up** or **heading up** (the map turns so the car drives up
+the frame, sitting two thirds down with the road ahead; a halt never turns
+the map, and it turns no faster than you allow), an establishing shot on the
+whole route and a closing one, a centred smoothing and a look-ahead, three
+presets (**Calm**, **Navigation**, **Documentary**) and the fine settings
+behind a link; the whole track is computed with the plan, so the preview, a
+seek and the file see one camera —, the recap (when the
 badge's counter follows the drive — see *The badge can count WITH the car*
 above — its pace, its summary card and its milestones), and the sound: a tick
 at every stop on the same voices, deeper where a leg begins, the seat on

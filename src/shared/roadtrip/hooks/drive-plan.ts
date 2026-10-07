@@ -51,6 +51,7 @@ import { partitionPicked, readPicked, sampleEvenly } from './picked';
 import { STOP_STYLES, readStops, stopText, type MapStop, type StopStyle } from './stops';
 import type { PlaceWritingTrip } from '../place-style';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
+import { CAMERA_LIMITS, type CameraOrientation, type CameraZoom } from './map-camera';
 
 /** The legs' located places, the author's own places, or the picked pictures' positions. */
 export type DriveStopsOn = 'places' | 'custom' | 'pictures';
@@ -137,8 +138,26 @@ export interface DriveOptions {
   arriveSeconds: number;
   end: DriveEnd;
   camera: DriveCamera;
-  /** On `follow`: the share of the route's extent the view spans. */
+  /**
+   * On `follow`: the share of the route's extent the view spans — what a
+   * piece stored before 2026-10-07 holds; read only while `viewKm` is null.
+   */
   followZoom: number;
+  // --- the camera (2026-10-07, `map-camera.ts`) ---------------------------------
+  // Defaults are the plain follow of before: no smoothing, a fixed zoom, north
+  // up, no wide shots — so a stored piece on `follow` moves exactly as it did.
+  // Choosing Follow in the panel writes the Calm preset over them.
+  /** Kilometres across the map's box while following; null reads `followZoom`. */
+  viewKm: number | null;
+  zoom: CameraZoom;
+  pullBack: number;
+  orientation: CameraOrientation;
+  smoothing: number;
+  lookAhead: number;
+  turnSmoothing: number;
+  maxTurn: number;
+  openWide: boolean;
+  endWide: boolean;
   /** Rewrite the badge's place with the stop the car is at, on `places` and `custom`. */
   captionFollows: boolean;
   // --- the recap (2026-10-07) ----------------------------------------------------
@@ -215,6 +234,16 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   end: 'reveal',
   camera: 'whole',
   followZoom: 0.45,
+  viewKm: null,
+  zoom: 'fixed',
+  pullBack: 0.7,
+  orientation: 'north',
+  smoothing: 0,
+  lookAhead: 0,
+  turnSmoothing: 1.4,
+  maxTurn: 50,
+  openWide: false,
+  endWide: false,
   captionFollows: false,
   pace: 0.65,
   summary: true,
@@ -331,6 +360,16 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     end: oneOf(o.end, ['reveal', 'stay'], d.end),
     camera: oneOf(o.camera, ['whole', 'follow'], d.camera),
     followZoom: clamp(Number(o.followZoom), L.followZoom.min, L.followZoom.max, d.followZoom),
+    viewKm: o.viewKm === null || o.viewKm === undefined ? null : clamp(Number(o.viewKm), CAMERA_LIMITS.viewKm.min, CAMERA_LIMITS.viewKm.max, CAMERA_LIMITS.viewKm.min),
+    zoom: oneOf(o.zoom, ['fixed', 'pull-back'], d.zoom),
+    pullBack: clamp(Number(o.pullBack), CAMERA_LIMITS.pullBack.min, CAMERA_LIMITS.pullBack.max, d.pullBack),
+    orientation: oneOf(o.orientation, ['north', 'heading'], d.orientation),
+    smoothing: clamp(Number(o.smoothing), CAMERA_LIMITS.smoothing.min, CAMERA_LIMITS.smoothing.max, d.smoothing),
+    lookAhead: clamp(Number(o.lookAhead), CAMERA_LIMITS.lookAhead.min, CAMERA_LIMITS.lookAhead.max, d.lookAhead),
+    turnSmoothing: clamp(Number(o.turnSmoothing), CAMERA_LIMITS.turnSmoothing.min, CAMERA_LIMITS.turnSmoothing.max, d.turnSmoothing),
+    maxTurn: clamp(Number(o.maxTurn), CAMERA_LIMITS.maxTurn.min, CAMERA_LIMITS.maxTurn.max, d.maxTurn),
+    openWide: o.openWide === true,
+    endWide: o.endWide === true,
     captionFollows: o.captionFollows === true,
     pace: clamp(Number(o.pace), L.pace.min, L.pace.max, d.pace),
     summary: o.summary !== false,
@@ -1376,15 +1415,50 @@ export function driveCounterPieces(
 
 // --- the camera -----------------------------------------------------------------
 
-/** A similarity transform from plan units to the frame. */
+/**
+ * A similarity transform from plan units to the frame: a scale, a turn
+ * (radians, heading-up — 0 keeps north up), then a translation.
+ */
 export interface View {
   scale: number;
   tx: number;
   ty: number;
+  angle: number;
 }
 
 export function applyView(view: View, p: PlanPoint): PlanPoint {
-  return { x: p.x * view.scale + view.tx, y: p.y * view.scale + view.ty };
+  const x = p.x * view.scale;
+  const y = p.y * view.scale;
+  if (!view.angle) return { x: x + view.tx, y: y + view.ty };
+  const c = Math.cos(view.angle);
+  const s = Math.sin(view.angle);
+  return { x: x * c - y * s + view.tx, y: x * s + y * c + view.ty };
+}
+
+/** The view that puts plan point `centre` at frame point `anchor`, at `scale`, turned by `angle`. */
+export function viewOf(centre: PlanPoint, anchor: PlanPoint, scale: number, angle = 0): View {
+  const c = Math.cos(angle);
+  const s = Math.sin(angle);
+  const x = centre.x * scale;
+  const y = centre.y * scale;
+  return { scale, angle, tx: anchor.x - (x * c - y * s), ty: anchor.y - (x * s + y * c) };
+}
+
+/** One frame of a camera track: where it looks, how wide, how the map is turned. */
+export interface CameraFrame {
+  centre: PlanPoint;
+  /** Plan units across the map's box. */
+  width: number;
+  angle: number;
+}
+
+/** A baked camera (`map-camera.ts`): one frame per moment, the whole route beside it. */
+export interface CameraTrack {
+  seconds: number;
+  whole: CameraFrame;
+  /** The follow view's width in kilometres, resolved — what the panel's slider shows. */
+  viewKm: number;
+  at(t: number): CameraFrame;
 }
 
 /** The plan's bounding box, over the path and the stops. */
@@ -1406,8 +1480,11 @@ export function planBounds(plan: DrivePlan): { x0: number; y0: number; x1: numbe
 
 /**
  * The view for a moment: the whole route fitted inside `box` with `margin`
- * pixels kept clear for the car and the cards, or that scale zoomed in by
- * the follow share with the car held at the box's centre.
+ * pixels kept clear for the car and the cards, or — following — the baked
+ * camera's frame at `t` (`map-camera.ts`): its centre at the box's centre,
+ * its width across the box, the map turned by its angle. Without a track
+ * the follow view is the one it always was: the whole-route scale divided by
+ * the share, the car held at the centre.
  */
 export function viewAt(
   plan: DrivePlan,
@@ -1415,6 +1492,8 @@ export function viewAt(
   margin: number,
   o: Pick<DriveOptions, 'camera' | 'followZoom'>,
   moment: DriveMoment,
+  track: CameraTrack | null = null,
+  t = 0,
 ): View {
   const b = planBounds(plan);
   const w = Math.max(1e-6, b.x1 - b.x0);
@@ -1424,10 +1503,14 @@ export function viewAt(
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2;
   if (o.camera === 'follow') {
+    if (track) {
+      const frame = track.at(t);
+      return viewOf(frame.centre, { x: cx, y: cy }, box.width / Math.max(1e-6, frame.width), frame.angle);
+    }
     const scale = whole / o.followZoom;
-    return { scale, tx: cx - moment.point.x * scale, ty: cy - moment.point.y * scale };
+    return { scale, tx: cx - moment.point.x * scale, ty: cy - moment.point.y * scale, angle: 0 };
   }
-  return { scale: whole, tx: cx - ((b.x0 + b.x1) / 2) * whole, ty: cy - ((b.y0 + b.y1) / 2) * whole };
+  return { scale: whole, tx: cx - ((b.x0 + b.x1) / 2) * whole, ty: cy - ((b.y0 + b.y1) / 2) * whole, angle: 0 };
 }
 
 // --- the map's furniture ---------------------------------------------------------
