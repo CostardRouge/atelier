@@ -922,6 +922,30 @@ single day — give it an end date to count a range". The old fixed examples wer
 invented values, and three of the four counter modes looked broken because
 picking one changed nothing and said nothing.
 
+**The badge can count WITH the car — the trip recap.** Three more counter
+modes, offered as such in the Counter section and honoured only under the
+Virée opener (anywhere else they say why not): *Days, as the car drives*,
+*Kilometres, as the car drives*, *Stops, as the car drives*. The number then
+follows the car at every frame — the day of the trip (its total the trip's),
+the distance as the crow flies between the stops passed (never a road
+distance, which the app does not know), or the stops reached — and a still of
+the piece shows the trip told whole. ONE clock drives all of it: each stop is
+dated from the document and never invented — a leg's span shared evenly among
+its places, a place's own arrival and departure where it keeps them, a stop
+of your own put on one of the trip's places, else its picture's day, a picture
+stop its pictures' — and a stop nothing dates stays on the road and moves no
+counter, which the panel counts. A **Pace** slider, Calendar ↔ Road (65 %
+toward the calendar by default), decides how the road time is shared: toward
+the calendar the car waits at a place while its days run on the counter —
+the "surplace" in Melbourne —, toward the road the days a place took pass as
+the car leaves it. The drive may take up to a minute. At the end a **summary
+card** — days · distance · stops — and, on the road, **milestones** every
+50 days and 1 000 km (or miles), each a switch; the badge's words carry a
+*Stop* field for the stops' label. The recap's "map over photo" is the map on
+a **paper plate** over the picture filling the frame (a Map switch, for the
+*Behind* pictures or the picture ground), the picture pushing in slowly while
+it shows. Nothing of a piece whose badge counts something else changes.
+
 **The day is measured, not guessed.** Everything the badge draws is a
 subtraction from the day the piece is filed under, so the editor reads the
 picture's own date — the camera's `DateTimeOriginal` where there is one, the
@@ -1136,9 +1160,12 @@ latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
 and at a strength that lets the paper show through —, where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
-up as it drives), the motion (the time on the road, the five motions, a hold
+up as it drives, the map on a paper plate over a picture), the motion (the time
+on the road, up to a minute, the five motions, a hold
 first, a beat at the end, whether the camera fits the whole route or follows
-the car at a zoom, the badge's place following the car), and the sound: a tick
+the car at a zoom, the badge's place following the car), the recap (when the
+badge's counter follows the drive — see *The badge can count WITH the car*
+above — its pace, its summary card and its milestones), and the sound: a tick
 at every stop on the same voices, deeper where a leg begins, the seat on
 arrival, a shutter click as each print lands.
 

@@ -30,7 +30,7 @@ import type { CarSpec } from '../car-spec';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
-import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
+import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
 
 /** What the engine draws into — the 2D context both renderers already use. */
 export type HookCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -244,6 +244,9 @@ export interface HookPlace {
   countryCode?: string;
   /** This place's own writing, over the opener's and the trip's. */
   style?: PlaceStyle;
+  /** The days it was reached and left, `YYYY-MM-DD`, where the place knows them (`TripPlace.arrived`/`left`). */
+  arrived?: string;
+  left?: string;
 }
 
 export interface HookStage {
@@ -310,6 +313,8 @@ export interface HookContext {
    * defaults, the name alone on an opener.
    */
   writing?: PlaceWritingTrip;
+  /** The badge's words (`TripDoc.badgeWords`) — what a variant that rewrites a counter says «of» with. */
+  badgeWords?: BadgeWords;
 }
 
 /** One sound the hook makes — see `shared/audio/sound-event.ts`. */

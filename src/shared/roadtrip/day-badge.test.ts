@@ -3,6 +3,7 @@ import { defaultCarSpec } from './car-spec';
 import {
   counterPieces,
   counterPreviews,
+  driveCountOf,
   DEFAULT_BADGE_WORDS,
   FRENCH_BADGE_WORDS,
   badgeContent,
@@ -463,6 +464,21 @@ describe('counterPieces — a mode that cannot count says why', () => {
   it('puts the marker on the place it actually draws', () => {
     const withPin = counterPieces(doc, post('2025-03-27'), 'day', DEFAULT_BADGE_WORDS, true);
     expect(withPin!.caption).toBe(`${DEFAULT_BADGE_WORDS.pin} Kalbarri`);
+  });
+
+  it('follows Virée’s car only under the Virée opener, and says so otherwise', () => {
+    // Without the car there is nothing to follow: the day of the trip stands.
+    const still = counterPieces(doc, post('2025-03-27'), 'drive-days', DEFAULT_BADGE_WORDS);
+    expect(still!.unavailable).toMatch(/Virée/);
+    expect(still!.headline).toBe('27');
+    const driven = { ...post('2025-03-27'), badge: { ...post('2025-03-27').badge, hook: [{ id: 'drive', options: {} }] } };
+    // At rest, before the opener speaks: true readings, never the road's total.
+    expect(counterPieces(doc, driven, 'drive-days', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'Day', headline: '27', counter: 'of 310', unavailable: null });
+    expect(counterPieces(doc, driven, 'drive-km', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'km', headline: '0', counter: null });
+    expect(counterPieces(doc, driven, 'drive-places', DEFAULT_BADGE_WORDS)).toMatchObject({ label: 'Stop', headline: '1', counter: null });
+    expect(counterPieces(doc, driven, 'drive-places', { ...DEFAULT_BADGE_WORDS, stop: 'Étape' })!.label).toBe('Étape');
+    expect(driveCountOf('drive-km')).toBe('km');
+    expect(driveCountOf('day')).toBeNull();
   });
 });
 

@@ -76,6 +76,7 @@ export function hookContextFor(
     pictures,
     car: trip.car,
     writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
+    badgeWords: trip.badgeWords,
   };
 }
 

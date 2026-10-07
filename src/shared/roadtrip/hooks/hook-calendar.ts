@@ -141,5 +141,7 @@ export function hookPlace(place: TripPlace, lat: number, lon: number): HookPlace
   take('country');
   take('countryCode');
   if (place.style) out.style = place.style;
+  if (place.arrived) out.arrived = place.arrived;
+  if (place.left) out.left = place.left;
   return out;
 }

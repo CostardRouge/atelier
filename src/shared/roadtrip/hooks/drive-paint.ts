@@ -31,8 +31,11 @@ import {
   PLAN_SIZE,
   applyView,
   cardPlacement,
+  distanceNumeral,
   graticuleStep,
+  headingAt,
   planBounds,
+  pointAt,
   scaleBar,
   viewAt,
   wantsStopLabel,
@@ -71,10 +74,26 @@ export interface DriveScratch {
   model: CarModel;
   parts?: Part[];
   buffer?: OffscreenCanvas | HTMLCanvasElement;
+  /** The words the summary card and the milestones say — the trip's badge words, English by default. */
+  words: SummaryWords;
 }
 
-export function driveScratch(spec: CarSpec): DriveScratch {
-  return { spec, model: carModel(spec.model) };
+export interface SummaryWords {
+  day: string;
+  days: string;
+  stop: string;
+  stops: string;
+}
+
+export const SUMMARY_WORDS: SummaryWords = { day: 'Day', days: 'days', stop: 'Stop', stops: 'stops' };
+
+export function driveScratch(spec: CarSpec, words: Partial<SummaryWords> = {}): DriveScratch {
+  const w = { ...SUMMARY_WORDS };
+  for (const key of Object.keys(w) as (keyof SummaryWords)[]) {
+    const given = words[key]?.trim();
+    if (given) w[key] = given;
+  }
+  return { spec, model: carModel(spec.model), words: w };
 }
 
 function carParts(scratch: DriveScratch): Part[] {
@@ -210,8 +229,11 @@ function paintMap(
   // paper: OpenStreetMap's own palette is a light one.
   const onPaper = o.ground !== 'picture';
   const tiles = o.ground === 'tiles' && basemap ? pictures?.get(basemap.key) : undefined;
-  const ink = onPaper ? o.inkColor : '#ffffff';
-  const halo = onPaper ? o.paperColor : 'rgba(0,0,0,0.55)';
+  // The map as a paper PLATE over a picture filling the frame: the road and
+  // the names are then inked as on paper, because they are.
+  const plated = o.plate && (o.pictures === 'backdrop' || !onPaper);
+  const ink = onPaper || plated ? o.inkColor : '#ffffff';
+  const halo = onPaper || plated ? o.paperColor : 'rgba(0,0,0,0.55)';
   const lw = o.lineWidth;
 
   g.save();
@@ -221,19 +243,38 @@ function paintMap(
   const showing = o.pictures === 'none' ? [] : plan.showing(t);
   // A picture behind the map: it takes the paper's place while the car
   // halts, the road and the car drawn over it, and fades as the car leaves.
-  const fullFrame = (rise: number, pop: { key: string; leaves: number }) => {
+  // Under a plate it pushes in slowly while it shows — a recap's picture is
+  // looked at for seconds, and a still one reads as a slide.
+  const fullFrame = (rise: number, pop: { key: string; at: number; leaves: number }) => {
     const picture = pictures?.get(pop.key);
     if (!picture) return;
     const leaving = t < pop.leaves ? 1 : Math.max(0, 1 - (t - pop.leaves) / CARD_FADE_SECONDS);
     const alpha = Math.min(1, rise) * leaving;
     if (alpha <= 0) return;
+    g.save();
     g.globalAlpha = alpha;
+    if (plated) {
+      const push = 1 + PUSH_IN * Math.min(1, Math.max(0, t - pop.at) / PUSH_IN_SECONDS);
+      g.translate(w / 2, h / 2);
+      g.scale(push, push);
+      g.translate(-w / 2, -h / 2);
+    }
     try {
       drawFramed(g, picture.image, picture.width, picture.height, w, h);
     } catch {
       // A bitmap released under a render in flight: the frame shows the map.
     }
-    g.globalAlpha = 1;
+    g.restore();
+  };
+  const paintPlate = () => {
+    if (!plated) return;
+    const m = 24 * u;
+    roundRect(g, box.x - m, box.y - m, box.width + 2 * m, box.height + 2 * m, 16 * u);
+    g.fillStyle = hexToRgba(o.paperColor, 0.84);
+    g.fill();
+    g.lineWidth = 1.5 * u;
+    g.strokeStyle = hexToRgba(o.inkColor, 0.25);
+    g.stroke();
   };
 
   if (onPaper) {
@@ -246,6 +287,7 @@ function paintMap(
       drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity);
     }
     if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);
+    paintPlate();
     // The tiles carry their own lines; a graticule over them is noise.
     if (o.graticule && !tiles) paintGraticule(g, plan, view, o, u, frame);
     if (o.vignette) {
@@ -256,8 +298,9 @@ function paintMap(
       g.fillStyle = grad;
       g.fillRect(0, 0, w, h);
     }
-  } else if (o.pictures === 'backdrop') {
-    for (const { pop, rise } of showing) fullFrame(rise, pop);
+  } else {
+    if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);
+    paintPlate();
   }
 
   // The road: the whole path faint and dashed ahead, the trail solid behind.
@@ -308,7 +351,10 @@ function paintMap(
       g.stroke();
     });
   }
-  if (moment.at !== null && !moment.over && (moment.phase === 'halt' || moment.phase === 'arrive')) {
+  // The milestones: a tick across the road, its number once the car has passed.
+  if (plan.milestones.length) paintMilestones(g, plan, o, at, moment, u, ink, halo, scratch.words);
+
+  if (moment.at !== null && !moment.over && (moment.phase === 'halt' || moment.phase === 'stay' || moment.phase === 'arrive')) {
     const p = stops[moment.at];
     const k = Math.min(1, moment.since / 0.7);
     if (k < 1) {
@@ -457,6 +503,120 @@ function paintMap(
   // A picture filling the frame while the car halts: over everything of the map.
   if (o.pictures === 'fill') for (const { pop, rise } of showing) fullFrame(rise, pop);
 
+  // The recap's summary card, once the car has arrived and rested.
+  const { summaryAt } = plan.schedule;
+  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words);
+
+  g.restore();
+}
+
+/** A plated picture's push-in: how far, over how long. */
+const PUSH_IN = 0.06;
+const PUSH_IN_SECONDS = 8;
+const SUMMARY_RISE_SECONDS = 0.45;
+
+function paintMilestones(
+  g: HookCtx2D,
+  plan: DrivePlan,
+  o: DriveOptions,
+  at: (p: { x: number; y: number }) => { x: number; y: number },
+  moment: DriveMoment,
+  u: number,
+  ink: string,
+  halo: string,
+  words: SummaryWords,
+): void {
+  const unit = o.distance === 'mi' ? 'mi' : 'km';
+  g.font = `500 ${18 * u}px ${MONO_FONT}`;
+  g.textBaseline = 'middle';
+  for (const mark of plan.milestones) {
+    const passed = mark.s <= moment.s + 1e-9;
+    const p = at(pointAt(plan.path, mark.s).point);
+    const d = headingAt(plan.path, mark.s);
+    // A tick across the road.
+    const half = 9 * u;
+    g.beginPath();
+    g.moveTo(p.x - d.y * half, p.y + d.x * half);
+    g.lineTo(p.x + d.y * half, p.y - d.x * half);
+    g.lineWidth = 6 * u;
+    g.strokeStyle = halo;
+    g.stroke();
+    g.lineWidth = 2.5 * u;
+    g.strokeStyle = passed ? o.trailColor : hexToRgba(ink, 0.5);
+    g.stroke();
+    if (!passed) continue;
+    const text = mark.kind === 'day' ? `${words.day} ${mark.value}` : `${distanceNumeral(mark.value, 'km')} ${unit}`;
+    // The number sits on the side the road is not: to the left of the heading.
+    const side = { x: -d.y, y: d.x };
+    const x = p.x - side.x * 22 * u;
+    const y = p.y - side.y * 22 * u;
+    g.textAlign = side.x > 0.2 ? 'right' : side.x < -0.2 ? 'left' : 'center';
+    g.lineWidth = 4 * u;
+    g.strokeStyle = halo;
+    g.strokeText(text, x, y);
+    g.fillStyle = ink;
+    g.fillText(text, x, y);
+  }
+}
+
+/**
+ * The summary: days · distance · stops, in the map's box — the three
+ * numbers of the trip the counter has been counting up to.
+ */
+function paintSummary(
+  g: HookCtx2D,
+  plan: DrivePlan,
+  o: DriveOptions,
+  box: { x: number; y: number; width: number; height: number },
+  u: number,
+  rise: number,
+  words: SummaryWords,
+): void {
+  const n = plan.route.stops.length;
+  const unit = o.distance === 'mi' ? 'mi' : 'km';
+  const cells: { value: string; word: string }[] = [];
+  if (plan.clock) {
+    const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
+    cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+  }
+  cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
+  cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
+
+  const k = 1 - Math.pow(1 - rise, 3);
+  const cw = Math.min(box.width, 200 * u * cells.length);
+  const ch = 150 * u;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2 + (1 - k) * 18 * u;
+  g.save();
+  g.globalAlpha = k;
+  roundRect(g, cx - cw / 2, cy - ch / 2, cw, ch, 14 * u);
+  g.fillStyle = hexToRgba(o.paperColor, 0.94);
+  g.fill();
+  g.lineWidth = 1.5 * u;
+  g.strokeStyle = hexToRgba(o.inkColor, 0.3);
+  g.stroke();
+  g.textAlign = 'center';
+  g.fillStyle = o.inkColor;
+  cells.forEach((cell, i) => {
+    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
+    g.font = `600 ${54 * u}px ${MONO_FONT}`;
+    g.textBaseline = 'alphabetic';
+    g.fillText(cell.value, x, cy + 8 * u);
+    g.font = `500 ${20 * u}px ${LABEL_FONT}`;
+    g.textBaseline = 'top';
+    g.fillStyle = hexToRgba(o.inkColor, 0.7);
+    g.fillText(cell.word, x, cy + 22 * u);
+    g.fillStyle = o.inkColor;
+    if (i > 0) {
+      const sx = cx - cw / 2 + (cw * i) / cells.length;
+      g.strokeStyle = hexToRgba(o.inkColor, 0.18);
+      g.lineWidth = 1.5 * u;
+      g.beginPath();
+      g.moveTo(sx, cy - ch * 0.3);
+      g.lineTo(sx, cy + ch * 0.3);
+      g.stroke();
+    }
+  });
   g.restore();
 }
 

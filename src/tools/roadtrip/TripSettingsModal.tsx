@@ -261,7 +261,7 @@ export default function TripSettingsModal({
                         {f.label}
                       </span>
                       <input
-                        value={trip.badgeWords[f.key]}
+                        value={trip.badgeWords[f.key] ?? ''}
                         onChange={(e) => patchWords({ [f.key]: e.target.value })}
                         className={`${inputClass} flex-1 min-w-0 max-[820px]:text-base`}
                       />

@@ -34,15 +34,22 @@ import {
   DRIVE_DEFAULTS,
   DRIVE_LIMITS,
   MAX_PICTURES_PER_STOP,
+  MILESTONE_DAYS,
+  MILESTONE_DISTANCE,
+  counterDay,
+  distanceNumeral,
+  driveCounterPieces,
   drivePlan,
   driveOptions,
   driveRoute,
   driveScore,
   driveWants,
   type DriveOptions,
+  type DrivePlan,
   type DriveRoute,
 } from './drive-plan';
 import { driveBasemap, driveScratch, paintDrive } from './drive-paint';
+import { driveCountOf, type DriveCount } from '../day-badge';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
 import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
@@ -120,6 +127,22 @@ function leftOutLine(route: DriveRoute, o: DriveOptions): string | null {
   return `Left out: ${parts.join(', ')}${why}`;
 }
 
+/** What the recap counts, and up to what — the real numbers, or the reason there are none. */
+function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null): string {
+  if (!plan) return 'Nothing to drive yet — the counter waits for the road.';
+  const n = route.stops.length;
+  if (count === 'km') return `The badge counts the distance as the car drives, up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies.`;
+  if (count === 'places') return `The badge counts the stops as the car reaches them, up to ${n}.`;
+  if (!plan.clock) {
+    return route.stops.length
+      ? 'No stop carries a date, so the day cannot count: the badge keeps the day of the trip. A stop put on one of the trip’s places, or given a picture, takes its date.'
+      : 'Nothing to drive yet.';
+  }
+  const from = counterDay(plan.clock.arrive[0], route.tripDays);
+  const to = counterDay(plan.clock.leave[n - 1], route.tripDays);
+  return `The badge counts the day of the trip as the car drives, from day ${from} to day ${to} of ${route.tripDays}.`;
+}
+
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
 function paintHint(model: string, color: string): string {
   const preset = carLine(model).colours.find((c) => c.hex === color);
@@ -133,7 +156,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const stages = ctx.stages ?? [];
   const calendar = ctx.calendar ?? [];
   const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing);
-  const plan = drivePlan(route, o);
+  const count = driveCountOf(ctx.counterMode);
+  const plan = drivePlan(route, o, count !== null);
   const wants = driveWants(route, o);
   const status = host?.pictureStatus;
   const line = pictureLine(wants.map((w) => w.key), status);
@@ -508,6 +532,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
+        {(o.pictures === 'backdrop' || o.ground === 'picture') && (
+          <FieldRow label="Plate" hint="The map on a translucent paper plate over the picture, the picture pushing in slowly while it shows — the recap’s «map over photo».">
+            <ToggleField label="The map on a paper plate over the picture" checked={o.plate} onChange={(plate) => set({ plate })}>
+              Map on a paper plate
+            </ToggleField>
+          </FieldRow>
+        )}
         {o.ground === 'tiles' && (
           <BasemapStatus
             want={plan ? driveBasemap(plan, o, ctx.aspect) : null}
@@ -737,6 +768,59 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
+      {ctx.counterMode !== undefined && (
+        <Group title="Recap">
+          {!count ? (
+            <p className="m-0 text-xs text-muted">
+              To make the badge’s number count with the car — the day of the trip, the distance or the stops —
+              pick a counter that follows the drive under Content → Counter.
+            </p>
+          ) : (
+            <>
+              <p className="m-0 text-xs text-ink-soft">{recapLine(count, route, plan)}</p>
+              {count === 'days' && route.undated > 0 && route.undated < route.stops.length && (
+                <p className="m-0 text-xs text-accent-ink">
+                  {route.undated} {route.undated === 1 ? 'stop carries' : 'stops carry'} no date — the day holds across{' '}
+                  {route.undated === 1 ? 'it' : 'them'}.{o.stopsOn === 'custom' ? ' A stop put on one of the trip’s places, or given a picture, takes its date.' : ''}
+                </p>
+              )}
+              <FieldRow
+                label="Pace"
+                hint={
+                  o.pace === 0
+                    ? 'The road time is shared by distance alone; the days a place took pass at once when the car leaves it.'
+                    : 'The car waits at a place while its days run on the counter, this much of the road time going to the days spent and the rest to the kilometres.'
+                }
+              >
+                <RangeField
+                  label="Calendar against road"
+                  min={DRIVE_LIMITS.pace.min}
+                  max={DRIVE_LIMITS.pace.max}
+                  step={0.05}
+                  value={o.pace}
+                  onChange={(pace) => set({ pace })}
+                  format={(v) => (v === 0 ? 'road' : v === 1 ? 'calendar' : `${Math.round(v * 100)}% calendar`)}
+                />
+              </FieldRow>
+              <FieldRow
+                label="On the way"
+                align="start"
+                hint={`A card — days · distance · stops — once the car has rested, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}.`}
+              >
+                <div className="flex flex-col gap-1.5">
+                  <ToggleField label="A summary card at the end" checked={o.summary} onChange={(summary) => set({ summary })}>
+                    Summary card
+                  </ToggleField>
+                  <ToggleField label="Milestones on the road" checked={o.milestones} onChange={(milestones) => set({ milestones })}>
+                    Milestones
+                  </ToggleField>
+                </div>
+              </FieldRow>
+            </>
+          )}
+        </Group>
+      )}
+
       <Group title="Sound">
         <SwitchRow
           label="Tick at every stop the car reaches"
@@ -819,31 +903,47 @@ export const driveVariant: HookVariant = {
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return null;
-    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o);
+    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o, driveCountOf(ctx.counterMode) !== null);
     return plan ? driveBasemap(plan, o, ctx.aspect) : null;
   },
   prepare(options, ctx) {
     const o = driveOptions(options);
     const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing);
-    const plan = drivePlan(route, o);
+    // The RECAP: the badge's counter follows the drive (declared in its own
+    // Counter section, `day-badge.ts`), so the plan runs the stops' clock.
+    const count = driveCountOf(ctx.counterMode);
+    const plan = drivePlan(route, o, count !== null);
     if (!plan) return { seconds: 0 };
-    const scratch = driveScratch(vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR));
+    const words = ctx.badgeWords;
+    const scratch = driveScratch(vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR), {
+      day: words?.day,
+      days: words?.days,
+      stop: words?.stop,
+    });
     const basemap = driveBasemap(plan, o, ctx.aspect);
     // A stop's name is a place on the legs and on the author's own list — the
     // author's assertion there, the Itinerary's rule — and a day on pictures.
     const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
+    const counterWords = { day: words?.day ?? 'Day', of: words?.of ?? 'of', stop: words?.stop };
     return {
       seconds: plan.seconds,
       // The badge's place reads the last stop the car passed, while it drives;
-      // once it arrives the badge says its own — the leg's label.
-      content: follows
-        ? (t) => {
-            const m = plan.at(t);
-            if (m.over || t >= plan.schedule.arrivedAt) return {};
-            const name = route.stops[m.reached]?.name;
-            return name ? { caption: name } : {};
-          }
-        : undefined,
+      // once it arrives the badge says its own — the leg's label. The counter,
+      // when it follows the drive, reads the car at every moment, and past the
+      // end the trip told whole.
+      content:
+        follows || count
+          ? (t) => {
+              const m = plan.at(t);
+              const out: Partial<Record<'caption' | 'label' | 'headline' | 'counter', string>> = {};
+              if (follows && !m.over && t < plan.schedule.arrivedAt) {
+                const name = route.stops[m.reached]?.name;
+                if (name) out.caption = name;
+              }
+              if (count) Object.assign(out, driveCounterPieces(plan, o, count, t, counterWords));
+              return out;
+            }
+          : undefined,
       paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap),
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,

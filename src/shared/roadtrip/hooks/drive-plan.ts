@@ -38,7 +38,7 @@
 import { VEHICLE_CHOICES, type VehicleChoice } from '../car-spec';
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
-import { haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
+import { formatDistance, haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
 import { currentLegIndex, standingPiece } from './hook-calendar';
 import {
   hookPictureKey,
@@ -141,6 +141,26 @@ export interface DriveOptions {
   followZoom: number;
   /** Rewrite the badge's place with the stop the car is at, on `places` and `custom`. */
   captionFollows: boolean;
+  // --- the recap (2026-10-07) ----------------------------------------------------
+  // Read only while the badge's counter FOLLOWS the drive (`driveCountOf`,
+  // `day-badge.ts`): a piece whose badge counts the day of the trip keeps the
+  // schedule it always had, whatever these hold.
+  /**
+   * Calendar ↔ Road: the share of the road time given to the DAYS spent
+   * (the car waits at a place while its days run) against the share given to
+   * the kilometres. 0 is the plain drive, where days skip at every stop.
+   */
+  pace: number;
+  /** A card at the end — days · distance · stops — before the reveal. */
+  summary: boolean;
+  /** A mark on the road every `MILESTONE_DAYS` days and `MILESTONE_DISTANCE` km or miles. */
+  milestones: boolean;
+  /**
+   * The map as a translucent paper PLATE over a picture filling the frame
+   * (`backdrop`, or the `picture` ground), with a slow push-in on the picture
+   * — the recap's «map over photo», usable on any drive.
+   */
+  plate: boolean;
   // --- sound -----------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -194,6 +214,10 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   camera: 'whole',
   followZoom: 0.45,
   captionFollows: false,
+  pace: 0.65,
+  summary: true,
+  milestones: true,
+  plate: false,
   sound: true,
   kit: 'wood',
   tickPitch: 1,
@@ -212,10 +236,12 @@ export const DRIVE_LIMITS = {
   size: { min: 0.5, max: 1.2 },
   basemapOpacity: { min: 0.2, max: 1 },
   labelSize: { min: 0.6, max: 1.6 },
-  driveSeconds: { min: 1, max: 12 },
+  // 60 s is the recap's: a year's trip told place by place (2026-10-07).
+  driveSeconds: { min: 1, max: 60 },
   delaySeconds: { min: 0, max: 2 },
   arriveSeconds: { min: 0, max: 3 },
   followZoom: { min: 0.15, max: 1 },
+  pace: { min: 0, max: 1 },
   tickPitch: { min: 0.5, max: 2 },
   tickVolume: { min: 0, max: 2 },
 } as const;
@@ -233,6 +259,13 @@ export const MERGE_KM = 0.15;
 export const MAX_PICTURES_PER_STOP = 6;
 /** The most stops a drive makes on pictures; past it the list is thinned evenly. */
 export const MAX_PICTURE_STOPS = 24;
+/** The summary card's beat at the end of a recap. */
+export const SUMMARY_SECONDS = 3;
+/** A milestone on the road every so many days, and every so many km or miles. */
+export const MILESTONE_DAYS = 50;
+export const MILESTONE_DISTANCE = 1000;
+/** A stop of the author's own within this distance of a trip place IS that place, dates included. */
+export const SAME_PLACE_KM = 1;
 
 const HEX = /^#[0-9a-f]{6}$/i;
 
@@ -296,6 +329,10 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     camera: oneOf(o.camera, ['whole', 'follow'], d.camera),
     followZoom: clamp(Number(o.followZoom), L.followZoom.min, L.followZoom.max, d.followZoom),
     captionFollows: o.captionFollows === true,
+    pace: clamp(Number(o.pace), L.pace.min, L.pace.max, d.pace),
+    summary: o.summary !== false,
+    milestones: o.milestones !== false,
+    plate: o.plate === true,
     sound: o.sound !== false,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),
@@ -322,6 +359,20 @@ export interface DriveStop extends GeoPoint {
   /** The first stop of a leg (places), or of a day (pictures): the deeper tick. */
   accent: boolean;
   pictures: StopPicture[];
+  /**
+   * WHEN the car is here, as days of the trip on a continuous scale — day
+   * 1.0 is the morning of day 1, day N + 1.0 the end of day N — so `arrive`
+   * and `leave` bound the stay and the counter reads `floor`. From the
+   * document only: a leg's span shared evenly among its places, a place's
+   * own `arrived`/`left` where it keeps them, a picture's day; absent where
+   * nothing dates the stop, and the recap's clock then holds across it.
+   */
+  days?: StopDays;
+}
+
+export interface StopDays {
+  arrive: number;
+  leave: number;
 }
 
 /** Why a picture is not on the map, for the panel to say. */
@@ -345,9 +396,63 @@ export interface DriveRoute {
   currentLeg: number | null;
   /** Every stop carries a name worth drawing. */
   named: boolean;
+  /** The trip's length in days — what the recap's day counter is «of». */
+  tripDays: number;
+  /** Stops nothing dates, for the panel to say. */
+  undated: number;
 }
 
 const EMPTY_LEFT_OUT: LeftOut = { after: 0, outside: 0, unlocated: 0, homeless: 0, crowded: 0 };
+
+// --- dating the stops -----------------------------------------------------------
+
+/** The day of the trip a date falls on, from the calendar; null outside it. */
+type DayOf = (date: string | undefined) => number | null;
+
+function dayOfFor(calendar: readonly HookDay[]): DayOf {
+  const map = new Map(calendar.map((day) => [day.date, day.dayNumber]));
+  return (date) => (date === undefined ? null : (map.get(date) ?? null));
+}
+
+/**
+ * When each of a leg's located places is reached and left: the leg's span
+ * shared EVENLY among them (a leg is dated, its places are not — an even
+ * share is the one arithmetic that invents no order the list does not
+ * hold), a place's own `arrived`/`left` winning where it keeps them. Null
+ * where the leg's span is not on the calendar.
+ */
+export function stagePlaceDays(stage: HookStage, dayOf: DayOf): (StopDays | null)[] {
+  const d0 = dayOf(stage.startDate);
+  const d1 = dayOf(stage.endDate);
+  const n = stage.places.length;
+  if (d0 === null || d1 === null || d1 < d0 || n === 0) return stage.places.map(() => null);
+  const span = d1 + 1 - d0;
+  return stage.places.map((place, i) => {
+    const share = { arrive: d0 + (span * i) / n, leave: d0 + (span * (i + 1)) / n };
+    const arrived = dayOf(place.arrived);
+    const left = dayOf(place.left);
+    const arrive = arrived ?? share.arrive;
+    const leave = left === null ? share.leave : left + 1;
+    return { arrive, leave: Math.max(arrive, leave) };
+  });
+}
+
+/** The days a stop whose pictures date it spans: the earliest to the end of the latest. */
+function pictureDays(dates: readonly string[], dayOf: DayOf): StopDays | undefined {
+  let lo = Infinity;
+  let hi = -Infinity;
+  for (const date of dates) {
+    const n = dayOf(date);
+    if (n === null) continue;
+    lo = Math.min(lo, n);
+    hi = Math.max(hi, n);
+  }
+  return Number.isFinite(lo) ? { arrive: lo, leave: hi + 1 } : undefined;
+}
+
+function countUndated(stops: readonly DriveStop[]): number {
+  return stops.reduce((n, s) => n + (s.days ? 0 : 1), 0);
+}
 
 function sameSpot(a: GeoPoint, b: GeoPoint): boolean {
   return Math.abs(a.lat - b.lat) < 1e-6 && Math.abs(a.lon - b.lon) < 1e-6;
@@ -385,22 +490,37 @@ function placeStops(
 ): DriveRoute {
   const current = currentLegIndex(stages, date);
   const driven = current === null ? stages.map((s, i) => ({ stage: s, index: i })) : stages.slice(0, current + 1).map((s, i) => ({ stage: s, index: i }));
+  const dayOf = dayOfFor(calendar);
   const stops: DriveStop[] = [];
   for (const { stage, index } of driven) {
     let first = true;
-    for (const place of stage.places) {
+    const days = stagePlaceDays(stage, dayOf);
+    stage.places.forEach((place, i) => {
       const point = { lat: place.lat, lon: place.lon };
       const previous = stops[stops.length - 1];
       if (previous && sameSpot(previous, point)) {
         first = false;
-        continue;
+        // The same spot twice in a row is one stay: it ends when the later leaves.
+        const when = days[i];
+        if (previous.days && when) previous.days = { arrive: previous.days.arrive, leave: Math.max(previous.days.leave, when.leave) };
+        return;
       }
-      stops.push({ ...point, name: stopText(place, o.placeStyle, writing).trim(), kind: 'place', leg: index, accent: first, pictures: [] });
+      const when = days[i];
+      stops.push({
+        ...point,
+        name: stopText(place, o.placeStyle, writing).trim(),
+        kind: 'place',
+        leg: index,
+        accent: first,
+        pictures: [],
+        ...(when ? { days: when } : {}),
+      });
       first = false;
-    }
+    });
   }
   const leftOut = { ...EMPTY_LEFT_OUT };
-  if (!stops.length) return { stops, leftOut, currentLeg: current === null ? null : current + 1, named: true };
+  const tripDays = calendar.length;
+  if (!stops.length) return { stops, leftOut, currentLeg: current === null ? null : current + 1, named: true, tripDays, undated: 0 };
 
   // The last stop of each driven leg — where a picture with only a date lands.
   const legEnd = new Map<number, DriveStop>();
@@ -445,7 +565,7 @@ function placeStops(
     }
   }
   crowd(stops, leftOut);
-  return { stops, leftOut, currentLeg: current === null ? null : current + 1, named: stops.some((s) => s.name) };
+  return { stops, leftOut, currentLeg: current === null ? null : current + 1, named: stops.some((s) => s.name), tripDays, undated: countUndated(stops) };
 }
 
 /** The stops on the pictures' own positions, in the order they were shot. */
@@ -454,11 +574,13 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
   const split = partitionPicked(calendar, date, o.picked);
   leftOut.after = split.after;
   leftOut.outside = split.outside;
-  const dayNumber = new Map(calendar.map((day) => [day.date, day.dayNumber]));
+  const dayOf = dayOfFor(calendar);
 
   // Located pictures become stops, a run within `MERGE_KM` of the last one
-  // joining it; the rest ride with the stop shot just before them.
+  // joining it; the rest ride with the stop shot just before them. A stop's
+  // days are its pictures' own.
   const stops: DriveStop[] = [];
+  const dated: string[][] = [];
   const orphansBeforeFirst: HookPickedPicture[] = [];
   let lastDate = '';
   for (const picture of split.inReach) {
@@ -471,20 +593,26 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
     const last = stops[stops.length - 1];
     if (last && haversineKm(last, picture.coords) <= MERGE_KM) {
       last.pictures.push(wantOf(picture));
+      dated[dated.length - 1].push(picture.date);
       continue;
     }
     const first = picture.date !== lastDate;
     lastDate = picture.date;
-    const n = dayNumber.get(picture.date);
+    const n = dayOf(picture.date);
     stops.push({
       ...picture.coords,
-      name: n === undefined ? '' : `Day ${n}`,
+      name: n === null ? '' : `Day ${n}`,
       kind: 'picture',
       leg: null,
       accent: first,
       pictures: [wantOf(picture)],
     });
+    dated.push([picture.date]);
   }
+  stops.forEach((stop, i) => {
+    const days = pictureDays(dated[i], dayOf);
+    if (days) stop.days = days;
+  });
   if (stops.length) {
     stops[0].pictures.unshift(...orphansBeforeFirst.map(wantOf));
   } else {
@@ -493,7 +621,37 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
   const kept = sampleEvenly(stops, MAX_PICTURE_STOPS);
   if (o.pictures === 'none') for (const stop of kept) stop.pictures = [];
   crowd(kept, leftOut);
-  return { stops: kept, leftOut, currentLeg: null, named: kept.some((s) => s.name) };
+  return { stops: kept, leftOut, currentLeg: null, named: kept.some((s) => s.name), tripDays: calendar.length, undated: countUndated(kept) };
+}
+
+/**
+ * When a stop of the author's own is reached and left: the trip place it
+ * stands on (within `SAME_PLACE_KM` — the stop was adopted from it, or put
+ * where it is), with that place's days; else the day of the stop's own
+ * picture. A stop with neither is undated — the car still drives through
+ * it, and the recap's counter holds.
+ */
+function customStopDays(
+  stop: MapStop,
+  stages: readonly HookStage[],
+  placeDays: readonly (readonly (StopDays | null)[])[],
+  dayOf: DayOf,
+): StopDays | undefined {
+  let best: StopDays | undefined;
+  let bestKm = SAME_PLACE_KM;
+  stages.forEach((stage, s) => {
+    stage.places.forEach((place, i) => {
+      const when = placeDays[s][i];
+      if (!when) return;
+      const km = haversineKm(place, stop);
+      if (km <= bestKm) {
+        bestKm = km;
+        best = when;
+      }
+    });
+  });
+  if (best) return best;
+  return stop.picture ? pictureDays([stop.picture.date], dayOf) : undefined;
 }
 
 /**
@@ -502,17 +660,29 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
  * Itinerary's rule. A picked picture with a position joins the nearest stop;
  * one without has nowhere the document can put it, and is counted.
  */
-function customStops(calendar: readonly HookDay[], date: string, o: DriveOptions, writing?: PlaceWritingTrip): DriveRoute {
+function customStops(
+  stages: readonly HookStage[],
+  calendar: readonly HookDay[],
+  date: string,
+  o: DriveOptions,
+  writing?: PlaceWritingTrip,
+): DriveRoute {
   const leftOut = { ...EMPTY_LEFT_OUT };
-  const stops: DriveStop[] = o.stops.map((stop, i) => ({
-    lat: stop.lat,
-    lon: stop.lon,
-    name: stopText(stop, o.placeStyle, writing).trim(),
-    kind: 'place',
-    leg: null,
-    accent: i === 0,
-    pictures: o.pictures !== 'none' && stop.picture ? [wantOf(stop.picture)] : [],
-  }));
+  const dayOf = dayOfFor(calendar);
+  const placeDays = stages.map((stage) => stagePlaceDays(stage, dayOf));
+  const stops: DriveStop[] = o.stops.map((stop, i) => {
+    const days = customStopDays(stop, stages, placeDays, dayOf);
+    return {
+      lat: stop.lat,
+      lon: stop.lon,
+      name: stopText(stop, o.placeStyle, writing).trim(),
+      kind: 'place',
+      leg: null,
+      accent: i === 0,
+      pictures: o.pictures !== 'none' && stop.picture ? [wantOf(stop.picture)] : [],
+      ...(days ? { days } : {}),
+    };
+  });
   if (stops.length && o.pictures !== 'none') {
     const split = partitionPicked(calendar, date, o.picked);
     leftOut.after = split.after;
@@ -523,7 +693,7 @@ function customStops(calendar: readonly HookDay[], date: string, o: DriveOptions
     }
   }
   crowd(stops, leftOut);
-  return { stops, leftOut, currentLeg: null, named: stops.some((s) => s.name) };
+  return { stops, leftOut, currentLeg: null, named: stops.some((s) => s.name), tripDays: calendar.length, undated: countUndated(stops) };
 }
 
 /** Trim each stop to what it can show, counting the rest. */
@@ -549,7 +719,7 @@ export function driveRoute(
   writing?: PlaceWritingTrip,
 ): DriveRoute {
   if (o.stopsOn === 'pictures') return pictureStops(calendar, date, o);
-  if (o.stopsOn === 'custom') return customStops(calendar, date, o, writing);
+  if (o.stopsOn === 'custom') return customStops(stages, calendar, date, o, writing);
   return placeStops(stages, calendar, date, o, writing);
 }
 
@@ -703,7 +873,12 @@ export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03)
 
 // --- the schedule ---------------------------------------------------------------
 
-export type PhaseKind = 'hold' | 'run' | 'halt' | 'arrive' | 'reveal';
+/**
+ * The car's phases. `stay` and `summary` are the recap's (2026-10-07): a
+ * stay is the car waiting at a place while that place's DAYS run on the
+ * counter — the Calendar end of the pace —, the summary the card at the end.
+ */
+export type PhaseKind = 'hold' | 'run' | 'halt' | 'stay' | 'arrive' | 'summary' | 'reveal';
 
 /**
  * How much wake a boat leaves: none before it sets off, growing over its
@@ -724,6 +899,14 @@ export interface Phase {
   s1: number;
   /** For a hold, a halt or the arrival: the stop the car sits at. */
   stop: number;
+  /**
+   * The day of the trip at the phase's two ends, on the stops' scale
+   * (`StopDays`) — set on every phase when the recap's clock runs, absent
+   * otherwise. A run reads it through its easing, so the day and the
+   * kilometres follow the same car.
+   */
+  day0?: number;
+  day1?: number;
 }
 
 export interface PicturePop {
@@ -747,6 +930,8 @@ export interface DriveSchedule {
   arrivedAt: number;
   /** When the reveal starts (= total when there is none). */
   revealAt: number;
+  /** When the summary card comes up, on a recap that asks for one; else null. */
+  summaryAt: number | null;
 }
 
 /** Whether the car halts at a stop under the options. */
@@ -761,13 +946,60 @@ export function haltSeconds(stop: DriveStop, o: DriveOptions): number {
   return o.pauseEverywhere ? o.secondsPerPicture : 0;
 }
 
-export function buildSchedule(stops: readonly DriveStop[], path: RoadPath, o: DriveOptions): DriveSchedule {
+/**
+ * The recap's CLOCK over the stops: when the car reaches and leaves each
+ * one, as days of the trip. A stop nothing dates takes its place BETWEEN its
+ * dated neighbours by distance (it is on the road, it moves no counter),
+ * and the ends take the nearest dated stop's. Null when no stop is dated —
+ * the counter then has nothing true to count and the drive keeps its own
+ * schedule.
+ */
+export function stopClock(stops: readonly DriveStop[], kmAtStop: readonly number[]): { arrive: number[]; leave: number[] } | null {
+  const n = stops.length;
+  const known = stops.map((s, i) => (s.days ? i : -1)).filter((i) => i >= 0);
+  if (!known.length) return null;
+  const arrive = new Array<number>(n);
+  const leave = new Array<number>(n);
+  for (let i = 0; i < n; i++) {
+    const own = stops[i].days;
+    if (own) {
+      arrive[i] = own.arrive;
+      leave[i] = own.leave;
+      continue;
+    }
+    // The dated stops either side; past the ends, the nearest one.
+    const before = known.filter((k) => k < i).pop();
+    const after = known.find((k) => k > i);
+    if (before === undefined && after !== undefined) {
+      arrive[i] = leave[i] = stops[after].days!.arrive;
+    } else if (after === undefined && before !== undefined) {
+      arrive[i] = leave[i] = stops[before].days!.leave;
+    } else if (before !== undefined && after !== undefined) {
+      const d0 = stops[before].days!.leave;
+      const d1 = stops[after].days!.arrive;
+      const span = kmAtStop[after] - kmAtStop[before];
+      const w = span > 0 ? (kmAtStop[i] - kmAtStop[before]) / span : 0.5;
+      arrive[i] = leave[i] = d0 + (d1 - d0) * w;
+    }
+  }
+  return { arrive, leave };
+}
+
+export function buildSchedule(
+  stops: readonly DriveStop[],
+  path: RoadPath,
+  o: DriveOptions,
+  /** The recap's clock, when the badge's counter follows the drive; null keeps the plain drive. */
+  clock: { arrive: readonly number[]; leave: readonly number[] } | null = null,
+  /** The recap asks for its summary card. */
+  summary = false,
+): DriveSchedule {
   const phases: Phase[] = [];
   const pops: PicturePop[] = [];
   const arrivals: number[] = [];
   let t = 0;
   const n = stops.length;
-  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0 };
+  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null };
 
   const addPops = (stop: number, start: number, leaves: number) => {
     if (o.pictures === 'none') return;
@@ -775,25 +1007,45 @@ export function buildSchedule(stops: readonly DriveStop[], path: RoadPath, o: Dr
       pops.push({ key: picture.key, stop, rank, at: start + rank * o.secondsPerPicture, leaves });
     });
   };
+  const days = (d0: number | undefined, d1 = d0) => (d0 === undefined ? {} : { day0: d0, day1: d1 });
+  const arriveDay = (i: number) => clock?.arrive[i];
+  const leaveDay = (i: number) => clock?.leave[i];
 
-  // The hold on the first stop, then its own halt.
+  // The pace: the road time is shared between the runs by LENGTH and, under
+  // a recap's clock, by the DAYS a run and a stay take — `pace` saying how
+  // much of each. The sum stays `driveSeconds` either way.
+  const dayTotal = clock ? clock.leave[n - 1] - clock.arrive[0] : 0;
+  const pace = clock && dayTotal > 0 ? o.pace : 0;
+  const staySeconds = (i: number): number => {
+    if (!clock || pace <= 0) return 0;
+    const dwell = clock.leave[i] - clock.arrive[i];
+    return dwell > 0 ? (o.driveSeconds * pace * dwell) / dayTotal : 0;
+  };
+
+  // The hold on the first stop, then its own halt, then its stay.
   arrivals.push(0);
   if (o.delaySeconds > 0) {
-    phases.push({ kind: 'hold', start: t, end: t + o.delaySeconds, s0: 0, s1: 0, stop: 0 });
+    phases.push({ kind: 'hold', start: t, end: t + o.delaySeconds, s0: 0, s1: 0, stop: 0, ...days(arriveDay(0)) });
     t += o.delaySeconds;
   }
   const firstHalt = haltSeconds(stops[0], o);
   if (firstHalt > 0 && n > 1) {
-    phases.push({ kind: 'halt', start: t, end: t + firstHalt, s0: 0, s1: 0, stop: 0 });
+    phases.push({ kind: 'halt', start: t, end: t + firstHalt, s0: 0, s1: 0, stop: 0, ...days(arriveDay(0)) });
     addPops(0, t, t + firstHalt);
     t += firstHalt;
   }
+  const firstStay = n > 1 ? staySeconds(0) : 0;
+  if (firstStay > 0) {
+    phases.push({ kind: 'stay', start: t, end: t + firstStay, s0: 0, s1: 0, stop: 0, ...days(arriveDay(0), leaveDay(0)) });
+    t += firstStay;
+  }
 
-  // Runs between halting stops, each taking its share of the driving time.
+  // Runs between the stops the car stops at — to halt, or to stay — each
+  // taking its share of the driving time.
   const runs: { from: number; to: number }[] = [];
   let from = 0;
   for (let i = 1; i < n; i++) {
-    if (i === n - 1 || haltsAt(stops[i], o)) {
+    if (i === n - 1 || haltsAt(stops[i], o) || staySeconds(i) > 0) {
       runs.push({ from, to: i });
       from = i;
     }
@@ -802,9 +1054,11 @@ export function buildSchedule(stops: readonly DriveStop[], path: RoadPath, o: Dr
   for (const run of runs) {
     const s0 = path.stopS[run.from];
     const s1 = path.stopS[run.to];
-    const share = drivable > 0 ? (s1 - s0) / drivable : 1 / runs.length;
+    const lengthShare = drivable > 0 ? (s1 - s0) / drivable : 1 / runs.length;
+    const travelDays = clock ? Math.max(0, clock.arrive[run.to] - clock.leave[run.from]) : 0;
+    const share = pace > 0 ? (1 - pace) * lengthShare + (pace * travelDays) / dayTotal : lengthShare;
     const seconds = Math.max(MIN_RUN_SECONDS, o.driveSeconds * share);
-    phases.push({ kind: 'run', start: t, end: t + seconds, s0, s1, stop: run.to });
+    phases.push({ kind: 'run', start: t, end: t + seconds, s0, s1, stop: run.to, ...days(leaveDay(run.from), arriveDay(run.to)) });
     t += seconds;
     // Every stop passed on the run is reached when the car crosses it.
     for (let i = run.from + 1; i <= run.to; i++) {
@@ -813,27 +1067,42 @@ export function buildSchedule(stops: readonly DriveStop[], path: RoadPath, o: Dr
     }
     if (run.to < n - 1) {
       const halt = haltSeconds(stops[run.to], o);
-      phases.push({ kind: 'halt', start: t, end: t + halt, s0: s1, s1, stop: run.to });
-      addPops(run.to, t, t + halt);
-      t += halt;
+      if (halt > 0) {
+        phases.push({ kind: 'halt', start: t, end: t + halt, s0: s1, s1, stop: run.to, ...days(arriveDay(run.to)) });
+        addPops(run.to, t, t + halt);
+        t += halt;
+      }
+      const stay = staySeconds(run.to);
+      if (stay > 0) {
+        phases.push({ kind: 'stay', start: t, end: t + stay, s0: s1, s1, stop: run.to, ...days(arriveDay(run.to), leaveDay(run.to)) });
+        t += stay;
+      }
     }
   }
 
-  // The arrival: the last stop's pictures, then a beat at rest.
+  // The arrival: the last stop's pictures, then a beat at rest — over which
+  // the last place's own days run, so the counter ends on the trip's last.
   const arrivedAt = t;
-  const lastHalt = n > 1 ? haltSeconds(stops[n - 1], o) : haltSeconds(stops[0], o);
-  const arrive = lastHalt + o.arriveSeconds;
   const lastStop = n - 1;
-  phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop });
+  const lastHalt = n > 1 ? haltSeconds(stops[lastStop], o) : haltSeconds(stops[0], o);
+  const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0);
+  phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(arriveDay(lastStop), leaveDay(lastStop)) });
   addPops(lastStop, t, t + arrive);
   t += arrive;
 
+  let summaryAt: number | null = null;
+  if (summary) {
+    summaryAt = t;
+    phases.push({ kind: 'summary', start: t, end: t + SUMMARY_SECONDS, s0: path.length, s1: path.length, stop: lastStop, ...days(leaveDay(lastStop)) });
+    t += SUMMARY_SECONDS;
+  }
+
   const revealAt = t;
   if (o.end === 'reveal') {
-    phases.push({ kind: 'reveal', start: t, end: t + REVEAL_SECONDS, s0: path.length, s1: path.length, stop: lastStop });
+    phases.push({ kind: 'reveal', start: t, end: t + REVEAL_SECONDS, s0: path.length, s1: path.length, stop: lastStop, ...days(leaveDay(lastStop)) });
     t += REVEAL_SECONDS;
   }
-  return { phases, pops, arrivals, total: t, arrivedAt, revealAt };
+  return { phases, pops, arrivals, total: t, arrivedAt, revealAt, summaryAt };
 }
 
 // --- reading the plan at a moment -------------------------------------------------
@@ -856,6 +1125,19 @@ export interface DriveMoment {
   over: boolean;
   /** Seconds since the current phase began — a ripple as the car halts. */
   since: number;
+  /**
+   * The day of the trip, on the stops' scale (`StopDays`), when the recap's
+   * clock runs — what the counter reads through `floor`; null otherwise.
+   */
+  day: number | null;
+}
+
+/** A mark on the road: where it is, and what it says. */
+export interface Milestone {
+  s: number;
+  kind: 'day' | 'distance';
+  /** The number alone — `50`, `1 000`; the paint adds the word. */
+  value: number;
 }
 
 export interface DrivePlan {
@@ -872,10 +1154,78 @@ export interface DrivePlan {
   kmAt(s: number): number;
   /** The pictures showing at `t`, each with its pop progress and its fade. */
   showing(t: number): { pop: PicturePop; rise: number; fade: number }[];
+  /** The badge's counter follows this drive: the clock runs, the summary and the milestones are drawn. */
+  recap: boolean;
+  /** The recap's clock over the stops, or null when nothing dates them. */
+  clock: { arrive: number[]; leave: number[] } | null;
+  /** The marks on the road, in order — empty unless the recap asks. */
+  milestones: Milestone[];
 }
 
-/** Plan a drive. Null when there is nothing to drive between and nothing to show. */
-export function drivePlan(route: DriveRoute, o: DriveOptions): DrivePlan | null {
+/**
+ * Where the road crosses each multiple of `step` days and of `step`
+ * kilometres (or miles): the day marks are read off the clock between the
+ * stops — a multiple reached during a STAY sits on that stop — and the
+ * distance marks off the cumulative kilometres. Pure, so the paint's marks
+ * and a test agree.
+ */
+export function roadMilestones(
+  stops: readonly DriveStop[],
+  path: RoadPath,
+  kmAtStop: readonly number[],
+  clock: { arrive: readonly number[]; leave: readonly number[] } | null,
+  unit: DistanceUnit,
+  dayStep = MILESTONE_DAYS,
+  distanceStep = MILESTONE_DISTANCE,
+): Milestone[] {
+  const out: Milestone[] = [];
+  const n = stops.length;
+  if (n < 2) return out;
+  if (clock) {
+    const first = clock.arrive[0];
+    const last = clock.leave[n - 1];
+    for (let m = Math.ceil(first / dayStep) * dayStep; m <= last; m += dayStep) {
+      if (m <= first) continue;
+      // The stop whose stay holds it, else the run it falls on.
+      for (let i = 0; i < n; i++) {
+        if (m >= clock.arrive[i] && m <= clock.leave[i]) {
+          out.push({ s: path.stopS[i], kind: 'day', value: m });
+          break;
+        }
+        if (i < n - 1 && m > clock.leave[i] && m < clock.arrive[i + 1]) {
+          const w = (m - clock.leave[i]) / (clock.arrive[i + 1] - clock.leave[i]);
+          out.push({ s: path.stopS[i] + (path.stopS[i + 1] - path.stopS[i]) * w, kind: 'day', value: m });
+          break;
+        }
+      }
+    }
+  }
+  if (unit !== 'off') {
+    const perKm = unit === 'mi' ? 0.621371 : 1;
+    const total = kmAtStop[n - 1] * perKm;
+    for (let m = distanceStep; m < total; m += distanceStep) {
+      const km = m / perKm;
+      for (let i = 1; i < n; i++) {
+        if (km <= kmAtStop[i]) {
+          const span = kmAtStop[i] - kmAtStop[i - 1];
+          const w = span > 0 ? (km - kmAtStop[i - 1]) / span : 1;
+          out.push({ s: path.stopS[i - 1] + (path.stopS[i] - path.stopS[i - 1]) * w, kind: 'distance', value: m });
+          break;
+        }
+      }
+    }
+  }
+  return out.sort((a, b) => a.s - b.s);
+}
+
+/**
+ * Plan a drive. Null when there is nothing to drive between and nothing to
+ * show. `recap` is the badge's counter following the drive: the stops'
+ * clock then runs the schedule (stays, the pace), the summary beat and the
+ * milestones — never otherwise, so a piece whose badge counts something else
+ * keeps the drive it always had.
+ */
+export function drivePlan(route: DriveRoute, o: DriveOptions, recap = false): DrivePlan | null {
   const stops = route.stops;
   if (stops.length === 0) return null;
   const hasPictures = o.pictures !== 'none' && stops.some((s) => s.pictures.length > 0);
@@ -883,9 +1233,11 @@ export function drivePlan(route: DriveRoute, o: DriveOptions): DrivePlan | null 
 
   const { points, geo } = planPoints(stops);
   const path = buildPath(points, o.path);
-  const schedule = buildSchedule(stops, path, o);
   const kmAtStop = [0];
   for (let i = 1; i < stops.length; i++) kmAtStop.push(kmAtStop[i - 1] + haversineKm(stops[i - 1], stops[i]));
+  const clock = recap ? stopClock(stops, kmAtStop) : null;
+  const schedule = buildSchedule(stops, path, o, clock, recap && o.summary);
+  const milestones = recap && o.milestones ? roadMilestones(stops, path, kmAtStop, clock, o.distance) : [];
 
   const at = (t: number): DriveMoment => {
     const { phases, total, revealAt } = schedule;
@@ -893,17 +1245,21 @@ export function drivePlan(route: DriveRoute, o: DriveOptions): DrivePlan | null 
     const phase = phases.find((p) => t < p.end) ?? phases[phases.length - 1];
     let s: number;
     let atStop: number | null;
+    const u = Math.max(0, Math.min(1, (t - phase.start) / (phase.end - phase.start)));
+    let k = u;
     if (phase.kind === 'run') {
-      const u = Math.max(0, Math.min(1, (t - phase.start) / (phase.end - phase.start)));
-      s = phase.s0 + (phase.s1 - phase.s0) * EASINGS[o.easing].ease(u);
+      k = EASINGS[o.easing].ease(u);
+      s = phase.s0 + (phase.s1 - phase.s0) * k;
       atStop = null;
     } else {
       s = phase.s0;
       atStop = phase.stop;
     }
+    let day: number | null = phase.day0 === undefined ? null : phase.day0 + ((phase.day1 ?? phase.day0) - phase.day0) * k;
     if (over) {
       s = path.length;
       atStop = stops.length - 1;
+      day = clock ? clock.leave[stops.length - 1] : null;
     }
     let reached = 0;
     for (let i = 0; i < path.stopS.length; i++) if (path.stopS[i] <= s + 1e-9) reached = i;
@@ -920,6 +1276,7 @@ export function drivePlan(route: DriveRoute, o: DriveOptions): DrivePlan | null 
       mapAlpha,
       over,
       since: over ? t - total : t - phase.start,
+      day,
     };
   };
 
@@ -951,7 +1308,58 @@ export function drivePlan(route: DriveRoute, o: DriveOptions): DrivePlan | null 
     return out;
   };
 
-  return { route, points, geo, path, schedule, kmAtStop, seconds: schedule.total, at, kmAt, showing };
+  return { route, points, geo, path, schedule, kmAtStop, seconds: schedule.total, at, kmAt, showing, recap, clock, milestones };
+}
+
+// --- the recap's counter ----------------------------------------------------------
+
+/** The badge's words a recap counter needs (`BadgeWords`, the trip's). */
+export interface CounterWords {
+  day: string;
+  of: string;
+  stop?: string;
+}
+
+/** A distance's numeral alone, the unit left to the badge's word — `1 682`, `3.1`. */
+export function distanceNumeral(km: number, unit: DistanceUnit): string {
+  const text = formatDistance(km, unit === 'off' ? 'km' : unit);
+  return text.replace(/\s*(km|mi)$/, '');
+}
+
+/** The day the counter shows for a clock reading: `floor`, never past the trip's last. */
+export function counterDay(day: number, tripDays: number): number {
+  return Math.max(1, Math.min(Math.max(1, tripDays), Math.floor(day + 1e-9)));
+}
+
+/**
+ * The badge's three counting pieces at `t`, when its counter FOLLOWS the
+ * drive (`day-badge.ts`, the `drive-*` modes) — the day of the trip, the
+ * distance, or the stops reached, each «of» its total. What `content(t)`
+ * hands the badge; past the end the final reading, so a still of the piece
+ * is the trip told whole. Days with no clock (nothing dates the stops) hand
+ * back nothing: the badge's own base — the day of the trip — stands, and
+ * the panel has said why.
+ */
+export function driveCounterPieces(
+  plan: DrivePlan,
+  o: DriveOptions,
+  count: 'days' | 'km' | 'places',
+  t: number,
+  words: CounterWords,
+): Partial<Record<'label' | 'headline' | 'counter', string>> {
+  const m = plan.at(t);
+  if (count === 'days') {
+    if (m.day === null || !plan.clock) return {};
+    const total = plan.route.tripDays;
+    return { label: words.day, headline: String(counterDay(m.day, total)), counter: `${words.of} ${total}` };
+  }
+  if (count === 'km') {
+    const unit = o.distance === 'off' ? 'km' : o.distance;
+    const total = plan.kmAtStop[plan.kmAtStop.length - 1];
+    return { label: unit, headline: distanceNumeral(plan.kmAt(m.s), unit), counter: `${words.of} ${distanceNumeral(total, unit)}` };
+  }
+  const n = plan.route.stops.length;
+  return { label: words.stop?.trim() || 'Stop', headline: String(m.reached + 1), counter: `${words.of} ${n}` };
 }
 
 // --- the camera -----------------------------------------------------------------
