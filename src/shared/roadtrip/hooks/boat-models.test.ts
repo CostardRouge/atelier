@@ -147,8 +147,8 @@ describe('hullPart', () => {
 });
 
 describe('the registry', () => {
-  it('lists the four boats as boats, the two cars as cars', () => {
+  it('lists the four boats as boats, the four cars as cars', () => {
     expect(CAR_MODELS.filter((m) => m.kind === 'boat').map((m) => m.id)).toEqual(['whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper']);
-    expect(CAR_MODELS.filter((m) => m.kind === 'car').map((m) => m.id)).toEqual(['prado-j120', 'kadjar-ph2']);
+    expect(CAR_MODELS.filter((m) => m.kind === 'car').map((m) => m.id)).toEqual(['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2']);
   });
 });

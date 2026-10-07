@@ -10,7 +10,8 @@
  *
  * The gear is ONE vocabulary shared by every model, and each model offers its
  * own part of it (`CarLine.gear`): the Prado's bull bar and basket, the
- * Kadjar's rails and roof bars, the mirrors both have. A flag a model does not
+ * Kadjar's rails and roof bars, the Trafic's panel glued on its roof, the
+ * mirrors all have. A flag a model does not
  * offer is carried and ignored, so switching models never has to rewrite the
  * other's; every reader asks the model which flags it means.
  *
@@ -24,7 +25,7 @@
  * trusted, and a partial spec keeps what it says.
  */
 
-export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const;
+export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const;
 export type CarModelId = (typeof CAR_MODEL_IDS)[number];
 
 /** The car a trip drives when nothing says otherwise — the maintainer's own. */
@@ -58,6 +59,8 @@ export interface CarGear {
   roofRails: boolean;
   /** Two bars ACROSS the roof — on the rails when they are fitted, on feet of their own otherwise. */
   roofBars: boolean;
+  /** A solar panel in a frame on the roof itself — a van's, needing no basket. */
+  roofSolar: boolean;
 }
 
 export const GEAR_KEYS: readonly (keyof CarGear)[] = [
@@ -74,6 +77,7 @@ export const GEAR_KEYS: readonly (keyof CarGear)[] = [
   'mirrors',
   'roofRails',
   'roofBars',
+  'roofSolar',
 ];
 
 /** What each toggle is called on screen, in the garage's order. */
@@ -91,6 +95,7 @@ export const GEAR_LABELS: Readonly<Record<keyof CarGear, string>> = {
   mirrors: 'door mirrors',
   roofRails: 'roof rails',
   roofBars: 'roof bars',
+  roofSolar: 'solar panel',
 };
 
 export interface CarSpec {
@@ -143,7 +148,8 @@ const PRADO_GEAR: readonly (keyof CarGear)[] = [
  * Every model the document can name. The colours are each car's factory range
  * as it is remembered, by name rather than by paint code (none is claimed),
  * plus the maintainer's own: the Prado's dark green and Raptor black, the
- * Kadjar's navy — which is his word for it, not Renault's.
+ * Kadjar's navy — which is his word for it, not Renault's — the Trafic's
+ * white, the colour it was photographed in, and the Zoé's, "classic" white.
  */
 export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
   'prado-j120': {
@@ -180,6 +186,39 @@ export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
     finish: 'gloss',
     fitted: ['roofBars', 'mirrors'],
     asItComes: 'The Kadjar in navy blue, gloss, with its two roof bars',
+  },
+  'trafic-ph2': {
+    gear: ['roofSolar', 'mirrors'],
+    colours: [
+      { id: 'glacier', name: 'Glacier white', hex: '#f0f0ec', note: 'Blanc Glacier — the van as photographed' },
+      { id: 'platinum', name: 'Platinum grey', hex: '#b2b5b8', note: 'Gris Platine' },
+      { id: 'comet', name: 'Comet grey', hex: '#6f7378', note: 'Gris Comète' },
+      { id: 'star-black', name: 'Star black', hex: '#16171a', note: 'Noir Étoilé' },
+      { id: 'panorama', name: 'Panorama blue', hex: '#2c4f86', note: 'Bleu Panorama' },
+      { id: 'cumulus', name: 'Cumulus blue', hex: '#1f2e52', note: 'Bleu Cumulus' },
+      { id: 'carmine', name: 'Carmine red', hex: '#9b1b22', note: 'Rouge Carmin' },
+    ],
+    color: '#f0f0ec',
+    finish: 'gloss',
+    fitted: ['roofSolar', 'mirrors'],
+    asItComes: 'The Trafic in white, gloss, with the solar panel on its roof',
+  },
+  'zoe-ph2': {
+    gear: ['mirrors'],
+    colours: [
+      { id: 'glacier', name: 'Glacier white', hex: '#f1f1ed', note: 'Blanc Glacier — the classic one' },
+      { id: 'quartz', name: 'Quartz white', hex: '#e8e7e1', note: 'Blanc Quartz' },
+      { id: 'highland', name: 'Highland grey', hex: '#8f9398', note: 'Gris Highland' },
+      { id: 'titanium', name: 'Titanium grey', hex: '#696c70', note: 'Gris Titanium' },
+      { id: 'star-black', name: 'Star black', hex: '#16171a', note: 'Noir Étoilé' },
+      { id: 'celadon', name: 'Celadon blue', hex: '#5a8fb0', note: 'Bleu Céladon' },
+      { id: 'berlin', name: 'Berlin blue', hex: '#1f3d6e', note: 'Bleu Berlin' },
+      { id: 'flame-red', name: 'Flame red', hex: '#a3161d', note: 'Rouge Flamme' },
+    ],
+    color: '#f1f1ed',
+    finish: 'gloss',
+    fitted: ['mirrors'],
+    asItComes: 'The Zoé in white, gloss, as it comes',
   },
   // The boats' liveries are guesses: none of their operators says what colour
   // they are, so each comes in the colour a boat of its kind most often wears.

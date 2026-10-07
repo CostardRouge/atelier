@@ -55,6 +55,38 @@ describe('the Kadjar', () => {
   });
 });
 
+describe('the Trafic', () => {
+  it('comes in white, gloss, with the solar panel on its roof and its mirrors', () => {
+    const van = defaultCarSpec('trafic-ph2');
+    expect(van.finish).toBe('gloss');
+    expect(colourName(van.color, van.model)).toBe('Glacier white');
+    expect(van.gear.roofSolar).toBe(true);
+    expect(van.gear.mirrors).toBe(true);
+    expect(van.gear.solar).toBe(false);
+    expect([...CAR_LINES['trafic-ph2'].gear].sort()).toEqual(['mirrors', 'roofSolar']);
+    expect(describeCar(van, 'Renault Trafic')).toBe('Renault Trafic · Glacier white, gloss · solar panel, door mirrors');
+  });
+
+  it('keeps its panel without a basket: the roof flag is not the Prado’s', () => {
+    const van = defaultCarSpec('trafic-ph2');
+    expect(effectiveGear(van.gear).roofSolar).toBe(true);
+    expect(gearWords({ ...van.gear, solar: true, rack: true }, 'trafic-ph2')).toEqual(['solar panel', 'door mirrors']);
+    expect(gearWords({ ...DEFAULT_GEAR, roofSolar: true }, 'prado-j120')).not.toContain('roofSolar');
+  });
+});
+
+describe('the Zoé', () => {
+  it('comes in white, gloss, with its mirrors and nothing else to offer', () => {
+    const car = defaultCarSpec('zoe-ph2');
+    expect(car.finish).toBe('gloss');
+    expect(colourName(car.color, car.model)).toBe('Glacier white');
+    expect(CAR_LINES['zoe-ph2'].gear).toEqual(['mirrors']);
+    expect(car.gear.mirrors).toBe(true);
+    expect(describeCar(car, 'Renault Zoé')).toBe('Renault Zoé · Glacier white, gloss · door mirrors');
+    expect(gearWords({ ...car.gear, roofSolar: true, roofBars: true }, 'zoe-ph2')).toEqual(['door mirrors']);
+  });
+});
+
 describe('the lines', () => {
   it('cover every model, each with readable, distinctly named colours that include its own', () => {
     for (const id of CAR_MODEL_IDS) {

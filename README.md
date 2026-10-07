@@ -1233,9 +1233,11 @@ arrival, a shutter click as each print lands, and under a recap a lighter
 tick as each day of the trip passes.
 
 **The car is the trip's, and it has a garage.** One car per journey: every
-Virée of a trip drives the same one, and it travels in the trip's backup. Two
-models: a Toyota Land Cruiser Prado (the J120, the default) and a Renault
-Kadjar (the 2018–2022 facelift). The garage dresses whichever you pick — a
+Virée of a trip drives the same one, and it travels in the trip's backup. Four
+models: a Toyota Land Cruiser Prado (the J120, the default), a Renault
+Kadjar (the 2018–2022 facelift), a Renault Trafic panel van (the 2019
+facelift) and a Renault Zoé (the 2019–2024 phase). The garage dresses
+whichever you pick — a
 colour from that model's factory range or one of your own, a factory gloss or
 a matte coating — and its gear, each a switch. The Prado (Raptor black, matte,
 by default) takes a bull bar with two spot lights, a roof basket carrying a
@@ -1246,7 +1248,17 @@ blue, gloss, by default) takes two roof bars across its roof — standing on
 their own feet, or on the factory roof rails when you fit those — and its door
 mirrors; it is drawn with its own marks: the C of its daytime lights, the
 diamond in a chrome-barred grille, black cladding round the arches, a spoiler
-over the raked tailgate, two-tone wheels. Picking a model brings that car as
+over the raked tailgate, two-tone wheels. The Trafic (white, gloss, by default)
+is the van as it was photographed: a solar panel in a frame on the front of its
+roof and its big door mirrors, each a switch; a short high bonnet under a raked
+windscreen, one flat flank from the sill to the roof with a swage at the belt,
+no window behind the cab, barn doors at the back with tall lamps in the
+pillars, steel wheels under plastic caps. The Zoé (white, gloss, by default)
+is the small electric hatchback as it comes, with its door mirrors as its one
+switch: a short bonnet falling to a nose with no grille — a chrome bar and the
+big diamond that is its charging hatch —, a windscreen far forward, a roof
+arcing down to a steep hatch, the rear handle hidden in a black C pillar,
+five-spoke alloys. Picking a model brings that car as
 it comes; the one you left keeps what you dressed it in while the garage stays
 open. Four boats join them: the **Whitsundays day cruiser**
 (a motor catamaran with a shaded upper deck, the ordinary boat out to
