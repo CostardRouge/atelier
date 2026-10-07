@@ -14,10 +14,10 @@
  *
  * What is fetched is bounded and kept: a region's tiles (at most `MAX_TILES`;
  * a following camera's pyramid `stripBudget()` more, over the whole drive —
- * `tile-strip.ts`), the blobs cached for the TAB only, so a slider dragged
- * on the opener never asks again — never on the disk: a tile cache that
- * outlives the tab is a change to what this device keeps, the maintainer's
- * to decide. The drawing carries the credit the licence
+ * `tile-strip.ts`), the blobs cached for the tab, so a slider dragged on the
+ * opener never asks again, and KEPT on this device for a month
+ * (`tile-cache.ts`, his call of 2026-10-07), so a piece reopened tomorrow or
+ * exported twice asks the server nothing — forgotten with the consent. The drawing carries the credit the licence
  * requires — that is the painters' job (`paintOsmCredit`), and it rides into
  * every export.
  */
@@ -27,6 +27,7 @@ import { isConstrainedDevice } from '../lib/device-class';
 import { columnSource, planTiles, rowSource, TILE_PX, type GeoBox } from './tile-math';
 import { STREAM_DECODED, STREAM_DECODED_CONSTRAINED, STRIP_TILES, STRIP_TILES_CONSTRAINED } from './tile-strip';
 import { OSM_CREDIT, OSM_TILES } from './track-map';
+import { clearTiles, readTile, writeTile } from './tile-cache';
 
 const KEY = 'atelier.map.tilesInOpeners';
 /** The most tiles one background asks for — a softer map past it, never more requests. */
@@ -75,9 +76,14 @@ export function tilesAllowed(): boolean {
   return allowed;
 }
 
-/** Say yes or no for this device. Never written on a document. */
+/**
+ * Say yes or no for this device. Never written on a document. A no also
+ * forgets the tiles this device kept (`tile-cache.ts`): what the yes fetched
+ * goes with it.
+ */
 export function allowTiles(on: boolean): void {
   allowed = on;
+  if (!on) void clearTiles();
   try {
     localStorage.setItem(KEY, on ? 'on' : 'off');
   } catch {
@@ -114,24 +120,46 @@ function fetchTile(z: number, x: number, y: number, signal?: AbortSignal): Promi
   const url = tileUrl(z, x, y);
   let pending = blobs.get(url);
   if (!pending) {
-    // The caller's cancel and the timeout, joined by hand: `AbortSignal.any`
-    // and `.timeout` are younger than the Safari this suite still serves.
-    const stop = new AbortController();
-    const timer = setTimeout(() => stop.abort(), TILE_TIMEOUT_MS);
-    if (signal?.aborted) stop.abort();
-    signal?.addEventListener('abort', () => stop.abort(), { once: true });
-    pending = fetch(url, { mode: 'cors', signal: stop.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error(`the tile server answered ${res.status}`);
-        return res.blob();
-      })
-      .finally(() => clearTimeout(timer));
+    pending = keptOrFetched(`${z}/${x}/${y}`, url, signal);
     pending.catch(() => blobs.delete(url));
     blobs.set(url, pending);
     // Oldest first: a Map iterates in insertion order.
     while (blobs.size > CACHE_TILES) blobs.delete(blobs.keys().next().value as string);
   }
   return pending;
+}
+
+/**
+ * A tile from the device's own cache when it is fresh (`tile-cache.ts`),
+ * else from the server — kept for next time — and, when the server cannot
+ * answer, the stale copy rather than nothing.
+ */
+async function keptOrFetched(key: string, url: string, signal?: AbortSignal): Promise<Blob> {
+  const kept = await readTile(key);
+  if (kept?.fresh) return kept.blob;
+  try {
+    const blob = await fromServer(url, signal);
+    void writeTile(key, blob);
+    return blob;
+  } catch (err) {
+    if (kept && !signal?.aborted) return kept.blob;
+    throw err;
+  }
+}
+
+function fromServer(url: string, signal?: AbortSignal): Promise<Blob> {
+  // The caller's cancel and the timeout, joined by hand: `AbortSignal.any`
+  // and `.timeout` are younger than the Safari this suite still serves.
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), TILE_TIMEOUT_MS);
+  if (signal?.aborted) stop.abort();
+  signal?.addEventListener('abort', () => stop.abort(), { once: true });
+  return fetch(url, { mode: 'cors', signal: stop.signal })
+    .then((res) => {
+      if (!res.ok) throw new Error(`the tile server answered ${res.status}`);
+      return res.blob();
+    })
+    .finally(() => clearTimeout(timer));
 }
 
 /**

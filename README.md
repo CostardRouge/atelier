@@ -50,7 +50,10 @@ Today it ships ten tools, converging into a few editors:
 >   exported file, credited «© OpenStreetMap contributors» as the licence
 >   requires — when a piece asks for them and this device has said yes: the
 >   yes is kept on the device, never in the trip, so a trip opened elsewhere
->   fetches nothing until that device says yes too.
+>   fetches nothing until that device says yes too. Tiles fetched that way
+>   are kept on the device for a month (at most 256 MB, 64 MB on a phone), so
+>   a second export asks the server nothing; taking the yes back forgets
+>   them, and the background row has a *Forget them* button.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a
 >   structured address (the county, the state and its code, the country) and
@@ -1196,7 +1199,8 @@ keeps full detail without holding thousands of pictures in memory (past a
 budget of requests, the stillest moments keep the most detail); the preview
 shows a softer map for an instant where it has not caught up, and an export
 waits for every frame's tiles before it writes it, saying how many a
-coarser map had to stand in for —,
+coarser map had to stand in for; the tiles are kept on the device for a
+month, so the next export or reopening fetches nothing it already has —,
 where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time

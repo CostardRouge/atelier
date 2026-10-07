@@ -15,6 +15,8 @@ import Button from '../../ui/Button';
 import { FieldRow, RangeField } from '../../ui/Inspector';
 import { TILES_IN_OPENER_NOTICE, allowTiles, useTilesAllowed } from '../../map/osm-tiles';
 import { useStreamProgress } from '../../map/tile-stream';
+import { clearTiles, useTileCacheSize } from '../../map/tile-cache';
+import { formatBytes } from '../../lib/format';
 import type { BasemapSet } from './basemap-strip';
 import type { HookBasemapWant, HookContext, HookPictureStatus } from './hook-variant';
 
@@ -93,6 +95,27 @@ export function BasemapStatus({ want, set, ctx, status, opacity, onOpacity, limi
         />
       </FieldRow>
       <p className="m-0 text-2xs text-faint">{TILES_IN_OPENER_NOTICE}</p>
+      {allowed && <KeptTiles />}
+    </div>
+  );
+}
+
+/**
+ * What this device keeps of the map (`tile-cache.ts`), and the verb that
+ * forgets it — one line, said only once something is kept.
+ */
+function KeptTiles() {
+  const kept = useTileCacheSize();
+  if (!kept || kept.tiles === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="m-0 text-2xs text-faint">
+        {kept.tiles} tiles kept on this device ({formatBytes(kept.bytes)}) for a month, so a second export asks the
+        server nothing.
+      </p>
+      <Button size="sm" variant="ghost" onClick={() => void clearTiles()}>
+        Forget them
+      </Button>
     </div>
   );
 }
