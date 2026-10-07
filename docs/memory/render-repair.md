@@ -12,7 +12,7 @@ A repair is a `Patch` — a destination disc (`x`, `y` in the SOURCE's own
 [0,1]; `radius` in the centred space whose half-diagonal is 1, the masks'
 convention, so one number means the same disc on every picture; a `feather`
 share of it), where its pixels come from (`dx`, `dy`, an offset in frame
-units), and a `kind`. `repair.ts` (pure, 13 specs) holds the record, the
+units), and a `kind`. `repair.ts` (pure) holds the record, the
 coverage, the ring, the means, `repairAt`, `placeSource` and the dust field;
 `repair-pass.ts`
 is the GLSL twin, the whole list as ONE fragment pass over two uniform arrays

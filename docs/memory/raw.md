@@ -114,7 +114,7 @@ displayed picture, RAW or not.
 
 ## The calibration a DNG carries, READ (2026-09-20)
 
-`shared/exif/dng-opcodes.ts` (pure, 9 specs) parses `OpcodeList3` out of the
+`shared/exif/dng-opcodes.ts` (pure) parses `OpcodeList3` out of the
 head `raw-probe.ts` already walks, through the same TIFF reader; the probe
 returns it as `RawProbe.calibration` and `rawCalibration(file)` fetches it
 with a megabyte and no decoder. `describeRaw` now ends with what the file
@@ -206,10 +206,10 @@ photograph, where the question comes up. It replaced the Develop tab's
 `DevelopBaseSection`: one control for one value, never two. Each rung's line
 says what it ADDS, and the foot of the menu says what the FILE asks for in
 the numbers a person can check (`gain map up to 5.93× · warp ×1.049 · CA
-0.9 px at the corner`) rather than a promise. Drawn only where a RAW is
-REACHABLE (the file itself is one, or a proxy's original is —
-`MediaOrigin.name`). Drawn at every width since it moved onto the file's
-NAME (2026-09-22); the rungs are a segmented control under the sensor row
+0.9 px at the corner`) rather than a promise. Since 2026-09-22 it IS the
+file's NAME, drawn for every picture and at every width, and lists the
+capture's files (`renditionsOf`), the rungs only under a reachable sensor row
+(`renditions-build.md`, R3a); the rungs are a segmented control under the sensor row
 since 2026-10-06 (`renditions-build.md`). The modal hosts (Trips, the Studio) never see it — the maintainer's
 call that they keep the simple sheet.
 
@@ -306,10 +306,9 @@ render simply is not in the file, and macOS is not showing a preview at all —
 it demosaics the CFA plane and applies the opcodes below. Any stage wider than
 960 px upscales; the 640 px thumbnail is the one surface the embedded render
 is honestly big enough for. **A camera that writes a preview this small is the
-case `DevelopSettings.base` exists for** — what nothing says today is the
-PIXEL count: `pictureFidelity` names the bits and never the size, and
-`DecodedPhoto.viaRawPreview` is returned by `photo-frame.ts` and read by
-nobody.
+case `DevelopSettings.base` exists for** — and since 2026-09-20 the PIXEL
+count is said: `pictureFidelity` names the bits and the size, reading
+`DecodedStill.viaRawPreview` (`develop.md`, «A picture says its PIXELS»).
 
 Decode timings, this Mac, the 74 MB already in memory: **4.4 s** whole
 (8064×4536, including the wasm's first load), **456 ms** at

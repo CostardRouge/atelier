@@ -7,7 +7,7 @@ MOVES a pixel rather than recolouring one. The graph they ride is
 
 ## The keystone: the first pass that MOVES a pixel (2026-09-17, P5 engine)
 
-`geometry.ts` (pure, 16 specs) + `keystone-pass.ts`. A homography carries the
+`geometry.ts` (pure) + `keystone-pass.ts`. A homography carries the
 whole correction — converging verticals, converging horizontals, a rotation and
 the zoom that hides the corners a warp empties — in ONE 3×3 matrix, so one
 resample serves all of it. It is the first thing here a cube could never do: a
@@ -72,7 +72,7 @@ up for a positive vertical.
 
 ## The lens: one radial pass, and no profiles (2026-09-17, P6 engine)
 
-`lens.ts` (pure, 17 specs) + `lens-pass.ts`. Barrel/pincushion (Brown–Conrady,
+`lens.ts` (pure) + `lens-pass.ts`. Barrel/pincushion (Brown–Conrady,
 `r_source = r(1 + k1·r² + k2·r⁴)`), lateral CA and vignetting are ONE pass:
 all three are functions of the radius alone, so the shader computes it once,
 samples each channel at its own scale of it and multiplies by the gain there.

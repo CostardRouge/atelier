@@ -59,7 +59,7 @@ body's files into it before choosing a path for that body.
 
 ## R1 is BUILT: one pure module, and the fields that were already arriving (2026-09-21)
 
-`shared/media/renditions.ts` (pure, DOM-free, 15 specs) turns what is known
+`shared/media/renditions.ts` (pure, DOM-free) turns what is known
 about a capture's files into the ordered list the pill draws; the Winnow half
 is `WinnowAssetRow`'s companion fields (declared at last) and
 `MediaOrigin.companion`, filled by `materialize`'s `companionOf`. No UI, no
