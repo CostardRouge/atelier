@@ -31,7 +31,8 @@
  */
 
 import { num, nums, parseIfd, type Entry } from '../exif/exif-parser';
-import { readDngProfile, type DngCalibration } from '../exif/dng-profile';
+import { readDngProfile, type DngCalibration, type DngProfile } from '../exif/dng-profile';
+import { mapSrgbThroughHueSat, type HueSatTable } from './hue-sat-map';
 import { dcrawRgbCam } from './dng-color';
 import { inverse3, type RawWhite } from './white-balance';
 
@@ -102,6 +103,8 @@ export interface LinearDng {
   model: string;
   /** Every calibration IFD0 names (`dng-profile.ts`) — what the camera profile interpolates. */
   calibrations?: DngCalibration[];
+  /** The file's whole camera profile, as far as the head holds it (the hue/sat map's table among it). */
+  profile?: DngProfile | null;
 }
 
 function ascii(view: DataView, entry: Entry | undefined): string {
@@ -203,12 +206,14 @@ export function readLinearDng(head: ArrayBuffer): LinearDng | null {
       asShotNeutral: three(nums(view, ifd0.get(TAG.asShotNeutral), little)),
       make: ascii(view, ifd0.get(TAG.make)),
       model: ascii(view, ifd0.get(TAG.model)) || ascii(view, ifd0.get(TAG.uniqueModel)),
-      calibrations: readDngProfile(view, ifd0, little)?.calibrations ?? [],
+      ...profileOf(readDngProfile(view, ifd0, little)),
     };
   } catch {
     return null;
   }
 }
+
+const profileOf = (profile: DngProfile | null) => ({ calibrations: profile?.calibrations ?? [], profile });
 
 // --- Orientation --------------------------------------------------------------
 
@@ -267,6 +272,8 @@ export interface LinearDngColor {
   rgbCam: number[];
   /** What the white balance in kelvin reads (`white-balance.ts`), or null without a matrix. */
   white: RawWhite | null;
+  /** The profile's hue/sat map, blended, applied after `rgbCam` and before the clip (C5). */
+  hueSat?: HueSatTable | null;
 }
 
 /**
@@ -357,6 +364,7 @@ export function developTile(tile: TileSpec, frame: FrameSpec, target: TileTarget
   const k2 = 1 / Math.max(1e-9, info.white - b2);
   const [m0, m1, m2] = color.mul;
   const [M0, M1, M2, M3, M4, M5, M6, M7, M8] = color.rgbCam;
+  const hueSat = color.hueSat ?? null;
   const { samples, channels, tileWidth, x0, y0, validWidth, validHeight } = tile;
   const factor = target.kind === 'sums' ? target.factor : 1;
   const codes = target.kind === 'codes' ? target.rgb16 : null;
@@ -391,6 +399,7 @@ export function developTile(tile: TileSpec, frame: FrameSpec, target: TileTarget
       let R = M0 * r + M1 * g + M2 * b;
       let G = M3 * r + M4 * g + M5 * b;
       let B = M6 * r + M7 * g + M8 * b;
+      if (hueSat) [R, G, B] = mapSrgbThroughHueSat(hueSat, [R, G, B]);
       R = R < 0 ? 0 : R > 1 ? 1 : R;
       G = G < 0 ? 0 : G > 1 ? 1 : G;
       B = B < 0 ? 0 : B > 1 ? 1 : B;

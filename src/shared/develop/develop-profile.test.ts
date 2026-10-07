@@ -23,7 +23,7 @@ describe('the camera profile on a develop', () => {
   it('is folded into the DECODE, so the head carries only a kelvin balance, the profile taken back out of it', () => {
     // C4: the decoder applies the profile before the clip; the head applies nothing for it.
     expect(rawMatrixOf(raw({ rawProfile: { matrix: PROFILE, label: 'A + D65' } }))).toBeNull();
-    expect(decodeProfileOf(raw({ rawProfile: { matrix: PROFILE, label: 'A + D65' } }))).toEqual(PROFILE);
+    expect(decodeProfileOf(raw({ rawProfile: { matrix: PROFILE, label: 'A + D65' } }))).toEqual({ matrix: PROFILE, label: 'A + D65' });
     expect(decodeProfileOf(raw({ rawProfile: 'pending' }))).toBe('resolve');
     expect(decodeProfileOf(raw())).toBeNull();
     expect(decodeProfileOf({ ...DEFAULT_DEVELOP, rawProfile: { matrix: PROFILE, label: '' } })).toBeNull();

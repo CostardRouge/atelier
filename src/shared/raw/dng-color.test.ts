@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import type { DngCalibration } from '../exif/dng-profile';
+import type { DngCalibration, DngProfile } from '../exif/dng-profile';
 import {
   balancedToSrgb,
   calibrationsFromLibraw,
@@ -17,6 +17,7 @@ import {
   profiledWbMatrix,
   rawProfileFor,
   rawProfileOrNull,
+  resolveProfile,
 } from './dng-color';
 import { apply3, planckianXy, type RawWhite } from './white-balance';
 
@@ -176,5 +177,43 @@ describe('the camera profile on a picture', () => {
     expect(rawProfileOrNull({ matrix: [1, 2] })).toBeNull();
     expect(rawProfileOrNull({ matrix: [NaN, 0, 0, 0, 1, 0, 0, 0, 1] })).toBeNull();
     expect(rawProfileOrNull('nope')).toBeNull();
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: 'x', hueSat: { weight: 0.4 } })).toEqual({
+      matrix: IDENTITY,
+      label: 'x',
+      hueSat: { weight: 0.4 },
+    });
+  });
+
+  // C5: a file whose profile carries a hue/sat map, one table per illuminant.
+  const withMap = (data2: boolean): DngProfile =>
+    ({
+      calibrations: dual,
+      hueSatMap: { dims: [6, 2, 1], data: new Float32Array(36), data2: data2 ? new Float32Array(36) : null, srgbValue: false },
+    }) as unknown as DngProfile;
+
+  it('carries the weight its hue/sat map is blended at, and says so in its name', () => {
+    const white = whiteAt(2850, dual);
+    const p = rawProfileFor(white, withMap(true))!;
+    expect(p.label).toBe('A + D65 · hue/sat');
+    // Near standard light A, the A table (the first) weighs almost all.
+    expect(p.hueSat!.weight).toBeGreaterThan(0.95);
+    expect(rawProfileFor(whiteAt(6500, dual), withMap(true))!.hueSat!.weight).toBeLessThan(0.05);
+    expect(rawProfileFor(white, withMap(false))!.hueSat).toEqual({ weight: 1 });
+    // A map whose bytes are past the head is not one the profile can claim.
+    const unread = withMap(true);
+    unread.hueSatMap!.data = null;
+    expect(rawProfileFor(white, unread)!.hueSat).toBeUndefined();
+    expect(rawProfileFor(white)!.hueSat).toBeUndefined();
+  });
+
+  it('resolves a stored request with its weight, and works one out on resolve', () => {
+    const white = whiteAt(3500, dual);
+    expect(resolveProfile({ matrix: IDENTITY, hueSat: { weight: 0.3 } }, white)).toEqual({
+      matrix: IDENTITY,
+      label: '',
+      hueSat: { weight: 0.3 },
+    });
+    expect(resolveProfile('resolve', white, withMap(true))!.hueSat).toBeDefined();
+    expect(resolveProfile(null, white)).toBeNull();
   });
 });

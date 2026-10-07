@@ -24,6 +24,7 @@ import {
   type PixelRect,
 } from './linear-dng';
 import { linearToBt709, type LinearRgb } from './raw-image';
+import { blendHueSat } from './hue-sat-map';
 import { resolveProfile, type ProfileRequest, type RawProfile } from './dng-color';
 import { mul3 } from './white-balance';
 
@@ -94,8 +95,10 @@ export async function decodeJxlDngPlane(file: File, head: ArrayBuffer, info: Lin
   const own = linearDngColor(info);
   // The profile acts on the camera's colour BEFORE the clip, like LibRaw's
   // own matrix: folded into `rgbCam`, never applied to a clipped picture.
-  const profile = resolveProfile(req.profile, own.white);
-  const color = profile ? { ...own, rgbCam: mul3(profile.matrix, own.rgbCam) } : own;
+  const profile = resolveProfile(req.profile, own.white, info.profile ?? null);
+  // The hue/sat map at the stored weight (C5), after the matrix, before the clip.
+  const hueSat = profile?.hueSat ? blendHueSat(info.profile?.hueSatMap, profile.hueSat.weight) : null;
+  const color = profile ? { ...own, rgbCam: mul3(profile.matrix, own.rgbCam), hueSat } : own;
   const rgb16 = factor === 1 ? new Uint16Array(width * height * 3) : null;
   const sums = factor === 1 ? null : new Float32Array(width * height * 3);
   codes ??= codeTable(linearToBt709);

@@ -68,6 +68,8 @@
  */
 
 import { probeRaw, RAW_PROBE_BYTES, sensorIfd } from '../exif/raw-probe';
+import type { DngProfile } from '../exif/dng-profile';
+import { blendHueSat, type HueSatTable } from './hue-sat-map';
 import { deviceClass } from '../lib/device-class';
 import { yieldToMain } from '../lib/yield-to-main';
 import { isRawImage } from '../library/assets';
@@ -434,7 +436,9 @@ export function decodeCacheKey(file: File, opts: RawDecodeOptions): string {
 /** The profile's part of a cache key: a stored matrix by its numbers, a resolve by its word. */
 function profileToken(profile: ProfileRequest): string {
   if (!profile) return '';
-  return `|profile=${profile === 'resolve' ? 'resolve' : profile.map((v) => v.toFixed(6)).join(',')}`;
+  if (profile === 'resolve') return '|profile=resolve';
+  const table = profile.hueSat ? `|hueSat=${profile.hueSat.weight.toFixed(6)}` : '';
+  return `|profile=${profile.matrix.map((v) => v.toFixed(6)).join(',')}${table}`;
 }
 
 /**
@@ -446,7 +450,8 @@ function profileToken(profile: ProfileRequest): string {
 function cameraMatrixFor(
   metadata: Record<string, unknown> | undefined,
   request: ProfileRequest,
-): { matrix: number[] | null; profile: RawProfile | null } {
+  file: DngProfile | null,
+): { matrix: number[] | null; profile: RawProfile | null; hueSat: HueSatTable | null } {
   const color = (metadata?.color_data ?? metadata?.color) as Record<string, unknown> | undefined;
   const rows = color?.rgb_cam;
   const rgbCam: number[] = [];
@@ -456,15 +461,25 @@ function cameraMatrixFor(
       for (let c = 0; c < 3; c += 1) rgbCam.push(Array.isArray(row) && typeof row[c] === 'number' ? row[c] : NaN);
     }
   }
-  if (rgbCam.length !== 9 || !rgbCam.every((v) => Number.isFinite(v))) return { matrix: null, profile: null };
-  const profile = resolveProfile(request, whiteOf(metadata));
-  return { matrix: profile ? mul3(profile.matrix, rgbCam) : rgbCam, profile };
+  if (rgbCam.length !== 9 || !rgbCam.every((v) => Number.isFinite(v))) return { matrix: null, profile: null, hueSat: null };
+  const profile = resolveProfile(request, whiteOf(metadata), file);
+  // The file's hue/sat map at the stored weight (C5) — read from the file
+  // every time, like the opcodes; a map whose bytes are not in hand is not
+  // applied, and a profile without a weight never asks for one.
+  const hueSat = profile?.hueSat ? blendHueSat(file?.hueSatMap, profile.hueSat.weight) : null;
+  return { matrix: profile ? mul3(profile.matrix, rgbCam) : rgbCam, profile, hueSat };
 }
 
 /** The plane turned from camera colour to sRGB through `matrix`, in place, a band at a time. */
-async function toSrgb(plane: Uint16Array, pixels: number, matrix: readonly number[], check: () => Promise<void>): Promise<void> {
+async function toSrgb(
+  plane: Uint16Array,
+  pixels: number,
+  matrix: readonly number[],
+  hueSat: HueSatTable | null,
+  check: () => Promise<void>,
+): Promise<void> {
   for (let p = 0; p < pixels; p += BAND_PIXELS) {
-    applyCameraMatrix(plane, matrix, p, Math.min(pixels, p + BAND_PIXELS));
+    applyCameraMatrix(plane, matrix, p, Math.min(pixels, p + BAND_PIXELS), hueSat);
     await check();
   }
 }
@@ -477,6 +492,8 @@ interface RawHead {
   height: number;
   /** LibRaw's flip for the capture's orientation. */
   flip: number;
+  /** The colour profile a DNG carries in IFD0 (`dng-profile.ts`) — where a hue/sat map's table is read from. */
+  profile: DngProfile | null;
 }
 
 async function readHead(file: File): Promise<RawHead | null> {
@@ -484,7 +501,7 @@ async function readHead(file: File): Promise<RawHead | null> {
     const probe = probeRaw(await file.slice(0, RAW_PROBE_BYTES).arrayBuffer());
     const sensor = probe ? sensorIfd(probe) : null;
     if (!probe || !sensor?.width || !sensor?.height) return null;
-    return { width: sensor.width, height: sensor.height, flip: librawFlip(probe.orientation) };
+    return { width: sensor.width, height: sensor.height, flip: librawFlip(probe.orientation), profile: probe.profile };
   } catch {
     /* not a TIFF-shaped RAW (a CR2 is, an ARW is; an ORF is not): decode whole */
     return null;
@@ -643,7 +660,7 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
       // A profile resolved here is the one the picture stores next: the
       // decode is held under that matrix too, so the next ask finds it.
       if (opts.profile === 'resolve' && decoded.profile) {
-        cache.remember(decodeCacheKey(file, { ...opts, profile: decoded.profile.matrix }), decoded, size);
+        cache.remember(decodeCacheKey(file, { ...opts, profile: decoded.profile }), decoded, size);
       }
     }
     return decoded;
@@ -750,11 +767,11 @@ async function decodeWhole(
   // drops it here rather than spending the conversion on it.
   if (signal.aborted) throw cancelled();
   // Camera colour → sRGB, through LibRaw's own matrix and the profile.
-  const found = cameraMatrixFor(metadata, opts.profile);
+  const found = cameraMatrixFor(metadata, opts.profile, head?.profile ?? null);
   const { matrix } = found;
   let { profile } = found;
   if (matrix) {
-    await toSrgb(image.data, image.width * image.height, matrix, async () => {
+    await toSrgb(image.data, image.width * image.height, matrix, found.hueSat, async () => {
       await yieldToMain();
       if (signal.aborted) throw cancelled();
     });
@@ -830,7 +847,7 @@ async function decodeTiled(
     if (signal.aborted) throw cancelled();
   };
   let metadata: Record<string, unknown> | undefined;
-  let colour: { matrix: number[]; profile: RawProfile | null } | null = null;
+  let colour: { matrix: number[]; profile: RawProfile | null; hueSat: HueSatTable | null } | null = null;
   const raw = await loadLibRaw();
   for (let index = 0; index < tiles.length; index += 1) {
     const tile = tiles[index];
@@ -858,11 +875,11 @@ async function decodeTiled(
     if (signal.aborted) throw cancelled();
     // Camera colour → sRGB, the one matrix every tile shares (C4).
     if (!colour) {
-      const found = cameraMatrixFor(metadata, opts.profile);
+      const found = cameraMatrixFor(metadata, opts.profile, head.profile);
       if (!found.matrix) throw new TilePlanMismatch('no camera matrix in the decoder’s read');
-      colour = { matrix: found.matrix, profile: found.profile };
+      colour = { matrix: found.matrix, profile: found.profile, hueSat: found.hueSat };
     }
-    await toSrgb(image.data, image.width * image.height, colour.matrix, check);
+    await toSrgb(image.data, image.width * image.height, colour.matrix, colour.hueSat, check);
     let tilePlane: Uint16Array | null = image.data;
     image = undefined;
     // The tile's plane starts a margin above and to the left of its interior.

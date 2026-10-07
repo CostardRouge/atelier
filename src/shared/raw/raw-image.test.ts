@@ -298,4 +298,18 @@ describe('applyCameraMatrix (C4: the camera matrix is ours)', () => {
     // Only the pixels asked are touched.
     expect(plane[6]).toBe(code(0.01));
   });
+
+  it('runs a hue/sat map after the matrix and before the clip (C5), an identity one changing nothing', () => {
+    const map = (shift: number) => ({ dims: [6, 2, 1] as [number, number, number], data: new Float32Array(36).map((_, i) => [shift, 1, 1][i % 3]), srgbValue: false });
+    const pixel = () => Uint16Array.from([code(0.5), code(0.2), code(0.1)]);
+    const plain = pixel();
+    applyCameraMatrix(plain, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 1);
+    const same = pixel();
+    applyCameraMatrix(same, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 1, map(0));
+    same.forEach((v, i) => expect(Math.abs(v - plain[i])).toBeLessThanOrEqual(2));
+    const turned = pixel();
+    applyCameraMatrix(turned, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 1, map(40));
+    // An orange turned 40° towards green: green rises past red's share.
+    expect(turned[1]).toBeGreaterThan(plain[1] + 1000);
+  });
 });

@@ -26,7 +26,7 @@
  * Pure and DOM-free.
  */
 
-import { illuminantName, type DngCalibration } from '../exif/dng-profile';
+import { illuminantName, type DngCalibration, type DngProfile } from '../exif/dng-profile';
 import { apply3, inverse3, mul3, tempTintToXy, XYZ_TO_SRGB, xyToTempTint, type RawWhite } from './white-balance';
 
 type M3 = number[];
@@ -324,6 +324,14 @@ export interface RawProfile {
   matrix: number[];
   /** `A + D65`, `D65` — the calibrations it interpolated, for the picture's facts. */
   label: string;
+  /**
+   * The file's own hue/saturation map is applied too (C5, `hue-sat-map.ts`),
+   * its two illuminants' tables blended at `weight` (of the first) — the
+   * matrices' weight at the as-shot light. The table is read from the file
+   * at every decode, like the opcode lists; only the weight is stored. Absent:
+   * no map — every profile resolved before C5, or a file that carries none.
+   */
+  hueSat?: { weight: number } | null;
 }
 
 /** The calibrations a white carries, or LibRaw's one matrix taken as D65's. */
@@ -339,12 +347,28 @@ function neutralOf(white: RawWhite): V3 {
 }
 
 /** The profile for one decoded picture, or null where its data cannot say. */
-export function rawProfileFor(white: RawWhite | null | undefined): RawProfile | null {
+export function rawProfileFor(white: RawWhite | null | undefined, file: DngProfile | null = null): RawProfile | null {
   if (!white) return null;
   const cals = calibrationsOf(white);
   const matrix = dngCorrection(cals, neutralOf(white), white.rgbCam);
   if (!matrix || !matrix.every((v) => Number.isFinite(v))) return null;
-  return { matrix, label: cals.map((c) => illuminantName(c.illuminant)).join(' + ') };
+  const label = cals.map((c) => illuminantName(c.illuminant)).join(' + ');
+  const weight = hueSatWeight(white, file);
+  return weight === null ? { matrix, label } : { matrix, label: `${label} · hue/sat`, hueSat: { weight } };
+}
+
+/**
+ * The weight a file's hue/sat map is blended at for this white — of its
+ * first table, by the matrices' own rule at the as-shot light — or null
+ * when the file carries no map whose bytes are in hand.
+ */
+export function hueSatWeight(white: RawWhite, file: DngProfile | null): number | null {
+  const map = file?.hueSatMap;
+  if (!map?.data) return null;
+  const [c1, c2] = file!.calibrations;
+  if (!map.data2 || !c1 || !c2) return 1;
+  const shot = profiledAsShot(white);
+  return shot ? interpolationWeight(shot.kelvin, illuminantKelvin(c1.illuminant), illuminantKelvin(c2.illuminant)) : 1;
 }
 
 /**
@@ -359,13 +383,19 @@ export const PROFILE_PENDING = 'pending';
  * already stored on the picture (its matrix), `'resolve'` to work it out from
  * this very decode's own colour data, or nothing — LibRaw's colour.
  */
-export type ProfileRequest = readonly number[] | 'resolve' | null | undefined;
+export type ProfileRequest = Pick<RawProfile, 'matrix' | 'hueSat'> | 'resolve' | null | undefined;
 
 /** The profile a request comes to for a decode whose white is `white`, or null. */
-export function resolveProfile(request: ProfileRequest, white: RawWhite | null | undefined): RawProfile | null {
+export function resolveProfile(
+  request: ProfileRequest,
+  white: RawWhite | null | undefined,
+  file: DngProfile | null = null,
+): RawProfile | null {
   if (!request) return null;
-  if (request === 'resolve') return rawProfileFor(white);
-  return request.length === 9 && request.every((v) => Number.isFinite(v)) ? { matrix: [...request], label: '' } : null;
+  if (request === 'resolve') return rawProfileFor(white, file);
+  const { matrix, hueSat } = request;
+  if (matrix.length !== 9 || !matrix.every((v) => Number.isFinite(v))) return null;
+  return { matrix: [...matrix], label: '', ...(hueSat ? { hueSat: { weight: hueSat.weight } } : {}) };
 }
 
 /** A stored profile read back safely: nine finite numbers, the pending mark, or null. */
@@ -375,7 +405,13 @@ export function rawProfileOrNull(raw: unknown): RawProfile | typeof PROFILE_PEND
   const src = raw as Record<string, unknown>;
   const m = src.matrix;
   if (!Array.isArray(m) || m.length !== 9 || !m.every((n) => typeof n === 'number' && Number.isFinite(n))) return null;
-  return { matrix: [...(m as number[])], label: typeof src.label === 'string' ? src.label.slice(0, 40) : '' };
+  const hs = src.hueSat as Record<string, unknown> | null | undefined;
+  const weight = hs && typeof hs.weight === 'number' && Number.isFinite(hs.weight) ? Math.max(0, Math.min(1, hs.weight)) : null;
+  return {
+    matrix: [...(m as number[])],
+    label: typeof src.label === 'string' ? src.label.slice(0, 40) : '',
+    ...(weight !== null ? { hueSat: { weight } } : {}),
+  };
 }
 
 /**

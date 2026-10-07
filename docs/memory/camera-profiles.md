@@ -40,8 +40,8 @@ camera's colour reads `dng-color.ts`, not a second construction.
 ## The shape of the answer (2026-10-07, DECIDED: «go with your recommendations»)
 
 The matrices are ONE 3×3 in the decoded picture's space (`dngCorrection`),
-the slot `rawWb.matrix` already has in the develop head; the hue/sat map is
-the head's first step; the look table sits between exposure and tone (the
+the slot `rawWb.matrix` already has in the develop head (moved into the
+DECODER by C4); the hue/sat map runs right after it (C5, decoder too); the look table sits between exposure and tone (the
 head's middle — the parallel base-curve session's code); a DCP's
 `ProfileToneCurve` is ONE more choice of the base-curve menu, never a second
 curve stage. A profile is CALIBRATION, stored RESOLVED on the picture like a
@@ -56,21 +56,14 @@ own pipeline — the weakest fit. The common prerequisite for anything past a
 ## C1: read and said, applied nowhere (2026-10-07)
 
 `exif/dng-profile.ts` (pure) reads IFD0's profile tags through the one TIFF
-reader; `RawProbe.profile` carries them and `describeRaw` ends with them
-(`profile "Adobe Standard" · A + D65 · forward matrices · hue/sat map
-90×30×1`). Rules: a table whose bytes are past the probe's megabyte is
-NAMED in `unread`, never dropped (the opcode reader's rule); absurd table
-dims are refused before allocating; a third illuminant (DNG 1.6) and a gain
-table map are SAID, not read. `raw/dng-color.ts` (pure) is the spec's maths —
-`interpolationWeight` (linear in 1/T, clamped), `neutralToXy` (the SDK's
-iteration from D50), `cameraToXyzD50` (forward matrix normalised to D50, else
-inverse matrix + Bradford), `balancedToSrgb`, `dngCorrection` (the 3×3 from
-LibRaw's answer to the spec's, identity under D65 with one D65 matrix — a
-spec pins it), `librawPick` (LibRaw's own choice, measured) and
-`calibrationsFromLibraw` (the measured `dng_color` shape). `dcrawRgbCam` is
-now the ONE construction of dcraw's `rgb_cam` (`linear-dng.ts` calls it).
-`illuminantKelvin` holds the DNG SDK's temperatures AS RECALLED — check them
-at source before anything is applied with them.
+reader into `RawProbe.profile`, said by `describeRaw`. A table past the
+probe's megabyte is NAMED in `unread`, never dropped; absurd dims are refused
+before allocating; a third illuminant and a gain table map are SAID, not
+read. `raw/dng-color.ts` (pure) is the spec's maths (`interpolationWeight`,
+`neutralToXy`, `cameraToXyzD50`, `dngCorrection`, `librawPick`,
+`calibrationsFromLibraw`); `dcrawRgbCam` is the ONE construction of dcraw's
+`rgb_cam`. `illuminantKelvin` holds the SDK's temperatures AS RECALLED —
+check them at source.
 
 ## C2 + C3: the spec's colour on a picture put on its sensor (2026-10-07)
 
@@ -139,3 +132,25 @@ differ from C3's after-the-clip correction on ~27 % of the samples of a
 deliberately saturated file — the colours LibRaw's matrix clipped. Cost:
 ~23 ns a pixel (12 MP in 278 ms here), banded. NOT measured: a real camera
 file, a JPEG XL ProRAW through the profile, a phone.
+
+## C5: the hue/sat map, in the decoder (2026-10-07)
+
+**Decision.** The brief put the map in the head; C4 made the DECODER the
+place — after the matrix, BEFORE the clip, in linear ProPhoto, the order the
+DNG SDK renders in — so it runs in `applyCameraMatrix` and `developTile`
+(JPEG XL), never in a shader. `raw/hue-sat-map.ts` (pure) is the SDK's HSV
+and lookup AS RECALLED, not read at source. **Rules a later agent must
+keep:**
+
+- **The table is read from the FILE each time** (`RawHead.profile` from the
+  probe, `LinearDng.profile`), like the opcodes; the picture stores only the
+  blend weight (`RawProfile.hueSat.weight`, label `… · hue/sat`). A map whose
+  bytes are past the head is not applied and not claimed.
+- **The weight is the matrices'** at the as-shot light, resolved once with
+  the profile; a kelvin balance moves the matrix, never re-blends the table.
+- The decode cache key carries the weight (`profileToken`), and the stage's
+  decode key is the request's JSON.
+
+Measured with the real decoder (synthetic DNGs, headless): an identity map
+gives the profile without a map; a 40° map at weight 0.76 moves 3 026 of
+3 072 pixels. NOT measured: a real Adobe/Apple profile, its look on his eyes.

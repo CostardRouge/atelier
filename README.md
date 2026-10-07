@@ -2141,7 +2141,9 @@ colour before anything is clipped to the screen's range — the decoder hands
 it over unconverted and the conversion is Atelier's. It is resolved once,
 with the measured exposure, and stored on the picture (the facts say *camera
 colour A + D65*); a picture already on its sensor before it existed keeps its
-colour. The kelvin white balance reads and sets the light through the same
+colour. Where the DNG carries a hue/saturation map (an Adobe or Apple
+profile), that map is applied too, right after the matrix, blended for the
+same light (*camera colour A + D65 · hue/sat*). The kelvin white balance reads and sets the light through the same
 calibrations.
 
 **Which pictures leave.** Every picture says whether it leaves: by default the

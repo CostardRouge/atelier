@@ -43,6 +43,7 @@
 
 import { fromLinear } from '../lut/transfer';
 import { toHalf, type HalfImage } from '../render/half-image';
+import { mapSrgbThroughHueSat, type HueSatTable } from './hue-sat-map';
 
 /** The three floats per pixel a RAW becomes before it is packed. */
 export interface LinearRgb {
@@ -493,7 +494,13 @@ function bt709CodeTable(): Uint16Array {
  * Measured against LibRaw's own sRGB output on synthetic DNGs: within one
  * 8-bit code (max 53, mean ~1.5 of 65535 in sixteen bits).
  */
-export function applyCameraMatrix(rgb16: Uint16Array, matrix: readonly number[], from: number, to: number): void {
+export function applyCameraMatrix(
+  rgb16: Uint16Array,
+  matrix: readonly number[],
+  from: number,
+  to: number,
+  hueSat: HueSatTable | null = null,
+): void {
   const lin = bt709Table();
   const code = bt709CodeTable();
   const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = matrix;
@@ -504,6 +511,8 @@ export function applyCameraMatrix(rgb16: Uint16Array, matrix: readonly number[],
     let R = m0 * r + m1 * g + m2 * b;
     let G = m3 * r + m4 * g + m5 * b;
     let B = m6 * r + m7 * g + m8 * b;
+    // The profile's hue/sat map (C5), on the camera's colour before the clip.
+    if (hueSat) [R, G, B] = mapSrgbThroughHueSat(hueSat, [R, G, B]);
     R = R <= 0 ? 0 : R >= 1 ? 1 : R;
     G = G <= 0 ? 0 : G >= 1 ? 1 : G;
     B = B <= 0 ? 0 : B >= 1 ? 1 : B;

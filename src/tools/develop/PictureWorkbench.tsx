@@ -929,7 +929,7 @@ export default function PictureWorkbench({
   // The camera profile every decode of this picture folds in (C4): stored,
   // `'resolve'` while pending, or none — LibRaw's colour.
   const decodeProfile = decodeProfileOf(developNow);
-  const decodeProfileKey = decodeProfile ? String(decodeProfile) : '';
+  const decodeProfileKey = decodeProfile ? JSON.stringify(decodeProfile) : '';
   // The stage's last decode of the sensor — what an Auto base curve is measured on.
   const [sensorDecode, setSensorDecode] = useState<{ file: File; half: HalfImage; gain: number } | null>(null);
   // The calibration the RAW carries, read from a megabyte of its head as soon

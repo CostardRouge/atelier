@@ -306,7 +306,7 @@ export function rawMatrixOf(d: DevelopSettings | null | undefined): number[] | n
 export function decodeProfileOf(d: DevelopSettings | null | undefined): ProfileRequest {
   if (!d || !isRawDevelop(d)) return null;
   if (d.rawProfile === PROFILE_PENDING) return 'resolve';
-  return appliedProfile(d)?.matrix ?? null;
+  return appliedProfile(d);
 }
 
 /** The camera profile a develop APPLIES — resolved, on a RAW base — or null. */
