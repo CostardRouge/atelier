@@ -75,6 +75,18 @@ describe('the Trafic', () => {
   });
 });
 
+describe('the Zoé', () => {
+  it('comes in white, gloss, with its mirrors and nothing else to offer', () => {
+    const car = defaultCarSpec('zoe-ph2');
+    expect(car.finish).toBe('gloss');
+    expect(colourName(car.color, car.model)).toBe('Glacier white');
+    expect(CAR_LINES['zoe-ph2'].gear).toEqual(['mirrors']);
+    expect(car.gear.mirrors).toBe(true);
+    expect(describeCar(car, 'Renault Zoé')).toBe('Renault Zoé · Glacier white, gloss · door mirrors');
+    expect(gearWords({ ...car.gear, roofSolar: true, roofBars: true }, 'zoe-ph2')).toEqual(['door mirrors']);
+  });
+});
+
 describe('the lines', () => {
   it('cover every model, each with readable, distinctly named colours that include its own', () => {
     for (const id of CAR_MODEL_IDS) {

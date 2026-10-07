@@ -20,7 +20,7 @@
  * `boat-parts.ts`. Pure and DOM-free.
  */
 
-import { cylinder, decal, heightOn, normalise, prism, type Part, type Vec3, type ZPlane } from './mesh3d';
+import { cylinder, decal, heightOn, normalise, prism, solid, type Face, type Part, type Vec3, type ZPlane } from './mesh3d';
 
 export type P2 = readonly [number, number];
 
@@ -235,6 +235,58 @@ export function makeBody(spec: BodySpec): Body {
   }
 
   return { halfLength, halfWidth, outline, cuts, halfWidthAt, slicePlan, hull, bands, wallDecal, acrossFace, diamond, sideDecal };
+}
+
+// --- the greenhouse ---------------------------------------------------------------
+
+/** A flank that leans in: `x` from the centre at height `z`, less by `lean` per unit of height above it. */
+export interface SideLean {
+  x: number;
+  z: number;
+  lean: number;
+}
+
+export const sideAt = (side: SideLean, z: number): number => side.x - side.lean * (z - side.z);
+/** A (y, z) point of the profile, on the right (`1`) or left (`-1`) flank. */
+export const onSideOf = (side: SideLean, sign: 1 | -1, [y, z]: P2): Vec3 => [sign * sideAt(side, z), y, z];
+
+/** A car's greenhouse profile in (y, z): the windscreen's base, the roof's two ends, the rear screen's base. */
+export interface GreenhouseProfile {
+  wsBase: P2;
+  roofFront: P2;
+  roofRear: P2;
+  rearBase: P2;
+}
+
+/**
+ * The cabin over the belt as ONE convex part: each flank tiled (the pillars,
+ * the glass, the strip under the roof — every tile convex and all on the
+ * flank's one leaning plane), then the roof, the windscreen and the rear
+ * screen across, and a floor lying on the body's top — never seen, it keeps
+ * `outward` honest. The tiles are given for the right flank; the left is
+ * the mirror.
+ */
+export function greenhouse(
+  id: string,
+  side: SideLean,
+  profile: GreenhouseProfile,
+  tiles: readonly { role: string; points: readonly P2[] }[],
+  roles: { roof?: string; screen?: string; rear?: string; floor?: string } = {},
+): Part {
+  const { wsBase, roofFront, roofRear, rearBase } = profile;
+  const faces: Face[] = [];
+  for (const sign of [1, -1] as const) {
+    for (const tile of tiles) faces.push({ role: tile.role, verts: tile.points.map((p) => onSideOf(side, sign, p)) });
+  }
+  const across = (a: P2, b: P2, role: string): Face => ({
+    role,
+    verts: [onSideOf(side, 1, a), onSideOf(side, -1, a), onSideOf(side, -1, b), onSideOf(side, 1, b)],
+  });
+  faces.push(across(roofFront, roofRear, roles.roof ?? 'roof'));
+  faces.push(across(wsBase, roofFront, roles.screen ?? 'glass'));
+  faces.push(across(roofRear, rearBase, roles.rear ?? 'glass'));
+  faces.push(across(rearBase, wsBase, roles.floor ?? 'body'));
+  return solid(id, faces);
 }
 
 // --- wheels -------------------------------------------------------------------

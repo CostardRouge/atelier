@@ -33,8 +33,8 @@
  */
 
 import { defaultCarSpec, effectiveGear, type CarGear } from '../car-spec';
-import { arc, at, box2, level, lifted, makeBody, meet, roadWheel, spokedRim, through, type P2 } from './car-parts';
-import { prism, solid, type Face, type Part, type Vec3, type ZPlane } from './mesh3d';
+import { arc, at, box2, greenhouse, level, lifted, makeBody, meet, roadWheel, spokedRim, through, type P2 } from './car-parts';
+import { prism, type Part, type ZPlane } from './mesh3d';
 
 /** The car's footprint, for its shadow and its scale on the map. */
 export const KADJAR_LENGTH = 4.49;
@@ -139,8 +139,6 @@ const WINDOW_TOP = lifted(ROOF, -0.07);
 
 /** The greenhouse's sides lean in: 0.84 from the centre at the belt, 0.64 at the roof. */
 const SIDE = { x: 0.84, z: GLASS.wsBase[1], lean: (0.84 - 0.64) / (GLASS.roofFront[1] - GLASS.wsBase[1]) };
-const sideX = (z: number) => SIDE.x - SIDE.lean * (z - SIDE.z);
-const onSide = (sign: 1 | -1, [y, z]: P2): Vec3 => [sign * sideX(z), y, z];
 
 const onBelt = (y: number): P2 => [y, at(BELT, y)];
 const onWindowTop = (y: number): P2 => [y, at(WINDOW_TOP, y)];
@@ -170,23 +168,7 @@ function sideTiles(): { role: string; points: P2[] }[] {
   ];
 }
 
-function cabin(): Part {
-  const { wsBase, roofFront, roofRear, rearBase } = GLASS;
-  const faces: Face[] = [];
-  for (const sign of [1, -1] as const) {
-    for (const tile of sideTiles()) faces.push({ role: tile.role, verts: tile.points.map((p) => onSide(sign, p)) });
-  }
-  const across = (a: P2, b: P2, role: string): Face => ({
-    role,
-    verts: [onSide(1, a), onSide(-1, a), onSide(-1, b), onSide(1, b)],
-  });
-  faces.push(across(roofFront, roofRear, 'roof'));
-  faces.push(across(wsBase, roofFront, 'glass'));
-  faces.push(across(roofRear, rearBase, 'glass'));
-  // The floor lies on the body's top; never seen, it keeps `outward` honest.
-  faces.push(across(rearBase, wsBase, 'body'));
-  return solid('cabin', faces);
-}
+const cabin = (): Part => greenhouse('cabin', SIDE, GLASS, sideTiles());
 
 // --- decals -------------------------------------------------------------------
 

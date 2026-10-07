@@ -334,6 +334,7 @@ const SOLID: Record<string, (id: string) => boolean> = {
   'prado-j120': (id) => id === 'body-bonnet' || id === 'cabin' || id.startsWith('flare-'),
   'kadjar-ph2': KADJAR_SOLID,
   'trafic-ph2': (id) => id === 'body-bonnet' || id === 'cab' || id.startsWith('cargo-') || id.startsWith('solar-'),
+  'zoe-ph2': (id) => id === 'body-bonnet' || id === 'cabin' || id === 'spoiler',
   'viper-jet': (id) => id === 'hull' || id === 'console',
   'solar-whisper': (id) => id === 'hull' || id.startsWith('roof-') || id.startsWith('bench-'),
 };

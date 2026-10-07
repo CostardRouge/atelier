@@ -608,6 +608,16 @@ renderer or either export moved.
   the nose rounded. The gear gained `roofSolar`, a panel in a frame on the
   roof itself, beside the Prado's `solar` that rides in the basket.
 
+### A fourth car — the Zoé (2026-10-07)
+
+- **`zoe-model.ts`** is the small electric hatchback, white as it comes, over
+  the same `car-parts.ts` — which gained the Kadjar's hand-built cabin as
+  `greenhouse` (a leaning flank tiled with pillars and glass, the roof and
+  both screens across) the day a second hatchback asked for it; the Kadjar is
+  byte-identical over it. A hatch glass steep enough to meet the window line
+  AHEAD of the C pillar's foot has to be built with the pillar's top corner on
+  that line, or the cabin is not convex — the gate said so first.
+
 ### Boats, and a vehicle per piece (2026-09-29)
 
 - **Four boats in the registry** (`kind: 'boat'`): the Whitsundays day

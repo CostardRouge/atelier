@@ -25,7 +25,7 @@
  * trusted, and a partial spec keeps what it says.
  */
 
-export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const;
+export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const;
 export type CarModelId = (typeof CAR_MODEL_IDS)[number];
 
 /** The car a trip drives when nothing says otherwise — the maintainer's own. */
@@ -148,8 +148,8 @@ const PRADO_GEAR: readonly (keyof CarGear)[] = [
  * Every model the document can name. The colours are each car's factory range
  * as it is remembered, by name rather than by paint code (none is claimed),
  * plus the maintainer's own: the Prado's dark green and Raptor black, the
- * Kadjar's navy — which is his word for it, not Renault's — and the Trafic's
- * white, the colour it was photographed in.
+ * Kadjar's navy — which is his word for it, not Renault's — the Trafic's
+ * white, the colour it was photographed in, and the Zoé's, "classic" white.
  */
 export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
   'prado-j120': {
@@ -202,6 +202,23 @@ export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
     finish: 'gloss',
     fitted: ['roofSolar', 'mirrors'],
     asItComes: 'The Trafic in white, gloss, with the solar panel on its roof',
+  },
+  'zoe-ph2': {
+    gear: ['mirrors'],
+    colours: [
+      { id: 'glacier', name: 'Glacier white', hex: '#f1f1ed', note: 'Blanc Glacier — the classic one' },
+      { id: 'quartz', name: 'Quartz white', hex: '#e8e7e1', note: 'Blanc Quartz' },
+      { id: 'highland', name: 'Highland grey', hex: '#8f9398', note: 'Gris Highland' },
+      { id: 'titanium', name: 'Titanium grey', hex: '#696c70', note: 'Gris Titanium' },
+      { id: 'star-black', name: 'Star black', hex: '#16171a', note: 'Noir Étoilé' },
+      { id: 'celadon', name: 'Celadon blue', hex: '#5a8fb0', note: 'Bleu Céladon' },
+      { id: 'berlin', name: 'Berlin blue', hex: '#1f3d6e', note: 'Bleu Berlin' },
+      { id: 'flame-red', name: 'Flame red', hex: '#a3161d', note: 'Rouge Flamme' },
+    ],
+    color: '#f1f1ed',
+    finish: 'gloss',
+    fitted: ['mirrors'],
+    asItComes: 'The Zoé in white, gloss, as it comes',
   },
   // The boats' liveries are guesses: none of their operators says what colour
   // they are, so each comes in the colour a boat of its kind most often wears.
