@@ -4,6 +4,7 @@ import { loadLand } from '../../shared/map/load-land';
 import { labelTowns, openingBounds, townsInView, type Town } from '../../shared/map/pick-map';
 import { OSM_CREDIT, TILES_TOGGLE, setTiles } from '../../shared/map/track-map';
 import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
+import type { IndexPick, StageLookup } from '../../shared/roadtrip/place-locate';
 import type { RulerGap } from '../../shared/roadtrip/stage-ruler';
 import { STAGE_TINTS } from '../../shared/roadtrip/stage-ruler';
 import type { DayCell } from '../../shared/roadtrip/trip-coverage';
@@ -50,10 +51,8 @@ interface TripMapViewProps {
   /** The pictures view: a told stage draws its latest hook instead of its dial. */
   pictures?: ReadonlyMap<string, StagePicture>;
   compact: boolean;
-  /** «Locate…» on a stage whose place has no position: open it where its place is edited. */
-  onLocate: (stageId: string) => void;
-  /** «Cover…» on days no stage covers. */
-  onCover: (gap: RulerGap) => void;
+  /** The verbs of «Not on the map»: place from the index, Fix, add a place, cover. */
+  offMap: OffMapActions;
   /** The phone shows a chip for what is not on the map; this opens its sheet. */
   onShowOffMap?: () => void;
   /** Drawn over the map's foot — the phone's stage bar. */
@@ -134,8 +133,7 @@ export default function TripMapView({
   onOpenStage,
   pictures,
   compact,
-  onLocate,
-  onCover,
+  offMap,
   onShowOffMap,
   footer,
 }: TripMapViewProps) {
@@ -704,7 +702,7 @@ export default function TripMapView({
         ) : (
           <div data-map-ui className="absolute left-2.5 bottom-2.5 w-[min(21rem,calc(100%-8rem))] max-h-[45%] overflow-y-auto px-3 py-2 rounded-paper border border-line bg-surface/92 backdrop-blur-[6px] shadow-paper">
             <p className="m-0 mb-1 font-mono text-3xs tracking-[0.08em] uppercase text-muted">Not on the map</p>
-            <OffMapRows map={model} onLocate={onLocate} onCover={onCover} />
+            <OffMapRows map={model} actions={offMap} />
           </div>
         ))}
 
@@ -748,39 +746,89 @@ export default function TripMapView({
   );
 }
 
+/** What «Not on the map» can do about each row. */
+export interface OffMapActions {
+  /** What the index of towns says per stage (`lookupTrip`); null while it is read. */
+  lookup: ReadonlyMap<string, StageLookup> | null;
+  /** A town the index found, as the trip writes it («Newcastle, NSW»). */
+  found: (pick: IndexPick) => string;
+  /** Put these places at the towns found — one change, ⌘Z takes it back. */
+  onPlace: (picks: readonly IndexPick[]) => void;
+  /** Open the stage on this place's Fix, or on a new place (null). */
+  onFix: (stageId: string, placeId: string | null) => void;
+  /** «Cover…» on days no stage covers. */
+  onCover: (gap: RulerGap) => void;
+}
+
 /**
  * The rows of what the map cannot place: stages with no position, then the
- * runs of days no stage covers — each with its verb. Drawn in the wide
- * screen's tray and in the phone's sheet.
+ * runs of days no stage covers — each with the verb that puts it on the map
+ * (2026-10-07, his «Locate… ne localise rien»). A stage whose place the index
+ * of towns answers for is PLACED in one click, the town said beside it; one
+ * it cannot settle opens on Fix; one with no place opens on a new place.
+ * Drawn in the wide screen's tray and in the phone's sheet.
  */
-export function OffMapRows({
-  map,
-  onLocate,
-  onCover,
-}: {
-  map: TripMap;
-  onLocate: (stageId: string) => void;
-  onCover: (gap: RulerGap) => void;
-}) {
+export function OffMapRows({ map, actions }: { map: TripMap; actions: OffMapActions }) {
+  const { lookup, found, onPlace, onFix, onCover } = actions;
   const gaps = map.offMap.gaps;
   const shown = gaps.slice(0, 3);
+  const sure = map.offMap.unplaced.flatMap((s) => lookup?.get(s.stage.id)?.sure ?? []);
   return (
     <ul className="m-0 p-0 list-none flex flex-col gap-1.5">
-      {map.offMap.unplaced.map((s) => (
-        <li key={s.stage.id} className="flex items-center gap-2 text-xs">
-          <span className="flex-none w-2 h-2 rounded-full" style={{ background: tintOf(s.index) }} aria-hidden="true" />
-          <span className="flex-1 min-w-0">
-            <span className="block font-medium truncate">{s.label || 'Unnamed stage'}</span>
-            <span className="block font-mono text-3xs text-muted truncate">
-              {formatIsoDate(s.dates[0])} → {formatIsoDate(s.dates[s.dates.length - 1])} · {s.dates.length} d ·{' '}
-              {s.stage.places.length ? 'its place has no position' : 'no place yet'}
-            </span>
+      {sure.length > 1 && (
+        <li className="flex items-center gap-2 text-xs pb-1.5 border-b border-line">
+          <span className="flex-1 min-w-0 text-ink-soft">
+            {sure.length} found in the index of towns
           </span>
-          <Button size="sm" onClick={() => onLocate(s.stage.id)}>
-            Locate…
+          <Button
+            size="sm"
+            variant="primary"
+            title="Each at the town of its name the index found, in the trip’s country — ⌘Z takes them all back"
+            onClick={() => onPlace(sure)}
+          >
+            Place all {sure.length}
           </Button>
         </li>
-      ))}
+      )}
+      {map.offMap.unplaced.map((s) => {
+        const look = lookup?.get(s.stage.id);
+        const named = s.stage.places.some((p) => p.name.trim());
+        const first = look?.unsure[0] ?? s.stage.places.find((p) => !p.coords)?.id ?? null;
+        const what = !named ? 'no place yet' : look?.sure.length ? `found: ${look.sure.map(found).join(', ')}` : 'no position';
+        return (
+          <li key={s.stage.id} className="flex items-center gap-2 text-xs">
+            <span className="flex-none w-2 h-2 rounded-full" style={{ background: tintOf(s.index) }} aria-hidden="true" />
+            <span className="flex-1 min-w-0">
+              <span className="block font-medium truncate">{s.label || 'Unnamed stage'}</span>
+              <span className="block font-mono text-3xs text-muted truncate">
+                {formatIsoDate(s.dates[0])} → {formatIsoDate(s.dates[s.dates.length - 1])} · {s.dates.length} d
+              </span>
+              <span className="block text-3xs text-ink-soft">{what}</span>
+            </span>
+            {!named ? (
+              <Button size="sm" onClick={() => onFix(s.stage.id, null)} title="Open the stage on a new place">
+                Add a place…
+              </Button>
+            ) : look?.sure.length ? (
+              <Button
+                size="sm"
+                title={`At ${look.sure.map(found).join(', ')}, from the index of towns shipped with Atelier — ⌘Z takes it back`}
+                onClick={() => onPlace(look.sure)}
+              >
+                Place it
+              </Button>
+            ) : (
+              <Button
+                size="sm"
+                onClick={() => onFix(s.stage.id, first)}
+                title={lookup ? 'The index cannot settle it: pick the town, search it, or type its position' : 'Open the stage on its place'}
+              >
+                Fix…
+              </Button>
+            )}
+          </li>
+        );
+      })}
       {shown.map((g) => (
         <li key={g.startDate} className="flex items-center gap-2 text-xs">
           <span className="flex-none w-2 h-2 rounded-full border-[1.5px] border-dashed border-faint" aria-hidden="true" />
