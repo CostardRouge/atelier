@@ -52,3 +52,23 @@ ICCs are never shipped nor fetched — a user may load his own into a vault
 own pipeline — the weakest fit. The common prerequisite for anything past a
 3×3 done right is LibRaw in camera/wide colour, the same change P3 needs
 (`lightroom-gaps.md` §11).
+
+## C1: read and said, applied nowhere (2026-10-07)
+
+`exif/dng-profile.ts` (pure) reads IFD0's profile tags through the one TIFF
+reader; `RawProbe.profile` carries them and `describeRaw` ends with them
+(`profile "Adobe Standard" · A + D65 · forward matrices · hue/sat map
+90×30×1`). Rules: a table whose bytes are past the probe's megabyte is
+NAMED in `unread`, never dropped (the opcode reader's rule); absurd table
+dims are refused before allocating; a third illuminant (DNG 1.6) and a gain
+table map are SAID, not read. `raw/dng-color.ts` (pure) is the spec's maths —
+`interpolationWeight` (linear in 1/T, clamped), `neutralToXy` (the SDK's
+iteration from D50), `cameraToXyzD50` (forward matrix normalised to D50, else
+inverse matrix + Bradford), `balancedToSrgb`, `dngCorrection` (the 3×3 from
+LibRaw's answer to the spec's, identity under D65 with one D65 matrix — a
+spec pins it), `librawPick` (LibRaw's own choice, measured) and
+`calibrationsFromLibraw` (the measured `dng_color` shape). `dcrawRgbCam` is
+now the ONE construction of dcraw's `rgb_cam` (`linear-dng.ts` calls it).
+`illuminantKelvin` holds the DNG SDK's temperatures AS RECALLED — check them
+at source before anything is applied with them. **How to apply**: wiring
+`dngCorrection` onto a picture is C3 of the brief and waits for his Q1.

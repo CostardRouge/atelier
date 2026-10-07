@@ -27,6 +27,7 @@ import { num, nums, parseIfd, type Entry } from './exif-parser';
 import { readExifBlock, withExifBlock } from './exif-block';
 import { buildOrientationBlock } from './exif-build';
 import { describeOpcodes, parseOpcodeList, type DngOpcodes } from './dng-opcodes';
+import { describeDngProfile, readDngProfile, type DngProfile } from './dng-profile';
 
 /** IFDs are front-loaded in a TIFF; this is plenty to walk them and find the previews. */
 export const RAW_PROBE_BYTES = 1024 * 1024;
@@ -113,6 +114,13 @@ export interface RawProbe {
    * above `gain` is offered: a correction nobody measured is worse than none.
    */
   calibration: DngOpcodes | null;
+  /**
+   * The colour profile a DNG carries in IFD0 — its matrices per illuminant,
+   * its hue/sat and look tables, its tone curve (`dng-profile.ts`). Read and
+   * said, never applied (`docs/camera-profiles.md`). Null for a RAW that is
+   * not a DNG, or a DNG with no colour data.
+   */
+  profile: DngProfile | null;
 }
 
 /** What a compression code means, for a report or a panel. */
@@ -186,12 +194,15 @@ export function probeRaw(buffer: ArrayBuffer): RawProbe | null {
     const ifds: RawIfd[] = [];
     const opcodes: number[] = [];
     let calibration: DngOpcodes | null = null;
+    let profile: DngProfile | null = null;
     const seen = new Set<number>();
 
     const visit = (offset: number, depth: number): number => {
       if (!offset || offset >= view.byteLength || seen.has(offset) || depth > 4) return 0;
       seen.add(offset);
       const { entry, map, next } = readIfd(view, 0, offset, little);
+      // The profile tags live in IFD0, the first IFD read.
+      if (!ifds.length) profile = readDngProfile(view, map, little);
       ifds.push(entry);
       for (const tag of OPCODE_TAGS) if (map.has(tag) && !opcodes.includes(tag)) opcodes.push(tag);
       // Only list 3: lists 1 and 2 act on the MOSAIC, before and during
@@ -220,7 +231,7 @@ export function probeRaw(buffer: ArrayBuffer): RawProbe | null {
     // nothing but whose sensor plane does is the fallback, and nothing else is
     // read as the capture's — a render's own tag describes the render.
     const orientation = ifds[0]?.orientation ?? ifds.find(isSensor)?.orientation ?? null;
-    return { little, ifds, preview: pickPreview(ifds), orientation, opcodes, calibration };
+    return { little, ifds, preview: pickPreview(ifds), orientation, opcodes, calibration, profile };
   } catch {
     return null;
   }
@@ -299,6 +310,8 @@ export function describeRaw(probe: RawProbe): string {
   // What list 3 really asks for, once it has been read rather than counted.
   const asked = describeOpcodes(probe.calibration);
   if (asked) parts.push(asked);
+  const colour = describeDngProfile(probe.profile);
+  if (colour) parts.push(colour);
   return parts.join(' · ');
 }
 

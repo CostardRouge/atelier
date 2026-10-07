@@ -31,7 +31,8 @@
  */
 
 import { num, nums, parseIfd, type Entry } from '../exif/exif-parser';
-import { inverse3, mul3, type RawWhite } from './white-balance';
+import { dcrawRgbCam } from './dng-color';
+import { inverse3, type RawWhite } from './white-balance';
 
 const TAG = {
   subfileType: 254,
@@ -70,9 +71,6 @@ export const JXL_COMPRESSION = 52546;
 export const LINEAR_RAW = 34892;
 /** CalibrationIlluminant D65. */
 const D65 = 21;
-
-/** Linear sRGB → XYZ (D65) — dcraw's `xyz_rgb`. */
-const XYZ_RGB = [0.412453, 0.35758, 0.180423, 0.212671, 0.71516, 0.072169, 0.019334, 0.119193, 0.950227];
 
 export interface LinearDngTile {
   offset: number;
@@ -280,13 +278,7 @@ export function linearDngColor(info: Pick<LinearDng, 'colorMatrix' | 'asShotNeut
 
   const identity = [1, 0, 0, 0, 1, 0, 0, 0, 1];
   if (!info.colorMatrix) return { mul, rgbCam: identity, white: null };
-  const camRgb = mul3(info.colorMatrix, XYZ_RGB);
-  for (let r = 0; r < 3; r += 1) {
-    const sum = camRgb[r * 3] + camRgb[r * 3 + 1] + camRgb[r * 3 + 2];
-    if (!(Math.abs(sum) > 1e-9)) return { mul, rgbCam: identity, white: null };
-    for (let c = 0; c < 3; c += 1) camRgb[r * 3 + c] /= sum;
-  }
-  const rgbCam = inverse3(camRgb);
+  const rgbCam = dcrawRgbCam(info.colorMatrix);
   if (!rgbCam) return { mul, rgbCam: identity, white: null };
   const white: RawWhite | null = inverse3(info.colorMatrix)
     ? { asShot: [raw[0] / raw[1], 1, raw[2] / raw[1]], camXyz: [...info.colorMatrix], rgbCam }

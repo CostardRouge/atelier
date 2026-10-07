@@ -225,7 +225,7 @@ export function rawWhiteBalanceOrNull(raw: unknown): RawWhiteBalance | null {
 }
 
 /** Linear sRGB (D65) → XYZ — dcraw's `xyz_rgb`, inverted; what LibRaw's `rgb_cam` was built against. */
-const XYZ_TO_SRGB = [3.2404542, -1.5371385, -0.4985314, -0.969266, 1.8760108, 0.041556, 0.0556434, -0.2040259, 1.0572252];
+export const XYZ_TO_SRGB = [3.2404542, -1.5371385, -0.4985314, -0.969266, 1.8760108, 0.041556, 0.0556434, -0.2040259, 1.0572252];
 
 /**
  * Is the decoder's read usable: finite, a camera matrix that inverts,
