@@ -93,6 +93,19 @@ export function deckCommit(totalX: number, travel: number, speedX: number, has: 
   return allowed(swipeCommit(totalX, travel, speedX), has);
 }
 
+/**
+ * Whether a plain `<img>` draws this file — what lets a deck's slot show a
+ * neighbour straight from its bytes when the host has no thumbnail of it (the
+ * Develop SHEET in Trips and the Studio). A clip, a RAW, a HEIF or a TIFF
+ * draws nothing in an `<img>`: its slot says its name instead.
+ */
+export function drawsInImg(file: Pick<File, 'name' | 'type'> | null): boolean {
+  if (!file) return false;
+  const type = file.type.toLowerCase();
+  if (type) return /^image\/(jpeg|png|webp|gif|avif)$/.test(type);
+  return /\.(jpe?g|png|webp|gif|avif)$/i.test(file.name);
+}
+
 /** Whether a trackpad sweep in progress has earned its page, and the roll can make it. */
 export function deckSweep(swept: number, travel: number, has: DeckNeighbours): -1 | 0 | 1 {
   return allowed(sweepCommit(swept, travel), has);

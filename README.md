@@ -247,7 +247,11 @@ exposure in stops, brightness, contrast, highlights, shadows, whites, blacks,
 temperature, tint, saturation, vibrance, with the grade stack underneath and a
 wipe to the untouched frame, which **A/B** in the sheet's header turns on and
 off (one choice for every Develop screen, remembered by the browser; turned on,
-it opens on the middle). A clip opens on the frame under the playhead and
+it opens on the middle). With **A/B** off, the picture at its fitted size
+**swipes** to the project's media before or after it, as in the Develop tool —
+a drag, a flick, a sideways trackpad sweep, or ← / → — and a page **writes**
+this media's numbers first, as Done would; the list's two ends resist. A clip
+opens on the frame under the playhead and
 **plays there**: ▶ or Space runs it graded while the sliders move, the bar
 under it scrubs, the histogram and Auto read the frame it stops on, and where
 it is paused is written nowhere — the Studio's own playhead stays put. The
@@ -1446,7 +1450,12 @@ look underneath so a correction and a grade are set in one place. The picture
 on the sheet is exactly what the piece will deliver — the correction, then the
 look, then the output transform — and a drag across it wipes to the untouched
 frame (hold the corner chip to see it whole; **A/B** in the header turns the
-wipe off and on). A clip slide **plays** in the sheet — ▶ or Space, a bar to
+wipe off and on). With **A/B** off, the picture at its fitted size **swipes**
+to the slide before or after, as in the Develop tool — a drag, a flick, a
+sideways trackpad sweep, or ← / → — over the piece's slides that hold a
+picture, a collage entered on its first cell; a page **writes** this slide's
+numbers first, as Done would, so Cancel only takes back the slide on screen.
+A clip slide **plays** in the sheet — ▶ or Space, a bar to
 scrub — so a correction is judged moving; the piece behind the sheet does not
 play along. The correction bakes into the
 same single LUT the grade already goes through, so the stage, the slide rail,

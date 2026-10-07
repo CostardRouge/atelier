@@ -462,3 +462,15 @@ at 0.8) and a clean variant did not; a scene's bottom shade through
 `drawOverlays` read 200 → 101 at a quarter second → 4, and 200 after the
 scene, under a whole-clip corner holding at 5 throughout.
 
+## The media's hash is held WITH its file (2026-10-07)
+
+`activeHash` (the guard on a media's develop, `media-develop.ts`) was a bare
+state reset by an effect, so for one render after a media switch it was the
+PREVIOUS media's hash: `restoreDevelop` compared it with the new media's saved
+hash, found them different and restored nothing. Harmless while the Develop
+sheet only opened long after a switch; fatal once the sheet steps between
+media (`develop.md`, «The sheet SWIPES too»): the stepped-to sheet opened as
+shot and wrote that back. **Rule**: an async value derived from a file is
+stored WITH that file (`{ file, hash }`) and read as null when the file moved
+on — unknown keeps the saved develop, as before.
+
