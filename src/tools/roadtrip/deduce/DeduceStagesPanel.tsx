@@ -326,7 +326,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-full max-w-[54rem] h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
+      <div className="w-[calc(100vw-4rem)] max-w-[100rem] max-[820px]:w-full h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         {/* --- the head: a title, the window's tabs, the draft ------------ */}
         <div className={`flex flex-col gap-2.5 pt-5 pb-2.5 ${padX} max-[820px]:pt-4`}>
           <div className="flex items-start justify-between gap-3">
@@ -416,7 +416,8 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         </div>
 
         {/* --- the body: the window, or a pane ----------------------------- */}
-        <div ref={bodyRef} className={`flex-1 min-h-0 overflow-auto flex flex-col gap-3.5 pt-3 pb-4 ${padX} [&>*]:flex-none`}>
+        {/* A SIZE container: the grain's map column reads its height (`cqh`). */}
+        <div ref={bodyRef} className={`flex-1 min-h-0 overflow-auto [container-type:size] flex flex-col gap-3.5 pt-3 pb-4 ${padX} [&>*]:flex-none`}>
           {deduction.problem ? (
             <p className="m-0 text-sm text-danger" role="alert">
               {deduction.problem.text}{' '}

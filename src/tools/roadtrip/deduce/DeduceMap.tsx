@@ -13,6 +13,7 @@ import {
 } from '../../../shared/map/map-view';
 import type { DayPoint } from '../../../shared/roadtrip/day-track';
 import { haltName, haltPlace, haltText, type DeduceDraft, type Proposal } from '../../../shared/roadtrip/deduce-draft';
+import { deduceMapContent } from '../../../shared/roadtrip/deduce-map';
 import { haversineKm } from '../../../shared/roadtrip/hooks/geo';
 import { ODD_KM } from '../../../shared/roadtrip/place-oddity';
 import type { PlaceWritingTrip } from '../../../shared/roadtrip/place-style';
@@ -38,7 +39,13 @@ import { proposalColour } from './pieces';
  * It frames REALITY, his rule: every place of the stage, even one a search
  * put on another continent — a map zoomed out to the world is how a wrong
  * town shows itself. Such a place is drawn where it claims to be, in
- * orange, tied to its halt's pictures by a dashed hairline.
+ * orange, tied to its halt's pictures by a dashed hairline. But only the
+ * reality the draft would WRITE (`deduce-map.ts`, 2026-10-07): a stage he
+ * skipped, a place he left out and the positions the deduction ignored are
+ * neither drawn nor framed — «une carte finale».
+ *
+ * `fill`: the map takes its box's whole height at the box's own aspect (a
+ * column beside the cards on a wide screen); without it, a 4:3 picture.
  *
  * `hot` is the chapter under the hand in whichever window: everything else
  * fades and that chapter's halts are named.
@@ -54,8 +61,6 @@ interface DeduceMapProps {
   draft: DeduceDraft;
   /** The days the deduction ran over, in calendar order. */
   points: readonly DayPoint[];
-  /** Days left out as outliers — drawn as a cross where the picture claims to be. */
-  ignored: readonly DayPoint[];
   land: LandCollection | null;
   hot?: string | null;
   /** The proposal the map flies to and frames — the one edited, the paquet's card. */
@@ -64,6 +69,8 @@ interface DeduceMapProps {
   caption?: string;
   /** What the colours mean — the map's tooltip, never a standing sentence. */
   legend?: string;
+  /** Fill the parent's height, at the box's aspect. */
+  fill?: boolean;
   className?: string;
 }
 
@@ -103,32 +110,52 @@ export default function DeduceMap({
   trip,
   draft,
   points,
-  ignored,
   land,
   hot = null,
   focus = null,
   caption,
   legend,
+  fill = false,
   className = '',
 }: DeduceMapProps) {
+  // The box, measured in `fill` mode: the viewBox takes its aspect, 400 wide.
+  const surface = useRef<HTMLDivElement | null>(null);
+  const [box, setBox] = useState<{ w: number; h: number } | null>(null);
+  useEffect(() => {
+    const el = surface.current;
+    if (!fill || !el) return;
+    const measure = () => setBox((cur) => (cur && cur.w === el.clientWidth && cur.h === el.clientHeight ? cur : { w: el.clientWidth, h: el.clientHeight }));
+    measure();
+    const ro = new ResizeObserver(measure);
+    ro.observe(el);
+    return () => ro.disconnect();
+  }, [fill]);
+  const mapH = fill && box && box.w > 0 && box.h > 0 ? Math.round((MAP_W * box.h) / box.w) : MAP_H;
+
+  // What is on the map: the itinerary the draft would write, the proposal
+  // looked at kept whatever its answer — and, to DRAW only, the one under the hand.
+  const framed = useMemo(() => deduceMapContent(proposals, draft, points, new Set(focus ? [focus.key] : [])), [proposals, draft, points, focus]);
+  const drawn = useMemo(
+    () => (hot && !framed.proposals.some((p) => p.key === hot) ? deduceMapContent(proposals, draft, points, new Set([hot, ...(focus ? [focus.key] : [])])) : framed),
+    [hot, framed, proposals, draft, points, focus],
+  );
+
   // What the frame holds: the focused proposal's halts and the places
-  // chosen for them, else the whole route — the ignored days and every
-  // chosen place included. Reality, wherever it is.
-  const target = useMemo<MapView | null>(() => {
-    const world: WorldPoint[] = [];
-    const halts = focus ? focus.halts : proposals.flatMap((p) => p.chapter.halts);
+  // chosen for them, else the whole kept route — every chosen place
+  // included. Reality, wherever it is, of what will be written.
+  const world = useMemo<WorldPoint[]>(() => {
+    const out: WorldPoint[] = [];
+    const halts = focus ? focus.halts : framed.proposals.flatMap((p) => p.halts);
     for (const h of halts) {
-      world.push(mercator(h.leg.centroid));
+      out.push(mercator(h.leg.centroid));
       const place = haltPlace(h, draft);
-      if (place?.coords) world.push(mercator(place.coords));
+      if (place?.coords) out.push(mercator(place.coords));
     }
-    if (!focus) {
-      for (const p of points) world.push(mercator(p));
-      for (const p of ignored) world.push(mercator(p));
-    }
-    // A wider margin than a point needs: the names are written to the right of their ring.
-    return fitView(world, MAP_W / MAP_H, { pad: 1.5, minW: focus ? 0.012 : 0.02 });
-  }, [focus, proposals, draft, points, ignored]);
+    if (!focus) for (const p of framed.route) out.push(mercator(p));
+    return out;
+  }, [focus, framed, draft]);
+  // A wider margin than a point needs: the names are written to the right of their ring.
+  const target = useMemo<MapView | null>(() => fitView(world, MAP_W / mapH, { pad: 1.5, minW: focus ? 0.012 : 0.02 }), [world, mapH, focus]);
 
   const [view, setView] = useState<MapView>(() => target ?? { x: 0.5, y: 0.5, w: 1 });
   const viewRef = useRef(view);
@@ -162,30 +189,40 @@ export default function DeduceMap({
   );
 
   // A new thing looked at: fly to it. The author's pan and zoom in between
-  // are left alone — only a change of what is framed moves the map.
+  // are left alone — only a change of what is framed moves the map. The box
+  // changing shape alone (the first measure, a resized window) re-places the
+  // frame without a flight, and only while the hand has not moved it.
   const lastTarget = useRef<MapView | null>(target);
+  const lastWorld = useRef(world);
+  const handMoved = useRef(false);
   useEffect(() => {
     if (!target) return;
     const last = lastTarget.current;
+    const sameContent = lastWorld.current === world;
     lastTarget.current = target;
+    lastWorld.current = world;
     if (!last) {
       // The first frame there is anything to frame: placed, not flown from nowhere.
       setView(target);
       return;
     }
+    if (sameContent) {
+      if (!handMoved.current) setView(target);
+      return;
+    }
+    handMoved.current = false;
     if (sameView(last, target)) return;
     flyTo(target);
-  }, [target, flyTo]);
+  }, [target, world, flyTo]);
 
   // --- the hand: one reading for every surface -------------------------------
-  const surface = useRef<HTMLDivElement | null>(null);
   const svgRef = useRef<SVGSVGElement | null>(null);
   /** The SVG's scale and offset inside its box (`meet`), measured at the event. */
   const frame = () => {
     const r = svgRef.current?.getBoundingClientRect();
     if (!r || !r.width || !r.height) return null;
-    const s = Math.min(r.width / MAP_W, r.height / MAP_H);
-    return { s, left: r.left + (r.width - MAP_W * s) / 2, top: r.top + (r.height - MAP_H * s) / 2 };
+    const s = Math.min(r.width / MAP_W, r.height / mapH);
+    return { s, left: r.left + (r.width - MAP_W * s) / 2, top: r.top + (r.height - mapH * s) / 2 };
   };
   useZoomGestures({
     ref: surface,
@@ -196,7 +233,7 @@ export default function DeduceMap({
         const f = frame();
         if (!f) return;
         const fx = (anchor.x - f.left) / f.s - MAP_W / 2;
-        const fy = (anchor.y - f.top) / f.s - MAP_H / 2;
+        const fy = (anchor.y - f.top) / f.s - mapH / 2;
         const current = viewRef.current;
         setView(zoomViewAbout(current, current.w * scale, fx, fy, MAP_W));
       },
@@ -206,48 +243,55 @@ export default function DeduceMap({
         setView((v) => panView(v, dx / f.s, dy / f.s, MAP_W));
       },
       drag: () => 'pan',
-      onGesture: stop,
+      onGesture: () => {
+        stop();
+        handMoved.current = true;
+      },
     },
   });
 
-  const zoomBy = (factor: number) => flyTo({ ...viewRef.current, w: clampW(viewRef.current.w / factor) });
+  const zoomBy = (factor: number) => {
+    handMoved.current = true;
+    flyTo({ ...viewRef.current, w: clampW(viewRef.current.w / factor) });
+  };
 
   // --- drawing ----------------------------------------------------------------
   const coast = useMemo(() => (land ? coastPath(land) : ''), [land]);
   const k = MAP_W / view.w;
   const at = (p: { lat: number; lon: number }) => {
     const [x, y] = mercator(p);
-    return { x: (x - view.x) * k + MAP_W / 2, y: (y - view.y) * k + MAP_H / 2 };
+    return { x: (x - view.x) * k + MAP_W / 2, y: (y - view.y) * k + mapH / 2 };
   };
 
   const byDay = useMemo(() => {
     const map = new Map<string, Proposal>();
-    for (const p of proposals) {
+    for (const p of drawn.proposals) {
       // A proposal claims the days of its halts, which is what the route is coloured by.
-      for (const h of p.chapter.halts) {
+      for (const h of p.halts) {
         for (const d of enumerateDays(h.leg.startDate, h.leg.endDate)) map.set(d, p);
       }
     }
     return map;
-  }, [proposals]);
+  }, [drawn]);
+  const route = drawn.route;
 
   const dim = (key: string | null) => (hot && key !== hot ? 'opacity-25' : '');
   const named = new Set([hot, focus?.key].filter(Boolean));
 
   return (
-    <div className={`relative rounded-paper border border-line bg-paper-2 overflow-hidden ${className}`} title={legend}>
-      <div ref={surface} className="touch-none cursor-grab active:cursor-grabbing select-none" data-deduce-map>
+    <div className={`relative rounded-paper border border-line bg-paper-2 overflow-hidden ${fill ? 'flex flex-col' : ''} ${className}`} title={legend}>
+      <div ref={surface} className={`touch-none cursor-grab active:cursor-grabbing select-none ${fill ? 'flex-1 min-h-0' : ''}`} data-deduce-map>
         <svg
           ref={svgRef}
-          viewBox={`0 0 ${MAP_W} ${MAP_H}`}
-          className="block w-full h-auto"
+          viewBox={`0 0 ${MAP_W} ${mapH}`}
+          className={`block w-full ${fill ? 'h-full' : 'h-auto'}`}
           role="img"
           aria-label={focus ? `Where ${focus.label} is` : 'The route, as the days say it'}
         >
           {coast && (
             <path
               d={coast}
-              transform={`matrix(${k} 0 0 ${k} ${MAP_W / 2 - view.x * k} ${MAP_H / 2 - view.y * k})`}
+              transform={`matrix(${k} 0 0 ${k} ${MAP_W / 2 - view.x * k} ${mapH / 2 - view.y * k})`}
               fill="var(--color-paper)"
               stroke="var(--color-line-strong)"
               strokeWidth={0.8}
@@ -255,14 +299,24 @@ export default function DeduceMap({
               fillRule="evenodd"
             />
           )}
-          {/* the route, a stroke per day in the colour of the proposal that claims it */}
-          {points.map((p, i) => {
+          {/* the route, a stroke per day in the colour of the proposal that claims
+              BOTH its ends. A stroke from one stage into the next is the travel
+              between them, not part of either (2026-10-07: China → Albany was
+              drawn in Albany's colour and read as the stage's own first line):
+              faint and dotted on the whole route, left out when one stage is
+              framed — that stage starts at its first place. */}
+          {route.map((p, i) => {
             if (i === 0) return null;
-            const a = at(points[i - 1]);
+            const from = byDay.get(route[i - 1].date) ?? null;
+            const to = byDay.get(p.date) ?? null;
+            const between = from !== to;
+            if (between && focus) return null;
+            const a = at(route[i - 1]);
             const b = at(p);
-            const owner = byDay.get(p.date) ?? null;
+            const owner = between ? null : to;
             const colour = owner ? proposalColour(owner) : 'var(--color-faint)';
-            const gap = Date.parse(p.date) - Date.parse(points[i - 1].date) > 86_400_000;
+            const gap = Date.parse(p.date) - Date.parse(route[i - 1].date) > 86_400_000;
+            const aside = focus && owner && owner.key !== focus.key ? 'opacity-40' : '';
             return (
               <line
                 key={p.date}
@@ -272,16 +326,16 @@ export default function DeduceMap({
                 y2={b.y}
                 stroke={colour}
                 strokeWidth={owner && owner.verb !== 'skip' ? 2.2 : 1}
-                strokeDasharray={gap ? '2 3' : undefined}
+                strokeDasharray={between ? '1 3' : gap ? '2 3' : undefined}
                 strokeLinecap="round"
-                className={`transition-opacity ${dim(owner?.key ?? null)}`}
+                className={`transition-opacity ${dim(owner?.key ?? null)} ${aside}`}
               />
             );
           })}
           {/* a ring per halt where its pictures were, sized by its days — and, when
               the place chosen for it lies far from them, that place too, in orange */}
-          {proposals.map((p) =>
-            p.chapter.halts.map((h) => {
+          {drawn.proposals.map((p) =>
+            p.halts.map((h) => {
               const q = at(h.leg.centroid);
               const r = 1.6 + Math.sqrt(h.leg.dayCount) * 1.1;
               const place = haltPlace(h, draft);
@@ -307,20 +361,8 @@ export default function DeduceMap({
               );
             }),
           )}
-          {/* an ignored position: a cross where the picture claims to be */}
-          {ignored.map((p) => {
-            const q = at(p);
-            return (
-              <path
-                key={p.date}
-                d={`M${q.x - 3},${q.y - 3}L${q.x + 3},${q.y + 3}M${q.x - 3},${q.y + 3}L${q.x + 3},${q.y - 3}`}
-                stroke="var(--color-warn)"
-                strokeWidth={1.3}
-              />
-            );
-          })}
           {/* the halts' names, for the chapter under the hand or the one in focus, at the PLACE */}
-          {proposals
+          {drawn.proposals
             .filter((p) => named.has(p.key))
             .map((p) =>
               p.halts.map((h) => {
