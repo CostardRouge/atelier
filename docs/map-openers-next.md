@@ -1,11 +1,10 @@
-# The map openers' next round — the stops panel, the camera, grouping places
+# The map openers' next round — the stops panel, the camera, grouping places, the recap
 
-**Status: DECIDED 2026-10-07, NOT BUILT.** The maintainer answered the lab
-<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3> («Labo Virée») and said
-explicitly not to start building yet. A second lab, the trip RECAP
-(<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>: the badge's counter
-following Virée's car), was published the same day and awaits his answers; it
-may change the order below, not these decisions.
+**Status: DECIDED 2026-10-07, NOT BUILT.** The maintainer answered two labs
+the same day and said explicitly not to start building yet: «Labo Virée»
+(<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
+RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
+labs' own recommendations except where §1 says otherwise.
 
 Facts this rests on (read in the code on 2026-10-07): the stops editor is
 shared by both map openers (`shared/roadtrip/hooks/stops-editor.tsx`, the big
@@ -100,9 +99,51 @@ stop list is never edited.
   150 m picture merge becomes this module's floor) and for the Itinerary too.
   The big map marks the stops that merged.
 
-## Order (a proposal; he has not ruled on it)
+## 5. The trip RECAP — the badge counts while the car drives
 
-One commit each, as the lab listed: the panel (list box, popover, a stop that
-knows its place, the glyph) → `stop-clusters.ts` + Virée's option → the same
-option in the Itinerary and the big map's mark → `map-camera.ts` → Virée's
-camera panel and presets → tiles along the route → the Itinerary's camera.
+His post-recap use: one picture, Virée, every place in order, the car — and
+the badge's number counting as the car goes. Accepted on the lab's
+recommendations («ça me va aussi»).
+
+- **ONE clock, the trip's DAY**: the car's position, the counter, the
+  kilometres and the background picture all read the day at `t`, computed
+  with the plan (pure, `trip-clock.ts`), so none can disagree in preview,
+  seek or export.
+- **The counter** counts **Days** by default (also Kilometres, Places, Days +
+  km), with **odometer** digits — each in a fixed-width cell, so the badge
+  never shakes when 199 turns 200.
+- **Declared where the counter lives**: a mode *Follows the drive* in the
+  badge's Counter section, offered only under Virée — never a silent
+  override. It rides the contract that already exists: a layer's
+  `content(t)` rewrites badge pieces (Défilé's numeral, Virée's *Caption
+  follows the car*).
+- **Pace**: a slider Calendar ↔ Road, **65 % toward Calendar** by default —
+  screen time shared by days spent and by kilometres; on Calendar the car
+  waits in Melbourne while the days run (which also answers the «surplace»).
+- **Layout** *Map over photo*: each place's picture full-frame behind a map
+  plate, cross-faded, a slow push-in; plus the **summary card** at the end
+  (days · km · places) and **milestones** on the road (every 50 days or
+  1 000 km), both on by default.
+- **Dates of «your places»**: from the trip stage whose places hold the stop
+  (matched by position, in the journey's order), else the stop's picture's
+  date; a stop with neither stays on the road and moves no counter, and the
+  panel says how many. The trip's stages are dated already.
+- **Kilometres are as the crow flies**, between consecutive places — never a
+  road distance, which the app does not know.
+- **Length**: Virée's drive caps at 12 s; the recap needs up to 60 s.
+- **Pictures**: forty full-frame backgrounds share the openers' 32 MP budget
+  (~0.8 MP each) — accepted under a light veil, else cap the count.
+- **Later**: the picture of the DAY rather than of the place, a tick per day;
+  later still Défilé's ribbon under the map (the first opener STACK) and the
+  distance comparison.
+
+## Order
+
+His pick on the recap lab's Q7: **the panel's list and the glyph first (§1,
+§2), then the recap (§5), then the camera (§3)**; grouping (§4) slots beside
+the camera. One commit each, roughly: the panel (list box, popover, a stop
+that knows its place, the glyph) → `trip-clock.ts` → Virée's pace and longer
+drive → the badge's *Follows the drive* → *Map over photo* → summary and
+milestones → odometer → `stop-clusters.ts` + Virée's option → the same in the
+Itinerary and the big map's mark → `map-camera.ts` → Virée's camera panel and
+presets → tiles along the route → the Itinerary's camera.
