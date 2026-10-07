@@ -214,8 +214,9 @@ export interface HookBasemapWant {
   width: number;
   height: number;
   /**
-   * The tile zoom to fetch at, fixed — a strip's patch along a following
-   * camera's road (`shared/map/tile-strip.ts`) is cut on one zoom's grid.
+   * The tile zoom to fetch at, fixed — a tile of a following camera's
+   * pyramid (`shared/map/tile-strip.ts`) is cut on its zoom's own grid, and
+   * falls back to its parent's when it cannot be fetched (`loadPatch`).
    * Absent, the loader picks the zoom from the raster's size.
    */
   zoom?: number;
@@ -428,6 +429,11 @@ export interface HookPictureStatus {
   pending: number;
   /** Keys that could not be drawn, each with one line saying why. */
   problems: ReadonlyMap<string, string>;
+  /**
+   * Map tiles of a following camera's pyramid that landed only from a
+   * COARSER zoom (their own could not be fetched) — drawn, a little softer.
+   */
+  coarser?: number;
 }
 
 /** What a variant's own options panel is handed. */
@@ -483,8 +489,8 @@ export interface HookVariant {
   /**
    * The map backgrounds this variant would draw under its map, or none — the
    * OpenStreetMap tiles an author asked for on this piece (2026-09-28): one
-   * raster over the whole map, and, under a following camera, a STRIP of
-   * finer patches along its road (2026-10-07). The shell fetches them only
+   * raster over the whole map, and, under a following camera, a zoom
+   * PYRAMID of finer tiles along its road (2026-10-07). The shell fetches them only
    * where this DEVICE allows it, in the order given; the variant never
    * fetches, and names each raster by the key it will draw it by.
    */

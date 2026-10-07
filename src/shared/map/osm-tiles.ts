@@ -12,10 +12,12 @@
  * nothing until that device says yes. The same switch the flight map words
  * (`TILES_TOGGLE`) explains what it reveals.
  *
- * What is fetched is small and kept: a region's tiles (at most `MAX_TILES`;
- * a following camera's strip of patches `stripBudget()` more, over the whole
- * drive — `tile-strip.ts`), the blobs cached for the tab, so a slider dragged
- * on the opener never asks again. The drawing carries the credit the licence
+ * What is fetched is bounded and kept: a region's tiles (at most `MAX_TILES`;
+ * a following camera's pyramid `stripBudget()` more, over the whole drive —
+ * `tile-strip.ts`), the blobs cached for the TAB only, so a slider dragged
+ * on the opener never asks again — never on the disk: a tile cache that
+ * outlives the tab is a change to what this device keeps, the maintainer's
+ * to decide. The drawing carries the credit the licence
  * requires — that is the painters' job (`paintOsmCredit`), and it rides into
  * every export.
  */
@@ -29,15 +31,20 @@ import { OSM_CREDIT, OSM_TILES } from './track-map';
 const KEY = 'atelier.map.tilesInOpeners';
 /** The most tiles one background asks for — a softer map past it, never more requests. */
 export const MAX_TILES = 64;
-/** Tiles fetched side by side for one raster — and, across the strip's patches, in all. */
+/** Tiles fetched side by side for one raster — and, across the pyramid's tiles, in all. */
 export const TILE_WORKERS = 4;
 /**
  * How many tile blobs the tab keeps (~30 kB each): a wide raster and a
- * computer's strip, with room for the zoom before a slider's last step.
+ * computer's pyramid, with room for a slider's step before the last.
  */
-const CACHE_TILES = 640;
+const CACHE_TILES = 768;
+/**
+ * A tile that has not answered by then is a failure, not a wait: an export
+ * awaits every tile it will draw, and a server that hangs must not hang it.
+ */
+const TILE_TIMEOUT_MS = 20_000;
 
-/** The tiles a following camera's strip may cost on THIS device — its rasters are bitmaps a phone must hold. */
+/** The tiles a following camera's pyramid may hold on THIS device — each is a 256 KB bitmap it must keep. */
 export function stripBudget(): number {
   return isConstrainedDevice() ? STRIP_TILES_CONSTRAINED : STRIP_TILES;
 }
@@ -102,10 +109,18 @@ function fetchTile(z: number, x: number, y: number, signal?: AbortSignal): Promi
   const url = tileUrl(z, x, y);
   let pending = blobs.get(url);
   if (!pending) {
-    pending = fetch(url, { mode: 'cors', signal }).then((res) => {
-      if (!res.ok) throw new Error(`the tile server answered ${res.status}`);
-      return res.blob();
-    });
+    // The caller's cancel and the timeout, joined by hand: `AbortSignal.any`
+    // and `.timeout` are younger than the Safari this suite still serves.
+    const stop = new AbortController();
+    const timer = setTimeout(() => stop.abort(), TILE_TIMEOUT_MS);
+    if (signal?.aborted) stop.abort();
+    signal?.addEventListener('abort', () => stop.abort(), { once: true });
+    pending = fetch(url, { mode: 'cors', signal: stop.signal })
+      .then((res) => {
+        if (!res.ok) throw new Error(`the tile server answered ${res.status}`);
+        return res.blob();
+      })
+      .finally(() => clearTimeout(timer));
     pending.catch(() => blobs.delete(url));
     blobs.set(url, pending);
     // Oldest first: a Map iterates in insertion order.
@@ -172,4 +187,32 @@ export async function loadBasemap(
     og.drawImage(mosaic, sx, sy, sw, sh, 0, r, width, 1);
   }
   return out.transferToImageBitmap();
+}
+
+/** How many zooms a pyramid tile falls back through before the wide raster stands in alone. */
+const COARSER_TRIES = 2;
+
+/**
+ * One tile of a following camera's pyramid (`tile-strip.ts`), at its zoom —
+ * or, when that tile cannot be fetched, the same region cut out of its
+ * PARENT, then its grandparent: the next coarser level, enlarged, rather
+ * than a hole in a recorded file. `zoom` says what landed. Throws only when
+ * none did, and then the wide raster under it stands in.
+ */
+export async function loadPatch(
+  box: GeoBox,
+  size: number,
+  zoom: number,
+  signal?: AbortSignal,
+): Promise<{ image: ImageBitmap; zoom: number }> {
+  let last: unknown = null;
+  for (let z = zoom; z >= Math.max(0, zoom - COARSER_TRIES); z--) {
+    try {
+      return { image: await loadBasemap(box, size, size, signal, z, 1), zoom: z };
+    } catch (err) {
+      if (signal?.aborted) throw err;
+      last = err;
+    }
+  }
+  throw last instanceof Error ? last : new Error('OpenStreetMap could not be reached.');
 }

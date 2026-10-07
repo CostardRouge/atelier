@@ -690,7 +690,7 @@ export default function PostEditor({
     () => [...post.badge.hook, ...post.slides.flatMap((s) => s.hook ?? [])],
     [post.badge.hook, post.slides],
   );
-  const { pictures: hookPictures, status: hookPictureStatus } = useHookPictures(
+  const { pictures: hookPictures, status: hookPictureStatus, ready: hookPicturesReady } = useHookPictures(
     deckLayers,
     baseHookCtx,
     lib.assets,
@@ -1567,6 +1567,8 @@ export default function PostEditor({
     timeSeconds: settle,
     hook,
     hookPictures,
+    ready: hookPicturesReady,
+    pictureStatus: hookPictureStatus,
     exif: hookExif,
     hookElementsAt,
     resolve,

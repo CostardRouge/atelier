@@ -33,8 +33,8 @@
 import { roundedRect, tile } from '../../media/cell-paint';
 import { drawFramed } from '../../media/framing';
 import { hexToRgba } from './colour';
-import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
-import { patchAlpha, visiblePatches, type BasemapSet } from './basemap-strip';
+import { basemapRect, paintOsmCredit } from './basemap-paint';
+import { paintGround, type BasemapSet } from './basemap-strip';
 import type { CameraTrack } from './drive-plan';
 import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
 import { placeLabels } from './geo';
@@ -142,16 +142,11 @@ export function paintMap(
     g.save();
     roundedRect(g, box.x, box.y, box.width, box.height, 14 * u);
     g.clip();
-    drawBasemap(g, tiles, basemapRect(basemap.wide, project), o.basemapOpacity);
-    // The strip's finer patches along the pen's road, fading to the wide
-    // raster as the camera pulls back (`basemap-strip.ts`).
-    const fade = view ? patchAlpha(basemap, box.width / view.scale) : 0;
-    if (fade > 0) {
-      const seen = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
-      for (const { picture, rect } of visiblePatches(basemap, pictures, (p) => basemapRect(p, project), seen)) {
-        drawBasemap(g, picture, rect, o.basemapOpacity * fade);
-      }
-    }
+    // The pyramid's levels along the pen's road over the wide raster, each
+    // frame's ground at its own density (`basemap-strip.ts`); a still map
+    // has none and draws the wide raster alone.
+    const seen = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
+    paintGround(g, basemap, pictures, tiles, (p) => basemapRect(p, project), seen, view ? t : 0, o.basemapOpacity);
     g.restore();
   }
   if (o.graticule) paintGraticule(g, o, box, project, u);

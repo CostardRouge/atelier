@@ -41,9 +41,8 @@ import {
 } from './drive-plan';
 import { TICK_KITS } from './tick-kits';
 import { driveBasemap, driveTrack } from './drive-paint';
-import { patchAlpha } from './basemap-strip';
+import { groundNote } from './basemap-strip';
 import { TILE_PX, planTiles } from '../../map/tile-math';
-import { STRIP_BLOCK } from '../../map/tile-strip';
 
 /** Three legs across Western Australia; the middle one has one place only. */
 const STAGES: HookStage[] = [
@@ -1009,56 +1008,91 @@ describe('the drive’s OpenStreetMap ground', () => {
     expect(density(b)).toBeGreaterThan(density(a));
   });
 
-  it('asks a STRIP of finer patches along a tight follow, inside the budget, the wide raster first', () => {
+  it('asks a PYRAMID of finer tiles along a tight follow, inside the budget, the wide raster first', () => {
     const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
     const plan = planFor(o);
-    const want = driveBasemap(plan, o, 9 / 16, trackFor(o), 256)!;
+    const want = driveBasemap(plan, o, 9 / 16, trackFor(o), 512)!;
     expect(want.patches.length).toBeGreaterThan(0);
-    expect(want.patches.length * STRIP_BLOCK * STRIP_BLOCK).toBeLessThanOrEqual(256);
+    expect(want.patches.length).toBeLessThanOrEqual(512);
     expect(want.wants[0]).toBe(want.wide);
     expect(want.wants.length).toBe(1 + want.patches.length);
-    // Every patch is fetched at the strip’s own zoom, and is a block of two tiles.
-    for (const p of want.patches) {
-      expect(p.zoom).toBe(want.patchZoom);
-      expect(Math.max(p.width, p.height)).toBe(STRIP_BLOCK * TILE_PX);
-    }
-    // The patches are DENSER than the wide raster: more pixels per degree.
+    // Every tile is one tile at its own zoom, the coarse levels first.
+    const zooms = want.patches.map((p) => p.zoom!);
+    expect(zooms).toEqual([...zooms].sort((a, b) => a - b));
+    for (const p of want.patches) expect(Math.max(p.width, p.height)).toBe(TILE_PX);
+    // The tiles are DENSER than the wide raster: more pixels per degree.
     const perDeg = (w: { width: number; box: { west: number; east: number } }) => w.width / (w.box.east - w.box.west);
-    expect(perDeg(want.patches[0])).toBeGreaterThan(perDeg(want.wide) * 2);
-    // Every stop the car halts at is under a patch — the frames are tight there.
+    expect(perDeg(want.patches[want.patches.length - 1])).toBeGreaterThan(perDeg(want.wide) * 2);
+    // Every stop the car halts at is under a tile — the frames are tight there.
     for (const s of route.stops) {
       expect(want.patches.some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
     }
   });
 
-  it('asks no strip without a budget, and never one at the wide raster’s own zoom', () => {
+  it('gives a pull-back its OWN zoom, never the wide raster enlarged', () => {
+    // The 2026-10-07 report: zooming in and out, the ground stayed at one
+    // density. A pull-back's middle now has tiles at its own, shallower zoom.
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 120, zoom: 'pull-back', pullBack: 0.7, smoothing: 1.1, openWide: true, endWide: true });
+    const plan = planFor(o);
+    const track = trackFor(o);
+    const set = driveBasemap(plan, o, 9 / 16, track, 100_000)!;
+    expect(set.short).toBe(0);
+    const levels = new Set(set.patches.map((p) => p.zoom));
+    expect(levels.size).toBeGreaterThanOrEqual(2);
+    // The level the paint draws follows the camera: deeper where it is tight.
+    const seconds = track.seconds;
+    const at = (t: number) => set.levelAt(t);
+    let tightest = -1;
+    let widest = Infinity;
+    for (let k = 0; k <= 40; k++) {
+      tightest = Math.max(tightest, at((seconds * k) / 40));
+      widest = Math.min(widest, at((seconds * k) / 40));
+    }
+    expect(tightest).toBeGreaterThan(widest);
+  });
+
+  it('asks none without a budget, and never a tile at the wide raster’s own zoom', () => {
     const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed' });
     expect(driveBasemap(planFor(o), o, 9 / 16, trackFor(o), 0)!.patches).toEqual([]);
     for (const viewKm of [35, 400, 3000]) {
       const wide = opts({ ground: 'tiles', camera: 'follow', viewKm, zoom: 'fixed' });
-      const b = driveBasemap(planFor(wide), wide, 9 / 16, trackFor(wide), 256)!;
+      const b = driveBasemap(planFor(wide), wide, 9 / 16, trackFor(wide), 512)!;
       const wideZoom = planTiles(b.wide.box, b.wide.width, b.wide.height)!.z;
-      if (b.patchZoom !== null) expect(b.patchZoom).toBeGreaterThan(wideZoom);
+      for (const p of b.patches) expect(p.zoom!).toBeGreaterThan(wideZoom);
     }
   });
 
-  it('spends a bigger budget on a deeper zoom', () => {
+  it('spends a bigger budget on fewer levels given up', () => {
     const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
     const plan = planFor(o);
     const track = trackFor(o);
     const small = driveBasemap(plan, o, 9 / 16, track, 64)!;
-    const big = driveBasemap(plan, o, 9 / 16, track, 1024)!;
-    expect(big.patchZoom!).toBeGreaterThan(small.patchZoom!);
+    const big = driveBasemap(plan, o, 9 / 16, track, 4096)!;
+    expect(big.short).toBeLessThan(small.short);
+    expect(Math.max(...big.patches.map((p) => p.zoom!))).toBeGreaterThan(Math.max(...small.patches.map((p) => p.zoom!)));
   });
 
-  it('fades the patches out as the camera pulls back past the follow’s width', () => {
-    const basemap = { patches: [{ key: 'p' } as never], followUnits: 10 };
-    expect(patchAlpha(basemap, 10)).toBe(1);
-    expect(patchAlpha(basemap, 20)).toBe(1);
-    expect(patchAlpha(basemap, 25)).toBeGreaterThan(0);
-    expect(patchAlpha(basemap, 25)).toBeLessThan(1);
-    expect(patchAlpha(basemap, 30)).toBe(0);
-    expect(patchAlpha({ patches: [], followUnits: 10 }, 10)).toBe(0);
+  it('reads a portrait frame’s delivery by its LONG edge, not its width', () => {
+    // A 35 km box 864 nominal px wide on a 1080 × 1920 frame is delivered
+    // 864 px wide: the level drawn is the one that density asks, not 1.78× it.
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', smoothing: 0, openWide: false, endWide: false });
+    const plan = planFor(o);
+    const track = trackFor(o);
+    const set = driveBasemap(plan, o, 9 / 16, track, 100_000)!;
+    const degrees = track.at(1).width / (plan.geo.scale * plan.geo.k);
+    const delivered = 1080 * 0.8 * o.size;
+    const density = (TILE_PX * 2 ** set.levelAt(1)) / 360;
+    // At least as dense as the delivery, and less than twice: the zoom it asks.
+    expect(density).toBeGreaterThanOrEqual(delivered / degrees);
+    expect(density).toBeLessThan((2 * delivered) / degrees);
+  });
+
+  it('says what a recorded file’s ground lost, and nothing when every tile is in', () => {
+    expect(groundNote(undefined)).toBeNull();
+    expect(groundNote({ problems: new Map() })).toBeNull();
+    expect(groundNote({ problems: new Map([['pic', 'gone']]), coarser: 0 })).toBeNull();
+    expect(groundNote({ problems: new Map([['osm:1', 'x'], ['osm:2', 'y']]) })).toMatch(/^2 map tiles could not be fetched/);
+    expect(groundNote({ problems: new Map(), coarser: 3 })).toMatch(/3 came from a coarser zoom/);
   });
 
   it('reads the new ground and its strength', () => {

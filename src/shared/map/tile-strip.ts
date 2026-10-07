@@ -1,60 +1,52 @@
 /**
- * A STRIP of finer tiles along a camera's road — the patches a following
- * camera needs where its one wide raster is too coarse.
+ * A zoom PYRAMID of tiles along a camera's road — the finer ground a
+ * following camera needs where its one wide raster is too coarse.
  *
  * One raster over the whole route (`BASEMAP_MAX_PX` on its long side) gives a
  * tight follow next to nothing: a 35 km frame over a 2 100 km route is 51 of
  * its 3 072 pixels, enlarged to a 1 920 delivery. The cure is not a bigger
  * raster — it is the same tiles at a deeper zoom, fetched only WHERE the
- * camera goes: the frames the camera shows are sampled over the drive, the
- * Mercator tiles they touch are taken as BLOCKS of `block` × `block` tiles
- * (a block is one raster, re-laid out of Mercator like the wide one), and
- * the zoom is the deepest at which the blocks the drive sweeps fit a tile
- * BUDGET — the same rule as `planTiles`: a softer map rather than a
- * thousand requests to a volunteer-run server.
+ * camera goes and at the zoom it is AT there: every frame of the baked track
+ * is a region and a density (`StripSample`), each takes the zoom whose tiles
+ * are at least as dense as its delivery (`zoomForDensity`), and the tiles it
+ * touches at that zoom, counted once across the drive. A tight follow asks
+ * deep tiles over a short reach, a pull-back's middle shallow ones over a wide
+ * reach, the frames between the levels between.
  *
- * A frame wider than `widest` (degrees of longitude — the caller's measure
- * of «pulled far back from the follow») is left out of the sweep and draws
- * the wide raster instead (`drive-paint.ts` fades the patches out towards
- * it), so a long hop's pull-back never asks for the whole country at the
- * follow's zoom.
+ * The first version (2026-10-07) cut ONE zoom for the whole drive and left a
+ * frame pulled back past three times the follow to the wide raster: measured
+ * the same day over the Western Australia fixture, 80–100 % of the frames
+ * drew their ground at under half the density they were delivered at — the
+ * blur the maintainer reported while the camera zoomed in and out.
  *
- * Pure and DOM-free; `osm-tiles.ts` fetches, `drive-paint.ts` asks and draws.
+ * Over the BUDGET (the tiles one piece may hold — each is a 256 px bitmap,
+ * so the budget is memory, and requests to a volunteer-run server) every
+ * frame gives up the same number of levels, and the levels the budget still
+ * has room for are given back to the STILLEST frames first — a halt, an
+ * opening, a slow pan, where the eye has time to read the ground; a frame
+ * racing across the map shows its ground for a thirtieth of a second.
+ *
+ * Pure and DOM-free; `osm-tiles.ts` fetches, `basemap-strip.ts` plans the
+ * samples and draws.
  */
 
 import { TILE_PX, latToTileY, lonToTileX, type GeoBox } from './tile-math';
 
-/**
- * A block's side, in tiles — ONE: a 256 px raster per request. Measured on
- * the Western Australia fixture, one-tile blocks hug the road closely enough
- * to buy a zoom level over two-tile ones in half the cases, for the same
- * tiles; the cost is more, smaller rasters, which the shell loads in a pool.
- */
-export const STRIP_BLOCK = 1;
-/** The most tiles a strip asks for on a computer, and on a constrained device. */
-export const STRIP_TILES = 256;
+/** The most tiles one piece's pyramid holds on a computer, and on a constrained device. */
+export const STRIP_TILES = 512;
 export const STRIP_TILES_CONSTRAINED = 96;
-/**
- * A frame this many times the follow's own width, or wider, shows the wide
- * raster: the patches fade out from `STRIP_FADE_FROM` to here, and such a
- * frame is not swept — a pull-back's middle, the wide shots.
- */
-export const STRIP_FADE_FROM = 2;
-export const STRIP_FADE_TO = 3;
 
 /** One frame the camera shows: its reach in degrees, and the density it wants drawn at. */
 export interface StripSample {
   box: GeoBox;
   /** Pixels per degree of longitude the frame would be delivered at. */
   pxPerDeg: number;
-}
-
-export interface StripPlan {
-  z: number;
-  /** The blocks' regions — each a Mercator-aligned square of `block` tiles. */
-  patches: GeoBox[];
-  /** Tiles the patches cost. */
-  tiles: number;
+  /**
+   * How fast the ground moves under this frame, in any unit shared by the
+   * samples (screen pixels a second). The stillest frames are given back a
+   * level first when the budget has room; absent counts as still.
+   */
+  motion?: number;
 }
 
 /** The longitude of tile column `x` (fractional) at zoom `z`. */
@@ -68,13 +60,13 @@ export function tileYToLat(y: number, z: number): number {
   return (180 / Math.PI) * Math.atan(0.5 * (Math.exp(n) - Math.exp(-n)));
 }
 
-/** The region of block (`bx`, `by`) at zoom `z`: `block` tiles a side. */
-export function blockBox(bx: number, by: number, z: number, block = STRIP_BLOCK): GeoBox {
+/** The region of tile (`x`, `y`) at zoom `z`. */
+export function tileBox(x: number, y: number, z: number): GeoBox {
   return {
-    west: tileXToLon(bx * block, z),
-    east: tileXToLon((bx + 1) * block, z),
-    north: tileYToLat(by * block, z),
-    south: tileYToLat((by + 1) * block, z),
+    west: tileXToLon(x, z),
+    east: tileXToLon(x + 1, z),
+    north: tileYToLat(y, z),
+    south: tileYToLat(y + 1, z),
   };
 }
 
@@ -84,52 +76,112 @@ export function zoomForDensity(pxPerDeg: number, maxZoom = 17): number {
   return Math.max(0, Math.min(maxZoom, Math.ceil(Math.log2((pxPerDeg * 360) / TILE_PX) - 1e-9)));
 }
 
+/** One tile of the pyramid. */
+export interface PyramidTile {
+  z: number;
+  x: number;
+  y: number;
+}
+
+export interface PyramidPlan {
+  /** Every tile, coarse levels first, then in the order the track first meets it. */
+  tiles: PyramidTile[];
+  /** The zooms the tiles are at, ascending. */
+  levels: number[];
+  /**
+   * Levels the frames gave up to the budget: 0 is every frame at its own
+   * density; 1 is every frame one zoom short except the stillest, given back
+   * theirs while the budget had room.
+   */
+  short: number;
+  /** Of the frames that asked for more than the floor, how many are drawn at their own density. */
+  sharp: number;
+  frames: number;
+  /** The deepest zoom a frame asked for. */
+  wanted: number;
+  /** Tiles the whole drive would cost at full detail — what the panel says the budget saved. */
+  full: number;
+}
+
 /**
- * The patches along the road: the deepest zoom, from the tightest frame's own
- * down, at which the blocks the samples touch cost at most `budget` tiles.
- * Null when there is nothing to sweep, or when the budget allows no zoom
- * deeper than `deeperThan` — the wide raster's own, which then already
- * carries everything the patches would.
+ * The pyramid along the road: each sample at its own zoom, inside `budget`
+ * tiles (see the module). Levels at or under `floor` — the wide raster's own
+ * zoom — cost nothing: the wide raster already carries them. Null when no
+ * frame asks for more than the floor, or the budget allows no level above it.
  */
-export function planStrip(
+export function planPyramid(
   samples: readonly StripSample[],
   budget: number,
-  {
-    block = STRIP_BLOCK,
-    maxZoom = 17,
-    widest = Infinity,
-    deeperThan = -1,
-  }: { block?: number; maxZoom?: number; widest?: number; deeperThan?: number } = {},
-): StripPlan | null {
-  if (!samples.length || !(budget >= block * block)) return null;
-  const swept = samples.filter(({ box }) => box.east > box.west && box.north > box.south && box.east - box.west <= widest);
-  if (!swept.length) return null;
-  let z = 0;
-  for (const s of swept) z = Math.max(z, zoomForDensity(s.pxPerDeg, maxZoom));
-  for (; z > deeperThan && z >= 0; z--) {
-    const seen = new Set<string>();
-    const blocks: { bx: number; by: number }[] = [];
-    const n = 2 ** z;
-    for (const { box } of swept) {
-      const bx0 = Math.max(0, Math.floor(lonToTileX(Math.max(-180, box.west), z) / block));
-      const bx1 = Math.min(Math.ceil(n / block) - 1, Math.floor(lonToTileX(Math.min(180, box.east), z) / block));
-      const by0 = Math.max(0, Math.floor(latToTileY(box.north, z) / block));
-      const by1 = Math.min(Math.ceil(n / block) - 1, Math.floor(latToTileY(box.south, z) / block));
-      for (let bx = bx0; bx <= bx1; bx++) {
-        for (let by = by0; by <= by1; by++) {
-          const key = `${bx},${by}`;
-          if (seen.has(key)) continue;
-          seen.add(key);
-          blocks.push({ bx, by });
-          if (blocks.length * block * block > budget) break;
-        }
-        if (blocks.length * block * block > budget) break;
+  { maxZoom = 17, floor = -1 }: { maxZoom?: number; floor?: number } = {},
+): PyramidPlan | null {
+  if (!samples.length || !(budget >= 1)) return null;
+  const frames: Frame[] = [];
+  let wanted = -1;
+  for (const { box, pxPerDeg, motion } of samples) {
+    if (!(box.east > box.west) || !(box.north > box.south)) continue;
+    const z = zoomForDensity(pxPerDeg, maxZoom);
+    if (z <= floor) continue;
+    frames.push({ box, z, motion: motion ?? 0 });
+    wanted = Math.max(wanted, z);
+  }
+  if (!frames.length) return null;
+
+  const full = sweep(frames, 0, floor, new Map(), Infinity)!.size;
+  for (let short = 0; wanted - short > floor; short++) {
+    const base = sweep(frames, short, floor, new Map(), budget);
+    if (!base) continue;
+    if (!base.size) return null;
+    let sharp = short === 0 ? frames.length : 0;
+    if (short > 0) {
+      // The room left goes back to the stillest frames, one level each.
+      const order = frames.map((_, i) => i).sort((a, b) => frames[a].motion - frames[b].motion || a - b);
+      for (const i of order) {
+        if (sweep([frames[i]], short - 1, floor, base, budget, true)) sharp += 1;
       }
-      if (blocks.length * block * block > budget) break;
     }
-    if (blocks.length * block * block > budget) continue;
-    if (!blocks.length) return null;
-    return { z, patches: blocks.map((b) => blockBox(b.bx, b.by, z, block)), tiles: blocks.length * block * block };
+    const tiles = [...base.values()].sort((a, b) => a.z - b.z || a.order - b.order).map(({ z, x, y }) => ({ z, x, y }));
+    const levels = [...new Set(tiles.map((t) => t.z))];
+    return { tiles, levels, short, sharp, frames: frames.length, wanted, full };
   }
   return null;
+}
+
+interface Frame {
+  box: GeoBox;
+  z: number;
+  motion: number;
+}
+
+type Swept = Map<string, PyramidTile & { order: number }>;
+
+/**
+ * Add the tiles the frames touch, each `short` levels under its own zoom, to
+ * `into`; null once it would hold more than `limit` — and, `atomic`, nothing
+ * added at all then (a frame given back its level whole, or not at all).
+ */
+function sweep(frames: readonly Frame[], short: number, floor: number, into: Swept, limit: number, atomic = false): Swept | null {
+  const added: string[] = [];
+  const undo = () => {
+    if (atomic) for (const key of added) into.delete(key);
+    return null;
+  };
+  for (const { box, z: own } of frames) {
+    const z = own - short;
+    if (z <= floor) continue;
+    const n = 2 ** z;
+    const x0 = Math.max(0, Math.floor(lonToTileX(Math.max(-180, box.west), z)));
+    const x1 = Math.min(n - 1, Math.floor(lonToTileX(Math.min(180, box.east), z)));
+    const y0 = Math.max(0, Math.floor(latToTileY(box.north, z)));
+    const y1 = Math.min(n - 1, Math.floor(latToTileY(box.south, z)));
+    for (let x = x0; x <= x1; x++) {
+      for (let y = y0; y <= y1; y++) {
+        const key = `${z}/${x}/${y}`;
+        if (into.has(key)) continue;
+        into.set(key, { z, x, y, order: into.size });
+        added.push(key);
+        if (into.size > limit) return undo();
+      }
+    }
+  }
+  return into;
 }

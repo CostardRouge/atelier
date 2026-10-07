@@ -465,8 +465,9 @@ function nominalBox(aspect: number): { w: number; h: number; box: Box } {
  * box's shape follows the frame's aspect alone), so moving or resizing the
  * map never fetches again; only the stops and the frame's shape do. Under a
  * following camera the region grows to the widest frame the track shows,
- * and a STRIP of finer patches along the pen's road comes with it
- * (`basemap-strip.ts`; `budget` is the tiles it may cost, 0 asks for none).
+ * and a zoom PYRAMID of tiles along the pen's road comes with it, each
+ * frame's ground at its own density (`basemap-strip.ts`; `budget` is the
+ * tiles it may hold, 0 asks for none).
  */
 export function mapBasemap(o: MapOptions, aspect: number, track: CameraTrack | null = null, budget = STRIP_TILES): BasemapSet | null {
   if (!o.basemap || o.stops.length === 0 || !(aspect > 0)) return null;
@@ -516,7 +517,6 @@ export function mapBasemap(o: MapOptions, aspect: number, track: CameraTrack | n
     diagonal: false,
     regionOf,
     unitsPerDegree,
-    kmPerUnit: KM_PER_DEGREE / Math.max(1e-9, unitsPerDegreeOf(unproject, 'lat')),
     budget,
   });
 }
