@@ -128,6 +128,7 @@ export function fitRender(render: HookRender, slideSeconds: number | undefined, 
   const content = render.content;
   const paint = render.paint;
   const score = render.score;
+  const ready = render.ready;
   return {
     scale,
     refused: null,
@@ -135,6 +136,7 @@ export function fitRender(render: HookRender, slideSeconds: number | undefined, 
       seconds: render.seconds * scale,
       ...(content ? { content: (t: number) => content(t / scale) } : {}),
       ...(paint ? { paint: (g, t, frame) => paint(g, t / scale, frame) } : {}),
+      ...(ready ? { ready: (t0: number, t1?: number, signal?: AbortSignal) => ready(t0 / scale, t1 === undefined ? undefined : t1 / scale, signal) } : {}),
       ...(score ? { score: () => score().map((event) => ({ ...event, at: event.at * scale })) } : {}),
       ...(render.mixWithSource !== undefined ? { mixWithSource: render.mixWithSource } : {}),
     },

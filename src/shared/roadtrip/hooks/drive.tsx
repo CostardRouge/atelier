@@ -61,6 +61,7 @@ import { formatDistance } from './geo';
 import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { allowTiles, stripBudget } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
+import { readyGround } from './basemap-strip';
 import { Group } from './panel-ui';
 import StopsEditor, { StopStyleRow } from './stops-editor';
 import { otherPlaces, tripPlaces } from './stops';
@@ -962,6 +963,8 @@ export const driveVariant: HookVariant = {
             }
           : undefined,
       paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track),
+      // A streamed ground's tiles, decoded before an export draws (`basemap-strip.ts`).
+      ready: basemap?.pyramid ? (t0, t1, signal) => readyGround(basemap, t0, t1, signal) : undefined,
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };

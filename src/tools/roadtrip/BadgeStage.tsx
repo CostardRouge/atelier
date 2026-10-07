@@ -51,6 +51,7 @@ import { clampPlaybackRate } from '../../shared/media/use-video-transport';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { useZoomGestures } from '../../shared/ui/use-zoom-gestures';
 import TaskEdge from '../../shared/ui/TaskEdge';
+import { onGroundLanded } from '../../shared/map/tile-stream';
 
 /**
  * Playing the open clip on the stage. The stage owns the `<video>` behind the
@@ -412,6 +413,11 @@ export default function BadgeStage({
   const onPictureSizesRef = useRef(onPictureSizes);
   onPictureSizesRef.current = onPictureSizes;
   const [cellSeq, setCellSeq] = useState(0);
+  // A streamed map ground's tiles land after the paint that asked for them
+  // (`tile-stream.ts`): a paused stage repaints when they do — only while an
+  // opener is drawn, so a stage without one never wakes for another's tiles.
+  const [groundSeq, setGroundSeq] = useState(0);
+  useEffect(() => (hook ? onGroundLanded(() => setGroundSeq((n) => n + 1)) : undefined), [hook]);
   // Reported after either decode lands: the lead's, or a round of the cells'.
   useEffect(() => {
     const report = onPictureSizesRef.current;
@@ -955,6 +961,7 @@ export default function BadgeStage({
     lut,
     filmKey,
     selectedCell,
+    groundSeq,
   ]);
 
   useEffect(() => () => releaseLater(sourceRef.current), []);

@@ -151,6 +151,14 @@ export interface ExportOptions {
  */
 export interface FrameProcessor {
   draw(frame: VideoFrame, tMicros: number): CanvasImageSource;
+  /**
+   * Called before each sample is handed to the decoder, in DECODE order and
+   * on the clock `draw` receives, and AWAITED: what the frames about to come
+   * out need and cannot wait for inside the synchronous `draw` — a streamed
+   * map ground's tiles (`basemap-strip.ts`) — is loaded here. Absent, the
+   * pipeline feeds the decoder without pausing.
+   */
+  ahead?(tMicros: number): Promise<void>;
   dispose(): void;
 }
 
@@ -872,6 +880,7 @@ export async function exportProcessedVideo(
         throwIfAborted();
         if (pipelineError) throw pipelineError;
         if (!sample?.data) continue;
+        if (processor.ahead) await processor.ahead(toMicros(sample.cts, sample.timescale) - win.leadMicros);
         decoder.decode(
           new EncodedVideoChunk({
             type: sample.is_sync ? 'key' : 'delta',

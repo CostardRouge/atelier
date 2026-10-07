@@ -1190,10 +1190,13 @@ latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
 and at a strength that lets the paper show through; when the camera follows
 the car, finer tiles are fetched along the road at every zoom the camera
-takes — close in, pulled back and in between —, inside a budget of tiles
-(the stillest moments keep the most detail when the budget runs short), and
-an export waits for every one of them before it writes a frame, saying how
-many a coarser map had to stand in for —,
+takes — close in, pulled back and in between — before anything is
+recorded, and decoded only around the moment being drawn, so a long drive
+keeps full detail without holding thousands of pictures in memory (past a
+budget of requests, the stillest moments keep the most detail); the preview
+shows a softer map for an instant where it has not caught up, and an export
+waits for every frame's tiles before it writes it, saying how many a
+coarser map had to stand in for —,
 where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time
