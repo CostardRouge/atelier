@@ -164,11 +164,17 @@ only where the gate already runs it).
 
 ## 6. Approach 2 — collect first, train outside, infer inside
 
-**B1 — The vignette as shot, beside the record.** When a picture is developed
-in a roll, a small vignette of it AS SHOT (256 px long edge, JPEG, a few kB)
-is baked once and kept in the roll store's thumbs beside the delivered one,
-keyed by picture id and never on the document — the same store, the same
-pruning. Cheap, local, no document migration. Without it there is no pair.
+**B1 — The vignette as shot, beside the record — BUILT 2026-10-07**
+(`shot-record.ts`, `shot-bake.ts`, `use-roll-shots.ts`, the `shots` store at
+`atelier-develop` v5, the *Learning* section of Develop's settings). Every
+photograph whose file is in hand — developed or not: the pair is worth more
+when the record is still empty, since the develop then arrives on top of it —
+gets a 256 px JPEG of it as decoded, the `SourceStats` the Auto verbs read
+measured off that canvas, and the camera's facts (`shotExifOf`: never the GPS,
+never a caption), keyed by picture id, never on the document, pruned with the
+picture. A device choice, kept by DEFAULT (his instruction of the day: a
+question becomes a settings row); Off clears the store. Driven headless;
+details and rules in `docs/memory/develop-roll.md`.
 
 **B2 — The training dump.** A verb on the roll gallery writes ONE file: every
 roll's pictures as `{ vignette, stats, exif summary, develop, crop, layers
@@ -224,7 +230,7 @@ tests, and it goes toward "the browser is the runtime today, not forever".
   Anthropic, opt-in?
 - If yes, the key's home: the browser (`localStorage`, no Winnow change) or
   a Winnow relay (cleaner, one route on his server).
-- Whether B1's vignette may be kept with the roll (a few kB per picture,
-  local, pruned with it).
+- ~~Whether B1's vignette may be kept with the roll~~ — a settings row since
+  2026-10-07 (Develop's settings → Learning), kept by default, his to switch.
 - The A1 thresholds and the A2 confidence floor are taste constants, named
   in their modules; move them from his pictures, not from an argument.

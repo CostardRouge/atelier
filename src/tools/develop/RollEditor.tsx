@@ -146,6 +146,7 @@ import BandGrip from './BandGrip';
 import ContactSheet from './ContactSheet';
 import { useStripPrefs } from './use-strip-prefs';
 import { useRollPreviews } from './use-roll-previews';
+import { useRollShots } from './use-roll-shots';
 import RollPicker from './RollPicker';
 
 /** One empty answer, so a memo keyed on it holds. */
@@ -359,6 +360,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     for (const [id, file] of previews.files) if (!out.has(id)) out.set(id, file);
     return out;
   }, [media.files, previews.files]);
+  // Each photograph AS SHOT beside its record, for a model to learn from
+  // (`use-roll-shots.ts`): baked from the files in hand, in the background.
+  const shots = useRollShots({ rollId: roll.id, pictures: roll.pictures, files });
   const availability = useMemo(() => {
     const out = new Map(media.availability);
     for (const id of previews.files.keys()) if (!media.files.has(id)) out.set(id, { kind: 'preview' });
@@ -676,6 +680,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     update((r) => removePictures(r, ids));
     void deleteRollThumbs(ids);
     previews.forget(ids);
+    shots.forget(ids);
     // A selection that just left the roll is done with: the mode ends with it.
     const remaining = [...visibleSelected].filter((id) => !ids.includes(id));
     if (selecting && remaining.length === 0) stopSelecting();

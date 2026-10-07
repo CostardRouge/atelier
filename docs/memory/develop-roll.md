@@ -1593,3 +1593,41 @@ palette) is not, and must stay not, or the keys die with it.
 
 **Rev. 2026-10-06, the polish pass («coherent, elegant, clean and handy»).** A row of the sheet is the inspector's split at a setting's label width: the NAME, its control, ONE state line under the control (`text-xs text-muted`, what the choice in hand does, changing with the value) and the standing why behind an ⓘ beside the name (`InfoDotButton`, the `FoldHints` shape) — the first cut put a paragraph of mono `text-3xs` (9 px) under every control, which read as a manual nobody could read. Controls take `useFingerSize()` (`md` under a finger); Enter closes like Escape, every row writing at once (the Trip settings' rule); the Network section's id is `network` (`privacy` is still decoded from a stored value); the phone's list is `flex-1` alone — `flex-none` beside it won and left a gutter. No hint carries a date or a session fact (`frontend.md`, 2026-10-06). The Export tab's *Encoder* line says the engine alone (`Browser` + *Settings ›*): what it keeps of the colour is said under each JPEG target's quality, where the quality is set (`develop-output.md`).
 
+
+## Each picture AS SHOT is kept beside its record (2026-10-07, B1 of `docs/auto-develop.md` §6)
+
+**Decision** (his «start and everything that could be autodevelop», with a
+settings row where a question would have been asked). A develop is a record,
+and a model can only learn what the record ANSWERS TO — the picture before it —
+while the roll's thumbnail is the picture as delivered. So every photograph
+whose file is in hand gets a PAIR baked once and kept in `atelier-develop`'s
+`shots` store (v5): a 256 px JPEG of it as the browser decodes it (1–2 kB on a
+flat picture, ~14 kB on a real one), the `SourceStats` the Auto verbs read,
+measured off that very canvas, and the camera's facts (`shotExifOf`: body,
+lens, exposure, white-balance mode, the hour — never the GPS, never a word),
+plus the file's own size and whether a RAW's render stood in. Keyed by picture
+id, never on the document, pruned with the picture and with the roll. Rules:
+
+- **A DEVICE choice, kept by DEFAULT** (`shotsPref`, `atelier.develop.shots`,
+  absent = on; the Learning section of Develop's settings): every day without
+  a pair is dataset lost (§4 decision 2), and his §8 question — whether the
+  vignette may be kept — became a row he can switch. Off means GONE: the sheet
+  clears the store itself (`clearRollShots`) and the hook only forgets what it
+  knew, so a later Keep bakes afresh — a hook may not be mounted when the
+  switch is thrown. The working previews' rule, device-wide instead of
+  per roll.
+- **Baked in the roll's one background decode slot** (`shot-bake.ts` through
+  `enqueueRollDecode`), decoded AT 256 px by the one door, the real file before
+  a working preview (`use-roll-shots.ts` leaves a preview out of `tried`, so
+  the real file is read when it comes); a clip is never baked. A canvas-made
+  JPEG or a preview carries no EXIF and the record says `exif: null` rather
+  than inventing a body.
+- **The one exception to «media bytes are never persisted» grew a FOURTH
+  case** (`local-first.md`): a vignette is media, small, local, per device.
+
+Driven headless (`shots.mjs` in the session scratchpad: a roll seeded through
+`putRoll`, two canvas JPEGs dropped on the editor): two records in the store
+within a second, 64 bins each, the linear means telling the blue picture from
+the warm one, `natural` 1600 × 1000, the Learning pane reading `2 kept · 3.0
+KB`, Off → 0 records and the pane saying so, Keep → 2 again, no page error.
+Not driven: a RAW's pair (`viaRawPreview`), a real file's EXIF.

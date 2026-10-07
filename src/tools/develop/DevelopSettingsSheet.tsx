@@ -1,6 +1,9 @@
-import { useId, useState, type ReactNode } from 'react';
+import { useEffect, useId, useState, type ReactNode } from 'react';
 import { DEVICE_CLASS_KEY, deviceClass, deviceClassFor, readDeviceFacts } from '../../shared/lib/device-class';
+import { clearRollShots, rollShotsFootprint } from '../../shared/develop/roll-store';
+import { SHOT_LONG_EDGE, shotsPref } from '../../shared/develop/shot-record';
 import { setLensfunAllowed, useLensfunAllowed } from '../../shared/lens/lensfun-store';
+import { formatBytes } from '../../shared/lib/format';
 import { useLutInterpolation } from '../../shared/lut/use-lut-interpolation';
 import { useBrowserChroma, useFullColourFrom } from '../../shared/media/browser-jpeg';
 import { chromaWords } from '../../shared/media/jpeg-chroma';
@@ -42,6 +45,7 @@ const SECTIONS: readonly { id: SettingsSection; name: string; sub: string }[] = 
   { id: 'rendering', name: 'Rendering', sub: 'Tones, looks, big pictures' },
   { id: 'device', name: 'Device', sub: 'Phone or computer' },
   { id: 'network', name: 'Network', sub: 'What may be fetched' },
+  { id: 'learning', name: 'Learning', sub: 'What a model learns from' },
 ];
 
 type DeviceChoice = 'auto' | 'constrained' | 'roomy';
@@ -341,7 +345,71 @@ function Network() {
   );
 }
 
-const PANES: Record<SettingsSection, () => ReactNode> = { encoder: Encoder, rendering: Rendering, device: Device, network: Network };
+/**
+ * What this device keeps so a model can one day learn the maintainer's hand
+ * (B1 of `docs/auto-develop.md` §6): each photograph as shot, beside its
+ * develop. The pairs are read into one file by the rolls gallery's ⋯.
+ */
+function Learning() {
+  const size = useFingerSize();
+  const [keep, setKeep] = useLocalPref(shotsPref, true);
+  const [footprint, setFootprint] = useState<{ count: number; bytes: number } | null>(null);
+  // Counted when the pane opens and after a switch: a bake in another roll is not watched.
+  useEffect(() => {
+    let alive = true;
+    setFootprint(null);
+    void rollShotsFootprint().then((f) => {
+      if (alive) setFootprint(f);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [keep]);
+  const kept = footprint
+    ? footprint.count
+      ? `${footprint.count} kept · ${formatBytes(footprint.bytes)}`
+      : 'none kept yet'
+    : 'counting…';
+  return (
+    <Row
+      label="Pictures as shot"
+      state={
+        keep
+          ? `A ${SHOT_LONG_EDGE} px picture of each photograph before its develop, with its light and its camera’s facts — ${kept}`
+          : 'Nothing kept, and what was is gone: a model cannot learn from this device'
+      }
+      info={
+        <>
+          <p>
+            A develop is a record, and a model can only learn what the record answers to: the picture before it. The
+            roll’s thumbnails show the picture as delivered, so a small one as shot is kept beside each record — a few
+            kilobytes, on this device, pruned with the picture. No place and no words go with it.
+          </p>
+          <p>The rolls gallery’s ⋯ writes every pair into one training file; nothing leaves by itself.</p>
+        </>
+      }
+    >
+      <Segmented
+        className="self-start max-w-full"
+        size={size}
+        label="Pictures as shot"
+        value={keep ? 'keep' : 'off'}
+        onChange={(v) => {
+          const on = v === 'keep';
+          setKeep(on);
+          // Off means gone: a pair nobody asked for is media kept for nothing.
+          if (!on) void clearRollShots().then(() => setFootprint({ count: 0, bytes: 0 }));
+        }}
+        options={[
+          { id: 'keep', label: 'Keep' },
+          { id: 'off', label: 'Off' },
+        ]}
+      />
+    </Row>
+  );
+}
+
+const PANES: Record<SettingsSection, () => ReactNode> = { encoder: Encoder, rendering: Rendering, device: Device, network: Network, learning: Learning };
 
 export default function DevelopSettingsSheet({ onClose }: { onClose: () => void }) {
   const compact = useIsCompact();

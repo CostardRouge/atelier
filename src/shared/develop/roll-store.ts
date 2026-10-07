@@ -27,7 +27,12 @@
  * - `exports` (v4, 2026-09-23) — when each picture of a roll last LEFT and as
  *   what (`export-marks.ts`), one row per roll. This device's, like `folders`:
  *   the files landed in a folder of this machine, and a mark on the document
- *   would be an undo step.
+ *   would be an undo step;
+ * - `shots` (v5, 2026-10-07) — each picture AS SHOT beside its record
+ *   (`shot-record.ts`): a 256 px vignette, its stats and the camera's facts,
+ *   the pair a model learns a develop from (B1 of `docs/auto-develop.md`).
+ *   Kept by default, this device's, pruned with the picture, dropped whole
+ *   when the device says no.
  */
 
 import type { SyncRecord } from '../sources/doc-sync';
@@ -35,12 +40,14 @@ import type { PersistedDirectoryHandle } from '../sources/file-sources';
 import { readPresetBook, type PresetBook } from './preset-book';
 import { migrateRollDoc, type RollDoc } from './roll-types';
 import { readExportMarks, type ExportMarks } from './export-marks';
+import { readShotRecord, type ShotRecord } from './shot-record';
 import { latestOf } from '../lib/latest-of';
 
 const DB_NAME = 'atelier-develop';
 // Bumped only when an object store is added; a document migration runs on read.
 // v2 (2026-09-16): `folders`. v3 (same day): `previews`. v4 (2026-09-23): `exports`.
-const DB_VERSION = 4;
+// v5 (2026-10-07): `shots`.
+const DB_VERSION = 5;
 const ROLLS = 'rolls';
 const THUMBS = 'thumbs';
 const SYNC = 'sync';
@@ -48,6 +55,7 @@ const PRESETS = 'presets';
 const FOLDERS = 'folders';
 const PREVIEWS = 'previews';
 const EXPORTS = 'exports';
+const SHOTS = 'shots';
 
 interface ThumbRecord {
   /** The roll picture's id. */
@@ -75,7 +83,7 @@ function openDb(): Promise<IDBDatabase> {
     const req = indexedDB.open(DB_NAME, DB_VERSION);
     req.onupgradeneeded = () => {
       const db = req.result;
-      for (const name of [ROLLS, THUMBS, SYNC, PRESETS, FOLDERS, PREVIEWS, EXPORTS]) {
+      for (const name of [ROLLS, THUMBS, SYNC, PRESETS, FOLDERS, PREVIEWS, EXPORTS, SHOTS]) {
         if (!db.objectStoreNames.contains(name)) db.createObjectStore(name, { keyPath: 'id' });
       }
     };
@@ -419,5 +427,72 @@ export async function deleteExportMarks(rollId: string): Promise<void> {
     await withStore(EXPORTS, 'readwrite', (s) => s.delete(rollId));
   } catch {
     /* already gone or storage unusable */
+  }
+}
+
+// --- the pictures as shot (v5) ----------------------------------------------
+
+/** Keep one picture's as-shot pair. Returns false when the browser refused. */
+export async function putRollShot(record: ShotRecord): Promise<boolean> {
+  try {
+    await withStore(SHOTS, 'readwrite', (s) => s.put(record));
+    return true;
+  } catch {
+    return false;
+  }
+}
+
+/** The pairs kept for one roll, by picture id. */
+export async function getRollShots(rollId: string): Promise<Map<string, ShotRecord>> {
+  const out = new Map<string, ShotRecord>();
+  for (const r of await listRollShots()) if (r.rollId === rollId) out.set(r.id, r);
+  return out;
+}
+
+/** Every pair this device keeps, whatever the roll — what the training dump reads. `[]` when storage is unusable. */
+export async function listRollShots(): Promise<ShotRecord[]> {
+  try {
+    const all = await withStore(SHOTS, 'readonly', (s) => s.getAll() as IDBRequest<unknown[]>);
+    return all.flatMap((raw) => readShotRecord(raw) ?? []);
+  } catch {
+    return [];
+  }
+}
+
+/** How many pairs are kept and what they weigh — for the settings sheet's one line. */
+export async function rollShotsFootprint(): Promise<{ count: number; bytes: number }> {
+  const all = await listRollShots();
+  let bytes = 0;
+  for (const r of all) bytes += r.vignette.size;
+  return { count: all.length, bytes };
+}
+
+/** Prune: when pictures leave a roll, when a roll is deleted. */
+export async function deleteRollShots(pictureIds: readonly string[]): Promise<void> {
+  if (pictureIds.length === 0) return;
+  try {
+    const db = await openDb();
+    try {
+      const tx = db.transaction(SHOTS, 'readwrite');
+      const store = tx.objectStore(SHOTS);
+      for (const id of pictureIds) store.delete(id);
+      await new Promise<void>((resolve, reject) => {
+        tx.oncomplete = () => resolve();
+        tx.onerror = () => reject(tx.error ?? new Error('IndexedDB transaction failed'));
+      });
+    } finally {
+      db.close();
+    }
+  } catch {
+    /* storage unusable: nothing to prune */
+  }
+}
+
+/** Every pair gone: the device said it keeps none. */
+export async function clearRollShots(): Promise<void> {
+  try {
+    await withStore(SHOTS, 'readwrite', (s) => s.clear());
+  } catch {
+    /* storage unusable: nothing to clear */
   }
 }
