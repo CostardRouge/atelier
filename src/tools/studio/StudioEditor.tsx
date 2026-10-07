@@ -59,7 +59,7 @@ import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity
 import { readRenditions, writeRendition } from '../../shared/projects/media-rendition';
 import { fetchHeld } from '../../shared/sources/held-fetch';
 import { trackedFetch } from '../../shared/tasks/tracked';
-import { fileIdentity, imageTypeLabel } from '../../shared/library/assets';
+import { fileIdentity, imageTypeLabel, type Asset } from '../../shared/library/assets';
 import { startTask } from '../../shared/tasks/tasks';
 import {
   atStep,
@@ -128,7 +128,7 @@ import { useLutStack } from '../../shared/lut/use-lut-stack';
 import { sameSlice } from '../../shared/history/history';
 import useHistory from '../../shared/history/use-history';
 import GradePanel from '../../shared/lut/GradePanel';
-import DevelopSheet from '../../shared/develop/DevelopSheet';
+import DevelopSheet, { type SheetDeckPicture } from '../../shared/develop/DevelopSheet';
 import DevelopSection from '../../shared/develop/DevelopSection';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { restoreDevelop, writeDevelop, type SavedDevelop } from '../../shared/projects/media-develop';
@@ -199,6 +199,13 @@ const CLIP_PHASES: RunPhase[] = [
   { id: 'encode', label: 'Encode' },
   { id: 'write', label: 'Write' },
 ];
+
+/** A media of the project as the Develop sheet's deck names it — its photo, else its clip. */
+function sheetPicture(asset: Asset | undefined): SheetDeckPicture | null {
+  if (!asset) return null;
+  const file = asset.kind === 'photo' ? (asset.parts.image ?? null) : (asset.parts.video ?? null);
+  return { id: asset.id, name: file?.name ?? asset.baseName, file };
+}
 
 /** What a measured figure is true of: this clip, these settings, this cut. */
 function statKey(clipId: string, variant: ExportVariant, cut: TrimRange | null): string {
@@ -349,13 +356,17 @@ export default function StudioEditor({
     () => project.media.develops ?? {},
   );
   const activeFile = activeImage ?? activeVideo;
-  const [activeHash, setActiveHash] = useState<string | null>(null);
+  // The hash is held WITH the file it was read from, so the render right after
+  // a switch never compares the last media's hash against this one's develop
+  // (which restored nothing, and a Develop sheet stepped onto this media
+  // would have opened as shot and written that back).
+  const [hashed, setHashed] = useState<{ file: File; hash: string | null } | null>(null);
+  const activeHash = hashed && hashed.file === activeFile ? hashed.hash : null;
   useEffect(() => {
-    setActiveHash(null);
     if (!activeFile) return;
     let cancelled = false;
     void mediaHash(activeFile).then((hash) => {
-      if (!cancelled) setActiveHash(hash);
+      if (!cancelled) setHashed({ file: activeFile, hash });
     });
     return () => {
       cancelled = true;
@@ -2155,6 +2166,23 @@ export default function StudioEditor({
           onCancel={() => setDevelopOpen(false)}
           footerHint={`writes to ${active.baseName}`}
           applyTo={developApplyTo}
+          // The project's media as a deck: a swipe or ←/→ (A/B off) writes
+          // this media's numbers and opens the one beside, in the Library's
+          // order, ending where the list ends. The slot and the landed sheet
+          // draw the Library's own file, so the still is one URL throughout;
+          // the sheet starts afresh once this media's hash is read.
+          deck={{
+            current: { id: active.id, name: activeFile.name, file: activeFile, key: `${active.id}:${activeHash ?? ''}` },
+            previous: sheetPicture(clips[activeIndex - 1]),
+            next: sheetPicture(clips[activeIndex + 1]),
+            onStep: (dir, develop) => {
+              const to = clips[activeIndex + dir];
+              if (!to) return;
+              setActiveDevelop(develop);
+              setDevelopAt(0);
+              lib.setActive(to.id);
+            },
+          }}
         />
       )}
 

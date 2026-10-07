@@ -855,6 +855,50 @@ landed; at 390 px under `LayoutModeProvider` the A/B sits in the wrapped row
 beside the clipboard verbs; a PNG kept its grade (64 → 90), no transport,
 Space swallowed. Not driven on the maintainer's machine or on H.264/HEVC.
 
+## The sheet SWIPES too, and a page WRITES (2026-10-07, his «fais pareil dans le Develop sheet de Trips et du Studio»)
+
+The tool's deck (`develop-roll.md`, «A swipe pages the roll when A/B is off»)
+reaches the modal: `DevelopSheet` takes an optional `deck` (`SheetDeck`:
+`current`, `previous`, `next`, `onStep`) and the same hands — A/B off, fitted,
+no dropper: a drag reveals the neighbour, a flick or a quarter pages, a
+sideways sweep pages, the ends resist — plus **← / → at the fit**, which the
+sheet's arrows did nothing with (a slider or a field keeps them). Rules:
+
+- **A page WRITES the open picture's numbers first** (`onStep(dir, draft)`), as
+  Done would, and the sheet stays open on the next; Cancel then takes back
+  only the picture on screen. The alternative — a draft carried across pages,
+  or a page refused while dirty — is a modal holding several pictures'
+  unwritten numbers, which no host stores.
+- **The sheet is TWO components**: the default export holds the three stills'
+  object URLs and keys the body (`DevelopSheetBody`) on
+  `current.key ?? current.id`, so the draft, the view and the decode start
+  afresh per picture (the never-inherit rule) while the landed body opens on
+  the URL its slot showed. A slot draws its file in an `<img>` only where one
+  can (`drawsInImg`: JPEG, PNG, WebP, GIF, AVIF); a RAW, a HEIF or a clip
+  shows its name. No cell thumbnail exists in the hosts, so the slot is the
+  file AS SHOT and the landed sheet grades it — a visible step, accepted.
+- **Trips** walks the piece's slides that HOLD a picture (the closing card and
+  an empty slide stepped over), entering a collage on its lead; a neighbour's
+  id is `key:0`, the landed `current.id` is `key:cellIndex`, and its still is
+  `resolve(slide.media)` because the Library's tick (the stage's file) follows
+  the slide a render late. The sheet's FILE stays the tick, as the stage's
+  does: a slide whose picture is not ticked in the Library shows the ticked
+  one there too — not this feature's to change.
+- **The Studio** walks the project's media in the Library's order
+  (`clips[activeIndex ± 1]`) and keys the body on `id:hash`: a media's develop
+  is hash-guarded, and the hash used to be the LAST media's for one render
+  after a switch, which restored nothing — so `activeHash` is now held with
+  the file it was read from (`studio.md`).
+
+Driven headless (`drive-sheet.mjs` and `drive-trips.mjs` in the scratchpad:
+three JPEGs in the Library, a Studio project, and a trip seeded through
+`createTripDoc` / `putTrip` with a hook and two slides): a drag pages, the
+next picture opens as shot, → steps, the last resists, a finger and a sweep
+come back, the first picture kept the exposure the page wrote, A/B on places
+the divider. Trap for the Trips drive: the Library's ACTIVE file must be among
+the TICKED ones (`useActiveAsset`), so a drive that ticks one picture pins the
+stage, and the sheet, to it. Not on his devices.
+
 ## Automating the develop: the record is the contract (2026-10-02)
 
 **Decision (the maintainer, `docs/auto-develop.md`).** Every automatic

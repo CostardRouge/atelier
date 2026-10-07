@@ -17,7 +17,7 @@ import {
   type SlideCollage,
 } from '../../shared/roadtrip/collage';
 import { normaliseCellPlace } from '../../shared/media/media-layout';
-import DevelopSheet from '../../shared/develop/DevelopSheet';
+import DevelopSheet, { type SheetDeck, type SheetDeckPicture } from '../../shared/develop/DevelopSheet';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import type { DevelopSettings } from '../../shared/develop/develop';
 import { flipFraming, normaliseFraming, type Framing } from '../../shared/media/framing';
@@ -1015,6 +1015,47 @@ export default function PostEditor({
     pending: Boolean(slideFile) && !sourceReady,
     scope: loopScope,
   });
+  const goToSlide = deck.goTo;
+
+  // The Develop sheet's DECK (`DevelopSheet`'s `deck`): with A/B off, a swipe
+  // or ←/→ on its picture writes this picture's numbers and opens the slide
+  // beside — the piece's slides that HOLD a picture, the closing card and an
+  // empty slide stepped over, a collage entered on its lead. Its ids name a
+  // slide's lead (`key:0`), which is what the landed sheet's current id is, so
+  // the still the slot showed is the very URL the sheet opens on.
+  const sheetDeck = useMemo<SheetDeck | null>(() => {
+    if (isCta) return null;
+    const beside = (by: -1 | 1): number | null => {
+      for (let i = slideIndex + by; i >= 0 && i < slides.length; i += by) {
+        const s = slides[i];
+        if (s.kind !== 'cta' && s.media) return i;
+      }
+      return null;
+    };
+    const lead = (i: number | null): SheetDeckPicture | null => {
+      if (i === null) return null;
+      const s = slides[i];
+      return { id: `${s.slideId ?? s.kind}:0`, name: s.media?.name ?? '', file: resolve(s.media) };
+    };
+    const [previous, next] = [beside(-1), beside(1)];
+    return {
+      current: {
+        id: `${slideKey}:${cellIndex}`,
+        name: cellFile?.name ?? '',
+        // The lead by its own ref: the Library's tick follows the open slide
+        // a render late, and the still must be the slot's from the first frame.
+        file: cellIndex === 0 && slide.kind !== 'cta' ? (resolve(slide.media) ?? cellFile) : cellFile,
+      },
+      previous: lead(previous),
+      next: lead(next),
+      onStep: (dir, develop) => {
+        const to = dir < 0 ? previous : next;
+        if (to === null) return;
+        setDevelop(develop);
+        goToSlide(to, 0);
+      },
+    };
+  }, [isCta, slides, slideIndex, slideKey, cellIndex, cellFile, slide, resolve, setDevelop, goToSlide]);
 
   // The cut, opened on the band. It belongs to one clip: another slide, or a
   // picture that is not a clip, closes it.
@@ -2429,6 +2470,7 @@ export default function PostEditor({
               : `writes to slide ${slide.position}`
         }
         applyTo={developApplyTo}
+        deck={sheetDeck}
       />
     )}
 

@@ -1,6 +1,18 @@
 import { describe, expect, it } from 'vitest';
 import { SWEEP_COMMIT_PX, SWIPE_DISTANCE, rubberBand } from '../ui/pan-zoom';
-import { deckCommit, deckOffset, deckSweep } from './stage-deck';
+import { deckCommit, deckOffset, deckSweep, drawsInImg } from './stage-deck';
+
+describe('drawsInImg', () => {
+  it('draws what a browser decodes in an <img>, by type then by name', () => {
+    expect(drawsInImg({ name: 'a.jpg', type: 'image/jpeg' })).toBe(true);
+    expect(drawsInImg({ name: 'a.webp', type: 'image/webp' })).toBe(true);
+    expect(drawsInImg({ name: 'DJI_0101.JPG', type: '' })).toBe(true);
+    expect(drawsInImg({ name: 'a.heic', type: 'image/heic' })).toBe(false);
+    expect(drawsInImg({ name: 'DSC0001.ARW', type: '' })).toBe(false);
+    expect(drawsInImg({ name: 'a.mp4', type: 'video/mp4' })).toBe(false);
+    expect(drawsInImg(null)).toBe(false);
+  });
+});
 
 const travel = 824;
 const both = { previous: true, next: true };
