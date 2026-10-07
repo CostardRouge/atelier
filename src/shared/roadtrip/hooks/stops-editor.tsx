@@ -25,10 +25,10 @@ import type { HookPanelHost } from './hook-variant';
 import MapField from './map-field';
 import { resetLink } from './panel-ui';
 import {
-  MAP_MAX_STOPS,
   addStop,
   assignPictures,
   moveStop,
+  numeralScale,
   patchStop,
   removeStop,
   stopsFromPlaces,
@@ -92,10 +92,8 @@ export default function StopsEditor({
 
   const selected = stops.find((stop) => stop.id === selectedId) ?? null;
   const selectedIndex = selected ? stops.findIndex((stop) => stop.id === selected.id) : -1;
-  const full = stops.length >= MAP_MAX_STOPS;
 
   const add = (at: Place) => {
-    if (full) return;
     const id = newId();
     onChange(addStop(stops, at, id));
     setSelectedId(id);
@@ -172,7 +170,7 @@ export default function StopsEditor({
         </Button>
       )}
 
-      {free.length > 0 && !full && (
+      {free.length > 0 && (
         <div className="flex flex-wrap gap-1.5">
           {free.slice(0, 12).map((place) => (
             <button
@@ -200,7 +198,7 @@ export default function StopsEditor({
                 }`}
               >
                 <span className="flex-none w-5 h-5 grid place-items-center rounded-full bg-frame font-mono text-3xs text-on-media">
-                  {index + 1}
+                  <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
                 </span>
                 <span className="min-w-0 flex-1 truncate text-xs text-ink">
                   {stop.name.trim() || <span className="text-muted">Unnamed stop</span>}
@@ -212,12 +210,6 @@ export default function StopsEditor({
             </li>
           ))}
         </ul>
-      )}
-      {full && (
-        <p className="m-0 text-2xs text-muted">
-          {MAP_MAX_STOPS} stops is as many as one opener holds — a stop’s number is written inside
-          its dot, and two digits are what a dot holds.
-        </p>
       )}
 
       {selected && (

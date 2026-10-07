@@ -22,6 +22,7 @@
 
 import { useRef, useState } from 'react';
 import { arcControl, fitProjection, type LatLon, type MapStop } from './map-plan';
+import { numeralScale } from './stops';
 
 /** The field's own coordinate space. The container keeps the same aspect. */
 const VIEW = { width: 320, height: 200 };
@@ -194,9 +195,9 @@ export default function MapField({
             <circle cx={at.x} cy={at.y} r={5.4} className="fill-[var(--color-accent)]" />
             <text
               x={at.x}
-              y={at.y + 2.4}
+              y={at.y + 2.4 * numeralScale(index + 1)}
               textAnchor="middle"
-              fontSize={6.4}
+              fontSize={6.4 * numeralScale(index + 1)}
               fontWeight={600}
               className="fill-frame font-mono"
             >

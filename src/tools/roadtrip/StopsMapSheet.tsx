@@ -26,9 +26,9 @@ import type { GazetteerCity } from '../../shared/roadtrip/gazetteer';
 // Read once per session and ordered once, off the main thread.
 import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
 import {
-  MAP_MAX_STOPS,
   addStop,
   moveStop,
+  numeralScale,
   patchStop,
   removeStop,
   type MapStop,
@@ -104,7 +104,6 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
   );
   const [labels, setLabels] = useState<TownLabel[]>([]);
   const [hover, setHover] = useState<{ name: string; x: number; y: number } | null>(null);
-  const [note, setNote] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -129,24 +128,14 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
   const done = () => (changed ? onDone(draft) : onCancel());
   useDialogKeys({ onCancel, onConfirm: done });
 
-  const say = useCallback((text: string) => {
-    setNote(text);
-    window.setTimeout(() => setNote((current) => (current === text ? null : current)), 2200);
+  // No cap on the list (2026-10-07): a three-month trip of 120 places was cut
+  // at 99. A third digit shrinks inside its dot instead (`numeralScale`).
+  const add = useCallback((at: Place) => {
+    // Functional: two taps inside one render must both land.
+    const id = newId();
+    setDraft((current) => addStop(current, at, id));
+    setSelectedId(id);
   }, []);
-
-  const add = useCallback(
-    (at: Place) => {
-      if (latest.current.draft.length >= MAP_MAX_STOPS) {
-        say(`${MAP_MAX_STOPS} stops is as many as one opener holds.`);
-        return;
-      }
-      // Functional: two taps inside one render must both land.
-      const id = newId();
-      setDraft((current) => addStop(current, at, id));
-      setSelectedId(id);
-    },
-    [say],
-  );
 
   // --- the map, created once --------------------------------------------------
   useEffect(() => {
@@ -432,7 +421,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Stops on the map</h2>
           <span className="min-w-0 font-mono text-2xs text-muted truncate">
             {title ? `${title} · ` : ''}
-            {draft.length} / {MAP_MAX_STOPS}
+            {draft.length} {draft.length === 1 ? 'stop' : 'stops'}
           </span>
           <span className="flex-1" />
           <button
@@ -525,14 +514,6 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                 {mapState === 'error' ? 'The map could not load here — the list and the inspector still work.' : 'Opening the map…'}
               </div>
             )}
-            {note && (
-              <div
-                role="status"
-                className="absolute left-1/2 bottom-10 -translate-x-1/2 px-3 py-1.5 rounded-full bg-frame text-on-media text-xs shadow-paper"
-              >
-                {note}
-              </div>
-            )}
             <p className="absolute left-2 bottom-1.5 m-0 font-mono text-3xs opacity-70" style={{ color: MAP_INK }}>
               {tilesOn ? `${OSM_CREDIT} · ` : ''}Towns: GeoNames (CC BY 4.0)
               {towns === 'loading' ? ' · reading…' : towns === 'failed' ? ' · could not be read' : ''}
@@ -570,7 +551,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                           aria-label={`Show stop ${index + 1} on the map`}
                           className="flex-none w-6 h-6 grid place-items-center rounded-full border-0 bg-accent font-mono text-3xs text-white cursor-pointer"
                         >
-                          {index + 1}
+                          <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
                         </button>
                         <input
                           value={stop.name}
@@ -687,7 +668,7 @@ function paintMarker(el: HTMLElement, n: number, name: string, selected: boolean
   disc.textContent = String(n);
   disc.style.cssText =
     'position:absolute;inset:0;border-radius:9999px;display:grid;place-items:center;' +
-    `background:${MAP_ACCENT};color:#fff;font:600 11px/1 ui-monospace,monospace;` +
+    `background:${MAP_ACCENT};color:#fff;font:600 ${(11 * numeralScale(n)).toFixed(1)}px/1 ui-monospace,monospace;` +
     `border:2px solid #fff;box-shadow:${selected ? '0 0 0 3px rgba(217,68,42,0.45),' : ''}0 1px 3px rgba(0,0,0,0.45)`;
   el.appendChild(disc);
   if (label) {

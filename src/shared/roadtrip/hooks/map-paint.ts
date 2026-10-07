@@ -36,6 +36,7 @@ import { hexToRgba } from './colour';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { placeLabels } from './geo';
+import { numeralScale } from './stops';
 
 /** A box a name may not be placed on — a pinned picture's tile. */
 interface LabelBox {
@@ -248,7 +249,8 @@ export function paintMap(
         // The numeral is the map's ink on the dot's own fill — a second colour
         // here would make the dots read as two kinds of thing.
         g.fillStyle = PAPER_INK;
-        g.font = `600 ${dotR * 1.15}px ${MONO_FONT}`;
+        // A third digit shrinks the numeral rather than spilling past the dot.
+        g.font = `600 ${dotR * 1.15 * numeralScale(index + 1)}px ${MONO_FONT}`;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.fillText(String(index + 1), at.x, at.y + dotR * 0.06);

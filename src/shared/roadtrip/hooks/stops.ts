@@ -27,16 +27,20 @@ export interface MapStop {
 }
 
 /**
- * The most stops one opener holds — a GUARD, not a taste. It was 24 (the
- * Itinerary's «past that the dots merge»), and a real itinerary up the east
- * coast of Australia met it at Agnes Water (2026-09-29, the maintainer: «why
- * only 24 places max?»): whether dots merge is the author's to judge on the
- * stage, and every picture's decode is already shared out by one budget
- * (`picture-budget.ts`). What remains is what the drawing can carry: a stop's
- * NUMBER is written inside its dot, and two digits are what a dot holds. Past
- * it a stored list is cut on read rather than half-drawn.
+ * How much smaller a stop's NUMERAL is drawn, so it stays inside its dot.
+ *
+ * Every dot that carries a number — the opener's, the panel's small map's,
+ * the big map's markers — was sized for two digits, and the list once
+ * stopped at 99 for exactly that reason. A list has no cap since 2026-10-07
+ * (the maintainer: «moi j'en avais 120, ça a été coupé à 99 … pas de
+ * limite»), so a numeral of three digits or more shrinks instead: its width
+ * stays that of a 2.3-digit numeral at full size, which a disc holds with
+ * room on both sides. Two digits and fewer are drawn exactly as before.
  */
-export const MAP_MAX_STOPS = 99;
+export function numeralScale(n: number): number {
+  const digits = String(Math.trunc(Math.abs(n)) || 1).length;
+  return Math.min(1, 2.3 / digits);
+}
 
 /**
  * A stored picture reference, read defensively: it travels in `.roadtrip.json`
@@ -78,7 +82,6 @@ export function readStops(raw: unknown): MapStop[] {
       lon,
       picture: readPicture(s.picture),
     });
-    if (out.length >= MAP_MAX_STOPS) break;
   }
   return out;
 }
@@ -120,7 +123,6 @@ export function addStop(
   at: GeoPoint & { name?: string },
   id: string,
 ): MapStop[] {
-  if (stops.length >= MAP_MAX_STOPS) return [...stops];
   return [...stops, { id, name: at.name ?? '', lat: at.lat, lon: at.lon }];
 }
 
@@ -185,9 +187,7 @@ export function stopsFromPlaces(
   places: readonly { name: string; lat: number; lon: number }[],
   makeId: (index: number) => string,
 ): MapStop[] {
-  return places
-    .slice(0, MAP_MAX_STOPS)
-    .map((place, i) => ({ id: makeId(i), name: place.name, lat: place.lat, lon: place.lon }));
+  return places.map((place, i) => ({ id: makeId(i), name: place.name, lat: place.lat, lon: place.lon }));
 }
 
 /** Every located place of the trip, in the order it was lived. */

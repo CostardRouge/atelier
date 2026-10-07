@@ -4,7 +4,6 @@ import type { HookPickedPicture, HookStage } from './hook-variant';
 import {
   MAP_DEFAULTS,
   MAP_LIMITS,
-  MAP_MAX_STOPS,
   addStop,
   arcControl,
   assignPictures,
@@ -39,6 +38,7 @@ import {
   wantsLabel,
   type MapStop,
 } from './map-plan';
+import { numeralScale } from './stops';
 import { TICK_KITS } from './tick-kits';
 
 const picture = (name: string): HookPickedPicture => ({
@@ -129,9 +129,10 @@ describe('readStops', () => {
     expect(stops[2].picture).toBeUndefined();
   });
 
-  it('never reads more stops than one opener draws', () => {
-    const many = Array.from({ length: MAP_MAX_STOPS + 8 }, (_, i) => ({ id: `s${i}`, lat: i * 0.1, lon: 0 }));
-    expect(readStops(many)).toHaveLength(MAP_MAX_STOPS);
+  it('reads every stop of a long itinerary — there is no cap', () => {
+    // His three-month trip held 120 places and was cut at 99 (2026-10-07).
+    const many = Array.from({ length: 240 }, (_, i) => ({ id: `s${i}`, lat: i * 0.1, lon: 0 }));
+    expect(readStops(many)).toHaveLength(240);
   });
 
   it('is empty for anything that is not a list', () => {
@@ -446,11 +447,13 @@ describe('mapWants', () => {
 });
 
 describe('editing the itinerary', () => {
-  it('adds at the end, up to the cap', () => {
+  it('adds at the end, past the old 99 too', () => {
     const one = addStop([], { lat: 1, lon: 2, name: 'Here' }, 'x');
     expect(one).toEqual([{ id: 'x', name: 'Here', lat: 1, lon: 2 }]);
-    const full = Array.from({ length: MAP_MAX_STOPS }, (_, i) => ({ id: `s${i}`, name: '', lat: i, lon: 0 }));
-    expect(addStop(full, { lat: 0, lon: 0 }, 'over')).toHaveLength(MAP_MAX_STOPS);
+    const long = Array.from({ length: 120 }, (_, i) => ({ id: `s${i}`, name: '', lat: i * 0.1, lon: 0 }));
+    const more = addStop(long, { lat: 0, lon: 0 }, 'more');
+    expect(more).toHaveLength(121);
+    expect(more[120].id).toBe('more');
   });
 
   it('patches one stop and keeps its picture', () => {
@@ -634,5 +637,28 @@ describe('the map’s OpenStreetMap region', () => {
   it('reads its two options, clamped', () => {
     expect(mapOptions({}).basemap).toBe(false);
     expect(mapOptions({ basemapOpacity: 7 }).basemapOpacity).toBe(MAP_LIMITS.basemapOpacity.max);
+  });
+});
+
+describe('a stop’s numeral', () => {
+  it('is drawn as before up to two digits', () => {
+    expect(numeralScale(1)).toBe(1);
+    expect(numeralScale(9)).toBe(1);
+    expect(numeralScale(99)).toBe(1);
+  });
+
+  it('shrinks from the third digit so its width stays what a dot holds', () => {
+    expect(numeralScale(100)).toBeLessThan(1);
+    expect(numeralScale(120)).toBeCloseTo(2.3 / 3);
+    expect(numeralScale(1000)).toBeCloseTo(2.3 / 4);
+    // The width — digits × scale — never passes 2.3 digits at full size.
+    for (const n of [100, 999, 1000, 12345]) {
+      expect(String(n).length * numeralScale(n)).toBeLessThanOrEqual(2.3 + 1e-9);
+    }
+  });
+
+  it('reads anything that is not a count as one digit', () => {
+    expect(numeralScale(0)).toBe(1);
+    expect(numeralScale(Number.NaN)).toBe(1);
   });
 });

@@ -44,7 +44,6 @@ import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 // The stop model and its edits are shared with Virée since 2026-09-28; the
 // names the Itinerary grew them under stay importable from here.
 export {
-  MAP_MAX_STOPS,
   addStop,
   assignPictures,
   moveStop,
