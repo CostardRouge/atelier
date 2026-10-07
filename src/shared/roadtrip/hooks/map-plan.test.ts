@@ -4,7 +4,6 @@ import type { HookPickedPicture, HookStage } from './hook-variant';
 import {
   MAP_DEFAULTS,
   MAP_LIMITS,
-  MAP_MAX_STOPS,
   addStop,
   arcControl,
   assignPictures,
@@ -18,6 +17,7 @@ import {
   mapBox,
   mapMoved,
   mapOptions,
+  groupMapStops,
   mapScore,
   mapTiming,
   mapWants,
@@ -39,6 +39,7 @@ import {
   wantsLabel,
   type MapStop,
 } from './map-plan';
+import { adoptSearch, moveStopTo, numeralScale, replaceStopPlace, searchPlace, stopText, writtenStops } from './stops';
 import { TICK_KITS } from './tick-kits';
 
 const picture = (name: string): HookPickedPicture => ({
@@ -74,6 +75,32 @@ const STAGES: HookStage[] = [
     ],
   },
 ];
+
+describe('groupMapStops', () => {
+  const CITY: MapStop[] = [
+    { id: 'a', name: 'Melbourne', lat: -37.81, lon: 144.96 },
+    { id: 'b', name: 'Fitzroy', lat: -37.8, lon: 144.98, picture: { ref: { name: 'f.jpg', size: 1, lastModified: 0 }, date: '2025-03-02' } },
+    { id: 'c', name: 'St Kilda', lat: -37.87, lon: 144.98 },
+    { id: 'd', name: 'Sydney', lat: -33.87, lon: 151.21 },
+  ];
+
+  it('is the list itself when off, and folds nearby stops into one that counts and holds a picture', () => {
+    const o = mapOptions({ stops: CITY });
+    expect(groupMapStops(o.stops, o)).toEqual(o.stops);
+    const grouped = groupMapStops(o.stops, { ...o, groupKm: 10, groupName: 'first' });
+    expect(grouped.map((s) => s.name)).toEqual(['Melbourne', 'Sydney']);
+    expect(grouped[0].members).toBe(3);
+    expect(grouped[0].picture?.ref.name).toBe('f.jpg');
+    expect(grouped[1].members).toBeUndefined();
+    // Never stored: a stop read back carries no count.
+    expect(readStops(grouped).every((s) => s.members === undefined)).toBe(true);
+  });
+
+  it('reads the grouping options defensively, and the Route conversion starts them off', () => {
+    expect(mapOptions({ groupKm: 'ten' }).groupKm).toBe(0);
+    expect(mapOptions({ groupKm: 3, groupVisits: 'all', groupName: 'central' })).toMatchObject({ groupKm: 3, groupVisits: 'all', groupName: 'central' });
+  });
+});
 
 describe('mapOptions', () => {
   it('falls back on every unreadable value rather than throwing', () => {
@@ -129,9 +156,10 @@ describe('readStops', () => {
     expect(stops[2].picture).toBeUndefined();
   });
 
-  it('never reads more stops than one opener draws', () => {
-    const many = Array.from({ length: MAP_MAX_STOPS + 8 }, (_, i) => ({ id: `s${i}`, lat: i * 0.1, lon: 0 }));
-    expect(readStops(many)).toHaveLength(MAP_MAX_STOPS);
+  it('reads every stop of a long itinerary — there is no cap', () => {
+    // His three-month trip held 120 places and was cut at 99 (2026-10-07).
+    const many = Array.from({ length: 240 }, (_, i) => ({ id: `s${i}`, lat: i * 0.1, lon: 0 }));
+    expect(readStops(many)).toHaveLength(240);
   });
 
   it('is empty for anything that is not a list', () => {
@@ -446,11 +474,13 @@ describe('mapWants', () => {
 });
 
 describe('editing the itinerary', () => {
-  it('adds at the end, up to the cap', () => {
+  it('adds at the end, past the old 99 too', () => {
     const one = addStop([], { lat: 1, lon: 2, name: 'Here' }, 'x');
     expect(one).toEqual([{ id: 'x', name: 'Here', lat: 1, lon: 2 }]);
-    const full = Array.from({ length: MAP_MAX_STOPS }, (_, i) => ({ id: `s${i}`, name: '', lat: i, lon: 0 }));
-    expect(addStop(full, { lat: 0, lon: 0 }, 'over')).toHaveLength(MAP_MAX_STOPS);
+    const long = Array.from({ length: 120 }, (_, i) => ({ id: `s${i}`, name: '', lat: i * 0.1, lon: 0 }));
+    const more = addStop(long, { lat: 0, lon: 0 }, 'more');
+    expect(more).toHaveLength(121);
+    expect(more[120].id).toBe('more');
   });
 
   it('patches one stop and keeps its picture', () => {
@@ -465,6 +495,22 @@ describe('editing the itinerary', () => {
     expect(moveStop(STOPS, 'c', -1).map((s) => s.id)).toEqual(['a', 'c', 'b']);
     expect(moveStop(STOPS, 'a', -1).map((s) => s.id)).toEqual(['a', 'b', 'c']);
     expect(moveStop(STOPS, 'c', 1).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('moves a stop to any place — a drag’s landing', () => {
+    expect(moveStopTo(STOPS, 'a', 2).map((s) => s.id)).toEqual(['b', 'c', 'a']);
+    expect(moveStopTo(STOPS, 'c', 0).map((s) => s.id)).toEqual(['c', 'a', 'b']);
+    expect(moveStopTo(STOPS, 'b', 1).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+    // Past an end is that end; an unknown stop or a non-number moves nothing.
+    expect(moveStopTo(STOPS, 'a', 99).map((s) => s.id)).toEqual(['b', 'c', 'a']);
+    expect(moveStopTo(STOPS, 'c', -4).map((s) => s.id)).toEqual(['c', 'a', 'b']);
+    expect(moveStopTo(STOPS, 'missing', 0).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+    expect(moveStopTo(STOPS, 'a', Number.NaN).map((s) => s.id)).toEqual(['a', 'b', 'c']);
+  });
+
+  it('keeps a stop’s picture through a drag', () => {
+    const stops = [{ ...STOPS[0], picture: picture('one.jpg') }, STOPS[1], STOPS[2]];
+    expect(moveStopTo(stops, 'a', 2)[2].picture?.ref.name).toBe('one.jpg');
   });
 
   it('removes one', () => {
@@ -634,5 +680,79 @@ describe('the map’s OpenStreetMap region', () => {
   it('reads its two options, clamped', () => {
     expect(mapOptions({}).basemap).toBe(false);
     expect(mapOptions({ basemapOpacity: 7 }).basemapOpacity).toBe(MAP_LIMITS.basemapOpacity.max);
+  });
+});
+
+describe('a stop’s numeral', () => {
+  it('is drawn as before up to two digits', () => {
+    expect(numeralScale(1)).toBe(1);
+    expect(numeralScale(9)).toBe(1);
+    expect(numeralScale(99)).toBe(1);
+  });
+
+  it('shrinks from the third digit so its width stays what a dot holds', () => {
+    expect(numeralScale(100)).toBeLessThan(1);
+    expect(numeralScale(120)).toBeCloseTo(2.3 / 3);
+    expect(numeralScale(1000)).toBeCloseTo(2.3 / 4);
+    // The width — digits × scale — never passes 2.3 digits at full size.
+    for (const n of [100, 999, 1000, 12345]) {
+      expect(String(n).length * numeralScale(n)).toBeLessThanOrEqual(2.3 + 1e-9);
+    }
+  });
+
+  it('reads anything that is not a count as one digit', () => {
+    expect(numeralScale(0)).toBe(1);
+    expect(numeralScale(Number.NaN)).toBe(1);
+  });
+});
+
+describe('a stop that knows its place', () => {
+  const sydney = { id: 's', name: 'Sydney', lat: -33.87, lon: 151.21, state: 'New South Wales', searchCode: 'NSW', countryCode: 'au' };
+
+  it('reads the facts it was stored with, drops empty ones, upper-cases the country', () => {
+    const [stop] = readStops([{ ...sydney, area: '  ', country: '', style: 'paren' }]);
+    expect(stop).toMatchObject({ state: 'New South Wales', searchCode: 'NSW', countryCode: 'AU', style: 'paren' });
+    expect('area' in stop).toBe(false);
+    expect('country' in stop).toBe(false);
+    // A writing the suite does not know is dropped, never kept as a string.
+    expect('style' in readStops([{ ...sydney, style: 'bogus' }])[0]).toBe(false);
+  });
+
+  it('writes a stop like a trip place — the trip’s badge writing by default, the name alone where nothing is known', () => {
+    expect(stopText(sydney)).toBe('Sydney');
+    expect(stopText(sydney, 'trip', { placeStyle: { badge: 'code', lists: 'code' } })).toBe('Sydney, NSW');
+    expect(stopText(sydney, 'full')).toBe('Sydney, New South Wales');
+    expect(stopText(sydney, 'paren')).toBe('Sydney (NSW)');
+    expect(stopText({ ...sydney, style: 'name' }, 'code')).toBe('Sydney');
+    expect(stopText({ name: 'Somewhere', lat: 0, lon: 0 }, 'code')).toBe('Somewhere');
+    // The trip's own table wins over the search's code.
+    expect(stopText(sydney, 'code', { stateCodes: { 'New South Wales': 'N.S.W.' } })).toBe('Sydney, N.S.W.');
+  });
+
+  it('hands the opener written stops and keeps everything else', () => {
+    const out = writtenStops([{ ...sydney, picture: picture('one.jpg') }], 'code');
+    expect(out[0].name).toBe('Sydney, NSW');
+    expect(out[0].picture?.ref.name).toBe('one.jpg');
+  });
+
+  it('takes what a search answers, never over a typed state, the search’s code always', () => {
+    const result = { name: 'Kalbarri', region: 'Western Australia, Australia', lat: -27.7, lon: 114.2, area: 'Shire of Northampton', state: 'Western Australia', stateCode: 'WA', country: 'Australia', countryCode: 'AU' };
+    const added = searchPlace(result);
+    expect(added).toMatchObject({ name: 'Kalbarri', state: 'Western Australia', searchCode: 'WA', countryCode: 'AU', area: 'Shire of Northampton' });
+    const typed = adoptSearch({ id: 'k', name: 'Kal', lat: 0, lon: 0, state: 'WA typed', searchCode: 'OLD' }, result);
+    expect(typed.state).toBe('WA typed');
+    expect(typed.searchCode).toBe('WA');
+    expect(typed.lat).toBe(-27.7);
+    expect(typed.name).toBe('Kalbarri');
+    const noCode = adoptSearch({ id: 'k', name: 'Kal', lat: 0, lon: 0, searchCode: 'OLD' }, { ...result, stateCode: '' });
+    expect('searchCode' in noCode).toBe(false);
+  });
+
+  it('gives a stop another place whole, keeping its id and picture', () => {
+    const stops = [{ ...sydney, picture: picture('one.jpg') }];
+    const [out] = replaceStopPlace(stops, 's', { name: 'Perth', lat: -31.9, lon: 115.9, state: 'Western Australia' });
+    expect(out).toMatchObject({ id: 's', name: 'Perth', state: 'Western Australia' });
+    expect('searchCode' in out).toBe(false);
+    expect(out.picture?.ref.name).toBe('one.jpg');
   });
 });

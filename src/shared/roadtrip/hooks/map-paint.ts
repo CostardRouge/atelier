@@ -36,6 +36,7 @@ import { hexToRgba } from './colour';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { placeLabels } from './geo';
+import { numeralScale } from './stops';
 
 /** A box a name may not be placed on — a pinned picture's tile. */
 interface LabelBox {
@@ -248,11 +249,16 @@ export function paintMap(
         // The numeral is the map's ink on the dot's own fill — a second colour
         // here would make the dots read as two kinds of thing.
         g.fillStyle = PAPER_INK;
-        g.font = `600 ${dotR * 1.15}px ${MONO_FONT}`;
+        // A third digit shrinks the numeral rather than spilling past the dot.
+        g.font = `600 ${dotR * 1.15 * numeralScale(index + 1)}px ${MONO_FONT}`;
         g.textAlign = 'center';
         g.textBaseline = 'middle';
         g.fillText(String(index + 1), at.x, at.y + dotR * 0.06);
       }
+      // A stop standing for several places wears their count (`stop-clusters.ts`).
+      const members = o.stops[index]?.members ?? 1;
+      // Above and to the LEFT: the name is placed on the right, at the dot's height.
+      if (members > 1) paintCount(g, at.x - dotR * 2.4, at.y - dotR * 1.9, members, u, o.pathColor);
     });
   }
 
@@ -617,6 +623,24 @@ function cover(g: HookCtx2D, picture: HookPicture, w: number, h: number): void {
 }
 
 /** A little aeroplane, nose along the direction of travel. */
+/** A small `×N` tag at a dot's shoulder: how many places the stop stands for. */
+export function paintCount(g: HookCtx2D, x: number, y: number, n: number, u: number, fill: string): void {
+  const text = `×${n}`;
+  g.save();
+  g.font = `600 ${15 * u}px ${MONO_FONT}`;
+  g.textAlign = 'center';
+  g.textBaseline = 'middle';
+  const w = g.measureText(text).width + 10 * u;
+  const h = 20 * u;
+  g.beginPath();
+  g.roundRect(x, y - h / 2, w, h, h / 2);
+  g.fillStyle = fill;
+  g.fill();
+  g.fillStyle = PAPER_INK;
+  g.fillText(text, x + w / 2, y + 0.5 * u);
+  g.restore();
+}
+
 function paintPlane(g: HookCtx2D, at: Point, angle: number, r: number): void {
   g.save();
   g.translate(at.x, at.y);

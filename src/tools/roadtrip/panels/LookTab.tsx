@@ -331,17 +331,6 @@ export default function LookTab({
               onLayout={(layout) => patchBadge({ layout })}
               minSize={0.05}
             />
-            <FieldRow label="Duration" hint="How long the hook lasts — what an exit animation lands on.">
-              <RangeField
-                label="Hook duration"
-                min={1}
-                max={15}
-                step={0.5}
-                value={post.badge.durationSeconds}
-                onChange={(durationSeconds) => patchBadge({ durationSeconds })}
-                format={(v) => `${v.toFixed(1)} s`}
-              />
-            </FieldRow>
           </InspectorSection>
 
           <InspectorSection
@@ -425,17 +414,6 @@ export default function LookTab({
                   onLayout={(layout) => onSlideBadge({ ...slide.badge!, layout })}
                   minSize={0.02}
                 />
-                <FieldRow label="Duration" hint="How long it lasts — what an exit animation lands on.">
-                  <RangeField
-                    label="Badge duration"
-                    min={1}
-                    max={15}
-                    step={0.5}
-                    value={slide.badge.durationSeconds}
-                    onChange={(durationSeconds) => onSlideBadge({ ...slide.badge!, durationSeconds })}
-                    format={(v) => `${v.toFixed(1)} s`}
-                  />
-                </FieldRow>
               </>
             )}
           </InspectorSection>

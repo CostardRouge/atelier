@@ -38,14 +38,42 @@ import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { BASEMAP_FOR_EDGE, BASEMAP_MAX_PX, basemapKey, rasterSize } from '../../map/tile-math';
 import type { HookBasemapWant, HookPictureWant } from './hook-variant';
 import { hookPictureKey } from './hook-variant';
-import { readStops, stopsFromPlaces, type MapStop } from './stops';
+import { STOP_STYLES, readStops, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
+import { GROUP_LIMITS, groupName, groupStops, type GroupName, type GroupVisits, type NamedTown } from './stop-clusters';
+
+/**
+ * The itinerary's stops with nearby ones folded into one (`stop-clusters.ts`),
+ * at render time: the stop sits on the member nearest the group's centre,
+ * named by the rule, holding the first picture a member holds, and says how
+ * many it stands for (`members`). The author's list is never touched.
+ */
+export function groupMapStops(
+  stops: readonly MapStop[],
+  o: Pick<MapOptions, 'groupKm' | 'groupVisits' | 'groupName'>,
+  towns: readonly NamedTown[] | null = null,
+): MapStop[] {
+  if (!(o.groupKm > 0) || stops.length < 2) return stops.slice();
+  const groups = groupStops(stops, o.groupKm, o.groupVisits);
+  if (groups.every((g) => g.members.length === 1)) return stops.slice();
+  return groups.map((group) => {
+    const anchor = stops[group.anchor];
+    if (group.members.length === 1) return anchor;
+    const picture = group.members.map((i) => stops[i].picture).find(Boolean);
+    return {
+      ...anchor,
+      name: groupName(stops, group, o.groupName, towns),
+      ...(picture ? { picture } : {}),
+      members: group.members.length,
+    };
+  });
+}
 
 // The stop model and its edits are shared with Virée since 2026-09-28; the
 // names the Itinerary grew them under stay importable from here.
 export {
-  MAP_MAX_STOPS,
   addStop,
+  adoptSearch,
   assignPictures,
   moveStop,
   otherPlaces,
@@ -53,8 +81,11 @@ export {
   readStops,
   removeStop,
   stopsFromPlaces,
+  stopText,
   tripPlaces,
+  writtenStops,
   type MapStop,
+  type StopStyle,
 } from './stops';
 
 /** How a stop's picture is presented. */
@@ -110,8 +141,15 @@ export interface MapOptions {
   numbers: boolean;
   labels: MapLabels;
   labelSize: number;
+  /** How a stop's name is written — like the trip's badges, or one writing of its own (`stopText`). */
+  placeStyle: StopStyle;
   /** The trip's own located places that are NOT stops, drawn faint behind. */
   context: boolean;
+  // --- grouping (2026-10-07, `stop-clusters.ts`) -----------------------------
+  /** Nearby stops as ONE stop, within this many km; 0 is off. Applied at render time, the list untouched. */
+  groupKm: number;
+  groupVisits: GroupVisits;
+  groupName: GroupName;
   // --- motion --------------------------------------------------------------
   draw: boolean;
   drawSeconds: number;
@@ -137,6 +175,13 @@ export interface MapOptions {
   // --- extras --------------------------------------------------------------
   compass: boolean;
   distance: MapDistance;
+  /**
+   * FIT the journey into the slide when the slide is shorter — its clock
+   * scaled so the pen rests when the slide ends, under the readability floor
+   * (`slide-timing.ts`). Stored with the opener, so it follows the slide's
+   * length when that changes later. Nothing under an Auto slide.
+   */
+  fit: boolean;
   // --- sound ---------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -168,8 +213,12 @@ export const MAP_DEFAULTS: MapOptions = {
   dotSize: 1,
   numbers: false,
   labels: 'current',
+  placeStyle: 'trip',
   labelSize: 1,
   context: false,
+  groupKm: 0,
+  groupVisits: 'consecutive',
+  groupName: 'town',
   draw: true,
   drawSeconds: 2.4,
   easing: 'ease-in-out',
@@ -186,6 +235,7 @@ export const MAP_DEFAULTS: MapOptions = {
   nameInBadge: false,
   compass: false,
   distance: 'off',
+  fit: false,
   sound: false,
   kit: 'ratchet',
   tickPitch: 1,
@@ -256,8 +306,12 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     dotSize: clamp(Number(o.dotSize), L.dotSize.min, L.dotSize.max, d.dotSize),
     numbers: o.numbers === true,
     labels: oneOf(o.labels, ['none', 'ends', 'current', 'passed', 'all'], d.labels),
+    placeStyle: oneOf(o.placeStyle, STOP_STYLES, d.placeStyle),
     labelSize: clamp(Number(o.labelSize), L.labelSize.min, L.labelSize.max, d.labelSize),
     context: o.context === true,
+    groupKm: Number(o.groupKm) > 0 ? clamp(Number(o.groupKm), GROUP_LIMITS.groupKm.min, GROUP_LIMITS.groupKm.max, 0) : 0,
+    groupVisits: oneOf(o.groupVisits, ['consecutive', 'all'], d.groupVisits),
+    groupName: oneOf(o.groupName, ['town', 'first', 'central'], d.groupName),
     draw: o.draw !== false,
     drawSeconds: clamp(Number(o.drawSeconds), L.drawSeconds.min, L.drawSeconds.max, d.drawSeconds),
     easing: oneOf(o.easing, EASING_IDS, d.easing),
@@ -274,12 +328,27 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     nameInBadge: o.nameInBadge === true,
     compass: o.compass === true,
     distance: oneOf(o.distance, ['off', 'km', 'mi'], d.distance),
+    fit: o.fit === true,
     sound: o.sound === true,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),
     tickVolume: clamp(Number(o.tickVolume), L.tickVolume.min, L.tickVolume.max, d.tickVolume),
     mixWithClip: o.mixWithClip === true,
   };
+}
+
+/**
+ * The shortest beat a fitted itinerary would scale: the wait at a stop (what
+ * a picture is looked at for), else the shortest hop. Infinity when the pen
+ * does not travel at all — nothing to flash, nothing to refuse.
+ */
+export function mapShortestBeat(timing: MapTiming): number {
+  let beat = Infinity;
+  for (const hop of timing.hops) {
+    if (hop.dwell > 0) beat = Math.min(beat, hop.dwell);
+    else if (hop.travel > 0) beat = Math.min(beat, hop.travel);
+  }
+  return beat;
 }
 
 // ---------------------------------------------------------------------------
@@ -829,6 +898,10 @@ export function mapFromRoute(
     tickPitch: raw.tickPitch,
     tickVolume: raw.tickVolume,
     mixWithClip: raw.mixWithClip,
+    fit: false,
+    groupKm: 0,
+    groupVisits: 'consecutive',
+    groupName: 'town',
     // The Route had no pictures at all, and an itinerary whose stops hold
     // none would draw an empty card or an empty backdrop. Off is the honest
     // conversion; the author switches it on when a stop has a picture.

@@ -56,8 +56,9 @@ function scrollsOn(node: HTMLElement, axis: 'x' | 'y'): boolean {
 /**
  * The box to scroll on that axis: the one named, if it scrolls on it, else the
  * nearest ancestor that scrolls on it because it says so — never a clipping one.
+ * Also what a held row scrolls (`use-list-reorder.ts`).
  */
-function scrollerOf(el: HTMLElement, axis: 'x' | 'y', named?: HTMLElement | null): HTMLElement | null {
+export function scrollerOf(el: HTMLElement, axis: 'x' | 'y', named?: HTMLElement | null): HTMLElement | null {
   if (named) return scrollsOn(named, axis) ? named : null;
   for (let node = el.parentElement; node && node !== document.body && node !== document.documentElement; node = node.parentElement) {
     if (scrollsOn(node, axis)) return node;

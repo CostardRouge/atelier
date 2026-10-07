@@ -28,8 +28,11 @@ import type { TrimRange } from '../media/trim';
 /** Shortest hook worth encoding — below this the entrance has no room. */
 export const MIN_HOOK_SECONDS = 1;
 
-/** Longest a hook clip is offered at; past this it stops being a hook. */
-export const MAX_HOOK_SECONDS = 30;
+/**
+ * Longest a slide is offered at. 30 until 2026-10-07; a recap — Virée over
+ * a year's trip, the badge counting its days — asked for a minute.
+ */
+export const MAX_HOOK_SECONDS = 60;
 
 /**
  * The speeds a clip slide is offered at — the Studio's own steps, so a piece

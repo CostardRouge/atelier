@@ -932,6 +932,30 @@ single day — give it an end date to count a range". The old fixed examples wer
 invented values, and three of the four counter modes looked broken because
 picking one changed nothing and said nothing.
 
+**The badge can count WITH the car — the trip recap.** Three more counter
+modes, offered as such in the Counter section and honoured only under the
+Virée opener (anywhere else they say why not): *Days, as the car drives*,
+*Kilometres, as the car drives*, *Stops, as the car drives*. The number then
+follows the car at every frame — the day of the trip (its total the trip's),
+the distance as the crow flies between the stops passed (never a road
+distance, which the app does not know), or the stops reached — and a still of
+the piece shows the trip told whole. ONE clock drives all of it: each stop is
+dated from the document and never invented — a leg's span shared evenly among
+its places, a place's own arrival and departure where it keeps them, a stop
+of your own put on one of the trip's places, else its picture's day, a picture
+stop its pictures' — and a stop nothing dates stays on the road and moves no
+counter, which the panel counts. A **Pace** slider, Calendar ↔ Road (65 %
+toward the calendar by default), decides how the road time is shared: toward
+the calendar the car waits at a place while its days run on the counter —
+the "surplace" in Melbourne —, toward the road the days a place took pass as
+the car leaves it. The drive may take up to a minute. At the end a **summary
+card** — days · distance · stops — and, on the road, **milestones** every
+50 days and 1 000 km (or miles), each a switch; the badge's words carry a
+*Stop* field for the stops' label. The recap's "map over photo" is the map on
+a **paper plate** over the picture filling the frame (a Map switch, for the
+*Behind* pictures or the picture ground), the picture pushing in slowly while
+it shows. Nothing of a piece whose badge counts something else changes.
+
 **The day is measured, not guessed.** Everything the badge draws is a
 subtraction from the day the piece is filed under, so the editor reads the
 picture's own date — the camera's `DateTimeOriginal` where there is one, the
@@ -953,11 +977,14 @@ computed value back.
 **Each piece can depart from the trip's style**: its casing (as-is, UPPER,
 lower), its ink, a panel behind it (fill, corner radius, outline) and an
 entrance and exit drawn from the engine's own animation model — fade, slide,
-scale, typewriter, wipe, with duration, easing and a stagger delay. The hook
-has a **duration**, which is what an exit animation lands on; playing the piece
-from the band under the preview shows the entrance land and the exit leave. A
-new hook is on screen for **3 s** — the badge settles in 2, the picture holds
-one more — unless the trip remembers another length for that kind of piece.
+scale, typewriter, wipe, with duration, easing and a stagger delay. An exit
+lands on the **end of the slide** — shorten the slide and the exit comes
+sooner, never cut; playing the piece from the band under the preview shows the
+entrance land and the exit leave. A new piece's first slide is on screen for
+**5 s** (the badge settles in 4, the picture holds one more) unless the trip
+remembers another length for that kind of piece — and it is born **Auto**:
+give it an opener and the slide lasts what the opener needs plus half a second,
+with no number to set (see *How long a slide lasts*, below).
 
 **A look you like becomes the starting point.** Trip settings (the ⚙ beside the
 way back) → **New pieces** saves
@@ -1129,7 +1156,16 @@ not, in your order, each able to hold a picture the car halts to show; or the
 **pictures you pick** — each one shot with a position in its EXIF is a stop, in
 the order they were shot, a run shot at one spot one stop. Your places follow
 you from one opener to the other: the stops picked for an Itinerary are the ones
-Virée drives when you switch, and back. At a stop with pictures the car
+Virée drives when you switch, and back. **Nearby places can be grouped** —
+six weeks in Melbourne and fifteen places a few kilometres apart are one
+halt: off by default, a distance with three shortcuts (2 km, a
+neighbourhood; 10 km, a city; 40 km, a metro area), only places that follow
+each other by default (a later return is a second halt) or every visit into
+the first, and the group named by the biggest town of the shipped index near
+it, its first place or its central one; the halt sits on a real place of the
+list, shows every picture of its group, wears `×N`, and the list itself is
+never changed — the Itinerary has the same switch, and the big picking map
+marks the stops that would merge. At a stop with pictures the car
 halts and they pop as **prints** beside it, piled like a stack on the map, or
 fill the frame, or take the paper's place behind the road while it halts; a
 picture without a position rides with the stop before it, or with the end of
@@ -1146,9 +1182,21 @@ latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
 and at a strength that lets the paper show through —, where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
-up as it drives), the motion (the time on the road, the five motions, a hold
-first, a beat at the end, whether the camera fits the whole route or follows
-the car at a zoom, the badge's place following the car), and the sound: a tick
+up as it drives, the map on a paper plate over a picture), the motion (the time
+on the road, up to a minute, the five motions, a hold
+first, a beat at the end, the badge's place following the car), the
+**camera** — the whole route from the first frame, or **following the car**
+with a real camera: a view width in kilometres, a zoom that **pulls back on
+long drives** along the fly-to curve of a web map and comes back as the car
+arrives, **north up** or **heading up** (the map turns so the car drives up
+the frame, sitting two thirds down with the road ahead; a halt never turns
+the map, and it turns no faster than you allow), an establishing shot on the
+whole route and a closing one, a centred smoothing and a look-ahead, three
+presets (**Calm**, **Navigation**, **Documentary**) and the fine settings
+behind a link; the whole track is computed with the plan, so the preview, a
+seek and the file see one camera —, the recap (when the
+badge's counter follows the drive — see *The badge can count WITH the car*
+above — its pace, its summary card and its milestones), and the sound: a tick
 at every stop on the same voices, deeper where a leg begins, the seat on
 arrival, a shutter click as each print lands.
 
@@ -1198,12 +1246,26 @@ from stop to stop, waiting at each for as long as you ask. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
 big one: pan, zoom and pinch it, and every tap is the next stop, joined to the
-one before as you go — one, two, three, up to 99 (a stop's number is written
-inside its dot, and two digits are what a dot holds). A tap near a town takes the town and
+one before as you go — one, two, three, as many as the trip holds (there is
+no cap: a three-digit number simply shrinks to stay inside its dot). A tap near a town takes the town and
 its name (a switch turns that off, to drop a stop exactly where you tap), a
 hollow ring is one of the trip's own places, a numbered stop is dragged to
 move it, a place can be searched for and added, and a stop you dropped with no
-name is offered the nearest town's (never given it). The towns come from the
+name is offered the nearest town's (never given it). The list beside the map
+**reorders by drag and drop** — grab a row by its grip (⠿) and drop it
+anywhere; held near the list's top or bottom edge it scrolls, so stop 110 can
+go first without letting go — and its ↑ / ↓ arrows still move a stop one place;
+the list in the panel drags the same way. That panel list keeps **every stop**
+in a box about ten rows tall that scrolls, a picture glyph marking the stops
+that hold one, and a click on a stop opens its own **popover**: where it is on
+a mini map (click empty ground to move it there, a hollow ring to give it one
+of the trip's places), its name with the same place search as the legs, its
+**state** — so it is written `Sydney, NSW`, in full, in parentheses or by its
+name alone, like every place of the suite, with *Written as* on the opener
+choosing for all the stops and a stop able to depart from it —, its latitude
+and longitude, its picture, and Earlier / Later. A stop adopted from one of
+the trip's places or found by the search knows its state and country from the
+start; a stop dropped by hand knows only where it is until you tell it. The towns come from the
 city index the app ships, so the map needs no network; the OpenStreetMap
 background is the optional one above, off until you turn it on. Nothing is
 written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one
@@ -1277,6 +1339,22 @@ or out point — the other end stays put, and the change is written once, when y
 let go (the Content tab's *On screen* slider is the same number). `⋯` moves the open picture earlier or later, removes it, or
 closes the piece on the call to action; `+` adds the active picture. Only the middle moves — a hook that opened third
 and a call to action that came second would stop being either.
+
+**How long a slide lasts.** A slide's length has an owner, and the *On screen*
+row says which. A new slide is **Auto**: it lasts what it carries — an opener
+(Itinerary, Virée, Défilé) plus a half-second hold, else its own seconds — and
+follows the opener when its settings change, so nothing is ever cut; the band
+writes `· auto` on its cell. Drag a grip, the slider or a clip's cut and the
+length is **Set by you**, with an *Auto* button to hand it back. A set slide
+shorter than its opener shows the cut **hatched** at the end of its cell and,
+under the slider, two verbs: *Use 10.4 s* (back to Auto) or *Fit Virée to
+5.0 s*. **Fit to the slide** is a setting of the opener, kept with it in its own
+panel under its length: the opener's clock is scaled so it rests when the slide
+ends — content, drawing and ticks on one scaled clock — and it follows the
+slide's length when that changes later, under a floor: a picture never shows
+for less than 0.35 s, below which the fit is refused and the panel says why. A
+slide may last up to a minute. Pieces made before this rule keep their stored
+length, set by hand, and are offered the same two verbs.
 
 **Any slide can hold what the hook holds.** Being first is what makes a slide
 the hook; what it *carries* is each slide's own. Open a content slide and the

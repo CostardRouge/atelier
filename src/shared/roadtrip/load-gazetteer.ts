@@ -42,15 +42,33 @@ export interface GazetteerIndex {
  * every leg unnamed for the rest of the session.
  */
 let pending: Promise<GazetteerIndex> | null = null;
+/** The index once it has arrived — what a synchronous reader may take (`townsIfLoaded`). */
+let loaded: GazetteerIndex | null = null;
 
 function loadIndex(): Promise<GazetteerIndex> {
   if (!pending) {
-    pending = (typeof Worker === 'undefined' ? inThread() : inWorker()).catch((error: unknown) => {
-      pending = null;
-      throw error;
-    });
+    pending = (typeof Worker === 'undefined' ? inThread() : inWorker())
+      .then((index) => {
+        loaded = index;
+        return index;
+      })
+      .catch((error: unknown) => {
+        pending = null;
+        throw error;
+      });
   }
   return pending;
+}
+
+/**
+ * The towns, biggest first, IF the index has already been read in this
+ * session — else null, and nothing is asked. For a synchronous reader that
+ * names what it draws (an opener's `prepare`, `hookContextFor`): the editor
+ * asks for the index when a piece needs it (`loadTowns`), and until it lands
+ * the reader falls back and says nothing false.
+ */
+export function townsIfLoaded(): readonly Town[] | null {
+  return loaded?.sorted ?? null;
 }
 
 async function inThread(): Promise<GazetteerIndex> {

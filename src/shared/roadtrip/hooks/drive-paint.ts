@@ -31,17 +31,22 @@ import {
   PLAN_SIZE,
   applyView,
   cardPlacement,
+  distanceNumeral,
   graticuleStep,
+  headingAt,
   planBounds,
+  pointAt,
   scaleBar,
   viewAt,
   wantsStopLabel,
+  type CameraTrack,
   type DriveMoment,
   type DriveOptions,
   type DrivePlan,
   type View,
   wakeStrength,
 } from './drive-plan';
+import { cameraTrack, widestFrame } from './map-camera';
 import {
   BASEMAP_FOR_EDGE,
   BASEMAP_MAX_PX,
@@ -50,6 +55,7 @@ import {
   rasterSize,
 } from '../../map/tile-math';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
+import { paintCount } from './map-paint';
 import { formatDistance, placeLabels } from './geo';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
@@ -71,10 +77,26 @@ export interface DriveScratch {
   model: CarModel;
   parts?: Part[];
   buffer?: OffscreenCanvas | HTMLCanvasElement;
+  /** The words the summary card and the milestones say — the trip's badge words, English by default. */
+  words: SummaryWords;
 }
 
-export function driveScratch(spec: CarSpec): DriveScratch {
-  return { spec, model: carModel(spec.model) };
+export interface SummaryWords {
+  day: string;
+  days: string;
+  stop: string;
+  stops: string;
+}
+
+export const SUMMARY_WORDS: SummaryWords = { day: 'Day', days: 'days', stop: 'Stop', stops: 'stops' };
+
+export function driveScratch(spec: CarSpec, words: Partial<SummaryWords> = {}): DriveScratch {
+  const w = { ...SUMMARY_WORDS };
+  for (const key of Object.keys(w) as (keyof SummaryWords)[]) {
+    const given = words[key]?.trim();
+    if (given) w[key] = given;
+  }
+  return { spec, model: carModel(spec.model), words: w };
 }
 
 function carParts(scratch: DriveScratch): Part[] {
@@ -92,6 +114,18 @@ export function driveBox(w: number, h: number, position: DriveOptions['position'
 }
 
 /**
+ * The camera's track for this drive, baked on the nominal 1080-wide frame of
+ * the piece's shape: the box, the car's margin and the lead room are all
+ * fractions of the frame, so the track reads the same at every size — the
+ * stage and the export see one camera.
+ */
+export function driveTrack(plan: DrivePlan, o: DriveOptions, aspect: number): CameraTrack {
+  const w = 1080;
+  const h = w / Math.max(1e-6, aspect);
+  return cameraTrack(plan, o, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7);
+}
+
+/**
  * The OpenStreetMap region a drive's frame shows, or null unless its ground
  * is `tiles`. Measured on a nominal frame of the piece's shape — the box, the
  * car's margin and the camera are all fractions of the frame, so the region
@@ -99,20 +133,27 @@ export function driveBox(w: number, h: number, position: DriveOptions['position'
  * when the camera follows the car, the route with half a frame around it,
  * every place the view can reach. Sized so a 1920 delivery is not enlarged.
  */
-export function driveBasemap(plan: DrivePlan, o: DriveOptions, aspect: number): HookBasemapWant | null {
+export function driveBasemap(plan: DrivePlan, o: DriveOptions, aspect: number, track: CameraTrack | null = null): HookBasemapWant | null {
   if (o.ground !== 'tiles' || !(aspect > 0)) return null;
   const w = 1080;
   const h = w / aspect;
-  const view = viewAt(plan, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7, o, plan.at(0));
+  const box = driveBox(w, h, o.position, o.size);
+  const view = viewAt(plan, box, CAR_PX * o.carSize * 0.7, o, plan.at(0), track);
   if (!(view.scale > 0)) return null;
   let x0: number;
   let x1: number;
   let y0: number;
   let y1: number;
   if (o.camera === 'follow') {
+    // The route with half a frame around it — at the WIDEST the camera gets
+    // (a pull-back, the wide shots), and the frame's diagonal when the map
+    // turns, since a turned frame reaches past its own width.
     const b = planBounds(plan);
-    const hw = w / 2 / view.scale;
-    const hh = h / 2 / view.scale;
+    const widest = track ? widestFrame(track) : box.width / view.scale;
+    const scale = box.width / Math.max(1e-6, widest);
+    const reach = o.orientation === 'heading' ? Math.hypot(w, h) / 2 : 0;
+    const hw = Math.max(w / 2, reach) / scale;
+    const hh = Math.max(h / 2, reach) / scale;
     x0 = b.x0 - hw;
     x1 = b.x1 + hw;
     y0 = b.y0 - hh;
@@ -149,6 +190,8 @@ export function paintDrive(
   frame: FrameBox,
   /** The OpenStreetMap region, on a `tiles` ground — drawn when the shell has it. */
   basemap: HookBasemapWant | null = null,
+  /** The baked camera (`map-camera.ts`); null keeps the plain follow of before. */
+  track: CameraTrack | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
@@ -156,18 +199,18 @@ export function paintDrive(
   if (moment.mapAlpha <= 0) return;
 
   if (moment.mapAlpha >= 1) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track);
     return;
   }
   // The reveal: the whole map at a falling alpha over the picture beneath.
   const buffer = bufferFor(scratch, w, h);
   const bg = buffer?.getContext('2d') as HookCtx2D | null;
   if (!buffer || !bg) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track);
     return;
   }
   bg.clearRect(0, 0, w, h);
-  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap);
+  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track);
   g.save();
   g.globalAlpha = moment.mapAlpha;
   g.drawImage(buffer, 0, 0);
@@ -199,19 +242,46 @@ function paintMap(
   moment: DriveMoment,
   frame: FrameBox,
   basemap: HookBasemapWant | null,
+  track: CameraTrack | null,
 ): void {
   const { width: w, height: h } = frame;
   const u = w / 1080;
   const carPx = CAR_PX * u * o.carSize;
   const box = driveBox(w, h, o.position, o.size);
-  const view = viewAt(plan, box, carPx * 0.7, o, moment);
+  const view = viewAt(plan, box, carPx * 0.7, o, moment, track, t);
   const at = (p: { x: number; y: number }) => applyView(view, p);
+  // The map turned (heading-up): what is drawn on the FRAME's axes — the
+  // graticule's lines, the tiles' rectangle — is drawn inside this transform
+  // against the unturned view, which lands it where `at` would.
+  const flat: View = { ...view, angle: 0 };
+  const turned = (draw: () => void) => {
+    if (!view.angle) {
+      draw();
+      return;
+    }
+    g.save();
+    g.translate(view.tx, view.ty);
+    g.rotate(view.angle);
+    g.translate(-view.tx, -view.ty);
+    draw();
+    g.restore();
+  };
+  // A direction in plan units, as the frame sees it.
+  const turnedDir = (d: { x: number; y: number }) => {
+    if (!view.angle) return d;
+    const c = Math.cos(view.angle);
+    const s = Math.sin(view.angle);
+    return { x: d.x * c - d.y * s, y: d.x * s + d.y * c };
+  };
   // Tiles are drawn over the paper, so everything on them is inked as on
   // paper: OpenStreetMap's own palette is a light one.
   const onPaper = o.ground !== 'picture';
   const tiles = o.ground === 'tiles' && basemap ? pictures?.get(basemap.key) : undefined;
-  const ink = onPaper ? o.inkColor : '#ffffff';
-  const halo = onPaper ? o.paperColor : 'rgba(0,0,0,0.55)';
+  // The map as a paper PLATE over a picture filling the frame: the road and
+  // the names are then inked as on paper, because they are.
+  const plated = o.plate && (o.pictures === 'backdrop' || !onPaper);
+  const ink = onPaper || plated ? o.inkColor : '#ffffff';
+  const halo = onPaper || plated ? o.paperColor : 'rgba(0,0,0,0.55)';
   const lw = o.lineWidth;
 
   g.save();
@@ -221,19 +291,38 @@ function paintMap(
   const showing = o.pictures === 'none' ? [] : plan.showing(t);
   // A picture behind the map: it takes the paper's place while the car
   // halts, the road and the car drawn over it, and fades as the car leaves.
-  const fullFrame = (rise: number, pop: { key: string; leaves: number }) => {
+  // Under a plate it pushes in slowly while it shows — a recap's picture is
+  // looked at for seconds, and a still one reads as a slide.
+  const fullFrame = (rise: number, pop: { key: string; at: number; leaves: number }) => {
     const picture = pictures?.get(pop.key);
     if (!picture) return;
     const leaving = t < pop.leaves ? 1 : Math.max(0, 1 - (t - pop.leaves) / CARD_FADE_SECONDS);
     const alpha = Math.min(1, rise) * leaving;
     if (alpha <= 0) return;
+    g.save();
     g.globalAlpha = alpha;
+    if (plated) {
+      const push = 1 + PUSH_IN * Math.min(1, Math.max(0, t - pop.at) / PUSH_IN_SECONDS);
+      g.translate(w / 2, h / 2);
+      g.scale(push, push);
+      g.translate(-w / 2, -h / 2);
+    }
     try {
       drawFramed(g, picture.image, picture.width, picture.height, w, h);
     } catch {
       // A bitmap released under a render in flight: the frame shows the map.
     }
-    g.globalAlpha = 1;
+    g.restore();
+  };
+  const paintPlate = () => {
+    if (!plated) return;
+    const m = 24 * u;
+    roundRect(g, box.x - m, box.y - m, box.width + 2 * m, box.height + 2 * m, 16 * u);
+    g.fillStyle = hexToRgba(o.paperColor, 0.84);
+    g.fill();
+    g.lineWidth = 1.5 * u;
+    g.strokeStyle = hexToRgba(o.inkColor, 0.25);
+    g.stroke();
   };
 
   if (onPaper) {
@@ -242,12 +331,13 @@ function paintMap(
     if (tiles && basemap) {
       const { geo } = plan;
       const project = (p: { lat: number; lon: number }) =>
-        at(geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2));
-      drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity);
+        applyView(flat, geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2));
+      turned(() => drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity));
     }
     if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);
+    paintPlate();
     // The tiles carry their own lines; a graticule over them is noise.
-    if (o.graticule && !tiles) paintGraticule(g, plan, view, o, u, frame);
+    if (o.graticule && !tiles) turned(() => paintGraticule(g, plan, flat, o, u, frame, view.angle !== 0));
     if (o.vignette) {
       const r = Math.hypot(w, h) / 2;
       const grad = g.createRadialGradient(w / 2, h / 2, r * 0.45, w / 2, h / 2, r * 1.02);
@@ -256,8 +346,9 @@ function paintMap(
       g.fillStyle = grad;
       g.fillRect(0, 0, w, h);
     }
-  } else if (o.pictures === 'backdrop') {
-    for (const { pop, rise } of showing) fullFrame(rise, pop);
+  } else {
+    if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);
+    paintPlate();
   }
 
   // The road: the whole path faint and dashed ahead, the trail solid behind.
@@ -306,9 +397,16 @@ function paintMap(
       g.lineWidth = 2.2 * u;
       g.strokeStyle = reached ? o.trailColor : ink;
       g.stroke();
+      // A halt standing for several places wears their count (`stop-clusters.ts`).
+      const members = plan.route.stops[i]?.members ?? 1;
+      // Above and to the LEFT: the name is placed on the right, at the dot's height.
+      if (members > 1) paintCount(g, p.x - dotR * 2.8, p.y - dotR * 2.2, members, u, reached ? o.trailColor : halo);
     });
   }
-  if (moment.at !== null && !moment.over && (moment.phase === 'halt' || moment.phase === 'arrive')) {
+  // The milestones: a tick across the road, its number once the car has passed.
+  if (plan.milestones.length) paintMilestones(g, plan, o, at, turnedDir, moment, u, ink, halo, scratch.words);
+
+  if (moment.at !== null && !moment.over && (moment.phase === 'halt' || moment.phase === 'stay' || moment.phase === 'arrive')) {
     const p = stops[moment.at];
     const k = Math.min(1, moment.since / 0.7);
     if (k < 1) {
@@ -373,7 +471,7 @@ function paintMap(
     const parts = carParts(scratch);
     const { model, spec } = scratch;
     const p = at(moment.point);
-    const heading = moment.heading;
+    const heading = turnedDir(moment.heading);
     const len = Math.hypot(heading.x, heading.y) || 1;
     const scale = carPx / model.length;
     const travelled = moment.s * view.scale;
@@ -406,7 +504,19 @@ function paintMap(
 
   // The furniture: a compass, a scale bar, the distance so far.
   const pad = 30 * u;
-  if (o.compass) paintCompass(g, w - pad - 22 * u, pad + 30 * u, u, ink, halo);
+  if (o.compass) {
+    // The rose turns with the map: under heading-up it is what says where north went.
+    const cx = w - pad - 22 * u;
+    const cy = pad + 30 * u;
+    g.save();
+    if (view.angle) {
+      g.translate(cx, cy);
+      g.rotate(view.angle);
+      g.translate(-cx, -cy);
+    }
+    paintCompass(g, cx, cy, u, ink, halo);
+    g.restore();
+  }
   if (o.scaleBar) {
     const bar = scaleBar(plan.geo.scale * view.scale, box.width * 0.26, o.distance === 'mi' ? 'mi' : 'km');
     const x = box.x;
@@ -457,6 +567,121 @@ function paintMap(
   // A picture filling the frame while the car halts: over everything of the map.
   if (o.pictures === 'fill') for (const { pop, rise } of showing) fullFrame(rise, pop);
 
+  // The recap's summary card, once the car has arrived and rested.
+  const { summaryAt } = plan.schedule;
+  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words);
+
+  g.restore();
+}
+
+/** A plated picture's push-in: how far, over how long. */
+const PUSH_IN = 0.06;
+const PUSH_IN_SECONDS = 8;
+const SUMMARY_RISE_SECONDS = 0.45;
+
+function paintMilestones(
+  g: HookCtx2D,
+  plan: DrivePlan,
+  o: DriveOptions,
+  at: (p: { x: number; y: number }) => { x: number; y: number },
+  dir: (d: { x: number; y: number }) => { x: number; y: number },
+  moment: DriveMoment,
+  u: number,
+  ink: string,
+  halo: string,
+  words: SummaryWords,
+): void {
+  const unit = o.distance === 'mi' ? 'mi' : 'km';
+  g.font = `500 ${18 * u}px ${MONO_FONT}`;
+  g.textBaseline = 'middle';
+  for (const mark of plan.milestones) {
+    const passed = mark.s <= moment.s + 1e-9;
+    const p = at(pointAt(plan.path, mark.s).point);
+    const d = dir(headingAt(plan.path, mark.s));
+    // A tick across the road.
+    const half = 9 * u;
+    g.beginPath();
+    g.moveTo(p.x - d.y * half, p.y + d.x * half);
+    g.lineTo(p.x + d.y * half, p.y - d.x * half);
+    g.lineWidth = 6 * u;
+    g.strokeStyle = halo;
+    g.stroke();
+    g.lineWidth = 2.5 * u;
+    g.strokeStyle = passed ? o.trailColor : hexToRgba(ink, 0.5);
+    g.stroke();
+    if (!passed) continue;
+    const text = mark.kind === 'day' ? `${words.day} ${mark.value}` : `${distanceNumeral(mark.value, 'km')} ${unit}`;
+    // The number sits on the side the road is not: to the left of the heading.
+    const side = { x: -d.y, y: d.x };
+    const x = p.x - side.x * 22 * u;
+    const y = p.y - side.y * 22 * u;
+    g.textAlign = side.x > 0.2 ? 'right' : side.x < -0.2 ? 'left' : 'center';
+    g.lineWidth = 4 * u;
+    g.strokeStyle = halo;
+    g.strokeText(text, x, y);
+    g.fillStyle = ink;
+    g.fillText(text, x, y);
+  }
+}
+
+/**
+ * The summary: days · distance · stops, in the map's box — the three
+ * numbers of the trip the counter has been counting up to.
+ */
+function paintSummary(
+  g: HookCtx2D,
+  plan: DrivePlan,
+  o: DriveOptions,
+  box: { x: number; y: number; width: number; height: number },
+  u: number,
+  rise: number,
+  words: SummaryWords,
+): void {
+  const n = plan.route.stops.length;
+  const unit = o.distance === 'mi' ? 'mi' : 'km';
+  const cells: { value: string; word: string }[] = [];
+  if (plan.clock) {
+    const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
+    cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+  }
+  cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
+  cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
+
+  const k = 1 - Math.pow(1 - rise, 3);
+  const cw = Math.min(box.width, 200 * u * cells.length);
+  const ch = 150 * u;
+  const cx = box.x + box.width / 2;
+  const cy = box.y + box.height / 2 + (1 - k) * 18 * u;
+  g.save();
+  g.globalAlpha = k;
+  roundRect(g, cx - cw / 2, cy - ch / 2, cw, ch, 14 * u);
+  g.fillStyle = hexToRgba(o.paperColor, 0.94);
+  g.fill();
+  g.lineWidth = 1.5 * u;
+  g.strokeStyle = hexToRgba(o.inkColor, 0.3);
+  g.stroke();
+  g.textAlign = 'center';
+  g.fillStyle = o.inkColor;
+  cells.forEach((cell, i) => {
+    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
+    g.font = `600 ${54 * u}px ${MONO_FONT}`;
+    g.textBaseline = 'alphabetic';
+    g.fillText(cell.value, x, cy + 8 * u);
+    g.font = `500 ${20 * u}px ${LABEL_FONT}`;
+    g.textBaseline = 'top';
+    g.fillStyle = hexToRgba(o.inkColor, 0.7);
+    g.fillText(cell.word, x, cy + 22 * u);
+    g.fillStyle = o.inkColor;
+    if (i > 0) {
+      const sx = cx - cw / 2 + (cw * i) / cells.length;
+      g.strokeStyle = hexToRgba(o.inkColor, 0.18);
+      g.lineWidth = 1.5 * u;
+      g.beginPath();
+      g.moveTo(sx, cy - ch * 0.3);
+      g.lineTo(sx, cy + ch * 0.3);
+      g.stroke();
+    }
+  });
   g.restore();
 }
 
@@ -474,18 +699,23 @@ function pointOn(plan: DrivePlan, s: number): { index: number } {
   return { index: lo };
 }
 
-/** Faint lines of latitude and longitude at a round step, across the frame. */
-function paintGraticule(g: HookCtx2D, plan: DrivePlan, view: View, o: DriveOptions, u: number, frame: FrameBox): void {
+/**
+ * Faint lines of latitude and longitude at a round step, across the frame.
+ * `view` is unturned; a turned map draws this inside the turn, over a reach
+ * wide enough that the lines still cross the whole frame.
+ */
+function paintGraticule(g: HookCtx2D, plan: DrivePlan, view: View, o: DriveOptions, u: number, frame: FrameBox, turned = false): void {
   const { geo } = plan;
   if (!(geo.scale > 0) || !(geo.k > 0)) return;
   const pxPerDegree = geo.scale * view.scale;
   const step = graticuleStep(pxPerDegree, 96 * u);
-  // Screen → plan → geo, at the frame's corners.
+  // Screen → plan → geo, at the frame's corners — a turned frame reaches its diagonal.
+  const reach = turned ? Math.hypot(frame.width, frame.height) : 0;
   const toPlan = (sx: number, sy: number) => ({ x: (sx - view.tx) / view.scale, y: (sy - view.ty) / view.scale });
   const lonOf = (px: number) => ((px - PLAN_SIZE / 2) / geo.scale + geo.midX) / geo.k;
   const latOf = (py: number) => -((py - PLAN_SIZE / 2) / geo.scale + geo.midY);
-  const a = toPlan(0, 0);
-  const b = toPlan(frame.width, frame.height);
+  const a = toPlan(-reach, -reach);
+  const b = toPlan(frame.width + reach, frame.height + reach);
   const lon0 = Math.min(lonOf(a.x), lonOf(b.x));
   const lon1 = Math.max(lonOf(a.x), lonOf(b.x));
   const lat0 = Math.min(latOf(a.y), latOf(b.y));
@@ -498,14 +728,14 @@ function paintGraticule(g: HookCtx2D, plan: DrivePlan, view: View, o: DriveOptio
   for (let lon = Math.ceil(lon0 / step) * step; lon <= lon1; lon += step) {
     const px = (lon * geo.k - geo.midX) * geo.scale + PLAN_SIZE / 2;
     const sx = px * view.scale + view.tx;
-    g.moveTo(sx, 0);
-    g.lineTo(sx, frame.height);
+    g.moveTo(sx, -reach);
+    g.lineTo(sx, frame.height + reach);
   }
   for (let lat = Math.ceil(lat0 / step) * step; lat <= lat1; lat += step) {
     const py = (-lat - geo.midY) * geo.scale + PLAN_SIZE / 2;
     const sy = py * view.scale + view.ty;
-    g.moveTo(0, sy);
-    g.lineTo(frame.width, sy);
+    g.moveTo(-reach, sy);
+    g.lineTo(frame.width + reach, sy);
   }
   g.stroke();
   g.restore();

@@ -18,6 +18,7 @@
 import type { BadgeContent, CounterMode } from '../day-badge';
 import type { TripDoc, TripPost } from '../trip-types';
 import { hookCalendar, hookStages } from './hook-calendar';
+import { townsIfLoaded } from '../load-gazetteer';
 import type { HookContext, HookLayer, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
 
@@ -25,8 +26,14 @@ import { resolveHook } from './registry';
 export interface HookTiming {
   /** The badge's life on that slide — what an exit animation lands on. */
   durationSeconds: number;
-  /** How long the slide is on screen. */
+  /** How long the slide is on screen, as last set. */
   screenSeconds: number;
+  /**
+   * The slide FOLLOWS its opener (`slide-timing.ts`): its length is the
+   * opener's plus a hold, so the opener is told no screen time — nothing
+   * fits into it, nothing is cut by it. Absent or false: a set length.
+   */
+  auto?: boolean;
   /** What the slide's badge counts; absent where the slide draws none. */
   counterMode?: CounterMode;
 }
@@ -36,6 +43,7 @@ export function pieceHookTiming(post: TripPost): HookTiming {
   return {
     durationSeconds: post.badge.durationSeconds,
     screenSeconds: post.badge.hookSeconds,
+    auto: post.badge.hookAuto === true,
     counterMode: post.badge.mode,
   };
 }
@@ -47,11 +55,13 @@ export function pieceHookTiming(post: TripPost): HookTiming {
  */
 export function slideHookTiming(slide: {
   seconds: number;
+  auto?: boolean;
   badge: { durationSeconds: number; mode: CounterMode } | null;
 }): HookTiming {
   return {
     durationSeconds: slide.badge?.durationSeconds ?? slide.seconds,
     screenSeconds: slide.seconds,
+    auto: slide.auto === true,
     counterMode: slide.badge?.mode,
   };
 }
@@ -67,7 +77,9 @@ export function hookContextFor(
   return {
     aspect,
     durationSeconds: timing.durationSeconds,
-    screenSeconds: timing.screenSeconds,
+    // An Auto slide follows its opener: the opener is told no screen time, so
+    // it never fits into one nor warns of being cut by one.
+    screenSeconds: timing.auto ? undefined : timing.screenSeconds,
     date: post.date,
     content,
     counterMode: timing.counterMode,
@@ -75,6 +87,11 @@ export function hookContextFor(
     stages: hookStages(trip),
     pictures,
     car: trip.car,
+    writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
+    badgeWords: trip.badgeWords,
+    // Read, never fetched here: the editor asks for the index when a piece
+    // groups by town, and every surface then names the same groups.
+    towns: townsIfLoaded(),
   };
 }
 

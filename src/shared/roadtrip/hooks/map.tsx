@@ -29,7 +29,7 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import { EASINGS, EASING_IDS } from './easing';
-import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-variant';
+import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { paintMap } from './map-paint';
 import {
   MAP_DEFAULTS,
@@ -48,11 +48,17 @@ import {
   planarHops,
   stopPictureKey,
   tripPlaces,
+  writtenStops,
+  groupMapStops,
+  mapShortestBeat,
   type MapOptions,
 } from './map-plan';
 import { BasemapStatus, enableBasemap } from './basemap-row';
 import { Group, MovedRow, resetLink } from './panel-ui';
-import StopsEditor from './stops-editor';
+import { FitRow } from './fit-row';
+import { GroupRows } from './group-rows';
+import { fitRender } from '../slide-timing';
+import StopsEditor, { StopStyleRow } from './stops-editor';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
 export { MAP_DEFAULTS, mapOptions, type MapOptions, type MapStop } from './map-plan';
@@ -99,14 +105,16 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
 
   const places = tripPlaces(ctx.stages);
   const free = otherPlaces(ctx.stages, o.stops);
-  const timing = mapTiming(planarHops(o.stops), o);
+  // The stops as the opener will DRAW them: nearby ones grouped (`stop-clusters.ts`).
+  const shown = groupMapStops(o.stops, o, ctx.towns ?? null);
+  const timing = mapTiming(planarHops(shown), o);
   const withPictures = o.stops.filter((stop) => stop.picture).length;
   const keys = o.stops.flatMap((stop) => {
     const key = stopPictureKey(stop);
     return key ? [key] : [];
   });
   const line = o.media === 'off' ? null : pictureLine(keys, host?.pictureStatus);
-  const totalKm = hopKms(o.stops).reduce((sum, km) => sum + km, 0);
+  const totalKm = hopKms(shown).reduce((sum, km) => sum + km, 0);
 
   // What the itinerary will really do for this piece — the counter modes'
   // rule: the real reading, or the reason there is none.
@@ -120,20 +128,12 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         : `${o.stops.length} stops · ${withPictures} with a picture · ${formatDistance(totalKm, o.distance === 'off' ? 'km' : o.distance)}${
             timing.total > 0 ? ` · ${timing.total.toFixed(1)}s` : ' · still'
           }`;
-  const cut = ctx.screenSeconds !== undefined && timing.total > ctx.screenSeconds;
   const coloursChanged =
     o.pathColor !== MAP_DEFAULTS.pathColor || o.aheadColor !== MAP_DEFAULTS.aheadColor;
 
   return (
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
       <p className="m-0 text-xs text-ink-soft">{summary}</p>
-      {cut && (
-        <p className="m-0 text-xs text-accent-ink">
-          The hook is on screen for {ctx.screenSeconds?.toFixed(1)}s, shorter than the
-          journey — the export would cut it before the pen arrives. Lengthen the hook in
-          Export, or shorten the drawing.
-        </p>
-      )}
 
       <Group title="Stops">
         <StopsEditor
@@ -142,10 +142,19 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           places={places}
           free={free}
           curve={o.curve}
+          placeStyle={o.placeStyle}
+          writing={ctx.writing}
           host={host}
           title="Itinerary"
           pictureHint={o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.'}
           picturesOffHint="The pictures are switched off below, so nothing a stop holds is drawn."
+          grouping={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
+        />
+        <GroupRows
+          value={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
+          onChange={(patch) => set(patch)}
+          count={{ stops: o.stops.length, halts: shown.length }}
+          townsReady={Boolean(ctx.towns?.length)}
         />
         {line && (
           <p
@@ -521,6 +530,9 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         {o.labels !== 'none' && (
+          <StopStyleRow value={o.placeStyle} writing={ctx.writing} onChange={(placeStyle) => set({ placeStyle })} />
+        )}
+        {o.labels !== 'none' && (
           <FieldRow label="Name size">
             <RangeField
               label="Name size"
@@ -571,6 +583,15 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
               format={(v) => `${v.toFixed(1)}s`}
             />
           </FieldRow>
+        )}
+        {o.draw && (
+          <FitRow
+            seconds={timing.total}
+            screenSeconds={ctx.screenSeconds}
+            shortestBeat={mapShortestBeat(timing)}
+            fit={o.fit}
+            onChange={(fit) => set({ fit })}
+          />
         )}
         {o.draw && (
           <FieldRow
@@ -781,12 +802,17 @@ export const mapVariant: HookVariant = {
     return { ...moveMap(mapOptions(options), dx, dy) };
   },
   prepare(options, ctx) {
-    const o = mapOptions(options);
+    // The stops with their names WRITTEN — «Sydney, NSW» or «Sydney» as the
+    // trip and the opener say — so the labels, the cards and the caption all
+    // read the same text.
+    const read = mapOptions(options);
+    // …and nearby stops folded into one where the author asked (`stop-clusters.ts`).
+    const o = { ...read, stops: groupMapStops(writtenStops(read.stops, read.placeStyle, ctx.writing), read, ctx.towns ?? null) };
     if (o.stops.length === 0) return { seconds: 0 };
     const timing = mapTiming(planarHops(o.stops), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];
     const basemap = mapBasemap(o, ctx.aspect);
-    return {
+    const render: HookRender = {
       seconds: timing.total,
       // The caption names the stop the pen is at — the last one once it
       // rests, where the pen really is. A stop's name is the author's own
@@ -809,6 +835,8 @@ export const mapVariant: HookVariant = {
         : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
+    // A set slide shorter than the journey: fitted into it when asked (`slide-timing.ts`).
+    return o.fit ? fitRender(render, ctx.screenSeconds, mapShortestBeat(timing)).render : render;
   },
   Sketch: MapSketch,
   Panel: MapPanel,

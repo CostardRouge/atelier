@@ -26,21 +26,26 @@ import type { GazetteerCity } from '../../shared/roadtrip/gazetteer';
 // Read once per session and ordered once, off the main thread.
 import { loadTowns } from '../../shared/roadtrip/load-gazetteer';
 import {
-  MAP_MAX_STOPS,
   addStop,
   moveStop,
+  moveStopTo,
+  numeralScale,
   patchStop,
   removeStop,
+  searchPlace,
   type MapStop,
 } from '../../shared/roadtrip/hooks/stops';
+import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
+import { groupStops, type GroupOptions } from '../../shared/roadtrip/hooks/stop-clusters';
 import { newId } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
 import { blockNativeZoom } from '../../shared/ui/native-gestures';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { revealInScroller } from '../../shared/ui/reveal';
+import { useListReorder } from '../../shared/ui/use-list-reorder';
 
-type Place = { name: string; lat: number; lon: number };
+type Place = HookPlace;
 
 interface StopsMapSheetProps {
   stops: readonly MapStop[];
@@ -48,6 +53,8 @@ interface StopsMapSheetProps {
   places: readonly Place[];
   /** The opener the stops belong to, for the title. */
   title?: string;
+  /** How the opener groups nearby places: the stops that merge are marked, the halt wearing their count. */
+  grouping?: GroupOptions;
   onCancel: () => void;
   onDone: (stops: MapStop[]) => void;
 }
@@ -92,8 +99,19 @@ let sessionSnap = true;
  * once, while Cancel and Escape leave it as it was. What a stop holds besides
  * its place — its picture — rides along untouched.
  */
-export default function StopsMapSheet({ stops, places, title, onCancel, onDone }: StopsMapSheetProps) {
+export default function StopsMapSheet({ stops, places, title, grouping, onCancel, onDone }: StopsMapSheetProps) {
   const [draft, setDraft] = useState<MapStop[]>(() => stops.map((stop) => ({ ...stop })));
+  // What the opener will make of the draft's stops: which merge, and the
+  // halt each group sits on — marked on the markers, the list left alone.
+  const marks = useMemo(() => {
+    const out = new Map<string, { count: number; anchor: boolean }>();
+    if (!grouping || !(grouping.groupKm > 0)) return out;
+    for (const group of groupStops(draft, grouping.groupKm, grouping.groupVisits)) {
+      if (group.members.length < 2) continue;
+      for (const i of group.members) out.set(draft[i].id, { count: group.members.length, anchor: i === group.anchor });
+    }
+    return out;
+  }, [draft, grouping]);
   const [selectedId, setSelectedId] = useState<string | null>(null);
   const listRef = useRef<HTMLDivElement | null>(null);
   const [tilesOn, setTilesOn] = useState(sessionTiles);
@@ -104,7 +122,6 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
   );
   const [labels, setLabels] = useState<TownLabel[]>([]);
   const [hover, setHover] = useState<{ name: string; x: number; y: number } | null>(null);
-  const [note, setNote] = useState<string | null>(null);
   const [query, setQuery] = useState('');
 
   const containerRef = useRef<HTMLDivElement | null>(null);
@@ -129,24 +146,22 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
   const done = () => (changed ? onDone(draft) : onCancel());
   useDialogKeys({ onCancel, onConfirm: done });
 
-  const say = useCallback((text: string) => {
-    setNote(text);
-    window.setTimeout(() => setNote((current) => (current === text ? null : current)), 2200);
+  // No cap on the list (2026-10-07): a three-month trip of 120 places was cut
+  // at 99. A third digit shrinks inside its dot instead (`numeralScale`).
+  const add = useCallback((at: HookPlace) => {
+    // Functional: two taps inside one render must both land.
+    const id = newId();
+    setDraft((current) => addStop(current, at, id));
+    setSelectedId(id);
   }, []);
 
-  const add = useCallback(
-    (at: Place) => {
-      if (latest.current.draft.length >= MAP_MAX_STOPS) {
-        say(`${MAP_MAX_STOPS} stops is as many as one opener holds.`);
-        return;
-      }
-      // Functional: two taps inside one render must both land.
-      const id = newId();
-      setDraft((current) => addStop(current, at, id));
-      setSelectedId(id);
-    },
-    [say],
-  );
+  // A stop's row is dragged by its grip to anywhere in the list; the arrows
+  // stay for one step, and for the keyboard.
+  const reorder = useListReorder<HTMLOListElement>((id, to) => {
+    setDraft((current) => moveStopTo(current, id, to));
+    setSelectedId(id);
+  });
+  const rows = reorder.held ? moveStopTo(draft, reorder.held.key, reorder.held.to) : draft;
 
   // --- the map, created once --------------------------------------------------
   useEffect(() => {
@@ -378,10 +393,10 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
         const at = marker.getLngLat();
         if (at.lat !== stop.lat || at.lng !== stop.lon) marker.setLngLat([stop.lon, stop.lat]);
       }
-      paintMarker(marker.getElement(), index + 1, stop.name, stop.id === selectedId);
+      paintMarker(marker.getElement(), index + 1, stop.name, stop.id === selectedId, marks.get(stop.id) ?? null);
     });
     relabel.current();
-  }, [draft, selectedId, mapState]);
+  }, [draft, selectedId, mapState, marks]);
 
   // The row of the stop just added or picked on the map is brought into view:
   // the list runs under the map, and the twenty-fifth tap lands below it.
@@ -432,7 +447,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Stops on the map</h2>
           <span className="min-w-0 font-mono text-2xs text-muted truncate">
             {title ? `${title} · ` : ''}
-            {draft.length} / {MAP_MAX_STOPS}
+            {draft.length} {draft.length === 1 ? 'stop' : 'stops'}
           </span>
           <span className="flex-1" />
           <button
@@ -489,7 +504,9 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                   value={query}
                   onChange={setQuery}
                   onPick={(result) => {
-                    add({ name: result.name, lat: result.lat, lon: result.lon });
+                    // The answer's state, codes and country come along, so
+                    // the stop is written «Sydney, NSW» like any place.
+                    add(searchPlace(result));
                     flyTo(result);
                     setQuery('');
                   }}
@@ -525,14 +542,6 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                 {mapState === 'error' ? 'The map could not load here — the list and the inspector still work.' : 'Opening the map…'}
               </div>
             )}
-            {note && (
-              <div
-                role="status"
-                className="absolute left-1/2 bottom-10 -translate-x-1/2 px-3 py-1.5 rounded-full bg-frame text-on-media text-xs shadow-paper"
-              >
-                {note}
-              </div>
-            )}
             <p className="absolute left-2 bottom-1.5 m-0 font-mono text-3xs opacity-70" style={{ color: MAP_INK }}>
               {tilesOn ? `${OSM_CREDIT} · ` : ''}Towns: GeoNames (CC BY 4.0)
               {towns === 'loading' ? ' · reading…' : towns === 'failed' ? ' · could not be read' : ''}
@@ -552,15 +561,32 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                 // height of 0, so it SHRANK to the scroller and cut its rows
                 // off instead of letting the scroller scroll — measured on a
                 // 25-stop list, where nothing past the 20th could be reached.
-                <ol className="flex-none m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden">
-                  {draft.map((stop, index) => {
+                <ol
+                  ref={reorder.listRef}
+                  className="flex-none m-0 p-0 list-none flex flex-col border border-line rounded-paper overflow-hidden"
+                >
+                  {rows.map((stop, index) => {
                     const on = stop.id === selectedId;
+                    const lifted = reorder.held?.key === stop.id;
                     return (
                       <li
                         key={stop.id}
                         data-stop-row={stop.id}
-                        className={`flex items-center gap-1.5 px-2 py-1 border-b border-line last:border-b-0 ${on ? 'bg-accent-wash' : 'bg-paper'}`}
+                        data-reorder-row={stop.id}
+                        className={`flex items-center gap-1.5 pl-0.5 pr-2 py-1 border-b border-line last:border-b-0 ${
+                          lifted ? 'bg-accent-wash shadow-[inset_3px_0_0_var(--color-accent)]' : on ? 'bg-accent-wash' : 'bg-paper'
+                        }`}
                       >
+                        <span
+                          {...reorder.grip(stop.id, index)}
+                          title="Drag to reorder"
+                          aria-hidden="true"
+                          className={`flex-none w-5 h-7 pointer-coarse:w-9 pointer-coarse:h-9 grid place-items-center select-none [&>svg]:w-3.5 [&>svg]:h-3.5 ${
+                            lifted ? 'cursor-grabbing text-accent-ink' : 'cursor-grab text-faint hover:text-ink-soft'
+                          }`}
+                        >
+                          {Icons.grip}
+                        </span>
                         <button
                           type="button"
                           onClick={() => {
@@ -570,7 +596,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                           aria-label={`Show stop ${index + 1} on the map`}
                           className="flex-none w-6 h-6 grid place-items-center rounded-full border-0 bg-accent font-mono text-3xs text-white cursor-pointer"
                         >
-                          {index + 1}
+                          <span style={{ fontSize: `${numeralScale(index + 1)}em` }}>{index + 1}</span>
                         </button>
                         <input
                           value={stop.name}
@@ -580,7 +606,15 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                           aria-label={`Name of stop ${index + 1}`}
                           className="min-w-0 flex-1 h-7 px-1.5 border border-transparent rounded-control bg-transparent text-sm text-ink focus:outline-none focus:border-accent focus:bg-surface"
                         />
-                        {stop.picture && <span className="flex-none font-mono text-3xs text-faint">photo</span>}
+                        {stop.picture && (
+                          <span
+                            className="flex-none inline-flex text-muted [&>svg]:w-3.5 [&>svg]:h-3.5"
+                            title={stop.picture.ref.name}
+                            aria-label={`Picture: ${stop.picture.ref.name}`}
+                          >
+                            {Icons.image}
+                          </span>
+                        )}
                         <button
                           type="button"
                           disabled={index === 0}
@@ -592,7 +626,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                         </button>
                         <button
                           type="button"
-                          disabled={index === draft.length - 1}
+                          disabled={index === rows.length - 1}
                           onClick={() => setDraft(moveStop(draft, stop.id, 1))}
                           aria-label={`Move stop ${index + 1} later`}
                           className={rowIconClass}
@@ -632,7 +666,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
 
         <div className="flex-none flex items-center gap-2 flex-wrap px-5 py-3 border-t border-line bg-surface max-[820px]:pb-[max(0.75rem,env(safe-area-inset-bottom))]">
           <span className="min-w-0 flex-1 text-xs text-muted max-[820px]:hidden">
-            Tap to add · drag a number to move it · pinch or scroll to zoom
+            Tap to add · drag a number to move it · drag a row’s grip to reorder · pinch or scroll to zoom
           </span>
           <Button
             size="sm"
@@ -676,20 +710,37 @@ function chipClass(on: boolean): string {
  * it never depends on the CSS scanner seeing a class built at runtime — the
  * flight map's marker rule (`frontend.md`).
  */
-function paintMarker(el: HTMLElement, n: number, name: string, selected: boolean) {
+function paintMarker(
+  el: HTMLElement,
+  n: number,
+  name: string,
+  selected: boolean,
+  /** The stop merges into a group of `count`: the halt (`anchor`) wears the count, a member a dashed ring. */
+  mark: { count: number; anchor: boolean } | null = null,
+) {
   const label = name.trim();
-  const key = `${n}|${label}|${selected ? 1 : 0}`;
+  const key = `${n}|${label}|${selected ? 1 : 0}|${mark ? `${mark.count}${mark.anchor ? 'a' : 'm'}` : ''}`;
   if (el.dataset.painted === key) return;
   el.dataset.painted = key;
-  el.title = label ? `${n}. ${label} — drag to move` : `Stop ${n} — drag to move`;
+  const merged = mark ? (mark.anchor ? ` — the halt of ${mark.count} places grouped` : ' — grouped into a halt nearby') : '';
+  el.title = (label ? `${n}. ${label}` : `Stop ${n}`) + merged + ' — drag to move';
   el.replaceChildren();
   const disc = document.createElement('span');
   disc.textContent = String(n);
+  const member = mark !== null && !mark.anchor;
   disc.style.cssText =
     'position:absolute;inset:0;border-radius:9999px;display:grid;place-items:center;' +
-    `background:${MAP_ACCENT};color:#fff;font:600 11px/1 ui-monospace,monospace;` +
-    `border:2px solid #fff;box-shadow:${selected ? '0 0 0 3px rgba(217,68,42,0.45),' : ''}0 1px 3px rgba(0,0,0,0.45)`;
+    `background:${member ? '#fff' : MAP_ACCENT};color:${member ? MAP_ACCENT : '#fff'};font:600 ${(11 * numeralScale(n)).toFixed(1)}px/1 ui-monospace,monospace;` +
+    `border:2px ${member ? 'dashed' : 'solid'} ${member ? MAP_ACCENT : '#fff'};box-shadow:${selected ? '0 0 0 3px rgba(217,68,42,0.45),' : ''}0 1px 3px rgba(0,0,0,0.45)`;
   el.appendChild(disc);
+  if (mark?.anchor) {
+    const count = document.createElement('span');
+    count.textContent = `×${mark.count}`;
+    count.style.cssText =
+      'position:absolute;left:16px;top:-9px;padding:1px 5px;border-radius:9999px;pointer-events:none;' +
+      `background:#1f1b16;color:#fff;font:600 10px/1.2 ui-monospace,monospace;box-shadow:0 1px 2px rgba(0,0,0,0.4)`;
+    el.appendChild(count);
+  }
   if (label) {
     const tag = document.createElement('span');
     tag.textContent = label;

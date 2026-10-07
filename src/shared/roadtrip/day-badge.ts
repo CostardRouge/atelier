@@ -64,7 +64,24 @@ export type CounterMode =
   /** Where the day sits inside its stage — "Kalbarri · 2 · of 3". */
   | 'stage-day'
   /** How long the trip stayed there — "3 · days in Kalbarri". */
-  | 'stage-length';
+  | 'stage-length'
+  /**
+   * FOLLOWS THE DRIVE (2026-10-07): the number counts as Virée's car goes —
+   * the day of the trip, the kilometres, or the stops reached. The badge
+   * says so here, where the counter lives, and never changes in secret:
+   * the opener rewrites the pieces through its `content(t)`, the contract
+   * Défilé's numeral and Virée's own caption already ride. Base pieces are
+   * the day of the trip (true at rest); the opener writes every moment.
+   */
+  | 'drive-days'
+  | 'drive-km'
+  | 'drive-places';
+
+/** The counter modes an opener drives, and what each counts. */
+export type DriveCount = 'days' | 'km' | 'places';
+export function driveCountOf(mode: CounterMode | undefined): DriveCount | null {
+  return mode === 'drive-days' ? 'days' : mode === 'drive-km' ? 'km' : mode === 'drive-places' ? 'places' : null;
+}
 
 /**
  * The modes, with a description of WHAT each counts — never an example of what
@@ -81,6 +98,9 @@ export const COUNTER_MODES: readonly {
   { id: 'day-range', label: 'Range of days', hint: 'A piece covering several days' },
   { id: 'stage-day', label: 'Day at the place', hint: 'Which day of a stage this is' },
   { id: 'stage-length', label: 'Days at the place', hint: 'How long the trip stayed there' },
+  { id: 'drive-days', label: 'Days, as the car drives', hint: 'The day of the trip, counting with Virée’s car' },
+  { id: 'drive-km', label: 'Kilometres, as the car drives', hint: 'The distance so far, counting with Virée’s car' },
+  { id: 'drive-places', label: 'Stops, as the car drives', hint: 'The stops reached, counting with Virée’s car' },
 ];
 
 /** The badge's pieces, top to bottom. */
@@ -115,6 +135,8 @@ export interface BadgeWords {
   of: string;
   /** "3 days **in** Kalbarri". */
   at: string;
+  /** The counter's label when it counts STOPS with Virée's car — "Stop 12". Optional; English by default. */
+  stop?: string;
   /**
    * The marker set before the place. A geometric glyph, not an emoji:
    * measured in a headless Chromium with no colour-emoji font, "📍" drew
@@ -139,6 +161,7 @@ export const DEFAULT_BADGE_WORDS: BadgeWords = {
   of: 'of',
   at: 'in',
   pin: '\u25C6',
+  stop: 'Stop',
   time: { ...DEFAULT_TIME_AGO_WORDS },
 };
 
@@ -149,12 +172,13 @@ export const FRENCH_BADGE_WORDS: BadgeWords = {
   of: 'sur',
   at: 'à',
   pin: '\u25C6',
+  stop: '\u00C9tape',
   time: { ...FRENCH_TIME_AGO_WORDS },
   camera: { ...FRENCH_CAMERA_WORDS, tags: { ...FRENCH_CAMERA_WORDS.tags } },
 };
 
 export const WORD_FIELDS: readonly {
-  key: 'day' | 'days' | 'of' | 'at' | 'pin';
+  key: 'day' | 'days' | 'of' | 'at' | 'pin' | 'stop';
   label: string;
 }[] = [
   { key: 'day', label: 'Day (singular)' },
@@ -162,6 +186,7 @@ export const WORD_FIELDS: readonly {
   { key: 'of', label: 'Out of' },
   { key: 'at', label: 'At a place' },
   { key: 'pin', label: 'Place marker' },
+  { key: 'stop', label: 'Stop (with the car)' },
 ];
 
 /** The badge's pieces. Any may be absent; the headline never is. */
@@ -354,6 +379,28 @@ export function counterPieces(
     text && showPin && w.pin.trim() ? `${w.pin.trim()} ${text}` : text;
 
   let unavailable: string | null = null;
+
+  const drive = driveCountOf(mode);
+  if (drive) {
+    // The number follows the car: the opener rewrites it at every moment,
+    // and the base below — the day of the trip — is true whenever it does
+    // not speak. Without Virée there is no car to follow, and saying so is
+    // the rule for every mode that cannot count.
+    const driven = post.badge.hook?.some((layer) => layer.id === 'drive') ?? false;
+    if (driven) {
+      // At rest, before the car moves: the day of the trip, no distance, the
+      // first stop — true readings, each overwritten the moment the car is.
+      // The distance's total is the road's, which only the opener knows.
+      return {
+        label: drive === 'days' ? w.day : drive === 'km' ? 'km' : w.stop?.trim() || 'Stop',
+        headline: drive === 'days' ? String(range.from) : drive === 'km' ? '0' : '1',
+        counter: drive === 'days' ? `${w.of} ${range.total}` : null,
+        caption: pin(place),
+        unavailable: null,
+      };
+    }
+    unavailable = 'The number follows Virée’s car — give this piece the Virée opener.';
+  }
 
   if (mode === 'stage-day' || mode === 'stage-length') {
     const at = stage && place ? stageDayNumber(stage, post.date) : null;
