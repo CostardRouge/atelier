@@ -3,6 +3,8 @@ import { describeDngProfile, PROFILE_TAG as T, readDngProfile } from './dng-prof
 import { parseIfd } from './exif-parser';
 import { describeRaw, probeRaw } from './raw-probe';
 import { readProfileCurve } from '../develop/profile-curve';
+import { isDcp, readDcp } from './dcp';
+import { addDcp, dcpProfile, forgetDcp, listDcps } from '../raw/profile-vault';
 
 /**
  * A one-IFD little-endian TIFF written byte by byte, every type a profile
@@ -168,3 +170,41 @@ describe('readDngProfile', () => {
     expect(await readProfileCurve(new File([new Uint8Array(16)], 'junk.dng'))).toBeNull();
   });
 });
+
+/** A `.dcp`: the same one-IFD TIFF with the camera-profile magic, `IIRC`. */
+function dcp(fields: Field[]): ArrayBuffer {
+  const buf = tiff(fields);
+  new DataView(buf).setUint16(2, 0x4352, true);
+  return buf;
+}
+
+describe('a loaded camera profile (.dcp, C8)', () => {
+  const named = [...dual, { tag: T.profileName, type: 2 as const, values: 'My Body Standard' }];
+
+  it('is read by its magic, through the DNG profile reader, and named', () => {
+    const bytes = dcp(named);
+    expect(isDcp(bytes)).toBe(true);
+    expect(isDcp(tiff(named))).toBe(false);
+    const read = readDcp(bytes, 'whatever.dcp')!;
+    expect(read.name).toBe('My Body Standard');
+    expect(read.profile.calibrations).toHaveLength(2);
+    expect(readDcp(dcp(dual), 'Sony ILCE-7CM2 Standard.dcp')!.name).toBe('Adobe Standard');
+    expect(readDcp(tiff(named))).toBeNull();
+    expect(readDcp(new ArrayBuffer(4))).toBeNull();
+  });
+
+  it('is kept under the hash of its bytes, and read back by it', async () => {
+    const added = await addDcp(new File([dcp(named)], 'mine.dcp'));
+    expect(added.ok).toBe(true);
+    if (!added.ok) return;
+    expect(added.hash).toMatch(/^[0-9a-f]{64}$/);
+    expect(added.name).toBe('My Body Standard');
+    expect((await dcpProfile(added.hash))?.calibrations).toHaveLength(2);
+    expect((await listDcps()).map((v) => v.hash)).toContain(added.hash);
+    const refused = await addDcp(new File([tiff(named)], 'not-a-dcp.dcp'));
+    expect(refused.ok).toBe(false);
+    await forgetDcp(added.hash);
+    expect(await dcpProfile(added.hash)).toBeNull();
+  });
+});
+

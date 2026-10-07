@@ -836,6 +836,12 @@ export function useDevelopPicture({
   // matrix its decode came to, and the decode is held under both.
   const rawProfileRef = useRef<ProfileRequest>(raw?.profile ?? null);
   rawProfileRef.current = raw?.profile ?? null;
+  // What the stage's source was decoded WITH, by value: a profile chosen,
+  // changed or undone (C8) re-decodes the stage, where the gain never does —
+  // but `'resolve'` turning into what it resolved to is the same colour, and
+  // decodes nothing.
+  const askedProfileKey = profileKeyOf(raw?.profile ?? null);
+  const decodedProfileKey = useRef<string | null>(null);
   const onRawDecodedRef = useRef(onRawDecoded);
   onRawDecodedRef.current = onRawDecoded;
   const onRawAbortedRef = useRef(onRawAborted);
@@ -894,6 +900,7 @@ export function useDevelopPicture({
           canvas.height = d.height;
           if (d.bytes) canvas.getContext('2d')?.putImageData(d.bytes, 0, 0);
           if (!cancelled) {
+            decodedProfileKey.current = profileKeyOf(d.profile);
             onRawDecodedRef.current?.({
               gain: d.gain,
               width: d.width,
@@ -944,6 +951,12 @@ export function useDevelopPicture({
       if (loaded) retired.current.push(loaded);
     };
   }, [file, videoTimeSeconds, rawFile, decodeNonce]);
+  useEffect(() => {
+    if (!rawFile || askedProfileKey === 'resolve' || decodedProfileKey.current === null) return;
+    if (askedProfileKey === decodedProfileKey.current) return;
+    decodedProfileKey.current = null;
+    setDecodeNonce((n) => n + 1);
+  }, [askedProfileKey, rawFile]);
   useEffect(() => {
     const stale = retired.current;
     if (!stale.length) return;
@@ -1883,7 +1896,8 @@ export function useDevelopPicture({
     [],
   );
   useEffect(() => {
-    // The decode belongs to one file: a step to the next picture drops it —
+    // The decode belongs to one file and one camera profile: a step to the
+    // next picture, or another profile (C8), drops it —
     // and the full-density grader built over it, whose WebGL2 context the
     // release timer above never reaches once the state is back to idle.
     setFull((prev) => {
@@ -1893,7 +1907,7 @@ export function useDevelopPicture({
     loupeSlot.current.current?.grader.dispose();
     loupeSlot.current.current = null;
     setLoupeState('idle');
-  }, [file, rawFile]);
+  }, [file, rawFile, askedProfileKey === 'resolve' ? null : askedProfileKey]);
   const loupeActive = loupeWanted && loupeState !== 'idle';
   const { rect: loupeRect, viewport: loupeViewport } = view;
   // Whether the loupe's frame is drawn whole or in bands is a render
@@ -2213,4 +2227,11 @@ export function useDevelopPicture({
     readout,
     handlers,
   };
+}
+
+/** A camera profile by what it APPLIES — '' for none, `'resolve'` for a pending one. */
+function profileKeyOf(profile: ProfileRequest | RawProfile | null): string {
+  if (!profile) return '';
+  if (profile === 'resolve') return 'resolve';
+  return JSON.stringify([profile.matrix, profile.hueSat?.weight ?? null, Boolean(profile.look), profile.dcp?.hash ?? null]);
 }

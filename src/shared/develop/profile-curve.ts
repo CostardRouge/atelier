@@ -8,26 +8,42 @@
  * its curve was read.
  */
 
+import type { DngProfile } from '../exif/dng-profile';
 import { probeRaw, RAW_PROBE_BYTES } from '../exif/raw-probe';
+import { dcpProfile } from '../raw/profile-vault';
 import { profileCurvePoints } from './base-curve';
 import type { CurvePoint } from './curves';
 
-const held = new Map<string, CurvePoint[] | null>();
+const held = new Map<string, Promise<DngProfile | null>>();
 
 const keyOf = (file: File) => `${file.name}|${file.size}|${file.lastModified}`;
 
+/** The colour profile a RAW's head carries (`dng-profile.ts`), read once per file; null for none. */
+export function readHeadProfile(file: File): Promise<DngProfile | null> {
+  const key = keyOf(file);
+  let known = held.get(key);
+  if (!known) {
+    known = file
+      .slice(0, Math.min(RAW_PROBE_BYTES, file.size))
+      .arrayBuffer()
+      .then((head) => probeRaw(head)?.profile ?? null)
+      .catch(() => null);
+    held.set(key, known);
+  }
+  return known;
+}
+
 /** The profile's curve as stored points, or null when the file carries none (or none we can read). */
 export async function readProfileCurve(file: File): Promise<CurvePoint[] | null> {
-  const key = keyOf(file);
-  const known = held.get(key);
-  if (known !== undefined) return known;
-  let out: CurvePoint[] | null = null;
-  try {
-    const probe = probeRaw(await file.slice(0, Math.min(RAW_PROBE_BYTES, file.size)).arrayBuffer());
-    out = profileCurvePoints(probe?.profile?.toneCurve);
-  } catch {
-    out = null;
-  }
-  held.set(key, out);
-  return out;
+  return profileCurvePoints((await readHeadProfile(file))?.toneCurve);
+}
+
+/**
+ * The curve a `profile` base curve takes for a picture: a LOADED profile's
+ * (C8) where the picture chose one — null when this device's vault does not
+ * hold it — else the file's own.
+ */
+export async function profileCurveFor(file: File, dcpHash: string | null | undefined): Promise<CurvePoint[] | null> {
+  if (dcpHash) return profileCurvePoints((await dcpProfile(dcpHash))?.toneCurve);
+  return readProfileCurve(file);
 }

@@ -70,6 +70,7 @@
 import { probeRaw, RAW_PROBE_BYTES, sensorIfd } from '../exif/raw-probe';
 import type { DngProfile } from '../exif/dng-profile';
 import { blendHueSat, compiledHueSat, lookTableOf, type HueSatTable } from './hue-sat-map';
+import { dcpProfile } from './profile-vault';
 import { deviceClass } from '../lib/device-class';
 import { yieldToMain } from '../lib/yield-to-main';
 import { isRawImage } from '../library/assets';
@@ -441,7 +442,20 @@ function profileToken(profile: ProfileRequest): string {
   if (profile === 'resolve') return '|profile=resolve';
   const table = profile.hueSat ? `|hueSat=${profile.hueSat.weight.toFixed(6)}` : '';
   const look = profile.look ? '|look' : '';
-  return `|profile=${profile.matrix.map((v) => v.toFixed(6)).join(',')}${table}${look}`;
+  const dcp = profile.dcp ? `|dcp=${profile.dcp.hash}` : '';
+  return `|profile=${profile.matrix.map((v) => v.toFixed(6)).join(',')}${table}${look}${dcp}`;
+}
+
+/**
+ * Where a profile's TABLES come from (C8): a loaded `.dcp` the picture names,
+ * read from this device's vault, else the file's own. A loaded profile the
+ * vault does not hold gives none — the stored matrix still applies, alone.
+ */
+async function tablesFor(request: ProfileRequest, own: DngProfile | null, name: string): Promise<DngProfile | null> {
+  if (!request || request === 'resolve' || !request.dcp) return own;
+  const loaded = await dcpProfile(request.dcp.hash);
+  if (!loaded) console.warn(`[raw] ${name}: the camera profile «${request.dcp.name}» is not on this device; its matrix alone applies`);
+  return loaded;
 }
 
 /**
@@ -561,8 +575,10 @@ async function decodeJxl(
   cancelled: () => DOMException,
   task: TaskHandle | null,
 ): Promise<RawDecoded> {
+  const tables = await tablesFor(opts.profile, info.profile ?? null, file.name);
   const plane = await decodeJxlDngPlane(file, head, info, {
     profile: opts.profile,
+    tables,
     region: opts.region ?? null,
     factorFor: (w, h) => boxFactorFor(w, h, opts),
     signal,
@@ -574,7 +590,7 @@ async function decodeJxl(
     if (signal.aborted) throw cancelled();
   };
   // The look table (C6) once the exposure is known, as for LibRaw's plane.
-  const look = plane.profile?.look ? lookTableOf(info.profile?.lookTable) : null;
+  const look = plane.profile?.look ? lookTableOf(tables?.lookTable) : null;
   let converting = opts;
   if (look) {
     const pixels = plane.width * plane.height;
@@ -810,7 +826,7 @@ async function decodeWhole(
   // drops it here rather than spending the conversion on it.
   if (signal.aborted) throw cancelled();
   // Camera colour → sRGB, through LibRaw's own matrix and the profile.
-  const found = cameraMatrixFor(metadata, opts.profile, head?.profile ?? null);
+  const found = cameraMatrixFor(metadata, opts.profile, await tablesFor(opts.profile, head?.profile ?? null, file.name));
   const { matrix } = found;
   let { profile } = found;
   if (matrix) {
@@ -930,7 +946,7 @@ async function decodeTiled(
     if (signal.aborted) throw cancelled();
     // Camera colour → sRGB, the one matrix every tile shares (C4).
     if (!colour) {
-      const found = cameraMatrixFor(metadata, opts.profile, head.profile);
+      const found = cameraMatrixFor(metadata, opts.profile, await tablesFor(opts.profile, head.profile, file.name));
       if (!found.matrix) throw new TilePlanMismatch('no camera matrix in the decoder’s read');
       // A look table is read at the picture's exposure, which tiles meter
       // only once the last one is in: without a stored gain, decode whole.

@@ -121,3 +121,34 @@ every base curve. **Rules a later agent must keep:**
 
 NOT seen in the browser (the menu's sixth choice) nor on a real profile.
 
+## C8: a loaded `.dcp`, kept by hash, chosen per picture (2026-10-07)
+
+**Decision (his Q3: his own profiles, his licence).** `exif/dcp.ts` reads
+the file through `readDngProfile` (the magic `IIRC`/`MMCR` aside, a DCP IS a
+DNG's IFD0); `raw/profile-vault.ts` keeps the BYTES in `atelier-camera-profiles`
+under their SHA-256. **Rules a later agent must keep:**
+
+- **A reference, never the profile, on the picture**: `RawProfile.dcp` =
+  hash + name, beside the RESOLVED matrix and weight. The tables are read
+  from the vault at every decode (`tablesFor` in `raw-decoder.ts`, passed to
+  `jxl-dng.ts` as `tables`); a vault that does not hold it gives the matrix
+  alone, warned in the console and said in the panel.
+- **Resolved on the workbench, on the decode's own white**
+  (`rawProfileFromDcp` over `whiteThroughDcp` — the decode's neutral and
+  `rgb_cam`, the DCP's calibrations), the very function a first decode uses
+  for the file's own, so the stored matrix is what every decode folds in.
+  The kelvin panel reads the same white; a kelvin balance set before is
+  re-solved through the new profile at the same light; a `profile` curve is
+  re-read from the new source (`profileCurveFor`).
+- **The stage re-decodes when the profile it decoded with is not the one
+  asked** (`profileKeyOf` in `use-develop-picture.ts`) — a choice, a change
+  or an undo — but `'resolve'` turning into what it resolved to decodes
+  nothing. Before C8 the profile only ever changed that way, so a ref was
+  enough; the loupe drops with it.
+- Calibration: no preset or paste carries it; offered only on the sensor,
+  decoded, not following the roll, not on a clip. No roll-wide default yet.
+
+Measured with the real decoder (synthetic DNG + DCP, headless): the DCP's
+map moves 3 026 of 3 072 pixels; one missing from the vault equals its
+matrix alone to the bit. NOT measured: a DCP of his, the panel in a browser.
+

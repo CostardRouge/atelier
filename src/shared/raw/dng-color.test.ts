@@ -17,7 +17,9 @@ import {
   profiledWbMatrix,
   rawProfileFor,
   rawProfileOrNull,
+  rawProfileFromDcp,
   resolveProfile,
+  whiteThroughDcp,
 } from './dng-color';
 import { apply3, planckianXy, type RawWhite } from './white-balance';
 
@@ -216,6 +218,25 @@ describe('the camera profile on a picture', () => {
     expect(rawProfileOrNull({ matrix: IDENTITY, label: '', look: true })).toEqual({ matrix: IDENTITY, label: '', look: true });
     expect(rawProfileOrNull({ matrix: IDENTITY, label: '', look: 'yes' })).toEqual({ matrix: IDENTITY, label: '' });
     expect(rawProfileFor(white, withMap(true))!.look).toBeUndefined();
+  });
+
+  it('takes a LOADED profile’s calibrations in place of the file’s, and names it (C8)', () => {
+    const white = whiteAt(2850, dual);
+    // A profile whose calibrations differ from the file's: one D65 matrix only.
+    const loaded = { calibrations: [cal(21, D65)], hueSatMap: null, lookTable: null } as unknown as DngProfile;
+    const through = whiteThroughDcp(white, loaded);
+    expect(through.calibrations).toHaveLength(1);
+    const hash = 'a'.repeat(64);
+    const p = rawProfileFromDcp(white, loaded, { hash, name: 'Mine' })!;
+    expect(p.dcp).toEqual({ hash, name: 'Mine' });
+    expect(p.label).toBe('Mine · D65');
+    // Not the file's own: the file interpolates two calibrations under tungsten.
+    expect(maxOff(p.matrix.map((v, i) => v - rawProfileFor(white)!.matrix[i] + IDENTITY[i]))).toBeGreaterThan(1e-3);
+    expect(rawProfileFromDcp(null, loaded, { hash, name: 'Mine' })).toBeNull();
+    // Stored and read back: the reference only, a malformed one dropped.
+    expect(rawProfileOrNull(JSON.parse(JSON.stringify(p)))!).toMatchObject({ dcp: { hash, name: 'Mine' } });
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: '', dcp: { hash: 'nope', name: 'x' } })).toEqual({ matrix: IDENTITY, label: '' });
+    expect(resolveProfile({ matrix: IDENTITY, dcp: { hash, name: 'Mine' } }, white)!.dcp).toEqual({ hash, name: 'Mine' });
   });
 
   it('resolves a stored request with its weight, and works one out on resolve', () => {

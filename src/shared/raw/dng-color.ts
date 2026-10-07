@@ -339,6 +339,14 @@ export interface RawProfile {
    * profile resolved before C6, or a file that carries none.
    */
   look?: boolean;
+  /**
+   * A profile the person LOADED (C8, `raw/profile-vault.ts`): the matrices,
+   * the hue/sat map, the look table and the curve came from that `.dcp`, not
+   * from the file. A reference only — the SHA-256 of its bytes and its name;
+   * the tables are read from this device's vault at every decode, and where
+   * the vault does not hold it the stored matrix still applies, alone.
+   */
+  dcp?: { hash: string; name: string } | null;
 }
 
 /** The calibrations a white carries, or LibRaw's one matrix taken as D65's. */
@@ -396,7 +404,7 @@ export const PROFILE_PENDING = 'pending';
  * already stored on the picture (its matrix), `'resolve'` to work it out from
  * this very decode's own colour data, or nothing — LibRaw's colour.
  */
-export type ProfileRequest = Pick<RawProfile, 'matrix' | 'hueSat' | 'look'> | 'resolve' | null | undefined;
+export type ProfileRequest = Pick<RawProfile, 'matrix' | 'hueSat' | 'look' | 'dcp'> | 'resolve' | null | undefined;
 
 /** The profile a request comes to for a decode whose white is `white`, or null. */
 export function resolveProfile(
@@ -406,13 +414,14 @@ export function resolveProfile(
 ): RawProfile | null {
   if (!request) return null;
   if (request === 'resolve') return rawProfileFor(white, file);
-  const { matrix, hueSat, look } = request;
+  const { matrix, hueSat, look, dcp } = request;
   if (matrix.length !== 9 || !matrix.every((v) => Number.isFinite(v))) return null;
   return {
     matrix: [...matrix],
     label: '',
     ...(hueSat ? { hueSat: { weight: hueSat.weight } } : {}),
     ...(look ? { look: true } : {}),
+    ...(dcp ? { dcp: { hash: dcp.hash, name: dcp.name } } : {}),
   };
 }
 
@@ -427,10 +436,40 @@ export function rawProfileOrNull(raw: unknown): RawProfile | typeof PROFILE_PEND
   const weight = hs && typeof hs.weight === 'number' && Number.isFinite(hs.weight) ? Math.max(0, Math.min(1, hs.weight)) : null;
   return {
     matrix: [...(m as number[])],
-    label: typeof src.label === 'string' ? src.label.slice(0, 40) : '',
+    label: typeof src.label === 'string' ? src.label.slice(0, 120) : '',
     ...(weight !== null ? { hueSat: { weight } } : {}),
     ...(src.look === true ? { look: true } : {}),
+    ...dcpRefOrNothing(src.dcp),
   };
+}
+
+function dcpRefOrNothing(raw: unknown): { dcp?: { hash: string; name: string } } {
+  if (!raw || typeof raw !== 'object') return {};
+  const { hash, name } = raw as Record<string, unknown>;
+  if (typeof hash !== 'string' || !/^[0-9a-f]{64}$/.test(hash)) return {};
+  return { dcp: { hash, name: typeof name === 'string' ? name.slice(0, 80) : '' } };
+}
+
+/**
+ * The white a LOADED profile reads a picture through: the decode's own
+ * (its as-shot neutral, LibRaw's `rgb_cam`) with the profile's calibrations
+ * in place of the file's — what the kelvin maths and `rawProfileFor` then
+ * interpolate. A DCP's camera calibrations are its own (normally none): the
+ * DNG's `CameraCalibration` is for the DNG's profile.
+ */
+export function whiteThroughDcp(white: RawWhite, dcp: DngProfile): RawWhite {
+  return { ...white, calibrations: dcp.calibrations.filter((c) => c.colorMatrix) };
+}
+
+/** The profile a LOADED `.dcp` comes to for this picture (C8), referenced by its hash and named by its own name. */
+export function rawProfileFromDcp(
+  white: RawWhite | null | undefined,
+  dcp: DngProfile,
+  ref: { hash: string; name: string },
+): RawProfile | null {
+  if (!white) return null;
+  const p = rawProfileFor(whiteThroughDcp(white, dcp), dcp);
+  return p ? { ...p, label: `${ref.name} · ${p.label}`.slice(0, 120), dcp: { hash: ref.hash, name: ref.name } } : null;
 }
 
 /**

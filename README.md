@@ -2026,7 +2026,18 @@ thumbnail (under 640 px), frames another shape, or does not follow one curve
 *Standard*. **Profile** is the tone curve a DNG's own colour profile carries
 (an Adobe *Camera Matching* profile, an iPhone ProRAW): read from the file,
 kept on the picture like Auto's, and applied the same way, on brightness —
-where Adobe applies it per channel. A picture you put on its sensor opens on *Auto*; one the roll's
+where Adobe applies it per channel.
+
+**Your own camera profile.** Under *Camera profile*, a RAW on its sensor can
+be developed with a `.dcp` you load from your own install (Adobe's *Adobe
+Standard* or *Camera Matching* profiles, or one you made from a colour
+chart): its matrices, hue/saturation map, look table and curve replace the
+file's own for that picture. The file is kept on this device only, under a
+fingerprint of its bytes; the picture stores that fingerprint and the
+profile's name, never the profile, so a roll kept on a Winnow carries none of
+it. Atelier ships no profile and downloads none. Opened on a device that does
+not hold it, the picture keeps the profile's colour matrix and says the rest
+is missing until the same `.dcp` is loaded there. A picture you put on its sensor opens on *Auto*; one the roll's
 *Sensor (RAW)* choice puts there opens on *Standard* (nothing is measured
 for a picture nobody opened), and a picture keeps the curve it already
 carries. A preset or a paste carries *Auto* as a choice, and it is measured

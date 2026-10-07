@@ -32,7 +32,8 @@ import {
   type DevelopSettings,
 } from '../../shared/develop/develop';
 import { cloneBaseCurve, needsMeasuring, needsProfileCurve, openingBaseCurve } from '../../shared/develop/base-curve';
-import { readProfileCurve } from '../../shared/develop/profile-curve';
+import { readHeadProfile, readProfileCurve } from '../../shared/develop/profile-curve';
+import { profileCurvePoints } from '../../shared/develop/base-curve';
 import type { CurvePoint } from '../../shared/develop/curves';
 import { measureBaseCurve } from '../../shared/develop/measure-base-curve';
 import type { HalfImage } from '../../shared/render/half-image';
@@ -180,7 +181,17 @@ import VignettePanel from './VignettePanel';
 import WhiteBalancePanel from './WhiteBalancePanel';
 import { dropDecodedRaws } from '../../shared/raw/raw-decoder';
 import type { RawWhite } from '../../shared/raw/white-balance';
-import { PROFILE_PENDING, type RawProfile } from '../../shared/raw/dng-color';
+import {
+  PROFILE_PENDING,
+  profiledWbMatrix,
+  rawProfileFor,
+  rawProfileFromDcp,
+  whiteThroughDcp,
+  type RawProfile,
+} from '../../shared/raw/dng-color';
+import { addDcp, dcpProfile, forgetDcp, useVaultVersion } from '../../shared/raw/profile-vault';
+import type { DngProfile } from '../../shared/exif/dng-profile';
+import CameraProfilePanel from './CameraProfilePanel';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, isDefaultDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
@@ -953,19 +964,46 @@ export default function PictureWorkbench({
   // The tone curve the DNG's own profile carries (C7), read from the same
   // head: what decides whether `Profile` is offered among the base curves.
   // `undefined` while unread, null for a file that carries none.
-  const [profileCurve, setProfileCurve] = useState<CurvePoint[] | null | undefined>(undefined);
+  const [fileCurve, setFileCurve] = useState<CurvePoint[] | null | undefined>(undefined);
   useEffect(() => {
-    setProfileCurve(undefined);
+    setFileCurve(undefined);
     const source = rawFile ?? sensorHeld;
     if (!source) return;
     let alive = true;
     void readProfileCurve(source).then((points) => {
-      if (alive) setProfileCurve(points);
+      if (alive) setFileCurve(points);
     });
     return () => {
       alive = false;
     };
   }, [rawFile, sensorHeld]);
+  // A LOADED camera profile the picture names (C8), read from this device's
+  // vault: its tables, its calibrations for the kelvin maths, its curve.
+  // `undefined` while read, null where the vault does not hold it.
+  const chosenDcp = appliedProfile(developNow)?.dcp ?? null;
+  const vaultVersion = useVaultVersion();
+  const [loadedDcp, setLoadedDcp] = useState<{ hash: string; profile: DngProfile | null } | null>(null);
+  useEffect(() => {
+    if (!chosenDcp) return;
+    let alive = true;
+    void dcpProfile(chosenDcp.hash).then((profile) => {
+      if (alive) setLoadedDcp({ hash: chosenDcp.hash, profile });
+    });
+    return () => {
+      alive = false;
+    };
+  }, [chosenDcp, vaultVersion]);
+  const activeDcp: DngProfile | null | undefined = !chosenDcp
+    ? null
+    : loadedDcp?.hash === chosenDcp.hash
+      ? loadedDcp.profile
+      : undefined;
+  // The curve a `profile` base curve takes: the loaded profile's, else the file's.
+  const profileCurve: CurvePoint[] | null | undefined = chosenDcp
+    ? activeDcp === undefined
+      ? undefined
+      : profileCurvePoints(activeDcp?.toneCurve)
+    : fileCurve;
   const rungs = rungsFor(calibration);
   // A rung the file cannot reach is never left standing: a picture developed
   // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
@@ -1360,6 +1398,45 @@ export default function PictureWorkbench({
       tell('No Profile curve: this file’s colour profile carries none — Standard instead');
     }
   }, [profileToRead, profileCurve, patchDraft, tell]);
+
+  // Choosing the camera profile (C8): resolved here on the decode's own white,
+  // exactly as a first decode resolves the file's (`rawProfileFor`), so the
+  // stored matrix is the one every later decode folds in. A kelvin balance
+  // set before is re-solved through the new profile at the same light, and a
+  // `profile` curve is read again from the new source.
+  const chooseProfile = useCallback(
+    async (choice: 'file' | { hash: string; name?: string }) => {
+      if (!rawWhite) return;
+      let next: RawProfile | null = null;
+      let white = rawWhite;
+      if (choice === 'file') {
+        const source = rawFile ?? sensorHeld;
+        next = rawProfileFor(rawWhite, source ? await readHeadProfile(source) : null);
+      } else {
+        const dcp = await dcpProfile(choice.hash);
+        if (!dcp) {
+          tell('That camera profile is not on this device');
+          return;
+        }
+        const name = choice.name ?? dcp.name ?? 'Camera profile';
+        next = rawProfileFromDcp(rawWhite, dcp, { hash: choice.hash, name });
+        white = whiteThroughDcp(rawWhite, dcp);
+      }
+      if (!next) {
+        tell('This picture’s colour data cannot resolve that profile');
+        return;
+      }
+      const wb = draft.draft.rawWb;
+      const matrix = wb ? profiledWbMatrix(white, wb.kelvin, wb.tint) : null;
+      patchDraft({
+        rawProfile: next,
+        rawWb: wb && matrix ? { ...wb, matrix } : null,
+        ...(draft.draft.baseCurve?.kind === 'profile' ? { baseCurve: { kind: 'profile' } } : {}),
+      });
+      tell(`Camera profile · ${next.label}`);
+    },
+    [rawWhite, rawFile, sensorHeld, draft.draft.rawWb, draft.draft.baseCurve, patchDraft, tell],
+  );
   videoRef.current = picture.video;
   // Space plays and pauses the CLIP — the sheet's rule (`DevelopSheet.tsx`),
   // here on the tool's own window: a control the keyboard is on keeps its
@@ -2785,9 +2862,23 @@ export default function PictureWorkbench({
                 onPicking={picture.setPicking}
                 echo={taskScope}
               />
+              {wantsRaw && rawWhite && !following && !clip && (
+                <CameraProfilePanel
+                  profile={appliedProfile(developNow)}
+                  missing={Boolean(chosenDcp) && activeDcp === null}
+                  onChoose={(id) => void chooseProfile(id === 'file' ? 'file' : { hash: id })}
+                  onLoad={(file) =>
+                    void addDcp(file).then((added) => {
+                      if (added.ok) void chooseProfile({ hash: added.hash, name: added.name });
+                      else tell(added.reason);
+                    })
+                  }
+                  onForget={(hash) => void forgetDcp(hash).then(() => tell('Forgotten on this device — the pictures that chose it keep its matrix'))}
+                />
+              )}
               {wantsRaw && rawWhite && (
                 <WhiteBalancePanel
-                  white={rawWhite}
+                  white={activeDcp ? whiteThroughDcp(rawWhite, activeDcp) : rawWhite}
                   profiled={Boolean(appliedProfile(developNow))}
                   value={draft.draft.rawWb ?? null}
                   onChange={(rawWb) => draft.patch({ rawWb })}

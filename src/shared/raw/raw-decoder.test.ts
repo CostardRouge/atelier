@@ -101,6 +101,7 @@ describe('what a decode is held under, and what is held', () => {
       plain,
       decodeCacheKey(file, { profile: { matrix, hueSat: { weight: 0.5 } } }),
       decodeCacheKey(file, { profile: { matrix, look: true } }),
+      decodeCacheKey(file, { profile: { matrix, dcp: { hash: 'b'.repeat(64), name: 'Mine' } } }),
     ];
     expect(new Set(keys).size).toBe(keys.length);
     expect(decodeCacheKey(file, { profile: { matrix: [...matrix] } })).toBe(plain);
