@@ -87,9 +87,10 @@ import {
   type TileFlip,
   type TilePlan,
 } from './raw-tiles';
-import { calibrationsFromLibraw } from './dng-color';
-import { rawWhiteOrNull, type RawWhite } from './white-balance';
+import { calibrationsFromLibraw, resolveProfile, type ProfileRequest, type RawProfile } from './dng-color';
+import { mul3, rawWhiteOrNull, type RawWhite } from './white-balance';
 import {
+  applyCameraMatrix,
   autoBrightGain,
   autoBrightGainFromLibRaw,
   boxLinearRows,
@@ -179,6 +180,8 @@ export interface RawDecoded {
   /** How many `open()`s of the file this decode took: 1 whole, more in tiles (`raw-tiles.ts`). */
   tiles: number;
   meta: RawMeta;
+  /** The camera profile folded into the conversion (`RawDecodeOptions.profile`), or null: LibRaw's colour. */
+  profile: RawProfile | null;
 }
 
 export interface RawDecodeOptions {
@@ -235,6 +238,14 @@ export interface RawDecodeOptions {
    * and the loupe hold; an export, decoded at its own size once, does not.
    */
   hold?: boolean;
+  /**
+   * The camera profile to fold into the camera's matrix BEFORE the clip
+   * (C4 of `docs/camera-profiles.md`): the matrix stored on the picture, or
+   * `'resolve'` to work it out from this decode's own colour data (a picture
+   * newly on its sensor — `RawDecoded.profile` then says what it came to).
+   * Absent: LibRaw's colour, to the code.
+   */
+  profile?: ProfileRequest;
 }
 
 let instance: Promise<LibRawLike> | null = null;
@@ -350,6 +361,7 @@ export function canDecodeRaw(file: File | null | undefined): boolean {
 export function librawSettings(
   halfSize: boolean,
   cropbox: readonly [number, number, number, number] = WHOLE_CROP,
+  outputColor: 0 | 1 = 0,
 ): Record<string, unknown> {
   return {
     outputBps: 16,
@@ -360,7 +372,11 @@ export function librawSettings(
     gamm: [1, 1],
     noAutoBright: true,
     useCameraWb: true,
-    outputColor: 1,
+    // CAMERA colour, balanced as shot and no matrix (2026-10-07, C4 of
+    // `docs/camera-profiles.md`): the matrix is ours (`applyCameraMatrix`),
+    // so a camera profile acts before the clip. LibRaw's own `rgb_cam` is
+    // still read and is the default matrix — today's colour within a code.
+    outputColor,
     // Clip at the sensor's saturation: what is ABOVE the displayed white but
     // below saturation is kept whole, and that is the headroom a develop reads.
     highlight: 0,
@@ -412,7 +428,45 @@ export function boxFactorFor(width: number, height: number, opts: RawDecodeOptio
  */
 export function decodeCacheKey(file: File, opts: RawDecodeOptions): string {
   const region = opts.region ? `|region=${opts.region.x},${opts.region.y},${opts.region.w},${opts.region.h}` : '';
-  return `${fileKey(file)}|budget=${opts.budgetPixels ?? ''}|min=${opts.minLongEdge ?? ''}|edge=${opts.maxEdge ?? ''}${region}`;
+  return `${fileKey(file)}|budget=${opts.budgetPixels ?? ''}|min=${opts.minLongEdge ?? ''}|edge=${opts.maxEdge ?? ''}${region}${profileToken(opts.profile)}`;
+}
+
+/** The profile's part of a cache key: a stored matrix by its numbers, a resolve by its word. */
+function profileToken(profile: ProfileRequest): string {
+  if (!profile) return '';
+  return `|profile=${profile === 'resolve' ? 'resolve' : profile.map((v) => v.toFixed(6)).join(',')}`;
+}
+
+/**
+ * The matrix this decode turns LibRaw's CAMERA colour into sRGB with — its
+ * own `rgb_cam`, with the camera profile folded in before the clip — or a
+ * null matrix where the decoder's read says nothing of its colour (then the
+ * decode is asked again in LibRaw's own sRGB).
+ */
+function cameraMatrixFor(
+  metadata: Record<string, unknown> | undefined,
+  request: ProfileRequest,
+): { matrix: number[] | null; profile: RawProfile | null } {
+  const color = (metadata?.color_data ?? metadata?.color) as Record<string, unknown> | undefined;
+  const rows = color?.rgb_cam;
+  const rgbCam: number[] = [];
+  if (Array.isArray(rows)) {
+    for (let r = 0; r < 3; r += 1) {
+      const row = rows[r];
+      for (let c = 0; c < 3; c += 1) rgbCam.push(Array.isArray(row) && typeof row[c] === 'number' ? row[c] : NaN);
+    }
+  }
+  if (rgbCam.length !== 9 || !rgbCam.every((v) => Number.isFinite(v))) return { matrix: null, profile: null };
+  const profile = resolveProfile(request, whiteOf(metadata));
+  return { matrix: profile ? mul3(profile.matrix, rgbCam) : rgbCam, profile };
+}
+
+/** The plane turned from camera colour to sRGB through `matrix`, in place, a band at a time. */
+async function toSrgb(plane: Uint16Array, pixels: number, matrix: readonly number[], check: () => Promise<void>): Promise<void> {
+  for (let p = 0; p < pixels; p += BAND_PIXELS) {
+    applyCameraMatrix(plane, matrix, p, Math.min(pixels, p + BAND_PIXELS));
+    await check();
+  }
 }
 
 const num = (v: unknown): number | null => (typeof v === 'number' && Number.isFinite(v) && v > 0 ? v : null);
@@ -465,6 +519,7 @@ async function decodeJxl(
   task: TaskHandle | null,
 ): Promise<RawDecoded> {
   const plane = await decodeJxlDngPlane(file, head, info, {
+    profile: opts.profile,
     region: opts.region ?? null,
     factorFor: (w, h) => boxFactorFor(w, h, opts),
     signal,
@@ -501,6 +556,7 @@ async function decodeJxl(
       ...plane.exif,
       white: plane.color.white,
     },
+    profile: plane.profile,
   };
 }
 
@@ -581,7 +637,15 @@ export function decodeRaw(file: File, opts: RawDecodeOptions = {}): Promise<RawD
   };
   void next.then(settled, settled);
   return next.then((decoded) => {
-    if (opts.hold) cache.remember(key, decoded, decodedBytes(decoded.width, decoded.height, withBytes));
+    if (opts.hold) {
+      const size = decodedBytes(decoded.width, decoded.height, withBytes);
+      cache.remember(key, decoded, size);
+      // A profile resolved here is the one the picture stores next: the
+      // decode is held under that matrix too, so the next ask finds it.
+      if (opts.profile === 'resolve' && decoded.profile) {
+        cache.remember(decodeCacheKey(file, { ...opts, profile: decoded.profile.matrix }), decoded, size);
+      }
+    }
     return decoded;
   });
 }
@@ -685,6 +749,22 @@ async function decodeWhole(
   // The worker has handed the plane back; a cancel that came meanwhile
   // drops it here rather than spending the conversion on it.
   if (signal.aborted) throw cancelled();
+  // Camera colour → sRGB, through LibRaw's own matrix and the profile.
+  const found = cameraMatrixFor(metadata, opts.profile);
+  const { matrix } = found;
+  let { profile } = found;
+  if (matrix) {
+    await toSrgb(image.data, image.width * image.height, matrix, async () => {
+      await yieldToMain();
+      if (signal.aborted) throw cancelled();
+    });
+  } else {
+    // Nothing of the camera's colour in the read: LibRaw's own sRGB, as before.
+    console.warn(`[raw] ${file.name}: no camera matrix in the decoder's read; decoded in LibRaw's sRGB`);
+    profile = null;
+    image = await openAndDecode(raw, file, await readBytes(file, signal, cancelled), librawSettings(askedHalf, WHOLE_CROP, 1));
+    if (signal.aborted) throw cancelled();
+  }
 
   const width = image.width;
   const height = image.height;
@@ -711,6 +791,7 @@ async function decodeWhole(
     scale: (halved ? 2 : 1) * Math.round(width / converted.width),
     tiles: 1,
     meta: metaOf(metadata),
+    profile,
   };
 }
 
@@ -749,6 +830,7 @@ async function decodeTiled(
     if (signal.aborted) throw cancelled();
   };
   let metadata: Record<string, unknown> | undefined;
+  let colour: { matrix: number[]; profile: RawProfile | null } | null = null;
   const raw = await loadLibRaw();
   for (let index = 0; index < tiles.length; index += 1) {
     const tile = tiles[index];
@@ -774,6 +856,13 @@ async function decodeTiled(
       throw new TilePlanMismatch(`tile ${index + 1} came back ${image.width}×${image.height}, planned ${tile.size.width}×${tile.size.height}`);
     }
     if (signal.aborted) throw cancelled();
+    // Camera colour → sRGB, the one matrix every tile shares (C4).
+    if (!colour) {
+      const found = cameraMatrixFor(metadata, opts.profile);
+      if (!found.matrix) throw new TilePlanMismatch('no camera matrix in the decoder’s read');
+      colour = { matrix: found.matrix, profile: found.profile };
+    }
+    await toSrgb(image.data, image.width * image.height, colour.matrix, check);
     let tilePlane: Uint16Array | null = image.data;
     image = undefined;
     // The tile's plane starts a margin above and to the left of its interior.
@@ -821,6 +910,7 @@ async function decodeTiled(
     scale,
     tiles: tiles.length,
     meta: metaOf(metadata),
+    profile: colour?.profile ?? null,
   };
   if (linear) {
     const measured = opts.gain ?? autoBrightGain(linear);

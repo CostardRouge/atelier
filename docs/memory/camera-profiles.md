@@ -104,5 +104,38 @@ Measured: the decoder's real `dng_color` (synthetic DNGs, headless) read back
 through `calibrationsFromLibraw` → a profile per file; a dual A + D65 file
 with no forward matrix reads its as-shot light 3290 K / −2.3 through the spec
 against LibRaw's 3211 K / −15.8. NOT measured: any real camera file, his
-eyes on the result. **Next: C4** (LibRaw in camera colour, his Q5 yes) — the
-profile then stops being a correction of a clipped sRGB decode.
+eyes on the result.
+
+## C4: the camera's matrix is OURS, and the profile acts before the clip (2026-10-07)
+
+**Decision (his Q5).** LibRaw is asked for CAMERA colour (`outputColor: 0`,
+balanced as shot, no matrix); `applyCameraMatrix` (`raw-image.ts`, pure)
+turns the 16-bit plane IN PLACE into the plane LibRaw wrote in sRGB —
+linearise, `rgb_cam` (read from the same full read, still reported), clip
+to [0, 1] where LibRaw clipped, encode — so every table, box, meter and
+byte downstream reads the plane it always did. The profile is folded into
+that matrix (`P · rgb_cam`), BEFORE the clip; the JPEG XL path folds it
+into its own `rgbCam`. **Rules a later agent must keep:**
+
+- **Every decode of a RAW develop passes `decodeProfileOf(develop)`** — the
+  stage, the loupe, the run's meter and render, the making-of. A decode
+  that forgets it draws the picture in LibRaw's colour beside a head that
+  no longer applies the profile: two colours for one picture.
+- **The head carries the profile NO MORE**: `rawMatrixOf` is the kelvin
+  balance alone, with the profile taken back out (`rawWb · P⁻¹`), because
+  `rawWb.matrix` is still stored from LibRaw's colour (no migration).
+- **`'resolve'`** asks the decoder to work the profile out of its own read
+  (`RawDecoded.profile` says what it came to; the stage and the run store
+  that); the held decode is remembered under the resolved matrix too, so
+  storing it re-decodes nothing.
+- **No `rgb_cam` in the read**: the whole decode is asked again in LibRaw's
+  own sRGB and no profile is applied; a tile plan falls back to whole.
+
+Measured with the real decoder in headless Chromium on three synthetic
+DNGs: no profile reproduces LibRaw's own sRGB within 1 code in 8 bits
+(16-bit max 53, the curve's knee — `bt709ToLinear`'s two branches meet at
+0.081 vs 0.0813); a grey file is identical; with the profile, up to 92 codes
+differ from C3's after-the-clip correction on ~27 % of the samples of a
+deliberately saturated file — the colours LibRaw's matrix clipped. Cost:
+~23 ns a pixel (12 MP in 278 ms here), banded. NOT measured: a real camera
+file, a JPEG XL ProRAW through the profile, a phone.

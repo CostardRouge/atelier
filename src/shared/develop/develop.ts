@@ -25,8 +25,8 @@
  */
 
 import type { SavedGrade } from '../lut/saved-grade';
-import { apply3, describeWhiteBalance, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
-import { PROFILE_PENDING, rawProfileOrNull, type RawProfile } from '../raw/dng-color';
+import { apply3, describeWhiteBalance, inverse3, mul3, rawWhiteBalanceOrNull, type RawWhiteBalance } from '../raw/white-balance';
+import { PROFILE_PENDING, rawProfileOrNull, type ProfileRequest, type RawProfile } from '../raw/dng-color';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   cloneCurves,
@@ -282,13 +282,31 @@ export function withoutBase(d: DevelopSettings): DevelopSettings {
 }
 
 /**
- * The ONE 3×3 a RAW develop applies first, or null: the kelvin white balance
- * where there is one (it carries the profile inside it when the picture has
- * one), else the camera profile alone.
+ * The ONE 3×3 a RAW develop applies first, or null. The camera profile is
+ * NOT here: the decoder folds it into the camera's matrix before the clip
+ * (C4, `decodeProfileOf`), so the head sees a picture already in the
+ * profile's colour. A kelvin balance is stored from LibRaw's colour
+ * (`rawWb.matrix`, the profile inside it on a profiled picture), so on a
+ * profiled picture the head applies it with the profile taken back out.
  */
 export function rawMatrixOf(d: DevelopSettings | null | undefined): number[] | null {
+  if (!d || !isRawDevelop(d) || !d.rawWb) return null;
+  const profile = appliedProfile(d);
+  const inv = profile ? inverse3(profile.matrix) : null;
+  return inv ? mul3(d.rawWb.matrix, inv) : d.rawWb.matrix;
+}
+
+/**
+ * What this develop asks the RAW decoder to fold into the camera's matrix:
+ * its stored profile, `'resolve'` while it waits for one, nothing for a
+ * picture developed in LibRaw's colour. Every decode of a RAW develop reads
+ * it — the stage, the loupe, the export, the meter, the making-of — or the
+ * picture would wear two colours.
+ */
+export function decodeProfileOf(d: DevelopSettings | null | undefined): ProfileRequest {
   if (!d || !isRawDevelop(d)) return null;
-  return d.rawWb?.matrix ?? appliedProfile(d)?.matrix ?? null;
+  if (d.rawProfile === PROFILE_PENDING) return 'resolve';
+  return appliedProfile(d)?.matrix ?? null;
 }
 
 /** The camera profile a develop APPLIES — resolved, on a RAW base — or null. */

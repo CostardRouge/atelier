@@ -21,6 +21,7 @@ import DevelopViewport from '../../shared/develop/DevelopViewport';
 import {
   DEFAULT_DEVELOP,
   appliedProfile,
+  decodeProfileOf,
   baseRung,
   developBase,
   developLines,
@@ -177,7 +178,7 @@ import VignettePanel from './VignettePanel';
 import WhiteBalancePanel from './WhiteBalancePanel';
 import { dropDecodedRaws } from '../../shared/raw/raw-decoder';
 import type { RawWhite } from '../../shared/raw/white-balance';
-import { PROFILE_PENDING, rawProfileFor, type RawProfile } from '../../shared/raw/dng-color';
+import { PROFILE_PENDING, type RawProfile } from '../../shared/raw/dng-color';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
 import { describeDetail, isDefaultDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
@@ -865,7 +866,14 @@ export default function PictureWorkbench({
     // On the roll's sensor the picture opens on the opening curve, as the
     // export does (`openingBaseCurve`), until it is given its own.
     return followsSensor
-      ? { ...draft.draft, base: 'gain', rawGain: followGain, rawProfile: followProfile, baseCurve: openingBaseCurve(draft.draft.baseCurve) }
+      ? {
+          ...draft.draft,
+          base: 'gain',
+          rawGain: followGain,
+          // Resolved by the stage's first decode (C4), held for the visit.
+          rawProfile: followProfile ?? PROFILE_PENDING,
+          baseCurve: openingBaseCurve(draft.draft.baseCurve),
+        }
       : draft.draft;
   }, [followsSensor, settling, stored, draft.draft, followGain, followProfile]);
   const inherited = developNow !== draft.draft;
@@ -918,6 +926,10 @@ export default function PictureWorkbench({
     };
   }, [wantsRaw, rawFile, sensorHeld, sensorName, tell, patchDraft]);
   const rawGain = developNow.rawGain ?? null;
+  // The camera profile every decode of this picture folds in (C4): stored,
+  // `'resolve'` while pending, or none — LibRaw's colour.
+  const decodeProfile = decodeProfileOf(developNow);
+  const decodeProfileKey = decodeProfile ? String(decodeProfile) : '';
   // The stage's last decode of the sensor — what an Auto base curve is measured on.
   const [sensorDecode, setSensorDecode] = useState<{ file: File; half: HalfImage; gain: number } | null>(null);
   // The calibration the RAW carries, read from a megabyte of its head as soon
@@ -1225,7 +1237,7 @@ export default function PictureWorkbench({
     showMaskOf: !clip && selectedLayer && tab === 'layers' && shownMask !== 'off' ? selectedLayer.id : null,
     maskStyle: shownMask === 'fill' ? 'fill' : 'outline',
     flashMask: clip ? null : flashMask,
-    raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain } : null,
+    raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain, profile: decodeProfile } : null,
     detail: clip ? null : detailDraft,
     repair: clip ? NO_PATCHES : repairDraft,
     // The dust map, when the scan shows it: drawn through the stage's own
@@ -1265,7 +1277,7 @@ export default function PictureWorkbench({
         // only with the picture's first numbers (`inheritedRef`).
         if (following) {
           setFollowGain(info.gain);
-          setFollowProfile(rawProfileFor(info.meta.white));
+          setFollowProfile(info.profile);
         } else {
           // A picture put on its sensor since the profile existed carries
           // `'pending'` and is resolved here with the gain; one on its
@@ -1274,7 +1286,7 @@ export default function PictureWorkbench({
           patchDraft({
             base: developBase(draft.draft) === 'proxy' ? 'gain' : draft.draft.base,
             rawGain: info.gain,
-            ...(pending ? { rawProfile: rawProfileFor(info.meta.white) } : {}),
+            ...(pending ? { rawProfile: info.profile } : {}),
           });
         }
         const ev = Math.log2(info.gain);
@@ -1944,11 +1956,12 @@ export default function PictureWorkbench({
       shownFile
         ? {
             file: shownFile,
-            raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain ?? 1 } : null,
+            raw: wantsRaw && rawFile ? { file: rawFile, gain: rawGain ?? 1, profile: decodeProfile } : null,
             calibration: wantsRaw ? applied : null,
           }
         : null,
-    [shownFile, wantsRaw, rawFile, rawGain, applied],
+    // The profile by its numbers, not its array's identity.
+    [shownFile, wantsRaw, rawFile, rawGain, applied, decodeProfileKey],
   );
   const anyProgress = exports.progress ?? makingOf.progress;
   const anyExporting = exports.exporting ?? makingOf.exporting;

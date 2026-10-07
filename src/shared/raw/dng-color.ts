@@ -354,6 +354,20 @@ export function rawProfileFor(white: RawWhite | null | undefined): RawProfile | 
  */
 export const PROFILE_PENDING = 'pending';
 
+/**
+ * What a decoder is asked to fold into the camera's matrix (C4): a profile
+ * already stored on the picture (its matrix), `'resolve'` to work it out from
+ * this very decode's own colour data, or nothing — LibRaw's colour.
+ */
+export type ProfileRequest = readonly number[] | 'resolve' | null | undefined;
+
+/** The profile a request comes to for a decode whose white is `white`, or null. */
+export function resolveProfile(request: ProfileRequest, white: RawWhite | null | undefined): RawProfile | null {
+  if (!request) return null;
+  if (request === 'resolve') return rawProfileFor(white);
+  return request.length === 9 && request.every((v) => Number.isFinite(v)) ? { matrix: [...request], label: '' } : null;
+}
+
 /** A stored profile read back safely: nine finite numbers, the pending mark, or null. */
 export function rawProfileOrNull(raw: unknown): RawProfile | typeof PROFILE_PENDING | null {
   if (raw === PROFILE_PENDING) return PROFILE_PENDING;

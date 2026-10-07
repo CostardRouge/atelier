@@ -2136,7 +2136,9 @@ colour the way the DNG specification describes it: a DNG's two calibrations
 (usually tungsten and daylight) blended for the light the picture was taken
 under, its forward matrix where it has one, and the white adapted in XYZ —
 LibRaw alone takes the daylight matrix whatever the light, which is a few to
-nearly twenty ΔE off on saturated colours under tungsten. It is resolved once,
+nearly twenty ΔE off on saturated colours under tungsten. It acts on the camera's own
+colour before anything is clipped to the screen's range — the decoder hands
+it over unconverted and the conversion is Atelier's. It is resolved once,
 with the measured exposure, and stored on the picture (the facts say *camera
 colour A + D65*); a picture already on its sensor before it existed keeps its
 colour. The kelvin white balance reads and sets the light through the same

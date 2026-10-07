@@ -464,3 +464,51 @@ export function packBytePixels(rgb16: Uint16Array, byteTable: Uint8ClampedArray,
     out[o + 3] = 255;
   }
 }
+
+// --- The camera's matrix, ours (C4 of `docs/camera-profiles.md`) -------------
+
+let codeOfLinear: Uint16Array | null = null;
+
+/**
+ * Linear light quantised to 1/65535 → the 16-bit BT.709 code LibRaw writes
+ * for it, built once: what LibRaw's own output stage does after its matrix.
+ */
+function bt709CodeTable(): Uint16Array {
+  if (!codeOfLinear) {
+    codeOfLinear = new Uint16Array(65536);
+    for (let i = 0; i < 65536; i += 1) codeOfLinear[i] = Math.round(linearToBt709(i / 65535) * 65535);
+  }
+  return codeOfLinear;
+}
+
+/**
+ * Samples `[from, to)` (whole pixels, three samples each) of a decode asked
+ * of LibRaw in CAMERA colour (`outputColor: 0` — balanced as shot, no
+ * matrix), turned IN PLACE into what LibRaw would have written in sRGB with
+ * `matrix` as its `rgb_cam`: the code decoded to linear light, the matrix,
+ * a clip to [0, 1] — LibRaw's own clip, at the same place —, the code again.
+ * So everything downstream (the tables, the boxes, the meter, the bytes)
+ * reads the very kind of plane it always did, and a camera PROFILE folded
+ * into `matrix` acts BEFORE the clip rather than on a clipped picture.
+ * Measured against LibRaw's own sRGB output on synthetic DNGs: within one
+ * 8-bit code (max 53, mean ~1.5 of 65535 in sixteen bits).
+ */
+export function applyCameraMatrix(rgb16: Uint16Array, matrix: readonly number[], from: number, to: number): void {
+  const lin = bt709Table();
+  const code = bt709CodeTable();
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = matrix;
+  for (let i = from * 3, end = to * 3; i < end; i += 3) {
+    const r = lin[rgb16[i]];
+    const g = lin[rgb16[i + 1]];
+    const b = lin[rgb16[i + 2]];
+    let R = m0 * r + m1 * g + m2 * b;
+    let G = m3 * r + m4 * g + m5 * b;
+    let B = m6 * r + m7 * g + m8 * b;
+    R = R <= 0 ? 0 : R >= 1 ? 1 : R;
+    G = G <= 0 ? 0 : G >= 1 ? 1 : G;
+    B = B <= 0 ? 0 : B >= 1 ? 1 : B;
+    rgb16[i] = code[(R * 65535 + 0.5) | 0];
+    rgb16[i + 1] = code[(G * 65535 + 0.5) | 0];
+    rgb16[i + 2] = code[(B * 65535 + 0.5) | 0];
+  }
+}

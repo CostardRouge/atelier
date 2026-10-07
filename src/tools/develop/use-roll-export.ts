@@ -74,6 +74,7 @@ import {
   baseRung,
   developBase,
   isRawDevelop,
+  decodeProfileOf,
   profilePending,
   rawGainOf,
   withoutBase,
@@ -639,7 +640,7 @@ export function useRollExport({
               develop: { ...(picture.develop ?? DEFAULT_DEVELOP), base: 'gain', rawGain: null, baseCurve: openingBaseCurve(picture.develop?.baseCurve) },
             };
           }
-          let raw: { file: File; gain: number } | null = null;
+          let raw: { file: File; gain: number; profile: ReturnType<typeof decodeProfileOf> } | null = null;
           if (isRawDevelop(picture.develop)) {
             if (onlyProxies) {
               failures.push(`${picture.ref.name} left from its proxy: proxies only for this run, its RAW base set aside`);
@@ -659,16 +660,19 @@ export function useRollExport({
               if (rawFile && picture.develop && !(picture.develop.rawGain && picture.develop.rawGain > 0)) {
                 say('develop', 'Metering the RAW');
                 const develop = picture.develop;
-                const metered = await meterRaw(rawFile, controller.signal).catch(() => null);
+                // Metered through the colour it will leave in (C4): a picture
+                // newly on its sensor resolves its camera profile here.
+                const resolving = followed || profilePending(develop);
+                const metered = await meterRaw(rawFile, controller.signal, resolving ? 'resolve' : decodeProfileOf(develop)).catch(() => null);
                 if (controller.signal.aborted) break;
                 const gain = metered?.gain;
                 if (gain) {
-                  const profile = followed || profilePending(develop) ? metered.profile : null;
+                  const profile = resolving ? metered.profile : null;
                   picture = { ...picture, develop: { ...develop, rawGain: gain, ...(profile ? { rawProfile: profile } : {}) } };
                 }
                 else rawFile = null;
               }
-              if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop) };
+              if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop), profile: decodeProfileOf(picture.develop) };
               else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
             }
           }

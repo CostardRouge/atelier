@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { fromHalf } from '../render/half-image';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
+  applyCameraMatrix,
   autoBrightGain,
   autoBrightGainFromLibRaw,
   boxDownscale,
@@ -265,5 +266,36 @@ describe('the fused encode over a linear picture', () => {
   it('shares its tables between calls and never hands out a different one', () => {
     expect(bt709Table()).toBe(bt709Table());
     expect(halfTableFromLibRaw(bt709Table())).toBe(halfTableFromLibRaw(bt709Table()));
+  });
+});
+
+describe('applyCameraMatrix (C4: the camera matrix is ours)', () => {
+  const code = (linear: number) => Math.round(linearToBt709(linear) * 65535);
+
+  it('with the identity, gives every code back within the quantisation LibRaw itself pays', () => {
+    const plane = new Uint16Array(3 * 4096);
+    for (let i = 0; i < plane.length; i += 1) plane[i] = (i * 16) % 65536;
+    const before = Uint16Array.from(plane);
+    applyCameraMatrix(plane, [1, 0, 0, 0, 1, 0, 0, 0, 1], 0, 4096);
+    let worst = 0;
+    for (let i = 0; i < plane.length; i += 1) worst = Math.max(worst, Math.abs(plane[i] - before[i]));
+    // Linear light is held in 16 bits between the two curves, as LibRaw holds
+    // it; the worst is at the curve's knee, where its two branches meet a hair
+    // apart (0.081 against 0.0813) — 16 of 65535, a sixteenth of an 8-bit code.
+    expect(worst).toBeLessThanOrEqual(20);
+  });
+
+  it('applies the matrix in linear light and clips each channel to [0, 1], as LibRaw’s own output stage', () => {
+    const m = [1.6, -0.4, -0.2, -0.1, 1.5, -0.4, 0, -0.4, 1.4];
+    const plane = Uint16Array.from([code(0.2), code(0.2), code(0.2), code(0.9), code(0.3), code(0.02), code(0.01), code(0.5), code(0.9)]);
+    applyCameraMatrix(plane, m, 0, 2);
+    // A grey stays grey: the rows sum to one.
+    expect(Math.abs(plane[0] - code(0.2))).toBeLessThanOrEqual(3);
+    expect(Math.abs(plane[1] - code(0.2))).toBeLessThanOrEqual(3);
+    // A saturated red goes past white in red and below zero in blue: clipped.
+    expect(plane[3]).toBe(65535);
+    expect(plane[5]).toBe(0);
+    // Only the pixels asked are touched.
+    expect(plane[6]).toBe(code(0.01));
   });
 });

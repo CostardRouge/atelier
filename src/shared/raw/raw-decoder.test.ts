@@ -70,7 +70,7 @@ describe('wantsHalfSize', () => {
 describe('the decoder’s settings and its gate', () => {
   it('asks for linear 16-bit output with the camera’s white balance and no auto-bright', () => {
     const s = librawSettings(true);
-    expect(s).toMatchObject({ outputBps: 16, noAutoBright: true, useCameraWb: true, outputColor: 1, highlight: 0, halfSize: true });
+    expect(s).toMatchObject({ outputBps: 16, noAutoBright: true, useCameraWb: true, outputColor: 0, highlight: 0, halfSize: true });
     expect(librawSettings(false).halfSize).toBe(false);
   });
 

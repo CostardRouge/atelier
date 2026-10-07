@@ -1,4 +1,5 @@
 import { useCallback, useDeferredValue, useEffect, useMemo, useRef, useState, type PointerEvent as ReactPointerEvent, type RefObject } from 'react';
+import type { ProfileRequest, RawProfile } from '../raw/dng-color';
 import { toLinear } from '../lut/transfer';
 import { filmTextureKey, isSilentTexture, type FilmTexture } from '../film/film-texture';
 import type { CubeLut } from '../lib/cube-parser';
@@ -376,6 +377,8 @@ export interface RawDecodedInfo {
    */
   half: HalfImage;
   file: File;
+  /** The camera profile this decode folded in — what a picture asking `'resolve'` stores. */
+  profile: RawProfile | null;
 }
 
 /** The crop a host wants the viewport to show: the aspect box and the framing inside it. */
@@ -672,7 +675,7 @@ export function useDevelopPicture({
    * stores, or null to measure it. The decode replaces `file`'s as the source;
    * `file` stays what the picture IS for everything else.
    */
-  raw?: { file: File; gain: number | null } | null;
+  raw?: { file: File; gain: number | null; profile?: ProfileRequest } | null;
   /** The decode's measurement, once per decode — what the host stores as `rawGain`. */
   onRawDecoded?: (info: RawDecodedInfo) => void;
   /** Denoise, defringe, sharpen (`render/detail.ts`): noise before the look, sharpen after everything. */
@@ -829,6 +832,10 @@ export function useDevelopPicture({
   // number the decode itself produced would be two seconds for nothing.
   const rawGainRef = useRef(raw?.gain ?? null);
   rawGainRef.current = raw?.gain ?? null;
+  // The camera profile likewise (C4): a picture asking `'resolve'` stores the
+  // matrix its decode came to, and the decode is held under both.
+  const rawProfileRef = useRef<ProfileRequest>(raw?.profile ?? null);
+  rawProfileRef.current = raw?.profile ?? null;
   const onRawDecodedRef = useRef(onRawDecoded);
   onRawDecodedRef.current = onRawDecoded;
   const onRawAbortedRef = useRef(onRawAborted);
@@ -870,6 +877,7 @@ export function useDevelopPicture({
       ? decodeRaw(rawFile, {
           budgetPixels: stageBudget(),
           gain: rawGainRef.current,
+          profile: rawProfileRef.current,
           // The GPU's cap and, on a phone, the device's own ceiling
           // (`raw-budget.ts`): a RAW is the one source decoded in the tab's
           // own memory, and a phone's tab was killed for the whole of it.
@@ -896,6 +904,7 @@ export function useDevelopPicture({
               meta: d.meta,
               half: d.half,
               file: rawFile,
+              profile: d.profile,
             });
           }
           return { image: canvas, width: d.width, height: d.height, gpu: d.half, release: () => {} };
@@ -1803,6 +1812,7 @@ export function useDevelopPicture({
     const load: Promise<{ source: BadgeSource; fileWidth: number }> = rawFile
       ? decodeRaw(rawFile, {
           gain: rawGainRef.current,
+          profile: rawProfileRef.current,
           maxEdge: rawDecodeEdge('loupe', deviceClass(), maxRenderSize()),
           signal: controller.signal,
           quiet: true,
