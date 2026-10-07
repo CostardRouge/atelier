@@ -35,8 +35,20 @@
 
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
-import { BASEMAP_FOR_EDGE, BASEMAP_MAX_PX, basemapKey, rasterSize } from '../../map/tile-math';
+import { BASEMAP_FOR_EDGE, BASEMAP_MAX_PX, MERCATOR_MAX_LAT, basemapKey, rasterSize, type GeoBox } from '../../map/tile-math';
+import { STRIP_TILES } from '../../map/tile-strip';
+import { stripOver, wideOnly, type BasemapSet } from './basemap-strip';
+import { KM_PER_DEGREE, applyView, viewOf, type CameraTrack, type View } from './drive-plan';
 import type { HookBasemapWant, HookPictureWant } from './hook-variant';
+import {
+  CAMERA_LIMITS,
+  subjectTrack,
+  widestFrame,
+  type CameraMode,
+  type CameraOptions,
+  type CameraSubject,
+  type CameraZoom,
+} from './map-camera';
 import { hookPictureKey } from './hook-variant';
 import { STOP_STYLES, readStops, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
@@ -158,6 +170,22 @@ export interface MapOptions {
   /** Seconds the pen waits at each stop it reaches. */
   dwellSeconds: number;
   pen: MapPen;
+  // --- camera (2026-10-07, `map-camera.ts`) ----------------------------------
+  /**
+   * The whole map from the first frame, or the map moving under the PEN as it
+   * travels — the same baked camera as Virée's, north up (a pen has no
+   * heading worth turning the map for), inside the map's box, which then
+   * clips what it frames. Only while the journey is drawn.
+   */
+  camera: CameraMode;
+  /** Kilometres across the map's box while following; null is a third of the map. */
+  viewKm: number | null;
+  zoom: CameraZoom;
+  pullBack: number;
+  smoothing: number;
+  lookAhead: number;
+  openWide: boolean;
+  endWide: boolean;
   // --- media ---------------------------------------------------------------
   media: MapMedia;
   mediaSize: number;
@@ -225,6 +253,14 @@ export const MAP_DEFAULTS: MapOptions = {
   delaySeconds: 0.2,
   dwellSeconds: 0.5,
   pen: 'dot',
+  camera: 'whole',
+  viewKm: null,
+  zoom: 'fixed',
+  pullBack: 0,
+  smoothing: 0,
+  lookAhead: 0,
+  openWide: false,
+  endWide: false,
   media: 'pin',
   mediaSize: 1,
   mediaFade: 0.25,
@@ -318,6 +354,14 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     delaySeconds: clamp(Number(o.delaySeconds), L.delaySeconds.min, L.delaySeconds.max, d.delaySeconds),
     dwellSeconds: clamp(Number(o.dwellSeconds), L.dwellSeconds.min, L.dwellSeconds.max, d.dwellSeconds),
     pen: oneOf(o.pen, ['dot', 'plane', 'none'], d.pen),
+    camera: oneOf(o.camera, ['whole', 'follow'], d.camera),
+    viewKm: Number(o.viewKm) > 0 ? clamp(Number(o.viewKm), CAMERA_LIMITS.viewKm.min, CAMERA_LIMITS.viewKm.max, 120) : null,
+    zoom: oneOf(o.zoom, ['fixed', 'pull-back'], d.zoom),
+    pullBack: clamp(Number(o.pullBack), CAMERA_LIMITS.pullBack.min, CAMERA_LIMITS.pullBack.max, d.pullBack),
+    smoothing: clamp(Number(o.smoothing), CAMERA_LIMITS.smoothing.min, CAMERA_LIMITS.smoothing.max, d.smoothing),
+    lookAhead: clamp(Number(o.lookAhead), CAMERA_LIMITS.lookAhead.min, CAMERA_LIMITS.lookAhead.max, d.lookAhead),
+    openWide: o.openWide === true,
+    endWide: o.endWide === true,
     media: oneOf(o.media, ['off', 'pin', 'card', 'backdrop', 'strip'], d.media),
     mediaSize: clamp(Number(o.mediaSize), L.mediaSize.min, L.mediaSize.max, d.mediaSize),
     mediaFade: clamp(Number(o.mediaFade), L.mediaFade.min, L.mediaFade.max, d.mediaFade),
@@ -407,36 +451,190 @@ export function moveMap(o: MapOptions, dx: number, dy: number): MapOptions {
   };
 }
 
+/** The box the map's regions are measured on: the frame's centre, the default size — a drag or a resize never refetches. */
+function nominalBox(aspect: number): { w: number; h: number; box: Box } {
+  const w = 1080;
+  const h = w / aspect;
+  return { w, h, box: mapBox(w, h, { position: 'middle', align: 'center', size: 1, offsetX: 0, offsetY: 0 }) };
+}
+
 /**
- * The OpenStreetMap region under the map's box, or null when the piece does
+ * The OpenStreetMap ground under the map's box, or null when the piece does
  * not ask for one: the box's own extent, unprojected. It does not depend on
  * the frame's size, on where the map was dragged or on its size slider (the
  * box's shape follows the frame's aspect alone), so moving or resizing the
- * map never fetches again; only the stops and the frame's shape do.
+ * map never fetches again; only the stops and the frame's shape do. Under a
+ * following camera the region grows to the widest frame the track shows,
+ * and a STRIP of finer patches along the pen's road comes with it
+ * (`basemap-strip.ts`; `budget` is the tiles it may cost, 0 asks for none).
  */
-export function mapBasemap(o: MapOptions, aspect: number): HookBasemapWant | null {
+export function mapBasemap(o: MapOptions, aspect: number, track: CameraTrack | null = null, budget = STRIP_TILES): BasemapSet | null {
   if (!o.basemap || o.stops.length === 0 || !(aspect > 0)) return null;
-  const w = 1080;
-  const h = w / aspect;
-  const box = mapBox(w, h, { position: 'middle', align: 'center', size: 1, offsetX: 0, offsetY: 0 });
+  const { w, h, box } = nominalBox(aspect);
   const { unproject } = fitProjection(o.stops, box, 8);
   // A little over the box on every side: the padding is a fraction of the
   // frame's width, not of the box, so a smaller map shows a hair more around
   // its stops — the paint clips to the box and places the raster by the
   // projection, so the overscan is never seen as an edge.
   const over = Math.max(box.width, box.height) * 0.05;
-  const nw = unproject({ x: box.x - over, y: box.y - over });
-  const se = unproject({ x: box.x + box.width + over, y: box.y + box.height + over });
-  const region = {
-    west: Math.max(-180, nw.lon),
-    east: Math.min(180, se.lon),
-    north: Math.min(90, nw.lat),
-    south: Math.max(-90, se.lat),
+  let x0 = box.x - over;
+  let y0 = box.y - over;
+  let x1 = box.x + box.width + over;
+  let y1 = box.y + box.height + over;
+  const following = track && o.camera === 'follow' && o.draw;
+  if (following) {
+    // …and the widest the camera gets, around the whole journey.
+    const widest = widestFrame(track);
+    const scale = box.width / Math.max(1e-6, widest);
+    const b = mapBounds(o.stops, box);
+    x0 = Math.min(x0, b.x0 - box.width / 2 / scale);
+    x1 = Math.max(x1, b.x1 + box.width / 2 / scale);
+    y0 = Math.min(y0, b.y0 - box.height / 2 / scale);
+    y1 = Math.max(y1, b.y1 + box.height / 2 / scale);
+  }
+  const regionOf = (ax0: number, ax1: number, ay0: number, ay1: number): GeoBox => {
+    const nw = unproject({ x: ax0, y: ay0 });
+    const se = unproject({ x: ax1, y: ay1 });
+    return {
+      west: Math.max(-180, nw.lon),
+      east: Math.min(180, se.lon),
+      north: Math.min(MERCATOR_MAX_LAT, nw.lat),
+      south: Math.max(-MERCATOR_MAX_LAT, se.lat),
+    };
   };
+  const region = regionOf(x0, x1, y0, y1);
+  if (!(region.east > region.west) || !(region.north > region.south)) return null;
   // Sized for the deck's delivery: the box at a 1920 long edge, a little over.
-  const need = Math.max(box.width, box.height) * (BASEMAP_FOR_EDGE / Math.max(w, h)) * 1.25;
+  const need = Math.max(x1 - x0, y1 - y0) * (BASEMAP_FOR_EDGE / Math.max(w, h)) * 1.25;
   const size = rasterSize(region, need, BASEMAP_MAX_PX);
-  return { key: basemapKey(region, size.width, size.height), box: region, ...size };
+  const wide: HookBasemapWant = { key: basemapKey(region, size.width, size.height), box: region, ...size };
+  if (!following) return wideOnly(wide);
+  const unitsPerDegree = unitsPerDegreeOf(unproject);
+  return stripOver(wide, track, {
+    box,
+    frame: { width: w, height: h },
+    diagonal: false,
+    regionOf,
+    unitsPerDegree,
+    kmPerUnit: KM_PER_DEGREE / Math.max(1e-9, unitsPerDegreeOf(unproject, 'lat')),
+    budget,
+  });
+}
+
+/** The projected stops' bounds in box pixels. */
+function mapBounds(stops: readonly LatLon[], box: Box): CameraSubject['bounds'] {
+  const { project } = fitProjection(stops, box, 8);
+  let x0 = Infinity;
+  let y0 = Infinity;
+  let x1 = -Infinity;
+  let y1 = -Infinity;
+  for (const stop of stops) {
+    const p = project(stop);
+    x0 = Math.min(x0, p.x);
+    y0 = Math.min(y0, p.y);
+    x1 = Math.max(x1, p.x);
+    y1 = Math.max(y1, p.y);
+  }
+  if (!Number.isFinite(x0)) return { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
+  return { x0, y0, x1, y1 };
+}
+
+/** Box pixels per degree — of longitude at the stops' latitude, or of latitude — read off the inverse projection. */
+function unitsPerDegreeOf(unproject: (p: Point) => LatLon, of: 'lon' | 'lat' = 'lon'): number {
+  const a = unproject({ x: 0, y: 0 });
+  const b = unproject({ x: 1000, y: 1000 });
+  const degrees = of === 'lon' ? Math.abs(b.lon - a.lon) : Math.abs(b.lat - a.lat);
+  return degrees > 1e-12 ? 1000 / degrees : 1;
+}
+
+/** The camera keys a map keeps — what a `CameraRows` patch may write on it. */
+export const MAP_CAMERA_KEYS = ['camera', 'viewKm', 'zoom', 'pullBack', 'smoothing', 'lookAhead', 'openWide', 'endWide'] as const;
+
+/** A camera patch narrowed to the keys a map keeps: a heading, a share, a turn never land on the document. */
+export function mapCameraPatch(patch: Partial<CameraOptions>): Partial<MapOptions> {
+  const out: Partial<MapOptions> = {};
+  for (const key of MAP_CAMERA_KEYS) {
+    if (key in patch) Object.assign(out, { [key]: patch[key] });
+  }
+  return out;
+}
+
+/** The map's camera options as the shared module reads them: north up, no share stored. */
+export function mapCamera(o: MapOptions): CameraOptions {
+  return {
+    camera: o.camera,
+    viewKm: o.viewKm,
+    // No share was ever stored on a map: with no width, a third of the map.
+    followZoom: 1 / 3,
+    zoom: o.zoom,
+    pullBack: o.pullBack,
+    orientation: 'north',
+    smoothing: o.smoothing,
+    lookAhead: o.lookAhead,
+    turnSmoothing: 0,
+    maxTurn: 180,
+    openWide: o.openWide,
+    endWide: o.endWide,
+  };
+}
+
+/**
+ * The pen as a camera subject, in the pixels of `box` (the map's box on the
+ * nominal frame): where it is at `t` along the same arcs the paint draws,
+ * the hop it is on, and the journey's bounds.
+ */
+export function mapSubject(o: MapOptions, timing: MapTiming, box: Box): CameraSubject {
+  const { project, unproject } = fitProjection(o.stops, box, 8);
+  const points = o.stops.map((stop) => project(stop));
+  const arcs = points.slice(1).map((to, i) => ({ from: points[i], to, control: arcControl(points[i], to, o.curve) }));
+  const kms = hopKms(o.stops);
+  const at = (t: number): Point => {
+    const pen = penAt(timing, o.easing, t);
+    if (pen.hop !== null && arcs[pen.hop]) {
+      const arc = arcs[pen.hop];
+      return quadAt(arc.from, arc.control, arc.to, pen.fraction);
+    }
+    return points[Math.min(points.length - 1, pen.stop)] ?? { x: box.x + box.width / 2, y: box.y + box.height / 2 };
+  };
+  return {
+    seconds: timing.total,
+    at,
+    runAt: (t) => {
+      const pen = penAt(timing, o.easing, t);
+      return pen.hop !== null ? { f: pen.fraction, km: kms[pen.hop] ?? 0 } : null;
+    },
+    bounds: mapBounds(o.stops, box),
+    kmPerUnit: KM_PER_DEGREE / Math.max(1e-9, unitsPerDegreeOf(unproject, 'lat')),
+  };
+}
+
+/**
+ * The camera's track over the itinerary, baked on the nominal frame of the
+ * piece's shape — null unless the camera follows a drawn journey. The box's
+ * placement does not matter to the geography (a frame is a stop and a width
+ * in km), so the centred box serves every placement.
+ */
+export function mapCameraTrack(o: MapOptions, timing: MapTiming, aspect: number): CameraTrack | null {
+  if (o.camera !== 'follow' || !o.draw || o.stops.length === 0 || !(aspect > 0) || !(timing.total > 0)) return null;
+  const { box } = nominalBox(aspect);
+  return subjectTrack(mapSubject(o, timing, box), mapCamera(o), box, 8);
+}
+
+/**
+ * The view that puts the track's frame at `t` in `box` — the map's box on
+ * the frame being painted, `u` its 1080-unit, the track being baked on the
+ * nominal frame — as a transform over the paint's own projection.
+ */
+export function mapView(track: CameraTrack, t: number, box: Box, u: number): View {
+  const frame = track.at(t);
+  const centre = { x: frame.centre.x * u, y: frame.centre.y * u };
+  return viewOf(centre, { x: box.x + box.width / 2, y: box.y + box.height / 2 }, box.width / Math.max(1e-6, frame.width * u), 0);
+}
+
+/** The paint's projection under a view. */
+export function viewed(project: (p: LatLon) => Point, view: View | null): (p: LatLon) => Point {
+  if (!view) return project;
+  return (p) => applyView(view, project(p));
 }
 
 /** Whether the map has been dragged away from the anchor it was placed on. */

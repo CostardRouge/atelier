@@ -938,7 +938,9 @@ Virée opener (anywhere else they say why not): *Days, as the car drives*,
 *Kilometres, as the car drives*, *Stops, as the car drives*. The number then
 follows the car at every frame — the day of the trip (its total the trip's),
 the distance as the crow flies between the stops passed (never a road
-distance, which the app does not know), or the stops reached — and a still of
+distance, which the app does not know), or the stops reached — with
+**odometer digits**: each in a fixed cell, so the badge never shakes when 199
+turns 200, rolling like a car's as the next one comes — and a still of
 the piece shows the trip told whole. ONE clock drives all of it: each stop is
 dated from the document and never invented — a leg's span shared evenly among
 its places, a place's own arrival and departure where it keeps them, a stop
@@ -1180,7 +1182,10 @@ how steeply the camera looks at it, per piece — the car itself is the trip's,
 below), the map (paper or the picture itself, paper and ink colours, lines of
 latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
-and at a strength that lets the paper show through —, where it sits and how big, dots, the stops'
+and at a strength that lets the paper show through; when the camera follows
+the car, finer tiles are fetched along the road at the camera's own zoom,
+inside a budget of tiles, and fade back to the wide map as it pulls back —,
+where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time
 on the road, up to a minute, the five motions, a hold
@@ -1242,7 +1247,12 @@ switch far down the list is seen on the car the moment it flips.
 your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
-from stop to stop, waiting at each for as long as you ask. The small map in
+from stop to stop, waiting at each for as long as you ask. The **camera** can
+follow the pen too, with the same presets as Virée's (a view width in
+kilometres, a pull-back on long hops, an opening and a closing shot on the
+whole map, a centred smoothing and a look-ahead), north always up and what it
+frames cut at the map's box — and, with the background on, the finer tiles
+along the road come with it. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
 big one: pan, zoom and pinch it, and every tap is the next stop, joined to the

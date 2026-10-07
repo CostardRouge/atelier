@@ -46,14 +46,17 @@ import {
   type View,
   wakeStrength,
 } from './drive-plan';
-import { cameraTrack, widestFrame } from './map-camera';
+import { cameraTrack, kmPerPlanUnit, widestFrame } from './map-camera';
 import {
   BASEMAP_FOR_EDGE,
   BASEMAP_MAX_PX,
   MERCATOR_MAX_LAT,
   basemapKey,
   rasterSize,
+  type GeoBox,
 } from '../../map/tile-math';
+import { STRIP_TILES } from '../../map/tile-strip';
+import { patchAlpha, stripOver, visiblePatches, wideOnly, type BasemapSet } from './basemap-strip';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
 import { paintCount } from './map-paint';
 import { formatDistance, placeLabels } from './geo';
@@ -125,15 +128,27 @@ export function driveTrack(plan: DrivePlan, o: DriveOptions, aspect: number): Ca
   return cameraTrack(plan, o, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7);
 }
 
+/** The drive's OpenStreetMap ground: the wide raster and the strip along the road (`basemap-strip.ts`). */
+export type DriveBasemap = BasemapSet;
+
 /**
- * The OpenStreetMap region a drive's frame shows, or null unless its ground
+ * The OpenStreetMap ground a drive's frame shows, or null unless its ground
  * is `tiles`. Measured on a nominal frame of the piece's shape — the box, the
  * car's margin and the camera are all fractions of the frame, so the region
  * is the same at every size: the whole route as the camera frames it, or,
  * when the camera follows the car, the route with half a frame around it,
  * every place the view can reach. Sized so a 1920 delivery is not enlarged.
+ * Under a following camera a STRIP of finer patches along the road comes
+ * with it (`stripOver`); `budget` is the tiles it may cost (`stripBudget()`),
+ * 0 asks for no strip.
  */
-export function driveBasemap(plan: DrivePlan, o: DriveOptions, aspect: number, track: CameraTrack | null = null): HookBasemapWant | null {
+export function driveBasemap(
+  plan: DrivePlan,
+  o: DriveOptions,
+  aspect: number,
+  track: CameraTrack | null = null,
+  budget = STRIP_TILES,
+): DriveBasemap | null {
   if (o.ground !== 'tiles' || !(aspect > 0)) return null;
   const w = 1080;
   const h = w / aspect;
@@ -168,16 +183,27 @@ export function driveBasemap(plan: DrivePlan, o: DriveOptions, aspect: number, t
   if (!(geo.scale > 0) || !(geo.k > 1e-6)) return null;
   const lonOf = (x: number) => ((x - PLAN_SIZE / 2) / geo.scale + geo.midX) / geo.k;
   const latOf = (y: number) => -((y - PLAN_SIZE / 2) / geo.scale + geo.midY);
-  const region = {
-    west: Math.max(-180, lonOf(x0)),
-    east: Math.min(180, lonOf(x1)),
-    north: Math.min(MERCATOR_MAX_LAT, latOf(y0)),
-    south: Math.max(-MERCATOR_MAX_LAT, latOf(y1)),
-  };
+  const regionOf = (ax0: number, ax1: number, ay0: number, ay1: number): GeoBox => ({
+    west: Math.max(-180, lonOf(ax0)),
+    east: Math.min(180, lonOf(ax1)),
+    north: Math.min(MERCATOR_MAX_LAT, latOf(ay0)),
+    south: Math.max(-MERCATOR_MAX_LAT, latOf(ay1)),
+  });
+  const region = regionOf(x0, x1, y0, y1);
   if (!(region.east > region.west) || !(region.north > region.south)) return null;
   const need = Math.max(x1 - x0, y1 - y0) * view.scale * (BASEMAP_FOR_EDGE / Math.max(w, h));
   const size = rasterSize(region, need, BASEMAP_MAX_PX);
-  return { key: basemapKey(region, size.width, size.height), box: region, ...size };
+  const wide: HookBasemapWant = { key: basemapKey(region, size.width, size.height), box: region, ...size };
+  if (!track || o.camera !== 'follow') return wideOnly(wide);
+  return stripOver(wide, track, {
+    box,
+    frame: { width: w, height: h },
+    diagonal: o.orientation === 'heading',
+    regionOf,
+    unitsPerDegree: geo.scale * geo.k,
+    kmPerUnit: kmPerPlanUnit(plan),
+    budget,
+  });
 }
 
 export function paintDrive(
@@ -188,8 +214,8 @@ export function paintDrive(
   scratch: DriveScratch,
   t: number,
   frame: FrameBox,
-  /** The OpenStreetMap region, on a `tiles` ground — drawn when the shell has it. */
-  basemap: HookBasemapWant | null = null,
+  /** The OpenStreetMap ground, on a `tiles` ground — drawn when the shell has it. */
+  basemap: DriveBasemap | null = null,
   /** The baked camera (`map-camera.ts`); null keeps the plain follow of before. */
   track: CameraTrack | null = null,
 ): void {
@@ -241,7 +267,7 @@ function paintMap(
   t: number,
   moment: DriveMoment,
   frame: FrameBox,
-  basemap: HookBasemapWant | null,
+  basemap: DriveBasemap | null,
   track: CameraTrack | null,
 ): void {
   const { width: w, height: h } = frame;
@@ -276,7 +302,7 @@ function paintMap(
   // Tiles are drawn over the paper, so everything on them is inked as on
   // paper: OpenStreetMap's own palette is a light one.
   const onPaper = o.ground !== 'picture';
-  const tiles = o.ground === 'tiles' && basemap ? pictures?.get(basemap.key) : undefined;
+  const tiles = o.ground === 'tiles' && basemap ? pictures?.get(basemap.wide.key) : undefined;
   // The map as a paper PLATE over a picture filling the frame: the road and
   // the names are then inked as on paper, because they are.
   const plated = o.plate && (o.pictures === 'backdrop' || !onPaper);
@@ -332,7 +358,20 @@ function paintMap(
       const { geo } = plan;
       const project = (p: { lat: number; lon: number }) =>
         applyView(flat, geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2));
-      turned(() => drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity));
+      turned(() => {
+        drawBasemap(g, tiles, basemapRect(basemap.wide, project), o.basemapOpacity);
+        // The strip's finer patches over it, where the frame is tight enough
+        // to tell: they fade out as the camera pulls back past the follow's
+        // width, a cross-dissolve to the wide raster rather than a sharp
+        // window of detail in a soft map. Only what the frame reaches is drawn.
+        const fade = patchAlpha(basemap, box.width / view.scale);
+        if (fade <= 0) return;
+        const reach = view.angle ? Math.hypot(w, h) / 2 : 0;
+        const seen = { x0: Math.min(0, w / 2 - reach), y0: Math.min(0, h / 2 - reach), x1: Math.max(w, w / 2 + reach), y1: Math.max(h, h / 2 + reach) };
+        for (const { picture, rect } of visiblePatches(basemap, pictures, (p) => basemapRect(p, project), seen)) {
+          drawBasemap(g, picture, rect, o.basemapOpacity * fade);
+        }
+      });
     }
     if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);
     paintPlate();

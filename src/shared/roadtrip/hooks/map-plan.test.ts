@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
-import { BASEMAP_MAX_PX, basemapKey } from '../../map/tile-math';
+import { BASEMAP_MAX_PX, basemapKey, planTiles } from '../../map/tile-math';
+import { applyView } from './drive-plan';
+import { CAMERA_PRESETS } from './map-camera';
 import type { HookPickedPicture, HookStage } from './hook-variant';
 import {
   MAP_DEFAULTS,
@@ -14,6 +16,11 @@ import {
   haversineKm,
   hopKms,
   mapBasemap,
+  mapCamera,
+  mapCameraPatch,
+  mapCameraTrack,
+  mapSubject,
+  mapView,
   mapBox,
   mapMoved,
   mapOptions,
@@ -644,7 +651,7 @@ describe('the map’s OpenStreetMap region', () => {
   });
 
   it('holds every stop, and fits the delivery without enlarging past the cap', () => {
-    const want = mapBasemap(on(), 9 / 16)!;
+    const want = mapBasemap(on(), 9 / 16)!.wide;
     for (const s of stops) {
       expect(s.lon).toBeGreaterThan(want.box.west);
       expect(s.lon).toBeLessThan(want.box.east);
@@ -656,10 +663,10 @@ describe('the map’s OpenStreetMap region', () => {
   });
 
   it('never fetches again for a map dragged, resized or re-anchored', () => {
-    const key = mapBasemap(on(), 9 / 16)!.key;
-    expect(mapBasemap(on({ offsetX: 0.3, offsetY: -0.2 }), 9 / 16)!.key).toBe(key);
-    expect(mapBasemap(on({ size: 0.6, position: 'top', align: 'left' }), 9 / 16)!.key).toBe(key);
-    expect(mapBasemap(on({ basemapOpacity: 0.4 }), 9 / 16)!.key).toBe(key);
+    const key = mapBasemap(on(), 9 / 16)!.wide.key;
+    expect(mapBasemap(on({ offsetX: 0.3, offsetY: -0.2 }), 9 / 16)!.wide.key).toBe(key);
+    expect(mapBasemap(on({ size: 0.6, position: 'top', align: 'left' }), 9 / 16)!.wide.key).toBe(key);
+    expect(mapBasemap(on({ basemapOpacity: 0.4 }), 9 / 16)!.wide.key).toBe(key);
   });
 
   it('covers the box the paint draws in, at every size of the map', () => {
@@ -667,7 +674,7 @@ describe('the map’s OpenStreetMap region', () => {
       const o = on({ size });
       const box = mapBox(1080, 1920, o);
       const { project } = fitProjection(o.stops, box, 8);
-      const want = mapBasemap(o, 1080 / 1920)!;
+      const want = mapBasemap(o, 1080 / 1920)!.wide;
       const nw = project({ lat: want.box.north, lon: want.box.west });
       const se = project({ lat: want.box.south, lon: want.box.east });
       expect(nw.x).toBeLessThanOrEqual(box.x + 1e-6);
@@ -680,6 +687,120 @@ describe('the map’s OpenStreetMap region', () => {
   it('reads its two options, clamped', () => {
     expect(mapOptions({}).basemap).toBe(false);
     expect(mapOptions({ basemapOpacity: 7 }).basemapOpacity).toBe(MAP_LIMITS.basemapOpacity.max);
+  });
+});
+
+describe('the camera following the pen', () => {
+  const stops = [
+    { id: 'a', name: 'Perth', lat: -31.95, lon: 115.86 },
+    { id: 'b', name: 'Kalbarri', lat: -27.71, lon: 114.16 },
+    { id: 'c', name: 'Exmouth', lat: -21.93, lon: 114.13 },
+    { id: 'd', name: 'Broome', lat: -17.96, lon: 122.24 },
+  ];
+  const follow = (patch: Record<string, unknown> = {}) =>
+    mapOptions({ stops, camera: 'follow', viewKm: 60, zoom: 'fixed', drawSeconds: 6, dwellSeconds: 0.5, delaySeconds: 0, ...patch });
+  const box = mapBox(1080, 1920, { position: 'middle', align: 'center', size: 1, offsetX: 0, offsetY: 0 });
+
+  it('reads its options clamped, and nothing stored changes: whole, still', () => {
+    expect(mapOptions({}).camera).toBe('whole');
+    expect(mapOptions({}).viewKm).toBeNull();
+    expect(mapOptions({ viewKm: 1e9 }).viewKm).toBe(3000);
+    expect(mapOptions({ viewKm: -4 }).viewKm).toBeNull();
+    expect(mapOptions({ pullBack: 7 }).pullBack).toBe(1);
+    expect(mapOptions({ camera: 'sideways' }).camera).toBe('whole');
+  });
+
+  it('keeps a camera patch to the keys a map has — a heading never lands on the document', () => {
+    const patch = mapCameraPatch({ camera: 'follow', orientation: 'heading', turnSmoothing: 2, viewKm: 35 });
+    expect(patch).toEqual({ camera: 'follow', viewKm: 35 });
+    expect(mapCamera(follow()).orientation).toBe('north');
+    expect(mapCamera(follow({ viewKm: 35 })).viewKm).toBe(35);
+  });
+
+  it('is nothing unless the camera follows a drawn journey', () => {
+    const o = follow();
+    const timing = mapTiming(planarHops(o.stops), o);
+    expect(mapCameraTrack(mapOptions({ stops }), timing, 9 / 16)).toBeNull();
+    expect(mapCameraTrack(follow({ draw: false }), mapTiming(planarHops(o.stops), follow({ draw: false })), 9 / 16)).toBeNull();
+    expect(mapCameraTrack(o, timing, 9 / 16)).not.toBeNull();
+  });
+
+  it('follows the pen: the frame is centred on the stop the pen rests at, at the asked width', () => {
+    const o = follow();
+    const timing = mapTiming(planarHops(o.stops), o);
+    const subject = mapSubject(o, timing, box);
+    const { project } = fitProjection(o.stops, box, 8);
+    // At rest on the first stop, then at the end on the last.
+    expect(subject.at(0)).toEqual(project(stops[0]));
+    expect(subject.at(timing.total + 1)).toEqual(project(stops[3]));
+    // On a hop, between the two stops along the arc — inside their bounds, roughly.
+    const mid = subject.at(timing.arrivals[1] - timing.hops[0].travel / 2);
+    const a = project(stops[0]);
+    const b = project(stops[1]);
+    expect(mid.x).toBeGreaterThan(Math.min(a.x, b.x) - 60);
+    expect(mid.x).toBeLessThan(Math.max(a.x, b.x) + 60);
+    expect(subject.runAt(timing.arrivals[1] - timing.hops[0].travel / 2)?.km).toBeCloseTo(hopKms(o.stops)[0], 6);
+    expect(subject.runAt(timing.arrivals[1] + 0.1)).toBeNull();
+    const track = mapCameraTrack(o, timing, 9 / 16)!;
+    expect(track.viewKm).toBe(60);
+    expect(track.at(0).centre).toEqual(project(stops[0]));
+    // Kilometres across the box are plan units × km per unit.
+    expect(track.at(0).width * subject.kmPerUnit).toBeCloseTo(60, 6);
+  });
+
+  it('puts the frame’s centre at the box’s middle, magnified, on any frame size', () => {
+    const o = follow();
+    const timing = mapTiming(planarHops(o.stops), o);
+    const track = mapCameraTrack(o, timing, 9 / 16)!;
+    for (const w of [540, 1080, 2160]) {
+      const u = w / 1080;
+      const b = mapBox(w, w / (9 / 16), o);
+      const view = mapView(track, 0, b, u);
+      const { project } = fitProjection(o.stops, b, 8 * u);
+      const centre = applyView(view, project(stops[0]));
+      expect(centre.x).toBeCloseTo(b.x + b.width / 2, 6);
+      expect(centre.y).toBeCloseTo(b.y + b.height / 2, 6);
+      expect(view.scale).toBeGreaterThan(1);
+    }
+  });
+
+  it('is baked on the centred box, so a dragged map sees the same geography', () => {
+    const o = follow();
+    const timing = mapTiming(planarHops(o.stops), o);
+    const a = mapCameraTrack(o, timing, 9 / 16)!;
+    const b = mapCameraTrack(follow({ offsetX: 0.3, size: 0.6 }), timing, 9 / 16)!;
+    expect(a.at(2).width).toBeCloseTo(b.at(2).width, 9);
+    expect(a.at(2).centre).toEqual(b.at(2).centre);
+  });
+
+  it('takes the presets on its own keys', () => {
+    const o = follow({ ...CAMERA_PRESETS.navigation.values, orientation: undefined });
+    expect(o.viewKm).toBe(35);
+    expect(mapCamera(o).orientation).toBe('north');
+  });
+
+  it('asks a strip of finer patches along the road under a tight follow, and none when still', () => {
+    const o = follow({ basemap: true, viewKm: 30 });
+    const timing = mapTiming(planarHops(o.stops), o);
+    const track = mapCameraTrack(o, timing, 9 / 16)!;
+    const set = mapBasemap(o, 9 / 16, track, 256)!;
+    expect(set.patches.length).toBeGreaterThan(0);
+    expect(set.patches.length).toBeLessThanOrEqual(256);
+    expect(set.wants[0]).toBe(set.wide);
+    const wideZoom = planTiles(set.wide.box, set.wide.width, set.wide.height)!.z;
+    expect(set.patchZoom!).toBeGreaterThan(wideZoom);
+    // Every stop is under a patch — the pen rests there.
+    for (const s of stops) {
+      expect(set.patches.some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
+    }
+    expect(mapBasemap(o, 9 / 16, null, 256)!.patches).toEqual([]);
+    expect(mapBasemap(mapOptions({ stops, basemap: true }), 9 / 16, track, 256)!.patches).toEqual([]);
+    expect(mapBasemap(o, 9 / 16, track, 0)!.patches).toEqual([]);
+  });
+
+  it('keeps the whole map’s region as it was for a still camera', () => {
+    const still = mapOptions({ stops, basemap: true });
+    expect(mapBasemap(still, 9 / 16)!.wide.key).toBe(mapBasemap(still, 9 / 16, null, 256)!.wide.key);
   });
 });
 

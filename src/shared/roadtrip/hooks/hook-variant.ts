@@ -213,6 +213,12 @@ export interface HookBasemapWant {
   box: { west: number; south: number; east: number; north: number };
   width: number;
   height: number;
+  /**
+   * The tile zoom to fetch at, fixed — a strip's patch along a following
+   * camera's road (`shared/map/tile-strip.ts`) is cut on one zoom's grid.
+   * Absent, the loader picks the zoom from the raster's size.
+   */
+  zoom?: number;
 }
 
 /**
@@ -338,8 +344,10 @@ export interface HookRender {
   /**
    * The pieces this layer rewrites at `t`, merged OVER the computed content.
    * `null` on a piece hides it. Absent = the badge says what it always said.
+   * `headlineValue` rides along: the continuous number behind a counting
+   * headline, which the badge draws as an odometer (`BadgeContent`).
    */
-  content?(t: number): Partial<Record<BadgePiece, string | null>>;
+  content?(t: number): HookContentPatch;
   /** Drawn between the picture and the shades, at the output's own size. */
   paint?(g: HookCtx2D, t: number, frame: FrameBox): void;
   /** The bed, as times and voices. Rendered offline at export; see §7. */
@@ -412,6 +420,9 @@ export interface HookPictureChoice {
   keepsLater?: boolean;
 }
 
+/** What a layer's `content(t)` hands back: the pieces it rewrites, and the value behind a counting headline. */
+export type HookContentPatch = Partial<Record<BadgePiece, string | null>> & { headlineValue?: number | null };
+
 export interface HookPictureStatus {
   /** Pictures still being found, fetched or decoded. */
   pending: number;
@@ -470,12 +481,14 @@ export interface HookVariant {
    */
   wantsPictures?(options: HookOptions, ctx: HookContext): HookPictureWant[];
   /**
-   * The map background this variant would draw under its map, or null — the
-   * OpenStreetMap tiles an author asked for on this piece (2026-09-28). The
-   * shell fetches them only where this DEVICE allows it; the variant never
-   * fetches, and names the raster by the key it will draw it by.
+   * The map backgrounds this variant would draw under its map, or none — the
+   * OpenStreetMap tiles an author asked for on this piece (2026-09-28): one
+   * raster over the whole map, and, under a following camera, a STRIP of
+   * finer patches along its road (2026-10-07). The shell fetches them only
+   * where this DEVICE allows it, in the order given; the variant never
+   * fetches, and names each raster by the key it will draw it by.
    */
-  wantsBasemap?(options: HookOptions, ctx: HookContext): HookBasemapWant | null;
+  wantsBasemap?(options: HookOptions, ctx: HookContext): readonly HookBasemapWant[];
   /**
    * Where this opener's drawing sits in the frame, so the stage can let it be
    * POINTED AT and dragged like any other content. Absent, the opener is not

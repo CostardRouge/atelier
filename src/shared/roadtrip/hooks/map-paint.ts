@@ -34,7 +34,9 @@ import { roundedRect, tile } from '../../media/cell-paint';
 import { drawFramed } from '../../media/framing';
 import { hexToRgba } from './colour';
 import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
-import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
+import { patchAlpha, visiblePatches, type BasemapSet } from './basemap-strip';
+import type { CameraTrack } from './drive-plan';
+import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
 import { placeLabels } from './geo';
 import { numeralScale } from './stops';
 
@@ -53,6 +55,7 @@ import {
   formatDistance,
   hopKms,
   mapBox,
+  mapView,
   mediaAt,
   penAt,
   pinAlphaAt,
@@ -60,6 +63,7 @@ import {
   quadSplit,
   quadTail,
   stopPictureKey,
+  viewed,
   wantsLabel,
   type Box,
   type LatLon,
@@ -98,8 +102,10 @@ export function paintMap(
   pictures: ReadonlyMap<string, HookPicture> | undefined,
   t: number,
   frame: FrameBox,
-  /** The OpenStreetMap region the piece asked for, drawn when the shell has it. */
-  basemap: HookBasemapWant | null = null,
+  /** The OpenStreetMap ground the piece asked for, drawn when the shell has it. */
+  basemap: BasemapSet | null = null,
+  /** The baked camera following the pen (`map-camera.ts`); null keeps the whole map still. */
+  track: CameraTrack | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0 || o.stops.length === 0) return;
@@ -108,7 +114,10 @@ export function paintMap(
   const box = mapBox(w, h, o);
   // Every stop is fitted from the first frame — the pen reaches all of them,
   // so hiding the hops ahead must not let the map re-scale under the drawing.
-  const { project } = fitProjection(o.stops, box, 8 * u);
+  // Under a following camera the fit is then moved and magnified by the
+  // track's frame at `t`, and what the map draws is clipped to its box.
+  const view = track ? mapView(track, t, box, u) : null;
+  const project = viewed(fitProjection(o.stops, box, 8 * u).project, view);
   const points: Painted[] = o.stops.map((stop, index) => ({ stop, at: project(stop), index }));
   const pen = penAt(timing, o.easing, t);
   const fractions = drawnFractions(timing, o.easing, t, Math.max(0, o.stops.length - 1));
@@ -126,17 +135,36 @@ export function paintMap(
 
   if (o.media === 'backdrop') paintBackdrop(g, o, media, pictureOf, w, h);
   if (o.plate) paintPlate(g, o, box, u, w);
-  const tiles = basemap ? pictures?.get(basemap.key) : undefined;
+  const tiles = basemap ? pictures?.get(basemap.wide.key) : undefined;
   if (basemap && tiles) {
     // Inside the map's own box, rounded like the plate: an inset map, the
     // picture around it untouched.
     g.save();
     roundedRect(g, box.x, box.y, box.width, box.height, 14 * u);
     g.clip();
-    drawBasemap(g, tiles, basemapRect(basemap, project), o.basemapOpacity);
+    drawBasemap(g, tiles, basemapRect(basemap.wide, project), o.basemapOpacity);
+    // The strip's finer patches along the pen's road, fading to the wide
+    // raster as the camera pulls back (`basemap-strip.ts`).
+    const fade = view ? patchAlpha(basemap, box.width / view.scale) : 0;
+    if (fade > 0) {
+      const seen = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
+      for (const { picture, rect } of visiblePatches(basemap, pictures, (p) => basemapRect(p, project), seen)) {
+        drawBasemap(g, picture, rect, o.basemapOpacity * fade);
+      }
+    }
     g.restore();
   }
   if (o.graticule) paintGraticule(g, o, box, project, u);
+
+  // What the camera frames is the box's: the line, the dots, the names and
+  // the pins past its edge are cut there, as an inset map cuts its world.
+  // The card, the strip, the compass and the distance sit outside, in the
+  // frame, and are drawn after the clip is lifted.
+  if (view) {
+    g.save();
+    roundedRect(g, box.x, box.y, box.width, box.height, 14 * u);
+    g.clip();
+  }
 
   // --- the path ------------------------------------------------------------
   const arcs = points.slice(1).map((to, i) => {
@@ -320,6 +348,8 @@ export function paintMap(
       }
     }
   }
+
+  if (view) g.restore();
 
   // --- the picture under the map, or along the edge -------------------------
   if (o.media === 'card') paintCard(g, o, points, media, pictureOf, box, u, frame);

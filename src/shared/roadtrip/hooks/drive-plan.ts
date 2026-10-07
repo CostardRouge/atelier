@@ -1455,20 +1455,33 @@ export function driveCounterPieces(
   count: 'days' | 'km' | 'places',
   t: number,
   words: CounterWords,
-): Partial<Record<'label' | 'headline' | 'counter', string>> {
+): Partial<Record<'label' | 'headline' | 'counter', string>> & { headlineValue?: number } {
   const m = plan.at(t);
+  // The value behind the numeral, for the odometer's roll: the day on its
+  // continuous scale, the distance in the piece's unit — the whole number
+  // once the car has arrived, so the final reading rests.
   if (count === 'days') {
     if (m.day === null || !plan.clock) return {};
     const total = plan.route.tripDays;
-    return { label: words.day, headline: String(counterDay(m.day, total)), counter: `${words.of} ${total}` };
+    const day = counterDay(m.day, total);
+    const value = m.over ? day : Math.max(1, Math.min(Math.max(1, total), m.day));
+    return { label: words.day, headline: String(day), headlineValue: value, counter: `${words.of} ${total}` };
   }
   if (count === 'km') {
     const unit = o.distance === 'off' ? 'km' : o.distance;
     const total = plan.kmAtStop[plan.kmAtStop.length - 1];
-    return { label: unit, headline: distanceNumeral(plan.kmAt(m.s), unit), counter: `${words.of} ${distanceNumeral(total, unit)}` };
+    const km = plan.kmAt(m.s);
+    const value = unit === 'mi' ? km * 0.621371 : km;
+    return {
+      label: unit,
+      headline: distanceNumeral(km, unit),
+      // Under ten the numeral keeps a decimal and is not an odometer's.
+      ...(value >= 10 ? { headlineValue: m.over ? Math.round(value) : value } : {}),
+      counter: `${words.of} ${distanceNumeral(total, unit)}`,
+    };
   }
   const n = plan.route.stops.length;
-  return { label: words.stop?.trim() || 'Stop', headline: String(m.reached + 1), counter: `${words.of} ${n}` };
+  return { label: words.stop?.trim() || 'Stop', headline: String(m.reached + 1), headlineValue: m.reached + 1, counter: `${words.of} ${n}` };
 }
 
 // --- the camera -----------------------------------------------------------------

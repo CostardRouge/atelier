@@ -24,6 +24,7 @@ import type { Shade } from '../shades/shades';
 import { compositeFor } from './blend';
 import { canMask, glyphsOf, readKnockout, washFill, type Knockout } from './knockout';
 import { tipAngle } from './rotate-device';
+import { cellsWidth, digitCells, type DigitCell } from './odometer';
 import {
   findScene,
   resolveScenes,
@@ -241,6 +242,8 @@ interface Layout {
   ascent: number;
   /** The element's appearance after theme/override resolution. */
   st: ResolvedStyle;
+  /** An odometer's digits, one fixed cell each, with their rolls (`odometer.ts`); absent, one run of text. */
+  cells?: DigitCell[];
 }
 
 /**
@@ -276,14 +279,96 @@ function layoutElement(
   ctx.font = font;
   setLetterSpacing(ctx, st.letterSpacingEm, fontPx);
   const m = ctx.measureText(text);
+  // An odometer: one cell per character, every digit as wide as the widest,
+  // so the box holds still while the numeral counts. The height is the
+  // digits' own, measured on the run of all ten — a rolling 1 must not sit
+  // in a box fitted to a 1.
+  const cells = el.odometer !== undefined ? odometerCells(ctx, text, el.odometer) : undefined;
+  const digits = cells ? ctx.measureText('0123456789') : null;
   setLetterSpacing(ctx, 0, fontPx);
-  const w = m.width;
-  const ascent = m.actualBoundingBoxAscent ?? fontPx * 0.8;
-  const descent = m.actualBoundingBoxDescent ?? fontPx * 0.2;
+  const w = cells ? cellsWidth(cells) : m.width;
+  const ascent = Math.max(m.actualBoundingBoxAscent ?? fontPx * 0.8, digits?.actualBoundingBoxAscent ?? 0);
+  const descent = Math.max(m.actualBoundingBoxDescent ?? fontPx * 0.2, digits?.actualBoundingBoxDescent ?? 0);
   const h = ascent + descent;
 
   const { x, y } = anchorOrigin(el.anchor, el.x * vw, el.y * vh, w, h);
-  return { text, font, fontPx, x, y, w, h, ascent, st };
+  return { text, font, fontPx, x, y, w, h, ascent, st, ...(cells ? { cells } : {}) };
+}
+
+/** The odometer's cells for `text` on the context's current font and letter-spacing. */
+function odometerCells(ctx: Ctx2D, text: string, value: number): DigitCell[] {
+  let digitWidth = 0;
+  for (const d of '0123456789') digitWidth = Math.max(digitWidth, ctx.measureText(d).width);
+  return digitCells(text, (ch) => ctx.measureText(ch).width, digitWidth, value);
+}
+
+/**
+ * The text of a layout, filled at (`x`, `baselineY`) — one run, or, for an
+ * odometer, cell by cell: a digit at rest sits centred in its cell; one
+ * rolling leaves by the top while its successor arrives from below, both cut
+ * at the line's own height. The two glyphs are cut in a scratch buffer and
+ * the buffer is drawn with the context's own shadow, blur and composite, so
+ * the pass's shadow blooms around the cut glyphs instead of being cut with
+ * them into a rectangle. Every pass of a text — the glow's layers, the
+ * mask, the plain fill — draws through here, so the roll is the same in
+ * each.
+ */
+function fillLayoutText(ctx: Ctx2D, lay: Layout, x: number, baselineY: number): void {
+  const cells = lay.cells;
+  if (!cells) {
+    ctx.fillText(lay.text, x, baselineY);
+    return;
+  }
+  const travel = lay.h;
+  const top = baselineY - lay.ascent;
+  for (const cell of cells) {
+    const centred = (ch: string) => cell.x + (cell.digit ? (cell.w - ctx.measureText(ch).width) / 2 : 0);
+    if (!(cell.roll > 0)) {
+      ctx.fillText(cell.ch, x + centred(cell.ch), baselineY);
+      continue;
+    }
+    // A little room sideways, where nothing moves: a glyph's overhang is kept.
+    const slack = lay.fontPx * 0.12;
+    const sw = Math.ceil(cell.w + slack * 2);
+    const sh = Math.ceil(lay.h);
+    const buf = getScratch('roll', sw, sh);
+    if (!buf) {
+      // No buffer: the glyphs cut in place, the shadow with them.
+      ctx.save();
+      ctx.beginPath();
+      ctx.rect(x + cell.x - slack, top, sw, sh);
+      ctx.clip();
+      ctx.fillText(cell.ch, x + centred(cell.ch), baselineY - travel * cell.roll);
+      ctx.fillText(cell.next, x + centred(cell.next), baselineY + travel * (1 - cell.roll));
+      ctx.restore();
+      continue;
+    }
+    const b = buf.ctx;
+    b.save();
+    b.globalCompositeOperation = 'source-over';
+    b.globalAlpha = 1;
+    b.shadowColor = ZERO_SHADOW;
+    b.shadowBlur = 0;
+    if ('filter' in b) (b as { filter: string }).filter = 'none';
+    b.clearRect(0, 0, sw, sh);
+    b.beginPath();
+    b.rect(0, 0, sw, sh);
+    b.clip();
+    b.font = ctx.font;
+    b.textBaseline = 'alphabetic';
+    b.textAlign = 'left';
+    b.fillStyle = typeof ctx.fillStyle === 'string' ? ctx.fillStyle : '#ffffff';
+    const by = lay.ascent;
+    b.fillText(cell.ch, slack + centred(cell.ch) - cell.x, by - travel * cell.roll);
+    b.fillText(cell.next, slack + centred(cell.next) - cell.x, by + travel * (1 - cell.roll));
+    b.restore();
+    ctx.drawImage(buf.canvas, 0, 0, sw, sh, x + cell.x - slack, top, sw, sh);
+  }
+}
+
+/** What a mask or a cache keyed on a text must also carry: the odometer's rolls, quantised. */
+function rollKey(lay: Layout): string {
+  return lay.cells ? lay.cells.map((c) => Math.round(c.roll * 32)).join('') : '';
 }
 
 const ZERO_SHADOW = 'rgba(0,0,0,0)';
@@ -1033,10 +1118,11 @@ interface Scratch {
  * masked text's wash is cut in (`paintWash`). They only ever grow; callers
  * draw the sub-rect they asked for.
  */
-const scratches: Record<'grain' | 'mask' | 'knock', Scratch | null> = {
+const scratches: Record<'grain' | 'mask' | 'knock' | 'roll', Scratch | null> = {
   grain: null,
   mask: null,
   knock: null,
+  roll: null,
 };
 
 /** Refuse to build a grain buffer bigger than this (a runaway glow radius). */
@@ -1095,7 +1181,7 @@ function getMaskFor(
   bx: number,
   by: number,
 ): HTMLCanvasElement | OffscreenCanvas | null {
-  const key = `${lay.text} ${lay.font} ${lay.st.letterSpacingEm} ${glow.bleedRadiusFrac} ${bx.toFixed(2)},${by.toFixed(2)}`;
+  const key = `${lay.text} ${rollKey(lay)} ${lay.font} ${lay.st.letterSpacingEm} ${glow.bleedRadiusFrac} ${bx.toFixed(2)},${by.toFixed(2)}`;
   const cached = maskCache.get(elementId);
   if (cached && cached.key === key && cached.w === w && cached.h === h) {
     return cached.canvas;
@@ -1119,8 +1205,8 @@ function getMaskFor(
   mctx.shadowBlur = Math.max(1, glow.bleedRadiusFrac * lay.fontPx);
   mctx.shadowOffsetX = 0;
   mctx.shadowOffsetY = 0;
-  mctx.fillText(lay.text, bx, by);
-  mctx.fillText(lay.text, bx, by);
+  fillLayoutText(mctx, lay, bx, by);
+  fillLayoutText(mctx, lay, bx, by);
   setLetterSpacing(mctx, 0, lay.fontPx);
   mctx.restore();
 
@@ -1254,8 +1340,8 @@ function drawGlowedText(
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     ctx.fillStyle = st.color;
-    ctx.fillText(lay.text, lay.x, baselineY);
-    ctx.fillText(lay.text, lay.x, baselineY);
+    fillLayoutText(ctx, lay, lay.x, baselineY);
+    fillLayoutText(ctx, lay, lay.x, baselineY);
     ctx.restore();
   }
 
@@ -1267,7 +1353,7 @@ function drawGlowedText(
     ctx.shadowOffsetX = 0;
     ctx.shadowOffsetY = 0;
     ctx.fillStyle = st.color;
-    ctx.fillText(lay.text, lay.x, baselineY);
+    fillLayoutText(ctx, lay, lay.x, baselineY);
     ctx.restore();
   }
 
@@ -1280,7 +1366,7 @@ function drawGlowedText(
   ctx.shadowColor = ZERO_SHADOW;
   ctx.shadowBlur = 0;
   ctx.fillStyle = st.color;
-  ctx.fillText(lay.text, lay.x, baselineY);
+  fillLayoutText(ctx, lay, lay.x, baselineY);
   ctx.restore();
 
   setLetterSpacing(ctx, 0, fontPx);
@@ -1558,7 +1644,7 @@ function drawTextElement(
     ctx.shadowBlur = 0;
   }
   ctx.fillStyle = st.color;
-  ctx.fillText(lay.text, lay.x, lay.y + lay.ascent);
+  fillLayoutText(ctx, lay, lay.x, lay.y + lay.ascent);
   setLetterSpacing(ctx, 0, lay.fontPx);
   ctx.restore();
 }
@@ -1574,6 +1660,8 @@ function revealWidth(ctx: Ctx2D, lay: Layout, reveal: number, steps: boolean): n
   const shown = Math.round(chars.length * reveal);
   if (shown >= chars.length) return lay.w;
   if (shown <= 0) return 0;
+  // An odometer's cells are their own measure.
+  if (lay.cells) return cellsWidth(lay.cells.slice(0, shown));
   ctx.save();
   ctx.font = lay.font;
   setLetterSpacing(ctx, lay.st.letterSpacingEm, lay.fontPx);

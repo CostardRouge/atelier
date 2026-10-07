@@ -62,14 +62,16 @@ export interface TilePlan {
  * being enlarged: the smallest zoom whose pixels are at least as dense as the
  * raster's in both directions, then lowered until the region holds at most
  * `maxTiles` — a softer map rather than a hundred requests to a volunteer-run
- * server. Null for a region that cannot be tiled in one piece: empty, or
- * across the antimeridian.
+ * server. A `zoom` given is taken as it is: a strip's patch (`tile-strip.ts`)
+ * is cut on a zoom's own tile grid, and a rounding that chose the next one
+ * would ask four times the tiles. Null for a region that cannot be tiled in
+ * one piece: empty, or across the antimeridian.
  */
 export function planTiles(
   box: GeoBox,
   width: number,
   height: number,
-  { maxTiles = 64, maxZoom = 17 }: { maxTiles?: number; maxZoom?: number } = {},
+  { maxTiles = 64, maxZoom = 17, zoom }: { maxTiles?: number; maxZoom?: number; zoom?: number } = {},
 ): TilePlan | null {
   const lonSpan = box.east - box.west;
   const south = Math.max(-MERCATOR_MAX_LAT, box.south);
@@ -82,7 +84,7 @@ export function planTiles(
   const sec = 1 / Math.cos((nearest * Math.PI) / 180);
   const wantX = (width / lonSpan) * (360 / TILE_PX);
   const wantY = (height / latSpan) * (360 / TILE_PX) / sec;
-  let z = Math.max(0, Math.min(maxZoom, Math.ceil(Math.log2(Math.max(wantX, wantY, 1)))));
+  let z = zoom !== undefined ? Math.max(0, Math.min(maxZoom, Math.round(zoom))) : Math.max(0, Math.min(maxZoom, Math.ceil(Math.log2(Math.max(wantX, wantY, 1)))));
   for (;;) {
     const n = 2 ** z;
     const x0 = Math.max(0, Math.floor(lonToTileX(box.west, z)));
@@ -90,7 +92,7 @@ export function planTiles(
     const y0 = Math.max(0, Math.floor(latToTileY(north, z)));
     const y1 = Math.min(n - 1, Math.floor(latToTileY(south, z) - 1e-9));
     const count = (x1 - x0 + 1) * (y1 - y0 + 1);
-    if (count <= maxTiles || z === 0) return { z, x0, x1, y0, y1, count };
+    if (count <= maxTiles || z === 0 || zoom !== undefined) return { z, x0, x1, y0, y1, count };
     z -= 1;
   }
 }

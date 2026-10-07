@@ -1,17 +1,17 @@
 # The map openers' next round — the stops panel, the camera, grouping places, the recap
 
-**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5** (what is
-left: the finer tiles along a tight follow, the Itinerary's own camera, the
-odometer digits). The maintainer answered two labs the same day: «Labo Virée»
+**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5, then the
+finer tiles along a tight follow, the Itinerary's own camera and the
+odometer digits — nothing is left.** The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
 day, «tu peux commencer le développement de tout ça». What each built commit
 fixed is in `docs/memory/roadtrip.md` («The stops panel…», «The trip RECAP…»).
-Of §5, the **odometer digits are deferred**: the badge is text drawn by
-`drawOverlays`, which cannot roll a digit; a tabular-numeral setting is the
-cheap half, for later. The picture of the DAY and Défilé's ribbon stay «later»
-as written.
+Of §5, the **odometer digits are built** (the badge stays text drawn by
+`drawOverlays`, which learnt to draw a numeral in fixed, rolling cells —
+«The counter's digits are an ODOMETER» in `docs/memory/roadtrip.md`). The
+picture of the DAY and Défilé's ribbon stay «later» as written.
 
 Facts this rests on (read in the code on 2026-10-07): the stops editor is
 shared by both map openers (`shared/roadtrip/hooks/stops-editor.tsx`, the big
@@ -86,8 +86,13 @@ up, smoothing 1.1 s, look ahead 0.4 s, open and end wide; **Navigation** —
 smoothing 1.8 s, look ahead 0.2 s, open and end wide; **Whole route**. Calm is
 the default when Follow is chosen. The OpenStreetMap ground along the route at
 a tight follow needs finer tiles: its own commit, measured. **Built** (`map-camera.ts`,
-«Virée's CAMERA is a baked track» in `docs/memory/roadtrip.md`); the finer
-tiles and the Itinerary's own camera are not.
+«Virée's CAMERA is a baked track» in `docs/memory/roadtrip.md`), **and the
+finer tiles too** — a strip of one-tile patches along the road at the
+follow's own zoom, inside a tile budget, fading to the wide raster as the
+camera pulls back (`shared/map/tile-strip.ts`, «Finer tiles along a tight
+follow»); **and the Itinerary's own camera**, following the pen on the same
+track and presets, north up, clipped at the map's box, with the strip under
+it («The Itinerary's CAMERA follows the pen»).
 
 ## 4. Grouping nearby places — accepted, every option kept
 

@@ -19,6 +19,8 @@ import type { HookBasemapWant, HookContext, HookPictureStatus } from './hook-var
 interface BasemapStatusProps {
   /** What the opener would fetch, or null when it has nothing to draw yet. */
   want: HookBasemapWant | null;
+  /** The finer patches along a following camera's road, if any (`tile-strip.ts`). */
+  patches?: readonly HookBasemapWant[];
   ctx: HookContext;
   status?: HookPictureStatus;
   opacity: number;
@@ -29,16 +31,26 @@ interface BasemapStatusProps {
 }
 
 /** Where the background stands, and how strongly it shows. For a background that is ON. */
-export function BasemapStatus({ want, ctx, status, opacity, onOpacity, limits, note }: BasemapStatusProps) {
+export function BasemapStatus({ want, patches = [], ctx, status, opacity, onOpacity, limits, note }: BasemapStatusProps) {
   const allowed = useTilesAllowed();
   const drawn = want ? ctx.pictures?.has(want.key) === true : false;
   const problem = want ? status?.problems.get(want.key) : undefined;
+  // The strip along the road: said as a count, since a patch still on its
+  // way is nothing to act on — the paper and the wide raster stand in.
+  const patchesIn = patches.filter((p) => ctx.pictures?.has(p.key)).length;
+  const patchProblem = patches.map((p) => status?.problems.get(p.key)).find(Boolean);
   const line = !allowed
     ? null
     : !want
       ? 'Nothing to draw it under yet — the map needs stops first.'
       : drawn
-        ? null
+        ? !patches.length
+          ? null
+          : patchesIn === patches.length
+            ? `Plus ${patches.length} finer patches along the road, at the camera’s own zoom.`
+            : patchProblem && patchesIn === 0
+              ? `The finer patches along the road: ${patchProblem}`
+              : `Fetching the finer patches along the road — ${patchesIn} of ${patches.length} in.`
         : problem
           ? problem
           : 'Fetching the map background…';

@@ -3,7 +3,7 @@ import type { Asset } from '../../shared/library/assets';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
 import { findMedia } from '../../shared/projects/media-identity';
-import { loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
+import { TILE_WORKERS, loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
 import type {
   HookBasemapWant,
   HookContext,
@@ -31,6 +31,8 @@ const RELEASE_AFTER_MS = 4000;
 const SETTLE_MS = 180;
 /** A clip that has not shown its frame by then is reported, not waited on. */
 const CLIP_FRAME_TIMEOUT_MS = 8000;
+/** Map rasters that landed within this are published as one change. */
+const PUBLISH_MS = 120;
 
 const VIDEO_NAME = /\.(mp4|mov|m4v|webm)$/i;
 
@@ -98,12 +100,13 @@ function budgetCount(count: number): number {
  * one more picture.
  *
  * **And the map backgrounds** (`HookVariant.wantsBasemap`, 2026-09-28): the
- * OpenStreetMap region an opener asked for, stitched and laid onto its
- * projection (`shared/map/osm-tiles.ts`), put in the same map under its own
- * key so every renderer that already receives the pictures — the stage, the
- * rail, the PNG deck, both video paths — draws it with no plumbing of its
- * own. Never graded: a map is not a photograph. Never fetched unless this
- * device allows it; the refusal is a line in `status.problems`.
+ * OpenStreetMap regions an opener asked for — the whole map, then the finer
+ * patches along a following camera's road —, each stitched and laid onto its
+ * projection (`shared/map/osm-tiles.ts`) in the order asked, put in the same
+ * map under its own key so every renderer that already receives the pictures
+ * — the stage, the rail, the PNG deck, both video paths — draws them with no
+ * plumbing of its own. Never graded: a map is not a photograph. Never fetched
+ * unless this device allows it; the refusal is a line in `status.problems`.
  */
 export default function useHookPictures(
   layers: readonly HookLayer[],
@@ -127,9 +130,13 @@ export default function useHookPictures(
   // the pass: saying yes in the panel fetches at once.
   const basemaps = useMemo(() => {
     const out: HookBasemapWant[] = [];
+    const seen = new Set<string>();
     for (const layer of layers) {
-      const want = hookVariantById(layer.id)?.wantsBasemap?.(layer.options ?? {}, ctx);
-      if (want && !out.some((w) => w.key === want.key)) out.push(want);
+      for (const want of hookVariantById(layer.id)?.wantsBasemap?.(layer.options ?? {}, ctx) ?? []) {
+        if (seen.has(want.key)) continue;
+        seen.add(want.key);
+        out.push(want);
+      }
     }
     return out;
   }, [layers, ctx]);
@@ -193,13 +200,31 @@ export default function useHookPictures(
           return `${want.atSeconds ?? ''}#${want.shape ?? 'frame'}#${aspect.toFixed(4)}#${Math.round(cap)}#${grade}`;
         }
 
+        // Two hundred one-tile patches along a road must neither serialise
+        // their fetches nor re-render the editor two hundred times: a map
+        // that lands is published on the next tick with whatever landed
+        // with it.
+        let publishTimer: number | null = null;
+        const publish = () => {
+          if (publishTimer !== null) return;
+          publishTimer = window.setTimeout(() => {
+            publishTimer = null;
+            if (cancelled) return;
+            setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
+            setStatus({ pending, problems: new Map(problems) });
+          }, PUBLISH_MS);
+        };
+
         try {
           // The backgrounds first: a map under the pen is the bigger part of
           // the frame, and the tiles are cached, so a second pass is cheap.
-          for (const map of mapsToLoad) {
-            if (cancelled) return;
+          // The wide raster takes the whole worker count; a strip's one-tile
+          // patches are loaded side by side with one worker each, so the
+          // connections to the tile server stay at `TILE_WORKERS` either way.
+          const queue = [...mapsToLoad];
+          const loadMap = async (map: HookBasemapWant, workers: number) => {
             try {
-              const image = await loadBasemap(map.box, map.width, map.height);
+              const image = await loadBasemap(map.box, map.width, map.height, undefined, map.zoom, workers);
               if (cancelled) {
                 image.close();
                 return;
@@ -210,14 +235,22 @@ export default function useHookPictures(
                 picture: { image, width: image.width, height: image.height },
               });
               if (before) release(before.picture);
-              setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
             } catch (err) {
               if (cancelled) return;
               problems.set(map.key, err instanceof Error ? err.message : String(err));
             }
             pending -= 1;
-            setStatus({ pending, problems: new Map(problems) });
-          }
+            publish();
+          };
+          const lane = async () => {
+            for (let map = queue.shift(); map && !cancelled; map = queue.shift()) {
+              await loadMap(map, map.zoom === undefined ? TILE_WORKERS : 1);
+            }
+          };
+          const lanes: Promise<void>[] = [];
+          for (let i = 0; i < TILE_WORKERS; i++) lanes.push(lane());
+          await Promise.all(lanes);
+          if (cancelled) return;
           for (const want of list) {
             if (cancelled) return;
             const sig = sigOf(want);

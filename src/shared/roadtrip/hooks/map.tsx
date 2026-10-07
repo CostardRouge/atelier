@@ -29,7 +29,7 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import { EASINGS, EASING_IDS } from './easing';
-import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
+import type { HookContext, HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { paintMap } from './map-paint';
 import {
   MAP_DEFAULTS,
@@ -37,6 +37,9 @@ import {
   formatDistance,
   hopKms,
   mapBasemap,
+  mapCamera,
+  mapCameraPatch,
+  mapCameraTrack,
   mapBox,
   mapMoved,
   mapOptions,
@@ -54,6 +57,8 @@ import {
   type MapOptions,
 } from './map-plan';
 import { BasemapStatus, enableBasemap } from './basemap-row';
+import { CameraRows } from './camera-rows';
+import { stripBudget } from '../../map/osm-tiles';
 import { Group, MovedRow, resetLink } from './panel-ui';
 import { FitRow } from './fit-row';
 import { GroupRows } from './group-rows';
@@ -115,6 +120,11 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   });
   const line = o.media === 'off' ? null : pictureLine(keys, host?.pictureStatus);
   const totalKm = hopKms(shown).reduce((sum, km) => sum + km, 0);
+  // The camera and the ground as the opener will really draw them — over the
+  // stops as shown, the same call as `prepare` and `wantsBasemap`.
+  const drawn = { ...o, stops: shown };
+  const track = mapCameraTrack(drawn, timing, ctx.aspect);
+  const basemaps = o.basemap ? mapBasemap(drawn, ctx.aspect, track, stripBudget()) : null;
 
   // What the itinerary will really do for this piece — the counter modes'
   // rule: the real reading, or the reason there is none.
@@ -389,7 +399,8 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         />
         {o.basemap && (
           <BasemapStatus
-            want={mapBasemap(o, ctx.aspect)}
+            want={basemaps?.wide ?? null}
+            patches={basemaps?.patches}
             ctx={ctx}
             status={host?.pictureStatus}
             opacity={o.basemapOpacity}
@@ -654,6 +665,22 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
+      {o.draw && o.stops.length > 1 && (
+        <Group title="Camera">
+          <CameraRows
+            o={mapCamera(o)}
+            set={(patch) => set(mapCameraPatch(patch))}
+            viewKm={o.viewKm ?? track?.viewKm ?? 120}
+            fresh={o.viewKm === null}
+            words={{ whole: 'Whole map', follow: 'Follow the pen', subject: 'the pen' }}
+            heading={false}
+          />
+          {o.camera === 'follow' && (
+            <p className="m-0 text-xs text-muted">North stays up: a pen has no heading worth turning the map for. What the camera frames is cut at the map’s box.</p>
+          )}
+        </Group>
+      )}
+
       <Group title="Extras">
         <FieldRow label="Compass" hint={o.compass ? 'North is up because the projection is; the arrow says so.' : undefined}>
           <ToggleField label="A north arrow" checked={o.compass} onChange={(compass) => set({ compass })}>
@@ -766,6 +793,18 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   );
 }
 
+/**
+ * The options as the opener DRAWS them: the stops with their names WRITTEN —
+ * «Sydney, NSW» or «Sydney» as the trip and the opener say — so the labels,
+ * the cards and the caption all read the same text, and nearby stops folded
+ * into one where the author asked (`stop-clusters.ts`). `prepare` and
+ * `wantsBasemap` read the same, so the ground's keys match the paint's.
+ */
+function drawnOptions(options: Readonly<Record<string, unknown>>, ctx: HookContext): MapOptions {
+  const read = mapOptions(options);
+  return { ...read, stops: groupMapStops(writtenStops(read.stops, read.placeStyle, ctx.writing), read, ctx.towns ?? null) };
+}
+
 export const mapVariant: HookVariant = {
   id: 'map',
   name: 'Itinerary',
@@ -788,7 +827,12 @@ export const mapVariant: HookVariant = {
     return mapWants(mapOptions(options));
   },
   wantsBasemap(options, ctx) {
-    return mapBasemap(mapOptions(options), ctx.aspect);
+    // Over the stops as DRAWN — grouped and written, as `prepare` reads
+    // them — so the keys the shell fetches are the keys the paint looks up.
+    const o = drawnOptions(options, ctx);
+    if (o.stops.length === 0) return [];
+    const timing = mapTiming(planarHops(o.stops), o);
+    return mapBasemap(o, ctx.aspect, mapCameraTrack(o, timing, ctx.aspect), stripBudget())?.wants ?? [];
   },
   // Pointed at and dragged on the stage like any other content. The box is
   // the MAP's — everything else the opener draws is measured from it, so
@@ -802,16 +846,13 @@ export const mapVariant: HookVariant = {
     return { ...moveMap(mapOptions(options), dx, dy) };
   },
   prepare(options, ctx) {
-    // The stops with their names WRITTEN — «Sydney, NSW» or «Sydney» as the
-    // trip and the opener say — so the labels, the cards and the caption all
-    // read the same text.
-    const read = mapOptions(options);
-    // …and nearby stops folded into one where the author asked (`stop-clusters.ts`).
-    const o = { ...read, stops: groupMapStops(writtenStops(read.stops, read.placeStyle, ctx.writing), read, ctx.towns ?? null) };
+    const o = drawnOptions(options, ctx);
     if (o.stops.length === 0) return { seconds: 0 };
     const timing = mapTiming(planarHops(o.stops), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];
-    const basemap = mapBasemap(o, ctx.aspect);
+    // The camera following the pen, baked once with the timing (`map-camera.ts`).
+    const track = mapCameraTrack(o, timing, ctx.aspect);
+    const basemap = mapBasemap(o, ctx.aspect, track, stripBudget());
     const render: HookRender = {
       seconds: timing.total,
       // The caption names the stop the pen is at — the last one once it
@@ -829,7 +870,7 @@ export const mapVariant: HookVariant = {
             return name ? { caption: name } : {};
           }
         : undefined,
-      paint: (g, t, frame) => paintMap(g, o, timing, context, ctx.pictures, t, frame, basemap),
+      paint: (g, t, frame) => paintMap(g, o, timing, context, ctx.pictures, t, frame, basemap, track),
       score: o.sound && o.draw
         ? () => mapScore(timing, { kit: o.kit, pitch: o.tickPitch }, o.tickVolume)
         : undefined,

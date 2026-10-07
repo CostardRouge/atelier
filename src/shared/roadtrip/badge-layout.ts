@@ -445,6 +445,11 @@ export function badgeElements(
     el.x = layout.x;
     el.y = at;
     el.sizeFrac = layout.sizeFrac * RATIOS[piece.key];
+    // A counting headline is an odometer: fixed digit cells rolling with the
+    // value behind the text (`overlay/odometer.ts`).
+    if (piece.key === 'headline' && typeof content.headlineValue === 'number' && Number.isFinite(content.headlineValue)) {
+      el.odometer = content.headlineValue;
+    }
     applyPieceStyle(el, style, durationSeconds);
     return [el];
   });

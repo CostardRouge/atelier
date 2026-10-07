@@ -197,6 +197,14 @@ export interface BadgeContent {
   label: string | null;
   /** The dominant piece: the numeral, alone. */
   headline: string;
+  /**
+   * The continuous value behind the headline while it COUNTS — an opener
+   * following the car hands it with each rewrite (`drive-plan.ts`), and the
+   * numeral is then drawn as an ODOMETER: fixed digit cells that roll as the
+   * value passes (`overlay/odometer.ts`). Absent or null, the headline is a
+   * text like any other.
+   */
+  headlineValue?: number | null;
   /** What it is out of ("of 310"), read as subordinate. */
   counter: string | null;
   /** Where it was. */
