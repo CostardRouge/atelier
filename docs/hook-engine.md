@@ -595,6 +595,19 @@ renderer or either export moved.
 - **`render-order.test.ts` judges every registry line**, so a third car is
   gated the day it is listed. Rules the Kadjar measured, in `roadtrip.md`.
 
+### A third car — the Trafic (2026-10-07)
+
+- **`trafic-model.ts`** is the maintainer's white panel van with the solar
+  panel on its roof, and the first model over **`car-parts.ts`**: the
+  Kadjar's hull slices, decals and wheels lifted out of it (the Kadjar is
+  byte-identical over them) and given a car's PLAN — `makeBody` takes the
+  half length and width, the outline and the cut heights, and returns the
+  tools that know them. A van's flanks lean in above the belt, which `prism`
+  cannot say, so its three upper slices (cab, sliding door, tail) are built
+  by hand on a rectangular plan; the lean is why the tail is square and only
+  the nose rounded. The gear gained `roofSolar`, a panel in a frame on the
+  roof itself, beside the Prado's `solar` that rides in the basket.
+
 ### Boats, and a vehicle per piece (2026-09-29)
 
 - **Four boats in the registry** (`kind: 'boat'`): the Whitsundays day

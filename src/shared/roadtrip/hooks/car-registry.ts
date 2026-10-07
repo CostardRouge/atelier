@@ -2,10 +2,12 @@
  * The vehicles a Virée may drive — one registry line per model, the way the
  * tools and the hook variants are listed.
  *
- * Two cars: the Toyota Land Cruiser Prado of the J120 series (`car-model.ts`),
- * the maintainer's own, and the Renault Kadjar of the facelift
- * (`kadjar-model.ts`). Four boats: the Whitsundays day cruiser, the Viper,
- * the Alison Maree and the Solar Whisper (`*-model.ts` over `boat-parts.ts`).
+ * Three cars: the Toyota Land Cruiser Prado of the J120 series (`car-model.ts`),
+ * the maintainer's own, the Renault Kadjar of the facelift
+ * (`kadjar-model.ts`) and the Renault Trafic panel van with the solar panel
+ * on its roof (`trafic-model.ts`, over `car-parts.ts`). Four boats: the
+ * Whitsundays day cruiser, the Viper, the Alison Maree and the Solar Whisper
+ * (`*-model.ts` over `boat-parts.ts`).
  * Another is one more `*-model.ts` over `mesh3d.ts`, one line here and one `CarLine` in
  * `car-spec.ts` (what it offers and how it comes); its parts must stay
  * CONVEX, or the painter's ordering breaks, and `render-order.test.ts` judges
@@ -14,6 +16,7 @@
 
 import { CAR_LENGTH, CAR_WIDTH, WHEEL_RADIUS, buildCar, carPalette } from './car-model';
 import { KADJAR_LENGTH, KADJAR_WIDTH, KADJAR_WHEEL_RADIUS, buildKadjar, kadjarPalette } from './kadjar-model';
+import { TRAFIC_LENGTH, TRAFIC_WIDTH, TRAFIC_WHEEL_RADIUS, buildTrafic, traficPalette } from './trafic-model';
 import { ALISON_LENGTH, ALISON_WIDTH, alisonPalette, buildAlisonMaree } from './alison-maree-model';
 import { VIPER_LENGTH, VIPER_WIDTH, buildViper, viperPalette } from './viper-model';
 import { WHISPER_LENGTH, WHISPER_WIDTH, buildSolarWhisper, whisperPalette } from './solar-whisper-model';
@@ -67,6 +70,18 @@ export const CAR_MODELS: readonly CarModel[] = [
     wheelRadius: KADJAR_WHEEL_RADIUS,
     build: buildKadjar,
     palette: kadjarPalette,
+  },
+  {
+    id: 'trafic-ph2',
+    kind: 'car',
+    name: 'Renault Trafic',
+    short: 'Trafic',
+    series: 'Panel van · 2019–2021 facelift',
+    length: TRAFIC_LENGTH,
+    width: TRAFIC_WIDTH,
+    wheelRadius: TRAFIC_WHEEL_RADIUS,
+    build: buildTrafic,
+    palette: traficPalette,
   },
   {
     id: 'whitsunday-cruiser',
