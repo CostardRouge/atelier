@@ -129,6 +129,14 @@ export interface OverlayElement {
   label?: string;
   /** For kind:'text', the literal string. */
   text?: string;
+  /**
+   * The continuous VALUE behind a numeric text — an odometer (`odometer.ts`):
+   * every digit is drawn in a cell of the widest digit's width, so the
+   * numeral never jitters as it counts, and rolls toward the next digit as
+   * the value passes. The text stays the formatted string. Absent, the text
+   * is drawn as one run, as every element always was.
+   */
+  odometer?: number;
 
   /** Anchor point in normalized [0,1] video coords. */
   anchor: Anchor;

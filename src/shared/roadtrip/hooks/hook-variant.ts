@@ -344,8 +344,10 @@ export interface HookRender {
   /**
    * The pieces this layer rewrites at `t`, merged OVER the computed content.
    * `null` on a piece hides it. Absent = the badge says what it always said.
+   * `headlineValue` rides along: the continuous number behind a counting
+   * headline, which the badge draws as an odometer (`BadgeContent`).
    */
-  content?(t: number): Partial<Record<BadgePiece, string | null>>;
+  content?(t: number): HookContentPatch;
   /** Drawn between the picture and the shades, at the output's own size. */
   paint?(g: HookCtx2D, t: number, frame: FrameBox): void;
   /** The bed, as times and voices. Rendered offline at export; see §7. */
@@ -417,6 +419,9 @@ export interface HookPictureChoice {
    */
   keepsLater?: boolean;
 }
+
+/** What a layer's `content(t)` hands back: the pieces it rewrites, and the value behind a counting headline. */
+export type HookContentPatch = Partial<Record<BadgePiece, string | null>> & { headlineValue?: number | null };
 
 export interface HookPictureStatus {
   /** Pictures still being found, fetched or decoded. */

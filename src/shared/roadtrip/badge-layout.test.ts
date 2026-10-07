@@ -82,6 +82,14 @@ describe('badgeElements', () => {
     expect(els[0].y).toBeCloseTo(0.1, 6);
   });
 
+  it('draws a counting headline as an odometer, and any other as plain text', () => {
+    const els = badgeElements({ ...full, headlineValue: 27.85 }, layout(), REEL);
+    expect(els.find((e) => e.text === '27')!.odometer).toBe(27.85);
+    expect(els.find((e) => e.text === '27')!.text).toBe('27');
+    expect(badgeElements(full, layout(), REEL).find((e) => e.text === '27')!.odometer).toBeUndefined();
+    expect(badgeElements({ ...full, headlineValue: null }, layout(), REEL).find((e) => e.text === '27')!.odometer).toBeUndefined();
+  });
+
   it('skips absent pieces entirely rather than reserving their space', () => {
     const bare: BadgeContent = {
       kicker: null,

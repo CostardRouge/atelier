@@ -1,17 +1,17 @@
 # The map openers' next round — the stops panel, the camera, grouping places, the recap
 
 **Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5, then the
-finer tiles along a tight follow and the Itinerary's own camera** (what is
-left: the odometer digits). The maintainer answered two labs the same day: «Labo Virée»
+finer tiles along a tight follow, the Itinerary's own camera and the
+odometer digits — nothing is left.** The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
 day, «tu peux commencer le développement de tout ça». What each built commit
 fixed is in `docs/memory/roadtrip.md` («The stops panel…», «The trip RECAP…»).
-Of §5, the **odometer digits are deferred**: the badge is text drawn by
-`drawOverlays`, which cannot roll a digit; a tabular-numeral setting is the
-cheap half, for later. The picture of the DAY and Défilé's ribbon stay «later»
-as written.
+Of §5, the **odometer digits are built** (the badge stays text drawn by
+`drawOverlays`, which learnt to draw a numeral in fixed, rolling cells —
+«The counter's digits are an ODOMETER» in `docs/memory/roadtrip.md`). The
+picture of the DAY and Défilé's ribbon stay «later» as written.
 
 Facts this rests on (read in the code on 2026-10-07): the stops editor is
 shared by both map openers (`shared/roadtrip/hooks/stops-editor.tsx`, the big

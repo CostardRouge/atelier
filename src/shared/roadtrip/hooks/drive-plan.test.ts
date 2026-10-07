@@ -811,14 +811,33 @@ describe('the recap — the stops are dated, and the badge counts with the car',
   it('hands the badge its three pieces — the day, the distance or the stops — and the trip told whole past the end', () => {
     const o = quiet({ pace: 0.65 });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
-    expect(driveCounterPieces(plan, o, 'days', 0, WORDS)).toEqual({ label: 'Day', headline: '1', counter: 'of 30' });
-    expect(driveCounterPieces(plan, o, 'days', plan.seconds + 1, WORDS)).toEqual({ label: 'Day', headline: '30', counter: 'of 30' });
+    expect(driveCounterPieces(plan, o, 'days', 0, WORDS)).toEqual({ label: 'Day', headline: '1', headlineValue: 1, counter: 'of 30' });
+    expect(driveCounterPieces(plan, o, 'days', plan.seconds + 1, WORDS)).toEqual({ label: 'Day', headline: '30', headlineValue: 30, counter: 'of 30' });
+    // Under ten kilometres the numeral keeps a decimal and is no odometer's.
     expect(driveCounterPieces(plan, o, 'km', 0, WORDS)).toEqual({ label: 'km', headline: '0.0', counter: `of ${distanceNumeral(plan.kmAtStop[4], 'km')}` });
     expect(driveCounterPieces(plan, o, 'km', plan.seconds + 1, WORDS).headline).toBe(distanceNumeral(plan.kmAtStop[4], 'km'));
-    expect(driveCounterPieces(plan, o, 'places', 0, WORDS)).toEqual({ label: 'Stop', headline: '1', counter: 'of 5' });
+    expect(driveCounterPieces(plan, o, 'km', plan.seconds + 1, WORDS).headlineValue).toBe(Math.round(plan.kmAtStop[4]));
+    expect(driveCounterPieces(plan, o, 'places', 0, WORDS)).toEqual({ label: 'Stop', headline: '1', headlineValue: 1, counter: 'of 5' });
     expect(driveCounterPieces(plan, o, 'places', plan.seconds + 1, WORDS).headline).toBe('5');
     expect(driveCounterPieces(plan, { ...o, distance: 'mi' }, 'km', plan.seconds + 1, WORDS).label).toBe('mi');
     expect(driveCounterPieces(plan, o, 'places', 0, { day: 'Jour', of: 'sur' }).label).toBe('Stop');
+  });
+
+  it('hands the odometer the value behind the numeral: the day on its continuous scale, the distance in the unit', () => {
+    const o = quiet({ pace: 0.65 });
+    const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
+    // Mid-drive the value carries the fraction the digits roll on; its floor is the headline.
+    let rolled = false;
+    for (let t = 0.2; t < plan.schedule.arrivedAt; t += 0.1) {
+      const p = driveCounterPieces(plan, o, 'days', t, WORDS);
+      expect(Math.floor(p.headlineValue! + 1e-9)).toBe(Number(p.headline));
+      if (p.headlineValue! % 1 > 0.01) rolled = true;
+      const km = driveCounterPieces(plan, { ...o, distance: 'mi' }, 'km', t, WORDS);
+      if (km.headlineValue !== undefined) expect(Math.round(km.headlineValue)).toBe(Number(km.headline!.replace(/\s/g, '')));
+    }
+    expect(rolled).toBe(true);
+    // At rest past the end the value is whole: the final reading does not roll.
+    expect(driveCounterPieces(plan, o, 'days', plan.seconds + 1, WORDS).headlineValue! % 1).toBe(0);
   });
 
   it('keeps the badge’s own day when nothing dates the stops', () => {

@@ -938,7 +938,9 @@ Virée opener (anywhere else they say why not): *Days, as the car drives*,
 *Kilometres, as the car drives*, *Stops, as the car drives*. The number then
 follows the car at every frame — the day of the trip (its total the trip's),
 the distance as the crow flies between the stops passed (never a road
-distance, which the app does not know), or the stops reached — and a still of
+distance, which the app does not know), or the stops reached — with
+**odometer digits**: each in a fixed cell, so the badge never shakes when 199
+turns 200, rolling like a car's as the next one comes — and a still of
 the piece shows the trip told whole. ONE clock drives all of it: each stop is
 dated from the document and never invented — a leg's span shared evenly among
 its places, a place's own arrival and departure where it keeps them, a stop
