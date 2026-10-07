@@ -38,6 +38,7 @@ import { newId, type PlaceStyle } from '../trip-types';
 import type { HookPanelHost, HookPlace } from './hook-variant';
 import type { GroupOptions } from './stop-clusters';
 import { fillFromIndex, fillSummary, lackingLine, lacksIndexFacts } from './stop-index';
+import { insertAtHop, swapAt, type StopDrop } from './stop-drop';
 import MapField from './map-field';
 import { resetLink } from './panel-ui';
 import {
@@ -219,11 +220,12 @@ export default function StopsEditor({
         onDrop={(at) => add({ name: '', ...at })}
         onAdopt={add}
         onMove={(id, at) => onChange(patchStop(stops, id, at))}
+        onReorder={(id, drop) => onChange(reordered(stops, id, drop))}
       />
       <p className="m-0 text-2xs text-faint">
         {openMap
-          ? 'The big map is for finding places — tap one, two, three. This small one is the drawing as it goes out: click to drop a stop, drag one to move it, a hollow ring is one of the trip’s own places.'
-          : 'Click the map to drop a stop, drag one to move it, click a hollow ring to take one of the trip’s own places. Nothing here is fetched — no tiles, no basemap.'}
+          ? 'The big map is for finding places — tap one, two, three. This small one is the drawing as it goes out: click to drop a stop; drop a stop on another to swap them, on a line to insert it, elsewhere to move it; a hollow ring is one of the trip’s own places.'
+          : 'Click the map to drop a stop; drop a stop on another to swap them, on a line to insert it, elsewhere to move it; click a hollow ring to take one of the trip’s own places. Nothing here is fetched — no tiles, no basemap.'}
       </p>
 
       {stops.length === 0 && places.length > 1 && (
@@ -433,6 +435,7 @@ function StopPopover({
         onDrop={(at) => patch(at)}
         onAdopt={(place) => onChange(replaceStopPlace(stops, stop.id, place))}
         onMove={(id, at) => onChange(patchStop(stops, id, at))}
+        onReorder={(id, drop) => onChange(reordered(stops, id, drop))}
       />
       <PlaceSearchField
         value={stop.name}
@@ -553,4 +556,10 @@ export function StopStyleRow({
       />
     </FieldRow>
   );
+}
+
+/** A stop dropped on another (swap) or on a line (insert), as the field read it (`stop-drop.ts`). */
+function reordered(stops: readonly MapStop[], id: string, drop: Exclude<StopDrop, { kind: 'move' }>): MapStop[] {
+  const index = stops.findIndex((stop) => stop.id === id);
+  return drop.kind === 'swap' ? swapAt(stops, index, drop.index) : insertAtHop(stops, index, drop.hop);
 }

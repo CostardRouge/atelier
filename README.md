@@ -1257,13 +1257,22 @@ frames cut at the map's box — and, with the background on, the finer tiles
 along the road come with it. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
-big one: pan, zoom and pinch it, and every tap is the next stop, joined to the
-one before as you go — one, two, three, as many as the trip holds (there is
-no cap: a three-digit number simply shrinks to stay inside its dot). A tap near a town takes the town and
-its name (a switch turns that off, to drop a stop exactly where you tap), a
-hollow ring is one of the trip's own places, a numbered stop is dragged to
-move it, a place can be searched for and added, and a stop you dropped with no
-name is offered the nearest town's (never given it). The list beside the map
+big one, drawn over the coastline the app ships (no network): pan, zoom and
+pinch it, and every tap on a town or on one of the trip's own places (a hollow
+ring) is the next stop, joined to the one before as you go — one, two, three,
+as many as the trip holds (there is no cap: a three-digit number simply
+shrinks to stay inside its dot). A tap on a **line** adds a stop between its
+two ends, on the nearest town; a tap on empty ground does nothing (a switch,
+*Snap to towns: off*, drops a stop exactly where you tap instead). A stop you
+**drag** does what its landing says, told while you hold it: dropped on
+another stop the two **swap** numbers, dropped on a line it is **inserted**
+between that line's two stops, dropped anywhere else it **moves** there. The
+small map in the panel follows the same three rules. A tap on the number of
+the stop already picked in the list lets you **type** its new number, the
+others making room. Every one of these is a real step of the map's own
+**undo and redo** (the arrows at the foot, ⌘Z and ⇧⌘Z), and a note on the map
+offers *Undo* right after a drop. A place can be searched for and added, and a
+stop you dropped with no name is offered the nearest town's (never given it). The list beside the map
 **reorders by drag and drop** — grab a row by its grip (⠿) and drop it
 anywhere; held near the list's top or bottom edge it scrolls, so stop 110 can
 go first without letting go — and its ↑ / ↓ arrows still move a stop one place;
