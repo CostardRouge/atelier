@@ -449,7 +449,10 @@ What it proved, and what carried over:
   (transport vs Look tab) is not decided.
 - **The stack UI** (more than one layer) has no design. The storage is ready for
   it; the picker is not, and ordering + two `frame` owners need a screen before
-  it can exist.
+  it can exist. Its first candidate, Défilé's ribbon under Virée's map
+  (2026-10-07), was built as an option of Virée borrowing Défilé's painter
+  (`drive-ribbon.ts`): the ribbon reads the drive's clock and map box, which
+  no contract between two layers carries.
 
 ## 13. Virée — the car on the map (2026-09-14)
 

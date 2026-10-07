@@ -64,8 +64,8 @@ describe('the facts a town carries', () => {
 
 describe('filling a place from a town', () => {
   it('fills only what the place lacks', () => {
-    const filled = withCityFacts(stop('Sydney', -33.87, 151.21, { country: 'Straya' }), CITIES[0]);
-    expect(filled).toMatchObject({ state: 'New South Wales', countryCode: 'AU', country: 'Straya' });
+    const filled = withCityFacts(stop('Sydney', -33.87, 151.21, { countryCode: 'AU', country: 'Oz' }), CITIES[0]);
+    expect(filled).toMatchObject({ state: 'New South Wales', countryCode: 'AU', country: 'Oz' });
   });
 
   it('keeps a state the author wrote as its official code', () => {
@@ -78,9 +78,21 @@ describe('filling a place from a town', () => {
     expect(withCityFacts(own, CITIES[0])).toBe(own);
   });
 
+  it('takes nothing when the place names another country in words alone', () => {
+    const own = stop('Sydney', -33.87, 151.21, { country: 'Canada' });
+    expect(withCityFacts(own, CITIES[0])).toBe(own);
+    expect(withCityFacts(stop('Sydney', -33.87, 151.21, { country: 'australia' }), CITIES[0])).toMatchObject({
+      countryCode: 'AU',
+      state: 'New South Wales',
+    });
+  });
+
   it('takes nothing when the place says another state', () => {
     const own = stop('Sydney', -33.87, 151.21, { state: 'Victoria' });
     expect(withCityFacts(own, CITIES[0])).toBe(own);
+    const coded = stop('Sydney', -33.87, 151.21, { stateCode: 'VIC' });
+    expect(withCityFacts(coded, CITIES[0])).toBe(coded);
+    expect(withCityFacts(stop('Sydney', -33.87, 151.21, { stateCode: 'NSW' }), CITIES[0])).toMatchObject({ state: 'New South Wales' });
   });
 });
 
@@ -113,6 +125,12 @@ describe('the state around a point', () => {
     expect(regionAround(CITIES, { lat: -28.17, lon: 153.538 })).toBeNull();
   });
 
+  it('sees a town of another state at the very edge of the circle', () => {
+    const at = city('Here', -26, 153, ...QLD);
+    const south = city('There', -26 - (24.99 / 6371.0088) * (180 / Math.PI), 153, ...NSW);
+    expect(regionAround([at, south], { lat: -26, lon: 153 })).toBeNull();
+  });
+
   it('is nothing far from every town', () => {
     expect(regionAround(CITIES, { lat: -30, lon: 140 })).toBeNull();
   });
@@ -132,6 +150,11 @@ describe('a stop read from the index', () => {
       state: 'Queensland',
       countryCode: 'AU',
     });
+  });
+
+  it('asks the towns around when the town of its name knows no state', () => {
+    const cities = [...CITIES, city('Carlo', -25.9, 153.08, '', '')];
+    expect(placeFromIndex(stop('Carlo', -25.9, 153.08), cities)).toMatchObject({ state: 'Queensland' });
   });
 
   it('is left alone when it knows its state and country already', () => {

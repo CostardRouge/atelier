@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { fitProjection, formatDistance, haversineKm, placeLabels, projectionFor } from './geo';
+import { EARTH_RADIUS_KM, degreeWindow, fitProjection, formatDistance, haversineKm, placeLabels, projectionFor } from './geo';
 
 const PERTH = { lat: -31.95, lon: 115.86 };
 const BROOME = { lat: -17.96, lon: 122.24 };
@@ -95,5 +95,30 @@ describe('placeLabels', () => {
     );
     expect(labels.length).toBeLessThan(5);
     expect(new Set(labels.map((l) => l.side)).size).toBe(labels.length);
+  });
+});
+
+describe('degreeWindow', () => {
+  it('holds every point the distance accepts, at any latitude and bearing', () => {
+    for (const lat of [-80, -60, -33.9, 0, 12.5, 45, 60.2, 75]) {
+      for (const km of [1, 10, 25, 50, 400]) {
+        const box = degreeWindow(lat, km);
+        for (let b = 0; b < 360; b += 3) {
+          // The point at exactly `km` on bearing b, on haversineKm's sphere.
+          const r = km / EARTH_RADIUS_KM;
+          const p1 = (lat * Math.PI) / 180;
+          const th = (b * Math.PI) / 180;
+          const p2 = Math.asin(Math.sin(p1) * Math.cos(r) + Math.cos(p1) * Math.sin(r) * Math.cos(th));
+          const dl = Math.atan2(Math.sin(th) * Math.sin(r) * Math.cos(p1), Math.cos(r) - Math.sin(p1) * Math.sin(p2));
+          expect(Math.abs((p2 * 180) / Math.PI - lat)).toBeLessThanOrEqual(box.dLat);
+          if (box.dLon !== null) expect(Math.abs((dl * 180) / Math.PI)).toBeLessThanOrEqual(box.dLon);
+        }
+      }
+    }
+  });
+
+  it('takes every longitude where the circle reaches a pole', () => {
+    expect(degreeWindow(89.9, 50).dLon).toBeNull();
+    expect(degreeWindow(0, 30_000).dLon).toBeNull();
   });
 });

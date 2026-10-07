@@ -32,7 +32,30 @@ import {
   tapeTicks,
   type ScrubOptions,
   type ScrubPlan,
+  type TapeGeometry,
 } from './scrub-plan';
+
+/** What a tape READS at one moment: the trip's days, its leg starts, the day under the head. */
+export interface TapeReading {
+  totalDays: number;
+  legStarts: readonly number[];
+  headDay: number;
+}
+
+/** How a tape is drawn — Défilé's own options, or another opener's choice of them (Virée's ribbon). */
+export type TapeStyle = Pick<
+  ScrubOptions,
+  | 'tickColor'
+  | 'passedColor'
+  | 'tickOpacity'
+  | 'tickGap'
+  | 'showTrack'
+  | 'tapeBackground'
+  | 'backgroundOpacity'
+  | 'edgeFade'
+  | 'headStyle'
+  | 'headGlow'
+>;
 
 /** What an untold day looks like: the paper's ink, not pure black. */
 const EMPTY_DAY = '#0c0b09';
@@ -74,7 +97,12 @@ export function paintScrub(
     }
   }
 
-  paintTape(g, plan, opts, t, w, h);
+  paintTape(
+    g,
+    { totalDays: plan.totalDays, legStarts: plan.legStarts, headDay: plan.headDayAt(t) },
+    opts,
+    tapeGeometry(w, h, opts),
+  );
 }
 
 /**
@@ -97,20 +125,16 @@ function drawPicture(
   }
 }
 
-function paintTape(
-  g: HookCtx2D,
-  plan: ScrubPlan,
-  opts: ScrubOptions,
-  t: number,
-  w: number,
-  h: number,
-): void {
-  // Every size and the band come from the pure geometry, so the rectangle the
-  // stage grabs (`tapeBox`) is the one drawn here.
-  const { x0, x1, length, baseline, dir, u, shortTick, headTall, tallTick, band } = tapeGeometry(w, h, opts);
-  const headDay = plan.headDayAt(t);
-  const legs = new Set(plan.legStarts);
-  const xOf = (day: number) => x0 + length * tapeFraction(day, plan.totalDays);
+/**
+ * The tape, drawn on the geometry it is handed. Défilé hands its own
+ * (`tapeGeometry`, the rectangle the stage grabs); Virée hands the ribbon's
+ * under its map (`drive-ribbon.ts`) — one painter, so the two tapes are one.
+ */
+export function paintTape(g: HookCtx2D, reading: TapeReading, opts: TapeStyle, geometry: TapeGeometry): void {
+  const { x0, x1, length, baseline, dir, u, shortTick, headTall, tallTick, band } = geometry;
+  const { headDay, totalDays } = reading;
+  const legs = new Set(reading.legStarts);
+  const xOf = (day: number) => x0 + length * tapeFraction(day, totalDays);
   const fade = (x: number) => edgeFadeAt(x, x0, x1, opts.edgeFade);
 
   g.save();
@@ -149,7 +173,7 @@ function paintTape(
     g.fillRect(x0, baseline - 0.75 * u, length, 1.5 * u);
   }
 
-  for (const day of tapeTicks(plan.totalDays, length, plan.legStarts, opts.tickGap * u)) {
+  for (const day of tapeTicks(totalDays, length, reading.legStarts, opts.tickGap * u)) {
     const leg = legs.has(day);
     const tall = leg ? tallTick : shortTick;
     const passed = day <= headDay + 1e-6;
@@ -162,7 +186,7 @@ function paintTape(
 
   // The reading head. Its glow is one shadow blur a frame — affordable on a
   // single small shape where it is not on every tick.
-  const hx = x0 + length * tapeFraction(headDay, plan.totalDays);
+  const hx = x0 + length * tapeFraction(headDay, totalDays);
   g.globalAlpha = fade(hx);
   if (opts.headGlow) {
     g.shadowColor = hexToRgba(opts.passedColor, 0.75);

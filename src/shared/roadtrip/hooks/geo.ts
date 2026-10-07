@@ -114,9 +114,31 @@ export function projectionFor<P extends GeoPoint>(
   };
 }
 
+/** The Earth's mean radius `haversineKm` measures with, km. */
+export const EARTH_RADIUS_KM = 6371.0088;
+
+/**
+ * The box in degrees that holds every point within `km` of a latitude —
+ * EXACT for `haversineKm`'s sphere, then padded a hair, so a filter on it
+ * never refuses a point the distance would accept. `dLon` is null where the
+ * circle takes in every longitude (it reaches a pole). A box built on
+ * 111.32 km a degree and `km / cos(lat)` was 0.1 % short north–south and
+ * missed the circle's bulge east–west: a town 49.99 km away was left out of a
+ * 50 km search (2026-10-07, the review of the town grid).
+ */
+export function degreeWindow(lat: number, km: number): { dLat: number; dLon: number | null } {
+  const PAD = 1.001;
+  const r = Math.max(0, km) / EARTH_RADIUS_KM;
+  const dLat = ((r * 180) / Math.PI) * PAD + 1e-9;
+  const cosLat = Math.cos((lat * Math.PI) / 180);
+  const sinR = Math.sin(Math.min(r, Math.PI / 2));
+  if (r >= Math.PI / 2 || sinR >= cosLat * 0.999) return { dLat, dLon: null };
+  return { dLat, dLon: ((Math.asin(sinR / cosLat) * 180) / Math.PI) * PAD + 1e-9 };
+}
+
 /** Great-circle distance between two located places, in kilometres. */
 export function haversineKm<P extends GeoPoint>(a: P, b: P): number {
-  const R = 6371.0088;
+  const R = EARTH_RADIUS_KM;
   const toRad = (deg: number) => (deg * Math.PI) / 180;
   const dLat = toRad(b.lat - a.lat);
   const dLon = toRad(b.lon - a.lon);

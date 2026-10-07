@@ -23,6 +23,7 @@
  */
 
 import { townsFromOrder, townOrder, type Town } from '../map/pick-map';
+import { startTask } from '../tasks/tasks';
 import { parseGazetteer, type GazetteerCity } from './gazetteer';
 import type { GazetteerAnswer, GazetteerFailure } from './gazetteer-worker';
 
@@ -47,6 +48,10 @@ let loaded: GazetteerIndex | null = null;
 
 function loadIndex(): Promise<GazetteerIndex> {
   if (!pending) {
+    // Said in the masthead's pill (after `SHOW_AFTER_MS`): the first read is
+    // 2 MB over the wire and a parse, and a switch that turned grouping on,
+    // or a map opening, must not look as if nothing happened.
+    const task = startTask({ label: 'Reading the town index' });
     pending = (typeof Worker === 'undefined' ? inThread() : inWorker())
       .then((index) => {
         loaded = index;
@@ -55,7 +60,8 @@ function loadIndex(): Promise<GazetteerIndex> {
       .catch((error: unknown) => {
         pending = null;
         throw error;
-      });
+      })
+      .finally(() => task.done());
   }
   return pending;
 }

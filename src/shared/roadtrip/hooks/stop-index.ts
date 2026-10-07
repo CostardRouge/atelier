@@ -25,7 +25,7 @@
 import type { GazetteerCity } from '../gazetteer';
 import { countryName } from '../place-style';
 import { officialStateCode } from '../state-codes';
-import { haversineKm, type GeoPoint } from './geo';
+import { degreeWindow, haversineKm, type GeoPoint } from './geo';
 import type { HookPlace } from './hook-variant';
 
 /** How far a town of the stop's own name may lie and still be the stop. */
@@ -34,8 +34,6 @@ export const SAME_TOWN_KM = 15;
 export const AT_TOWN_KM = 10;
 /** …and the circle every town of which must lie in one state. */
 export const AROUND_KM = 25;
-
-const KM_PER_DEGREE = 111.32;
 
 function fold(text: string): string {
   return text.normalize('NFD').replace(/[̀-ͯ]/g, '').trim().toLowerCase();
@@ -76,8 +74,14 @@ export function withCityFacts<P extends HookPlace>(place: P, city: TownFacts): P
   const facts = cityFacts(city);
   const ownCountry = (place.countryCode ?? '').trim().toUpperCase();
   if (ownCountry && facts.countryCode && ownCountry !== facts.countryCode) return place;
+  // A country written in words and no code (a place from before v30) is the
+  // author's word too: another country's name refuses the town.
+  const ownCountryName = (place.country ?? '').trim();
+  if (!ownCountry && ownCountryName && facts.countryCode && fold(ownCountryName) !== fold(facts.country ?? '')) return place;
   const ownState = (place.state ?? '').trim();
   if (ownState && facts.state && !sameState(ownState, facts.state, facts.countryCode ?? ownCountry)) return place;
+  const ownCode = (place.stateCode ?? '').trim();
+  if (!ownState && ownCode && facts.state && !sameState(ownCode, facts.state, facts.countryCode ?? ownCountry)) return place;
   const next = { ...place };
   if (!ownState && facts.state) next.state = facts.state;
   if (!ownCountry && facts.countryCode) {
@@ -123,9 +127,8 @@ export function townNamed(
 
 /** Every town of the index within `km` of a point, nearest first. */
 function townsWithin(cities: readonly GazetteerCity[], point: GeoPoint, km: number): { city: GazetteerCity; km: number }[] {
-  const latWindow = km / KM_PER_DEGREE;
-  const cosLat = Math.cos((point.lat * Math.PI) / 180);
-  const lonWindow = cosLat > 0.02 ? km / (KM_PER_DEGREE * cosLat) : 181;
+  const { dLat: latWindow, dLon } = degreeWindow(point.lat, km);
+  const lonWindow = dLon ?? 181;
   const out: { city: GazetteerCity; km: number }[] = [];
   for (const city of cities) {
     if (Math.abs(city.lat - point.lat) > latWindow) continue;
@@ -140,16 +143,17 @@ function townsWithin(cities: readonly GazetteerCity[], point: GeoPoint, km: numb
 /**
  * The state and country a point lies in, when the index says so without
  * doubt: a town within {@link AT_TOWN_KM}, and every town within
- * {@link AROUND_KM} in that one state. Null otherwise.
+ * {@link AROUND_KM} in that one state — a town with no state counting for
+ * neither. Null otherwise.
  */
 export function regionAround(
   cities: readonly GazetteerCity[],
   point: GeoPoint,
 ): Pick<GazetteerCity, 'region' | 'country'> | null {
-  const around = townsWithin(cities, point, AROUND_KM);
+  // A town the index gives no state says nothing either way.
+  const around = townsWithin(cities, point, AROUND_KM).filter((t) => t.city.regionKey && t.city.region.trim());
   if (!around.length || around[0].km > AT_TOWN_KM) return null;
   const first = around[0].city;
-  if (!first.regionKey || !first.region.trim()) return null;
   return around.every((t) => t.city.regionKey === first.regionKey) ? { region: first.region, country: first.country } : null;
 }
 
@@ -173,7 +177,11 @@ export function placeFromIndex<P extends HookPlace>(
   names?: TownNames,
 ): P | null {
   if (!lacksIndexFacts(place)) return null;
-  const source = townNamed(cities, place, names) ?? regionAround(cities, place);
+  // A town of its name that knows no state still lets the towns around say one,
+  // in that town's own country.
+  const named = townNamed(cities, place, names);
+  const around = named?.region.trim() ? null : regionAround(cities, place);
+  const source = around && (!named || around.country === named.country) ? around : named;
   if (!source) return null;
   const next = withCityFacts(place, source);
   return next.state !== place.state || next.countryCode !== place.countryCode ? next : null;

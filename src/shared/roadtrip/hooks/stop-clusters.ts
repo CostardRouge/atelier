@@ -21,7 +21,7 @@
  * Pure and DOM-free; the towns are handed in.
  */
 
-import { haversineKm, type GeoPoint } from './geo';
+import { degreeWindow, haversineKm, type GeoPoint } from './geo';
 
 export type GroupVisits = 'consecutive' | 'all';
 export type GroupName = 'town' | 'first' | 'central';
@@ -129,14 +129,89 @@ export function groupName(
   if (rule === 'central') return stops[group.anchor].name;
   if (rule === 'town' && towns?.length) {
     const reach = Math.max(...group.members.map((i) => haversineKm(group.centre, stops[i]))) + TOWN_REACH_KM;
-    let best: NamedTown | null = null;
-    for (const town of towns) {
-      if (haversineKm(group.centre, town) > reach) continue;
-      if (!best || town.population > best.population) best = town;
-    }
+    const best = biggestTownWithin(towns, group.centre, reach);
     if (best) return best.name;
   }
   return stops[group.members[0]].name;
+}
+
+/**
+ * The towns in one-degree CELLS, built once per index and kept beside it.
+ *
+ * Naming a group used to read every town of the index — 130 000 great-circle
+ * solves per group, 685 ms for the 40 groups of a three-month trip, measured
+ * on the real file — and every surface that draws an opener asks for the
+ * names again: the panel on each render (which is each frame while the piece
+ * plays), `prepare`, `wantsPictures`, `wantsBasemap`. That is what made the
+ * whole editor stutter the moment grouping was on (2026-10-07, the
+ * maintainer). A group's reach is tens of kilometres, so only the cells
+ * around it are read: the same answer, to the town.
+ */
+const CELL_DEG = 1;
+interface TownGrid {
+  cells: Map<string, number[]>;
+}
+const grids = new WeakMap<readonly NamedTown[], TownGrid>();
+
+const SPAN = Math.round(360 / CELL_DEG);
+/** A longitude cell index brought into [−180, 180): ±180 is one meridian. */
+function wrapCell(b: number): number {
+  return ((((b + SPAN / 2) % SPAN) + SPAN) % SPAN) - SPAN / 2;
+}
+function cellKey(lat: number, lon: number): string {
+  return `${Math.floor(lat / CELL_DEG)}:${wrapCell(Math.floor(lon / CELL_DEG))}`;
+}
+
+function gridOf(towns: readonly NamedTown[]): TownGrid {
+  let grid = grids.get(towns);
+  if (grid) return grid;
+  const cells = new Map<string, number[]>();
+  towns.forEach((town, i) => {
+    const key = cellKey(town.lat, town.lon);
+    const cell = cells.get(key);
+    if (cell) cell.push(i);
+    else cells.set(key, [i]);
+  });
+  grid = { cells };
+  grids.set(towns, grid);
+  return grid;
+}
+
+/**
+ * The most populous town within `reach` km of `centre` — on a tie the one
+ * the index lists first, exactly as a scan of the whole list would choose.
+ */
+export function biggestTownWithin(towns: readonly NamedTown[], centre: GeoPoint, reach: number): NamedTown | null {
+  const { cells } = gridOf(towns);
+  const window = degreeWindow(centre.lat, reach);
+  const lat0 = Math.floor((centre.lat - window.dLat) / CELL_DEG);
+  const lat1 = Math.floor((centre.lat + window.dLat) / CELL_DEG);
+  // Near a pole, or for a reach past a few thousand km, every longitude.
+  const dLon = window.dLon === null || window.dLon >= 180 ? 180 : window.dLon;
+  const lon0 = Math.floor((centre.lon - dLon) / CELL_DEG);
+  const lon1 = Math.floor((centre.lon + dLon) / CELL_DEG);
+  const seen = new Set<number>();
+  let best = -1;
+  for (let a = lat0; a <= lat1; a += 1) {
+    for (let b = lon0; b <= lon1; b += 1) {
+      // A longitude cell past ±180 is the same cell the other side of the antimeridian.
+      const wrapped = wrapCell(b);
+      if (seen.has(a * SPAN + wrapped)) continue;
+      seen.add(a * SPAN + wrapped);
+      const cell = cells.get(`${a}:${wrapped}`);
+      if (!cell) continue;
+      for (const i of cell) {
+        const town = towns[i];
+        if (best >= 0) {
+          const held = towns[best];
+          if (town.population < held.population || (town.population === held.population && i > best)) continue;
+        }
+        if (haversineKm(centre, town) > reach) continue;
+        best = i;
+      }
+    }
+  }
+  return best >= 0 ? towns[best] : null;
 }
 
 /** Whether these options group anything at all. */
