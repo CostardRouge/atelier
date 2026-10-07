@@ -66,11 +66,21 @@ describe('stateCodeFor', () => {
     expect(stateCodeFor({ state: '' }, trip())).toEqual({ code: '', from: 'none' });
   });
 
-  it('automatic order: own, then the table, then the search, then derived', () => {
+  it('automatic order: own, then the table, then the search, then the official code, then derived', () => {
     expect(stateCodeFor({ ...qld, stateCode: 'Q' }, trip({ Queensland: 'QL' }))).toEqual({ code: 'Q', from: 'own' });
     expect(stateCodeFor(qld, trip({ Queensland: 'QL' }))).toEqual({ code: 'QL', from: 'table' });
     expect(stateCodeFor(qld, trip())).toEqual({ code: 'QLD', from: 'search' });
-    expect(stateCodeFor({ state: 'Queensland' }, trip())).toEqual({ code: 'QUE', from: 'derived' });
+    // Deriving gave Queensland QUE, which nobody reads (2026-10-07).
+    expect(stateCodeFor({ state: 'Queensland' }, trip())).toEqual({ code: 'QLD', from: 'official' });
+    expect(stateCodeFor({ state: 'Bretagne' }, trip())).toEqual({ code: 'BRE', from: 'derived' });
+  });
+
+  it('reads the official code within the place’s country, and by the name alone without one', () => {
+    expect(stateCodeFor({ state: 'Northern Territory', countryCode: 'AU' }, trip())).toEqual({ code: 'NT', from: 'official' });
+    expect(stateCodeFor({ state: 'Québec', countryCode: 'CA' }, trip())).toEqual({ code: 'QC', from: 'official' });
+    expect(stateCodeFor({ state: 'Washington' }, trip())).toEqual({ code: 'WA', from: 'official' });
+    // A state of another country is not looked up in these tables.
+    expect(stateCodeFor({ state: 'Queensland', countryCode: 'FR' }, trip())).toEqual({ code: 'QUE', from: 'derived' });
   });
 
   it('a pin wins over the automatic order — the author may prefer the search over their table', () => {
@@ -82,7 +92,7 @@ describe('stateCodeFor', () => {
 
   it('a pin on a rung that went empty falls through instead of showing nothing', () => {
     expect(stateCodeFor({ ...qld, codeFrom: 'table' }, trip())).toEqual({ code: 'QLD', from: 'search' });
-    expect(stateCodeFor({ state: 'Queensland', codeFrom: 'own' }, trip())).toEqual({ code: 'QUE', from: 'derived' });
+    expect(stateCodeFor({ state: 'Queensland', codeFrom: 'own' }, trip())).toEqual({ code: 'QLD', from: 'official' });
   });
 
   it('lists every candidate, empty where the place has none', () => {
@@ -90,6 +100,7 @@ describe('stateCodeFor', () => {
       own: '',
       table: 'QL',
       search: 'QLD',
+      official: 'QLD',
       derived: 'QUE',
     });
   });
@@ -115,7 +126,7 @@ describe('writePlace', () => {
 
   it('reads the trip’s table when the place has no code of its own', () => {
     expect(writePlace({ name: 'Cairns', state: 'Queensland' }, 'code', trip({ Queensland: 'QLD' }))).toBe('Cairns, QLD');
-    expect(writePlace({ name: 'Cairns', state: 'Queensland' }, 'code', trip())).toBe('Cairns, QUE');
+    expect(writePlace({ name: 'Cairns', state: 'Queensland' }, 'code', trip())).toBe('Cairns, QLD');
   });
 });
 

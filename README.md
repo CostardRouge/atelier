@@ -638,8 +638,16 @@ dates, and a dot for "the 12th" would claim what the trip does not know. The
 legs are joined in the order you lived them, the road solid up to the open leg
 and pale after it, and **dotted** where the trip cannot account for its days —
 days no leg covers, or a leg whose place was typed without a position. Those are
-**counted in a corner, never guessed**, each with its verb: *Locate…* opens the
-leg where its place is set, *Cover…* makes a leg of exactly those days. Click a
+listed under **Not on the map**, each saying what it lacks and the verb that
+fixes it: a place that has a name is looked up in the shipped city index —
+offline, in the trip's country, in the state the place names, and taken only
+when one town answers or one is clearly nearer the legs around it — and placed
+in one click (**Place it**, or **Place all** for every one found; ⌘Z takes it
+back); a name the index cannot settle opens the leg on that place's **Fix…**
+(the towns of that name, the search, a position by hand); a leg with no place
+opens on a new one (**Add a place…**); *Cover…* makes a leg of exactly the days
+no leg covers. A grey town name on the map is only the index's label, never one
+of your places. Click a
 dial to open its leg (the open day moves into it), pick one of its days in the
 leg's card, or drag along the year map above to walk the trip a week at a time
 while the map follows; the **Pictures** switch puts each told leg's latest hook
@@ -778,13 +786,15 @@ default, so nothing you composed changes) and once for the lists, the legs,
 the calendar and the map (the short code by default); a stage, or a single
 place under **More…**, can depart from it, the nearest choice winning. The
 **short code** comes from the place's own, else the trip's own table, else
-what the search gave, else the state's initials — said as such, because
-initials are right for New South Wales and wrong for Queensland. No table is
-shipped: the trip's table is yours, one line per state, written from a
-place's editor (**Keep QLD for Queensland on this trip**) or in Trip settings
-→ Places, where every state your places name is listed with the code it
-reads today and where that code comes from; a place can still prefer the
-search's code or its own over the table. The table travels in the backup.
+what the search gave, else the **official abbreviation** — shipped for
+Australia, the United States and Canada only ("Queensland" reads QLD,
+"Texas" TX, "Quebec" QC) —, else the state's initials, said as such because
+initials are right for New South Wales and wrong for Queensland. The trip's
+table is yours, one line per state, written from a place's editor (**Keep
+QLD for Queensland on this trip**) or in Trip settings → Places, where every
+state your places name is listed with the code it reads today and where that
+code comes from; a place can still prefer the search's code or its own over
+the table. The table travels in the backup.
 
 Each place can carry **coordinates**, and there are two ways to get them: type
 the name and leave it at that (a place that is only a name is a complete

@@ -20,7 +20,10 @@ import {
 } from '../../shared/roadtrip/trip-days';
 import { createLoupeStore } from '../../shared/roadtrip/loupe';
 import { stageAt, stageDayNumber, tripCoverage } from '../../shared/roadtrip/trip-coverage';
-import { rememberStateCode } from '../../shared/roadtrip/place-style';
+import { placeText, rememberStateCode } from '../../shared/roadtrip/place-style';
+import { applyIndexPicks, lookupTrip, placeAtCity } from '../../shared/roadtrip/place-locate';
+import type { GazetteerCity } from '../../shared/roadtrip/gazetteer';
+import { requestPlace } from './place-request';
 import { stageLabel, tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import {
   usePublishMediaActions,
@@ -63,7 +66,7 @@ import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import LegsSheet from './LegsSheet';
 import YearMap from './YearMap';
-import TripMapView, { OffMapRows, type StagePicture } from './TripMapView';
+import TripMapView, { OffMapRows, type OffMapActions, type StagePicture } from './TripMapView';
 import StageDays from './StageDays';
 import MapStageBar from './MapStageBar';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
@@ -672,7 +675,7 @@ export default function TripOverview({
   );
   const [offMapOpen, setOffMapOpen] = useState(false);
   /**
-   * «Locate…»: open the stage — as a tap on its dial would, the day moving
+   * «Fix…» / «Add a place…» (was «Locate…»): open the stage — as a tap on its dial would, the day moving
    * into it — where its place is edited: the aside's card, or the legs sheet.
    * Opened without moving the day, the aside drew one stage's days above
    * another stage's card.
@@ -685,7 +688,30 @@ export default function TripOverview({
     },
     [openStageOnMap, compact],
   );
-  /** «Cover…»: a new stage over exactly those days, open to be named — the ruler's gap `+`. */
+  // The index of towns, read only while the map lists a stage whose place has
+  // a name and no position — the one «Place it» answers from (offline).
+  const wantsIndex =
+    onMap && model.offMap.unplaced.some((s) => s.stage.places.some((p) => !p.coords && p.name.trim()));
+  const [cities, setCities] = useState<GazetteerCity[] | null>(null);
+  useEffect(() => {
+    if (!wantsIndex || cities) return;
+    let live = true;
+    void gazetteerOrEmpty().then((list) => {
+      if (live) setCities(list);
+    });
+    return () => {
+      live = false;
+    };
+  }, [wantsIndex, cities]);
+  const lookup = useMemo(() => (cities ? lookupTrip(trip, cities) : null), [cities, trip]);
+  /** «Fix…» / «Add a place…»: the stage opened as Locate did, its card asked to open that place. */
+  const fixPlace = useCallback(
+    (stageId: string, placeId: string | null) => {
+      requestPlace({ stageId, placeId });
+      locateStage(stageId);
+    },
+    [locateStage],
+  );
   const coverGap = useCallback(
     (gap: RulerGap) => {
       const stage = stageOverGap(trip, gap.startDate, gap.endDate);
@@ -696,6 +722,29 @@ export default function TripOverview({
       if (compact) setLegsOpen(true);
     },
     [trip, setStages, selected, onSelectDate, compact],
+  );
+  const offMapActions = useMemo<OffMapActions>(
+    () => ({
+      lookup,
+      found: (pick) => {
+        const stage = trip.stages.find((st) => st.id === pick.stageId);
+        const place = stage?.places.find((p) => p.id === pick.placeId);
+        return stage && place ? placeText(placeAtCity(place, pick.city), stage, trip, 'lists') : pick.city.name;
+      },
+      onPlace: (picks) => {
+        setStages(applyIndexPicks(trip.stages, picks));
+        // One stage placed: open it — the day moved into it — so the map shows where it landed.
+        const ids = new Set(picks.map((p) => p.stageId));
+        if (ids.size === 1) {
+          const [id] = ids;
+          openStageOnMap(id);
+          setOffMapOpen(false);
+        }
+      },
+      onFix: fixPlace,
+      onCover: coverGap,
+    }),
+    [lookup, trip, setStages, openStageOnMap, fixPlace, coverGap],
   );
 
   // The year map beside the MAP: its frame is the open day's week (dragged, it
@@ -1008,8 +1057,7 @@ export default function TripOverview({
       onOpenStage={openStageOnMap}
       pictures={stagePictures}
       compact={compact}
-      onLocate={locateStage}
-      onCover={coverGap}
+      offMap={offMapActions}
       onShowOffMap={() => setOffMapOpen(true)}
       footer={footer}
     />
@@ -1030,7 +1078,7 @@ export default function TripOverview({
               The map shows only what the trip can place. A stage whose place has no position, and
               days no stage covers, are listed here — the road is dotted where they fall.
             </p>
-            <OffMapRows map={model} onLocate={locateStage} onCover={coverGap} />
+            <OffMapRows map={model} actions={offMapActions} />
           </div>
         </BottomSheet>
       )}

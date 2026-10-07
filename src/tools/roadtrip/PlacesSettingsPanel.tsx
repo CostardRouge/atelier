@@ -1,3 +1,4 @@
+import { officialStateCode } from '../../shared/roadtrip/state-codes';
 import {
   CODE_FROM_WORDS,
   PLACE_STYLE_OPTIONS,
@@ -114,7 +115,7 @@ export default function PlacesSettingsPanel({ trip, onChange }: { trip: TripDoc;
                       <input
                         value={trip.stateCodes[state] ?? ''}
                         onChange={(e) => onChange(rememberStateCode(trip, state, e.target.value.toUpperCase()))}
-                        placeholder={deriveStateCode(state) || '—'}
+                        placeholder={officialStateCode(state) || deriveStateCode(state) || '—'}
                         aria-label={`Code for ${state}`}
                         maxLength={6}
                         className={`${inputClass} h-[1.9rem] w-[5.5rem] font-mono uppercase`}
