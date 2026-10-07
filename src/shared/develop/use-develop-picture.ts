@@ -868,6 +868,9 @@ export function useDevelopPicture({
     let cancelled = false;
     setSource(null);
     setProblem(null);
+    // The source about to be decoded has no profile yet: a profile asked
+    // before it lands is not a CHANGE, and must not decode it a second time.
+    decodedProfileKey.current = null;
     if (!file) return;
     let loaded: BadgeSource | null = null;
     // The decode is a TASK on this picture's edge. A RAW's can be cancelled —

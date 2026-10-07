@@ -981,28 +981,33 @@ export default function PictureWorkbench({
   // vault: its tables, its calibrations for the kelvin maths, its curve.
   // `undefined` while read, null where the vault does not hold it.
   const chosenDcp = appliedProfile(developNow)?.dcp ?? null;
+  const chosenDcpHash = chosenDcp?.hash ?? null;
+  const chosenDcpName = chosenDcp?.name ?? null;
   const vaultVersion = useVaultVersion();
   const [loadedDcp, setLoadedDcp] = useState<{ hash: string; profile: DngProfile | null } | null>(null);
   useEffect(() => {
-    if (!chosenDcp) return;
+    if (!chosenDcpHash) return;
     let alive = true;
-    void dcpProfile(chosenDcp.hash).then((profile) => {
-      if (alive) setLoadedDcp({ hash: chosenDcp.hash, profile });
+    void dcpProfile(chosenDcpHash).then((profile) => {
+      if (alive) setLoadedDcp({ hash: chosenDcpHash, profile });
     });
     return () => {
       alive = false;
     };
-  }, [chosenDcp, vaultVersion]);
+  }, [chosenDcpHash, vaultVersion]);
   const activeDcp: DngProfile | null | undefined = !chosenDcp
     ? null
-    : loadedDcp?.hash === chosenDcp.hash
+    : loadedDcp?.hash === chosenDcpHash
       ? loadedDcp.profile
       : undefined;
   // The curve a `profile` base curve takes: the loaded profile's, else the file's.
+  // A loaded profile this device does not hold says nothing about its curve:
+  // unknown, never «none» — a picture must not be moved off its Profile curve
+  // (and the document written) merely by being opened on another device.
   const profileCurve: CurvePoint[] | null | undefined = chosenDcp
-    ? activeDcp === undefined
-      ? undefined
-      : profileCurvePoints(activeDcp?.toneCurve)
+    ? activeDcp
+      ? profileCurvePoints(activeDcp.toneCurve)
+      : undefined
     : fileCurve;
   const rungs = rungsFor(calibration);
   // A rung the file cannot reach is never left standing: a picture developed
@@ -1395,9 +1400,9 @@ export default function PictureWorkbench({
       patchDraft({ baseCurve: { kind: 'profile', points: profileCurve.map((p) => ({ x: p.x, y: p.y })) } });
     } else {
       patchDraft({ baseCurve: { kind: 'standard' } });
-      tell('No Profile curve: this file’s colour profile carries none — Standard instead');
+      tell(`No Profile curve: ${chosenDcpName ? `«${chosenDcpName}»` : 'this file’s colour profile'} carries none — Standard instead`);
     }
-  }, [profileToRead, profileCurve, patchDraft, tell]);
+  }, [profileToRead, profileCurve, chosenDcpName, patchDraft, tell]);
 
   // Choosing the camera profile (C8): resolved here on the decode's own white,
   // exactly as a first decode resolves the file's (`rawProfileFor`), so the
@@ -2876,7 +2881,10 @@ export default function PictureWorkbench({
                   onForget={(hash) => void forgetDcp(hash).then(() => tell('Forgotten on this device — the pictures that chose it keep its matrix'))}
                 />
               )}
-              {wantsRaw && rawWhite && (
+              {/* A kelvin balance is solved through the profile's calibrations:
+                  where the chosen .dcp is not on this device there are none to
+                  solve through — a balance already set still applies. */}
+              {wantsRaw && rawWhite && !(chosenDcp && activeDcp === null) && (
                 <WhiteBalancePanel
                   white={activeDcp ? whiteThroughDcp(rawWhite, activeDcp) : rawWhite}
                   profiled={Boolean(appliedProfile(developNow))}
