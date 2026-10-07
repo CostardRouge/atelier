@@ -52,6 +52,12 @@ describe('the tiles a region needs', () => {
     expect(latToTileY(WA.south, plan.z)).toBeLessThanOrEqual(plan.y1 + 1);
   });
 
+  it('takes a zoom it is given as it is', () => {
+    const fixed = planTiles(WA, 1200, 2400, { zoom: 5 })!;
+    expect(fixed.z).toBe(5);
+    expect(planTiles(WA, 6000, 12000, { zoom: 9, maxTiles: 4 })!.z).toBe(9);
+  });
+
   it('refuses a region it cannot tile in one piece', () => {
     expect(planTiles({ west: 178, south: -20, east: -178, north: -15 }, 500, 500)).toBeNull();
     expect(planTiles({ west: 10, south: 5, east: 10, north: 6 }, 500, 500)).toBeNull();

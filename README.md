@@ -1180,7 +1180,10 @@ how steeply the camera looks at it, per piece — the car itself is the trip's,
 below), the map (paper or the picture itself, paper and ink colours, lines of
 latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
-and at a strength that lets the paper show through —, where it sits and how big, dots, the stops'
+and at a strength that lets the paper show through; when the camera follows
+the car, finer tiles are fetched along the road at the camera's own zoom,
+inside a budget of tiles, and fade back to the wide map as it pulls back —,
+where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time
 on the road, up to a minute, the five motions, a hold

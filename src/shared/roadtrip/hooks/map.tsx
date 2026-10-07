@@ -788,7 +788,8 @@ export const mapVariant: HookVariant = {
     return mapWants(mapOptions(options));
   },
   wantsBasemap(options, ctx) {
-    return mapBasemap(mapOptions(options), ctx.aspect);
+    const want = mapBasemap(mapOptions(options), ctx.aspect);
+    return want ? [want] : [];
   },
   // Pointed at and dragged on the stage like any other content. The box is
   // the MAP's — everything else the opener draws is measured from it, so

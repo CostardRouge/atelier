@@ -40,7 +40,9 @@ import {
   type DriveStop,
 } from './drive-plan';
 import { TICK_KITS } from './tick-kits';
-import { driveBasemap } from './drive-paint';
+import { driveBasemap, driveTrack, patchAlpha } from './drive-paint';
+import { TILE_PX, planTiles } from '../../map/tile-math';
+import { STRIP_BLOCK } from '../../map/tile-strip';
 
 /** Three legs across Western Australia; the middle one has one place only. */
 const STAGES: HookStage[] = [
@@ -931,24 +933,27 @@ describe('buildSchedule alone', () => {
   });
 });
 
-describe('the drive’s OpenStreetMap region', () => {
+describe('the drive’s OpenStreetMap ground', () => {
   const route = driveRoute(STAGES, CAL, dateOf(20), opts());
   const planFor = (o: DriveOptions) => drivePlan(route, o)!;
+  const trackFor = (o: DriveOptions) => driveTrack(planFor(o), o, 9 / 16);
 
   it('is nothing unless the ground is the tiles', () => {
     expect(driveBasemap(planFor(opts()), opts(), 9 / 16)).toBeNull();
     expect(driveBasemap(planFor(opts({ ground: 'picture' })), opts({ ground: 'picture' }), 9 / 16)).toBeNull();
   });
 
-  it('holds every stop the car drives, for the whole-route camera', () => {
+  it('holds every stop the car drives, for the whole-route camera, and asks no strip', () => {
     const o = opts({ ground: 'tiles' });
     const want = driveBasemap(planFor(o), o, 9 / 16)!;
     for (const s of route.stops) {
-      expect(s.lon).toBeGreaterThan(want.box.west);
-      expect(s.lon).toBeLessThan(want.box.east);
-      expect(s.lat).toBeGreaterThan(want.box.south);
-      expect(s.lat).toBeLessThan(want.box.north);
+      expect(s.lon).toBeGreaterThan(want.wide.box.west);
+      expect(s.lon).toBeLessThan(want.wide.box.east);
+      expect(s.lat).toBeGreaterThan(want.wide.box.south);
+      expect(s.lat).toBeLessThan(want.wide.box.north);
     }
+    expect(want.patches).toEqual([]);
+    expect(want.wants).toEqual([want.wide]);
   });
 
   it('covers every frame a following camera shows, in more detail', () => {
@@ -958,12 +963,64 @@ describe('the drive’s OpenStreetMap region', () => {
     const b = driveBasemap(planFor(follow), follow, 9 / 16)!;
     // The car is centred at every stop, so every stop is inside, with room.
     for (const s of route.stops) {
-      expect(s.lon).toBeGreaterThan(b.box.west);
-      expect(s.lon).toBeLessThan(b.box.east);
+      expect(s.lon).toBeGreaterThan(b.wide.box.west);
+      expect(s.lon).toBeLessThan(b.wide.box.east);
     }
     // Zoomed in, the same kilometre takes more pixels.
-    const density = (w: typeof a) => w.height / (w.box.north - w.box.south);
+    const density = (w: typeof a) => w.wide.height / (w.wide.box.north - w.wide.box.south);
     expect(density(b)).toBeGreaterThan(density(a));
+  });
+
+  it('asks a STRIP of finer patches along a tight follow, inside the budget, the wide raster first', () => {
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
+    const plan = planFor(o);
+    const want = driveBasemap(plan, o, 9 / 16, trackFor(o), 256)!;
+    expect(want.patches.length).toBeGreaterThan(0);
+    expect(want.patches.length * STRIP_BLOCK * STRIP_BLOCK).toBeLessThanOrEqual(256);
+    expect(want.wants[0]).toBe(want.wide);
+    expect(want.wants.length).toBe(1 + want.patches.length);
+    // Every patch is fetched at the strip’s own zoom, and is a block of two tiles.
+    for (const p of want.patches) {
+      expect(p.zoom).toBe(want.patchZoom);
+      expect(Math.max(p.width, p.height)).toBe(STRIP_BLOCK * TILE_PX);
+    }
+    // The patches are DENSER than the wide raster: more pixels per degree.
+    const perDeg = (w: { width: number; box: { west: number; east: number } }) => w.width / (w.box.east - w.box.west);
+    expect(perDeg(want.patches[0])).toBeGreaterThan(perDeg(want.wide) * 2);
+    // Every stop the car halts at is under a patch — the frames are tight there.
+    for (const s of route.stops) {
+      expect(want.patches.some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
+    }
+  });
+
+  it('asks no strip without a budget, and never one at the wide raster’s own zoom', () => {
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed' });
+    expect(driveBasemap(planFor(o), o, 9 / 16, trackFor(o), 0)!.patches).toEqual([]);
+    for (const viewKm of [35, 400, 3000]) {
+      const wide = opts({ ground: 'tiles', camera: 'follow', viewKm, zoom: 'fixed' });
+      const b = driveBasemap(planFor(wide), wide, 9 / 16, trackFor(wide), 256)!;
+      const wideZoom = planTiles(b.wide.box, b.wide.width, b.wide.height)!.z;
+      if (b.patchZoom !== null) expect(b.patchZoom).toBeGreaterThan(wideZoom);
+    }
+  });
+
+  it('spends a bigger budget on a deeper zoom', () => {
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
+    const plan = planFor(o);
+    const track = trackFor(o);
+    const small = driveBasemap(plan, o, 9 / 16, track, 64)!;
+    const big = driveBasemap(plan, o, 9 / 16, track, 1024)!;
+    expect(big.patchZoom!).toBeGreaterThan(small.patchZoom!);
+  });
+
+  it('fades the patches out as the camera pulls back past the follow’s width', () => {
+    const basemap = { patches: [{ key: 'p' } as never], followUnits: 10 };
+    expect(patchAlpha(basemap, 10)).toBe(1);
+    expect(patchAlpha(basemap, 20)).toBe(1);
+    expect(patchAlpha(basemap, 25)).toBeGreaterThan(0);
+    expect(patchAlpha(basemap, 25)).toBeLessThan(1);
+    expect(patchAlpha(basemap, 30)).toBe(0);
+    expect(patchAlpha({ patches: [], followUnits: 10 }, 10)).toBe(0);
   });
 
   it('reads the new ground and its strength', () => {

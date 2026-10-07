@@ -1,8 +1,8 @@
 # The map openers' next round — the stops panel, the camera, grouping places, the recap
 
-**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5** (what is
-left: the finer tiles along a tight follow, the Itinerary's own camera, the
-odometer digits). The maintainer answered two labs the same day: «Labo Virée»
+**Status: DECIDED 2026-10-07 and BUILT the same day, §1 to §5, and the
+finer tiles along a tight follow after them** (what is left: the Itinerary's
+own camera, the odometer digits). The maintainer answered two labs the same day: «Labo Virée»
 (<https://claude.ai/artifact/XkX5EwmpS2gf8g5Gyg2pa3>, §1–§4) and the trip
 RECAP (<https://claude.ai/artifact/WXTxg7iybW7Ez2Q65CWmSq>, §5), both on the
 labs' own recommendations except where §1 says otherwise — then, later in the
@@ -86,8 +86,11 @@ up, smoothing 1.1 s, look ahead 0.4 s, open and end wide; **Navigation** —
 smoothing 1.8 s, look ahead 0.2 s, open and end wide; **Whole route**. Calm is
 the default when Follow is chosen. The OpenStreetMap ground along the route at
 a tight follow needs finer tiles: its own commit, measured. **Built** (`map-camera.ts`,
-«Virée's CAMERA is a baked track» in `docs/memory/roadtrip.md`); the finer
-tiles and the Itinerary's own camera are not.
+«Virée's CAMERA is a baked track» in `docs/memory/roadtrip.md`), **and the
+finer tiles too** — a strip of one-tile patches along the road at the
+follow's own zoom, inside a tile budget, fading to the wide raster as the
+camera pulls back (`shared/map/tile-strip.ts`, «Finer tiles along a tight
+follow»); the Itinerary's own camera is not.
 
 ## 4. Grouping nearby places — accepted, every option kept
 

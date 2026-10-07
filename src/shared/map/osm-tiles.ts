@@ -12,21 +12,35 @@
  * nothing until that device says yes. The same switch the flight map words
  * (`TILES_TOGGLE`) explains what it reveals.
  *
- * What is fetched is small and kept: a region's tiles (at most `MAX_TILES`),
- * the blobs cached for the tab, so a slider dragged on the opener never asks
- * again. The drawing carries the credit the licence requires — that is the
- * painters' job (`paintOsmCredit`), and it rides into every export.
+ * What is fetched is small and kept: a region's tiles (at most `MAX_TILES`;
+ * a following camera's strip of patches `stripBudget()` more, over the whole
+ * drive — `tile-strip.ts`), the blobs cached for the tab, so a slider dragged
+ * on the opener never asks again. The drawing carries the credit the licence
+ * requires — that is the painters' job (`paintOsmCredit`), and it rides into
+ * every export.
  */
 
 import { useSyncExternalStore } from 'react';
+import { isConstrainedDevice } from '../lib/device-class';
 import { columnSource, planTiles, rowSource, TILE_PX, type GeoBox } from './tile-math';
+import { STRIP_TILES, STRIP_TILES_CONSTRAINED } from './tile-strip';
 import { OSM_CREDIT, OSM_TILES } from './track-map';
 
 const KEY = 'atelier.map.tilesInOpeners';
 /** The most tiles one background asks for — a softer map past it, never more requests. */
 export const MAX_TILES = 64;
-/** How many tile blobs the tab keeps (~30 kB each). */
-const CACHE_TILES = 400;
+/** Tiles fetched side by side for one raster — and, across the strip's patches, in all. */
+export const TILE_WORKERS = 4;
+/**
+ * How many tile blobs the tab keeps (~30 kB each): a wide raster and a
+ * computer's strip, with room for the zoom before a slider's last step.
+ */
+const CACHE_TILES = 640;
+
+/** The tiles a following camera's strip may cost on THIS device — its rasters are bitmaps a phone must hold. */
+export function stripBudget(): number {
+  return isConstrainedDevice() ? STRIP_TILES_CONSTRAINED : STRIP_TILES;
+}
 
 // --- consent -----------------------------------------------------------------
 
@@ -103,17 +117,22 @@ function fetchTile(z: number, x: number, y: number, signal?: AbortSignal): Promi
 /**
  * The region as ONE raster where latitude and longitude are both linear —
  * what an opener draws with a single affine `drawImage`. The mosaic is
- * fetched four tiles at a time, stitched, and re-laid row by row out of
- * Web Mercator (`tile-math.ts`). Throws with a sentence a person can act on.
+ * fetched `TILE_WORKERS` tiles at a time, stitched, and re-laid row by row
+ * out of Web Mercator (`tile-math.ts`). A `zoom` given is fetched as it is
+ * (a strip's patch, one tile — `workers` lets the caller run several such
+ * loads side by side without multiplying the connections). Throws with a
+ * sentence a person can act on.
  */
 export async function loadBasemap(
   box: GeoBox,
   width: number,
   height: number,
   signal?: AbortSignal,
+  zoom?: number,
+  workers = TILE_WORKERS,
 ): Promise<ImageBitmap> {
   if (!tilesAllowed()) throw new Error('The OpenStreetMap background is not allowed on this device.');
-  const plan = planTiles(box, width, height, { maxTiles: MAX_TILES });
+  const plan = planTiles(box, width, height, { maxTiles: MAX_TILES, zoom });
   if (!plan) throw new Error('This region cannot be drawn from tiles in one piece (it crosses the 180th meridian).');
 
   const cols = plan.x1 - plan.x0 + 1;
@@ -137,7 +156,7 @@ export async function loadBasemap(
       }
     }
   };
-  await Promise.all([worker(), worker(), worker(), worker()]);
+  await Promise.all(Array.from({ length: Math.max(1, workers) }, worker));
   if (signal?.aborted) throw new DOMException('Aborted', 'AbortError');
   if (failed === plan.count) {
     throw new Error('OpenStreetMap could not be reached — the map is drawn without its background.');

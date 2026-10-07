@@ -59,7 +59,7 @@ import { useState } from 'react';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
 import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
-import { allowTiles } from '../../map/osm-tiles';
+import { allowTiles, stripBudget } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
 import { Group } from './panel-ui';
 import StopsEditor, { StopStyleRow } from './stops-editor';
@@ -175,6 +175,12 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const wants = driveWants(route, o);
   const status = host?.pictureStatus;
   const line = pictureLine(wants.map((w) => w.key), status);
+  // The ground's rasters, as the shell is asked for them — the same call as
+  // `wantsBasemap`, so the status row reads the keys the stage draws.
+  const basemapWants =
+    plan && o.ground === 'tiles'
+      ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())
+      : null;
   const tripCar = ctx.car ?? DEFAULT_CAR;
   // `vehicleFor` hands back the trip's own spec when the piece borrows nothing.
   const car = vehicleFor(o.vehicle, o.vehicleColor, tripCar);
@@ -559,7 +565,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
         {o.ground === 'tiles' && (
           <BasemapStatus
-            want={plan ? driveBasemap(plan, o, ctx.aspect) : null}
+            want={basemapWants?.wide ?? null}
+            patches={basemapWants?.patches}
             ctx={ctx}
             status={host?.pictureStatus}
             opacity={o.basemapOpacity}
@@ -1053,9 +1060,9 @@ export const driveVariant: HookVariant = {
   },
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
-    if (o.ground !== 'tiles') return null;
+    if (o.ground !== 'tiles') return [];
     const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, driveCountOf(ctx.counterMode) !== null);
-    return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null) : null;
+    return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())?.wants ?? [] : [];
   },
   prepare(options, ctx) {
     const o = driveOptions(options);
@@ -1074,7 +1081,7 @@ export const driveVariant: HookVariant = {
     // The camera, baked once with the plan (`map-camera.ts`); the plain
     // follow of before needs none.
     const track = o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null;
-    const basemap = driveBasemap(plan, o, ctx.aspect, track);
+    const basemap = driveBasemap(plan, o, ctx.aspect, track, stripBudget());
     // A stop's name is a place on the legs and on the author's own list — the
     // author's assertion there, the Itinerary's rule — and a day on pictures.
     const follows = o.captionFollows && o.stopsOn !== 'pictures' && route.stops.some((s) => s.name);
