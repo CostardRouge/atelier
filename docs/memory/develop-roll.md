@@ -1516,7 +1516,7 @@ view. Rules:
 
 ## Auto level: the horizon found by itself (2026-10-02, A2 of `docs/auto-develop.md`)
 
-`shared/develop/auto-level.ts` (pure, 10 specs) + an **Auto** button in the
+`shared/develop/auto-level.ts` (pure) + an **Auto** button in the
 Crop tab's Level row. `measureTilt(luma)`: a 5-tap binomial blur, a
 **Scharr** gradient per pixel, each edge's line direction folded to its
 deviation from the nearest axis (the fold `levelDelta` makes, so a leaning
@@ -1546,7 +1546,7 @@ agree), kept through a later crop, no page error.
 
 ## Crop to the subject (2026-10-02, A3 of `docs/auto-develop.md`)
 
-`shared/develop/subject-crop.ts` (pure, 11 specs) + `tools/develop/use-subject-crop.ts`
+`shared/develop/subject-crop.ts` (pure) + `tools/develop/use-subject-crop.ts`
 + a *Subject* row in the Crop tab. `maskBounds` reads the subject's box and
 covered share off a `BrushRaster`; `subjectZone` takes the box's corners into
 the TURNED picture's frame (`screen = R(θ)·M·q`, the zone's own, so a flip
@@ -1594,6 +1594,217 @@ palette) is not, and must stay not, or the keys die with it.
 **Rev. 2026-10-06, the polish pass («coherent, elegant, clean and handy»).** A row of the sheet is the inspector's split at a setting's label width: the NAME, its control, ONE state line under the control (`text-xs text-muted`, what the choice in hand does, changing with the value) and the standing why behind an ⓘ beside the name (`InfoDotButton`, the `FoldHints` shape) — the first cut put a paragraph of mono `text-3xs` (9 px) under every control, which read as a manual nobody could read. Controls take `useFingerSize()` (`md` under a finger); Enter closes like Escape, every row writing at once (the Trip settings' rule); the Network section's id is `network` (`privacy` is still decoded from a stored value); the phone's list is `flex-1` alone — `flex-none` beside it won and left a gutter. No hint carries a date or a session fact (`frontend.md`, 2026-10-06). The Export tab's *Encoder* line says the engine alone (`Browser` + *Settings ›*): what it keeps of the colour is said under each JPEG target's quality, where the quality is set (`develop-output.md`).
 
 
+## Each picture AS SHOT is kept beside its record (2026-10-07, B1 of `docs/auto-develop.md` §6)
+
+**Decision** (his «start and everything that could be autodevelop», with a
+settings row where a question would have been asked). A develop is a record,
+and a model can only learn what the record ANSWERS TO — the picture before it —
+while the roll's thumbnail is the picture as delivered. So every photograph
+whose file is in hand gets a PAIR baked once and kept in `atelier-develop`'s
+`shots` store (v5): a 256 px JPEG of it as the browser decodes it (1–2 kB on a
+flat picture, ~14 kB on a real one), the `SourceStats` the Auto verbs read,
+measured off that very canvas, and the camera's facts (`shotExifOf`: body,
+lens, exposure, white-balance mode, the hour — never the GPS, never a word),
+plus the file's own size and whether a RAW's render stood in. Keyed by picture
+id, never on the document, pruned with the picture and with the roll. Rules:
+
+- **A DEVICE choice, kept by DEFAULT** (`shotsPref`, `atelier.develop.shots`,
+  absent = on; the Learning section of Develop's settings): every day without
+  a pair is dataset lost (§4 decision 2), and his §8 question — whether the
+  vignette may be kept — became a row he can switch. Off means GONE: the sheet
+  clears the store itself (`clearRollShots`) and the hook only forgets what it
+  knew, so a later Keep bakes afresh — a hook may not be mounted when the
+  switch is thrown. The working previews' rule, device-wide instead of
+  per roll.
+- **Baked in the roll's one background decode slot** (`shot-bake.ts` through
+  `enqueueRollDecode`), decoded AT 256 px by the one door, the real file before
+  a working preview (`use-roll-shots.ts` leaves a preview out of `tried`, so
+  the real file is read when it comes); a clip is never baked. A canvas-made
+  JPEG or a preview carries no EXIF and the record says `exif: null` rather
+  than inventing a body.
+- **The one exception to «media bytes are never persisted» grew a FOURTH
+  case** (`local-first.md`): a vignette is media, small, local, per device.
+
+Driven headless (`shots.mjs` in the session scratchpad: a roll seeded through
+`putRoll`, two canvas JPEGs dropped on the editor): two records in the store
+within a second, 64 bins each, the linear means telling the blue picture from
+the warm one, `natural` 1600 × 1000, the Learning pane reading `2 kept · 3.0
+KB`, Off → 0 records and the pane saying so, Keep → 2 again, no page error.
+Not driven: a RAW's pair (`viaRawPreview`), a real file's EXIF.
+
+**The TRAINING FILE (B2, same day)** — `training-dump.ts` (pure, specced) and
+a *Training file* row under the switch, in the SAME Learning section rather
+than on the gallery the brief named: one place, beside the choice it depends
+on, reachable on a phone (the gallery's header is not drawn there). One JSON
+file (`atelier-training-<day>.json`, `kind: atelier/training-pairs`, v1),
+one line per picture of EVERY roll that has its pair: the vignette as a data
+URL, its stats, the camera's facts, the sections edited, and the RECORD
+normalised through the very readers a roll uses (`normaliseDevelop`,
+`normaliseFraming`, `keystoneOrNull`, `lensOrNull`, `detailOrNull`,
+`postVignetteOrNull`, `readPatches`, `readLayers`, `readRollGrade`), so a
+script never guesses an absent field. Rules: an UNTOUCHED picture is a pair
+(«change nothing» is an answer to learn); a look's legacy inlined `.cube`
+text is replaced by its byte count (a lattice is not a label); the media's
+asset and source ids, the journal, the words and the delivery stay out; a
+vignette that cannot be read keeps its line with `vignette: null`; a picture
+without a pair (a clip, a file never in hand) is COUNTED in the line under the
+verb, never silently dropped. Driven headless (`dump.mjs`): a developed and
+an untouched picture gave a 7 kB file with both, the line reading
+`atelier-training-2026-10-07.json · 2 pairs`. A trainer outside the repo (B3)
+reads it; the model it makes comes back as a verb (B4).
+
+## Auto detail: the noise and the sharpen seeded from the ISO and the material (2026-10-07, A4 of `docs/auto-develop.md`)
+
+`shared/develop/auto-detail.ts` (pure) + an *Auto detail* switch at
+the head of the Detail tab (`DetailPanel`'s `auto`), held by the workbench
+over the whole detail record through `use-value-switch.ts`. What it reads,
+never guesses: the ISO of the file ON SCREEN (`useEffectiveExif(shownFile)` —
+the vouched record for a proxy) and the MATERIAL the picture is developed
+from (`onSensor` → the sensor; a working preview or an origin whose fidelity
+is `proxy` → a proxy; else the camera's file). Rules:
+
+- **Per STOP above a floor**, like Lightroom's and Capture One's seeds:
+  luminance 12 a stop above ISO 800, colour 10 a stop above 400 (capped 80),
+  the sharpen's masking 12 a stop above 800 (capped 60); the sharpen by
+  material — 35 on a demosaiced sensor, 20 on a body's JPEG (sharpened
+  already), 0 on a proxy, SAID (`no sharpen on a proxy`). The radius and the
+  Detail are the lens's and the hand's and are never written. Every number is
+  a named taste constant (`docs/auto-develop.md` §8).
+- **No ISO → the sharpen alone**, and `no ISO in the file · noise left alone`:
+  nothing written where nothing was measured. A clamp is said.
+- **A VALUE switch** (`value-switch.ts`, pure; `use-value-switch.ts`,
+  a session map keyed picture|verb): `switchState` over the whole record, so
+  the radius a hand set comes back with the rest on a turn-off and ⌘Z lights
+  the switch. **Trap, found by the drive**: a `before` that is itself NULL (no
+  detail record yet) is not "nothing to put back" — the first turn-off left
+  every number standing; the restore is BOXED (`{ value }`) since.
+- The Auto row's three verbs keep `auto-slots.ts` (disjoint fields on one
+  record); a verb that writes a RECORD whole takes the value switch. Auto
+  upright is its second user.
+
+Driven headless (`detail.mjs`, a canvas JPEG stamped ISO 3200 through
+`buildExifBlock` + `withExifBlock`): the caption `ISO 3200 · the camera’s
+file`, the click writing `noise 24 · colour 30 · sharpen 20 · masking 24`
+into the sliders and, after the autosave, the roll; off → every number 0 and
+`null` stored; ⌘Z → relit with the numbers back. A drive that re-navigates
+to the picture's hash right after a drop races the editor's remount and its
+tab click is lost — click after the drop settles, and retry until the tab's
+own sliders exist.
+
+## Auto upright: the keystone solved from the lines that converge (2026-10-07, A5 of `docs/auto-develop.md`)
+
+`shared/develop/auto-keystone.ts` (pure) + an *Auto upright*
+switch at the head of the Perspective fold (`KeystonePanel`'s `auto`), held
+by the workbench over the whole keystone through `use-value-switch.ts`.
+Lightroom's Upright and Capture One's Keystone as ONE verb that SETS
+Vertical, Horizontal and Zoom and leaves Turn and Stretch to the hand. Rules:
+
+- **Solved against the matrix, not a textbook.** `keystoneMatrix` divides by
+  `1 + h·x + v·y` in its SQUARE space (both axes in heights), and a line
+  `x = u·(1 − y/Y)` converging to a vanishing point `Y` goes vertical under
+  it exactly when `v = −1/Y`. So every near-vertical edge is read as a tilt
+  `t = dx/dy` and the crossing `u = x − t·y` of the middle row, and the
+  REGRESSION of `t` on `u` (weighted by edge strength) gives `v` directly;
+  `vertical = 100·v / PERSPECTIVE_REACH` (exported for it). The horizontal
+  axis is the same reading with x and y swapped. The spec maps a converging
+  line's two ends through `keystoneMatrix` with the solved value and asserts
+  they land within a hundredth of the width of each other.
+- **Three passes, two of them found by measuring.** Pass 1 reads the edges
+  within `MAX_LEAN` (15°) and is what the answer is TRUSTED on (its r² is the
+  confidence, under `CONFIDENCE_FLOOR` 0.35 the lines do not agree on one
+  point; `MIN_AXIS_SHARE` 0.08 of the strong edges and a `MIN_SPREAD` of 0.12
+  heights between crossings, or there is nothing to right). Pass 2 takes back
+  every edge within `RESIDUAL_LEAN` (4°) of that slope's line, out to twice
+  the lean — the hard cut had kept only the inner pixels of a line leaning
+  14° and read every slope 2 % low. Pass 3 reads each LINE from where its
+  PIXELS are (edges clustered by crossing within `CLUSTER_GAP`, each line
+  fitted `pos = a + b·depth`, the lines' slopes regressed on their
+  crossings): the gradient's angle is exact near the axis and a few tenths of
+  a degree off at 14°, which still read the slope 1.3 % low; a position fit
+  has no such bias and the spec holds the slope to 0.005.
+- **Lines that spread but do not lean say upright already** (r² under the
+  floor with a slope under two slider units: value 0, dashed); a lean the
+  lines do not agree on is REFUSED and said (`no lines to right on`); one
+  pole or a flat field is nothing. Nothing to right is recorded as a press
+  that changed nothing, never a stale warp.
+- **The zoom is re-solved to cover** (`zoomToCover`): the smallest scale,
+  1..3, at which the inverse matrix maps every point of the frame's boundary
+  inside the source — bisection over the matrix's own `keystoneSampleMatrix`
+  on the SOURCE's aspect, the one `picture-geometry.ts` hands the pass. The
+  corrected frame is then whole, and not a pixel more than it takes.
+- The picture is read AS SHOT (`asShotSample(512)`, before any warp), so the
+  verb SETS and a second press is the same answer; a flip or a quarter turn
+  need no account — the keystone lives in the source's frame, before the
+  crop.
+
+Driven headless (`upright.mjs`, a 1800 × 1200 façade of five verticals
+converging 2.5 heights above the centre): *Auto upright* wrote `vertical 89`
+(the matrix's 88.9 for `k = 0.4`), `horizontal 0`, `zoom 1.21`, stored after
+the autosave; off → 0 / 0 / 1; ⌘Z → relit with the numbers back. Not driven on
+a photograph of his, where the taste constants are to be moved from.
+
+## ONE `Auto`, the author's recipe, and a picture auto-developed as it opens (2026-10-07, `docs/auto-develop.md` §5)
+
+**Decision** (his «everything that could be autodevelop … a settings panel so
+options let the user choose»). `shared/develop/auto-plan.ts` (pure)
++ `use-auto-all.ts` + an `Auto` switch drawn FIRST in the Auto row of both
+hosts, before a hairline and the single verbs; the *Automatic* section of
+Develop's settings holds the plan. Rules:
+
+- **The plan is the DEVICE's** (`autoPlanPref`, `atelier.develop.auto`):
+  which of six steps `Auto` runs — tone, colour, bands, detail, level,
+  upright, always in that order — and whether an untouched photograph gets it
+  the first time it opens. Lightroom's one Auto is a fixed recipe; here the
+  recipe is his, because colour is wrong on a sunset, level on a tilted
+  composition and upright on a picture with no building, so those three
+  START UNTICKED (`DEFAULT_AUTO_PLAN`: tone, bands, detail). The chips are
+  `Button aria-pressed`; the state line says the recipe in words
+  (`describeSteps`).
+- **`Auto` runs every ticked step THIS host can run, each through its OWN
+  switch** (`AutoAllStep`: state, apply, turnOff): so each lights, each is
+  taken back alone afterwards, and `Auto`'s own state is READ off theirs
+  (`allState`: off / on / nothing / edited). The Trips/Studio sheet has the
+  three develop verbs; a clip the same; the tool's photograph all six. The
+  Auto row's three verbs run through ONE `runAutoVerb` the buttons and
+  `Auto` share, and Auto level moved from `CropPanel`'s closure to the
+  workbench (`runAutoLevel`, handed down as `onAutoLevel`) for the same
+  reason.
+- **Trap, found by driving**: two verbs run in one tick wrote their memos
+  over each other's STALE render — `useAutoMemory.apply` recorded over the
+  memos of the render that made the closure, so bands' write dropped tone's
+  memo and tone's switch came up unlit after `Auto`. Every switch memory
+  (`use-auto-memory.ts`, `use-crop-switches.ts`) now reads its memos as of
+  the LAST WRITE through a ref kept synchronously; `use-value-switch.ts` holds
+  one memo and cannot race itself.
+- **Auto at open** (`plan.onOpen`): the workbench runs `Auto` when the stats
+  of an UNTOUCHED photograph are first read (never a clip, never an edited
+  picture), ONCE per picture per session (`firstOpen`, a module set) — so a
+  turn-off, an undo or a reset does not bring it back the next time ←/→
+  lands there. Its writes go through the ordinary write-throughs with
+  `via: 'auto'` (a `pendingVia` ref set before the run and let go three
+  write delays after; `onDevelop`/`onFraming`/`onKeystone`/`onDetail`/
+  `onAspect` take the `via` and the editor's handlers pass it to `update`),
+  so the journal says it and the making-of captions the step `by Auto, as it
+  opened`. The state line says ONE undo takes it back — measured: the three
+  writes land inside the history's 700 ms coalescing window.
+- **Auto tone gained a REACH** (`AUTO_GAMMA_MIN` 0.55, `AUTO_GAMMA_MAX` 1.8):
+  a median sitting at the white point — a snow field, a white wall, the
+  façade of the drive — asked the solve for a gamma near 0 and the slider's
+  own floor (0.1) still crushed the picture to black; `Auto` at open would
+  have done it to every high-key picture. A stop and a half either way,
+  about what Lightroom's Auto moves an exposure; pinned by a spec that
+  develops the wall through the numbers and keeps it bright.
+
+Driven headless (`auto.mjs`): on a flat ISO-3200 picture, `Auto` lit tone,
+bands and detail and said `auto · tone, bands and detail`; a second click
+said `auto off · 3 steps back to before` and dimmed them all. The Automatic
+pane, opened by the ⚙, ticked colour, level and upright and *When a picture
+opens → Auto*; → on a façade opened untouched: `auto · tone, colour, bands,
+detail, level and upright`, every switch lit, `vertical 89 · zoom 1.21`, the
+journal's three steps `via: auto`, the stored levels' gamma 0.55. Drive trap:
+a module edited after the dev server started is a SECOND instance under
+`evaluate`'s `import()` (Vite's HMR serves the app a `?t=` copy), so a module
+STORE must be driven through the real control, never by importing it.
 ## A swipe pages the roll when A/B is off (2026-10-07)
 
 **The maintainer: *"In develop: when A/B compare is not active let's have

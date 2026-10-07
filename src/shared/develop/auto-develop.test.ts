@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  AUTO_GAMMA_MAX,
+  AUTO_GAMMA_MIN,
   BRIGHT_LEAN,
   BRIGHT_TARGET,
   DARK_LEAN,
@@ -151,10 +153,29 @@ describe('autoTone', () => {
     );
     const levels = autoTone(skewed);
     if (levels?.rgb) {
-      expect(levels.rgb.gamma).toBeGreaterThanOrEqual(0.1);
-      expect(levels.rgb.gamma).toBeLessThanOrEqual(10);
+      expect(levels.rgb.gamma).toBeGreaterThanOrEqual(AUTO_GAMMA_MIN);
+      expect(levels.rgb.gamma).toBeLessThanOrEqual(AUTO_GAMMA_MAX);
       expect(Number.isFinite(levels.rgb.gamma)).toBe(true);
     }
+  });
+
+  it('bends a high-key picture no further than its own reach — a median at the white point is not a black picture', () => {
+    // A white wall with a thin dark line: the median sits on the white point and
+    // the naive solve asks for a gamma near 0, which crushed the picture.
+    const highKey = measureSource(
+      bytes([
+        ...Array.from({ length: 9600 }, () => [215, 212, 205] as [number, number, number]),
+        ...Array.from({ length: 400 }, () => [40, 38, 35] as [number, number, number]),
+      ]),
+    );
+    const levels = autoTone(highKey);
+    expect(levels?.rgb?.gamma).toBeGreaterThanOrEqual(AUTO_GAMMA_MIN);
+    // Developed through the numbers, the wall stays a bright wall.
+    const wall = developLinear(
+      [toLinear(215 / 255, 'srgb'), toLinear(212 / 255, 'srgb'), toLinear(205 / 255, 'srgb')],
+      { ...DEFAULT_DEVELOP, levels },
+    );
+    expect(fromLinear(wall[1], 'srgb')).toBeGreaterThan(0.6);
   });
 
   it('names what it did, in the codes a photographer reads', () => {

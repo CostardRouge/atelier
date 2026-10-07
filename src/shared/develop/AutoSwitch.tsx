@@ -93,7 +93,7 @@ export default function AutoSwitch({
   return (
     <button
       type="button"
-      className={`relative inline-flex items-center gap-1.5 border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_SHAPE} ${VERB_GROUND} ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
+      className={`relative inline-flex items-center gap-1.5 whitespace-nowrap border text-xs cursor-pointer disabled:opacity-50 disabled:cursor-default transition-[background-color,border-color,color,translate,box-shadow] duration-150 ease-paper ${PRESS_LOOK} data-pressed:bg-paper-2 ${VERB_SHAPE} ${VERB_GROUND} ${SHAPE[shape]} ${look(armed ? 'armed' : state, shape)}`}
       aria-pressed={armed || state !== 'off'}
       disabled={disabled}
       title={armed ? undefined : state === 'off' ? hint : AUTO_SWITCH_TITLE[state]}

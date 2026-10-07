@@ -53,7 +53,7 @@ export const DEFAULT_KEYSTONE: Readonly<Keystone> = Object.freeze({
 });
 
 /** How far ±100 bends the frame. Beyond this the far edge folds through infinity. */
-const PERSPECTIVE_REACH = 0.45;
+export const PERSPECTIVE_REACH = 0.45;
 /** ±100 stretches or squeezes the width by a third. */
 const ASPECT_REACH = 1 / 3;
 export const MIN_KEYSTONE_SCALE = 1;

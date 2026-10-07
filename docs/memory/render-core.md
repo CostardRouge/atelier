@@ -7,7 +7,7 @@ grows from is `media-pipeline.md`.
 
 ## Built so far (2026-09-17, P4 both commits)
 
-`shared/render/`: `glsl.ts` (the shared chunks), `pass-plan.ts` (pure, 8 specs),
+`shared/render/`: `glsl.ts` (the shared chunks), `pass-plan.ts` (pure),
 `graph.ts` (the core), `cube-pass.ts` (the look as a pass), `graph-grader.ts`
 (the core wearing `FrameGrader`). The engine change was committed SEPARATELY
 from the switch-over so it could be proved a null result first;

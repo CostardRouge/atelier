@@ -66,7 +66,15 @@ import { useDevelopPicture, type DevelopFrame, type DevelopPicture } from '../..
 import { useStageDeck } from '../../shared/develop/use-stage-deck';
 import type { DeckNeighbour } from '../../shared/develop/stage-deck';
 import { DECK_GAP } from '../../shared/ui/use-media-viewer';
-import { sameKeystone, type Keystone } from '../../shared/render/geometry';
+import { isDefaultKeystone, sameKeystone, type Keystone } from '../../shared/render/geometry';
+import { UPRIGHT_SAMPLE_EDGE, describeUpright, measureUpright, uprightKeystone } from '../../shared/develop/auto-keystone';
+import { LEVEL_SAMPLE_EDGE, describeTilt, levelFine, lumaOf, measureTilt } from '../../shared/develop/auto-level';
+import { DEFAULT_AUTO_PLAN, autoPlanPref } from '../../shared/develop/auto-plan';
+import { runAutoVerb } from '../../shared/develop/DevelopAuto';
+import { firstOpen, useAutoAll, type AutoAllStep } from '../../shared/develop/use-auto-all';
+import { WRITE_DELAY_MS } from '../../shared/develop/use-write-through';
+import { useLocalPref } from '../../shared/ui/local-pref';
+import { isEdited, type JournalVia } from '../../shared/develop/roll-types';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
   DEFAULT_BRUSH_HARDNESS,
@@ -166,7 +174,10 @@ import { dropDecodedRaws } from '../../shared/raw/raw-decoder';
 import type { RawWhite } from '../../shared/raw/white-balance';
 import { describePostVignette, samePostVignette, type PostCropVignette } from '../../shared/render/post-vignette';
 import RepairPanel, { DEFAULT_DUST, type DustState, type RepairTool } from './RepairPanel';
-import { describeDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
+import { describeDetail, isDefaultDetail, sameDetail, type DetailImage, type DetailSettings } from '../../shared/render/detail';
+import { autoDetail, describeAutoDetail, withAutoDetail, type DetailFacts } from '../../shared/develop/auto-detail';
+import { isWorkingPreview } from '../../shared/develop/working-preview';
+import { useValueSwitch } from './use-value-switch';
 import {
   DUST_SCAN_EDGE,
   MAX_PATCHES,
@@ -388,17 +399,17 @@ export default function PictureWorkbench({
   /** The border's own batch verbs — never the crop (the maintainer's two verbs). */
   borderApplyTo: readonly BorderApplyVerb[];
   onBorder: (border: RollBorder | null) => void;
-  onDevelop: (develop: DevelopSettings | null) => void;
-  onFraming: (framing: Framing | null) => void;
-  onKeystone: (keystone: Keystone | null) => void;
+  onDevelop: (develop: DevelopSettings | null, via?: JournalVia) => void;
+  onFraming: (framing: Framing | null, via?: JournalVia) => void;
+  onKeystone: (keystone: Keystone | null, via?: JournalVia) => void;
   onLens: (lens: LensCorrection | null) => void;
   /** The lens's measured profile put on the picture, or taken off (`null`). */
   onLensProfile: (profile: LensProfileApplied | null) => void;
-  onDetail: (detail: DetailSettings | null) => void;
+  onDetail: (detail: DetailSettings | null, via?: JournalVia) => void;
   onVignette: (vignette: PostCropVignette | null) => void;
   onRepair: (repair: Patch[]) => void;
   onLayers: (layers: AdjustLayer[]) => void;
-  onAspect: (aspect: string) => void;
+  onAspect: (aspect: string, via?: JournalVia) => void;
   /** The roll's delivery settings, edited on the Export tab. */
   exportSettings: RollExport;
   onExportSettings: (patch: Partial<RollExport>) => void;
@@ -1327,6 +1338,10 @@ export default function PictureWorkbench({
   const callbacks = useRef({ onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode });
   callbacks.current = { onLensProfile, onDevelop, onFraming, onKeystone, onLens, onDetail, onVignette, onRepair, onLayers, onAspect, onSnapshot, onStep, onTabChange, onDeliver, onSettings, onCopy, onPaste, onVariant, onSelectMode, onSelectAll, onEscape, onBand, onSheet, onThumbs, onFocusMode };
   const { replace } = draft;
+  // What the next writes are BY, when not the hand: the `Auto` switch run as
+  // the picture opened sets it before applying and lets it go once the
+  // write-throughs have flushed, so the journal says `auto` on those steps.
+  const pendingVia = useRef<JournalVia | null>(null);
   useWriteThrough<DevelopSettings>({
     stored: entry.develop,
     // Keyed on the numbers themselves: `draft` is a new object every render.
@@ -1337,7 +1352,7 @@ export default function PictureWorkbench({
     // they were set on the sensor's data and mean nothing on the render.
     onWrite: (value) => {
       const roll = inheritedRef.current;
-      callbacks.current.onDevelop(roll && value && !isRawDevelop(value) ? { ...value, ...roll } : value);
+      callbacks.current.onDevelop(roll && value && !isRawDevelop(value) ? { ...value, ...roll } : value, pendingVia.current ?? undefined);
     },
     // The WHOLE record, material included: an undo that takes a picture back
     // off its RAW must put the base back with the numbers.
@@ -1351,7 +1366,7 @@ export default function PictureWorkbench({
     stored: entry.keystone ?? null,
     draft: keystoneDraft,
     same: sameKeystone,
-    onWrite: (value) => callbacks.current.onKeystone(value),
+    onWrite: (value) => callbacks.current.onKeystone(value, pendingVia.current ?? undefined),
     onReseed: (value) => setKeystoneDraft(value),
   });
   useWriteThrough<LensCorrection>({
@@ -1365,7 +1380,7 @@ export default function PictureWorkbench({
     stored: entry.detail ?? null,
     draft: detailDraft,
     same: sameDetail,
-    onWrite: (value) => callbacks.current.onDetail(value),
+    onWrite: (value) => callbacks.current.onDetail(value, pendingVia.current ?? undefined),
     onReseed: (value) => setDetailDraft(value),
   });
   useWriteThrough<PostCropVignette>({
@@ -1393,14 +1408,14 @@ export default function PictureWorkbench({
     stored: entry.aspect,
     draft: aspectDraft,
     same: (a, b) => a === b,
-    onWrite: (value) => callbacks.current.onAspect(value ?? 'original'),
+    onWrite: (value) => callbacks.current.onAspect(value ?? 'original', pendingVia.current ?? undefined),
     onReseed: (value) => setAspectDraft(value ?? 'original'),
   });
   useWriteThrough<Framing>({
     stored: entry.framing,
     draft: isDefaultFraming(framingDraft) ? null : framingDraft,
     same: sameFraming,
-    onWrite: (value) => callbacks.current.onFraming(value),
+    onWrite: (value) => callbacks.current.onFraming(value, pendingVia.current ?? undefined),
     onReseed: (value) => setFramingDraft(value ?? { ...DEFAULT_FRAMING }),
   });
 
@@ -1533,6 +1548,22 @@ export default function PictureWorkbench({
     onTold: tell,
     record: (write) => cropSwitches.record('subject', write),
   });
+  // Auto level (`auto-level.ts`): the picture as shot, read whole and once,
+  // on the click — held here rather than in the Crop tab since 2026-10-07,
+  // so the one `Auto` can run it with the rest (`use-auto-all.ts`).
+  const runAutoLevel = useCallback(() => {
+    const sample = picture.asShotSample(LEVEL_SAMPLE_EDGE);
+    const ctx = sample?.getContext('2d', { willReadFrequently: true });
+    if (!sample || !ctx) {
+      tell('the picture has not been read yet');
+      return;
+    }
+    const tilt = measureTilt(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
+    cropSwitches.record('level', () => {
+      if (tilt && tilt.tilt !== 0) crop.straighten(levelFine(tilt, framingDraft.flipX, framingDraft.flipY));
+    });
+    tell(`auto level · ${describeTilt(tilt)}`);
+  }, [picture, cropSwitches, crop, framingDraft.flipX, framingDraft.flipY, tell]);
   useEffect(() => {
     if (!source) return;
     const t = window.setTimeout(() => {
@@ -2040,6 +2071,139 @@ export default function PictureWorkbench({
   const candidate = lookup?.kind === 'found' && shot ? profileFor(lookup.camera, lookup.lens, shot, !onSensor) : null;
   const shotLine = useMemo(() => (factsOn ? captureLine(shotExif) || null : null), [factsOn, shotExif]);
 
+  // --- Auto detail (`auto-detail.ts`) -------------------------------------------
+  // What it reads: the ISO of the file ON SCREEN (the vouched record for a
+  // proxy), and the MATERIAL the picture is developed from — the sensor's
+  // own data, the camera's file, or a re-encode made to look at. A switch
+  // over the whole detail record (`use-value-switch.ts`): the radius and the
+  // Detail it leaves alone come back with the rest on a turn-off.
+  const detailFacts = useMemo<DetailFacts>(
+    () => ({
+      iso: typeof shotExif?.iso === 'number' && shotExif.iso > 0 ? shotExif.iso : null,
+      material: onSensor
+        ? 'sensor'
+        : shownFile && (isWorkingPreview(shownFile) || mediaOrigin(shownFile)?.fidelity === 'proxy')
+          ? 'proxy'
+          : 'camera',
+    }),
+    [shotExif, onSensor, shownFile],
+  );
+  const detailSwitch = useValueSwitch<DetailSettings | null>({
+    pictureKey: entry.id,
+    verb: 'detail',
+    value: detailDraft,
+    same: sameDetail,
+    write: setDetailDraft,
+    onTold: tell,
+    label: 'auto detail',
+    words: 'the detail',
+  });
+  const autoDetailVerb = useMemo(() => {
+    const apply = () => {
+      const found = autoDetail(detailFacts);
+      const next = withAutoDetail(detailDraft, found);
+      detailSwitch.record(isDefaultDetail(next) ? null : next, `auto detail · ${describeAutoDetail(found, detailFacts)}`);
+    };
+    return {
+      state: detailSwitch.state,
+      facts: detailFacts,
+      apply,
+      turnOff: detailSwitch.turnOff,
+      onClick: () => {
+        if (!detailSwitch.turnOff()) apply();
+      },
+    };
+  }, [detailSwitch, detailFacts, detailDraft]);
+
+  // --- Auto upright (`auto-keystone.ts`) ----------------------------------------
+  // The picture AS SHOT, read whole and once on the click — the source before
+  // any warp, so the verb SETS the perspective rather than nudging a warped
+  // view —, the two sliders solved against the matrix, the zoom re-solved on
+  // the source's own frame (the one the keystone pass hands the matrix).
+  const uprightSwitch = useValueSwitch<Keystone | null>({
+    pictureKey: entry.id,
+    verb: 'upright',
+    value: keystoneDraft,
+    same: sameKeystone,
+    write: setKeystoneDraft,
+    onTold: tell,
+    label: 'auto upright',
+    words: 'the perspective',
+  });
+  const autoUprightVerb = useMemo(() => {
+    const apply = () => {
+      const sample = picture.asShotSample(UPRIGHT_SAMPLE_EDGE);
+      const ctx = sample?.getContext('2d', { willReadFrequently: true });
+      if (!sample || !ctx) {
+        tell('auto upright · the picture has not been read yet');
+        return;
+      }
+      const up = measureUpright(lumaOf(ctx.getImageData(0, 0, sample.width, sample.height).data, sample.width, sample.height));
+      const next = uprightKeystone(up, keystoneDraft, source ? source.width / source.height : 1);
+      // Nothing to right: recorded as a press that changed nothing (dashed), never a stale warp.
+      if (!next) {
+        uprightSwitch.record(keystoneDraft, `auto upright · ${describeUpright(up)}`);
+        return;
+      }
+      uprightSwitch.record(isDefaultKeystone(next) ? null : next, `auto upright · ${describeUpright(up)} · zoom ${next.scale.toFixed(2)}×`);
+    };
+    return {
+      state: uprightSwitch.state,
+      disabled: !source,
+      apply,
+      turnOff: uprightSwitch.turnOff,
+      onClick: () => {
+        if (!uprightSwitch.turnOff()) apply();
+      },
+    };
+  }, [uprightSwitch, picture, keystoneDraft, source, tell]);
+
+  // --- the one `Auto` (`auto-plan.ts`, `use-auto-all.ts`) -----------------------
+  // Every step the plan may tick, as THIS picture can run it: the Auto row's
+  // three over the stats, the Detail tab's, the Crop tab's two — a clip has
+  // the develop alone. Each runs through its own switch, so each lights and
+  // each can be taken back alone after.
+  const [autoPlan] = useLocalPref(autoPlanPref, DEFAULT_AUTO_PLAN);
+  const stats = picture.stats;
+  const autoSteps = useMemo<AutoAllStep[]>(() => {
+    const develop = (id: 'tone' | 'colour' | 'bands'): AutoAllStep => ({
+      id,
+      state: auto.state(id),
+      apply: () => {
+        if (stats && stats.total > 0) runAutoVerb(id, stats, auto);
+      },
+      turnOff: () => auto.turnOff(id),
+    });
+    const steps: AutoAllStep[] = [develop('tone'), develop('colour'), develop('bands')];
+    if (!clip) {
+      steps.push({ id: 'detail', state: autoDetailVerb.state, apply: autoDetailVerb.apply, turnOff: autoDetailVerb.turnOff });
+      steps.push({ id: 'level', state: cropSwitches.state('level'), apply: runAutoLevel, turnOff: () => cropSwitches.turnOff('level') });
+      steps.push({ id: 'upright', state: autoUprightVerb.state, apply: autoUprightVerb.apply, turnOff: autoUprightVerb.turnOff });
+    }
+    return steps;
+  }, [auto, stats, clip, autoDetailVerb, cropSwitches, runAutoLevel, autoUprightVerb]);
+  const autoAll = useAutoAll({ plan: autoPlan, steps: autoSteps, onTold: tell });
+  // Run as the picture OPENS, when the device asks: an untouched photograph
+  // (never a clip), once per picture per session, the moment its stats are
+  // read — written `via: 'auto'` so the journal says so, one undo step like
+  // any other. A second open in the session, an edited picture, or one the
+  // switch was already pressed on gets nothing.
+  const autoAllRef = useRef(autoAll);
+  autoAllRef.current = autoAll;
+  const entryRef = useRef(entry);
+  entryRef.current = entry;
+  const statsReady = Boolean(stats && stats.total > 0);
+  useEffect(() => {
+    if (!autoPlan.onOpen || clip || !statsReady || !source) return;
+    if (isEdited(entryRef.current) || !firstOpen(entryRef.current.id)) return;
+    pendingVia.current = 'auto';
+    void autoAllRef.current.apply().finally(() => {
+      window.setTimeout(() => {
+        pendingVia.current = null;
+      }, WRITE_DELAY_MS * 3);
+    });
+  }, [autoPlan.onOpen, clip, statsReady, source]);
+
   /**
    * The two verbs the HOST puts in the well beside the clipboard glyphs: their
    * SHAPE here, their colour at the call site.
@@ -2493,6 +2657,7 @@ export default function PictureWorkbench({
               <DevelopAutoSection
                 stats={picture.stats}
                 auto={auto}
+                all={autoAll}
                 picking={picture.picking}
                 onPicking={picture.setPicking}
                 echo={taskScope}
@@ -2592,6 +2757,7 @@ export default function PictureWorkbench({
                 onChange={setDetailDraft}
                 maskView={sharpenMaskView}
                 onMaskView={setSharpenMaskView}
+                auto={autoDetailVerb}
               />
             </>
           ) : tab === 'layers' ? (
@@ -2714,13 +2880,14 @@ export default function PictureWorkbench({
               clip={clip}
               subjectCrop={subjectCrop}
               switches={cropSwitches}
+              onAutoLevel={runAutoLevel}
               onTold={tell}
             />
           ) : null}
           {/* The warps are a photograph's: a clip's Crop tab is the crop alone. */}
           {tab === 'crop' && !clip ? (
             <>
-              <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} />
+              <KeystonePanel value={keystoneDraft} onChange={setKeystoneDraft} auto={autoUprightVerb} />
               <LensPanel
                 value={lensDraft}
                 onChange={setLensDraft}

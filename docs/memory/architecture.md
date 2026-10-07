@@ -4,7 +4,7 @@ Read before touching the shell (`src/app/`), the tool registry, the shared asset
 
 ## One registry drives the whole suite (2026-08-20)
 
-**Decision.** `src/app/tools.tsx` exports `TOOLS`, and both the masthead nav and the hash router derive from it. **Why**: the suite grew from two tools to nine; anything duplicated per tool (a nav entry, a route, a sidebar flag) drifts. **How to apply**: adding a tool is one `Tool` entry (`id`, `path`, `label`, `subtitle`, `blurb`, `Component`, optional `accepts`) plus its component under `src/tools/<tool>/`. Never add a route or a nav item by hand elsewhere.
+**Decision.** `src/app/tools.tsx` exports `TOOLS`, and both the masthead nav and the hash router derive from it. **Why**: the suite grew from two tools to ten; anything duplicated per tool (a nav entry, a route, a sidebar flag) drifts. **How to apply**: adding a tool is one `Tool` entry (`id`, `path`, `label`, `subtitle`, `blurb`, `Component`, optional `accepts`) plus its component under `src/tools/<tool>/`. Never add a route or a nav item by hand elsewhere.
 
 ## `shared/` never imports `tools/` (2026-08-20)
 

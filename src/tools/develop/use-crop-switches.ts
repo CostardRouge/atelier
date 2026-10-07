@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import type { AutoState } from '../../shared/develop/auto-slots';
 import { cropSwitchState, recordCropSwitch, revertCropSwitch, type CropSwitches as Memos, type CropVerb } from './crop-switches';
 import type { CropZoneApi } from './use-crop-zone';
@@ -34,9 +34,14 @@ export function useCropSwitches({
   onTold: (message: string) => void;
 }): CropSwitches {
   const [held, setHeld] = useState<Memos>(() => SESSION.get(pictureKey) ?? {});
+  // As of the last write, synchronously — two verbs run in one tick (the one
+  // `Auto`) must not read each other's stale render (`use-auto-memory.ts`).
+  const latest = useRef(held);
+  latest.current = held;
   const keep = useCallback(
     (next: Memos) => {
       SESSION.set(pictureKey, next);
+      latest.current = next;
       setHeld(next);
     },
     [pictureKey],
@@ -49,14 +54,14 @@ export function useCropSwitches({
     (verb: CropVerb, write: () => void) => {
       const before = stored();
       write();
-      keep(recordCropSwitch(held, verb, before, stored()));
+      keep(recordCropSwitch(latest.current, verb, before, stored()));
     },
-    [held, stored, keep],
+    [stored, keep],
   );
 
   const turnOff = useCallback(
     (verb: CropVerb) => {
-      const off = revertCropSwitch(held, verb, stored());
+      const off = revertCropSwitch(latest.current, verb, stored());
       if (off.state === 'off') return false;
       keep(off.memos);
       if (off.restore) restore(off.restore);
@@ -67,7 +72,7 @@ export function useCropSwitches({
       );
       return true;
     },
-    [held, stored, restore, keep, onTold],
+    [stored, restore, keep, onTold],
   );
 
   return { state, record, turnOff };

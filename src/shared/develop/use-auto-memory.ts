@@ -1,4 +1,4 @@
-import { useCallback, useState } from 'react';
+import { useCallback, useRef, useState } from 'react';
 import {
   autoState,
   recordAuto,
@@ -59,9 +59,15 @@ export function useAutoMemory({
 }): AutoMemory {
   const [local, setLocal] = useState<AutoMemos>(() => (pictureKey ? SESSION.get(pictureKey) : undefined) ?? {});
   const memos = pictureKey ? (SESSION.get(pictureKey) ?? local) : local;
+  // The memos as of the LAST write, synchronously: the one `Auto` runs tone
+  // then bands in one tick, and a closure over the render's memos made the
+  // second write drop the first's memo — tone's switch came up unlit.
+  const held = useRef(memos);
+  held.current = memos;
   const write = useCallback(
     (next: AutoMemos) => {
       if (pictureKey) SESSION.set(pictureKey, next);
+      held.current = next;
       setLocal(next);
     },
     [pictureKey],
@@ -71,16 +77,16 @@ export function useAutoMemory({
 
   const apply = useCallback(
     (verb: AutoVerb, answer: SlotValues, told: string) => {
-      write(recordAuto(memos, verb, develop, answer));
+      write(recordAuto(held.current, verb, develop, answer));
       onPatch(answer);
       onTold(told);
     },
-    [memos, develop, write, onPatch, onTold],
+    [develop, write, onPatch, onTold],
   );
 
   const turnOff = useCallback(
     (verb: AutoVerb) => {
-      const { memos: next, patch, state: was } = revertAuto(memos, verb, develop);
+      const { memos: next, patch, state: was } = revertAuto(held.current, verb, develop);
       if (was === 'off') return false;
       write(next);
       if (was === 'nothing') {
@@ -94,7 +100,7 @@ export function useAutoMemory({
       );
       return true;
     },
-    [memos, develop, write, onPatch, onTold],
+    [develop, write, onPatch, onTold],
   );
 
   return { state, apply, turnOff };

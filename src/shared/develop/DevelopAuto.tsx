@@ -13,15 +13,48 @@ import {
 import type { AutoVerb } from './auto-slots';
 import AutoSwitch from './AutoSwitch';
 import type { AutoMemory } from './use-auto-memory';
+import type { AutoAllVerb } from './use-auto-all';
 
 const AUTO_HINT =
   'Tone reads where the picture’s light actually sits and writes a black point, a white point and a midtone gamma into Levels — it touches no colour. Colour neutralises the AVERAGE cast, which is the wrong answer on a sunset or a candle-lit room, so it is a second button and never rides along with the first. Pick grey asks you instead: click something in the picture that ought to be neutral and the white balance is solved for that, which beats the average whenever the picture is not an average scene. Bands is the third answer: where a tenth of the picture sits against black it lifts Shadows, where a tenth sits against white it pulls Highlights down — a compression of the ends where Tone is a stretch, so the two stay separate buttons. All of them are measured on the picture as shot, so pressing one twice gives the same answer rather than compounding.';
+
+const ALL_HINT =
+  'Auto runs the steps ticked in Settings › Automatic — tone, bands and detail until you say otherwise, colour, level and upright when you tick them — each through its own switch, so any one can be taken back alone afterwards. It can also run by itself the first time an untouched photograph opens, if that setting is on.';
 
 const SWITCH_HINT =
   'Each one is a switch: a second click puts back what its own sliders held before it, and leaves the others alone. Lit, it still holds its answer; dashed, it found nothing to change; half-lit, you moved its sliders since. Colour and Pick grey share the white balance — the newer replaces the older, and turning it off gives back the balance from before either.';
 
 const LEVELS_HINT =
   'Where the range is read FROM: everything at or under black becomes black, everything at or over white becomes white, and gamma bends what is between them. Auto tone writes these three; the curve’s own end points do the same thing by hand.';
+
+/** The Auto row's three verbs that write the develop, by name — `Auto` runs them through here too. */
+export type DevelopAutoVerb = Extract<AutoVerb, 'tone' | 'colour' | 'bands'>;
+
+/**
+ * One of the row's verbs run over the stats, through the memory, with its
+ * told line — the same closure the button and the `Auto` switch call, so the
+ * two can never disagree about what a verb writes.
+ */
+export function runAutoVerb(verb: DevelopAutoVerb, stats: SourceStats, auto: AutoMemory): void {
+  if (verb === 'tone') {
+    const levels = autoTone(stats);
+    auto.apply('tone', { levels }, levels ? `auto tone · ${describeAutoTone(levels)}` : 'nothing to stretch');
+    return;
+  }
+  if (verb === 'colour') {
+    const { temperature, tint, clamped } = autoColour(stats);
+    auto.apply(
+      'colour',
+      { temperature, tint },
+      !temperature && !tint ? 'already neutral' : `auto colour · temperature ${temperature}, tint ${tint}` + (clamped ? ' · as far as the sliders reach' : ''),
+    );
+    return;
+  }
+  // Nothing to recover still SETS the two bands to zero: a verb that leaves a
+  // stale value where it found no reason for one is a nudge.
+  const bands = autoBands(stats);
+  auto.apply('bands', { highlights: bands?.highlights ?? 0, shadows: bands?.shadows ?? 0 }, bands ? `auto bands · ${describeAutoBands(bands)}` : 'nothing to recover');
+}
 
 /**
  * Auto — separate buttons, deliberately not one, and each a SWITCH.
@@ -35,6 +68,7 @@ const LEVELS_HINT =
 export function DevelopAutoSection({
   stats,
   auto,
+  all,
   picking,
   onPicking,
   echo = null,
@@ -42,6 +76,8 @@ export function DevelopAutoSection({
   stats: SourceStats | null;
   /** The row's memory of its clicks, held by the host per picture (`useAutoMemory`). */
   auto: AutoMemory;
+  /** The one `Auto` running the plan's steps (`use-auto-all.ts`); omitted, the row is its verbs alone. */
+  all?: AutoAllVerb;
   /** Whether the eyedropper is armed; omitted, no dropper is drawn. */
   picking?: boolean;
   onPicking?: (on: boolean) => void;
@@ -51,49 +87,15 @@ export function DevelopAutoSection({
   const ready = Boolean(stats && stats.total > 0);
   const notRead = 'the picture has not been read yet';
 
-  const toggle = (verb: AutoVerb, run: (stats: SourceStats) => void) => {
+  const toggle = (verb: DevelopAutoVerb) => {
     if (auto.turnOff(verb) || !stats) return;
-    run(stats);
+    runAutoVerb(verb, stats, auto);
   };
 
-  const verbs: { verb: AutoVerb; label: string; hint?: string; run: (stats: SourceStats) => void }[] = [
-    {
-      verb: 'tone',
-      label: 'Auto tone',
-      run: (s) => {
-        const levels = autoTone(s);
-        auto.apply('tone', { levels }, levels ? `auto tone · ${describeAutoTone(levels)}` : 'nothing to stretch');
-      },
-    },
-    {
-      verb: 'colour',
-      label: 'Auto colour',
-      run: (s) => {
-        const { temperature, tint, clamped } = autoColour(s);
-        auto.apply(
-          'colour',
-          { temperature, tint },
-          !temperature && !tint
-            ? 'already neutral'
-            : `auto colour · temperature ${temperature}, tint ${tint}` + (clamped ? ' · as far as the sliders reach' : ''),
-        );
-      },
-    },
-    {
-      verb: 'bands',
-      label: 'Auto bands',
-      hint: 'Lift the shadows and pull the highlights down where the picture leans',
-      // Nothing to recover still SETS the two bands to zero: a verb that
-      // leaves a stale value where it found no reason for one is a nudge.
-      run: (s) => {
-        const bands = autoBands(s);
-        auto.apply(
-          'bands',
-          { highlights: bands?.highlights ?? 0, shadows: bands?.shadows ?? 0 },
-          bands ? `auto bands · ${describeAutoBands(bands)}` : 'nothing to recover',
-        );
-      },
-    },
+  const verbs: { verb: DevelopAutoVerb; label: string; hint?: string }[] = [
+    { verb: 'tone', label: 'Auto tone' },
+    { verb: 'colour', label: 'Auto colour' },
+    { verb: 'bands', label: 'Auto bands', hint: 'Lift the shadows and pull the highlights down where the picture leans' },
   ];
 
   const pickState = auto.state('pick');
@@ -105,6 +107,7 @@ export function DevelopAutoSection({
       title="Auto"
       info={
         <>
+          {all && <p>{ALL_HINT}</p>}
           <p>{AUTO_HINT}</p>
           <p>{SWITCH_HINT}</p>
         </>
@@ -112,7 +115,15 @@ export function DevelopAutoSection({
       foldable={false}
     >
       <div className="flex flex-wrap items-center gap-2">
-        {verbs.map(({ verb, label, hint, run }) => {
+        {all && (
+          <>
+            <AutoSwitch state={all.state} disabled={!ready && all.state === 'off'} hint={ready ? all.hint : notRead} echo={echo} onClick={all.onClick}>
+              Auto
+            </AutoSwitch>
+            <span aria-hidden className="w-px h-5 bg-line flex-none" />
+          </>
+        )}
+        {verbs.map(({ verb, label, hint }) => {
           const state = auto.state(verb);
           return (
             <AutoSwitch
@@ -121,7 +132,7 @@ export function DevelopAutoSection({
               disabled={!ready && state === 'off'}
               hint={ready ? hint : notRead}
               echo={echo}
-              onClick={() => toggle(verb, run)}
+              onClick={() => toggle(verb)}
             >
               {label}
             </AutoSwitch>
