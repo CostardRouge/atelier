@@ -957,11 +957,12 @@ of your own put on one of the trip's places, else its picture's day, a picture
 stop its pictures' — and a stop nothing dates stays on the road and moves no
 counter, which the panel counts. A **Pace** slider, Calendar ↔ Road (65 %
 toward the calendar by default), decides how the road time is shared: toward
-the calendar the car waits at a place while its days run on the counter —
-the "surplace" in Melbourne —, toward the road the days a place took pass as
-the car leaves it. The drive may take up to a minute, and it takes the length
-you set however many places it stops at (the panel says when the hops get
-too short to read); counting with the car adds only the summary card's three
+the calendar the car slows past a place that took days, toward the road it
+keeps one speed, and the counter runs either way. The car never stops for a
+place's days unless **Wait at the place** is ticked; then it waits out the
+long stays, the "surplace" in Melbourne, its days running while it waits.
+The drive may take up to a minute, and it takes the length you set however
+many places it passes (the panel says when the hops get too short to read); counting with the car adds only the summary card's three
 seconds, and a piece whose length you set by hand says, beside the counter,
 when that cuts its end. At the end a **summary
 card** — days · distance · stops — and, on the road, **milestones** every

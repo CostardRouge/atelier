@@ -145,6 +145,9 @@ recommendations («ça me va aussi»).
 - **Pace**: a slider Calendar ↔ Road, **65 % toward Calendar** by default —
   screen time shared by days spent and by kilometres; on Calendar the car
   waits in Melbourne while the days run (which also answers the «surplace»).
+  *Since 2026-10-07 the wait is a tick, «Wait at the place», off by default:
+  the car stopping at every place without being asked was his report; off,
+  it slows past a place that took days.*
 - **Layout** *Map over photo*: each place's picture full-frame behind a map
   plate, cross-faded, a slow push-in; plus the **summary card** at the end
   (days · km · places) and **milestones** on the road (every 50 days or

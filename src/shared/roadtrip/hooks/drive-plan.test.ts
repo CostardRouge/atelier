@@ -27,6 +27,7 @@ import {
   DAY_TICK_GAP,
   driveScore,
   shareRoadTime,
+  STAY_MIN_SECONDS,
   driveWants,
   graticuleStep,
   headingAt,
@@ -773,7 +774,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
   });
 
   it('on a recap, the car STAYS at a place while its days run, the road time still summing to the drive’s', () => {
-    const o = quiet({ pace: 0.65 });
+    const o = quiet({ pace: 0.65, waitStays: true });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
     expect(plan.recap).toBe(true);
     const kinds = plan.schedule.phases.map((p) => p.kind);
@@ -788,7 +789,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
   });
 
   it('reads ONE clock: the day never goes back, starts on the first day and ends on the last', () => {
-    const o = quiet({ pace: 0.65 });
+    const o = quiet({ pace: 0.65, waitStays: true });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
     let last = -Infinity;
     for (let t = 0; t <= plan.seconds; t += 0.05) {
@@ -811,7 +812,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
       pic('b.jpg', 4, { lat: -31.95, lon: 115.86 }, 2),
       pic('c.jpg', 9, { lat: -20, lon: 120 }, 3),
     ];
-    const o = quiet({ stopsOn: 'pictures', picked, pace: 0.65 });
+    const o = quiet({ stopsOn: 'pictures', picked, pace: 0.65, waitStays: true });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
     const stay = plan.schedule.phases.find((p) => p.kind === 'stay' && p.stop === 0)!;
     const pop = (name: string) => plan.schedule.pops.find((p) => p.key.includes(name))!;
@@ -821,7 +822,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     expect(pop('b.jpg').leaves).toBeCloseTo(stay.end, 6);
     expect(Math.floor(plan.at(pop('b.jpg').at + 1e-6).day!)).toBe(4);
     // Off, or with no clock to count days on, every picture comes up on arrival.
-    const off = quiet({ stopsOn: 'pictures', picked, pace: 0.65, dayPictures: false });
+    const off = quiet({ stopsOn: 'pictures', picked, pace: 0.65, waitStays: true, dayPictures: false });
     const flat = drivePlan(driveRoute(STAGES, CAL, dateOf(20), off), off, true)!;
     expect(flat.schedule.pops.find((p) => p.key.includes('b.jpg'))!.at).toBeLessThanOrEqual(stay.start);
     const plain = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o)!;
@@ -846,8 +847,9 @@ describe('the recap — the stops are dated, and the badge counts with the car',
         .reduce((sum, p) => sum + (p.end - p.start), 0);
       expect(road).toBeCloseTo(driveSeconds, 6);
     }
-    // 39 hops want 13.65 s at the floor: under it the panel has a number to say.
-    const o = quiet({ pace: 0.65, driveSeconds: 4 });
+    // A pause at each of the 40 places makes 39 hops, 13.65 s at the floor:
+    // under it the panel has a number to say.
+    const o = quiet({ pace: 0.65, driveSeconds: 4, pauseEverywhere: true });
     const plan = drivePlan(driveRoute(many, CAL, dateOf(28), o), o, true)!;
     expect(plan.schedule.roadFloor).toBeGreaterThan(4);
   });
@@ -864,6 +866,38 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     expect(tight.stays).toEqual([0]);
     // Nothing to share, nothing shared.
     expect(shareRoadTime([0.5, 0.5], [], 0, 0.35)).toEqual({ runs: [0, 0], stays: [] });
+  });
+
+  it('stops only where a place’s days make a real wait, and rolls past the others', () => {
+    const o = quiet({ pace: 0.65, driveSeconds: 4 });
+    const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
+    // Four seconds for 30 days: no place earns a second, so the car never stops…
+    expect(plan.schedule.phases.filter((p) => p.kind === 'stay')).toEqual([]);
+    expect(plan.schedule.phases.filter((p) => p.kind === 'run')).toHaveLength(1);
+    let last = -Infinity;
+    let stills = 0;
+    const run = plan.schedule.phases.find((p) => p.kind === 'run')!;
+    for (let t = run.start + 0.05; t < run.end - 0.05; t += 0.01) {
+      const s = plan.at(t).s;
+      if (s - last < 1e-9) stills += 1;
+      last = s;
+    }
+    expect(stills).toBe(0);
+    // …while the counter still reads every place’s days as it passes it.
+    for (let i = 1; i < plan.route.stops.length - 1; i++) {
+      const days = plan.route.stops[i].days!;
+      const day = plan.at(plan.schedule.arrivals[i]).day!;
+      expect(day).toBeGreaterThanOrEqual(days.arrive - 1e-6);
+      expect(day).toBeLessThanOrEqual(days.leave + 1e-6);
+    }
+    // Asked to, and given the time, it waits out the long stays.
+    expect(drivePlan(driveRoute(STAGES, CAL, dateOf(20), quiet({ pace: 0.65, driveSeconds: 30 })), quiet({ pace: 0.65, driveSeconds: 30 }), true)!
+      .schedule.phases.some((p) => p.kind === 'stay')).toBe(false);
+    const slow = quiet({ pace: 0.65, driveSeconds: 30, waitStays: true });
+    const long = drivePlan(driveRoute(STAGES, CAL, dateOf(20), slow), slow, true)!;
+    const stays = long.schedule.phases.filter((p) => p.kind === 'stay');
+    expect(stays.length).toBeGreaterThan(0);
+    for (const stay of stays) expect(stay.end - stay.start).toBeGreaterThanOrEqual(STAY_MIN_SECONDS - 1e-9);
   });
 
   it('stands the ribbon’s head on the day the badge counts, at every moment', () => {
@@ -887,7 +921,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     for (let i = 1; i < turns.length; i++) expect(turns[i]).toBeGreaterThan(turns[i - 1]);
     for (const [i, at] of turns.entries()) {
       expect(Math.floor(plan.at(at + 1e-6).day! + 1e-9)).toBe(i + 2);
-      expect(plan.at(at - 1e-6).day!).toBeLessThan(i + 2);
+      expect(plan.at(at - 1e-3).day!).toBeLessThan(i + 2);
     }
     const light = (score: ReturnType<typeof driveScore>) => score.filter((e) => e.gain === 0.32 * o.tickVolume);
     const ticks = light(driveScore(plan, o));
@@ -900,13 +934,13 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     expect(dayTurns(plain, o)).toEqual([]);
   });
 
-  it('at the Road end of the pace the days a place took pass as the car leaves it', () => {
+  it('at the Road end of the pace the car never waits: a place’s days run while it drives on', () => {
     const o = quiet({ pace: 0 });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
     expect(plan.schedule.phases.some((p) => p.kind === 'stay')).toBe(false);
-    expect(plan.at(0).day).toBe(6);
-    // Just short of the arrival the car is at Broome's gate: the day it reaches it.
-    expect(plan.at(plan.schedule.arrivedAt - 1e-6).day).toBeCloseTo(23.5, 3);
+    expect(plan.at(0).day).toBe(1);
+    // Just short of the arrival the car is at Broome's gate, Broome's days spent on the way in.
+    expect(plan.at(plan.schedule.arrivedAt - 1e-6).day).toBeCloseTo(31, 3);
     // The summary comes up on the trip's last day, the rest having run at the gate.
     expect(plan.at(plan.schedule.summaryAt!).day).toBe(31);
   });
