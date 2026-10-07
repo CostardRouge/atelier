@@ -26,6 +26,7 @@ import {
   dayTurns,
   DAY_TICK_GAP,
   driveScore,
+  shareRoadTime,
   driveWants,
   graticuleStep,
   headingAt,
@@ -826,6 +827,43 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     const plain = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o)!;
     expect(plain.schedule.pops.map((p) => p.key)).toHaveLength(3);
     expect(plain.schedule.pops.every((p) => p.at <= plain.schedule.arrivedAt)).toBe(true);
+  });
+
+  it('keeps the road to the length the author set, however many stops a recap stops at', () => {
+    // Four legs of ten places each: a recap ends a run at every dated place.
+    const many: HookStage[] = [0, 1, 2, 3].map((leg) => ({
+      ...STAGES[0],
+      id: `many-${leg}`,
+      startDate: dateOf(1 + leg * 7),
+      endDate: dateOf(7 + leg * 7),
+      places: Array.from({ length: 10 }, (_, k) => ({ name: `P${leg}-${k}`, lat: -30 + leg * 2 + k * 0.2, lon: 115 + k * 0.3 })),
+    }));
+    for (const driveSeconds of [4, 12, 30]) {
+      const o = quiet({ pace: 0.65, driveSeconds, summary: false });
+      const plan = drivePlan(driveRoute(many, CAL, dateOf(28), o), o, true)!;
+      const road = plan.schedule.phases
+        .filter((p) => p.kind === 'run' || p.kind === 'stay' || p.kind === 'arrive')
+        .reduce((sum, p) => sum + (p.end - p.start), 0);
+      expect(road).toBeCloseTo(driveSeconds, 6);
+    }
+    // 39 hops want 13.65 s at the floor: under it the panel has a number to say.
+    const o = quiet({ pace: 0.65, driveSeconds: 4 });
+    const plan = drivePlan(driveRoute(many, CAL, dateOf(28), o), o, true)!;
+    expect(plan.schedule.roadFloor).toBeGreaterThan(4);
+  });
+
+  it('shares the road: a run under the floor takes it from the others, the whole kept', () => {
+    const out = shareRoadTime([0.01, 0.49, 0.2], [0.3], 10, 0.35);
+    expect(out.runs[0]).toBeCloseTo(0.35, 9);
+    expect(out.runs.reduce((a, b) => a + b, 0) + out.stays[0]).toBeCloseTo(10, 9);
+    expect(out.runs[1] / out.runs[2]).toBeCloseTo(0.49 / 0.2, 9);
+    expect(out.stays[0] / out.runs[2]).toBeCloseTo(0.3 / 0.2, 9);
+    // Floors past the budget: the runs share it evenly, the stays get nothing.
+    const tight = shareRoadTime([0.5, 0.25, 0.25], [0.2], 0.6, 0.35);
+    for (const run of tight.runs) expect(run).toBeCloseTo(0.2, 9);
+    expect(tight.stays).toEqual([0]);
+    // Nothing to share, nothing shared.
+    expect(shareRoadTime([0.5, 0.5], [], 0, 0.35)).toEqual({ runs: [0, 0], stays: [] });
   });
 
   it('stands the ribbon’s head on the day the badge counts, at every moment', () => {

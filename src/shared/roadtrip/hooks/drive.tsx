@@ -693,7 +693,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       <Group title="Motion">
-        <FieldRow label="Driving" hint="The time on the road, shared between the stops by distance; halts come on top.">
+        <FieldRow
+          label="Driving"
+          hint={
+            plan && o.driveSeconds < plan.schedule.roadFloor - 1e-9
+              ? `${plan.schedule.phases.filter((p) => p.kind === 'run').length} hops in ${o.driveSeconds.toFixed(1)} s: each is shorter than a third of a second. Give the road ${Math.ceil(plan.schedule.roadFloor)} s, or group nearby places.`
+              : `The time on the road${count ? ', stays at the places included' : ''}, shared between the stops by distance${count ? ' and days' : ''}; halts${count && o.summary ? ' and the summary card' : ''} come on top.`
+          }
+        >
           <RangeField
             label="Driving length"
             min={DRIVE_LIMITS.driveSeconds.min}
