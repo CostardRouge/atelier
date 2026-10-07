@@ -959,7 +959,11 @@ counter, which the panel counts. A **Pace** slider, Calendar ↔ Road (65 %
 toward the calendar by default), decides how the road time is shared: toward
 the calendar the car waits at a place while its days run on the counter —
 the "surplace" in Melbourne —, toward the road the days a place took pass as
-the car leaves it. The drive may take up to a minute. At the end a **summary
+the car leaves it. The drive may take up to a minute, and it takes the length
+you set however many places it stops at (the panel says when the hops get
+too short to read); counting with the car adds only the summary card's three
+seconds, and a piece whose length you set by hand says, beside the counter,
+when that cuts its end. At the end a **summary
 card** — days · distance · stops — and, on the road, **milestones** every
 50 days and 1 000 km (or miles), each a switch; the badge's words carry a
 *Stop* field for the stops' label. The recap's "map over photo" is the map on
