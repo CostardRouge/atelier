@@ -107,6 +107,8 @@ export type AddResult = { ok: true; hash: string; name: string } | { ok: false; 
 
 /** Read a `.dcp` the person picked, keep it, and say what it is. */
 export async function addDcp(file: File): Promise<AddResult> {
+  // A DCP is a few hundred kilobytes; a file this size is something else.
+  if (file.size > 32 * 1024 * 1024) return { ok: false, reason: `${file.name} is too large to be a camera profile` };
   let bytes: ArrayBuffer;
   try {
     bytes = await file.arrayBuffer();

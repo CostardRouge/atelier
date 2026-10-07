@@ -145,6 +145,15 @@ under their SHA-256. **Rules a later agent must keep:**
   or an undo — but `'resolve'` turning into what it resolved to decodes
   nothing. Before C8 the profile only ever changed that way, so a ref was
   enough; the loupe drops with it.
+- **A profile this device does not hold is UNKNOWN, never «none»**
+  (2026-10-07 review): a `profile` curve not yet read stays unread (it draws
+  Standard, as any unread one) instead of being written to Standard — that
+  wrote the document merely by opening it on another device; and the kelvin
+  control is hidden there, there being no calibrations to solve through (a
+  balance already set still applies).
+- The stage forgets the profile its source was decoded with the moment a new
+  source starts decoding, so a profile asked before it lands is never taken
+  for a change (a second decode).
 - Calibration: no preset or paste carries it; offered only on the sensor,
   decoded, not following the roll, not on a clip. No roll-wide default yet.
 
