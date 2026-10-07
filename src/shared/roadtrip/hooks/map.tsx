@@ -57,6 +57,7 @@ import {
   type MapOptions,
 } from './map-plan';
 import { BasemapStatus, enableBasemap } from './basemap-row';
+import { readyGround } from './basemap-strip';
 import { CameraRows } from './camera-rows';
 import { stripBudget } from '../../map/osm-tiles';
 import { Group, MovedRow, resetLink } from './panel-ui';
@@ -871,6 +872,8 @@ export const mapVariant: HookVariant = {
           }
         : undefined,
       paint: (g, t, frame) => paintMap(g, o, timing, context, ctx.pictures, t, frame, basemap, track),
+      // A streamed ground's tiles, decoded before an export draws (`basemap-strip.ts`).
+      ready: basemap?.pyramid ? (t0, t1, signal) => readyGround(basemap, t0, t1, signal) : undefined,
       score: o.sound && o.draw
         ? () => mapScore(timing, { kit: o.kit, pitch: o.tickPitch }, o.tickVolume)
         : undefined,

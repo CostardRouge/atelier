@@ -25,6 +25,7 @@
  */
 
 import type { ComponentType } from 'react';
+import type { PyramidTile } from '../../map/tile-strip';
 import type { SavedMediaRef } from '../../projects/project-types';
 import type { CarSpec } from '../car-spec';
 import type { PlaceWritingTrip } from '../place-style';
@@ -214,12 +215,18 @@ export interface HookBasemapWant {
   width: number;
   height: number;
   /**
-   * The tile zoom to fetch at, fixed — a tile of a following camera's
-   * pyramid (`shared/map/tile-strip.ts`) is cut on its zoom's own grid, and
-   * falls back to its parent's when it cannot be fetched (`loadPatch`).
-   * Absent, the loader picks the zoom from the raster's size.
+   * The tile zoom to fetch at, fixed. Absent, the loader picks the zoom
+   * from the raster's size.
    */
   zoom?: number;
+  /**
+   * Not a raster but a following camera's PYRAMID of tiles
+   * (`basemap-strip.ts`): the shell opens a stream under `key`
+   * (`shared/map/tile-stream.ts`) and fetches every tile's blob ahead; the
+   * painter decodes around the playhead. `box`, `width` and `height` are
+   * then unused.
+   */
+  pyramid?: readonly PyramidTile[];
 }
 
 /**
@@ -351,6 +358,11 @@ export interface HookRender {
   content?(t: number): HookContentPatch;
   /** Drawn between the picture and the shades, at the output's own size. */
   paint?(g: HookCtx2D, t: number, frame: FrameBox): void;
+  /**
+   * Resolves once what `paint` draws from `t0` to `t1` is in memory (a
+   * streamed map ground). Absent: the paint needs nothing it waits for.
+   */
+  ready?(t0: number, t1?: number, signal?: AbortSignal): Promise<void>;
   /** The bed, as times and voices. Rendered offline at export; see §7. */
   score?(): readonly SoundEvent[];
   /**
@@ -429,6 +441,8 @@ export interface HookPictureStatus {
   pending: number;
   /** Keys that could not be drawn, each with one line saying why. */
   problems: ReadonlyMap<string, string>;
+  /** Map tiles of a pyramid that could not be fetched at all — the coarser ground stands in. */
+  tilesFailed?: number;
   /**
    * Map tiles of a following camera's pyramid that landed only from a
    * COARSER zoom (their own could not be fetched) — drawn, a little softer.
@@ -634,6 +648,13 @@ export interface ResolvedHook {
   contentAt(base: BadgeContent | null, t: number): BadgeContent | null;
   /** Paint every layer, in order. */
   paint(g: HookCtx2D, t: number, frame: FrameBox): void;
+  /**
+   * Resolves once everything the frames from `t0` to `t1` paint is in memory
+   * — a streamed map ground's tiles (`basemap-strip.ts`). An EXPORT awaits it
+   * before drawing a frame; the stage never does (its paint draws what is in
+   * and asks for the rest).
+   */
+  ready(t0: number, t1?: number, signal?: AbortSignal): Promise<void>;
   /** Every layer's events, in time order. */
   score(): readonly SoundEvent[];
   /** Some layer asked for its score to be mixed into a clip's own sound. */
@@ -676,6 +697,9 @@ export function foldHook(layers: readonly HookRender[], ownsFrame: boolean): Res
     },
     paint(g, t, frame) {
       for (const layer of layers) layer.paint?.(g, t, frame);
+    },
+    ready(t0, t1, signal) {
+      return Promise.all(layers.map((layer) => layer.ready?.(t0, t1, signal))).then(() => undefined);
     },
     score() {
       return layers

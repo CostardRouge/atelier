@@ -50,7 +50,10 @@ Today it ships ten tools, converging into a few editors:
 >   exported file, credited «© OpenStreetMap contributors» as the licence
 >   requires — when a piece asks for them and this device has said yes: the
 >   yes is kept on the device, never in the trip, so a trip opened elsewhere
->   fetches nothing until that device says yes too.
+>   fetches nothing until that device says yes too. Tiles fetched that way
+>   are kept on the device for a month (at most 256 MB, 64 MB on a phone), so
+>   a second export asks the server nothing; taking the yes back forgets
+>   them, and the background row has a *Forget them* button.
 > - The **place search** in Trips: looking a stage's place up sends *the words
 >   you type* to OpenStreetMap's Nominatim service, and gets a name, a
 >   structured address (the county, the state and its code, the country) and
@@ -247,7 +250,11 @@ exposure in stops, brightness, contrast, highlights, shadows, whites, blacks,
 temperature, tint, saturation, vibrance, with the grade stack underneath and a
 wipe to the untouched frame, which **A/B** in the sheet's header turns on and
 off (one choice for every Develop screen, remembered by the browser; turned on,
-it opens on the middle). A clip opens on the frame under the playhead and
+it opens on the middle). With **A/B** off, the picture at its fitted size
+**swipes** to the project's media before or after it, as in the Develop tool —
+a drag, a flick, a sideways trackpad sweep, or ← / → — and a page **writes**
+this media's numbers first, as Done would; the list's two ends resist. A clip
+opens on the frame under the playhead and
 **plays there**: ▶ or Space runs it graded while the sliders move, the bar
 under it scrubs, the histogram and Auto read the frame it stops on, and where
 it is paused is written nowhere — the Studio's own playhead stays put. The
@@ -1186,10 +1193,14 @@ latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
 and at a strength that lets the paper show through; when the camera follows
 the car, finer tiles are fetched along the road at every zoom the camera
-takes — close in, pulled back and in between —, inside a budget of tiles
-(the stillest moments keep the most detail when the budget runs short), and
-an export waits for every one of them before it writes a frame, saying how
-many a coarser map had to stand in for —,
+takes — close in, pulled back and in between — before anything is
+recorded, and decoded only around the moment being drawn, so a long drive
+keeps full detail without holding thousands of pictures in memory (past a
+budget of requests, the stillest moments keep the most detail); the preview
+shows a softer map for an instant where it has not caught up, and an export
+waits for every frame's tiles before it writes it, saying how many a
+coarser map had to stand in for; the tiles are kept on the device for a
+month, so the next export or reopening fetches nothing it already has —,
 where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time
@@ -1446,7 +1457,12 @@ look underneath so a correction and a grade are set in one place. The picture
 on the sheet is exactly what the piece will deliver — the correction, then the
 look, then the output transform — and a drag across it wipes to the untouched
 frame (hold the corner chip to see it whole; **A/B** in the header turns the
-wipe off and on). A clip slide **plays** in the sheet — ▶ or Space, a bar to
+wipe off and on). With **A/B** off, the picture at its fitted size **swipes**
+to the slide before or after, as in the Develop tool — a drag, a flick, a
+sideways trackpad sweep, or ← / → — over the piece's slides that hold a
+picture, a collage entered on its first cell; a page **writes** this slide's
+numbers first, as Done would, so Cancel only takes back the slide on screen.
+A clip slide **plays** in the sheet — ▶ or Space, a bar to
 scrub — so a correction is judged moving; the piece behind the sheet does not
 play along. The correction bakes into the
 same single LUT the grade already goes through, so the stage, the slide rail,

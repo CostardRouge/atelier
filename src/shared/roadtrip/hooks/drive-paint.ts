@@ -375,7 +375,7 @@ function paintMap(
         const seen = view.angle
           ? { x0: mx - reach, y0: my - reach, x1: mx + reach, y1: my + reach }
           : { x0: 0, y0: 0, x1: w, y1: h };
-        paintGround(g, basemap, pictures, tiles, (p) => basemapRect(p, project), seen, t, o.basemapOpacity);
+        paintGround(g, basemap, tiles, (p) => basemapRect(p, project), seen, t, o.basemapOpacity);
       });
     }
     if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);

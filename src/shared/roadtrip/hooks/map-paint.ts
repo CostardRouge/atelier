@@ -146,7 +146,7 @@ export function paintMap(
     // frame's ground at its own density (`basemap-strip.ts`); a still map
     // has none and draws the wide raster alone.
     const seen = { x0: box.x, y0: box.y, x1: box.x + box.width, y1: box.y + box.height };
-    paintGround(g, basemap, pictures, tiles, (p) => basemapRect(p, project), seen, view ? t : 0, o.basemapOpacity);
+    paintGround(g, basemap, tiles, (p) => basemapRect(p, project), seen, view ? t : 0, o.basemapOpacity);
     g.restore();
   }
   if (o.graticule) paintGraticule(g, o, box, project, u);

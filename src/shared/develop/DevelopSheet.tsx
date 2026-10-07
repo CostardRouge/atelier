@@ -1,6 +1,6 @@
 import { useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import type { LutStack } from '../lut/use-lut-stack';
-import { describeKeyTarget, targetOwnsSpace } from '../media/transport-keys';
+import { describeKeyTarget, targetOwnsSpace, targetOwnsTyping } from '../media/transport-keys';
 import StageZoomControl from '../ui/StageZoomControl';
 import useDialogKeys from '../ui/use-dialog-keys';
 import { useIsCompact } from '../ui/use-layout-mode';
@@ -37,6 +37,39 @@ import { useDevelopPicture } from './use-develop-picture';
 import { usePicturePixels } from './use-picture-pixels';
 import { pictureFidelity } from './picture-fidelity';
 import { renderPrecisionHere } from '../render/graph-grader';
+import { useStageDeck } from './use-stage-deck';
+import { drawsInImg, type DeckNeighbour, type StageDeckView } from './stage-deck';
+import { DECK_GAP } from '../ui/use-media-viewer';
+import { useObjectUrls } from '../lib/use-object-urls';
+
+/** A picture beside the open one, as a host names it to the sheet's deck. */
+export interface SheetDeckPicture {
+  id: string;
+  name: string;
+  /** Its bytes, when in hand — drawn in the slot a swipe reveals if an `<img>` can. */
+  file: File | null;
+  /**
+   * What starts the sheet afresh, when it is more than the id — the Studio
+   * waits for the media's hash, which guards the numbers it opens on.
+   */
+  key?: string;
+}
+
+/**
+ * The host's pictures around the open one, for a SWIPE (`stage-deck.ts`): with
+ * A/B off, a drag at the fit reveals the neighbour and a release pages to it,
+ * as in the Develop tool and the lightbox. A page WRITES the open picture's
+ * numbers first (`onStep` gets them, as Done would) and keeps the sheet open
+ * on the next — Cancel then only takes back the picture on screen.
+ */
+export interface SheetDeck {
+  /** The picture on screen; the sheet starts afresh — draft, view — when it changes. */
+  current: SheetDeckPicture;
+  previous: SheetDeckPicture | null;
+  next: SheetDeckPicture | null;
+  /** Write `develop` to the picture on screen, then open the one `dir` away. */
+  onStep: (dir: -1 | 1, develop: DevelopSettings | null) => void;
+}
 
 export interface DevelopSheetProps {
   /** The picture, or null when the slide has none — the controls still show. */
@@ -81,6 +114,44 @@ export interface DevelopSheetProps {
   presets?: DevelopPresets;
   /** Batch verbs the host offers (`DevelopApplyVerb`). */
   applyTo?: readonly DevelopApplyVerb[];
+  /** The pictures beside this one, for a swipe; null keeps the sheet to one picture. */
+  deck?: SheetDeck | null;
+}
+
+/**
+ * The sheet's deck, made ABOVE the body the open picture keys: the object
+ * URLs of the three stills live here, so the still a landed page opens on is
+ * the very URL its slot just showed — already decoded, no seam (the Develop
+ * tool's `RollEditor` holds them above its workbench for the same reason).
+ */
+export default function DevelopSheet(props: DevelopSheetProps) {
+  const { deck = null } = props;
+  // Keyed on the three pictures, never on the `deck` object a host builds per
+  // render: a new map each render would revoke and remake every URL.
+  const [prev, cur, next] = deck ? [deck.previous, deck.current, deck.next] : [null, null, null];
+  const blobs = useMemo(() => {
+    const out = new Map<string, Blob>();
+    for (const [id, file] of [
+      [prev?.id, prev?.file],
+      [cur?.id, cur?.file],
+      [next?.id, next?.file],
+    ] as const) {
+      if (id && file && drawsInImg(file)) out.set(id, file);
+    }
+    return out;
+  }, [prev?.id, prev?.file, cur?.id, cur?.file, next?.id, next?.file]);
+  const urls = useObjectUrls(blobs);
+  const slot = (p: SheetDeckPicture | null): DeckNeighbour | null =>
+    p ? { id: p.id, name: p.name, src: urls.get(p.id) ?? null } : null;
+  const neighbours = deck && (deck.previous || deck.next) ? { previous: slot(deck.previous), next: slot(deck.next) } : null;
+  return (
+    <DevelopSheetBody
+      key={deck ? (deck.current.key ?? deck.current.id) : 'one'}
+      {...props}
+      neighbours={neighbours}
+      still={deck ? (urls.get(deck.current.id) ?? null) : null}
+    />
+  );
 }
 
 /**
@@ -100,7 +171,7 @@ export interface DevelopSheetProps {
  * the sheet IS what the piece will deliver, and the before/after is the
  * untouched frame against it. Cancel puts the stack back.
  */
-export default function DevelopSheet({
+function DevelopSheetBody({
   file,
   videoTimeSeconds = 0,
   title,
@@ -115,7 +186,13 @@ export default function DevelopSheet({
   footerHint,
   presets: hostPresets,
   applyTo,
-}: DevelopSheetProps) {
+  deck = null,
+  neighbours,
+  still,
+}: DevelopSheetProps & {
+  neighbours: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
+  still: string | null;
+}) {
   const book = usePresetBookHost();
   const presets = hostPresets ?? book;
   const draft = useDevelopDraft(value, stack);
@@ -144,6 +221,19 @@ export default function DevelopSheet({
   const [compareOn, setCompareOn] = useLocalFlag('atelier.develop.compare', true);
   // The loupe too: the modal hosts gain RENDERING, never panels (§4.2), and
   // the file's own pixels under a magnified view are rendering.
+  // The host's pictures as a DECK under the stage (`use-stage-deck.ts`): with
+  // A/B off, a fitted drag or a sideways sweep pages, writing this picture's
+  // numbers first, as Done would. The travel is read off the viewport the
+  // picture hook below owns, at gesture time.
+  const pictureRef = useRef<{ width: () => number } | null>(null);
+  const draftRef = useRef(draft);
+  draftRef.current = draft;
+  const deckOnStep = deck?.onStep;
+  const sheetDeck = useStageDeck({
+    neighbours: { previous: Boolean(neighbours?.previous), next: Boolean(neighbours?.next) },
+    travel: () => (pictureRef.current?.width() ?? 0) + DECK_GAP,
+    onStep: (dir) => deckOnStep?.(dir, draftRef.current.result()),
+  });
   const picture = useDevelopPicture({
     file,
     videoTimeSeconds,
@@ -155,7 +245,12 @@ export default function DevelopSheet({
     pixelView,
     clipping,
     compare: compareOn,
+    swipe: neighbours ? sheetDeck.hands : null,
   });
+  pictureRef.current = { width: () => picture.view.viewportRef.current?.clientWidth ?? 0 };
+  const deckView: StageDeckView | null = neighbours
+    ? { offset: sheetDeck.offset, settling: sheetDeck.settling, previous: neighbours.previous, next: neighbours.next }
+    : null;
   // The one `Auto` over the three verbs a sheet has (`use-auto-all.ts`); the
   // plan's other steps belong to the Develop tool's tabs.
   const [autoPlan] = useLocalPref(autoPlanPref, DEFAULT_AUTO_PLAN);
@@ -183,13 +278,25 @@ export default function DevelopSheet({
   // `Z` and the arrows over the picture, the grammar every Looking surface
   // shares (`zoom-keys.ts`); the workbench maps the same `Z` through
   // `roll-editor.ts` and gives its arrows to the roll.
-  const keys = useRef({ view: picture.view });
-  keys.current = { view: picture.view };
+  // At the fit the arrows have nothing to pan, so with a deck they step to
+  // the picture beside — the Develop tool's ←/→, instant, writing as a swipe
+  // does; a field or a slider the keyboard is on keeps its arrows.
+  const keys = useRef({ view: picture.view, neighbours, step: deckOnStep, draft });
+  keys.current = { view: picture.view, neighbours, step: deckOnStep, draft };
   useEffect(() => {
     const onKey = (e: KeyboardEvent) => {
       const v = keys.current.view;
-      const action = zoomKeyAction(describeZoomKey(e), v.zoomed);
-      if (!action) return;
+      const press = describeZoomKey(e);
+      const action = zoomKeyAction(press, v.zoomed);
+      if (!action) {
+        const { neighbours: n, step, draft: d } = keys.current;
+        const dir = e.key === 'ArrowLeft' ? -1 : e.key === 'ArrowRight' ? 1 : 0;
+        if (!dir || v.zoomed || !step || !n || press.defaultPrevented || e.altKey || e.ctrlKey || e.metaKey) return;
+        if (targetOwnsTyping(press.target) || !(dir < 0 ? n.previous : n.next)) return;
+        e.preventDefault();
+        step(dir, d.result());
+        return;
+      }
       e.preventDefault();
       if (action.kind === 'pan') v.pan(action.dx, action.dy);
       else if (v.zoomed) v.zoom.reset();
@@ -313,6 +420,8 @@ export default function DevelopSheet({
           <div className="flex-1 min-w-0 min-h-0 flex flex-col gap-2 max-[820px]:flex-none">
             <DevelopViewport
               picture={picture}
+              deck={deckView}
+              still={still}
               scope={scope}
               hasFile={Boolean(file)}
               emptyText={emptyText}

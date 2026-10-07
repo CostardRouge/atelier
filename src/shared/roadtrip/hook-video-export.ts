@@ -92,6 +92,12 @@ function bedFor(hook: ResolvedHook | null | undefined) {
     });
 }
 
+/**
+ * Seconds BEHIND a fed frame whose map tiles stay decoded: up to ~24 decoded
+ * frames wait between the decoder and the paint, a second of footage at 24 fps.
+ */
+const CLIP_GROUND_WINDOW = 1;
+
 export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
   const { shades, block = null } = opts;
   return exportVariantVideo(
@@ -131,6 +137,14 @@ export function exportHookVideo(opts: HookVideoOptions): Promise<Blob> {
               if (shades?.length) paintShades(ctx, w, h, shades, block);
             }
           : undefined,
+      // The opener's streamed map ground, decoded around each frame before
+      // the decoder hands it over: the paint above is synchronous and may not
+      // wait, and a recorded frame must not draw a tile still on its way.
+      // The window spans the frame fed and those the decoder may still hold
+      // back, oldest first: they are drawn first.
+      prepareUnderOverlays: opts.hook
+        ? (t) => opts.hook!.ready(Math.max(0, t - CLIP_GROUND_WINDOW), t, opts.signal)
+        : undefined,
       elementsAt: opts.elementsAt ?? undefined,
       bed: bedFor(opts.hook),
       mixBed: opts.hook?.mixWithSource ?? false,
@@ -270,6 +284,9 @@ export async function exportHookStillVideo(opts: HookStillVideoOptions): Promise
           elements: opts.elements,
           elementsAt: opts.elementsAt ?? null,
           hook: opts.hook ?? null,
+          // Every tile this frame draws decoded first: a recorded frame never
+          // holds a map tile still on its way (`basemap-strip.ts`).
+          ground: true,
           theme: opts.theme,
           timeSeconds: tSeconds,
           shades: opts.shades,
@@ -358,6 +375,9 @@ async function exportCollageStillVideo(
           elements: opts.elements,
           elementsAt: opts.elementsAt ?? null,
           hook: opts.hook ?? null,
+          // Every tile this frame draws decoded first: a recorded frame never
+          // holds a map tile still on its way (`basemap-strip.ts`).
+          ground: true,
           theme: opts.theme,
           timeSeconds: tSeconds,
           shades: opts.shades,

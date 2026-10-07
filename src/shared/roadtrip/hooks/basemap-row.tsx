@@ -14,6 +14,9 @@
 import Button from '../../ui/Button';
 import { FieldRow, RangeField } from '../../ui/Inspector';
 import { TILES_IN_OPENER_NOTICE, allowTiles, useTilesAllowed } from '../../map/osm-tiles';
+import { useStreamProgress } from '../../map/tile-stream';
+import { clearTiles, useTileCacheSize } from '../../map/tile-cache';
+import { formatBytes } from '../../lib/format';
 import type { BasemapSet } from './basemap-strip';
 import type { HookBasemapWant, HookContext, HookPictureStatus } from './hook-variant';
 
@@ -38,26 +41,26 @@ export function BasemapStatus({ want, set, ctx, status, opacity, onOpacity, limi
   const problem = want ? status?.problems.get(want.key) : undefined;
   // The pyramid along the road: said as a count, since a tile still on its
   // way is nothing to act on — the coarser ground stands in, and an export
-  // waits for every one of them before its first frame.
-  const patches = set?.patches ?? [];
-  const patchesIn = patches.filter((p) => ctx.pictures?.has(p.key)).length;
-  const patchesFailed = patches.filter((p) => status?.problems.has(p.key)).length;
+  // waits for every one of them before its first frame. The tiles are
+  // fetched ahead and decoded around the playhead (`tile-stream.ts`).
+  const progress = useStreamProgress(set?.pyramid?.key);
+  const total = set?.pyramid?.tiles.length ?? 0;
   const short =
     set && set.short > 0
-      ? ` ${set.short === 1 ? 'One zoom' : `${set.short} zooms`} short where the camera moves fastest — full detail would take ${set.full} tiles, past what this device holds.`
+      ? ` ${set.short === 1 ? 'One zoom' : `${set.short} zooms`} short where the camera moves fastest — full detail would take ${set.full} tiles, past what this device fetches.`
       : ' Every frame at its own zoom.';
   const line = !allowed
     ? null
     : !want
       ? 'Nothing to draw it under yet — the map needs stops first.'
       : drawn
-        ? !patches.length
+        ? !total
           ? null
-          : patchesIn + patchesFailed === patches.length
-            ? patchesFailed
-              ? `${patchesFailed} of ${patches.length} finer tiles could not be fetched — a coarser map stands in there.`
-              : `Plus ${patches.length} finer tiles along the road.${short}`
-            : `Fetching the finer tiles along the road — ${patchesIn} of ${patches.length} in. An export waits for all of them.`
+          : progress?.done
+            ? progress.failed
+              ? `${progress.failed} of ${total} finer tiles could not be fetched — a coarser map stands in there.`
+              : `Plus ${total} finer tiles along the road, decoded as the camera reaches them.${short}`
+            : `Fetching the finer tiles along the road — ${progress?.fetched ?? 0} of ${total} in. An export waits for all of them.`
         : problem
           ? problem
           : 'Fetching the map background…';
@@ -92,6 +95,27 @@ export function BasemapStatus({ want, set, ctx, status, opacity, onOpacity, limi
         />
       </FieldRow>
       <p className="m-0 text-2xs text-faint">{TILES_IN_OPENER_NOTICE}</p>
+      {allowed && <KeptTiles />}
+    </div>
+  );
+}
+
+/**
+ * What this device keeps of the map (`tile-cache.ts`), and the verb that
+ * forgets it — one line, said only once something is kept.
+ */
+function KeptTiles() {
+  const kept = useTileCacheSize();
+  if (!kept || kept.tiles === 0) return null;
+  return (
+    <div className="flex flex-wrap items-center gap-2">
+      <p className="m-0 text-2xs text-faint">
+        {kept.tiles} tiles kept on this device ({formatBytes(kept.bytes)}) for a month, so a second export asks the
+        server nothing.
+      </p>
+      <Button size="sm" variant="ghost" onClick={() => void clearTiles()}>
+        Forget them
+      </Button>
     </div>
   );
 }

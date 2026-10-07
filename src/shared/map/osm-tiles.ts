@@ -14,10 +14,10 @@
  *
  * What is fetched is bounded and kept: a region's tiles (at most `MAX_TILES`;
  * a following camera's pyramid `stripBudget()` more, over the whole drive —
- * `tile-strip.ts`), the blobs cached for the TAB only, so a slider dragged
- * on the opener never asks again — never on the disk: a tile cache that
- * outlives the tab is a change to what this device keeps, the maintainer's
- * to decide. The drawing carries the credit the licence
+ * `tile-strip.ts`), the blobs cached for the tab, so a slider dragged on the
+ * opener never asks again, and KEPT on this device for a month
+ * (`tile-cache.ts`, his call of 2026-10-07), so a piece reopened tomorrow or
+ * exported twice asks the server nothing — forgotten with the consent. The drawing carries the credit the licence
  * requires — that is the painters' job (`paintOsmCredit`), and it rides into
  * every export.
  */
@@ -25,8 +25,9 @@
 import { useSyncExternalStore } from 'react';
 import { isConstrainedDevice } from '../lib/device-class';
 import { columnSource, planTiles, rowSource, TILE_PX, type GeoBox } from './tile-math';
-import { STRIP_TILES, STRIP_TILES_CONSTRAINED } from './tile-strip';
+import { STREAM_DECODED, STREAM_DECODED_CONSTRAINED, STRIP_TILES, STRIP_TILES_CONSTRAINED } from './tile-strip';
 import { OSM_CREDIT, OSM_TILES } from './track-map';
+import { clearTiles, readTile, writeTile } from './tile-cache';
 
 const KEY = 'atelier.map.tilesInOpeners';
 /** The most tiles one background asks for — a softer map past it, never more requests. */
@@ -44,10 +45,18 @@ const CACHE_TILES = 768;
  */
 const TILE_TIMEOUT_MS = 20_000;
 
-/** The tiles a following camera's pyramid may hold on THIS device — each is a 256 KB bitmap it must keep. */
+/** The tiles a following camera's pyramid may FETCH on this device — requests, and compressed blobs it keeps. */
 export function stripBudget(): number {
   return isConstrainedDevice() ? STRIP_TILES_CONSTRAINED : STRIP_TILES;
 }
+
+/** The pyramid tiles this device keeps DECODED at once around the playhead — 256 kB bitmaps. */
+export function decodedBudget(): number {
+  return isConstrainedDevice() ? STREAM_DECODED_CONSTRAINED : STREAM_DECODED;
+}
+
+/** The tab's tile blobs by URL, a request in flight shared by every asker. */
+const blobs = new Map<string, Promise<Blob>>();
 
 // --- consent -----------------------------------------------------------------
 
@@ -70,9 +79,18 @@ export function tilesAllowed(): boolean {
   return allowed;
 }
 
-/** Say yes or no for this device. Never written on a document. */
+/**
+ * Say yes or no for this device. Never written on a document. A no also
+ * forgets the tiles this device kept (`tile-cache.ts`): what the yes fetched
+ * goes with it.
+ */
 export function allowTiles(on: boolean): void {
   allowed = on;
+  if (!on) {
+    // The tab's copies go too: a no means nothing fetched is drawn again.
+    blobs.clear();
+    void clearTiles();
+  }
   try {
     localStorage.setItem(KEY, on ? 'on' : 'off');
   } catch {
@@ -99,8 +117,6 @@ export const TILES_IN_OPENER_NOTICE =
 
 // --- tiles -------------------------------------------------------------------
 
-const blobs = new Map<string, Promise<Blob>>();
-
 function tileUrl(z: number, x: number, y: number): string {
   return OSM_TILES.replace('{z}', String(z)).replace('{x}', String(x)).replace('{y}', String(y));
 }
@@ -109,24 +125,48 @@ function fetchTile(z: number, x: number, y: number, signal?: AbortSignal): Promi
   const url = tileUrl(z, x, y);
   let pending = blobs.get(url);
   if (!pending) {
-    // The caller's cancel and the timeout, joined by hand: `AbortSignal.any`
-    // and `.timeout` are younger than the Safari this suite still serves.
-    const stop = new AbortController();
-    const timer = setTimeout(() => stop.abort(), TILE_TIMEOUT_MS);
-    if (signal?.aborted) stop.abort();
-    signal?.addEventListener('abort', () => stop.abort(), { once: true });
-    pending = fetch(url, { mode: 'cors', signal: stop.signal })
-      .then((res) => {
-        if (!res.ok) throw new Error(`the tile server answered ${res.status}`);
-        return res.blob();
-      })
-      .finally(() => clearTimeout(timer));
+    pending = keptOrFetched(`${z}/${x}/${y}`, url, signal);
     pending.catch(() => blobs.delete(url));
     blobs.set(url, pending);
     // Oldest first: a Map iterates in insertion order.
     while (blobs.size > CACHE_TILES) blobs.delete(blobs.keys().next().value as string);
   }
   return pending;
+}
+
+/**
+ * A tile from the device's own cache when it is fresh (`tile-cache.ts`),
+ * else from the server — kept for next time — and, when the server cannot
+ * answer, the stale copy rather than nothing.
+ */
+async function keptOrFetched(key: string, url: string, signal?: AbortSignal): Promise<Blob> {
+  const kept = await readTile(key);
+  if (kept?.fresh) return kept.blob;
+  try {
+    const blob = await fromServer(url, signal);
+    // A tile that lands after the yes was taken back is drawn by whoever
+    // asked, never kept: `allowTiles(false)` has already cleared the cache.
+    if (tilesAllowed()) void writeTile(key, blob);
+    return blob;
+  } catch (err) {
+    if (kept && !signal?.aborted) return kept.blob;
+    throw err;
+  }
+}
+
+function fromServer(url: string, signal?: AbortSignal): Promise<Blob> {
+  // The caller's cancel and the timeout, joined by hand: `AbortSignal.any`
+  // and `.timeout` are younger than the Safari this suite still serves.
+  const stop = new AbortController();
+  const timer = setTimeout(() => stop.abort(), TILE_TIMEOUT_MS);
+  if (signal?.aborted) stop.abort();
+  signal?.addEventListener('abort', () => stop.abort(), { once: true });
+  return fetch(url, { mode: 'cors', signal: stop.signal })
+    .then((res) => {
+      if (!res.ok) throw new Error(`the tile server answered ${res.status}`);
+      return res.blob();
+    })
+    .finally(() => clearTimeout(timer));
 }
 
 /**
@@ -193,26 +233,71 @@ export async function loadBasemap(
 const COARSER_TRIES = 2;
 
 /**
- * One tile of a following camera's pyramid (`tile-strip.ts`), at its zoom —
- * or, when that tile cannot be fetched, the same region cut out of its
- * PARENT, then its grandparent: the next coarser level, enlarged, rather
- * than a hole in a recorded file. `zoom` says what landed. Throws only when
- * none did, and then the wide raster under it stands in.
+ * The blob of one tile of a following camera's pyramid (`tile-strip.ts`) —
+ * or, when that tile cannot be fetched, of its PARENT, then its grandparent:
+ * the next coarser level, cut and enlarged at decode, rather than a hole in
+ * a recorded file. `zoom` says which landed. Throws only when none did, and
+ * then the coarser ground under it stands in.
  */
-export async function loadPatch(
-  box: GeoBox,
-  size: number,
-  zoom: number,
+export async function fetchPatch(
+  tile: { z: number; x: number; y: number },
   signal?: AbortSignal,
-): Promise<{ image: ImageBitmap; zoom: number }> {
+): Promise<{ blob: Blob; zoom: number }> {
+  if (!tilesAllowed()) throw new Error('The OpenStreetMap background is not allowed on this device.');
   let last: unknown = null;
-  for (let z = zoom; z >= Math.max(0, zoom - COARSER_TRIES); z--) {
+  for (let up = 0; up <= COARSER_TRIES && tile.z - up >= 0; up++) {
     try {
-      return { image: await loadBasemap(box, size, size, signal, z, 1), zoom: z };
+      return { blob: await fetchTile(tile.z - up, tile.x >> up, tile.y >> up, signal), zoom: tile.z - up };
     } catch (err) {
       if (signal?.aborted) throw err;
       last = err;
     }
   }
   throw last instanceof Error ? last : new Error('OpenStreetMap could not be reached.');
+}
+
+/**
+ * Bands a decoded tile is re-laid out of Mercator in. Inside one tile the
+ * stretch is all but linear (under a pixel in 32 bands at the coarsest level
+ * a pyramid draws), and a band per row — the wide raster's way — is 256
+ * draws a tile, which a streamed ground pays on the playhead's path.
+ */
+const PATCH_BANDS = 32;
+
+/**
+ * One pyramid tile as a `TILE_PX` raster with latitude and longitude both
+ * linear over its own box, decoded from `blob` — the tile at `zoom`, its
+ * own or an ancestor's (`fetchPatch`), cut to the box and re-laid in bands.
+ * The mosaic is that ONE fetched tile, so the plan is built on its own
+ * column and row: a plan derived from the box can round the box's west edge
+ * a hair under the tile's and start a column early — which drew a
+ * transparent tile, the wide raster showing through (seen headless).
+ */
+export async function decodePatch(
+  blob: Blob,
+  zoom: number,
+  tile: { z: number; x: number; y: number },
+  box: GeoBox,
+): Promise<ImageBitmap> {
+  const up = tile.z - zoom;
+  const x = tile.x >> up;
+  const y = tile.y >> up;
+  const plan = { z: zoom, x0: x, x1: x, y0: y, y1: y, count: 1 };
+  const source = await createImageBitmap(blob);
+  try {
+    const out = new OffscreenCanvas(TILE_PX, TILE_PX);
+    const og = out.getContext('2d');
+    if (!og) throw new Error('This browser cannot draw the map background.');
+    og.imageSmoothingQuality = 'high';
+    const { sx, sw } = columnSource(box, plan);
+    const band = TILE_PX / PATCH_BANDS;
+    for (let b = 0; b < PATCH_BANDS; b++) {
+      const top = rowSource(box, plan, b * band, TILE_PX);
+      const bottom = rowSource(box, plan, (b + 1) * band - 1, TILE_PX);
+      og.drawImage(source, sx, top.sy, sw, bottom.sy + bottom.sh - top.sy, 0, b * band, TILE_PX, band);
+    }
+    return out.transferToImageBitmap();
+  } finally {
+    source.close();
+  }
 }

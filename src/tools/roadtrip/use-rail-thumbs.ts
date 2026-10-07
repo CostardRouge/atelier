@@ -259,6 +259,8 @@ export default function useRailThumbs({
           ...job.render,
           source,
           grader,
+          // A thumbnail is a delivered picture of the slide: its map ground whole.
+          ground: true,
           collage:
             cells && job.slide.collage
               ? {

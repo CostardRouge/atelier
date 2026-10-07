@@ -19,22 +19,38 @@
  * drew their ground at under half the density they were delivered at — the
  * blur the maintainer reported while the camera zoomed in and out.
  *
- * Over the BUDGET (the tiles one piece may hold — each is a 256 px bitmap,
- * so the budget is memory, and requests to a volunteer-run server) every
+ * The tiles are STREAMED (`tile-stream.ts`, 2026-10-07): every one is
+ * fetched ahead as its compressed blob (~20–40 kB), and only those around
+ * the playhead are decoded into 256 px bitmaps (256 kB each), so the budget
+ * here counts REQUESTS to a volunteer-run server and blobs in memory, not
+ * bitmaps — a 2 100 km drive at a 35 km view is 2 000–3 700 tiles at full
+ * detail, which a bitmap budget could never hold. Over the budget every
  * frame gives up the same number of levels, and the levels the budget still
  * has room for are given back to the STILLEST frames first — a halt, an
  * opening, a slow pan, where the eye has time to read the ground; a frame
  * racing across the map shows its ground for a thirtieth of a second.
  *
- * Pure and DOM-free; `osm-tiles.ts` fetches, `basemap-strip.ts` plans the
+ * Pure and DOM-free; `osm-tiles.ts` fetches and decodes, `tile-stream.ts`
+ * holds the blobs and the decoded window, `basemap-strip.ts` plans the
  * samples and draws.
  */
 
 import { TILE_PX, latToTileY, lonToTileX, type GeoBox } from './tile-math';
 
-/** The most tiles one piece's pyramid holds on a computer, and on a constrained device. */
-export const STRIP_TILES = 512;
-export const STRIP_TILES_CONSTRAINED = 96;
+/**
+ * The most tiles one piece's pyramid FETCHES on a computer, and on a
+ * constrained device — requests, and blobs held compressed for the piece.
+ */
+export const STRIP_TILES = 3072;
+export const STRIP_TILES_CONSTRAINED = 768;
+/**
+ * The most tiles DECODED at once — 256 kB bitmaps around the playhead
+ * (128 MB on a computer, 32 MB on a phone). A frame needs 20–90 of them
+ * (the frame's diagonal square under heading-up), so the window holds about
+ * a second of a fast drive ahead.
+ */
+export const STREAM_DECODED = 512;
+export const STREAM_DECODED_CONSTRAINED = 128;
 
 /** One frame the camera shows: its reach in degrees, and the density it wants drawn at. */
 export interface StripSample {
@@ -101,6 +117,13 @@ export interface PyramidPlan {
   wanted: number;
   /** Tiles the whole drive would cost at full detail — what the panel says the budget saved. */
   full: number;
+  /**
+   * For each sample, in the order given, the tiles its frame DRAWS — indices
+   * into `tiles`, at the frame's own level after the budget (empty for a
+   * frame the wide raster carries). What a streamed ground decodes around
+   * the playhead (`tile-stream.ts`).
+   */
+  frameTiles: number[][];
 }
 
 /**
@@ -117,13 +140,13 @@ export function planPyramid(
   if (!samples.length || !(budget >= 1)) return null;
   const frames: Frame[] = [];
   let wanted = -1;
-  for (const { box, pxPerDeg, motion } of samples) {
-    if (!(box.east > box.west) || !(box.north > box.south)) continue;
+  samples.forEach(({ box, pxPerDeg, motion }, sample) => {
+    if (!(box.east > box.west) || !(box.north > box.south)) return;
     const z = zoomForDensity(pxPerDeg, maxZoom);
-    if (z <= floor) continue;
-    frames.push({ box, z, motion: motion ?? 0 });
+    if (z <= floor) return;
+    frames.push({ box, z, motion: motion ?? 0, sample });
     wanted = Math.max(wanted, z);
-  }
+  });
   if (!frames.length) return null;
 
   const full = sweep(frames, 0, floor, new Map(), Infinity)!.size;
@@ -132,16 +155,30 @@ export function planPyramid(
     if (!base) continue;
     if (!base.size) return null;
     let sharp = short === 0 ? frames.length : 0;
+    const given = new Set<number>();
     if (short > 0) {
       // The room left goes back to the stillest frames, one level each.
       const order = frames.map((_, i) => i).sort((a, b) => frames[a].motion - frames[b].motion || a - b);
       for (const i of order) {
-        if (sweep([frames[i]], short - 1, floor, base, budget, true)) sharp += 1;
+        if (sweep([frames[i]], short - 1, floor, base, budget, true)) {
+          sharp += 1;
+          given.add(i);
+        }
       }
     }
     const tiles = [...base.values()].sort((a, b) => a.z - b.z || a.order - b.order).map(({ z, x, y }) => ({ z, x, y }));
     const levels = [...new Set(tiles.map((t) => t.z))];
-    return { tiles, levels, short, sharp, frames: frames.length, wanted, full };
+    const index = new Map(tiles.map((t, i) => [`${t.z}/${t.x}/${t.y}`, i]));
+    const frameTiles: number[][] = samples.map(() => []);
+    frames.forEach((frame, i) => {
+      const z = frame.z - (given.has(i) ? short - 1 : short);
+      if (z <= floor) return;
+      frameTiles[frame.sample] = tilesOf(frame.box, z).flatMap((key) => {
+        const at = index.get(key);
+        return at === undefined ? [] : [at];
+      });
+    });
+    return { tiles, levels, short, sharp, frames: frames.length, wanted, full, frameTiles };
   }
   return null;
 }
@@ -150,6 +187,20 @@ interface Frame {
   box: GeoBox;
   z: number;
   motion: number;
+  /** Its index among the samples given. */
+  sample: number;
+}
+
+/** The keys (`z/x/y`) of the tiles a region touches at zoom `z`. */
+function tilesOf(box: GeoBox, z: number): string[] {
+  const n = 2 ** z;
+  const x0 = Math.max(0, Math.floor(lonToTileX(Math.max(-180, box.west), z)));
+  const x1 = Math.min(n - 1, Math.floor(lonToTileX(Math.min(180, box.east), z)));
+  const y0 = Math.max(0, Math.floor(latToTileY(box.north, z)));
+  const y1 = Math.min(n - 1, Math.floor(latToTileY(box.south, z)));
+  const out: string[] = [];
+  for (let x = x0; x <= x1; x++) for (let y = y0; y <= y1; y++) out.push(`${z}/${x}/${y}`);
+  return out;
 }
 
 type Swept = Map<string, PyramidTile & { order: number }>;
@@ -168,19 +219,12 @@ function sweep(frames: readonly Frame[], short: number, floor: number, into: Swe
   for (const { box, z: own } of frames) {
     const z = own - short;
     if (z <= floor) continue;
-    const n = 2 ** z;
-    const x0 = Math.max(0, Math.floor(lonToTileX(Math.max(-180, box.west), z)));
-    const x1 = Math.min(n - 1, Math.floor(lonToTileX(Math.min(180, box.east), z)));
-    const y0 = Math.max(0, Math.floor(latToTileY(box.north, z)));
-    const y1 = Math.min(n - 1, Math.floor(latToTileY(box.south, z)));
-    for (let x = x0; x <= x1; x++) {
-      for (let y = y0; y <= y1; y++) {
-        const key = `${z}/${x}/${y}`;
-        if (into.has(key)) continue;
-        into.set(key, { z, x, y, order: into.size });
-        added.push(key);
-        if (into.size > limit) return undo();
-      }
+    for (const key of tilesOf(box, z)) {
+      if (into.has(key)) continue;
+      const [tz, tx, ty] = key.split('/').map(Number);
+      into.set(key, { z: tz, x: tx, y: ty, order: into.size });
+      added.push(key);
+      if (into.size > limit) return undo();
     }
   }
   return into;

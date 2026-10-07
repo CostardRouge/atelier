@@ -3,7 +3,8 @@ import type { Asset } from '../../shared/library/assets';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
 import { findMedia } from '../../shared/projects/media-identity';
-import { TILE_WORKERS, loadBasemap, loadPatch, useTilesAllowed } from '../../shared/map/osm-tiles';
+import { TILE_WORKERS, loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
+import { closeStream, openStream, type TileStream } from '../../shared/map/tile-stream';
 import type {
   HookBasemapWant,
   HookContext,
@@ -171,6 +172,7 @@ export default function useHookPictures(
   const [pictures, setPictures] = useState<ReadonlyMap<string, HookPicture>>(EMPTY);
   const [status, setStatus] = useState<HookPictureStatus>({ pending: 0, problems: NO_PROBLEMS });
   const held = useRef(new Map<string, Held>());
+  const streams = useRef(new Map<string, TileStream>());
   // What the latest render ASKS (its pass key and Library), what the last
   // finished pass answered (a render of its own, through `settled`), and who
   // waits for the two to meet (`ready`). Compared by what was asked, not by
@@ -194,7 +196,20 @@ export default function useHookPictures(
         const { wants: list, files: pool, lut: cube, basemaps: maps, tilesOk: allowed } = latest.current;
         const problems = new Map<string, string>();
         const graders = new Map<string, FrameGrader>();
-        const keep = new Set([...list.map((w) => w.key), ...(allowed ? maps.map((m) => m.key) : [])]);
+        // A following camera's pyramid is not a raster: it is a STREAM the
+        // shell opens and fills with every tile's blob, decoded later around
+        // the playhead (`tile-stream.ts`).
+        const rasters = maps.filter((m) => !m.pyramid);
+        const pyramids = allowed ? maps.filter((m) => m.pyramid) : [];
+        for (const [key] of streams.current) {
+          if (pyramids.some((m) => m.key === key)) continue;
+          closeStream(key);
+          streams.current.delete(key);
+        }
+        for (const map of pyramids) {
+          if (!streams.current.has(map.key)) streams.current.set(map.key, openStream(map.key, map.pyramid!));
+        }
+        const keep = new Set([...list.map((w) => w.key), ...(allowed ? rasters.map((m) => m.key) : [])]);
 
         // Whatever is no longer wanted leaves the map now and is closed later.
         let changed = false;
@@ -212,9 +227,11 @@ export default function useHookPictures(
             problems.set(map.key, 'The OpenStreetMap background is not allowed on this device, so nothing is fetched.');
           }
         }
-        const mapsToLoad = allowed ? maps.filter((m) => held.current.get(m.key)?.sig !== BASEMAP_SIG) : [];
-        let pending = list.filter((w) => held.current.get(w.key)?.sig !== sigOf(w)).length + mapsToLoad.length;
+        const mapsToLoad = allowed ? rasters.filter((m) => held.current.get(m.key)?.sig !== BASEMAP_SIG) : [];
+        const fetching = pyramids.map((m) => streams.current.get(m.key)!).filter((stream) => !stream.progress().done);
+        let pending = list.filter((w) => held.current.get(w.key)?.sig !== sigOf(w)).length + mapsToLoad.length + fetching.length;
         let coarser = 0;
+        let tilesFailed = 0;
         setStatus({ pending, problems: problems.size ? new Map(problems) : NO_PROBLEMS });
 
         function sigOf(want: HookPictureWant): string {
@@ -232,29 +249,28 @@ export default function useHookPictures(
             publishTimer = null;
             if (cancelled) return;
             setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
-            setStatus({ pending, problems: new Map(problems), coarser });
+            setStatus({ pending, problems: new Map(problems), coarser, tilesFailed });
           }, PUBLISH_MS);
         };
 
         try {
           // The backgrounds first: a map under the pen is the bigger part of
           // the frame, and the tiles are cached, so a second pass is cheap.
-          // The wide raster takes the whole worker count; a strip's one-tile
-          // patches are loaded side by side with one worker each, so the
-          // connections to the tile server stay at `TILE_WORKERS` either way.
-          const queue = [...mapsToLoad];
-          const loadMap = async (map: HookBasemapWant, workers: number) => {
+          // The pyramids' blobs are fetched beside it, `TILE_WORKERS` at a
+          // time each — every tile ahead, so an export never waits on the
+          // network between two frames.
+          const streamed = Promise.all(
+            fetching.map((stream) =>
+              stream.fetchAll().then(() => {
+                pending -= 1;
+                publish();
+              }),
+            ),
+          );
+          for (const map of mapsToLoad) {
+            if (cancelled) return;
             try {
-              // A pyramid's tile falls back to its parent's when its own
-              // cannot be fetched: softer, never a hole (`loadPatch`).
-              let image: ImageBitmap;
-              if (map.zoom === undefined) {
-                image = await loadBasemap(map.box, map.width, map.height, undefined, undefined, workers);
-              } else {
-                const landed = await loadPatch(map.box, map.width, map.zoom);
-                image = landed.image;
-                if (landed.zoom < map.zoom) coarser += 1;
-              }
+              const image = await loadBasemap(map.box, map.width, map.height, undefined, undefined, TILE_WORKERS);
               if (cancelled) {
                 image.close();
                 return;
@@ -271,15 +287,13 @@ export default function useHookPictures(
             }
             pending -= 1;
             publish();
-          };
-          const lane = async () => {
-            for (let map = queue.shift(); map && !cancelled; map = queue.shift()) {
-              await loadMap(map, map.zoom === undefined ? TILE_WORKERS : 1);
-            }
-          };
-          const lanes: Promise<void>[] = [];
-          for (let i = 0; i < TILE_WORKERS; i++) lanes.push(lane());
-          await Promise.all(lanes);
+          }
+          await streamed;
+          for (const map of pyramids) {
+            const progress = streams.current.get(map.key)?.progress();
+            coarser += progress?.coarser ?? 0;
+            tilesFailed += progress?.failed ?? 0;
+          }
           if (cancelled) return;
           for (const want of list) {
             if (cancelled) return;
@@ -300,7 +314,7 @@ export default function useHookPictures(
               problems.set(want.key, describe(err, want));
             }
             pending -= 1;
-            setStatus({ pending, problems: new Map(problems), coarser });
+            setStatus({ pending, problems: new Map(problems), coarser, tilesFailed });
           }
           if (cancelled) return;
           // The pass is over: what landed is published NOW (not on the next
@@ -308,7 +322,7 @@ export default function useHookPictures(
           // answers.
           if (publishTimer !== null) window.clearTimeout(publishTimer);
           setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
-          setStatus({ pending: 0, problems: problems.size ? new Map(problems) : NO_PROBLEMS, coarser });
+          setStatus({ pending: 0, problems: problems.size ? new Map(problems) : NO_PROBLEMS, coarser, tilesFailed });
           answered.current = ask;
           setSettled((n) => n + 1);
         } finally {
@@ -329,6 +343,8 @@ export default function useHookPictures(
     () => () => {
       for (const entry of held.current.values()) (entry.picture.image as ImageBitmap).close();
       held.current.clear();
+      for (const key of streams.current.keys()) closeStream(key);
+      streams.current.clear();
     },
     [],
   );

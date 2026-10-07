@@ -6,42 +6,67 @@
  * (`drive-paint.ts`) and the Itinerary (`map-plan.ts`, `map-paint.ts`), which
  * differ only in how a plan rectangle is turned into degrees.
  *
+ * The pyramid is STREAMED (`shared/map/tile-stream.ts`): the shell fetches
+ * every tile's blob ahead, the paint draws the frame's own tiles that are
+ * decoded and asks for the rest, and an export awaits `readyGround` before
+ * each frame, so a recorded frame never holds a tile still on its way.
+ *
  * Planning is pure and DOM-free; `paintGround` is the one drawing both
  * painters call.
  */
 
-import { BASEMAP_FOR_EDGE, TILE_PX, basemapKey, planTiles, type GeoBox } from '../../map/tile-math';
+import { BASEMAP_FOR_EDGE, planTiles, type GeoBox } from '../../map/tile-math';
 import { planPyramid, tileBox, zoomForDensity, type PyramidTile, type StripSample } from '../../map/tile-strip';
+import { holdingStream, streamFor } from '../../map/tile-stream';
 import { drawBasemap } from './basemap-paint';
 import type { CameraTrack } from './drive-plan';
 import type { HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { TRACK_FPS } from './map-camera';
 
+/** The pyramid of a following camera: what its stream is keyed by and holds. */
+export interface BasemapPyramid {
+  key: string;
+  tiles: readonly PyramidTile[];
+  /** Each tile's region, in the same order. */
+  boxes: readonly GeoBox[];
+}
+
 export interface BasemapSet {
   wide: HookBasemapWant;
-  /** The pyramid's tiles, coarse levels first — each a one-tile raster at its own zoom. */
-  patches: readonly HookBasemapWant[];
-  /** Each patch's tile, in the same order. */
-  tiles: readonly PyramidTile[];
+  pyramid: BasemapPyramid | null;
   /**
-   * The zoom the frame at `t` is delivered at — the deepest level the paint
-   * draws there (a finer one a tighter frame nearby fetched is left out: it
-   * would cost draws and add nothing). −1 when the wide raster is enough.
+   * The zoom the frame at `t` is delivered at — the level of the tiles the
+   * paint draws there. −1 when the wide raster is enough.
    */
   levelAt: (t: number) => number;
+  /**
+   * The pyramid tiles the frames from `t0` to `t1` (or the frame at `t0`)
+   * draw — indices into `pyramid.tiles`, the nearest in time first.
+   */
+  tilesAt: (t0: number, t1?: number) => number[];
   /** Levels every frame gave up to the budget, and how much detail they kept (`PyramidPlan`). */
   short: number;
   sharp: number;
   frames: number;
   /** Tiles the drive would cost at full detail. */
   full: number;
-  /** Every raster, in the order the shell fetches it: the wide one first, then the pyramid coarse to fine. */
+  /** What the shell fetches: the wide raster first, then the pyramid's stream. */
   wants: readonly HookBasemapWant[];
 }
 
 /** The set with the wide raster alone. */
 export function wideOnly(wide: HookBasemapWant): BasemapSet {
-  return { wide, patches: [], tiles: [], levelAt: () => -1, short: 0, sharp: 0, frames: 0, full: 0, wants: [wide] };
+  return { wide, pyramid: null, levelAt: () => -1, tilesAt: () => [], short: 0, sharp: 0, frames: 0, full: 0, wants: [wide] };
+}
+
+/** A short, stable name for a long key — FNV-1a. */
+function hashOf(text: string): string {
+  let h = 0x811c9dc5;
+  for (let i = 0; i < text.length; i++) {
+    h ^= text.charCodeAt(i);
+    h = Math.imul(h, 0x01000193);
+  }
+  return (h >>> 0).toString(36);
 }
 
 /** A few plans kept, so a panel re-rendering on every keystroke does not sweep the drive again. */
@@ -52,7 +77,7 @@ const PLANNED_KEEP = 8;
  * The pyramid along a following camera's road, over `wide`: every frame the
  * track shows (baked at `TRACK_FPS`, so a frame the export draws IS a
  * sample) as a region in degrees, the density its delivery asks and how fast
- * the ground moves under it. `budget` is the tiles it may hold
+ * the ground moves under it. `budget` is the tiles it may FETCH
  * (`stripBudget()`); 0 asks for none.
  */
 export function stripOver(
@@ -89,12 +114,14 @@ export function stripOver(
   const reach = diagonal ? Math.hypot(w, h) : 0;
   const steps = Math.max(1, Math.ceil(track.seconds * TRACK_FPS));
   const samples: StripSample[] = [];
+  const sampled: boolean[] = [];
   const zooms: number[] = [];
   let before: { x: number; y: number; width: number } | null = null;
   for (let k = 0; k <= steps; k++) {
     const f = track.at(k / TRACK_FPS);
     if (!(f.width > 0)) {
       zooms.push(-1);
+      sampled.push(false);
       continue;
     }
     const unitsPerPx = f.width / box.width;
@@ -111,8 +138,9 @@ export function stripOver(
         TRACK_FPS
       : 0;
     before = { x: f.centre.x, y: f.centre.y, width: f.width };
-    if (!(region.east > region.west) || !(region.north > region.south)) continue;
-    samples.push({ box: region, pxPerDeg, motion });
+    const usable = region.east > region.west && region.north > region.south;
+    sampled.push(usable);
+    if (usable) samples.push({ box: region, pxPerDeg, motion });
   }
   const floor = planTiles(wide.box, wide.width, wide.height)?.z ?? 0;
   const key = `${wide.key}#${budget}#${samples.map((s) => `${s.box.west.toFixed(4)},${s.box.north.toFixed(4)},${s.box.east.toFixed(4)},${s.pxPerDeg.toPrecision(5)}`).join(';')}`;
@@ -121,25 +149,47 @@ export function stripOver(
   const plan = planPyramid(samples, budget, { floor });
   let set: BasemapSet = out;
   if (plan) {
-    const patches = plan.tiles.map(({ z, x, y }): HookBasemapWant => {
-      const patch = tileBox(x, y, z);
-      return { key: basemapKey(patch, TILE_PX, TILE_PX), box: patch, width: TILE_PX, height: TILE_PX, zoom: z };
-    });
+    const pyramid: BasemapPyramid = {
+      key: `osm-pyramid:${hashOf(key)}:${plan.tiles.length}`,
+      tiles: plan.tiles,
+      boxes: plan.tiles.map(({ z, x, y }) => tileBox(x, y, z)),
+    };
+    // Samples were skipped where a frame had no region: map each step to its sample.
+    const frameTiles: number[][] = [];
+    let s = 0;
+    for (let k = 0; k <= steps; k++) frameTiles.push(sampled[k] ? plan.frameTiles[s++] : []);
+    const step = (t: number) => Math.max(0, Math.min(steps, Math.round(t * TRACK_FPS)));
     const levelAt = (t: number) => {
       const f = Math.max(0, Math.min(zooms.length - 1, t * TRACK_FPS));
       const i = Math.floor(f);
       return Math.max(zooms[i], zooms[Math.min(zooms.length - 1, i + 1)]);
     };
+    const tilesAt = (t0: number, t1 = t0) => {
+      const a = step(t0);
+      const b = Math.max(a, step(t1));
+      if (a === b) return frameTiles[a];
+      const seen = new Set<number>();
+      const out: number[] = [];
+      for (let k = a; k <= b; k++) {
+        for (const i of frameTiles[k]) {
+          if (seen.has(i)) continue;
+          seen.add(i);
+          out.push(i);
+        }
+      }
+      return out;
+    };
+    const want: HookBasemapWant = { key: pyramid.key, box: wide.box, width: 0, height: 0, pyramid: plan.tiles };
     set = {
       wide,
-      patches,
-      tiles: plan.tiles,
+      pyramid,
       levelAt,
+      tilesAt,
       short: plan.short,
       sharp: plan.sharp,
       frames: plan.frames,
       full: plan.full,
-      wants: [wide, ...patches],
+      wants: [wide, want],
     };
   }
   planned.set(key, set);
@@ -149,50 +199,72 @@ export function stripOver(
 
 type Rect = { x: number; y: number; width: number; height: number };
 
+/** Seconds of the drive ahead a PREVIEW asks to have decoded as it paints. */
+const PREVIEW_AHEAD = 0.6;
+/** Seconds ahead an EXPORT has decoded before each frame, so decoding runs ahead of encoding. */
+export const EXPORT_AHEAD = 1;
+
 /**
- * The pyramid's tiles the frame at `t` reaches, coarse to fine — only levels
- * up to the frame's own (`levelAt`), only those whose rectangle meets `seen`
- * (the frame, or its diagonal's square when the map turns), only those the
- * shell has landed, and never one whose four children are all landed too:
- * they cover it whole, and drawing every level under the finest cost a
- * frame five times the wide raster's fill (measured headless). A tile still
- * missing leaves the level under it, and under them all the wide raster:
- * never a hole.
+ * Decode what the frames from `t0` to `t1` draw, and resolve when it is in —
+ * what an export awaits before a frame (`HookRender.ready`). Nothing to wait
+ * for without a pyramid, or where the shell opened no stream (not allowed here).
+ */
+export async function readyGround(basemap: BasemapSet | null, t0: number, t1 = t0, signal?: AbortSignal): Promise<void> {
+  const key = basemap?.pyramid?.key;
+  if (!basemap || !key) return;
+  await holdingStream(key, (stream) => stream.ready(basemap.tilesAt(t0, t1), signal));
+}
+
+/**
+ * The pyramid tiles the frame at `t` draws, as bitmaps and rectangles —
+ * coarse to fine: for a tile not decoded yet, its nearest decoded ANCESTOR
+ * (asked for in the background, with the next `PREVIEW_AHEAD` seconds), so
+ * a preview racing ahead of the decoder shows a softer ground for a moment,
+ * never a hole; only those whose rectangle meets `seen` (the frame, or its
+ * diagonal's square when the map turns).
  */
 export function visiblePatches(
   basemap: BasemapSet,
-  pictures: ReadonlyMap<string, HookPicture> | undefined,
-  rectOf: (want: HookBasemapWant) => Rect,
+  rectOf: (want: Pick<HookBasemapWant, 'box'>) => Rect,
   seen: { x0: number; y0: number; x1: number; y1: number },
   t: number,
 ): { picture: HookPicture; rect: Rect }[] {
-  const level = basemap.levelAt(t);
-  const out: { picture: HookPicture; rect: Rect }[] = [];
-  if (level < 0 || !pictures) return out;
-  const landed = new Set<string>();
-  basemap.patches.forEach((patch, i) => {
-    const tile = basemap.tiles[i];
-    if (tile && tile.z <= level && pictures.has(patch.key)) landed.add(`${tile.z}/${tile.x}/${tile.y}`);
-  });
-  basemap.patches.forEach((patch, i) => {
-    const tile = basemap.tiles[i];
-    if (!tile || !landed.has(`${tile.z}/${tile.x}/${tile.y}`)) return;
-    const z = tile.z + 1;
-    const x = tile.x * 2;
-    const y = tile.y * 2;
-    if (landed.has(`${z}/${x}/${y}`) && landed.has(`${z}/${x + 1}/${y}`) && landed.has(`${z}/${x}/${y + 1}`) && landed.has(`${z}/${x + 1}/${y + 1}`)) return;
-    const rect = rectOf(patch);
-    if (rect.x + rect.width < seen.x0 || rect.x > seen.x1 || rect.y + rect.height < seen.y0 || rect.y > seen.y1) return;
-    out.push({ picture: pictures.get(patch.key)!, rect });
-  });
-  return out;
+  const stream = streamFor(basemap.pyramid?.key);
+  const pyramid = basemap.pyramid;
+  if (!stream || !pyramid) return [];
+  stream.request(basemap.tilesAt(t, t + PREVIEW_AHEAD));
+  const meets = (i: number) => {
+    const rect = rectOf({ box: pyramid.boxes[i] });
+    return rect.x + rect.width >= seen.x0 && rect.x <= seen.x1 && rect.y + rect.height >= seen.y0 && rect.y <= seen.y1 ? rect : null;
+  };
+  const coarse = new Set<number>();
+  const sharp: { picture: HookPicture; rect: Rect }[] = [];
+  for (const i of basemap.tilesAt(t)) {
+    const rect = meets(i);
+    if (!rect) continue;
+    const bitmap = stream.get(i);
+    if (bitmap) {
+      sharp.push({ picture: { image: bitmap, width: bitmap.width, height: bitmap.height }, rect });
+      continue;
+    }
+    const up = stream.ancestor(i);
+    if (up !== undefined) coarse.add(up);
+  }
+  const under = [...coarse]
+    .sort((a, b) => pyramid.tiles[a].z - pyramid.tiles[b].z)
+    .flatMap((i) => {
+      const bitmap = stream.get(i);
+      const rect = meets(i);
+      return bitmap && rect ? [{ picture: { image: bitmap, width: bitmap.width, height: bitmap.height }, rect }] : [];
+    });
+  return [...under, ...sharp];
 }
 
 /** The one layer the ground is composed in when it is drawn at less than full strength. */
 let layer: OffscreenCanvas | null = null;
 
 /**
- * The ground — the wide raster, then the pyramid's levels over it — at
+ * The ground — the wide raster, then the pyramid's tiles over it — at
  * `opacity`. Several layers drawn each at the strength would darken where
  * they overlap (the paper shows 10 % through one at 0.9, 1 % through two),
  * so under full strength they are composed whole in a layer of the frame's
@@ -202,14 +274,13 @@ let layer: OffscreenCanvas | null = null;
 export function paintGround(
   g: HookCtx2D,
   basemap: BasemapSet,
-  pictures: ReadonlyMap<string, HookPicture> | undefined,
   wide: HookPicture,
-  rectOf: (want: HookBasemapWant) => Rect,
+  rectOf: (want: Pick<HookBasemapWant, 'box'>) => Rect,
   seen: { x0: number; y0: number; x1: number; y1: number },
   t: number,
   opacity: number,
 ): void {
-  const fine = visiblePatches(basemap, pictures, rectOf, seen, t);
+  const fine = visiblePatches(basemap, rectOf, seen, t);
   const target = { width: g.canvas.width, height: g.canvas.height };
   const composed = fine.length > 0 && opacity < 0.999 && typeof OffscreenCanvas !== 'undefined';
   if (!composed) {
@@ -240,9 +311,11 @@ export function paintGround(
  * openers asked for is in. A tile that failed leaves the coarser ground under
  * it (its parent, or the wide raster); the wide raster failing leaves the paper.
  */
-export function groundNote(status: { problems: ReadonlyMap<string, string>; coarser?: number } | undefined): string | null {
+export function groundNote(
+  status: { problems: ReadonlyMap<string, string>; coarser?: number; tilesFailed?: number } | undefined,
+): string | null {
   if (!status) return null;
-  const failed = [...status.problems.keys()].filter((key) => key.startsWith('osm:')).length;
+  const failed = [...status.problems.keys()].filter((key) => key.startsWith('osm:')).length + (status.tilesFailed ?? 0);
   const coarser = status.coarser ?? 0;
   const parts: string[] = [];
   if (failed) parts.push(`${failed} map ${failed === 1 ? 'tile' : 'tiles'} could not be fetched — a coarser map stands in there`);
