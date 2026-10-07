@@ -482,6 +482,13 @@ anything about media sources or document storage:
   which four questions are the maintainer's. An INDEX, not a plan — the
   reasoning stays in the two briefs. Read it to find the next piece of work;
   keep it current or delete it.
+- **`docs/remaining-work.md`** — what is LEFT across the whole project
+  (2026-10-07), one row per item in four tables: measurements never made on
+  his devices, decisions that are his, work that needs no decision, and
+  Winnow's side — each row naming the brief or memory file that holds the
+  detail, and a suggested order for an agent left to choose. An INDEX like
+  `run-sheet.md`, not a plan: read it to pick the next piece of work in a
+  fresh session, keep it current when a row closes, delete it when stale.
 - **`docs/look-picker-redesign.md`** — the "Choose a look" dialog measured
   against its code (2026-10-01, from his screenshot: ten faults, each traced
   to a line), three faces drawn as working mocks (lab
