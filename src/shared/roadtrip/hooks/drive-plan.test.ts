@@ -23,6 +23,8 @@ import {
   drivePlan,
   wakeStrength,
   driveRoute,
+  dayTurns,
+  DAY_TICK_GAP,
   driveScore,
   driveWants,
   graticuleStep,
@@ -799,6 +801,52 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     const stay = plan.schedule.phases.find((p) => p.kind === 'stay' && p.stop === 1)!;
     expect(plan.at(stay.start).day).toBeCloseTo(6, 6);
     expect(plan.at(stay.end - 1e-6).day).toBeCloseTo(11, 3);
+  });
+
+  it('brings a picture of a later day of a stay up on its day, the first day’s on arrival', () => {
+    const picked = [
+      pic('a.jpg', 2, { lat: -31.95, lon: 115.86 }, 1),
+      pic('b.jpg', 4, { lat: -31.95, lon: 115.86 }, 2),
+      pic('c.jpg', 9, { lat: -20, lon: 120 }, 3),
+    ];
+    const o = quiet({ stopsOn: 'pictures', picked, pace: 0.65 });
+    const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
+    const stay = plan.schedule.phases.find((p) => p.kind === 'stay' && p.stop === 0)!;
+    const pop = (name: string) => plan.schedule.pops.find((p) => p.key.includes(name))!;
+    expect(pop('a.jpg').at).toBeLessThanOrEqual(stay.start);
+    // Perth holds days 2 → 5: day 4 is two thirds of the way through the stay.
+    expect(pop('b.jpg').at).toBeCloseTo(stay.start + ((4 - 2) / 3) * (stay.end - stay.start), 6);
+    expect(pop('b.jpg').leaves).toBeCloseTo(stay.end, 6);
+    expect(Math.floor(plan.at(pop('b.jpg').at + 1e-6).day!)).toBe(4);
+    // Off, or with no clock to count days on, every picture comes up on arrival.
+    const off = quiet({ stopsOn: 'pictures', picked, pace: 0.65, dayPictures: false });
+    const flat = drivePlan(driveRoute(STAGES, CAL, dateOf(20), off), off, true)!;
+    expect(flat.schedule.pops.find((p) => p.key.includes('b.jpg'))!.at).toBeLessThanOrEqual(stay.start);
+    const plain = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o)!;
+    expect(plain.schedule.pops.map((p) => p.key)).toHaveLength(3);
+    expect(plain.schedule.pops.every((p) => p.at <= plain.schedule.arrivedAt)).toBe(true);
+  });
+
+  it('ticks lightly as each day turns, on the frame the counter turns, never in a buzz', () => {
+    const o = quiet({ pace: 0.65 });
+    const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
+    const turns = dayTurns(plan, o);
+    // Days 1 → 31: thirty turns, in order.
+    expect(turns).toHaveLength(30);
+    for (let i = 1; i < turns.length; i++) expect(turns[i]).toBeGreaterThan(turns[i - 1]);
+    for (const [i, at] of turns.entries()) {
+      expect(Math.floor(plan.at(at + 1e-6).day! + 1e-9)).toBe(i + 2);
+      expect(plan.at(at - 1e-6).day!).toBeLessThan(i + 2);
+    }
+    const light = (score: ReturnType<typeof driveScore>) => score.filter((e) => e.gain === 0.32 * o.tickVolume);
+    const ticks = light(driveScore(plan, o));
+    expect(ticks.length).toBeGreaterThan(0);
+    expect(ticks.length).toBeLessThanOrEqual(30);
+    for (let i = 1; i < ticks.length; i++) expect(ticks[i].at - ticks[i - 1].at).toBeGreaterThanOrEqual(DAY_TICK_GAP);
+    expect(light(driveScore(plan, { ...o, dayTicks: false }))).toEqual([]);
+    // No clock, no day to turn.
+    const plain = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o)!;
+    expect(dayTurns(plain, o)).toEqual([]);
   });
 
   it('at the Road end of the pace the days a place took pass as the car leaves it', () => {

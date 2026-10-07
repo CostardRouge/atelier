@@ -818,7 +818,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               <FieldRow
                 label="On the way"
                 align="start"
-                hint={`A card — days · distance · stops — once the car has rested, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}.`}
+                hint={`A card — days · distance · stops — once the car has rested, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}.${o.pictures !== 'none' ? ' While the car stays, a picture shot on a later day comes up on its day.' : ''}`}
               >
                 <div className="flex flex-col gap-1.5">
                   <ToggleField label="A summary card at the end" checked={o.summary} onChange={(summary) => set({ summary })}>
@@ -827,6 +827,15 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   <ToggleField label="Milestones on the road" checked={o.milestones} onChange={(milestones) => set({ milestones })}>
                     Milestones
                   </ToggleField>
+                  {o.pictures !== 'none' && (
+                    <ToggleField
+                      label="While the car stays, each picture on the day it was shot"
+                      checked={o.dayPictures}
+                      onChange={(dayPictures) => set({ dayPictures })}
+                    >
+                      Pictures on their day
+                    </ToggleField>
+                  )}
                 </div>
               </FieldRow>
             </>
@@ -856,6 +865,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           <FieldRow label="Shutter">
             <ToggleField label="A shutter click as each picture pops" checked={o.shutter} onChange={(shutter) => set({ shutter })}>
               A click as each picture lands
+            </ToggleField>
+          </FieldRow>
+        )}
+        {o.sound && plan?.clock && (
+          <FieldRow label="Days">
+            <ToggleField label="A light tick as each day of the trip passes" checked={o.dayTicks} onChange={(dayTicks) => set({ dayTicks })}>
+              A tick as each day passes
             </ToggleField>
           </FieldRow>
         )}

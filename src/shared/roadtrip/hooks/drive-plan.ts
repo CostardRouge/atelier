@@ -186,6 +186,13 @@ export interface DriveOptions {
    * — the recap's «map over photo», usable on any drive.
    */
   plate: boolean;
+  /**
+   * The picture of the DAY (2026-10-07, §5 of `docs/map-openers-next.md`):
+   * while the car stays at a place, each picture comes up on the day it was
+   * shot rather than all at once on arrival — the place told day by day.
+   * Read only under the recap's clock, where a stay has days to run.
+   */
+  dayPictures: boolean;
   // --- sound -----------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -193,6 +200,12 @@ export interface DriveOptions {
   tickVolume: number;
   /** A shutter click as each picture pops. */
   shutter: boolean;
+  /**
+   * A light tick as each DAY of the trip passes, while the recap's counter
+   * runs (§5 of `docs/map-openers-next.md`) — never closer than
+   * `DAY_TICK_GAP` seconds, so a fast run of days is a patter, not a buzz.
+   */
+  dayTicks: boolean;
   mixWithClip: boolean;
   /** FIT the drive into a shorter slide — `MapOptions.fit`, the same rule. */
   fit: boolean;
@@ -258,11 +271,13 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   summary: true,
   milestones: true,
   plate: false,
+  dayPictures: true,
   sound: true,
   kit: 'wood',
   tickPitch: 1,
   tickVolume: 1,
   shutter: true,
+  dayTicks: true,
   mixWithClip: false,
   fit: false,
 };
@@ -387,11 +402,13 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     summary: o.summary !== false,
     milestones: o.milestones !== false,
     plate: o.plate === true,
+    dayPictures: o.dayPictures !== false,
     sound: o.sound !== false,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),
     tickVolume: clamp(Number(o.tickVolume), L.tickVolume.min, L.tickVolume.max, d.tickVolume),
     shutter: o.shutter !== false,
+    dayTicks: o.dayTicks !== false,
     mixWithClip: o.mixWithClip === true,
     fit: o.fit === true,
   };
@@ -411,6 +428,10 @@ export function driveShortestBeat(plan: DrivePlan, o: DriveOptions): number {
 export interface StopPicture {
   key: string;
   want: HookPictureWant;
+  /** The day it was shot, `YYYY-MM-DD`, where the picture says. */
+  date?: string;
+  /** That day as a day of the trip (`HookDay.dayNumber`), set by `driveRoute`; absent off the calendar. */
+  day?: number;
 }
 
 export interface DriveStop extends GeoPoint {
@@ -528,6 +549,7 @@ function wantOf(picture: HookPickedPicture | { ref: HookPickedPicture['ref']; at
   return {
     key,
     want: { key, ref: picture.ref, ...('atSeconds' in picture && picture.atSeconds ? { atSeconds: picture.atSeconds } : {}) },
+    ...('date' in picture && picture.date ? { date: picture.date } : {}),
   };
 }
 
@@ -829,6 +851,14 @@ export function driveRoute(
       : o.stopsOn === 'custom'
         ? customStops(stages, calendar, date, o, writing)
         : placeStops(stages, calendar, date, o, writing);
+  // Each picture learns its day of the trip once, here, where the calendar is.
+  const dayOf = dayOfFor(calendar);
+  for (const stop of route.stops) {
+    for (const picture of stop.pictures) {
+      const day = dayOf(picture.date);
+      if (day !== null) picture.day = day;
+    }
+  }
   return groupRoute(route, o, towns);
 }
 
@@ -1110,10 +1140,35 @@ export function buildSchedule(
   const n = stops.length;
   if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null };
 
+  /**
+   * The picture of the DAY: under the recap's clock, a picture shot on a
+   * later day of a stop's own stay waits for that day, its time read off the
+   * span the days run over — the stay, or the arrival's beat at the last
+   * stop. Everything else comes up as the car arrives, as before.
+   */
+  const dayOfStay = (stop: number, picture: StopPicture): number | null => {
+    if (!o.dayPictures || !clock || picture.day === undefined) return null;
+    const arrive = clock.arrive[stop];
+    const leave = clock.leave[stop];
+    return picture.day > arrive + 1e-9 && picture.day < leave ? picture.day : null;
+  };
   const addPops = (stop: number, start: number, leaves: number) => {
     if (o.pictures === 'none') return;
     stops[stop].pictures.forEach((picture, rank) => {
+      if (dayOfStay(stop, picture) !== null) return;
       pops.push({ key: picture.key, stop, rank, at: start + rank * o.secondsPerPicture, leaves });
+    });
+  };
+  /** The pictures of the later days of a stay, each at its day, over [from, to]. */
+  const addDayPops = (stop: number, from: number, to: number) => {
+    if (o.pictures === 'none' || !clock || to <= from) return;
+    const arrive = clock.arrive[stop];
+    const span = clock.leave[stop] - arrive;
+    if (!(span > 0)) return;
+    stops[stop].pictures.forEach((picture, rank) => {
+      const day = dayOfStay(stop, picture);
+      if (day === null) return;
+      pops.push({ key: picture.key, stop, rank, at: from + ((day - arrive) / span) * (to - from), leaves: to });
     });
   };
   const days = (d0: number | undefined, d1 = d0) => (d0 === undefined ? {} : { day0: d0, day1: d1 });
@@ -1146,6 +1201,7 @@ export function buildSchedule(
   const firstStay = n > 1 ? staySeconds(0) : 0;
   if (firstStay > 0) {
     phases.push({ kind: 'stay', start: t, end: t + firstStay, s0: 0, s1: 0, stop: 0, ...days(arriveDay(0), leaveDay(0)) });
+    addDayPops(0, t, t + firstStay);
     t += firstStay;
   }
 
@@ -1184,6 +1240,7 @@ export function buildSchedule(
       const stay = staySeconds(run.to);
       if (stay > 0) {
         phases.push({ kind: 'stay', start: t, end: t + stay, s0: s1, s1, stop: run.to, ...days(arriveDay(run.to), leaveDay(run.to)) });
+        addDayPops(run.to, t, t + stay);
         t += stay;
       }
     }
@@ -1197,6 +1254,8 @@ export function buildSchedule(
   const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0);
   phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(arriveDay(lastStop), leaveDay(lastStop)) });
   addPops(lastStop, t, t + arrive);
+  // The last place's days run over the whole arrival beat (its phase's `days`).
+  addDayPops(lastStop, t, t + arrive);
   t += arrive;
 
   let summaryAt: number | null = null;
@@ -1671,11 +1730,35 @@ export function cardPlacement(
 
 // --- the score ------------------------------------------------------------------
 
+/** The closest two day ticks may fall, seconds: past it a day passes in silence. */
+export const DAY_TICK_GAP = 0.07;
+
+/**
+ * When each day of the trip begins on the recap's clock — the instants the
+ * counter's day turns. Read off each phase's `day0 → day1` through the
+ * phase's own easing (a run eases, a stay and a beat are linear), so the
+ * tick lands on the very frame the numeral turns. Empty without a clock.
+ */
+export function dayTurns(plan: DrivePlan, o: Pick<DriveOptions, 'easing'>): number[] {
+  if (!plan.clock) return [];
+  const out: number[] = [];
+  for (const phase of plan.schedule.phases) {
+    const { day0, day1 } = phase;
+    if (day0 === undefined || day1 === undefined || !(day1 > day0)) continue;
+    for (let d = Math.floor(day0 + 1e-9) + 1; d <= day1 + 1e-9; d += 1) {
+      const f = Math.min(1, (d - day0) / (day1 - day0));
+      const u = phase.kind === 'run' ? EASINGS[o.easing].inverse(f) : f;
+      out.push(phase.start + u * (phase.end - phase.start));
+    }
+  }
+  return out;
+}
+
 /**
  * The drive, heard: the kit's landing at every stop the car reaches, its
  * leg voice on an accented stop (a leg's first place, a day's first picture),
  * the seat when the car arrives — and, when asked, a shutter as each picture
- * pops. Nothing at volume 0.
+ * pops and a light tick as each day of the recap turns. Nothing at volume 0.
  */
 export function driveScore(plan: DrivePlan, o: DriveOptions): SoundEvent[] {
   if (!(o.tickVolume > 0)) return [];
@@ -1699,6 +1782,16 @@ export function driveScore(plan: DrivePlan, o: DriveOptions): SoundEvent[] {
   if (o.shutter && o.pictures !== 'none') {
     for (const pop of plan.schedule.pops) {
       out.push({ at: pop.at + 0.05, voice: 'click', gain: 0.55 * o.tickVolume, rate: o.tickPitch * 1.15 });
+    }
+  }
+  if (o.dayTicks) {
+    // A day that turns on a landing is heard in the landing.
+    const landings = out.map((e) => e.at);
+    let prev = -Infinity;
+    for (const at of dayTurns(plan, o)) {
+      if (at - prev < DAY_TICK_GAP || landings.some((l) => Math.abs(l - at) < DAY_TICK_GAP)) continue;
+      prev = at;
+      out.push({ at, voice: kit.tick, gain: 0.32 * o.tickVolume, rate: o.tickPitch * 1.35 });
     }
   }
   return out.sort((a, b) => a.at - b.at);
