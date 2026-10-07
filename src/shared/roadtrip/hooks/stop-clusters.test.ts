@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { GROUP_SHORTCUTS, groupName, groupStops, groupsOn, type NamedTown } from './stop-clusters';
+import { GROUP_SHORTCUTS, biggestTownWithin, groupName, groupStops, groupsOn, type NamedTown } from './stop-clusters';
+import { haversineKm } from './geo';
 
 /** Melbourne and its suburbs, a side trip to Geelong, back to Melbourne, then Sydney. */
 const STOPS = [
@@ -59,5 +60,37 @@ describe('groupName', () => {
     // With no index at hand the town rule says the first member, never a blank.
     expect(groupName(STOPS, groups[0], 'town', null)).toBe('Melbourne');
     expect(groupName(STOPS.map((s, i) => (i === 0 ? { ...s, name: 'Docklands' } : s)), groups[0], 'town', [])).toBe('Docklands');
+  });
+});
+
+describe('the biggest town within reach, read through the grid', () => {
+  // A seeded spread of towns, ties and the antimeridian included.
+  let seed = 7;
+  const rand = () => ((seed = (seed * 1103515245 + 12345) % 2 ** 31) / 2 ** 31);
+  const towns: NamedTown[] = Array.from({ length: 4000 }, (_, i) => ({
+    name: `T${i}`,
+    lat: -60 + rand() * 120,
+    lon: i % 10 === 0 ? 178 + rand() * 4 - (rand() < 0.5 ? 0 : 360) : -180 + rand() * 360,
+    population: Math.floor(rand() * 50) * 1000,
+  }));
+  const brute = (centre: { lat: number; lon: number }, reach: number) => {
+    let best: NamedTown | null = null;
+    for (const town of towns) {
+      if (haversineKm(centre, town) > reach) continue;
+      if (!best || town.population > best.population) best = town;
+    }
+    return best;
+  };
+
+  it('answers exactly as a scan of the whole index, ties and the antimeridian included', () => {
+    for (let k = 0; k < 300; k += 1) {
+      const centre = { lat: -58 + rand() * 116, lon: k % 7 === 0 ? 179.5 : -180 + rand() * 360 };
+      const reach = 5 + rand() * 400;
+      expect(biggestTownWithin(towns, centre, reach)?.name ?? null).toBe(brute(centre, reach)?.name ?? null);
+    }
+  });
+
+  it('finds nothing where nothing is within reach', () => {
+    expect(biggestTownWithin([{ name: 'Far', lat: 10, lon: 10, population: 5 }], { lat: -40, lon: 100 }, 50)).toBeNull();
   });
 });
