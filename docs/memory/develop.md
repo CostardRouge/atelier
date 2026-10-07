@@ -266,7 +266,8 @@ rung Atelier had NO base curve — the decode in linear light, sRGB-encoded,
 times `rawGain`: C1's Linear Response — while the camera render carries the
 camera's curve, which is why a sensor picture read flatter than its render.
 **Decision** (`base-curve.ts`, pure; `DevelopSettings.baseCurve`, optional):
-`linear` · `standard` · `contrast` · `shadows` · `auto`; ONE Fritsch–Carlson
+`linear` · `standard` · `contrast` · `shadows` · `auto` · `profile` (C7,
+`camera-profiles-build.md`); ONE Fritsch–Carlson
 curve (`makeCurve`) on the EXTENDED encoded luminance, drawn on [0,1] and
 continued above white as a line at its own slope there (floored at 0.25) so a
 RAW's headroom stays a number for the recovery and the shoulder. Applied as
@@ -284,7 +285,7 @@ on black → two stops past white, four cases; Linear = no curve, 0 codes).
 curve twice; it is NOT an edit on a render (`isDefaultDevelop` ignores it) but
 IS worth carrying (`carriesDevelop`: the clipboard, a preset); `withoutBase`
 KEEPS it but strips an Auto's measured points (`portableBaseCurve`) — an
-unmeasured Auto draws Standard; numbers that LAND (paste, preset, apply-to,
+unmeasured Auto (or unread Profile) draws Standard; numbers that LAND (paste, preset, apply-to,
 reset, `setDraft`) go through `landBaseCurve`: the source's curve where it
 chose one, else the target's own, and an incoming bare Auto keeps the
 target's own measurement. `developTail` zeroes it (head only). **How to

@@ -2011,7 +2011,8 @@ but it acts only on a RAW's sensor: on a JPEG or a camera render it would
 apply the camera's curve twice, and waits there unused. A picture stored
 before the curve existed reads as *Linear* and does not change. It is chosen
 in the file's menu, under *The sensor*: **Base curve** — *Auto*,
-*Standard*, *Contrast*, *Shadows*, *Linear* — with the chosen curve said in
+*Profile* (only where the file carries one), *Standard*, *Contrast*,
+*Shadows*, *Linear* — with the chosen curve said in
 one line under it (*our curve: a moderate S…*); picking one while the
 picture is on a render takes it to its sensor. **Auto** is the camera's own
 curve, MEASURED on the render the file itself carries: the sensor as the
@@ -2022,7 +2023,10 @@ sensor's is the camera's curve. It is measured once and kept on the
 picture, so the export applies exactly what you saw; where the render is a
 thumbnail (under 640 px), frames another shape, or does not follow one curve
 (a camera's local tone mapping), Auto says why and the picture takes
-*Standard*. A picture you put on its sensor opens on *Auto*; one the roll's
+*Standard*. **Profile** is the tone curve a DNG's own colour profile carries
+(an Adobe *Camera Matching* profile, an iPhone ProRAW): read from the file,
+kept on the picture like Auto's, and applied the same way, on brightness —
+where Adobe applies it per channel. A picture you put on its sensor opens on *Auto*; one the roll's
 *Sensor (RAW)* choice puts there opens on *Standard* (nothing is measured
 for a picture nobody opened), and a picture keeps the curve it already
 carries. A preset or a paste carries *Auto* as a choice, and it is measured

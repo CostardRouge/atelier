@@ -95,3 +95,29 @@ Measured with the real decoder (synthetic DNGs, headless): an identity look
 gives the picture without it to the bit; a 25° look moves every pixel; the
 first decode equals a later one at gain 1 and 3.94. NOT measured: a real
 Camera Matching profile.
+
+## C7: the profile's tone curve is a BASE CURVE (2026-10-07)
+
+**Decision (his Q6).** `ProfileToneCurve` is the `profile` kind of
+`BaseCurve`, never a second curve stage: it rides the head's tone table like
+every base curve. **Rules a later agent must keep:**
+
+- **Points, stored like Auto's** — the file's curve resampled by
+  `profileCurvePoints` into the encoded domain (the profile's points joined
+  by `makeCurve`, a 512-step grid, then the FEWEST grid points the shaper
+  draws within 0.1 code, ≤ 32). Uniform spacing was measured 10 codes off
+  near black on a lifted curve; adaptive is ≤ 0.1 there. A curve with an
+  infinite slope at black (x^0.7) cannot be held by any finite list —
+  neither by the profile's own points.
+- **One file's, like a measurement**: `portableBaseCurve` drops the points,
+  `landBaseCurve` keeps the target's own, an unread Profile draws Standard
+  and says so, and it is OFFERED only where the file carries a curve
+  (`readProfileCurve`, a megabyte of the head, held per file).
+- **Filled by whoever has the file**: the stage on reading the head, the
+  export run before it renders (a preset's, a paste's, the roll's opening);
+  a file with none falls to Standard, said.
+- On LUMINANCE (a grey stays grey), where the SDK applies its curve per
+  channel with the hue kept — the departure, in the brief.
+
+NOT seen in the browser (the menu's sixth choice) nor on a real profile.
+

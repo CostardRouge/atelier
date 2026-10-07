@@ -31,7 +31,9 @@ import {
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
-import { cloneBaseCurve, needsMeasuring, openingBaseCurve } from '../../shared/develop/base-curve';
+import { cloneBaseCurve, needsMeasuring, needsProfileCurve, openingBaseCurve } from '../../shared/develop/base-curve';
+import { readProfileCurve } from '../../shared/develop/profile-curve';
+import type { CurvePoint } from '../../shared/develop/curves';
 import { measureBaseCurve } from '../../shared/develop/measure-base-curve';
 import type { HalfImage } from '../../shared/render/half-image';
 import { CHOICE_WORDS, followsRoll, resolveRollChoice, roleOfRow, rollChoiceFor, type ChoiceRole, type RollChoice } from '../../shared/develop/roll-choice';
@@ -948,6 +950,22 @@ export default function PictureWorkbench({
       alive = false;
     };
   }, [rawFile, sensorHeld]);
+  // The tone curve the DNG's own profile carries (C7), read from the same
+  // head: what decides whether `Profile` is offered among the base curves.
+  // `undefined` while unread, null for a file that carries none.
+  const [profileCurve, setProfileCurve] = useState<CurvePoint[] | null | undefined>(undefined);
+  useEffect(() => {
+    setProfileCurve(undefined);
+    const source = rawFile ?? sensorHeld;
+    if (!source) return;
+    let alive = true;
+    void readProfileCurve(source).then((points) => {
+      if (alive) setProfileCurve(points);
+    });
+    return () => {
+      alive = false;
+    };
+  }, [rawFile, sensorHeld]);
   const rungs = rungsFor(calibration);
   // A rung the file cannot reach is never left standing: a picture developed
   // on `gainMapWarp` and then opened from a file whose opcodes are gone falls
@@ -1328,6 +1346,20 @@ export default function PictureWorkbench({
       measuringFor.current = null;
     };
   }, [curveToMeasure, sensorDecode, rawGain, patchDraft, tell]);
+  // A `profile` base curve not yet read on this picture (picked before its
+  // file was in hand, or carried by a preset or a paste) takes the file's own
+  // curve once it is read — stored as points like Auto's — or Standard,
+  // said, where the file carries none.
+  const profileToRead = wantsRaw && profileCurve !== undefined && needsProfileCurve(developNow.baseCurve);
+  useEffect(() => {
+    if (!profileToRead) return;
+    if (profileCurve) {
+      patchDraft({ baseCurve: { kind: 'profile', points: profileCurve.map((p) => ({ x: p.x, y: p.y })) } });
+    } else {
+      patchDraft({ baseCurve: { kind: 'standard' } });
+      tell('No Profile curve: this file’s colour profile carries none — Standard instead');
+    }
+  }, [profileToRead, profileCurve, patchDraft, tell]);
   videoRef.current = picture.video;
   // Space plays and pauses the CLIP — the sheet's rule (`DevelopSheet.tsx`),
   // here on the tool's own window: a control the keyboard is on keeps its
@@ -2449,6 +2481,7 @@ export default function PictureWorkbench({
               status={wantsRaw ? (picture.problem ?? (!picture.source ? 'decoding the sensor’s data…' : null)) : null}
               gain={wantsRaw ? rawGain : null}
               baseCurve={developNow.baseCurve ?? null}
+              offersProfileCurve={Boolean(profileCurve)}
               onBaseCurve={(next) => patchDraft({ baseCurve: next })}
               calibration={calibration?.summary ?? null}
               roll={

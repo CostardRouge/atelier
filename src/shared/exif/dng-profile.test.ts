@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { describeDngProfile, PROFILE_TAG as T, readDngProfile } from './dng-profile';
 import { parseIfd } from './exif-parser';
 import { describeRaw, probeRaw } from './raw-probe';
+import { readProfileCurve } from '../develop/profile-curve';
 
 /**
  * A one-IFD little-endian TIFF written byte by byte, every type a profile
@@ -156,5 +157,14 @@ describe('readDngProfile', () => {
     const probe = probeRaw(tiff(dual))!;
     expect(probe.profile?.calibrations).toHaveLength(2);
     expect(describeRaw(probe)).toContain('profile "Adobe Standard" · A + D65 · forward matrices');
+  });
+
+  it('hands a profile’s tone curve to the base curve, read from the file’s head (C7)', async () => {
+    const curved = new File([tiff([...dual, { tag: T.toneCurve, type: 11, values: [0, 0, 0.5, 0.6, 1, 1] }])], 'curved.dng');
+    const points = (await readProfileCurve(curved))!;
+    expect(points[0]).toEqual({ x: 0, y: 0 });
+    expect(points[points.length - 1]).toEqual({ x: 1, y: 1 });
+    expect(await readProfileCurve(new File([tiff(dual)], 'plain.dng'))).toBeNull();
+    expect(await readProfileCurve(new File([new Uint8Array(16)], 'junk.dng'))).toBeNull();
   });
 });

@@ -80,7 +80,8 @@ import {
   withoutBase,
 } from '../../shared/develop/develop';
 import { resolveRollChoice, rollChoiceFor } from '../../shared/develop/roll-choice';
-import { openingBaseCurve } from '../../shared/develop/base-curve';
+import { needsProfileCurve, openingBaseCurve } from '../../shared/develop/base-curve';
+import { readProfileCurve } from '../../shared/develop/profile-curve';
 import { captureRenditions, meterRaw } from '../../shared/develop/roll-choice-source';
 import {
   calibrationAt,
@@ -671,6 +672,15 @@ export function useRollExport({
                   picture = { ...picture, develop: { ...develop, rawGain: gain, ...(profile ? { rawProfile: profile } : {}) } };
                 }
                 else rawFile = null;
+              }
+              // A Profile curve chosen before its file was read (a preset, a paste,
+              // the roll's opening) takes the file's own here, as its stage would (C7).
+              if (rawFile && picture.develop && needsProfileCurve(picture.develop.baseCurve)) {
+                const points = await readProfileCurve(rawFile);
+                picture = {
+                  ...picture,
+                  develop: { ...picture.develop, baseCurve: points ? { kind: 'profile', points } : { kind: 'standard' } },
+                };
               }
               if (rawFile) raw = { file: rawFile, gain: rawGainOf(picture.develop), profile: decodeProfileOf(picture.develop) };
               else failures.push(`${picture.ref.name} is developed on its RAW, which is not reachable here — its render left instead`);
