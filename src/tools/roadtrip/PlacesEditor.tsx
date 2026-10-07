@@ -33,6 +33,7 @@ import {
 import { DateField } from '../../shared/ui/DateField';
 import PlaceFixPanel, { type FixCandidate, type FixTab } from './PlaceFixPanel';
 import PlacesTable, { type PlacesTableRow } from './PlacesTable';
+import { takePlaceRequest, usePlaceRequest } from './place-request';
 
 interface PlacesEditorProps {
   trip: TripDoc;
@@ -133,6 +134,24 @@ export default function PlacesEditor({ trip, stage, onChange, onRememberCode }: 
     setTab('hand');
     setFresh(place.id);
   }
+
+  // Asked from outside the card (the map's «Not on the map» tray): open that
+  // place on Fix — its other towns first when it has a name —, or add one.
+  const request = usePlaceRequest(stage.id);
+  useEffect(() => {
+    if (!request) return;
+    const taken = takePlaceRequest(stage.id);
+    if (!taken) return;
+    if (!taken.placeId) {
+      add();
+      return;
+    }
+    const place = places.find((p) => p.id === taken.placeId);
+    if (!place) return;
+    setOpenId(place.id);
+    setTab(place.name.trim() ? 'same' : 'hand');
+    // `add` and `places` are read at the moment the request lands, on purpose.
+  }, [request, stage.id]);
 
   function openPlace(id: string, as: FixTab) {
     if (openId === id && tab === as) {
@@ -428,7 +447,7 @@ function PlaceFields({
             <input
               value={place.stateCode ?? ''}
               onChange={(e) => onChange(withText(place, 'stateCode', e.target.value.toUpperCase()))}
-              placeholder={candidates.derived || 'NSW'}
+              placeholder={candidates.official || candidates.derived || 'NSW'}
               aria-label={`Your own code for ${state}`}
               maxLength={6}
               className={`${inputClass} w-[4.5rem] py-0.5 font-mono uppercase`}

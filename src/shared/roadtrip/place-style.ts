@@ -25,6 +25,7 @@
  * Pure and DOM-free.
  */
 
+import { officialStateCode } from './state-codes';
 import { formatDayMonth, isWithin, parseIsoDate, type IsoDate } from './trip-days';
 import { PLACE_ARROW, stageEnd, stageStart } from './trip-places';
 // Types only: `trip-types.ts` imports THIS module's default, and a value the
@@ -47,8 +48,8 @@ export const PLACE_STYLE_OPTIONS: readonly { id: PlaceStyle; label: string; exam
   { id: 'name', label: 'Name only', example: 'Sydney' },
 ];
 
-/** Where a resolved code came from — the three a place may wear, plus the two fallbacks. */
-export type CodeFrom = PlaceCodeFrom | 'derived' | 'none';
+/** Where a resolved code came from — the three a place may wear, plus the three fallbacks. */
+export type CodeFrom = PlaceCodeFrom | 'official' | 'derived' | 'none';
 
 export interface StateCode {
   code: string;
@@ -59,6 +60,7 @@ export const CODE_FROM_WORDS: Record<CodeFrom, string> = {
   own: 'this place’s own',
   table: 'the trip’s table',
   search: 'the search',
+  official: 'the official abbreviation',
   derived: 'derived from the name',
   none: 'no state',
 };
@@ -74,7 +76,8 @@ function fold(text: string): string {
  * A code from a state's name alone: the initials of its words (small words
  * skipped), or the first three letters of a single word. «New South Wales» →
  * NSW, «Western Australia» → WA, «Bretagne» → BRE — and «Queensland» → QUE,
- * which is why this is the LAST rung and never the first.
+ * which is why this is the LAST rung, after the official abbreviations
+ * (`state-codes.ts`) that give Queensland its QLD.
  */
 export function deriveStateCode(state: string): string {
   const words = fold(state)
@@ -100,31 +103,33 @@ export function tableCode(codes: Record<string, string>, state: string): string 
 
 /** Every code this place could wear, empty where it has none. */
 export function codeCandidates(
-  place: Pick<TripPlace, 'state' | 'stateCode' | 'searchCode'>,
+  place: Pick<TripPlace, 'state' | 'stateCode' | 'searchCode'> & Partial<Pick<TripPlace, 'countryCode'>>,
   trip: Pick<TripDoc, 'stateCodes'>,
-): Record<PlaceCodeFrom | 'derived', string> {
+): Record<PlaceCodeFrom | 'official' | 'derived', string> {
   return {
     own: (place.stateCode ?? '').trim(),
     table: tableCode(trip.stateCodes ?? {}, place.state),
     search: (place.searchCode ?? '').trim(),
+    official: officialStateCode(place.state, place.countryCode),
     derived: deriveStateCode(place.state),
   };
 }
 
 /**
  * The code a place wears: the rung it is pinned to when that rung has a
- * value, else the automatic order own → table → search → derived. A pin on
+ * value, else the automatic order own → table → search → official →
+ * derived. A pin on
  * a rung that went empty (the table entry was removed) falls through rather
  * than showing nothing — the pin is a preference, not a fact.
  */
 export function stateCodeFor(
-  place: Pick<TripPlace, 'state' | 'stateCode' | 'searchCode' | 'codeFrom'>,
+  place: Pick<TripPlace, 'state' | 'stateCode' | 'searchCode' | 'codeFrom'> & Partial<Pick<TripPlace, 'countryCode'>>,
   trip: Pick<TripDoc, 'stateCodes'>,
 ): StateCode {
   if (!place.state.trim()) return { code: '', from: 'none' };
   const c = codeCandidates(place, trip);
   if (place.codeFrom && c[place.codeFrom]) return { code: c[place.codeFrom], from: place.codeFrom };
-  for (const from of ['own', 'table', 'search'] as const) if (c[from]) return { code: c[from], from };
+  for (const from of ['own', 'table', 'search', 'official'] as const) if (c[from]) return { code: c[from], from };
   return { code: c.derived, from: c.derived ? 'derived' : 'none' };
 }
 
@@ -152,7 +157,7 @@ export function placeStyleFor(
  * comma, never an invented code.
  */
 export function writePlace(
-  place: Pick<TripPlace, 'name' | 'state' | 'stateCode' | 'searchCode' | 'codeFrom'>,
+  place: Pick<TripPlace, 'name' | 'state' | 'stateCode' | 'searchCode' | 'codeFrom'> & Partial<Pick<TripPlace, 'countryCode'>>,
   style: PlaceStyle,
   trip: Pick<TripDoc, 'stateCodes'>,
 ): string {
