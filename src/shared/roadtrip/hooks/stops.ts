@@ -12,18 +12,103 @@
  * invented. Pure and DOM-free.
  */
 
+import type { PlaceResult } from '../../map/geocode';
+import { DEFAULT_PLACE_STYLE, writePlace, type PlaceWritingTrip } from '../place-style';
+import type { PlaceStyle } from '../trip-types';
 import type { GeoPoint } from './geo';
-import type { HookPickedPicture, HookStage } from './hook-variant';
+import type { HookPickedPicture, HookPlace, HookStage } from './hook-variant';
 
-/** One place the author put on the map, with the picture they gave it. */
-export interface MapStop {
+/**
+ * One place the author put on the map, with the picture they gave it — and,
+ * since 2026-10-07, what it KNOWS of where it is (`HookPlace`: the state,
+ * its code, the country), so it is written «Sydney, NSW» like any place of
+ * the suite. A stop stored before that day knows only its name and still
+ * reads as it did.
+ */
+export interface MapStop extends HookPlace {
   /** Stable across edits — the React key, and what a reorder moves. */
   id: string;
-  name: string;
-  lat: number;
-  lon: number;
   /** The one picture this stop shows, or nothing. */
   picture?: HookPickedPicture;
+}
+
+/** The facts a stop may know beside its name and position, as stored keys. */
+const PLACE_FACTS = ['state', 'area', 'stateCode', 'searchCode', 'country', 'countryCode'] as const;
+const PLACE_STYLES: readonly PlaceStyle[] = ['code', 'full', 'paren', 'name'];
+
+/** Only the facts a place HAS: an empty string is never stored, a code is upper case. */
+function placeFacts(from: Partial<HookPlace>): Partial<HookPlace> {
+  const out: Partial<HookPlace> = {};
+  for (const key of PLACE_FACTS) {
+    const value = typeof from[key] === 'string' ? from[key].trim() : '';
+    if (value) out[key] = key === 'countryCode' ? value.toUpperCase() : value;
+  }
+  if (from.style && PLACE_STYLES.includes(from.style)) out.style = from.style;
+  return out;
+}
+
+/** How an opener writes its stops: like the trip's badges, or one writing of its own. */
+export type StopStyle = 'trip' | PlaceStyle;
+export const STOP_STYLES: readonly StopStyle[] = ['trip', ...PLACE_STYLES];
+
+/**
+ * A place as an opener or a list WRITES it — «Sydney, NSW», «Sydney, New
+ * South Wales», «Sydney (NSW)» or «Sydney» — through the suite's one cascade
+ * (`place-style.ts`): the place's own writing, else the opener's, else the
+ * trip's for a badge. A place that knows no state is its name, whatever the
+ * writing asks; nothing is invented.
+ */
+export function stopText(place: HookPlace, style: StopStyle = 'trip', writing?: PlaceWritingTrip): string {
+  const trip = { placeStyle: writing?.placeStyle ?? DEFAULT_PLACE_STYLE, stateCodes: writing?.stateCodes ?? {} };
+  const chosen = place.style ?? (style === 'trip' ? trip.placeStyle.badge : style);
+  return writePlace(
+    { name: place.name, state: place.state ?? '', stateCode: place.stateCode, searchCode: place.searchCode },
+    chosen,
+    trip,
+  );
+}
+
+/** The stops with their names WRITTEN — what an opener paints and captions with. */
+export function writtenStops<S extends HookPlace>(stops: readonly S[], style: StopStyle, writing?: PlaceWritingTrip): S[] {
+  return stops.map((stop) => ({ ...stop, name: stopText(stop, style, writing) }));
+}
+
+/**
+ * What a stop takes from a search's answer — the rule of `adoptSearchResult`
+ * (`place-search.ts`): the name and the position are the answer's, a state
+ * the author typed is never overwritten, a fact the stop lacked is filled,
+ * and the search's own code is always the latest answer's.
+ */
+export function adoptSearch(stop: MapStop, result: PlaceResult): MapStop {
+  const next: MapStop = { ...stop, name: result.name, lat: result.lat, lon: result.lon };
+  const facts = placeFacts({
+    state: (stop.state ?? '').trim() || result.state || result.region,
+    area: (stop.area ?? '').trim() || result.area,
+    country: (stop.country ?? '').trim() || result.country,
+    countryCode: (stop.countryCode ?? '').trim() || result.countryCode,
+    searchCode: result.stateCode,
+  });
+  for (const key of PLACE_FACTS) {
+    if (facts[key]) next[key] = facts[key];
+    else if (key === 'searchCode') delete next.searchCode;
+  }
+  return next;
+}
+
+/** A search's answer as a place to ADD — every fact it carries. */
+export function searchPlace(result: PlaceResult): HookPlace {
+  return {
+    name: result.name,
+    lat: result.lat,
+    lon: result.lon,
+    ...placeFacts({
+      state: result.state || result.region,
+      area: result.area,
+      country: result.country,
+      countryCode: result.countryCode,
+      searchCode: result.stateCode,
+    }),
+  };
 }
 
 /**
@@ -80,6 +165,7 @@ export function readStops(raw: unknown): MapStop[] {
       name: typeof s.name === 'string' ? s.name : '',
       lat,
       lon,
+      ...placeFacts(s as Partial<HookPlace>),
       picture: readPicture(s.picture),
     });
   }
@@ -91,15 +177,12 @@ export function readStops(raw: unknown): MapStop[] {
  * context layer and for the panel's "add a place" chips. Matched on position
  * rather than on name: the same place typed twice is one place.
  */
-export function otherPlaces(
-  stages: readonly HookStage[] | undefined,
-  stops: readonly MapStop[],
-): { name: string; lat: number; lon: number }[] {
-  const out: { name: string; lat: number; lon: number }[] = [];
+export function otherPlaces(stages: readonly HookStage[] | undefined, stops: readonly MapStop[]): HookPlace[] {
+  const out: HookPlace[] = [];
   for (const stage of stages ?? []) {
     for (const place of stage.places) {
       if (samePlace(stops, place) || out.some((seen) => near(seen, place))) continue;
-      out.push({ name: place.name, lat: place.lat, lon: place.lon });
+      out.push({ ...place });
     }
   }
   return out;
@@ -117,13 +200,22 @@ function samePlace(stops: readonly MapStop[], place: GeoPoint): boolean {
 // Editing the stops — pure, so the panels only draw
 // ---------------------------------------------------------------------------
 
-/** A stop added at the end. The name is the author's to write. */
-export function addStop(
-  stops: readonly MapStop[],
-  at: GeoPoint & { name?: string },
-  id: string,
-): MapStop[] {
-  return [...stops, { id, name: at.name ?? '', lat: at.lat, lon: at.lon }];
+/** A stop added at the end, with whatever the place knows. The name is the author's to write. */
+export function addStop(stops: readonly MapStop[], at: GeoPoint & Partial<HookPlace>, id: string): MapStop[] {
+  return [...stops, { id, name: at.name ?? '', lat: at.lat, lon: at.lon, ...placeFacts(at) }];
+}
+
+/**
+ * A stop GIVEN another place — one of the trip's landmarks taken from the
+ * mini map, say: the place's name, position and facts replace the stop's
+ * (its old facts were the old place's), the id and the picture stay.
+ */
+export function replaceStopPlace(stops: readonly MapStop[], id: string, place: HookPlace): MapStop[] {
+  return stops.map((stop) =>
+    stop.id === id
+      ? { id: stop.id, name: place.name, lat: place.lat, lon: place.lon, ...placeFacts(place), ...(stop.picture ? { picture: stop.picture } : {}) }
+      : stop,
+  );
 }
 
 /** One stop changed in place; everything else, including its picture, kept. */
@@ -198,22 +290,17 @@ export function assignPictures(
 }
 
 /** The trip's own located places as an itinerary — the one-click start. */
-export function stopsFromPlaces(
-  places: readonly { name: string; lat: number; lon: number }[],
-  makeId: (index: number) => string,
-): MapStop[] {
-  return places.map((place, i) => ({ id: makeId(i), name: place.name, lat: place.lat, lon: place.lon }));
+export function stopsFromPlaces(places: readonly HookPlace[], makeId: (index: number) => string): MapStop[] {
+  return places.map((place, i) => ({ id: makeId(i), name: place.name, lat: place.lat, lon: place.lon, ...placeFacts(place) }));
 }
 
 /** Every located place of the trip, in the order it was lived. */
-export function tripPlaces(
-  stages: readonly HookStage[] | undefined,
-): { name: string; lat: number; lon: number }[] {
-  const out: { name: string; lat: number; lon: number }[] = [];
+export function tripPlaces(stages: readonly HookStage[] | undefined): HookPlace[] {
+  const out: HookPlace[] = [];
   for (const stage of stages ?? []) {
     for (const place of stage.places) {
       if (out.some((seen) => near(seen, place))) continue;
-      out.push({ name: place.name, lat: place.lat, lon: place.lon });
+      out.push({ ...place });
     }
   }
   return out;

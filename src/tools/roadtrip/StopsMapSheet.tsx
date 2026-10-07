@@ -32,8 +32,10 @@ import {
   numeralScale,
   patchStop,
   removeStop,
+  searchPlace,
   type MapStop,
 } from '../../shared/roadtrip/hooks/stops';
+import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
 import { newId } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
 import { Icons } from '../../shared/ui/icons';
@@ -42,7 +44,7 @@ import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import { revealInScroller } from '../../shared/ui/reveal';
 import { useListReorder } from '../../shared/ui/use-list-reorder';
 
-type Place = { name: string; lat: number; lon: number };
+type Place = HookPlace;
 
 interface StopsMapSheetProps {
   stops: readonly MapStop[];
@@ -132,7 +134,7 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
 
   // No cap on the list (2026-10-07): a three-month trip of 120 places was cut
   // at 99. A third digit shrinks inside its dot instead (`numeralScale`).
-  const add = useCallback((at: Place) => {
+  const add = useCallback((at: HookPlace) => {
     // Functional: two taps inside one render must both land.
     const id = newId();
     setDraft((current) => addStop(current, at, id));
@@ -488,7 +490,9 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                   value={query}
                   onChange={setQuery}
                   onPick={(result) => {
-                    add({ name: result.name, lat: result.lat, lon: result.lon });
+                    // The answer's state, codes and country come along, so
+                    // the stop is written «Sydney, NSW» like any place.
+                    add(searchPlace(result));
                     flyTo(result);
                     setQuery('');
                   }}
@@ -588,7 +592,15 @@ export default function StopsMapSheet({ stops, places, title, onCancel, onDone }
                           aria-label={`Name of stop ${index + 1}`}
                           className="min-w-0 flex-1 h-7 px-1.5 border border-transparent rounded-control bg-transparent text-sm text-ink focus:outline-none focus:border-accent focus:bg-surface"
                         />
-                        {stop.picture && <span className="flex-none font-mono text-3xs text-faint">photo</span>}
+                        {stop.picture && (
+                          <span
+                            className="flex-none inline-flex text-muted [&>svg]:w-3.5 [&>svg]:h-3.5"
+                            title={stop.picture.ref.name}
+                            aria-label={`Picture: ${stop.picture.ref.name}`}
+                          >
+                            {Icons.image}
+                          </span>
+                        )}
                         <button
                           type="button"
                           disabled={index === 0}

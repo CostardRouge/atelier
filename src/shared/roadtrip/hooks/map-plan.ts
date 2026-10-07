@@ -38,13 +38,14 @@ import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { BASEMAP_FOR_EDGE, BASEMAP_MAX_PX, basemapKey, rasterSize } from '../../map/tile-math';
 import type { HookBasemapWant, HookPictureWant } from './hook-variant';
 import { hookPictureKey } from './hook-variant';
-import { readStops, stopsFromPlaces, type MapStop } from './stops';
+import { STOP_STYLES, readStops, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 
 // The stop model and its edits are shared with Virée since 2026-09-28; the
 // names the Itinerary grew them under stay importable from here.
 export {
   addStop,
+  adoptSearch,
   assignPictures,
   moveStop,
   otherPlaces,
@@ -52,8 +53,11 @@ export {
   readStops,
   removeStop,
   stopsFromPlaces,
+  stopText,
   tripPlaces,
+  writtenStops,
   type MapStop,
+  type StopStyle,
 } from './stops';
 
 /** How a stop's picture is presented. */
@@ -109,6 +113,8 @@ export interface MapOptions {
   numbers: boolean;
   labels: MapLabels;
   labelSize: number;
+  /** How a stop's name is written — like the trip's badges, or one writing of its own (`stopText`). */
+  placeStyle: StopStyle;
   /** The trip's own located places that are NOT stops, drawn faint behind. */
   context: boolean;
   // --- motion --------------------------------------------------------------
@@ -167,6 +173,7 @@ export const MAP_DEFAULTS: MapOptions = {
   dotSize: 1,
   numbers: false,
   labels: 'current',
+  placeStyle: 'trip',
   labelSize: 1,
   context: false,
   draw: true,
@@ -255,6 +262,7 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
     dotSize: clamp(Number(o.dotSize), L.dotSize.min, L.dotSize.max, d.dotSize),
     numbers: o.numbers === true,
     labels: oneOf(o.labels, ['none', 'ends', 'current', 'passed', 'all'], d.labels),
+    placeStyle: oneOf(o.placeStyle, STOP_STYLES, d.placeStyle),
     labelSize: clamp(Number(o.labelSize), L.labelSize.min, L.labelSize.max, d.labelSize),
     context: o.context === true,
     draw: o.draw !== false,

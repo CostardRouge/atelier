@@ -20,8 +20,8 @@
 
 import { tripCoverage } from '../trip-coverage';
 import { stageLabel } from '../trip-places';
-import type { TripDoc } from '../trip-types';
-import type { HookDay, HookDayPiece, HookStage } from './hook-variant';
+import type { TripDoc, TripPlace } from '../trip-types';
+import type { HookDay, HookDayPiece, HookPlace, HookStage } from './hook-variant';
 
 /**
  * The last calendars built, by the piece they leave out. Everything a calendar
@@ -107,7 +107,7 @@ export function hookStages(trip: TripDoc): HookStage[] {
       place.coords &&
       Number.isFinite(place.coords.lat) &&
       Number.isFinite(place.coords.lon)
-        ? [{ name: place.name, lat: place.coords.lat, lon: place.coords.lon }]
+        ? [hookPlace(place, place.coords.lat, place.coords.lon)]
         : [],
     ),
   }));
@@ -120,4 +120,26 @@ export function currentLegIndex(stages: readonly HookStage[], date: string): num
     if (stage.startDate <= date && date <= stage.endDate) found = i;
   });
   return found;
+}
+
+/**
+ * A trip place as an opener is handed it: its position and WHAT IT KNOWS —
+ * the state, the codes, the country, its own writing — so a stop adopted from
+ * it is written «Sydney, NSW» like the place itself. Only the facts the
+ * place has travel; an empty string is left out rather than copied.
+ */
+export function hookPlace(place: TripPlace, lat: number, lon: number): HookPlace {
+  const out: HookPlace = { name: place.name, lat, lon };
+  const take = (key: 'state' | 'area' | 'stateCode' | 'searchCode' | 'country' | 'countryCode') => {
+    const value = (place[key] ?? '').trim();
+    if (value) out[key] = value;
+  };
+  take('state');
+  take('area');
+  take('stateCode');
+  take('searchCode');
+  take('country');
+  take('countryCode');
+  if (place.style) out.style = place.style;
+  return out;
 }

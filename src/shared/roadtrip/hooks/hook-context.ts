@@ -75,6 +75,7 @@ export function hookContextFor(
     stages: hookStages(trip),
     pictures,
     car: trip.car,
+    writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
   };
 }
 

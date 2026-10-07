@@ -49,7 +49,7 @@ import type { HookPanelProps, HookPictureStatus, HookVariant } from './hook-vari
 import { allowTiles } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
 import { Group } from './panel-ui';
-import StopsEditor from './stops-editor';
+import StopsEditor, { StopStyleRow } from './stops-editor';
 import { otherPlaces, tripPlaces } from './stops';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
@@ -132,7 +132,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const set = (patch: Partial<DriveOptions>) => onChange({ ...o, ...patch });
   const stages = ctx.stages ?? [];
   const calendar = ctx.calendar ?? [];
-  const route = driveRoute(stages, calendar, ctx.date, o);
+  const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing);
   const plan = drivePlan(route, o);
   const wants = driveWants(route, o);
   const status = host?.pictureStatus;
@@ -236,6 +236,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             places={places}
             free={otherPlaces(stages, o.stops)}
             curve={o.path === 'curved' ? 0.12 : 0}
+            placeStyle={o.placeStyle}
+            writing={ctx.writing}
             host={host}
             title="Virée"
             pictureHint={
@@ -595,6 +597,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
+        {o.labels !== 'none' && o.stopsOn !== 'pictures' && (
+          <StopStyleRow value={o.placeStyle} writing={ctx.writing} onChange={(placeStyle) => set({ placeStyle })} />
+        )}
         {o.labels !== 'none' && (
           <FieldRow label="Name size">
             <RangeField
@@ -809,17 +814,17 @@ export const driveVariant: HookVariant = {
   owns: 'frame',
   wantsPictures(options, ctx) {
     const o = driveOptions(options);
-    return driveWants(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o), o);
+    return driveWants(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o);
   },
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return null;
-    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o), o);
+    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing), o);
     return plan ? driveBasemap(plan, o, ctx.aspect) : null;
   },
   prepare(options, ctx) {
     const o = driveOptions(options);
-    const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o);
+    const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing);
     const plan = drivePlan(route, o);
     if (!plan) return { seconds: 0 };
     const scratch = driveScratch(vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR));

@@ -27,6 +27,8 @@
 import type { ComponentType } from 'react';
 import type { SavedMediaRef } from '../../projects/project-types';
 import type { CarSpec } from '../car-spec';
+import type { PlaceWritingTrip } from '../place-style';
+import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
 import type { BadgeContent, BadgePiece, CounterMode } from '../day-badge';
 
@@ -217,12 +219,39 @@ export interface HookBasemapWant {
  * the order they were lived. A place with no coordinates is left out here: it
  * is a complete place, but nothing a drawing can put on a line.
  */
+/**
+ * A located place as an opener is handed it — a stage's, or a stop the author
+ * put on a map. Beside its name and position it may KNOW where it is, with
+ * the fields a trip place keeps since v30 (`TripPlace`): the state, its code,
+ * the country. Every one is optional; a point with a name is a complete
+ * place, and what it knows is what lets the openers write «Sydney, NSW» the
+ * way every other list of the suite does (`stopText`, `stops.ts`).
+ */
+export interface HookPlace {
+  name: string;
+  lat: number;
+  lon: number;
+  /** The state, province or region ("New South Wales"). */
+  state?: string;
+  /** The county, shire or district. */
+  area?: string;
+  /** The author's own short code for the state ("NSW"). */
+  stateCode?: string;
+  /** The code the search gave ("AU-NSW" → "NSW"). */
+  searchCode?: string;
+  country?: string;
+  /** ISO 3166-1 alpha-2, upper case. */
+  countryCode?: string;
+  /** This place's own writing, over the opener's and the trip's. */
+  style?: PlaceStyle;
+}
+
 export interface HookStage {
   startDate: string;
   endDate: string;
   /** What the badge calls this leg (`stageLabel`). */
   label: string;
-  places: readonly { name: string; lat: number; lon: number }[];
+  places: readonly HookPlace[];
 }
 
 /** A decoded picture a variant may draw, with the size it was decoded at. */
@@ -274,6 +303,13 @@ export interface HookContext {
    * A hand-built context without it drives the default car.
    */
   car?: CarSpec;
+  /**
+   * How the trip WRITES a place (`TripDoc.placeStyle`, `stateCodes`) — what
+   * an opener's labels and the stops' lists read through `stopText`, so a
+   * stop is written like every other place of the suite. Absent: the
+   * defaults, the name alone on an opener.
+   */
+  writing?: PlaceWritingTrip;
 }
 
 /** One sound the hook makes — see `shared/audio/sound-event.ts`. */

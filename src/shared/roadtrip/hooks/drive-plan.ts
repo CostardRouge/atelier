@@ -48,7 +48,8 @@ import {
   type HookStage,
 } from './hook-variant';
 import { partitionPicked, readPicked, sampleEvenly } from './picked';
-import { readStops, type MapStop } from './stops';
+import { STOP_STYLES, readStops, stopText, type MapStop, type StopStyle } from './stops';
+import type { PlaceWritingTrip } from '../place-style';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 
 /** The legs' located places, the author's own places, or the picked pictures' positions. */
@@ -124,6 +125,8 @@ export interface DriveOptions {
   dots: boolean;
   labels: DriveLabels;
   labelSize: number;
+  /** How a stop's name is written — like the trip's badges, or one writing of its own (`stopText`). */
+  placeStyle: StopStyle;
   compass: boolean;
   scaleBar: boolean;
   distance: DistanceUnit;
@@ -178,6 +181,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   size: 1,
   dots: true,
   labels: 'all',
+  placeStyle: 'trip',
   labelSize: 1,
   compass: true,
   scaleBar: true,
@@ -279,6 +283,7 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     size: clamp(Number(o.size), L.size.min, L.size.max, d.size),
     dots: o.dots !== false,
     labels: oneOf(o.labels, ['none', 'ends', 'all'], d.labels),
+    placeStyle: oneOf(o.placeStyle, STOP_STYLES, d.placeStyle),
     labelSize: clamp(Number(o.labelSize), L.labelSize.min, L.labelSize.max, d.labelSize),
     compass: o.compass !== false,
     scaleBar: o.scaleBar !== false,
@@ -376,6 +381,7 @@ function placeStops(
   calendar: readonly HookDay[],
   date: string,
   o: DriveOptions,
+  writing?: PlaceWritingTrip,
 ): DriveRoute {
   const current = currentLegIndex(stages, date);
   const driven = current === null ? stages.map((s, i) => ({ stage: s, index: i })) : stages.slice(0, current + 1).map((s, i) => ({ stage: s, index: i }));
@@ -389,7 +395,7 @@ function placeStops(
         first = false;
         continue;
       }
-      stops.push({ ...point, name: place.name.trim(), kind: 'place', leg: index, accent: first, pictures: [] });
+      stops.push({ ...point, name: stopText(place, o.placeStyle, writing).trim(), kind: 'place', leg: index, accent: first, pictures: [] });
       first = false;
     }
   }
@@ -496,12 +502,12 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
  * Itinerary's rule. A picked picture with a position joins the nearest stop;
  * one without has nowhere the document can put it, and is counted.
  */
-function customStops(calendar: readonly HookDay[], date: string, o: DriveOptions): DriveRoute {
+function customStops(calendar: readonly HookDay[], date: string, o: DriveOptions, writing?: PlaceWritingTrip): DriveRoute {
   const leftOut = { ...EMPTY_LEFT_OUT };
   const stops: DriveStop[] = o.stops.map((stop, i) => ({
     lat: stop.lat,
     lon: stop.lon,
-    name: stop.name.trim(),
+    name: stopText(stop, o.placeStyle, writing).trim(),
     kind: 'place',
     leg: null,
     accent: i === 0,
@@ -539,10 +545,12 @@ export function driveRoute(
   calendar: readonly HookDay[],
   date: string,
   o: DriveOptions,
+  /** The trip's writing of a place, so a stop's name reads like every list's. */
+  writing?: PlaceWritingTrip,
 ): DriveRoute {
   if (o.stopsOn === 'pictures') return pictureStops(calendar, date, o);
-  if (o.stopsOn === 'custom') return customStops(calendar, date, o);
-  return placeStops(stages, calendar, date, o);
+  if (o.stopsOn === 'custom') return customStops(calendar, date, o, writing);
+  return placeStops(stages, calendar, date, o, writing);
 }
 
 /** The pictures a route draws, once each, in the shape the style wants. */

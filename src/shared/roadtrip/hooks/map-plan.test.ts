@@ -38,7 +38,7 @@ import {
   wantsLabel,
   type MapStop,
 } from './map-plan';
-import { moveStopTo, numeralScale } from './stops';
+import { adoptSearch, moveStopTo, numeralScale, replaceStopPlace, searchPlace, stopText, writtenStops } from './stops';
 import { TICK_KITS } from './tick-kits';
 
 const picture = (name: string): HookPickedPicture => ({
@@ -676,5 +676,56 @@ describe('a stop’s numeral', () => {
   it('reads anything that is not a count as one digit', () => {
     expect(numeralScale(0)).toBe(1);
     expect(numeralScale(Number.NaN)).toBe(1);
+  });
+});
+
+describe('a stop that knows its place', () => {
+  const sydney = { id: 's', name: 'Sydney', lat: -33.87, lon: 151.21, state: 'New South Wales', searchCode: 'NSW', countryCode: 'au' };
+
+  it('reads the facts it was stored with, drops empty ones, upper-cases the country', () => {
+    const [stop] = readStops([{ ...sydney, area: '  ', country: '', style: 'paren' }]);
+    expect(stop).toMatchObject({ state: 'New South Wales', searchCode: 'NSW', countryCode: 'AU', style: 'paren' });
+    expect('area' in stop).toBe(false);
+    expect('country' in stop).toBe(false);
+    // A writing the suite does not know is dropped, never kept as a string.
+    expect('style' in readStops([{ ...sydney, style: 'bogus' }])[0]).toBe(false);
+  });
+
+  it('writes a stop like a trip place — the trip’s badge writing by default, the name alone where nothing is known', () => {
+    expect(stopText(sydney)).toBe('Sydney');
+    expect(stopText(sydney, 'trip', { placeStyle: { badge: 'code', lists: 'code' } })).toBe('Sydney, NSW');
+    expect(stopText(sydney, 'full')).toBe('Sydney, New South Wales');
+    expect(stopText(sydney, 'paren')).toBe('Sydney (NSW)');
+    expect(stopText({ ...sydney, style: 'name' }, 'code')).toBe('Sydney');
+    expect(stopText({ name: 'Somewhere', lat: 0, lon: 0 }, 'code')).toBe('Somewhere');
+    // The trip's own table wins over the search's code.
+    expect(stopText(sydney, 'code', { stateCodes: { 'New South Wales': 'N.S.W.' } })).toBe('Sydney, N.S.W.');
+  });
+
+  it('hands the opener written stops and keeps everything else', () => {
+    const out = writtenStops([{ ...sydney, picture: picture('one.jpg') }], 'code');
+    expect(out[0].name).toBe('Sydney, NSW');
+    expect(out[0].picture?.ref.name).toBe('one.jpg');
+  });
+
+  it('takes what a search answers, never over a typed state, the search’s code always', () => {
+    const result = { name: 'Kalbarri', region: 'Western Australia, Australia', lat: -27.7, lon: 114.2, area: 'Shire of Northampton', state: 'Western Australia', stateCode: 'WA', country: 'Australia', countryCode: 'AU' };
+    const added = searchPlace(result);
+    expect(added).toMatchObject({ name: 'Kalbarri', state: 'Western Australia', searchCode: 'WA', countryCode: 'AU', area: 'Shire of Northampton' });
+    const typed = adoptSearch({ id: 'k', name: 'Kal', lat: 0, lon: 0, state: 'WA typed', searchCode: 'OLD' }, result);
+    expect(typed.state).toBe('WA typed');
+    expect(typed.searchCode).toBe('WA');
+    expect(typed.lat).toBe(-27.7);
+    expect(typed.name).toBe('Kalbarri');
+    const noCode = adoptSearch({ id: 'k', name: 'Kal', lat: 0, lon: 0, searchCode: 'OLD' }, { ...result, stateCode: '' });
+    expect('searchCode' in noCode).toBe(false);
+  });
+
+  it('gives a stop another place whole, keeping its id and picture', () => {
+    const stops = [{ ...sydney, picture: picture('one.jpg') }];
+    const [out] = replaceStopPlace(stops, 's', { name: 'Perth', lat: -31.9, lon: 115.9, state: 'Western Australia' });
+    expect(out).toMatchObject({ id: 's', name: 'Perth', state: 'Western Australia' });
+    expect('searchCode' in out).toBe(false);
+    expect(out.picture?.ref.name).toBe('one.jpg');
   });
 });

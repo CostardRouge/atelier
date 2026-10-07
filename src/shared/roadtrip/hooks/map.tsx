@@ -48,11 +48,12 @@ import {
   planarHops,
   stopPictureKey,
   tripPlaces,
+  writtenStops,
   type MapOptions,
 } from './map-plan';
 import { BasemapStatus, enableBasemap } from './basemap-row';
 import { Group, MovedRow, resetLink } from './panel-ui';
-import StopsEditor from './stops-editor';
+import StopsEditor, { StopStyleRow } from './stops-editor';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
 export { MAP_DEFAULTS, mapOptions, type MapOptions, type MapStop } from './map-plan';
@@ -142,6 +143,8 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           places={places}
           free={free}
           curve={o.curve}
+          placeStyle={o.placeStyle}
+          writing={ctx.writing}
           host={host}
           title="Itinerary"
           pictureHint={o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.'}
@@ -521,6 +524,9 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         {o.labels !== 'none' && (
+          <StopStyleRow value={o.placeStyle} writing={ctx.writing} onChange={(placeStyle) => set({ placeStyle })} />
+        )}
+        {o.labels !== 'none' && (
           <FieldRow label="Name size">
             <RangeField
               label="Name size"
@@ -781,7 +787,11 @@ export const mapVariant: HookVariant = {
     return { ...moveMap(mapOptions(options), dx, dy) };
   },
   prepare(options, ctx) {
-    const o = mapOptions(options);
+    // The stops with their names WRITTEN — «Sydney, NSW» or «Sydney» as the
+    // trip and the opener say — so the labels, the cards and the caption all
+    // read the same text.
+    const read = mapOptions(options);
+    const o = { ...read, stops: writtenStops(read.stops, read.placeStyle, ctx.writing) };
     if (o.stops.length === 0) return { seconds: 0 };
     const timing = mapTiming(planarHops(o.stops), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];

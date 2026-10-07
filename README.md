@@ -1197,7 +1197,17 @@ name is offered the nearest town's (never given it). The list beside the map
 **reorders by drag and drop** — grab a row by its grip (⠿) and drop it
 anywhere; held near the list's top or bottom edge it scrolls, so stop 110 can
 go first without letting go — and its ↑ / ↓ arrows still move a stop one place;
-the list in the panel drags the same way. The towns come from the
+the list in the panel drags the same way. That panel list keeps **every stop**
+in a box about ten rows tall that scrolls, a picture glyph marking the stops
+that hold one, and a click on a stop opens its own **popover**: where it is on
+a mini map (click empty ground to move it there, a hollow ring to give it one
+of the trip's places), its name with the same place search as the legs, its
+**state** — so it is written `Sydney, NSW`, in full, in parentheses or by its
+name alone, like every place of the suite, with *Written as* on the opener
+choosing for all the stops and a stop able to depart from it —, its latitude
+and longitude, its picture, and Earlier / Later. A stop adopted from one of
+the trip's places or found by the search knows its state and country from the
+start; a stop dropped by hand knows only where it is until you tell it. The towns come from the
 city index the app ships, so the map needs no network; the OpenStreetMap
 background is the optional one above, off until you turn it on. Nothing is
 written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one
