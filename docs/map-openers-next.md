@@ -46,7 +46,10 @@ must stay reachable from the panel because its PICTURE is chosen there.
   migration. Filled when the stop is adopted from one of the trip's places (a
   copy: `HookStage.places` must then carry those fields, additively), from the
   search (`placeDetails` / `adoptSearchResult`, which never overwrite a typed
-  field) and, where it can be read, from the town index. Written everywhere a
+  field) and, where it can be read, from the town index (**built late on
+  2026-10-07**: a town tapped on the big map, the town a stop is named after,
+  and *Fill from the town index* under both lists — `hooks/stop-index.ts`).
+  Written everywhere a
   stop's name is drawn — the openers' map labels, Virée's caption that follows
   the car, both lists — through `placeLine` / `writePlace` and the cascade stop
   → opener → trip. His words: «si je suis à Sydney, il faut afficher Sydney NSW

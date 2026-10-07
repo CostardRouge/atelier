@@ -34,12 +34,18 @@ export interface GeoBounds {
   north: number;
 }
 
-/** A town, as the picking map draws it. */
+/**
+ * A town, as the picking map draws it. A town read from the index IS the
+ * city's record (`townsFromOrder`), so it also says its state and country —
+ * what a stop placed on it learns (`stop-index.ts`).
+ */
 export interface Town {
   name: string;
   lat: number;
   lon: number;
   population: number;
+  region?: string;
+  country?: string;
 }
 
 /**
@@ -235,10 +241,10 @@ export const NAME_OFFER_KM = 30;
 export function nameOffer(
   cities: readonly GazetteerCity[],
   point: LonLat,
-): { name: string; km: number } | null {
+): { name: string; km: number; city: GazetteerCity } | null {
   const city = nearestCity(cities, point, NAME_OFFER_KM);
   if (!city) return null;
-  return { name: city.name, km: haversineKm(point, city) };
+  return { name: city.name, km: haversineKm(point, city), city };
 }
 
 /** The stops as a GeoJSON line, in their order. */

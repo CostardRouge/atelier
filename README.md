@@ -1274,8 +1274,13 @@ of the trip's places), its name with the same place search as the legs, its
 name alone, like every place of the suite, with *Written as* on the opener
 choosing for all the stops and a stop able to depart from it —, its latitude
 and longitude, its picture, and Earlier / Later. A stop adopted from one of
-the trip's places or found by the search knows its state and country from the
-start; a stop dropped by hand knows only where it is until you tell it. The towns come from the
+the trip's places, found by the search, tapped on a town of the big map or named
+after the town it offers knows its state and country from the start. For the
+others, **Fill from the town index** under either list writes the state of every
+named stop the shipped index answers for without doubt — a town of the same name
+within 15 km, else a town within 10 km whose neighbours all lie in one state, so a
+stop on the Queensland–New South Wales border is left to you and the line says
+how many were. A stop dropped by hand with no name knows only where it is. The towns come from the
 city index the app ships, so the map needs no network; the OpenStreetMap
 background is the optional one above, off until you turn it on. Nothing is
 written until **Done** — Cancel or Escape leave the stops as they were. Each stop can carry **one

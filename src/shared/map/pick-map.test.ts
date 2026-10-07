@@ -126,6 +126,8 @@ describe('the name offered to a dropped stop', () => {
   it('is the nearest town within reach, with its distance', () => {
     const offer = nameOffer(INDEX, { lat: -27.8, lon: 114.2 });
     expect(offer?.name).toBe('Kalbarri');
+    // The town itself rides along, so the stop named after it learns its state.
+    expect(offer?.city.name).toBe('Kalbarri');
     expect(offer!.km).toBeGreaterThan(5);
     expect(offer!.km).toBeLessThan(15);
   });
