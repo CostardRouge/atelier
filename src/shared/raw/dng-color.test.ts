@@ -1,0 +1,126 @@
+import { describe, expect, it } from 'vitest';
+import type { DngCalibration } from '../exif/dng-profile';
+import {
+  balancedToSrgb,
+  calibrationsFromLibraw,
+  cameraToXyzD50,
+  D50_XYZ,
+  dcrawRgbCam,
+  dngCorrection,
+  illuminantKelvin,
+  interpolationWeight,
+  librawPick,
+  neutralToXy,
+  profileAt,
+} from './dng-color';
+import { apply3, planckianXy } from './white-balance';
+
+// The synthetic pair the brief measured LibRaw against (`docs/camera-profiles.md` §2):
+// a D65 matrix of the shape Adobe publishes for a Sony body, and an invented
+// Standard-light-A one beside it.
+const A = [0.812, -0.271, -0.061, -0.457, 1.272, 0.209, -0.082, 0.164, 0.748];
+const D65 = [0.7374, -0.2389, -0.0551, -0.5435, 1.3162, 0.2519, -0.1006, 0.1795, 0.6552];
+const FM = [0.73, 0.15, 0.085, 0.3, 0.82, -0.12, 0.03, -0.15, 0.945];
+
+const cal = (illuminant: number, colorMatrix: number[], forwardMatrix: number[] | null = null): DngCalibration => ({
+  illuminant,
+  colorMatrix,
+  forwardMatrix,
+  cameraCalibration: null,
+});
+const dual = [cal(17, A), cal(21, D65)];
+const xyz = (x: number, y: number): [number, number, number] => [x / y, 1, (1 - x - y) / y];
+const close = (a: readonly number[], b: readonly number[], eps: number) =>
+  a.forEach((v, i) => expect(Math.abs(v - b[i])).toBeLessThan(eps));
+const IDENTITY = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+const maxOff = (m: number[]) => Math.max(...m.map((v, i) => Math.abs(v - IDENTITY[i])));
+
+describe('interpolationWeight', () => {
+  it('is linear in inverse temperature, clamped, and order-blind', () => {
+    expect(interpolationWeight(2000, 2850, 6500)).toBe(1);
+    expect(interpolationWeight(2850, 2850, 6500)).toBe(1);
+    expect(interpolationWeight(6500, 2850, 6500)).toBe(0);
+    expect(interpolationWeight(9000, 2850, 6500)).toBe(0);
+    // Halfway in mireds: 1e6 / ((350.9 + 153.8) / 2).
+    const mid = 1e6 / ((1e6 / 2850 + 1e6 / 6500) / 2);
+    expect(interpolationWeight(mid, 2850, 6500)).toBeCloseTo(0.5, 12);
+    expect(interpolationWeight(4000, 6500, 2850)).toBeCloseTo(1 - interpolationWeight(4000, 2850, 6500), 12);
+    expect(interpolationWeight(4000, 6500, 0)).toBe(1);
+  });
+
+  it('places the illuminants the files name', () => {
+    expect(illuminantKelvin(17)).toBe(2850);
+    expect(illuminantKelvin(21)).toBe(6500);
+    expect(illuminantKelvin(255)).toBe(0);
+  });
+});
+
+describe('the white from a neutral', () => {
+  it('finds the light a neutral was made under, through the interpolated matrix', () => {
+    for (const kelvin of [2850, 3500, 4500, 6500]) {
+      const [x, y] = planckianXy(kelvin);
+      const neutral = apply3(profileAt(dual, kelvin)!.xyzToCamera, xyz(x, y));
+      close(neutralToXy(dual, neutral)!, [x, y], 2e-4);
+    }
+  });
+});
+
+describe('camera → XYZ D50', () => {
+  it('maps the neutral to D50 on both paths', () => {
+    const neutral = [0.62, 1, 0.48];
+    close(apply3(cameraToXyzD50(dual, neutral)!, neutral as [number, number, number]), D50_XYZ, 1e-7);
+    const withFm = [cal(17, A, FM), cal(21, D65, FM)];
+    const fm = cameraToXyzD50(withFm, neutral)!;
+    close(apply3(fm, neutral as [number, number, number]), D50_XYZ, 1e-7);
+  });
+
+  it('maps a balanced neutral to sRGB white', () => {
+    const m = balancedToSrgb(dual, [0.62, 1, 0.48])!;
+    close(apply3(m, [1, 1, 1]), [1, 1, 1], 1e-12);
+  });
+});
+
+describe('LibRaw against the spec', () => {
+  it('rebuilds the rgb_cam LibRaw returned for the synthetic DNG (measured), from the D65 matrix it picks', () => {
+    const picked = librawPick([cal(21, D65), cal(17, A)])!;
+    expect(picked.illuminant).toBe(21);
+    expect(librawPick(dual)!.illuminant).toBe(21);
+    close(dcrawRgbCam(picked.colorMatrix!)!.slice(0, 3), [1.635386, -0.421962, -0.213424], 1e-4);
+  });
+
+  it('agrees with the spec exactly under D65 with one D65 matrix', () => {
+    const one = [cal(21, D65)];
+    const [x, y] = [0.3127, 0.329];
+    const neutral = apply3(D65, xyz(x, y));
+    expect(maxOff(dngCorrection(one, neutral, dcrawRgbCam(D65)!)!)).toBeLessThan(1e-3);
+  });
+
+  it('departs from it under tungsten, where the two matrices disagree', () => {
+    const [x, y] = planckianXy(2850);
+    const neutral = apply3(A, xyz(x, y));
+    const correction = dngCorrection(dual, neutral, dcrawRgbCam(D65)!)!;
+    // The size of the departure is the brief's measurement (§2), not a target.
+    expect(maxOff(correction)).toBeGreaterThan(0.05);
+    // A neutral stays neutral either way: the rows still sum to 1.
+    close(apply3(correction, [1, 1, 1]), [1, 1, 1], 1e-9);
+  });
+});
+
+describe('calibrationsFromLibraw', () => {
+  it('reads libraw-wasm 1.6 `dng_color` as measured, padded rows and all-zero slots', () => {
+    const z4 = [0, 0, 0, 0];
+    const slot = (illuminant: number, m: number[], fm: number[] | null) => ({
+      illuminant,
+      colormatrix: [m.slice(0, 3), m.slice(3, 6), m.slice(6, 9), [0, 0, 0]],
+      forwardmatrix: fm ? [[...fm.slice(0, 3), 0], [...fm.slice(3, 6), 0], [...fm.slice(6, 9), 0]] : [z4, z4, z4],
+      calibration: [z4, z4, z4, z4],
+    });
+    const cals = calibrationsFromLibraw([slot(17, A, FM), slot(21, D65, null)]);
+    expect(cals.map((c) => c.illuminant)).toEqual([17, 21]);
+    expect(cals[0].forwardMatrix).toEqual(FM);
+    expect(cals[1].forwardMatrix).toBeNull();
+    expect(cals[0].cameraCalibration).toBeNull();
+    expect(calibrationsFromLibraw([{ illuminant: 0, colormatrix: [z4, z4, z4], forwardmatrix: [z4, z4, z4] }])).toEqual([]);
+    expect(calibrationsFromLibraw(undefined)).toEqual([]);
+  });
+});

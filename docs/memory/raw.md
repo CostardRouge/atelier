@@ -277,6 +277,11 @@ Daylight (5500 K, +10) is daylight's own chromaticity and the correction of a
 sensor rung showed the panel with *as shot 2850 K*, Daylight warmed the grey,
 Tungsten and As shot gave it back.
 
+**The ONE matrix the kelvin maths reads is LibRaw's D65 choice** (2026-10-07):
+LibRaw never interpolates a DNG's two illuminants and ignores its forward
+matrix, so the as-shot temperature reads ~80 K low under tungsten on a
+dual-illuminant file — measured, and why, in `camera-profiles.md`.
+
 ## Which FILE the sensor's data is in — see `renditions.md`
 
 A capture is often several files (Sony `.ARW` + `.HIF`, DJI `.DNG` + `.JPG`),

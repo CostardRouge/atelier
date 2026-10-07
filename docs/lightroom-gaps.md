@@ -355,6 +355,9 @@ wherever a look is applied.
   space would change every look he has already set. Revive only on a real
   need: a print lab asking for Adobe RGB, or a P3 screen he delivers to.
   (12, the HSL mixer he named beside them, is BUILT.)
+  **19 REOPENED on 2026-10-07** — he asked for the camera profiles after
+  showing Capture One's *ICC Profile: «Sony A7C II ProStandard»*; the brief
+  is `docs/camera-profiles.md`.
 - **The Crop tab folds, and every row's prose goes behind an ⓘ** — built the
   same day (`develop.md`).
 - **22 (content-aware remove) and 23 (side-by-side before/after, a reference
