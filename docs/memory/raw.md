@@ -31,7 +31,7 @@ about the decoder's output; a six-entry `gamm` WOULD be honoured and break
 it, which the settings say. Do not "fix" the length.
 
 **Settings**: 16-bit, camera white balance, CAMERA colour (`outputColor: 0`
-since 2026-10-07 — the matrix is ours, `camera-profiles.md`, «C4»),
+since 2026-10-07 — the matrix is ours, `camera-profiles-build.md`, «C4»),
 NO auto-bright, highlight mode 0 (clip at sensor saturation — everything
 between the displayed white and saturation is kept whole, and that is the
 headroom a develop reads), quality 3, half size when it fits, **the white

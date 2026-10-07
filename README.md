@@ -2143,7 +2143,9 @@ with the measured exposure, and stored on the picture (the facts say *camera
 colour A + D65*); a picture already on its sensor before it existed keeps its
 colour. Where the DNG carries a hue/saturation map (an Adobe or Apple
 profile), that map is applied too, right after the matrix, blended for the
-same light (*camera colour A + D65 · hue/sat*). The kelvin white balance reads and sets the light through the same
+same light (*camera colour A + D65 · hue/sat*), and so is a profile's look
+table, read at the picture's own exposure (*· look*); the exposure and white
+balance sliders act after it. The kelvin white balance reads and sets the light through the same
 calibrations.
 
 **Which pictures leave.** Every picture says whether it leaves: by default the

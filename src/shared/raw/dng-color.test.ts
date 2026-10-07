@@ -206,6 +206,18 @@ describe('the camera profile on a picture', () => {
     expect(rawProfileFor(white)!.hueSat).toBeUndefined();
   });
 
+  it('carries the file’s look table as a fact, said in its name (C6)', () => {
+    const white = whiteAt(2850, dual);
+    const file = { ...withMap(true), lookTable: { dims: [6, 2, 1], data: new Float32Array(36), data2: null, srgbValue: true } } as unknown as DngProfile;
+    const p = rawProfileFor(white, file)!;
+    expect(p.look).toBe(true);
+    expect(p.label).toBe('A + D65 · hue/sat · look');
+    expect(resolveProfile({ matrix: IDENTITY, look: true }, white)!.look).toBe(true);
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: '', look: true })).toEqual({ matrix: IDENTITY, label: '', look: true });
+    expect(rawProfileOrNull({ matrix: IDENTITY, label: '', look: 'yes' })).toEqual({ matrix: IDENTITY, label: '' });
+    expect(rawProfileFor(white, withMap(true))!.look).toBeUndefined();
+  });
+
   it('resolves a stored request with its weight, and works one out on resolve', () => {
     const white = whiteAt(3500, dual);
     expect(resolveProfile({ matrix: IDENTITY, hueSat: { weight: 0.3 } }, white)).toEqual({

@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import {
   blendHueSat,
   compileHueSat,
+  lookTableOf,
   hsvToRgb,
   isIdentityHueSat,
   mapHsv,
@@ -136,5 +137,23 @@ describe('a hue/sat map', () => {
       }
     }
     expect(compileHueSat(identity)).toBeNull();
+  });
+
+  it('reads a value axis at the exposure it is given, and scales the pixel as it comes (C6)', () => {
+    // The dark layer leaves a pixel alone, the bright layer halves it.
+    const t = table([6, 2, 2], (_h, _s, v) => [0, 1, v ? 0.5 : 1]);
+    close(mapHsv(t, 0.25, 0, 0), [0.25 * 0.875, 0, 0], 1e-9);
+    // Shown four times brighter, the same pixel is read at the top.
+    close(mapHsv(t, 0.25, 0, 0, 4), [0.125, 0, 0], 1e-9);
+    const io = new Float64Array([0.25, 0, 0]);
+    compileHueSat(t, 4)!(io);
+    close(Array.from(io), [0.125, 0, 0], 1e-9);
+  });
+
+  it('takes a look table only when its bytes are in hand', () => {
+    const data = new Float32Array(36);
+    expect(lookTableOf({ dims: [6, 2, 1], data, data2: null, srgbValue: true })).toEqual({ dims: [6, 2, 1], data, srgbValue: true });
+    expect(lookTableOf({ dims: [6, 2, 1], data: null, data2: null, srgbValue: false })).toBeNull();
+    expect(lookTableOf(null)).toBeNull();
   });
 });

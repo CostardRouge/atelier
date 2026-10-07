@@ -332,6 +332,13 @@ export interface RawProfile {
    * no map — every profile resolved before C5, or a file that carries none.
    */
   hueSat?: { weight: number } | null;
+  /**
+   * The file's own LOOK TABLE is applied too (C6): after the exposure, its
+   * value axis read at the picture's metered gain, in the decoder. Read from
+   * the file at every decode; only the fact is stored. Absent: none — every
+   * profile resolved before C6, or a file that carries none.
+   */
+  look?: boolean;
 }
 
 /** The calibrations a white carries, or LibRaw's one matrix taken as D65's. */
@@ -354,7 +361,13 @@ export function rawProfileFor(white: RawWhite | null | undefined, file: DngProfi
   if (!matrix || !matrix.every((v) => Number.isFinite(v))) return null;
   const label = cals.map((c) => illuminantName(c.illuminant)).join(' + ');
   const weight = hueSatWeight(white, file);
-  return weight === null ? { matrix, label } : { matrix, label: `${label} · hue/sat`, hueSat: { weight } };
+  const look = Boolean(file?.lookTable?.data);
+  return {
+    matrix,
+    label: label + (weight !== null ? ' · hue/sat' : '') + (look ? ' · look' : ''),
+    ...(weight !== null ? { hueSat: { weight } } : {}),
+    ...(look ? { look: true } : {}),
+  };
 }
 
 /**
@@ -383,7 +396,7 @@ export const PROFILE_PENDING = 'pending';
  * already stored on the picture (its matrix), `'resolve'` to work it out from
  * this very decode's own colour data, or nothing — LibRaw's colour.
  */
-export type ProfileRequest = Pick<RawProfile, 'matrix' | 'hueSat'> | 'resolve' | null | undefined;
+export type ProfileRequest = Pick<RawProfile, 'matrix' | 'hueSat' | 'look'> | 'resolve' | null | undefined;
 
 /** The profile a request comes to for a decode whose white is `white`, or null. */
 export function resolveProfile(
@@ -393,9 +406,14 @@ export function resolveProfile(
 ): RawProfile | null {
   if (!request) return null;
   if (request === 'resolve') return rawProfileFor(white, file);
-  const { matrix, hueSat } = request;
+  const { matrix, hueSat, look } = request;
   if (matrix.length !== 9 || !matrix.every((v) => Number.isFinite(v))) return null;
-  return { matrix: [...matrix], label: '', ...(hueSat ? { hueSat: { weight: hueSat.weight } } : {}) };
+  return {
+    matrix: [...matrix],
+    label: '',
+    ...(hueSat ? { hueSat: { weight: hueSat.weight } } : {}),
+    ...(look ? { look: true } : {}),
+  };
 }
 
 /** A stored profile read back safely: nine finite numbers, the pending mark, or null. */
@@ -411,6 +429,7 @@ export function rawProfileOrNull(raw: unknown): RawProfile | typeof PROFILE_PEND
     matrix: [...(m as number[])],
     label: typeof src.label === 'string' ? src.label.slice(0, 40) : '',
     ...(weight !== null ? { hueSat: { weight } } : {}),
+    ...(src.look === true ? { look: true } : {}),
   };
 }
 

@@ -104,9 +104,13 @@ const srgbEncode = (v: number) => (v <= 0.0031308 ? 12.92 * v : 1.055 * Math.pow
  * One linear ProPhoto pixel through the table: hue wraps, saturation and
  * value are clamped to the table's range, the three channels interpolated
  * (bilinear in hue × saturation, trilinear with a value axis); the hue
- * shifted, saturation scaled and held at 1, value scaled.
+ * shifted, saturation scaled and held at 1, value scaled. A value axis is
+ * read at `v × valueGain` — the exposure the pixel is SHOWN at, for a table
+ * that comes after exposure (a look table, C6) — while the scales act on the
+ * pixel as given, which is the same thing since the map commutes with a
+ * uniform gain everywhere but on that axis.
  */
-export function mapHsv(table: HueSatTable, r: number, g: number, b: number): [number, number, number] {
+export function mapHsv(table: HueSatTable, r: number, g: number, b: number, valueGain = 1): [number, number, number] {
   const [hueDiv, satDiv, valDiv] = table.dims;
   const [h, s, v] = rgbToHsv(Math.max(0, r), Math.max(0, g), Math.max(0, b));
   const data = table.data;
@@ -126,7 +130,7 @@ export function mapHsv(table: HueSatTable, r: number, g: number, b: number): [nu
   let v0 = 0;
   let vf = 0;
   if (valDiv > 1) {
-    const vIn = table.srgbValue ? srgbEncode(Math.min(1, v)) : Math.min(1, v);
+    const vIn = table.srgbValue ? srgbEncode(Math.min(1, v * valueGain)) : Math.min(1, v * valueGain);
     const vScaled = vIn * (valDiv - 1);
     v0 = Math.min(valDiv - 2, Math.max(0, Math.floor(vScaled)));
     vf = vScaled - v0;
@@ -157,11 +161,11 @@ export function mapHsv(table: HueSatTable, r: number, g: number, b: number): [nu
 /**
  * The table compiled for a hot loop: `map(io)` takes one linear ProPhoto
  * pixel in `io[0..2]` and writes it back mapped — `mapHsv`'s arithmetic to
- * the last bit, with no array made per pixel (a 12 MP plane is twelve
- * million calls). Null for a table that changes nothing, so a caller skips
+ * the last bit (`valueGain` included), with no array made per pixel (a
+ * 12 MP plane is twelve million calls). Null for a table that changes nothing, so a caller skips
  * the conversions too.
  */
-export function compileHueSat(table: HueSatTable): ((io: Float64Array) => void) | null {
+export function compileHueSat(table: HueSatTable, valueGain = 1): ((io: Float64Array) => void) | null {
   if (isIdentityHueSat(table)) return null;
   const [hueDiv, satDiv, valDiv] = table.dims;
   const data = table.data;
@@ -204,7 +208,8 @@ export function compileHueSat(table: HueSatTable): ((io: Float64Array) => void) 
     let o10 = h1 * hueStep + s0;
     let vf = 0;
     if (layered) {
-      const vIn = srgbValue ? srgbEncode(v < 1 ? v : 1) : v < 1 ? v : 1;
+      const vg = v * valueGain;
+      const vIn = srgbValue ? srgbEncode(vg < 1 ? vg : 1) : vg < 1 ? vg : 1;
       const vScaled = vIn * valMax;
       const v0 = Math.min(valDiv - 2, Math.max(0, Math.floor(vScaled)));
       vf = vScaled - v0;
@@ -277,13 +282,24 @@ export function compileHueSat(table: HueSatTable): ((io: Float64Array) => void) 
   };
 }
 
-const compiled = new WeakMap<HueSatTable, ((io: Float64Array) => void) | null>();
+const compiled = new WeakMap<HueSatTable, Map<number, ((io: Float64Array) => void) | null>>();
 
-/** `compileHueSat`, once per table — a plane is converted a band at a time. */
-export function compiledHueSat(table: HueSatTable): ((io: Float64Array) => void) | null {
-  let fn = compiled.get(table);
-  if (fn === undefined) compiled.set(table, (fn = compileHueSat(table)));
+/** `compileHueSat`, once per table and gain — a plane is converted a band at a time. */
+export function compiledHueSat(table: HueSatTable, valueGain = 1): ((io: Float64Array) => void) | null {
+  let byGain = compiled.get(table);
+  if (!byGain) compiled.set(table, (byGain = new Map()));
+  let fn = byGain.get(valueGain);
+  if (fn === undefined) byGain.set(valueGain, (fn = compileHueSat(table, valueGain)));
   return fn;
+}
+
+/**
+ * A profile's LOOK TABLE (`ProfileLookTable`, C6) as a table to apply, or
+ * null when the file's bytes are not in hand. One table: a look is not
+ * interpolated between illuminants.
+ */
+export function lookTableOf(map: DngHsvTable | null | undefined): HueSatTable | null {
+  return map?.data ? { dims: map.dims, data: map.data, srgbValue: map.srgbValue } : null;
 }
 
 /** One linear sRGB pixel through the table, by way of linear ProPhoto. */

@@ -177,8 +177,13 @@ use, either baked into a lattice. Two things make it a weaker fit than a DCP:
    RGB lattice sampled per pixel) at the head's start. Not bakeable into the
    tail cube, which runs AFTER the tone stages.
 3. **The look table** sits after exposure and before the tone curve — in the
-   MIDDLE of the head (`glsl.ts` `HEAD_APPLY`, `develop-head.ts`), the code
-   the parallel session is changing now. It waits for that work to land.
+   MIDDLE of the head (`glsl.ts` `HEAD_APPLY`, `develop-head.ts`). *Built
+   instead in the decoder (C6, 2026-10-07)*: the head is composed from
+   `DevelopSettings` alone by a dozen consumers that never hold the file, so
+   a table read from the file cannot reach it without a registry whose
+   arrival no cube cache would see. The decoder applies it after the gain
+   is known, its value axis read at that gain — exact at the picture's own
+   exposure; the exposure and white-balance sliders then act after it.
 4. **The profile tone curve overlaps the base tone curves exactly**: a DCP's
    `ProfileToneCurve` is what Capture One's *Curve* and Lightroom's base curve
    ARE. It must become ONE more choice in that menu (*Profile's own*), drawn
@@ -255,7 +260,7 @@ the middle of the gamut and only approximately right at its edge.
 | C3 | **BUILT.** `DevelopSettings.rawProfile` — the resolved correction, `'pending'` until the gain's metering (stage or run), absent = today — applied as the head's ONE matrix; a kelvin balance is solved through the profile and REPLACES its matrix | Q1, Q7 | specs: the matrix in the head and in `developLinear`, kelvin = profile at the as-shot light |
 | C4 | **BUILT.** LibRaw asked for camera colour (`outputColor: 0`); `applyCameraMatrix` turns the 16-bit plane into what LibRaw wrote in sRGB, in place, with the profile folded into its `rgb_cam` BEFORE the clip (the JPEG XL path folds it into its own `rgbCam`); the head stops applying the profile (`decodeProfileOf` feeds every decode) | Q5 | today's colour within 1 code in 8 bits (real decoder, synthetic DNGs); before vs after the clip up to 92 codes where LibRaw clipped |
 | C5 | **BUILT, in the DECODER rather than the head** (C4 made that the place: after the matrix, before the clip, in linear ProPhoto, as the SDK renders). `raw/hue-sat-map.ts` (the SDK's HSV and table lookup AS RECALLED — hue wraps, saturation and value clamped, bi/trilinear, saturation held at 1); the two illuminants' tables blended at the matrices' weight, stored as `RawProfile.hueSat.weight` and the table read from the file each time; LibRaw's plane and the JPEG XL tiles alike. A kelvin change does not re-blend it | C3, C4 | specs (identity, a 60° shift = one sextant, a node hit exactly, the blend); real decoder on two synthetic DNGs: an identity map = no map, a 40° map (weight 0.76) moves 99 % of the pixels; ~80 ns a pixel compiled (the plain matrix ~20) |
-| C6 | The look table between exposure and tone | C5, coordination | gate row |
+| C6 | **BUILT, in the DECODER** (§5.3 says why): `RawProfile.look` (a fact; the table read from the file each time, `lookTableOf`), applied by `applyLookTable` / `applyLookLinear` as a pass AFTER the gain is known — the stored one, else metered on the matrix's plane before the look and handed on as the picture's gain, so every later decode reads the look at the same exposure; a tile plan without a stored gain decodes whole. LibRaw's plane and the JPEG XL path alike | C5 | specs (the value axis at the gain, the pass on codes and on light, the flag, the cache key); real decoder on synthetic DNGs: an identity look = no look to the bit, a 25° look moves every pixel, the first decode = a later one to the bit at gain 1 and at gain 3.94 |
 | C7 | `ProfileToneCurve` as a base-curve choice | Q6 | spec |
 | C8 | `.dcp` loading into a vault, picked per picture | Q3 | a DCP of his |
 | C9 | ICC: a spike — LittleCMS wasm vs a TS subset, against one ARW Capture One exported | Q4 | ΔE vs Capture One's render |

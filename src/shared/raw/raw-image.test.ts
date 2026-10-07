@@ -1,8 +1,11 @@
 import { describe, expect, it } from 'vitest';
+import { compileHueSat } from './hue-sat-map';
 import { fromHalf } from '../render/half-image';
 import { fromLinear, toLinear } from '../lut/transfer';
 import {
   applyCameraMatrix,
+  applyLookLinear,
+  applyLookTable,
   autoBrightGain,
   autoBrightGainFromLibRaw,
   boxDownscale,
@@ -313,3 +316,22 @@ describe('applyCameraMatrix (C4: the camera matrix is ours)', () => {
     expect(turned[1]).toBeGreaterThan(plain[1] + 1000);
   });
 });
+
+describe('applyLookTable (C6: the look after exposure)', () => {
+  const code = (linear: number) => Math.round(linearToBt709(linear) * 65535);
+  // A 30° turn on every node: a grey has no hue and stays itself.
+  const turn = compileHueSat({ dims: [6, 2, 1], data: new Float32Array(36).map((_, i) => [30, 1, 1][i % 3]), srgbValue: false })!;
+
+  it('leaves a grey alone and turns a colour, on codes and on linear light alike', () => {
+    const plane = Uint16Array.from([code(0.3), code(0.3), code(0.3), code(0.6), code(0.2), code(0.1)]);
+    applyLookTable(plane, turn, 0, 2);
+    for (let c = 0; c < 3; c += 1) expect(Math.abs(plane[c] - code(0.3))).toBeLessThanOrEqual(20);
+    expect(plane[4]).toBeGreaterThan(code(0.2) + 2000);
+    const lin = Float32Array.from([0.3, 0.3, 0.3, 0.6, 0.2, 0.1]);
+    applyLookLinear(lin, turn, 0, 2);
+    for (let c = 0; c < 3; c += 1) expect(lin[c]).toBeCloseTo(0.3, 4);
+    // The same pixel, both ways, to the codes' own rounding.
+    expect(Math.abs(code(lin[4]) - plane[4])).toBeLessThanOrEqual(40);
+  });
+});
+

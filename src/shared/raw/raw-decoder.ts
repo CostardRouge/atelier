@@ -69,7 +69,7 @@
 
 import { probeRaw, RAW_PROBE_BYTES, sensorIfd } from '../exif/raw-probe';
 import type { DngProfile } from '../exif/dng-profile';
-import { blendHueSat, type HueSatTable } from './hue-sat-map';
+import { blendHueSat, compiledHueSat, lookTableOf, type HueSatTable } from './hue-sat-map';
 import { deviceClass } from '../lib/device-class';
 import { yieldToMain } from '../lib/yield-to-main';
 import { isRawImage } from '../library/assets';
@@ -93,6 +93,8 @@ import { calibrationsFromLibraw, resolveProfile, type ProfileRequest, type RawPr
 import { mul3, rawWhiteOrNull, type RawWhite } from './white-balance';
 import {
   applyCameraMatrix,
+  applyLookLinear,
+  applyLookTable,
   autoBrightGain,
   autoBrightGainFromLibRaw,
   boxLinearRows,
@@ -438,7 +440,8 @@ function profileToken(profile: ProfileRequest): string {
   if (!profile) return '';
   if (profile === 'resolve') return '|profile=resolve';
   const table = profile.hueSat ? `|hueSat=${profile.hueSat.weight.toFixed(6)}` : '';
-  return `|profile=${profile.matrix.map((v) => v.toFixed(6)).join(',')}${table}`;
+  const look = profile.look ? '|look' : '';
+  return `|profile=${profile.matrix.map((v) => v.toFixed(6)).join(',')}${table}${look}`;
 }
 
 /**
@@ -451,7 +454,7 @@ function cameraMatrixFor(
   metadata: Record<string, unknown> | undefined,
   request: ProfileRequest,
   file: DngProfile | null,
-): { matrix: number[] | null; profile: RawProfile | null; hueSat: HueSatTable | null } {
+): { matrix: number[] | null; profile: RawProfile | null; hueSat: HueSatTable | null; look: HueSatTable | null } {
   const color = (metadata?.color_data ?? metadata?.color) as Record<string, unknown> | undefined;
   const rows = color?.rgb_cam;
   const rgbCam: number[] = [];
@@ -461,13 +464,36 @@ function cameraMatrixFor(
       for (let c = 0; c < 3; c += 1) rgbCam.push(Array.isArray(row) && typeof row[c] === 'number' ? row[c] : NaN);
     }
   }
-  if (rgbCam.length !== 9 || !rgbCam.every((v) => Number.isFinite(v))) return { matrix: null, profile: null, hueSat: null };
+  if (rgbCam.length !== 9 || !rgbCam.every((v) => Number.isFinite(v))) return { matrix: null, profile: null, hueSat: null, look: null };
   const profile = resolveProfile(request, whiteOf(metadata), file);
   // The file's hue/sat map at the stored weight (C5) — read from the file
   // every time, like the opcodes; a map whose bytes are not in hand is not
   // applied, and a profile without a weight never asks for one.
   const hueSat = profile?.hueSat ? blendHueSat(file?.hueSatMap, profile.hueSat.weight) : null;
-  return { matrix: profile ? mul3(profile.matrix, rgbCam) : rgbCam, profile, hueSat };
+  // The look table likewise (C6), applied once the exposure is known (`withLook`).
+  const look = profile?.look ? lookTableOf(file?.lookTable) : null;
+  return { matrix: profile ? mul3(profile.matrix, rgbCam) : rgbCam, profile, hueSat, look };
+}
+
+/**
+ * A profile's LOOK TABLE over a plane in BT.709 codes, in place, a band at a
+ * time (C6) — its value axis read at `gain`, the exposure the picture is
+ * shown at before any slider: the table comes after exposure, and the gain
+ * is metered on the plane the matrix made, before the look.
+ */
+async function withLook(
+  plane: Uint16Array,
+  pixels: number,
+  look: HueSatTable,
+  gain: number,
+  check: () => Promise<void>,
+): Promise<void> {
+  const fn = compiledHueSat(look, gain);
+  if (!fn) return;
+  for (let p = 0; p < pixels; p += BAND_PIXELS) {
+    applyLookTable(plane, fn, p, Math.min(pixels, p + BAND_PIXELS));
+    await check();
+  }
 }
 
 /** The plane turned from camera colour to sRGB through `matrix`, in place, a band at a time. */
@@ -547,13 +573,30 @@ async function decodeJxl(
     await yieldToMain();
     if (signal.aborted) throw cancelled();
   };
+  // The look table (C6) once the exposure is known, as for LibRaw's plane.
+  const look = plane.profile?.look ? lookTableOf(info.profile?.lookTable) : null;
+  let converting = opts;
+  if (look) {
+    const pixels = plane.width * plane.height;
+    const gain =
+      opts.gain ?? (plane.linear ? autoBrightGain(plane.linear) : autoBrightGainFromLibRaw(plane.rgb16!, plane.width, plane.height, bt709Table()));
+    const fn = compiledHueSat(look, gain);
+    if (fn) {
+      for (let p = 0; p < pixels; p += BAND_PIXELS) {
+        if (plane.linear) applyLookLinear(plane.linear.data, fn, p, Math.min(pixels, p + BAND_PIXELS));
+        else applyLookTable(plane.rgb16!, fn, p, Math.min(pixels, p + BAND_PIXELS));
+        await check();
+      }
+    }
+    converting = { ...opts, gain };
+  }
   let converted: Pick<RawDecoded, 'half' | 'bytes' | 'width' | 'height' | 'gain'>;
   if (plane.linear) {
-    converted = await encodeBoxed(plane.linear, opts, withBytes, check);
+    converted = await encodeBoxed(plane.linear, converting, withBytes, check);
   } else {
     let rgb16: Uint16Array | null = plane.rgb16!;
     // The plane is already at the size asked: no second box factor.
-    converted = await convert(rgb16, plane.width, plane.height, { ...opts, budgetPixels: null, maxEdge: null }, withBytes, signal, cancelled, () => {
+    converted = await convert(rgb16, plane.width, plane.height, { ...converting, budgetPixels: null, maxEdge: null }, withBytes, signal, cancelled, () => {
       rgb16 = null;
     });
   }
@@ -796,7 +839,19 @@ async function decodeWhole(
   // on a phone that is the difference between two peaks and one.
   let plane: Uint16Array | null = image.data;
   image = undefined;
-  const converted = await convert(plane, width, height, opts, withBytes, signal, cancelled, () => {
+  // The look table (C6) once the exposure is known: the stored gain, else
+  // metered here on the matrix's plane — and handed on, so the picture
+  // stores the gain its look was read at.
+  let converting = opts;
+  if (matrix && found.look) {
+    const gain = opts.gain ?? autoBrightGainFromLibRaw(plane, width, height, bt709Table());
+    await withLook(plane, width * height, found.look, gain, async () => {
+      await yieldToMain();
+      if (signal.aborted) throw cancelled();
+    });
+    converting = { ...opts, gain };
+  }
+  const converted = await convert(plane, width, height, converting, withBytes, signal, cancelled, () => {
     plane = null;
   });
   return {
@@ -847,7 +902,7 @@ async function decodeTiled(
     if (signal.aborted) throw cancelled();
   };
   let metadata: Record<string, unknown> | undefined;
-  let colour: { matrix: number[]; profile: RawProfile | null; hueSat: HueSatTable | null } | null = null;
+  let colour: { matrix: number[]; profile: RawProfile | null; hueSat: HueSatTable | null; look: HueSatTable | null } | null = null;
   const raw = await loadLibRaw();
   for (let index = 0; index < tiles.length; index += 1) {
     const tile = tiles[index];
@@ -877,9 +932,13 @@ async function decodeTiled(
     if (!colour) {
       const found = cameraMatrixFor(metadata, opts.profile, head.profile);
       if (!found.matrix) throw new TilePlanMismatch('no camera matrix in the decoder’s read');
-      colour = { matrix: found.matrix, profile: found.profile, hueSat: found.hueSat };
+      // A look table is read at the picture's exposure, which tiles meter
+      // only once the last one is in: without a stored gain, decode whole.
+      if (found.look && opts.gain == null) throw new TilePlanMismatch('a look table without a stored gain');
+      colour = { matrix: found.matrix, profile: found.profile, hueSat: found.hueSat, look: found.look };
     }
     await toSrgb(image.data, image.width * image.height, colour.matrix, colour.hueSat, check);
+    if (colour.look) await withLook(image.data, image.width * image.height, colour.look, opts.gain!, check);
     let tilePlane: Uint16Array | null = image.data;
     image = undefined;
     // The tile's plane starts a margin above and to the left of its interior.

@@ -535,3 +535,56 @@ export function applyCameraMatrix(
     rgb16[i + 2] = code[(B * 65535 + 0.5) | 0];
   }
 }
+
+/**
+ * A profile's LOOK TABLE (C6) over a plane `applyCameraMatrix` already wrote —
+ * BT.709 codes, sRGB primaries — in place: decoded to light, through the
+ * compiled table in linear ProPhoto (`compiledHueSat`, its value axis at the
+ * picture's exposure), clipped and encoded again. A pass of its own because
+ * the table comes AFTER exposure, and the exposure is metered on the plane
+ * the matrix made.
+ */
+export function applyLookTable(rgb16: Uint16Array, look: (io: Float64Array) => void, from: number, to: number): void {
+  const lin = bt709Table();
+  const code = bt709CodeTable();
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = SRGB_TO_PROPHOTO;
+  const [p0, p1, p2, p3, p4, p5, p6, p7, p8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
+  for (let i = from * 3, end = to * 3; i < end; i += 3) {
+    const r = lin[rgb16[i]];
+    const g = lin[rgb16[i + 1]];
+    const b = lin[rgb16[i + 2]];
+    io[0] = m0 * r + m1 * g + m2 * b;
+    io[1] = m3 * r + m4 * g + m5 * b;
+    io[2] = m6 * r + m7 * g + m8 * b;
+    look(io);
+    let R = p0 * io[0] + p1 * io[1] + p2 * io[2];
+    let G = p3 * io[0] + p4 * io[1] + p5 * io[2];
+    let B = p6 * io[0] + p7 * io[1] + p8 * io[2];
+    R = R <= 0 ? 0 : R >= 1 ? 1 : R;
+    G = G <= 0 ? 0 : G >= 1 ? 1 : G;
+    B = B <= 0 ? 0 : B >= 1 ? 1 : B;
+    rgb16[i] = code[(R * 65535 + 0.5) | 0];
+    rgb16[i + 1] = code[(G * 65535 + 0.5) | 0];
+    rgb16[i + 2] = code[(B * 65535 + 0.5) | 0];
+  }
+}
+
+/** The same over LINEAR light (a box-averaged picture, sRGB primaries), in place; values are kept as they come, never clipped. */
+export function applyLookLinear(data: Float32Array, look: (io: Float64Array) => void, from: number, to: number): void {
+  const [m0, m1, m2, m3, m4, m5, m6, m7, m8] = SRGB_TO_PROPHOTO;
+  const [p0, p1, p2, p3, p4, p5, p6, p7, p8] = PROPHOTO_TO_SRGB;
+  const io = new Float64Array(3);
+  for (let i = from * 3, end = to * 3; i < end; i += 3) {
+    const r = data[i];
+    const g = data[i + 1];
+    const b = data[i + 2];
+    io[0] = m0 * r + m1 * g + m2 * b;
+    io[1] = m3 * r + m4 * g + m5 * b;
+    io[2] = m6 * r + m7 * g + m8 * b;
+    look(io);
+    data[i] = Math.max(0, p0 * io[0] + p1 * io[1] + p2 * io[2]);
+    data[i + 1] = Math.max(0, p3 * io[0] + p4 * io[1] + p5 * io[2]);
+    data[i + 2] = Math.max(0, p6 * io[0] + p7 * io[1] + p8 * io[2]);
+  }
+}

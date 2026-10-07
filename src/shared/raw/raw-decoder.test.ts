@@ -91,6 +91,21 @@ describe('what a decode is held under, and what is held', () => {
     expect(decodeCacheKey(file, { maxEdge: 4096 })).not.toBe(key);
   });
 
+  it('keys the camera profile by what it applies — its matrix, its map’s weight, its look', () => {
+    const file = new File([new Uint8Array(8)], 'DJI_0101.DNG', { lastModified: 1700000000000 });
+    const matrix = [1, 0, 0, 0, 1, 0, 0, 0, 1];
+    const plain = decodeCacheKey(file, { profile: { matrix } });
+    const keys = [
+      decodeCacheKey(file, {}),
+      decodeCacheKey(file, { profile: 'resolve' }),
+      plain,
+      decodeCacheKey(file, { profile: { matrix, hueSat: { weight: 0.5 } } }),
+      decodeCacheKey(file, { profile: { matrix, look: true } }),
+    ];
+    expect(new Set(keys).size).toBe(keys.length);
+    expect(decodeCacheKey(file, { profile: { matrix: [...matrix] } })).toBe(plain);
+  });
+
   it('holds nothing until a decode lands, and can be told to forget', () => {
     expect(decodedRawBytes()).toBe(0);
     dropDecodedRaws();
