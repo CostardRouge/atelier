@@ -400,7 +400,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         {o.basemap && (
           <BasemapStatus
             want={basemaps?.wide ?? null}
-            patches={basemaps?.patches}
+            set={basemaps}
             ctx={ctx}
             status={host?.pictureStatus}
             opacity={o.basemapOpacity}

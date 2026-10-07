@@ -1,9 +1,9 @@
-import { useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import type { Asset } from '../../shared/library/assets';
 import type { CubeLut } from '../../shared/lib/cube-parser';
 import { makeFrameGrader, type FrameGrader } from '../../shared/lut/frame-grader';
 import { findMedia } from '../../shared/projects/media-identity';
-import { TILE_WORKERS, loadBasemap, useTilesAllowed } from '../../shared/map/osm-tiles';
+import { TILE_WORKERS, loadBasemap, loadPatch, useTilesAllowed } from '../../shared/map/osm-tiles';
 import type {
   HookBasemapWant,
   HookContext,
@@ -39,6 +39,14 @@ const VIDEO_NAME = /\.(mp4|mov|m4v|webm)$/i;
 export interface HookPictures {
   pictures: ReadonlyMap<string, HookPicture>;
   status: HookPictureStatus;
+  /**
+   * Resolves once every picture and map tile the openers asked for has
+   * landed or failed — the LATEST ask, so a change made while waiting is
+   * waited for too — and the editor has rendered with them: an export
+   * awaits it before its first frame, so a recorded file never holds a tile
+   * still on its way (2026-10-07). `signal` stops the wait.
+   */
+  ready: (signal?: AbortSignal) => Promise<void>;
 }
 
 interface Held {
@@ -163,12 +171,24 @@ export default function useHookPictures(
   const [pictures, setPictures] = useState<ReadonlyMap<string, HookPicture>>(EMPTY);
   const [status, setStatus] = useState<HookPictureStatus>({ pending: 0, problems: NO_PROBLEMS });
   const held = useRef(new Map<string, Held>());
+  // What the latest render ASKS (its pass key and Library), what the last
+  // finished pass answered (a render of its own, through `settled`), and who
+  // waits for the two to meet (`ready`). Compared by what was asked, not by
+  // a pass counter: an export clicked between a change's render and its
+  // effect must wait for the pass that change is about to start.
+  const asked = useRef({ key: passKey, files });
+  asked.current = { key: passKey, files };
+  const answered = useRef<{ key: string; files: readonly File[] } | null>(null);
+  const [settled, setSettled] = useState(0);
+  const waiters = useRef<(() => void)[]>([]);
+  const isSettled = () => answered.current?.key === asked.current.key && answered.current.files === asked.current.files;
   // Read inside the pass without re-running it for a new array of the same wants.
   const latest = useRef({ wants, files, lut, basemaps, tilesOk });
   latest.current = { wants, files, lut, basemaps, tilesOk };
 
   useEffect(() => {
     let cancelled = false;
+    const ask = { key: passKey, files };
     const timer = window.setTimeout(() => {
       void (async () => {
         const { wants: list, files: pool, lut: cube, basemaps: maps, tilesOk: allowed } = latest.current;
@@ -194,6 +214,7 @@ export default function useHookPictures(
         }
         const mapsToLoad = allowed ? maps.filter((m) => held.current.get(m.key)?.sig !== BASEMAP_SIG) : [];
         let pending = list.filter((w) => held.current.get(w.key)?.sig !== sigOf(w)).length + mapsToLoad.length;
+        let coarser = 0;
         setStatus({ pending, problems: problems.size ? new Map(problems) : NO_PROBLEMS });
 
         function sigOf(want: HookPictureWant): string {
@@ -211,7 +232,7 @@ export default function useHookPictures(
             publishTimer = null;
             if (cancelled) return;
             setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
-            setStatus({ pending, problems: new Map(problems) });
+            setStatus({ pending, problems: new Map(problems), coarser });
           }, PUBLISH_MS);
         };
 
@@ -224,7 +245,16 @@ export default function useHookPictures(
           const queue = [...mapsToLoad];
           const loadMap = async (map: HookBasemapWant, workers: number) => {
             try {
-              const image = await loadBasemap(map.box, map.width, map.height, undefined, map.zoom, workers);
+              // A pyramid's tile falls back to its parent's when its own
+              // cannot be fetched: softer, never a hole (`loadPatch`).
+              let image: ImageBitmap;
+              if (map.zoom === undefined) {
+                image = await loadBasemap(map.box, map.width, map.height, undefined, undefined, workers);
+              } else {
+                const landed = await loadPatch(map.box, map.width, map.zoom);
+                image = landed.image;
+                if (landed.zoom < map.zoom) coarser += 1;
+              }
               if (cancelled) {
                 image.close();
                 return;
@@ -270,8 +300,17 @@ export default function useHookPictures(
               problems.set(want.key, describe(err, want));
             }
             pending -= 1;
-            setStatus({ pending, problems: new Map(problems) });
+            setStatus({ pending, problems: new Map(problems), coarser });
           }
+          if (cancelled) return;
+          // The pass is over: what landed is published NOW (not on the next
+          // tick), and its end is a render of its own, after which `ready`
+          // answers.
+          if (publishTimer !== null) window.clearTimeout(publishTimer);
+          setPictures(new Map([...held.current].map(([k, v]) => [k, v.picture])));
+          setStatus({ pending: 0, problems: problems.size ? new Map(problems) : NO_PROBLEMS, coarser });
+          answered.current = ask;
+          setSettled((n) => n + 1);
         } finally {
           for (const grader of graders.values()) grader.dispose();
         }
@@ -294,7 +333,41 @@ export default function useHookPictures(
     [],
   );
 
-  return { pictures, status };
+  // After the render that published the latest pass's end: whoever waits
+  // reads an editor already drawn with every tile.
+  useEffect(() => {
+    if (!isSettled()) return;
+    const ready = waiters.current;
+    waiters.current = [];
+    for (const resolve of ready) resolve();
+  }, [settled]);
+
+  const ready = useCallback(
+    (signal?: AbortSignal) =>
+      new Promise<void>((resolve, reject) => {
+        if (signal?.aborted) {
+          reject(new DOMException('Cancelled', 'AbortError'));
+          return;
+        }
+        if (isSettled()) {
+          resolve();
+          return;
+        }
+        const done = () => {
+          signal?.removeEventListener('abort', stop);
+          resolve();
+        };
+        const stop = () => {
+          waiters.current = waiters.current.filter((w) => w !== done);
+          reject(new DOMException('Cancelled', 'AbortError'));
+        };
+        signal?.addEventListener('abort', stop, { once: true });
+        waiters.current.push(done);
+      }),
+    [],
+  );
+
+  return { pictures, status, ready };
 }
 
 /** Close a replaced picture late — see RELEASE_AFTER_MS. Never cancelled. */

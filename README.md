@@ -1185,8 +1185,11 @@ below), the map (paper or the picture itself, paper and ink colours, lines of
 latitude and longitude, a vignette — or, as a third ground, OpenStreetMap's
 own map under the road and the car, in the preview and the file, credited
 and at a strength that lets the paper show through; when the camera follows
-the car, finer tiles are fetched along the road at the camera's own zoom,
-inside a budget of tiles, and fade back to the wide map as it pulls back —,
+the car, finer tiles are fetched along the road at every zoom the camera
+takes — close in, pulled back and in between —, inside a budget of tiles
+(the stillest moments keep the most detail when the budget runs short), and
+an export waits for every one of them before it writes a frame, saying how
+many a coarser map had to stand in for —,
 where it sits and how big, dots, the stops'
 names, a compass rose, a scale bar, the distance so far in km or miles counting
 up as it drives, the map on a paper plate over a picture), the motion (the time
@@ -1254,7 +1257,7 @@ follow the pen too, with the same presets as Virée's (a view width in
 kilometres, a pull-back on long hops, an opening and a closing shot on the
 whole map, a centred smoothing and a look-ahead), north always up and what it
 frames cut at the map's box — and, with the background on, the finer tiles
-along the road come with it. The small map in
+along the road come with it, at every zoom the camera takes. The small map in
 the panel is the very projection the export draws, run backwards, so what you
 point at is what goes out. To **find** places, **Pick them on a map…** opens a
 big one: pan, zoom and pinch it, and every tap is the next stop, joined to the

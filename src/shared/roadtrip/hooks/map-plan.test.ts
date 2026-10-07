@@ -779,7 +779,7 @@ describe('the camera following the pen', () => {
     expect(mapCamera(o).orientation).toBe('north');
   });
 
-  it('asks a strip of finer patches along the road under a tight follow, and none when still', () => {
+  it('asks a pyramid of finer tiles along the road under a tight follow, and none when still', () => {
     const o = follow({ basemap: true, viewKm: 30 });
     const timing = mapTiming(planarHops(o.stops), o);
     const track = mapCameraTrack(o, timing, 9 / 16)!;
@@ -788,7 +788,7 @@ describe('the camera following the pen', () => {
     expect(set.patches.length).toBeLessThanOrEqual(256);
     expect(set.wants[0]).toBe(set.wide);
     const wideZoom = planTiles(set.wide.box, set.wide.width, set.wide.height)!.z;
-    expect(set.patchZoom!).toBeGreaterThan(wideZoom);
+    for (const p of set.patches) expect(p.zoom!).toBeGreaterThan(wideZoom);
     // Every stop is under a patch — the pen rests there.
     for (const s of stops) {
       expect(set.patches.some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);

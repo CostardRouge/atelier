@@ -558,7 +558,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         {o.ground === 'tiles' && (
           <BasemapStatus
             want={basemapWants?.wide ?? null}
-            patches={basemapWants?.patches}
+            set={basemapWants}
             ctx={ctx}
             status={host?.pictureStatus}
             opacity={o.basemapOpacity}

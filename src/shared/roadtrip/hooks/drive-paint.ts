@@ -46,7 +46,7 @@ import {
   type View,
   wakeStrength,
 } from './drive-plan';
-import { cameraTrack, kmPerPlanUnit, widestFrame } from './map-camera';
+import { cameraTrack, widestFrame } from './map-camera';
 import {
   BASEMAP_FOR_EDGE,
   BASEMAP_MAX_PX,
@@ -56,8 +56,8 @@ import {
   type GeoBox,
 } from '../../map/tile-math';
 import { STRIP_TILES } from '../../map/tile-strip';
-import { patchAlpha, stripOver, visiblePatches, wideOnly, type BasemapSet } from './basemap-strip';
-import { basemapRect, drawBasemap, paintOsmCredit } from './basemap-paint';
+import { paintGround, stripOver, wideOnly, type BasemapSet } from './basemap-strip';
+import { basemapRect, paintOsmCredit } from './basemap-paint';
 import { paintCount } from './map-paint';
 import { formatDistance, placeLabels } from './geo';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
@@ -128,7 +128,7 @@ export function driveTrack(plan: DrivePlan, o: DriveOptions, aspect: number): Ca
   return cameraTrack(plan, o, driveBox(w, h, o.position, o.size), CAR_PX * o.carSize * 0.7);
 }
 
-/** The drive's OpenStreetMap ground: the wide raster and the strip along the road (`basemap-strip.ts`). */
+/** The drive's OpenStreetMap ground: the wide raster and the pyramid along the road (`basemap-strip.ts`). */
 export type DriveBasemap = BasemapSet;
 
 /**
@@ -138,9 +138,9 @@ export type DriveBasemap = BasemapSet;
  * is the same at every size: the whole route as the camera frames it, or,
  * when the camera follows the car, the route with half a frame around it,
  * every place the view can reach. Sized so a 1920 delivery is not enlarged.
- * Under a following camera a STRIP of finer patches along the road comes
- * with it (`stripOver`); `budget` is the tiles it may cost (`stripBudget()`),
- * 0 asks for no strip.
+ * Under a following camera a zoom PYRAMID of tiles along the road comes with
+ * it, each frame's ground at its own density (`stripOver`); `budget` is the
+ * tiles it may hold (`stripBudget()`), 0 asks for none.
  */
 export function driveBasemap(
   plan: DrivePlan,
@@ -201,7 +201,6 @@ export function driveBasemap(
     diagonal: o.orientation === 'heading',
     regionOf,
     unitsPerDegree: geo.scale * geo.k,
-    kmPerUnit: kmPerPlanUnit(plan),
     budget,
   });
 }
@@ -359,18 +358,24 @@ function paintMap(
       const project = (p: { lat: number; lon: number }) =>
         applyView(flat, geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2));
       turned(() => {
-        drawBasemap(g, tiles, basemapRect(basemap.wide, project), o.basemapOpacity);
-        // The strip's finer patches over it, where the frame is tight enough
-        // to tell: they fade out as the camera pulls back past the follow's
-        // width, a cross-dissolve to the wide raster rather than a sharp
-        // window of detail in a soft map. Only what the frame reaches is drawn.
-        const fade = patchAlpha(basemap, box.width / view.scale);
-        if (fade <= 0) return;
+        // The pyramid's levels over the wide raster, each frame's ground at
+        // the zoom it is delivered at; only what the frame reaches is drawn.
+        // Inside `turned()` the frame is the UNTURNED view's, rotated back
+        // about (tx, ty) — not about the frame's centre: the square of its
+        // half-diagonal around where its centre lands then. Taking the frame's
+        // own centre culled the finer tiles of a heading-up camera (measured
+        // 2026-10-07: Navigation drew its wide raster three zooms short).
         const reach = view.angle ? Math.hypot(w, h) / 2 : 0;
-        const seen = { x0: Math.min(0, w / 2 - reach), y0: Math.min(0, h / 2 - reach), x1: Math.max(w, w / 2 + reach), y1: Math.max(h, h / 2 + reach) };
-        for (const { picture, rect } of visiblePatches(basemap, pictures, (p) => basemapRect(p, project), seen)) {
-          drawBasemap(g, picture, rect, o.basemapOpacity * fade);
-        }
+        const c = Math.cos(-view.angle);
+        const s = Math.sin(-view.angle);
+        const dx = w / 2 - view.tx;
+        const dy = h / 2 - view.ty;
+        const mx = view.tx + dx * c - dy * s;
+        const my = view.ty + dx * s + dy * c;
+        const seen = view.angle
+          ? { x0: mx - reach, y0: my - reach, x1: mx + reach, y1: my + reach }
+          : { x0: 0, y0: 0, x1: w, y1: h };
+        paintGround(g, basemap, pictures, tiles, (p) => basemapRect(p, project), seen, t, o.basemapOpacity);
       });
     }
     if (o.pictures === 'backdrop') for (const { pop, rise } of showing) fullFrame(rise, pop);

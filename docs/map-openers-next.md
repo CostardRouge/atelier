@@ -93,10 +93,10 @@ smoothing 1.8 s, look ahead 0.2 s, open and end wide; **Whole route**. Calm is
 the default when Follow is chosen. The OpenStreetMap ground along the route at
 a tight follow needs finer tiles: its own commit, measured. **Built** (`map-camera.ts`,
 «Virée's CAMERA is a baked track» in `docs/memory/roadtrip.md`), **and the
-finer tiles too** — a strip of one-tile patches along the road at the
-follow's own zoom, inside a tile budget, fading to the wide raster as the
-camera pulls back (`shared/map/tile-strip.ts`, «Finer tiles along a tight
-follow»); **and the Itinerary's own camera**, following the pen on the same
+finer tiles too** — since his blur report the same evening a zoom pyramid
+along the road, every frame at its own zoom inside a tile budget, an export
+waiting for every tile (`shared/map/tile-strip.ts`, «Finer tiles along a
+following camera»); **and the Itinerary's own camera**, following the pen on the same
 track and presets, north up, clipped at the map's box, with the strip under
 it («The Itinerary's CAMERA follows the pen»).
 

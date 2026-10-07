@@ -35,7 +35,8 @@ import { transcodeStore } from '../../shared/media/transcode-store';
 import type { HookBlock } from '../../shared/shades/shades';
 import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
 import { deliverFilesTo, pickDeliveryTarget, type DeliveryTarget } from '../../shared/sources/deliver-files';
-import type { HookPicture, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
+import type { HookPicture, HookPictureStatus, ResolvedHook } from '../../shared/roadtrip/hooks/hook-variant';
+import { groundNote } from '../../shared/roadtrip/hooks/basemap-strip';
 import type { ElementsAt } from '../../shared/roadtrip/hooks/hook-elements';
 import { startTask, type TaskHandle } from '../../shared/tasks/tasks';
 import {
@@ -105,6 +106,16 @@ export interface PostExportInputs {
   filmFor: (slide: DeckSlide) => FilmTexture | null;
   /** Called as an export starts, so the caller can bring the report into view. */
   onStart?: () => void;
+  /**
+   * Resolves once the openers' pictures and map tiles have all landed or
+   * failed and the editor has rendered with them (`useHookPictures`). An
+   * export awaits it before its first frame, then reads `hook` and
+   * `hookPictures` as they are THEN: a recorded file never holds a tile that
+   * was still on its way at the click.
+   */
+  ready?: (signal?: AbortSignal) => Promise<void>;
+  /** Where the pictures and tiles stand — what the wait could not bring is said with the delivery. */
+  pictureStatus?: HookPictureStatus;
 }
 
 export interface PostExports {
@@ -283,6 +294,23 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
   // the click's, and a retouch made meanwhile is not in them.
   const latest = useRef(inputs);
   latest.current = inputs;
+  // The opener and its pictures as they were once the wait ended — every
+  // renderer below reads these, never the click's, during a run.
+  const ground = useRef<{ hook: ResolvedHook | null; pictures: ReadonlyMap<string, HookPicture> | undefined } | null>(null);
+  const liveHook = () => (ground.current ? ground.current.hook : inputs.hook);
+  const livePictures = () => (ground.current ? ground.current.pictures : inputs.hookPictures);
+  /**
+   * Wait for every tile and picture the openers asked for, then hold the
+   * opener drawn with them. Returns what the ground lost, or null.
+   */
+  async function awaitGround(signal: AbortSignal): Promise<string | null> {
+    if (!inputs.ready) return null;
+    setExporting('Fetching the map tiles and pictures…');
+    await inputs.ready(signal);
+    const now = latest.current;
+    ground.current = { hook: now.hook, pictures: now.hookPictures };
+    return groundNote(now.pictureStatus);
+  }
   const sent = useRef<{ trip: TripDoc; post: TripPost; positions: number[] } | null>(null);
   const withEdits = (text: string) => {
     const at = sent.current;
@@ -367,11 +395,13 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const signal = beginTask('Encoding the hook');
     beginRun([slideUnit(inputs.hookSlide, hookFile.name, true)]);
     enter(0);
-    say('encode', 'Encoding the hook', 0);
     let audioSkipped: string | null = null;
     const onProgress = (p: ExportProgress) =>
       say('encode', p.ratio === null ? `${p.phase}…` : `Encoding the hook · ${Math.round(p.ratio * 100)}%`, p.ratio);
     try {
+      const lost = await awaitGround(signal);
+      say('encode', 'Encoding the hook', 0);
+      const hook = liveHook();
       // The stage measures the hook's clip while it shows it; a piece opened
       // on another slide has not shown it yet, so the size is read from the
       // file rather than the author told to wait for something not coming.
@@ -385,7 +415,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       const shared = {
         variant,
         elements: inputs.hookElements,
-        hook: inputs.hook,
+        hook,
         elementsAt: inputs.hookElementsAt,
         theme: trip.theme,
         shades: post.badge.shades,
@@ -397,7 +427,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         motion: {
           motion: post.badge.motion ?? null,
           seconds: inputs.hookLength,
-          openerSeconds: inputs.hook?.seconds ?? 0,
+          openerSeconds: hook?.seconds ?? 0,
         },
         lut: looks.lutFor(inputs.hookSlide),
         film: looks.filmFor(inputs.hookSlide),
@@ -453,12 +483,14 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
       finish(0, true);
       // A clip that went out without the ticks it was composed with says so
       // with the delivery, rather than being discovered on a phone later.
-      setNote(withEdits(audioSkipped ? `${name} downloaded — ${audioSkipped}` : `${name} downloaded`));
+      const said = [audioSkipped, lost].filter(Boolean).join('; ');
+      setNote(withEdits(said ? `${name} downloaded — ${said}` : `${name} downloaded`));
     } catch (err) {
       const failure = explainFailure(err, 'The clip could not be encoded.');
       setNote(isAbortError(err) ? 'Encoding cancelled — nothing was written.' : failure.note);
       if (failure.undecodable) setUndecodable(hookFile);
     } finally {
+      ground.current = null;
       setExporting(null);
       showRun(null);
       endTask();
@@ -489,8 +521,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const { slide } = item;
     const isHook = slide.kind === 'hook';
     const variant = hookVariant(post.badge.aspectId, 1080, slide.speed);
-    const own = isHook ? null : slideRender(trip, post, slide, aspect, inputs.hookPictures, inputs.exif);
-    const opener = own ? own.hook : inputs.hook;
+    const own = isHook ? null : slideRender(trip, post, slide, aspect, livePictures(), inputs.exif);
+    const opener = own ? own.hook : liveHook();
     const shared = {
       signal,
       variant,
@@ -594,6 +626,8 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     setExporting('Preparing…');
     let made = 0;
     try {
+      // Every tile and picture the openers draw, in before the first frame.
+      const lost = await awaitGround(signal);
       // Which pixels each still leaves from, decided once for all of them.
       const stills = items.filter((i) => i.medium === 'image');
       let resolve = inputs.resolve;
@@ -623,7 +657,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             longEdge: DECK_LONG_EDGE,
             timeSeconds: inputs.timeSeconds,
             resolve,
-            pictures: inputs.hookPictures,
+            pictures: livePictures(),
             exif: inputs.exif,
             lutFor: looks.lutFor,
             filmFor: looks.filmFor,
@@ -673,12 +707,14 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
             ...(signal.aborted ? [`cancelled after ${made} of ${items.length}`] : []),
             ...plan.blockers,
             ...failures,
+            ...(lost ? [lost] : []),
           ]),
         ),
       );
     } catch (err) {
-      setNote(explainFailure(err, 'The piece could not be exported.').note);
+      setNote(isAbortError(err) ? 'Export cancelled — nothing was written.' : explainFailure(err, 'The piece could not be exported.').note);
     } finally {
+      ground.current = null;
       setExporting(null);
       showRun(null);
       endTask();
@@ -715,9 +751,10 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     const signal = beginTask(position === undefined ? 'Exporting the slides' : 'Exporting the slide');
     written.current = { count: 0, errors: [], method: 'folder' };
     beginRun(slides.map((s) => slideUnit(s, s.media?.name ?? (s.kind === 'cta' ? 'the card' : 'no picture'), false)));
-    setExporting('Choosing the pixels…');
     let made = 0;
     try {
+      const lost = await awaitGround(signal);
+      setExporting('Choosing the pixels…');
       const resolve = await pixelsForStills(slides);
       for (const [i, slide] of slides.entries()) {
         if (signal.aborted) break;
@@ -731,7 +768,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
           longEdge: DECK_LONG_EDGE,
           timeSeconds: inputs.timeSeconds,
           resolve,
-          pictures: inputs.hookPictures,
+          pictures: livePictures(),
           exif: inputs.exif,
           lutFor: looks.lutFor,
           filmFor: looks.filmFor,
@@ -749,10 +786,18 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
         setNote(signal.aborted ? 'Export cancelled — nothing was written.' : 'Nothing could be rendered — check the pictures are loaded.');
         return;
       }
-      setNote(withEdits(closingNote(slides.length - written.current.count, signal.aborted ? [`cancelled after ${made} of ${slides.length}`] : [])));
+      setNote(
+        withEdits(
+          closingNote(slides.length - written.current.count, [
+            ...(signal.aborted ? [`cancelled after ${made} of ${slides.length}`] : []),
+            ...(lost ? [lost] : []),
+          ]),
+        ),
+      );
     } catch (err) {
-      setNote(explainFailure(err, 'The slides could not be exported.').note);
+      setNote(isAbortError(err) ? 'Export cancelled — nothing was written.' : explainFailure(err, 'The slides could not be exported.').note);
     } finally {
+      ground.current = null;
       setExporting(null);
       showRun(null);
       endTask();
