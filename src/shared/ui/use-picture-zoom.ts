@@ -16,6 +16,7 @@ import {
 } from './pan-zoom';
 import { zoomLabel, type ZoomControls } from './stage-zoom';
 import { useZoomGestures } from './use-zoom-gestures';
+import type { DragHandler, DragStart } from './zoom-gestures';
 
 interface PictureZoomOptions {
   /** The picture's own size, or null until it is known — it pans nowhere until then. */
@@ -38,6 +39,21 @@ interface PictureZoomOptions {
    */
   claim?: (target: EventTarget | null) => boolean;
   onTakeover?: () => void;
+  /**
+   * A FITTED pointer nobody claimed — there is nothing to pan at the fit, so
+   * the surface may read it itself (the Develop stage's deck: a swipe to the
+   * next picture). Asked after `claim`, never once zoomed, and never for the
+   * finger left over from a pinch unless the handler wants it.
+   */
+  drag?: (start: DragStart) => DragHandler | null;
+  /**
+   * A sideways wheel at the fit — a trackpad sweep — which has nothing to pan
+   * either: `dx` as the machine would pan by (the wheel's `deltaX`, negated).
+   * Zoomed, the sweep pans as on every Looking surface.
+   */
+  sweep?: (dx: number) => void;
+  /** Two fingers are on the surface (true), or the last of them lifted (false). */
+  onPinch?: (active: boolean) => void;
 }
 
 export interface PictureZoom {
@@ -98,6 +114,9 @@ export function usePictureZoom({
   ceiling = INSPECT_MAX_ZOOM,
   claim,
   onTakeover,
+  drag,
+  sweep,
+  onPinch,
 }: PictureZoomOptions): PictureZoom {
   const viewportRef = useRef<HTMLDivElement>(null);
   const [viewport, setViewport] = useState<Box>({ width: 0, height: 0 });
@@ -117,8 +136,8 @@ export function usePictureZoom({
   const max = Math.max(onePixel, ceiling);
 
   // Read by the native listeners, which are bound once.
-  const live = useRef({ view, viewport, content, max, claim, onTakeover });
-  live.current = { view, viewport, content, max, claim, onTakeover };
+  const live = useRef({ view, viewport, content, max, claim, onTakeover, drag, sweep, onPinch });
+  live.current = { view, viewport, content, max, claim, onTakeover, drag, sweep, onPinch };
 
   useEffect(() => {
     setView(FITTED);
@@ -165,18 +184,29 @@ export function usePictureZoom({
   // The one reading of the hand (`zoom-gestures.ts`): this surface only
   // answers what the scale is, what to do with a new one, and which single
   // pointer it lets the machine pan — a zoomed picture's, never the divider's.
+  // Fitted, there is nothing to pan, so a pointer nobody claimed and a
+  // sideways sweep are the caller's to read (a deck's), as in the lightbox.
   useZoomGestures({
     ref: viewportRef,
     target: {
       scaleAt: () => live.current.view.scale,
       zoomTo: (scale, anchor) => zoomTo(scale, anchorOf(anchor.x, anchor.y)),
-      panBy: (dx, dy) => panBy(dx, dy),
+      panBy: (dx, dy, _at, by) => {
+        const l = live.current;
+        if (by === 'wheel' && l.sweep && l.view.scale <= MIN_VIEW_ZOOM) {
+          l.sweep(dx);
+          return;
+        }
+        panBy(dx, dy);
+      },
       drag: (start) => {
         const l = live.current;
         if (start.pointer && l.claim?.(start.pointer.target)) return null;
-        return l.view.scale > MIN_VIEW_ZOOM ? 'pan' : null;
+        if (l.view.scale > MIN_VIEW_ZOOM) return 'pan';
+        return l.drag?.(start) ?? null;
       },
       onTakeover: () => live.current.onTakeover?.(),
+      onPinch: (active) => live.current.onPinch?.(active),
       onGesture: () => setSettling(false),
       onDragging: setPanning,
     },

@@ -13,11 +13,11 @@ import { useEffect, useRef, useState } from 'react';
  * dependency, and a fresh map every render would revoke and recreate every
  * URL, which is exactly the flicker this exists to avoid.
  */
-export function useObjectUrls(files: ReadonlyMap<string, File>): ReadonlyMap<string, string> {
+export function useObjectUrls(files: ReadonlyMap<string, Blob>): ReadonlyMap<string, string> {
   const [urls, setUrls] = useState<ReadonlyMap<string, string>>(() => new Map());
   // The file each URL was made from, so a key whose file was REPLACED gets a
   // new URL rather than an old one that no longer points at those bytes.
-  const held = useRef(new Map<string, { file: File; url: string }>());
+  const held = useRef(new Map<string, { file: Blob; url: string }>());
 
   useEffect(() => {
     const next = new Map(held.current);

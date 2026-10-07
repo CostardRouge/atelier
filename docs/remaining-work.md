@@ -28,6 +28,7 @@ precondition of the row that depends on it.
 | The Winnow picker, Deduce, the LUT pack sync, the finals going home, against the REAL instance | All driven against a stub; the pack's first real push was refused 400 once already | `winnow-picker.md`, `roadtrip.md` «The itinerary is DEDUCED», `docs/lut-packs.md` | Him, on the deployed pair |
 | H.264 encodes never made here: the making-of, the Studio's clips, Trips' hook clip | This Chromium has no H.264 encoder; VP9 stood in | `develop-roll.md` «The making-of», `studio.md`, `roadtrip.md` | Him |
 | Ultra HDR on an HDR screen, the 16-bit PNG opened in Lightroom, the look picker on his Mac, press feedback on the iPad | Each claimed from a file read back or a headless drive, not from eyes | `hdr.md`, `develop-output.md`, `docs/look-picker-redesign.md`, `docs/press-feedback.md` | Him |
+| The Develop stage's swipe (A/B off) under a finger on the iPad and under his Mac's trackpad | Driven headless with a mouse, CDP touches and a synthetic wheel; a real trackpad's momentum after a page, and Chrome's wheel latch across the stage's remount, are reasoned, not seen | `develop-roll.md` «A swipe pages the roll when A/B is off» | Him |
 
 ## 2. Decisions that are his
 

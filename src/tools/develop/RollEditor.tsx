@@ -54,6 +54,8 @@ import {
 import { WORKING_PREVIEW_ESTIMATE_BYTES } from '../../shared/develop/working-preview';
 import { formatBytes } from '../../shared/lib/format';
 import { pictureThumbnail } from '../../shared/develop/roll-thumb';
+import type { DeckNeighbour } from '../../shared/develop/stage-deck';
+import { useObjectUrls } from '../../shared/lib/use-object-urls';
 import { warmStageStill } from '../../shared/develop/stage-sources';
 import {
   addPictures,
@@ -1256,6 +1258,54 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [roll.pictures, openId, showIgnored, filtering, culling.byPicture, stripFilter],
   );
   const selectAll = useCallback(() => setSelected(new Set(shownIds)), [shownIds]);
+
+  // --- the roll as a DECK under the stage (`stage-deck.ts`) -----------------
+  // The two pictures beside the open one, exactly as ←/→ would step — an
+  // ignored picture and one the band's filter has taken off are stepped over
+  // — drawn in the slots a swipe reveals from their cells' own stills, and
+  // the open one's still under its stage until it has decoded. The object
+  // URLs are made HERE, above the workbench the open picture keys, so the
+  // still a landed page opens on is the very URL its slot just showed: the
+  // browser has it decoded, and the swap shows no seam.
+  const deckIds = useMemo(() => {
+    if (!openId) return null;
+    const skip = (p: RollPicture) => isIgnored(p) || !passesStripFilter(p, stripFilter, culling.byPicture.get(p.id));
+    const beside = (by: -1 | 1) => {
+      const id = stepPicture(roll.pictures, openId, by, skip);
+      return id && id !== openId ? id : null;
+    };
+    return { previous: beside(-1), next: beside(1) };
+  }, [roll.pictures, openId, stripFilter, culling.byPicture]);
+  const deckBlobs = useMemo(() => {
+    const out = new Map<string, Blob>();
+    for (const id of [deckIds?.previous, openId, deckIds?.next]) {
+      const blob = id ? thumbs.get(id) : undefined;
+      if (id && blob) out.set(id, blob);
+    }
+    return out;
+  }, [deckIds, openId, thumbs]);
+  const deckUrls = useObjectUrls(deckBlobs);
+  const deckNeighbours = useMemo(() => {
+    if (!deckIds) return null;
+    const beside = (id: string | null): DeckNeighbour | null => {
+      const p = id ? roll.pictures.find((x) => x.id === id) : undefined;
+      if (!p) return null;
+      const url = deckUrls.get(p.id) ?? null;
+      // No cell of its own yet: the instance's thumbnail, as the band draws it.
+      const remote = url ? null : remoteThumb(p);
+      return {
+        id: p.id,
+        name: pictureLabel(p),
+        src: url ?? (remote ? remote.client.thumbUrl(remote.id) : null),
+        credentialed: !url && Boolean(remote),
+      };
+    };
+    // A roll of one has no deck at all — nothing to reveal either way.
+    const previous = beside(deckIds.previous);
+    const next = beside(deckIds.next);
+    return previous || next ? { previous, next } : null;
+  }, [deckIds, roll.pictures, deckUrls, remoteThumb]);
+  const deckStill = openId ? (deckUrls.get(openId) ?? null) : null;
   const ignoreSelection = useCallback(() => {
     if (exportRunning.current) {
       setNotice(LOCKED_DELIVERY);
@@ -2008,6 +2058,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
               exportVerbs={exportVerbs}
               onSnapshot={(blob, aspect) => handleSnapshot(open.id, blob, aspect)}
               onStep={step}
+              neighbours={deckNeighbours}
+              still={deckStill}
               onDeliver={(action) => (selecting && selectedIds.length > 0 ? deliverSelection(action) : handleDeliver(open.id, action))}
               selecting={selecting}
               onSelectMode={() => (selecting ? stopSelecting() : startSelecting())}

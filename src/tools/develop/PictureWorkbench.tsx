@@ -62,7 +62,10 @@ import { canStageDraw } from '../../shared/projects/media-rendition';
 import { fetchHeld } from '../../shared/sources/held-fetch';
 import { useDevelopDraft, useTold } from '../../shared/develop/use-develop-draft';
 import { useWriteThrough } from '../../shared/develop/use-write-through';
-import { useDevelopPicture, type DevelopFrame } from '../../shared/develop/use-develop-picture';
+import { useDevelopPicture, type DevelopFrame, type DevelopPicture } from '../../shared/develop/use-develop-picture';
+import { useStageDeck } from '../../shared/develop/use-stage-deck';
+import type { DeckNeighbour } from '../../shared/develop/stage-deck';
+import { DECK_GAP } from '../../shared/ui/use-media-viewer';
 import { sameKeystone, type Keystone } from '../../shared/render/geometry';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
@@ -340,6 +343,8 @@ export default function PictureWorkbench({
   onThumbs,
   focused = false,
   onFocusMode,
+  neighbours = null,
+  still = null,
   columns = STAGE_COLUMNS,
   emptyText = 'This picture is not in the Library — open its folder, or take it from its day on your Winnow. Its numbers can still be set.',
 }: {
@@ -406,6 +411,15 @@ export default function PictureWorkbench({
   /** The open picture's cell, retaken as delivered — its bytes and its aspect (`roll-thumb.ts`). */
   onSnapshot: (thumb: Blob, aspect: number) => void;
   onStep: (step: number) => void;
+  /**
+   * The two pictures beside this one as the arrows would step — the roll as
+   * a DECK under the stage (`stage-deck.ts`): with A/B off, a drag at the
+   * fit reveals one and a release pages to it through `onStep`. Null draws
+   * no deck (a roll of one, a host without a roll).
+   */
+  neighbours?: { previous: DeckNeighbour | null; next: DeckNeighbour | null } | null;
+  /** This picture's own cell, drawn under the stage until it has decoded (`DevelopViewport`'s `still`). */
+  still?: string | null;
   /**
    * The delivery keys (`P` send ↔ hold, `U` back to the rule, `M` ignore ↔
    * un-ignore): the editor answers from the roll as it stands, since the
@@ -1141,11 +1155,23 @@ export default function PictureWorkbench({
     ctx.putImageData(pixels, 0, 0);
     return { image: canvas as CanvasImageSource, width: w, height: h };
   }, [field, dust.map, threshold]);
+  // The roll as a deck under the stage (`use-stage-deck.ts`): the travel of
+  // one page is the viewport's width, read at gesture time off the element
+  // the picture hook below owns — so the deck is made first and told where
+  // to measure once the hook has answered.
+  const pictureRef = useRef<DevelopPicture | null>(null);
+  const deck = useStageDeck({
+    neighbours: { previous: Boolean(neighbours?.previous), next: Boolean(neighbours?.next) },
+    travel: () => (pictureRef.current?.view.viewportRef.current?.clientWidth ?? 0) + DECK_GAP,
+    onStep,
+  });
   const picture = useDevelopPicture({
     file: shownFile,
     videoTimeSeconds: clipStart,
     cube: stack.composed,
     frame,
+    // A free press at the fit — A/B off, no tool armed — is the deck's.
+    swipe: neighbours ? deck.hands : null,
     // A clip is handed the develop and the look alone: every other input is
     // a pass over one still frame, and the export cannot follow it from
     // frame to frame — so the stage must not show it (`isClipPicture`).
@@ -2043,6 +2069,7 @@ export default function PictureWorkbench({
     `rounded-control border font-mono text-xs cursor-pointer ${verbPress}`;
   /** The wipe is suspended, and the pill says so rather than claiming to be on. */
   const abHeld = compareOn && (picture.painting || picture.picking);
+  pictureRef.current = picture;
 
   /**
    * What hangs off the zoom's percentage: the two rungs a menu can name, then
@@ -2345,6 +2372,10 @@ export default function PictureWorkbench({
           emptyText={emptyText}
           scope={taskScope}
           pixelView={pixelView}
+          // The roll under the stage: where the deck is, and who sits either
+          // side — drawn from their cells, paged by a swipe with A/B off.
+          deck={neighbours ? { offset: deck.offset, settling: deck.settling, previous: neighbours.previous, next: neighbours.next } : null}
+          still={still}
           facts={facts}
           shot={shotLine}
           // B of « C + B »: drawn OVER the picture, at the top, so the bar

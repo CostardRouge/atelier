@@ -65,6 +65,7 @@ import type { FrameAffine, PostCropVignette } from '../render/post-vignette';
 import { frameAffine } from './vignette-frame';
 import { readoutOf } from '../render/clipping';
 import { createReadoutStore, type ReadoutStore } from './readout-store';
+import type { DeckHands } from './stage-deck';
 
 /** How close to the frame's side the divider's handle may be held, in px. */
 const HANDLE_INSET = 14;
@@ -72,18 +73,22 @@ const HANDLE_INSET = 14;
 const TOUCH_SLOP = 6;
 
 /**
- * Whether a press on the picture places the divider rather than panning:
- * always at the fitted size, where there is nothing to pan; once zoomed, only
- * on the divider's own handle. A control over the picture keeps its press.
+ * Whether a press on the picture is this hook's — the divider's, or a tool's
+ * — rather than the zoom machine's: at the fitted size, where there is
+ * nothing to pan, unless the pointer is FREE (the split off, no tool holding
+ * it, and a deck to hand it to — then the machine offers it as a swipe,
+ * `stage-deck.ts`); once zoomed, only on the divider's own handle. A control
+ * over the picture keeps its press.
  */
-function wipeClaims(target: EventTarget | null, zoomed: boolean): boolean {
+function wipeClaims(target: EventTarget | null, zoomed: boolean, free: boolean): boolean {
   const el = target as Element | null;
   if (el?.closest?.('button')) return false;
   // A press on a repair ring is the RING's: the zoom machine listens natively
   // in the capture phase, so the ring's own stopPropagation never reaches it,
   // and a zoomed view panned under every drag of a patch until this said no.
   if (el?.closest?.('[data-ring]')) return true;
-  return !zoomed || Boolean(el?.closest?.('[data-wipe-handle]'));
+  if (el?.closest?.('[data-wipe-handle]')) return true;
+  return !zoomed && !free;
 }
 
 
@@ -603,7 +608,17 @@ export function useDevelopPicture({
   clipping = false,
   sharpenMask = false,
   vignette = null,
+  swipe = null,
 }: {
+  /**
+   * The roll's DECK under the stage (`stage-deck.ts`, `use-stage-deck.ts`):
+   * where a FREE pointer goes — fitted, the split off, no tool holding it.
+   * The lightbox's rule read here: at the fit there is nothing to pan and
+   * nothing to place, so a drag across the picture is the next or the
+   * previous one, and a sideways trackpad sweep the same. Null — the modal
+   * hosts, a roll of one — leaves a free press doing nothing, as before.
+   */
+  swipe?: DeckHands | null;
   /**
    * The post-crop vignette (`render/post-vignette.ts`), shaped in the frame
    * `frame` describes — part of the picture: the histogram, `delivered()` and
@@ -1696,11 +1711,25 @@ export function useDevelopPicture({
   const dragging = useRef<{ startX: number; live: boolean } | null>(null);
   const fingers = useRef(0);
   const zoomedRef = useRef(false);
+  // Nothing of this hook's owns a fitted pointer — the split is off and no
+  // tool holds it — and there is a deck to hand it to: the machine offers the
+  // press as a swipe, and a sideways sweep pages (`swipe`). With the split
+  // on, the press places the divider as ever; with a tool armed, the tool's.
+  const free = !compare && !suspended && Boolean(swipe);
+  const freeRef = useRef(free);
+  freeRef.current = free;
+  const swipeRef = useRef(swipe);
+  swipeRef.current = swipe;
   const natural = useMemo(() => (canvasSize ? { width: canvasSize.w, height: canvasSize.h } : null), [canvasSize]);
   const view = usePictureZoom({
     natural,
     resetKey: source,
-    claim: (target) => wipeClaims(target, zoomedRef.current),
+    claim: (target) => wipeClaims(target, zoomedRef.current, freeRef.current),
+    drag: (start) => (freeRef.current ? (swipeRef.current?.drag(start) ?? null) : null),
+    sweep: (dx) => {
+      if (freeRef.current) swipeRef.current?.sweep(dx);
+    },
+    onPinch: (active) => swipeRef.current?.onPinch(active),
     onTakeover: () => {
       dragging.current = null;
     },
@@ -2032,7 +2061,7 @@ export function useDevelopPicture({
       // to place, and a drag that moved an invisible line would be a bug the
       // author could only find by turning compare back on.
       if (!compare || suspended) return;
-      if (!wipeClaims(e.target, view.zoomed)) return;
+      if (!wipeClaims(e.target, view.zoomed, free)) return;
       dragging.current = { startX: e.clientX, live: !touch };
       // A pointer the browser no longer knows (a synthetic one) throws rather
       // than answering; the wipe works without the capture either way.

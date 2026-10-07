@@ -4,8 +4,10 @@ import { developPillClass } from './develop-classes';
 import { imageRenderingFor, type PixelView } from '../ui/use-pixel-view';
 import TaskEdge from '../ui/TaskEdge';
 import { Icons } from '../ui/icons';
+import { DECK_GAP, DECK_SETTLE_MS } from '../ui/use-media-viewer';
 import type { DevelopPicture } from './use-develop-picture';
 import type { SubjectPin } from '../render/mask';
+import type { DeckNeighbour, StageDeckView } from './stage-deck';
 
 /**
  * A repair patch as the viewport draws it: two discs in the source's own
@@ -103,8 +105,24 @@ export default function DevelopViewport({
   spots = null,
   onSpot,
   scope = null,
+  deck = null,
+  still = null,
 }: {
   picture: DevelopPicture;
+  /**
+   * The roll as a DECK under this stage (`stage-deck.ts`): where it is
+   * displaced to under a swipe, and the two pictures beside the open one,
+   * drawn in the slots the hand reveals from their cells' own stills. Null
+   * — the modal hosts — draws the picture alone, as before.
+   */
+  deck?: StageDeckView | null;
+  /**
+   * The open picture's own cheap still (its cell's thumbnail), drawn UNDER
+   * the canvas until the stage has decoded — the lightbox's rule, so a page
+   * never opens on black and simply sharpens. The deck's slot and this are
+   * the same URL, which is what makes a landed page show no seam.
+   */
+  still?: string | null;
   /**
    * The media whose TASKS this stage draws on its bottom edge (`TaskEdge`,
    * `tasks.md`): a RAW being fetched for it, its original on its way. The
@@ -313,41 +331,77 @@ export default function DevelopViewport({
           : handlers.onPointerDown
       }
     >
-      <canvas
-        ref={picture.canvasRef}
-        className="absolute inset-0 w-full h-full object-contain"
-        style={{
-          transform: view.transform,
-          // A finger is followed as it moves; a button is animated.
-          transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
-          // Below 1:1 the browser is DOWNSCALING, where `pixelated` is simply
-          // worse — it aliases a picture nobody asked to inspect. The choice
-          // only takes effect where it means something.
-          imageRendering: view.magnifying ? imageRenderingFor(pixelView) : undefined,
-        }}
-        aria-label="The picture, corrected"
-      />
-      {/* The loupe: the file's own pixels, drawn in VIEWPORT space over the
-          stage while the view is past the stage's 1:1. Sized 0 and drawing
-          nothing when it is not (`use-develop-picture.ts`, «the loupe»). */}
-      <canvas
-        ref={picture.loupe.canvasRef}
-        className="absolute inset-0 w-full h-full pointer-events-none"
-        aria-hidden="true"
-      />
-      {/* The veil: a map of the picture in the picture's place — the same
-          box and transform as the stage canvas, its backing the same size,
-          so `object-contain` letterboxes the two alike. Sized 0 when there
-          is nothing to show (`use-develop-picture.ts`, «the veil»). */}
-      <canvas
-        ref={picture.veilCanvasRef}
-        className="absolute inset-0 w-full h-full object-contain pointer-events-none"
-        style={{
-          transform: view.transform,
-          transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
-        }}
-        aria-hidden="true"
-      />
+      {/* The DECK: the picture's own layers in the middle slot, the two
+          pictures beside it in the slots either side, moved as one by the
+          deck's offset under a swipe (`stage-deck.ts`). With no deck it is a
+          box the size of the stage that moves nothing, and the first child
+          as the canvas was — what is drawn and what is hit are unchanged. */}
+      <div className="absolute inset-0" style={deckStyle(deck)}>
+        {deck?.previous && <DeckSlot at={-1} neighbour={deck.previous} />}
+        {deck?.next && <DeckSlot at={1} neighbour={deck.next} />}
+        {/* The cheap still UNDER the canvas until the stage has decoded: a
+            picture the deck landed on opens on the very still its slot
+            showed, and sharpens. Transformed like the canvas, so a decode
+            under a zoomed view (a rung switched) lands where the view is. */}
+        {hasFile && !source && !problem && still && (
+          <img
+            src={still}
+            alt=""
+            aria-hidden="true"
+            draggable={false}
+            decoding="async"
+            className="absolute inset-0 w-full h-full object-contain block"
+            style={{ transform: view.transform }}
+          />
+        )}
+        <canvas
+          ref={picture.canvasRef}
+          className="absolute inset-0 w-full h-full object-contain"
+          style={{
+            transform: view.transform,
+            // A finger is followed as it moves; a button is animated.
+            transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
+            // Below 1:1 the browser is DOWNSCALING, where `pixelated` is simply
+            // worse — it aliases a picture nobody asked to inspect. The choice
+            // only takes effect where it means something.
+            imageRendering: view.magnifying ? imageRenderingFor(pixelView) : undefined,
+          }}
+          aria-label="The picture, corrected"
+        />
+        {/* The loupe: the file's own pixels, drawn in VIEWPORT space over the
+            stage while the view is past the stage's 1:1. Sized 0 and drawing
+            nothing when it is not (`use-develop-picture.ts`, «the loupe»). */}
+        <canvas
+          ref={picture.loupe.canvasRef}
+          className="absolute inset-0 w-full h-full pointer-events-none"
+          aria-hidden="true"
+        />
+        {/* The veil: a map of the picture in the picture's place — the same
+            box and transform as the stage canvas, its backing the same size,
+            so `object-contain` letterboxes the two alike. Sized 0 when there
+            is nothing to show (`use-develop-picture.ts`, «the veil»). */}
+        <canvas
+          ref={picture.veilCanvasRef}
+          className="absolute inset-0 w-full h-full object-contain pointer-events-none"
+          style={{
+            transform: view.transform,
+            transition: view.settling ? 'transform 220ms var(--ease-paper)' : undefined,
+          }}
+          aria-hidden="true"
+        />
+      </div>
+      {/* While the still stands in for the picture: the lightbox's own bar,
+          saying only that what is on screen is not yet the decoded picture.
+          Nothing waits on it — the stage answers every gesture meanwhile. */}
+      {hasFile && !source && !problem && still && (
+        <div
+          className="absolute top-0 inset-x-0 h-[2px] overflow-hidden pointer-events-none"
+          role="progressbar"
+          aria-label="Decoding the picture"
+        >
+          <div className="h-full w-1/4 bg-accent animate-deck-load" />
+        </div>
+      )}
       {/* The top-right corner is a COLUMN: the crop verb first, so it never
           moves when the loupe's status comes and goes under it. */}
       {((onCropToView && !picking) || picture.loupe.active) && (
@@ -414,7 +468,7 @@ export default function DevelopViewport({
           {problem}
         </span>
       )}
-      {hasFile && !source && !problem && (
+      {hasFile && !source && !problem && !still && (
         <span className="absolute inset-0 grid place-items-center font-mono text-2xs text-muted">decoding…</span>
       )}
       {/* The passive surface: a hairline along the bottom for whatever is
@@ -427,6 +481,10 @@ export default function DevelopViewport({
         <div
           className="absolute top-9 left-1/2 -translate-x-1/2 z-10 max-w-[calc(100%-1.25rem)] inline-flex items-center gap-0.5 pl-1 rounded-full border border-line-strong bg-surface/92 shadow-paper"
           onPointerDown={(e) => e.stopPropagation()}
+          // Its own press for the zoom machine too, which listens natively
+          // and never sees a React `stopPropagation`: a press between its
+          // two buttons must not start the deck.
+          data-pan-ignore
           role="status"
         >
           {offer}
@@ -440,6 +498,12 @@ export default function DevelopViewport({
           click something grey
         </span>
       )}
+      {tool && source && <div className="absolute top-2 left-2.5 z-10">{tool}</div>}
+      {/* The marks and the rings sit ON the picture and travel with the deck:
+          a second group under the same offset, pointer-transparent itself so
+          every control drawn before it in the frame keeps its press, each
+          mark and each ring answering its own. */}
+      <div className="absolute inset-0 pointer-events-none" style={deckStyle(deck)}>
       {source &&
         marks?.map((pin, i) => {
           const at = picture.stagePoint(pin.x, pin.y);
@@ -467,7 +531,7 @@ export default function DevelopViewport({
               // tokens: a pin sits on a picture, never on the page).
               className={`absolute -translate-x-1/2 -translate-y-1/2 grid place-items-center w-5 h-5 rounded-full shadow-paper group border ${
                 removed ? 'bg-frame/92 border-on-media/70 text-on-media' : 'bg-surface/92 border-line-strong text-ink-soft'
-              } ${onUnmark ? 'cursor-pointer hover:border-accent hover:text-accent-ink' : 'pointer-events-none'}`}
+              } ${onUnmark ? 'pointer-events-auto cursor-pointer hover:border-accent hover:text-accent-ink' : 'pointer-events-none'}`}
               style={{ left: at.x, top: at.y }}
               title={
                 onUnmark
@@ -497,7 +561,6 @@ export default function DevelopViewport({
             </button>
           );
         })}
-      {tool && source && <div className="absolute top-2 left-2.5 z-10">{tool}</div>}
       {source && ((rings && rings.length > 0) || (spots && spots.length > 0)) && (
         <svg
           className="absolute inset-0 w-full h-full overflow-visible"
@@ -600,6 +663,7 @@ export default function DevelopViewport({
           })}
         </svg>
       )}
+      </div>
       {(shot || (facts && facts.length > 0)) && source && (
         <div
           // Pointer-transparent: the facts sit ON the picture, and the picture
@@ -648,6 +712,52 @@ export default function DevelopViewport({
             ◐ hold for before
           </button>
         </>
+      )}
+    </div>
+  );
+}
+
+/**
+ * Where the deck is: a transform under the hand, animated on a release with
+ * the lightbox's own timing. Nothing at all without a deck — an inline style
+ * of two `undefined`s, so the modal hosts draw exactly what they drew.
+ */
+function deckStyle(deck: StageDeckView | null): { transform?: string; transition?: string } | undefined {
+  if (!deck) return undefined;
+  return {
+    transform: `translate3d(${deck.offset}px, 0, 0)`,
+    transition: deck.settling ? `transform ${DECK_SETTLE_MS}ms var(--ease-paper)` : undefined,
+  };
+}
+
+/**
+ * One picture beside the open one, in the slot the hand reveals: a whole
+ * slot to the left or the right of the stage with the lightbox's paper
+ * between, drawing its cell's still fitted as the stage will fit it — so a
+ * landed page opens on that very still. A still that has not been baked yet
+ * says the picture's name, as the lightbox says "nothing to show".
+ */
+function DeckSlot({ at, neighbour }: { at: -1 | 1; neighbour: DeckNeighbour }) {
+  return (
+    <div
+      className="absolute inset-0"
+      style={{ transform: `translateX(calc(${at * 100}% + ${at * DECK_GAP}px))` }}
+      aria-hidden="true"
+      data-deck-slot={at < 0 ? 'previous' : 'next'}
+    >
+      {neighbour.src ? (
+        <img
+          src={neighbour.src}
+          alt=""
+          crossOrigin={neighbour.credentialed ? 'use-credentials' : undefined}
+          draggable={false}
+          decoding="async"
+          className="absolute inset-0 w-full h-full object-contain block"
+        />
+      ) : (
+        <span className="absolute inset-0 grid place-items-center px-6 text-center font-mono text-2xs text-muted">
+          {neighbour.name}
+        </span>
       )}
     </div>
   );
