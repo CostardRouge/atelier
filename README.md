@@ -778,13 +778,15 @@ default, so nothing you composed changes) and once for the lists, the legs,
 the calendar and the map (the short code by default); a stage, or a single
 place under **More…**, can depart from it, the nearest choice winning. The
 **short code** comes from the place's own, else the trip's own table, else
-what the search gave, else the state's initials — said as such, because
-initials are right for New South Wales and wrong for Queensland. No table is
-shipped: the trip's table is yours, one line per state, written from a
-place's editor (**Keep QLD for Queensland on this trip**) or in Trip settings
-→ Places, where every state your places name is listed with the code it
-reads today and where that code comes from; a place can still prefer the
-search's code or its own over the table. The table travels in the backup.
+what the search gave, else the **official abbreviation** — shipped for
+Australia, the United States and Canada only ("Queensland" reads QLD,
+"Texas" TX, "Quebec" QC) —, else the state's initials, said as such because
+initials are right for New South Wales and wrong for Queensland. The trip's
+table is yours, one line per state, written from a place's editor (**Keep
+QLD for Queensland on this trip**) or in Trip settings → Places, where every
+state your places name is listed with the code it reads today and where that
+code comes from; a place can still prefer the search's code or its own over
+the table. The table travels in the backup.
 
 Each place can carry **coordinates**, and there are two ways to get them: type
 the name and leave it at that (a place that is only a name is a complete

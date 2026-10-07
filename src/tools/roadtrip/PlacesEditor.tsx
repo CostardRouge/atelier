@@ -428,7 +428,7 @@ function PlaceFields({
             <input
               value={place.stateCode ?? ''}
               onChange={(e) => onChange(withText(place, 'stateCode', e.target.value.toUpperCase()))}
-              placeholder={candidates.derived || 'NSW'}
+              placeholder={candidates.official || candidates.derived || 'NSW'}
               aria-label={`Your own code for ${state}`}
               maxLength={6}
               className={`${inputClass} w-[4.5rem] py-0.5 font-mono uppercase`}
