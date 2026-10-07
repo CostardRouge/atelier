@@ -41,6 +41,7 @@ import {
   type ElementBox,
 } from '../overlay/draw-overlays';
 import { ensureOverlayFonts } from '../overlay/fonts';
+import { EXPORT_AHEAD } from './hooks/basemap-strip';
 import type { OverlayElement } from '../overlay/overlay-types';
 import type { StyleTheme } from '../overlay/title-styles';
 
@@ -199,6 +200,13 @@ export { drawQr, type QrDraw };
 
 export interface RenderBadgeOptions {
   source: BadgeSource | null;
+  /**
+   * Wait for everything the opener draws at this time to be in memory first
+   * (`ResolvedHook.ready` — a streamed map ground's tiles) — what an EXPORT
+   * and a delivered thumbnail ask; the live stage never waits, it draws what
+   * is in and repaints as the rest lands.
+   */
+  ground?: boolean;
   /**
    * Asked after the fonts are waited for: a paint that a newer one overtook
    * while it waited returns without drawing, or its complete frame lands OVER
@@ -436,6 +444,11 @@ export async function renderBadge(
   const ctx = canvas.getContext('2d');
   if (!ctx) return;
 
+  if (opts.ground && opts.hook) {
+    const t = opts.timeSeconds ?? 0;
+    await opts.hook.ready(t, t + EXPORT_AHEAD);
+  }
+
   // The fonts are waited for FIRST, and everything after is synchronous.
   // Reading the canvas size before an await and drawing after it is how a
   // stale render paints a miniature into a canvas a newer one has resized —
@@ -528,7 +541,7 @@ export async function badgeToPng(
     ? { ...opts.collage, items: opts.collage.items.map((item, i) => ({ ...item, grader: cellGraders[i] })) }
     : opts.collage;
   try {
-    await renderBadge(canvas, { ...opts, source, grader, collage });
+    await renderBadge(canvas, { ...opts, source, grader, collage, ground: true });
   } finally {
     grader?.dispose();
     fit?.release();

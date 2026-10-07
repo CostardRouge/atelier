@@ -41,8 +41,13 @@ import {
 } from './drive-plan';
 import { TICK_KITS } from './tick-kits';
 import { driveBasemap, driveTrack } from './drive-paint';
-import { groundNote } from './basemap-strip';
+import { groundNote, type BasemapSet } from './basemap-strip';
+import { STREAM_DECODED, STRIP_TILES } from '../../map/tile-strip';
 import { TILE_PX, planTiles } from '../../map/tile-math';
+
+/** The pyramid's tiles as rasters would be described: zoom, region, size. */
+const patchesOf = (set: BasemapSet) =>
+  (set.pyramid?.tiles ?? []).map((t, i) => ({ zoom: t.z, box: set.pyramid!.boxes[i], width: TILE_PX, height: TILE_PX }));
 
 /** Three legs across Western Australia; the middle one has one place only. */
 const STAGES: HookStage[] = [
@@ -989,7 +994,7 @@ describe('the drive’s OpenStreetMap ground', () => {
       expect(s.lat).toBeGreaterThan(want.wide.box.south);
       expect(s.lat).toBeLessThan(want.wide.box.north);
     }
-    expect(want.patches).toEqual([]);
+    expect(patchesOf(want)).toEqual([]);
     expect(want.wants).toEqual([want.wide]);
   });
 
@@ -1012,20 +1017,22 @@ describe('the drive’s OpenStreetMap ground', () => {
     const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
     const plan = planFor(o);
     const want = driveBasemap(plan, o, 9 / 16, trackFor(o), 512)!;
-    expect(want.patches.length).toBeGreaterThan(0);
-    expect(want.patches.length).toBeLessThanOrEqual(512);
+    expect(patchesOf(want).length).toBeGreaterThan(0);
+    expect(patchesOf(want).length).toBeLessThanOrEqual(512);
     expect(want.wants[0]).toBe(want.wide);
-    expect(want.wants.length).toBe(1 + want.patches.length);
+    expect(want.wants.length).toBe(2);
+    expect(want.wants[1].pyramid).toBe(want.pyramid!.tiles);
+    expect(want.wants[1].key).toBe(want.pyramid!.key);
     // Every tile is one tile at its own zoom, the coarse levels first.
-    const zooms = want.patches.map((p) => p.zoom!);
+    const zooms = patchesOf(want).map((p) => p.zoom!);
     expect(zooms).toEqual([...zooms].sort((a, b) => a - b));
-    for (const p of want.patches) expect(Math.max(p.width, p.height)).toBe(TILE_PX);
+    for (const p of patchesOf(want)) expect(Math.max(p.width, p.height)).toBe(TILE_PX);
     // The tiles are DENSER than the wide raster: more pixels per degree.
     const perDeg = (w: { width: number; box: { west: number; east: number } }) => w.width / (w.box.east - w.box.west);
-    expect(perDeg(want.patches[want.patches.length - 1])).toBeGreaterThan(perDeg(want.wide) * 2);
+    expect(perDeg(patchesOf(want)[patchesOf(want).length - 1])).toBeGreaterThan(perDeg(want.wide) * 2);
     // Every stop the car halts at is under a tile — the frames are tight there.
     for (const s of route.stops) {
-      expect(want.patches.some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
+      expect(patchesOf(want).some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
     }
   });
 
@@ -1037,7 +1044,7 @@ describe('the drive’s OpenStreetMap ground', () => {
     const track = trackFor(o);
     const set = driveBasemap(plan, o, 9 / 16, track, 100_000)!;
     expect(set.short).toBe(0);
-    const levels = new Set(set.patches.map((p) => p.zoom));
+    const levels = new Set(patchesOf(set).map((p) => p.zoom));
     expect(levels.size).toBeGreaterThanOrEqual(2);
     // The level the paint draws follows the camera: deeper where it is tight.
     const seconds = track.seconds;
@@ -1051,14 +1058,37 @@ describe('the drive’s OpenStreetMap ground', () => {
     expect(tightest).toBeGreaterThan(widest);
   });
 
+  it('says which tiles each frame draws, and a window of them nearest first', () => {
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
+    const track = trackFor(o);
+    const set = driveBasemap(planFor(o), o, 9 / 16, track, 100_000)!;
+    const now = set.tilesAt(1);
+    expect(now.length).toBeGreaterThan(0);
+    for (const i of now) expect(set.pyramid!.tiles[i].z).toBe(set.levelAt(1));
+    // A window starts with the frame at its start, and holds each tile once.
+    const ahead = set.tilesAt(1, 2);
+    expect(ahead.slice(0, now.length)).toEqual(now);
+    expect(new Set(ahead).size).toBe(ahead.length);
+    expect(ahead.length).toBeGreaterThan(now.length);
+  });
+
+  it('plans a tight follow over the whole 2 100 km fixture at FULL detail inside a computer’s fetch budget', () => {
+    // What streaming buys: the pyramid is counted in REQUESTS, not bitmaps.
+    const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed', openWide: false, endWide: false });
+    const set = driveBasemap(planFor(o), o, 9 / 16, trackFor(o), STRIP_TILES)!;
+    expect(set.short).toBe(0);
+    expect(set.pyramid!.tiles.length).toBe(set.full);
+    expect(set.full).toBeGreaterThan(STREAM_DECODED);
+  });
+
   it('asks none without a budget, and never a tile at the wide raster’s own zoom', () => {
     const o = opts({ ground: 'tiles', camera: 'follow', viewKm: 35, zoom: 'fixed' });
-    expect(driveBasemap(planFor(o), o, 9 / 16, trackFor(o), 0)!.patches).toEqual([]);
+    expect(patchesOf(driveBasemap(planFor(o), o, 9 / 16, trackFor(o), 0)!)).toEqual([]);
     for (const viewKm of [35, 400, 3000]) {
       const wide = opts({ ground: 'tiles', camera: 'follow', viewKm, zoom: 'fixed' });
       const b = driveBasemap(planFor(wide), wide, 9 / 16, trackFor(wide), 512)!;
       const wideZoom = planTiles(b.wide.box, b.wide.width, b.wide.height)!.z;
-      for (const p of b.patches) expect(p.zoom!).toBeGreaterThan(wideZoom);
+      for (const p of patchesOf(b)) expect(p.zoom!).toBeGreaterThan(wideZoom);
     }
   });
 
@@ -1069,7 +1099,7 @@ describe('the drive’s OpenStreetMap ground', () => {
     const small = driveBasemap(plan, o, 9 / 16, track, 64)!;
     const big = driveBasemap(plan, o, 9 / 16, track, 4096)!;
     expect(big.short).toBeLessThan(small.short);
-    expect(Math.max(...big.patches.map((p) => p.zoom!))).toBeGreaterThan(Math.max(...small.patches.map((p) => p.zoom!)));
+    expect(Math.max(...patchesOf(big).map((p) => p.zoom!))).toBeGreaterThan(Math.max(...patchesOf(small).map((p) => p.zoom!)));
   });
 
   it('reads a portrait frame’s delivery by its LONG edge, not its width', () => {

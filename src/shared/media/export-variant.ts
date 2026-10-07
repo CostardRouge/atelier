@@ -108,6 +108,12 @@ export interface VariantRenderOptions {
     tSeconds: number,
   ) => void;
   /**
+   * Awaited ahead of the frames `paintUnderOverlays` will draw, on its clock
+   * — what that synchronous paint needs loaded first (a streamed map ground's
+   * tiles). Called before each sample is decoded (`FrameProcessor.ahead`).
+   */
+  prepareUnderOverlays?: (tSeconds: number) => Promise<void>;
+  /**
    * Which clock the overlays' animations run on.
    *
    * `source` (the default, the Studio's) hands the engine the SOURCE time
@@ -223,7 +229,14 @@ export async function exportVariantVideo(
       const delivered = opts.overlayClock === 'delivered';
       const speed = resolveSpeed(variant.speed);
 
+      // The clock `paintUnderOverlays` reads, from a source time.
+      const clockOf = (tMicros: number) => {
+        const t = tMicros / 1_000_000;
+        return delivered ? Math.max(0, t - origin) / speed : t - origin;
+      };
+      const prepare = opts.prepareUnderOverlays;
       return {
+        ...(prepare ? { ahead: (tMicros: number) => prepare(clockOf(tMicros)) } : {}),
         draw(videoFrame, tMicros) {
           // The SOURCE instant, in the clip's own seconds: the grain field
           // re-rolls per source frame quantised to `grainFps`, so a 24 fps

@@ -113,3 +113,40 @@ describe('the pyramid along the road', () => {
     expect(keys.size).toBe(plan.tiles.length);
   });
 });
+
+describe('what each frame draws', () => {
+  it('lists, per sample, the tiles at the level the frame is drawn at', () => {
+    const samples = road((f) => (f < 0.5 ? 0.35 : 3), 80);
+    const plan = planPyramid(samples, 100_000)!;
+    expect(plan.frameTiles.length).toBe(samples.length);
+    samples.forEach((s, k) => {
+      const tiles = plan.frameTiles[k].map((i) => plan.tiles[i]);
+      expect(tiles.length).toBeGreaterThan(0);
+      // One level per frame — its own, the budget allowing it.
+      const z = zoomForDensity(s.pxPerDeg);
+      for (const t of tiles) expect(t.z).toBe(z);
+      expect(covered({ tiles }, z, (s.box.west + s.box.east) / 2, (s.box.north + s.box.south) / 2)).toBe(true);
+    });
+  });
+
+  it('draws a frame given back its level at that level, the others one short', () => {
+    const samples = road(0.35, 120, (f) => (Math.abs(f - 0.5) < 0.05 ? 1 : 500));
+    const plan = planPyramid(samples, 96)!;
+    const own = zoomForDensity(samples[0].pxPerDeg);
+    const level = (k: number) => plan.tiles[plan.frameTiles[k][0]].z;
+    const sharp = samples.map((_, k) => k).filter((k) => level(k) === own - plan.short + 1);
+    expect(sharp.length).toBe(plan.sharp);
+    expect(sharp.length).toBeGreaterThan(0);
+    // The halt's still frames were offered their level first.
+    expect(sharp.some((k) => samples[k].motion === 1)).toBe(true);
+    expect(level(0)).toBe(own - plan.short);
+  });
+
+  it('leaves a frame the wide raster carries with nothing to draw', () => {
+    const wide: StripSample[] = [{ box: { west: 100, east: 130, south: -40, north: -10 }, pxPerDeg: 1920 / 30 }];
+    const z = zoomForDensity(1920 / 30);
+    const plan = planPyramid([...wide, ...road(0.35, 10)], 100_000, { floor: z })!;
+    expect(plan.frameTiles[0]).toEqual([]);
+    expect(plan.frameTiles[1].length).toBeGreaterThan(0);
+  });
+});

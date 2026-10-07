@@ -1,4 +1,6 @@
 import { describe, expect, it } from 'vitest';
+import { TILE_PX } from '../../map/tile-math';
+import type { BasemapSet } from './basemap-strip';
 import { BASEMAP_MAX_PX, basemapKey, planTiles } from '../../map/tile-math';
 import { applyView } from './drive-plan';
 import { CAMERA_PRESETS } from './map-camera';
@@ -48,6 +50,10 @@ import {
 } from './map-plan';
 import { adoptSearch, moveStopTo, numeralScale, replaceStopPlace, searchPlace, stopText, writtenStops } from './stops';
 import { TICK_KITS } from './tick-kits';
+
+/** The pyramid's tiles as rasters would be described: zoom, region, size. */
+const patchesOf = (set: BasemapSet) =>
+  (set.pyramid?.tiles ?? []).map((t, i) => ({ zoom: t.z, box: set.pyramid!.boxes[i], width: TILE_PX, height: TILE_PX }));
 
 const picture = (name: string): HookPickedPicture => ({
   ref: { name, size: 1000, lastModified: 1_741_046_400_000 },
@@ -784,18 +790,18 @@ describe('the camera following the pen', () => {
     const timing = mapTiming(planarHops(o.stops), o);
     const track = mapCameraTrack(o, timing, 9 / 16)!;
     const set = mapBasemap(o, 9 / 16, track, 256)!;
-    expect(set.patches.length).toBeGreaterThan(0);
-    expect(set.patches.length).toBeLessThanOrEqual(256);
+    expect(patchesOf(set).length).toBeGreaterThan(0);
+    expect(patchesOf(set).length).toBeLessThanOrEqual(256);
     expect(set.wants[0]).toBe(set.wide);
     const wideZoom = planTiles(set.wide.box, set.wide.width, set.wide.height)!.z;
-    for (const p of set.patches) expect(p.zoom!).toBeGreaterThan(wideZoom);
+    for (const p of patchesOf(set)) expect(p.zoom!).toBeGreaterThan(wideZoom);
     // Every stop is under a patch — the pen rests there.
     for (const s of stops) {
-      expect(set.patches.some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
+      expect(patchesOf(set).some((p) => s.lon >= p.box.west && s.lon <= p.box.east && s.lat >= p.box.south && s.lat <= p.box.north)).toBe(true);
     }
-    expect(mapBasemap(o, 9 / 16, null, 256)!.patches).toEqual([]);
-    expect(mapBasemap(mapOptions({ stops, basemap: true }), 9 / 16, track, 256)!.patches).toEqual([]);
-    expect(mapBasemap(o, 9 / 16, track, 0)!.patches).toEqual([]);
+    expect(patchesOf(mapBasemap(o, 9 / 16, null, 256)!)).toEqual([]);
+    expect(patchesOf(mapBasemap(mapOptions({ stops, basemap: true }), 9 / 16, track, 256)!)).toEqual([]);
+    expect(patchesOf(mapBasemap(o, 9 / 16, track, 0)!)).toEqual([]);
   });
 
   it('keeps the whole map’s region as it was for a still camera', () => {
