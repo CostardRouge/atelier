@@ -11,11 +11,10 @@
 import Segmented from '../../ui/Segmented';
 import { PRESS_LOOK } from '../../ui/press';
 import { FieldRow, RangeField, SelectField, TextField } from '../../ui/Inspector';
-import { TITLE_STYLE_PRESETS } from '../../overlay/title-styles';
+import { FacePicker, LookPicker } from './card-thumbs';
 import type { DriveOptions, DrivePlan } from './drive-plan';
 import {
   CARD_FACES,
-  CARD_FACE_NAMES,
   CARD_FACTS,
   CARD_FACT_NAMES,
   CARD_LIMITS,
@@ -59,7 +58,6 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
   const facts = plan ? cardFacts(plan) : null;
   const measurable = new Set(facts ? cardCells(facts, CARD_FACTS, WORDS, o.distance).map((c) => c.fact) : []);
   const pictures = plan ? plan.route.stops.some((s) => s.pictures.length > 0) : false;
-  const tripLook = TITLE_STYLE_PRESETS.find((p) => p.id === ctx.theme?.presetId)?.name ?? (ctx.theme ? 'custom' : 'Neutral');
   const names = plan ? [...new Set(plan.route.stops.map(placeName).filter(Boolean))] : [];
   const moment = badgeMoment(o.badgeWhen);
   const roadNames = face === 'trace' || face === 'passport';
@@ -72,24 +70,26 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
 
   return (
     <>
-      <FieldRow label="Face" hint={FACE_HINTS[face]}>
-        <Segmented
-          size="sm"
-          columns={3}
-          label="The card’s face"
-          value={face}
-          onChange={(cardFace) => set({ cardFace })}
-          options={CARD_FACES.filter((id) => badge || id !== 'stamp').map((id) => ({ id, label: CARD_FACE_NAMES[id] === 'Contact sheet' ? 'Sheet' : CARD_FACE_NAMES[id] }))}
-        />
-      </FieldRow>
-      <FieldRow label="Look" hint="The trip’s look by default — the badge’s. Another look changes the card alone.">
-        <SelectField
-          label="The card’s look"
-          value={o.cardLook}
-          onChange={(cardLook) => set({ cardLook })}
-          options={[{ id: 'trip', label: `The trip’s (${tripLook})` }, ...TITLE_STYLE_PRESETS.map((p) => ({ id: p.id, label: p.name }))]}
-        />
-      </FieldRow>
+      <FacePicker
+        faces={CARD_FACES.filter((id) => badge || id !== 'stamp')}
+        value={face}
+        onChange={(cardFace) => set({ cardFace })}
+        plan={plan}
+        pictures={ctx.pictures}
+        aspect={ctx.aspect}
+        input={{
+          o,
+          theme: ctx.theme,
+          tripName: ctx.tripName,
+          words: WORDS,
+          calendar: ctx.calendar ?? [],
+          towns: ctx.towns ?? null,
+          vehicle: '',
+          below: !badge,
+        }}
+      />
+      <p className="m-0 -mt-1 text-xs text-muted">{FACE_HINTS[face]}</p>
+      <LookPicker value={o.cardLook} onChange={(cardLook) => set({ cardLook })} trip={ctx.theme} />
       {!stamp && (
         <FieldRow
           label="Ground"
