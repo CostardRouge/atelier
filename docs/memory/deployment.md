@@ -24,7 +24,11 @@ Read before touching `vite.config.ts`, the workflows in `.github/workflows/`, `p
 
 ## Node 20 and `npm ci` (2026-08-20)
 
-**Fact.** Both workflows use `actions/setup-node@v4` with `node-version: 20`, `cache: npm`, and install with `npm ci`. **How to apply**: `package-lock.json` must stay in sync with `package.json` or `npm ci` fails the build; commit the lockfile with any dependency change, and do not introduce a second lockfile (pnpm/yarn/bun) — the cache key and `npm ci` both assume this one.
+**Fact.** Both workflows use `actions/setup-node@v5` with `node-version: 20`, `cache: npm`, and install with `npm ci`. **How to apply**: `package-lock.json` must stay in sync with `package.json` or `npm ci` fails the build; commit the lockfile with any dependency change, and do not introduce a second lockfile (pnpm/yarn/bun) — the cache key and `npm ci` both assume this one.
+
+## Actions on Node 24, runners named (2026-10-08)
+
+**Decision.** Every workflow uses action majors that run on Node 24 (`checkout@v5`, `setup-node@v5`, `upload-artifact@v7`, `configure-pages@v6`, `upload-pages-artifact@v5`, `deploy-pages@v5`, `github-script@v8`) and `runs-on: ubuntu-24.04`, never `ubuntu-latest`. **Why**: the Node 20 majors raise a deprecation warning on every run, and `ubuntu-latest` moves to Ubuntu 26 from 2026-10-19 — a named image makes that move a one-line bump someone chose. **How to apply**: when the runner log ends with "The following actions target Node.js 20", that warning names the exact actions to bump. The action runtime is unrelated to `node-version: 20`, which is the Node the build runs on. Pages' artifact action skips dotfiles since v4, and `dist/` has none.
 
 ## Built-in LUTs are discovered at build time, not listed (2026-08-20)
 
