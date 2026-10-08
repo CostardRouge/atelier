@@ -599,6 +599,8 @@ describe('a RAW base', () => {
     expect(sameDevelop(raw, { ...raw })).toBe(true);
     expect(sameDevelop(raw, { ...raw, rawGain: 2.5 })).toBe(false);
     expect(sameDevelop(raw, withoutBase(raw))).toBe(false);
+    // The rung itself, not only whether there is one.
+    expect(sameDevelop(raw, { ...raw, base: 'gainMap' })).toBe(false);
     expect(isDefaultDevelop(withoutBase(raw))).toBe(true);
     expect(cloneDevelop(raw).base).toBe('gain');
     expect(cloneDevelop(raw).rawGain).toBe(2);

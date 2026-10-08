@@ -302,7 +302,7 @@ behind an ⓘ; a pick from below the sensor CLIMBS to `steps[0]` first.
 **The opening curve** (`openingBaseCurve`: the picture's own, else
 Standard) is written by every door that PUTS a picture on its sensor and by
 nothing else — the menu's climb (`PictureWorkbench` `onBase`), the roll's
-sensor (`ontoRollSensor`, the follower's `developNow` and `inheritedRef`,
+sensor (`ontoRollSensor`, the follower's `developNowOf` / `rollBase` in `develop-now.ts`,
 both synthetic develops of `use-roll-export.ts`) — so the stage and the
 export agree for a follower never written, a remeter (rawGain → null) never
 adds one, and a develop stored before 2026-10-07 stays Linear. A follower
