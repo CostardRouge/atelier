@@ -900,6 +900,30 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     for (const stay of stays) expect(stay.end - stay.start).toBeGreaterThanOrEqual(STAY_MIN_SECONDS - 1e-9);
   });
 
+  it('leaves the camera alone: a recap pulls back over the road as a plain drive does', () => {
+    // His report: switching the counter to one that follows the drive changed
+    // the follow camera's zoom. The pull-back is per hop between the stops the
+    // car STOPS at, and a recap used to stop at every place — so no hop was
+    // long enough to pull back over.
+    const o = quiet({ pace: 0.65, driveSeconds: 12, camera: 'follow', viewKm: 120, zoom: 'pull-back', pullBack: 0.7, openWide: false, endWide: false });
+    const widest = (recap: boolean) => {
+      const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, recap)!;
+      const track = driveTrack(plan, o, 9 / 16);
+      let max = 0;
+      let min = Infinity;
+      for (let t = 0; t <= plan.schedule.arrivedAt; t += 0.05) {
+        max = Math.max(max, track.at(t).width);
+        min = Math.min(min, track.at(t).width);
+      }
+      return { max: max / min, track };
+    };
+    const plain = widest(false);
+    const recap = widest(true);
+    expect(plain.max).toBeGreaterThan(1.5);
+    expect(recap.max / plain.max).toBeGreaterThan(0.85);
+    expect(recap.track.viewKm).toBe(plain.track.viewKm);
+  });
+
   it('stands the ribbon’s head on the day the badge counts, at every moment', () => {
     const o = quiet({ pace: 0.65, ribbon: true });
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
