@@ -1906,6 +1906,22 @@ function isOnScreen(
 }
 
 /** Geometry of one element in video-pixel space — used for hit-testing. */
+/**
+ * The size one text element draws at — its glyph box, before any legibility
+ * padding — measured exactly as `drawOverlays` lays it out. What a painter
+ * that composes several texts of a theme (Virée's summary card) fits them by.
+ */
+export function textElementSize(
+  ctx: Ctx2D,
+  el: OverlayElement,
+  videoWidth: number,
+  videoHeight: number,
+  theme?: StyleTheme | null,
+): { w: number; h: number; fontPx: number } | null {
+  const lay = layoutElement(ctx, el, null, videoWidth, videoHeight, theme);
+  return lay ? { w: lay.w, h: lay.h, fontPx: lay.fontPx } : null;
+}
+
 export interface ElementBox {
   id: string;
   x: number;

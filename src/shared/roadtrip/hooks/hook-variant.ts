@@ -33,6 +33,7 @@ import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
 import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
+import type { StyleTheme } from '../../overlay/title-styles';
 
 /** What the engine draws into — the 2D context both renderers already use. */
 export type HookCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -336,6 +337,15 @@ export interface HookContext {
    * town (`stop-clusters.ts`). Absent: the first member names it.
    */
   towns?: readonly NamedTown[] | null;
+  /**
+   * The trip's LOOK (`TripDoc.theme`) — the badge's own type, colour and
+   * glow — for an opener that sets words of its own (Virée's summary card),
+   * so they wear the signature the badge wears. Absent or null: the neutral
+   * look.
+   */
+  theme?: StyleTheme | null;
+  /** The trip's name — what a card that titles the trip says by default. */
+  tripName?: string;
 }
 
 /** One sound the hook makes — see `shared/audio/sound-event.ts`. */

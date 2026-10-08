@@ -63,6 +63,8 @@ import { formatDistance, placeLabels } from './geo';
 import { paintTape } from './scrub-paint';
 import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
+import { drawLookTexts, type LookText } from './look-text';
+import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
 import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
@@ -84,6 +86,8 @@ export interface DriveScratch {
   buffer?: OffscreenCanvas | HTMLCanvasElement;
   /** The words the summary card and the milestones say — the trip's badge words, English by default. */
   words: SummaryWords;
+  /** The trip's look (`HookContext.theme`), which the summary card's words wear. */
+  theme: StyleTheme | null;
 }
 
 export interface SummaryWords {
@@ -95,13 +99,17 @@ export interface SummaryWords {
 
 export const SUMMARY_WORDS: SummaryWords = { day: 'Day', days: 'days', stop: 'Stop', stops: 'stops' };
 
-export function driveScratch(spec: CarSpec, words: Partial<SummaryWords> = {}): DriveScratch {
+export function driveScratch(
+  spec: CarSpec,
+  words: Partial<SummaryWords> = {},
+  theme: StyleTheme | null = null,
+): DriveScratch {
   const w = { ...SUMMARY_WORDS };
   for (const key of Object.keys(w) as (keyof SummaryWords)[]) {
     const given = words[key]?.trim();
     if (given) w[key] = given;
   }
-  return { spec, model: carModel(spec.model), words: w };
+  return { spec, model: carModel(spec.model), words: w, theme: theme ?? themeFromPreset('neutral') };
 }
 
 function carParts(scratch: DriveScratch): Part[] {
@@ -625,7 +633,7 @@ function paintMap(
 
   // The recap's summary card, once the car has arrived and rested.
   const { summaryAt } = plan.schedule;
-  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words);
+  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words, scratch.theme, frame, t);
 
   g.restore();
 }
@@ -682,7 +690,9 @@ function paintMilestones(
 
 /**
  * The summary: days · distance · stops, in the map's box — the three
- * numbers of the trip the counter has been counting up to.
+ * numbers of the trip the counter has been counting up to. On the map's
+ * paper, so its words wear the trip's LOOK in its face and case and take the
+ * map's ink (gold or red on cream reads badly) — the summary card's rule.
  */
 function paintSummary(
   g: HookCtx2D,
@@ -692,6 +702,9 @@ function paintSummary(
   u: number,
   rise: number,
   words: SummaryWords,
+  theme: StyleTheme | null,
+  frame: FrameBox,
+  t: number,
 ): void {
   const n = plan.route.stops.length;
   const unit = o.distance === 'mi' ? 'mi' : 'km';
@@ -716,29 +729,24 @@ function paintSummary(
   g.lineWidth = 1.5 * u;
   g.strokeStyle = hexToRgba(o.inkColor, 0.3);
   g.stroke();
-  g.textAlign = 'center';
-  g.fillStyle = o.inkColor;
-  cells.forEach((cell, i) => {
-    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
-    g.font = `600 ${54 * u}px ${MONO_FONT}`;
-    g.textBaseline = 'alphabetic';
-    g.fillText(cell.value, x, cy + 8 * u);
-    g.font = `500 ${20 * u}px ${LABEL_FONT}`;
-    g.textBaseline = 'top';
-    g.fillStyle = hexToRgba(o.inkColor, 0.7);
-    g.fillText(cell.word, x, cy + 22 * u);
-    g.fillStyle = o.inkColor;
-    if (i > 0) {
-      const sx = cx - cw / 2 + (cw * i) / cells.length;
-      g.strokeStyle = hexToRgba(o.inkColor, 0.18);
-      g.lineWidth = 1.5 * u;
-      g.beginPath();
-      g.moveTo(sx, cy - ch * 0.3);
-      g.lineTo(sx, cy + ch * 0.3);
-      g.stroke();
-    }
+  cells.forEach((_, i) => {
+    if (i === 0) return;
+    const sx = cx - cw / 2 + (cw * i) / cells.length;
+    g.strokeStyle = hexToRgba(o.inkColor, 0.18);
+    g.lineWidth = 1.5 * u;
+    g.beginPath();
+    g.moveTo(sx, cy - ch * 0.3);
+    g.lineTo(sx, cy + ch * 0.3);
+    g.stroke();
   });
   g.restore();
+  const texts: LookText[] = [];
+  cells.forEach((cell, i) => {
+    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
+    texts.push({ id: `summary:value:${i}`, text: cell.value, px: 54 * u, x, y: cy + 8 * u, anchor: 'bottom-center', ink: o.inkColor, alpha: k });
+    texts.push({ id: `summary:word:${i}`, text: cell.word, px: 20 * u, x, y: cy + 22 * u, anchor: 'top-center', ink: hexToRgba(o.inkColor, 0.7), alpha: k });
+  });
+  drawLookTexts(g, texts, frame.width, frame.height, theme, t);
 }
 
 /** The sample before `s` on the path — what the trail is drawn up to. */

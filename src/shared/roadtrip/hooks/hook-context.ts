@@ -92,6 +92,8 @@ export function hookContextFor(
     // Read, never fetched here: the editor asks for the index when a piece
     // groups by town, and every surface then names the same groups.
     towns: townsIfLoaded(),
+    theme: trip.theme,
+    tripName: trip.name,
   };
 }
 

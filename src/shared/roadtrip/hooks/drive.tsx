@@ -51,6 +51,7 @@ import {
   type DriveRoute,
 } from './drive-plan';
 import { driveRibbon } from './drive-ribbon';
+import { loadLook } from './look-text';
 import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
@@ -970,11 +971,12 @@ export const driveVariant: HookVariant = {
     const plan = drivePlan(route, o, count !== null);
     if (!plan) return { seconds: 0 };
     const words = ctx.badgeWords;
-    const scratch = driveScratch(vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR), {
-      day: words?.day,
-      days: words?.days,
-      stop: words?.stop,
-    });
+    const scratch = driveScratch(
+      vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR),
+      { day: words?.day, days: words?.days, stop: words?.stop },
+      ctx.theme ?? null,
+    );
+    const fonts = plan.schedule.summaryAt !== null ? loadLook(scratch.theme) : Promise.resolve();
     // The camera, baked once with the plan (`map-camera.ts`); the plain
     // follow of before needs none.
     const track = o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null;
@@ -1008,7 +1010,9 @@ export const driveVariant: HookVariant = {
           : undefined,
       paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track, ribbon),
       // A streamed ground's tiles, decoded before an export draws (`basemap-strip.ts`).
-      ready: basemap?.pyramid ? (t0, t1, signal) => readyGround(basemap, t0, t1, signal) : undefined,
+      // The look's faces too, which the summary card sets its words in.
+      ready: (t0, t1, signal) =>
+        Promise.all([fonts, basemap?.pyramid ? readyGround(basemap, t0, t1, signal) : undefined]).then(() => undefined),
       score: o.sound ? () => driveScore(plan, o) : undefined,
       mixWithSource: o.sound && o.mixWithClip,
     };
