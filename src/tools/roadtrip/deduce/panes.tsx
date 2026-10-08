@@ -1,5 +1,6 @@
 import type { ReactNode } from 'react';
 import type { DraftOutcome } from '../../../shared/roadtrip/deduce-draft';
+import { sourcesOf } from '../../../shared/roadtrip/polarsteps';
 import { placeText, type PlaceWritingTrip } from '../../../shared/roadtrip/place-style';
 import type { TripStage } from '../../../shared/roadtrip/trip-types';
 import { stageTint } from '../../../shared/roadtrip/stage-ruler';
@@ -160,8 +161,9 @@ export function DataPane({ ctx }: { ctx: DeduceContext }) {
   const { deduction, settings, actions, draft } = ctx;
   const { track, outliers, halts, days, readAt, sourceId } = deduction;
   const blind = days.filter((d) => !d.placed && d.count > 0);
-  const unnamed = deduction.chapters.flatMap((c) => c.halts).filter((h) => !h.city);
+  const unnamed = deduction.chapters.flatMap((c) => c.halts).filter((h) => !h.city && !h.step);
   const ago = readAt ? Math.max(0, Math.round((Date.now() - readAt) / 60_000)) : null;
+  const polar = track ? sourcesOf(track) : null;
   const dates = (list: string[], n = 10) => (
     <div className="flex flex-wrap gap-1">
       {list.slice(0, n).map((d) => (
@@ -187,6 +189,9 @@ export function DataPane({ ctx }: { ctx: DeduceContext }) {
       <p className={`m-0 ${mono}`}>
         {sourceId} · one position per day, no picture fetched · {track ? `${track.points.length} placed, ${track.blind.length} without position` : 'not read yet'}
         {ago !== null ? ` · read ${ago === 0 ? 'just now' : `${ago} min ago`}` : ''}
+        {polar && (polar.track || polar.step)
+          ? ` · Polarsteps placed ${plural(polar.track, 'day')} by its track${polar.step ? `, ${polar.step} by a step alone` : ''}, ${polar.instance} left to ${sourceId}`
+          : ''}
       </p>
       <Row title="Days without a position" count={blind.length}>
         <span className={note}>

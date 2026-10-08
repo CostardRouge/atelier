@@ -53,6 +53,7 @@ const SOURCE_WORDS: Record<NonNullable<TripPlace['source']>, string> = {
   typed: 'typed',
   search: 'found by the search',
   deduced: 'from your pictures',
+  polarsteps: 'from Polarsteps',
 };
 
 /**

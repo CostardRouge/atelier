@@ -118,8 +118,12 @@ export const POST_KINDS: readonly { id: PostKind; label: string; hint: string }[
   { id: 'photo', label: 'Single photo', hint: 'One image with its badge' },
 ];
 
-/** Where a place's facts came from — said beside it, never decisive. */
-export type PlaceSource = 'typed' | 'search' | 'deduced';
+/**
+ * Where a place's facts came from — said beside it, never decisive.
+ * `polarsteps` (2026-10-08) is a step of a Polarsteps export the author
+ * dropped into Deduce: additive, so no document version moved.
+ */
+export type PlaceSource = 'typed' | 'search' | 'deduced' | 'polarsteps';
 
 /**
  * How a place is WRITTEN where it is shown: «Sydney, NSW» · «Sydney, New

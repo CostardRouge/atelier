@@ -8,6 +8,7 @@ import { proposeDraft, type DeduceDraft, type Proposal } from '../../../shared/r
 import { findOutliers, withoutOutliers, type Outlier } from '../../../shared/roadtrip/deduce-outliers';
 import type { GazetteerCity } from '../../../shared/roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../../shared/roadtrip/load-gazetteer';
+import { mergeDays, polarstepsDays, type PolarstepsExport } from '../../../shared/roadtrip/polarsteps';
 import { segmentTrack, type TrackLeg } from '../../../shared/roadtrip/segment-track';
 import { trackChapters, type TrackChapter } from '../../../shared/roadtrip/track-chapters';
 import { enumerateDays, type IsoDate } from '../../../shared/roadtrip/trip-days';
@@ -43,7 +44,14 @@ export interface DayInfo {
 export interface Deduction {
   client: WinnowClient;
   sourceId: string;
+  /**
+   * The days the deduction reads: the instance's, merged with a Polarsteps
+   * export when one was dropped (`mergeDays`). Null until there is something
+   * to read — the instance's answer, or an export when the instance failed.
+   */
   track: DayTrack | null;
+  /** The instance's own answer, before any merge. */
+  instanceTrack: DayTrack | null;
   cities: GazetteerCity[] | null;
   land: LandCollection | null;
   problem: Problem | null;
@@ -78,12 +86,13 @@ export function useDeduction(
   trip: TripDoc,
   settings: DeduceSettings,
   draft: DeduceDraft,
+  polarsteps: PolarstepsExport | null = null,
 ): Deduction {
   const client = useMemo(
     () => new WinnowClient({ baseUrl: connection.baseUrl, auth: connection.auth }),
     [connection.baseUrl, connection.auth],
   );
-  const [track, setTrack] = useState<DayTrack | null>(null);
+  const [instanceTrack, setTrack] = useState<DayTrack | null>(null);
   const [cities, setCities] = useState<GazetteerCity[] | null>(null);
   const [land, setLand] = useState<LandCollection | null>(null);
   const [problem, setProblem] = useState<Problem | null>(null);
@@ -133,6 +142,15 @@ export function useDeduction(
     };
   }, []);
 
+  // A dropped export is read on the trip's own two dates and merged day by
+  // day; without the instance (it failed), the export alone still deduces.
+  const track = useMemo<DayTrack | null>(() => {
+    const polar = polarsteps ? polarstepsDays(polarsteps, trip.startDate, trip.endDate) : null;
+    if (!polar) return instanceTrack;
+    if (!instanceTrack && !problem) return null;
+    return mergeDays(instanceTrack, polar);
+  }, [instanceTrack, polarsteps, problem, trip.startDate, trip.endDate]);
+
   const outliers = useMemo(() => (track ? findOutliers(track.points) : []), [track]);
   const points = useMemo(
     () => (track ? (settings.ignoreOutliers ? withoutOutliers(track.points, outliers) : track.points) : []),
@@ -152,9 +170,10 @@ export function useDeduction(
         grain: settings.grain,
         maxHopKm: settings.hopKm,
         bigDays: settings.bigDays,
+        steps: polarsteps?.trip?.steps,
       }),
     };
-  }, [track, cities, points, settings]);
+  }, [track, cities, points, settings, polarsteps]);
 
   const proposals = useMemo(
     () => proposeDraft(trip, chapters, draft, connection.id),
@@ -181,6 +200,7 @@ export function useDeduction(
     client,
     sourceId: connection.id,
     track,
+    instanceTrack,
     cities,
     land,
     problem,

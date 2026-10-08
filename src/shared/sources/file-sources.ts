@@ -281,6 +281,15 @@ export async function pickFiles(): Promise<File[]> {
   return files ? Array.from(files) : [];
 }
 
+/** Several files of one kind — a Polarsteps export's two JSON files. */
+export async function pickFilesOf(accept: string): Promise<File[]> {
+  const files = await runFilePicker((input) => {
+    input.multiple = true;
+    input.accept = accept;
+  });
+  return files ? Array.from(files) : [];
+}
+
 /** Accept strings for the single-slot pickers, kept in one place. */
 export const VIDEO_ACCEPT = 'video/*,.mp4,.mov';
 export const SRT_ACCEPT = '.srt,text/plain';
