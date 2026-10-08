@@ -52,7 +52,7 @@ const GEAR_GROUPS: Array<{
       { key: 'awning', needs: 'rack', hint: 'Along the basket’s left side.' },
       { key: 'roofRails', hint: 'Along the roof’s two edges, as the factory fits them.' },
       { key: 'roofBars', hint: 'Two bars across the roof — on the rails when they are fitted, on their own feet otherwise.' },
-      { key: 'roofSolar', hint: 'In a frame on the roof itself, over the cab.' },
+      { key: 'roofSolar', hint: 'A 430 W module in a frame on the roof, over the cab.' },
     ],
   },
   {

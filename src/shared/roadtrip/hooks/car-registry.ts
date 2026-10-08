@@ -78,7 +78,7 @@ export const CAR_MODELS: readonly CarModel[] = [
     kind: 'car',
     name: 'Renault Trafic',
     short: 'Trafic',
-    series: 'Panel van · 2019–2021 facelift',
+    series: 'Panel van L2 · 2019–2021 facelift',
     length: TRAFIC_LENGTH,
     width: TRAFIC_WIDTH,
     wheelRadius: TRAFIC_WHEEL_RADIUS,

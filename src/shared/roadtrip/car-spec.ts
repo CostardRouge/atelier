@@ -201,7 +201,7 @@ export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
     color: '#f0f0ec',
     finish: 'gloss',
     fitted: ['roofSolar', 'mirrors'],
-    asItComes: 'The Trafic in white, gloss, with the solar panel on its roof',
+    asItComes: 'The Trafic in white, gloss, with the 430 W panel on its roof',
   },
   'zoe-ph2': {
     gear: ['mirrors'],
