@@ -778,12 +778,12 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
     expect(plan.recap).toBe(true);
     const kinds = plan.schedule.phases.map((p) => p.kind);
-    expect(kinds).toEqual(['stay', 'run', 'stay', 'run', 'stay', 'run', 'stay', 'run', 'arrive', 'summary', 'reveal']);
+    expect(kinds).toEqual(['stay', 'run', 'stay', 'run', 'stay', 'run', 'stay', 'run', 'arrive', 'summary']);
     const road = plan.schedule.phases
       .filter((p) => p.kind === 'run' || p.kind === 'stay' || p.kind === 'arrive')
       .reduce((n, p) => n + (p.end - p.start), 0);
     expect(road).toBeCloseTo(10, 6);
-    expect(plan.schedule.total).toBeCloseTo(10 + SUMMARY_SECONDS + REVEAL_SECONDS, 6);
+    expect(plan.schedule.total).toBeCloseTo(10 + SUMMARY_SECONDS, 6);
     // A run between two places that touch in time takes the floor, by length alone.
     expect(plan.schedule.phases[1].end - plan.schedule.phases[1].start).toBeGreaterThanOrEqual(MIN_RUN_SECONDS);
   });
@@ -1029,7 +1029,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     expect(plan.clock).toBeNull();
     expect(driveCounterPieces(plan, o, 'days', 1, WORDS)).toEqual({});
     expect(driveCounterPieces(plan, o, 'places', 1, WORDS).counter).toBe('of 2');
-    expect(plan.schedule.phases.map((p) => p.kind)).toEqual(['run', 'arrive', 'summary', 'reveal']);
+    expect(plan.schedule.phases.map((p) => p.kind)).toEqual(['run', 'arrive', 'summary']);
   });
 
   it('marks the road every so many days and kilometres, a day reached during a stay sitting on its stop', () => {

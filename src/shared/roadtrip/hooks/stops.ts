@@ -13,7 +13,7 @@
  */
 
 import type { PlaceResult } from '../../map/geocode';
-import { DEFAULT_PLACE_STYLE, writePlace, type PlaceWritingTrip } from '../place-style';
+import { DEFAULT_PLACE_STYLE, stateCodeFor, writePlace, type PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { GeoPoint } from './geo';
 import type { HookPickedPicture, HookPlace, HookStage } from './hook-variant';
@@ -72,6 +72,21 @@ export function stopText(place: HookPlace, style: StopStyle = 'trip', writing?: 
     chosen,
     trip,
   );
+}
+
+/**
+ * The state a place is in, as the trip writes its code («QLD») — the
+ * passport's stamps and the card's count of states — else the state's name,
+ * else nothing.
+ */
+export function stopState(place: HookPlace, writing?: PlaceWritingTrip): string {
+  const state = (place.state ?? '').trim();
+  if (!state) return '';
+  const { code } = stateCodeFor(
+    { state, stateCode: place.stateCode, searchCode: place.searchCode, countryCode: place.countryCode },
+    { stateCodes: writing?.stateCodes ?? {} },
+  );
+  return code || state;
 }
 
 /** The stops with their names WRITTEN — what an opener paints and captions with. */

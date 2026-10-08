@@ -63,6 +63,10 @@ import { formatDistance, placeLabels } from './geo';
 import { paintTape } from './scrub-paint';
 import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
+import { drawLookTexts, type LookText } from './look-text';
+import { cellAt, type CardScene } from './summary-card';
+import { cardCovers, cardProgress, paintCard as paintSummaryCard } from './summary-paint';
+import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
 import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
@@ -84,6 +88,8 @@ export interface DriveScratch {
   buffer?: OffscreenCanvas | HTMLCanvasElement;
   /** The words the summary card and the milestones say — the trip's badge words, English by default. */
   words: SummaryWords;
+  /** The trip's look (`HookContext.theme`), which the summary card's words wear. */
+  theme: StyleTheme | null;
 }
 
 export interface SummaryWords {
@@ -95,13 +101,17 @@ export interface SummaryWords {
 
 export const SUMMARY_WORDS: SummaryWords = { day: 'Day', days: 'days', stop: 'Stop', stops: 'stops' };
 
-export function driveScratch(spec: CarSpec, words: Partial<SummaryWords> = {}): DriveScratch {
+export function driveScratch(
+  spec: CarSpec,
+  words: Partial<SummaryWords> = {},
+  theme: StyleTheme | null = null,
+): DriveScratch {
   const w = { ...SUMMARY_WORDS };
   for (const key of Object.keys(w) as (keyof SummaryWords)[]) {
     const given = words[key]?.trim();
     if (given) w[key] = given;
   }
-  return { spec, model: carModel(spec.model), words: w };
+  return { spec, model: carModel(spec.model), words: w, theme: theme ?? themeFromPreset('neutral') };
 }
 
 function carParts(scratch: DriveScratch): Part[] {
@@ -221,25 +231,33 @@ export function paintDrive(
   track: CameraTrack | null = null,
   /** The recap's ribbon of days under the map (`drive-ribbon.ts`), when asked. */
   ribbon: DriveRibbon | null = null,
+  /** The recap's summary card (`summary-card.ts`), when the drive has one. */
+  card: CardScene | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
   const moment = plan.at(t);
   if (moment.mapAlpha <= 0) return;
+  // A card that covers the frame, once it has come: the map under it is not drawn.
+  const { summaryAt } = plan.schedule;
+  if (card && card.face !== 'stamp' && summaryAt !== null && cardCovers(card, t - summaryAt)) {
+    paintSummaryCard(g, card, pictures, t - summaryAt, frame, t);
+    return;
+  }
 
   if (moment.mapAlpha >= 1) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
     return;
   }
   // The reveal: the whole map at a falling alpha over the picture beneath.
   const buffer = bufferFor(scratch, w, h);
   const bg = buffer?.getContext('2d') as HookCtx2D | null;
   if (!buffer || !bg) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
     return;
   }
   bg.clearRect(0, 0, w, h);
-  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
   g.save();
   g.globalAlpha = moment.mapAlpha;
   g.drawImage(buffer, 0, 0);
@@ -273,6 +291,7 @@ function paintMap(
   basemap: DriveBasemap | null,
   track: CameraTrack | null,
   ribbon: DriveRibbon | null,
+  card: CardScene | null,
 ): void {
   const { width: w, height: h } = frame;
   const u = w / 1080;
@@ -623,9 +642,13 @@ function paintMap(
   // A picture filling the frame while the car halts: over everything of the map.
   if (o.pictures === 'fill') for (const { pop, rise } of showing) fullFrame(rise, pop);
 
-  // The recap's summary card, once the car has arrived and rested.
+  // The recap's summary card, once the car has arrived and rested: the
+  // stamp in the map's box, any other face over the whole frame.
   const { summaryAt } = plan.schedule;
-  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words);
+  if (summaryAt !== null && t >= summaryAt) {
+    if (card && card.face !== 'stamp') paintSummaryCard(g, card, pictures, t - summaryAt, frame, t);
+    else paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words, card?.theme ?? scratch.theme, frame, t, card);
+  }
 
   g.restore();
 }
@@ -682,7 +705,9 @@ function paintMilestones(
 
 /**
  * The summary: days · distance · stops, in the map's box — the three
- * numbers of the trip the counter has been counting up to.
+ * numbers of the trip the counter has been counting up to. On the map's
+ * paper, so its words wear the trip's LOOK in its face and case and take the
+ * map's ink (gold or red on cream reads badly) — the summary card's rule.
  */
 function paintSummary(
   g: HookCtx2D,
@@ -692,16 +717,27 @@ function paintSummary(
   u: number,
   rise: number,
   words: SummaryWords,
+  theme: StyleTheme | null,
+  frame: FrameBox,
+  t: number,
+  /** The card's facts, as the author chose them; absent, days · distance · stops. */
+  scene: CardScene | null = null,
 ): void {
   const n = plan.route.stops.length;
   const unit = o.distance === 'mi' ? 'mi' : 'km';
   const cells: { value: string; word: string }[] = [];
-  if (plan.clock) {
-    const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
-    cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+  if (scene) {
+    const { count } = cardProgress(scene.card.cardEntrance, t - (plan.schedule.summaryAt ?? t));
+    for (const cell of scene.cells) cells.push({ value: cellAt(cell, count, unit), word: cell.word });
+  } else {
+    if (plan.clock) {
+      const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
+      cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+    }
+    cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
+    cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
   }
-  cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
-  cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
+  if (!cells.length) return;
 
   const k = 1 - Math.pow(1 - rise, 3);
   const cw = Math.min(box.width, 200 * u * cells.length);
@@ -716,29 +752,24 @@ function paintSummary(
   g.lineWidth = 1.5 * u;
   g.strokeStyle = hexToRgba(o.inkColor, 0.3);
   g.stroke();
-  g.textAlign = 'center';
-  g.fillStyle = o.inkColor;
-  cells.forEach((cell, i) => {
-    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
-    g.font = `600 ${54 * u}px ${MONO_FONT}`;
-    g.textBaseline = 'alphabetic';
-    g.fillText(cell.value, x, cy + 8 * u);
-    g.font = `500 ${20 * u}px ${LABEL_FONT}`;
-    g.textBaseline = 'top';
-    g.fillStyle = hexToRgba(o.inkColor, 0.7);
-    g.fillText(cell.word, x, cy + 22 * u);
-    g.fillStyle = o.inkColor;
-    if (i > 0) {
-      const sx = cx - cw / 2 + (cw * i) / cells.length;
-      g.strokeStyle = hexToRgba(o.inkColor, 0.18);
-      g.lineWidth = 1.5 * u;
-      g.beginPath();
-      g.moveTo(sx, cy - ch * 0.3);
-      g.lineTo(sx, cy + ch * 0.3);
-      g.stroke();
-    }
+  cells.forEach((_, i) => {
+    if (i === 0) return;
+    const sx = cx - cw / 2 + (cw * i) / cells.length;
+    g.strokeStyle = hexToRgba(o.inkColor, 0.18);
+    g.lineWidth = 1.5 * u;
+    g.beginPath();
+    g.moveTo(sx, cy - ch * 0.3);
+    g.lineTo(sx, cy + ch * 0.3);
+    g.stroke();
   });
   g.restore();
+  const texts: LookText[] = [];
+  cells.forEach((cell, i) => {
+    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
+    texts.push({ id: `summary:value:${i}`, text: cell.value, px: 54 * u, x, y: cy + 8 * u, anchor: 'bottom-center', ink: o.inkColor, alpha: k });
+    texts.push({ id: `summary:word:${i}`, text: cell.word, px: 20 * u, x, y: cy + 22 * u, anchor: 'top-center', ink: hexToRgba(o.inkColor, 0.7), alpha: k });
+  });
+  drawLookTexts(g, texts, frame.width, frame.height, theme, t);
 }
 
 /** The sample before `s` on the path — what the trail is drawn up to. */
