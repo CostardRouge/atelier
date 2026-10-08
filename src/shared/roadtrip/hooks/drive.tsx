@@ -52,6 +52,8 @@ import {
 } from './drive-plan';
 import { driveRibbon } from './drive-ribbon';
 import { loadLook } from './look-text';
+import { NEW_CARD, badgeMoment, badgeWindowFor, cardScene } from './summary-card';
+import { SummaryCardRows } from './summary-card-panel';
 import { driveBasemap, driveScratch, driveTrack, paintDrive } from './drive-paint';
 import { driveCountOf, type DriveCount } from '../day-badge';
 import { FitRow } from './fit-row';
@@ -838,7 +840,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               <FieldRow
                 label="On the way"
                 align="start"
-                hint={`A card — days · distance · stops — once the car has rested, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}. The ribbon is Défilé’s tape of the trip’s days under the map, its head on the counter’s day.${o.pictures !== 'none' ? ' While the car stays, a picture shot on a later day comes up on its day.' : ''}`}
+                hint={`A card once the car has rested — set below —, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}. The ribbon is Défilé’s tape of the trip’s days under the map, its head on the counter’s day.${o.pictures !== 'none' ? ' While the car stays, a picture shot on a later day comes up on its day.' : ''}`}
               >
                 <div className="flex flex-col gap-1.5">
                   <ToggleField label="A summary card at the end" checked={o.summary} onChange={(summary) => set({ summary })}>
@@ -867,6 +869,12 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               </FieldRow>
             </>
           )}
+        </Group>
+      )}
+
+      {count && o.summary && (
+        <Group title="Summary card">
+          <SummaryCardRows o={o} set={set} plan={plan} ctx={ctx} />
         </Group>
       )}
 
@@ -944,9 +952,12 @@ export const driveVariant: HookVariant = {
   id: 'drive',
   name: 'Virée',
   tagline: 'A little car drives the map from stop to stop, showing pictures',
-  defaults: { ...DRIVE_DEFAULTS },
-  // The vehicle too: the boat a piece borrowed is that day's, not a look.
-  contentKeys: ['picked', 'stops', 'vehicle', 'vehicleColor'],
+  // A new recap's card is the TRACE; one stored before it says nothing and
+  // keeps the stamp it had (`CARD_DEFAULTS`).
+  defaults: { ...DRIVE_DEFAULTS, ...NEW_CARD },
+  // The vehicle too: the boat a piece borrowed is that day's, not a look. And
+  // what the card says of THIS trip — its words, its places, its facts.
+  contentKeys: ['picked', 'stops', 'vehicle', 'vehicleColor', 'cardTitle', 'cardSubtitle', 'cardChosen', 'cardFrom', 'cardTo', 'cardFacts'],
   // An Itinerary's stops, handed over on a switch, are driven at once the
   // first time — the author came for their places, not the legs'.
   sharedStops: { key: 'stops', fresh: { stopsOn: 'custom' } },
@@ -976,7 +987,21 @@ export const driveVariant: HookVariant = {
       { day: words?.day, days: words?.days, stop: words?.stop },
       ctx.theme ?? null,
     );
-    const fonts = plan.schedule.summaryAt !== null ? loadLook(scratch.theme) : Promise.resolve();
+    // The recap's summary card, measured once with the plan (`summary-card.ts`).
+    const card =
+      plan.schedule.summaryAt !== null
+        ? cardScene({
+            plan,
+            o,
+            theme: ctx.theme,
+            tripName: ctx.tripName,
+            words: scratch.words,
+            calendar: ctx.calendar ?? [],
+            towns: ctx.towns ?? null,
+            vehicle: scratch.model.name,
+          })
+        : null;
+    const fonts = card ? loadLook(card.theme) : Promise.resolve();
     // The camera, baked once with the plan (`map-camera.ts`); the plain
     // follow of before needs none.
     const track = o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null;
@@ -1008,7 +1033,10 @@ export const driveVariant: HookVariant = {
               return out;
             }
           : undefined,
-      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track, ribbon),
+      // The badge and the summary card are never on screen together: on a
+      // recap that has its card, the badge takes the moment it was given.
+      ...(count && o.summary ? { badgeWindow: badgeWindowFor(badgeMoment(o.badgeWhen), plan.schedule) } : {}),
+      paint: (g, t, frame) => paintDrive(g, plan, o, ctx.pictures, scratch, t, frame, basemap, track, ribbon, card),
       // A streamed ground's tiles, decoded before an export draws (`basemap-strip.ts`).
       // The look's faces too, which the summary card sets its words in.
       ready: (t0, t1, signal) =>

@@ -151,7 +151,10 @@ recommendations («ça me va aussi»).
 - **Layout** *Map over photo*: each place's picture full-frame behind a map
   plate, cross-faded, a slow push-in; plus the **summary card** at the end
   (days · km · places) and **milestones** on the road (every 50 days or
-  1 000 km), both on by default.
+  1 000 km), both on by default. *Since 2026-10-08 the card is configurable —
+  six faces, its look, ground, facts, names, and when the badge shows —
+  from the lab https://claude.ai/artifact/5rCRZCwpbsywuVaXfZrKGY
+  (`docs/memory/roadtrip.md`, «The recap's SUMMARY CARD»).*
 - **Dates of «your places»**: from the trip stage whose places hold the stop
   (matched by position, in the journey's order), else the stop's picture's
   date; a stop with neither stays on the road and moves no counter, and the

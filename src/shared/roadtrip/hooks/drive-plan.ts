@@ -48,7 +48,8 @@ import {
   type HookStage,
 } from './hook-variant';
 import { partitionPicked, readPicked, sampleEvenly } from './picked';
-import { STOP_STYLES, readStops, stopText, type MapStop, type StopStyle } from './stops';
+import { BADGE_BEFORE_SECONDS, CARD_DEFAULTS, badgeMoment, readCardOptions, type CardOptions } from './summary-card';
+import { STOP_STYLES, readStops, stopState, stopText, type MapStop, type StopStyle } from './stops';
 import type { PlaceWritingTrip } from '../place-style';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 import { CAMERA_LIMITS, type CameraOrientation, type CameraZoom } from './map-camera';
@@ -72,7 +73,8 @@ export type DriveEnd = 'reveal' | 'stay';
 export type DriveLabels = 'none' | 'ends' | 'all';
 export type DrivePosition = 'top' | 'middle' | 'bottom';
 
-export interface DriveOptions {
+/** A drive's options; the recap's summary card's are `CardOptions` (`summary-card.ts`). */
+export interface DriveOptions extends CardOptions {
   // --- road ------------------------------------------------------------------
   stopsOn: DriveStopsOn;
   /**
@@ -225,6 +227,7 @@ export interface DriveOptions {
 }
 
 export const DRIVE_DEFAULTS: DriveOptions = {
+  ...CARD_DEFAULTS,
   stopsOn: 'places',
   stops: [],
   picked: [],
@@ -358,6 +361,7 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
   const d = DRIVE_DEFAULTS;
   const L = DRIVE_LIMITS;
   return {
+    ...readCardOptions(raw),
     stopsOn: oneOf(o.stopsOn, ['places', 'custom', 'pictures'], d.stopsOn),
     stops: readStops(o.stops),
     picked: readPicked(o.picked),
@@ -462,6 +466,10 @@ export interface DriveStop extends GeoPoint {
   pictures: StopPicture[];
   /** How many places this halt stands for, when nearby places are grouped (`stop-clusters.ts`); absent is one. */
   members?: number;
+  /** The place's own name, before the writing adds its state — what the summary card labels with. */
+  place?: string;
+  /** The states this halt is in, as the trip writes them (`stopState`) — a group's every member's. */
+  states?: string[];
   /**
    * WHEN the car is here, as days of the trip on a continuous scale — day
    * 1.0 is the morning of day 1, day N + 1.0 the end of day N — so `arrive`
@@ -610,9 +618,12 @@ function placeStops(
         return;
       }
       const when = days[i];
+      const state = stopState(place, writing);
       stops.push({
         ...point,
         name: stopText(place, o.placeStyle, writing).trim(),
+        place: place.name.trim(),
+        ...(state ? { states: [state] } : {}),
         kind: 'place',
         leg: index,
         accent: first,
@@ -776,10 +787,13 @@ function customStops(
   const placeDays = stages.map((stage) => stagePlaceDays(stage, dayOf));
   const stops: DriveStop[] = o.stops.map((stop, i) => {
     const days = customStopDays(stop, stages, placeDays, dayOf);
+    const state = stopState(stop, writing);
     return {
       lat: stop.lat,
       lon: stop.lon,
       name: stopText(stop, o.placeStyle, writing).trim(),
+      place: stop.name.trim(),
+      ...(state ? { states: [state] } : {}),
       kind: 'place',
       leg: null,
       accent: i === 0,
@@ -835,10 +849,15 @@ export function groupRoute(route: DriveRoute, o: Pick<DriveOptions, 'groupKm' | 
       if (!m.days) continue;
       days = days ? { arrive: Math.min(days.arrive, m.days.arrive), leave: Math.max(days.leave, m.days.leave) } : { ...m.days };
     }
+    const states = [...new Set(members.flatMap((m) => m.states ?? []))];
+    const name = groupName(route.stops, group, o.groupName, towns);
     return {
       lat: anchor.lat,
       lon: anchor.lon,
-      name: groupName(route.stops, group, o.groupName, towns),
+      name,
+      // The bare name of the member that names the group, else the group's name.
+      place: members.find((m) => m.name === name)?.place ?? name,
+      ...(states.length ? { states } : {}),
       kind: anchor.kind,
       leg: route.stops[group.members[0]].leg,
       accent: members.some((m) => m.accent),
@@ -1127,6 +1146,10 @@ export interface DriveSchedule {
   revealAt: number;
   /** When the summary card comes up, on a recap that asks for one; else null. */
   summaryAt: number | null;
+  /** The map fades off at the end (`end: 'reveal'` with no summary card). */
+  reveals: boolean;
+  /** The seconds the car waited at the start for a badge shown before the drive. */
+  lead: number;
   /**
    * The least road time that gives every hop its {@link MIN_RUN_SECONDS}: a
    * `driveSeconds` under it is honoured, the hops then shorter than the floor
@@ -1242,15 +1265,17 @@ export function buildSchedule(
   o: DriveOptions,
   /** The recap's clock, when the badge's counter follows the drive; null keeps the plain drive. */
   clock: { arrive: readonly number[]; leave: readonly number[] } | null = null,
-  /** The recap asks for its summary card. */
+  /** The recap asks for its summary card — the END of the drive: no reveal follows it. */
   summary = false,
+  /** Seconds the car waits at the start for a badge shown before the drive. */
+  lead = 0,
 ): DriveSchedule {
   const phases: Phase[] = [];
   const pops: PicturePop[] = [];
   const arrivals: number[] = [];
   let t = 0;
   const n = stops.length;
-  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null, roadFloor: 0 };
+  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null, roadFloor: 0, reveals: false, lead: 0 };
 
   /**
    * The picture of the DAY: under the recap's clock, a picture shot on a
@@ -1359,9 +1384,10 @@ export function buildSchedule(
 
   // The hold on the first stop, then its own halt, then its stay.
   arrivals.push(0);
-  if (o.delaySeconds > 0) {
-    phases.push({ kind: 'hold', start: t, end: t + o.delaySeconds, s0: 0, s1: 0, stop: 0, ...days(dayIn(0)) });
-    t += o.delaySeconds;
+  const hold = o.delaySeconds + Math.max(0, lead);
+  if (hold > 0) {
+    phases.push({ kind: 'hold', start: t, end: t + hold, s0: 0, s1: 0, stop: 0, ...days(dayIn(0)) });
+    t += hold;
   }
   const firstHalt = haltSeconds(stops[0], o);
   if (firstHalt > 0 && n > 1) {
@@ -1432,12 +1458,15 @@ export function buildSchedule(
     t += SUMMARY_SECONDS;
   }
 
+  // The card is the drive's last image — the thumbnail, the reveal never
+  // fades it — so a reveal follows the arrival only where there is none.
   const revealAt = t;
-  if (o.end === 'reveal') {
+  const reveals = o.end === 'reveal' && !summary;
+  if (reveals) {
     phases.push({ kind: 'reveal', start: t, end: t + REVEAL_SECONDS, s0: path.length, s1: path.length, stop: lastStop, ...days(leaveDay(lastStop)) });
     t += REVEAL_SECONDS;
   }
-  return { phases, pops, arrivals, total: t, arrivedAt, revealAt, summaryAt, roadFloor: runs.length * MIN_RUN_SECONDS };
+  return { phases, pops, arrivals, total: t, arrivedAt, revealAt, summaryAt, roadFloor: runs.length * MIN_RUN_SECONDS, reveals, lead: Math.max(0, lead) };
 }
 
 // --- reading the plan at a moment -------------------------------------------------
@@ -1571,11 +1600,15 @@ export function drivePlan(route: DriveRoute, o: DriveOptions, recap = false): Dr
   const kmAtStop = [0];
   for (let i = 1; i < stops.length; i++) kmAtStop.push(kmAtStop[i - 1] + haversineKm(stops[i - 1], stops[i]));
   const clock = recap ? stopClock(stops, kmAtStop) : null;
-  const schedule = buildSchedule(stops, path, o, clock, recap && o.summary);
+  // The summary card is the recap's, and the badge may take its place
+  // (`badgeWhen: 'end'`) or open the drive (`before`, the car waiting for it).
+  const moment = badgeMoment(o.badgeWhen);
+  const card = recap && o.summary && moment !== 'end';
+  const schedule = buildSchedule(stops, path, o, clock, card, card && moment === 'before' ? BADGE_BEFORE_SECONDS : 0);
   const milestones = recap && o.milestones ? roadMilestones(stops, path, kmAtStop, clock, o.distance) : [];
 
   const at = (t: number): DriveMoment => {
-    const { phases, total, revealAt } = schedule;
+    const { phases, total, revealAt, reveals } = schedule;
     const over = t >= total;
     const phase = phases.find((p) => t < p.end) ?? phases[phases.length - 1];
     let s: number;
@@ -1607,12 +1640,12 @@ export function drivePlan(route: DriveRoute, o: DriveOptions, recap = false): Dr
     let reached = 0;
     for (let i = 0; i < path.stopS.length; i++) if (path.stopS[i] <= s + 1e-9) reached = i;
     const mapAlpha =
-      o.end === 'reveal' && t >= revealAt ? Math.max(0, 1 - (t - revealAt) / REVEAL_SECONDS) : 1;
+      reveals && t >= revealAt ? Math.max(0, 1 - (t - revealAt) / REVEAL_SECONDS) : 1;
     return {
       s,
       point: pointAt(path, s).point,
       heading: headingAt(path, s),
-      phase: over ? (o.end === 'reveal' ? 'reveal' : 'arrive') : phase.kind,
+      phase: over ? (reveals ? 'reveal' : 'arrive') : phase.kind,
       at: atStop,
       reached,
       progress: path.length > 0 ? s / path.length : 1,

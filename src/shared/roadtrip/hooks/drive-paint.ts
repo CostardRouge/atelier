@@ -64,6 +64,8 @@ import { paintTape } from './scrub-paint';
 import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { drawLookTexts, type LookText } from './look-text';
+import { cellAt, type CardScene } from './summary-card';
+import { cardCovers, cardProgress, paintCard as paintSummaryCard } from './summary-paint';
 import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
 import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
 
@@ -229,25 +231,33 @@ export function paintDrive(
   track: CameraTrack | null = null,
   /** The recap's ribbon of days under the map (`drive-ribbon.ts`), when asked. */
   ribbon: DriveRibbon | null = null,
+  /** The recap's summary card (`summary-card.ts`), when the drive has one. */
+  card: CardScene | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
   const moment = plan.at(t);
   if (moment.mapAlpha <= 0) return;
+  // A card that covers the frame, once it has come: the map under it is not drawn.
+  const { summaryAt } = plan.schedule;
+  if (card && card.face !== 'stamp' && summaryAt !== null && cardCovers(card, t - summaryAt)) {
+    paintSummaryCard(g, card, pictures, t - summaryAt, frame, t);
+    return;
+  }
 
   if (moment.mapAlpha >= 1) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
     return;
   }
   // The reveal: the whole map at a falling alpha over the picture beneath.
   const buffer = bufferFor(scratch, w, h);
   const bg = buffer?.getContext('2d') as HookCtx2D | null;
   if (!buffer || !bg) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
     return;
   }
   bg.clearRect(0, 0, w, h);
-  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
   g.save();
   g.globalAlpha = moment.mapAlpha;
   g.drawImage(buffer, 0, 0);
@@ -281,6 +291,7 @@ function paintMap(
   basemap: DriveBasemap | null,
   track: CameraTrack | null,
   ribbon: DriveRibbon | null,
+  card: CardScene | null,
 ): void {
   const { width: w, height: h } = frame;
   const u = w / 1080;
@@ -631,9 +642,13 @@ function paintMap(
   // A picture filling the frame while the car halts: over everything of the map.
   if (o.pictures === 'fill') for (const { pop, rise } of showing) fullFrame(rise, pop);
 
-  // The recap's summary card, once the car has arrived and rested.
+  // The recap's summary card, once the car has arrived and rested: the
+  // stamp in the map's box, any other face over the whole frame.
   const { summaryAt } = plan.schedule;
-  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words, scratch.theme, frame, t);
+  if (summaryAt !== null && t >= summaryAt) {
+    if (card && card.face !== 'stamp') paintSummaryCard(g, card, pictures, t - summaryAt, frame, t);
+    else paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words, card?.theme ?? scratch.theme, frame, t, card);
+  }
 
   g.restore();
 }
@@ -705,16 +720,24 @@ function paintSummary(
   theme: StyleTheme | null,
   frame: FrameBox,
   t: number,
+  /** The card's facts, as the author chose them; absent, days · distance · stops. */
+  scene: CardScene | null = null,
 ): void {
   const n = plan.route.stops.length;
   const unit = o.distance === 'mi' ? 'mi' : 'km';
   const cells: { value: string; word: string }[] = [];
-  if (plan.clock) {
-    const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
-    cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+  if (scene) {
+    const { count } = cardProgress(scene.card.cardEntrance, t - (plan.schedule.summaryAt ?? t));
+    for (const cell of scene.cells) cells.push({ value: cellAt(cell, count, unit), word: cell.word });
+  } else {
+    if (plan.clock) {
+      const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
+      cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+    }
+    cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
+    cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
   }
-  cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
-  cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
+  if (!cells.length) return;
 
   const k = 1 - Math.pow(1 - rise, 3);
   const cw = Math.min(box.width, 200 * u * cells.length);

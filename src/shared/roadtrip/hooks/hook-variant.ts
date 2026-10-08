@@ -34,6 +34,7 @@ import type { MapStop } from './stops';
 import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
 import type { StyleTheme } from '../../overlay/title-styles';
+import type { TimeWindow } from '../../overlay/animation';
 
 /** What the engine draws into — the 2D context both renderers already use. */
 export type HookCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -369,6 +370,13 @@ export interface HookRender {
   /** Drawn between the picture and the shades, at the output's own size. */
   paint?(g: HookCtx2D, t: number, frame: FrameBox): void;
   /**
+   * When the BADGE is on screen while this layer plays: its pieces take this
+   * window (`windowedBadge`), so an entrance starts at its start and an exit
+   * lands on its end — Virée's badge leaving as its summary card comes, or
+   * coming in its place. Absent: the badge lives as it always did.
+   */
+  readonly badgeWindow?: TimeWindow;
+  /**
    * Resolves once what `paint` draws from `t0` to `t1` is in memory (a
    * streamed map ground). Absent: the paint needs nothing it waits for.
    */
@@ -654,6 +662,8 @@ export interface ResolvedHook {
   readonly rewrites: boolean;
   /** True when a layer replaces the picture rather than drawing over it. */
   readonly ownsFrame: boolean;
+  /** When the badge is on screen — the last layer that says; null where none does. */
+  readonly badgeWindow: TimeWindow | null;
   /** The badge's content after every layer has had its say at `t`. */
   contentAt(base: BadgeContent | null, t: number): BadgeContent | null;
   /** Paint every layer, in order. */
@@ -685,6 +695,7 @@ export function foldHook(layers: readonly HookRender[], ownsFrame: boolean): Res
     rewrites: layers.some((layer) => typeof layer.content === 'function'),
     mixWithSource: layers.some((layer) => layer.mixWithSource === true && !!layer.score),
     ownsFrame,
+    badgeWindow: layers.reduce<TimeWindow | null>((win, layer) => layer.badgeWindow ?? win, null),
     contentAt(base, t) {
       if (!base) return null;
       let content = base;

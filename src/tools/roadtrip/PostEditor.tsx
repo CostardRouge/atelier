@@ -77,7 +77,7 @@ import {
 } from '../../shared/roadtrip/slide-render';
 import { isSlideTextId, type SlideBadge } from '../../shared/roadtrip/slide-capacities';
 import type { OverlayElement } from '../../shared/overlay/overlay-types';
-import { hookElementsAt as hookElementsAtFor } from '../../shared/roadtrip/hooks/hook-elements';
+import { hookElementsAt as hookElementsAtFor, windowedBadge } from '../../shared/roadtrip/hooks/hook-elements';
 import useHookPictures from './use-hook-pictures';
 import { useHookSound } from './use-hook-sound';
 import { ctaLayout, ctaRoleFromElementId, type CtaRole } from '../../shared/roadtrip/cta-slide';
@@ -612,7 +612,7 @@ export default function PostEditor({
   // masked line must not mask the signature — `slide-render.ts`) — the
   // elements every export of the hook and the Studio bridge burn in.
   const hookTexts = post.badge.texts;
-  const hookElements = useMemo(() => {
+  const hookElementsAlways = useMemo(() => {
     const badge = content
       ? badgeElements(
           content,
@@ -633,12 +633,6 @@ export default function PostEditor({
     aspect,
     hookTexts,
   ]);
-
-  const elements = useMemo(() => {
-    if (isHook) return hookElements;
-    if (isCta) return cta.elements;
-    return contentSlideElements(slide.caption, aspect);
-  }, [isHook, isCta, hookElements, cta.elements, slide.caption, aspect]);
 
   const block = useMemo(
     () => (content ? badgeBlockExtent(content, post.badge.layout, aspect) : null),
@@ -707,6 +701,18 @@ export default function PostEditor({
     () => resolveHook(post.badge.hook, hookCtx),
     [post.badge.hook, hookCtx],
   );
+  // The badge inside the window its opener gives it (Virée's card: the badge
+  // and the card are never on screen together) — what the stage draws and
+  // every export of the hook burns in.
+  const hookElements = useMemo(
+    () => windowedBadge(hookElementsAlways, hook.badgeWindow),
+    [hookElementsAlways, hook.badgeWindow],
+  );
+  const elements = useMemo(() => {
+    if (isHook) return hookElements;
+    if (isCta) return cta.elements;
+    return contentSlideElements(slide.caption, aspect);
+  }, [isHook, isCta, hookElements, cta.elements, slide.caption, aspect]);
   // Only an opener that rewrites the badge's words gets elements per frame;
   // every other piece keeps the ones built above, once per edit. The cascade
   // goes in too: `hookElements` above and `slideRender` (the exports, the

@@ -965,8 +965,29 @@ The drive may take up to a minute, and it takes the length you set however
 many places it passes (the panel says when the hops get too short to read); counting with the car adds only the summary card's three
 seconds, and a piece whose length you set by hand says, beside the counter,
 when that cuts its end. At the end a **summary
-card** — days · distance · stops — and, on the road, **milestones** every
-50 days and 1 000 km (or miles), each a switch; the badge's words carry a
+card** — the drive's last image and the piece's thumbnail, no reveal after it
+— and, on the road, **milestones** every
+50 days and 1 000 km (or miles), each a switch. The card has six faces: the
+**Trace** (the trip's road drawn big, its places named — a new recap's
+default), the **Ticket** (a boarding pass whose barcode is the trip's days,
+long where a leg starts, darker where a picture was shot), the **Passport**
+(a stamp for each state crossed), the **Contact sheet** (the road's pictures
+and the road), the **Stamp** (days · distance · stops in the map's box — what
+a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
+the trip's days). It wears the **trip's look** — the badge's face, case,
+colour and glow — or another look for the card alone; it stands on the trip's
+last picture veiled, the look's own solid, or the map's paper (where its
+words take the map's ink); it says up to four facts in your order (days,
+distance, places, states, photos, the longest stay — a fact the drive cannot
+measure is left out), a title and a subtitle (the trip's name and *The recap*
+when empty), and names the road's places — none, the ends, **grouped** (one
+name for the places within 200 km, the biggest town of the index, the longest
+stay or the first place, *Cairns +2*), every place or your list —, a name
+that would cover another left out. Its numbers count up as it comes, and its
+road draws itself, or it cuts in. **The badge and the card are never on screen
+together**: the badge shows *before the drive* (the car waits for it),
+*during the drive* (it leaves as the card comes — the default), *at the end*
+in the card's place, or *never*; the badge's words carry a
 *Stop* field for the stops' label. The recap's "map over photo" is the map on
 a **paper plate** over the picture filling the frame (a Map switch, for the
 *Behind* pictures or the picture ground), the picture pushing in slowly while

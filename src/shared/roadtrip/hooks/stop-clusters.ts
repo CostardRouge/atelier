@@ -22,6 +22,7 @@
  */
 
 import { degreeWindow, haversineKm, type GeoPoint } from './geo';
+import { cardWantsTowns } from './summary-card';
 
 export type GroupVisits = 'consecutive' | 'all';
 export type GroupName = 'town' | 'first' | 'central';
@@ -223,9 +224,10 @@ export function groupsOn(o: Pick<GroupOptions, 'groupKm'>): boolean {
  * Whether any of these opener layers names a group by its TOWN — what makes
  * the editor read the town index, so every surface names the same groups.
  */
-export function wantsTowns(layers: readonly { options?: Readonly<Record<string, unknown>> }[]): boolean {
+export function wantsTowns(layers: readonly { id?: string; options?: Readonly<Record<string, unknown>> }[]): boolean {
   return layers.some((layer) => {
     const o = layer.options ?? {};
-    return Number(o.groupKm) > 0 && (o.groupName ?? 'town') === 'town';
+    // Virée's summary card names its groups of places by town too.
+    return (Number(o.groupKm) > 0 && (o.groupName ?? 'town') === 'town') || (layer.id === 'drive' && cardWantsTowns(o));
   });
 }

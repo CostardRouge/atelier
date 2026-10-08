@@ -21,6 +21,25 @@ import {
 } from '../badge-layout';
 import type { BadgeContent } from '../day-badge';
 import type { ResolvedHook } from './hook-variant';
+import type { TimeWindow } from '../../overlay/animation';
+import { pieceFromElementId } from '../badge-layout';
+
+/**
+ * The badge's pieces inside the window an opener gives them
+ * (`ResolvedHook.badgeWindow`): an entrance plays from its start and an exit
+ * lands on its end — or, where the window is open, on the piece's own end.
+ * Only the BADGE's elements move; the slide's free text keeps its own life.
+ * A window that opens and closes at 0 hides the badge (`never`), the ghost
+ * still letting the editor pick a piece.
+ */
+export function windowedBadge(elements: OverlayElement[], win: TimeWindow | null | undefined): OverlayElement[] {
+  if (!win) return elements;
+  return elements.map((el) =>
+    pieceFromElementId(el.id) === null
+      ? el
+      : { ...el, window: { start: win.start, end: win.end ?? (el.animation?.out ? (el.window?.end ?? null) : null) } },
+  );
+}
 
 export type ElementsAt = (tSeconds: number) => OverlayElement[];
 
@@ -36,6 +55,6 @@ export function hookElementsAt(
   if (!hook?.rewrites || !content) return null;
   return (t) => {
     const at = hook.contentAt(content, t);
-    return at ? badgeElements(at, layout, aspect, styles, durationSeconds, cascade) : [];
+    return at ? windowedBadge(badgeElements(at, layout, aspect, styles, durationSeconds, cascade), hook.badgeWindow) : [];
   };
 }
