@@ -33,6 +33,7 @@ import { CAR_MODELS, carModel, vehicleLabel } from './car-registry';
 import {
   DRIVE_DEFAULTS,
   DRIVE_LIMITS,
+  STAY_MIN_SECONDS,
   MAX_PICTURES_PER_STOP,
   MILESTONE_DAYS,
   MILESTONE_DISTANCE,
@@ -809,8 +810,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                 label="Pace"
                 hint={
                   o.pace === 0
-                    ? 'The road time is shared by distance alone; the days a place took pass at once when the car leaves it.'
-                    : 'The car waits at a place while its days run on the counter, this much of the road time going to the days spent and the rest to the kilometres.'
+                    ? 'The road time is shared by distance alone; the car never waits, a place’s days running while it drives on.'
+                    : 'This much of the road time goes to the days and the rest to the kilometres: the car slows past a place that took days.'
                 }
               >
                 <RangeField
@@ -823,6 +824,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   format={(v) => (v === 0 ? 'road' : v === 1 ? 'calendar' : `${Math.round(v * 100)}% calendar`)}
                 />
               </FieldRow>
+              {o.pace > 0 && (
+                <FieldRow
+                  label="Long stays"
+                  hint={`The car stops at a place whose days make a stay of ${STAY_MIN_SECONDS} s or more, the counter running while it waits. Off, it never stops for days.`}
+                >
+                  <ToggleField label="Wait out the long stays" checked={o.waitStays} onChange={(waitStays) => set({ waitStays })}>
+                    Wait at the place
+                  </ToggleField>
+                </FieldRow>
+              )}
               <FieldRow
                 label="On the way"
                 align="start"

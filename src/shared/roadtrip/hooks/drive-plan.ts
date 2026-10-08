@@ -198,6 +198,14 @@ export interface DriveOptions {
    * the car (`drive-ribbon.ts`). Read only under the recap's clock.
    */
   ribbon: boolean;
+  /**
+   * The car STOPS at a place for its days, where they make a stay of
+   * {@link STAY_MIN_SECONDS} or more (the recap lab's «surplace» in
+   * Melbourne). Off — the default since 2026-10-07, his «alors qu'on n'a pas
+   * coché ce mode» — it never waits for days: it slows past a place that
+   * took them, the counter running all the same.
+   */
+  waitStays: boolean;
   // --- sound -----------------------------------------------------------------
   sound: boolean;
   kit: TickKit;
@@ -278,6 +286,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   plate: false,
   dayPictures: true,
   ribbon: false,
+  waitStays: false,
   sound: true,
   kit: 'wood',
   tickPitch: 1,
@@ -410,6 +419,7 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     plate: o.plate === true,
     dayPictures: o.dayPictures !== false,
     ribbon: o.ribbon === true,
+    waitStays: o.waitStays === true,
     sound: o.sound !== false,
     kit: oneOf(o.kit, KIT_IDS, d.kit),
     tickPitch: clamp(Number(o.tickPitch), L.tickPitch.min, L.tickPitch.max, d.tickPitch),
@@ -1053,7 +1063,46 @@ export interface Phase {
    */
   day0?: number;
   day1?: number;
+  /**
+   * A run under the recap's clock that PASSES places without stopping: the
+   * car's arc length and the day at each stop it crosses, and the share of
+   * the run's time spent up to it (`cost`, 0 → 1, by `pace`: distance and
+   * days). The car rolls through, slower where a place took days, faster
+   * on an empty road — it stops only where it halts or truly stays.
+   */
+  knots?: RunKnots;
 }
+
+export interface RunKnots {
+  s: number[];
+  day: number[];
+  cost: number[];
+}
+
+/** Where along a run's knots the car is at `e` (the eased share of the run's time). */
+export function knotAt(knots: RunKnots, e: number): { s: number; day: number } {
+  const { s, day, cost } = knots;
+  const c = Math.max(0, Math.min(1, e));
+  let j = 0;
+  while (j < cost.length - 2 && cost[j + 1] < c) j++;
+  const span = cost[j + 1] - cost[j];
+  const f = span > 1e-12 ? (c - cost[j]) / span : 1;
+  return { s: s[j] + (s[j + 1] - s[j]) * f, day: day[j] + (day[j + 1] - day[j]) * f };
+}
+
+/** The share of a run's time (its cost) at which its day reaches `d`, or null when it never does. */
+export function knotCostOfDay(knots: RunKnots, d: number): number | null {
+  const { day, cost } = knots;
+  for (let j = 0; j + 1 < day.length; j++) {
+    if (day[j + 1] > day[j] && d > day[j] - 1e-9 && d <= day[j + 1] + 1e-9) {
+      return cost[j] + ((d - day[j]) / (day[j + 1] - day[j])) * (cost[j + 1] - cost[j]);
+    }
+  }
+  return null;
+}
+
+/** The shortest STAY the car stops for, in seconds: a shorter one is spent rolling past the place. */
+export const STAY_MIN_SECONDS = 1;
 
 export interface PicturePop {
   key: string;
@@ -1211,6 +1260,7 @@ export function buildSchedule(
    */
   const dayOfStay = (stop: number, picture: StopPicture): number | null => {
     if (!o.dayPictures || !clock || picture.day === undefined) return null;
+    if (!staying[stop]) return null;
     const arrive = clock.arrive[stop];
     const leave = clock.leave[stop];
     return picture.day > arrive + 1e-9 && picture.day < leave ? picture.day : null;
@@ -1248,35 +1298,74 @@ export function buildSchedule(
     const dwell = clock.leave[i] - clock.arrive[i];
     return dwell > 0 ? (pace * dwell) / dayTotal : 0;
   };
+  // The car STOPS for a place's days only when asked (`waitStays`) and only
+  // where they make a real wait (2026-10-07, his report that the car stopped
+  // at every place «alors qu'on n'a pas coché ce mode»): otherwise a place's
+  // days are spent rolling past it, slower, the counter running all the same.
+  const staying = stops.map((_, i) => o.waitStays && stayWeight(i) * o.driveSeconds >= STAY_MIN_SECONDS);
+  // The day the car reaches a stop and leaves it: a stay's two ends; a place
+  // rolled past is crossed mid-way through its days — the first one left on
+  // its first day, the last reached on the trip's last, its days spent on the
+  // way in, so none of them is skipped in one frame at the arrival.
+  const dayIn = (i: number): number | undefined => {
+    if (!clock) return undefined;
+    if (staying[i] || i === 0) return clock.arrive[i];
+    if (i === n - 1) return clock.leave[i];
+    return (clock.arrive[i] + clock.leave[i]) / 2;
+  };
+  const dayOut = (i: number): number | undefined => {
+    if (!clock) return undefined;
+    if (staying[i]) return clock.leave[i];
+    if (i === 0 || i === n - 1) return clock.arrive[i];
+    return (clock.arrive[i] + clock.leave[i]) / 2;
+  };
 
   // Runs between the stops the car stops at — to halt, or to stay — each
   // taking its share of the driving time.
   const runs: { from: number; to: number }[] = [];
   let from = 0;
   for (let i = 1; i < n; i++) {
-    if (i === n - 1 || haltsAt(stops[i], o) || stayWeight(i) > 0) {
+    if (i === n - 1 || haltsAt(stops[i], o) || staying[i]) {
       runs.push({ from, to: i });
       from = i;
     }
   }
   const drivable = path.length;
+  /** A run's cost from one stop to the next: its distance and, by `pace`, its days. */
+  const hopCost = (d0: number, d1: number, lengthShare: number): number =>
+    pace > 0 ? (1 - pace) * lengthShare + (pace * Math.max(0, d1 - d0)) / dayTotal : lengthShare;
   const runWeights = runs.map((run) => {
     const lengthShare = drivable > 0 ? (path.stopS[run.to] - path.stopS[run.from]) / drivable : 1 / runs.length;
-    const travelDays = clock ? Math.max(0, clock.arrive[run.to] - clock.leave[run.from]) : 0;
-    return pace > 0 ? (1 - pace) * lengthShare + (pace * travelDays) / dayTotal : lengthShare;
+    return hopCost(dayOut(run.from) ?? 0, dayIn(run.to) ?? 0, lengthShare);
   });
-  const road = shareRoadTime(runWeights, stops.map((_, i) => stayWeight(i)), o.driveSeconds, MIN_RUN_SECONDS);
+  const road = shareRoadTime(runWeights, stops.map((_, i) => (staying[i] ? stayWeight(i) : 0)), o.driveSeconds, MIN_RUN_SECONDS);
   const staySeconds = (i: number): number => road.stays[i] ?? 0;
+  /** The places a run rolls past, as knots — null where there is no clock or nothing to pass. */
+  const runKnots = (run: { from: number; to: number }): RunKnots | undefined => {
+    if (!clock) return undefined;
+    const idx: number[] = [];
+    for (let i = run.from; i <= run.to; i++) idx.push(i);
+    const s = idx.map((i) => path.stopS[i]);
+    const day = idx.map((i, j) => (j === 0 ? dayOut(i)! : j === idx.length - 1 ? dayIn(i)! : (clock.arrive[i] + clock.leave[i]) / 2));
+    const raw = [0];
+    for (let j = 1; j < idx.length; j++) {
+      const lengthShare = drivable > 0 ? (s[j] - s[j - 1]) / drivable : 0;
+      raw.push(raw[j - 1] + hopCost(day[j - 1], day[j], lengthShare));
+    }
+    const total = raw[raw.length - 1];
+    if (!(total > 1e-12)) return undefined;
+    return { s, day, cost: raw.map((c) => c / total) };
+  };
 
   // The hold on the first stop, then its own halt, then its stay.
   arrivals.push(0);
   if (o.delaySeconds > 0) {
-    phases.push({ kind: 'hold', start: t, end: t + o.delaySeconds, s0: 0, s1: 0, stop: 0, ...days(arriveDay(0)) });
+    phases.push({ kind: 'hold', start: t, end: t + o.delaySeconds, s0: 0, s1: 0, stop: 0, ...days(dayIn(0)) });
     t += o.delaySeconds;
   }
   const firstHalt = haltSeconds(stops[0], o);
   if (firstHalt > 0 && n > 1) {
-    phases.push({ kind: 'halt', start: t, end: t + firstHalt, s0: 0, s1: 0, stop: 0, ...days(arriveDay(0)) });
+    phases.push({ kind: 'halt', start: t, end: t + firstHalt, s0: 0, s1: 0, stop: 0, ...days(dayIn(0)) });
     addPops(0, t, t + firstHalt);
     t += firstHalt;
   }
@@ -1291,17 +1380,27 @@ export function buildSchedule(
     const s0 = path.stopS[run.from];
     const s1 = path.stopS[run.to];
     const seconds = road.runs[r];
-    phases.push({ kind: 'run', start: t, end: t + seconds, s0, s1, stop: run.to, ...days(leaveDay(run.from), arriveDay(run.to)) });
+    const knots = runKnots(run);
+    phases.push({
+      kind: 'run',
+      start: t,
+      end: t + seconds,
+      s0,
+      s1,
+      stop: run.to,
+      ...days(dayOut(run.from), dayIn(run.to)),
+      ...(knots ? { knots } : {}),
+    });
     t += seconds;
     // Every stop passed on the run is reached when the car crosses it.
     for (let i = run.from + 1; i <= run.to; i++) {
-      const share = s1 > s0 ? (path.stopS[i] - s0) / (s1 - s0) : 1;
+      const share = knots ? knots.cost[i - run.from] : s1 > s0 ? (path.stopS[i] - s0) / (s1 - s0) : 1;
       arrivals.push(phases[phases.length - 1].start + seconds * EASINGS[o.easing].inverse(Math.min(1, share)));
     }
     if (run.to < n - 1) {
       const halt = haltSeconds(stops[run.to], o);
       if (halt > 0) {
-        phases.push({ kind: 'halt', start: t, end: t + halt, s0: s1, s1, stop: run.to, ...days(arriveDay(run.to)) });
+        phases.push({ kind: 'halt', start: t, end: t + halt, s0: s1, s1, stop: run.to, ...days(dayIn(run.to)) });
         addPops(run.to, t, t + halt);
         t += halt;
       }
@@ -1320,7 +1419,7 @@ export function buildSchedule(
   const lastStop = n - 1;
   const lastHalt = n > 1 ? haltSeconds(stops[lastStop], o) : haltSeconds(stops[0], o);
   const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0);
-  phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(arriveDay(lastStop), leaveDay(lastStop)) });
+  phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(dayIn(lastStop), leaveDay(lastStop)) });
   addPops(lastStop, t, t + arrive);
   // The last place's days run over the whole arrival beat (its phase's `days`).
   addDayPops(lastStop, t, t + arrive);
@@ -1483,15 +1582,23 @@ export function drivePlan(route: DriveRoute, o: DriveOptions, recap = false): Dr
     let atStop: number | null;
     const u = Math.max(0, Math.min(1, (t - phase.start) / (phase.end - phase.start)));
     let k = u;
+    let knotDay: number | null = null;
     if (phase.kind === 'run') {
       k = EASINGS[o.easing].ease(u);
-      s = phase.s0 + (phase.s1 - phase.s0) * k;
+      if (phase.knots) {
+        const at = knotAt(phase.knots, k);
+        s = at.s;
+        knotDay = at.day;
+      } else {
+        s = phase.s0 + (phase.s1 - phase.s0) * k;
+      }
       atStop = null;
     } else {
       s = phase.s0;
       atStop = phase.stop;
     }
-    let day: number | null = phase.day0 === undefined ? null : phase.day0 + ((phase.day1 ?? phase.day0) - phase.day0) * k;
+    let day: number | null =
+      knotDay ?? (phase.day0 === undefined ? null : phase.day0 + ((phase.day1 ?? phase.day0) - phase.day0) * k);
     if (over) {
       s = path.length;
       atStop = stops.length - 1;
@@ -1814,7 +1921,8 @@ export function dayTurns(plan: DrivePlan, o: Pick<DriveOptions, 'easing'>): numb
     const { day0, day1 } = phase;
     if (day0 === undefined || day1 === undefined || !(day1 > day0)) continue;
     for (let d = Math.floor(day0 + 1e-9) + 1; d <= day1 + 1e-9; d += 1) {
-      const f = Math.min(1, (d - day0) / (day1 - day0));
+      // A run that rolls past places turns its days along its knots.
+      const f = phase.knots ? (knotCostOfDay(phase.knots, d) ?? 1) : Math.min(1, (d - day0) / (day1 - day0));
       const u = phase.kind === 'run' ? EASINGS[o.easing].inverse(f) : f;
       out.push(phase.start + u * (phase.end - phase.start));
     }
