@@ -10,6 +10,7 @@ import { badgeVariant } from './badge';
 import { driveVariant } from './drive';
 import { scrubVariant } from './scrub';
 import { mapVariant } from './map';
+import { cardVariant } from './card';
 import {
   DEFAULT_HOOK_ID,
   defaultHookLayers,
@@ -26,6 +27,7 @@ export const HOOK_VARIANTS: readonly HookVariant[] = [
   scrubVariant,
   driveVariant,
   mapVariant,
+  cardVariant,
 ];
 
 export function hookVariantById(id: string): HookVariant | undefined {

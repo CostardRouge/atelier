@@ -987,7 +987,10 @@ that would cover another left out. Its numbers count up as it comes, and its
 road draws itself, or it cuts in. **The badge and the card are never on screen
 together**: the badge shows *before the drive* (the car waits for it),
 *during the drive* (it leaves as the card comes — the default), *at the end*
-in the card's place, or *never*; the badge's words carry a
+in the card's place, or *never*. The same card can stand **on a slide of its
+own**, with no car: the **Recap card** opener, the end of a carousel or the
+piece's thumbnail (the deck exports it as a PNG like any slide), over the
+slide's own picture veiled on the Photo ground, the badge hidden on its slide; the badge's words carry a
 *Stop* field for the stops' label. The recap's "map over photo" is the map on
 a **paper plate** over the picture filling the frame (a Map switch, for the
 *Behind* pictures or the picture ground), the picture pushing in slowly while

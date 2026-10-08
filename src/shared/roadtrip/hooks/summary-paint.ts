@@ -83,11 +83,16 @@ export function paintCard(
 
 function paintGround(pen: Pen, pictures: ReadonlyMap<string, HookPicture> | undefined): void {
   const { g, s, w, h, u } = pen;
-  const picture = s.card.cardGround === 'photo' && s.groundPicture ? pictures?.get(s.groundPicture) : undefined;
-  g.fillStyle = s.ink.ground;
-  g.fillRect(0, 0, w, h);
-  if (picture) {
-    coverImage(g, picture, { x: 0, y: 0, w, h });
+  const photo = s.card.cardGround === 'photo';
+  const picture = photo && s.groundPicture ? pictures?.get(s.groundPicture) : undefined;
+  // The slide's own picture is already under a card that stands alone.
+  const under = photo && !picture && s.below;
+  if (!under) {
+    g.fillStyle = s.ink.ground;
+    g.fillRect(0, 0, w, h);
+  }
+  if (picture || under) {
+    if (picture) coverImage(g, picture, { x: 0, y: 0, w, h });
     // The veil: the picture stays a picture, the words read over it.
     g.fillStyle = 'rgba(8,7,6,0.5)';
     g.fillRect(0, 0, w, h);

@@ -467,6 +467,8 @@ export interface CardScene {
   groundPicture: string | null;
   /** The contact sheet's pictures, in the road's order. */
   sheet: string[];
+  /** On a `photo` ground with no picture of the road, the slide's own picture is under the card: veil it. */
+  below: boolean;
 }
 
 /** The most pictures the contact sheet prints. */
@@ -481,6 +483,8 @@ export interface CardSceneInput {
   calendar: readonly { date: string; dayNumber: number; legStart: boolean }[];
   towns: readonly NamedTown[] | null;
   vehicle: string;
+  /** The slide's own picture is under the card (the card on a slide alone), so a photo ground has one. */
+  below?: boolean;
 }
 
 /** The card's scene for a recap: what each face reads, measured once. */
@@ -492,7 +496,7 @@ export function cardScene(input: CardSceneInput): CardScene {
   const keys = plan.route.stops.flatMap((s) => s.pictures.map((p) => p.key));
   const groundPicture = keys.length ? keys[keys.length - 1] : null;
   // A photo ground with no picture on the road is the look's own solid.
-  const ground: CardGround = o.cardGround === 'photo' && !groundPicture ? 'solid' : o.cardGround;
+  const ground: CardGround = o.cardGround === 'photo' && !groundPicture && !input.below ? 'solid' : o.cardGround;
   const n = plan.route.stops.length;
   const dateOfDay = (day: number) => calendar.find((d) => d.dayNumber === day)?.date ?? '';
   const first = plan.clock && n ? dateOfDay(Math.floor(plan.clock.arrive[0])) : (calendar[0]?.date ?? '');
@@ -516,6 +520,7 @@ export function cardScene(input: CardSceneInput): CardScene {
     vehicle: input.vehicle,
     groundPicture,
     sheet: keys.slice(0, SHEET_PICTURES),
+    below: !!input.below,
   };
 }
 

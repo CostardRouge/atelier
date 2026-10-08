@@ -228,6 +228,6 @@ export function wantsTowns(layers: readonly { id?: string; options?: Readonly<Re
   return layers.some((layer) => {
     const o = layer.options ?? {};
     // Virée's summary card names its groups of places by town too.
-    return (Number(o.groupKm) > 0 && (o.groupName ?? 'town') === 'town') || (layer.id === 'drive' && cardWantsTowns(o));
+    return (Number(o.groupKm) > 0 && (o.groupName ?? 'town') === 'town') || ((layer.id === 'drive' || layer.id === 'card') && cardWantsTowns(o));
   });
 }

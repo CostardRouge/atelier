@@ -12,6 +12,7 @@ import {
   cardFacts,
   cardInk,
   cardLabels,
+  cardScene,
   cardTheme,
   cardWantsTowns,
   cellAt,
@@ -20,6 +21,7 @@ import {
   readCardOptions,
 } from './summary-card';
 import { driveVariant } from './drive';
+import { cardVariant } from './card';
 import { windowedBadge } from './hook-elements';
 import { foldHook } from './hook-variant';
 
@@ -240,5 +242,30 @@ describe('the badge takes the window its opener gives it', () => {
     const hook = foldHook([{ seconds: plan.seconds, badgeWindow: badgeWindowFor(badgeMoment(o.badgeWhen), plan.schedule) }], true);
     expect(hook.badgeWindow).toEqual({ start: 0, end: plan.schedule.summaryAt });
     expect(foldHook([{ seconds: 1 }], false).badgeWindow).toBeNull();
+  });
+});
+
+describe('the card on a slide of its own', () => {
+  const ctx = { aspect: 9 / 16, durationSeconds: 3, date: LAST, content: null, calendar: CAL, stages: STAGES, tripName: 'East coast' };
+
+  it('tells the same road and numbers as Virée’s card, and hides the badge on its slide', () => {
+    const render = cardVariant.prepare(cardVariant.defaults, ctx);
+    expect(render.badgeWindow).toEqual({ start: 0, end: 0 });
+    expect(render.seconds).toBeGreaterThan(1);
+    expect(cardVariant.prepare({ ...cardVariant.defaults, cardEntrance: 'cut' }, ctx).seconds).toBe(0);
+    expect(driveOptions(cardVariant.defaults).cardFace).toBe('trace');
+  });
+
+  it('says why where the legs carry no place', () => {
+    expect(cardVariant.unmet?.({ ...ctx, stages: [] })).toMatch(/no located place/);
+    expect(cardVariant.unmet?.(ctx)).toBeNull();
+    expect(cardVariant.prepare(cardVariant.defaults, { ...ctx, stages: [] }).seconds).toBe(0);
+  });
+
+  it('puts the slide’s own picture under a photo ground, veiled', () => {
+    const { plan } = recap();
+    const scene = cardScene({ plan, o: { ...quiet(), cardGround: 'photo' }, theme: null, tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '', below: true });
+    expect(scene.card.cardGround).toBe('photo');
+    expect(cardScene({ plan, o: { ...quiet(), cardGround: 'photo' }, theme: null, tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '' }).card.cardGround).toBe('solid');
   });
 });

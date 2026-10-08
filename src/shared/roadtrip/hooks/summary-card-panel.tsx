@@ -37,6 +37,8 @@ interface Props {
   set: (patch: Partial<CardOptions>) => void;
   plan: DrivePlan | null;
   ctx: HookContext;
+  /** Offer when the badge shows — Virée's; a card on its slide alone hides it. */
+  badge?: boolean;
 }
 
 const WORDS = { day: 'Day', days: 'days', stop: 'Stop', stops: 'stops' };
@@ -51,7 +53,7 @@ const FACE_HINTS: Record<CardOptions['cardFace'], string> = {
   dash: 'The odometer and a gauge of the trip’s days.',
 };
 
-export function SummaryCardRows({ o, set, plan, ctx }: Props) {
+export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
   const face = o.cardFace;
   const stamp = face === 'stamp';
   const facts = plan ? cardFacts(plan) : null;
@@ -77,7 +79,7 @@ export function SummaryCardRows({ o, set, plan, ctx }: Props) {
           label="The card’s face"
           value={face}
           onChange={(cardFace) => set({ cardFace })}
-          options={CARD_FACES.map((id) => ({ id, label: CARD_FACE_NAMES[id] === 'Contact sheet' ? 'Sheet' : CARD_FACE_NAMES[id] }))}
+          options={CARD_FACES.filter((id) => badge || id !== 'stamp').map((id) => ({ id, label: CARD_FACE_NAMES[id] === 'Contact sheet' ? 'Sheet' : CARD_FACE_NAMES[id] }))}
         />
       </FieldRow>
       <FieldRow label="Look" hint="The trip’s look by default — the badge’s. Another look changes the card alone.">
@@ -94,9 +96,11 @@ export function SummaryCardRows({ o, set, plan, ctx }: Props) {
           hint={
             o.cardGround === 'photo' && !pictures
               ? 'No picture on the road: the card stands on the look’s own solid.'
-              : 'The trip’s last picture veiled, the look’s own solid, or the map’s paper — where the words take the map’s ink.'
+              : badge
+                ? 'The trip’s last picture veiled, the look’s own solid, or the map’s paper — where the words take the map’s ink.'
+                : 'The slide’s own picture veiled, the look’s own solid, or the map’s paper — where the words take the map’s ink.'
           }
-          hintShown={o.cardGround === 'photo' && !pictures}
+          hintShown={o.cardGround === 'photo' && !pictures && badge}
         >
           <Segmented
             size="sm"
@@ -244,7 +248,7 @@ export function SummaryCardRows({ o, set, plan, ctx }: Props) {
           ]}
         />
       </FieldRow>
-      <FieldRow
+      {badge && <FieldRow
         label="Badge"
         hint={
           moment === 'before'
@@ -269,7 +273,7 @@ export function SummaryCardRows({ o, set, plan, ctx }: Props) {
             { id: 'never', label: 'Never' },
           ]}
         />
-      </FieldRow>
+      </FieldRow>}
     </>
   );
 }
