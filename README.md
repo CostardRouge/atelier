@@ -1236,8 +1236,8 @@ tick as each day of the trip passes.
 **The car is the trip's, and it has a garage.** One car per journey: every
 Virée of a trip drives the same one, and it travels in the trip's backup. Four
 models: a Toyota Land Cruiser Prado (the J120, the default), a Renault
-Kadjar (the 2018–2022 facelift), a Renault Trafic panel van (the 2019
-facelift) and a Renault Zoé (the 2019–2024 phase). The garage dresses
+Kadjar (the 2018–2022 facelift), a Renault Trafic panel van (the long L2,
+2019 facelift) and a Renault Zoé (the 2019–2024 phase). The garage dresses
 whichever you pick — a
 colour from that model's factory range or one of your own, a factory gloss or
 a matte coating — and its gear, each a switch. The Prado (Raptor black, matte,
@@ -1250,8 +1250,8 @@ their own feet, or on the factory roof rails when you fit those — and its door
 mirrors; it is drawn with its own marks: the C of its daytime lights, the
 diamond in a chrome-barred grille, black cladding round the arches, a spoiler
 over the raked tailgate, two-tone wheels. The Trafic (white, gloss, by default)
-is the van as it was photographed: a solar panel in a frame on the front of its
-roof and its big door mirrors, each a switch; a short high bonnet under a raked
+is the van as it was photographed: a 430 W solar panel in a frame on the front
+of its roof and its big door mirrors, each a switch; a short high bonnet under a raked
 windscreen, one flat flank from the sill to the roof with a swage at the belt,
 no window behind the cab, barn doors at the back with tall lamps in the
 pillars, steel wheels under plastic caps. The Zoé (white, gloss, by default)

@@ -34,7 +34,7 @@ describe('buildTrafic', () => {
     expect(new Set(geared.map((p) => p.id)).size).toBe(geared.length);
   });
 
-  it('fits a Trafic’s footprint: 5.0 long, 1.96 wide, wheels on the ground, the roof at 1.96 and the panel over it', () => {
+  it('fits an L2 Trafic’s footprint: 5.4 long, 1.96 wide, wheels on the ground, the roof at 1.96 and the panel over it', () => {
     const vs = verts(bare);
     const xs = vs.map((v) => v[0]);
     const ys = vs.map((v) => v[1]);

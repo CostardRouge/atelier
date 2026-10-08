@@ -597,8 +597,9 @@ renderer or either export moved.
 
 ### A third car — the Trafic (2026-10-07)
 
-- **`trafic-model.ts`** is the maintainer's white panel van with the solar
-  panel on its roof, and the first model over **`car-parts.ts`**: the
+- **`trafic-model.ts`** is the maintainer's white panel van — the long L2,
+  a 430 W panel on its roof, both the owner's own words — and the first
+  model over **`car-parts.ts`**: the
   Kadjar's hull slices, decals and wheels lifted out of it (the Kadjar is
   byte-identical over them) and given a car's PLAN — `makeBody` takes the
   half length and width, the outline and the cut heights, and returns the
