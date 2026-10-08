@@ -494,7 +494,8 @@ export function cardScene(input: CardSceneInput): CardScene {
   const unit: DistanceUnit = o.distance === 'mi' ? 'mi' : 'km';
   const facts = cardFacts(plan);
   const keys = plan.route.stops.flatMap((s) => s.pictures.map((p) => p.key));
-  const groundPicture = keys.length ? keys[keys.length - 1] : null;
+  // On a slide of its own the card's Photo ground is the slide's own picture.
+  const groundPicture = keys.length && !input.below ? keys[keys.length - 1] : null;
   // A photo ground with no picture on the road is the look's own solid.
   const ground: CardGround = o.cardGround === 'photo' && !groundPicture && !input.below ? 'solid' : o.cardGround;
   const n = plan.route.stops.length;

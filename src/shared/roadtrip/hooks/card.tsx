@@ -5,14 +5,18 @@
  * slide.
  *
  * The same model and painter as Virée's card (`summary-card.ts`,
- * `summary-paint.ts`), over the same road: the trip's legs up to the piece's
- * day, dated by the recap's clock, so the two cards of one trip say the same
+ * `summary-paint.ts`), over the same road, its stops chosen as Virée's are
+ * (`stop-source.ts`: the legs by default, your own map, or the photos) and
+ * dated by the recap's clock, so the two cards of one trip say the same
  * numbers. A `layer`: on a Photo ground the slide's own picture is under it,
  * veiled. The badge is never on screen with a card, so it is hidden on its
  * slide.
  */
 
-import { DRIVE_DEFAULTS, driveOptions, drivePlan, driveRoute } from './drive-plan';
+import { DRIVE_DEFAULTS, driveOptions, drivePlan, driveRoute, driveWants } from './drive-plan';
+import { readStopSource, sourceStops, type StopSourcePatch } from './stop-source';
+import { StopSourceRows } from './stop-source-rows';
+import { otherPlaces, tripPlaces } from './stops';
 import type { HookPanelProps, HookRender, HookVariant } from './hook-variant';
 import { loadLook } from './look-text';
 import { SUMMARY_WORDS } from './drive-paint';
@@ -21,9 +25,9 @@ import { CARD_COUNT_SECONDS, CARD_RISE_SECONDS, paintCard } from './summary-pain
 import { SummaryCardRows } from './summary-card-panel';
 import { Group } from './panel-ui';
 
-/** What the card reads of the drive's options: the legs, no pictures of its own. */
+/** What the card reads of the drive's options: its stops' source, and its own card. */
 function roadOptions(options: Readonly<Record<string, unknown>>) {
-  return driveOptions({ ...DRIVE_DEFAULTS, ...readCardOptions(options), stopsOn: 'places', pictures: 'none', groupKm: 0 });
+  return driveOptions({ ...DRIVE_DEFAULTS, ...readCardOptions(options), ...readStopSource(options, 'places'), pictures: 'cards', groupKm: 0 });
 }
 
 function planFor(options: Readonly<Record<string, unknown>>, ctx: HookPanelProps['ctx']) {
@@ -45,17 +49,41 @@ function CardSketch() {
   );
 }
 
-function CardPanel({ options, onChange, ctx }: HookPanelProps) {
+function CardPanel({ options, onChange, ctx, host }: HookPanelProps) {
   const card = readCardOptions(options);
+  const source = readStopSource(options, 'places');
   const { o, plan } = planFor(options, ctx);
-  const set = (patch: Partial<CardOptions>) => onChange({ ...card, ...patch });
+  const set = (patch: Partial<CardOptions> | StopSourcePatch) => onChange({ ...card, ...source, ...patch });
+  const resolved = sourceStops(source, ctx);
+  const places = tripPlaces(ctx.stages);
+  const from = source.stopsOn === 'places' ? 'on its legs' : source.stopsOn === 'pictures' ? 'from the photos' : 'on your map';
   return (
     <div className="flex flex-col gap-3">
       <p className="m-0 text-xs text-ink-soft">
         {plan
-          ? `The trip’s road up to this piece’s day: ${plan.route.stops.length} places on its legs. The badge is hidden on this slide.`
-          : 'No leg of the trip up to this day carries two located places — the card has no road to tell.'}
+          ? `The trip’s road up to this piece’s day: ${plan.route.stops.length} places ${from}. The badge is hidden on this slide.`
+          : 'Fewer than two located places to tell — choose where the stops come from below.'}
       </p>
+      <Group title="Stops">
+        <StopSourceRows
+          value={source}
+          onChange={set}
+          resolved={resolved}
+          host={host}
+          label="What the card’s road joins"
+          pieces={o.cardFace === 'sheet'}
+          editor={{
+            places,
+            free: otherPlaces(ctx.stages, resolved),
+            curve: 0.12,
+            placeStyle: o.placeStyle,
+            writing: ctx.writing,
+            title: 'Recap card',
+            pictureHint: o.cardFace === 'sheet' ? 'Printed on the contact sheet.' : null,
+            picturesOffHint: 'Only the contact sheet prints the stops’ pictures.',
+          }}
+        />
+      </Group>
       <Group title="Summary card">
         <SummaryCardRows o={{ ...o, ...card }} set={set} plan={plan} ctx={ctx} badge={false} />
       </Group>
@@ -67,12 +95,17 @@ export const cardVariant: HookVariant = {
   id: 'card',
   name: 'Recap card',
   tagline: 'The trip told on one card: its road, its days, its distance',
-  defaults: { ...CARD_DEFAULTS, cardFace: 'trace' },
-  contentKeys: ['cardTitle', 'cardSubtitle', 'cardChosen', 'cardFrom', 'cardTo', 'cardFacts'],
-  needs: { coverage: true, stages: true, places: true },
+  defaults: { ...CARD_DEFAULTS, cardFace: 'trace', stopsOn: 'places', stops: [], picked: [], includePieces: true },
+  contentKeys: ['cardTitle', 'cardSubtitle', 'cardChosen', 'cardFrom', 'cardTo', 'cardFacts', 'stops', 'picked'],
+  // The stops follow the author to the other map openers and back.
+  sharedStops: { key: 'stops', fresh: { stopsOn: 'custom' } },
+  needs: { coverage: true, stages: true, places: true, media: 'day' },
   owns: 'layer',
-  unmet(ctx) {
-    return (ctx.stages ?? []).some((s) => s.places.length > 0) ? null : 'The trip’s legs carry no located place yet.';
+  // The contact sheet prints the road's pictures; every other face reads none
+  // (a Photo ground is the slide's own picture).
+  wantsPictures(options, ctx) {
+    const { o, plan } = planFor(options, ctx);
+    return plan && o.cardFace === 'sheet' ? driveWants(plan.route, o) : [];
   },
   prepare(options, ctx) {
     const { o, plan } = planFor(options, ctx);

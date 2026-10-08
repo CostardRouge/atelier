@@ -49,8 +49,9 @@ import {
   type CameraSubject,
   type CameraZoom,
 } from './map-camera';
-import { hookPictureKey } from './hook-variant';
-import { STOP_STYLES, readStops, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
+import { hookPictureKey, type HookPickedPicture } from './hook-variant';
+import { readStopSource, type StopSource } from './stop-source';
+import { STOP_STYLES, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
 import { GROUP_LIMITS, groupName, groupStops, type GroupName, type GroupVisits, type NamedTown } from './stop-clusters';
 
@@ -113,8 +114,18 @@ export type MapPen = 'dot' | 'plane' | 'none';
 export type MapMediaFrame = 'paper' | 'bare';
 
 export interface MapOptions {
-  /** The itinerary itself. Everything else is how it is drawn. */
+  /**
+   * Where the stops come from (`stop-source.ts`, 2026-10-08): the author's
+   * own list (`custom`, the default — what every stored itinerary is), the
+   * trip's legs, or the picked photos' positions.
+   */
+  stopsOn: StopSource;
+  /** The author's own list — the itinerary itself on `custom`. Everything else is how it is drawn. */
   stops: readonly MapStop[];
+  /** The pictures picked for the `pictures` source. */
+  picked: readonly HookPickedPicture[];
+  /** On the legs: also the picture of each day already told. */
+  includePieces: boolean;
   // --- frame ---------------------------------------------------------------
   position: MapPosition;
   align: MapAlign;
@@ -219,7 +230,10 @@ export interface MapOptions {
 }
 
 export const MAP_DEFAULTS: MapOptions = {
+  stopsOn: 'custom',
   stops: [],
+  picked: [],
+  includePieces: true,
   position: 'middle',
   align: 'center',
   size: 1,
@@ -319,8 +333,12 @@ export function mapOptions(raw: Readonly<Record<string, unknown>>): MapOptions {
   const o = { ...MAP_DEFAULTS, ...raw } as Record<keyof MapOptions, unknown>;
   const d = MAP_DEFAULTS;
   const L = MAP_LIMITS;
+  const source = readStopSource(o, 'custom');
   return {
-    stops: readStops(o.stops),
+    stopsOn: source.stopsOn,
+    stops: source.stops,
+    picked: source.picked,
+    includePieces: source.includePieces,
     position: oneOf(o.position, ['top', 'middle', 'bottom'], d.position),
     align: oneOf(o.align, ['left', 'center', 'right'], d.align),
     size: clamp(Number(o.size), L.size.min, L.size.max, d.size),

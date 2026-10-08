@@ -1308,7 +1308,10 @@ screen both show the car beside its choices, which scroll on their own, so a
 switch far down the list is seen on the car the moment it flips.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
-your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
+your own places) — though, like Virée and the Recap card, it can also take
+its stops from the trip's **legs** or the **photos'** own positions, the
+editor then showing the list it will draw (edit one and it becomes your own
+map): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
 from stop to stop, waiting at each for as long as you ask. The **camera** can

@@ -256,10 +256,21 @@ describe('the card on a slide of its own', () => {
     expect(driveOptions(cardVariant.defaults).cardFace).toBe('trace');
   });
 
-  it('says why where the legs carry no place', () => {
-    expect(cardVariant.unmet?.({ ...ctx, stages: [] })).toMatch(/no located place/);
-    expect(cardVariant.unmet?.(ctx)).toBeNull();
-    expect(cardVariant.prepare(cardVariant.defaults, { ...ctx, stages: [] }).seconds).toBe(0);
+  it('draws nothing where its source gives fewer than two places, the badge still hidden', () => {
+    const empty = cardVariant.prepare(cardVariant.defaults, { ...ctx, stages: [] });
+    expect(empty.seconds).toBe(0);
+    expect(empty.badgeWindow).toEqual({ start: 0, end: 0 });
+  });
+
+  it('takes its stops from your own map too, and prints their pictures on the contact sheet only', () => {
+    const stops = [
+      { id: 'a', name: 'Cairns', lat: -16.92, lon: 145.77, picture: { ref: { name: 'a.jpg', size: 1, lastModified: 0 }, date: '2025-03-02' } },
+      { id: 'b', name: 'Sydney', lat: -33.87, lon: 151.21 },
+    ];
+    const own = { ...cardVariant.defaults, stopsOn: 'custom', stops };
+    expect(cardVariant.prepare(own, ctx).seconds).toBeGreaterThan(0);
+    expect(cardVariant.wantsPictures!(own, ctx)).toEqual([]);
+    expect(cardVariant.wantsPictures!({ ...own, cardFace: 'sheet' }, ctx).map((w) => w.key)).toEqual(['name:a.jpg:1']);
   });
 
   it('puts the slide’s own picture under a photo ground, veiled', () => {

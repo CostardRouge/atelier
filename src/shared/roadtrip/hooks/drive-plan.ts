@@ -45,6 +45,7 @@ import {
   type HookDay,
   type HookPickedPicture,
   type HookPictureWant,
+  type HookPlace,
   type HookStage,
 } from './hook-variant';
 import { partitionPicked, readPicked, sampleEvenly } from './picked';
@@ -470,6 +471,8 @@ export interface DriveStop extends GeoPoint {
   place?: string;
   /** The states this halt is in, as the trip writes them (`stopState`) — a group's every member's. */
   states?: string[];
+  /** The place this stop is, on the legs or the author's own list — what another opener reads it back as (`stop-source.ts`). */
+  source?: HookPlace;
   /**
    * WHEN the car is here, as days of the trip on a continuous scale — day
    * 1.0 is the morning of day 1, day N + 1.0 the end of day N — so `arrive`
@@ -624,6 +627,7 @@ function placeStops(
         name: stopText(place, o.placeStyle, writing).trim(),
         place: place.name.trim(),
         ...(state ? { states: [state] } : {}),
+        source: place,
         kind: 'place',
         leg: index,
         accent: first,
@@ -794,6 +798,7 @@ function customStops(
       name: stopText(stop, o.placeStyle, writing).trim(),
       place: stop.name.trim(),
       ...(state ? { states: [state] } : {}),
+      source: stop,
       kind: 'place',
       leg: null,
       accent: i === 0,
@@ -805,7 +810,11 @@ function customStops(
     const split = partitionPicked(calendar, date, o.picked);
     leftOut.after = split.after;
     leftOut.outside = split.outside;
+    // A picture a stop already holds is not added a second time — a list
+    // taken from the picked pictures keeps each on its own stop.
+    const held = new Set(stops.flatMap((s) => s.pictures.map((p) => p.key)));
     for (const picture of split.inReach) {
+      if (held.has(hookPictureKey(picture.ref))) continue;
       if (picture.coords) nearestStop(stops, picture.coords).pictures.push(wantOf(picture));
       else leftOut.unlocated += 1;
     }
