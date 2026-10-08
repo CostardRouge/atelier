@@ -49,6 +49,7 @@ import type { HookPlace } from '../../shared/roadtrip/hooks/hook-variant';
 import { groupStops, type GroupOptions } from '../../shared/roadtrip/hooks/stop-clusters';
 import { newId } from '../../shared/roadtrip/trip-types';
 import Button from '../../shared/ui/Button';
+import { ToggleField } from '../../shared/ui/Inspector';
 import { Icons } from '../../shared/ui/icons';
 import { blockNativeZoom } from '../../shared/ui/native-gestures';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
@@ -718,7 +719,11 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
             </div>
 
             <div className="absolute left-3 top-3 right-14 flex flex-col gap-2 items-start pointer-events-none">
-              <div className="pointer-events-auto w-[min(22rem,100%)] p-2 rounded-paper bg-surface/95 border border-line shadow-paper">
+              {/* One opaque card holds the search and the map's two switches, so
+                  nothing it says is read through the tiles under it — the two
+                  translucent chips that sat on the map were grey or orange
+                  depending on the ground (his «pas élégant»). */}
+              <div className="pointer-events-auto w-[min(22rem,100%)] p-2 rounded-paper bg-surface border border-line shadow-paper flex flex-col gap-2">
                 <PlaceSearchField
                   value={query}
                   onChange={setQuery}
@@ -733,26 +738,21 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
                   label="Find a place"
                   inputClassName="font-sans text-sm h-[2.125rem] px-3 border border-line-strong rounded-control bg-surface text-ink focus:outline-none focus:border-accent w-full"
                 />
-              </div>
-              <div className="pointer-events-auto flex flex-wrap gap-1.5">
-                <button
-                  type="button"
-                  aria-pressed={tilesOn}
-                  onClick={() => setTilesOn((on) => !on)}
-                  title={TILES_TOGGLE.title}
-                  className={chipClass(tilesOn)}
-                >
-                  {tilesOn ? TILES_TOGGLE.on : TILES_TOGGLE.off}
-                </button>
-                <button
-                  type="button"
-                  aria-pressed={snap}
-                  onClick={() => setSnap((on) => !on)}
-                  title="A tap near a town or one of the trip’s places takes it, with its name. Off, a tap drops the stop exactly where it lands."
-                  className={chipClass(snap)}
-                >
-                  {snap ? 'Snap to towns: on' : 'Snap to towns: off'}
-                </button>
+                <div className="flex flex-wrap items-center gap-x-4 gap-y-1.5 pt-2 px-1 border-t border-line">
+                  <span title={TILES_TOGGLE.title} className="inline-flex">
+                    <ToggleField label={TILES_TOGGLE.off} checked={tilesOn} onChange={setTilesOn}>
+                      Map tiles
+                    </ToggleField>
+                  </span>
+                  <span
+                    title="A tap near a town or one of the trip’s places takes it, with its name. Off, a tap drops the stop exactly where it lands."
+                    className="inline-flex"
+                  >
+                    <ToggleField label="Snap a tap to the nearest town" checked={snap} onChange={setSnap}>
+                      Snap to towns
+                    </ToggleField>
+                  </span>
+                </div>
               </div>
             </div>
 
@@ -997,11 +997,6 @@ export default function StopsMapSheet({ stops, places, title, grouping, onCancel
 const rowIconClass =
   'flex-none w-6 h-6 grid place-items-center rounded-full border-0 bg-transparent text-muted cursor-pointer hover:text-ink disabled:opacity-30 disabled:cursor-default [&>svg]:w-3.5 [&>svg]:h-3.5';
 
-function chipClass(on: boolean): string {
-  return `px-2.5 py-1 rounded-full border text-2xs cursor-pointer shadow-paper ${
-    on ? 'border-accent bg-accent-wash text-accent-ink' : 'border-line bg-surface/95 text-ink-soft hover:border-line-strong'
-  }`;
-}
 
 /**
  * A stop's marker: a numbered disc with its name beside it. Inline styles, so
