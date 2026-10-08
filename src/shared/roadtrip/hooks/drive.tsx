@@ -68,7 +68,9 @@ import { allowTiles, stripBudget } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
 import { readyGround } from './basemap-strip';
 import { Group } from './panel-ui';
-import StopsEditor, { StopStyleRow } from './stops-editor';
+import { StopStyleRow } from './stops-editor';
+import { StopSourceRows } from './stop-source-rows';
+import { sourceStops } from './stop-source';
 import { otherPlaces, tripPlaces } from './stops';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
@@ -188,7 +190,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const borrowed = car !== tripCar;
   const shown = route.stops.reduce((n, s) => n + s.pictures.length, 0);
   const located = stages.reduce((n, s) => n + s.places.length, 0);
-  const pickedLocated = o.picked.filter((p) => p.coords).length;
   const places = tripPlaces(stages);
   // The caption can follow the car wherever a stop's name is a PLACE: the
   // legs' own, or the author's. A picture stop is named after its day.
@@ -242,52 +243,24 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       )}
 
       <Group title="Road">
-        <FieldRow
-          label="Stops"
-          align="start"
-          hint={
-            o.stopsOn === 'places'
-              ? 'The legs’ places with coordinates, the trip so far, arriving where this day’s leg ends. A place gets coordinates when you look it up in the trip’s legs.'
-              : o.stopsOn === 'custom'
-                ? 'The places you put on the map below, in your order — any place, on the trip’s legs or not. The car halts at a stop that holds a picture.'
-                : `Each picked picture shot with a position is a stop, in the order they were shot; one without rides with the stop before it.${pickedLocated ? ` ${pickedLocated} of ${o.picked.length} picked carry one.` : ''}`
-          }
-        >
-          <Segmented
-            size="sm"
-            fill
-            label="What the car drives between"
-            value={o.stopsOn}
-            onChange={(stopsOn) => set({ stopsOn })}
-            options={[
-              // Three in a 200px column: the words are short, the hint under
-              // the control says the rest.
-              { id: 'places', label: 'Legs' },
-              { id: 'custom', label: 'Your map' },
-              { id: 'pictures', label: 'Photos' },
-            ]}
-          />
-        </FieldRow>
-        {o.stopsOn === 'custom' && (
-          <StopsEditor
-            stops={o.stops}
-            onChange={(stops) => set({ stops })}
-            places={places}
-            free={otherPlaces(stages, o.stops)}
-            curve={o.path === 'curved' ? 0.12 : 0}
-            placeStyle={o.placeStyle}
-            writing={ctx.writing}
-            host={host}
-            title="Virée"
-            pictureHint={
-              o.pictures === 'none'
-                ? null
-                : 'Shown when the car halts here, before any picked picture shot nearby.'
-            }
-            picturesOffHint="The pictures are set to None below, so the car drives past without showing any."
-            grouping={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
-          />
-        )}
+        <StopSourceRows
+          value={o}
+          onChange={set}
+          resolved={sourceStops(o, ctx)}
+          host={host}
+          label="What the car drives between"
+          editor={{
+            places,
+            free: otherPlaces(stages, o.stops),
+            curve: o.path === 'curved' ? 0.12 : 0,
+            placeStyle: o.placeStyle,
+            writing: ctx.writing,
+            title: 'Virée',
+            pictureHint: o.pictures === 'none' ? null : 'Shown when the car halts here, before any picked picture shot nearby.',
+            picturesOffHint: 'The pictures are set to None below, so the car drives past without showing any.',
+            grouping: { groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName },
+          }}
+        />
         <GroupRows
           value={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
           onChange={(patch) => set(patch)}
@@ -375,7 +348,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
-        {o.pictures !== 'none' && (
+        {/* On Photos the pictures ARE the stops, chosen in the Stops rows above. */}
+        {o.pictures !== 'none' && o.stopsOn !== 'pictures' && (
           <div className="flex flex-col gap-2">
             {choose ? (
               <div className="flex items-center gap-2 flex-wrap">

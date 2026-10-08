@@ -70,8 +70,8 @@ export function paintCard(
   g.globalAlpha = alpha;
   paintGround(pen, pictures);
   g.restore();
-  if (scene.face === 'stamp') return;
-  if (scene.face === 'trace') paintTrace(pen);
+  if (scene.face === 'stamp') paintStamp(pen);
+  else if (scene.face === 'trace') paintTrace(pen);
   else if (scene.face === 'ticket') paintTicket(pen);
   else if (scene.face === 'passport') paintPassport(pen);
   else if (scene.face === 'sheet') paintSheet(pen, pictures);
@@ -317,6 +317,36 @@ function paintTrace(pen: Pen): void {
   drawRoad(pen, s.plan, at, pen.count, 7 * u, true);
   const within: Box = { x: 24 * u, y: titleEnd, w: pen.w - 48 * u, h: factsY - titleEnd - 16 * u };
   placeLabels(pen, at, [], within, 30 * u);
+}
+
+// --- the STAMP ----------------------------------------------------------------------
+
+/**
+ * The stamp as a picture of itself — the road under a box of facts. Virée
+ * draws the real one in its map's box (`paintSummary`); this is what the
+ * face picker shows of it.
+ */
+function paintStamp(pen: Pen): void {
+  const { g, s, w, h, u } = pen;
+  const at = fitRoad(s.plan, { x: w * 0.12, y: h * 0.12, w: w * 0.76, h: h * 0.76 });
+  g.save();
+  g.globalAlpha = 0.55;
+  drawRoad({ ...pen, alpha: pen.alpha * 0.55 }, s.plan, at, 1, 5 * u, true);
+  g.restore();
+  const bw = Math.min(w * 0.86, 640 * u);
+  const bh = 190 * u;
+  const box: Box = { x: (w - bw) / 2, y: (h - bh) / 2, w: bw, h: bh };
+  g.save();
+  g.globalAlpha = pen.alpha;
+  g.beginPath();
+  roundRectOn(g, box.x, box.y, box.w, box.h, 16 * u);
+  g.fillStyle = hexToRgba(s.ink.ground, 0.94);
+  g.fill();
+  g.lineWidth = 2 * u;
+  g.strokeStyle = hexToRgba(s.ink.rule, 0.3);
+  g.stroke();
+  g.restore();
+  factsRow(pen, { x: box.x, y: box.y + 30 * u, w: box.w, h: bh - 40 * u }, 64, 22);
 }
 
 // --- the TICKET ----------------------------------------------------------------------

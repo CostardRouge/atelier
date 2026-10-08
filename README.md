@@ -974,7 +974,8 @@ long where a leg starts, darker where a picture was shot), the **Passport**
 (a stamp for each state crossed), the **Contact sheet** (the road's pictures
 and the road), the **Stamp** (days · distance · stops in the map's box — what
 a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
-the trip's days). It wears the **trip's look** — the badge's face, case,
+the trip's days) — each picked from a small picture of itself, drawn over
+the piece's own road. It wears the **trip's look** — the badge's face, case,
 colour and glow — or another look for the card alone; it stands on the trip's
 last picture veiled, the look's own solid, or the map's paper (where its
 words take the map's ink); it says up to four facts in your order (days,
@@ -1308,7 +1309,10 @@ screen both show the car beside its choices, which scroll on their own, so a
 switch far down the list is seen on the car the moment it flips.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
-your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
+your own places) — though, like Virée and the Recap card, it can also take
+its stops from the trip's **legs** or the **photos'** own positions, the
+editor then showing the list it will draw (edit one and it becomes your own
+map): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
 from stop to stop, waiting at each for as long as you ask. The **camera** can
