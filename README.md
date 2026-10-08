@@ -1380,6 +1380,27 @@ be a dot or a little plane, the badge's caption can follow it from stop to
 stop, and it ticks at each arrival on the same voices as Défilé. Every opener
 runs on the same clock as the badge, in the preview and in the file.
 
+**Vitrine** is the vehicle on its own, with no map: the trip's car (or any car
+of the garage) presented in a place, through an entrance, to an ending, in a
+look, drawn by the same software renderer as Virée's car. Eleven places —
+showroom, city, desert, ferry, lake, beach, car park, mountain road, service
+station, bivouac, forest — each with its variants (the ferry's open car deck is
+packed with parked cars and vans in lanes, like a real crossing), an hour of
+the day (dawn, noon, sunset, night) and weather (dry, rain, mist) outdoors, as
+a full scene or a floating diorama. Six entrances: it drives in, assembles
+from its exploded parts, drops from the sky, is drawn line by line, appears
+under the lights, or comes in stop-motion. Where there is a road the vehicle
+**never stops in its lane**: it keeps driving while the scenery scrolls past,
+pulls over to the shoulder (indicator on, brake lights), or leaves the road for
+a clearing or the sand; a place without a road keeps it still. On the beach it
+drives the hard sand at the water's edge, K'gari style, and steers round
+driftwood, a rock and a dingo. The look is colour, a blueprint or a riso print;
+a **Start from** row gives a dozen finished recipes, and changing one keeps
+your vehicle and your words. The **Place line** rewrites the badge's place
+(a ferry crossing is whatever route you type — Algeciras → Tanger Med,
+Melbourne → Devonport), and the badge comes in once the entrance is over, stays
+all along, or never.
+
 *A **Route** opener used to draw the trip's own shape from the legs' located
 places; the Itinerary replaced it, and a piece composed with one is converted
 into an itinerary of those same places when the trip is next opened.*
