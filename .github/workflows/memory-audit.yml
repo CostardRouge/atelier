@@ -25,7 +25,7 @@ concurrency:
 
 jobs:
   audit:
-    runs-on: ubuntu-latest
+    runs-on: ubuntu-24.04
     # A runaway agent is the expensive failure mode here: this job spends the
     # maintainer's Claude subscription quota, not just Actions minutes.
     timeout-minutes: 20
@@ -38,7 +38,7 @@ jobs:
       # disk, exactly as a local session does — without this step it has no
       # repository to audit.
       - name: Checkout
-        uses: actions/checkout@v4
+        uses: actions/checkout@v5
         with:
           fetch-depth: 1
 
@@ -129,7 +129,7 @@ jobs:
       # timed-out audit still hands over whatever it wrote.
       - name: Keep the report even when the issue could not be opened
         if: always()
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: memory-audit
           path: memory-audit.md
