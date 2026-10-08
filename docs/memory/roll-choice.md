@@ -35,7 +35,14 @@ Rules a later change must keep:
   to the stack after the draft's own effect) until the picture gets numbers:
   the first write carries `base: 'gain'` + the metered gain, and the
   write-through's echo re-seeds the draft (the `settling` window is drawn on
-  the stored base, or the stage flashes the render). A kelvin `rawWb` alone
+  the stored base, or the stage flashes the render). Both answers live in
+  ONE pure function, `tools/develop/develop-now.ts` (`developNowOf` +
+  `developToWrite`): **only the ROLL's base (`rollBase`, a follower) ever
+  rides a write — settling NEVER does** (2026-10-08, his A7C II report: a
+  picture stepped DOWN from *Gain* to its proxy or camera render settles
+  too, and writing the stored base back with the stepped-down draft made the
+  write equal the document, so nothing re-seeded and the stage stayed on the
+  sensor for good, undo included). A kelvin `rawWb` alone
   counts as numbers there. Apply to / Paste keep a SENSOR's numbers on a
   follower's sensor (`ontoRollSensor`), else the paste would read as set on
   the render and drop the picture off it — the case he will hit first.

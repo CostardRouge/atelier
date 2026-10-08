@@ -459,7 +459,9 @@ export function sameDevelop(a: DevelopSettings | null | undefined, b: DevelopSet
     sameMixer(x.mixer, y.mixer) &&
     sameMono(x.mono, y.mono) &&
     sameGrading(x.grading, y.grading) &&
-    isRawDevelop(x) === isRawDevelop(y) &&
+    // The RUNG, not only whether there is one: Gain → Gain map is a change
+    // the roll must be written, or the rung picked is never stored.
+    developBase(x) === developBase(y) &&
     rawGainOf(x) === rawGainOf(y) &&
     JSON.stringify(x.rawWb ?? null) === JSON.stringify(y.rawWb ?? null) &&
     JSON.stringify(x.rawProfile ?? null) === JSON.stringify(y.rawProfile ?? null) &&

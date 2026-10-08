@@ -71,7 +71,7 @@ a later agent must keep:**
   first, the stage's decode (`onRawDecoded`) or the run's (`meterRaw`, which
   now returns the profile beside the gain). *Meter the exposure again* never
   adds one. A follower holds it for the visit (`followProfile`) and writes it
-  with its first numbers (`inheritedRef`).
+  with its first numbers (`rollBase`, `develop-now.ts`).
 - **ONE matrix in the head**: `rawMatrixOf` = `rawWb.matrix ?? profile`. A
   kelvin balance on a profiled picture is solved THROUGH the profile
   (`profiledWbMatrix`, green held like `wbMatrix`) and REPLACES its matrix —

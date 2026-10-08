@@ -108,7 +108,11 @@ pure rules are `roll-editor.ts` (tested). Rules a later phase must keep:
 - **No Done.** The draft is written to the roll 200 ms after it rests and on
   leaving the picture (the pending value flushed in the unmount cleanup), and
   `sameDevelop` drops a write that says nothing new (null ≡ an untouched set),
-  so remounting a picture never dirties the roll.
+  so remounting a picture never dirties the roll. It compares the RUNG
+  (`developBase`), not only whether there is one (2026-10-08): comparing
+  `isRawDevelop` alone made *Gain → Gain map* "nothing new", so the rung
+  picked in the name menu was drawn and never stored — the export and the
+  next visit took the old one.
 - **ONE updater** (`update(change)` over a ref that advances immediately): a
   develop, the look and a batch landing in one tick compose instead of the last
   replacing a roll the others already moved on. Every writer goes through it.

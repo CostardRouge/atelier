@@ -12,6 +12,7 @@ import { DevelopAutoSection, DevelopLevelsSection } from '../../shared/develop/D
 import { whiteBalanceFor } from '../../shared/develop/auto-develop';
 import { useAutoMemory } from '../../shared/develop/use-auto-memory';
 import { useCropSwitches } from './use-crop-switches';
+import { developNowOf, developToWrite } from './develop-now';
 import DevelopHistogram from '../../shared/develop/DevelopHistogram';
 import DevelopMixer from '../../shared/develop/DevelopMixer';
 import { straightMono } from '../../shared/develop/mixer';
@@ -26,12 +27,11 @@ import {
   developBase,
   developLines,
   isDefaultDevelop,
-  isRawDevelop,
   profilePending,
   signed,
   type DevelopSettings,
 } from '../../shared/develop/develop';
-import { cloneBaseCurve, needsMeasuring, needsProfileCurve, openingBaseCurve } from '../../shared/develop/base-curve';
+import { cloneBaseCurve, needsMeasuring, needsProfileCurve } from '../../shared/develop/base-curve';
 import { readHeadProfile, readProfileCurve } from '../../shared/develop/profile-curve';
 import { profileCurvePoints } from '../../shared/develop/base-curve';
 import type { CurvePoint } from '../../shared/develop/curves';
@@ -868,37 +868,22 @@ export default function PictureWorkbench({
   // The camera profile (`dng-color.ts`) resolved on the same decode as the
   // gain, held with it while following and written with the first numbers.
   const [followProfile, setFollowProfile] = useState<RawProfile | null>(null);
-  // The document already on a RAW base the draft has not been re-seeded
-  // with yet — the render between the first write and its echo, or an undo
-  // landing — is drawn on that base, never on the render for one frame.
+  // The document already on a RAW base the draft is not on — the render
+  // between the first write and its echo, an undo landing, or a step DOWN to a
+  // file before it is written — is drawn on that base, never on the render for
+  // one frame; only the ROLL's sensor ever rides a write (`develop-now.ts`).
   const stored = entry.develop;
-  const settling = isRawDevelop(stored) && !isRawDevelop(draft.draft);
-  const developNow = useMemo<DevelopSettings>(() => {
-    if (isRawDevelop(draft.draft)) return draft.draft;
-    if (settling && stored) return { ...draft.draft, base: stored.base, rawGain: stored.rawGain, rawProfile: stored.rawProfile ?? null, baseCurve: stored.baseCurve ?? null };
-    // On the roll's sensor the picture opens on the opening curve, as the
-    // export does (`openingBaseCurve`), until it is given its own.
-    return followsSensor
-      ? {
-          ...draft.draft,
-          base: 'gain',
-          rawGain: followGain,
-          // Resolved by the stage's first decode (C4), held for the visit.
-          rawProfile: followProfile ?? PROFILE_PENDING,
-          baseCurve: openingBaseCurve(draft.draft.baseCurve),
-        }
-      : draft.draft;
-  }, [followsSensor, settling, stored, draft.draft, followGain, followProfile]);
-  const inherited = developNow !== draft.draft;
+  const { now: developNow, settling, rollBase } = useMemo(
+    () => developNowOf({ draft: draft.draft, stored, followsSensor, followGain, followProfile }),
+    [followsSensor, stored, draft.draft, followGain, followProfile],
+  );
   // On the roll's sensor and not yet on its own: what a cancel, a failed fetch
   // or the stage's meter answers for the visit rather than for the document.
-  const following = inherited && !settling;
+  const following = rollBase !== null && !settling;
   const followingRef = useRef(following);
   followingRef.current = following;
-  const inheritedRef = useRef<Pick<DevelopSettings, 'base' | 'rawGain' | 'rawProfile' | 'baseCurve'> | null>(null);
-  inheritedRef.current = inherited
-    ? { base: developNow.base, rawGain: developNow.rawGain, rawProfile: developNow.rawProfile ?? null, baseCurve: developNow.baseCurve ?? null }
-    : null;
+  const rollBaseRef = useRef(rollBase);
+  rollBaseRef.current = rollBase;
   // The stack grades what the picture is developed WITH: after the draft's
   // own effect, so the roll's base reaches the cube in the same commit.
   const { setDevelop: setStackDevelop } = stack;
@@ -1335,7 +1320,7 @@ export default function PictureWorkbench({
       setSensorDecode({ file: info.file, half: info.half, gain: info.gain });
       if (rawGain === null) {
         // On the roll's sensor the gain is held for the visit and written
-        // only with the picture's first numbers (`inheritedRef`).
+        // only with the picture's first numbers (`rollBase`).
         if (following) {
           setFollowGain(info.gain);
           setFollowProfile(info.profile);
@@ -1537,14 +1522,11 @@ export default function PictureWorkbench({
     // Keyed on the numbers themselves: `draft` is a new object every render.
     // A white balance set in kelvin is a number too, on the roll's sensor.
     // So is a base curve picked there: it binds the material like a number.
-    draft: isDefaultDevelop(draft.draft) && !(inherited && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
+    draft: isDefaultDevelop(draft.draft) && !(rollBase && (draft.draft.rawWb || draft.draft.baseCurve)) ? null : draft.draft,
     same: sameDevelop,
     // A picture on the roll's sensor writes the base WITH its first numbers:
     // they were set on the sensor's data and mean nothing on the render.
-    onWrite: (value) => {
-      const roll = inheritedRef.current;
-      callbacks.current.onDevelop(roll && value && !isRawDevelop(value) ? { ...value, ...roll } : value, pendingVia.current ?? undefined);
-    },
+    onWrite: (value) => callbacks.current.onDevelop(developToWrite(value, rollBaseRef.current), pendingVia.current ?? undefined),
     // The WHOLE record, material included: an undo that takes a picture back
     // off its RAW must put the base back with the numbers.
     onReseed: (value) => replace(value ?? DEFAULT_DEVELOP),
