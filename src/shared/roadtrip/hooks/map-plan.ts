@@ -157,6 +157,13 @@ export interface MapOptions {
   aheadStyle: MapAhead;
   /** How far a hop bows away from the straight line, 0 = straight. */
   curve: number;
+  /**
+   * Each hop on the trip's ROAD (`HookContext.road`, `roadHops`): the road's
+   * points between its two stops, or null where the road does not join them
+   * and the hop keeps its arc. DERIVED where the opener is drawn
+   * (`drawnOptions`) and never stored: the road is the trip's, not the piece's.
+   */
+  roads?: readonly (readonly LatLon[] | null)[];
   underlay: boolean;
   // --- places --------------------------------------------------------------
   dots: boolean;
@@ -490,7 +497,7 @@ function nominalBox(aspect: number): { w: number; h: number; box: Box } {
 export function mapBasemap(o: MapOptions, aspect: number, track: CameraTrack | null = null, budget = STRIP_TILES): BasemapSet | null {
   if (!o.basemap || o.stops.length === 0 || !(aspect > 0)) return null;
   const { w, h, box } = nominalBox(aspect);
-  const { unproject } = fitProjection(o.stops, box, 8);
+  const { unproject } = fitProjection(mapFit(o), box, 8);
   // A little over the box on every side: the padding is a fraction of the
   // frame's width, not of the box, so a smaller map shows a hair more around
   // its stops — the paint clips to the box and places the raster by the
@@ -505,7 +512,7 @@ export function mapBasemap(o: MapOptions, aspect: number, track: CameraTrack | n
     // …and the widest the camera gets, around the whole journey.
     const widest = widestFrame(track);
     const scale = box.width / Math.max(1e-6, widest);
-    const b = mapBounds(o.stops, box);
+    const b = mapBounds(mapFit(o), box);
     x0 = Math.min(x0, b.x0 - box.width / 2 / scale);
     x1 = Math.max(x1, b.x1 + box.width / 2 / scale);
     y0 = Math.min(y0, b.y0 - box.height / 2 / scale);
@@ -541,6 +548,7 @@ export function mapBasemap(o: MapOptions, aspect: number, track: CameraTrack | n
 
 /** The projected stops' bounds in box pixels. */
 function mapBounds(stops: readonly LatLon[], box: Box): CameraSubject['bounds'] {
+  // `stops` is what the map is fitted on (`mapFit`): the road's points are bounds too.
   const { project } = fitProjection(stops, box, 8);
   let x0 = Infinity;
   let y0 = Infinity;
@@ -602,12 +610,17 @@ export function mapCamera(o: MapOptions): CameraOptions {
  * the hop it is on, and the journey's bounds.
  */
 export function mapSubject(o: MapOptions, timing: MapTiming, box: Box): CameraSubject {
-  const { project, unproject } = fitProjection(o.stops, box, 8);
+  const { project, unproject } = fitProjection(mapFit(o), box, 8);
   const points = o.stops.map((stop) => project(stop));
   const arcs = points.slice(1).map((to, i) => ({ from: points[i], to, control: arcControl(points[i], to, o.curve) }));
-  const kms = hopKms(o.stops);
+  const roads = o.stops.slice(1).map((stop, i) => {
+    const via = o.roads?.[i];
+    return via ? roadShape(o.stops[i], via, stop, project) : null;
+  });
+  const kms = hopKms(o.stops, o.roads);
   const at = (t: number): Point => {
     const pen = penAt(timing, o.easing, t);
+    if (pen.hop !== null && roads[pen.hop]) return roadShapeAt(roads[pen.hop]!, pen.fraction);
     if (pen.hop !== null && arcs[pen.hop]) {
       const arc = arcs[pen.hop];
       return quadAt(arc.from, arc.control, arc.to, pen.fraction);
@@ -621,7 +634,7 @@ export function mapSubject(o: MapOptions, timing: MapTiming, box: Box): CameraSu
       const pen = penAt(timing, o.easing, t);
       return pen.hop !== null ? { f: pen.fraction, km: kms[pen.hop] ?? 0 } : null;
     },
-    bounds: mapBounds(o.stops, box),
+    bounds: mapBounds(mapFit(o), box),
     kmPerUnit: KM_PER_DEGREE / Math.max(1e-9, unitsPerDegreeOf(unproject, 'lat')),
   };
 }
@@ -658,6 +671,61 @@ export function viewed(project: (p: LatLon) => Point, view: View | null): (p: La
 /** Whether the map has been dragged away from the anchor it was placed on. */
 export function mapMoved(o: MapOptions): boolean {
   return o.offsetX !== 0 || o.offsetY !== 0;
+}
+
+/** How many road points at most decide the map's fit — a spread of every fix would overflow a call's arguments. */
+const FIT_SAMPLE = 4000;
+
+/**
+ * What the map is fitted on: the stops, and the road between them where the
+ * opener follows it — so a road bowing past the stops stays in the box. The
+ * paint, the camera and the ground all fit on this, or the tiles slide.
+ */
+export function mapFit(o: Pick<MapOptions, 'stops' | 'roads'>): readonly LatLon[] {
+  const road = o.roads?.flatMap((v) => v ?? []) ?? [];
+  if (road.length === 0) return o.stops;
+  const step = Math.max(1, Math.ceil(road.length / FIT_SAMPLE));
+  return [...o.stops, ...(step === 1 ? road : road.filter((_, i) => i % step === 0))];
+}
+
+/** One hop laid on the road, in pixels: its points and how far along (by km, 0 → 1) each one is. */
+export interface RoadShape {
+  points: Point[];
+  at: number[];
+}
+
+/** A hop's road in pixels: `a`, the road's points, `b`, measured in kilometres so a fraction of the hop is a fraction of its distance. */
+export function roadShape(a: LatLon, via: readonly LatLon[], b: LatLon, project: (p: LatLon) => Point): RoadShape {
+  const geo = [a, ...via, b];
+  const cum = [0];
+  for (let i = 1; i < geo.length; i++) cum.push(cum[i - 1] + haversineKm(geo[i - 1], geo[i]));
+  const total = cum[cum.length - 1];
+  return { points: geo.map(project), at: cum.map((k) => (total > 0 ? k / total : 0)) };
+}
+
+/** The point a fraction `f` of the way along a road shape. */
+export function roadShapeAt(shape: RoadShape, f: number): Point {
+  const { points, at } = shape;
+  if (f <= 0 || points.length === 1) return points[0];
+  if (f >= 1) return points[points.length - 1];
+  let lo = 0;
+  let hi = at.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (at[mid] <= f) lo = mid;
+    else hi = mid;
+  }
+  const span = at[hi] - at[lo];
+  const w = span > 0 ? (f - at[lo]) / span : 0;
+  return { x: points[lo].x + (points[hi].x - points[lo].x) * w, y: points[lo].y + (points[hi].y - points[lo].y) * w };
+}
+
+/** The road shape's points from fraction `f0` to `f1`, both ends interpolated. */
+export function roadShapeSlice(shape: RoadShape, f0: number, f1: number): Point[] {
+  const out = [roadShapeAt(shape, f0)];
+  for (let i = 0; i < shape.points.length; i++) if (shape.at[i] > f0 && shape.at[i] < f1) out.push(shape.points[i]);
+  out.push(roadShapeAt(shape, f1));
+  return out;
 }
 
 /**
@@ -827,9 +895,19 @@ export function formatDistance(km: number, unit: MapDistance): string {
   return `${text} ${unit}`;
 }
 
-/** Each hop's length in kilometres, in the itinerary's order. */
-export function hopKms(stops: readonly MapStop[]): number[] {
-  return stops.slice(1).map((stop, i) => haversineKm(stops[i], stop));
+/** Each hop's length in kilometres, in the itinerary's order — along the road where the hop follows it (`MapOptions.roads`). */
+export function hopKms(stops: readonly MapStop[], roads?: MapOptions['roads']): number[] {
+  return stops.slice(1).map((stop, i) => {
+    const via = roads?.[i];
+    if (!via) return haversineKm(stops[i], stop);
+    let km = 0;
+    let prev: LatLon = stops[i];
+    for (const p of [...via, stop]) {
+      km += haversineKm(prev, p);
+      prev = p;
+    }
+    return km;
+  });
 }
 
 /**
@@ -837,12 +915,13 @@ export function hopKms(stops: readonly MapStop[]): number[] {
  * projection is one uniform scale. What the travel times are shared out by, so
  * the pen's pace is the same whatever size the frame is drawn at.
  */
-export function planarHops(stops: readonly MapStop[]): number[] {
-  const { project } = fitProjection(stops, { x: 0, y: 0, width: 1000, height: 1000 });
+export function planarHops(stops: readonly MapStop[], roads?: MapOptions['roads']): number[] {
+  const { project } = fitProjection(mapFit({ stops, roads }), { x: 0, y: 0, width: 1000, height: 1000 });
   return stops.slice(1).map((stop, i) => {
-    const a = project(stops[i]);
-    const b = project(stop);
-    return Math.hypot(b.x - a.x, b.y - a.y);
+    const line = [stops[i], ...(roads?.[i] ?? []), stop].map(project);
+    let length = 0;
+    for (let k = 1; k < line.length; k++) length += Math.hypot(line[k].x - line[k - 1].x, line[k].y - line[k - 1].y);
+    return length;
   });
 }
 

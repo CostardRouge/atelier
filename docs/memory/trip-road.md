@@ -91,3 +91,20 @@ the heading is read over a chord (`headingAt`), or the car twitches on every
 fix. Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
+
+## The Itinerary and the overview's Map draw the road (2026-10-09)
+
+The Itinerary reads the road through `MapOptions.roads`, DERIVED in
+`drawnOptions` (and the panel) from `roadHops` and never stored — the road is
+the trip's, not the piece's. Every fit of the drawn map goes through
+`mapFit(o)` (stops + a ≤ 4 000-point sample of the road): the paint, the
+camera's subject and bounds and the OSM ground must fit on the same points,
+or the tiles slide under the line. A road hop is a `RoadShape` whose
+fractions are KILOMETRES, so the pen, the drawn/ahead split and the distance
+readout agree; the pen's pace shares time by the road's planar length
+(`planarHops(stops, roads)`). The overview's Map adds the road as a MapLibre
+`line` layer (GPU, not the per-frame SVG) and then drops the solid straight
+strokes between stages, keeping the dotted ones (they say days are
+unaccounted for); it frames the places plus the road inside their box grown
+by its own size (≥ 2°), never the far end of a flight home the track carries.
+Left as is: a stage's own tinted path between its places is still straight.

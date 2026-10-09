@@ -66,6 +66,7 @@ import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import LegsSheet from './LegsSheet';
 import YearMap from './YearMap';
+import { tripRoadLine } from '../../shared/roadtrip/road-track';
 import TripMapView, { OffMapRows, type OffMapActions, type StagePicture } from './TripMapView';
 import StageDays from './StageDays';
 import MapStageBar from './MapStageBar';
@@ -1065,6 +1066,7 @@ export default function TripOverview({
       offMap={offMapActions}
       onShowOffMap={() => setOffMapOpen(true)}
       footer={footer}
+      road={tripRoadLine(trip.road ?? null)}
     />
   );
 

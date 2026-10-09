@@ -47,6 +47,10 @@ import {
   tripPlaces,
   wantsLabel,
   type MapStop,
+  mapFit,
+  roadShape,
+  roadShapeAt,
+  roadShapeSlice,
 } from './map-plan';
 import { adoptSearch, moveStopTo, numeralScale, replaceStopPlace, searchPlace, stopText, writtenStops } from './stops';
 import { TICK_KITS } from './tick-kits';
@@ -807,6 +811,50 @@ describe('the camera following the pen', () => {
   it('keeps the whole map’s region as it was for a still camera', () => {
     const still = mapOptions({ stops, basemap: true });
     expect(mapBasemap(still, 9 / 16)!.wide.key).toBe(mapBasemap(still, 9 / 16, null, 256)!.wide.key);
+  });
+});
+
+describe('the trip’s road under the pen', () => {
+  // A road round a bay between two stops the crow joins across the water.
+  const stops = [
+    { id: 'a', name: 'A', lat: -30, lon: 120 },
+    { id: 'b', name: 'B', lat: -31, lon: 120 },
+  ];
+  const via = [
+    { lat: -30, lon: 121 },
+    { lat: -30, lon: 122 },
+    { lat: -31, lon: 122 },
+    { lat: -31, lon: 121 },
+  ];
+  const roads = [via];
+
+  it('counts the road’s kilometres and its length for the pen’s pace', () => {
+    expect(hopKms(stops, roads)[0]).toBeGreaterThan(hopKms(stops)[0] * 4);
+    expect(planarHops(stops, roads)[0]).toBeGreaterThan(planarHops(stops)[0] * 2);
+  });
+
+  it('fits the map on the road too, and walks a shape by its kilometres', () => {
+    expect(mapFit({ stops, roads })).toHaveLength(6);
+    expect(mapFit({ stops })).toBe(stops);
+    const shape = roadShape(stops[0], via, stops[1], (p) => ({ x: p.lon, y: -p.lat }));
+    expect(roadShapeAt(shape, 0)).toEqual({ x: 120, y: 30 });
+    expect(roadShapeAt(shape, 1)).toEqual({ x: 120, y: 31 });
+    // Halfway along the road is the bay's far side, not the middle of the water.
+    expect(roadShapeAt(shape, 0.5).x).toBeCloseTo(122, 1);
+    const half = roadShapeSlice(shape, 0, 0.5);
+    expect(half[0]).toEqual({ x: 120, y: 30 });
+    expect(half.length).toBeGreaterThan(2);
+  });
+
+  it('puts the camera’s subject on the road', () => {
+    const o = { ...MAP_DEFAULTS, stops, roads };
+    const timing = mapTiming(planarHops(stops, roads), o);
+    const box = { x: 0, y: 0, width: 1000, height: 1000 };
+    const subject = mapSubject(o, timing, box);
+    const mid = (timing.arrivals[0] + timing.arrivals[1]) / 2;
+    const straight = mapSubject({ ...MAP_DEFAULTS, stops }, mapTiming(planarHops(stops), o), box);
+    // On the road the pen is far east of the straight line between A and B.
+    expect(subject.at(mid).x).toBeGreaterThan(straight.at(mid).x + 200);
   });
 });
 

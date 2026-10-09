@@ -905,7 +905,10 @@ apart from them smooths the line from every point up to 2 km, and *Forget the
 road* takes it off the trip. **Virée drives that road**: between two stops the
 road joins, the vehicle follows it (round the bay rather than across it) and
 the counter, the milestones and the summary card count what it drives; a hop
-the road never joins (a flight, a stop off the road) keeps its curve.
+the road never joins (a flight, a stop off the road) keeps its curve. The
+**Itinerary**'s pen draws its hops on the same road, its distance counting
+it, and the overview's **Map** draws the road under the stages in place of
+the straight strokes between them.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the

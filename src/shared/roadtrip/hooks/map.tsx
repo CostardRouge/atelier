@@ -55,7 +55,9 @@ import {
   groupMapStops,
   mapShortestBeat,
   type MapOptions,
+  type MapStop,
 } from './map-plan';
+import { roadHops } from '../road-track';
 import { BasemapStatus, enableBasemap } from './basemap-row';
 import { readyGround } from './basemap-strip';
 import { CameraRows } from './camera-rows';
@@ -117,17 +119,18 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   const free = otherPlaces(ctx.stages, stops);
   // The stops as the opener will DRAW them: nearby ones grouped (`stop-clusters.ts`).
   const shown = groupMapStops(stops, o, ctx.towns ?? null);
-  const timing = mapTiming(planarHops(shown), o);
+  const { roads } = roadsOf(shown, ctx);
+  const timing = mapTiming(planarHops(shown, roads), o);
   const withPictures = stops.filter((stop) => stop.picture).length;
   const keys = stops.flatMap((stop) => {
     const key = stopPictureKey(stop);
     return key ? [key] : [];
   });
   const line = o.media === 'off' ? null : pictureLine(keys, host?.pictureStatus);
-  const totalKm = hopKms(shown).reduce((sum, km) => sum + km, 0);
+  const totalKm = hopKms(shown, roads).reduce((sum, km) => sum + km, 0);
   // The camera and the ground as the opener will really draw them — over the
   // stops as shown, the same call as `prepare` and `wantsBasemap`.
-  const drawn = { ...o, stops: shown };
+  const drawn = { ...o, stops: shown, roads };
   const track = mapCameraTrack(drawn, timing, ctx.aspect);
   const basemaps = o.basemap ? mapBasemap(drawn, ctx.aspect, track, stripBudget()) : null;
 
@@ -818,7 +821,19 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
  */
 function drawnOptions(options: Readonly<Record<string, unknown>>, ctx: HookContext): MapOptions {
   const read = mapOptions(options);
-  return { ...read, stops: groupMapStops(writtenStops(sourceStops(read, ctx), read.placeStyle, ctx.writing), read, ctx.towns ?? null) };
+  const stops = groupMapStops(writtenStops(sourceStops(read, ctx), read.placeStyle, ctx.writing), read, ctx.towns ?? null);
+  return { ...read, stops, ...roadsOf(stops, ctx) };
+}
+
+/**
+ * The hops the trip's road joins, laid on it (`roadHops`) — derived here,
+ * where the opener is drawn, and never stored. Nothing where every hop keeps
+ * its arc, so a trip with no road draws exactly as before.
+ */
+function roadsOf(stops: readonly MapStop[], ctx: HookContext): Pick<MapOptions, 'roads'> {
+  if (!ctx.road?.pieces.length || stops.length < 2) return {};
+  const hops = roadHops(ctx.road, stops);
+  return hops.some(Boolean) ? { roads: hops.map((h) => h?.via ?? null) } : {};
 }
 
 export const mapVariant: HookVariant = {
@@ -849,7 +864,7 @@ export const mapVariant: HookVariant = {
     // them — so the keys the shell fetches are the keys the paint looks up.
     const o = drawnOptions(options, ctx);
     if (o.stops.length === 0) return [];
-    const timing = mapTiming(planarHops(o.stops), o);
+    const timing = mapTiming(planarHops(o.stops, o.roads), o);
     return mapBasemap(o, ctx.aspect, mapCameraTrack(o, timing, ctx.aspect), stripBudget())?.wants ?? [];
   },
   // Pointed at and dragged on the stage like any other content. The box is
@@ -866,7 +881,7 @@ export const mapVariant: HookVariant = {
   prepare(options, ctx) {
     const o = drawnOptions(options, ctx);
     if (o.stops.length === 0) return { seconds: 0 };
-    const timing = mapTiming(planarHops(o.stops), o);
+    const timing = mapTiming(planarHops(o.stops, o.roads), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];
     // The camera following the pen, baked once with the timing (`map-camera.ts`).
     const track = mapCameraTrack(o, timing, ctx.aspect);
