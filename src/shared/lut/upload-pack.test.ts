@@ -27,7 +27,7 @@ vi.mock('./pack-thumbs', () => ({
 
 vi.mock('./pack-vault', () => ({
   loadPacks: async () => [],
-  packsSnapshot: () => saved.at(-1) ? [saved.at(-1)] : [],
+  packsSnapshot: () => saved.slice(-1)[0] ? [saved.slice(-1)[0]] : [],
   savePack: async (index: unknown) => {
     saved.push(index);
     return true;
@@ -84,7 +84,7 @@ describe('uploading a .cube into the vault', () => {
 
   it('files the look in the one personal pack, at its root', async () => {
     await uploadLookIntoVault(cubeFile('Sunset.cube'));
-    const index = saved.at(-1) as { id: string; looks: { node: string; family: string }[] };
+    const index = saved.slice(-1)[0] as { id: string; looks: { node: string; family: string }[] };
     expect(index.id).toBe(UPLOAD_PACK_ID);
     expect(index.looks).toHaveLength(1);
     expect(index.looks[0].node).toBe('');
@@ -94,7 +94,7 @@ describe('uploading a .cube into the vault', () => {
 
   it('reads a conversion look on the log reference', async () => {
     await uploadLookIntoVault(cubeFile('DJI D-Log M to Rec709.cube'));
-    const index = saved.at(-1) as { looks: { family: string }[] };
+    const index = saved.slice(-1)[0] as { looks: { family: string }[] };
     expect(index.looks[0].family).toBe('log');
   });
 

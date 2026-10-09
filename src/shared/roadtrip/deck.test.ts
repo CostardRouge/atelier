@@ -343,7 +343,7 @@ describe('deckSlides — medium and screen time', () => {
     const p = post({ includeCta: true });
     p.badge.medium = 'video';
     const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
-    expect(deck.at(-1)).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
+    expect(deck.slice(-1)[0]).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
   });
 
   it('carries a clip’s speed, and 1 for anything that is not a clip', () => {

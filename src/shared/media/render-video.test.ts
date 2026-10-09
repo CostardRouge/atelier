@@ -151,7 +151,7 @@ describe('encodeFrames', () => {
 
     expect(recorded.encoded).toHaveLength(20);
     expect(painted[0]).toBe(0);
-    expect(painted.at(-1)).toBeCloseTo(1.9, 5);
+    expect(painted.slice(-1)[0]).toBeCloseTo(1.9, 5);
     // Each frame starts exactly where the previous one ended: a gap here is a
     // stutter in the delivered file that no unit of the plan would show.
     for (let i = 1; i < recorded.encoded.length; i += 1) {
@@ -285,7 +285,7 @@ describe('encodeFrames', () => {
         if (p.ratio !== null) last = p.ratio;
       },
     });
-    expect(phases.at(-1)).toBe('finalizing');
+    expect(phases.slice(-1)[0]).toBe('finalizing');
     expect(last).toBe(1);
   });
 });
