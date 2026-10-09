@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  addRoadFixes,
   cutFlights,
   decodeTrack,
   despike,
@@ -213,7 +214,25 @@ describe('the road on the trip', () => {
     expect(readTripRoad({ track: 'nope' })).toBeNull();
     const road = makeTripRoad(fixes, span, null, 1)!;
     expect(readTripRoad(JSON.parse(JSON.stringify(road)))).toEqual(road);
-    expect(readTripRoad({ ...road, mode: 'fly', detail: 7 })).toMatchObject({ mode: 'stages', detail: 100 });
+    expect(readTripRoad({ ...road, mode: 'fly', detail: 7, source: 'nope' })).toMatchObject({ mode: 'stages', detail: 100, source: 'polarsteps' });
+    expect(readTripRoad({ ...road, source: 'gpx' })!.source).toBe('gpx');
+  });
+
+  it('merges more fixes into the road, or makes one, and says where they came from', () => {
+    const first = makeTripRoad(fixes.slice(0, 10), span, null, 1)!;
+    const later = fixes.slice(10).map((f) => ({ ...f }));
+    const { road, added } = addRoadFixes({ ...first, mode: 'raw', added: [fixes[3]] }, later, span, 'gpx', 2);
+    expect(added).toBe(later.length);
+    expect(road!.fixes).toBe(fixes.length);
+    expect(road!.source).toBe('mixed');
+    expect(road!.mode).toBe('raw');
+    expect(road!.added).toEqual([fixes[3]]);
+    // The same fixes again add nothing; none at all makes a road from GPX alone.
+    expect(addRoadFixes(road, later, span, 'gpx', 3).added).toBe(0);
+    expect(addRoadFixes(null, fixes, span, 'gpx', 3).road!.source).toBe('gpx');
+    // Outside the trip's span: nothing lands.
+    const far = fixes.map((f) => ({ ...f, t: f.t + 30 * 86_400 }));
+    expect(addRoadFixes(null, far, span, 'gpx', 3)).toEqual({ road: null, added: 0 });
   });
 
   it('draws nothing as the crow flies, the line otherwise', () => {

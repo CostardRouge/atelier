@@ -345,6 +345,8 @@ export default function TripDetailsModal({
               onForget={() => setRoad(null)}
               onAdded={(added) => setRoad((r) => (r ? { ...r, added } : r))}
               onNested={setRoadNested}
+              onRoad={setRoad}
+              tripSpan={trip}
             />
           </div>
         )}

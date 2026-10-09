@@ -902,7 +902,11 @@ flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
 apart from them smooths the line from every point up to 2 km, and *Forget the
-road* takes it off the trip. **Place road points…** opens a big map of the
+road* takes it off the trip. **Add a GPX…** merges the timed points of one or
+more `.gpx` files (a GPS logger, a car's navigation, Strava…) into the road
+within the trip's dates, or makes the road from them alone — the same instant
+once, the reading kept; a planned route with no times is refused, since it
+cannot be put on the trip's clock. **Place road points…** opens a big map of the
 road as recorded, every stretch over 20 km the track skipped (the phone off
 for a day) drawn dashed: a click puts a point of road on the nearest stretch,
 at the time that far along it, and the road goes through it; a click on one
