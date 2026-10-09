@@ -75,6 +75,12 @@ export interface TrainingPair {
   picture: { id: string; name: string; size: number; hash: string | null; variant: number | null };
   /** The sections the author touched; empty is an untouched picture. */
   edits: PictureEdit[];
+  /**
+   * An AGENT wrote at least one step of this record through a command
+   * (journal `via: 'agent'`): a model learning the author's own taste leaves
+   * these out. Unknown — false — for a picture edited before the journal.
+   */
+  agent: boolean;
   shot: TrainingShot;
   record: TrainingRecord;
 }
@@ -137,6 +143,7 @@ export function trainingPair(roll: RollDoc, p: RollPicture, shot: ShotRecord, vi
     roll: { id: roll.id, name: roll.name },
     picture: { id: p.id, name: p.ref.name, size: p.ref.size, hash: p.ref.hash ?? null, variant: p.variant ?? null },
     edits: pictureEdits(p),
+    agent: (p.journal ?? []).some((step) => step.via === 'agent'),
     shot: {
       vignette,
       aspect: shot.aspect,

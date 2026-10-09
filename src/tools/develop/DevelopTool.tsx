@@ -27,6 +27,9 @@ import { openPictureId, pictureAfterRestore } from '../../shared/develop/roll-ed
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
+import { CommandError } from '../../shared/commands/registry';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { rollSummary } from '../../shared/develop/develop-commands';
 import RollGallery from './RollGallery';
 import RollEditor from './RollEditor';
 
@@ -203,6 +206,60 @@ export default function DevelopTool() {
     },
   });
   historyRef.current = history;
+
+  // The tool's own commands (`shared/commands/`, `develop-commands.ts`): the
+  // rolls, opening one, and the roll's undo — the very stack ⌘Z walks, so an
+  // agent's write is one step back like the author's.
+  useRegisterCommands('develop', [
+    {
+      id: 'develop.rolls',
+      title: 'List the rolls',
+      description: 'Every roll this browser holds — id, name, how many pictures and how many are edited — and which one is open.',
+      // The open roll as it is ON SCREEN: the store's copy lags the 800 ms debounce.
+      run: async () => ({
+        open: open?.id ?? null,
+        rolls: (await listRolls()).map((r) => rollSummary(open && r.id === open.id ? open : r)),
+      }),
+    },
+    {
+      id: 'develop.openRoll',
+      title: 'Open a roll',
+      description: 'Open a roll in the editor, on its first picture or on the one named. Wait for develop.pictures before reading it.',
+      params: {
+        roll: { type: 'string', description: 'The roll id, from develop.rolls.' },
+        picture: { type: 'string', description: 'A picture id to open it on.', optional: true },
+      },
+      run: async (p) => {
+        const found = (await listRolls()).find((r) => r.id === p.roll);
+        if (!found) throw new CommandError('invalid', `no roll "${String(p.roll)}" — develop.rolls lists them`);
+        if (typeof p.picture === 'string' && !found.pictures.some((x) => x.id === p.picture)) {
+          throw new CommandError('invalid', `roll "${found.name}" holds no picture "${p.picture}"`);
+        }
+        navigate(developPath(rollRef(found), typeof p.picture === 'string' ? p.picture : null));
+        return { roll: found.id, name: found.name };
+      },
+    },
+    {
+      id: 'develop.undo',
+      title: 'Undo',
+      description: 'Step the open roll back one edit — the same stack as ⌘Z, the agent’s own writes included.',
+      available: () => (!open ? 'no roll is open' : history.canUndo ? true : 'nothing to undo'),
+      run: () => {
+        history.undo();
+        return { undone: true };
+      },
+    },
+    {
+      id: 'develop.redo',
+      title: 'Redo',
+      description: 'Step the open roll forward again after an undo.',
+      available: () => (!open ? 'no roll is open' : history.canRedo ? true : 'nothing to redo'),
+      run: () => {
+        history.redo();
+        return { redone: true };
+      },
+    },
+  ]);
 
   // Opening a remote roll: the mirror opens at once, the instance is asked.
   const resumedFor = useRef<string | null>(null);

@@ -269,8 +269,13 @@ export interface RollPicture {
   makingOf?: MakingOf;
 }
 
-/** How a step came to be, when it was not the author's own gesture on this picture: `auto` is the `Auto` switch run at open. */
-export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier' | 'auto';
+/**
+ * How a step came to be, when it was not the author's own gesture on this
+ * picture: `auto` is the `Auto` switch run at open, `agent` a write an agent
+ * made through a command (`shared/commands/`) — kept apart so a model
+ * learning the author's taste can leave it out (`training-dump.ts`).
+ */
+export type JournalVia = 'apply' | 'paste' | 'reset' | 'earlier' | 'auto' | 'agent';
 
 /**
  * A step's VALUES: the sections it changed, as they stood after it — the
@@ -584,7 +589,7 @@ export const PICTURE_EDITS: readonly PictureEdit[] = [
 ];
 
 const EDIT_IDS: ReadonlySet<string> = new Set(PICTURE_EDITS);
-const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier', 'auto']);
+const VIAS: ReadonlySet<string> = new Set(['apply', 'paste', 'reset', 'earlier', 'auto', 'agent']);
 
 /** A step's stored values read through the same readers a picture's fields are. */
 function readSectionValues(raw: unknown, sections: readonly PictureEdit[]): SectionValues {

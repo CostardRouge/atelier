@@ -84,6 +84,8 @@ import { firstOpen, useAutoAll, type AutoAllStep } from '../../shared/develop/us
 import { WRITE_DELAY_MS } from '../../shared/develop/use-write-through';
 import { useLocalPref } from '../../shared/ui/local-pref';
 import { isEdited, type JournalVia } from '../../shared/develop/roll-types';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { imageResult, untilSteady } from '../../shared/commands/image-result';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
   DEFAULT_BRUSH_HARDNESS,
@@ -1748,6 +1750,55 @@ export default function PictureWorkbench({
     }, SNAPSHOT_DELAY_MS);
     return () => window.clearTimeout(t);
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
+
+  // --- what an agent LOOKS at (`shared/commands/`) -----------------------------
+  // The cell's own recipe at the size asked: the picture as delivered —
+  // graded, framed, bordered — or as shot. It waits for `delivered` to stop
+  // changing first, since a `develop.set` reaches the roll at once and the
+  // stage's cube a render later; an answer taken before would show the
+  // picture one write behind.
+  const looking = useRef({ source, delivered, aspectRatio, framingDraft, border });
+  looking.current = { source, delivered, aspectRatio, framingDraft, border };
+  useRegisterCommands('develop-workbench', [
+    {
+      id: 'develop.snapshot',
+      title: 'Look at the picture',
+      description:
+        'A JPEG of the open picture AS DELIVERED (graded, cropped, bordered — what an export would hold, at a smaller size), or AS SHOT with before: true (uncropped, no correction). Waits for the stage to catch up with the last write.',
+      params: {
+        longEdge: { type: 'number', description: 'The long edge in pixels; 1024 when absent.', min: 64, max: 2048, integer: true, optional: true },
+        before: { type: 'boolean', description: 'The picture as shot instead of as delivered.', optional: true },
+      },
+      available: () => (looking.current.source ? true : 'the open picture is still decoding'),
+      run: async (p) => {
+        await untilSteady(() => looking.current.delivered);
+        const { source: s, delivered: draw, aspectRatio: ratio, framingDraft: framing, border: edge } = looking.current;
+        if (!s) throw new Error('the open picture is no longer decoded');
+        const longEdge = typeof p.longEdge === 'number' ? p.longEdge : 1024;
+        let blob: Blob | null = null;
+        if (p.before === true) {
+          const scale = Math.min(1, longEdge / Math.max(s.width, s.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(s.width * scale));
+          canvas.height = Math.max(1, Math.round(s.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('the browser refused a canvas');
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(s.image, 0, 0, canvas.width, canvas.height);
+          blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        } else {
+          const image = draw();
+          if (!image) throw new Error('the stage has nothing to deliver yet');
+          blob = (await framedThumbnail(image, s.width, s.height, ratio, framing, edge, longEdge))?.blob ?? null;
+        }
+        if (!blob) throw new Error('the browser refused to encode the picture');
+        const bitmap = await createImageBitmap(blob);
+        const size = { w: bitmap.width, h: bitmap.height };
+        bitmap.close();
+        return imageResult(blob, size.w, size.h, p.before === true ? 'the picture as shot, uncropped' : 'the picture as delivered');
+      },
+    },
+  ]);
 
   // --- the clipboard's two verbs ------------------------------------------------
   // Held HERE rather than in the well, so ⌘C and ⌘V light the very glyph a

@@ -1,7 +1,10 @@
 import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
-import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { CommandError } from '../../shared/commands/registry';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { SECTION_IDS, developControls, pictureSummary, rollSummary, targetPicture, withDevelopValues } from '../../shared/develop/develop-commands';
 import { landBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
@@ -743,6 +746,88 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       }, via),
     [update],
   );
+
+  // The roll's commands (`shared/commands/`, `develop-commands.ts`): reading
+  // its pictures and writing a develop through `handleDevelop`, the funnel the
+  // sliders use — journaled `via: 'agent'`, so the making-of and the training
+  // file can tell an agent's step from the author's.
+  useRegisterCommands('develop-roll', [
+    {
+      id: 'develop.pictures',
+      title: 'List the roll’s pictures',
+      description: 'The open roll and its pictures in band order: id, file name, whether it is open, a clip, a variant, which sections carry an edit, whether it leaves in an export.',
+      run: () => ({
+        roll: rollSummary(latest.current),
+        pictures: latest.current.pictures.map((p) => pictureSummary(p, openIdRef.current)),
+      }),
+    },
+    {
+      id: 'develop.openPicture',
+      title: 'Open a picture',
+      description: 'Put a picture of the roll on the stage. Wait for develop.snapshot to be available before looking at it: a picture decodes after it opens.',
+      params: { picture: { type: 'string', description: 'The picture id, from develop.pictures.' } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        onOpenPicture(target.id);
+        return { open: target.id, name: pictureLabel(target) };
+      },
+    },
+    {
+      id: 'develop.controls',
+      title: 'Read the sliders',
+      description: 'The eleven develop sliders of a picture (the open one unless named) with their range, step, unit and current value — what develop.set writes.',
+      params: { picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        return { picture: target.id, controls: developControls(target.develop) };
+      },
+    },
+    {
+      id: 'develop.get',
+      title: 'Read a develop',
+      description: 'A picture’s whole develop record (sliders, curves, levels, mixer, B&W, grading, the RAW material), every default filled, and which sections of the picture carry an edit.',
+      params: { picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        return { picture: target.id, develop: normaliseDevelop(target.develop ?? {}), edited: pictureEdits(target) };
+      },
+    },
+    {
+      id: 'develop.set',
+      title: 'Set sliders',
+      description:
+        'Write develop sliders on a picture (the open one unless named), as ABSOLUTE values inside each slider’s range — exposure in EV −3..3, the others −100..100. Keys: exposure, brightness, contrast, highlights, shadows, whites, blacks, temperature, tint, saturation, vibrance. Everything not named is kept. One undo step, journaled as an agent’s.',
+      params: {
+        values: { type: 'object', description: 'Slider → value, e.g. { "exposure": 0.5, "shadows": 30 }.' },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        const next = withDevelopValues(target.develop, p.values as Record<string, unknown>);
+        handleDevelop(target.id, next, 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, controls: developControls(now?.develop ?? null) };
+      },
+    },
+    {
+      id: 'develop.reset',
+      title: 'Reset sections',
+      description: `Put sections of a picture back as shot (the develop alone unless named). Sections: ${SECTION_IDS.join(', ')}. One undo step.`,
+      params: {
+        sections: { type: 'strings', description: 'Section ids; ["develop"] when absent.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        const asked = (p.sections as string[] | undefined) ?? ['develop'];
+        const unknown = asked.filter((s) => !(SECTION_IDS as readonly string[]).includes(s));
+        if (unknown.length) throw new CommandError('invalid', `no section ${unknown.join(', ')} — the sections are ${SECTION_IDS.join(', ')}`);
+        update((r) => resetSections(r, target.id, asked as PictureSection[]), 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, edited: now ? pictureEdits(now) : [] };
+      },
+    },
+  ]);
 
   const handleFraming = useCallback(
     (id: string, framing: Framing | null, via?: JournalVia) => update((r) => patchPicture(r, id, { framing }), via),

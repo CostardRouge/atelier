@@ -94,6 +94,7 @@ describe('buildTrainingDump', () => {
       roll: { name: 'Islande' },
       picture: { name: 'a.jpg', size: 10, hash: 'h-a', variant: null },
       edits: [],
+      agent: false,
       shot: { vignette: 'data:image/jpeg;base64,10', aspect: 1.5, natural: { width: 6000, height: 4000 }, exif: { model: 'ILCE-7CM2', iso: 400 } },
     });
     expect(dump.file.pairs[1].picture.hash).toBeNull();
@@ -109,6 +110,16 @@ describe('buildTrainingDump', () => {
     expect(dump.file.pairs[0].shot.vignette).toBeNull();
     expect(dump.file.pairs[0].edits).toEqual(['develop']);
     expect(dump.file.pairs[0].record.develop.exposure).toBe(1);
+  });
+
+  it('marks a record an agent wrote a step of, so a trainer can leave it out', () => {
+    const p = createRollPicture({ name: 'a.jpg', size: 10, lastModified: 1 }, 'p1');
+    p.develop = { ...DEFAULT_DEVELOP, exposure: 0.4 };
+    p.journal = [{ at: 1, sections: ['develop'], after: { develop: p.develop }, via: 'agent' }];
+    const roll = rollWith(p);
+    expect(trainingPair(roll, p, shotOf('p1', roll.id), null).agent).toBe(true);
+    p.journal = [{ at: 1, sections: ['develop'], after: { develop: p.develop } }];
+    expect(trainingPair(roll, p, shotOf('p1', roll.id), null).agent).toBe(false);
   });
 
   it('writes what the shot said about the source and nothing of the media’s ids', () => {
