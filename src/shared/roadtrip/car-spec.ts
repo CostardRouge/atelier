@@ -19,13 +19,27 @@
  * includes four BOATS — the Whitsundays day cruiser, the Viper, the Alison
  * Maree, the Solar Whisper — which offer no gear and wear their hull colour as the body's. A
  * trip may drive one, but a piece usually borrows one for a day on the water
- * (`vehicleFor`).
+ * (`vehicleFor`). Since 2026-10-09 two of the boats are FERRIES — the Spirit
+ * of Tasmania and the Mediterranean ferry — which CARRY a vehicle
+ * (`CarLine.carries`): a piece that crosses on one shows the trip's car
+ * driving aboard (`DriveOptions.boarding`).
  *
  * Pure and DOM-free: the reader never throws, a stored value is never
  * trusted, and a partial spec keeps what it says.
  */
 
-export const CAR_MODEL_IDS = ['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2', 'whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper'] as const;
+export const CAR_MODEL_IDS = [
+  'prado-j120',
+  'kadjar-ph2',
+  'trafic-ph2',
+  'zoe-ph2',
+  'whitsunday-cruiser',
+  'viper-jet',
+  'alison-maree',
+  'solar-whisper',
+  'spirit-of-tasmania',
+  'med-ferry',
+] as const;
 export type CarModelId = (typeof CAR_MODEL_IDS)[number];
 
 /** The car a trip drives when nothing says otherwise — the maintainer's own. */
@@ -128,6 +142,8 @@ export interface CarLine {
   fitted: readonly (keyof CarGear)[];
   /** One sentence naming that car, for the verb that goes back to it. */
   asItComes: string;
+  /** A ferry: it carries vehicles, so the trip's car can drive aboard it. */
+  carries?: boolean;
 }
 
 const PRADO_GEAR: readonly (keyof CarGear)[] = [
@@ -274,7 +290,41 @@ export const CAR_LINES: Readonly<Record<CarModelId, CarLine>> = {
     fitted: [],
     asItComes: 'The Solar Whisper in white, its roof tiled with solar panels',
   },
+  // The ferries. The Spirit's red is the operator's own word for its brand;
+  // the Mediterranean ferry is no one ship, painted like the one at Tanger Med.
+  'spirit-of-tasmania': {
+    gear: [],
+    colours: [
+      { id: 'white', name: 'White', hex: '#f4f4f1', note: 'with the red band and funnel the operator calls its brand' },
+      { id: 'grey', name: 'Light grey', hex: '#d9dcde' },
+      { id: 'navy', name: 'Navy', hex: '#1d2a4a' },
+    ],
+    color: '#f4f4f1',
+    finish: 'gloss',
+    fitted: [],
+    asItComes: 'The Spirit of Tasmania in white, its band and funnel red',
+    carries: true,
+  },
+  'med-ferry': {
+    gear: [],
+    colours: [
+      { id: 'navy', name: 'Navy', hex: '#1d2a4a', note: 'like the ship at Tanger Med — a guess, repaint it to the one you took' },
+      { id: 'white', name: 'White', hex: '#f3f4f2', note: 'as many Spanish and Italian ferries wear it' },
+      { id: 'royal', name: 'Royal blue', hex: '#1f4e9a' },
+      { id: 'red', name: 'Red', hex: '#a8262b' },
+    ],
+    color: '#1d2a4a',
+    finish: 'gloss',
+    fitted: [],
+    asItComes: 'The Mediterranean ferry with a navy hull, its funnels banded white',
+    carries: true,
+  },
 };
+
+/** Whether a model is a ferry, which the trip's car can drive aboard. */
+export function carriesVehicles(model: string): boolean {
+  return carLine(model).carries === true;
+}
 
 /** What a model offers — the Prado's for an id this build does not know. */
 export function carLine(model: string): CarLine {

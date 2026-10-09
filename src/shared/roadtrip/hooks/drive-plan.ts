@@ -36,6 +36,7 @@
  */
 
 import { VEHICLE_CHOICES, type VehicleChoice } from '../car-spec';
+import { ALIGHT_SECONDS, BOARD_SECONDS, type TimeSpan } from './boarding';
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { formatDistance, haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
@@ -114,6 +115,12 @@ export interface DriveOptions extends CardOptions {
   vehicle: VehicleChoice;
   /** The borrowed vehicle's paint, `#rrggbb`; empty: as it comes. */
   vehicleColor: string;
+  /**
+   * On a borrowed FERRY (`CarLine.carries`), the trip's car drives aboard at
+   * the start and off at the end (`boarding.ts`). On by default: it is what
+   * says the car crossed too.
+   */
+  boarding: boolean;
   carSize: number;
   /** The camera's elevation over the map, degrees; 90 looks straight down. */
   tilt: number;
@@ -246,6 +253,7 @@ export const DRIVE_DEFAULTS: DriveOptions = {
   cardSize: 1,
   vehicle: 'trip',
   vehicleColor: '',
+  boarding: true,
   carSize: 1,
   tilt: 58,
   ground: 'paper',
@@ -380,6 +388,7 @@ export function driveOptions(raw: Readonly<Record<string, unknown>>): DriveOptio
     cardSize: clamp(Number(o.cardSize), L.cardSize.min, L.cardSize.max, d.cardSize),
     vehicle: oneOf(o.vehicle, VEHICLE_CHOICES, d.vehicle),
     vehicleColor: hex(o.vehicleColor, ''),
+    boarding: o.boarding !== false,
     carSize: clamp(Number(o.carSize), L.carSize.min, L.carSize.max, d.carSize),
     tilt: clamp(Number(o.tilt), L.tilt.min, L.tilt.max, d.tilt),
     ground: oneOf(o.ground, ['paper', 'picture', 'tiles'], d.ground),
@@ -1159,6 +1168,9 @@ export interface DriveSchedule {
   reveals: boolean;
   /** The seconds the car waited at the start for a badge shown before the drive. */
   lead: number;
+  /** When the trip's car drives aboard the ferry — the end of the hold — and off it, at the arrival; null without a ferry (`boarding.ts`). */
+  boardAt: TimeSpan | null;
+  alightAt: TimeSpan | null;
   /**
    * The least road time that gives every hop its {@link MIN_RUN_SECONDS}: a
    * `driveSeconds` under it is honoured, the hops then shorter than the floor
@@ -1278,13 +1290,15 @@ export function buildSchedule(
   summary = false,
   /** Seconds the car waits at the start for a badge shown before the drive. */
   lead = 0,
+  /** The trip's car boards the ferry this drive is on, and drives off at the end (`boarding.ts`). */
+  board = false,
 ): DriveSchedule {
   const phases: Phase[] = [];
   const pops: PicturePop[] = [];
   const arrivals: number[] = [];
   let t = 0;
   const n = stops.length;
-  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null, roadFloor: 0, reveals: false, lead: 0 };
+  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null, roadFloor: 0, reveals: false, lead: 0, boardAt: null, alightAt: null };
 
   /**
    * The picture of the DAY: under the recap's clock, a picture shot on a
@@ -1391,9 +1405,13 @@ export function buildSchedule(
     return { s, day, cost: raw.map((c) => c / total) };
   };
 
-  // The hold on the first stop, then its own halt, then its stay.
+  // The hold on the first stop, then its own halt, then its stay. A car
+  // boarding the ferry does so at the END of the hold, once the badge it may
+  // wait for has come: the ship leaves with it aboard.
   arrivals.push(0);
-  const hold = o.delaySeconds + Math.max(0, lead);
+  const boarding = board ? BOARD_SECONDS : 0;
+  const hold = o.delaySeconds + Math.max(0, lead) + boarding;
+  const boardAt = board ? { start: t + hold - boarding, end: t + hold } : null;
   if (hold > 0) {
     phases.push({ kind: 'hold', start: t, end: t + hold, s0: 0, s1: 0, stop: 0, ...days(dayIn(0)) });
     t += hold;
@@ -1453,7 +1471,9 @@ export function buildSchedule(
   const arrivedAt = t;
   const lastStop = n - 1;
   const lastHalt = n > 1 ? haltSeconds(stops[lastStop], o) : haltSeconds(stops[0], o);
-  const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0);
+  // The car drives off at the start of the arrival's beat, its pictures popping meanwhile.
+  const alightAt = board ? { start: t, end: t + ALIGHT_SECONDS } : null;
+  const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0) + (board ? ALIGHT_SECONDS : 0);
   phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(dayIn(lastStop), leaveDay(lastStop)) });
   addPops(lastStop, t, t + arrive);
   // The last place's days run over the whole arrival beat (its phase's `days`).
@@ -1475,7 +1495,20 @@ export function buildSchedule(
     phases.push({ kind: 'reveal', start: t, end: t + REVEAL_SECONDS, s0: path.length, s1: path.length, stop: lastStop, ...days(leaveDay(lastStop)) });
     t += REVEAL_SECONDS;
   }
-  return { phases, pops, arrivals, total: t, arrivedAt, revealAt, summaryAt, roadFloor: runs.length * MIN_RUN_SECONDS, reveals, lead: Math.max(0, lead) };
+  return {
+    phases,
+    pops,
+    arrivals,
+    total: t,
+    arrivedAt,
+    revealAt,
+    summaryAt,
+    roadFloor: runs.length * MIN_RUN_SECONDS,
+    reveals,
+    lead: Math.max(0, lead),
+    boardAt,
+    alightAt,
+  };
 }
 
 // --- reading the plan at a moment -------------------------------------------------
@@ -1598,7 +1631,13 @@ export function roadMilestones(
  * milestones — never otherwise, so a piece whose badge counts something else
  * keeps the drive it always had.
  */
-export function drivePlan(route: DriveRoute, o: DriveOptions, recap = false): DrivePlan | null {
+export function drivePlan(
+  route: DriveRoute,
+  o: DriveOptions,
+  recap = false,
+  /** The trip's car drives aboard the ferry this piece is on (`boardsOf`); a drive with one stop has no crossing to board for. */
+  board = false,
+): DrivePlan | null {
   const stops = route.stops;
   if (stops.length === 0) return null;
   const hasPictures = o.pictures !== 'none' && stops.some((s) => s.pictures.length > 0);
@@ -1613,7 +1652,7 @@ export function drivePlan(route: DriveRoute, o: DriveOptions, recap = false): Dr
   // (`badgeWhen: 'end'`) or open the drive (`before`, the car waiting for it).
   const moment = badgeMoment(o.badgeWhen);
   const card = recap && o.summary && moment !== 'end';
-  const schedule = buildSchedule(stops, path, o, clock, card, card && moment === 'before' ? BADGE_BEFORE_SECONDS : 0);
+  const schedule = buildSchedule(stops, path, o, clock, card, card && moment === 'before' ? BADGE_BEFORE_SECONDS : 0, board && stops.length > 1);
   const milestones = recap && o.milestones ? roadMilestones(stops, path, kmAtStop, clock, o.distance) : [];
 
   const at = (t: number): DriveMoment => {

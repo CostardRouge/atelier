@@ -1299,7 +1299,15 @@ outboards). Their liveries are guesses you can repaint. A trip can drive a
 boat, but a piece usually borrows one: the Virée panel's **Vehicle** row keeps
 the trip's car or picks any other model for that piece alone, in a paint of its
 own, and a boat leaves a wake that grows as it gets under way and settles when
-it halts — long behind the Viper, barely a ripple behind the Solar Whisper. The car turns on a turntable while you dress it (drag
+it halts — long behind the Viper, barely a ripple behind the Solar Whisper.
+Two **ferries** carry the car across: the **Spirit of Tasmania** (Bass Strait —
+a white hull with the red band and funnel its operator calls its brand) and a
+**Mediterranean ferry** of the France–Spain–Morocco crossings (no one ship: a
+navy hull under a white superstructure, two funnels side by side, a long open
+aft deck). A ship is drawn bigger than the rest. When a piece borrows a ferry,
+**Boarding** (on by default) opens on the trip's car at the quay: it drives up
+the stern ramp and disappears inside, the ferry crosses like any boat, and the
+car drives off over the bow ramp at the far side. The car turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own

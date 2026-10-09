@@ -43,6 +43,7 @@ import {
   type DriveOptions,
   type DriveStop,
 } from './drive-plan';
+import { ALIGHT_SECONDS, BOARD_SECONDS } from './boarding';
 import { driveRibbon } from './drive-ribbon';
 import { TICK_KITS } from './tick-kits';
 import { driveBasemap, driveTrack } from './drive-paint';
@@ -1129,6 +1130,44 @@ describe('buildSchedule alone', () => {
     const s = buildSchedule([], buildPath([], 'curved'), opts());
     expect(s.total).toBe(0);
     expect(s.phases).toEqual([]);
+    expect(s.boardAt).toBeNull();
+    expect(s.alightAt).toBeNull();
+  });
+});
+
+describe('the trip’s car boarding a ferry', () => {
+  const route = driveRoute(STAGES, CAL, dateOf(20), opts({ includePieces: false }));
+
+  it('is on by default and read defensively', () => {
+    expect(driveOptions({}).boarding).toBe(true);
+    expect(driveOptions({ boarding: false }).boarding).toBe(false);
+    expect(driveOptions({ boarding: 'no' }).boarding).toBe(true);
+  });
+
+  it('adds its two beats and nothing else: aboard at the end of the hold, off at the start of the arrival', () => {
+    const o = opts({ pictures: 'none' });
+    const plain = drivePlan(route, o)!;
+    const ferry = drivePlan(route, o, false, true)!;
+    expect(plain.schedule.boardAt).toBeNull();
+    expect(plain.schedule.alightAt).toBeNull();
+    expect(ferry.seconds).toBeCloseTo(plain.seconds + BOARD_SECONDS + ALIGHT_SECONDS, 9);
+    const hold = ferry.schedule.phases.find((p) => p.kind === 'hold')!;
+    expect(ferry.schedule.boardAt).toEqual({ start: hold.end - BOARD_SECONDS, end: hold.end });
+    expect(hold.end - hold.start).toBeCloseTo(o.delaySeconds + BOARD_SECONDS, 9);
+    expect(ferry.schedule.alightAt).toEqual({ start: ferry.schedule.arrivedAt, end: ferry.schedule.arrivedAt + ALIGHT_SECONDS });
+    // The road itself is untouched: every run as long as it was, shifted by the boarding.
+    const runs = (plan: typeof plain) => plan.schedule.phases.filter((p) => p.kind === 'run').map((p) => p.end - p.start);
+    expect(runs(ferry)).toEqual(runs(plain));
+    const firstRun = (plan: typeof plain) => plan.schedule.phases.find((p) => p.kind === 'run')!.start;
+    expect(firstRun(ferry) - firstRun(plain)).toBeCloseTo(BOARD_SECONDS, 9);
+    // The ship waits at the quay while the car drives on.
+    expect(ferry.at(ferry.schedule.boardAt!.start + 0.5).s).toBe(0);
+  });
+
+  it('has nothing to board for on a drive with one stop', () => {
+    const one = driveRoute([STAGES[0]], CAL, dateOf(2), opts({ includePieces: false, picked: [pic('a.jpg', 1)] }));
+    const plan = drivePlan({ ...one, stops: one.stops.slice(0, 1) }, opts(), false, true);
+    if (plan) expect(plan.schedule.boardAt).toBeNull();
   });
 });
 

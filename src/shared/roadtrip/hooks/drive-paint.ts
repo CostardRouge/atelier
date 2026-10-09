@@ -67,7 +67,8 @@ import { drawLookTexts, type LookText } from './look-text';
 import { cellAt, type CardScene } from './summary-card';
 import { cardCovers, cardProgress, paintCard as paintSummaryCard } from './summary-paint';
 import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
-import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
+import { paintGroundShadow, paintMesh, paintWake, project, renderOrder, toWorld, type Part, type Pose } from './mesh3d';
+import { RIDER_SCALE, boardingAt, riderTrack, type RiderTrack } from './boarding';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
@@ -85,6 +86,10 @@ export interface DriveScratch {
   spec: CarSpec;
   model: CarModel;
   parts?: Part[];
+  /** A ferry's parts with a ramp down, built the first time it lowers one. */
+  withRamp?: { stern?: Part[]; bow?: Part[] };
+  /** The trip's car riding the ferry this piece borrowed (`boarding.ts`); absent when it does not board. */
+  rider?: { spec: CarSpec; model: CarModel; parts?: Part[] };
   buffer?: OffscreenCanvas | HTMLCanvasElement;
   /** The words the summary card and the milestones say — the trip's badge words, English by default. */
   words: SummaryWords;
@@ -105,18 +110,28 @@ export function driveScratch(
   spec: CarSpec,
   words: Partial<SummaryWords> = {},
   theme: StyleTheme | null = null,
+  /** The trip's car, when it drives aboard the ferry `spec` names. */
+  rider: CarSpec | null = null,
 ): DriveScratch {
   const w = { ...SUMMARY_WORDS };
   for (const key of Object.keys(w) as (keyof SummaryWords)[]) {
     const given = words[key]?.trim();
     if (given) w[key] = given;
   }
-  return { spec, model: carModel(spec.model), words: w, theme: theme ?? themeFromPreset('neutral') };
+  return {
+    spec,
+    model: carModel(spec.model),
+    words: w,
+    theme: theme ?? themeFromPreset('neutral'),
+    ...(rider ? { rider: { spec: rider, model: carModel(rider.model) } } : {}),
+  };
 }
 
-function carParts(scratch: DriveScratch): Part[] {
+function carParts(scratch: DriveScratch, ramp: RiderTrack['ramp'] = null): Part[] {
   if (!scratch.parts) scratch.parts = scratch.model.build(scratch.spec.gear);
-  return scratch.parts;
+  if (!ramp || !scratch.model.ramps) return scratch.parts;
+  const kept = (scratch.withRamp ??= {});
+  return (kept[ramp] ??= [...scratch.parts, ...scratch.model.ramps()[ramp]]);
 }
 
 /** The box the route is fitted into, on a frame of `w`×`h`. */
@@ -296,6 +311,9 @@ function paintMap(
   const { width: w, height: h } = frame;
   const u = w / 1080;
   const carPx = CAR_PX * u * o.carSize;
+  // A ship is drawn bigger than a car (`CarModel.mapScale`); everything that
+  // keeps clear of the vehicle keeps clear of what is drawn.
+  const vehiclePx = carPx * (scratch.model.mapScale ?? 1);
   const box = driveBox(w, h, o.position, o.size);
   const view = viewAt(plan, box, carPx * 0.7, o, moment, track, t);
   const at = (p: { x: number; y: number }) => applyView(view, p);
@@ -498,7 +516,7 @@ function paintMap(
       const cw = landscape ? long : (long * picture.width) / picture.height;
       const ch = landscape ? (long * picture.height) / picture.width : long;
       const border = long * 0.05;
-      const place = cardPlacement(stops[pop.stop], pop.rank, pop.key, { w: cw + 2 * border, h: ch + 2 * border }, frame, carPx * 0.55, pop.stop);
+      const place = cardPlacement(stops[pop.stop], pop.rank, pop.key, { w: cw + 2 * border, h: ch + 2 * border }, frame, vehiclePx * 0.55, pop.stop);
       cards.push({ picture, x: place.x, y: place.y, w: cw, h: ch, border, angle: place.angle, rise, fade });
       const half = Math.hypot(cw + 2 * border, ch + 2 * border) / 2;
       cardBoxes.push({ x0: place.x - half, y0: place.y - half, x1: place.x + half, y1: place.y + half });
@@ -534,18 +552,14 @@ function paintMap(
   // The prints lie on the map; the car, a toy standing on it, is drawn over them.
   for (const card of cards) paintCard(g, card, u);
 
-  // The car, its shadow first.
+  // The car, its shadow first — and, on a ferry, the trip's car driving on or off it.
   {
-    const parts = carParts(scratch);
     const { model, spec } = scratch;
+    const boarding = scratch.rider ? boardingAt(plan.schedule, t) : null;
     const p = at(moment.point);
     const heading = turnedDir(moment.heading);
     const len = Math.hypot(heading.x, heading.y) || 1;
-    const scale = carPx / model.length;
-    const travelled = moment.s * view.scale;
-    const spin = travelled / (model.wheelRadius * scale);
-    const spins: Record<string, number> = {};
-    for (const part of parts) if (part.spin) spins[part.id] = -spin;
+    const scale = vehiclePx / model.length;
     const pose: Pose = {
       fx: heading.x / len,
       fy: -heading.y / len,
@@ -553,8 +567,16 @@ function paintMap(
       scale,
       x: p.x,
       y: p.y,
-      spins,
+      spins: {},
     };
+    const rider = scratch.rider && boarding ? riderPose(scratch.rider, boarding, pose, model.length, carPx) : null;
+    const parts = carParts(scratch, rider?.track.ramp ?? null);
+    const travelled = moment.s * view.scale;
+    const spin = travelled / (model.wheelRadius * scale);
+    const spins: Record<string, number> = {};
+    for (const part of parts) if (part.spin) spins[part.id] = -spin;
+    pose.spins = spins;
+    const ink = onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)';
     if (model.kind === 'boat') {
       // A boat sits IN the water: a faint shadow, and the wake it leaves while
       // it runs — growing as it gets under way, settling once it halts.
@@ -563,11 +585,15 @@ function paintMap(
     } else {
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
     }
+    // The car inside the hull, or behind it, is drawn first so the ship
+    // covers it as it goes in; out on a ramp nearer the camera, after.
+    if (rider && !rider.front) paintRider(g, scratch.rider!, rider, onPaper, ink, carPx);
     paintMesh(g, renderOrder(parts, pose, carLight(spec.finish)), {
       palette: model.palette(spec.color),
-      ink: onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)',
+      ink,
       outlineWidth: Math.max(0.9, carPx / 78),
     });
+    if (rider && rider.front) paintRider(g, scratch.rider!, rider, onPaper, ink, carPx);
   }
 
   // The furniture: a compass, a scale bar, the distance so far.
@@ -657,6 +683,60 @@ function paintMap(
 const PUSH_IN = 0.06;
 const PUSH_IN_SECONDS = 8;
 const SUMMARY_RISE_SECONDS = 0.45;
+
+/** Where the riding car is on screen this frame, and whether it is in front of the ship. */
+interface RiderPose {
+  pose: Pose;
+  track: RiderTrack;
+  front: boolean;
+}
+
+/**
+ * The trip's car beside the ship: placed along the ship's own centre line
+ * through the ship's pose (`riderTrack`), so it follows the ship's turn and
+ * tilt exactly, at its own scale — {@link RIDER_SCALE} of a car's usual length.
+ * It is IN FRONT of the ship only out past an end of the hull and nearer the
+ * camera than that end; anywhere else the ship covers it.
+ */
+function riderPose(
+  rider: NonNullable<DriveScratch['rider']>,
+  boarding: NonNullable<ReturnType<typeof boardingAt>>,
+  ship: Pose,
+  shipLength: number,
+  carPx: number,
+): RiderPose {
+  const riderPx = carPx * RIDER_SCALE;
+  const track = riderTrack(boarding, shipLength, riderPx / ship.scale);
+  if (track.alpha <= 0) return { pose: ship, track, front: false };
+  const here = project(toWorld([0, track.y, 0], ship), ship);
+  const half = shipLength / 2;
+  const out = Math.abs(track.y) > half;
+  const end = project(toWorld([0, Math.sign(track.y) * half, 0], ship), ship);
+  const scale = riderPx / rider.model.length;
+  const spin = (track.travelled * ship.scale) / (rider.model.wheelRadius * scale);
+  if (!rider.parts) rider.parts = rider.model.build(rider.spec.gear);
+  const spins: Record<string, number> = {};
+  for (const part of rider.parts) if (part.spin) spins[part.id] = -spin;
+  return {
+    pose: { fx: ship.fx, fy: ship.fy, tilt: ship.tilt, scale, x: here.x, y: here.y, spins },
+    track,
+    front: out && here.depth < end.depth,
+  };
+}
+
+function paintRider(g: HookCtx2D, rider: NonNullable<DriveScratch['rider']>, at: RiderPose, onPaper: boolean, ink: string, carPx: number): void {
+  if (at.track.alpha <= 0 || !rider.parts) return;
+  const { model, spec } = rider;
+  g.save();
+  g.globalAlpha *= at.track.alpha;
+  paintGroundShadow(g, at.pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
+  paintMesh(g, renderOrder(rider.parts, at.pose, carLight(spec.finish)), {
+    palette: model.palette(spec.color),
+    ink,
+    outlineWidth: Math.max(0.7, (carPx * RIDER_SCALE) / 78),
+  });
+  g.restore();
+}
 
 function paintMilestones(
   g: HookCtx2D,

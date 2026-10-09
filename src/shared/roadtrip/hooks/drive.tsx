@@ -28,7 +28,7 @@ import {
   ToggleField,
   swatchClass,
 } from '../../ui/Inspector';
-import { DEFAULT_CAR, carLine, describeCar, vehicleFor, type VehicleChoice } from '../car-spec';
+import { DEFAULT_CAR, carLine, carriesVehicles, describeCar, vehicleFor, type CarSpec, type VehicleChoice } from '../car-spec';
 import { CAR_MODELS, carModel, vehicleLabel } from './car-registry';
 import {
   DRIVE_DEFAULTS,
@@ -158,6 +158,17 @@ function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null)
   return `The badge counts the day of the trip as the car drives, from day ${from} to day ${to} of ${route.tripDays}${km}.`;
 }
 
+/**
+ * Whether the trip's car drives aboard this piece's vehicle: a FERRY the
+ * piece borrowed, a car (not a boat) for the trip to put on it, and the
+ * author's yes. Read by the panel, the plan and the shell's ground alike, so
+ * all three time the same drive.
+ */
+function boardsOf(o: DriveOptions, tripCar: CarSpec): boolean {
+  const vehicle = vehicleFor(o.vehicle, o.vehicleColor, tripCar);
+  return o.boarding && vehicle !== tripCar && carriesVehicles(vehicle.model) && carModel(tripCar.model).kind === 'car';
+}
+
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
 function paintHint(model: string, color: string): string {
   const preset = carLine(model).colours.find((c) => c.hex === color);
@@ -172,7 +183,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const calendar = ctx.calendar ?? [];
   const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing, ctx.towns ?? null);
   const count = driveCountOf(ctx.counterMode);
-  const plan = drivePlan(route, o, count !== null);
+  const tripCar = ctx.car ?? DEFAULT_CAR;
+  const boards = boardsOf(o, tripCar);
+  const plan = drivePlan(route, o, count !== null, boards);
   /** How many stops the road has BEFORE nearby ones are grouped — what the grouping row counts from. */
   const ungrouped = o.groupKm > 0 ? driveRoute(stages, calendar, ctx.date, { ...o, groupKm: 0 }, ctx.writing).stops.length : route.stops.length;
   const wants = driveWants(route, o);
@@ -184,7 +197,6 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
     plan && o.ground === 'tiles'
       ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())
       : null;
-  const tripCar = ctx.car ?? DEFAULT_CAR;
   // `vehicleFor` hands back the trip's own spec when the piece borrows nothing.
   const car = vehicleFor(o.vehicle, o.vehicleColor, tripCar);
   const borrowed = car !== tripCar;
@@ -432,6 +444,20 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         <p className="m-0 text-xs text-ink-soft">{describeCar(car, carModel(car.model).name)}</p>
+        {borrowed && carriesVehicles(car.model) && carModel(tripCar.model).kind === 'car' ? (
+          <FieldRow
+            label="Boarding"
+            hint={
+              o.boarding
+                ? 'Up the stern ramp and in, then off over the bow at the end.'
+                : 'The ferry crosses alone.'
+            }
+          >
+            <ToggleField label="Boarding" checked={o.boarding} onChange={(boarding) => set({ boarding })}>
+              {carModel(tripCar.model).short} drives aboard
+            </ToggleField>
+          </FieldRow>
+        ) : null}
         {borrowed ? (
           <FieldRow
             label="Paint"
@@ -944,7 +970,12 @@ export const driveVariant: HookVariant = {
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return [];
-    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, driveCountOf(ctx.counterMode) !== null);
+    const plan = drivePlan(
+      driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null),
+      o,
+      driveCountOf(ctx.counterMode) !== null,
+      boardsOf(o, ctx.car ?? DEFAULT_CAR),
+    );
     return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())?.wants ?? [] : [];
   },
   prepare(options, ctx) {
@@ -953,13 +984,16 @@ export const driveVariant: HookVariant = {
     // The RECAP: the badge's counter follows the drive (declared in its own
     // Counter section, `day-badge.ts`), so the plan runs the stops' clock.
     const count = driveCountOf(ctx.counterMode);
-    const plan = drivePlan(route, o, count !== null);
+    const tripCar = ctx.car ?? DEFAULT_CAR;
+    const boards = boardsOf(o, tripCar);
+    const plan = drivePlan(route, o, count !== null, boards);
     if (!plan) return { seconds: 0 };
     const words = ctx.badgeWords;
     const scratch = driveScratch(
-      vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR),
+      vehicleFor(o.vehicle, o.vehicleColor, tripCar),
       { day: words?.day, days: words?.days, stop: words?.stop },
       ctx.theme ?? null,
+      boards ? tripCar : null,
     );
     // The recap's summary card, measured once with the plan (`summary-card.ts`).
     const card =
