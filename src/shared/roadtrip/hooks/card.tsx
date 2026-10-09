@@ -33,7 +33,7 @@ function roadOptions(options: Readonly<Record<string, unknown>>) {
 function planFor(options: Readonly<Record<string, unknown>>, ctx: HookPanelProps['ctx']) {
   const o = roadOptions(options);
   const route = driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null);
-  return { o, plan: drivePlan(route, o, true) };
+  return { o, plan: drivePlan(route, o, true, false, undefined, ctx.road ?? null) };
 }
 
 function CardSketch() {

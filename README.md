@@ -902,7 +902,10 @@ flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
 apart from them smooths the line from every point up to 2 km, and *Forget the
-road* takes it off the trip.
+road* takes it off the trip. **Virée drives that road**: between two stops the
+road joins, the vehicle follows it (round the bay rather than across it) and
+the counter, the milestones and the summary card count what it drives; a hop
+the road never joins (a flight, a stop off the road) keeps its curve.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
@@ -984,9 +987,9 @@ modes, offered as such in the Counter section and honoured only under the
 Virée opener (anywhere else they say why not): *Days, as the car drives*,
 *Kilometres, as the car drives*, *Stops, as the car drives* and *Days + km, as
 the car drives*. The number then follows the car at every frame — the day of
-the trip (its total the trip's), the distance as the crow flies between the
-stops passed (never a road distance, which the app does not know), the stops
-reached, or the day with the distance so far beside its total
+the trip (its total the trip's), the distance the vehicle has driven — along
+the trip's road wherever it follows it (Trip settings → Road), as the crow
+flies between the stops otherwise —, the stops reached, or the day with the distance so far beside its total
 (`Day · 54 · of 90 · 1 479 km`, the kilometres in whole units) — with
 **odometer digits**: each in a fixed cell, so the badge never shakes when 199
 turns 200, rolling like a car's as the next one comes — and a still of

@@ -23,6 +23,7 @@ import type { HookContext, HookLayer, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
 import { resolveRef, vehicleRefForDay } from '../vehicle-fleet';
 import { landIfLoaded } from '../../map/load-terrain';
+import { tripRoadLine } from '../road-track';
 
 /** What an opener is told about time on the slide it plays on. */
 export interface HookTiming {
@@ -95,6 +96,9 @@ export function hookContextFor(
     vehicleRef: dayRef,
     fleet: trip.vehicles,
     crossings: trip.crossings,
+    // Read once per stored road (`tripRoadLine` keeps it), so every surface
+    // drives the same line.
+    road: tripRoadLine(trip.road ?? null),
     // Read, never fetched here, like the towns: the editor asks for the
     // coastline when a piece drives under the water rule.
     land: landIfLoaded(),

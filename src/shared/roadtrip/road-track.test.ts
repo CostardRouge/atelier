@@ -10,6 +10,7 @@ import {
   NO_ROAD,
   readTripRoad,
   roadBetween,
+  roadHops,
   roadLine,
   simplify,
   thin,
@@ -163,6 +164,26 @@ describe('roadBetween', () => {
     const hop = roadBetween(line, { lat: -30, lon: 122.6 }, { lat: -30, lon: 120 });
     expect(hop).not.toBeNull();
     expect(hop!.via[0].lon).toBeGreaterThan(hop!.via[hop!.via.length - 1].lon);
+  });
+});
+
+describe('roadHops', () => {
+  it('carries the cursor from hop to hop and refuses an absurd detour', () => {
+    const out = drive({ lat: -30, lon: 120 }, 6);
+    const end = out[out.length - 1];
+    const ret = out.slice().reverse().map((f, i) => ({ ...f, t: end.t + (i + 1) * 600 }));
+    const line = roadLine([...out, ...ret], 'raw', 0);
+    const mid = out[Math.floor(out.length / 2)];
+    const hops = roadHops(line, [out[0], end, mid]);
+    expect(hops.every(Boolean)).toBe(true);
+    expect(hops[1]!.cursor.index).toBeGreaterThan(hops[0]!.cursor.index);
+    // Two stops 33 km apart that the road only joins by a loop of 1 000 km.
+    const loopBack = out.slice().reverse().map((f, i) => ({ ...f, t: end.t + (i + 1) * 600, lat: f.lat - 0.3 }));
+    const loop = roadLine([...out, ...loopBack], 'raw', 0);
+    expect(roadHops(loop, [out[0], { lat: out[0].lat - 0.3, lon: out[0].lon }])[0]).toBeNull();
+    expect(roadHops(line, [out[0], out[0]])[0]).toBeNull();
+    // Cached: the same stops on the same line are the same answer.
+    expect(roadHops(line, [out[0], end, mid])).toBe(hops);
   });
 });
 

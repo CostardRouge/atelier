@@ -71,3 +71,23 @@ would count at the current detail, so the choice is made on the numbers; the
 detail slider walks `ROAD_DETAILS` and is greyed under Crow flies (nothing to
 smooth). With no road the panel says where one comes from (Deduce) rather
 than hiding — the overview's sheet is where he looks for it.
+
+## Virée drives the road (2026-10-09)
+
+`HookContext.road` is `tripRoadLine(trip.road)` (cached per stored road in a
+WeakMap, so every surface reads one line); `drivePlan`'s last argument takes
+it. `roadHops` (cached per line and stops) finds each hop on the road with
+the cursor carried along; a hop is refused — and keeps its curve — when its
+two stops are under `SAME_PLACE_KM` (3 km: measured on his real year, four
+120 km loops between stops 1 km apart, the commute at the end of the trip)
+or its road length passes `DETOUR_RATIO` × the crow AND the crow + 150 km.
+The plan's box fits the road too (a sample of ≤ 4 000 points: a spread of
+every fix overflows `Math.min`'s arguments in JavaScriptCore). `RoadPath.km`
+carries the kilometres at each sample — the road's own along a road hop, the
+crow's shared by arc on a curve — so `kmAt`, `kmAtStop`, the milestones
+(`sAlong`) and the summary card count what the vehicle drives, exactly, never
+by plan length (the projection's scale varies with latitude). On a road path
+the heading is read over a chord (`headingAt`), or the car twitches on every
+fix. Measured locally on his track (never committed): 143 simulated stops,
+99 hops on the road at `stages`/100 m, the road hops summing to the line's
+own km within 1 %, ~100 ms for the first plan, ~10 ms cached.

@@ -24,6 +24,7 @@
  * this module runs its tests in node. The design is `docs/hook-engine.md`.
  */
 
+import type { RoadLine } from '../road-track';
 import type { ComponentType } from 'react';
 import type { PyramidTile } from '../../map/tile-strip';
 import type { SavedMediaRef } from '../../projects/project-types';
@@ -338,6 +339,13 @@ export interface HookContext {
   fleet?: readonly TripVehicle[];
   /** The trip's rule for water (`TripDoc.crossings`). */
   crossings?: TripCrossings;
+  /**
+   * The trip's ROAD as its mode and detail read it (`TripDoc.road`,
+   * `tripRoadLine`) — what a drive follows between two stops the road joins,
+   * and what its kilometres are counted on. Absent or empty: curves from
+   * place to place, as the crow flies.
+   */
+  road?: RoadLine | null;
   /**
    * The shipped coastline as an index, when it has been read in this session
    * (`landIfLoaded`) — what tells a crossing from a road (`terrain.ts`).

@@ -457,6 +457,61 @@ export function makeTripRoad(
 /** The line a trip's road draws, as its mode and detail read it, hand-placed points merged in time. */
 export function tripRoadLine(road: TripRoad | null): RoadLine {
   if (!road || road.mode === 'crow') return NO_ROAD;
+  // Every surface that paints a piece asks, often per edit: the same stored
+  // road (an edit elsewhere keeps its object) is read once.
+  const known = lineOf.get(road);
+  if (known) return known;
   const fixes = road.added.length ? cleanFixes([...decodeTrack(road.track), ...road.added]) : decodeTrack(road.track);
-  return roadLine(fixes, road.mode, road.detail);
+  const line = roadLine(fixes, road.mode, road.detail);
+  lineOf.set(road, line);
+  return line;
 }
+
+const lineOf = new WeakMap<TripRoad, RoadLine>();
+
+/**
+ * A hop found on the road that wanders this far past the crow's line is not
+ * that hop — the road joined the two stops on two different passes — and
+ * keeps its curve. Generous: a road round a bay is 4–5× the water it skirts.
+ */
+export const DETOUR_RATIO = 8;
+const DETOUR_KM = 150;
+/**
+ * Two stops nearer than this are one place told twice: the vehicle stays,
+ * rather than driving the day trip or the commute the road made from there
+ * (measured on a real year: four 120 km loops between stops 1 km apart).
+ */
+export const SAME_PLACE_KM = 3;
+
+/**
+ * Each hop of a list of stops along the road, in order, the cursor carried
+ * from one to the next (`roadBetween`); null where the road does not join
+ * the two, or joins them by an absurd detour. Cached per line and stops,
+ * since every reader of a piece plans the same drive.
+ */
+export function roadHops(line: RoadLine, stops: readonly LatLon[]): (RoadHop | null)[] {
+  if (!line.pieces.length || stops.length < 2) return stops.slice(1).map(() => null);
+  const key = stops.map((p) => `${p.lat.toFixed(5)},${p.lon.toFixed(5)}`).join(';');
+  let byStops = hopsOf.get(line);
+  if (!byStops) hopsOf.set(line, (byStops = new Map()));
+  const known = byStops.get(key);
+  if (known) return known;
+  const out: (RoadHop | null)[] = [];
+  let cursor: RoadCursor | null = null;
+  for (let i = 1; i < stops.length; i++) {
+    const crow = distanceKm(stops[i - 1], stops[i]);
+    if (crow < SAME_PLACE_KM) {
+      out.push(null);
+      continue;
+    }
+    const hop = roadBetween(line, stops[i - 1], stops[i], cursor);
+    const sane = hop && (hop.km <= crow * DETOUR_RATIO || hop.km - crow <= DETOUR_KM);
+    out.push(sane ? hop : null);
+    if (sane) cursor = hop.cursor;
+  }
+  if (byStops.size > 8) byStops.clear();
+  byStops.set(key, out);
+  return out;
+}
+
+const hopsOf = new WeakMap<RoadLine, Map<string, (RoadHop | null)[]>>();
