@@ -105,7 +105,7 @@ describe('drawOverlays — a wash', () => {
     // Nothing is written as text on the frame itself…
     expect(texts(ops)).toHaveLength(0);
     // …the buffer is: a wash first, then the glyphs, erasing it.
-    const buf = buffers.at(-1)!;
+    const buf = buffers.slice(-1)[0]!;
     const fill = buf.ops.find((o) => o.op === 'fillRect');
     expect(fill?.fillStyle).toBe(washFill(knockout));
     const [glyphs] = texts(buf.ops);
@@ -131,7 +131,7 @@ describe('drawOverlays — a wash', () => {
     const after = texts(ops).find((o) => o.args[0] === 'After');
     expect(after?.composite).toBe('source-over');
     // The buffer was cleared before this wash, not painted over the last one.
-    const buf = buffers.at(-1)!;
+    const buf = buffers.slice(-1)[0]!;
     const lastClear = buf.ops.map((o) => o.op).lastIndexOf('clearRect');
     const lastFill = buf.ops.map((o) => o.op).lastIndexOf('fillRect');
     expect(lastClear).toBeGreaterThanOrEqual(0);

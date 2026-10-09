@@ -119,7 +119,7 @@ describe('slideRender', () => {
       cta: { ...DEFAULT_CTA, headline: 'Follow the trip', url: 'https://example.com', showQr: true },
     });
     const p = post({ includeCta: true });
-    const card = deckSlides(t, p).at(-1)!;
+    const card = deckSlides(t, p).slice(-1)[0]!;
     const render = slideRender(t, p, card, ASPECT);
 
     expect(card.kind).toBe('cta');

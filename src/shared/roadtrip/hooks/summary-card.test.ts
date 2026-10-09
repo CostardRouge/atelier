@@ -185,7 +185,7 @@ describe('the badge and the card are never on screen together', () => {
     const { plan } = recap();
     expect(badgeMoment('auto')).toBe('during');
     expect(plan.schedule.reveals).toBe(false);
-    expect(plan.schedule.phases.map((p) => p.kind).at(-1)).toBe('summary');
+    expect(plan.schedule.phases.map((p) => p.kind).slice(-1)[0]).toBe('summary');
     expect(plan.at(plan.seconds + 1).mapAlpha).toBe(1);
     expect(badgeWindowFor('during', plan.schedule)).toEqual({ start: 0, end: plan.schedule.summaryAt });
   });
