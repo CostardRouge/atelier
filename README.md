@@ -864,6 +864,29 @@ before you review exactly what will be, every stage written carries a mark so
 the ⋯ menu can take them all out again, a re-run recognises what is already in
 the trip, and no piece is ever created.
 
+**Starting over.** Trip settings, under the dates and the cover, offers to
+start the legs over when a run went wrong: *Remove what Deduce added* (only the
+legs it wrote), *Clear the places* (every leg keeps its dates and name, ready
+to be placed again) or *Remove every leg*. A verb appears only when it has
+something to do, each asks first with its counts and a backup link, and ⌘Z
+takes it back; the pieces, the trip's dates and its state codes are never
+touched.
+
+**+ Polarsteps** (a chip beside what was read, or a drop anywhere on the
+window) takes a Polarsteps export — `trip.json`, `locations.json`, either one,
+or the unzipped folder; a zip is refused with the reason, and of an export
+holding several trips the files covering this one are kept. It is read in the
+browser, never sent and forgotten with the window. Its **track** places each
+day on that day's own clock — the time zone of the step you were in, read by
+the browser, so a morning frame is never filed on the evening before — and it
+wins over the instance wherever it has fixes; the instance fills the days the
+track lacks, a step's own position fills a day neither has, and a day the
+instance only guessed comes last. Its **steps** are places you named, so a halt
+takes the name of the step of its days nearest its centre (the island, the
+gorge, the rock) before the city index, which then only names what no step
+does and still says which region a halt lies in. A place written that way says
+*from Polarsteps*.
+
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
 file's own EXIF (or, for a picture fetched from a Winnow, the metadata that

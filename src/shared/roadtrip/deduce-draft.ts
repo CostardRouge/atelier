@@ -105,10 +105,15 @@ export function haltPick(halt: NamedLeg, draft: DeduceDraft): HaltPick | null {
   return draft.places?.[haltKey(halt)] ?? null;
 }
 
-/** The name a halt goes by: the place chosen for it, else its city's, else the one given here, else none. */
+/**
+ * The name a halt goes by: the place chosen for it, else its Polarsteps
+ * step's (the author's own), else its city's, else the one given here, else none.
+ */
 export function haltName(halt: NamedLeg, draft: DeduceDraft): string | null {
   const picked = haltPick(halt, draft)?.name.trim();
   if (picked) return picked;
+  const stepped = halt.step?.name.trim();
+  if (stepped) return stepped;
   const own = halt.city?.name.trim();
   if (own) return own;
   const given = draft.renames[haltKey(halt)]?.trim();
@@ -141,6 +146,18 @@ export function haltPlace(halt: NamedLeg, draft: DeduceDraft): TripPlace | null 
       countryCode: pick.countryCode,
       country: pick.country,
       area: pick.area,
+    });
+  }
+  if (halt.step) {
+    // The author's own place: its position, and the state the export said —
+    // else the region the index puts it in, as a halt the index named.
+    const step = halt.step;
+    return createTripPlace(name, step.state || halt.city?.region || '', { lat: step.lat, lon: step.lon }, {
+      ...known,
+      source: 'polarsteps',
+      area: step.area,
+      country: step.country,
+      countryCode: step.countryCode || halt.city?.country.toUpperCase(),
     });
   }
   if (halt.city) {
