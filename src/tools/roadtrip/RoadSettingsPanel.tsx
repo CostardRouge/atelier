@@ -2,12 +2,15 @@ import { useEffect, useMemo, useState } from 'react';
 import {
   ROAD_DETAILS,
   decodeTrack,
+  roadSourceText,
   tripRoadLine,
   type RoadFix,
   type RoadMode,
   type TripRoad,
 } from '../../shared/roadtrip/road-track';
 import { roadFixes, roadGaps } from '../../shared/roadtrip/road-points';
+import { addGpxToRoad } from '../../shared/roadtrip/gpx';
+import { pickFilesOf } from '../../shared/sources/file-sources';
 import RoadPointsSheet from './RoadPointsSheet';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
@@ -38,6 +41,13 @@ interface RoadSettingsPanelProps {
   /** The points of road placed by hand on the big map; absent hides the verb. */
   onAdded?: (added: RoadFix[]) => void;
   /**
+   * The road with GPX files merged in (or made from them), kept within
+   * `span`; absent hides *Add a GPX…*.
+   */
+  onRoad?: (road: TripRoad) => void;
+  /** The trip's two dates — what a GPX is kept within. */
+  tripSpan?: { startDate: string; endDate: string };
+  /**
    * A sheet or a question of this panel is open over the one it sits in —
    * which then leaves Escape and Enter to it, or one press closes both.
    */
@@ -51,8 +61,42 @@ interface RoadSettingsPanelProps {
  * drives, so this one choice is every opener's. Drawn in both trip sheets —
  * live in the piece's, as a draft in the overview's — from one component.
  */
-export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail, onForget, onAdded, onNested }: RoadSettingsPanelProps) {
+export default function RoadSettingsPanel({
+  road,
+  mode,
+  detail,
+  onMode,
+  onDetail,
+  onForget,
+  onAdded,
+  onNested,
+  onRoad,
+  tripSpan,
+}: RoadSettingsPanelProps) {
   const [forgetting, setForgetting] = useState(false);
+  // What the last GPX did, said under the verbs until the next one.
+  const [gpxNote, setGpxNote] = useState<{ text: string; warn: boolean } | null>(null);
+  const addGpx =
+    onRoad && tripSpan
+      ? async () => {
+          const files = await pickFilesOf('.gpx,application/gpx+xml');
+          if (!files.length) return;
+          const texts = await Promise.all(files.map(async (f) => ({ name: f.name, body: await f.text() })));
+          const out = addGpxToRoad(road, texts, tripSpan, Date.now());
+          if (out.road && out.added) onRoad(out.road);
+          setGpxNote({ text: out.note, warn: !out.added });
+        }
+      : null;
+  const gpxButton = addGpx && (
+    <button type="button" onClick={() => void addGpx()} className={smallButton}>
+      Add a GPX…
+    </button>
+  );
+  const gpxLine = gpxNote && (
+    <p className={`m-0 text-xs ${gpxNote.warn ? 'text-warn' : 'text-muted'}`} role="status">
+      {gpxNote.text}
+    </p>
+  );
   const [placing, setPlacing] = useState(false);
   const nested = forgetting || placing;
   useEffect(() => {
@@ -80,10 +124,14 @@ export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail
 
   if (!road || !lines) {
     return (
-      <p className="m-0 text-sm text-muted">
-        No road yet. Drop a Polarsteps export in <b className="font-medium text-ink-soft">Deduce</b> and keep its road: the
-        openers will drive it instead of a curve from place to place.
-      </p>
+      <div className="flex flex-col gap-2.5">
+        <p className="m-0 text-sm text-muted">
+          No road yet. Drop a Polarsteps export in <b className="font-medium text-ink-soft">Deduce</b> and keep its road,
+          or add a GPX: the openers will drive it instead of a curve from place to place.
+        </p>
+        {gpxButton && <span>{gpxButton}</span>}
+        {gpxLine}
+      </div>
     );
   }
 
@@ -93,13 +141,13 @@ export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail
   return (
     <div className="flex flex-col gap-3">
       <span className="font-mono text-2xs text-muted">
-        {road.fixes.toLocaleString('en-GB')} fixes from Polarsteps
+        {road.fixes.toLocaleString('en-GB')} fixes from {roadSourceText(road.source)}
         {span ? ` · ${dayOf(span.from)} → ${dayOf(span.to)}` : ''}
         {road.added.length ? ` · ${road.added.length} placed by hand` : ''}{' '}
         <InfoDot about="the road">
           <p>The line the openers drive and the kilometres they count. A place stays a place: the road is never named nor drawn as points.</p>
           <p>Between stays leaves out what happens while you stay somewhere (walks, buses, the commute). Every move keeps it, without the GPS’s noise. Raw keeps every fix.</p>
-          <p>The road is kept whole, raw fixes included, and travels in the trip’s backup.</p>
+          <p>The road is kept whole, raw fixes included, and travels in the trip’s backup. A GPX adds its timed points to it — a car’s log, a day the phone missed — within the trip’s dates.</p>
         </InfoDot>
       </span>
 
@@ -139,6 +187,7 @@ export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail
       </label>
 
       <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {gpxButton}
         {onAdded && (
           <button type="button" onClick={() => setPlacing(true)} className={smallButton}>
             Place road points…
@@ -156,6 +205,7 @@ export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail
           </button>
         )}
       </span>
+      {gpxLine}
       {placing && onAdded && (
         <RoadPointsSheet
           road={road}

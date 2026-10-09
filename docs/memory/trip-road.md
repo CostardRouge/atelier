@@ -124,3 +124,27 @@ for trips where the phone was off. The Road panel's sheet and Forget question
 are NESTED dialogs: `onNested` makes both parent sheets drop their
 Escape/Enter (window listeners run in registration order, so the parent's
 would fire first and close both).
+
+## GPX adds to the road (2026-10-09, his «do gpx support»)
+
+`gpx.ts` (pure) reads a `.gpx` with a regex scanner, not `DOMParser` (the
+module stays node-tested; one pass over 100 000 points): `trkpt`, `rtept`
+and `wpt`, namespace prefixes allowed, a point KEPT only with a time (a time
+with no zone is UTC, the schema's rule), a timeless planned route REFUSED
+with the reason — the road merges on the track's clock and has no other way
+to order a point. Several files merge into one journey (a logger writes a
+file a day). Trip settings → Road → *Add a GPX…* runs `addGpxToRoad` →
+`addRoadFixes`: merged with what is there, within the trip's span ± a day,
+the same instant once, mode/detail/hand points kept, `TripRoad.source`
+becoming `gpx` or `mixed` (read back as `polarsteps` when unknown), and the
+panel says what was added or why nothing was.
+
+GPX in DEDUCE too (same day): a `.gpx` (by name or by its `<gpx` head) is the
+TRACK half of the export — `PolarstepsTrack.origin: 'gpx'` — so its timed
+points place the days on the same rules (solar clock without a `trip.json`,
+the step's zone with one) and *Keep the road from GPX* writes `source: 'gpx'`.
+All the GPX files of one drop are read as ONE journey and then weighed, as
+one track, against a `locations.json` by the trip's days they cover. The
+chip says `GPX`, `Polarsteps + GPX` or `Polarsteps`. Not driven in a
+browser: the Deduce window needs a Winnow connection (a stub), so it rests
+on the unit tests of `addPolarstepsFiles` and the Road panel's drive.

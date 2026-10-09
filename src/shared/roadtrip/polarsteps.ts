@@ -34,6 +34,7 @@
  */
 
 import { DEFAULT_MAX_KM } from './gazetteer';
+import { looksLikeGpx, mergeGpx, readGpx, type GpxTrack } from './gpx';
 import { haversineKm } from './hooks/geo';
 import type { DayPoint, DaySource, DayTrack } from './day-track';
 import type { TrackLeg } from './segment-track';
@@ -87,6 +88,12 @@ export interface PolarstepsTrack {
   fixes: PolarstepsFix[];
   /** Fixes left out: no time, or no position on the globe. */
   skipped: number;
+  /**
+   * Where the fixes came from: GPX files (`gpx.ts`) stand in for
+   * `locations.json` — a GPS logger's, a car's, Strava's — with the same
+   * rules. Absent: Polarsteps.
+   */
+  origin?: 'gpx';
 }
 
 /** What has been read so far — one half, or both. */
@@ -296,6 +303,10 @@ export function readLocationsJson(raw: unknown): PolarstepsTrack | { error: stri
  * Anything else is refused with the reason, never half-read.
  */
 export function readPolarstepsFile(name: string, body: string): PolarstepsFile | { error: string } {
+  if (looksLikeGpx(name, body)) {
+    const gpx = readGpx(name, body);
+    return 'error' in gpx ? gpx : { kind: 'locations', track: gpxTrack(gpx) };
+  }
   if (/\.zip$/i.test(name)) {
     return { error: `${name} is a zip: unzip it, then drop trip.json and locations.json (or the folder).` };
   }
@@ -313,7 +324,12 @@ export function readPolarstepsFile(name: string, body: string): PolarstepsFile |
     const track = readLocationsJson(raw);
     return 'error' in track ? track : { kind: 'locations', track };
   }
-  return { error: `${name} is neither a Polarsteps trip.json nor a locations.json.` };
+  return { error: `${name} is neither a Polarsteps trip.json, a locations.json nor a GPX file.` };
+}
+
+/** A GPX track as the track half of an export. */
+function gpxTrack(gpx: GpxTrack): PolarstepsTrack {
+  return { fixes: gpx.fixes, skipped: gpx.untimed + gpx.skipped, origin: 'gpx' };
 }
 
 /**
@@ -331,12 +347,21 @@ export function addPolarstepsFiles(
   const errors: string[] = [];
   let trip: { value: PolarstepsTrip; days: number } | null = null;
   let track: { value: PolarstepsTrack; days: number } | null = null;
+  // GPX files are one journey split by day (a logger's file a day): read
+  // together, then weighed as one track against a locations.json.
+  const gpx: GpxTrack[] = [];
   const within = (days: Iterable<IsoDate | null>): number => {
     const set = new Set<IsoDate>();
     for (const d of days) if (d && (!span || isWithin(span.from, span.to, d))) set.add(d);
     return set.size;
   };
   for (const file of files) {
+    if (looksLikeGpx(file.name, file.body)) {
+      const read = readGpx(file.name, file.body);
+      if ('error' in read) errors.push(read.error);
+      else gpx.push(read);
+      continue;
+    }
     const read = readPolarstepsFile(file.name, file.body);
     if ('error' in read) {
       errors.push(read.error);
@@ -352,6 +377,11 @@ export function addPolarstepsFiles(
       if (!track || days > track.days) track = { value: read.track, days };
     }
   }
+  if (gpx.length) {
+    const value = gpxTrack(mergeGpx(gpx));
+    const days = within(value.fixes.map((f) => solarDay(f.time, f.lon)));
+    if (!track || days > track.days) track = { value, days };
+  }
   if (!trip && !track) return { value: current, errors };
   return {
     value: { trip: trip?.value ?? current?.trip ?? null, track: track?.value ?? current?.track ?? null },
@@ -361,7 +391,7 @@ export function addPolarstepsFiles(
 
 /** Whether a file name is worth reading as part of an export (a folder's walk). */
 export function isExportFile(name: string): boolean {
-  return /^(trip|locations)\.json$/i.test(name);
+  return /^(trip|locations)\.json$/i.test(name) || /\.gpx$/i.test(name);
 }
 
 // --- one position per day ---------------------------------------------------------

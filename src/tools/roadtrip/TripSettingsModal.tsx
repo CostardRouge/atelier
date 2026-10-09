@@ -329,6 +329,8 @@ export default function TripSettingsModal({
                 onForget={() => onChangeTrip({ ...trip, road: null })}
                 onAdded={(added) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, added } })}
                 onNested={setRoadNested}
+                onRoad={(road) => onChangeTrip({ ...trip, road })}
+                tripSpan={trip}
               />
             )}
 

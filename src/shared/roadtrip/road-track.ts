@@ -389,9 +389,21 @@ export function fixesFrom(track: readonly { lat: number; lon: number; time: numb
  * The trip's road (`TripDoc.road`, v32): the whole track, encoded, and how
  * the trip reads it. Portable — the backup carries it, raw fixes included.
  */
+/** Where a road's fixes came from: a Polarsteps export, GPX files, or both merged. */
+export type RoadSource = 'polarsteps' | 'gpx' | 'mixed';
+
+export function isRoadSource(value: unknown): value is RoadSource {
+  return value === 'polarsteps' || value === 'gpx' || value === 'mixed';
+}
+
+/** How a source is said on screen. */
+export function roadSourceText(source: RoadSource): string {
+  return source === 'gpx' ? 'GPX' : source === 'mixed' ? 'Polarsteps and GPX' : 'Polarsteps';
+}
+
 export interface TripRoad {
   /** Where the fixes came from. */
-  source: 'polarsteps';
+  source: RoadSource;
   /** `encodeTrack` of every fix kept, in time order. */
   track: string;
   /** How many fixes the track holds, said without decoding it. */
@@ -417,7 +429,7 @@ export function readTripRoad(raw: unknown): TripRoad | null {
     : [];
   if (fixes.length < 2 && !added.length) return null;
   return {
-    source: 'polarsteps',
+    source: isRoadSource(r.source) ? r.source : 'polarsteps',
     track: typeof r.track === 'string' ? r.track : '',
     fixes: fixes.length,
     added,
@@ -438,13 +450,12 @@ export function makeTripRoad(
   span: { startDate: string; endDate: string },
   previous: TripRoad | null,
   now: number,
+  source: RoadSource = 'polarsteps',
 ): TripRoad | null {
-  const from = Date.parse(`${span.startDate}T00:00:00Z`) / 1000 - 86_400;
-  const to = Date.parse(`${span.endDate}T23:59:59Z`) / 1000 + 86_400;
-  const kept = cleanFixes(fixes).filter((f) => f.t >= from && f.t <= to);
+  const kept = withinSpan(cleanFixes(fixes), span);
   if (kept.length < 2) return previous;
   return {
-    source: 'polarsteps',
+    source,
     track: encodeTrack(kept),
     fixes: kept.length,
     added: previous?.added ?? [],
@@ -452,6 +463,36 @@ export function makeTripRoad(
     detail: previous?.detail ?? DEFAULT_ROAD_DETAIL,
     importedAt: now,
   };
+}
+
+/** The fixes within the trip's span, a day of slack each side (for the zones). */
+function withinSpan(fixes: readonly RoadFix[], span: { startDate: string; endDate: string }): RoadFix[] {
+  const from = Date.parse(`${span.startDate}T00:00:00Z`) / 1000 - 86_400;
+  const to = Date.parse(`${span.endDate}T23:59:59Z`) / 1000 + 86_400;
+  return fixes.filter((f) => f.t >= from && f.t <= to);
+}
+
+/**
+ * The road with more fixes MERGED in — a GPX of the days the track missed,
+ * a car's log beside a phone's — on the one clock, the same instant once,
+ * kept within the trip's span. Creates the road when there is none; the
+ * reading and the hand-placed points stay. Null when nothing new lands
+ * inside the span (and there was no road).
+ */
+export function addRoadFixes(
+  road: TripRoad | null,
+  fixes: readonly RoadFix[],
+  span: { startDate: string; endDate: string },
+  source: RoadSource,
+  now: number,
+): { road: TripRoad | null; added: number } {
+  const old = road ? decodeTrack(road.track) : [];
+  const fresh = withinSpan(cleanFixes(fixes), span);
+  const merged = cleanFixes([...old, ...fresh]);
+  const added = merged.length - old.length;
+  if (added <= 0) return { road, added: 0 };
+  const next = makeTripRoad(merged, span, road, now, road && road.source !== source ? 'mixed' : source);
+  return { road: next, added: next ? added : 0 };
 }
 
 /** The line a trip's road draws, as its mode and detail read it, hand-placed points merged in time. */

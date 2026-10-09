@@ -877,10 +877,13 @@ something to do, each asks first with its counts and a backup link, and ⌘Z
 takes it back; the pieces, the trip's dates and its state codes are never
 touched.
 
-**+ Polarsteps** (a chip beside what was read, or a drop anywhere on the
+**+ Polarsteps / GPX** (a chip beside what was read, or a drop anywhere on the
 window) takes a Polarsteps export — `trip.json`, `locations.json`, either one,
 or the unzipped folder; a zip is refused with the reason, and of an export
-holding several trips the files covering this one are kept. It is read in the
+holding several trips the files covering this one are kept. **GPX** files (a
+GPS logger, a car's navigation, Strava…) stand in for `locations.json`: their
+timed points are the track, alone or beside a `trip.json`, a file a day read
+as one journey. It is read in the
 browser, never sent, and forgotten with the window unless you keep its road
 (below). Its **track** places each
 day on that day's own clock — the time zone of the step you were in, read by
@@ -891,8 +894,8 @@ instance only guessed comes last. Its **steps** are places you named, so a halt
 takes the name of the step of its days nearest its centre (the island, the
 gorge, the rock) before the city index, which then only names what no step
 does and still says which region a halt lies in. A place written that way says
-*from Polarsteps*. **Keep the road from Polarsteps**, ticked in Review whenever
-the export has a track, writes that track onto the trip as its **road**: the
+*from Polarsteps*. **Keep the road from Polarsteps** (or *from GPX*), ticked in
+Review whenever the export has a track, writes that track onto the trip as its **road**: the
 line the openers drive and the kilometres they count, never a place. It is
 kept whole (a year is about 55 KB), raw fixes included, and travels in the
 backup; writing a new export replaces the fixes and keeps how the trip reads
@@ -902,7 +905,11 @@ flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
 apart from them smooths the line from every point up to 2 km, and *Forget the
-road* takes it off the trip. **Place road points…** opens a big map of the
+road* takes it off the trip. **Add a GPX…** merges the timed points of one or
+more `.gpx` files (a GPS logger, a car's navigation, Strava…) into the road
+within the trip's dates, or makes the road from them alone — the same instant
+once, the reading kept; a planned route with no times is refused, since it
+cannot be put on the trip's clock. **Place road points…** opens a big map of the
 road as recorded, every stretch over 20 km the track skipped (the phone off
 for a day) drawn dashed: a click puts a point of road on the nearest stretch,
 at the time that far along it, and the road goes through it; a click on one
