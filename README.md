@@ -97,8 +97,8 @@ The destination of the whole suite: one editor instead of eight pages.
 
 **Projects first.** `#/studio/home` is a gallery of saved projects — thumbnail
 (baked at save time, so nothing decodes), aspect, duration, element and file
-counts. The whole card opens the project; its other verbs (use as template,
-move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
+counts. The whole card opens the project; its other verbs (clone, use as
+template, move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
 the end of the grid that creates a project or takes a dropped settings file.
 Creating one goes through a small intro modal (name, destination
 aspect, start-from-template, optional media folder). Everything you do in the
@@ -109,7 +109,12 @@ missing — and missing media never blocks editing (a banner offers a re-point).
 On browsers without the File System Access API (Firefox, Safari) the handle
 can't persist, so reopening falls back to the same banner. A project is also a
 template: "Use as template" duplicates its portable half (overlays, look,
-guides, settings) with no media binding.
+guides, settings) with no media binding. **Clone…** is the other copy: the
+whole project, trims, developments and clip list included, pointing at the same
+footage folder, kept here or on a connected instance. The sheet proposes the
+first free name in the chosen place (`Vol du soir` → `Vol du soir (2)`, no
+suffix where the name is free), you can type another, and a status line then
+offers Open and Undo.
 
 **Settings travel as a file.** Project settings (the ⚙ chip in the project
 bar) has an *Import / export* section: **Export settings** downloads

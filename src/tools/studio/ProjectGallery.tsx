@@ -6,6 +6,7 @@ import {
   createProjectDoc,
   type ProjectDoc,
 } from '../../shared/projects/project-types';
+import { cloneProject } from '../../shared/projects/clone-project';
 import { applyProjectHouseStyle } from '../../shared/projects/house-style';
 import { bundledProjectHouseStyle } from '../../shared/projects/house-style-bundle';
 import {
@@ -39,6 +40,9 @@ import { DEFAULT_GUIDES } from '../../shared/overlay/guides';
 import { defaultElementsPreset } from '../../shared/overlay/overlay-types';
 import NewProjectModal, { type NewProjectChoices } from './NewProjectModal';
 import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
+import CloneDocumentModal, { type CloneChoice } from '../../shared/ui/CloneDocumentModal';
+import ClonedNotice from '../../shared/ui/ClonedNotice';
+import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
@@ -69,16 +73,20 @@ function formatWhen(ts: number): string {
 function ProjectCard({
   doc,
   isOpen,
+  fresh = false,
   remoteOnly,
   moveTargets,
   busy,
   onOpen,
   onDelete,
+  onClone,
   onDuplicate,
   onMove,
 }: {
   doc: ProjectDoc;
   isOpen: boolean;
+  /** Just cloned: drawn with the accent until the gallery lets it go. */
+  fresh?: boolean;
   /** Kept on an instance and not yet mirrored here: opening pulls it first. */
   remoteOnly: boolean;
   /** The other sources this project could be moved to. */
@@ -87,6 +95,7 @@ function ProjectCard({
   busy: string | null;
   onOpen: () => void;
   onDelete: () => void;
+  onClone: () => void;
   onDuplicate: () => void;
   onMove: (targetSourceId: string) => void;
 }) {
@@ -103,6 +112,15 @@ function ProjectCard({
   // Everything else is behind the ⋯, with the destructive verb apart.
   const items: OverflowItem[] = [
     { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
+    {
+      id: 'clone',
+      label: 'Clone…',
+      title: remoteOnly
+        ? 'Open it here first — a clone is made from the copy this device holds'
+        : 'Make a copy of this project, here or on another source',
+      disabled: remoteOnly,
+      onSelect: onClone,
+    },
     ...(!remoteOnly
       ? [
           {
@@ -128,6 +146,7 @@ function ProjectCard({
       role="button"
       tabIndex={0}
       aria-label={`Open ${doc.name}`}
+      data-doc-id={doc.id}
       aria-disabled={busy !== null}
       onClick={(e) => {
         if (busy !== null) return;
@@ -145,7 +164,7 @@ function ProjectCard({
         }
       }}
       className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-        isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
+        isOpen || fresh ? 'border-accent' : 'border-line hover:border-line-strong'
       } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >
       {/* The card no longer clips (the ⋯ menu opens past its edge), so the
@@ -174,9 +193,9 @@ function ProjectCard({
           >
             {doc.name}
           </h3>
-          {isOpen && (
+          {(isOpen || fresh) && (
             <span className="flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] bg-accent-wash text-accent-ink">
-              open
+              {isOpen ? 'open' : 'new'}
             </span>
           )}
           {busy === null && (
@@ -286,6 +305,9 @@ export default function ProjectGallery({
 }: ProjectGalleryProps) {
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  // The project whose Clone sheet is open (the one just made is held by
+  // `useFreshClone`: accent on its card, a status line, scrolled into view).
+  const [cloning, setCloning] = useState<ProjectDoc | null>(null);
   // The lists, the groups and the verbs that cross a source are shared with
   // every document gallery (`use-document-gallery.ts`); this driver says how a
   // project is listed, written and removed.
@@ -316,6 +338,16 @@ export default function ProjectGallery({
     setNotice,
     createOn,
   } = gallery;
+  const { cloned, setCloned, freshId } = useFreshClone(projects);
+
+  /** The names a source already holds — mirrored here or listed only there. */
+  const namesIn = useCallback(
+    (sourceId: string): string[] => {
+      const group = groups.find((g) => g.id === sourceId);
+      return group ? [...group.items, ...group.remoteOnly.map((r) => r.doc)].map((p) => p.name) : [];
+    },
+    [groups],
+  );
 
   /**
    * Importing is two steps and the first one is a QUESTION — where the file
@@ -444,6 +476,21 @@ export default function ProjectGallery({
     onOpen(await gallery.mirrorRemote(row));
   }
 
+  /**
+   * A clone is written like a creation — where the project is KEPT first,
+   * mirrored here after — so a refusal from the instance leaves nothing behind
+   * and says so. It points at the same footage folder as the original.
+   */
+  async function handleClone(source: ProjectDoc, choice: CloneChoice) {
+    setNotice(null);
+    const doc = cloneProject(source, { name: choice.name, sourceId: choice.sourceId });
+    const ok = await createOn(doc, 'cloned');
+    setCloning(null);
+    if (!ok) return;
+    setCloned(doc);
+    refresh();
+  }
+
   /** A new LOCAL project from another's portable half — a template is from no source. */
   function handleDuplicate(source: ProjectDoc) {
     const doc = createProjectDoc(
@@ -502,6 +549,24 @@ export default function ProjectGallery({
         <p className="m-0 text-xs text-danger" role="alert">
           {notice}
         </p>
+      )}
+
+      {/* Pinned to the top of the scroller: the clone may be a screen below. */}
+      {cloned && (
+        <ClonedNotice
+          name={cloned.name}
+          sourceId={cloned.sourceId}
+          onOpen={() => {
+            const doc = cloned;
+            setCloned(null);
+            onOpen(doc);
+          }}
+          onUndo={() => {
+            const doc = cloned;
+            setCloned(null);
+            void handleDelete(doc, null);
+          }}
+        />
       )}
 
       <AbsentSourceNotes absent={absent} />
@@ -588,11 +653,13 @@ export default function ProjectGallery({
                         key={doc.id}
                         doc={doc}
                         isOpen={doc.id === openProjectId}
+                        fresh={doc.id === freshId}
                         remoteOnly={false}
                         moveTargets={moveTargets}
                         busy={busy[doc.id] ?? null}
                         onOpen={() => onOpen(doc)}
                         onDelete={() => void handleDelete(doc, null)}
+                        onClone={() => setCloning(doc)}
                         onDuplicate={() => handleDuplicate(doc)}
                         onMove={(target) => void handleMove(doc, target)}
                       />
@@ -613,6 +680,7 @@ export default function ProjectGallery({
                         busy={busy[row.doc.id] ?? null}
                         onOpen={() => void handleOpenRemote(row)}
                         onDelete={() => void handleDelete(row.doc, row.etag)}
+                        onClone={() => setCloning(row.doc)}
                         onDuplicate={() => undefined}
                         onMove={() => undefined}
                       />
@@ -635,6 +703,27 @@ export default function ProjectGallery({
             setImporting(false);
             void handleImport(target);
           }}
+        />
+      )}
+
+      {cloning && (
+        <CloneDocumentModal
+          noun="project"
+          original={cloning.name}
+          originalSourceId={cloning.sourceId}
+          sources={documentSources}
+          namesIn={namesIn}
+          note={
+            <>
+              <p>
+                Everything comes along: overlays, scenes, look, export settings, and each clip’s
+                trim, development and chosen file.
+              </p>
+              <p>The footage itself stays where it is — the clone points at the same folder.</p>
+            </>
+          }
+          onCancel={() => setCloning(null)}
+          onConfirm={(choice) => handleClone(cloning, choice)}
         />
       )}
 
