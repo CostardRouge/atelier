@@ -66,7 +66,7 @@ export type CounterMode =
   /** How long the trip stayed there — "3 · days in Kalbarri". */
   | 'stage-length'
   /**
-   * FOLLOWS THE DRIVE (2026-10-07): the number counts as Virée's car goes —
+   * FOLLOWS THE DRIVE (2026-10-07): the number counts as Virée's vehicle goes —
    * the day of the trip, the kilometres, the stops reached, or the day
    * with the distance beside its total («Day 27 · of 310 · 4,120 km»). The badge
    * says so here, where the counter lives, and never changes in secret:
@@ -106,13 +106,13 @@ export const COUNTER_MODES: readonly {
   { id: 'day-range', label: 'Range of days', hint: 'A piece covering several days' },
   { id: 'stage-day', label: 'Day at the place', hint: 'Which day of a stage this is' },
   { id: 'stage-length', label: 'Days at the place', hint: 'How long the trip stayed there' },
-  { id: 'drive-days', label: 'Days, as the car drives', hint: 'The day of the trip, counting with Virée’s car' },
-  { id: 'drive-km', label: 'Kilometres, as the car drives', hint: 'The distance so far, counting with Virée’s car' },
-  { id: 'drive-places', label: 'Stops, as the car drives', hint: 'The stops reached, counting with Virée’s car' },
+  { id: 'drive-days', label: 'Days, as the vehicle drives', hint: 'The day of the trip, counting with Virée’s vehicle' },
+  { id: 'drive-km', label: 'Kilometres, as the vehicle drives', hint: 'The distance so far, counting with Virée’s vehicle' },
+  { id: 'drive-places', label: 'Stops, as the vehicle drives', hint: 'The stops reached, counting with Virée’s vehicle' },
   {
     id: 'drive-days-km',
-    label: 'Days + km, as the car drives',
-    hint: 'The day of the trip with the distance so far beside it, counting with Virée’s car',
+    label: 'Days + km, as the vehicle drives',
+    hint: 'The day of the trip with the distance so far beside it, counting with Virée’s vehicle',
   },
 ];
 
@@ -148,7 +148,7 @@ export interface BadgeWords {
   of: string;
   /** "3 days **in** Kalbarri". */
   at: string;
-  /** The counter's label when it counts STOPS with Virée's car — "Stop 12". Optional; English by default. */
+  /** The counter's label when it counts STOPS with Virée's vehicle — "Stop 12". Optional; English by default. */
   stop?: string;
   /**
    * The marker set before the place. A geometric glyph, not an emoji:
@@ -199,7 +199,7 @@ export const WORD_FIELDS: readonly {
   { key: 'of', label: 'Out of' },
   { key: 'at', label: 'At a place' },
   { key: 'pin', label: 'Place marker' },
-  { key: 'stop', label: 'Stop (with the car)' },
+  { key: 'stop', label: 'Stop (with the vehicle)' },
 ];
 
 /** The badge's pieces. Any may be absent; the headline never is. */
@@ -212,7 +212,7 @@ export interface BadgeContent {
   headline: string;
   /**
    * The continuous value behind the headline while it COUNTS — an opener
-   * following the car hands it with each rewrite (`drive-plan.ts`), and the
+   * following the vehicle hands it with each rewrite (`drive-plan.ts`), and the
    * numeral is then drawn as an ODOMETER: fixed digit cells that roll as the
    * value passes (`overlay/odometer.ts`). Absent or null, the headline is a
    * text like any other.
@@ -403,17 +403,17 @@ export function counterPieces(
 
   const drive = driveCountOf(mode);
   if (drive) {
-    // The number follows the car: the opener rewrites it at every moment,
+    // The number follows the vehicle: the opener rewrites it at every moment,
     // and the base below — the day of the trip — is true whenever it does
-    // not speak. Without Virée there is no car to follow, and saying so is
+    // not speak. Without Virée there is no vehicle to follow, and saying so is
     // the rule for every mode that cannot count.
     const driven = post.badge.hook?.some((layer) => layer.id === 'drive') ?? false;
     if (driven) {
-      // At rest, before the car moves: the day of the trip, no distance, the
-      // first stop — true readings, each overwritten the moment the car is.
+      // At rest, before the vehicle moves: the day of the trip, no distance, the
+      // first stop — true readings, each overwritten the moment the vehicle is.
       // The distance's total is the road's, which only the opener knows.
       // Days + km at rest is the day alone: the distance's unit is the
-      // opener's to choose, and it says it the moment the car moves.
+      // opener's to choose, and it says it the moment the vehicle moves.
       const days = drive === 'days' || drive === 'days-km';
       return {
         label: days ? w.day : drive === 'km' ? 'km' : w.stop?.trim() || 'Stop',
@@ -423,7 +423,7 @@ export function counterPieces(
         unavailable: null,
       };
     }
-    unavailable = 'The number follows Virée’s car — give this piece the Virée opener.';
+    unavailable = 'The number follows Virée’s vehicle — give this piece the Virée opener.';
   }
 
   if (mode === 'stage-day' || mode === 'stage-length') {

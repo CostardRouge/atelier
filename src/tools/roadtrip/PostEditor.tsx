@@ -127,7 +127,7 @@ import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
-import CarGarageModal from './CarGarageModal';
+import GarageModal from './GarageModal';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
@@ -281,7 +281,7 @@ export default function PostEditor({
   );
   /** The trip-wide sheet, and which of its sections was asked for. */
   const [tripSheet, setTripSheet] = useState<TripSettingsSection | null>(null);
-  /** The garage, opened from the opener that drives the trip's car. */
+  /** The garage, opened from the opener that drives the trip's vehicle. */
   const [garageOpen, setGarageOpen] = useState(false);
 
   const activeFile = active ? pickable(active) : null;
@@ -2330,7 +2330,7 @@ export default function PostEditor({
               onChangeTrip={onChangeTrip}
               patchBadge={patchBadge}
               onOpenTripSettings={() => setTripSheet('words')}
-              onConfigureCar={() => setGarageOpen(true)}
+              onConfigureVehicle={() => setGarageOpen(true)}
               placingShade={shadeHandle ? placingShade : null}
               onPlaceShade={placeShade}
             />
@@ -2494,7 +2494,7 @@ export default function PostEditor({
     )}
 
     {garageOpen && (
-      <CarGarageModal
+      <GarageModal
         trip={trip}
         onCancel={() => setGarageOpen(false)}
         onDone={(car) => {

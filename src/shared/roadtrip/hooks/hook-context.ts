@@ -9,7 +9,7 @@
  *
  * An opener may sit on ANY slide (`slide-capacities.ts`), and what it is told
  * about time is that slide's: how long it is on screen, what its badge's
- * numeral counts. Everything else — the calendar, the legs, the car, the day
+ * numeral counts. Everything else — the calendar, the legs, the vehicle, the day
  * told — is the trip's and the piece's, whichever slide asks.
  *
  * Pure: the pictures are decoded elsewhere and handed in.
@@ -86,7 +86,7 @@ export function hookContextFor(
     calendar: hookCalendar(trip, post.id),
     stages: hookStages(trip),
     pictures,
-    car: trip.car,
+    vehicle: trip.car,
     writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
     badgeWords: trip.badgeWords,
     // Read, never fetched here: the editor asks for the index when a piece

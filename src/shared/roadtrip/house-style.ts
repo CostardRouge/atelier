@@ -3,7 +3,7 @@
  * has saved one from a trip he likes.
  *
  * The factory look is a handful of constants, each defined where its thing is
- * (`DEFAULT_BADGE_WORDS`, `DEFAULT_CTA`, `defaultCarSpec`, the `neutral`
+ * (`DEFAULT_BADGE_WORDS`, `DEFAULT_CTA`, `defaultVehicleSpec`, the `neutral`
  * theme…). A house style replaces them for a NEW trip only, as ONE committed
  * file, `house-style.json` beside this module: the dev server writes it
  * (`vite.config.ts`), saving is a diff to read and commit, and the deployed
@@ -13,7 +13,7 @@
  *
  * It carries the trip's VOICE and nothing that tells one journey: the words,
  * the title style, the closing card, the look each kind of piece starts from,
- * the grade and the car. Never the name, the dates, the legs, the pieces, the
+ * the grade and the vehicle. Never the name, the dates, the legs, the pieces, the
  * cover or the develop presets (numbers applied to one picture at a time, not
  * a look a trip wears). Inside what it carries, two things stay behind:
  *

@@ -2,8 +2,8 @@
  * Défilé's RIBBON under Virée's map (2026-10-07, §5 of
  * `docs/map-openers-next.md`, the recap lab's «le ruban des jours»): the
  * trip's measuring tape, one tick a day and a long one where a leg starts,
- * its head advancing with the car on the recap's day clock — the counter,
- * the car and the head read the same day, so the head stands over day k
+ * its head advancing with the vehicle on the recap's day clock — the counter,
+ * the vehicle and the head read the same day, so the head stands over day k
  * exactly while the badge says day k.
  *
  * Drawn by Défilé's own painter (`paintTape`), on a geometry placed here:

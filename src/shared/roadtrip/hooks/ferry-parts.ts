@@ -12,7 +12,7 @@
  * continue the hull's and no strip of deck lies behind them.
  *
  * Units are metres, the waterline at z = 0, the bow toward +y, x to the right.
- * A ship is drawn bigger than a car on the map (`CarModel.mapScale`), not at
+ * A ship is drawn bigger than a car on the map (`VehicleModel.mapScale`), not at
  * its true size: forty Prados long, it would leave the car a speck.
  *
  * Pure and DOM-free.
@@ -174,7 +174,7 @@ export function buildRopax(s: RopaxShape): Part[] {
 
 /**
  * The ramps a ferry lowers while a vehicle drives on or off — drawn only then
- * (`CarModel.ramps`): the stern's, down from the car deck to the quay, and
+ * (`VehicleModel.ramps`): the stern's, down from the car deck to the quay, and
  * the bow's, out past the stem. Thin plates, apart from the hull.
  */
 export function ropaxRamps(s: RopaxShape): { stern: Part[]; bow: Part[] } {

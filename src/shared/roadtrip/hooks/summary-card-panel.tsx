@@ -252,9 +252,9 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
         label="Badge"
         hint={
           moment === 'before'
-            ? 'The badge opens the piece while the car waits, and leaves as it starts.'
+            ? 'The badge opens the piece while the vehicle waits, and leaves as it starts.'
             : moment === 'during'
-              ? 'The badge counts with the car and leaves as the card comes.'
+              ? 'The badge counts with the vehicle and leaves as the card comes.'
               : moment === 'end'
                 ? 'No card: the badge comes at the end in its place, as the map fades.'
                 : 'No badge on this piece: the drive, then the card.'

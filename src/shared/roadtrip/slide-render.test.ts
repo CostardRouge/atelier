@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCarSpec } from './car-spec';
+import { defaultVehicleSpec } from './vehicle-spec';
 import { badgeBlockExtent, badgeElements } from './badge-layout';
 import { DEFAULT_CTA } from './cta-slide';
 import { badgeContent, DEFAULT_BADGE_WORDS } from './day-badge';
@@ -48,7 +48,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   sourceId: 'local',
   cover: defaultTripCover(),
   developPresets: [],
-  car: defaultCarSpec(),
+  car: defaultVehicleSpec(),
   placeStyle: { badge: 'name', lists: 'code' },
   stateCodes: {},
   createdAt: 0,

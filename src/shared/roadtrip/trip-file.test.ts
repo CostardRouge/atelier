@@ -17,7 +17,7 @@ import {
   tripFileName,
 } from './trip-file';
 import { DEFAULT_DEVELOP } from '../develop/develop';
-import { DEFAULT_CAR, defaultCarSpec } from './car-spec';
+import { DEFAULT_VEHICLE, defaultVehicleSpec } from './vehicle-spec';
 import { createTextElement } from '../overlay/overlay-types';
 
 const trip = (): TripDoc => {
@@ -156,7 +156,7 @@ describe('the trip file', () => {
 
   it('carries the trip’s car — its colour, finish and gear — and lands an older file on the default', () => {
     const doc = trip();
-    doc.car = { ...defaultCarSpec(), color: '#1f3b2f', finish: 'gloss', gear: { ...defaultCarSpec().gear, rack: false } };
+    doc.car = { ...defaultVehicleSpec(), color: '#1f3b2f', finish: 'gloss', gear: { ...defaultVehicleSpec().gear, rack: false } };
     const file = roundTrip(doc);
     expect(file.car.color).toBe('#1f3b2f');
     expect(file.car.finish).toBe('gloss');
@@ -168,13 +168,13 @@ describe('the trip file', () => {
     older.version = 18;
     const parsed = parseTripFile(JSON.stringify(older));
     if (!parsed.ok) throw new Error(parsed.error);
-    expect(parsed.file.car).toEqual(DEFAULT_CAR);
+    expect(parsed.file.car).toEqual(DEFAULT_VEHICLE);
 
     const junk = JSON.parse(serializeTripFile(toTripFile(trip()))) as Record<string, unknown>;
     junk.car = 'black';
     const read = parseTripFile(JSON.stringify(junk));
     if (!read.ok) throw new Error(read.error);
-    expect(read.file.car).toEqual(DEFAULT_CAR);
+    expect(read.file.car).toEqual(DEFAULT_VEHICLE);
   });
 
   it('writes readable, newline-terminated JSON', () => {

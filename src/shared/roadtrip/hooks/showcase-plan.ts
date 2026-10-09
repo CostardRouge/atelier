@@ -14,11 +14,11 @@
  * Pure and DOM-free; the painter is `showcase-paint.ts`.
  */
 
-import { carLight } from './car-model';
-import { carModel, type CarModel } from './car-registry';
+import { vehicleLight } from './car-model';
+import { vehicleModel, type VehicleModel } from './vehicle-registry';
 import { readOptions, type HookOptions } from './hook-variant';
 import { rotateAbout, toWorld, type Light, type Part, type Vec3 } from './mesh3d';
-import type { CarSpec } from '../car-spec';
+import type { VehicleSpec } from '../vehicle-spec';
 import {
   BEACH_OBSTACLES,
   PLACES,
@@ -303,8 +303,8 @@ export function rankOf(id: string): number {
 
 /** A vehicle, built once with everything an entrance reads of it. */
 export interface ShowcaseCar {
-  spec: CarSpec;
-  model: CarModel;
+  spec: VehicleSpec;
+  model: VehicleModel;
   parts: Part[];
   rgb: Readonly<Record<string, Rgb>>;
   light: Light;
@@ -318,8 +318,8 @@ export interface ShowcaseCar {
   explode: Vec3[];
 }
 
-export function showcaseCar(spec: CarSpec): ShowcaseCar {
-  const model = carModel(spec.model);
+export function showcaseCar(spec: VehicleSpec): ShowcaseCar {
+  const model = vehicleModel(spec.model);
   const parts = model.build(spec.gear);
   const pal = model.palette(spec.color);
   const rgb: Record<string, Rgb> = {};
@@ -350,7 +350,7 @@ export function showcaseCar(spec: CarSpec): ShowcaseCar {
     if (ranks[i] === 0) v[0] = Math.sign(c[0] || 1) * 1.35;
     return v;
   });
-  return { spec, model, parts, rgb, light: carLight(spec.finish), box, len: box.y1 - box.y0, wid: box.x1 - box.x0, ranks, seq, explode };
+  return { spec, model, parts, rgb, light: vehicleLight(spec.finish), box, len: box.y1 - box.y0, wid: box.x1 - box.x0, ranks, seq, explode };
 }
 
 const eIn = (t: number) => t * t * t;

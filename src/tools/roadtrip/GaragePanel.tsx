@@ -1,27 +1,27 @@
 import { useRef, type ReactNode } from 'react';
 import {
   GEAR_LABELS,
-  carLine,
-  defaultCarSpec,
-  describeCar,
-  sameCarSpec,
-  type CarFinish,
-  type CarGear,
-  type CarModelId,
-  type CarSpec,
-} from '../../shared/roadtrip/car-spec';
-import { CAR_MODELS, carModel, vehicleLabel } from '../../shared/roadtrip/hooks/car-registry';
+  vehicleLine,
+  defaultVehicleSpec,
+  describeVehicle,
+  sameVehicleSpec,
+  type VehicleFinish,
+  type VehicleGear,
+  type VehicleModelId,
+  type VehicleSpec,
+} from '../../shared/roadtrip/vehicle-spec';
+import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import { FieldRow, SelectField, SwitchRow, swatchClass } from '../../shared/ui/Inspector';
 import Segmented from '../../shared/ui/Segmented';
-import CarTurntable from './CarTurntable';
+import VehicleTurntable from './VehicleTurntable';
 import { linkButton } from './panels/ui';
 
 interface CarGaragePanelProps {
-  value: CarSpec;
-  onChange: (spec: CarSpec) => void;
+  value: VehicleSpec;
+  onChange: (spec: VehicleSpec) => void;
 }
 
-const FINISHES: Array<{ id: CarFinish; label: string; hint: string }> = [
+const FINISHES: Array<{ id: VehicleFinish; label: string; hint: string }> = [
   { id: 'gloss', label: 'Gloss', hint: 'Factory paint: a highlight where the light strikes.' },
   { id: 'matte', label: 'Matte', hint: 'A textured coating: no highlight, a broad sheen instead.' },
 ];
@@ -29,11 +29,11 @@ const FINISHES: Array<{ id: CarFinish; label: string; hint: string }> = [
 /**
  * The gear, grouped where it sits on the car; a row that needs another is
  * listed under it. Every model's rows are here and a model shows the ones it
- * offers (`CarLine.gear`), so a group it has nothing in is not drawn.
+ * offers (`VehicleLine.gear`), so a group it has nothing in is not drawn.
  */
 const GEAR_GROUPS: Array<{
   title: string;
-  rows: Array<{ key: keyof CarGear; needs?: keyof CarGear; hint?: string }>;
+  rows: Array<{ key: keyof VehicleGear; needs?: keyof VehicleGear; hint?: string }>;
 }> = [
   {
     title: 'Front',
@@ -92,7 +92,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * composed. One panel, so the two can never drift.
  *
  * The model is a select over the registry, and picking one brings that car
- * AS IT COMES (`defaultCarSpec(model)`): a Kadjar in the Prado's Raptor black
+ * AS IT COMES (`defaultVehicleSpec(model)`): a Kadjar in the Prado's Raptor black
  * with a bull-bar flag it cannot draw is nobody's car. What was dressed on the
  * model left behind is remembered for as long as the panel is open, so going
  * back to it gives it back. The colour is a row of the MODEL's named swatches
@@ -111,20 +111,20 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * Split, the panel fills its host's height (the host gives it a definite
  * one); narrower, it stacks and the host scrolls, as before.
  */
-export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps) {
-  const model = carModel(value.model);
-  const line = carLine(value.model);
+export default function GaragePanel({ value, onChange }: CarGaragePanelProps) {
+  const model = vehicleModel(value.model);
+  const line = vehicleLine(value.model);
   const preset = line.colours.find((c) => c.hex === value.color.toLowerCase());
-  const isDefault = sameCarSpec(value, defaultCarSpec(value.model));
+  const isDefault = sameVehicleSpec(value, defaultVehicleSpec(value.model));
   // What each model was dressed as when it was left, for the length of a visit.
-  const left = useRef(new Map<CarModelId, CarSpec>());
+  const left = useRef(new Map<VehicleModelId, VehicleSpec>());
 
-  const patch = (p: Partial<CarSpec>) => onChange({ ...value, ...p });
-  const patchGear = (p: Partial<CarGear>) => onChange({ ...value, gear: { ...value.gear, ...p } });
-  const switchModel = (id: CarModelId) => {
+  const patch = (p: Partial<VehicleSpec>) => onChange({ ...value, ...p });
+  const patchGear = (p: Partial<VehicleGear>) => onChange({ ...value, gear: { ...value.gear, ...p } });
+  const switchModel = (id: VehicleModelId) => {
     if (id === value.model) return;
     left.current.set(value.model, value);
-    onChange(left.current.get(id) ?? defaultCarSpec(id));
+    onChange(left.current.get(id) ?? defaultVehicleSpec(id));
   };
   const groups = GEAR_GROUPS.map((group) => ({
     ...group,
@@ -135,20 +135,20 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
     <div className="@container h-full">
       <div className="flex flex-col gap-4 @min-[44rem]:h-full @min-[44rem]:grid @min-[44rem]:grid-cols-[minmax(0,1.2fr)_minmax(19rem,1fr)] @min-[44rem]:grid-rows-[minmax(0,1fr)] @min-[44rem]:gap-6">
         <div className="flex flex-col gap-3 @min-[44rem]:min-h-0">
-          <CarTurntable
+          <VehicleTurntable
             spec={value}
             className="h-[18rem] max-[820px]:h-[calc(var(--app-h)*0.36)] @min-[44rem]:h-auto @min-[44rem]:flex-1 @min-[44rem]:min-h-[16rem]"
           />
-          <p className="m-0 text-xs leading-relaxed text-muted">{describeCar(value, model.name)}</p>
+          <p className="m-0 text-xs leading-relaxed text-muted">{describeVehicle(value, model.name)}</p>
         </div>
 
         <div className="flex flex-col gap-4 @min-[44rem]:min-h-0 @min-[44rem]:overflow-y-auto @min-[44rem]:overscroll-contain @min-[44rem]:pr-2 @min-[44rem]:pb-1">
           <FieldRow label="Model" hint={model.series}>
             <SelectField
               value={value.model}
-              options={CAR_MODELS.map((m) => ({ id: m.id, label: vehicleLabel(m) }))}
+              options={VEHICLE_MODELS.map((m) => ({ id: m.id, label: vehicleLabel(m) }))}
               onChange={switchModel}
-              label="Car model"
+              label="Model"
             />
           </FieldRow>
 
@@ -214,7 +214,7 @@ export default function CarGaragePanel({ value, onChange }: CarGaragePanelProps)
           <div className="pt-3 border-t border-line">
             <button
               type="button"
-              onClick={() => onChange(defaultCarSpec(value.model))}
+              onClick={() => onChange(defaultVehicleSpec(value.model))}
               disabled={isDefault}
               title={line.asItComes}
               className={`${linkButton} disabled:opacity-45 disabled:cursor-default disabled:no-underline`}

@@ -1,15 +1,15 @@
 /**
- * «&nbsp;Virée&nbsp;» — the arithmetic. A little car drives a paper map from
+ * «&nbsp;Virée&nbsp;» — the arithmetic. A little vehicle drives a paper map from
  * stop to stop, pausing to show pictures; everything a frame needs is read
  * off the plan `prepare()` computes once.
  *
- * Three readings decide what the car may claim, each a refusal to say more
+ * Three readings decide what the vehicle may claim, each a refusal to say more
  * than the document holds:
  *
  * - **The stops are the legs' LOCATED places, the author's OWN places, or
  *   the pictures' own positions.** On places, the road is the trip so far —
  *   every leg up to the one this day belongs to, in the order they were
- *   lived — and the car arrives at the end of that leg: it marks the LEG,
+ *   lived — and the vehicle arrives at the end of that leg: it marks the LEG,
  *   never a spot the dates cannot justify — the rule the retired route trace
  *   fixed. On the author's own (`custom`, 2026-09-28), the road is the list
  *   they put on the map, in their order, the Itinerary's stops (`stops.ts`):
@@ -22,20 +22,20 @@
  *   its day belongs to — the leg is dated, the place is not, so the end of
  *   the leg is as far as the truth goes. Anything that fits nowhere is left
  *   out and COUNTED, never guessed onto the map.
- * - **The car's clock is closed-form.** The schedule is a list of phases
+ * - **The vehicle's clock is closed-form.** The schedule is a list of phases
  *   (a hold, a run, a halt, the arrival, the reveal) with start and end
- *   times; where the car is at `t` is a function of `t` and nothing else,
+ *   times; where the vehicle is at `t` is a function of `t` and nothing else,
  *   so the preview, the export and the score cannot drift.
  *
  * The path is measured in the projection's OWN units, inside a fixed
  * 1000-unit box, never in pixels: the projection is one uniform scale, so
  * every ratio is frame-free and the score written at export lands where the
  * preview's car stops. The paint maps plan units to the frame through one
- * similarity transform — the camera — which is what lets it follow the car
+ * similarity transform — the camera — which is what lets it follow the vehicle
  * without changing the route's shape. Pure and DOM-free.
  */
 
-import { VEHICLE_CHOICES, type VehicleChoice } from '../car-spec';
+import { VEHICLE_CHOICES, type VehicleChoice } from '../vehicle-spec';
 import { ALIGHT_SECONDS, BOARD_SECONDS, type TimeSpan } from './boarding';
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
@@ -60,7 +60,7 @@ import { GROUP_LIMITS, groupName, groupStops, type GroupName, type GroupVisits, 
 /** The legs' located places, the author's own places, or the picked pictures' positions. */
 export type DriveStopsOn = 'places' | 'custom' | 'pictures';
 /**
- * What the car drives on: the paper map drawn here, the piece's own picture,
+ * What the vehicle drives on: the paper map drawn here, the piece's own picture,
  * or OpenStreetMap's tiles (2026-09-28) — drawn under the road in the preview
  * and the file, where this device allows the fetch; the paper stands in
  * until they arrive, or when they never do.
@@ -68,7 +68,7 @@ export type DriveStopsOn = 'places' | 'custom' | 'pictures';
 export type DriveGround = 'paper' | 'picture' | 'tiles';
 export type DrivePath = 'curved' | 'straight';
 export type DriveAhead = 'dashed' | 'faint' | 'hidden';
-/** Prints beside the car, the picture filling the frame, the picture BEHIND the map, or nothing. */
+/** Prints beside the vehicle, the picture filling the frame, the picture BEHIND the map, or nothing. */
 export type DrivePictures = 'cards' | 'fill' | 'backdrop' | 'none';
 export type DriveCamera = 'whole' | 'follow';
 export type DriveEnd = 'reveal' | 'stay';
@@ -82,7 +82,7 @@ export interface DriveOptions extends CardOptions {
   /**
    * The author's own places, in their order — the road on `custom`. The same
    * list, and the same editor, as the Itinerary's stops; a stop's picture is
-   * shown when the car halts there.
+   * shown when the vehicle halts there.
    */
   stops: MapStop[];
   /** The pictures the author picked — stops on `pictures`, shown at the places on `places` and `custom`. */
@@ -91,34 +91,34 @@ export interface DriveOptions extends CardOptions {
   includePieces: boolean;
   path: DrivePath;
   ahead: DriveAhead;
-  /** The line the car leaves behind it. */
+  /** The line the vehicle leaves behind it. */
   trail: boolean;
   trailColor: string;
   aheadColor: string;
   lineWidth: number;
   // --- pictures --------------------------------------------------------------
   pictures: DrivePictures;
-  /** How long the car halts for each picture. */
+  /** How long the vehicle halts for each picture. */
   secondsPerPicture: number;
   /** Halt at a stop with no picture too. */
   pauseEverywhere: boolean;
-  /** Leave the cards on the map once the car has gone. */
+  /** Leave the cards on the map once the vehicle has gone. */
   cardsStay: boolean;
   cardSize: number;
   // --- vehicle -----------------------------------------------------------------
-  // The car itself — model, colour, finish, gear — is the TRIP's (`TripDoc.car`)
+  // The vehicle itself — model, colour, finish, gear — is the TRIP's (`TripDoc.car`)
   // and reaches the variant through `HookContext.car`. A piece may borrow
   // another vehicle for its day — a boat to the reef — as a model and a paint
-  // of its own (`vehicleFor`); otherwise it keeps only how big the car is drawn
+  // of its own (`vehicleFor`); otherwise it keeps only how big the vehicle is drawn
   // and how the camera looks at it.
-  /** `trip`: the trip's car, as dressed in its garage; else a model this piece drives. */
+  /** `trip`: the trip's vehicle, as dressed in its garage; else a model this piece drives. */
   vehicle: VehicleChoice;
   /** The borrowed vehicle's paint, `#rrggbb`; empty: as it comes. */
   vehicleColor: string;
   /**
-   * On a borrowed FERRY (`CarLine.carries`), the trip's car drives aboard at
+   * On a borrowed FERRY (`VehicleLine.carries`), the trip's vehicle drives aboard at
    * the start and off at the end (`boarding.ts`). On by default: it is what
-   * says the car crossed too.
+   * says the vehicle crossed too.
    */
   boarding: boolean;
   carSize: number;
@@ -174,7 +174,7 @@ export interface DriveOptions extends CardOptions {
   maxTurn: number;
   openWide: boolean;
   endWide: boolean;
-  /** Rewrite the badge's place with the stop the car is at, on `places` and `custom`. */
+  /** Rewrite the badge's place with the stop the vehicle is at, on `places` and `custom`. */
   captionFollows: boolean;
   // --- the recap (2026-10-07) ----------------------------------------------------
   // Read only while the badge's counter FOLLOWS the drive (`driveCountOf`,
@@ -182,7 +182,7 @@ export interface DriveOptions extends CardOptions {
   // schedule it always had, whatever these hold.
   /**
    * Calendar ↔ Road: the share of the road time given to the DAYS spent
-   * (the car waits at a place while its days run) against the share given to
+   * (the vehicle waits at a place while its days run) against the share given to
    * the kilometres. 0 is the plain drive, where days skip at every stop.
    */
   pace: number;
@@ -198,18 +198,18 @@ export interface DriveOptions extends CardOptions {
   plate: boolean;
   /**
    * The picture of the DAY (2026-10-07, §5 of `docs/map-openers-next.md`):
-   * while the car stays at a place, each picture comes up on the day it was
+   * while the vehicle stays at a place, each picture comes up on the day it was
    * shot rather than all at once on arrival — the place told day by day.
    * Read only under the recap's clock, where a stay has days to run.
    */
   dayPictures: boolean;
   /**
    * Défilé's RIBBON of the trip's days under the map, its head advancing with
-   * the car (`drive-ribbon.ts`). Read only under the recap's clock.
+   * the vehicle (`drive-ribbon.ts`). Read only under the recap's clock.
    */
   ribbon: boolean;
   /**
-   * The car STOPS at a place for its days, where they make a stay of
+   * The vehicle STOPS at a place for its days, where they make a stay of
    * {@link STAY_MIN_SECONDS} or more (the recap lab's «surplace» in
    * Melbourne). Off — the default since 2026-10-07, his «alors qu'on n'a pas
    * coché ce mode» — it never waits for days: it slows past a place that
@@ -483,7 +483,7 @@ export interface DriveStop extends GeoPoint {
   /** The place this stop is, on the legs or the author's own list — what another opener reads it back as (`stop-source.ts`). */
   source?: HookPlace;
   /**
-   * WHEN the car is here, as days of the trip on a continuous scale — day
+   * WHEN the vehicle is here, as days of the trip on a continuous scale — day
    * 1.0 is the morning of day 1, day N + 1.0 the end of day N — so `arrive`
    * and `leave` bound the stay and the counter reads `floor`. From the
    * document only: a leg's span shared evenly among its places, a place's
@@ -756,7 +756,7 @@ function pictureStops(calendar: readonly HookDay[], date: string, o: DriveOption
  * When a stop of the author's own is reached and left: the trip place it
  * stands on (within `SAME_PLACE_KM` — the stop was adopted from it, or put
  * where it is), with that place's days; else the day of the stop's own
- * picture. A stop with neither is undated — the car still drives through
+ * picture. A stop with neither is undated — the vehicle still drives through
  * it, and the recap's counter holds.
  */
 function customStopDays(
@@ -1034,7 +1034,7 @@ export function pointAt(path: RoadPath, s: number): { point: PlanPoint; index: n
   return { point: { x: points[lo].x + (points[hi].x - points[lo].x) * w, y: points[lo].y + (points[hi].y - points[lo].y) * w }, index: lo };
 }
 
-/** The unit direction of travel at `s`, blended across a corner so the car turns rather than snaps. */
+/** The unit direction of travel at `s`, blended across a corner so the vehicle turns rather than snaps. */
 export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03): { x: number; y: number } {
   const { points, cum } = path;
   if (points.length < 2) return { x: 0, y: -1 };
@@ -1067,8 +1067,8 @@ export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03)
 // --- the schedule ---------------------------------------------------------------
 
 /**
- * The car's phases. `stay` and `summary` are the recap's (2026-10-07): a
- * stay is the car waiting at a place while that place's DAYS run on the
+ * The vehicle's phases. `stay` and `summary` are the recap's (2026-10-07): a
+ * stay is the vehicle waiting at a place while that place's DAYS run on the
  * counter — the Calendar end of the pace —, the summary the card at the end.
  */
 export type PhaseKind = 'hold' | 'run' | 'halt' | 'stay' | 'arrive' | 'summary' | 'reveal';
@@ -1090,7 +1090,7 @@ export interface Phase {
   /** For a run: the arc lengths it covers. */
   s0: number;
   s1: number;
-  /** For a hold, a halt or the arrival: the stop the car sits at. */
+  /** For a hold, a halt or the arrival: the stop the vehicle sits at. */
   stop: number;
   /**
    * The day of the trip at the phase's two ends, on the stops' scale
@@ -1104,7 +1104,7 @@ export interface Phase {
    * A run under the recap's clock that PASSES places without stopping: the
    * car's arc length and the day at each stop it crosses, and the share of
    * the run's time spent up to it (`cost`, 0 → 1, by `pace`: distance and
-   * days). The car rolls through, slower where a place took days, faster
+   * days). The vehicle rolls through, slower where a place took days, faster
    * on an empty road — it stops only where it halts or truly stays.
    */
   knots?: RunKnots;
@@ -1116,7 +1116,7 @@ export interface RunKnots {
   cost: number[];
 }
 
-/** Where along a run's knots the car is at `e` (the eased share of the run's time). */
+/** Where along a run's knots the vehicle is at `e` (the eased share of the run's time). */
 export function knotAt(knots: RunKnots, e: number): { s: number; day: number } {
   const { s, day, cost } = knots;
   const c = Math.max(0, Math.min(1, e));
@@ -1138,7 +1138,7 @@ export function knotCostOfDay(knots: RunKnots, d: number): number | null {
   return null;
 }
 
-/** The shortest STAY the car stops for, in seconds: a shorter one is spent rolling past the place. */
+/** The shortest STAY the vehicle stops for, in seconds: a shorter one is spent rolling past the place. */
 export const STAY_MIN_SECONDS = 1;
 
 export interface PicturePop {
@@ -1146,7 +1146,7 @@ export interface PicturePop {
   stop: number;
   /** Its rank among the stop's pictures. */
   rank: number;
-  /** When it pops, and when the car leaves the stop. */
+  /** When it pops, and when the vehicle leaves the stop. */
   at: number;
   leaves: number;
 }
@@ -1154,11 +1154,11 @@ export interface PicturePop {
 export interface DriveSchedule {
   phases: Phase[];
   pops: PicturePop[];
-  /** When the car reaches each stop; the first at 0. */
+  /** When the vehicle reaches each stop; the first at 0. */
   arrivals: number[];
   /** The whole opener, reveal included. */
   total: number;
-  /** When the car has reached the last stop. */
+  /** When the vehicle has reached the last stop. */
   arrivedAt: number;
   /** When the reveal starts (= total when there is none). */
   revealAt: number;
@@ -1166,9 +1166,9 @@ export interface DriveSchedule {
   summaryAt: number | null;
   /** The map fades off at the end (`end: 'reveal'` with no summary card). */
   reveals: boolean;
-  /** The seconds the car waited at the start for a badge shown before the drive. */
+  /** The seconds the vehicle waited at the start for a badge shown before the drive. */
   lead: number;
-  /** When the trip's car drives aboard the ferry — the end of the hold — and off it, at the arrival; null without a ferry (`boarding.ts`). */
+  /** When the trip's vehicle drives aboard the ferry — the end of the hold — and off it, at the arrival; null without a ferry (`boarding.ts`). */
   boardAt: TimeSpan | null;
   alightAt: TimeSpan | null;
   /**
@@ -1229,12 +1229,12 @@ export function shareRoadTime(
   }
 }
 
-/** Whether the car halts at a stop under the options. */
+/** Whether the vehicle halts at a stop under the options. */
 export function haltsAt(stop: DriveStop, o: DriveOptions): boolean {
   return o.pauseEverywhere || (o.pictures !== 'none' && stop.pictures.length > 0);
 }
 
-/** How long the car halts at a stop: a beat per picture, one beat with none when asked. */
+/** How long the vehicle halts at a stop: a beat per picture, one beat with none when asked. */
 export function haltSeconds(stop: DriveStop, o: DriveOptions): number {
   const shown = o.pictures === 'none' ? 0 : stop.pictures.length;
   if (shown > 0) return shown * o.secondsPerPicture;
@@ -1242,7 +1242,7 @@ export function haltSeconds(stop: DriveStop, o: DriveOptions): number {
 }
 
 /**
- * The recap's CLOCK over the stops: when the car reaches and leaves each
+ * The recap's CLOCK over the stops: when the vehicle reaches and leaves each
  * one, as days of the trip. A stop nothing dates takes its place BETWEEN its
  * dated neighbours by distance (it is on the road, it moves no counter),
  * and the ends take the nearest dated stop's. Null when no stop is dated —
@@ -1288,9 +1288,9 @@ export function buildSchedule(
   clock: { arrive: readonly number[]; leave: readonly number[] } | null = null,
   /** The recap asks for its summary card — the END of the drive: no reveal follows it. */
   summary = false,
-  /** Seconds the car waits at the start for a badge shown before the drive. */
+  /** Seconds the vehicle waits at the start for a badge shown before the drive. */
   lead = 0,
-  /** The trip's car boards the ferry this drive is on, and drives off at the end (`boarding.ts`). */
+  /** The trip's vehicle boards the ferry this drive is on, and drives off at the end (`boarding.ts`). */
   board = false,
 ): DriveSchedule {
   const phases: Phase[] = [];
@@ -1304,7 +1304,7 @@ export function buildSchedule(
    * The picture of the DAY: under the recap's clock, a picture shot on a
    * later day of a stop's own stay waits for that day, its time read off the
    * span the days run over — the stay, or the arrival's beat at the last
-   * stop. Everything else comes up as the car arrives, as before.
+   * stop. Everything else comes up as the vehicle arrives, as before.
    */
   const dayOfStay = (stop: number, picture: StopPicture): number | null => {
     if (!o.dayPictures || !clock || picture.day === undefined) return null;
@@ -1346,12 +1346,12 @@ export function buildSchedule(
     const dwell = clock.leave[i] - clock.arrive[i];
     return dwell > 0 ? (pace * dwell) / dayTotal : 0;
   };
-  // The car STOPS for a place's days only when asked (`waitStays`) and only
-  // where they make a real wait (2026-10-07, his report that the car stopped
+  // The vehicle STOPS for a place's days only when asked (`waitStays`) and only
+  // where they make a real wait (2026-10-07, his report that the vehicle stopped
   // at every place «alors qu'on n'a pas coché ce mode»): otherwise a place's
   // days are spent rolling past it, slower, the counter running all the same.
   const staying = stops.map((_, i) => o.waitStays && stayWeight(i) * o.driveSeconds >= STAY_MIN_SECONDS);
-  // The day the car reaches a stop and leaves it: a stay's two ends; a place
+  // The day the vehicle reaches a stop and leaves it: a stay's two ends; a place
   // rolled past is crossed mid-way through its days — the first one left on
   // its first day, the last reached on the trip's last, its days spent on the
   // way in, so none of them is skipped in one frame at the arrival.
@@ -1368,7 +1368,7 @@ export function buildSchedule(
     return (clock.arrive[i] + clock.leave[i]) / 2;
   };
 
-  // Runs between the stops the car stops at — to halt, or to stay — each
+  // Runs between the stops the vehicle stops at — to halt, or to stay — each
   // taking its share of the driving time.
   const runs: { from: number; to: number }[] = [];
   let from = 0;
@@ -1445,7 +1445,7 @@ export function buildSchedule(
       ...(knots ? { knots } : {}),
     });
     t += seconds;
-    // Every stop passed on the run is reached when the car crosses it.
+    // Every stop passed on the run is reached when the vehicle crosses it.
     for (let i = run.from + 1; i <= run.to; i++) {
       const share = knots ? knots.cost[i - run.from] : s1 > s0 ? (path.stopS[i] - s0) / (s1 - s0) : 1;
       arrivals.push(phases[phases.length - 1].start + seconds * EASINGS[o.easing].inverse(Math.min(1, share)));
@@ -1471,7 +1471,7 @@ export function buildSchedule(
   const arrivedAt = t;
   const lastStop = n - 1;
   const lastHalt = n > 1 ? haltSeconds(stops[lastStop], o) : haltSeconds(stops[0], o);
-  // The car drives off at the start of the arrival's beat, its pictures popping meanwhile.
+  // The vehicle drives off at the start of the arrival's beat, its pictures popping meanwhile.
   const alightAt = board ? { start: t, end: t + ALIGHT_SECONDS } : null;
   const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0) + (board ? ALIGHT_SECONDS : 0);
   phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(dayIn(lastStop), leaveDay(lastStop)) });
@@ -1519,17 +1519,17 @@ export interface DriveMoment {
   point: PlanPoint;
   heading: { x: number; y: number };
   phase: PhaseKind;
-  /** The stop the car sits at, or null while running. */
+  /** The stop the vehicle sits at, or null while running. */
   at: number | null;
-  /** The last stop the car reached. */
+  /** The last stop the vehicle reached. */
   reached: number;
   /** 0..1 through the whole path. */
   progress: number;
   /** The map's presence, 1 until the reveal fades it. */
   mapAlpha: number;
-  /** Past the end: the car rests, the map stays or is gone. */
+  /** Past the end: the vehicle rests, the map stays or is gone. */
   over: boolean;
-  /** Seconds since the current phase began — a ripple as the car halts. */
+  /** Seconds since the current phase began — a ripple as the vehicle halts. */
   since: number;
   /**
    * The day of the trip, on the stops' scale (`StopDays`), when the recap's
@@ -1556,7 +1556,7 @@ export interface DrivePlan {
   kmAtStop: number[];
   seconds: number;
   at(t: number): DriveMoment;
-  /** Kilometres the car has covered by `s`. */
+  /** Kilometres the vehicle has covered by `s`. */
   kmAt(s: number): number;
   /** The pictures showing at `t`, each with its pop progress and its fade. */
   showing(t: number): { pop: PicturePop; rise: number; fade: number }[];
@@ -1635,7 +1635,7 @@ export function drivePlan(
   route: DriveRoute,
   o: DriveOptions,
   recap = false,
-  /** The trip's car drives aboard the ferry this piece is on (`boardsOf`); a drive with one stop has no crossing to board for. */
+  /** The trip's vehicle drives aboard the ferry this piece is on (`boardsOf`); a drive with one stop has no crossing to board for. */
   board = false,
 ): DrivePlan | null {
   const stops = route.stops;
@@ -1649,7 +1649,7 @@ export function drivePlan(
   for (let i = 1; i < stops.length; i++) kmAtStop.push(kmAtStop[i - 1] + haversineKm(stops[i - 1], stops[i]));
   const clock = recap ? stopClock(stops, kmAtStop) : null;
   // The summary card is the recap's, and the badge may take its place
-  // (`badgeWhen: 'end'`) or open the drive (`before`, the car waiting for it).
+  // (`badgeWhen: 'end'`) or open the drive (`before`, the vehicle waiting for it).
   const moment = badgeMoment(o.badgeWhen);
   const card = recap && o.summary && moment !== 'end';
   const schedule = buildSchedule(stops, path, o, clock, card, card && moment === 'before' ? BADGE_BEFORE_SECONDS : 0, board && stops.length > 1);
@@ -1774,7 +1774,7 @@ export function driveCounterPieces(
   const m = plan.at(t);
   // The value behind the numeral, for the odometer's roll: the day on its
   // continuous scale, the distance in the piece's unit — the whole number
-  // once the car has arrived, so the final reading rests.
+  // once the vehicle has arrived, so the final reading rests.
   if (count === 'days' || count === 'days-km') {
     if (m.day === null || !plan.clock) return {};
     const total = plan.route.tripDays;
@@ -1875,11 +1875,11 @@ export function planBounds(plan: DrivePlan): { x0: number; y0: number; x1: numbe
 
 /**
  * The view for a moment: the whole route fitted inside `box` with `margin`
- * pixels kept clear for the car and the cards, or — following — the baked
+ * pixels kept clear for the vehicle and the cards, or — following — the baked
  * camera's frame at `t` (`map-camera.ts`): its centre at the box's centre,
  * its width across the box, the map turned by its angle. Without a track
  * the follow view is the one it always was: the whole-route scale divided by
- * the share, the car held at the centre.
+ * the share, the vehicle held at the centre.
  */
 export function viewAt(
   plan: DrivePlan,
@@ -2012,9 +2012,9 @@ export function dayTurns(plan: DrivePlan, o: Pick<DriveOptions, 'easing'>): numb
 }
 
 /**
- * The drive, heard: the kit's landing at every stop the car reaches, its
+ * The drive, heard: the kit's landing at every stop the vehicle reaches, its
  * leg voice on an accented stop (a leg's first place, a day's first picture),
- * the seat when the car arrives — and, when asked, a shutter as each picture
+ * the seat when the vehicle arrives — and, when asked, a shutter as each picture
  * pops and a light tick as each day of the recap turns. Nothing at volume 0.
  */
 export function driveScore(plan: DrivePlan, o: DriveOptions): SoundEvent[] {

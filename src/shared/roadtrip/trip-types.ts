@@ -48,7 +48,7 @@ import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
 import { readCascade, type BadgeCascade } from './badge-layout';
-import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
+import { defaultVehicleSpec, readVehicleSpec, type VehicleSpec } from './vehicle-spec';
 import type { OverlayElement } from '../overlay/overlay-types';
 import {
   readSlideBadge,
@@ -817,7 +817,7 @@ export interface TripDoc {
    * a piece that drove a different one would be a different journey.
    * Portable, so the backup carries it.
    */
-  car: CarSpec;
+  car: VehicleSpec;
   /**
    * How a place is written on this trip's two kinds of surface. A stage or a
    * place may depart from it (`TripStage.placeStyle`, `TripPlace.style`).
@@ -882,7 +882,7 @@ export function createTripDoc(
     grade: emptyGrade(),
     cover: defaultTripCover(),
     developPresets: [],
-    car: defaultCarSpec(),
+    car: defaultVehicleSpec(),
     placeStyle: { ...DEFAULT_PLACE_STYLE },
     stateCodes: {},
     createdAt: now,
@@ -1069,7 +1069,7 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * conversion v19 while `main` took v19 for the car, and a trip opened on that
  * branch before the renumber was stamped v19 with no car at all — so the car
  * block below never ran on it, and the garage threw on `car.model`. The car is
- * read again through `readCarSpec`, which keeps a real spec exactly as it is
+ * read again through `readVehicleSpec`, which keeps a real spec exactly as it is
  * and gives a missing one the default the opener always drew.
  *
  * v18 → v19 gives the trip its CAR (`TripDoc.car`): the model, the colour,
@@ -1405,9 +1405,9 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   }
 
   if (migrated.version < 19) {
-    // Read through `readCarSpec`: a document that never had a car lands on the
+    // Read through `readVehicleSpec`: a document that never had a car lands on the
     // default, junk lands on the default, a partial spec keeps what it says.
-    migrated.car = readCarSpec(migrated.car);
+    migrated.car = readVehicleSpec(migrated.car);
   }
 
   if (migrated.version < 20) {
@@ -1447,7 +1447,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (migrated.version < 21) {
     // A trip stamped v19 by the Itinerary branch skipped the car block above.
     // Idempotent on every other document: a car that is there is kept as is.
-    migrated.car = readCarSpec(migrated.car);
+    migrated.car = readVehicleSpec(migrated.car);
   }
 
   if (migrated.version < 22) {

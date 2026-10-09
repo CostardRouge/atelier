@@ -11,8 +11,8 @@
  * (`*-model.ts` over `boat-parts.ts`). Two ferries: the Spirit of Tasmania and
  * the Mediterranean ferry (over `ferry-parts.ts`), drawn bigger than the rest
  * and lowering ramps for the car that drives aboard.
- * Another is one more `*-model.ts` over `mesh3d.ts`, one line here and one `CarLine` in
- * `car-spec.ts` (what it offers and how it comes); its parts must stay
+ * Another is one more `*-model.ts` over `mesh3d.ts`, one line here and one `VehicleLine` in
+ * `vehicle-spec.ts` (what it offers and how it comes); its parts must stay
  * CONVEX, or the painter's ordering breaks, and `render-order.test.ts` judges
  * every line of this list. Pure and DOM-free.
  */
@@ -27,11 +27,11 @@ import { WHISPER_LENGTH, WHISPER_WIDTH, buildSolarWhisper, whisperPalette } from
 import { CRUISER_LENGTH, CRUISER_WIDTH, buildCruiser, cruiserPalette } from './whitsunday-cruiser-model';
 import { SPIRIT_LENGTH, SPIRIT_WIDTH, buildSpiritOfTasmania, spiritPalette, spiritRamps } from './spirit-of-tasmania-model';
 import { MED_FERRY_LENGTH, MED_FERRY_WIDTH, buildMedFerry, medFerryPalette, medFerryRamps } from './med-ferry-model';
-import { DEFAULT_MODEL, carriesVehicles, type CarGear, type CarModelId } from '../car-spec';
+import { DEFAULT_MODEL, carriesVehicles, type VehicleGear, type VehicleModelId } from '../vehicle-spec';
 import type { Part } from './mesh3d';
 
-export interface CarModel {
-  id: CarModelId;
+export interface VehicleModel {
+  id: VehicleModelId;
   /** A car rolls on wheels and throws a shadow; a boat leaves a wake. */
   kind: 'car' | 'boat';
   /** The make and the model, as said on screen. */
@@ -55,12 +55,12 @@ export interface CarModel {
   mapScale?: number;
   /** A ferry's ramps, drawn while a vehicle drives on (the stern's) or off (the bow's). */
   ramps?: () => { stern: Part[]; bow: Part[] };
-  build(gear: CarGear): Part[];
+  build(gear: VehicleGear): Part[];
   /** Its colours by role, given the author's body colour. */
   palette(bodyColor: string): Record<string, string>;
 }
 
-export const CAR_MODELS: readonly CarModel[] = [
+export const VEHICLE_MODELS: readonly VehicleModel[] = [
   {
     id: 'prado-j120',
     kind: 'car',
@@ -194,12 +194,12 @@ export const CAR_MODELS: readonly CarModel[] = [
 ];
 
 /** How a model is named in a list of every vehicle: a boat says so, and a ferry that it is one. */
-export function vehicleLabel(model: CarModel): string {
+export function vehicleLabel(model: VehicleModel): string {
   if (carriesVehicles(model.id)) return `Ferry · ${model.name}`;
   return model.kind === 'boat' ? `Boat · ${model.name}` : model.name;
 }
 
 /** The model an id names — the default car for one this build does not know. */
-export function carModel(id: string): CarModel {
-  return CAR_MODELS.find((model) => model.id === id) ?? CAR_MODELS.find((model) => model.id === DEFAULT_MODEL) ?? CAR_MODELS[0];
+export function vehicleModel(id: string): VehicleModel {
+  return VEHICLE_MODELS.find((model) => model.id === id) ?? VEHICLE_MODELS.find((model) => model.id === DEFAULT_MODEL) ?? VEHICLE_MODELS[0];
 }

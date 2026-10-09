@@ -1,12 +1,12 @@
 import { useEffect, useLayoutEffect, useMemo, useRef, useState, type KeyboardEvent, type PointerEvent } from 'react';
-import { describeCar, type CarSpec } from '../../shared/roadtrip/car-spec';
-import { carLight } from '../../shared/roadtrip/hooks/car-model';
-import { carModel } from '../../shared/roadtrip/hooks/car-registry';
+import { describeVehicle, type VehicleSpec } from '../../shared/roadtrip/vehicle-spec';
+import { vehicleLight } from '../../shared/roadtrip/hooks/car-model';
+import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import { paintGroundShadow, paintMesh, renderOrder, type Pose } from '../../shared/roadtrip/hooks/mesh3d';
 import { prefersReducedMotion } from '../../shared/ui/reduced-motion';
 
 interface CarTurntableProps {
-  spec: CarSpec;
+  spec: VehicleSpec;
   /** The box's size — a height class; the canvas fills it. */
   className?: string;
 }
@@ -47,10 +47,10 @@ function token(el: Element, name: string, fallback: string): string {
  * turntable sits in still scrolls (`frontend.md`). A finger turns only; the
  * tilt is a mouse or a pen's, and the keyboard's.
  */
-export default function CarTurntable({ spec, className = '' }: CarTurntableProps) {
+export default function VehicleTurntable({ spec, className = '' }: CarTurntableProps) {
   const boxRef = useRef<HTMLDivElement>(null);
   const canvasRef = useRef<HTMLCanvasElement>(null);
-  const model = carModel(spec.model);
+  const model = vehicleModel(spec.model);
   const parts = useMemo(() => model.build(spec.gear), [model, spec.gear]);
 
   // The view, written by gestures and read by every paint.
@@ -72,7 +72,7 @@ export default function CarTurntable({ spec, className = '' }: CarTurntableProps
     const { width: w, height: h } = canvas;
     if (w === 0 || h === 0) return;
     const current = specRef.current;
-    const carOf = carModel(current.model);
+    const carOf = vehicleModel(current.model);
     const { heading, tilt } = view.current;
     const paper = token(canvas, '--color-paper', '#f4f0e7');
     const ring = token(canvas, '--color-line-strong', '#d2c8b3');
@@ -106,7 +106,7 @@ export default function CarTurntable({ spec, className = '' }: CarTurntableProps
     g.restore();
 
     paintGroundShadow(g, pose, carOf.length / 2, carOf.width / 2, 0.3);
-    paintMesh(g, renderOrder(partsRef.current, pose, carLight(current.finish)), {
+    paintMesh(g, renderOrder(partsRef.current, pose, vehicleLight(current.finish)), {
       palette: carOf.palette(current.color),
       ink: 'rgba(20,16,12,0.85)',
       outlineWidth: Math.max(0.9, (scale * carOf.length) / 78),
@@ -226,9 +226,9 @@ export default function CarTurntable({ spec, className = '' }: CarTurntableProps
     <div
       ref={boxRef}
       role="img"
-      aria-label={describeCar(spec, model.name)}
+      aria-label={describeVehicle(spec, model.name)}
       tabIndex={0}
-      title="Drag to turn the car; the arrow keys turn and tilt it"
+      title="Drag to turn the vehicle; the arrow keys turn and tilt it"
       onPointerDown={onPointerDown}
       onPointerMove={onPointerMove}
       onPointerUp={endDrag}

@@ -29,7 +29,7 @@ import { createShade } from '../shades/shades';
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_FRAMING } from '../media/framing';
 import { DEFAULT_CTA } from './cta-slide';
-import { DEFAULT_CAR } from './car-spec';
+import { DEFAULT_VEHICLE } from './vehicle-spec';
 import { DEFAULT_BADGE_WORDS } from './day-badge';
 
 const stage = (
@@ -130,7 +130,7 @@ describe('migrateTripDoc', () => {
   });
 
   it('gives a v1 document the default car', () => {
-    expect(migrateTripDoc(v1()).car).toEqual(DEFAULT_CAR);
+    expect(migrateTripDoc(v1()).car).toEqual(DEFAULT_VEHICLE);
   });
 
   it('leaves a current document untouched', () => {
@@ -262,8 +262,8 @@ describe('migrateTripDoc — v20 → v21, the car is repaired', () => {
   };
 
   it('gives a carless v19 or v20 trip the default car', () => {
-    expect(migrateTripDoc(carless(19)).car).toEqual(DEFAULT_CAR);
-    expect(migrateTripDoc(carless(20)).car).toEqual(DEFAULT_CAR);
+    expect(migrateTripDoc(carless(19)).car).toEqual(DEFAULT_VEHICLE);
+    expect(migrateTripDoc(carless(20)).car).toEqual(DEFAULT_VEHICLE);
   });
 
   it('keeps the car a v20 trip already has', () => {
@@ -1090,18 +1090,18 @@ describe('migrateTripDoc — v18 → v19 (the trip’s car)', () => {
 
   it('lands a trip that never had a car on the default one', () => {
     const doc = migrateTripDoc(v18());
-    expect(doc.car).toEqual(DEFAULT_CAR);
+    expect(doc.car).toEqual(DEFAULT_VEHICLE);
     expect(doc.version).toBe(TRIP_DOC_VERSION);
   });
 
   it('lands junk on the default and keeps what a partial spec says', () => {
-    expect(migrateTripDoc(v18('black')).car).toEqual(DEFAULT_CAR);
-    expect(migrateTripDoc(v18({ color: 'red', gear: 3 })).car).toEqual(DEFAULT_CAR);
+    expect(migrateTripDoc(v18('black')).car).toEqual(DEFAULT_VEHICLE);
+    expect(migrateTripDoc(v18({ color: 'red', gear: 3 })).car).toEqual(DEFAULT_VEHICLE);
     const partial = migrateTripDoc(v18({ color: '#ff0000', gear: { bullBar: false } })).car;
     expect(partial.color).toBe('#ff0000');
     expect(partial.gear.bullBar).toBe(false);
     expect(partial.gear.spare).toBe(true);
-    expect(partial.finish).toBe(DEFAULT_CAR.finish);
+    expect(partial.finish).toBe(DEFAULT_VEHICLE.finish);
   });
 
   it('is idempotent', () => {

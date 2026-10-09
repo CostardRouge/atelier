@@ -1214,15 +1214,15 @@ head. It **ticks** at every landing, a deeper tick where a leg of the trip
 begins and a low seat on today, in a choice of voices (ratchet, woodblock,
 typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
-every visit. **Virée** puts a little car on the map: a paper map of
+every visit. **Virée** puts a little vehicle on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
-through its stops, and a cartoon vehicle — the trip's car, a Land Cruiser
+through its stops, and a cartoon vehicle — the trip's own, a Land Cruiser
 Prado or a Renault Kadjar with its wheels turning, or a boat a piece borrows for
 a day on the water, leaving a wake — a miniature rendered in the browser,
 driving from stop to stop. The stops are the
 legs' located places, arriving where this day's leg ends; **your own places**,
 put on a map with the very editor the Itinerary uses — any place, on a leg or
-not, in your order, each able to hold a picture the car halts to show; or the
+not, in your order, each able to hold a picture the vehicle halts to show; or the
 **pictures you pick** — each one shot with a position in its EXIF is a stop, in
 the order they were shot, a run shot at one spot one stop. Your places follow
 you from one opener to the other: the stops picked for an Itinerary are the ones
@@ -1320,7 +1320,7 @@ narrow hull, benches along both edges so every seat has the water, a roof tiled
 with solar panels, the croc cam's screen under its front edge, two electric
 outboards). Their liveries are guesses you can repaint. A trip can drive a
 boat, but a piece usually borrows one: the Virée panel's **Vehicle** row keeps
-the trip's car or picks any other model for that piece alone, in a paint of its
+the trip's vehicle or picks any other model for that piece alone, in a paint of its
 own, and a boat leaves a wake that grows as it gets under way and settles when
 it halts — long behind the Viper, barely a ripple behind the Solar Whisper.
 Two **ferries** carry the car across: the **Spirit of Tasmania** (Bass Strait —
@@ -1330,14 +1330,14 @@ navy hull under a white superstructure, two funnels side by side, a long open
 aft deck). A ship is drawn bigger than the rest. When a piece borrows a ferry,
 **Boarding** (on by default) opens on the trip's car at the quay: it drives up
 the stern ramp and disappears inside, the ferry crosses like any boat, and the
-car drives off over the bow ramp at the far side. The car turns on a turntable while you dress it (drag
+car drives off over the bow ramp at the far side. The vehicle turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own
-panel («Configure the car…», with Cancel and Done) and lives in the trip's
-settings as its Car section, where every switch writes at once. On a wide
-screen both show the car beside its choices, which scroll on their own, so a
-switch far down the list is seen on the car the moment it flips.
+panel («Configure the vehicle…», with Cancel and Done) and lives in the trip's
+settings as its Vehicle section, where every switch writes at once. On a wide
+screen both show the vehicle beside its choices, which scroll on their own, so a
+switch far down the list is seen on the vehicle the moment it flips.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
 your own places) — though, like Virée and the Recap card, it can also take

@@ -37,7 +37,7 @@
  * and downloading files stay in the UI.
  */
 
-import { readCarSpec } from './car-spec';
+import { readVehicleSpec } from './vehicle-spec';
 import { isIsoDate } from './trip-days';
 import {
   TRIP_DOC_VERSION,
@@ -204,7 +204,7 @@ export function parseTripFile(text: string): ParseResult {
       ? (raw.developPresets as TripDoc['developPresets'])
       : base.developPresets,
     // A validated read, never a cast: junk or nothing lands on the default car.
-    car: readCarSpec(raw.car),
+    car: readVehicleSpec(raw.car),
     placeStyle: readPlaceStyle(raw.placeStyle),
     stateCodes: readStateCodes(raw.stateCodes),
   });

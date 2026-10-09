@@ -26,7 +26,7 @@ export const BOARD_SECONDS = 1.8;
 export const ALIGHT_SECONDS = 1.6;
 /**
  * How long the car is drawn while it boards, against a car's usual length
- * on the map: the ship is drawn 2.2 times as long (`CarModel.mapScale`), so
+ * on the map: the ship is drawn 2.2 times as long (`VehicleModel.mapScale`), so
  * at this size the car is a fifth of the ship and narrower than its door.
  */
 export const RIDER_SCALE = 0.42;

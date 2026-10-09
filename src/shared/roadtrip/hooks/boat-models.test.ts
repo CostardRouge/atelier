@@ -1,14 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ALISON_LENGTH, ALISON_WIDTH, buildAlisonMaree } from './alison-maree-model';
 import { hullPart } from './boat-parts';
-import { CAR_MODELS } from './car-registry';
+import { VEHICLE_MODELS } from './vehicle-registry';
 import { faceNormal, renderOrder, type Part } from './mesh3d';
 import { WHISPER_LENGTH, WHISPER_WIDTH, buildSolarWhisper } from './solar-whisper-model';
 import { VIPER_LENGTH, VIPER_WIDTH, buildViper } from './viper-model';
 import { CRUISER_LENGTH, CRUISER_WIDTH, buildCruiser } from './whitsunday-cruiser-model';
 import { SPIRIT_LENGTH, SPIRIT_WIDTH, buildSpiritOfTasmania, spiritRamps } from './spirit-of-tasmania-model';
 import { MED_FERRY_LENGTH, MED_FERRY_WIDTH, buildMedFerry, medFerryRamps } from './med-ferry-model';
-import { carriesVehicles } from '../car-spec';
+import { carriesVehicles } from '../vehicle-spec';
 
 const verts = (parts: Part[]) => parts.flatMap((p) => p.faces.flatMap((f) => [...f.verts]));
 const extent = (parts: Part[], axis: 0 | 1 | 2) => {
@@ -132,7 +132,7 @@ describe('the Solar Whisper', () => {
     const motors = whisper.filter((p) => /^outboard-[lr]$/.test(p.id));
     expect(motors).toHaveLength(2);
     for (const m of motors) expect(m.centre[1]).toBeLessThan(stern);
-    const wakes = CAR_MODELS.filter((m) => m.kind === 'boat').map((m) => [m.id, m.wake ?? 1] as const);
+    const wakes = VEHICLE_MODELS.filter((m) => m.kind === 'boat').map((m) => [m.id, m.wake ?? 1] as const);
     const least = wakes.reduce((a, b) => (b[1] < a[1] ? b : a));
     expect(least[0]).toBe('solar-whisper');
   });
@@ -191,9 +191,9 @@ describe('the ferries', () => {
   });
 
   it('carry vehicles, drawn bigger than a car on the map, with ramps to lower — and nothing else does', () => {
-    const ferries = CAR_MODELS.filter((m) => carriesVehicles(m.id)).map((m) => m.id);
+    const ferries = VEHICLE_MODELS.filter((m) => carriesVehicles(m.id)).map((m) => m.id);
     expect(ferries).toEqual(['spirit-of-tasmania', 'med-ferry']);
-    for (const m of CAR_MODELS) {
+    for (const m of VEHICLE_MODELS) {
       const ferry = ferries.includes(m.id);
       expect(m.kind === 'boat' || !ferry).toBe(true);
       expect(!!m.ramps, m.id).toBe(ferry);
@@ -204,7 +204,7 @@ describe('the ferries', () => {
 
 describe('the registry', () => {
   it('lists the six boats as boats, the four cars as cars', () => {
-    expect(CAR_MODELS.filter((m) => m.kind === 'boat').map((m) => m.id)).toEqual([
+    expect(VEHICLE_MODELS.filter((m) => m.kind === 'boat').map((m) => m.id)).toEqual([
       'whitsunday-cruiser',
       'viper-jet',
       'alison-maree',
@@ -212,6 +212,6 @@ describe('the registry', () => {
       'spirit-of-tasmania',
       'med-ferry',
     ]);
-    expect(CAR_MODELS.filter((m) => m.kind === 'car').map((m) => m.id)).toEqual(['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2']);
+    expect(VEHICLE_MODELS.filter((m) => m.kind === 'car').map((m) => m.id)).toEqual(['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2']);
   });
 });

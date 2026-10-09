@@ -1,11 +1,11 @@
 import { describe, expect, it } from 'vitest';
-import { GEAR_KEYS, defaultCarSpec, type CarGear } from '../car-spec';
+import { GEAR_KEYS, defaultVehicleSpec, type VehicleGear } from '../vehicle-spec';
 import { KADJAR_LENGTH, KADJAR_WHEEL_RADIUS, KADJAR_WIDTH, buildKadjar, kadjarPalette } from './kadjar-model';
 import { centroid, dot, faceNormal, renderOrder, sub, type Part, type Vec3 } from './mesh3d';
 
-const NONE = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as CarGear;
-const ALL = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as CarGear;
-const AS_IT_COMES = defaultCarSpec('kadjar-ph2').gear;
+const NONE = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as VehicleGear;
+const ALL = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as VehicleGear;
+const AS_IT_COMES = defaultVehicleSpec('kadjar-ph2').gear;
 
 const faceCount = (parts: Part[]) => parts.reduce((n, part) => n + part.faces.length, 0);
 const verts = (parts: Part[]): Vec3[] => parts.flatMap((part) => part.faces.flatMap((f) => [...f.verts]));

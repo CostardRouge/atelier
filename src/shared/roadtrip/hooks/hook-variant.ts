@@ -27,7 +27,7 @@
 import type { ComponentType } from 'react';
 import type { PyramidTile } from '../../map/tile-strip';
 import type { SavedMediaRef } from '../../projects/project-types';
-import type { CarSpec } from '../car-spec';
+import type { VehicleSpec } from '../vehicle-spec';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
@@ -319,10 +319,10 @@ export interface HookContext {
    */
   pictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The trip's car (`TripDoc.car`) — what a variant that drives one draws.
-   * A hand-built context without it drives the default car.
+   * The trip's vehicle (`TripDoc.car`) — what a variant that drives one draws.
+   * A hand-built context without it drives the default vehicle.
    */
-  car?: CarSpec;
+  vehicle?: VehicleSpec;
   /**
    * How the trip WRITES a place (`TripDoc.placeStyle`, `stateCodes`) — what
    * an opener's labels and the stops' lists read through `stopText`, so a
@@ -412,9 +412,9 @@ export interface HookPanelHost {
   pictureStatus?: HookPictureStatus;
   /**
    * Open the garage — the sheet that dresses the TRIP's car. A panel may not
-   * write the trip itself; absent, the panel says where the car is set.
+   * write the trip itself; absent, the panel says where the vehicle is set.
    */
-  configureCar?(): void;
+  configureVehicle?(): void;
   /**
    * Open the big picking map on these stops — pan, zoom, tap to add, drag to
    * move, towns to take a name from — and resolve the stops as the author

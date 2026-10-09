@@ -1,7 +1,7 @@
 import HouseStyleControls, { type HouseStyleRow } from '../../shared/ui/HouseStyleControls';
 import { presetById } from '../../shared/overlay/title-styles';
-import { colourName } from '../../shared/roadtrip/car-spec';
-import { carModel } from '../../shared/roadtrip/hooks/car-registry';
+import { colourName } from '../../shared/roadtrip/vehicle-spec';
+import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import {
   HOUSE_STYLE_PATH,
   houseStyleFrom,
@@ -31,7 +31,7 @@ function rowsOf(style: TripHouseStyle): HouseStyleRow[] {
       ).join(' · '),
     },
     { label: 'Grade', value: looks.length ? looks.join(' + ') : 'None' },
-    { label: 'Car', value: `${carModel(style.car.model).short} · ${colour === 'Custom' ? style.car.color : colour}` },
+    { label: 'Vehicle', value: `${vehicleModel(style.car.model).short} · ${colour === 'Custom' ? style.car.color : colour}` },
   ];
 }
 

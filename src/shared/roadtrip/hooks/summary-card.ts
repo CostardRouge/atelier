@@ -61,7 +61,7 @@ export type CardEntrance = 'count' | 'cut';
 /**
  * When the BADGE is on screen, the card being there at the end: the badge and
  * the card are never on screen together. `auto` is `during` — the counter
- * follows the car, which is the only time there is a card.
+ * follows the vehicle, which is the only time there is a card.
  */
 export type BadgeWhen = 'auto' | 'before' | 'during' | 'end' | 'never';
 
@@ -169,12 +169,12 @@ export function badgeMoment(when: BadgeWhen): BadgeMoment {
   return when === 'auto' ? 'during' : when;
 }
 
-/** Seconds the car waits at the start for a badge shown BEFORE the drive. */
+/** Seconds the vehicle waits at the start for a badge shown BEFORE the drive. */
 export const BADGE_BEFORE_SECONDS = 2.5;
 
 /**
  * The badge's window on a recap that has its card (`HookRender.badgeWindow`):
- * BEFORE the drive while the car waits for it, DURING the drive until the
+ * BEFORE the drive while the vehicle waits for it, DURING the drive until the
  * card comes, at the END in the card's place — from where the map fades —,
  * or NEVER. The badge and the card are never on screen together.
  */

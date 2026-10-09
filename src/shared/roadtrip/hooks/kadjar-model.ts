@@ -32,7 +32,7 @@
  * car's plan; the Trafic and the Zoé are built from the same. Pure and DOM-free.
  */
 
-import { defaultCarSpec, effectiveGear, type CarGear } from '../car-spec';
+import { defaultVehicleSpec, effectiveGear, type VehicleGear } from '../vehicle-spec';
 import { arc, at, box2, greenhouse, level, lifted, makeBody, meet, roadWheel, spokedRim, through, type P2 } from './car-parts';
 import { prism, type Part, type ZPlane } from './mesh3d';
 
@@ -399,7 +399,7 @@ function spoiler(): Part {
 // --- the car --------------------------------------------------------------------
 
 /** Build the Kadjar, with the gear asked for — the two roof bars and the mirrors, by default. */
-export function buildKadjar(gear: CarGear = defaultCarSpec('kadjar-ph2').gear): Part[] {
+export function buildKadjar(gear: VehicleGear = defaultVehicleSpec('kadjar-ph2').gear): Part[] {
   const g = effectiveGear(gear);
   const L = HALF_LENGTH;
   const archFront = { a: AXLE.front - ARCH_HALF, b: AXLE.front + ARCH_HALF };
