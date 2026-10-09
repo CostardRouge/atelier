@@ -14,10 +14,20 @@ import { pickFilesOf } from '../../shared/sources/file-sources';
 import RoadMap from './RoadMap';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
-import InfoDot from '../../shared/ui/InfoDot';
 import Segmented from '../../shared/ui/Segmented';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import { buttonClass } from '../../shared/ui/Button';
 import { dangerLink, smallButton } from './panels/ui';
+
+/** What the road is and how each mode reads it — the Road pane's ⓘ. */
+export const ROAD_ABOUT = (
+  <>
+    <p>The line the openers drive and the kilometres they count. A place stays a place: the road is never named nor drawn as points.</p>
+    <p>Between stays leaves out what happens while you stay somewhere (walks, buses, the commute). Every move keeps it, without the GPS’s noise. Raw keeps every fix.</p>
+    <p>The road is kept whole, raw fixes included, and travels in the trip’s backup. A GPX adds its timed points to it — a car’s log, a day the phone missed — within the trip’s dates.</p>
+    <p>Dashed red on the map: a stretch over 20 km with no fix. With <i>Place road points</i> on, a click puts a point of road on the nearest stretch, at the time that far along it; a click on one of yours takes it back.</p>
+  </>
+);
 
 const MODE_LABEL: Record<RoadMode, string> = {
   crow: 'Crow flies',
@@ -77,6 +87,8 @@ export default function RoadSettingsPanel({
   places = [],
 }: RoadSettingsPanelProps) {
   const [forgetting, setForgetting] = useState(false);
+  // Four modes with their kilometres do not fit a phone's width on one row.
+  const compact = useIsCompact();
   const [placing, setPlacing] = useState(false);
   // What the last GPX or the last click on the map did, said under the map.
   const [note, setNote] = useState<{ text: string; warn: boolean } | null>(null);
@@ -146,20 +158,14 @@ export default function RoadSettingsPanel({
       <span className="font-mono text-2xs text-muted">
         {road.fixes.toLocaleString('en-GB')} fixes from {roadSourceText(road.source)}
         {span ? ` · ${dayOf(span.from)} → ${dayOf(span.to)}` : ''}
-        {road.added.length ? ` · ${road.added.length} placed by hand` : ''}{' '}
-        <InfoDot about="the road">
-          <p>The line the openers drive and the kilometres they count. A place stays a place: the road is never named nor drawn as points.</p>
-          <p>Between stays leaves out what happens while you stay somewhere (walks, buses, the commute). Every move keeps it, without the GPS’s noise. Raw keeps every fix.</p>
-          <p>The road is kept whole, raw fixes included, and travels in the trip’s backup. A GPX adds its timed points to it — a car’s log, a day the phone missed — within the trip’s dates.</p>
-          <p>Dashed red on the map: a stretch over 20 km with no fix. With *Place road points* on, a click puts a point of road on the nearest stretch, at the time that far along it; a click on one of yours takes it back.</p>
-        </InfoDot>
+        {road.added.length ? ` · ${road.added.length} placed by hand` : ''}
       </span>
 
       <div className="flex flex-wrap items-center gap-x-5 gap-y-2">
         <div className="flex-[1_1_26rem] max-w-[40rem]">
           <Segmented
             aria-label="The road follows"
-            columns={4}
+            columns={compact ? 2 : 4}
             value={mode}
             onChange={onMode}
             options={(['crow', 'stages', 'moves', 'raw'] as const).map((m) => ({
@@ -186,7 +192,7 @@ export default function RoadSettingsPanel({
             aria-label="Road detail"
             className="flex-1 min-w-[6rem] accent-[var(--color-accent)]"
           />
-          <span className="font-mono text-ink-soft min-w-[8.5rem] text-right">
+          <span className="font-mono text-ink-soft min-w-[7.5rem] text-right max-[820px]:min-w-0">
             {detailText(detail)}
             {shown ? ` · ${shown.points.toLocaleString('en-GB')} pts` : ''}
           </span>

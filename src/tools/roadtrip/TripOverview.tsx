@@ -537,6 +537,12 @@ export default function TripOverview({
   // The dates-and-route sheet, the creation modal reopened on this trip.
   // The trip's settings sheet and the section it is open on (`TripSettingsModal`).
   const [settings, setSettings] = useState<TripSettingsSection | null>(initialSettings ?? null);
+  // Whether the click named its section (a phone then opens on it, not on the list).
+  const [settingsLand, setSettingsLand] = useState(!!initialSettings);
+  const openSettings = useCallback((section: TripSettingsSection = 'dates', land = false) => {
+    setSettings(section);
+    setSettingsLand(land);
+  }, []);
   const editingDetails = settings !== null;
   useEffect(() => {
     if (initialSettings) onSettingsTaken?.();
@@ -889,7 +895,7 @@ export default function TripOverview({
               label: 'Trip overview',
               onSelect: (id: string) => {
                 if (id === 'legs') setLegsOpen(true);
-                else setSettings('dates');
+                else openSettings();
               },
             }
           : null,
@@ -1009,7 +1015,7 @@ export default function TripOverview({
           ),
         )
       : []),
-    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => setSettings('dates'), !onDeduceFrom || !(deduceSources ?? []).length),
+    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => openSettings(), !onDeduceFrom || !(deduceSources ?? []).length),
   ];
 
   // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
@@ -1104,6 +1110,7 @@ export default function TripOverview({
         <TripSettingsModal
           trip={trip}
           section={settings}
+          land={settingsLand}
           onChangeTrip={changeFromSettings}
           onClose={() => setSettings(null)}
         />
@@ -1362,7 +1369,7 @@ export default function TripOverview({
             />
             {deduceButtons}
             <Button
-              onClick={() => setSettings('dates')}
+              onClick={() => openSettings()}
               icon={Icons.settings}
               title="The trip's dates, route and cover"
             >
@@ -1380,7 +1387,7 @@ export default function TripOverview({
           <TripTitle name={trip.name} onRename={rename} />
           <button
             type="button"
-            onClick={() => setSettings('dates')}
+            onClick={() => openSettings('dates', true)}
             title="Change the trip's dates"
             className="self-start p-0 border-0 bg-transparent text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
           >

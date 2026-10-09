@@ -4,6 +4,7 @@ import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
 import { spanProblem, type TripDoc } from '../../shared/roadtrip/trip-types';
 import { DateField } from '../../shared/ui/DateField';
 import SectionLegend from '../../shared/ui/SectionLegend';
+import { buttonClass } from '../../shared/ui/Button';
 import { inputClass } from './panels/ui';
 
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
@@ -58,7 +59,7 @@ export default function TripDatesSection({ trip, onChange }: { trip: TripDoc; on
           }
         }}
         aria-label="Trip name"
-        className={`${inputClass} max-w-[24rem] text-base`}
+        className={`${inputClass} max-w-[24rem] text-base max-[820px]:max-w-none`}
       />
 
       <SectionLegend label="Dates">
@@ -98,7 +99,7 @@ export default function TripDatesSection({ trip, onChange }: { trip: TripDoc; on
             type="button"
             disabled={!!problem}
             onClick={() => onChange(applyTripDetails(trip, { startDate, endDate }))}
-            className="h-[2.1rem] px-[1.1rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent disabled:opacity-50 disabled:cursor-not-allowed"
+            className={`${buttonClass('primary', 'sm')} disabled:opacity-50 disabled:cursor-not-allowed`}
           >
             Apply the new dates
           </button>

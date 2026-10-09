@@ -831,7 +831,10 @@ pieces*, *Backup and start over* — beside one pane. Every change is written at
 once and ⌘Z takes it back; the dates alone wait for **Apply the new dates**,
 after saying what a shorter span does to the legs (trimmed, dropped) and to the
 pieces (kept, off the calendar). Opened from a piece, *New pieces* offers to
-save that piece's look for the next pieces of its kind or reset it.
+save that piece's look for the next pieces of its kind or reset it. On a
+phone the sheet is a settings screen: the list of sections first, a section
+with a way back and **Done** in its bar — straight on the section when you
+tapped one (the dates, the closing card, a card's cover).
 
 **Working the itinerary out, instead of typing it.** Drawing a three-month
 trip's legs by hand is some three hundred gestures, most of them archaeology

@@ -1,5 +1,10 @@
-import { useEffect, useMemo, useState } from 'react';
+import { useEffect, useMemo, useState, type ReactNode } from 'react';
 import SectionLegend from '../../shared/ui/SectionLegend';
+import InfoDot from '../../shared/ui/InfoDot';
+import IconButton from '../../shared/ui/IconButton';
+import { buttonClass } from '../../shared/ui/Button';
+import { Icons } from '../../shared/ui/icons';
+import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import type { CtaLayout } from '../../shared/roadtrip/cta-slide';
 import {
@@ -29,8 +34,8 @@ import CoverPanel from './CoverPanel';
 import TripDatesSection from './TripDatesSection';
 import TripKeepSection from './TripKeepSection';
 import HouseStylePanel from './HouseStylePanel';
-import PlacesSettingsPanel from './PlacesSettingsPanel';
-import RoadSettingsPanel from './RoadSettingsPanel';
+import PlacesSettingsPanel, { PLACES_ABOUT } from './PlacesSettingsPanel';
+import RoadSettingsPanel, { ROAD_ABOUT } from './RoadSettingsPanel';
 import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE } from '../../shared/roadtrip/road-track';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
@@ -78,6 +83,61 @@ const GROUPS: Array<{ label: string; sections: Array<{ id: TripSettingsSection; 
   },
 ];
 
+/** Each section's name, as the rail and the pane's heading say it. */
+const TITLE = Object.fromEntries(GROUPS.flatMap((g) => g.sections.map((s) => [s.id, s.label]))) as Record<
+  TripSettingsSection,
+  string
+>;
+
+/** The sections drawn across the whole pane — a map, a turning vehicle; the rest keep a reading column. */
+const WIDE: ReadonlySet<TripSettingsSection> = new Set(['road', 'car']);
+
+/** The standing why of each section, folded behind the ⓘ beside its heading. */
+const ABOUT: Partial<Record<TripSettingsSection, ReactNode>> = {
+  cover: (
+    <p>
+      How the trip shows itself in the gallery. Pin up to three pieces; what you leave unpinned fills from the trip&apos;s
+      busiest days.
+    </p>
+  ),
+  places: PLACES_ABOUT,
+  road: ROAD_ABOUT,
+  car: (
+    <>
+      <p>
+        The vehicles this trip drives — the main one on every stage that names no other — and how each changed on the
+        way, dated. A piece shows a vehicle as it was on the piece’s own day. A stage can name another in its card, a
+        place the vehicle it was reached by. They travel in the trip’s backup.
+      </p>
+      <p>Drag the vehicle to turn it. The angle here is only a look: it is never kept, and never becomes a piece’s camera.</p>
+    </>
+  ),
+  words: (
+    <>
+      <p>
+        Every word the badge can say. English is only the default — a deck in another language is these fields, not a
+        second vocabulary in the code.
+      </p>
+      <p>“{'{n}'}” is replaced by the quantity, “{'{date}'}” by the picture’s own day.</p>
+    </>
+  ),
+  cta: (
+    <p>
+      The slide every deck of this trip can close with — one template, never re-authored per piece. Whether a given piece
+      uses it is decided on its own slide rail.
+    </p>
+  ),
+  defaults: (
+    <>
+      <p>
+        The frame, the opener, the placement, the shades, the per-piece styling and what a piece counts — kept per kind
+        for the next piece of this trip. What a piece says about a particular day is never inherited.
+      </p>
+      <p>A look is saved from a piece: its ⚙ shows «This piece» here.</p>
+    </>
+  ),
+};
+
 interface TripSettingsModalProps {
   trip: TripDoc;
   /**
@@ -88,6 +148,13 @@ interface TripSettingsModalProps {
   /** The closing card as laid out for that piece, for its QR problem. */
   cta?: CtaLayout;
   section: TripSettingsSection;
+  /**
+   * The click named THIS section (the dates under the heading, the closing
+   * card on the stage, the gallery card's cover) — so a phone opens on it
+   * too. Absent, a phone opens on the list of sections, the way a settings
+   * screen does, and a wide screen on `section` beside the rail.
+   */
+  land?: boolean;
   ctaFieldRefs?: CtaFieldRefs;
   onChangeTrip: (trip: TripDoc) => void;
   /** Writes the piece's badge — with `post`. */
@@ -128,6 +195,7 @@ export default function TripSettingsModal({
   post,
   cta,
   section,
+  land = false,
   ctaFieldRefs,
   onChangeTrip,
   patchBadge,
@@ -139,14 +207,16 @@ export default function TripSettingsModal({
   const [keepNested, setKeepNested] = useState(false);
   const nested = roadNested || keepNested;
   // Narrow only: the rail and the pane are two screens, and this says which.
-  const [showRail, setShowRail] = useState(false);
+  const compact = useIsCompact();
+  const [showRail, setShowRail] = useState(() => compact && !land);
 
   // A click on the closing card on the stage opens the sheet AT that card,
   // whether or not the sheet was already up.
   useEffect(() => {
     setOpen(section);
-    setShowRail(false);
-  }, [section]);
+    setShowRail(compact && !land);
+    // The width is read when the sheet is asked for, not followed after.
+  }, [section, land]);
 
   // Nothing here is applied on a button — the trip is written on every
   // keystroke — so the sheet's primary action IS closing it: Enter says
@@ -206,38 +276,57 @@ export default function TripSettingsModal({
       aria-label="Trip settings"
     >
       <div className="w-full max-w-[80rem] h-[min(calc(var(--app-h)*0.9),54rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
-        <div className="flex-none flex items-baseline gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line">
-          <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Trip settings</h2>
-          <span className="min-w-0 font-mono text-2xs text-muted truncate">
-            {trip.name} · {facts}
-          </span>
+        {/* Wide: the title, the trip it is about, ×. Narrow, the bar of a
+            drill-down: the list of sections is the first screen, a section
+            the second with its way back, and Done where a phone puts it. */}
+        <div className="flex-none flex items-center gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line max-[820px]:px-3 max-[820px]:pt-[max(0.625rem,env(safe-area-inset-top))] max-[820px]:pb-2.5">
+          {!showRail && (
+            <span className="hidden max-[820px]:inline-flex">
+              <IconButton label="All the trip's settings" onClick={() => setShowRail(true)}>
+                {Icons.back}
+              </IconButton>
+            </span>
+          )}
+          <div className="min-w-0 flex items-baseline gap-3 max-[820px]:flex-col max-[820px]:gap-0">
+            <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl max-[820px]:text-xl">
+              Trip settings
+            </h2>
+            <span className="min-w-0 max-w-full font-mono text-2xs text-muted truncate">
+              {trip.name}
+              <span className="max-[820px]:hidden"> · {facts}</span>
+            </span>
+          </div>
           {pieceLabel && (
             <span className="flex-none font-mono text-2xs px-2 py-0.5 rounded-full bg-accent-wash text-accent-ink max-[820px]:hidden">
               from {pieceLabel}
             </span>
           )}
           <span className="flex-1" />
-          <button
-            type="button"
-            onClick={onClose}
-            aria-label="Close the trip settings"
-            className="flex-none w-7 h-7 grid place-items-center rounded-full border border-line text-base leading-none text-muted cursor-pointer hover:border-accent hover:text-accent-ink"
-          >
-            ×
-          </button>
+          <span className="max-[820px]:hidden">
+            <IconButton label="Close the trip settings" size="sm" variant="ghost" onClick={onClose}>
+              {Icons.close}
+            </IconButton>
+          </span>
+          {/* The recipe is inline-flex, so the width rule rides a wrapper. */}
+          <span className="hidden max-[820px]:inline-flex">
+            <button type="button" onClick={onClose} className={buttonClass('primary', 'sm')}>
+              Done
+            </button>
+          </span>
         </div>
 
         <div className="flex-1 min-h-0 flex">
           {/* The rail. Wide it is always there; narrow it IS the first screen,
               and picking a section replaces it — a drill-down, never a stack. */}
-          <div
-            className={`flex-none w-[13rem] flex flex-col gap-[3px] px-3 py-4 border-r border-line overflow-y-auto max-[820px]:w-full max-[820px]:border-r-0 ${
+          <nav
+            aria-label="Trip settings sections"
+            className={`flex-none w-[13rem] flex flex-col gap-[3px] px-3 py-4 border-r border-line overflow-y-auto max-[820px]:w-full max-[820px]:border-r-0 max-[820px]:px-0 max-[820px]:py-2 ${
               showRail ? 'max-[820px]:flex' : 'max-[820px]:hidden'
             }`}
           >
             {GROUPS.map((g) => (
-              <div key={g.label} className="flex flex-col gap-[3px] pb-2.5">
-                <span className="font-mono text-3xs tracking-[0.14em] uppercase text-muted px-3 pt-1 pb-1.5">
+              <div key={g.label} className="flex flex-col gap-[3px] pb-2.5 max-[820px]:gap-0 max-[820px]:pb-4">
+                <span className="font-mono text-3xs tracking-[0.14em] uppercase text-muted px-3 pt-1 pb-1.5 max-[820px]:px-5">
                   {g.label}
                 </span>
                 {g.sections.map((s) => (
@@ -249,46 +338,41 @@ export default function TripSettingsModal({
                       setShowRail(false);
                     }}
                     aria-current={s.id === open}
-                    className={`text-left px-3 py-2 rounded-paper text-sm cursor-pointer transition-colors max-[820px]:text-base max-[820px]:py-2.5 ${
-                      s.id === open
-                        ? 'bg-accent-wash text-accent-ink font-semibold'
-                        : 'text-ink-soft hover:bg-paper-2'
+                    className={`flex items-center gap-2 text-left px-3 py-2 rounded-paper text-sm cursor-pointer transition-colors max-[820px]:rounded-none max-[820px]:px-5 max-[820px]:py-3.5 max-[820px]:text-base max-[820px]:border-b max-[820px]:border-line max-[820px]:bg-transparent max-[820px]:text-ink max-[820px]:font-normal ${
+                      s.id === open ? 'bg-accent-wash text-accent-ink font-semibold' : 'text-ink-soft hover:bg-paper-2'
                     }`}
                   >
-                    {s.label}
+                    <span className="flex-1">{s.label}</span>
+                    <span className="hidden max-[820px]:inline-flex text-muted" aria-hidden>
+                      {Icons.chevronRight}
+                    </span>
                   </button>
                 ))}
               </div>
             ))}
-          </div>
+          </nav>
 
           <div
-            className={`flex-1 min-w-0 flex flex-col gap-4 px-6 py-5 overflow-y-auto overscroll-contain ${
+            className={`flex-1 min-w-0 flex flex-col gap-4 px-8 pt-6 pb-8 overflow-y-auto overscroll-contain max-[820px]:px-4 max-[820px]:pt-4 max-[820px]:pb-[max(2rem,env(safe-area-inset-bottom))] ${
               showRail ? 'max-[820px]:hidden' : 'max-[820px]:flex'
             }`}
           >
-            <button
-              type="button"
-              onClick={() => setShowRail(true)}
-              className="hidden max-[820px]:inline-flex self-start items-center h-[2rem] px-3 rounded-full border border-line-strong bg-paper text-sm font-semibold text-ink-soft cursor-pointer"
-            >
-              ‹ All settings
-            </button>
+            {/* One heading for every section, its why behind the ⓘ. */}
+            <div className="flex-none flex flex-wrap items-center gap-x-2">
+              <h3 className="m-0 font-serif text-xl font-normal max-[820px]:text-2xl">{TITLE[open]}</h3>
+              {ABOUT[open] && <InfoDot about={TITLE[open].toLowerCase()}>{ABOUT[open]}</InfoDot>}
+            </div>
 
+            <div className={WIDE.has(open) ? 'flex-1 min-h-0 flex flex-col gap-4' : 'w-full max-w-[44rem] flex flex-col gap-4'}>
             {open === 'dates' && <TripDatesSection trip={trip} onChange={onChangeTrip} />}
 
             {open === 'cover' && (
               <>
-                <SectionLegend label="Cover">
-                  <p>How the trip shows itself in the gallery. Pin up to three pieces; what you leave unpinned fills from the trip&apos;s busiest days.</p>
-                </SectionLegend>
-                <div className="max-w-[44rem]">
-                  <CoverPanel
-                    trip={trip}
-                    value={trip.cover}
-                    onChange={(cover) => onChangeTrip({ ...trip, cover: prunePins(trip, cover) })}
-                  />
-                </div>
+                <CoverPanel
+                  trip={trip}
+                  value={trip.cover}
+                  onChange={(cover) => onChangeTrip({ ...trip, cover: prunePins(trip, cover) })}
+                />
               </>
             )}
 
@@ -296,33 +380,19 @@ export default function TripSettingsModal({
 
             {open === 'words' && (
               <>
-                <SectionLegend label="Badge words">
-                  <p>
-                    Every word the badge can say. English is only the default — a deck
-                    in another language is these fields, not a second vocabulary in the
-                    code.
-                  </p>
-                  <p>
-                    “{'{n}'}” is replaced by the quantity, “{'{date}'}” by the picture’s
-                    own day.
-                  </p>
-                </SectionLegend>
-                <div className="flex gap-2 max-w-[18rem]">
+                <div className="flex flex-wrap items-center gap-2">
+                  <span className="text-xs text-muted">Fill every word in</span>
                   <button
                     type="button"
-                    onClick={() =>
-                      onChangeTrip({ ...trip, badgeWords: { ...DEFAULT_BADGE_WORDS } })
-                    }
-                    className={`flex-1 ${smallButton} font-normal`}
+                    onClick={() => onChangeTrip({ ...trip, badgeWords: { ...DEFAULT_BADGE_WORDS } })}
+                    className={buttonClass('default', 'sm')}
                   >
                     English
                   </button>
                   <button
                     type="button"
-                    onClick={() =>
-                      onChangeTrip({ ...trip, badgeWords: { ...FRENCH_BADGE_WORDS } })
-                    }
-                    className={`flex-1 ${smallButton} font-normal`}
+                    onClick={() => onChangeTrip({ ...trip, badgeWords: { ...FRENCH_BADGE_WORDS } })}
+                    className={buttonClass('default', 'sm')}
                   >
                     Français
                   </button>
@@ -341,9 +411,7 @@ export default function TripSettingsModal({
                     </label>
                   ))}
                 </div>
-                <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
-                  Time
-                </span>
+                <SectionLegend label="Time" />
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 max-[820px]:grid-cols-1">
                   {TIME_AGO_WORD_FIELDS.map((f) => (
                     <label key={f.key} className="flex items-center gap-2.5">
@@ -358,9 +426,7 @@ export default function TripSettingsModal({
                     </label>
                   ))}
                 </div>
-                <span className="font-mono text-2xs tracking-[0.14em] uppercase text-muted">
-                  Camera credit
-                </span>
+                <SectionLegend label="Camera credit" />
                 <div className="grid grid-cols-2 gap-x-6 gap-y-2.5 max-[820px]:grid-cols-1">
                   <label className="flex items-center gap-2.5">
                     <span className="w-[6.5rem] flex-none text-xs text-muted">Shot on</span>
@@ -403,36 +469,19 @@ export default function TripSettingsModal({
 
             {open === 'cta' && (
               <>
-                <SectionLegend label="Closing card">
-                  <p>
-                    The slide every deck of this trip can close with — one template,
-                    never re-authored per piece. Whether a given piece uses it is
-                    decided on its own slide rail.
-                  </p>
-                </SectionLegend>
-                <div className="max-w-[28rem]">
-                  <CtaPanel
-                    cta={trip.cta}
-                    onChange={(next) => onChangeTrip({ ...trip, cta: next })}
-                    problem={cta?.qrProblem ?? null}
-                    fieldRefs={ctaFieldRefs}
-                  />
-                </div>
+                <CtaPanel
+                  cta={trip.cta}
+                  onChange={(next) => onChangeTrip({ ...trip, cta: next })}
+                  problem={cta?.qrProblem ?? null}
+                  fieldRefs={ctaFieldRefs}
+                />
               </>
             )}
 
             {open === 'defaults' && (
               <>
-                <SectionLegend label="New pieces">
-                  <p>
-                    The frame, the opener, the placement, the shades, the per-piece styling
-                    and what a piece counts — kept per kind for the next piece of this trip.
-                    What a piece says about a particular day is never inherited.
-                  </p>
-                  <p>A look is saved from a piece: its ⚙ shows «This piece» here.</p>
-                </SectionLegend>
                 {post && patchBadge && (
-                  <div className="flex flex-col gap-2.5 max-w-[40rem] px-4 py-3.5 border border-accent rounded-paper bg-accent-wash">
+                  <div className="flex flex-col gap-2.5 px-4 py-3.5 border border-accent rounded-paper bg-accent-wash">
                     <span className="font-mono text-2xs tracking-[0.14em] uppercase text-accent-ink">This piece · {pieceLabel}</span>
                     <div className="flex flex-wrap gap-1.5">
                       <button
@@ -468,7 +517,7 @@ export default function TripSettingsModal({
                     </div>
                   </div>
                 )}
-                <div className="max-w-[40rem] border border-line rounded-paper overflow-hidden">
+                <div className="border border-line rounded-paper overflow-hidden">
                   {POST_KINDS.map((k, i) => {
                     const saved = trip.hookDefaults[k.id];
                     return (
@@ -497,19 +546,6 @@ export default function TripSettingsModal({
 
             {open === 'car' && (
               <>
-                <SectionLegend label="Vehicle">
-                  <p>
-                    The vehicles this trip drives — the main one on every stage that names
-                    no other — and how each changed on the way, dated. A piece shows a
-                    vehicle as it was on the piece’s own day. A stage can name another in
-                    its card, a place the vehicle it was reached by. They travel in the
-                    trip’s backup.
-                  </p>
-                  <p>
-                    Drag the vehicle to turn it. The angle here is only a look: it is never
-                    kept, and never becomes a piece’s camera.
-                  </p>
-                </SectionLegend>
                 <CrossingsPanel
                   value={trip.crossings}
                   onChange={(crossings) => onChangeTrip({ ...trip, crossings })}
@@ -528,17 +564,14 @@ export default function TripSettingsModal({
             )}
 
             {import.meta.env.DEV && open === 'house' && <HouseStylePanel trip={trip} />}
+            </div>
           </div>
         </div>
 
-        <div className="flex-none flex items-center gap-4 px-6 py-3.5 border-t border-line bg-surface max-[820px]:pb-[max(0.875rem,env(safe-area-inset-bottom))]">
+        <div className="flex-none flex items-center gap-4 px-6 py-3.5 border-t border-line bg-surface max-[820px]:hidden">
           <span className="text-2xs text-muted">Every change is written at once · ⌘Z takes it back</span>
           <span className="flex-1" />
-          <button
-            type="button"
-            onClick={onClose}
-            className="h-[2.1rem] px-[1.1rem] inline-flex items-center border border-ink rounded-full bg-ink text-paper cursor-pointer text-sm font-semibold hover:bg-accent hover:border-accent"
-          >
+          <button type="button" onClick={onClose} className={buttonClass('primary')}>
             Done
           </button>
         </div>

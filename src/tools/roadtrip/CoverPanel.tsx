@@ -106,7 +106,7 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
     <div className="flex flex-col gap-4">
       <div className="flex flex-col gap-2">
         <p className={legend}>Layout</p>
-        <div className="grid grid-cols-[repeat(auto-fit,minmax(104px,1fr))] gap-2.5">
+        <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
           {LAYOUTS.map((option) => (
             <button
               key={option.id}
