@@ -1351,7 +1351,7 @@ piece dresses the state in effect on that day.
 When a piece's **Vehicle** row keeps the trip's own (its default), Virée
 **changes vehicle along the road**. A stage can name another vehicle of the
 fleet, or a model borrowed for the day (the select beside its place style, in
-the stage's card); a place can say how it was reached (its **Reached by**: a
+the stage's card, with its paint beside it for a borrowed model); a place can say how it was reached (its **Reached by**: a
 boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
 **water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
 new trip, off for one made before it) a hop that crosses the sea sails, from
