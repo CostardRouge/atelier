@@ -401,6 +401,38 @@ export async function deleteRollPreviews(pictureIds: readonly string[]): Promise
 }
 
 
+// --- what a clone takes along ------------------------------------------------
+
+/**
+ * Give a cloned roll the device-side data its original has: thumbnails (with
+ * their aspect), working previews and remembered folders, under the clone's own
+ * picture ids and roll id (`develop/clone-roll.ts`, which says what is left
+ * behind on purpose). Each part is a cache or a convenience, so a part that
+ * fails costs the clone a cell its picture, never the roll.
+ */
+export async function copyRollSidecars(
+  fromRollId: string,
+  toRollId: string,
+  pictureIds: ReadonlyMap<string, string>,
+): Promise<void> {
+  const [thumbs, previews, folders] = await Promise.all([
+    getRollThumbEntries([...pictureIds.keys()]),
+    getRollPreviews(fromRollId),
+    getRollFolders(fromRollId),
+  ]);
+  const writes: Promise<unknown>[] = [];
+  for (const [from, entry] of thumbs) {
+    const to = pictureIds.get(from);
+    if (to) writes.push(putRollThumb(to, entry.blob, Date.now(), entry.aspect));
+  }
+  for (const [from, blob] of previews) {
+    const to = pictureIds.get(from);
+    if (to) writes.push(putRollPreview(to, toRollId, blob));
+  }
+  if (folders.length > 0) writes.push(putRollFolders(toRollId, folders));
+  await Promise.all(writes);
+}
+
 // --- export marks (v4) ------------------------------------------------------
 
 /** When each picture of a roll last left (`export-marks.ts`); `{}` when none did or storage is unusable. */

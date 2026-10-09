@@ -2506,8 +2506,14 @@ pressing **Develop** while one is on screen opens the roll on that file.
 Studio and Trips, over the whole roll — and one kept on a Winnow saves there
 after a few seconds of quiet, with the same status pill as a trip; the gallery
 moves, deletes and exports it (`.roll.json`, a backup — importing always makes a
-new roll). Thumbnails are baked here from the Library's files and never leave
-the browser.
+new roll). **Clone…** in a roll's ⋯ menu makes a copy of the whole roll — every
+picture with its develop, crop, look and delivery — kept here or on a connected
+instance: the sheet proposes the first free name in the chosen place (`Désert` →
+`Désert (2)`, no suffix where the name is free), you can type another, and a
+status line then offers Open and Undo. The clone points at the same files and
+takes its own copy of the thumbnails, working previews and remembered folders.
+Thumbnails are baked here from the Library's files and never leave the
+browser.
 
 **Working previews.** A roll with pictures from your own disk can keep a
 **working preview** of each — a 2048 px copy, stored in this browser only —

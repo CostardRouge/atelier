@@ -18,6 +18,7 @@ import {
   type RemoteRollRow,
 } from '../../shared/develop/roll-remote';
 import {
+  copyRollSidecars,
   deleteRoll,
   deleteRollFolders,
   deleteRollPreviews,
@@ -30,6 +31,7 @@ import {
   putRoll,
 } from '../../shared/develop/roll-store';
 import { addPictures, createRollDoc, rollProgress, type RollDoc } from '../../shared/develop/roll-types';
+import { cloneRoll } from '../../shared/develop/clone-roll';
 import { rollFileOf } from './RollEditor';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
 import { downloadBlob } from '../../shared/media/save';
@@ -42,6 +44,8 @@ import { sourceLabel } from '../../shared/sources/document-gallery';
 import AbsentSourceNotes from '../../shared/sources/AbsentSourceNotes';
 import { useDocumentGallery } from '../../shared/sources/use-document-gallery';
 import Button from '../../shared/ui/Button';
+import CloneDocumentModal, { type CloneChoice } from '../../shared/ui/CloneDocumentModal';
+import ClonedNotice from '../../shared/ui/ClonedNotice';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import EmptyState from '../../shared/ui/EmptyState';
 import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
@@ -50,6 +54,7 @@ import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import { Icons } from '../../shared/ui/icons';
 import { pageScroll } from '../../shared/ui/page-scroll';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
+import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import NewRollModal, { defaultRollName, type NewRollChoices } from './NewRollModal';
 
@@ -110,21 +115,26 @@ function CoverCell({ blob, span }: { blob: Blob; span: boolean }) {
 function RollCard({
   roll,
   isOpen,
+  fresh = false,
   remoteOnly,
   moveTargets,
   busy,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
 }: {
   roll: RollDoc;
   isOpen: boolean;
+  /** Just cloned: drawn with the accent until the gallery lets it go. */
+  fresh?: boolean;
   remoteOnly: boolean;
   moveTargets: readonly SourceInfo[];
   busy: string | null;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
 }) {
@@ -137,6 +147,15 @@ function RollCard({
   // is behind the ⋯, the destructive verb apart.
   const items: OverflowItem[] = [
     { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
+    {
+      id: 'clone',
+      label: 'Clone…',
+      title: remoteOnly
+        ? 'Open it here first — a clone is made from the copy this device holds'
+        : 'Make a copy of this roll, here or on another source',
+      disabled: remoteOnly,
+      onSelect: onClone,
+    },
     ...(!remoteOnly
       ? [
           {
@@ -160,6 +179,7 @@ function RollCard({
       role="button"
       tabIndex={0}
       aria-label={`Open ${roll.name}`}
+      data-doc-id={roll.id}
       aria-disabled={busy !== null}
       onClick={(e) => {
         if (busy !== null) return;
@@ -173,7 +193,7 @@ function RollCard({
         }
       }}
       className={`group relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft cursor-pointer transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
-        isOpen ? 'border-accent' : 'border-line hover:border-line-strong'
+        isOpen || fresh ? 'border-accent' : 'border-line hover:border-line-strong'
       } ${remoteOnly ? 'opacity-75' : ''} ${busy !== null ? 'cursor-default' : ''}`}
     >
       <div className="block w-full bg-frame leading-[0] rounded-t-paper-lg overflow-hidden">
@@ -189,9 +209,9 @@ function RollCard({
           >
             {roll.name}
           </h3>
-          {isOpen && (
+          {(isOpen || fresh) && (
             <span className="flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] bg-accent-wash text-accent-ink">
-              open
+              {isOpen ? 'open' : 'new'}
             </span>
           )}
           {busy === null && <OverflowMenu label={`More actions for ${roll.name}`} items={items} className="-mr-1.5" />}
@@ -271,6 +291,9 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
   const lib = useAssetLibrary();
   const [creating, setCreating] = useState(false);
   const [importing, setImporting] = useState(false);
+  // The roll whose Clone sheet is open (the one just made is held by
+  // `useFreshClone`: accent on its card, a status line, scrolled into view).
+  const [cloning, setCloning] = useState<RollDoc | null>(null);
   const gallery = useDocumentGallery<RollDoc, RemoteRollRow>({
     kind: ROLL_DOC_KIND,
     noun: 'roll',
@@ -305,6 +328,16 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
     setNotice,
     createOn,
   } = gallery;
+  const { cloned, setCloned, freshId } = useFreshClone(rolls);
+
+  /** The names a source already holds — mirrored here or listed only there. */
+  const namesIn = useCallback(
+    (sourceId: string): string[] => {
+      const group = groups.find((g) => g.id === sourceId);
+      return group ? [...group.items, ...group.remoteOnly.map((r) => r.doc)].map((r) => r.name) : [];
+    },
+    [groups],
+  );
 
   // The photographs AND the clips ticked in the Library: a roll takes both (2026-09-30).
   const selectedPhotos = useMemo(
@@ -406,6 +439,23 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
   }
   handleImportRef.current = handleImport;
 
+  /**
+   * A clone is written like a creation — where the roll is KEPT first,
+   * mirrored here after — so a refusal from the instance leaves nothing behind
+   * and says so. Its thumbnails, working previews and remembered folders are
+   * copied under the new ids once the roll exists (`clone-roll.ts`).
+   */
+  async function handleClone(source: RollDoc, choice: CloneChoice) {
+    setNotice(null);
+    const { doc, pictureIds } = cloneRoll(source, { name: choice.name, sourceId: choice.sourceId });
+    const ok = await createOn(doc, 'cloned');
+    setCloning(null);
+    if (!ok) return;
+    await copyRollSidecars(source.id, doc.id, pictureIds);
+    setCloned(doc);
+    refresh();
+  }
+
   function handleExport(roll: RollDoc) {
     downloadBlob(new Blob([serializeRollFile(toRollFile(roll))], { type: 'application/json' }), rollFileName(roll.name));
   }
@@ -433,6 +483,24 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
         <p className="m-0 text-xs text-danger" role="alert">
           {notice}
         </p>
+      )}
+
+      {/* Pinned to the top of the scroller: the clone may be a screen below. */}
+      {cloned && (
+        <ClonedNotice
+          name={cloned.name}
+          sourceId={cloned.sourceId}
+          onOpen={() => {
+            const doc = cloned;
+            setCloned(null);
+            onOpen(doc);
+          }}
+          onUndo={() => {
+            const doc = cloned;
+            setCloned(null);
+            void gallery.remove(doc, null);
+          }}
+        />
       )}
 
       <AbsentSourceNotes absent={absent} />
@@ -505,11 +573,13 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
                         key={roll.id}
                         roll={roll}
                         isOpen={roll.id === openRollId}
+                        fresh={roll.id === freshId}
                         remoteOnly={false}
                         moveTargets={moveTargets}
                         busy={busy[roll.id] ?? null}
                         onOpen={() => onOpen(roll)}
                         onExport={() => handleExport(roll)}
+                        onClone={() => setCloning(roll)}
                         onDelete={() => void gallery.remove(roll, null)}
                         onMove={(target) => void gallery.moveTo(roll, target)}
                       />
@@ -530,6 +600,7 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
                         busy={busy[row.doc.id] ?? null}
                         onOpen={() => void gallery.mirrorRemote(row).then(onOpen)}
                         onExport={() => undefined}
+                        onClone={() => setCloning(row.doc)}
                         onDelete={() => void gallery.remove(row.doc, row.etag)}
                         onMove={() => undefined}
                       />
@@ -552,6 +623,27 @@ export default function RollGallery({ openRollId, onOpen }: RollGalleryProps) {
             setImporting(false);
             void handleImport(target);
           }}
+        />
+      )}
+
+      {cloning && (
+        <CloneDocumentModal
+          noun="roll"
+          original={cloning.name}
+          originalSourceId={cloning.sourceId}
+          sources={documentSources}
+          namesIn={namesIn}
+          note={
+            <>
+              <p>
+                Every picture comes along with its develop, crop, look, words and delivery, and the
+                roll’s export settings.
+              </p>
+              <p>The files stay where they are — the clone points at the same pictures.</p>
+            </>
+          }
+          onCancel={() => setCloning(null)}
+          onConfirm={(choice) => handleClone(cloning, choice)}
         />
       )}
 
