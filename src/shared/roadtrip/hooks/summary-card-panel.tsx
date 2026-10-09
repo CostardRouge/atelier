@@ -48,7 +48,7 @@ const FACE_HINTS: Record<CardOptions['cardFace'], string> = {
   ticket: 'A boarding pass; its barcode is the trip’s days.',
   passport: 'A stamp for each state the road crossed.',
   sheet: 'The road’s pictures as a contact sheet, the road beside them.',
-  stamp: 'The facts in the map’s box, the map still under it.',
+  stamp: 'The facts in the map’s box, in the card’s look, the map still under it.',
   dash: 'The odometer and a gauge of the trip’s days.',
 };
 
@@ -91,7 +91,22 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
       />
       <p className="m-0 -mt-1 text-xs text-muted">{FACE_HINTS[face]}</p>
       <LookPicker value={o.cardLook} onChange={(cardLook) => set({ cardLook })} trip={ctx.theme} />
-      {!stamp && (
+      {stamp ? (
+        <FieldRow label="Ground" hint="The look’s own solid, or the map’s paper — where the words take the map’s ink.">
+          <Segmented
+            size="sm"
+            fill
+            label="What is under the card"
+            // The stamp sits on the map: a stored Photo is the look's solid.
+            value={o.cardGround === 'paper' ? 'paper' : 'solid'}
+            onChange={(cardGround) => set({ cardGround })}
+            options={[
+              { id: 'solid', label: 'Solid' },
+              { id: 'paper', label: 'Paper' },
+            ]}
+          />
+        </FieldRow>
+      ) : (
         <FieldRow
           label="Ground"
           hint={

@@ -2,8 +2,9 @@
  * Painting the recap's SUMMARY CARD (`summary-card.ts`): five faces that
  * cover the frame — the trace, the ticket, the passport, the contact sheet
  * and the dashboard — on the trip's last picture veiled, the look's own solid
- * or the map's paper. (The sixth, the stamp in the map's box, is the drive's
- * own `paintSummary`.)
+ * or the map's paper. The sixth, the stamp, is a box of facts in the map's
+ * box over the map still drawn: Virée places it (`paintSummary`), this module
+ * inks it (`paintStampBox`), in the card's look like every other face.
  *
  * Every word goes through the overlay engine in the card's look
  * (`look-text.ts`); the shapes are inked with the look's colour. Sizes are in
@@ -67,10 +68,13 @@ export function paintCard(
   const { alpha, count } = cardProgress(scene.card.cardEntrance, since);
   if (alpha <= 0) return;
   const pen: Pen = { g, s: scene, w, h, u: Math.min(w, h) / 1080, alpha, count, t, texts: [] };
-  g.save();
-  g.globalAlpha = alpha;
-  paintGround(pen, pictures);
-  g.restore();
+  // The stamp stands on the map, not on a ground of its own.
+  if (scene.face !== 'stamp') {
+    g.save();
+    g.globalAlpha = alpha;
+    paintGround(pen, pictures);
+    g.restore();
+  }
   if (scene.face === 'stamp') paintStamp(pen);
   else if (scene.face === 'trace') paintTrace(pen);
   else if (scene.face === 'ticket') paintTicket(pen);
@@ -323,31 +327,88 @@ function paintTrace(pen: Pen): void {
 // --- the STAMP ----------------------------------------------------------------------
 
 /**
- * The stamp as a picture of itself — the road under a box of facts. Virée
- * draws the real one in its map's box (`paintSummary`); this is what the
- * face picker shows of it.
+ * The stamp as a picture of itself — the map's paper, the road, the box of
+ * facts. Virée draws the real one in its map's box (`paintSummary`), through
+ * the same {@link paintStampBox}; this is what the face picker shows of it.
  */
 function paintStamp(pen: Pen): void {
   const { g, s, w, h, u } = pen;
-  const at = fitRoad(s.plan, { x: w * 0.12, y: h * 0.12, w: w * 0.76, h: h * 0.76 });
-  g.save();
-  g.globalAlpha = 0.55;
-  drawRoad({ ...pen, alpha: pen.alpha * 0.55 }, s.plan, at, 1, 5 * u, true);
-  g.restore();
-  const bw = Math.min(w * 0.86, 640 * u);
-  const bh = 190 * u;
-  const box: Box = { x: (w - bw) / 2, y: (h - bh) / 2, w: bw, h: bh };
   g.save();
   g.globalAlpha = pen.alpha;
+  g.fillStyle = s.map.paper;
+  g.fillRect(0, 0, w, h);
+  g.restore();
+  const at = fitRoad(s.plan, { x: w * 0.12, y: h * 0.12, w: w * 0.76, h: h * 0.76 });
+  drawRoad({ ...pen, alpha: pen.alpha * 0.55 }, s.plan, at, 1, 5 * u, true);
+  const bw = Math.min(w * 0.86, 640 * u);
+  const bh = 190 * u;
+  stampBox(pen, { x: (w - bw) / 2, y: (h - bh) / 2, w: bw, h: bh }, 64, 22);
+}
+
+/**
+ * The stamp's box at `box`, in the card's LOOK — its ground (the look's
+ * solid, or the map's paper when the author picks Paper), its texture, its
+ * frame and its facts, the words set in the look. It used to be inked in the
+ * map's paper and ink whatever the look, so a new look changed its font
+ * alone (his report, 2026-10-09). `u` is the caller's unit: Virée's map
+ * box has its own.
+ */
+export function paintStampBox(
+  g: HookCtx2D,
+  scene: CardScene,
+  box: Box,
+  u: number,
+  alpha: number,
+  count: number,
+  frame: FrameBox,
+  t: number,
+): void {
+  const pen: Pen = { g, s: scene, w: frame.width, h: frame.height, u, alpha, count, t, texts: [] };
+  stampBox(pen, box, 54, 20);
+  drawLookTexts(g, pen.texts, frame.width, frame.height, scene.theme, t);
+}
+
+function stampBox(pen: Pen, box: Box, valuePx: number, wordPx: number): void {
+  const { g, s, u } = pen;
+  const r = 14 * u;
+  g.save();
+  g.globalAlpha = pen.alpha;
+  // Lifted off the map: a soft shadow in stacked fills (no blur in these painters).
+  for (const [dy, a] of [[6, 0.08], [3, 0.1]] as const) {
+    g.beginPath();
+    roundRectOn(g, box.x, box.y + dy * u, box.w, box.h, r);
+    g.fillStyle = hexToRgba('#000000', a);
+    g.fill();
+  }
+  // The ground OPAQUE — the map's names must never read through it.
   g.beginPath();
-  roundRectOn(g, box.x, box.y, box.w, box.h, 16 * u);
+  roundRectOn(g, box.x, box.y, box.w, box.h, r);
   g.fillStyle = s.ink.ground;
   g.fill();
+  if (s.ink.texture !== 'none') {
+    g.save();
+    g.clip();
+    if (s.ink.texture === 'grain') {
+      g.fillStyle = 'rgba(255,236,200,0.06)';
+      let seed = 7;
+      const rnd = () => ((seed = (seed * 16807) % 2147483647) / 2147483647);
+      const n = Math.round((box.w * box.h) / (900 * u * u));
+      for (let i = 0; i < n; i++) g.fillRect(box.x + rnd() * box.w, box.y + rnd() * box.h, 1.6 * u, 1.6 * u);
+    } else {
+      g.fillStyle = hexToRgba(s.ink.accent, 0.07);
+      for (let y = box.y; y < box.y + box.h; y += 4 * u) g.fillRect(box.x, y, box.w, 1.4 * u);
+    }
+    g.restore();
+  }
+  // Its frame, in the look's colour (the map's ink on paper).
+  g.beginPath();
+  roundRectOn(g, box.x, box.y, box.w, box.h, r);
   g.lineWidth = 2 * u;
-  g.strokeStyle = hexToRgba(s.ink.rule, 0.3);
+  g.strokeStyle = hexToRgba(s.ink.rule, s.card.cardGround === 'paper' ? 0.3 : 0.6);
   g.stroke();
   g.restore();
-  factsRow(pen, { x: box.x, y: box.y + 30 * u, w: box.w, h: bh - 40 * u }, 64, 22);
+  const rowH = (valuePx + 16 + wordPx) * u;
+  factsRow(pen, { x: box.x, y: box.y + (box.h - rowH) / 2, w: box.w, h: rowH }, valuePx, wordPx);
 }
 
 // --- the TICKET ----------------------------------------------------------------------

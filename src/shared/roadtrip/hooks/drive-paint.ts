@@ -65,7 +65,7 @@ import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
 import { drawLookTexts, type LookText } from './look-text';
 import { cellAt, type CardScene } from './summary-card';
-import { cardCovers, cardProgress, paintCard as paintSummaryCard } from './summary-paint';
+import { cardCovers, cardProgress, paintCard as paintSummaryCard, paintStampBox } from './summary-paint';
 import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
 import { paintGroundShadow, paintMesh, paintWake, project, renderOrder, toWorld, type Part, type Pose } from './mesh3d';
 import { RIDER_SCALE, boardingAt, crossingAt, dockReach, riderBlend, riderTrack, type RiderTrack } from './boarding';
@@ -946,9 +946,10 @@ function paintMilestones(
 
 /**
  * The summary: days · distance · stops, in the map's box — the three
- * numbers of the trip the counter has been counting up to. On the map's
- * paper, so its words wear the trip's LOOK in its face and case and take the
- * map's ink (gold or red on cream reads badly) — the summary card's rule.
+ * numbers of the trip the counter has been counting up to. With a card (the
+ * recap's Stamp face) the box wears the card's LOOK — its solid, its frame,
+ * its words — or the map's paper when the author picks Paper
+ * (`paintStampBox`); without one, the map's paper and ink, as it always did.
  */
 function paintSummary(
   g: HookCtx2D,
@@ -985,6 +986,11 @@ function paintSummary(
   const ch = 150 * u;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2 + (1 - k) * 18 * u;
+  if (scene) {
+    const { count } = cardProgress(scene.card.cardEntrance, t - (plan.schedule.summaryAt ?? t));
+    paintStampBox(g, scene, { x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch }, u, k, count, frame, t);
+    return;
+  }
   g.save();
   g.globalAlpha = k;
   // A card lifted off the map: a soft shadow in stacked fills (no blur in

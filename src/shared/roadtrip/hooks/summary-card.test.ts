@@ -278,8 +278,19 @@ describe('the card on a slide of its own', () => {
 
   it('puts the slide’s own picture under a photo ground, veiled', () => {
     const { plan } = recap();
-    const scene = cardScene({ plan, o: { ...quiet(), cardGround: 'photo' }, theme: null, tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '', below: true });
+    const scene = cardScene({ plan, o: { ...quiet(), cardFace: 'trace', cardGround: 'photo' }, theme: null, tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '', below: true });
     expect(scene.card.cardGround).toBe('photo');
-    expect(cardScene({ plan, o: { ...quiet(), cardGround: 'photo' }, theme: null, tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '' }).card.cardGround).toBe('solid');
+    expect(cardScene({ plan, o: { ...quiet(), cardFace: 'trace', cardGround: 'photo' }, theme: null, tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '' }).card.cardGround).toBe('solid');
+  });
+
+  it('inks the stamp in the look — its solid, or the map’s paper when asked — over the map', () => {
+    const { plan, o } = recap();
+    const base = { plan, theme: themeFromPreset('plein-cadre'), tripName: 'X', words: WORDS, calendar: CAL, towns: null, vehicle: '' };
+    const solid = cardScene({ ...base, o: { ...o, cardFace: 'stamp', cardGround: 'photo' } });
+    expect(solid.card.cardGround).toBe('solid');
+    expect(solid.ink.ground).toBe(themeFromPreset('plein-cadre')!.style.color);
+    const paper = cardScene({ ...base, o: { ...o, cardFace: 'stamp', cardGround: 'paper' } });
+    expect(paper.ink.ground).toBe(o.paperColor);
+    expect(paper.map).toEqual({ paper: o.paperColor, ink: o.inkColor });
   });
 });

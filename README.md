@@ -1001,8 +1001,8 @@ default), the **Ticket** (a boarding pass whose barcode is the trip's days,
 long where a leg starts, darker where a picture was shot), the **Passport**
 (a round stamp for each state crossed and, where a place does not say its state and
 the shipped town index cannot tell it, a rectangular one for the place itself — in the road's order), the **Contact sheet** (the road's pictures
-and the road), the **Stamp** (days · distance · stops in the map's box — what
-a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
+and the road), the **Stamp** (days · distance · stops in a box over the map,
+on the look's own solid or the map's paper — what a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
 the trip's days) — each picked from a small picture of itself, drawn over
 the piece's own road. It wears the **trip's look** — the badge's face, case,
 colour and glow — or another look for the card alone; it stands on the trip's

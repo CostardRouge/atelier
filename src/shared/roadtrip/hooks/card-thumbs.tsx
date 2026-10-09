@@ -55,8 +55,8 @@ function FaceThumb({ face, plan, input, pictures, aspect }: { face: CardFace } &
       g.fillStyle = sky;
       g.fillRect(0, 0, canvas.width, canvas.height);
       if (!plan) return;
-      // A Stamp sits on the map's paper: its picture says so.
-      const scene = cardScene({ ...input, plan, o: { ...input.o, cardFace: face, ...(face === 'stamp' ? { cardGround: 'paper' } : {}) } });
+      // Every face in the author's look and ground — the Stamp included, on the map's paper under it.
+      const scene = cardScene({ ...input, plan, o: { ...input.o, cardFace: face } });
       paintCard(g, scene, pictures, 60, { width: canvas.width, height: canvas.height }, 60);
     };
     paint();
