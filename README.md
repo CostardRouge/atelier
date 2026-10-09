@@ -896,7 +896,13 @@ the export has a track, writes that track onto the trip as its **road**: the
 line the openers drive and the kilometres they count, never a place. It is
 kept whole (a year is about 55 KB), raw fixes included, and travels in the
 backup; writing a new export replaces the fixes and keeps how the trip reads
-them.
+them. **Trip settings → Road** (in the overview's sheet, or the piece's ⚙)
+chooses how it is read, each choice with the kilometres it counts: *Crow
+flies* (no road, curves from place to place), *Between stays* (what you did
+while staying somewhere — walks, buses, the commute — left out), *Every move*
+(all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
+apart from them smooths the line from every point up to 2 km, and *Forget the
+road* takes it off the trip.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the

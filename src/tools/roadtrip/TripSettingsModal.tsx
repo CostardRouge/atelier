@@ -27,14 +27,17 @@ import FleetPanel from './FleetPanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel from './PlacesSettingsPanel';
+import RoadSettingsPanel from './RoadSettingsPanel';
+import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE } from '../../shared/roadtrip/road-track';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
-export type TripSettingsSection = 'words' | 'places' | 'cta' | 'defaults' | 'car' | 'house';
+export type TripSettingsSection = 'words' | 'places' | 'road' | 'cta' | 'defaults' | 'car' | 'house';
 
 const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
   { id: 'words', label: 'Words' },
   { id: 'places', label: 'Places' },
+  { id: 'road', label: 'Road' },
   { id: 'cta', label: 'Closing card' },
   { id: 'defaults', label: 'New pieces' },
   { id: 'car', label: 'Vehicle' },
@@ -313,6 +316,17 @@ export default function TripSettingsModal({
             )}
 
             {open === 'places' && <PlacesSettingsPanel trip={trip} onChange={onChangeTrip} />}
+
+            {open === 'road' && (
+              <RoadSettingsPanel
+                road={trip.road}
+                mode={trip.road?.mode ?? DEFAULT_ROAD_MODE}
+                detail={trip.road?.detail ?? DEFAULT_ROAD_DETAIL}
+                onMode={(mode) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, mode } })}
+                onDetail={(detail) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, detail } })}
+                onForget={() => onChangeTrip({ ...trip, road: null })}
+              />
+            )}
 
             {open === 'cta' && (
               <>

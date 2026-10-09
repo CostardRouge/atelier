@@ -60,3 +60,14 @@ the road from Polarsteps*, ticked by default whenever the export has a track,
 and Write works with only the road to write. `makeTripRoad` keeps the fixes
 within the trip's span plus a day each side, and a re-import replaces the
 fixes while keeping the mode, the detail and the hand-placed points.
+
+## Trip settings → Road, one panel in both sheets (2026-10-09)
+
+`RoadSettingsPanel.tsx` is drawn LIVE in the piece's Trip settings (section
+`road`, written through `onChangeTrip` on every move like the other sections)
+and as a DRAFT in the overview's Trip settings (`TripDetailsModal`, beside the
+cover, written on Save through `TripDetails.road`). Each mode shows the km it
+would count at the current detail, so the choice is made on the numbers; the
+detail slider walks `ROAD_DETAILS` and is greyed under Crow flies (nothing to
+smooth). With no road the panel says where one comes from (Deduce) rather
+than hiding — the overview's sheet is where he looks for it.

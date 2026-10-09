@@ -891,7 +891,12 @@ export default function TripOverview({
         startDate: details.startDate,
         endDate: details.endDate,
       });
-      onChange({ ...next, cover: details.cover, updatedAt: Date.now() });
+      onChange({
+        ...next,
+        cover: details.cover,
+        ...(details.road !== undefined ? { road: details.road } : {}),
+        updatedAt: Date.now(),
+      });
       // The open day may no longer be in the trip: the route says where you
       // are, so it has to follow rather than leave the panel on a day the
       // calendar no longer draws.

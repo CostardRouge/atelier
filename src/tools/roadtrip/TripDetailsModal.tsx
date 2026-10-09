@@ -10,6 +10,8 @@ import {
 } from '../../shared/roadtrip/trip-types';
 import { prunePins } from '../../shared/roadtrip/trip-cover';
 import CoverPanel from './CoverPanel';
+import RoadSettingsPanel from './RoadSettingsPanel';
+import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE, type TripRoad } from '../../shared/roadtrip/road-track';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 import InfoDot from '../../shared/ui/InfoDot';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
@@ -32,6 +34,8 @@ export interface TripDetails {
   sourceId: string;
   /** How the trip shows itself in the gallery. Editing only. */
   cover: TripCover;
+  /** The trip's road as this sheet leaves it (`road-track.ts`). Editing only. */
+  road?: TripRoad | null;
 }
 
 /** A connected Winnow the modal can offer as a seed, and whether it can. */
@@ -111,6 +115,8 @@ export default function TripDetailsModal({
 
   const [name, setName] = useState(trip?.name ?? '');
   const [cover, setCover] = useState<TripCover>(() => trip?.cover ?? defaultTripCover());
+  // The road's reading, a draft like the cover until Save.
+  const [road, setRoad] = useState<TripRoad | null>(trip?.road ?? null);
   const [sourceId, setSourceId] = useState(() =>
     sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID),
   );
@@ -150,6 +156,7 @@ export default function TripDetailsModal({
       endDate,
       sourceId,
       cover: trip ? prunePins(trip, cover) : cover,
+      ...(trip ? { road } : {}),
     });
   }
 
@@ -319,6 +326,22 @@ export default function TripDetailsModal({
           <div className={field}>
             <span className={legend}>Cover</span>
             <CoverPanel trip={trip} value={cover} onChange={setCover} />
+          </div>
+        )}
+
+        {/* The road the openers drive (`TripDoc.road`): a property of the trip
+            like its cover, so a draft here too, written on Save. */}
+        {editing && trip && (
+          <div className={field}>
+            <span className={legend}>Road</span>
+            <RoadSettingsPanel
+              road={road}
+              mode={road?.mode ?? DEFAULT_ROAD_MODE}
+              detail={road?.detail ?? DEFAULT_ROAD_DETAIL}
+              onMode={(mode) => setRoad((r) => (r ? { ...r, mode } : r))}
+              onDetail={(detail) => setRoad((r) => (r ? { ...r, detail } : r))}
+              onForget={() => setRoad(null)}
+            />
           </div>
         )}
 
