@@ -282,7 +282,13 @@ export default function PostEditor({
     ),
   );
   /** The trip-wide sheet, and which of its sections was asked for. */
-  const [tripSheet, setTripSheet] = useState<TripSettingsSection | null>(null);
+  const [tripSheet, setTripSheetSection] = useState<TripSettingsSection | null>(null);
+  // The closing card on the stage names its section; the ⚙ names none, so a phone opens on the list.
+  const [tripSheetLand, setTripSheetLand] = useState(false);
+  const setTripSheet = useCallback((section: TripSettingsSection | null) => {
+    setTripSheetSection(section);
+    setTripSheetLand(section === 'cta');
+  }, []);
   /** The garage, opened from the opener that drives the trip's vehicle. */
   const [garageOpen, setGarageOpen] = useState(false);
 
@@ -2507,6 +2513,7 @@ export default function PostEditor({
         post={post}
         cta={cta}
         section={tripSheet}
+        land={tripSheetLand}
         ctaFieldRefs={ctaFieldRefs}
         onChangeTrip={onChangeTrip}
         patchBadge={patchBadge}

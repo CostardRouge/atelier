@@ -9,8 +9,26 @@ import {
   writePlace,
 } from '../../shared/roadtrip/place-style';
 import type { PlaceStyle, TripDoc, TripPlace } from '../../shared/roadtrip/trip-types';
-import SectionLegend from '../../shared/ui/SectionLegend';
 import { inputClass } from './panels/ui';
+
+/** What a place keeps and how it is written — the Places pane's ⓘ. */
+export const PLACES_ABOUT = (
+  <>
+    <p>
+      A place keeps its name, its state and that state’s short code, its country and,
+      when you want them, the days you reached and left it. How it is WRITTEN is a
+      setting: one for the badges and the openers, where room is short, one for the
+      lists, the legs, the calendar and the map. A stage or a single place can depart
+      from them — the nearest choice wins, like the look.
+    </p>
+    <p>
+      A state’s code comes from the place’s own, else this table, else what the
+      search gave, else the state’s initials — said as such, because initials are
+      right for New South Wales and wrong for Queensland. Nothing is shipped: this
+      table is this trip’s, filled one state at a time, and it travels in the backup.
+    </p>
+  </>
+);
 
 /**
  * The Places section of the trip settings: how a place is WRITTEN on the two
@@ -40,21 +58,6 @@ export default function PlacesSettingsPanel({ trip, onChange }: { trip: TripDoc;
 
   return (
     <>
-      <SectionLegend label="Places">
-        <p>
-          A place keeps its name, its state and that state’s short code, its country and,
-          when you want them, the days you reached and left it. How it is WRITTEN is a
-          setting: one for the badges and the openers, where room is short, one for the
-          lists, the legs, the calendar and the map. A stage or a single place can depart
-          from them — the nearest choice wins, like the look.
-        </p>
-        <p>
-          A state’s code comes from the place’s own, else this table, else what the
-          search gave, else the state’s initials — said as such, because initials are
-          right for New South Wales and wrong for Queensland. Nothing is shipped: this
-          table is this trip’s, filled one state at a time, and it travels in the backup.
-        </p>
-      </SectionLegend>
 
       <div className="grid grid-cols-[auto_minmax(0,1fr)] gap-x-4 gap-y-2.5 items-center max-w-[36rem] max-[820px]:grid-cols-1">
         {(
