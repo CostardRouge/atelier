@@ -1350,11 +1350,15 @@ piece dresses the state in effect on that day.
 
 When a piece's **Vehicle** row keeps the trip's own (its default), Virée
 **changes vehicle along the road**. A stage can name another vehicle of the
-fleet, or a model borrowed for the day; a place can say how it was reached (a
+fleet, or a model borrowed for the day (the select beside its place style, in
+the stage's card); a place can say how it was reached (its **Reached by**: a
 boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
-**water rule** (Trip settings → Vehicle; on for a new trip, off for one made
-before it) a hop that crosses the sea sails, from the shore it leaves to the
-shore it reaches, on the boat the rule names. Each vehicle wears its look of
+**water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
+new trip, off for one made before it) a hop that crosses the sea sails, from
+the shore it leaves to the shore it reaches, on the boat the rule names. Its
+**Fine settings** hold the two distances the coarse coastline needs: water
+narrower than the **bridge** length stays a road, and a stop within the
+**shore** distance of a coast counts as ashore. Each vehicle wears its look of
 the day, so the Prado drives green until Melbourne and black after; a swap is
 marked by a splash and a repaint by a sweep of the new paint. The water is read
 on the coastline the app already ships (Natural Earth 1:50m, no network), with

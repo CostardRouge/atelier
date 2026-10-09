@@ -22,6 +22,7 @@ import {
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
+import CrossingsPanel from './CrossingsPanel';
 import FleetPanel from './FleetPanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import HouseStylePanel from './HouseStylePanel';
@@ -405,14 +406,19 @@ export default function TripSettingsModal({
                   <p>
                     The vehicles this trip drives — the main one on every stage that names
                     no other — and how each changed on the way, dated. A piece shows a
-                    vehicle as it was on the piece’s own day. They travel in the trip’s
-                    backup.
+                    vehicle as it was on the piece’s own day. A stage can name another in
+                    its card, a place the vehicle it was reached by. They travel in the
+                    trip’s backup.
                   </p>
                   <p>
                     Drag the vehicle to turn it. The angle here is only a look: it is never
                     kept, and never becomes a piece’s camera.
                   </p>
                 </SectionLegend>
+                <CrossingsPanel
+                  value={trip.crossings}
+                  onChange={(crossings) => onChangeTrip({ ...trip, crossings })}
+                />
                 {/* A definite height wide, so the garage can keep the car in
                     view beside its own scrolling choices; narrow, the panel
                     stacks and this pane scrolls. */}

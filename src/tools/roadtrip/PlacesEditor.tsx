@@ -34,6 +34,7 @@ import { DateField } from '../../shared/ui/DateField';
 import PlaceFixPanel, { type FixCandidate, type FixTab } from './PlaceFixPanel';
 import PlacesTable, { type PlacesTableRow } from './PlacesTable';
 import { takePlaceRequest, usePlaceRequest } from './place-request';
+import VehicleRefSelect from './VehicleRefSelect';
 
 interface PlacesEditorProps {
   trip: TripDoc;
@@ -516,6 +517,26 @@ function PlaceFields({
           )}
         </div>
       ) : null}
+
+      {/* How it was reached: the hop that leads here, by hand — a boat the
+          coastline cannot see (a river, a lake), or a road it took for water.
+          Empty: the stage's vehicle, and a boat by itself on water. */}
+      <div className="flex flex-wrap items-center gap-x-2 gap-y-1" data-reached-by>
+        <span className={fieldLabel}>Reached by</span>
+        <VehicleRefSelect
+          value={place.arriveBy}
+          fleet={trip.vehicles}
+          inherit={trip.crossings?.auto ? 'The road decides · a boat on water' : 'The stage’s vehicle'}
+          label={`How ${name} was reached`}
+          onChange={(arriveBy) => {
+            const next = { ...place };
+            if (arriveBy) next.arriveBy = arriveBy;
+            else delete next.arriveBy;
+            onChange(next);
+          }}
+          className="font-sans text-xs h-[1.9rem] px-2 border border-line-strong rounded-paper bg-paper text-ink focus:outline-none focus:border-accent"
+        />
+      </div>
 
       {/* The facts line: where the place came from, what else it knows, and
           the two verbs that open the rest. */}
