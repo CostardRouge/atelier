@@ -340,7 +340,7 @@ function paintStamp(pen: Pen): void {
   g.globalAlpha = pen.alpha;
   g.beginPath();
   roundRectOn(g, box.x, box.y, box.w, box.h, 16 * u);
-  g.fillStyle = hexToRgba(s.ink.ground, 0.94);
+  g.fillStyle = s.ink.ground;
   g.fill();
   g.lineWidth = 2 * u;
   g.strokeStyle = hexToRgba(s.ink.rule, 0.3);
