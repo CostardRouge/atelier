@@ -746,8 +746,16 @@ function paintSummary(
   const cy = box.y + box.height / 2 + (1 - k) * 18 * u;
   g.save();
   g.globalAlpha = k;
+  // A card lifted off the map: a soft shadow in stacked fills (no blur in
+  // this painter), then the paper OPAQUE — the map's names used to show
+  // through it (his «tampon translucide»).
+  for (const [dy, a] of [[6, 0.05], [3, 0.07]] as const) {
+    roundRect(g, cx - cw / 2, cy - ch / 2 + dy * u, cw, ch, 14 * u);
+    g.fillStyle = hexToRgba(o.inkColor, a);
+    g.fill();
+  }
   roundRect(g, cx - cw / 2, cy - ch / 2, cw, ch, 14 * u);
-  g.fillStyle = hexToRgba(o.paperColor, 0.94);
+  g.fillStyle = o.paperColor;
   g.fill();
   g.lineWidth = 1.5 * u;
   g.strokeStyle = hexToRgba(o.inkColor, 0.3);
