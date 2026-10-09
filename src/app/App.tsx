@@ -8,6 +8,7 @@ import { REPO_URL } from './site';
 import { HOME_PATH, toolForPath } from './tools';
 import ToolSwitcher from './ToolSwitcher';
 import SourcePill from './SourcePill';
+import AgentPill from './AgentPill';
 import TaskPill from '../shared/ui/TaskPill';
 import { useHashRoute } from './use-hash-route';
 import BottomSheet from '../shared/ui/BottomSheet';
@@ -269,6 +270,7 @@ export default function App() {
           {/* What is running, at every width — the masthead is the one row
               every screen keeps. Nothing to say, nothing drawn. */}
           <TaskPill compact={compact} />
+          <AgentPill />
           {tool && !compact && <SourcePill />}
           <ThemeToggle />
           <a

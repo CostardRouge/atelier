@@ -77,6 +77,10 @@ Today it ships ten tools, converging into a few editors:
 > it, a trip or a project can be kept on it, and a **LUT pack's looks** are
 > fetched from it the first time a picture asks for one — all under your
 > account there. Nothing is sent to a server you did not name yourself.
+>
+> One more connection never leaves your computer: the **agent bridge** (see
+> "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,
+> the tab talks to `127.0.0.1` alone, to a program you started yourself.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -2741,6 +2745,46 @@ npm run typecheck  # type-check without emitting
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
 ```
+
+### Driving Atelier from an agent (MCP)
+
+Every agent-facing verb of the suite is a **command** with a stable id and
+checked parameters — `app.status`, `app.navigate`, `develop.set`,
+`develop.snapshot`… — registered by the screen that can do it while it is
+open (`src/shared/commands/`). A command goes through the very path a gesture
+goes through: an agent's edit is saved, undoable with ⌘Z like yours, and
+marked in the picture's journal as an agent's, so a making-of says *by an
+agent* and the training file can leave it out of what a model learns of your
+taste. A value outside a slider's range is refused with the range, never
+clamped.
+
+From the browser's console: `await atelier.run('app.status')`, and
+`atelier.commands()` for the list.
+
+From **Claude Code** (or any MCP client), through the bridge — a small Node
+program with no dependency (Node ≥ 22.18):
+
+```bash
+claude mcp add atelier -- node /path/to/atelier/scripts/atelier-mcp.mjs
+```
+
+Then open Atelier — the deployed site or `npm run dev` — go to `#/sources` and
+click *Connect* under **Agents**. The masthead shows an **Agent** pill for as
+long as the tab is connected; *Disconnect* there ends it. The choice belongs to
+that tab alone: a reload keeps it, a new tab does not, and a second tab that
+connects takes the bridge over from the first. The bridge listens on
+`127.0.0.1:7981` (`--port N` to change it), answers only pages from your own
+machine and the deployed site (`ATELIER_ORIGINS` adds others), and offers
+three tools: `atelier_status`, `atelier_commands` (what the current screen
+offers, with each command's parameters) and `atelier_run`.
+
+A session in Develop looks like: `app.navigate` to `/develop/home`,
+`app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
+`develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then
+`develop.snapshot`, which hands the model the picture as it would be
+delivered (or as shot, with `before: true`). Only the eleven sliders are
+writable in this first version; curves, the mixer, the crop and the rest are
+read by `develop.get`.
 
 ## Photo EXIF tool
 
