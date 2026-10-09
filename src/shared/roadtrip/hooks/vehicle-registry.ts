@@ -170,7 +170,8 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
     length: SPIRIT_LENGTH,
     width: SPIRIT_WIDTH,
     wheelRadius: 1,
-    wake: 1.2,
+    // Drawn 2.2 times a car, a ship's wake would reach off the map: a shorter one.
+    wake: 0.55,
     mapScale: 2.2,
     build: buildSpiritOfTasmania,
     palette: spiritPalette,
@@ -185,7 +186,8 @@ export const VEHICLE_MODELS: readonly VehicleModel[] = [
     length: MED_FERRY_LENGTH,
     width: MED_FERRY_WIDTH,
     wheelRadius: 1,
-    wake: 1.2,
+    // Drawn 2.2 times a car, a ship's wake would reach off the map: a shorter one.
+    wake: 0.55,
     mapScale: 2.2,
     build: buildMedFerry,
     palette: medFerryPalette,

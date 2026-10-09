@@ -69,6 +69,7 @@ import { cardCovers, cardProgress, paintCard as paintSummaryCard } from './summa
 import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
 import { paintGroundShadow, paintMesh, paintWake, project, renderOrder, toWorld, type Part, type Pose } from './mesh3d';
 import { RIDER_SCALE, boardingAt, riderTrack, type RiderTrack } from './boarding';
+import type { DriveRoad, RoadTransition } from './vehicle-plan';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
@@ -88,6 +89,14 @@ export interface DriveScratch {
   parts?: Part[];
   /** A ferry's parts with a ramp down, built the first time it lowers one. */
   withRamp?: { stern?: Part[]; bow?: Part[] };
+  /**
+   * What drives the road, moment by moment, and where it changed — the
+   * trip's fleet per stage, a hop picked by hand, a boat on the water, a
+   * repaint on its day (`vehicle-plan.ts`). Absent: `spec` drives it all.
+   */
+  road?: DriveRoad;
+  /** Every vehicle's parts the road has drawn, by model and gear — built on first use. */
+  built?: Map<string, Part[]>;
   /** The trip's vehicle riding the ferry this piece borrowed (`boarding.ts`); absent when it does not board. */
   rider?: { spec: VehicleSpec; model: VehicleModel; parts?: Part[] };
   buffer?: OffscreenCanvas | HTMLCanvasElement;
@@ -96,6 +105,9 @@ export interface DriveScratch {
   /** The trip's look (`HookContext.theme`), which the summary card's words wear. */
   theme: StyleTheme | null;
 }
+
+/** How long a change is marked on the vehicle: a splash or a sweep of paint. */
+export const TRANSITION_SECONDS = 0.6;
 
 export interface SummaryWords {
   day: string;
@@ -125,6 +137,29 @@ export function driveScratch(
     theme: theme ?? themeFromPreset('neutral'),
     ...(rider ? { rider: { spec: rider, model: vehicleModel(rider.model) } } : {}),
   };
+}
+
+/** A vehicle's parts by model and gear, built once per road. */
+function partsFor(scratch: DriveScratch, spec: VehicleSpec): Part[] {
+  const key = `${spec.model}:${Object.values(spec.gear).map((on) => (on ? 1 : 0)).join('')}`;
+  const built = (scratch.built ??= new Map());
+  let parts = built.get(key);
+  if (!parts) {
+    parts = vehicleModel(spec.model).build(spec.gear);
+    built.set(key, parts);
+  }
+  return parts;
+}
+
+/** The last change at or before `t`, while it is still marked. */
+function liveTransition(road: DriveRoad | undefined, t: number): RoadTransition | null {
+  if (!road) return null;
+  let found: RoadTransition | null = null;
+  for (const tr of road.transitions) {
+    if (tr.t > t) break;
+    found = tr;
+  }
+  return found && t - found.t < TRANSITION_SECONDS ? found : null;
 }
 
 function vehicleParts(scratch: DriveScratch, ramp: RiderTrack['ramp'] = null): Part[] {
@@ -313,7 +348,10 @@ function paintMap(
   const carPx = CAR_PX * u * o.carSize;
   // A ship is drawn bigger than a car (`VehicleModel.mapScale`); everything that
   // keeps clear of the vehicle keeps clear of what is drawn.
-  const vehiclePx = carPx * (scratch.model.mapScale ?? 1);
+  // What drives this moment: the road's own answer, else the one vehicle.
+  const current = scratch.road ? scratch.road.at(t, moment) : scratch.spec;
+  const currentModel = current === scratch.spec ? scratch.model : vehicleModel(current.model);
+  const vehiclePx = carPx * (currentModel.mapScale ?? 1);
   const box = driveBox(w, h, o.position, o.size);
   const view = viewAt(plan, box, carPx * 0.7, o, moment, track, t);
   const at = (p: { x: number; y: number }) => applyView(view, p);
@@ -554,7 +592,8 @@ function paintMap(
 
   // The vehicle, its shadow first — and, on a ferry, the trip's vehicle driving on or off it.
   {
-    const { model, spec } = scratch;
+    const model = currentModel;
+    const spec = current;
     const boarding = scratch.rider ? boardingAt(plan.schedule, t) : null;
     const p = at(moment.point);
     const heading = turnedDir(moment.heading);
@@ -570,7 +609,8 @@ function paintMap(
       spins: {},
     };
     const rider = scratch.rider && boarding ? riderPose(scratch.rider, boarding, pose, model.length, carPx) : null;
-    const parts = vehicleParts(scratch, rider?.track.ramp ?? null);
+    const parts = scratch.rider || spec === scratch.spec ? vehicleParts(scratch, rider?.track.ramp ?? null) : partsFor(scratch, spec);
+    const change = liveTransition(scratch.road, t);
     const travelled = moment.s * view.scale;
     const spin = travelled / (model.wheelRadius * scale);
     const spins: Record<string, number> = {};
@@ -580,7 +620,9 @@ function paintMap(
     if (model.kind === 'boat') {
       // A boat sits IN the water: a faint shadow, and the wake it leaves while
       // it runs — growing as it gets under way, settling once it halts.
-      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, moment.since), Math.max(1, carPx / 55), model.wake ?? 1);
+      // A boat taken at a shore mid-run gets under way from the swap, not from the run's start.
+      const since = change?.kind === 'swap' ? Math.min(moment.since, t - change.t) : moment.since;
+      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, since), Math.max(1, carPx / 55), model.wake ?? 1);
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.12 : 0.2);
     } else {
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
@@ -594,6 +636,7 @@ function paintMap(
       outlineWidth: Math.max(0.9, carPx / 78),
     });
     if (rider && rider.front) paintRider(g, scratch.rider!, rider, onPaper, ink, carPx);
+    if (change) paintChange(g, change, (t - change.t) / TRANSITION_SECONDS, p, vehiclePx, model.kind === 'boat', spec.color, ink);
   }
 
   // The furniture: a compass, a scale bar, the distance so far.
@@ -683,6 +726,49 @@ function paintMap(
 const PUSH_IN = 0.06;
 const PUSH_IN_SECONDS = 8;
 const SUMMARY_RISE_SECONDS = 0.45;
+
+/**
+ * A change marked on the vehicle: a SWAP throws a splash — rings out from
+ * where it now floats (a boat) or stands (a car back ashore); a REPAINT is a
+ * sweep of the new paint, a disc of its colour opening and fading.
+ */
+function paintChange(
+  g: HookCtx2D,
+  change: RoadTransition,
+  k: number,
+  at: { x: number; y: number },
+  vehiclePx: number,
+  afloat: boolean,
+  color: string,
+  ink: string,
+): void {
+  const fade = 1 - k;
+  g.save();
+  if (change.kind === 'repaint') {
+    const r = vehiclePx * (0.25 + 0.55 * k);
+    g.globalAlpha = 0.35 * fade;
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(at.x, at.y, r, 0, Math.PI * 2);
+    g.fill();
+    g.globalAlpha = 0.8 * fade;
+    g.strokeStyle = ink;
+    g.lineWidth = Math.max(1, vehiclePx / 90);
+    g.stroke();
+  } else {
+    g.strokeStyle = afloat ? 'rgba(63,90,114,0.9)' : ink;
+    for (const lag of [0, 0.25]) {
+      const kk = Math.max(0, k - lag);
+      if (kk <= 0) continue;
+      g.globalAlpha = 0.7 * (1 - kk);
+      g.lineWidth = Math.max(1, vehiclePx / 60) * (1 - kk);
+      g.beginPath();
+      g.ellipse(at.x, at.y, vehiclePx * (0.3 + 0.6 * kk), vehiclePx * (0.18 + 0.36 * kk), 0, 0, Math.PI * 2);
+      g.stroke();
+    }
+  }
+  g.restore();
+}
 
 /** Where the riding car is on screen this frame, and whether it is in front of the ship. */
 interface RiderPose {

@@ -271,3 +271,23 @@ export function makeMain(fleet: readonly TripVehicle[], id: string): TripVehicle
 export function replaceVehicle(fleet: readonly TripVehicle[], next: TripVehicle): TripVehicle[] {
   return fleet.map((v) => (v.id === next.id ? next : v));
 }
+
+/** A stage as the vehicle reader needs it: its span and what it drives. */
+interface StageSpan {
+  startDate: IsoDate;
+  endDate: IsoDate;
+  vehicle?: VehicleRef;
+}
+
+/**
+ * What a day drives when nothing nearer says: the vehicle of the stage the
+ * day is in — the LAST match, the rule `stageAt` uses — else the main one.
+ */
+export function vehicleRefForDay(fleet: readonly TripVehicle[], stages: readonly StageSpan[], day: IsoDate | null | undefined): VehicleRef {
+  if (day) {
+    let found: StageSpan | null = null;
+    for (const stage of stages) if (stage.startDate <= day && day <= stage.endDate) found = stage;
+    if (found?.vehicle) return found.vehicle;
+  }
+  return { fleet: mainVehicle(fleet).id };
+}

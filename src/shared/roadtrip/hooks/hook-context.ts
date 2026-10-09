@@ -21,7 +21,8 @@ import { hookCalendar, hookStages } from './hook-calendar';
 import { townsIfLoaded } from '../load-gazetteer';
 import type { HookContext, HookLayer, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
-import { mainVehicle, vehicleOnDay } from '../vehicle-fleet';
+import { resolveRef, vehicleRefForDay } from '../vehicle-fleet';
+import { landIfLoaded } from '../../map/load-terrain';
 
 /** What an opener is told about time on the slide it plays on. */
 export interface HookTiming {
@@ -75,6 +76,7 @@ export function hookContextFor(
   pictures?: ReadonlyMap<string, HookPicture>,
   timing: HookTiming = pieceHookTiming(post),
 ): HookContext {
+  const dayRef = vehicleRefForDay(trip.vehicles ?? [], trip.stages ?? [], post.date);
   return {
     aspect,
     durationSeconds: timing.durationSeconds,
@@ -87,9 +89,15 @@ export function hookContextFor(
     calendar: hookCalendar(trip, post.id),
     stages: hookStages(trip),
     pictures,
-    // The main vehicle as it was on the piece's own day: a piece dated before
-    // the Prado's repaint shows it green.
-    vehicle: vehicleOnDay(mainVehicle(trip.vehicles), post.date),
+    // The vehicle of the piece's own day — its stage's, else the main one — as
+    // it was that day: a piece dated before the Prado's repaint shows it green.
+    vehicle: resolveRef(dayRef, trip.vehicles ?? [], post.date),
+    vehicleRef: dayRef,
+    fleet: trip.vehicles,
+    crossings: trip.crossings,
+    // Read, never fetched here, like the towns: the editor asks for the
+    // coastline when a piece drives under the water rule.
+    land: landIfLoaded(),
     writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
     badgeWords: trip.badgeWords,
     // Read, never fetched here: the editor asks for the index when a piece

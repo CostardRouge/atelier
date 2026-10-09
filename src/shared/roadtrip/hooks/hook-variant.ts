@@ -28,6 +28,8 @@ import type { ComponentType } from 'react';
 import type { PyramidTile } from '../../map/tile-strip';
 import type { SavedMediaRef } from '../../projects/project-types';
 import type { VehicleSpec } from '../vehicle-spec';
+import type { TripCrossings, TripVehicle, VehicleRef } from '../vehicle-fleet';
+import type { LandIndex } from '../../map/terrain';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
@@ -264,6 +266,8 @@ export interface HookPlace {
   /** The days it was reached and left, `YYYY-MM-DD`, where the place knows them (`TripPlace.arrived`/`left`). */
   arrived?: string;
   left?: string;
+  /** How it was reached — the vehicle of the hop that leads here (`TripPlace.arriveBy`). */
+  arriveBy?: VehicleRef;
 }
 
 export interface HookStage {
@@ -272,6 +276,8 @@ export interface HookStage {
   /** What the badge calls this leg (`stageLabel`). */
   label: string;
   places: readonly HookPlace[];
+  /** What this leg drives (`TripStage.vehicle`); absent = the trip's main vehicle. */
+  vehicle?: VehicleRef;
 }
 
 /** A decoded picture a variant may draw, with the size it was decoded at. */
@@ -323,6 +329,21 @@ export interface HookContext {
    * A hand-built context without it drives the default vehicle.
    */
   vehicle?: VehicleSpec;
+  /**
+   * The reference `vehicle` was resolved from — the stage of the piece's day,
+   * else the main vehicle (`vehicleRefForDay`) — what a stop no leg claims drives.
+   */
+  vehicleRef?: VehicleRef;
+  /** The trip's fleet and its stories (`TripDoc.vehicles`), for an opener that changes vehicle along its road. */
+  fleet?: readonly TripVehicle[];
+  /** The trip's rule for water (`TripDoc.crossings`). */
+  crossings?: TripCrossings;
+  /**
+   * The shipped coastline as an index, when it has been read in this session
+   * (`landIfLoaded`) — what tells a crossing from a road (`terrain.ts`).
+   * Absent: no hop is known to cross water, and the road is driven whole.
+   */
+  land?: LandIndex | null;
   /**
    * How the trip WRITES a place (`TripDoc.placeStyle`, `stateCodes`) — what
    * an opener's labels and the stops' lists read through `stopText`, so a

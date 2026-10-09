@@ -1348,6 +1348,24 @@ its vehicle's model, since another model is another vehicle. A piece shows a
 vehicle as it was on the piece's own day, and «Configure the vehicle…» from a
 piece dresses the state in effect on that day.
 
+When a piece's **Vehicle** row keeps the trip's own (its default), Virée
+**changes vehicle along the road**. A stage can name another vehicle of the
+fleet, or a model borrowed for the day; a place can say how it was reached (a
+boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
+**water rule** (Trip settings → Vehicle; on for a new trip, off for one made
+before it) a hop that crosses the sea sails, from the shore it leaves to the
+shore it reaches, on the boat the rule names. Each vehicle wears its look of
+the day, so the Prado drives green until Melbourne and black after; a swap is
+marked by a splash and a repaint by a sweep of the new paint. The water is read
+on the coastline the app already ships (Natural Earth 1:50m, no network), with
+one rule: a hop sails only when it changes land or ends at sea. A curve that
+cuts a bay the road went round stays a road, while a strait such as Gibraltar
+sails (Africa and Eurasia are one land on that map, so a strait is water whose
+two shores lie much further apart round the coast than across it). A river or
+a lake is not on that map: a river cruise is set on its place by hand. The
+panel says what the road will do, for example «2 crossings by Spirit of
+Tasmania: Melbourne → Devonport, Hobart → Melbourne».
+
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
 your own places) — though, like Virée and the Recap card, it can also take
 its stops from the trip's **legs** or the **photos'** own positions, the

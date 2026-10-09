@@ -29,6 +29,8 @@ import {
   swatchClass,
 } from '../../ui/Inspector';
 import { DEFAULT_VEHICLE, vehicleLine, carriesVehicles, describeVehicle, vehicleFor, type VehicleSpec, type VehicleChoice } from '../vehicle-spec';
+import { fleetOf, mainVehicle } from '../vehicle-fleet';
+import { driveRoad, refModel, type RoadInput } from './vehicle-plan';
 import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from './vehicle-registry';
 import {
   DRIVE_DEFAULTS,
@@ -63,7 +65,7 @@ import { CAMERA_PRESETS } from './map-camera';
 import { CameraRows } from './camera-rows';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
-import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
+import type { HookContext, HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { allowTiles, stripBudget } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
 import { readyGround } from './basemap-strip';
@@ -167,6 +169,50 @@ function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null)
 function boardsOf(o: DriveOptions, tripVehicle: VehicleSpec): boolean {
   const vehicle = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
   return o.boarding && vehicle !== tripVehicle && carriesVehicles(vehicle.model) && vehicleModel(tripVehicle.model).kind === 'car';
+}
+
+/** What the road's vehicles are read from — the context's fleet, stages, rule and coastline. */
+function roadInput(ctx: HookContext, forced: VehicleSpec | null): RoadInput {
+  const fleet = ctx.fleet?.length ? ctx.fleet : fleetOf(ctx.vehicle ?? DEFAULT_VEHICLE);
+  return {
+    stages: ctx.stages ?? [],
+    calendar: ctx.calendar ?? [],
+    fleet,
+    crossings: ctx.crossings,
+    land: ctx.land,
+    dayRef: ctx.vehicleRef ?? { fleet: mainVehicle(fleet).id },
+    date: ctx.date,
+    forced,
+  };
+}
+
+/**
+ * What the road will do with the trip's vehicles, said as a sentence: the
+ * crossings it sails and on what, the hops picked by hand, the stages that
+ * drive another vehicle — or why it reads no water (the rule off, the
+ * coastline not yet here). The same `driveVehicles` the paint draws.
+ */
+function roadSentence(plan: DrivePlan, ctx: HookContext): string {
+  const input = roadInput(ctx, null);
+  const { vehicles } = driveRoad(plan, input);
+  const stops = plan.route.stops;
+  const parts: string[] = [];
+  const water = vehicles.segments.filter((seg) => seg.source === 'water');
+  if (!input.crossings?.auto) parts.push('The water rule is off in the trip settings');
+  else if (!input.land) parts.push('Reading the coastline — the road is driven whole until it arrives');
+  else if (!water.length) parts.push('No hop crosses water');
+  else {
+    const boat = vehicleModel(refModel(water[0].ref, input.fleet)).short;
+    const where = vehicles.hops
+      .map((hop, h) => (hop?.water ? `${stops[h].name || `stop ${h + 1}`} → ${stops[h + 1].name || `stop ${h + 2}`}` : null))
+      .filter((x): x is string => x !== null);
+    parts.push(`${where.length} crossing${where.length > 1 ? 's' : ''} by ${boat}: ${where.slice(0, 3).join(', ')}${where.length > 3 ? '…' : ''}`);
+  }
+  const placed = vehicles.segments.filter((seg) => seg.source === 'place').length;
+  if (placed) parts.push(`${placed} hop${placed > 1 ? 's' : ''} picked by hand`);
+  const staged = new Set(vehicles.segments.filter((seg) => seg.source === 'stage').map((seg) => refModel(seg.ref, input.fleet)));
+  if (staged.size) parts.push(`stages on ${[...staged].map((m) => vehicleModel(m).short).join(', ')}`);
+  return `${parts.join(' · ')}.`;
 }
 
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
@@ -444,6 +490,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         <p className="m-0 text-xs text-ink-soft">{describeVehicle(car, vehicleModel(car.model).name)}</p>
+        {!borrowed && plan && <p className="m-0 text-xs text-muted">{roadSentence(plan, ctx)}</p>}
         {borrowed && carriesVehicles(car.model) && vehicleModel(tripVehicle.model).kind === 'car' ? (
           <FieldRow
             label="Boarding"
@@ -989,12 +1036,17 @@ export const driveVariant: HookVariant = {
     const plan = drivePlan(route, o, count !== null, boards);
     if (!plan) return { seconds: 0 };
     const words = ctx.badgeWords;
+    const own = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
     const scratch = driveScratch(
-      vehicleFor(o.vehicle, o.vehicleColor, tripVehicle),
+      own,
       { day: words?.day, days: words?.days, stop: words?.stop },
       ctx.theme ?? null,
       boards ? tripVehicle : null,
     );
+    // The road's vehicles: the piece's own for the whole road when it borrows
+    // one, else the trip's — per stage, per place, a boat on the water, each
+    // in its look of the day (`vehicle-plan.ts`).
+    scratch.road = driveRoad(plan, roadInput(ctx, own !== tripVehicle ? own : null)).road;
     // The recap's summary card, measured once with the plan (`summary-card.ts`).
     const card =
       plan.schedule.summaryAt !== null
