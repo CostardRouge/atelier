@@ -1368,13 +1368,10 @@ export default function TripOverview({
               ]}
             />
             {deduceButtons}
-            <Button
-              onClick={() => openSettings()}
-              icon={Icons.settings}
-              title="The trip's dates, route and cover"
-            >
-              Trip settings
-            </Button>
+            {/* The glyph alone, as in a piece's bar: the sheet it opens says what it is. */}
+            <IconButton label="Trip settings" title="Trip settings — dates, cover, places, road, vehicle and the rest" onClick={() => openSettings()}>
+              {Icons.settings}
+            </IconButton>
           </>
         }
       />

@@ -823,7 +823,7 @@ leg: the New trip dialog asks for the name and the two dates and nothing else,
 so a trip starts with no leg at all and a day outside every leg names no place
 rather than claiming one.
 
-**One Trip settings, wherever you are.** The overview's *Trip settings*, a
+**One Trip settings, wherever you are.** The overview's ⚙, a
 piece's ⚙ and a gallery card's ⋯ **Trip settings…** open the same sheet: a rail
 of sections — *Name and dates*, *Cover* (its layout and up to three pinned
 pieces), *Places*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
