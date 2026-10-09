@@ -1,5 +1,4 @@
 import { useEffect, useState } from 'react';
-import { downloadBlob } from '../../shared/media/save';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import type { CtaLayout } from '../../shared/roadtrip/cta-slide';
@@ -12,19 +11,23 @@ import {
 import { TIME_AGO_WORD_FIELDS, type TimeAgoWords } from '../../shared/roadtrip/time-ago';
 import { CAMERA_FIELDS, type CameraField } from '../../shared/exif/camera-facts';
 import { DEFAULT_CAMERA_WORDS } from '../../shared/overlay/camera-plate';
-import { serializeTripFile, toTripFile, tripFileName } from '../../shared/roadtrip/trip-file';
-import { spanLength } from '../../shared/roadtrip/trip-days';
+import { formatIsoDate, spanLength } from '../../shared/roadtrip/trip-days';
+import { prunePins } from '../../shared/roadtrip/trip-cover';
 import {
   POST_KINDS,
   defaultPostBadge,
   hookDefaultsFrom,
   type PostBadge,
+  type PostKind,
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
 import CrossingsPanel from './CrossingsPanel';
 import FleetPanel from './FleetPanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
+import CoverPanel from './CoverPanel';
+import TripDatesSection from './TripDatesSection';
+import TripKeepSection from './TripKeepSection';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel from './PlacesSettingsPanel';
 import RoadSettingsPanel from './RoadSettingsPanel';
@@ -32,30 +35,63 @@ import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE } from '../../shared/roadtrip/ro
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
-export type TripSettingsSection = 'words' | 'places' | 'road' | 'cta' | 'defaults' | 'car' | 'house';
+export type TripSettingsSection =
+  | 'dates'
+  | 'cover'
+  | 'places'
+  | 'road'
+  | 'car'
+  | 'words'
+  | 'cta'
+  | 'defaults'
+  | 'keep'
+  | 'house';
 
-const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
-  { id: 'words', label: 'Words' },
-  { id: 'places', label: 'Places' },
-  { id: 'road', label: 'Road' },
-  { id: 'cta', label: 'Closing card' },
-  { id: 'defaults', label: 'New pieces' },
-  { id: 'car', label: 'Vehicle' },
-  // The dev server alone can write the house style into the repository; the
-  // built site never draws this section, and Vite drops the panel from it.
-  ...(import.meta.env.DEV ? [{ id: 'house' as const, label: 'House style' }] : []),
+/** The rail, in four groups — the trip itself, how it speaks, its pieces, keeping it. */
+const GROUPS: Array<{ label: string; sections: Array<{ id: TripSettingsSection; label: string }> }> = [
+  {
+    label: 'The trip',
+    sections: [
+      { id: 'dates', label: 'Name and dates' },
+      { id: 'cover', label: 'Cover' },
+      { id: 'places', label: 'Places' },
+      { id: 'road', label: 'Road' },
+      { id: 'car', label: 'Vehicle' },
+    ],
+  },
+  {
+    label: 'How it speaks',
+    sections: [
+      { id: 'words', label: 'Badge words' },
+      { id: 'cta', label: 'Closing card' },
+    ],
+  },
+  { label: 'Pieces', sections: [{ id: 'defaults', label: 'New pieces' }] },
+  {
+    label: 'Keep',
+    sections: [
+      { id: 'keep', label: 'Backup and start over' },
+      // The dev server alone can write the house style into the repository;
+      // the built site never draws this section, and Vite drops the panel.
+      ...(import.meta.env.DEV ? [{ id: 'house' as const, label: 'House style' }] : []),
+    ],
+  },
 ];
 
 interface TripSettingsModalProps {
   trip: TripDoc;
-  /** The piece in hand — only for its kind, which is what a default is filed under. */
-  post: TripPost;
-  /** The closing card as laid out for this piece, for its QR problem. */
-  cta: CtaLayout;
+  /**
+   * The piece the sheet was opened from, when it was — what «This piece» in
+   * New pieces saves and resets. Absent: opened from the overview.
+   */
+  post?: TripPost;
+  /** The closing card as laid out for that piece, for its QR problem. */
+  cta?: CtaLayout;
   section: TripSettingsSection;
-  ctaFieldRefs: CtaFieldRefs;
+  ctaFieldRefs?: CtaFieldRefs;
   onChangeTrip: (trip: TripDoc) => void;
-  patchBadge: (patch: Partial<PostBadge>) => void;
+  /** Writes the piece's badge — with `post`. */
+  patchBadge?: (patch: Partial<PostBadge>) => void;
   onClose: () => void;
 }
 
@@ -98,8 +134,10 @@ export default function TripSettingsModal({
   onClose,
 }: TripSettingsModalProps) {
   const [open, setOpen] = useState<TripSettingsSection>(section);
-  // The Road panel's map or question is up: its keys, not this sheet's.
+  // A question or a map of a section is up: its keys, not this sheet's.
   const [roadNested, setRoadNested] = useState(false);
+  const [keepNested, setKeepNested] = useState(false);
+  const nested = roadNested || keepNested;
   // Narrow only: the rail and the pane are two screens, and this says which.
   const [showRail, setShowRail] = useState(false);
 
@@ -113,7 +151,7 @@ export default function TripSettingsModal({
   // Nothing here is applied on a button — the trip is written on every
   // keystroke — so the sheet's primary action IS closing it: Enter says
   // "done" from any field, and Escape dismisses it.
-  useDialogKeys({ onCancel: roadNested ? undefined : onClose, onConfirm: roadNested ? null : onClose });
+  useDialogKeys({ onCancel: nested ? undefined : onClose, onConfirm: nested ? null : onClose });
 
   const patchWords = (patch: Partial<BadgeWords>) =>
     onChangeTrip({ ...trip, badgeWords: { ...trip.badgeWords, ...patch } });
@@ -139,9 +177,9 @@ export default function TripSettingsModal({
       },
     });
 
-  const savedDefault = trip.hookDefaults[post.kind] ?? null;
-  const kindLabel =
-    POST_KINDS.find((k) => k.id === post.kind)?.label.toLowerCase() ?? post.kind;
+  const savedDefault = post ? (trip.hookDefaults[post.kind] ?? null) : null;
+  const kindLabel = (kind: PostKind) => POST_KINDS.find((k) => k.id === kind)?.label.toLowerCase() ?? kind;
+  const pieceLabel = post ? `${POST_KINDS.find((k) => k.id === post.kind)?.label ?? post.kind} · ${formatIsoDate(post.date)}` : null;
 
   const days = spanLength(trip.startDate, trip.endDate);
   const facts = [
@@ -150,14 +188,6 @@ export default function TripSettingsModal({
   ]
     .filter(Boolean)
     .join(' · ');
-
-  /** The whole trip on disk — a backup, and how it reaches another machine. */
-  function backUp() {
-    downloadBlob(
-      new Blob([serializeTripFile(toTripFile(trip))], { type: 'application/json' }),
-      tripFileName(trip.name),
-    );
-  }
 
   return (
     <div
@@ -172,6 +202,11 @@ export default function TripSettingsModal({
           <span className="min-w-0 font-mono text-2xs text-muted truncate">
             {trip.name} · {facts}
           </span>
+          {pieceLabel && (
+            <span className="flex-none font-mono text-2xs px-2 py-0.5 rounded-full bg-accent-wash text-accent-ink max-[820px]:hidden">
+              from {pieceLabel}
+            </span>
+          )}
           <span className="flex-1" />
           <button
             type="button"
@@ -191,26 +226,30 @@ export default function TripSettingsModal({
               showRail ? 'max-[820px]:flex' : 'max-[820px]:hidden'
             }`}
           >
-            <span className="font-mono text-3xs tracking-[0.14em] uppercase text-muted px-3 pt-1 pb-2">
-              Shared by the whole trip
-            </span>
-            {SECTIONS.map((s) => (
-              <button
-                key={s.id}
-                type="button"
-                onClick={() => {
-                  setOpen(s.id);
-                  setShowRail(false);
-                }}
-                aria-current={s.id === open}
-                className={`text-left px-3 py-2 rounded-paper text-sm cursor-pointer transition-colors max-[820px]:text-base max-[820px]:py-2.5 ${
-                  s.id === open
-                    ? 'bg-accent-wash text-accent-ink font-semibold'
-                    : 'text-ink-soft hover:bg-paper-2'
-                }`}
-              >
-                {s.label}
-              </button>
+            {GROUPS.map((g) => (
+              <div key={g.label} className="flex flex-col gap-[3px] pb-2.5">
+                <span className="font-mono text-3xs tracking-[0.14em] uppercase text-muted px-3 pt-1 pb-1.5">
+                  {g.label}
+                </span>
+                {g.sections.map((s) => (
+                  <button
+                    key={s.id}
+                    type="button"
+                    onClick={() => {
+                      setOpen(s.id);
+                      setShowRail(false);
+                    }}
+                    aria-current={s.id === open}
+                    className={`text-left px-3 py-2 rounded-paper text-sm cursor-pointer transition-colors max-[820px]:text-base max-[820px]:py-2.5 ${
+                      s.id === open
+                        ? 'bg-accent-wash text-accent-ink font-semibold'
+                        : 'text-ink-soft hover:bg-paper-2'
+                    }`}
+                  >
+                    {s.label}
+                  </button>
+                ))}
+              </div>
             ))}
           </div>
 
@@ -227,9 +266,28 @@ export default function TripSettingsModal({
               ‹ All settings
             </button>
 
+            {open === 'dates' && <TripDatesSection trip={trip} onChange={onChangeTrip} />}
+
+            {open === 'cover' && (
+              <>
+                <SectionLegend label="Cover">
+                  <p>How the trip shows itself in the gallery. Pin up to three pieces; what you leave unpinned fills from the trip&apos;s busiest days.</p>
+                </SectionLegend>
+                <div className="max-w-[44rem]">
+                  <CoverPanel
+                    trip={trip}
+                    value={trip.cover}
+                    onChange={(cover) => onChangeTrip({ ...trip, cover: prunePins(trip, cover) })}
+                  />
+                </div>
+              </>
+            )}
+
+            {open === 'keep' && <TripKeepSection trip={trip} onChange={onChangeTrip} onNested={setKeepNested} />}
+
             {open === 'words' && (
               <>
-                <SectionLegend label="Words">
+                <SectionLegend label="Badge words">
                   <p>
                     Every word the badge can say. English is only the default — a deck
                     in another language is these fields, not a second vocabulary in the
@@ -347,7 +405,7 @@ export default function TripSettingsModal({
                   <CtaPanel
                     cta={trip.cta}
                     onChange={(next) => onChangeTrip({ ...trip, cta: next })}
-                    problem={cta.qrProblem}
+                    problem={cta?.qrProblem ?? null}
                     fieldRefs={ctaFieldRefs}
                   />
                 </div>
@@ -356,67 +414,75 @@ export default function TripSettingsModal({
 
             {open === 'defaults' && (
               <>
-                <SectionLegend label={`New pieces · ${kindLabel}`}>
+                <SectionLegend label="New pieces">
                   <p>
-                    The frame, the opener, the placement, the shades, the per-piece
-                    styling and what a piece counts — kept for the next {kindLabel} of
-                    this trip. What a piece says about a particular day is never
-                    inherited.
+                    The frame, the opener, the placement, the shades, the per-piece styling
+                    and what a piece counts — kept per kind for the next piece of this trip.
+                    What a piece says about a particular day is never inherited.
                   </p>
+                  <p>A look is saved from a piece: its ⚙ shows «This piece» here.</p>
                 </SectionLegend>
-                <div className="flex flex-wrap gap-1.5">
-                  <button
-                    type="button"
-                    onClick={() =>
-                      onChangeTrip({
-                        ...trip,
-                        hookDefaults: {
-                          ...trip.hookDefaults,
-                          [post.kind]: hookDefaultsFrom(post.badge),
-                        },
-                      })
-                    }
-                    className={smallButton}
-                  >
-                    Save this piece as the default
-                  </button>
-                  {savedDefault && (
-                    <>
+                {post && patchBadge && (
+                  <div className="flex flex-col gap-2.5 max-w-[40rem] px-4 py-3.5 border border-accent rounded-paper bg-accent-wash">
+                    <span className="font-mono text-2xs tracking-[0.14em] uppercase text-accent-ink">This piece · {pieceLabel}</span>
+                    <div className="flex flex-wrap gap-1.5">
                       <button
                         type="button"
                         onClick={() =>
-                          patchBadge({
-                            ...defaultPostBadge(post.kind, savedDefault),
-                            // The day, the frame of the clip and the author's own
-                            // words belong to this piece, not to the default.
-                            referenceDate: post.badge.referenceDate,
-                            videoTimeSeconds: post.badge.videoTimeSeconds,
-                            textOverrides: post.badge.textOverrides,
+                          onChangeTrip({
+                            ...trip,
+                            hookDefaults: { ...trip.hookDefaults, [post.kind]: hookDefaultsFrom(post.badge) },
                           })
                         }
-                        className={`${smallButton} font-normal`}
+                        className={smallButton}
                       >
-                        Apply it to this piece
+                        Save its look for new {kindLabel(post.kind)}s
                       </button>
-                      <button
-                        type="button"
-                        onClick={() => {
-                          const next = { ...trip.hookDefaults };
-                          delete next[post.kind];
-                          onChangeTrip({ ...trip, hookDefaults: next });
-                        }}
-                        className={dangerLink}
-                      >
-                        Forget it
-                      </button>
-                    </>
-                  )}
-                </div>
-                {!savedDefault && (
-                  <span className="text-2xs text-faint">
-                    Nothing saved yet — new pieces start from the factory look.
-                  </span>
+                      {savedDefault && (
+                        <button
+                          type="button"
+                          onClick={() =>
+                            patchBadge({
+                              ...defaultPostBadge(post.kind, savedDefault),
+                              // The day, the frame of the clip and the author's own
+                              // words belong to this piece, not to the default.
+                              referenceDate: post.badge.referenceDate,
+                              videoTimeSeconds: post.badge.videoTimeSeconds,
+                              textOverrides: post.badge.textOverrides,
+                            })
+                          }
+                          className={`${smallButton} font-normal`}
+                        >
+                          Reset it to the {kindLabel(post.kind)}s&apos; look
+                        </button>
+                      )}
+                    </div>
+                  </div>
                 )}
+                <div className="max-w-[40rem] border border-line rounded-paper overflow-hidden">
+                  {POST_KINDS.map((k, i) => {
+                    const saved = trip.hookDefaults[k.id];
+                    return (
+                      <div key={k.id} className={`flex items-center gap-3 px-3.5 py-2.5 ${i ? 'border-t border-line' : ''}`}>
+                        <span className="flex-1 text-sm font-semibold">{k.label}</span>
+                        <span className="text-xs text-muted">{saved ? 'a saved look' : 'the factory look'}</span>
+                        {saved && (
+                          <button
+                            type="button"
+                            onClick={() => {
+                              const next = { ...trip.hookDefaults };
+                              delete next[k.id];
+                              onChangeTrip({ ...trip, hookDefaults: next });
+                            }}
+                            className={dangerLink}
+                          >
+                            Forget
+                          </button>
+                        )}
+                      </div>
+                    );
+                  })}
+                </div>
               </>
             )}
 
@@ -457,9 +523,7 @@ export default function TripSettingsModal({
         </div>
 
         <div className="flex-none flex items-center gap-4 px-6 py-3.5 border-t border-line bg-surface max-[820px]:pb-[max(0.875rem,env(safe-area-inset-bottom))]">
-          <button type="button" onClick={backUp} className={smallButton}>
-            ↓ Back up the trip
-          </button>
+          <span className="text-2xs text-muted">Every change is written at once · ⌘Z takes it back</span>
           <span className="flex-1" />
           <button
             type="button"

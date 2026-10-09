@@ -63,10 +63,8 @@ fixes while keeping the mode, the detail and the hand-placed points.
 
 ## Trip settings → Road, one panel in both sheets (2026-10-09)
 
-`RoadSettingsPanel.tsx` is drawn LIVE in the piece's Trip settings (section
-`road`, written through `onChangeTrip` on every move like the other sections)
-and as a DRAFT in the overview's Trip settings (`TripDetailsModal`, beside the
-cover, written on Save through `TripDetails.road`). Each mode shows the km it
+`RoadSettingsPanel.tsx` is the Road section of the ONE Trip settings sheet
+(`roadtrip.md`, «ONE Trip settings sheet»), written live like every section. Each mode shows the km it
 would count at the current detail, so the choice is made on the numbers; the
 detail slider walks `ROAD_DETAILS` and is greyed under Crow flies (nothing to
 smooth). With no road the panel says where one comes from (Deduce) rather

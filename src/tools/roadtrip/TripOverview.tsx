@@ -1,6 +1,5 @@
 import { useCallback, useEffect, useMemo, useRef, useState, type ReactNode } from 'react';
 import { deleteThumbs } from '../../shared/roadtrip/trip-store';
-import { applyTripDetails } from '../../shared/roadtrip/trip-edit';
 import {
   dayStageActions,
   insertStageInOrder,
@@ -51,7 +50,7 @@ import { levelOf, type DayMenuItem, type DayStage } from './DayHeatmap';
 import DayPanel from './DayPanel';
 import LocatePicturePanel from './LocatePicturePanel';
 import StagesPanel, { StageCard } from './StagesPanel';
-import TripDetailsModal, { type TripDetails } from './TripDetailsModal';
+import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import PageBar from '../../shared/ui/PageBar';
 import { useAtLeast, useIsCompact } from '../../shared/ui/use-layout-mode';
 import { Icons } from '../../shared/ui/icons';
@@ -74,6 +73,10 @@ import { usePublishSectionBar } from '../../shared/ui/section-rail';
 
 interface TripOverviewProps {
   trip: TripDoc;
+  /** Open the trip's settings on this section as the overview mounts — the gallery's «Trip settings…». */
+  initialSettings?: TripSettingsSection | null;
+  /** Said once the overview has taken `initialSettings`, so it is not taken again. */
+  onSettingsTaken?: () => void;
   /** The day the route names; null falls back to the first day of the trip. */
   selectedDate: IsoDate | null;
   /** `replace` rewrites the route rather than adding a step — a drag along the year map. */
@@ -233,6 +236,8 @@ export default function TripOverview({
   onCompleteFrom,
   deduceSources,
   onDeduceFrom,
+  initialSettings,
+  onSettingsTaken,
 }: TripOverviewProps) {
   const compact = useIsCompact();
   const expanded = useAtLeast('expanded');
@@ -530,7 +535,13 @@ export default function TripOverview({
   );
 
   // The dates-and-route sheet, the creation modal reopened on this trip.
-  const [editingDetails, setEditingDetails] = useState(false);
+  // The trip's settings sheet and the section it is open on (`TripSettingsModal`).
+  const [settings, setSettings] = useState<TripSettingsSection | null>(initialSettings ?? null);
+  const editingDetails = settings !== null;
+  useEffect(() => {
+    if (initialSettings) onSettingsTaken?.();
+    // Mount only: what the gallery asked for is taken once.
+  }, []);
   // The phone's day sheet: pulled up from the strip, never by a tap on a cell.
   const [dayOpen, setDayOpen] = useState(false);
   // Read once here so the strip and the sheet draw the same pictures.
@@ -878,34 +889,23 @@ export default function TripOverview({
               label: 'Trip overview',
               onSelect: (id: string) => {
                 if (id === 'legs') setLegsOpen(true);
-                else setEditingDetails(true);
+                else setSettings('dates');
               },
             }
           : null,
       [compact, legsOpen, editingDetails, adjusting],
     ),
   );
-  const saveDetails = useCallback(
-    (details: TripDetails) => {
-      setEditingDetails(false);
-      const next = applyTripDetails(trip, {
-        startDate: details.startDate,
-        endDate: details.endDate,
-      });
-      onChange({
-        ...next,
-        cover: details.cover,
-        ...(details.road !== undefined ? { road: details.road } : {}),
-        updatedAt: Date.now(),
-      });
-      // The open day may no longer be in the trip: the route says where you
-      // are, so it has to follow rather than leave the panel on a day the
-      // calendar no longer draws.
-      if (selected && !isWithin(next.startDate, next.endDate, selected)) {
-        onSelectDate(next.startDate);
-      }
+  // Every write of the settings sheet: stamped, and the open day kept inside
+  // the trip — new dates may leave it outside, and the route says where you
+  // are, so it follows rather than leave the panel on a day the calendar no
+  // longer draws.
+  const changeFromSettings = useCallback(
+    (next: TripDoc) => {
+      onChange({ ...next, updatedAt: Date.now() });
+      if (selected && !isWithin(next.startDate, next.endDate, selected)) onSelectDate(next.startDate);
     },
-    [trip, onChange, onSelectDate, selected],
+    [onChange, onSelectDate, selected],
   );
 
   const stagesPanel = (
@@ -1009,7 +1009,7 @@ export default function TripOverview({
           ),
         )
       : []),
-    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => setEditingDetails(true), !onDeduceFrom || !(deduceSources ?? []).length),
+    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => setSettings('dates'), !onDeduceFrom || !(deduceSources ?? []).length),
   ];
 
   // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
@@ -1100,15 +1100,12 @@ export default function TripOverview({
         />
       )}
 
-      {editingDetails && (
-        <TripDetailsModal
+      {settings && (
+        <TripSettingsModal
           trip={trip}
-          onCancel={() => setEditingDetails(false)}
-          onSubmit={saveDetails}
-          onReset={(next) => {
-            setEditingDetails(false);
-            onChange(next);
-          }}
+          section={settings}
+          onChangeTrip={changeFromSettings}
+          onClose={() => setSettings(null)}
         />
       )}
     </>
@@ -1365,7 +1362,7 @@ export default function TripOverview({
             />
             {deduceButtons}
             <Button
-              onClick={() => setEditingDetails(true)}
+              onClick={() => setSettings('dates')}
               icon={Icons.settings}
               title="The trip's dates, route and cover"
             >
@@ -1383,7 +1380,7 @@ export default function TripOverview({
           <TripTitle name={trip.name} onRename={rename} />
           <button
             type="button"
-            onClick={() => setEditingDetails(true)}
+            onClick={() => setSettings('dates')}
             title="Change the trip's dates"
             className="self-start p-0 border-0 bg-transparent text-xs text-muted text-left cursor-pointer hover:text-accent-ink hover:underline underline-offset-[3px]"
           >

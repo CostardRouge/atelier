@@ -823,6 +823,16 @@ leg: the New trip dialog asks for the name and the two dates and nothing else,
 so a trip starts with no leg at all and a day outside every leg names no place
 rather than claiming one.
 
+**One Trip settings, wherever you are.** The overview's *Trip settings*, a
+piece's ⚙ and a gallery card's ⋯ **Trip settings…** open the same sheet: a rail
+of sections — *Name and dates*, *Cover* (its layout and up to three pinned
+pieces), *Places*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
+pieces*, *Backup and start over* — beside one pane. Every change is written at
+once and ⌘Z takes it back; the dates alone wait for **Apply the new dates**,
+after saying what a shorter span does to the legs (trimmed, dropped) and to the
+pieces (kept, off the calendar). Opened from a piece, *New pieces* offers to
+save that piece's look for the next pieces of its kind or reset it.
+
 **Working the itinerary out, instead of typing it.** Drawing a three-month
 trip's legs by hand is some three hundred gestures, most of them archaeology
 about where you were on a given day — so the legs can be *deduced* instead,
@@ -869,7 +879,7 @@ before you review exactly what will be, every stage written carries a mark so
 the ⋯ menu can take them all out again, a re-run recognises what is already in
 the trip, and no piece is ever created.
 
-**Starting over.** Trip settings, under the dates and the cover, offers to
+**Starting over.** Trip settings → *Backup and start over* offers to
 start the legs over when a run went wrong: *Remove what Deduce added* (only the
 legs it wrote), *Clear the places* (every leg keeps its dates and name, ready
 to be placed again) or *Remove every leg*. A verb appears only when it has
@@ -899,8 +909,7 @@ Review whenever the export has a track, writes that track onto the trip as its *
 line the openers drive and the kilometres they count, never a place. It is
 kept whole (a year is about 55 KB), raw fixes included, and travels in the
 backup; writing a new export replaces the fixes and keeps how the trip reads
-them. **Trip settings → Road** (in the overview's sheet, or the piece's ⚙)
-chooses how it is read, each choice with the kilometres it counts: *Crow
+them. **Trip settings → Road** chooses how it is read, each choice with the kilometres it counts: *Crow
 flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider

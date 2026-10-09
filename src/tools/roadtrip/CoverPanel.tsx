@@ -45,12 +45,9 @@ const legend = 'm-0 font-mono text-2xs tracking-[0.14em] uppercase text-muted';
 /**
  * Choosing what a trip shows of itself: the layout, and the pieces pinned to it.
  *
- * A controlled panel rather than a screen, because it has TWO homes and neither
- * can be the only one. The trip's details sheet is where the trip's own
- * properties are edited, so the cover belongs beside its name and its dates;
- * the gallery is where a cover is looked at, so it is also reachable from the
- * card. One panel, so the two can never drift — the same reason `StylePanel`
- * and `GradePanel` became shared the moment they had a second consumer.
+ * A controlled panel, drawn by Trip settings' Cover section — the one sheet
+ * of the trip's own properties, reached from the overview, a piece and the
+ * gallery card alike (its «Trip settings…» opens the trip on this section).
  *
  * Every thumbnail of the trip is loaded here rather than the handful a card
  * needs: the point of the panel is to see the pieces and pick among them. They
