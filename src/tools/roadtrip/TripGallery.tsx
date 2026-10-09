@@ -1,4 +1,4 @@
-import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import { tripCoverage, type TripCoverage } from '../../shared/roadtrip/trip-coverage';
@@ -54,7 +54,8 @@ import TripCoverModal from './TripCoverModal';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 import useCoverThumbs from './use-cover-thumbs';
 import { pageScroll } from '../../shared/ui/page-scroll';
-import { revealInScroller } from '../../shared/ui/reveal';
+import ClonedNotice from '../../shared/ui/ClonedNotice';
+import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import Button from '../../shared/ui/Button';
@@ -417,7 +418,7 @@ function TripRow({
       role="button"
       tabIndex={0}
       aria-label={`Open ${trip.name}`}
-      data-trip-id={trip.id}
+      data-doc-id={trip.id}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, a, [role="menu"]')) return;
@@ -639,7 +640,7 @@ function TripCard({
       role="button"
       tabIndex={0}
       aria-label={`Open ${trip.name}`}
-      data-trip-id={trip.id}
+      data-doc-id={trip.id}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, select, input, label, a, [role="menu"]')) {
@@ -822,8 +823,6 @@ export default function TripGallery({
   // accent and named in the status line, so a clone that landed beside its
   // original is never lost among two cards of one name).
   const [cloning, setCloning] = useState<TripDoc | null>(null);
-  const [cloned, setCloned] = useState<TripDoc | null>(null);
-  const freshId = cloned?.id ?? null;
 
   // The lists, the groups and the verbs that cross a source are shared with
   // every document gallery (`use-document-gallery.ts`); this driver says how a
@@ -894,29 +893,7 @@ export default function TripGallery({
     ),
   );
   const { urls, hasThumb } = useCoverThumbs(trips);
-
-  // The status line lets go by itself, and so does the accent on the card.
-  useEffect(() => {
-    if (!cloned) return;
-    const timer = window.setTimeout(() => setCloned(null), 12000);
-    return () => window.clearTimeout(timer);
-  }, [cloned]);
-
-  // Bring the clone into view once it is drawn — it lands next to the other
-  // trips of its source, which may be a screen away on a long gallery.
-  const scrolledTo = useRef<string | null>(null);
-  useEffect(() => {
-    if (!freshId) {
-      scrolledTo.current = null;
-      return;
-    }
-    if (scrolledTo.current === freshId) return;
-    const el = document.querySelector<HTMLElement>(`[data-trip-id="${freshId}"]`);
-    if (!el) return;
-    scrolledTo.current = freshId;
-    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
-    revealInScroller(el, { block: 'nearest', behavior: calm ? 'auto' : 'smooth', margin: 12 });
-  }, [freshId, trips]);
+  const { cloned, setCloned, freshId } = useFreshClone(trips);
 
   /** The names a source already holds — mirrored here or listed only there. */
   const namesIn = useCallback(
@@ -1100,40 +1077,21 @@ export default function TripGallery({
         </p>
       )}
 
-      {/* Pinned to the top of the scroller: the clone may be a screen below. */}
       {cloned && (
-        <div
-          role="status"
-          className="sticky top-0 z-10 flex items-center gap-x-4 gap-y-1 flex-wrap px-3.5 py-2 bg-ink text-paper rounded-paper text-sm shadow-paper"
-        >
-          <span className="min-w-0 flex-1 basis-48">
-            <span className="inline-flex align-[-2px] mr-1.5">{Icons.check}</span>
-            Cloned as <strong className="font-semibold">“{cloned.name}”</strong>
-            <span className="opacity-70 text-xs"> · {sourceLabel(cloned.sourceId)}</span>
-          </span>
-          <button
-            type="button"
-            onClick={() => {
-              const doc = cloned;
-              setCloned(null);
-              open(doc);
-            }}
-            className="p-0 border-0 bg-transparent text-inherit font-semibold underline underline-offset-[3px] cursor-pointer"
-          >
-            Open
-          </button>
-          <button
-            type="button"
-            onClick={() => {
-              const doc = cloned;
-              setCloned(null);
-              void handleDelete(doc, null);
-            }}
-            className="p-0 border-0 bg-transparent text-inherit font-semibold underline underline-offset-[3px] cursor-pointer"
-          >
-            Undo
-          </button>
-        </div>
+        <ClonedNotice
+          name={cloned.name}
+          sourceId={cloned.sourceId}
+          onOpen={() => {
+            const doc = cloned;
+            setCloned(null);
+            open(doc);
+          }}
+          onUndo={() => {
+            const doc = cloned;
+            setCloned(null);
+            void handleDelete(doc, null);
+          }}
+        />
       )}
 
       <AbsentSourceNotes absent={absent} />
