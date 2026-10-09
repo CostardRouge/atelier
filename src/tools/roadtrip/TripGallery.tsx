@@ -1,4 +1,4 @@
-import { useCallback, useMemo, useRef, useState } from 'react';
+import { useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import { tripRouteLabel } from '../../shared/roadtrip/trip-places';
 import { tripCoverage, type TripCoverage } from '../../shared/roadtrip/trip-coverage';
@@ -10,6 +10,7 @@ import {
 } from '../../shared/roadtrip/trip-cover';
 import { createTripDoc, type TripCover, type TripDoc } from '../../shared/roadtrip/trip-types';
 import { applyHouseStyle } from '../../shared/roadtrip/house-style';
+import { cloneTrip } from '../../shared/roadtrip/clone-trip';
 import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import {
   TRIP_FILE_ACCEPT,
@@ -29,6 +30,7 @@ import { downloadBlob } from '../../shared/media/save';
 import {
   deleteSyncRecord,
   deleteThumbs,
+  copyThumbs,
   deleteTrip,
   getSyncRecord,
   listTrips,
@@ -47,10 +49,12 @@ import {
 } from '../../shared/roadtrip/trip-remote';
 import TripDetailsModal, { type TripDetails, type TimelineSourceOption } from './TripDetailsModal';
 import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
+import CloneDocumentModal, { type CloneChoice } from '../../shared/ui/CloneDocumentModal';
 import TripCoverModal from './TripCoverModal';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 import useCoverThumbs from './use-cover-thumbs';
 import { pageScroll } from '../../shared/ui/page-scroll';
+import { revealInScroller } from '../../shared/ui/reveal';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import Button from '../../shared/ui/Button';
@@ -238,6 +242,7 @@ function TripActions({
   moveTargets,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
   onChooseCover,
@@ -249,6 +254,7 @@ function TripActions({
   moveTargets: readonly SourceInfo[];
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
@@ -268,6 +274,15 @@ function TripActions({
       label: 'Export the trip file',
       title: `Save the whole trip as a ${TRIP_FILE_EXTENSION} file`,
       onSelect: onExport,
+    },
+    {
+      id: 'clone',
+      label: 'Clone…',
+      title: remoteOnly
+        ? 'Open it here first — a clone is made from the copy this device holds'
+        : 'Make a copy of this trip, here or on another source',
+      disabled: remoteOnly,
+      onSelect: onClone,
     },
     ...(!remoteOnly
       ? moveTargets.map((target) => ({
@@ -370,22 +385,27 @@ function DayStrip({ coverage, className = '' }: { coverage: TripCoverage; classN
 function TripRow({
   trip,
   isOpen,
+  fresh = false,
   remoteOnly,
   moveTargets,
   busy,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
   onChooseCover,
 }: {
   trip: TripDoc;
   isOpen: boolean;
+  /** Just cloned: drawn with the accent until the gallery lets it go. */
+  fresh?: boolean;
   remoteOnly: boolean;
   moveTargets: readonly SourceInfo[];
   busy: string | null;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
@@ -397,6 +417,7 @@ function TripRow({
       role="button"
       tabIndex={0}
       aria-label={`Open ${trip.name}`}
+      data-trip-id={trip.id}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, a, [role="menu"]')) return;
@@ -410,7 +431,7 @@ function TripRow({
       }}
       className={`grid grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-3 py-2.5 border-b border-line cursor-pointer transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent ${
         remoteOnly ? 'opacity-75' : ''
-      } ${isOpen ? 'bg-accent-wash/50' : ''}`}
+      } ${isOpen || fresh ? 'bg-accent-wash/50' : ''}`}
     >
       <div className="min-w-0 flex flex-col gap-0.5">
         <span className="text-sm font-semibold truncate" title={trip.name}>
@@ -441,6 +462,7 @@ function TripRow({
           moveTargets={moveTargets}
           onOpen={onOpen}
           onExport={onExport}
+          onClone={onClone}
           onDelete={onDelete}
           onMove={onMove}
           onChooseCover={onChooseCover}
@@ -464,6 +486,7 @@ function ResumeBand({
   hasThumb,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
   onChooseCover,
@@ -476,6 +499,7 @@ function ResumeBand({
   hasThumb: (postId: string) => boolean;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
@@ -525,6 +549,7 @@ function ResumeBand({
             moveTargets={moveTargets}
             onOpen={onOpen}
             onExport={onExport}
+            onClone={onClone}
             onDelete={onDelete}
             onMove={onMove}
             onChooseCover={onChooseCover}
@@ -562,6 +587,7 @@ function ResumeBand({
 function TripCard({
   trip,
   isOpen,
+  fresh = false,
   lastOpened,
   remoteOnly,
   moveTargets,
@@ -570,12 +596,15 @@ function TripCard({
   hasThumb,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
   onChooseCover,
 }: {
   trip: TripDoc;
   isOpen: boolean;
+  /** Just cloned: drawn with the accent until the gallery lets it go. */
+  fresh?: boolean;
   /** The trip this browser opened last — where "resume" would land. */
   lastOpened: boolean;
   /** Kept on an instance and not yet mirrored here: opening pulls it first. */
@@ -589,6 +618,7 @@ function TripCard({
   hasThumb: (postId: string) => boolean;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
   onChooseCover: () => void;
@@ -609,6 +639,7 @@ function TripCard({
       role="button"
       tabIndex={0}
       aria-label={`Open ${trip.name}`}
+      data-trip-id={trip.id}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, select, input, label, a, [role="menu"]')) {
@@ -624,7 +655,7 @@ function TripCard({
       }}
       className={`relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         busy === null ? 'cursor-pointer' : ''
-      } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
+      } ${isOpen || fresh ? 'border-accent' : 'border-line hover:border-line-strong'} ${
         remoteOnly ? 'opacity-75' : ''
       }`}
     >
@@ -660,13 +691,13 @@ function TripCard({
           </h3>
           {/* Where you were: the trip this browser opened last, or the one
               open right now. One tag, never both — "open" wins. */}
-          {(isOpen || lastOpened) && (
+          {(isOpen || lastOpened || fresh) && (
             <span
               className={`flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] ${
-                isOpen ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
+                isOpen || fresh ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
               }`}
             >
-              {isOpen ? 'open' : 'last opened'}
+              {isOpen ? 'open' : fresh ? 'new' : 'last opened'}
             </span>
           )}
           <span className="flex-1" />
@@ -678,6 +709,7 @@ function TripCard({
               moveTargets={moveTargets}
               onOpen={onOpen}
               onExport={onExport}
+              onClone={onClone}
               onDelete={onDelete}
               onMove={onMove}
               onChooseCover={onChooseCover}
@@ -786,6 +818,12 @@ export default function TripGallery({
   );
   const [importing, setImporting] = useState(false);
   const [covering, setCovering] = useState<TripDoc | null>(null);
+  // The trip whose Clone sheet is open, the one just made (drawn with the
+  // accent and named in the status line, so a clone that landed beside its
+  // original is never lost among two cards of one name).
+  const [cloning, setCloning] = useState<TripDoc | null>(null);
+  const [cloned, setCloned] = useState<TripDoc | null>(null);
+  const freshId = cloned?.id ?? null;
 
   // The lists, the groups and the verbs that cross a source are shared with
   // every document gallery (`use-document-gallery.ts`); this driver says how a
@@ -857,6 +895,38 @@ export default function TripGallery({
   );
   const { urls, hasThumb } = useCoverThumbs(trips);
 
+  // The status line lets go by itself, and so does the accent on the card.
+  useEffect(() => {
+    if (!cloned) return;
+    const timer = window.setTimeout(() => setCloned(null), 12000);
+    return () => window.clearTimeout(timer);
+  }, [cloned]);
+
+  // Bring the clone into view once it is drawn — it lands next to the other
+  // trips of its source, which may be a screen away on a long gallery.
+  const scrolledTo = useRef<string | null>(null);
+  useEffect(() => {
+    if (!freshId) {
+      scrolledTo.current = null;
+      return;
+    }
+    if (scrolledTo.current === freshId) return;
+    const el = document.querySelector<HTMLElement>(`[data-trip-id="${freshId}"]`);
+    if (!el) return;
+    scrolledTo.current = freshId;
+    const calm = window.matchMedia('(prefers-reduced-motion: reduce)').matches;
+    revealInScroller(el, { block: 'nearest', behavior: calm ? 'auto' : 'smooth', margin: 12 });
+  }, [freshId, trips]);
+
+  /** The names a source already holds — mirrored here or listed only there. */
+  const namesIn = useCallback(
+    (sourceId: string): string[] => {
+      const group = groups.find((g) => g.id === sourceId);
+      return group ? [...group.items, ...group.remoteOnly.map((r) => r.doc)].map((t) => t.name) : [];
+    },
+    [groups],
+  );
+
   async function handleCreate(choices: TripDetails) {
     setNotice(null);
     // A new trip wears the house style when one is committed; a backup or an
@@ -867,6 +937,23 @@ export default function TripGallery({
     );
     setCreating(false);
     if (await createOn(doc, 'created')) open(doc);
+  }
+
+  /**
+   * A clone is written like a creation — where it is KEPT first, mirrored here
+   * after — so a refusal from the instance leaves nothing behind and says so.
+   * Its hook thumbnails are copied under the new pieces' ids, on this device,
+   * once the trip exists.
+   */
+  async function handleClone(trip: TripDoc, choice: CloneChoice) {
+    setNotice(null);
+    const { doc, thumbIds } = cloneTrip(trip, { name: choice.name, sourceId: choice.sourceId });
+    const ok = await createOn(doc, 'cloned');
+    setCloning(null);
+    if (!ok) return;
+    await copyThumbs(thumbIds);
+    setCloned(doc);
+    refresh();
   }
 
   /** The whole trip on disk — a backup, and how it reaches another machine. */
@@ -1013,6 +1100,42 @@ export default function TripGallery({
         </p>
       )}
 
+      {/* Pinned to the top of the scroller: the clone may be a screen below. */}
+      {cloned && (
+        <div
+          role="status"
+          className="sticky top-0 z-10 flex items-center gap-x-4 gap-y-1 flex-wrap px-3.5 py-2 bg-ink text-paper rounded-paper text-sm shadow-paper"
+        >
+          <span className="min-w-0 flex-1 basis-48">
+            <span className="inline-flex align-[-2px] mr-1.5">{Icons.check}</span>
+            Cloned as <strong className="font-semibold">“{cloned.name}”</strong>
+            <span className="opacity-70 text-xs"> · {sourceLabel(cloned.sourceId)}</span>
+          </span>
+          <button
+            type="button"
+            onClick={() => {
+              const doc = cloned;
+              setCloned(null);
+              open(doc);
+            }}
+            className="p-0 border-0 bg-transparent text-inherit font-semibold underline underline-offset-[3px] cursor-pointer"
+          >
+            Open
+          </button>
+          <button
+            type="button"
+            onClick={() => {
+              const doc = cloned;
+              setCloned(null);
+              void handleDelete(doc, null);
+            }}
+            className="p-0 border-0 bg-transparent text-inherit font-semibold underline underline-offset-[3px] cursor-pointer"
+          >
+            Undo
+          </button>
+        </div>
+      )}
+
       <AbsentSourceNotes absent={absent} />
 
       {trips === null ? (
@@ -1099,6 +1222,7 @@ export default function TripGallery({
                             hasThumb={hasThumb}
                             onOpen={() => open(lead)}
                             onExport={() => handleExport(lead)}
+                            onClone={() => setCloning(lead)}
                             onDelete={() => void handleDelete(lead, null)}
                             onMove={(target) => void handleMove(lead, target)}
                             onChooseCover={() => setCovering(lead)}
@@ -1110,11 +1234,13 @@ export default function TripGallery({
                               key={trip.id}
                               trip={trip}
                               isOpen={false}
+                              fresh={trip.id === freshId}
                               remoteOnly={false}
                               moveTargets={moveTargets}
                               busy={busy[trip.id] ?? null}
                               onOpen={() => open(trip)}
                               onExport={() => handleExport(trip)}
+                              onClone={() => setCloning(trip)}
                               onDelete={() => void handleDelete(trip, null)}
                               onMove={(target) => void handleMove(trip, target)}
                               onChooseCover={() => setCovering(trip)}
@@ -1130,6 +1256,7 @@ export default function TripGallery({
                               busy={busy[row.doc.id] ?? null}
                               onOpen={() => void handleOpenRemote(row)}
                               onExport={() => handleExport(row.doc)}
+                              onClone={() => setCloning(row.doc)}
                               onDelete={() => void handleDelete(row.doc, row.etag)}
                               onMove={() => undefined}
                               onChooseCover={() => setCovering(row.doc)}
@@ -1157,6 +1284,7 @@ export default function TripGallery({
                         key={trip.id}
                         trip={trip}
                         isOpen={trip.id === openTripId}
+                        fresh={trip.id === freshId}
                         lastOpened={openTripId === null && trip.id === lastOpenedId}
                         remoteOnly={false}
                         moveTargets={moveTargets}
@@ -1165,6 +1293,7 @@ export default function TripGallery({
                         hasThumb={hasThumb}
                         onOpen={() => open(trip)}
                         onExport={() => handleExport(trip)}
+                        onClone={() => setCloning(trip)}
                         onDelete={() => void handleDelete(trip, null)}
                         onMove={(target) => void handleMove(trip, target)}
                         onChooseCover={() => setCovering(trip)}
@@ -1183,6 +1312,7 @@ export default function TripGallery({
                         hasThumb={hasThumb}
                         onOpen={() => void handleOpenRemote(row)}
                         onExport={() => handleExport(row.doc)}
+                        onClone={() => setCloning(row.doc)}
                         onDelete={() => void handleDelete(row.doc, row.etag)}
                         onMove={() => undefined}
                         onChooseCover={() => setCovering(row.doc)}
@@ -1194,6 +1324,27 @@ export default function TripGallery({
             );
           })}
         </div>
+      )}
+
+      {cloning && (
+        <CloneDocumentModal
+          noun="trip"
+          original={cloning.name}
+          originalSourceId={cloning.sourceId}
+          sources={documentSources}
+          namesIn={namesIn}
+          note={
+            <>
+              <p>Everything comes along: days, legs, pieces, looks, words and theme.</p>
+              <p>
+                Not the pictures themselves — they are found again by their hash — nor the links to
+                Studio projects.
+              </p>
+            </>
+          }
+          onCancel={() => setCloning(null)}
+          onConfirm={(choice) => handleClone(cloning, choice)}
+        />
       )}
 
       {covering && (
