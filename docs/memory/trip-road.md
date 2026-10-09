@@ -138,3 +138,13 @@ file a day). Trip settings → Road → *Add a GPX…* runs `addGpxToRoad` →
 the same instant once, mode/detail/hand points kept, `TripRoad.source`
 becoming `gpx` or `mixed` (read back as `polarsteps` when unknown), and the
 panel says what was added or why nothing was.
+
+GPX in DEDUCE too (same day): a `.gpx` (by name or by its `<gpx` head) is the
+TRACK half of the export — `PolarstepsTrack.origin: 'gpx'` — so its timed
+points place the days on the same rules (solar clock without a `trip.json`,
+the step's zone with one) and *Keep the road from GPX* writes `source: 'gpx'`.
+All the GPX files of one drop are read as ONE journey and then weighed, as
+one track, against a `locations.json` by the trip's days they cover. The
+chip says `GPX`, `Polarsteps + GPX` or `Polarsteps`. Not driven in a
+browser: the Deduce window needs a Winnow connection (a stub), so it rests
+on the unit tests of `addPolarstepsFiles` and the Road panel's drive.

@@ -16,7 +16,7 @@ import {
   type DraftOutcome,
 } from '../../../shared/roadtrip/deduce-draft';
 import { addPolarstepsFiles, sourcesOf, type PolarstepsExport } from '../../../shared/roadtrip/polarsteps';
-import { fixesFrom, makeTripRoad, tripRoadLine, DEFAULT_ROAD_MODE } from '../../../shared/roadtrip/road-track';
+import { fixesFrom, makeTripRoad, roadSourceText, tripRoadLine, DEFAULT_ROAD_MODE, type RoadSource } from '../../../shared/roadtrip/road-track';
 import type { TripDoc } from '../../../shared/roadtrip/trip-types';
 import { filesFromDataTransfer } from '../../../shared/sources/file-sources';
 import type { WinnowConnection } from '../../../shared/sources/winnow/store';
@@ -67,7 +67,8 @@ import { revealInScroller } from '../../../shared/ui/reveal';
  * **A Polarsteps export may be dropped in** (2026-10-08, `polarsteps.ts`):
  * its track places a day before the instance does, on the day's own clock,
  * and its steps name the places before the index. One chip says it; the
- * files are read here and forgotten with the window.
+ * files are read here and forgotten with the window. GPX files stand in for
+ * its `locations.json` (`gpx.ts`), alone or beside a `trip.json`.
  */
 
 interface DeduceStagesPanelProps {
@@ -129,18 +130,20 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
 
   const outcome = useMemo(() => draftOutcome(proposals, draft, { sourceId, now: 0 }), [proposals, draft, sourceId]);
   const toWrite = outcome.adds.length + outcome.completes.length;
+  // Where the track came from — a GPX stands in for locations.json.
+  const roadSource: RoadSource = polarsteps?.track?.origin === 'gpx' ? 'gpx' : 'polarsteps';
   // The road the export would give the trip, measured as the trip reads it.
   const roadOffer = useMemo(() => {
     const fixes = polarsteps?.track?.fixes ?? [];
     if (fixes.length < 2) return null;
-    const road = makeTripRoad(fixesFrom(fixes), trip, trip.road, 0);
+    const road = makeTripRoad(fixesFrom(fixes), trip, trip.road, 0, roadSource);
     if (!road) return null;
     // Measured within the trip's span, as the trip reads it (as the crow
     // flies reads nothing, so the default reading is said instead).
     const mode = road.mode === 'crow' ? DEFAULT_ROAD_MODE : road.mode;
     const line = tripRoadLine({ ...road, mode });
     return { fixes: road.fixes, km: line.km, read: mode === 'stages' ? 'between stays' : mode === 'moves' ? 'every move' : 'raw' };
-  }, [polarsteps, trip]);
+  }, [polarsteps, trip, roadSource]);
   const writesRoad = keepRoad && roadOffer !== null;
   const canWrite = toWrite > 0 || writesRoad;
 
@@ -224,7 +227,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
     async (files: File[]) => {
       const texts = await exportTexts(files);
       if (!texts.length) {
-        setPolarError('Nothing to read here: drop trip.json, locations.json or their folder.');
+        setPolarError('Nothing to read here: drop trip.json, locations.json, their folder or GPX files.');
         return;
       }
       const { value, errors } = addPolarstepsFiles(polarRef.current, texts, { from: trip.startDate, to: trip.endDate });
@@ -241,7 +244,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
     const applied = applyDraft(trip, out, now);
     const fixes = polarsteps?.track?.fixes ?? [];
     const written = writesRoad
-      ? { ...applied.trip, road: makeTripRoad(fixesFrom(fixes), applied.trip, trip.road, now) }
+      ? { ...applied.trip, road: makeTripRoad(fixesFrom(fixes), applied.trip, trip.road, now, roadSource) }
       : applied.trip;
     onWrite(written, applied.spanWidened);
     setLastRun(out);
@@ -453,7 +456,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
               <button
                 type="button"
                 onClick={() => setPane('data')}
-                title={`${deduction.days.length} days · ${placed} placed${bySource ? ` (${bySource.track} by the Polarsteps track, ${bySource.instance} by ${sourceId}, ${bySource.step} by a step alone)` : ''} · ${blind} without position · ${sourceId}${ago !== null ? `, read ${ago === 0 ? 'just now' : `${ago} min ago`}` : ''}`}
+                title={`${deduction.days.length} days · ${placed} placed${bySource ? ` (${bySource.track} by the ${polarsteps?.track?.origin === 'gpx' ? 'GPX' : 'Polarsteps'} track, ${bySource.instance} by ${sourceId}, ${bySource.step} by a step alone)` : ''} · ${blind} without position · ${sourceId}${ago !== null ? `, read ${ago === 0 ? 'just now' : `${ago} min ago`}` : ''}`}
                 className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-line bg-transparent font-mono text-2xs text-ink-soft cursor-pointer hover:border-line-strong hover:text-ink"
               >
                 <i className={`w-1.5 h-1.5 rounded-full ${flaws.length ? 'bg-warn' : 'bg-ok'}`} aria-hidden="true" />
@@ -501,7 +504,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         <div ref={bodyRef} className={`flex-1 min-h-0 overflow-auto [container-type:size] flex flex-col gap-3.5 pt-3 pb-4 ${padX} [&>*]:flex-none`}>
           {deduction.problem && polarsteps && deduction.track && (
             <p className="m-0 font-mono text-xs text-warn" role="status">
-              {deduction.problem.text} Deducing from Polarsteps alone.
+              {deduction.problem.text} Deducing from {polarsteps.track?.origin === 'gpx' ? (polarsteps.trip ? 'Polarsteps and GPX' : 'GPX') : 'Polarsteps'} alone.
             </p>
           )}
           {deduction.problem && !deduction.track ? (
@@ -526,7 +529,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
                     className="mt-1 accent-[var(--color-accent)]"
                   />
                   <span className="min-w-0 text-sm">
-                    <b className="font-medium">Keep the road from Polarsteps</b>{' '}
+                    <b className="font-medium">Keep the road from {roadSourceText(roadSource)}</b>{' '}
                     <InfoDot about="the road">
                       <p>The track becomes the line the openers drive and the kilometres they count. Your places stay as they are.</p>
                       <p>It is kept whole, home and work included, and travels in the backup; Trip settings → Road chooses how it is read.</p>

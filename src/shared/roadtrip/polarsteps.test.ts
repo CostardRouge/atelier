@@ -4,6 +4,7 @@ import { EMPTY_DRAFT, haltName, haltPlace } from './deduce-draft';
 import type { GazetteerCity } from './gazetteer';
 import {
   addPolarstepsFiles,
+  isExportFile,
   dayOfFix,
   localDay,
   mergeDays,
@@ -354,6 +355,29 @@ describe('addPolarstepsFiles', () => {
     );
     expect(value?.trip?.steps[0].name).toBe('This one');
     expect(value?.track?.fixes[0].time).toBe(utc(2025, 7, 3));
+  });
+
+  it('takes GPX files as the track, one journey across a file a day', () => {
+    const gpx = (day: number) =>
+      `<gpx><trk><trkseg><trkpt lat="-25" lon="152"><time>2025-07-0${day}T02:00:00Z</time></trkpt>` +
+      `<trkpt lat="-25.1" lon="152.1"><time>2025-07-0${day}T03:00:00Z</time></trkpt></trkseg></trk></gpx>`;
+    const { value, errors } = addPolarstepsFiles(
+      null,
+      [
+        { name: 'day3.gpx', body: gpx(3) },
+        { name: 'day4.GPX', body: gpx(4) },
+        { name: 'plan.gpx', body: '<gpx><rtept lat="1" lon="2"></rtept></gpx>' },
+      ],
+      { from: '2025-07-01', to: '2025-07-31' },
+    );
+    expect(value?.track?.origin).toBe('gpx');
+    expect(value?.track?.fixes).toHaveLength(4);
+    expect(errors).toEqual(['plan.gpx has no times: a planned route cannot be put on the trip’s clock.']);
+    // A locations.json covering more of the trip wins over them.
+    const more = JSON.stringify({ locations: [3, 4, 5, 6].map((d) => ({ lat: -25, lon: 152, time: utc(2025, 7, d) })) });
+    const both = addPolarstepsFiles(null, [{ name: 'day3.gpx', body: gpx(3) }, { name: 'locations.json', body: more }], { from: '2025-07-01', to: '2025-07-31' });
+    expect(both.value?.track?.origin).toBeUndefined();
+    expect(isExportFile('Track 2025-07-03.gpx')).toBe(true);
   });
 
   it('summarises what was read against the trip', () => {
