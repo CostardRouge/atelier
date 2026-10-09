@@ -88,7 +88,13 @@ crow's shared by arc on a curve — so `kmAt`, `kmAtStop`, the milestones
 (`sAlong`) and the summary card count what the vehicle drives, exactly, never
 by plan length (the projection's scale varies with latitude). On a road path
 the heading is read over a chord (`headingAt`), or the car twitches on every
-fix. Measured locally on his track (never committed): 143 simulated stops,
+fix — and the chord is NEVER a share of the piece (2026-10-09, his report of
+a trembling car): 3 % of the path was 1.3 km on a day and 600 km on a piece
+driving the whole trip, which pointed the car at a far town while it slid
+through every bend. The plan's default is `ROAD_HEADING_KM` (1 km) on the
+ground; the painter passes its own, two vehicle lengths ON SCREEN
+(`HEADING_LENGTHS`), so close up the car follows its bend and from afar a
+town's streets do not spin it. Measured locally on his track (never committed): 143 simulated stops,
 99 hops on the road at `stages`/100 m, the road hops summing to the line's
 own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
 

@@ -31,6 +31,7 @@ import {
   driveWants,
   graticuleStep,
   headingAt,
+  sAlong,
   jitter,
   planPoints,
   pointAt,
@@ -419,6 +420,30 @@ describe('the path', () => {
     const after = headingAt(path, 103, 10);
     expect(after.y).toBeGreaterThan(0.5);
     expect(after.x).toBeGreaterThan(0.1);
+  });
+
+  it('reads a road’s direction over a chord on the ground, whatever the piece’s length', () => {
+    // A road (1 plan unit = 1 km) east for 10 km, then north for `north` km.
+    const road = (north: number) => {
+      const via: { x: number; y: number }[] = [];
+      for (let x = 0.5; x < 10; x += 0.5) via.push({ x, y: 0 });
+      for (let y = 0; y < north; y += 0.5) via.push({ x: 10, y });
+      const viaKm = via.map((p) => p.x + p.y);
+      return buildPath([{ x: 0, y: 0 }, { x: 10, y: north }], 'straight', [{ via, viaKm, km: 10 + north }]);
+    };
+    for (const north of [10, 2000]) {
+      const path = road(north);
+      // 5 km in, on the eastward stretch: east, on a day's piece and on a whole trip's alike.
+      const h = headingAt(path, sAlong(path, 5));
+      expect(h.x).toBeCloseTo(1, 6);
+      expect(h.y).toBeCloseTo(0, 6);
+      // The corner turns over the chord's kilometre, never before it.
+      expect(headingAt(path, sAlong(path, 9.4)).y).toBeCloseTo(0, 6);
+      expect(headingAt(path, sAlong(path, 10)).y).toBeGreaterThan(0.5);
+    }
+    // A caller's own chord (the painter's, in plan units) still wins.
+    const long = road(2000);
+    expect(headingAt(long, sAlong(long, 5), 600).y).toBeGreaterThan(0.5);
   });
 
   it('is a centripetal spline: the middle of a segment sits between its ends', () => {

@@ -1134,20 +1134,45 @@ export function pointAt(path: RoadPath, s: number): { point: PlanPoint; index: n
   return { point: { x: points[lo].x + (points[hi].x - points[lo].x) * w, y: points[lo].y + (points[hi].y - points[lo].y) * w }, index: lo };
 }
 
-/** The unit direction of travel at `s`, blended across a corner so the vehicle turns rather than snaps. */
-export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03): { x: number; y: number } {
+/**
+ * The chord a vehicle on the trip's road reads its direction over when no
+ * caller says one, in kilometres ON THE GROUND. A share of the whole path
+ * (the 3 % a curve blends over) was 1.3 km on a day's piece and 600 km on a
+ * piece that drives the whole trip: the vehicle then pointed at a town far
+ * off and slid sideways through every bend.
+ */
+export const ROAD_HEADING_KM = 1;
+
+/**
+ * The unit direction of travel at `s`, blended across a corner so the vehicle
+ * turns rather than snaps. On the trip's road (`path.km`) it is read over a
+ * chord — `blend` plan units when given (the painter's, sized to the vehicle
+ * on screen), else `ROAD_HEADING_KM` on the ground; on a curve, `blend`
+ * defaults to 3 % of the path.
+ */
+export function headingAt(path: RoadPath, s: number, blend?: number): { x: number; y: number } {
   const { points, cum } = path;
   if (points.length < 2) return { x: 0, y: -1 };
-  if (path.km && blend > 0) {
+  if (path.km && (blend === undefined || blend > 0)) {
     // A road is many short segments, each a little off the last: the
     // direction is read over a chord across `s`, so the vehicle follows the
     // road's line rather than every jitter of its fixes.
-    const half = blend * 0.5;
-    const a = pointAt(path, Math.max(0, s - half)).point;
-    const b = pointAt(path, Math.min(path.length, s + half)).point;
+    let s0: number;
+    let s1: number;
+    if (blend === undefined) {
+      const k = kmAlong(path, s);
+      s0 = sAlong(path, k - ROAD_HEADING_KM / 2);
+      s1 = sAlong(path, k + ROAD_HEADING_KM / 2);
+    } else {
+      s0 = Math.max(0, s - blend / 2);
+      s1 = Math.min(path.length, s + blend / 2);
+    }
+    const a = pointAt(path, s0).point;
+    const b = pointAt(path, s1).point;
     const len = Math.hypot(b.x - a.x, b.y - a.y);
     if (len > 1e-6) return { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
   }
+  blend ??= path.length * 0.03;
   const dir = (i: number) => {
     const a = points[Math.max(0, Math.min(points.length - 2, i))];
     const b = points[Math.max(1, Math.min(points.length - 1, i + 1))];
