@@ -21,6 +21,8 @@ import type { StyleTheme } from '../../overlay/title-styles';
 import { themeFromPreset } from '../../overlay/title-styles';
 import type { DrivePlan, DriveStop } from './drive-plan';
 import { formatDistance, type DistanceUnit } from './geo';
+import type { PlaceWritingTrip } from '../place-style';
+import { passportStamps, stopStates, type CardStamp } from './passport-stamps';
 import { groupName, groupStops, type NamedTown } from './stop-clusters';
 
 // --- the options -------------------------------------------------------------
@@ -85,7 +87,21 @@ export interface CardOptions {
   cardFrom: string;
   cardTo: string;
   badgeWhen: BadgeWhen;
+  // --- the passport's stamps (`passport-stamps.ts`, 2026-10-09) ---
+  /** What the stamps tell: the state, else the place (`mixed`); the states alone; the places alone. */
+  cardStampMode: StampMode;
+  /** A missing state read from the shipped town index at render, or left missing. */
+  cardStampFill: 'index' | 'none';
+  /** A state written as its code (QLD) or in full. */
+  cardStampState: 'code' | 'full';
+  /** A place with no state written as three letters, in full, or given no stamp. */
+  cardStampPlace: 'code' | 'full' | 'skip';
+  /** A destination stamped once, or at each visit in the road's order. */
+  cardStampOnce: 'once' | 'visit';
 }
+
+/** What the passport's stamps tell. */
+export type StampMode = 'mixed' | 'states' | 'places';
 
 /**
  * What a stored recap reads when it says nothing — the STAMP, as it was. A
@@ -106,6 +122,11 @@ export const CARD_DEFAULTS: CardOptions = {
   cardFrom: '',
   cardTo: '',
   badgeWhen: 'auto',
+  cardStampMode: 'mixed',
+  cardStampFill: 'index',
+  cardStampState: 'code',
+  cardStampPlace: 'code',
+  cardStampOnce: 'once',
 };
 
 /** What a new Virée layer starts from, over `CARD_DEFAULTS`. */
@@ -146,6 +167,11 @@ export function readCardOptions(raw: Readonly<Record<string, unknown>>): CardOpt
     cardFrom: cityCodeText(raw.cardFrom),
     cardTo: cityCodeText(raw.cardTo),
     badgeWhen: oneOf(raw.badgeWhen, ['auto', 'before', 'during', 'end', 'never'], d.badgeWhen),
+    cardStampMode: oneOf(raw.cardStampMode, ['mixed', 'states', 'places'], d.cardStampMode),
+    cardStampFill: oneOf(raw.cardStampFill, ['index', 'none'], d.cardStampFill),
+    cardStampState: oneOf(raw.cardStampState, ['code', 'full'], d.cardStampState),
+    cardStampPlace: oneOf(raw.cardStampPlace, ['code', 'full', 'skip'], d.cardStampPlace),
+    cardStampOnce: oneOf(raw.cardStampOnce, ['once', 'visit'], d.cardStampOnce),
   };
 }
 
@@ -157,6 +183,7 @@ function cityCodeText(value: unknown): string {
 export function cardWantsTowns(options: Readonly<Record<string, unknown>>): boolean {
   if (options.summary === false) return false;
   const card = readCardOptions(options);
+  if (card.cardFace === 'passport') return card.cardStampMode !== 'places' && card.cardStampFill === 'index';
   return card.cardLabels === 'groups' && card.cardLabelName === 'town' && (card.cardFace === 'trace' || card.cardFace === 'ticket');
 }
 
@@ -469,6 +496,8 @@ export interface CardScene {
   sheet: string[];
   /** On a `photo` ground with no picture of the road, the slide's own picture is under the card: veil it. */
   below: boolean;
+  /** The passport's stamps, in the road's order (`passport-stamps.ts`). */
+  stamps: CardStamp[];
 }
 
 /** The most pictures the contact sheet prints. */
@@ -485,6 +514,8 @@ export interface CardSceneInput {
   vehicle: string;
   /** The slide's own picture is under the card (the card on a slide alone), so a photo ground has one. */
   below?: boolean;
+  /** How the trip writes a state's code — the passport's stamps. */
+  writing?: PlaceWritingTrip;
 }
 
 /** The card's scene for a recap: what each face reads, measured once. */
@@ -492,7 +523,14 @@ export function cardScene(input: CardSceneInput): CardScene {
   const { plan, o, calendar } = input;
   const theme = cardTheme(o.cardLook, input.theme);
   const unit: DistanceUnit = o.distance === 'mi' ? 'mi' : 'km';
-  const facts = cardFacts(plan);
+  // The states each stop is in — its own, else the index's when asked — read
+  // once: the passport stamps them and the «states» fact counts them.
+  const fromIndex = o.cardStampFill === 'index';
+  const statesByStop = plan.route.stops.map((stop) => stopStates(stop, input.writing, input.towns, fromIndex));
+  const measured = cardFacts(plan);
+  const states: string[] = [];
+  for (const list of statesByStop) for (const st of list) if (!states.includes(st.code)) states.push(st.code);
+  const facts = { ...measured, states: states.length ? states : measured.states };
   const keys = plan.route.stops.flatMap((s) => s.pictures.map((p) => p.key));
   // On a slide of its own the card's Photo ground is the slide's own picture.
   const groundPicture = keys.length && !input.below ? keys[keys.length - 1] : null;
@@ -522,6 +560,7 @@ export function cardScene(input: CardSceneInput): CardScene {
     groundPicture,
     sheet: keys.slice(0, SHEET_PICTURES),
     below: !!input.below,
+    stamps: passportStamps(plan.route.stops, o, (stop) => statesByStop[plan.route.stops.indexOf(stop)] ?? []),
   };
 }
 

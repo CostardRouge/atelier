@@ -60,7 +60,7 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
   const pictures = plan ? plan.route.stops.some((s) => s.pictures.length > 0) : false;
   const names = plan ? [...new Set(plan.route.stops.map(placeName).filter(Boolean))] : [];
   const moment = badgeMoment(o.badgeWhen);
-  const roadNames = face === 'trace' || face === 'passport';
+  const roadNames = face === 'trace';
 
   const toggleFact = (fact: CardFact) => {
     const on = o.cardFacts.includes(fact);
@@ -86,6 +86,7 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
           towns: ctx.towns ?? null,
           vehicle: '',
           below: !badge,
+          writing: ctx.writing,
         }}
       />
       <p className="m-0 -mt-1 text-xs text-muted">{FACE_HINTS[face]}</p>
@@ -154,11 +155,7 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
       {roadNames && (
         <FieldRow
           label="Places"
-          hint={
-            face === 'passport'
-              ? 'Named on the passport only where the trip knows no state.'
-              : 'Names that would cover another are left out, the ends first.'
-          }
+          hint="Names that would cover another are left out, the ends first."
         >
           <Segmented
             size="sm"
@@ -226,6 +223,97 @@ export function SummaryCardRows({ o, set, plan, ctx, badge = true }: Props) {
             })}
           </div>
         </FieldRow>
+      )}
+      {face === 'passport' && (
+        <>
+          <FieldRow
+            label="Stamps"
+            hint={
+              o.cardStampMode === 'mixed'
+                ? 'In the road’s order: the state where it is known, else the place. A round stamp is a state, a rectangle a place.'
+                : o.cardStampMode === 'states'
+                  ? 'The states alone; a place with none gets no stamp. With no state at all, the places come back.'
+                  : 'One stamp per place, its three letters.'
+            }
+          >
+            <Segmented
+              size="sm"
+              fill
+              label="What the stamps tell"
+              value={o.cardStampMode}
+              onChange={(cardStampMode) => set({ cardStampMode })}
+              options={[
+                { id: 'mixed', label: 'Combined' },
+                { id: 'states', label: 'States' },
+                { id: 'places', label: 'Places' },
+              ]}
+            />
+          </FieldRow>
+          {o.cardStampMode !== 'places' && (
+            <>
+              <FieldRow
+                label="Missing state"
+                hint={
+                  o.cardStampFill === 'index'
+                    ? `Read from the town index the app ships, when it says so without doubt — never written into your places.${ctx.towns ? '' : ' The index is still loading.'}`
+                    : 'A place that does not say its state stays without one.'
+                }
+              >
+                <Segmented
+                  size="sm"
+                  fill
+                  label="A place’s missing state"
+                  value={o.cardStampFill}
+                  onChange={(cardStampFill) => set({ cardStampFill })}
+                  options={[
+                    { id: 'index', label: 'From the town index' },
+                    { id: 'none', label: 'Left missing' },
+                  ]}
+                />
+              </FieldRow>
+              <FieldRow label="A state">
+                <Segmented
+                  size="sm"
+                  fill
+                  label="How a state is written"
+                  value={o.cardStampState}
+                  onChange={(cardStampState) => set({ cardStampState })}
+                  options={[
+                    { id: 'code', label: 'Code' },
+                    { id: 'full', label: 'Full name' },
+                  ]}
+                />
+              </FieldRow>
+            </>
+          )}
+          <FieldRow label={o.cardStampMode === 'places' ? 'A place' : 'No state'}>
+            <Segmented
+              size="sm"
+              fill
+              label="How a place with no state is stamped"
+              value={o.cardStampPlace}
+              onChange={(cardStampPlace) => set({ cardStampPlace })}
+              options={[
+                { id: 'code', label: '3 letters' },
+                { id: 'full', label: 'Full name' },
+                ...(o.cardStampMode === 'mixed' ? [{ id: 'skip' as const, label: 'No stamp' }] : []),
+              ]}
+            />
+          </FieldRow>
+          <FieldRow label="Stamped" hint={o.cardStampOnce === 'visit' ? 'A state left and found again is stamped again, like a real passport.' : undefined}>
+            <Segmented
+              size="sm"
+              fill
+              label="How often a destination is stamped"
+              value={o.cardStampOnce}
+              onChange={(cardStampOnce) => set({ cardStampOnce })}
+              options={[
+                { id: 'once', label: 'Once' },
+                { id: 'visit', label: 'At each visit' },
+              ]}
+            />
+          </FieldRow>
+        </>
       )}
       {face === 'ticket' && facts && (
         <FieldRow label="Codes">

@@ -76,7 +76,10 @@ describe('the card’s options', () => {
   it('asks for the town index only where a road face names its groups by town', () => {
     expect(cardWantsTowns({ cardFace: 'trace' })).toBe(true);
     expect(cardWantsTowns({ cardFace: 'trace', cardLabelName: 'first' })).toBe(false);
-    expect(cardWantsTowns({ cardFace: 'passport' })).toBe(false);
+    // The passport reads a missing state from the index, unless told not to.
+    expect(cardWantsTowns({ cardFace: 'passport' })).toBe(true);
+    expect(cardWantsTowns({ cardFace: 'passport', cardStampFill: 'none' })).toBe(false);
+    expect(cardWantsTowns({ cardFace: 'sheet' })).toBe(false);
     expect(cardWantsTowns({ cardFace: 'trace', summary: false })).toBe(false);
   });
 });

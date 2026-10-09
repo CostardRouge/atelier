@@ -115,6 +115,7 @@ export const cardVariant: HookVariant = {
     const scene = cardScene({
       plan,
       o: { ...o, cardFace: o.cardFace === 'stamp' ? 'trace' : o.cardFace },
+      writing: ctx.writing,
       theme: ctx.theme,
       tripName: ctx.tripName,
       words: { ...SUMMARY_WORDS, ...(words?.day ? { day: words.day } : {}), ...(words?.days ? { days: words.days } : {}), ...(words?.stop ? { stop: words.stop } : {}) },
