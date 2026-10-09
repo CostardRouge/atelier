@@ -24,6 +24,7 @@ import { rulerBars, rulerGaps, type RulerGap } from './stage-ruler';
 import type { TripDoc, TripStage } from './trip-types';
 import type { IsoDate } from './trip-days';
 import { addDays } from './trip-days';
+import { roadHops, type RoadLine } from './road-track';
 
 export interface MapPoint {
   lat: number;
@@ -191,6 +192,38 @@ export function tripMap(trip: Pick<TripDoc, 'startDate' | 'endDate' | 'stages'> 
       gapDays: gaps.reduce((n, g) => n + g.length, 0),
     },
   };
+}
+
+/**
+ * Each stage's own path ON the trip's road (`TripDoc.road`): its places in
+ * order, with the road's points between two of them wherever the road joins
+ * them (`roadHops`), else the straight stroke it always had. The hops are
+ * found over EVERY stage's places in lived order, one pass, so the cursor
+ * carries from stage to stage and a road driven out and back takes the
+ * right pass each time. Only stages with two places or more; an empty road
+ * gives an empty map, and the paths stay as they were.
+ */
+export function stageRoads(stages: readonly MapStage[], road: RoadLine): Map<string, MapPoint[]> {
+  const out = new Map<string, MapPoint[]>();
+  if (!road.pieces.length) return out;
+  const located = stages.filter((s) => s.places.length > 0);
+  const all = located.flatMap((s) => s.places);
+  const hops = roadHops(road, all);
+  let at = 0;
+  for (const s of located) {
+    const n = s.places.length;
+    if (n >= 2) {
+      const line: MapPoint[] = [{ lat: s.places[0].lat, lon: s.places[0].lon }];
+      for (let i = 1; i < n; i++) {
+        const hop = hops[at + i - 1];
+        if (hop) line.push(...hop.via);
+        line.push({ lat: s.places[i].lat, lon: s.places[i].lon });
+      }
+      out.set(s.stage.id, line);
+    }
+    at += n;
+  }
+  return out;
 }
 
 /**

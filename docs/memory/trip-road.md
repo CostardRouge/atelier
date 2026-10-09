@@ -107,7 +107,13 @@ readout agree; the pen's pace shares time by the road's planar length
 strokes between stages, keeping the dotted ones (they say days are
 unaccounted for); it frames the places plus the road inside their box grown
 by its own size (≥ 2°), never the far end of a flight home the track carries.
-Left as is: a stage's own tinted path between its places is still straight.
+Since the same day a stage's own TINTED path follows the road too
+(`stageRoads` in `trip-map.ts`): the hops are found over EVERY stage's places
+in lived order in one `roadHops` pass, so the cursor carries from stage to
+stage (an out-and-back road takes the right pass), computed in a `useMemo`
+on the stages and the road and never per frame — the search scans the whole
+line; the dial sits halfway along the path as drawn (`pathMidpoint`), on the
+road, and the stage focus flies there.
 
 ## Road points placed by hand, on the big map (2026-10-09)
 

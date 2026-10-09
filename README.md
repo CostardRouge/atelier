@@ -919,7 +919,8 @@ the counter, the milestones and the summary card count what it drives; a hop
 the road never joins (a flight, a stop off the road) keeps its curve. The
 **Itinerary**'s pen draws its hops on the same road, its distance counting
 it, and the overview's **Map** draws the road under the stages in place of
-the straight strokes between them.
+the straight strokes between them, each stage's coloured path following it
+between its places, its dial on the line.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
