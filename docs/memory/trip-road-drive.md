@@ -40,12 +40,15 @@ line drawn is the line driven** (Virée, the Itinerary, the overview's map),
 but **what is counted is the road as recorded**: every steered point carries
 `km` along the recorded piece, `roadKms` reads it between two such points,
 so `RoadLine.km`, a hop's km, the counter and the Itinerary's readout never
-lose the 1–5 % the rounded corners shorten. `TripRoad.steer` (optional:
-absent or null = the recorded line, so no stored trip moved, no version
-bump), two sliders under Detail — Look ahead (0 = off, then `ROAD_LOOKS`
+lose the 1–5 % the rounded corners shorten. **ON by default at 500 m / 50 m**
+(2026-10-09, his call): `TripRoad.steer` ABSENT is the default — so a road
+kept before steering existed steers too, with no version bump —, `null` is
+off by the author, an object his setting; read through `roadSteerOf` and
+never `road.steer` raw (junk reads as the default, a re-import keeps what
+he set). Two sliders under Detail — Look ahead (0 = off, then `ROAD_LOOKS`
 200 m–3 km) and Turn radius (`ROAD_RADII` 10–500 m, greyed when off) —, the
-reason behind the panel's ⓘ. A new road starts OFF (his Q2 unanswered); a
-re-import keeps it. The panel's per-mode km and Deduce's offer read the line
+reason behind the panel's ⓘ. A hand-placed point is on the RECORDED line;
+the steered one passes near it, not through it. The panel's per-mode km and Deduce's offer read the line
 with `steer: null` (the same km, without a drive's cost). The steered points
 carry no meaning for `RoadPointsSheet`, which reads its own raw line.
 

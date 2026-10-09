@@ -905,9 +905,9 @@ flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
 apart from them thins the line from every point up to 2 km. **Look ahead**
-(off by default, 200 m to 3 km) steers the vehicle like a driver instead of a
+(500 m by default, 200 m to 3 km, or off) steers the vehicle like a driver instead of a
 pen through every fix: it aims at the road that far ahead and turns no tighter
-than its **Turn radius**, so the GPS's scatter becomes a bend rather than a
+than its **Turn radius** (50 m by default), so the GPS's scatter becomes a bend rather than a
 twitch. The line drawn is the line driven, and the kilometres stay the road's
 as recorded. *Forget the road* takes it off the trip. **Add a GPX…** merges the timed points of one or
 more `.gpx` files (a GPS logger, a car's navigation, Strava…) into the road

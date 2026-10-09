@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { encodeTrack, tripRoadLine, type RoadFix, type TripRoad } from './road-track';
+import { distanceKm, encodeTrack, tripRoadLine, type RoadFix, type TripRoad } from './road-track';
 import { nearestRoadPoint, placeRoadPoint, removeRoadPoint, roadFixes, roadGaps } from './road-points';
 
 const T0 = 1_751_300_000; // invented
@@ -44,8 +44,11 @@ describe('road points placed by hand', () => {
     const fixes = roadFixes(road);
     expect(p.t).toBeGreaterThan(fixes[10].t);
     expect(p.t).toBeLessThan(fixes[11].t);
-    const line = tripRoadLine(next);
+    // The line as recorded goes through it; the line steered (the default) passes by it.
+    const line = tripRoadLine({ ...next, steer: null });
     expect(line.pieces.flat().some((f) => f.lat === -29.5)).toBe(true);
+    const steered = tripRoadLine(next).pieces.flat();
+    expect(Math.min(...steered.map((f) => distanceKm(f, at)))).toBeLessThan(1);
     // A second point splits the rest of the hole.
     const two = placeRoadPoint(next, { lat: -29.8, lon: 124.5 })!;
     expect(two.added.map((q) => q.lon)).toEqual([123, 124.5]);

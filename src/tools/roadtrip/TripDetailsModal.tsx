@@ -11,7 +11,7 @@ import {
 import { prunePins } from '../../shared/roadtrip/trip-cover';
 import CoverPanel from './CoverPanel';
 import RoadSettingsPanel from './RoadSettingsPanel';
-import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE, type TripRoad } from '../../shared/roadtrip/road-track';
+import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE, roadSteerOf, type TripRoad } from '../../shared/roadtrip/road-track';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 import InfoDot from '../../shared/ui/InfoDot';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
@@ -341,7 +341,7 @@ export default function TripDetailsModal({
               mode={road?.mode ?? DEFAULT_ROAD_MODE}
               detail={road?.detail ?? DEFAULT_ROAD_DETAIL}
               onMode={(mode) => setRoad((r) => (r ? { ...r, mode } : r))}
-              steer={road?.steer ?? null}
+              steer={roadSteerOf(road)}
               onDetail={(detail) => setRoad((r) => (r ? { ...r, detail } : r))}
               onSteer={(steer) => setRoad((r) => (r ? { ...r, steer } : r))}
               onForget={() => setRoad(null)}

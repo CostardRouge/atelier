@@ -69,8 +69,17 @@ export interface RoadSteer {
 export const ROAD_LOOKS: readonly number[] = [200, 300, 500, 750, 1000, 1500, 2000, 3000];
 /** The tightest-turn choices, metres. */
 export const ROAD_RADII: readonly number[] = [10, 25, 50, 100, 200, 300, 500];
-/** What steering takes when it is turned on. */
+/** How a road steers until the author says otherwise (his call, 2026-10-09: on by default). */
 export const DEFAULT_ROAD_STEER: RoadSteer = { lookM: 500, radiusM: 50 };
+
+/**
+ * How a stored road steers: absent is the DEFAULT (a road kept before
+ * steering existed steers too), null is turned off by the author.
+ */
+export function roadSteerOf(road: Pick<TripRoad, 'steer'> | null | undefined): RoadSteer | null {
+  if (!road) return null;
+  return road.steer === undefined ? DEFAULT_ROAD_STEER : road.steer;
+}
 
 export function readRoadSteer(value: unknown): RoadSteer | null {
   if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
@@ -601,7 +610,10 @@ export interface TripRoad {
   mode: RoadMode;
   /** The Douglas–Peucker tolerance, metres (`ROAD_DETAILS`). */
   detail: number;
-  /** How the vehicle steers along the line (`steerRoad`); absent or null drives it as recorded. */
+  /**
+   * How the vehicle steers along the line (`steerRoad`): absent steers by
+   * `DEFAULT_ROAD_STEER`, null drives the line as recorded (`roadSteerOf`).
+   */
   steer?: RoadSteer | null;
   /** When the track was last written, ms. */
   importedAt: number;
@@ -618,6 +630,7 @@ export function readTripRoad(raw: unknown): TripRoad | null {
       )
     : [];
   if (fixes.length < 2 && !added.length) return null;
+  const steer = r.steer === null ? null : (readRoadSteer(r.steer) ?? undefined);
   return {
     source: isRoadSource(r.source) ? r.source : 'polarsteps',
     track: typeof r.track === 'string' ? r.track : '',
@@ -625,7 +638,8 @@ export function readTripRoad(raw: unknown): TripRoad | null {
     added,
     mode: isRoadMode(r.mode) ? r.mode : DEFAULT_ROAD_MODE,
     detail: readRoadDetail(r.detail),
-    steer: readRoadSteer(r.steer),
+    // Absent or junk: the default; null: turned off by the author.
+    ...(steer !== undefined ? { steer } : {}),
     importedAt: typeof r.importedAt === 'number' && Number.isFinite(r.importedAt) ? r.importedAt : 0,
   };
 }
@@ -652,7 +666,7 @@ export function makeTripRoad(
     added: previous?.added ?? [],
     mode: previous?.mode ?? DEFAULT_ROAD_MODE,
     detail: previous?.detail ?? DEFAULT_ROAD_DETAIL,
-    steer: previous?.steer ?? null,
+    ...(previous?.steer !== undefined ? { steer: previous.steer } : {}),
     importedAt: now,
   };
 }
@@ -695,7 +709,7 @@ export function tripRoadLine(road: TripRoad | null): RoadLine {
   const known = lineOf.get(road);
   if (known) return known;
   const fixes = road.added.length ? cleanFixes([...decodeTrack(road.track), ...road.added]) : decodeTrack(road.track);
-  const line = roadLine(fixes, road.mode, road.detail, road.steer ?? null);
+  const line = roadLine(fixes, road.mode, road.detail, roadSteerOf(road));
   lineOf.set(road, line);
   return line;
 }

@@ -15,6 +15,7 @@ import {
   roadHops,
   roadKms,
   roadLine,
+  roadSteerOf,
   simplify,
   steerRoad,
   thin,
@@ -327,8 +328,18 @@ describe('steering', () => {
     expect(readRoadSteer({ lookM: 500, radiusM: 7 })).toEqual({ lookM: 500, radiusM: 50 });
     expect(readRoadSteer({ lookM: 42, radiusM: 50 })).toBeNull();
     expect(readRoadSteer('fast')).toBeNull();
+    // On by default, a road kept before steering existed included; null is off.
     const road = makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, null, 1)!;
-    expect(road.steer).toBeNull();
+    expect(road.steer).toBeUndefined();
+    expect(roadSteerOf(road)).toEqual({ lookM: 500, radiusM: 50 });
+    expect(roadSteerOf(readTripRoad(JSON.parse(JSON.stringify(road))))).toEqual({ lookM: 500, radiusM: 50 });
+    const off = readTripRoad(JSON.parse(JSON.stringify({ ...road, steer: null })))!;
+    expect(roadSteerOf(off)).toBeNull();
+    expect(roadSteerOf(readTripRoad({ ...road, steer: { lookM: 42 } }))).toEqual({ lookM: 500, radiusM: 50 });
+    expect(makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, off, 2)!.steer).toBeNull();
+    const every = { ...road, detail: 0 };
+    expect(tripRoadLine(every).pieces[0]).not.toEqual(tripRoadLine({ ...every, steer: null }).pieces[0]);
+    expect(tripRoadLine(every).km).toBe(tripRoadLine({ ...every, steer: null }).km);
     const steering = { ...road, steer: { lookM: 750, radiusM: 25 } };
     expect(readTripRoad(JSON.parse(JSON.stringify(steering)))!.steer).toEqual({ lookM: 750, radiusM: 25 });
     // A re-import keeps how the author steers.
