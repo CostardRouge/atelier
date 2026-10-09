@@ -22,6 +22,8 @@ import { useAssetLibrary } from '../shared/library/AssetLibraryContext';
 import { useWinnowConnection } from '../shared/sources/winnow/use-connection';
 import ThemeToggle from './ThemeToggle';
 import { buttonClass } from '../shared/ui/Button';
+import { useRegisterCommands } from '../shared/commands/use-commands';
+import { appCommands } from './app-commands';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -56,6 +58,9 @@ export default function App() {
   // an empty or unknown hash lands on home with nothing to redirect.
   const tool = sourcesPath ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
+  // The shell's own commands — where the suite is, going somewhere, waiting
+  // for a tool's commands to open (`app-commands.ts`).
+  useRegisterCommands('shell', appCommands(path));
 
   // The tab's title names the screen: a browser's tab strip, its history and
   // a screen reader's "page changed" all read it, and it never changed before
