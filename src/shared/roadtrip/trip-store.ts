@@ -204,6 +204,22 @@ export async function getThumbs(ids: readonly string[]): Promise<Map<string, Blo
 }
 
 /**
+ * Give copies of thumbnails to other posts — a clone's covers. `ids` maps the
+ * post a picture belongs to onto the post that should now have its own copy;
+ * the two sets of keys never share a record, so deleting either trip prunes
+ * only its own. A thumbnail that does not exist is simply not copied.
+ */
+export async function copyThumbs(ids: ReadonlyMap<string, string>): Promise<void> {
+  const found = await getThumbs([...ids.keys()]);
+  await Promise.all(
+    [...found].map(([from, blob]) => {
+      const to = ids.get(from);
+      return to ? putThumb(to, blob) : Promise.resolve();
+    }),
+  );
+}
+
+/**
  * Forget the thumbnails of posts that are gone. Called when a post or a whole
  * trip is deleted: a thumbnail store nobody prunes grows for the lifetime of
  * the browser profile, and these are the only heavy values in the database.

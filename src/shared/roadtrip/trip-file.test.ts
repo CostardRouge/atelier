@@ -154,6 +154,19 @@ describe('the trip file', () => {
     expect(r.file.posts[0].badge.grade).toBeNull();
   });
 
+  it('carries how the trip writes its places and its own state codes, through a file AND onto a new document', () => {
+    const doc = trip();
+    doc.placeStyle = { badge: 'full', lists: 'name' };
+    doc.stateCodes = { Queensland: 'QLD' };
+    const file = roundTrip(doc);
+    expect(file.placeStyle).toEqual(doc.placeStyle);
+    expect(file.stateCodes).toEqual(doc.stateCodes);
+    // `tripDocFromFile` once left both on `createTripDoc`'s defaults: an
+    // import, a move between sources and a clone each lost the trip's voice.
+    expect(tripDocFromFile(file).placeStyle).toEqual(doc.placeStyle);
+    expect(tripDocFromFile(file).stateCodes).toEqual(doc.stateCodes);
+  });
+
   it('carries the trip’s fleet — every vehicle, its look and its dated changes — and the water rule', () => {
     const doc = trip();
     const prado = { ...defaultVehicleSpec(), color: '#1f3b2f', finish: 'gloss' as const, gear: { ...defaultVehicleSpec().gear, rack: false } };

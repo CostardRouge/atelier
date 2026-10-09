@@ -7,12 +7,14 @@
  * drawn here rather than by a map library — what you point at is exactly what
  * the export will draw, at the same scale, with the same bow on every hop.
  *
- * **No tiles, and no request of any kind.** The suite's two network exceptions
- * are the Flight Map's opt-in OSM layer and the opt-in place lookup; a third
- * one hidden inside an options panel is how a local-first promise stops being
- * checkable. So the backdrop is a graticule, the trip's own located places are
- * the landmarks, and a place the author cannot see is found by NAME, through
- * the same opt-in search the trip's legs use.
+ * **No tiles, and nothing asked of anyone but our own origin.** The suite's
+ * network exceptions are opt-in; a third one hidden inside an options panel
+ * is how a local-first promise stops being checkable. So the backdrop is the
+ * coastline the app SHIPS (`public/geo/land.json`, the big map's and the
+ * overview's own, 2026-10-09 — the field used to be a black box with a grid)
+ * under a graticule, the trip's own located places are the landmarks, and a
+ * place the author cannot see is found by NAME, through the same opt-in
+ * search the trip's legs use.
  *
  * Every gesture here has a keyboard twin in the panel beside it: the trip's
  * places are chips, a searched place is a field, a stop's position is two
@@ -20,7 +22,10 @@
  * only way.
  */
 
-import { useRef, useState } from 'react';
+import { useEffect, useMemo, useRef, useState } from 'react';
+import type { LandCollection } from '../../map/land';
+import { landPath } from '../../map/land-path';
+import { loadLand } from '../../map/load-land';
 import { arcControl, fitProjection, type LatLon, type MapStop } from './map-plan';
 import { DROP_ON_LINE_PX, DROP_ON_STOP_PX, dropLine, resolveDrop, type ScreenPoint, type StopDrop } from './stop-drop';
 import { numeralScale } from './stops';
@@ -87,6 +92,16 @@ export default function MapField({
   // Both sets are fitted, so adopting a landmark never makes the map jump.
   const fitted: LatLon[] = [...stops, ...places];
   const { project, unproject } = fitProjection(fitted, box, PAD);
+  const land = useLand();
+  // The coast under the field, projected once per framing — not per pointer move.
+  const framing = fitted.map((p) => `${p.lat.toFixed(4)},${p.lon.toFixed(4)}`).join(';');
+  const coast = useMemo(() => {
+    if (!land) return '';
+    const nw = unproject({ x: 0, y: 0 });
+    const se = unproject({ x: VIEW.width, y: VIEW.height });
+    return landPath(land, project, { west: nw.lon, east: se.lon, north: nw.lat, south: se.lat });
+    // `project` and `unproject` are rebuilt every render from `fitted`; `framing` is what they depend on.
+  }, [land, framing]);
 
   /** A pointer in the field's own units, and how many of them make a CSS pixel. */
   const fieldAt = (event: { clientX: number; clientY: number }): { p: ScreenPoint; scale: number } | null => {
@@ -180,6 +195,9 @@ export default function MapField({
         press.current = null;
       }}
     >
+      {coast && (
+        <path d={coast} fillRule="evenodd" className="fill-on-media stroke-on-media" fillOpacity={0.13} strokeOpacity={0.32} strokeWidth={0.6} />
+      )}
       <Graticule />
       {heldDrop && heldIndex >= 0 && (
         <text x={VIEW.width / 2} y={VIEW.height - 6} textAnchor="middle" fontSize={8} className="fill-on-media">
@@ -284,6 +302,24 @@ export default function MapField({
       })}
     </svg>
   );
+}
+
+/** The shipped coastline, read once for every field on the page; null until it lands, or where it cannot be read. */
+function useLand(): LandCollection | null {
+  const [land, setLand] = useState<LandCollection | null>(null);
+  useEffect(() => {
+    let alive = true;
+    loadLand().then(
+      (value) => {
+        if (alive) setLand(value);
+      },
+      () => {},
+    );
+    return () => {
+      alive = false;
+    };
+  }, []);
+  return land;
 }
 
 /** A faint grid, so an empty field still reads as a projection of the world. */

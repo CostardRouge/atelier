@@ -97,8 +97,8 @@ The destination of the whole suite: one editor instead of eight pages.
 
 **Projects first.** `#/studio/home` is a gallery of saved projects — thumbnail
 (baked at save time, so nothing decodes), aspect, duration, element and file
-counts. The whole card opens the project; its other verbs (use as template,
-move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
+counts. The whole card opens the project; its other verbs (clone, use as
+template, move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
 the end of the grid that creates a project or takes a dropped settings file.
 Creating one goes through a small intro modal (name, destination
 aspect, start-from-template, optional media folder). Everything you do in the
@@ -109,7 +109,12 @@ missing — and missing media never blocks editing (a banner offers a re-point).
 On browsers without the File System Access API (Firefox, Safari) the handle
 can't persist, so reopening falls back to the same banner. A project is also a
 template: "Use as template" duplicates its portable half (overlays, look,
-guides, settings) with no media binding.
+guides, settings) with no media binding. **Clone…** is the other copy: the
+whole project, trims, developments and clip list included, pointing at the same
+footage folder, kept here or on a connected instance. The sheet proposes the
+first free name in the chosen place (`Vol du soir` → `Vol du soir (2)`, no
+suffix where the name is free), you can type another, and a status line then
+offers Open and Undo.
 
 **Settings travel as a file.** Project settings (the ⚙ chip in the project
 bar) has an *Import / export* section: **Export settings** downloads
@@ -994,7 +999,8 @@ card** — the drive's last image and the piece's thumbnail, no reveal after it
 **Trace** (the trip's road drawn big, its places named — a new recap's
 default), the **Ticket** (a boarding pass whose barcode is the trip's days,
 long where a leg starts, darker where a picture was shot), the **Passport**
-(a stamp for each state crossed), the **Contact sheet** (the road's pictures
+(a round stamp for each state crossed and, where a place does not say its state and
+the shipped town index cannot tell it, a rectangular one for the place itself — in the road's order), the **Contact sheet** (the road's pictures
 and the road), the **Stamp** (days · distance · stops in the map's box — what
 a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
 the trip's days) — each picked from a small picture of itself, drawn over
@@ -2785,7 +2791,13 @@ theirs). The trip document holds place names, dates and the text of your
 badges, and only your own account can read it back; the hook thumbnails never
 travel and are re-drawn locally. A trip can be moved between this browser and
 an instance from its card; the `.roadtrip.json` file remains the offline way
-to cross. A Studio project kept on an instance works the same way from the
+to cross. **Clone…** in a card's ⋯ menu makes a copy of the whole trip, kept
+here or on a connected instance: the sheet proposes the first free name in
+the chosen place (`Maroc` → `Maroc (2)`, no suffix where the name is free),
+you can type another, and the line under the field says what will be saved.
+The copy keeps everything but the pictures themselves (found again by their
+hash) and the links to Studio projects; its cover thumbnails are copied on
+this device, and the status line that follows offers Open and Undo. A Studio project kept on an instance works the same way from the
 project gallery and the project bar; its media folder never travels — only
 the list of clips does, so on another device the project opens and asks you
 to point it at the footage.

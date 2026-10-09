@@ -19,6 +19,7 @@ import { planBounds, type DrivePlan, type PlanPoint } from './drive-plan';
 import type { FrameBox, HookCtx2D, HookPicture } from './hook-variant';
 import { drawLookTexts, fitLookText, measureLookText, type LookText } from './look-text';
 import { cellAt, cityCode, labelText, type CardOptions, type CardScene } from './summary-card';
+import { MAX_STAMPS } from './passport-stamps';
 
 /** The card's fade up, and the numbers' and the road's count, in seconds. */
 export const CARD_RISE_SECONDS = 0.45;
@@ -340,7 +341,7 @@ function paintStamp(pen: Pen): void {
   g.globalAlpha = pen.alpha;
   g.beginPath();
   roundRectOn(g, box.x, box.y, box.w, box.h, 16 * u);
-  g.fillStyle = hexToRgba(s.ink.ground, 0.94);
+  g.fillStyle = s.ink.ground;
   g.fill();
   g.lineWidth = 2 * u;
   g.strokeStyle = hexToRgba(s.ink.rule, 0.3);
@@ -464,10 +465,10 @@ function paintPassport(pen: Pen): void {
   const fh = factsHeight(u);
   const factsY = box.y + box.h - fh;
   factsRow(pen, { x: box.x, y: factsY, w: box.w, h: fh });
-  // The stamps: one per state crossed, else one per place named.
-  const marks = s.facts.states.length
-    ? s.facts.states.map((code) => ({ big: code, small: '' }))
-    : s.labels.slice(0, 9).map((l) => ({ big: cityCode(l.name), small: l.name }));
+  // The stamps, in the road's order (`passport-stamps.ts`): a state where it
+  // is known, else the place; past a page's worth, the rest are counted.
+  const marks = s.stamps.slice(0, MAX_STAMPS);
+  const more = s.stamps.length - marks.length;
   if (!marks.length) return;
   const area: Box = { x: box.x, y: titleEnd + 30 * u, w: box.w, h: factsY - titleEnd - 80 * u };
   const cols = marks.length <= 2 ? marks.length : marks.length <= 4 ? 2 : 3;
@@ -483,7 +484,8 @@ function paintPassport(pen: Pen): void {
     const cx = area.x + (area.w - rowCount * cell) / 2 + cell * (col + 0.5);
     const cy = area.y + (area.h - rows * cell) / 2 + cell * (row + 0.5);
     const tilt = ((i * 37) % 17 - 8) * (Math.PI / 180);
-    const round = i % 2 === 0;
+    // The shape says the level: a state's round stamp, a place's rectangle.
+    const round = mark.kind === 'state';
     g.save();
     g.globalAlpha = pen.alpha * 0.9;
     g.translate(cx, cy);
@@ -504,6 +506,7 @@ function paintPassport(pen: Pen): void {
     say(pen, `stamp:${i}`, mark.big, big, cx, cy, 'center');
     if (mark.small) say(pen, `stamp-name:${i}`, mark.small, 20 * u, cx, cy + r + 18 * u, 'top-center', 0.7);
   });
+  if (more > 0 && shown >= marks.length) say(pen, 'stamp-more', `+${more}`, 34 * u, area.x + area.w, area.y + area.h, 'bottom-right', 0.8);
 }
 
 function roundRectOn(g: HookCtx2D, x: number, y: number, w: number, h: number, r: number): void {
