@@ -43,6 +43,7 @@
 import { DEFAULT_GRAIN_OPTIONS, groupByGrain, type DeduceGrain } from './deduce-grain';
 import { nearestCity, type GazetteerCity } from './gazetteer';
 import { groupLegs, type NamedLeg } from './group-legs';
+import { stepFor, type PolarstepsStep } from './polarsteps';
 import type { TimelineChapter, TimelinePlace } from './timeline-import';
 import type { TrackLeg } from './segment-track';
 
@@ -73,6 +74,11 @@ export interface TrackChapterOptions {
    */
   grain?: DeduceGrain;
   bigDays?: number;
+  /**
+   * Polarsteps steps (`polarsteps.ts`): a halt with a step of its days near
+   * its centre takes the STEP's name, the author's own, before the index's.
+   */
+  steps?: readonly PolarstepsStep[];
 }
 
 /**
@@ -106,16 +112,19 @@ function revisionFor(halts: readonly NamedLeg[]): string {
 function placesFor(halts: readonly NamedLeg[]): TimelinePlace[] {
   const seen = new Set<string>();
   const places: TimelinePlace[] = [];
-  for (const { city } of halts) {
-    if (!city) continue;
-    const key = city.name.trim().toLowerCase();
+  for (const { city, step } of halts) {
+    const named = step
+      ? { name: step.name, region: step.state || city?.region || '', lat: step.lat, lon: step.lon }
+      : city;
+    if (!named) continue;
+    const key = named.name.trim().toLowerCase();
     if (seen.has(key)) continue;
     seen.add(key);
     places.push({
-      name: city.name,
-      ...(city.region ? { region: city.region } : {}),
-      lat: city.lat,
-      lon: city.lon,
+      name: named.name,
+      ...(named.region ? { region: named.region } : {}),
+      lat: named.lat,
+      lon: named.lon,
     });
   }
   return places;
@@ -133,10 +142,12 @@ export function trackChapters(
   options: TrackChapterOptions = {},
 ): TrackChapter[] {
   // Named FIRST: a halt's city is what says which region it lies in.
-  const named: NamedLeg[] = legs.map((leg) => ({
-    leg,
-    city: cities.length ? nearestCity(cities, leg.centroid, options.maxKm) : null,
-  }));
+  // The step, when there is one, names it; the city still says its region.
+  const named: NamedLeg[] = legs.map((leg) => {
+    const city = cities.length ? nearestCity(cities, leg.centroid, options.maxKm) : null;
+    const step = options.steps?.length ? stepFor(leg, options.steps) : null;
+    return step ? { leg, city, step } : { leg, city };
+  });
 
   const groups = options.grain
     ? groupByGrain(named, options.grain, {

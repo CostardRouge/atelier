@@ -40,6 +40,7 @@
  */
 
 import type { GazetteerCity } from './gazetteer';
+import type { PolarstepsStep } from './polarsteps';
 import { haversineKm } from './hooks/geo';
 import type { TrackLeg } from './segment-track';
 
@@ -47,6 +48,12 @@ import type { TrackLeg } from './segment-track';
 export interface NamedLeg {
   leg: TrackLeg;
   city: GazetteerCity | null;
+  /**
+   * The Polarsteps step of its days that names it (`polarsteps.ts`,
+   * `stepFor`) — the author's own place, which beats `city` for the NAME.
+   * The city still says the region the halt is grouped by.
+   */
+  step?: PolarstepsStep;
 }
 
 export interface LegGroup {
