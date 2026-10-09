@@ -27,7 +27,9 @@
 import type { ComponentType } from 'react';
 import type { PyramidTile } from '../../map/tile-strip';
 import type { SavedMediaRef } from '../../projects/project-types';
-import type { CarSpec } from '../car-spec';
+import type { VehicleSpec } from '../vehicle-spec';
+import type { TripCrossings, TripVehicle, VehicleRef } from '../vehicle-fleet';
+import type { LandIndex } from '../../map/terrain';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
@@ -264,6 +266,8 @@ export interface HookPlace {
   /** The days it was reached and left, `YYYY-MM-DD`, where the place knows them (`TripPlace.arrived`/`left`). */
   arrived?: string;
   left?: string;
+  /** How it was reached — the vehicle of the hop that leads here (`TripPlace.arriveBy`). */
+  arriveBy?: VehicleRef;
 }
 
 export interface HookStage {
@@ -272,6 +276,8 @@ export interface HookStage {
   /** What the badge calls this leg (`stageLabel`). */
   label: string;
   places: readonly HookPlace[];
+  /** What this leg drives (`TripStage.vehicle`); absent = the trip's main vehicle. */
+  vehicle?: VehicleRef;
 }
 
 /** A decoded picture a variant may draw, with the size it was decoded at. */
@@ -319,10 +325,25 @@ export interface HookContext {
    */
   pictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The trip's car (`TripDoc.car`) — what a variant that drives one draws.
-   * A hand-built context without it drives the default car.
+   * The trip's main vehicle as it was on the piece's day (`TripDoc.vehicles`) — what a variant that drives one draws.
+   * A hand-built context without it drives the default vehicle.
    */
-  car?: CarSpec;
+  vehicle?: VehicleSpec;
+  /**
+   * The reference `vehicle` was resolved from — the stage of the piece's day,
+   * else the main vehicle (`vehicleRefForDay`) — what a stop no leg claims drives.
+   */
+  vehicleRef?: VehicleRef;
+  /** The trip's fleet and its stories (`TripDoc.vehicles`), for an opener that changes vehicle along its road. */
+  fleet?: readonly TripVehicle[];
+  /** The trip's rule for water (`TripDoc.crossings`). */
+  crossings?: TripCrossings;
+  /**
+   * The shipped coastline as an index, when it has been read in this session
+   * (`landIfLoaded`) — what tells a crossing from a road (`terrain.ts`).
+   * Absent: no hop is known to cross water, and the road is driven whole.
+   */
+  land?: LandIndex | null;
   /**
    * How the trip WRITES a place (`TripDoc.placeStyle`, `stateCodes`) — what
    * an opener's labels and the stops' lists read through `stopText`, so a
@@ -412,9 +433,9 @@ export interface HookPanelHost {
   pictureStatus?: HookPictureStatus;
   /**
    * Open the garage — the sheet that dresses the TRIP's car. A panel may not
-   * write the trip itself; absent, the panel says where the car is set.
+   * write the trip itself; absent, the panel says where the vehicle is set.
    */
-  configureCar?(): void;
+  configureVehicle?(): void;
   /**
    * Open the big picking map on these stops — pan, zoom, tap to add, drag to
    * move, towns to take a name from — and resolve the stops as the author

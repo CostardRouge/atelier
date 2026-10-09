@@ -3,7 +3,7 @@
  * has saved one from a trip he likes.
  *
  * The factory look is a handful of constants, each defined where its thing is
- * (`DEFAULT_BADGE_WORDS`, `DEFAULT_CTA`, `defaultCarSpec`, the `neutral`
+ * (`DEFAULT_BADGE_WORDS`, `DEFAULT_CTA`, `defaultVehicleSpec`, the `neutral`
  * theme…). A house style replaces them for a NEW trip only, as ONE committed
  * file, `house-style.json` beside this module: the dev server writes it
  * (`vite.config.ts`), saving is a diff to read and commit, and the deployed
@@ -13,7 +13,7 @@
  *
  * It carries the trip's VOICE and nothing that tells one journey: the words,
  * the title style, the closing card, the look each kind of piece starts from,
- * the grade and the car. Never the name, the dates, the legs, the pieces, the
+ * the grade and the vehicle. Never the name, the dates, the legs, the pieces, the
  * cover or the develop presets (numbers applied to one picture at a time, not
  * a look a trip wears). Inside what it carries, two things stay behind:
  *
@@ -38,6 +38,8 @@ import {
   type TripDoc,
   type TripGrade,
 } from './trip-types';
+import { readVehicleSpec, type VehicleSpec } from './vehicle-spec';
+import { mainVehicle } from './vehicle-fleet';
 
 /** Tells the house style apart from any other JSON in the repository. */
 export const HOUSE_STYLE_KIND = 'atelier.trip-house-style';
@@ -45,11 +47,15 @@ export const HOUSE_STYLE_KIND = 'atelier.trip-house-style';
 /** Where the dev server writes it, relative to the repository — said in the UI. */
 export const HOUSE_STYLE_PATH = 'src/shared/roadtrip/house-style.json';
 
-/** The fields of `TripDoc` a house style carries — and the only ones. */
-export type TripHouseStyle = Pick<
-  TripDoc,
-  'badgeWords' | 'theme' | 'cta' | 'hookDefaults' | 'grade' | 'car'
->;
+/**
+ * The fields of `TripDoc` a house style carries — and the only ones — plus
+ * the trip's MAIN vehicle as it set off, under the file's old key `car`: the
+ * author's own vehicle is a habit, while a second vehicle or a repaint
+ * belongs to one journey and stays in it.
+ */
+export type TripHouseStyle = Pick<TripDoc, 'badgeWords' | 'theme' | 'cta' | 'hookDefaults' | 'grade'> & {
+  car: VehicleSpec;
+};
 
 export interface HouseStyleFile {
   kind: typeof HOUSE_STYLE_KIND;
@@ -64,7 +70,7 @@ export interface HouseStyleSnapshot {
   uploadedLooks: string[];
 }
 
-/** A copy of the style's own fields out of a document, nothing else. */
+/** A copy of the style's own fields, nothing else. */
 function pickStyle(doc: TripHouseStyle): TripHouseStyle {
   return structuredClone({
     badgeWords: doc.badgeWords,
@@ -74,6 +80,11 @@ function pickStyle(doc: TripHouseStyle): TripHouseStyle {
     grade: doc.grade,
     car: doc.car,
   });
+}
+
+/** A trip's style: its own fields, and its main vehicle as it set off. */
+function styleOf(trip: TripDoc): TripHouseStyle {
+  return pickStyle({ ...trip, car: mainVehicle(trip.vehicles).spec });
 }
 
 /** An opener with what it was given for one piece put back to the variant's default. */
@@ -103,7 +114,7 @@ function styleDefaults(defaults: HookDefaults): HookDefaults {
 
 /** The trip's look as a file to commit, and what it had to leave behind. */
 export function houseStyleFrom(trip: TripDoc): HouseStyleSnapshot {
-  const style = pickStyle(trip);
+  const style = styleOf(trip);
   const hookDefaults: HookDefaultsByKind = {};
   for (const [kind, defaults] of Object.entries(style.hookDefaults)) {
     if (defaults) hookDefaults[kind as keyof HookDefaultsByKind] = styleDefaults(defaults);
@@ -149,15 +160,20 @@ export function readHouseStyle(raw: unknown): TripHouseStyle | null {
   const blank = createTripDoc('', '2000-01-01', '2000-01-01');
   // `in`, not `??`: a stored `theme: null` is a choice, not a missing block.
   const given = Object.fromEntries(
-    Object.entries(pickStyle(blank)).map(([key, fallback]) => [
+    Object.entries(styleOf(blank)).map(([key, fallback]) => [
       key,
       key in stored ? stored[key] : fallback,
     ]),
   );
-  return pickStyle(migrateTripDoc({ ...blank, ...given, version } as TripDoc));
+  // The vehicle keeps its key in every version of the file: read it whole,
+  // through the same defensive reader the document's migrations use.
+  return { ...styleOf(migrateTripDoc({ ...blank, ...given, version } as TripDoc)), car: readVehicleSpec(given.car) };
 }
 
 /** A new trip dressed in the house style; `null` leaves it on the factory look. */
 export function applyHouseStyle(doc: TripDoc, style: TripHouseStyle | null): TripDoc {
-  return style ? { ...doc, ...pickStyle(style) } : doc;
+  if (!style) return doc;
+  const { car, ...rest } = pickStyle(style);
+  const [main, ...others] = doc.vehicles;
+  return { ...doc, ...rest, vehicles: [{ ...mainVehicle(doc.vehicles), ...main, spec: car }, ...others] };
 }

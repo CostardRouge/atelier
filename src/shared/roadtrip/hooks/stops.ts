@@ -1,7 +1,7 @@
 /**
  * The author's own STOPS — the places a map opener is given by hand, whether
  * or not the trip's legs name them. Both map openers read them: the Itinerary
- * draws its pen through them, Virée drives its car through them when its stops
+ * draws its pen through them, Virée drives its vehicle through them when its stops
  * are «your places» (2026-09-28). What two variants both want lives beside the
  * contract, never in either — the `easing.ts` / `tick-kits.ts` rule — so this
  * is the model and its edits, and `map-plan.ts` re-exports the names it grew

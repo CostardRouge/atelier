@@ -1,6 +1,6 @@
 /**
  * The camera's rows, as an opener's panel offers them — ONE face for Virée's
- * camera over the car and the Itinerary's over the pen (`map-camera.ts`):
+ * camera over the vehicle and the Itinerary's over the pen (`map-camera.ts`):
  * the mode, the presets, the view width, the zoom, the orientation where the
  * opener has a heading, the wide shots, and the fine settings behind a link.
  */
@@ -139,7 +139,7 @@ export function CameraRows({ o, set, viewKm, fresh, words, heading }: CameraRows
               hint={
                 o.orientation === 'north'
                   ? 'North stays up, as on the paper map.'
-                  : `The map turns so ${words.subject} drives up the frame, sitting two thirds down with the road ahead; the car is seen from behind.`
+                  : `The map turns so ${words.subject} drives up the frame, sitting two thirds down with the road ahead; the vehicle is seen from behind.`
               }
             >
               <Segmented

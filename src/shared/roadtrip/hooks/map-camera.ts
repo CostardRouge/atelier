@@ -20,14 +20,14 @@
  *   fraction of a hop this long, starting and ending at the view width — mixed
  *   in by the strength and smoothed in LOG space, so a 1 000 km hop is seen
  *   whole in its middle and a 10 km one barely moves the zoom.
- * - **Smoothing** is a CENTRED Gaussian window over the car's position: the
+ * - **Smoothing** is a CENTRED Gaussian window over the vehicle's position: the
  *   drive is known in advance, so the camera leads as much as it lags and
- *   never trails the car. **Look ahead** reads the car's position that many
+ *   never trails the vehicle. **Look ahead** reads the vehicle's position that many
  *   seconds later.
- * - **Heading up** turns the map so the car drives up the frame, the car set
+ * - **Heading up** turns the map so the vehicle drives up the frame, the vehicle set
  *   two thirds down the frame (lead room). The heading is weighted by
  *   DISPLACEMENT over the turn window — a halt adds nothing, so the map never
- *   spins while the car waits — then rate-limited to the max turn speed.
+ *   spins while the vehicle waits — then rate-limited to the max turn speed.
  * - **Open wide / End wide** blend from the whole route to the follow view
  *   over the first and last `WIDE_SECONDS`: an establishing shot, then the
  *   car, then the whole road once more.
@@ -56,7 +56,7 @@ export interface CameraSubject {
   kmPerUnit: number;
 }
 
-/** Virée's car as a subject. */
+/** Virée's vehicle as a subject. */
 export function driveSubject(plan: DrivePlan): CameraSubject {
   const { phases } = plan.schedule;
   return {
@@ -87,9 +87,9 @@ export interface CameraOptions {
   /** How much of the flyTo pull-back is taken, 0..1. */
   pullBack: number;
   orientation: CameraOrientation;
-  /** Seconds of the centred window on the car's position. */
+  /** Seconds of the centred window on the vehicle's position. */
   smoothing: number;
-  /** Seconds the camera reads the car ahead of now. */
+  /** Seconds the camera reads the vehicle ahead of now. */
   lookAhead: number;
   /** Seconds of the window the heading is averaged over. */
   turnSmoothing: number;
@@ -119,7 +119,7 @@ export const CAMERA_PRESETS: Record<CameraPresetId, { label: string; hint: strin
   },
   navigation: {
     label: 'Navigation',
-    hint: 'Close behind the car, the road ahead up the frame, like a sat-nav.',
+    hint: 'Close behind the vehicle, the road ahead up the frame, like a sat-nav.',
     values: { viewKm: 35, zoom: 'pull-back', pullBack: 0.45, orientation: 'heading', smoothing: 0.7, lookAhead: 0.7, turnSmoothing: 1.4, maxTurn: 60, openWide: false, endWide: true },
   },
   documentary: {
@@ -154,9 +154,9 @@ export const TRACK_FPS = 30;
 export const FLY_RHO = 1.42;
 /** The establishing shot's and the closing shot's length. */
 export const WIDE_SECONDS = 1.8;
-/** The car's place down the frame under heading-up: lead room ahead of it. */
+/** The vehicle's place down the frame under heading-up: lead room ahead of it. */
 export const LEAD_ROOM = 0.15;
-/** How far from the car the camera's centre may wander, as a share of the box's half-height. */
+/** How far from the vehicle the camera's centre may wander, as a share of the box's half-height. */
 export const KEEP_IN_FRAME = 0.7;
 
 /**
@@ -282,7 +282,7 @@ export function subjectTrack(
   const width = followWidth(plan.kmPerUnit, o, whole, box, margin);
   const viewKm = width * plan.kmPerUnit;
 
-  // The centre: the car's position read `lookAhead` later, blurred over the
+  // The centre: the vehicle's position read `lookAhead` later, blurred over the
   // smoothing window — centred, so the camera leads as much as it lags.
   const px: number[] = [];
   const py: number[] = [];
@@ -295,7 +295,7 @@ export function subjectTrack(
   const cx = gaussianSmooth(px, sigma);
   const cy = gaussianSmooth(py, sigma);
 
-  // The heading: the car's displacement per frame, blurred over the turn
+  // The heading: the vehicle's displacement per frame, blurred over the turn
   // window (a halt moves nothing, so it weighs nothing), unwrapped, then
   // limited to the turn speed.
   let angle: number[] = new Array<number>(n).fill(0);
@@ -320,7 +320,7 @@ export function subjectTrack(
     const first = raw.find((a) => a !== null) ?? -Math.PI / 2;
     const headings = unwrapAngles(raw.map((a) => a ?? first));
     const limited = rateLimit(headings, ((o.maxTurn * Math.PI) / 180) / fps);
-    // The map turned so the car drives UP the frame.
+    // The map turned so the vehicle drives UP the frame.
     angle = limited.map((h) => -Math.PI / 2 - h);
   }
 
@@ -352,16 +352,16 @@ export function subjectTrack(
     let y = cy[k];
     let a = angle[k];
     if (o.orientation === 'heading') {
-      // Lead room: the car two thirds down the frame, the road ahead above it.
+      // Lead room: the vehicle two thirds down the frame, the road ahead above it.
       const off = LEAD_ROOM * box.height * unitsPerPx;
       const h = -Math.PI / 2 - a;
       x += Math.cos(h) * off;
       y += Math.sin(h) * off;
     }
-    // The car stays in the frame whatever the look-ahead and the smoothing
+    // The vehicle stays in the frame whatever the look-ahead and the smoothing
     // asked: a fast drive read 0.7 s ahead is hundreds of kilometres, and a
-    // camera that leaves its car behind is no camera. The centre is kept
-    // within `KEEP_IN_FRAME` of the box's half-height from the car.
+    // camera that leaves its vehicle behind is no camera. The centre is kept
+    // within `KEEP_IN_FRAME` of the box's half-height from the vehicle.
     const car = plan.at(t);
     const dx = x - car.x;
     const dy = y - car.y;

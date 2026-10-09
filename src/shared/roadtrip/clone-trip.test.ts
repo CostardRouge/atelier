@@ -8,7 +8,8 @@ import {
   type TripDoc,
 } from './trip-types';
 import { DEFAULT_DEVELOP } from '../develop/develop';
-import { defaultCarSpec } from './car-spec';
+import { defaultVehicleSpec } from './vehicle-spec';
+import { DEFAULT_CROSSINGS, fleetOf } from './vehicle-fleet';
 
 function sample(): TripDoc {
   const doc = createTripDoc('Maroc', '2026-05-01', '2026-05-21', 'winnow.example');
@@ -32,7 +33,8 @@ function sample(): TripDoc {
     ],
     cover: { layout: 'cover', pinned: [b.id, 'a-post-that-is-gone'] },
     developPresets: [{ id: 'p1', name: 'Noon', settings: { ...DEFAULT_DEVELOP, whites: -20 } }],
-    car: { ...defaultCarSpec(), color: '#1f3b2f' },
+    vehicles: fleetOf({ ...defaultVehicleSpec(), color: '#1f3b2f' }),
+    crossings: { ...DEFAULT_CROSSINGS, auto: true },
     placeStyle: { badge: 'full', lists: 'name' },
     stateCodes: { Souss: 'SSM' },
     cameraNames: { 'DJI FC8482': 'Mini 4 Pro' },

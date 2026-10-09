@@ -22,7 +22,8 @@ import {
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
-import CarGaragePanel from './CarGaragePanel';
+import CrossingsPanel from './CrossingsPanel';
+import FleetPanel from './FleetPanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel from './PlacesSettingsPanel';
@@ -36,7 +37,7 @@ const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
   { id: 'places', label: 'Places' },
   { id: 'cta', label: 'Closing card' },
   { id: 'defaults', label: 'New pieces' },
-  { id: 'car', label: 'Car' },
+  { id: 'car', label: 'Vehicle' },
   // The dev server alone can write the house style into the repository; the
   // built site never draws this section, and Vite drops the panel from it.
   ...(import.meta.env.DEV ? [{ id: 'house' as const, label: 'House style' }] : []),
@@ -401,24 +402,31 @@ export default function TripSettingsModal({
 
             {open === 'car' && (
               <>
-                <SectionLegend label="Car">
+                <SectionLegend label="Vehicle">
                   <p>
-                    The car every Virée of this trip drives — one car, every piece —
-                    and it travels in the trip’s backup. A piece only chooses how big
-                    it is drawn and how the camera looks at it.
+                    The vehicles this trip drives — the main one on every stage that names
+                    no other — and how each changed on the way, dated. A piece shows a
+                    vehicle as it was on the piece’s own day. A stage can name another in
+                    its card, a place the vehicle it was reached by. They travel in the
+                    trip’s backup.
                   </p>
                   <p>
-                    Drag the car to turn it. The angle here is only a look: it is never
+                    Drag the vehicle to turn it. The angle here is only a look: it is never
                     kept, and never becomes a piece’s camera.
                   </p>
                 </SectionLegend>
+                <CrossingsPanel
+                  value={trip.crossings}
+                  onChange={(crossings) => onChangeTrip({ ...trip, crossings })}
+                />
                 {/* A definite height wide, so the garage can keep the car in
                     view beside its own scrolling choices; narrow, the panel
                     stacks and this pane scrolls. */}
                 <div className="min-[821px]:flex-1 min-[821px]:min-h-0">
-                  <CarGaragePanel
-                    value={trip.car}
-                    onChange={(car) => onChangeTrip({ ...trip, car })}
+                  <FleetPanel
+                    trip={trip}
+                    value={trip.vehicles}
+                    onChange={(vehicles) => onChangeTrip({ ...trip, vehicles })}
                   />
                 </div>
               </>

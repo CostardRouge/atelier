@@ -20,8 +20,8 @@
  * Pure and DOM-free: the ground speaks only through `SceneDraw`.
  */
 
-import { defaultCarSpec, type CarModelId } from '../car-spec';
-import { carModel } from './car-registry';
+import { defaultVehicleSpec, type VehicleModelId } from '../vehicle-spec';
+import { vehicleModel } from './vehicle-registry';
 import {
   box,
   cylinder,
@@ -296,9 +296,9 @@ function ellipsoid(r: Rng, cx: number, cy: number, cz: number, rx: number, ry: n
 export const PROP_RGB: Record<string, Rgb> = {};
 let propN = 0;
 /** Another vehicle standing in a scene — our own models, as they come, in the colour given. */
-function vehicleProp(modelId: CarModelId, x: number, y: number, h: number, color: string): Part[] {
-  const model = carModel(modelId);
-  const spec = defaultCarSpec(model.id);
+function vehicleProp(modelId: VehicleModelId, x: number, y: number, h: number, color: string): Part[] {
+  const model = vehicleModel(modelId);
+  const spec = defaultVehicleSpec(model.id);
   const key = 'pv' + propN++;
   const pal = model.palette(color);
   for (const role in pal) PROP_RGB[key + ':' + role] = rgbOf(pal[role]);
@@ -511,7 +511,7 @@ export const BEACH_OBSTACLES: readonly Obstacle[] = [
   { x: 22, y: 4.9, a: 1.6 },
 ];
 
-const PARKED: readonly CarModelId[] = ['kadjar-ph2', 'zoe-ph2', 'trafic-ph2', 'prado-j120'];
+const PARKED: readonly VehicleModelId[] = ['kadjar-ph2', 'zoe-ph2', 'trafic-ph2', 'prado-j120'];
 /** The car deck's lanes, scene y, the hero's in the middle. */
 const DECK_LANES = [-2.8, 0, 2.8, 5.4];
 

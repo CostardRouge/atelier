@@ -20,8 +20,8 @@
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import { FieldRow, SelectField, TextField, swatchClass } from '../../ui/Inspector';
-import { DEFAULT_CAR, DEFAULT_MODEL, carLine, defaultCarSpec, describeCar, vehicleFor, type CarSpec, type VehicleChoice } from '../car-spec';
-import { CAR_MODELS, carModel } from './car-registry';
+import { DEFAULT_VEHICLE, DEFAULT_MODEL, vehicleLine, defaultVehicleSpec, describeVehicle, vehicleFor, type VehicleSpec, type VehicleChoice } from '../vehicle-spec';
+import { VEHICLE_MODELS, vehicleModel } from './vehicle-registry';
 import type { HookPanelProps, HookRender, HookVariant } from './hook-variant';
 import { Group } from './panel-ui';
 import { paintShowcase, prepareShowcase } from './showcase-paint';
@@ -43,12 +43,12 @@ import {
 import { PLACES, TIMES, TIME_IDS, WEATHERS, WEATHER_IDS } from './showcase-scenes';
 
 /** The cars a showcase can stage: a boat has no road to drive here. */
-const CARS = CAR_MODELS.filter((m) => m.kind === 'car');
+const CARS = VEHICLE_MODELS.filter((m) => m.kind === 'car');
 
-/** The vehicle this piece stages: the trip's car, or the one it borrows — never a boat. */
-export function showcaseSpec(o: ShowcaseOptions, tripCar: CarSpec): CarSpec {
-  const spec = vehicleFor(o.vehicle, o.vehicleColor, tripCar);
-  return carModel(spec.model).kind === 'car' ? spec : defaultCarSpec(DEFAULT_MODEL);
+/** The vehicle this piece stages: the trip's, or the one it borrows — never a boat. */
+export function showcaseSpec(o: ShowcaseOptions, tripVehicle: VehicleSpec): VehicleSpec {
+  const spec = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
+  return vehicleModel(spec.model).kind === 'car' ? spec : defaultVehicleSpec(DEFAULT_MODEL);
 }
 
 /** The picker card: a car on a lit plinth. */
@@ -69,7 +69,7 @@ function ShowcaseSketch() {
 
 /** What a borrowed vehicle's paint is called. */
 function paintHint(model: string, color: string): string {
-  const preset = carLine(model).colours.find((c) => c.hex === color);
+  const preset = vehicleLine(model).colours.find((c) => c.hex === color);
   if (!preset) return 'A colour of this piece’s own.';
   return preset.note ? `${preset.name} — ${preset.note}` : preset.name;
 }
@@ -81,10 +81,10 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const ends = endsOf(place, variant);
   const end = endOf(place, variant, o.end);
   const indoor = !!place.studio || (place.indoor?.(variant) ?? false);
-  const tripCar = ctx.car ?? DEFAULT_CAR;
-  const car = showcaseSpec(o, tripCar);
-  const borrowed = car !== tripCar;
-  const tripIsBoat = carModel(tripCar.model).kind !== 'car';
+  const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
+  const car = showcaseSpec(o, tripVehicle);
+  const borrowed = car !== tripVehicle;
+  const tripIsBoat = vehicleModel(tripVehicle.model).kind !== 'car';
   const entry = ENTRIES.find((e) => e.id === o.entry) ?? ENTRIES[0];
   const look = LOOKS.find((l) => l.id === o.look) ?? LOOKS[0];
   const endLabel = (id: (typeof ENDS)[number]['id']) => ((id === 'pullover' || id === 'offroad') && ends?.[id]?.label) || ENDS.find((e) => e.id === id)!.label;
@@ -193,25 +193,25 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
             tripIsBoat && !borrowed
               ? 'The trip drives a boat, which has no road here: the Prado stands in until a car is picked.'
               : borrowed
-                ? 'This piece only: the trip keeps its car.'
-                : 'The trip’s car, as it is dressed in the garage.'
+                ? 'This piece only: the trip keeps its vehicle.'
+                : 'The trip’s vehicle, as it is dressed in the garage.'
           }
         >
           <SelectField
             value={borrowed ? car.model : 'trip'}
             options={[
-              { id: 'trip', label: `The trip’s ${carModel(tripCar.model).short}` },
-              ...CARS.filter((m) => m.id !== tripCar.model).map((m) => ({ id: m.id, label: m.name })),
+              { id: 'trip', label: `The trip’s ${vehicleModel(tripVehicle.model).short}` },
+              ...CARS.filter((m) => m.id !== tripVehicle.model).map((m) => ({ id: m.id, label: m.name })),
             ]}
             onChange={(vehicle) => set({ vehicle: vehicle as VehicleChoice, vehicleColor: '' })}
             label="Vehicle"
           />
         </FieldRow>
-        <p className="m-0 text-xs text-ink-soft">{describeCar(car, carModel(car.model).name)}</p>
+        <p className="m-0 text-xs text-ink-soft">{describeVehicle(car, vehicleModel(car.model).name)}</p>
         {borrowed ? (
           <FieldRow label="Paint" align="start" hint={paintHint(car.model, car.color)}>
             <div className="flex flex-wrap items-center gap-1.5">
-              {carLine(car.model).colours.map((c) => {
+              {vehicleLine(car.model).colours.map((c) => {
                 const on = c.hex === car.color;
                 return (
                   <button
@@ -220,7 +220,7 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
                     aria-label={c.name}
                     aria-pressed={on}
                     title={c.note ? `${c.name} — ${c.note}` : c.name}
-                    onClick={() => set({ vehicleColor: c.hex === carLine(car.model).color ? '' : c.hex })}
+                    onClick={() => set({ vehicleColor: c.hex === vehicleLine(car.model).color ? '' : c.hex })}
                     className={`flex-none w-7 h-7 p-0 rounded-full border-2 cursor-pointer transition-[box-shadow,border-color] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
                       on ? 'border-accent shadow-[0_0_0_2px_var(--color-surface)_inset]' : 'border-line-strong hover:border-muted'
                     }`}
@@ -238,14 +238,14 @@ function ShowcasePanel({ options, onChange, ctx, host }: HookPanelProps) {
               />
             </div>
           </FieldRow>
-        ) : host?.configureCar ? (
+        ) : host?.configureVehicle ? (
           <div>
-            <Button size="sm" onClick={() => host.configureCar?.()}>
-              Configure the car…
+            <Button size="sm" onClick={() => host.configureVehicle?.()}>
+              Configure the vehicle…
             </Button>
           </div>
         ) : (
-          <p className="m-0 text-xs text-muted">The trip’s car is dressed in the trip settings, under Car.</p>
+          <p className="m-0 text-xs text-muted">The trip’s vehicle is dressed in the trip settings, under Vehicle.</p>
         )}
       </Group>
 
@@ -282,7 +282,7 @@ export const showcaseVariant: HookVariant = {
   owns: 'frame',
   prepare(options, ctx) {
     const o = readShowcase(options);
-    const prep = prepareShowcase(o, showcaseSpec(o, ctx.car ?? DEFAULT_CAR));
+    const prep = prepareShowcase(o, showcaseSpec(o, ctx.vehicle ?? DEFAULT_VEHICLE));
     const caption = o.caption.trim();
     const render: HookRender = {
       seconds: SHOWCASE_SECONDS,

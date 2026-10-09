@@ -52,10 +52,10 @@ interface HookPickerProps {
   /** The shelf is passed only when a switch changed it. */
   onChange: (layers: HookLayer[], shelf?: HookShelf) => void;
   /**
-   * Opens the trip's garage — the car every Virée drives. Absent where the
+   * Opens the trip's garage — the vehicle every Virée drives. Absent where the
    * picker has no trip to write to, and the variant's panel says so instead.
    */
-  onConfigureCar?: () => void;
+  onConfigureVehicle?: () => void;
   /**
    * The picker is choosing a slide's OWN opener rather than the piece's. The
    * badge variant draws nothing beyond the badge, and on such a slide the
@@ -83,7 +83,7 @@ export default function HookPicker({
   ctx,
   pictureStatus,
   onChange,
-  onConfigureCar,
+  onConfigureVehicle,
   slideOpener = false,
 }: HookPickerProps) {
   // A slide with no opener is showing the NONE card, the badge variant's.
@@ -106,8 +106,8 @@ export default function HookPicker({
     [],
   );
   const host = useMemo<HookPanelHost>(
-    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar, editStopsOnMap }),
-    [choosePictures, pictureStatus, onConfigureCar, editStopsOnMap],
+    () => ({ choosePictures, pictureStatus, configureVehicle: onConfigureVehicle, editStopsOnMap }),
+    [choosePictures, pictureStatus, onConfigureVehicle, editStopsOnMap],
   );
   const settle = (picked: HookPickedPicture[] | null) => {
     choosing?.resolve(picked);

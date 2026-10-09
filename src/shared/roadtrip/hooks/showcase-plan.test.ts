@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCarSpec } from '../car-spec';
+import { defaultVehicleSpec } from '../vehicle-spec';
 import { centroid, dot, faceNormal, sub, type Part } from './mesh3d';
 import {
   BEACH_OBSTACLES,
@@ -21,8 +21,8 @@ import {
 } from './showcase-plan';
 import { PLACES, placeById } from './showcase-scenes';
 
-const prado = showcaseCar(defaultCarSpec('prado-j120'));
-const trafic = showcaseCar(defaultCarSpec('trafic-ph2'));
+const prado = showcaseCar(defaultVehicleSpec('prado-j120'));
+const trafic = showcaseCar(defaultVehicleSpec('trafic-ph2'));
 
 describe('readShowcase', () => {
   it('reads an empty record as the defaults, and anything unknown as its default', () => {

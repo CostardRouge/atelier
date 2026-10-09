@@ -1220,15 +1220,15 @@ head. It **ticks** at every landing, a deeper tick where a leg of the trip
 begins and a low seat on today, in a choice of voices (ratchet, woodblock,
 typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
-every visit. **Virée** puts a little car on the map: a paper map of
+every visit. **Virée** puts a little vehicle on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
-through its stops, and a cartoon vehicle — the trip's car, a Land Cruiser
+through its stops, and a cartoon vehicle — the trip's own, a Land Cruiser
 Prado or a Renault Kadjar with its wheels turning, or a boat a piece borrows for
 a day on the water, leaving a wake — a miniature rendered in the browser,
 driving from stop to stop. The stops are the
 legs' located places, arriving where this day's leg ends; **your own places**,
 put on a map with the very editor the Itinerary uses — any place, on a leg or
-not, in your order, each able to hold a picture the car halts to show; or the
+not, in your order, each able to hold a picture the vehicle halts to show; or the
 **pictures you pick** — each one shot with a position in its EXIF is a stop, in
 the order they were shot, a run shot at one spot one stop. Your places follow
 you from one opener to the other: the stops picked for an Itinerary are the ones
@@ -1326,16 +1326,65 @@ narrow hull, benches along both edges so every seat has the water, a roof tiled
 with solar panels, the croc cam's screen under its front edge, two electric
 outboards). Their liveries are guesses you can repaint. A trip can drive a
 boat, but a piece usually borrows one: the Virée panel's **Vehicle** row keeps
-the trip's car or picks any other model for that piece alone, in a paint of its
+the trip's vehicle or picks any other model for that piece alone, in a paint of its
 own, and a boat leaves a wake that grows as it gets under way and settles when
-it halts — long behind the Viper, barely a ripple behind the Solar Whisper. The car turns on a turntable while you dress it (drag
+it halts — long behind the Viper, barely a ripple behind the Solar Whisper.
+Two **ferries** carry the car across: the **Spirit of Tasmania** (Bass Strait —
+a white hull with the red band and funnel its operator calls its brand) and a
+**Mediterranean ferry** of the France–Spain–Morocco crossings (no one ship: a
+navy hull under a white superstructure, two funnels side by side, a long open
+aft deck). A ship is drawn bigger than the rest. When a piece borrows a ferry,
+**Boarding** (on by default) opens on the trip's car at the quay: it drives up
+the stern ramp and disappears inside, the ferry crosses like any boat, and the
+car drives off over the bow ramp at the far side. The vehicle turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own
-panel («Configure the car…», with Cancel and Done) and lives in the trip's
-settings as its Car section, where every switch writes at once. On a wide
-screen both show the car beside its choices, which scroll on their own, so a
-switch far down the list is seen on the car the moment it flips.
+panel («Configure the vehicle…», with Cancel and Done) and lives in the trip's
+settings as its Vehicle section, where every switch writes at once. On a wide
+screen both show the vehicle beside its choices, which scroll on their own, so a
+switch far down the list is seen on the vehicle the moment it flips.
+That section holds the trip's **fleet**: the vehicles the journey drives, the
+first being the main one (what a stage that names no other drives), each with
+**its story** — how it set off, then every change on the way, dated (the Prado
+repainted Raptor black at Melbourne, say). Name the place where it happened
+and, when the trip knows the day it reached that place, the change takes that
+day. Pick a row and the garage beside it dresses that state; a change keeps
+its vehicle's model, since another model is another vehicle. A piece shows a
+vehicle as it was on the piece's own day, and «Configure the vehicle…» from a
+piece dresses the state in effect on that day.
+
+When a piece's **Vehicle** row keeps the trip's own (its default), Virée
+**changes vehicle along the road**. A stage can name another vehicle of the
+fleet, or a model borrowed for the day (the select beside its place style, in
+the stage's card, with its paint beside it for a borrowed model); a place can say how it was reached (its **Reached by**: a
+boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
+**water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
+new trip, off for one made before it) a hop that crosses the sea sails, from
+the shore it leaves to the shore it reaches, on the boat the rule names. Its
+**Fine settings** hold the two distances the coarse coastline needs: water
+narrower than the **bridge** length stays a road, and a stop within the
+**shore** distance of a coast counts as ashore. Each vehicle wears its look of
+the day, so the Prado drives green until Melbourne and black after; a swap is
+marked by a splash and a repaint by a sweep of the new paint. The water is read
+on the coastline the app already ships (Natural Earth 1:50m, no network), with
+one rule: a hop sails only when it changes land or ends at sea. A curve that
+cuts a bay the road went round stays a road, while a strait such as Gibraltar
+sails (Africa and Eurasia are one land on that map, so a strait is water whose
+two shores lie much further apart round the coast than across it). A river or
+a lake is not on that map: a river cruise is set on its place by hand. The
+panel says what the road will do, for example «2 crossings by Spirit of
+Tasmania, the Prado aboard: Melbourne → Devonport, Hobart → Melbourne».
+When the boat that takes a crossing is a **ferry** (the water rule's boat, or
+the one a place was reached by) and the road's vehicle is a car, the car
+**boards** it there. It drives to the quay and stops, and the ship docks just
+ahead. The car lines up with the stern ramp and drives in. The ship crosses,
+and at the far quay the car drives off over the bow ramp and on to the next
+stop. Each of the two beats adds under two seconds to the drive. The
+**Boarding** switch in the panel's Vehicle group turns this off, and the ferry
+then takes over at the shore like any boat. On a wide map, where the strait is
+shorter than the drawn ship, the ship holds still mid-strait while the car
+drives on at one end and off at the other.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
 your own places) — though, like Virée and the Recap card, it can also take

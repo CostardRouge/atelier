@@ -103,6 +103,7 @@ export function hookStages(trip: TripDoc): HookStage[] {
     startDate: stage.startDate,
     endDate: stage.endDate,
     label: stageLabel(stage),
+    ...(stage.vehicle ? { vehicle: stage.vehicle } : {}),
     places: stage.places.flatMap((place) =>
       place.coords &&
       Number.isFinite(place.coords.lat) &&
@@ -143,5 +144,6 @@ export function hookPlace(place: TripPlace, lat: number, lon: number): HookPlace
   if (place.style) out.style = place.style;
   if (place.arrived) out.arrived = place.arrived;
   if (place.left) out.left = place.left;
+  if (place.arriveBy) out.arriveBy = place.arriveBy;
   return out;
 }

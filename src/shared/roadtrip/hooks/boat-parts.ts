@@ -119,6 +119,43 @@ export function demihullParts(id: string, h: HullShape, cutAt: number, top = 'de
   ];
 }
 
+/**
+ * A long monohull — a ship — cut across at the given y's into slices, each
+ * its own convex part, for the reason the catamarans' hulls are cut: one side
+ * face the length of a ship is keyed by its far end. A cut face is inside the
+ * hull and never built; only the first slice keeps its transom, and a slice
+ * whose top is buried under a superstructure (`topless`) builds no deck.
+ */
+export function hullSlices(id: string, h: HullShape, cuts: readonly number[], topless: (index: number) => boolean): Part[] {
+  const { deck, water } = hullPlans(h);
+  const ends = [h.stern, ...cuts, h.bow];
+  const parts: Part[] = [];
+  for (let i = 0; i < ends.length - 1; i++) {
+    let d: P2[] = [...deck];
+    let w: P2[] = [...water];
+    if (i > 0) {
+      d = clipY(d, ends[i], 'fore');
+      w = clipY(w, ends[i], 'fore');
+    }
+    if (i < ends.length - 2) {
+      d = clipY(d, ends[i + 1], 'aft');
+      w = clipY(w, ends[i + 1], 'aft');
+    }
+    const first = i === 0;
+    const last = i === ends.length - 2;
+    const side = hullRoles(topless(i) ? '' : 'deck');
+    parts.push(
+      hullSolid(`${id}-${i}`, [...lift(d, h.freeboard), ...lift(w, 0)], (n) => {
+        if (n[1] < -0.9) return first ? 'body' : null;
+        if (n[1] > 0.9) return last ? 'body' : null;
+        const role = side(n);
+        return role === '' ? null : role;
+      }),
+    );
+  }
+  return parts;
+}
+
 const level = (z: number): ZPlane => ({ z });
 
 /** An axis-aligned box, its bottom and any named wall left out where it is pressed against something. */

@@ -37,7 +37,8 @@
  * and downloading files stay in the UI.
  */
 
-import { readCarSpec } from './car-spec';
+import { readVehicleSpec } from './vehicle-spec';
+import { readCrossings, readFleet } from './vehicle-fleet';
 import { isIsoDate } from './trip-days';
 import {
   TRIP_DOC_VERSION,
@@ -104,7 +105,10 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     // The presets are the trip's habit of light, like its words; a piece's
     // own develop rides inside its post above.
     developPresets: structuredClone(trip.developPresets),
-    car: structuredClone(trip.car),
+    // The fleet and its story (the Prado repainted at Melbourne), and the
+    // trip's rule for water: how this journey moved, like its legs.
+    vehicles: structuredClone(trip.vehicles),
+    crossings: { ...trip.crossings },
     // How the trip writes its places, and its own table of state codes: the
     // trip's voice, like its words — a place read elsewhere should read the same.
     placeStyle: { ...trip.placeStyle },
@@ -203,8 +207,12 @@ export function parseTripFile(text: string): ParseResult {
     developPresets: Array.isArray(raw.developPresets)
       ? (raw.developPresets as TripDoc['developPresets'])
       : base.developPresets,
-    // A validated read, never a cast: junk or nothing lands on the default car.
-    car: readCarSpec(raw.car),
+    // A validated read, never a cast: junk or nothing lands on the default
+    // vehicle. A file before v31 carries a `car`, which the migration folds
+    // into a fleet of one; from v31 the fleet and the water rule are read.
+    ...(version < 31
+      ? { car: readVehicleSpec(raw.car) }
+      : { vehicles: readFleet(raw.vehicles), crossings: readCrossings(raw.crossings) }),
     placeStyle: readPlaceStyle(raw.placeStyle),
     stateCodes: readStateCodes(raw.stateCodes),
   });
@@ -229,7 +237,8 @@ export function parseTripFile(text: string): ParseResult {
       grade: migrated.grade,
       cover: migrated.cover,
       developPresets: migrated.developPresets,
-      car: migrated.car,
+      vehicles: migrated.vehicles,
+      crossings: migrated.crossings,
       placeStyle: migrated.placeStyle,
       stateCodes: migrated.stateCodes,
     },
@@ -266,7 +275,8 @@ export function tripDocFromFile(
     // once had on the studio's intros.
     cover: structuredClone(file.cover),
     developPresets: structuredClone(file.developPresets),
-    car: structuredClone(file.car),
+    vehicles: structuredClone(file.vehicles),
+    crossings: { ...file.crossings },
     placeStyle: { ...file.placeStyle },
     stateCodes: { ...file.stateCodes },
   };

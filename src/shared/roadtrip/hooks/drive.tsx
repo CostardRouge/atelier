@@ -4,17 +4,17 @@
  *
  * A paper map of the trip so far (no tiles, nothing fetched: the projection
  * is the route trace's own), the road as a curve through the stops, and a
- * cartoon vehicle — the trip's car, wheels turning, or a boat a piece borrows
+ * cartoon vehicle — the trip's vehicle, wheels turning, or a boat a piece borrows
  * for its day on the water, a wake behind it — a miniature rendered by
  * `mesh3d.ts`, driving it. The stops are the legs' located places, the places the
  * author puts on the map themselves (the Itinerary's own editor, shared), or
- * the picked pictures' own positions; at a stop with pictures the car halts and they pop
+ * the picked pictures' own positions; at a stop with pictures the vehicle halts and they pop
  * as prints beside it, or fill the frame; when it arrives the map can fade
  * and leave the piece's own picture under the badge. It ticks at every stop
  * on the shared kits, with a shutter as each print lands.
  *
  * The arithmetic is `drive-plan.ts`, the drawing `drive-paint.ts`, the
- * vehicles `car-registry.ts`; this file is the variant's face — what it
+ * vehicles `vehicle-registry.ts`; this file is the variant's face — what it
  * needs, its sketch, and its options.
  */
 
@@ -28,8 +28,10 @@ import {
   ToggleField,
   swatchClass,
 } from '../../ui/Inspector';
-import { DEFAULT_CAR, carLine, describeCar, vehicleFor, type VehicleChoice } from '../car-spec';
-import { CAR_MODELS, carModel, vehicleLabel } from './car-registry';
+import { DEFAULT_VEHICLE, vehicleLine, carriesVehicles, describeVehicle, vehicleFor, type VehicleSpec, type VehicleChoice } from '../vehicle-spec';
+import { fleetOf, mainVehicle } from '../vehicle-fleet';
+import { driveRoad, driveVehicles, ferryDocks, refModel, type DriveVehicles, type RoadInput } from './vehicle-plan';
+import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from './vehicle-registry';
 import {
   DRIVE_DEFAULTS,
   DRIVE_LIMITS,
@@ -37,6 +39,7 @@ import {
   MAX_PICTURES_PER_STOP,
   MILESTONE_DAYS,
   MILESTONE_DISTANCE,
+  PLAN_SIZE,
   counterDay,
   distanceNumeral,
   driveCounterPieces,
@@ -63,7 +66,7 @@ import { CAMERA_PRESETS } from './map-camera';
 import { CameraRows } from './camera-rows';
 import { EASINGS, EASING_IDS } from './easing';
 import { formatDistance } from './geo';
-import type { HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
+import type { HookContext, HookPanelProps, HookPictureStatus, HookRender, HookVariant } from './hook-variant';
 import { allowTiles, stripBudget } from '../../map/osm-tiles';
 import { BasemapStatus } from './basemap-row';
 import { readyGround } from './basemap-strip';
@@ -145,8 +148,8 @@ function leftOutLine(route: DriveRoute, o: DriveOptions): string | null {
 function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null): string {
   if (!plan) return 'Nothing to drive yet — the counter waits for the road.';
   const n = route.stops.length;
-  if (count === 'km') return `The badge counts the distance as the car drives, up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies.`;
-  if (count === 'places') return `The badge counts the stops as the car reaches them, up to ${n}.`;
+  if (count === 'km') return `The badge counts the distance as the vehicle drives, up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies.`;
+  if (count === 'places') return `The badge counts the stops as the vehicle reaches them, up to ${n}.`;
   const km = count === 'days-km' ? `, the distance beside it up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies` : '';
   if (!plan.clock) {
     return route.stops.length
@@ -155,12 +158,86 @@ function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null)
   }
   const from = counterDay(plan.clock.arrive[0], route.tripDays);
   const to = counterDay(plan.clock.leave[n - 1], route.tripDays);
-  return `The badge counts the day of the trip as the car drives, from day ${from} to day ${to} of ${route.tripDays}${km}.`;
+  return `The badge counts the day of the trip as the vehicle drives, from day ${from} to day ${to} of ${route.tripDays}${km}.`;
+}
+
+/**
+ * Whether the trip's vehicle drives aboard this piece's vehicle: a FERRY the
+ * piece borrowed, a car (not a boat) for the trip to put on it, and the
+ * author's yes. Read by the panel, the plan and the shell's ground alike, so
+ * all three time the same drive.
+ */
+function boardsOf(o: DriveOptions, tripVehicle: VehicleSpec): boolean {
+  const vehicle = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
+  return o.boarding && vehicle !== tripVehicle && carriesVehicles(vehicle.model) && vehicleModel(tripVehicle.model).kind === 'car';
+}
+
+/** What the road's vehicles are read from — the context's fleet, stages, rule and coastline. */
+function roadInput(ctx: HookContext, forced: VehicleSpec | null): RoadInput {
+  const fleet = ctx.fleet?.length ? ctx.fleet : fleetOf(ctx.vehicle ?? DEFAULT_VEHICLE);
+  return {
+    stages: ctx.stages ?? [],
+    calendar: ctx.calendar ?? [],
+    fleet,
+    crossings: ctx.crossings,
+    land: ctx.land,
+    dayRef: ctx.vehicleRef ?? { fleet: mainVehicle(fleet).id },
+    date: ctx.date,
+    forced,
+  };
+}
+
+/**
+ * The plan as every reader of this piece builds it — the panel, the shell's
+ * ground, the stage and the export — so all of them time the same drive: the
+ * recap's clock when the badge counts with it, the trip's car boarding a
+ * borrowed ferry, and, on the trip's own road, the car docking at each shore
+ * a ferry carries it across (`ferryDocks`), found on the plan's own path.
+ */
+function planOf(route: DriveRoute, o: DriveOptions, ctx: HookContext): DrivePlan | null {
+  const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
+  const ownRoad = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle) === tripVehicle;
+  const input = roadInput(ctx, null);
+  const docks =
+    o.boarding && ownRoad
+      ? (path: DrivePlan['path'], geo: DrivePlan['geo']) =>
+          ferryDocks(driveVehicles({ ...input, stops: route.stops, path, geo, centre: PLAN_SIZE / 2, forced: null }))
+      : undefined;
+  return drivePlan(route, o, driveCountOf(ctx.counterMode) !== null, boardsOf(o, tripVehicle), docks);
+}
+
+/**
+ * What the road will do with the trip's vehicles, said as a sentence: the
+ * crossings it sails and on what, the hops picked by hand, the stages that
+ * drive another vehicle — or why it reads no water (the rule off, the
+ * coastline not yet here). The same `driveVehicles` the paint draws.
+ */
+function roadSentence(plan: DrivePlan, ctx: HookContext, vehicles: DriveVehicles, o: DriveOptions): string {
+  const input = roadInput(ctx, null);
+  const stops = plan.route.stops;
+  const parts: string[] = [];
+  const water = vehicles.segments.filter((seg) => seg.source === 'water');
+  if (!input.crossings?.auto) parts.push('The water rule is off in the trip settings');
+  else if (!input.land) parts.push('Reading the coastline — the road is driven whole until it arrives');
+  else if (!water.length) parts.push('No hop crosses water');
+  else {
+    const boat = vehicleModel(refModel(water[0].ref, input.fleet)).short;
+    const where = vehicles.hops
+      .map((hop, h) => (hop?.water ? `${stops[h].name || `stop ${h + 1}`} → ${stops[h + 1].name || `stop ${h + 2}`}` : null))
+      .filter((x): x is string => x !== null);
+    const aboard = o.boarding && water.some((seg) => seg.rider) ? `, the ${vehicleModel(refModel(water.find((seg) => seg.rider)!.rider!, input.fleet)).short} aboard` : '';
+    parts.push(`${where.length} crossing${where.length > 1 ? 's' : ''} by ${boat}${aboard}: ${where.slice(0, 3).join(', ')}${where.length > 3 ? '…' : ''}`);
+  }
+  const placed = vehicles.segments.filter((seg) => seg.source === 'place').length;
+  if (placed) parts.push(`${placed} hop${placed > 1 ? 's' : ''} picked by hand`);
+  const staged = new Set(vehicles.segments.filter((seg) => seg.source === 'stage').map((seg) => refModel(seg.ref, input.fleet)));
+  if (staged.size) parts.push(`stages on ${[...staged].map((m) => vehicleModel(m).short).join(', ')}`);
+  return `${parts.join(' · ')}.`;
 }
 
 /** What a borrowed vehicle's paint is called: its preset, with its word, or a colour of the piece's own. */
 function paintHint(model: string, color: string): string {
-  const preset = carLine(model).colours.find((c) => c.hex === color);
+  const preset = vehicleLine(model).colours.find((c) => c.hex === color);
   if (!preset) return 'A colour of this piece’s own.';
   return preset.note ? `${preset.name} — ${preset.note}` : preset.name;
 }
@@ -172,7 +249,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const calendar = ctx.calendar ?? [];
   const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing, ctx.towns ?? null);
   const count = driveCountOf(ctx.counterMode);
-  const plan = drivePlan(route, o, count !== null);
+  const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
+  const plan = planOf(route, o, ctx);
   /** How many stops the road has BEFORE nearby ones are grouped — what the grouping row counts from. */
   const ungrouped = o.groupKm > 0 ? driveRoute(stages, calendar, ctx.date, { ...o, groupKm: 0 }, ctx.writing).stops.length : route.stops.length;
   const wants = driveWants(route, o);
@@ -184,14 +262,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
     plan && o.ground === 'tiles'
       ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())
       : null;
-  const tripCar = ctx.car ?? DEFAULT_CAR;
   // `vehicleFor` hands back the trip's own spec when the piece borrows nothing.
-  const car = vehicleFor(o.vehicle, o.vehicleColor, tripCar);
-  const borrowed = car !== tripCar;
+  const car = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
+  const borrowed = car !== tripVehicle;
+  /** The trip's own road: who drives each stretch, a ferry carrying the car included. */
+  const roadVehicles = !borrowed && plan ? driveRoad(plan, roadInput(ctx, null)).vehicles : null;
+  const ferried = roadVehicles?.segments.find((seg) => seg.rider) ?? null;
   const shown = route.stops.reduce((n, s) => n + s.pictures.length, 0);
   const located = stages.reduce((n, s) => n + s.places.length, 0);
   const places = tripPlaces(stages);
-  // The caption can follow the car wherever a stop's name is a PLACE: the
+  // The caption can follow the vehicle wherever a stop's name is a PLACE: the
   // legs' own, or the author's. A picture stop is named after its day.
   const namesArePlaces = o.stopsOn !== 'pictures';
 
@@ -248,7 +328,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           onChange={set}
           resolved={sourceStops(o, ctx)}
           host={host}
-          label="What the car drives between"
+          label="What the vehicle drives between"
           editor={{
             places,
             free: otherPlaces(stages, o.stops),
@@ -256,8 +336,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             placeStyle: o.placeStyle,
             writing: ctx.writing,
             title: 'Virée',
-            pictureHint: o.pictures === 'none' ? null : 'Shown when the car halts here, before any picked picture shot nearby.',
-            picturesOffHint: 'The pictures are set to None below, so the car drives past without showing any.',
+            pictureHint: o.pictures === 'none' ? null : 'Shown when the vehicle halts here, before any picked picture shot nearby.',
+            picturesOffHint: 'The pictures are set to None below, so the vehicle drives past without showing any.',
             grouping: { groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName },
           }}
         />
@@ -280,7 +360,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             ]}
           />
         </FieldRow>
-        <FieldRow label="Ahead" hint={o.ahead === 'hidden' ? 'The road ahead is not drawn: only the trail the car leaves.' : undefined}>
+        <FieldRow label="Ahead" hint={o.ahead === 'hidden' ? 'The road ahead is not drawn: only the trail the vehicle leaves.' : undefined}>
           <Segmented
             size="sm"
             fill
@@ -295,8 +375,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         <FieldRow label="Trail">
-          <ToggleField label="The trail behind the car" checked={o.trail} onChange={(trail) => set({ trail })}>
-            A solid line behind the car
+          <ToggleField label="The trail behind the vehicle" checked={o.trail} onChange={(trail) => set({ trail })}>
+            A solid line behind the vehicle
           </ToggleField>
         </FieldRow>
         <FieldRow label="Colours" hint="The trail, then the road ahead.">
@@ -326,12 +406,12 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           label="Shown as"
           hint={
             o.pictures === 'cards'
-              ? 'Prints popping beside the car at each stop, piled like a stack on the map.'
+              ? 'Prints popping beside the vehicle at each stop, piled like a stack on the map.'
               : o.pictures === 'fill'
-                ? 'Each picture fills the frame while the car halts, then the map comes back.'
+                ? 'Each picture fills the frame while the vehicle halts, then the map comes back.'
                 : o.pictures === 'backdrop'
-                  ? 'Each picture takes the paper’s place behind the road and the car while it halts.'
-                  : 'The car drives without stopping for pictures.'
+                  ? 'Each picture takes the paper’s place behind the road and the vehicle while it halts.'
+                  : 'The vehicle drives without stopping for pictures.'
           }
         >
           <Segmented
@@ -373,7 +453,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         )}
         {o.pictures !== 'none' && (
-          <FieldRow label="Per picture" hint="How long the car halts for each picture at a stop.">
+          <FieldRow label="Per picture" hint="How long the vehicle halts for each picture at a stop.">
             <RangeField
               label="Seconds per picture"
               min={DRIVE_LIMITS.secondsPerPicture.min}
@@ -399,13 +479,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           </FieldRow>
         )}
         {o.pictures === 'cards' && (
-          <FieldRow label="Afterwards" hint={o.cardsStay ? 'The prints stay on the map once the car has gone: a collage by the end.' : 'The prints fade as the car leaves.'}>
+          <FieldRow label="Afterwards" hint={o.cardsStay ? 'The prints stay on the map once the vehicle has gone: a collage by the end.' : 'The prints fade as the vehicle leaves.'}>
             <ToggleField label="Leave the prints on the map" checked={o.cardsStay} onChange={(cardsStay) => set({ cardsStay })}>
               Leave them on the map
             </ToggleField>
           </FieldRow>
         )}
-        <FieldRow label="Pauses" hint={o.pauseEverywhere ? 'The car pauses a beat at every stop, pictures or not.' : undefined}>
+        <FieldRow label="Pauses" hint={o.pauseEverywhere ? 'The vehicle pauses a beat at every stop, pictures or not.' : undefined}>
           <ToggleField label="Pause at every stop" checked={o.pauseEverywhere} onChange={(pauseEverywhere) => set({ pauseEverywhere })}>
             At every stop, pictures or not
           </ToggleField>
@@ -417,21 +497,50 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           label="Drives"
           hint={
             borrowed
-              ? 'This piece only: the trip keeps its car, and its other pieces drive it.'
-              : 'The trip’s car, as it is dressed in the garage.'
+              ? 'This piece only: the trip keeps its vehicle, and its other pieces drive it.'
+              : 'The trip’s vehicle, as it is dressed in the garage.'
           }
         >
           <SelectField
             value={borrowed ? car.model : 'trip'}
             options={[
-              { id: 'trip', label: `The trip’s ${carModel(tripCar.model).short}` },
-              ...CAR_MODELS.filter((m) => m.id !== tripCar.model).map((m) => ({ id: m.id, label: vehicleLabel(m) })),
+              { id: 'trip', label: `The trip’s ${vehicleModel(tripVehicle.model).short}` },
+              ...VEHICLE_MODELS.filter((m) => m.id !== tripVehicle.model).map((m) => ({ id: m.id, label: vehicleLabel(m) })),
             ]}
             onChange={(vehicle) => set({ vehicle: vehicle as VehicleChoice, vehicleColor: '' })}
             label="Vehicle"
           />
         </FieldRow>
-        <p className="m-0 text-xs text-ink-soft">{describeCar(car, carModel(car.model).name)}</p>
+        <p className="m-0 text-xs text-ink-soft">{describeVehicle(car, vehicleModel(car.model).name)}</p>
+        {plan && roadVehicles && <p className="m-0 text-xs text-muted">{roadSentence(plan, ctx, roadVehicles, o)}</p>}
+        {borrowed && carriesVehicles(car.model) && vehicleModel(tripVehicle.model).kind === 'car' ? (
+          <FieldRow
+            label="Boarding"
+            hint={
+              o.boarding
+                ? 'Up the stern ramp and in, then off over the bow at the end.'
+                : 'The ferry crosses alone.'
+            }
+          >
+            <ToggleField label="Boarding" checked={o.boarding} onChange={(boarding) => set({ boarding })}>
+              {vehicleModel(tripVehicle.model).short} drives aboard
+            </ToggleField>
+          </FieldRow>
+        ) : ferried?.rider ? (
+          <FieldRow
+            label="Boarding"
+            hint={
+              o.boarding
+                ? 'At each shore the ferry waits at the quay: the car drives up the stern ramp, and off over the bow on the far side.'
+                : 'The ferry takes over at the shore, like any boat.'
+            }
+          >
+            <ToggleField label="Boarding" checked={o.boarding} onChange={(boarding) => set({ boarding })}>
+              {vehicleModel(refModel(ferried.rider, roadInput(ctx, null).fleet)).short} drives aboard the{' '}
+              {vehicleModel(refModel(ferried.ref, roadInput(ctx, null).fleet)).short}
+            </ToggleField>
+          </FieldRow>
+        ) : null}
         {borrowed ? (
           <FieldRow
             label="Paint"
@@ -439,7 +548,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             hint={paintHint(car.model, car.color)}
           >
             <div className="flex flex-wrap items-center gap-1.5">
-              {carLine(car.model).colours.map((c) => {
+              {vehicleLine(car.model).colours.map((c) => {
                 const on = c.hex === car.color;
                 return (
                   <button
@@ -448,7 +557,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                     aria-label={c.name}
                     aria-pressed={on}
                     title={c.note ? `${c.name} — ${c.note}` : c.name}
-                    onClick={() => set({ vehicleColor: c.hex === carLine(car.model).color ? '' : c.hex })}
+                    onClick={() => set({ vehicleColor: c.hex === vehicleLine(car.model).color ? '' : c.hex })}
                     className={`flex-none w-7 h-7 p-0 rounded-full border-2 cursor-pointer transition-[box-shadow,border-color] duration-150 ease-paper focus:outline-none focus-visible:ring-2 focus-visible:ring-accent focus-visible:ring-offset-1 ${
                       on ? 'border-accent shadow-[0_0_0_2px_var(--color-surface)_inset]' : 'border-line-strong hover:border-muted'
                     }`}
@@ -466,14 +575,14 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               />
             </div>
           </FieldRow>
-        ) : host?.configureCar ? (
+        ) : host?.configureVehicle ? (
           <div>
-            <Button size="sm" onClick={() => host.configureCar?.()}>
-              Configure the car…
+            <Button size="sm" onClick={() => host.configureVehicle?.()}>
+              Configure the vehicle…
             </Button>
           </div>
         ) : (
-          <p className="m-0 text-xs text-muted">The car is set for the whole trip, in its settings.</p>
+          <p className="m-0 text-xs text-muted">The vehicle is set for the whole trip, in its settings.</p>
         )}
         <FieldRow label="Size">
           <RangeField
@@ -486,7 +595,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => `${Math.round(v * 100)}%`}
           />
         </FieldRow>
-        <FieldRow label="Camera" hint="How steeply the camera looks down at the car: 90° is the map’s own view, lower shows its sides.">
+        <FieldRow label="Camera" hint="How steeply the camera looks down at the vehicle: 90° is the map’s own view, lower shows its sides.">
           <RangeField
             label="Camera elevation"
             min={DRIVE_LIMITS.tilt.min}
@@ -504,16 +613,16 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           label="Ground"
           hint={
             o.ground === 'paper'
-              ? 'A paper map covers the picture while the car drives.'
+              ? 'A paper map covers the picture while the vehicle drives.'
               : o.ground === 'tiles'
-                ? 'OpenStreetMap under the road and the car — roads, coasts, towns — in the preview and in the exported file. The paper stands in until the tiles arrive.'
-                : 'The road and the car are drawn over the piece’s own picture.'
+                ? 'OpenStreetMap under the road and the vehicle — roads, coasts, towns — in the preview and in the exported file. The paper stands in until the tiles arrive.'
+                : 'The road and the vehicle are drawn over the piece’s own picture.'
           }
         >
           <Segmented
             size="sm"
             fill
-            label="What the car drives on"
+            label="What the vehicle drives on"
             value={o.ground}
             onChange={(ground) => {
               // Choosing the tiles is this device's yes, given with the
@@ -653,7 +762,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
         <FieldRow
           label="Distance"
-          hint={o.distance === 'off' ? undefined : 'The straight-line sum between the stops the car has passed, counting up as it drives — never a road distance.'}
+          hint={o.distance === 'off' ? undefined : 'The straight-line sum between the stops the vehicle has passed, counting up as it drives — never a road distance.'}
         >
           <Segmented
             size="sm"
@@ -700,13 +809,13 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
         <FieldRow label="Motion" hint={EASINGS[o.easing].hint}>
           <SelectField
-            label="How the car pulls away and stops"
+            label="How the vehicle pulls away and stops"
             value={o.easing}
             onChange={(easing) => set({ easing })}
             options={EASING_IDS.map((id) => ({ id, label: EASINGS[id].label }))}
           />
         </FieldRow>
-        <FieldRow label="Hold first" hint={o.delaySeconds > 0 ? 'The car sits at the first stop this long before it moves.' : undefined}>
+        <FieldRow label="Hold first" hint={o.delaySeconds > 0 ? 'The vehicle sits at the first stop this long before it moves.' : undefined}>
           <RangeField
             label="Hold on the first stop"
             min={DRIVE_LIMITS.delaySeconds.min}
@@ -717,7 +826,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
             format={(v) => (v === 0 ? 'none' : `${v.toFixed(1)}s`)}
           />
         </FieldRow>
-        <FieldRow label="At the end" hint="A beat at rest once the car has arrived, after its last pictures.">
+        <FieldRow label="At the end" hint="A beat at rest once the vehicle has arrived, after its last pictures.">
           <RangeField
             label="Rest on arrival"
             min={DRIVE_LIMITS.arriveSeconds.min}
@@ -735,7 +844,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           <Segmented
             size="sm"
             fill
-            label="What happens once the car has arrived"
+            label="What happens once the vehicle has arrived"
             value={o.end}
             onChange={(end) => set({ end })}
             options={[
@@ -746,11 +855,11 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
         {namesArePlaces && (
           <SwitchRow
-            label="The badge’s place follows the car"
-            name="Caption follows the car"
+            label="The badge’s place follows the vehicle"
+            name="Caption follows the vehicle"
             checked={o.captionFollows}
             onChange={(captionFollows) => set({ captionFollows })}
-            hint="While the car drives, the badge’s place reads the last stop it passed; once it arrives the badge says its own."
+            hint="While the vehicle drives, the badge’s place reads the last stop it passed; once it arrives the badge says its own."
           />
         )}
       </Group>
@@ -761,7 +870,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           set={set}
           viewKm={viewKm}
           fresh={o.viewKm === null && o.followZoom === DRIVE_DEFAULTS.followZoom}
-          words={{ whole: 'Whole route', follow: 'Follow the car', subject: 'the car' }}
+          words={{ whole: 'Whole route', follow: 'Follow the vehicle', subject: 'the vehicle' }}
           heading
         />
       </Group>
@@ -770,7 +879,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         <Group title="Recap">
           {!count ? (
             <p className="m-0 text-xs text-muted">
-              To make the badge’s number count with the car — the day of the trip, the distance, the stops, or the
+              To make the badge’s number count with the vehicle — the day of the trip, the distance, the stops, or the
               day with the distance beside it —
               pick a counter that follows the drive under Content → Counter.
             </p>
@@ -787,8 +896,8 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                 label="Pace"
                 hint={
                   o.pace === 0
-                    ? 'The road time is shared by distance alone; the car never waits, a place’s days running while it drives on.'
-                    : 'This much of the road time goes to the days and the rest to the kilometres: the car slows past a place that took days.'
+                    ? 'The road time is shared by distance alone; the vehicle never waits, a place’s days running while it drives on.'
+                    : 'This much of the road time goes to the days and the rest to the kilometres: the vehicle slows past a place that took days.'
                 }
               >
                 <RangeField
@@ -804,7 +913,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               {o.pace > 0 && (
                 <FieldRow
                   label="Long stays"
-                  hint={`The car stops at a place whose days make a stay of ${STAY_MIN_SECONDS} s or more, the counter running while it waits. Off, it never stops for days.`}
+                  hint={`The vehicle stops at a place whose days make a stay of ${STAY_MIN_SECONDS} s or more, the counter running while it waits. Off, it never stops for days.`}
                 >
                   <ToggleField label="Wait out the long stays" checked={o.waitStays} onChange={(waitStays) => set({ waitStays })}>
                     Wait at the place
@@ -814,7 +923,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
               <FieldRow
                 label="On the way"
                 align="start"
-                hint={`A card once the car has rested — set below —, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}. The ribbon is Défilé’s tape of the trip’s days under the map, its head on the counter’s day.${o.pictures !== 'none' ? ' While the car stays, a picture shot on a later day comes up on its day.' : ''}`}
+                hint={`A card once the vehicle has rested — set below —, and a mark on the road every ${MILESTONE_DAYS} days and ${distanceNumeral(MILESTONE_DISTANCE, 'km')} ${o.distance === 'mi' ? 'mi' : 'km'}. The ribbon is Défilé’s tape of the trip’s days under the map, its head on the counter’s day.${o.pictures !== 'none' ? ' While the vehicle stays, a picture shot on a later day comes up on its day.' : ''}`}
               >
                 <div className="flex flex-col gap-1.5">
                   <ToggleField label="A summary card at the end" checked={o.summary} onChange={(summary) => set({ summary })}>
@@ -824,7 +933,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                     Milestones
                   </ToggleField>
                   <ToggleField
-                    label="Défilé’s ribbon of the trip’s days under the map, its head following the car"
+                    label="Défilé’s ribbon of the trip’s days under the map, its head following the vehicle"
                     checked={o.ribbon}
                     onChange={(ribbon) => set({ ribbon })}
                   >
@@ -832,7 +941,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
                   </ToggleField>
                   {o.pictures !== 'none' && (
                     <ToggleField
-                      label="While the car stays, each picture on the day it was shot"
+                      label="While the vehicle stays, each picture on the day it was shot"
                       checked={o.dayPictures}
                       onChange={(dayPictures) => set({ dayPictures })}
                     >
@@ -854,11 +963,11 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
 
       <Group title="Sound">
         <SwitchRow
-          label="Tick at every stop the car reaches"
+          label="Tick at every stop the vehicle reaches"
           name="Tick at every stop"
           checked={o.sound}
           onChange={(sound) => set({ sound })}
-          hint="A deeper tick where a leg begins (or a new day), a low seat when the car arrives. A photo, or a clip recorded without sound, takes the ticks as its sound."
+          hint="A deeper tick where a leg begins (or a new day), a low seat when the vehicle arrives. A photo, or a clip recorded without sound, takes the ticks as its sound."
         />
         {o.sound && (
           <FieldRow label="Voice" hint={TICK_KITS[o.kit].hint}>
@@ -925,7 +1034,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
 export const driveVariant: HookVariant = {
   id: 'drive',
   name: 'Virée',
-  tagline: 'A little car drives the map from stop to stop, showing pictures',
+  tagline: 'A little vehicle drives the map from stop to stop, showing pictures',
   // A new recap's card is the TRACE; one stored before it says nothing and
   // keeps the stamp it had (`CARD_DEFAULTS`).
   defaults: { ...DRIVE_DEFAULTS, ...NEW_CARD },
@@ -944,7 +1053,7 @@ export const driveVariant: HookVariant = {
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return [];
-    const plan = drivePlan(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, driveCountOf(ctx.counterMode) !== null);
+    const plan = planOf(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, ctx);
     return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())?.wants ?? [] : [];
   },
   prepare(options, ctx) {
@@ -953,14 +1062,22 @@ export const driveVariant: HookVariant = {
     // The RECAP: the badge's counter follows the drive (declared in its own
     // Counter section, `day-badge.ts`), so the plan runs the stops' clock.
     const count = driveCountOf(ctx.counterMode);
-    const plan = drivePlan(route, o, count !== null);
+    const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
+    const boards = boardsOf(o, tripVehicle);
+    const plan = planOf(route, o, ctx);
     if (!plan) return { seconds: 0 };
     const words = ctx.badgeWords;
+    const own = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
     const scratch = driveScratch(
-      vehicleFor(o.vehicle, o.vehicleColor, ctx.car ?? DEFAULT_CAR),
+      own,
       { day: words?.day, days: words?.days, stop: words?.stop },
       ctx.theme ?? null,
+      boards ? tripVehicle : null,
     );
+    // The road's vehicles: the piece's own for the whole road when it borrows
+    // one, else the trip's — per stage, per place, a boat on the water, each
+    // in its look of the day (`vehicle-plan.ts`).
+    scratch.road = driveRoad(plan, roadInput(ctx, own !== tripVehicle ? own : null)).road;
     // The recap's summary card, measured once with the plan (`summary-card.ts`).
     const card =
       plan.schedule.summaryAt !== null
@@ -991,9 +1108,9 @@ export const driveVariant: HookVariant = {
     // closure on one scaled clock (`slide-timing.ts`); an Auto slide follows.
     const render: HookRender = {
       seconds: plan.seconds,
-      // The badge's place reads the last stop the car passed, while it drives;
+      // The badge's place reads the last stop the vehicle passed, while it drives;
       // once it arrives the badge says its own — the leg's label. The counter,
-      // when it follows the drive, reads the car at every moment, and past the
+      // when it follows the drive, reads the vehicle at every moment, and past the
       // end the trip told whole.
       content:
         follows || count

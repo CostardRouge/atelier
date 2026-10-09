@@ -35,7 +35,7 @@
  * Pure and DOM-free.
  */
 
-import { defaultCarSpec, effectiveGear, type CarGear } from '../car-spec';
+import { defaultVehicleSpec, effectiveGear, type VehicleGear } from '../vehicle-spec';
 import { arc, at, box2, cappedRim, level, makeBody, meet, roadWheel, through, type P2 } from './car-parts';
 import { decal, prism, solid, type Face, type Part, type Vec3 } from './mesh3d';
 
@@ -321,7 +321,7 @@ function solarPanel(): Part[] {
 // --- the van --------------------------------------------------------------------
 
 /** Build the Trafic, with the gear asked for — the solar panel and the mirrors, by default. */
-export function buildTrafic(gear: CarGear = defaultCarSpec('trafic-ph2').gear): Part[] {
+export function buildTrafic(gear: VehicleGear = defaultVehicleSpec('trafic-ph2').gear): Part[] {
   const g = effectiveGear(gear);
   const L = HALF_LENGTH;
   const archFront = { a: AXLE.front - ARCH_HALF, b: AXLE.front + ARCH_HALF };

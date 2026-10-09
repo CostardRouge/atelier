@@ -20,7 +20,7 @@
  * unit-tested; `showcase-plan.ts` is.
  */
 
-import type { CarSpec } from '../car-spec';
+import type { VehicleSpec } from '../vehicle-spec';
 import type { FrameBox, HookCtx2D } from './hook-variant';
 import {
   box as boxPart,
@@ -130,7 +130,7 @@ export interface ShowcasePrepared {
   scratch: { refl?: { c: AnyCanvas; g: AnyCtx }; rs?: { c: AnyCanvas; g: AnyCtx }; grain?: CanvasPattern | null };
 }
 
-export function prepareShowcase(o: ShowcaseOptions, spec: CarSpec): ShowcasePrepared {
+export function prepareShowcase(o: ShowcaseOptions, spec: VehicleSpec): ShowcasePrepared {
   const { place, variant } = placeOf(o);
   const studio = place.studio?.(variant) ?? null;
   const indoor = place.indoor?.(variant) ?? false;

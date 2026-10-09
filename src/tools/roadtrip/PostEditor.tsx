@@ -68,6 +68,7 @@ import { hookVariantById, resolveHook } from '../../shared/roadtrip/hooks/regist
 import { setHookOptions, type HookContext, type HookLayer, type HookShelf } from '../../shared/roadtrip/hooks/hook-variant';
 import { hookContextFor, slideHookTiming } from '../../shared/roadtrip/hooks/hook-context';
 import { loadTowns, townsIfLoaded } from '../../shared/roadtrip/load-gazetteer';
+import { landIfLoaded, loadLandIndex } from '../../shared/map/load-terrain';
 import { wantsTowns } from '../../shared/roadtrip/hooks/stop-clusters';
 import {
   slideBadgeContent,
@@ -127,7 +128,8 @@ import { putThumb } from '../../shared/roadtrip/trip-store';
 import BadgeStage, { HOOK_ID } from './BadgeStage';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
-import CarGarageModal from './CarGarageModal';
+import GarageModal from './GarageModal';
+import { mainVehicle, replaceVehicle, withLookOn } from '../../shared/roadtrip/vehicle-fleet';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
@@ -281,7 +283,7 @@ export default function PostEditor({
   );
   /** The trip-wide sheet, and which of its sections was asked for. */
   const [tripSheet, setTripSheet] = useState<TripSettingsSection | null>(null);
-  /** The garage, opened from the opener that drives the trip's car. */
+  /** The garage, opened from the opener that drives the trip's vehicle. */
   const [garageOpen, setGarageOpen] = useState(false);
 
   const activeFile = active ? pickable(active) : null;
@@ -661,14 +663,33 @@ export default function PostEditor({
     };
   }, [deckLayersForTowns]);
 
+  // A Virée under the trip's water rule reads the shipped coastline to tell a
+  // crossing from a road (`terrain.ts`): asked for here, once, and the context
+  // rebuilt when it lands — until then the road is driven whole.
+  const [landTick, setLandTick] = useState(0);
+  const drivesUnderWaterRule = trip.crossings?.auto === true && deckLayersForTowns.some((layer) => layer.id === 'drive');
+  useEffect(() => {
+    if (!drivesUnderWaterRule || landIfLoaded()) return;
+    let alive = true;
+    loadLandIndex()
+      .then(() => {
+        if (alive) setLandTick((n) => n + 1);
+      })
+      .catch(() => {});
+    return () => {
+      alive = false;
+    };
+  }, [drivesUnderWaterRule]);
+
   // What every hook variant is prepared against — built by the one function
   // the deck, the rail and the exports use too — and what the picker hands to a
   // variant's options panel, so a control there can say a real value. The
   // pictures an opener asked for are decoded apart and joined in after.
   const baseHookCtx = useMemo<HookContext>(
     () => hookContextFor(trip, post, aspect, content),
-    // `townsTick` is not read: it rebuilds the context once the town index lands.
-    [trip, post, aspect, content, townsTick],
+    // `townsTick` and `landTick` are not read: they rebuild the context once
+    // the town index or the coastline lands.
+    [trip, post, aspect, content, townsTick, landTick],
   );
   // The grade is bound here, before the opener's pictures: a flashed picture
   // wears the HOOK's grade (without any one slide's develop), so a sweep and
@@ -2330,7 +2351,7 @@ export default function PostEditor({
               onChangeTrip={onChangeTrip}
               patchBadge={patchBadge}
               onOpenTripSettings={() => setTripSheet('words')}
-              onConfigureCar={() => setGarageOpen(true)}
+              onConfigureVehicle={() => setGarageOpen(true)}
               placingShade={shadeHandle ? placingShade : null}
               onPlaceShade={placeShade}
             />
@@ -2494,11 +2515,13 @@ export default function PostEditor({
     )}
 
     {garageOpen && (
-      <CarGarageModal
+      <GarageModal
         trip={trip}
+        day={post.date}
         onCancel={() => setGarageOpen(false)}
-        onDone={(car) => {
-          onChangeTrip({ ...trip, car });
+        onDone={(spec) => {
+          const main = mainVehicle(trip.vehicles);
+          onChangeTrip({ ...trip, vehicles: replaceVehicle(trip.vehicles, withLookOn(main, post.date, spec)) });
           setGarageOpen(false);
         }}
       />
