@@ -17,7 +17,7 @@
  */
 
 import { normaliseDevelopPresets, type DevelopPreset, type DevelopSettings } from './develop';
-import { removePresetFrom, savePresetIn } from './develop-presets';
+import { clonePresetIn, removePresetFrom, savePresetIn } from './develop-presets';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { readIdentity, type DeliveryIdentity } from '../exif/delivery-meta';
 import type { SavedGrade } from '../lut/saved-grade';
@@ -93,6 +93,12 @@ export function savePresetInBook(
   look: SavedGrade | null = null,
 ): PresetBook {
   const presets = savePresetIn(book.presets, name, settings, id, look);
+  return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
+}
+
+/** A copy of preset `id` under `name` (numbered when taken); the same book back when nothing changed. */
+export function clonePresetInBook(book: PresetBook, id: string, name: string, newId: string, now: number = Date.now()): PresetBook {
+  const presets = clonePresetIn(book.presets, id, name, newId);
   return presets === book.presets ? book : { ...book, presets: [...presets], updatedAt: now };
 }
 

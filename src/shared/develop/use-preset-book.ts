@@ -19,6 +19,7 @@ import {
   createPresetBook,
   mergeBooks,
   mergeTripPresets,
+  clonePresetInBook,
   removePresetFromBook,
   savePresetInBook,
   withIdentity,
@@ -235,6 +236,13 @@ export async function saveToPresetBook(name: string, settings: DevelopSettings, 
   if (next !== state.book) await commit(next);
 }
 
+export async function cloneInPresetBook(id: string, name: string) {
+  await ensurePresetBook();
+  if (!state.book) return;
+  const next = clonePresetInBook(state.book, id, name, newRollId());
+  if (next !== state.book) await commit(next);
+}
+
 export async function removeFromPresetBook(id: string) {
   await ensurePresetBook();
   if (!state.book) return;
@@ -338,6 +346,7 @@ export function usePresetBookHost(): DevelopPresets {
     return {
       list: book?.presets ?? [],
       onSave: (name: string, settings: DevelopSettings, look?: SavedGrade | null) => void saveToPresetBook(name, settings, look ?? null),
+      onClone: (id: string, name: string) => void cloneInPresetBook(id, name),
       onRemove: (id: string) => void removeFromPresetBook(id),
       keptOn: 'in your own book, shared by every Develop sheet and tool',
       place: {

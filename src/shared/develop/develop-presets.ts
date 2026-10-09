@@ -9,6 +9,7 @@
 
 import { DEFAULT_DEVELOP, carriesDevelop, cloneDevelop, withoutBase, type DevelopPreset, type DevelopSettings } from './develop';
 import type { SavedGrade } from '../lut/saved-grade';
+import { uniqueDocName } from '../sources/doc-name';
 
 /**
  * The list with a preset holding a copy of `settings` under `name`. A name
@@ -45,4 +46,30 @@ export function savePresetIn(
 /** The list without preset `id`; the same list when it holds none. No picture it was applied to changes. */
 export function removePresetFrom(list: readonly DevelopPreset[], id: string): readonly DevelopPreset[] {
   return list.some((p) => p.id === id) ? list.filter((p) => p.id !== id) : list;
+}
+
+/**
+ * The list with a COPY of preset `id` right after it, under `name` — numbered
+ * by the clone rule (`doc-name.ts`: `Dusk` → `Dusk (2)`) when the name is taken,
+ * so cloning never replaces a preset the way `savePresetIn` does. The copy
+ * keeps the numbers and the look and shares nothing mutable with the original.
+ * An unknown id or a blank name changes nothing and the same list comes back.
+ */
+export function clonePresetIn(
+  list: readonly DevelopPreset[],
+  id: string,
+  name: string,
+  newId: string,
+): readonly DevelopPreset[] {
+  const at = list.findIndex((p) => p.id === id);
+  const label = uniqueDocName(name, list.map((p) => p.name));
+  if (at < 0 || !label) return list;
+  const from = list[at];
+  const copy: DevelopPreset = {
+    id: newId,
+    name: label,
+    settings: cloneDevelop(from.settings),
+    ...(from.look ? { look: structuredClone(from.look) } : {}),
+  };
+  return [...list.slice(0, at + 1), copy, ...list.slice(at + 1)];
 }

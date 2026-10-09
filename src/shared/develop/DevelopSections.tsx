@@ -25,6 +25,7 @@ import { developButtonClass, developLinkClass } from './develop-classes';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from './develop-clipboard';
 import type { DevelopApplyVerb, DevelopPresets, DevelopPresetsPlace } from './develop-host';
 import { focusOnMount } from '../ui/focus';
+import { uniqueDocName } from '../sources/doc-name';
 
 /**
  * The same three verbs as ONE GROUP of glyphs, for a host whose room is the
@@ -327,10 +328,18 @@ export function DevelopPresetsSection({
   const [presetName, setPresetName] = useState('');
   const [withLook, setWithLook] = useState(false);
   const canSaveLook = Boolean(look);
+  // Cloning a preset: the one being copied and the name typed so far (null
+  // until the person types, so the field follows the suggestion).
+  const [cloning, setCloningState] = useState<{ id: string; name: string; typed: string | null } | null>(null);
   const setNaming = (on: boolean) => {
     setNamingState(on);
     onNaming?.(on);
   };
+  const setCloning = (next: typeof cloning) => {
+    setCloningState(next);
+    onNaming?.(next !== null);
+  };
+  const taken = presets.list.map((p) => p.name);
   return (
     <DevelopFold
       id="presets"
@@ -370,6 +379,18 @@ export function DevelopPresetsSection({
               </button>
               <button
                 type="button"
+                onClick={() => {
+                  setNaming(false);
+                  setCloning({ id: p.id, name: p.name, typed: null });
+                }}
+                className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent text-3xs text-muted cursor-pointer hover:text-accent-ink"
+                aria-label={`Clone preset ${p.name}`}
+                title="Clone this preset under a name of your own"
+              >
+                {Icons.copy}
+              </button>
+              <button
+                type="button"
                 onClick={() => presets.onRemove(p.id)}
                 className="px-2 py-[0.3rem] border-0 border-l border-line bg-transparent font-mono text-3xs text-muted cursor-pointer hover:text-accent"
                 aria-label={`Remove preset ${p.name}`}
@@ -380,6 +401,20 @@ export function DevelopPresetsSection({
             </span>
           ))}
         </div>
+      )}
+      {cloning && (
+        <PresetCloneRow
+          original={cloning.name}
+          typed={cloning.typed}
+          taken={taken}
+          onType={(typed) => setCloning({ ...cloning, typed })}
+          onCancel={() => setCloning(null)}
+          onClone={(name) => {
+            presets.onClone(cloning.id, name);
+            onTold(`cloned ${cloning.name} as ${name}`);
+            setCloning(null);
+          }}
+        />
       )}
       {naming ? (
         <form
@@ -436,6 +471,73 @@ export function DevelopPresetsSection({
         </button>
       )}
     </DevelopFold>
+  );
+}
+
+/**
+ * Naming the copy of a preset: the first free name is in the field, editable,
+ * and the line under it says what will be saved — the same rule as cloning a
+ * trip, a project or a roll (`doc-name.ts`), minus the destination, since the
+ * book is one list kept in one place.
+ */
+function PresetCloneRow({
+  original,
+  typed,
+  taken,
+  onType,
+  onCancel,
+  onClone,
+}: {
+  original: string;
+  typed: string | null;
+  taken: readonly string[];
+  onType: (typed: string) => void;
+  onCancel: () => void;
+  onClone: (name: string) => void;
+}) {
+  const suggestion = uniqueDocName(original, taken);
+  const name = typed ?? suggestion;
+  const effective = uniqueDocName(name, taken);
+  return (
+    <form
+      className="flex flex-col gap-1"
+      onSubmit={(e) => {
+        e.preventDefault();
+        if (effective) onClone(effective);
+      }}
+    >
+      <div className="flex items-center gap-1.5">
+        <input
+          type="text"
+          value={name}
+          onChange={(e) => onType(e.target.value)}
+          onKeyDown={(e) => {
+            // The host's own Escape closes it; here it closes the field.
+            if (e.key === 'Escape') {
+              e.preventDefault();
+              e.stopPropagation();
+              onCancel();
+            }
+          }}
+          aria-label={`Name of the copy of ${original}`}
+          ref={focusOnMount}
+          className="flex-1 min-w-0 px-2.5 py-[0.3rem] rounded-full border border-line-strong bg-paper text-xs max-[820px]:text-base leading-tight text-ink placeholder:text-faint focus:outline-none focus:border-accent"
+        />
+        <button type="submit" className={developButtonClass} aria-disabled={!effective}>
+          Clone
+        </button>
+        <button type="button" onClick={onCancel} className={developLinkClass}>
+          Cancel
+        </button>
+      </div>
+      <p className={`m-0 font-mono text-3xs ${!effective ? 'text-danger' : effective !== name.trim() ? 'text-warn' : 'text-muted'}`} role="status">
+        {!effective
+          ? 'A preset needs a name.'
+          : effective !== name.trim()
+            ? `“${name.trim()}” is taken → saved as “${effective}”`
+            : `Copy of “${original}” — saved as “${effective}”`}
+      </p>
+    </form>
   );
 }
 
