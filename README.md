@@ -994,7 +994,8 @@ card** — the drive's last image and the piece's thumbnail, no reveal after it
 **Trace** (the trip's road drawn big, its places named — a new recap's
 default), the **Ticket** (a boarding pass whose barcode is the trip's days,
 long where a leg starts, darker where a picture was shot), the **Passport**
-(a stamp for each state crossed), the **Contact sheet** (the road's pictures
+(a round stamp for each state crossed and, where a place does not say its state and
+the shipped town index cannot tell it, a rectangular one for the place itself — in the road's order), the **Contact sheet** (the road's pictures
 and the road), the **Stamp** (days · distance · stops in the map's box — what
 a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
 the trip's days) — each picked from a small picture of itself, drawn over

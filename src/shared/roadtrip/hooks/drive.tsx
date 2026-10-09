@@ -967,6 +967,7 @@ export const driveVariant: HookVariant = {
         ? cardScene({
             plan,
             o,
+            writing: ctx.writing,
             theme: ctx.theme,
             tripName: ctx.tripName,
             words: scratch.words,
