@@ -33,6 +33,7 @@ import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import CoverPanel from './CoverPanel';
 import TripDatesSection from './TripDatesSection';
 import TripKeepSection from './TripKeepSection';
+import TripDeduceSection, { DEDUCE_ABOUT } from './TripDeduceSection';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel, { PLACES_ABOUT } from './PlacesSettingsPanel';
 import RoadSettingsPanel, { ROAD_ABOUT } from './RoadSettingsPanel';
@@ -44,6 +45,7 @@ export type TripSettingsSection =
   | 'dates'
   | 'cover'
   | 'places'
+  | 'deduce'
   | 'road'
   | 'car'
   | 'words'
@@ -60,6 +62,7 @@ const GROUPS: Array<{ label: string; sections: Array<{ id: TripSettingsSection; 
       { id: 'dates', label: 'Name and dates' },
       { id: 'cover', label: 'Cover' },
       { id: 'places', label: 'Places' },
+      { id: 'deduce', label: 'Deduce' },
       { id: 'road', label: 'Road' },
       { id: 'car', label: 'Vehicle' },
     ],
@@ -101,6 +104,7 @@ const ABOUT: Partial<Record<TripSettingsSection, ReactNode>> = {
     </p>
   ),
   places: PLACES_ABOUT,
+  deduce: DEDUCE_ABOUT,
   road: ROAD_ABOUT,
   car: (
     <>
@@ -160,6 +164,10 @@ interface TripSettingsModalProps {
   /** Writes the piece's badge — with `post`. */
   patchBadge?: (patch: Partial<PostBadge>) => void;
   onClose: () => void;
+  /** The connected instances Deduce can ask — what the Deduce section offers. */
+  deduceSources?: readonly string[];
+  /** Open the Deduce window on one (the sheet closes first); absent, the section says where it is reached. */
+  onDeduceFrom?: (sourceId: string) => void;
 }
 
 /**
@@ -200,6 +208,8 @@ export default function TripSettingsModal({
   onChangeTrip,
   patchBadge,
   onClose,
+  deduceSources = [],
+  onDeduceFrom,
 }: TripSettingsModalProps) {
   const [open, setOpen] = useState<TripSettingsSection>(section);
   // A question or a map of a section is up: its keys, not this sheet's.
@@ -451,6 +461,22 @@ export default function TripSettingsModal({
             )}
 
             {open === 'places' && <PlacesSettingsPanel trip={trip} onChange={onChangeTrip} />}
+
+            {open === 'deduce' && (
+              <TripDeduceSection
+                trip={trip}
+                sources={deduceSources}
+                onDeduce={
+                  onDeduceFrom &&
+                  ((id) => {
+                    // The window needs the whole screen: this sheet steps aside.
+                    onClose();
+                    onDeduceFrom(id);
+                  })
+                }
+                onShow={setOpen}
+              />
+            )}
 
             {open === 'road' && (
               <RoadSettingsPanel

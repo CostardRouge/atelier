@@ -933,23 +933,6 @@ export default function TripOverview({
     />
   );
 
-  // Deduce lives in the trip's own bar, so it is there in the calendar AND on
-  // the map (the stages panel, its old home, is not drawn beside the map).
-  // One button per connected instance; a phone reaches it from the legs
-  // sheet, whose cell is in the bottom bar whatever the middle shows.
-  const deduceButtons =
-    onDeduceFrom &&
-    (deduceSources ?? []).map((id) => (
-      <Button
-        key={`deduce-${id}`}
-        onClick={() => onDeduceFrom(id)}
-        title={`Work the stages out from where ${id} says each day was`}
-        icon={Icons.search}
-      >
-        Deduce
-      </Button>
-    ));
-
   const dayPanel = selected && (
     <DayPanel
       trip={trip}
@@ -978,8 +961,8 @@ export default function TripOverview({
   );
 
   // The phone's ⋯: the same two choices as the two switches, one item each,
-  // then the trip's own verbs the wide bar draws as buttons (Deduce, Trip
-  // settings) — the ⋯ took the bar's room, so it carries the bar's verbs. A
+  // then the trip's own verb the wide bar draws as a glyph (Trip settings,
+  // where Deduce lives too) — the ⋯ took the bar's room, so it carries it. A
   // verb (`current` null) wears no tick.
   const viewItem = (id: string, icon: ReactNode, text: string, title: string, current: boolean | null, onSelect: () => void, rule = false): OverflowItem => ({
     id,
@@ -1002,20 +985,7 @@ export default function TripOverview({
     viewItem('map', Icons.map, 'Map', 'The trip as its route: each stage at its place, with its days', overview === 'map', () => chooseOverview('map')),
     viewItem('rungs', Icons.grid, 'Days as rungs', 'Each day as its rung: nothing, drafted, published once, twice, more', view === 'rungs', () => chooseView('rungs'), true),
     viewItem('pictures', Icons.image, 'Days as pictures', 'Each told day as the hook of its piece', view === 'pictures', () => chooseView('pictures')),
-    ...(onDeduceFrom
-      ? (deduceSources ?? []).map((id, i) =>
-          viewItem(
-            `deduce-${id}`,
-            Icons.search,
-            (deduceSources ?? []).length > 1 ? `Deduce from ${id}` : 'Deduce stages',
-            `Work the stages out from where ${id} says each day was`,
-            null,
-            () => onDeduceFrom(id),
-            i === 0,
-          ),
-        )
-      : []),
-    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => openSettings(), !onDeduceFrom || !(deduceSources ?? []).length),
+    viewItem('settings', Icons.settings, 'Trip settings', 'Dates, cover, places, Deduce, road, vehicle and the rest', null, () => openSettings(), true),
   ];
 
   // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
@@ -1112,6 +1082,8 @@ export default function TripOverview({
           section={settings}
           land={settingsLand}
           onChangeTrip={changeFromSettings}
+          deduceSources={deduceSources}
+          onDeduceFrom={onDeduceFrom}
           onClose={() => setSettings(null)}
         />
       )}
@@ -1367,9 +1339,8 @@ export default function TripOverview({
                 { id: 'pictures', label: 'Pictures', icon: Icons.image, title: 'Each told day as the hook of its piece' },
               ]}
             />
-            {deduceButtons}
             {/* The glyph alone, as in a piece's bar: the sheet it opens says what it is. */}
-            <IconButton label="Trip settings" title="Trip settings — dates, cover, places, road, vehicle and the rest" onClick={() => openSettings()}>
+            <IconButton label="Trip settings" title="Trip settings — dates, cover, places, Deduce, road, vehicle and the rest" onClick={() => openSettings()}>
               {Icons.settings}
             </IconButton>
           </>
