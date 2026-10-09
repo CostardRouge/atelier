@@ -2976,9 +2976,10 @@ flips (`develop.crop`, read back by `develop.getCrop`); perspective, lens,
 detail and the post-crop vignette; the Auto row's verbs (`develop.auto`,
 `develop.cropToSubject`); and the roll itself — one picture's settings onto
 others (`develop.applyTo`), which pictures leave (`develop.deliver`), a title
-and a caption (`develop.words`). The look (LUTs, film stocks), masks and
-layers, and the export itself stay with the person for now: an export needs a
-folder chosen by a click.
+and a caption (`develop.words`); the look — built-in LUTs and film stocks,
+their strength and order, the output transform (`develop.addLook` and its
+siblings) — and your preset book (`develop.presets`, `develop.applyPreset`,
+`develop.savePreset`). Your purchased looks, masks and layers stay with you.
 
 ## Photo EXIF tool
 

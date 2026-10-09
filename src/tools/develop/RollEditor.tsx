@@ -5,6 +5,9 @@ import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDev
 import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
+import { lookCommands } from '../../shared/develop/look-commands';
+import { presetCommands } from '../../shared/develop/preset-commands';
+import { presetsNow, saveToPresetBook } from '../../shared/develop/use-preset-book';
 import { SECTION_IDS, developControls, pictureSummary, rollSummary, targetPicture, withDevelopValues } from '../../shared/develop/develop-commands';
 import { landBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
@@ -279,7 +282,27 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const openId = openPictureId(roll.pictures, pictureId);
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   // The look is the OPEN picture's (roll v5): the stack follows the strip.
-  const stack = useRollGrade(open, update);
+  // Its writes carry `lookVia` — `agent` while a look command runs, so the
+  // journal tells an agent's look from the author's.
+  const lookVia = useRef<JournalVia | null>(null);
+  const lookUpdate = useCallback((change: (r: RollDoc) => RollDoc) => update(change, lookVia.current ?? undefined), [update]);
+  const stack = useRollGrade(open, lookUpdate);
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
+  const lookWrites = useRef(0);
+  const lookAsAgent = useCallback(async <T,>(write: () => T | Promise<T>): Promise<T> => {
+    lookWrites.current += 1;
+    lookVia.current = 'agent';
+    try {
+      return await write();
+    } finally {
+      // The stack writes back an effect later, after its bake.
+      window.setTimeout(() => {
+        lookWrites.current -= 1;
+        if (lookWrites.current === 0) lookVia.current = null;
+      }, 600);
+    }
+  }, []);
   const openIdRef = useRef(openId);
   openIdRef.current = openId;
 
@@ -828,6 +851,27 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       else handleVignette(target.id, next, 'agent');
       const now = latest.current.pictures.find((x) => x.id === target.id);
       return { picture: target.id, [section]: now?.[section] ?? null };
+    }),
+    ...presetCommands({
+      presets: presetsNow,
+      save: saveToPresetBook,
+      roll: () => latest.current,
+      pictures: (ids) =>
+        ((ids as string[] | undefined) ?? [undefined]).map((id) => targetPicture(latest.current, id, openIdRef.current)),
+      write: (changes) =>
+        update((r) => {
+          let next = r;
+          for (const [id, change] of changes) {
+            next = patchPicture(next, id, { develop: change.develop });
+            if (change.grade !== undefined) next = copyGradeTo(next, [id], change.grade);
+          }
+          return next;
+        }, 'agent'),
+    }),
+    ...lookCommands({
+      stack: () => stackRef.current,
+      available: () => (openIdRef.current ? true : 'no picture is open'),
+      asAgent: lookAsAgent,
     }),
     {
       id: 'develop.applyTo',
