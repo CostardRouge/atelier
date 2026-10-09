@@ -267,5 +267,7 @@ export function tripDocFromFile(
     cover: structuredClone(file.cover),
     developPresets: structuredClone(file.developPresets),
     car: structuredClone(file.car),
+    placeStyle: { ...file.placeStyle },
+    stateCodes: { ...file.stateCodes },
   };
 }

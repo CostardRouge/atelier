@@ -2736,7 +2736,13 @@ theirs). The trip document holds place names, dates and the text of your
 badges, and only your own account can read it back; the hook thumbnails never
 travel and are re-drawn locally. A trip can be moved between this browser and
 an instance from its card; the `.roadtrip.json` file remains the offline way
-to cross. A Studio project kept on an instance works the same way from the
+to cross. **Clone…** in a card's ⋯ menu makes a copy of the whole trip, kept
+here or on a connected instance: the sheet proposes the first free name in
+the chosen place (`Maroc` → `Maroc (2)`, no suffix where the name is free),
+you can type another, and the line under the field says what will be saved.
+The copy keeps everything but the pictures themselves (found again by their
+hash) and the links to Studio projects; its cover thumbnails are copied on
+this device, and the status line that follows offers Open and Undo. A Studio project kept on an instance works the same way from the
 project gallery and the project bar; its media folder never travels — only
 the list of clips does, so on another device the project opens and asks you
 to point it at the footage.
