@@ -498,6 +498,8 @@ export interface CardScene {
   below: boolean;
   /** The passport's stamps, in the road's order (`passport-stamps.ts`). */
   stamps: CardStamp[];
+  /** The map's own paper and ink — what is under the stamp. */
+  map: { paper: string; ink: string };
 }
 
 /** The most pictures the contact sheet prints. */
@@ -527,6 +529,7 @@ export function cardScene(input: CardSceneInput): CardScene {
   // once: the passport stamps them and the «states» fact counts them.
   const fromIndex = o.cardStampFill === 'index';
   const statesByStop = plan.route.stops.map((stop) => stopStates(stop, input.writing, input.towns, fromIndex));
+  const statesOf = new Map(plan.route.stops.map((stop, i) => [stop, statesByStop[i]]));
   const measured = cardFacts(plan);
   const states: string[] = [];
   for (const list of statesByStop) for (const st of list) if (!states.includes(st.code)) states.push(st.code);
@@ -534,8 +537,16 @@ export function cardScene(input: CardSceneInput): CardScene {
   const keys = plan.route.stops.flatMap((s) => s.pictures.map((p) => p.key));
   // On a slide of its own the card's Photo ground is the slide's own picture.
   const groundPicture = keys.length && !input.below ? keys[keys.length - 1] : null;
-  // A photo ground with no picture on the road is the look's own solid.
-  const ground: CardGround = o.cardGround === 'photo' && !groundPicture && !input.below ? 'solid' : o.cardGround;
+  // A photo ground with no picture on the road is the look's own solid. The
+  // stamp sits on the map, so its ground is the look's solid or the map's paper.
+  const ground: CardGround =
+    o.cardFace === 'stamp'
+      ? o.cardGround === 'paper'
+        ? 'paper'
+        : 'solid'
+      : o.cardGround === 'photo' && !groundPicture && !input.below
+        ? 'solid'
+        : o.cardGround;
   const n = plan.route.stops.length;
   const dateOfDay = (day: number) => calendar.find((d) => d.dayNumber === day)?.date ?? '';
   const first = plan.clock && n ? dateOfDay(Math.floor(plan.clock.arrive[0])) : (calendar[0]?.date ?? '');
@@ -560,7 +571,8 @@ export function cardScene(input: CardSceneInput): CardScene {
     groundPicture,
     sheet: keys.slice(0, SHEET_PICTURES),
     below: !!input.below,
-    stamps: passportStamps(plan.route.stops, o, (stop) => statesByStop[plan.route.stops.indexOf(stop)] ?? []),
+    stamps: passportStamps(plan.route.stops, o, (stop) => statesOf.get(stop) ?? []),
+    map: { paper: o.paperColor, ink: o.inkColor },
   };
 }
 
