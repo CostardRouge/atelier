@@ -918,11 +918,13 @@ road* takes it off the trip. **Add a GPX…** merges the timed points of one or
 more `.gpx` files (a GPS logger, a car's navigation, Strava…) into the road
 within the trip's dates, or makes the road from them alone — the same instant
 once, the reading kept; a planned route with no times is refused, since it
-cannot be put on the trip's clock. **Place road points…** opens a big map of the
-road as recorded, every stretch over 20 km the track skipped (the phone off
-for a day) drawn dashed: a click puts a point of road on the nearest stretch,
-at the time that far along it, and the road goes through it; a click on one
-of yours takes it back. A road point is never a place, and never named. **Virée drives that road**: between two stops the
+cannot be put on the trip's clock. Below them, the section's pane is the
+**map of the road** as the chosen mode reads it (the crow's straight line
+between the places when it reads none), every stretch over 20 km the track
+skipped (the phone off for a day) drawn dashed. With **✎ Place road points**
+on, a click puts a point of road on the nearest stretch, at the time that far
+along it, and the road goes through it; a click on one of yours takes it back.
+A road point is never a place, and never named. **Virée drives that road**: between two stops the
 road joins, the vehicle follows it (round the bay rather than across it) and
 the counter, the milestones and the summary card count what it drives; a hop
 the road never joins (a flight, a stop off the road) keeps its curve. The

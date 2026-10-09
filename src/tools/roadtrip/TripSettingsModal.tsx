@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import type { CtaLayout } from '../../shared/roadtrip/cta-slide';
@@ -180,6 +180,15 @@ export default function TripSettingsModal({
   const savedDefault = post ? (trip.hookDefaults[post.kind] ?? null) : null;
   const kindLabel = (kind: PostKind) => POST_KINDS.find((k) => k.id === kind)?.label.toLowerCase() ?? kind;
   const pieceLabel = post ? `${POST_KINDS.find((k) => k.id === post.kind)?.label ?? post.kind} · ${formatIsoDate(post.date)}` : null;
+
+  // The trip's located places in lived order — what the road's map draws.
+  const roadPlaces = useMemo(
+    () =>
+      [...trip.stages]
+        .sort((p, q) => p.startDate.localeCompare(q.startDate))
+        .flatMap((st) => st.places.flatMap((pl) => (pl.coords ? [{ lat: pl.coords.lat, lon: pl.coords.lon }] : []))),
+    [trip.stages],
+  );
 
   const days = spanLength(trip.startDate, trip.endDate);
   const facts = [
@@ -385,10 +394,10 @@ export default function TripSettingsModal({
                 onMode={(mode) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, mode } })}
                 onDetail={(detail) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, detail } })}
                 onForget={() => onChangeTrip({ ...trip, road: null })}
-                onAdded={(added) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, added } })}
                 onNested={setRoadNested}
                 onRoad={(road) => onChangeTrip({ ...trip, road })}
                 tripSpan={trip}
+                places={roadPlaces}
               />
             )}
 

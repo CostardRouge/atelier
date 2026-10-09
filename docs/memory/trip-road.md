@@ -113,21 +113,28 @@ on the stages and the road and never per frame — the search scans the whole
 line; the dial sits halfway along the path as drawn (`pathMidpoint`), on the
 road, and the stage focus flies there.
 
-## Road points placed by hand, on the big map (2026-10-09)
+## Road points placed by hand, on the map IN the Road pane (2026-10-09)
 
-`road-points.ts` + `RoadPointsSheet.tsx`, opened from the Road panel. A click
+`road-points.ts` + `RoadMap.tsx`, the map filling the Road section's pane
+(his «dans ce grand espace, on pourrait directement mettre la map»; the
+separate sheet is gone). It draws the road as the CHOSEN mode reads it, the
+crow's dashed straight line between the trip's places when it reads none,
+the raw track's holes and the hand points. Placing is a MODE (*✎ Place road
+points* / *Done placing*) so a drag that pans never drops a point; every
+click writes at once (⌘Z), *Take the points back* clears them. Trap met
+again: MapLibre's `position: relative` undid `absolute inset-0` on its
+container (height 0, a blank map) — the container fills a wrapper. A click
 lands on the nearest stretch between two consecutive fixes (a flight
 excluded, 300 km reach) and takes the time that far along it, strictly
 between the two fixes, so `cleanFixes` merges it in order and every mode
 draws through it; a click within 12 px of a point of yours takes it back.
 Holes (stretches > 20 km, not flights) are drawn dashed and counted on the
-panel's button. MEASURED on his real year: no hole over 150 km, 20 over
+panel's verbs. MEASURED on his real year: no hole over 150 km, 20 over
 20 km — the Nullarbor line in the water was never a hole in the track but
 the arcs between sparse places, which the road itself cures; hand points are
-for trips where the phone was off. The Road panel's sheet and Forget question
-are NESTED dialogs: `onNested` makes both parent sheets drop their
-Escape/Enter (window listeners run in registration order, so the parent's
-would fire first and close both).
+for trips where the phone was off. The Forget question is a NESTED dialog:
+`onNested` makes the sheet drop its Escape/Enter (window listeners run in
+registration order, so the sheet's would fire first and close both).
 
 ## GPX adds to the road (2026-10-09, his «do gpx support»)
 
