@@ -902,7 +902,11 @@ flies* (no road, curves from place to place), *Between stays* (what you did
 while staying somewhere — walks, buses, the commute — left out), *Every move*
 (all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
 apart from them smooths the line from every point up to 2 km, and *Forget the
-road* takes it off the trip. **Virée drives that road**: between two stops the
+road* takes it off the trip. **Place road points…** opens a big map of the
+road as recorded, every stretch over 20 km the track skipped (the phone off
+for a day) drawn dashed: a click puts a point of road on the nearest stretch,
+at the time that far along it, and the road goes through it; a click on one
+of yours takes it back. A road point is never a place, and never named. **Virée drives that road**: between two stops the
 road joins, the vehicle follows it (round the bay rather than across it) and
 the counter, the milestones and the summary card count what it drives; a hop
 the road never joins (a flight, a stop off the road) keeps its curve. The

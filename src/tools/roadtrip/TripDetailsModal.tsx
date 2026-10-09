@@ -117,6 +117,8 @@ export default function TripDetailsModal({
   const [cover, setCover] = useState<TripCover>(() => trip?.cover ?? defaultTripCover());
   // The road's reading, a draft like the cover until Save.
   const [road, setRoad] = useState<TripRoad | null>(trip?.road ?? null);
+  // The Road panel's map or question is up: its keys, not this sheet's.
+  const [roadNested, setRoadNested] = useState(false);
   const [sourceId, setSourceId] = useState(() =>
     sources.some((s) => s.id === DEFAULT_SOURCE_ID) ? DEFAULT_SOURCE_ID : (sources[0]?.id ?? DEFAULT_SOURCE_ID),
   );
@@ -165,8 +167,8 @@ export default function TripDetailsModal({
   // While a Start over asks its question, the keys are the question's: an
   // Escape must close the question, never the sheet behind it too.
   useDialogKeys({
-    onCancel: resetting ? undefined : onCancel,
-    onConfirm: canSubmit && !resetting ? submit : null,
+    onCancel: resetting || roadNested ? undefined : onCancel,
+    onConfirm: canSubmit && !resetting && !roadNested ? submit : null,
   });
 
   return (
@@ -341,6 +343,8 @@ export default function TripDetailsModal({
               onMode={(mode) => setRoad((r) => (r ? { ...r, mode } : r))}
               onDetail={(detail) => setRoad((r) => (r ? { ...r, detail } : r))}
               onForget={() => setRoad(null)}
+              onAdded={(added) => setRoad((r) => (r ? { ...r, added } : r))}
+              onNested={setRoadNested}
             />
           </div>
         )}

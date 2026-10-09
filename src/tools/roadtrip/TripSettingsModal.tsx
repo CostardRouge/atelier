@@ -98,6 +98,8 @@ export default function TripSettingsModal({
   onClose,
 }: TripSettingsModalProps) {
   const [open, setOpen] = useState<TripSettingsSection>(section);
+  // The Road panel's map or question is up: its keys, not this sheet's.
+  const [roadNested, setRoadNested] = useState(false);
   // Narrow only: the rail and the pane are two screens, and this says which.
   const [showRail, setShowRail] = useState(false);
 
@@ -111,7 +113,7 @@ export default function TripSettingsModal({
   // Nothing here is applied on a button — the trip is written on every
   // keystroke — so the sheet's primary action IS closing it: Enter says
   // "done" from any field, and Escape dismisses it.
-  useDialogKeys({ onCancel: onClose, onConfirm: onClose });
+  useDialogKeys({ onCancel: roadNested ? undefined : onClose, onConfirm: roadNested ? null : onClose });
 
   const patchWords = (patch: Partial<BadgeWords>) =>
     onChangeTrip({ ...trip, badgeWords: { ...trip.badgeWords, ...patch } });
@@ -325,6 +327,8 @@ export default function TripSettingsModal({
                 onMode={(mode) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, mode } })}
                 onDetail={(detail) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, detail } })}
                 onForget={() => onChangeTrip({ ...trip, road: null })}
+                onAdded={(added) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, added } })}
+                onNested={setRoadNested}
               />
             )}
 

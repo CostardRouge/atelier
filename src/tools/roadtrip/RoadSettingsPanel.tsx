@@ -1,16 +1,19 @@
-import { useMemo, useState } from 'react';
+import { useEffect, useMemo, useState } from 'react';
 import {
   ROAD_DETAILS,
   decodeTrack,
   tripRoadLine,
+  type RoadFix,
   type RoadMode,
   type TripRoad,
 } from '../../shared/roadtrip/road-track';
+import { roadFixes, roadGaps } from '../../shared/roadtrip/road-points';
+import RoadPointsSheet from './RoadPointsSheet';
 import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import InfoDot from '../../shared/ui/InfoDot';
 import Segmented from '../../shared/ui/Segmented';
-import { dangerLink } from './panels/ui';
+import { dangerLink, smallButton } from './panels/ui';
 
 const MODE_LABEL: Record<RoadMode, string> = {
   crow: 'Crow flies',
@@ -32,6 +35,13 @@ interface RoadSettingsPanelProps {
   onDetail: (detail: number) => void;
   /** Take the road off the trip; absent hides the verb. */
   onForget?: () => void;
+  /** The points of road placed by hand on the big map; absent hides the verb. */
+  onAdded?: (added: RoadFix[]) => void;
+  /**
+   * A sheet or a question of this panel is open over the one it sits in —
+   * which then leaves Escape and Enter to it, or one press closes both.
+   */
+  onNested?: (open: boolean) => void;
 }
 
 /**
@@ -41,8 +51,15 @@ interface RoadSettingsPanelProps {
  * drives, so this one choice is every opener's. Drawn in both trip sheets —
  * live in the piece's, as a draft in the overview's — from one component.
  */
-export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail, onForget }: RoadSettingsPanelProps) {
+export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail, onForget, onAdded, onNested }: RoadSettingsPanelProps) {
   const [forgetting, setForgetting] = useState(false);
+  const [placing, setPlacing] = useState(false);
+  const nested = forgetting || placing;
+  useEffect(() => {
+    onNested?.(nested);
+  }, [nested, onNested]);
+  // The holes the track has, counted on the button that fills them.
+  const holes = useMemo(() => (road ? roadGaps(roadFixes(road)).length : 0), [road]);
 
   // The track's two ends, read once per track.
   const span = useMemo(() => {
@@ -121,12 +138,33 @@ export default function RoadSettingsPanel({ road, mode, detail, onMode, onDetail
         </span>
       </label>
 
-      {onForget && (
-        <span>
+      <span className="flex flex-wrap items-center gap-x-4 gap-y-2">
+        {onAdded && (
+          <button type="button" onClick={() => setPlacing(true)} className={smallButton}>
+            Place road points…
+          </button>
+        )}
+        {onAdded && (
+          <span className="font-mono text-2xs text-muted">
+            {holes} {holes === 1 ? 'hole' : 'holes'} in the track{road.added.length ? ` · ${road.added.length} placed` : ''}
+          </span>
+        )}
+        <span className="flex-1" />
+        {onForget && (
           <button type="button" onClick={() => setForgetting(true)} className={dangerLink}>
             Forget the road
           </button>
-        </span>
+        )}
+      </span>
+      {placing && onAdded && (
+        <RoadPointsSheet
+          road={road}
+          onCancel={() => setPlacing(false)}
+          onDone={(added) => {
+            setPlacing(false);
+            onAdded(added);
+          }}
+        />
       )}
       {forgetting && onForget && (
         <ConfirmDialog

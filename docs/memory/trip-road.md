@@ -108,3 +108,19 @@ strokes between stages, keeping the dotted ones (they say days are
 unaccounted for); it frames the places plus the road inside their box grown
 by its own size (≥ 2°), never the far end of a flight home the track carries.
 Left as is: a stage's own tinted path between its places is still straight.
+
+## Road points placed by hand, on the big map (2026-10-09)
+
+`road-points.ts` + `RoadPointsSheet.tsx`, opened from the Road panel. A click
+lands on the nearest stretch between two consecutive fixes (a flight
+excluded, 300 km reach) and takes the time that far along it, strictly
+between the two fixes, so `cleanFixes` merges it in order and every mode
+draws through it; a click within 12 px of a point of yours takes it back.
+Holes (stretches > 20 km, not flights) are drawn dashed and counted on the
+panel's button. MEASURED on his real year: no hole over 150 km, 20 over
+20 km — the Nullarbor line in the water was never a hole in the track but
+the arcs between sparse places, which the road itself cures; hand points are
+for trips where the phone was off. The Road panel's sheet and Forget question
+are NESTED dialogs: `onNested` makes both parent sheets drop their
+Escape/Enter (window listeners run in registration order, so the parent's
+would fire first and close both).
