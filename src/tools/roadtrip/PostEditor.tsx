@@ -128,6 +128,7 @@ import BadgeStage, { HOOK_ID } from './BadgeStage';
 import type { CtaFieldRefs } from './CtaPanel';
 import DeckStrip from './DeckStrip';
 import GarageModal from './GarageModal';
+import { mainVehicle, replaceVehicle, withLookOn } from '../../shared/roadtrip/vehicle-fleet';
 import TripSettingsModal, { type TripSettingsSection } from './TripSettingsModal';
 import ContentTab from './panels/ContentTab';
 import ExportTab from './panels/ExportTab';
@@ -2496,9 +2497,11 @@ export default function PostEditor({
     {garageOpen && (
       <GarageModal
         trip={trip}
+        day={post.date}
         onCancel={() => setGarageOpen(false)}
-        onDone={(car) => {
-          onChangeTrip({ ...trip, car });
+        onDone={(spec) => {
+          const main = mainVehicle(trip.vehicles);
+          onChangeTrip({ ...trip, vehicles: replaceVehicle(trip.vehicles, withLookOn(main, post.date, spec)) });
           setGarageOpen(false);
         }}
       />

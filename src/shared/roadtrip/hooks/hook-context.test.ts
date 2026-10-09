@@ -156,7 +156,13 @@ describe('the scrub through the shared context', () => {
   it('builds elements per frame only for a hook that rewrites', () => {
     const { trip, hero } = fixture();
     const ctx = hookContextFor(trip, hero, 9 / 16, content);
-    expect(ctx.vehicle).toBe(trip.car);
+    expect(ctx.vehicle).toEqual(trip.vehicles[0].spec);
+    // A repaint before the piece's day is what the piece's vehicle wears.
+    const repainted = {
+      ...trip,
+      vehicles: [{ ...trip.vehicles[0], changes: [{ id: 'c', from: '2000-01-01', look: { ...trip.vehicles[0].spec, color: '#123456' } }] }],
+    };
+    expect(hookContextFor(repainted, hero, 9 / 16, content).vehicle?.color).toBe('#123456');
     const plain = resolveHook(hero.badge.hook, ctx);
     expect(hookElementsAt(plain, content, DEFAULT_BADGE_LAYOUT, 9 / 16, {}, 4)).toBeNull();
 

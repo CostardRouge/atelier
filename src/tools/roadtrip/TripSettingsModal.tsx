@@ -22,7 +22,7 @@ import {
   type TripDoc,
   type TripPost,
 } from '../../shared/roadtrip/trip-types';
-import GaragePanel from './GaragePanel';
+import FleetPanel from './FleetPanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel from './PlacesSettingsPanel';
@@ -403,9 +403,10 @@ export default function TripSettingsModal({
               <>
                 <SectionLegend label="Vehicle">
                   <p>
-                    The vehicle every Virée of this trip drives — one vehicle, every piece —
-                    and it travels in the trip’s backup. A piece only chooses how big
-                    it is drawn and how the camera looks at it.
+                    The vehicles this trip drives — the main one on every stage that names
+                    no other — and how each changed on the way, dated. A piece shows a
+                    vehicle as it was on the piece’s own day. They travel in the trip’s
+                    backup.
                   </p>
                   <p>
                     Drag the vehicle to turn it. The angle here is only a look: it is never
@@ -416,9 +417,10 @@ export default function TripSettingsModal({
                     view beside its own scrolling choices; narrow, the panel
                     stacks and this pane scrolls. */}
                 <div className="min-[821px]:flex-1 min-[821px]:min-h-0">
-                  <GaragePanel
-                    value={trip.car}
-                    onChange={(car) => onChangeTrip({ ...trip, car })}
+                  <FleetPanel
+                    trip={trip}
+                    value={trip.vehicles}
+                    onChange={(vehicles) => onChangeTrip({ ...trip, vehicles })}
                   />
                 </div>
               </>

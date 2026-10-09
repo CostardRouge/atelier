@@ -16,9 +16,13 @@ import Segmented from '../../shared/ui/Segmented';
 import VehicleTurntable from './VehicleTurntable';
 import { linkButton } from './panels/ui';
 
-interface CarGaragePanelProps {
+interface GaragePanelProps {
   value: VehicleSpec;
   onChange: (spec: VehicleSpec) => void;
+  /** Drawn first in the choices' column — the fleet and its story, in the trip settings. */
+  header?: ReactNode;
+  /** The model is said, not chosen: a dated change keeps its vehicle's model. */
+  lockModel?: boolean;
 }
 
 const FINISHES: Array<{ id: VehicleFinish; label: string; hint: string }> = [
@@ -111,7 +115,7 @@ function Group({ title, children }: { title: string; children: ReactNode }) {
  * Split, the panel fills its host's height (the host gives it a definite
  * one); narrower, it stacks and the host scrolls, as before.
  */
-export default function GaragePanel({ value, onChange }: CarGaragePanelProps) {
+export default function GaragePanel({ value, onChange, header, lockModel = false }: GaragePanelProps) {
   const model = vehicleModel(value.model);
   const line = vehicleLine(value.model);
   const preset = line.colours.find((c) => c.hex === value.color.toLowerCase());
@@ -143,13 +147,18 @@ export default function GaragePanel({ value, onChange }: CarGaragePanelProps) {
         </div>
 
         <div className="flex flex-col gap-4 @min-[44rem]:min-h-0 @min-[44rem]:overflow-y-auto @min-[44rem]:overscroll-contain @min-[44rem]:pr-2 @min-[44rem]:pb-1">
-          <FieldRow label="Model" hint={model.series}>
-            <SelectField
-              value={value.model}
-              options={VEHICLE_MODELS.map((m) => ({ id: m.id, label: vehicleLabel(m) }))}
-              onChange={switchModel}
-              label="Model"
-            />
+          {header}
+          <FieldRow label="Model" hint={lockModel ? 'A change keeps its vehicle’s model: another model is another vehicle.' : model.series}>
+            {lockModel ? (
+              <span className="text-sm text-ink-soft truncate">{model.name}</span>
+            ) : (
+              <SelectField
+                value={value.model}
+                options={VEHICLE_MODELS.map((m) => ({ id: m.id, label: vehicleLabel(m) }))}
+                onChange={switchModel}
+                label="Model"
+              />
+            )}
           </FieldRow>
 
           <FieldRow

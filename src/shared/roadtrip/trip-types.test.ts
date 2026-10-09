@@ -130,7 +130,7 @@ describe('migrateTripDoc', () => {
   });
 
   it('gives a v1 document the default car', () => {
-    expect(migrateTripDoc(v1()).car).toEqual(DEFAULT_VEHICLE);
+    expect(migrateTripDoc(v1()).vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
   });
 
   it('leaves a current document untouched', () => {
@@ -257,20 +257,19 @@ describe('migrateTripDoc — v20 → v21, the car is repaired', () => {
   /** What the Itinerary branch stamped v19 — and main then stamped v20 — with no car. */
   const carless = (version: number) => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    delete (doc as Partial<TripDoc>).car;
     return { ...doc, version } as TripDoc;
   };
 
   it('gives a carless v19 or v20 trip the default car', () => {
-    expect(migrateTripDoc(carless(19)).car).toEqual(DEFAULT_VEHICLE);
-    expect(migrateTripDoc(carless(20)).car).toEqual(DEFAULT_VEHICLE);
+    expect(migrateTripDoc(carless(19)).vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
+    expect(migrateTripDoc(carless(20)).vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
   });
 
   it('keeps the car a v20 trip already has', () => {
     const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04');
-    const car = { ...doc.car, color: '#b3261e', finish: 'gloss' as const };
-    const migrated = migrateTripDoc({ ...doc, version: 20, car });
-    expect(migrated.car).toEqual(car);
+    const car = { ...doc.vehicles[0].spec, color: '#b3261e', finish: 'gloss' as const };
+    const migrated = migrateTripDoc({ ...doc, version: 20, car } as unknown as TripDoc);
+    expect(migrated.vehicles[0].spec).toEqual(car);
     expect(migrated.version).toBe(TRIP_DOC_VERSION);
   });
 });
@@ -1090,14 +1089,14 @@ describe('migrateTripDoc — v18 → v19 (the trip’s car)', () => {
 
   it('lands a trip that never had a car on the default one', () => {
     const doc = migrateTripDoc(v18());
-    expect(doc.car).toEqual(DEFAULT_VEHICLE);
+    expect(doc.vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
     expect(doc.version).toBe(TRIP_DOC_VERSION);
   });
 
   it('lands junk on the default and keeps what a partial spec says', () => {
-    expect(migrateTripDoc(v18('black')).car).toEqual(DEFAULT_VEHICLE);
-    expect(migrateTripDoc(v18({ color: 'red', gear: 3 })).car).toEqual(DEFAULT_VEHICLE);
-    const partial = migrateTripDoc(v18({ color: '#ff0000', gear: { bullBar: false } })).car;
+    expect(migrateTripDoc(v18('black')).vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
+    expect(migrateTripDoc(v18({ color: 'red', gear: 3 })).vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
+    const partial = migrateTripDoc(v18({ color: '#ff0000', gear: { bullBar: false } })).vehicles[0].spec;
     expect(partial.color).toBe('#ff0000');
     expect(partial.gear.bullBar).toBe(false);
     expect(partial.gear.spare).toBe(true);
@@ -1512,5 +1511,36 @@ describe('migrateTripDoc — v28 → v29, any slide may hold an opener, a badge,
     expect(copy.slides[0].shades).toHaveLength(1);
     expect(copy.slides[0].shades[0].id).not.toBe(slide.shades[0].id);
     expect(copy.slides[0].shades[0].strength).toBe(slide.shades[0].strength);
+  });
+});
+
+describe('migrateTripDoc — v30 → v31, the car becomes a fleet', () => {
+  const v30 = (car: unknown) => {
+    const doc = createTripDoc('Australie', '2025-03-01', '2026-01-04') as unknown as Record<string, unknown>;
+    delete doc.vehicles;
+    delete doc.crossings;
+    return { ...doc, version: 30, car } as unknown as TripDoc;
+  };
+
+  it('folds the one car into a fleet of one, as it was, with no change', () => {
+    const car = { ...DEFAULT_VEHICLE, color: '#1f3b2f', finish: 'gloss' as const };
+    const doc = migrateTripDoc(v30(car));
+    expect(doc.vehicles).toEqual([{ id: 'main', spec: car, changes: [] }]);
+    expect('car' in doc).toBe(false);
+    expect(doc.version).toBe(TRIP_DOC_VERSION);
+  });
+
+  it('starts the water rule OFF on a stored trip, so nothing composed before it sails', () => {
+    expect(migrateTripDoc(v30(DEFAULT_VEHICLE)).crossings.auto).toBe(false);
+    // A new trip has it on.
+    expect(createTripDoc('Islande', '2026-06-01', '2026-06-12').crossings.auto).toBe(true);
+  });
+
+  it('leaves the stages and places without a vehicle: every leg drives what it drove', () => {
+    const doc = migrateTripDoc(v30(DEFAULT_VEHICLE));
+    for (const stage of doc.stages) {
+      expect(stage.vehicle).toBeUndefined();
+      for (const place of stage.places) expect(place.arriveBy).toBeUndefined();
+    }
   });
 });

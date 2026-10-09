@@ -130,8 +130,13 @@ export interface VehicleColour {
   note?: string;
 }
 
+/** A vehicle rolls on a road or floats on water — what the terrain decides between (`terrain.ts`). */
+export type VehicleKind = 'car' | 'boat';
+
 /** What a model offers, and how it comes. */
 export interface VehicleLine {
+  /** A car or a boat: the document's own word for it, so nothing needs the 3D registry to ask. */
+  kind: VehicleKind;
   /** The gear the garage offers on it, in the garage's order. */
   gear: readonly (keyof VehicleGear)[];
   /** Its named colours. */
@@ -169,6 +174,7 @@ const PRADO_GEAR: readonly (keyof VehicleGear)[] = [
  */
 export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
   'prado-j120': {
+    kind: 'car',
     gear: PRADO_GEAR,
     colours: [
       { id: 'ebony', name: 'Ebony black', hex: '#141416' },
@@ -187,6 +193,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     asItComes: 'The Prado as it was photographed: Raptor black, matte, everything fitted',
   },
   'kadjar-ph2': {
+    kind: 'car',
     gear: ['roofRails', 'roofBars', 'mirrors'],
     colours: [
       { id: 'navy', name: 'Navy blue', hex: '#1d2f5e', note: 'bleu marine' },
@@ -204,6 +211,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     asItComes: 'The Kadjar in navy blue, gloss, with its two roof bars',
   },
   'trafic-ph2': {
+    kind: 'car',
     gear: ['roofSolar', 'mirrors'],
     colours: [
       { id: 'glacier', name: 'Glacier white', hex: '#f0f0ec', note: 'Blanc Glacier — the van as photographed' },
@@ -220,6 +228,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     asItComes: 'The Trafic in white, gloss, with the 430 W panel on its roof',
   },
   'zoe-ph2': {
+    kind: 'car',
     gear: ['mirrors'],
     colours: [
       { id: 'glacier', name: 'Glacier white', hex: '#f1f1ed', note: 'Blanc Glacier — the classic one' },
@@ -239,6 +248,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
   // The boats' liveries are guesses: none of their operators says what colour
   // they are, so each comes in the colour a boat of its kind most often wears.
   'whitsunday-cruiser': {
+    kind: 'boat',
     gear: [],
     colours: [
       { id: 'white', name: 'White', hex: '#f4f4f1', note: 'what the day fleet mostly wears' },
@@ -252,6 +262,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     asItComes: 'The day cruiser in white, with its teal line',
   },
   'viper-jet': {
+    kind: 'boat',
     gear: [],
     colours: [
       { id: 'black', name: 'Black', hex: '#1d1f23', note: 'a guess — repaint it to what it wears' },
@@ -266,6 +277,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     asItComes: 'The Viper in black, with a red line',
   },
   'alison-maree': {
+    kind: 'boat',
     gear: [],
     colours: [
       { id: 'white', name: 'White', hex: '#f3f4f2', note: 'a guess — repaint it to what it wears' },
@@ -278,6 +290,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     asItComes: 'The Alison Maree in white, with its navy line',
   },
   'solar-whisper': {
+    kind: 'boat',
     gear: [],
     colours: [
       { id: 'white', name: 'White', hex: '#f3f3ef', note: 'a guess — repaint it to what it wears' },
@@ -293,6 +306,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
   // The ferries. The Spirit's red is the operator's own word for its brand;
   // the Mediterranean ferry is no one ship, painted like the one at Tanger Med.
   'spirit-of-tasmania': {
+    kind: 'boat',
     gear: [],
     colours: [
       { id: 'white', name: 'White', hex: '#f4f4f1', note: 'with the red band and funnel the operator calls its brand' },
@@ -306,6 +320,7 @@ export const VEHICLE_LINES: Readonly<Record<VehicleModelId, VehicleLine>> = {
     carries: true,
   },
   'med-ferry': {
+    kind: 'boat',
     gear: [],
     colours: [
       { id: 'navy', name: 'Navy', hex: '#1d2a4a', note: 'like the ship at Tanger Med — a guess, repaint it to the one you took' },
@@ -329,6 +344,16 @@ export function carriesVehicles(model: string): boolean {
 /** What a model offers — the Prado's for an id this build does not know. */
 export function vehicleLine(model: string): VehicleLine {
   return (VEHICLE_LINES as Record<string, VehicleLine | undefined>)[model] ?? VEHICLE_LINES[DEFAULT_MODEL];
+}
+
+/** Whether a model is a car or a boat — a car for an id this build does not know, like `vehicleLine`. */
+export function vehicleKind(model: string): VehicleKind {
+  return vehicleLine(model).kind;
+}
+
+/** Whether a value names a model this build knows. */
+export function isVehicleModelId(value: unknown): value is VehicleModelId {
+  return isModelId(value);
 }
 
 function isModelId(value: unknown): value is VehicleModelId {
@@ -429,7 +454,7 @@ export type VehicleChoice = 'trip' | VehicleModelId;
 export const VEHICLE_CHOICES: readonly VehicleChoice[] = ['trip', ...VEHICLE_MODEL_IDS];
 
 /**
- * The vehicle a PIECE drives. The trip has one car (`TripDoc.car`), but a day
+ * The vehicle a PIECE drives. The trip has its fleet (`TripDoc.vehicles`), but a day
  * on the water borrows a boat: `choice` names the model the piece picked,
  * `color` its own paint (empty: as it comes). The trip's car stands for itself
  * — as it is dressed in the garage — whether the piece left the choice to the

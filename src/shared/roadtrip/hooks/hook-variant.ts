@@ -319,7 +319,7 @@ export interface HookContext {
    */
   pictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The trip's vehicle (`TripDoc.car`) — what a variant that drives one draws.
+   * The trip's main vehicle as it was on the piece's day (`TripDoc.vehicles`) — what a variant that drives one draws.
    * A hand-built context without it drives the default vehicle.
    */
   vehicle?: VehicleSpec;

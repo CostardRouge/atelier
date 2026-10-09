@@ -106,7 +106,7 @@ export interface DriveOptions extends CardOptions {
   cardsStay: boolean;
   cardSize: number;
   // --- vehicle -----------------------------------------------------------------
-  // The vehicle itself — model, colour, finish, gear — is the TRIP's (`TripDoc.car`)
+  // The vehicle itself — model, colour, finish, gear — is the TRIP's (`TripDoc.vehicles`)
   // and reaches the variant through `HookContext.car`. A piece may borrow
   // another vehicle for its day — a boat to the reef — as a model and a paint
   // of its own (`vehicleFor`); otherwise it keeps only how big the vehicle is drawn

@@ -21,6 +21,7 @@ import { hookCalendar, hookStages } from './hook-calendar';
 import { townsIfLoaded } from '../load-gazetteer';
 import type { HookContext, HookLayer, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
+import { mainVehicle, vehicleOnDay } from '../vehicle-fleet';
 
 /** What an opener is told about time on the slide it plays on. */
 export interface HookTiming {
@@ -86,7 +87,9 @@ export function hookContextFor(
     calendar: hookCalendar(trip, post.id),
     stages: hookStages(trip),
     pictures,
-    vehicle: trip.car,
+    // The main vehicle as it was on the piece's own day: a piece dated before
+    // the Prado's repaint shows it green.
+    vehicle: vehicleOnDay(mainVehicle(trip.vehicles), post.date),
     writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
     badgeWords: trip.badgeWords,
     // Read, never fetched here: the editor asks for the index when a piece

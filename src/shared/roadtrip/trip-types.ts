@@ -48,7 +48,14 @@ import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
 import { readCascade, type BadgeCascade } from './badge-layout';
-import { defaultVehicleSpec, readVehicleSpec, type VehicleSpec } from './vehicle-spec';
+import { defaultVehicleSpec, readVehicleSpec } from './vehicle-spec';
+import {
+  DEFAULT_CROSSINGS,
+  fleetOf,
+  type TripCrossings,
+  type TripVehicle,
+  type VehicleRef,
+} from './vehicle-fleet';
 import type { OverlayElement } from '../overlay/overlay-types';
 import {
   readSlideBadge,
@@ -73,7 +80,7 @@ import {
 // a value both ways is the cycle that left `day-badge.ts` half-loaded.
 import { DEFAULT_PLACE_STYLE } from './place-style';
 
-export const TRIP_DOC_VERSION = 30;
+export const TRIP_DOC_VERSION = 31;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -197,6 +204,12 @@ export interface TripPlace {
   source?: PlaceSource;
   /** This place's own writing, over its stage's and the trip's. */
   style?: PlaceStyle;
+  /**
+   * How this place was REACHED — the vehicle of the hop that leads to it (a
+   * boat to Whitehaven, the Solar Whisper up the Daintree), over the stage's
+   * and over the water rule; absent = decided by those (`vehicle-plan.ts`).
+   */
+  arriveBy?: VehicleRef;
 }
 
 /**
@@ -272,6 +285,8 @@ export interface TripStage {
   origin?: StageOrigin;
   /** How this stage's places are written, over the trip's; absent = the trip's. */
   placeStyle?: PlaceStyle;
+  /** What this leg drives — one of the fleet or a borrowed model; absent = the trip's main vehicle (`vehicle-fleet.ts`). */
+  vehicle?: VehicleRef;
 }
 
 /**
@@ -812,12 +827,15 @@ export interface TripDoc {
    */
   developPresets: DevelopPreset[];
   /**
-   * The car every Virée of this trip drives — its model, colour, finish and
-   * gear, dressed in the garage. On the TRIP because a journey has one car:
-   * a piece that drove a different one would be a different journey.
-   * Portable, so the backup carries it.
+   * The trip's FLEET (v31, `vehicle-fleet.ts`): the vehicles it drives, the
+   * first being its MAIN one, each as it set off plus the dated changes it
+   * went through (the Prado repainted at Melbourne). A stage may name another
+   * (`TripStage.vehicle`), a place how it was reached (`TripPlace.arriveBy`).
+   * Never empty. Portable, so the backup carries it.
    */
-  car: VehicleSpec;
+  vehicles: TripVehicle[];
+  /** The trip's rule for water: a hop that crosses it takes a boat by itself (`terrain.ts`). Portable. */
+  crossings: TripCrossings;
   /**
    * How a place is written on this trip's two kinds of surface. A stage or a
    * place may depart from it (`TripStage.placeStyle`, `TripPlace.style`).
@@ -882,7 +900,8 @@ export function createTripDoc(
     grade: emptyGrade(),
     cover: defaultTripCover(),
     developPresets: [],
-    car: defaultVehicleSpec(),
+    vehicles: fleetOf(defaultVehicleSpec()),
+    crossings: { ...DEFAULT_CROSSINGS },
     placeStyle: { ...DEFAULT_PLACE_STYLE },
     stateCodes: {},
     createdAt: now,
@@ -1065,6 +1084,11 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * is the framing already stored. Every stored picture holds still — `motion`
  * starts null — so nothing a trip already draws changes.
  *
+ * v30 → v31 makes the trip's one car a FLEET (`TripDoc.vehicles`, the car as
+ * its main vehicle with no change) and gives it a rule for water
+ * (`TripDoc.crossings`), OFF on every stored trip so nothing composed before
+ * it starts sailing. `car` is deleted, never left for a reader to misread.
+ *
  * v20 → v21 REPAIRS the car. The Itinerary branch numbered its Route
  * conversion v19 while `main` took v19 for the car, and a trip opened on that
  * branch before the renumber was stamped v19 with no car at all — so the car
@@ -1134,6 +1158,9 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
   const migrated = { ...doc };
+  // The one vehicle a trip had before v31, read by the blocks that wrote it
+  // and folded into the fleet by the last one.
+  const legacy = migrated as TripDoc & { car?: unknown };
   if (migrated.version < 10) {
     // No trip had a grade before, so every existing picture keeps rendering
     // exactly as it did: the trip's grade is empty and every post follows it.
@@ -1407,7 +1434,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (migrated.version < 19) {
     // Read through `readVehicleSpec`: a document that never had a car lands on the
     // default, junk lands on the default, a partial spec keeps what it says.
-    migrated.car = readVehicleSpec(migrated.car);
+    legacy.car = readVehicleSpec(legacy.car);
   }
 
   if (migrated.version < 20) {
@@ -1447,7 +1474,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (migrated.version < 21) {
     // A trip stamped v19 by the Itinerary branch skipped the car block above.
     // Idempotent on every other document: a car that is there is kept as is.
-    migrated.car = readVehicleSpec(migrated.car);
+    legacy.car = readVehicleSpec(legacy.car);
   }
 
   if (migrated.version < 22) {
@@ -1596,6 +1623,16 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     }));
     migrated.placeStyle = readPlaceStyle(migrated.placeStyle);
     migrated.stateCodes = readStateCodes(migrated.stateCodes);
+  }
+
+  if (migrated.version < 31) {
+    // The one car becomes a FLEET of one, as it was, with no change; the
+    // water rule starts OFF on a stored trip, so no piece composed before it
+    // starts sailing — the author turns it on. No stage names a vehicle and
+    // no place says how it was reached, so every leg drives what it drove.
+    migrated.vehicles = fleetOf(readVehicleSpec(legacy.car));
+    migrated.crossings = { ...DEFAULT_CROSSINGS, auto: false };
+    delete legacy.car;
   }
 
   migrated.version = TRIP_DOC_VERSION;

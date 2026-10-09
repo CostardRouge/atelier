@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { defaultVehicleSpec } from './vehicle-spec';
+import { DEFAULT_CROSSINGS, fleetOf } from './vehicle-fleet';
 import {
   captionElementId,
   captionLineFromElementId,
@@ -55,7 +56,8 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   sourceId: 'local',
   cover: defaultTripCover(),
   developPresets: [],
-  car: defaultVehicleSpec(),
+  vehicles: fleetOf(defaultVehicleSpec()),
+  crossings: { ...DEFAULT_CROSSINGS },
   placeStyle: { badge: 'name', lists: 'code' },
   stateCodes: {},
   createdAt: 0,

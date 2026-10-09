@@ -2,15 +2,19 @@ import { useState } from 'react';
 import { describeVehicle, sameVehicleSpec, type VehicleSpec } from '../../shared/roadtrip/vehicle-spec';
 import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
+import type { IsoDate } from '../../shared/roadtrip/trip-days';
+import { changeOn, mainVehicle, vehicleOnDay } from '../../shared/roadtrip/vehicle-fleet';
 import Button from '../../shared/ui/Button';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
 import GaragePanel from './GaragePanel';
 
-interface CarGarageModalProps {
+interface GarageModalProps {
   trip: TripDoc;
+  /** The piece's day: the trip's main vehicle is dressed as it was then. */
+  day: IsoDate;
   onCancel: () => void;
-  /** The car as dressed — the caller writes it to the trip. */
-  onDone: (car: VehicleSpec) => void;
+  /** The vehicle as dressed — the caller writes it to the state in effect on `day` (`withLookOn`). */
+  onDone: (spec: VehicleSpec) => void;
 }
 
 /**
@@ -26,9 +30,14 @@ interface CarGarageModalProps {
  * drift. No portal: `PostEditor` renders it beside the other trip-wide sheets,
  * outside the panel host, and it stacks over the stage like them.
  */
-export default function GarageModal({ trip, onCancel, onDone }: CarGarageModalProps) {
-  const [draft, setDraft] = useState<VehicleSpec>(trip.car);
-  const changed = !sameVehicleSpec(draft, trip.car);
+export default function GarageModal({ trip, day, onCancel, onDone }: GarageModalProps) {
+  const main = mainVehicle(trip.vehicles);
+  const start = vehicleOnDay(main, day);
+  // Which state the sheet dresses: the vehicle as it set off, or a change in
+  // effect on the piece's day — said, so a repaint never lands on the wrong one.
+  const change = changeOn(main, day);
+  const [draft, setDraft] = useState<VehicleSpec>(start);
+  const changed = !sameVehicleSpec(draft, start);
   const done = () => (changed ? onDone(draft) : onCancel());
   useDialogKeys({ onCancel, onConfirm: done });
 
@@ -65,7 +74,9 @@ export default function GarageModal({ trip, onCancel, onDone }: CarGarageModalPr
 
         <div className="flex-none flex items-center gap-3 px-6 py-3.5 border-t border-line bg-surface max-[820px]:pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           <span className="min-w-0 text-xs text-muted truncate">
-            Every Virée of this trip drives this vehicle.
+            {change
+              ? `As it is from ${change.place ? `${change.place}, ` : ''}${change.from} — the trip settings hold its whole story.`
+              : 'The trip’s main vehicle, as it set off.'}
           </span>
           <span className="flex-1" />
           <Button onClick={onCancel}>Cancel</Button>

@@ -1338,6 +1338,15 @@ panel («Configure the vehicle…», with Cancel and Done) and lives in the trip
 settings as its Vehicle section, where every switch writes at once. On a wide
 screen both show the vehicle beside its choices, which scroll on their own, so a
 switch far down the list is seen on the vehicle the moment it flips.
+That section holds the trip's **fleet**: the vehicles the journey drives, the
+first being the main one (what a stage that names no other drives), each with
+**its story** — how it set off, then every change on the way, dated (the Prado
+repainted Raptor black at Melbourne, say). Name the place where it happened
+and, when the trip knows the day it reached that place, the change takes that
+day. Pick a row and the garage beside it dresses that state; a change keeps
+its vehicle's model, since another model is another vehicle. A piece shows a
+vehicle as it was on the piece's own day, and «Configure the vehicle…» from a
+piece dresses the state in effect on that day.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
 your own places) — though, like Virée and the Recap card, it can also take
