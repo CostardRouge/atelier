@@ -35,6 +35,7 @@ import PostEditor from './PostEditor';
 import TimelineImportPanel from './TimelineImportPanel';
 import DeduceStagesPanel from './deduce/DeduceStagesPanel';
 import TripGallery from './TripGallery';
+import type { TripSettingsSection } from './TripSettingsModal';
 import TripOverview from './TripOverview';
 
 /** This tool's own route; every sub-route hangs off it. */
@@ -294,7 +295,14 @@ export default function RoadTripTool() {
     });
   }, [open, resume, clear]);
 
-  const handleOpen = useCallback((doc: TripDoc) => {
+  // The gallery's «Trip settings…» opens the trip on its settings sheet: the
+  // overview reads this as it mounts and says so, and it is dropped then, or
+  // every return from a piece would open the sheet again.
+  const [settingsOnOpen, setSettingsOnOpen] = useState<TripSettingsSection | null>(null);
+  const settingsTaken = useCallback(() => setSettingsOnOpen(null), []);
+
+  const handleOpen = useCallback((doc: TripDoc, settings?: TripSettingsSection) => {
+    setSettingsOnOpen(settings ?? null);
     // The gallery lists what the store held when it MOUNTED, and the trip
     // that is open may carry edits the 800 ms debounce had not written yet:
     // taking the listed copy back put the screen a step behind, and the next
@@ -441,7 +449,6 @@ export default function RoadTripTool() {
           onOpen={handleOpen}
           timelineSources={seedSources}
           onSeedFrom={(id) => openImport('seed', id)}
-          onChangeOpenTrip={handleChange}
         />
       ) : editingPost ? (
         <PostEditor
@@ -462,6 +469,8 @@ export default function RoadTripTool() {
         <TripOverview
           key={open.id}
           trip={open}
+          initialSettings={settingsOnOpen}
+          onSettingsTaken={settingsTaken}
           selectedDate={route.date}
           onSelectDate={(date, options) => go(date, null, options)}
           onShowTrips={() => navigate(HOME_ROUTE)}

@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { GEAR_KEYS, type CarGear } from '../car-spec';
+import { GEAR_KEYS, type VehicleGear } from '../vehicle-spec';
 import { centroid, dot, faceNormal, renderOrder, sub, type Part, type Vec3 } from './mesh3d';
 import { ZOE_LENGTH, ZOE_WHEEL_RADIUS, ZOE_WIDTH, buildZoe, zoePalette } from './zoe-model';
 
-const NONE = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as CarGear;
-const ALL = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as CarGear;
+const NONE = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as VehicleGear;
+const ALL = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as VehicleGear;
 
 const faceCount = (parts: Part[]) => parts.reduce((n, part) => n + part.faces.length, 0);
 const verts = (parts: Part[]): Vec3[] => parts.flatMap((part) => part.faces.flatMap((f) => [...f.verts]));

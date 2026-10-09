@@ -21,8 +21,8 @@
  */
 
 import { describe, expect, it } from 'vitest';
-import { GEAR_KEYS, carLine, type CarGear } from '../car-spec';
-import { CAR_MODELS } from './car-registry';
+import { GEAR_KEYS, vehicleLine, type VehicleGear } from '../vehicle-spec';
+import { VEHICLE_MODELS } from './vehicle-registry';
 import { buildKadjar } from './kadjar-model';
 import {
   cross,
@@ -320,7 +320,7 @@ function mispainted(parts: readonly Part[], pose: Pose): Verdict {
 }
 
 /** Every flag on: each model draws the part of it it offers. */
-const ALL_GEAR = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as CarGear;
+const ALL_GEAR = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as VehicleGear;
 
 /**
  * Every car in the registry fully geared — a car added there is judged here
@@ -342,8 +342,8 @@ const SOLID: Record<string, (id: string) => boolean> = {
 const CAT_SOLID = (id: string) => id.startsWith('hull-') || id === 'saloon' || id === 'wheelhouse';
 
 const CARS = [
-  ...CAR_MODELS.map((model) => ({
-    name: `the ${model.short}${carLine(model.id).gear.length ? ', fully geared' : ''}`,
+  ...VEHICLE_MODELS.map((model) => ({
+    name: `the ${model.short}${vehicleLine(model.id).gear.length ? ', fully geared' : ''}`,
     parts: model.build(ALL_GEAR),
     scale: scaleFor(model.length),
     solid: SOLID[model.id] ?? CAT_SOLID,

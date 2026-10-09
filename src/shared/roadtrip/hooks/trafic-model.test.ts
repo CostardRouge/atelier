@@ -1,10 +1,10 @@
 import { describe, expect, it } from 'vitest';
-import { GEAR_KEYS, defaultCarSpec, type CarGear } from '../car-spec';
+import { GEAR_KEYS, defaultVehicleSpec, type VehicleGear } from '../vehicle-spec';
 import { centroid, dot, faceNormal, renderOrder, sub, type Part, type Vec3 } from './mesh3d';
 import { TRAFIC_BONNET_NOSE, TRAFIC_LENGTH, TRAFIC_WHEEL_RADIUS, TRAFIC_WIDTH, buildTrafic, traficPalette } from './trafic-model';
 
-const NONE = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as CarGear;
-const ALL = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as CarGear;
+const NONE = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as VehicleGear;
+const ALL = Object.fromEntries(GEAR_KEYS.map((key) => [key, true])) as unknown as VehicleGear;
 
 const faceCount = (parts: Part[]) => parts.reduce((n, part) => n + part.faces.length, 0);
 const verts = (parts: Part[]): Vec3[] => parts.flatMap((part) => part.faces.flatMap((f) => [...f.verts]));
@@ -34,7 +34,7 @@ describe('buildTrafic', () => {
     expect(new Set(geared.map((p) => p.id)).size).toBe(geared.length);
   });
 
-  it('fits a Trafic’s footprint: 5.0 long, 1.96 wide, wheels on the ground, the roof at 1.96 and the panel over it', () => {
+  it('fits an L2 Trafic’s footprint: 5.4 long, 1.96 wide, wheels on the ground, the roof at 1.96 and the panel over it', () => {
     const vs = verts(bare);
     const xs = vs.map((v) => v[0]);
     const ys = vs.map((v) => v[1]);
@@ -102,7 +102,7 @@ describe('buildTrafic', () => {
     expect(has(asItComes, 'mirror-')).toBe(true);
     expect(has(bare, 'solar-')).toBe(false);
     expect(has(bare, 'mirror-')).toBe(false);
-    expect(has(buildTrafic({ ...defaultCarSpec('trafic-ph2').gear, roofSolar: false }), 'solar-')).toBe(false);
+    expect(has(buildTrafic({ ...defaultVehicleSpec('trafic-ph2').gear, roofSolar: false }), 'solar-')).toBe(false);
     for (const other of ['bullbar', 'spot-', 'basket-', 'storage', 'jerry', 'awning', 'flap-', 'visor-', 'spare', 'rail-', 'roofbar-']) {
       expect(has(geared, other), other).toBe(false);
     }

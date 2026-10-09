@@ -83,8 +83,8 @@ interface LookTabProps {
   patchBadge: (patch: Partial<PostBadge>) => void;
   /** The trip's words live in its settings sheet now. */
   onOpenTripSettings: () => void;
-  /** Opens the trip's garage, for the opener that drives its car. */
-  onConfigureCar?: () => void;
+  /** Opens the trip's garage, for the opener that drives its vehicle. */
+  onConfigureVehicle?: () => void;
   /** The shade whose centre the stage is placing, if any. */
   placingShade?: string | null;
   /** Hand a shade's centre to the stage, or take it back with null. */
@@ -121,7 +121,7 @@ export default function LookTab({
   onChangeTrip,
   patchBadge,
   onOpenTripSettings,
-  onConfigureCar,
+  onConfigureVehicle,
   placingShade = null,
   onPlaceShade,
 }: LookTabProps) {
@@ -164,7 +164,7 @@ export default function LookTab({
             ctx={hookCtx}
             pictureStatus={hookPictureStatus}
             onChange={onLayers}
-            onConfigureCar={onConfigureCar}
+            onConfigureVehicle={onConfigureVehicle}
             slideOpener={!isHook}
           />
         </InspectorSection>

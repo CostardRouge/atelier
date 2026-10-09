@@ -233,7 +233,7 @@ describe('the script', () => {
     }
     // Stories: one segment for the hook, one per chapter, one for the reveal with its ending.
     expect(progressSegments(base)).toHaveLength(base.chapters.length + 2);
-    expect(progressSegments(base).at(-1)).toEqual({ start: base.reveal.start, end: base.seconds });
+    expect(progressSegments(base).slice(-1)[0]).toEqual({ start: base.reveal.start, end: base.seconds });
     // A moment's own length wins over the length's.
     expect(timelapseScript(p, options({ hook: { ...DEFAULT_TIMELAPSE.hook, seconds: 3 } })).hook.dur).toBe(3);
   });

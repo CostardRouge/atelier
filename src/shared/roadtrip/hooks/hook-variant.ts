@@ -24,15 +24,20 @@
  * this module runs its tests in node. The design is `docs/hook-engine.md`.
  */
 
+import type { RoadLine } from '../road-track';
 import type { ComponentType } from 'react';
 import type { PyramidTile } from '../../map/tile-strip';
 import type { SavedMediaRef } from '../../projects/project-types';
-import type { CarSpec } from '../car-spec';
+import type { VehicleSpec } from '../vehicle-spec';
+import type { TripCrossings, TripVehicle, VehicleRef } from '../vehicle-fleet';
+import type { LandIndex } from '../../map/terrain';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
 import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
+import type { StyleTheme } from '../../overlay/title-styles';
+import type { TimeWindow } from '../../overlay/animation';
 
 /** What the engine draws into — the 2D context both renderers already use. */
 export type HookCtx2D = CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D;
@@ -262,6 +267,8 @@ export interface HookPlace {
   /** The days it was reached and left, `YYYY-MM-DD`, where the place knows them (`TripPlace.arrived`/`left`). */
   arrived?: string;
   left?: string;
+  /** How it was reached — the vehicle of the hop that leads here (`TripPlace.arriveBy`). */
+  arriveBy?: VehicleRef;
 }
 
 export interface HookStage {
@@ -270,6 +277,8 @@ export interface HookStage {
   /** What the badge calls this leg (`stageLabel`). */
   label: string;
   places: readonly HookPlace[];
+  /** What this leg drives (`TripStage.vehicle`); absent = the trip's main vehicle. */
+  vehicle?: VehicleRef;
 }
 
 /** A decoded picture a variant may draw, with the size it was decoded at. */
@@ -317,10 +326,32 @@ export interface HookContext {
    */
   pictures?: ReadonlyMap<string, HookPicture>;
   /**
-   * The trip's car (`TripDoc.car`) — what a variant that drives one draws.
-   * A hand-built context without it drives the default car.
+   * The trip's main vehicle as it was on the piece's day (`TripDoc.vehicles`) — what a variant that drives one draws.
+   * A hand-built context without it drives the default vehicle.
    */
-  car?: CarSpec;
+  vehicle?: VehicleSpec;
+  /**
+   * The reference `vehicle` was resolved from — the stage of the piece's day,
+   * else the main vehicle (`vehicleRefForDay`) — what a stop no leg claims drives.
+   */
+  vehicleRef?: VehicleRef;
+  /** The trip's fleet and its stories (`TripDoc.vehicles`), for an opener that changes vehicle along its road. */
+  fleet?: readonly TripVehicle[];
+  /** The trip's rule for water (`TripDoc.crossings`). */
+  crossings?: TripCrossings;
+  /**
+   * The trip's ROAD as its mode and detail read it (`TripDoc.road`,
+   * `tripRoadLine`) — what a drive follows between two stops the road joins,
+   * and what its kilometres are counted on. Absent or empty: curves from
+   * place to place, as the crow flies.
+   */
+  road?: RoadLine | null;
+  /**
+   * The shipped coastline as an index, when it has been read in this session
+   * (`landIfLoaded`) — what tells a crossing from a road (`terrain.ts`).
+   * Absent: no hop is known to cross water, and the road is driven whole.
+   */
+  land?: LandIndex | null;
   /**
    * How the trip WRITES a place (`TripDoc.placeStyle`, `stateCodes`) — what
    * an opener's labels and the stops' lists read through `stopText`, so a
@@ -336,6 +367,15 @@ export interface HookContext {
    * town (`stop-clusters.ts`). Absent: the first member names it.
    */
   towns?: readonly NamedTown[] | null;
+  /**
+   * The trip's LOOK (`TripDoc.theme`) — the badge's own type, colour and
+   * glow — for an opener that sets words of its own (Virée's summary card),
+   * so they wear the signature the badge wears. Absent or null: the neutral
+   * look.
+   */
+  theme?: StyleTheme | null;
+  /** The trip's name — what a card that titles the trip says by default. */
+  tripName?: string;
 }
 
 /** One sound the hook makes — see `shared/audio/sound-event.ts`. */
@@ -358,6 +398,13 @@ export interface HookRender {
   content?(t: number): HookContentPatch;
   /** Drawn between the picture and the shades, at the output's own size. */
   paint?(g: HookCtx2D, t: number, frame: FrameBox): void;
+  /**
+   * When the BADGE is on screen while this layer plays: its pieces take this
+   * window (`windowedBadge`), so an entrance starts at its start and an exit
+   * lands on its end — Virée's badge leaving as its summary card comes, or
+   * coming in its place. Absent: the badge lives as it always did.
+   */
+  readonly badgeWindow?: TimeWindow;
   /**
    * Resolves once what `paint` draws from `t0` to `t1` is in memory (a
    * streamed map ground). Absent: the paint needs nothing it waits for.
@@ -394,9 +441,9 @@ export interface HookPanelHost {
   pictureStatus?: HookPictureStatus;
   /**
    * Open the garage — the sheet that dresses the TRIP's car. A panel may not
-   * write the trip itself; absent, the panel says where the car is set.
+   * write the trip itself; absent, the panel says where the vehicle is set.
    */
-  configureCar?(): void;
+  configureVehicle?(): void;
   /**
    * Open the big picking map on these stops — pan, zoom, tap to add, drag to
    * move, towns to take a name from — and resolve the stops as the author
@@ -644,6 +691,8 @@ export interface ResolvedHook {
   readonly rewrites: boolean;
   /** True when a layer replaces the picture rather than drawing over it. */
   readonly ownsFrame: boolean;
+  /** When the badge is on screen — the last layer that says; null where none does. */
+  readonly badgeWindow: TimeWindow | null;
   /** The badge's content after every layer has had its say at `t`. */
   contentAt(base: BadgeContent | null, t: number): BadgeContent | null;
   /** Paint every layer, in order. */
@@ -675,6 +724,7 @@ export function foldHook(layers: readonly HookRender[], ownsFrame: boolean): Res
     rewrites: layers.some((layer) => typeof layer.content === 'function'),
     mixWithSource: layers.some((layer) => layer.mixWithSource === true && !!layer.score),
     ownsFrame,
+    badgeWindow: layers.reduce<TimeWindow | null>((win, layer) => layer.badgeWindow ?? win, null),
     contentAt(base, t) {
       if (!base) return null;
       let content = base;

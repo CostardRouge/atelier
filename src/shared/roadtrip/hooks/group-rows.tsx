@@ -71,7 +71,7 @@ export function GroupRows({ value, onChange, count, townsReady }: GroupRowsProps
             hint={
               value.groupVisits === 'consecutive'
                 ? 'Only places that follow each other merge, so the journey’s order stands; a later return is a second halt.'
-                : 'Every visit merges into the first — the car never comes back.'
+                : 'Every visit merges into the first — the vehicle never comes back.'
             }
           >
             <Segmented

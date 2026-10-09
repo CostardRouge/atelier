@@ -123,7 +123,7 @@ describe('pushPack', () => {
     await pushPack(host, pack(['aa', 'bb']), lattices(['aa', 'bb']));
     expect(calls.filter((c) => c.startsWith('put-file')).length).toBe(2);
     // The index is last: a device reading it must never find a look that 404s.
-    expect(calls.at(-1)).toBe('put-doc:pk_1');
+    expect(calls.slice(-1)[0]).toBe('put-doc:pk_1');
     expect(calls.indexOf(`put-file:${await blobOf('aa')}`)).toBeLessThan(
       calls.indexOf('put-doc:pk_1'),
     );

@@ -16,6 +16,8 @@ export interface DevelopPresets {
   list: readonly DevelopPreset[];
   /** `look` only from a host whose pictures own their look (the Develop tool). */
   onSave: (name: string, settings: DevelopSettings, look?: SavedGrade | null) => void;
+  /** A copy of preset `id` under `name`, numbered by the host when the name is taken. */
+  onClone: (id: string, name: string) => void;
   onRemove: (id: string) => void;
   /** Where they are kept, said in the section's ⓘ: "on the trip". */
   keptOn?: string;

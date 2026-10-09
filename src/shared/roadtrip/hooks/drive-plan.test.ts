@@ -41,14 +41,17 @@ import {
   viewAt,
   wantsStopLabel,
   type DriveOptions,
+  type DrivePlan,
   type DriveStop,
 } from './drive-plan';
+import { ALIGHT_SECONDS, BOARD_SECONDS } from './boarding';
 import { driveRibbon } from './drive-ribbon';
 import { TICK_KITS } from './tick-kits';
 import { driveBasemap, driveTrack } from './drive-paint';
 import { groundNote, type BasemapSet } from './basemap-strip';
 import { STREAM_DECODED, STRIP_TILES } from '../../map/tile-strip';
 import { TILE_PX, planTiles } from '../../map/tile-math';
+import { distanceKm, roadLine, type RoadFix } from '../road-track';
 
 /** The pyramid's tiles as rasters would be described: zoom, region, size. */
 const patchesOf = (set: BasemapSet) =>
@@ -778,12 +781,12 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     const plan = drivePlan(driveRoute(STAGES, CAL, dateOf(20), o), o, true)!;
     expect(plan.recap).toBe(true);
     const kinds = plan.schedule.phases.map((p) => p.kind);
-    expect(kinds).toEqual(['stay', 'run', 'stay', 'run', 'stay', 'run', 'stay', 'run', 'arrive', 'summary', 'reveal']);
+    expect(kinds).toEqual(['stay', 'run', 'stay', 'run', 'stay', 'run', 'stay', 'run', 'arrive', 'summary']);
     const road = plan.schedule.phases
       .filter((p) => p.kind === 'run' || p.kind === 'stay' || p.kind === 'arrive')
       .reduce((n, p) => n + (p.end - p.start), 0);
     expect(road).toBeCloseTo(10, 6);
-    expect(plan.schedule.total).toBeCloseTo(10 + SUMMARY_SECONDS + REVEAL_SECONDS, 6);
+    expect(plan.schedule.total).toBeCloseTo(10 + SUMMARY_SECONDS, 6);
     // A run between two places that touch in time takes the floor, by length alone.
     expect(plan.schedule.phases[1].end - plan.schedule.phases[1].start).toBeGreaterThanOrEqual(MIN_RUN_SECONDS);
   });
@@ -1029,7 +1032,7 @@ describe('the recap — the stops are dated, and the badge counts with the car',
     expect(plan.clock).toBeNull();
     expect(driveCounterPieces(plan, o, 'days', 1, WORDS)).toEqual({});
     expect(driveCounterPieces(plan, o, 'places', 1, WORDS).counter).toBe('of 2');
-    expect(plan.schedule.phases.map((p) => p.kind)).toEqual(['run', 'arrive', 'summary', 'reveal']);
+    expect(plan.schedule.phases.map((p) => p.kind)).toEqual(['run', 'arrive', 'summary']);
   });
 
   it('marks the road every so many days and kilometres, a day reached during a stay sitting on its stop', () => {
@@ -1129,6 +1132,134 @@ describe('buildSchedule alone', () => {
     const s = buildSchedule([], buildPath([], 'curved'), opts());
     expect(s.total).toBe(0);
     expect(s.phases).toEqual([]);
+    expect(s.boardAt).toBeNull();
+    expect(s.alightAt).toBeNull();
+  });
+});
+
+describe('the trip’s car boarding a ferry', () => {
+  const route = driveRoute(STAGES, CAL, dateOf(20), opts({ includePieces: false }));
+
+  it('is on by default and read defensively', () => {
+    expect(driveOptions({}).boarding).toBe(true);
+    expect(driveOptions({ boarding: false }).boarding).toBe(false);
+    expect(driveOptions({ boarding: 'no' }).boarding).toBe(true);
+  });
+
+  it('adds its two beats and nothing else: aboard at the end of the hold, off at the start of the arrival', () => {
+    const o = opts({ pictures: 'none' });
+    const plain = drivePlan(route, o)!;
+    const ferry = drivePlan(route, o, false, true)!;
+    expect(plain.schedule.boardAt).toBeNull();
+    expect(plain.schedule.alightAt).toBeNull();
+    expect(ferry.seconds).toBeCloseTo(plain.seconds + BOARD_SECONDS + ALIGHT_SECONDS, 9);
+    const hold = ferry.schedule.phases.find((p) => p.kind === 'hold')!;
+    expect(ferry.schedule.boardAt).toEqual({ start: hold.end - BOARD_SECONDS, end: hold.end });
+    expect(hold.end - hold.start).toBeCloseTo(o.delaySeconds + BOARD_SECONDS, 9);
+    expect(ferry.schedule.alightAt).toEqual({ start: ferry.schedule.arrivedAt, end: ferry.schedule.arrivedAt + ALIGHT_SECONDS });
+    // The road itself is untouched: every run as long as it was, shifted by the boarding.
+    const runs = (plan: typeof plain) => plan.schedule.phases.filter((p) => p.kind === 'run').map((p) => p.end - p.start);
+    expect(runs(ferry)).toEqual(runs(plain));
+    const firstRun = (plan: typeof plain) => plan.schedule.phases.find((p) => p.kind === 'run')!.start;
+    expect(firstRun(ferry) - firstRun(plain)).toBeCloseTo(BOARD_SECONDS, 9);
+    // The ship waits at the quay while the car drives on.
+    expect(ferry.at(ferry.schedule.boardAt!.start + 0.5).s).toBe(0);
+  });
+
+  it('has nothing to board for on a drive with one stop', () => {
+    const one = driveRoute([STAGES[0]], CAL, dateOf(2), opts({ includePieces: false, picked: [pic('a.jpg', 1)] }));
+    const plan = drivePlan({ ...one, stops: one.stops.slice(0, 1) }, opts(), false, true);
+    if (plan) expect(plan.schedule.boardAt).toBeNull();
+  });
+});
+
+describe('a ferry the road crosses by: the car docks at each shore', () => {
+  const route = driveRoute(STAGES, CAL, dateOf(20), opts({ includePieces: false }));
+  const o = opts({ pictures: 'none' });
+  const runs = (plan: DrivePlan) => plan.schedule.phases.filter((p) => p.kind === 'run');
+  /** Two shores a third and two thirds of the way along the second hop. */
+  const shores = (plan: DrivePlan) => {
+    const { stopS } = plan.path;
+    return { board: stopS[1] + (stopS[2] - stopS[1]) / 3, alight: stopS[1] + ((stopS[2] - stopS[1]) * 2) / 3 };
+  };
+
+  it('cuts the run at each shore and rests the car there for its beat — the road time unchanged', () => {
+    const plain = drivePlan(route, o)!;
+    const { board, alight } = shores(plain);
+    const docked = drivePlan(route, o, false, false, () => [
+      { s: board, kind: 'board' },
+      { s: alight, kind: 'alight' },
+    ])!;
+    expect(docked.seconds).toBeCloseTo(plain.seconds + BOARD_SECONDS + ALIGHT_SECONDS, 9);
+    expect(runs(docked)).toHaveLength(runs(plain).length + 2);
+    const roadTime = (plan: DrivePlan) => runs(plan).reduce((sum, p) => sum + p.end - p.start, 0);
+    expect(roadTime(docked)).toBeCloseTo(roadTime(plain), 9);
+    const [on, off] = docked.schedule.docks;
+    expect(on).toMatchObject({ kind: 'board', s: board, stop: null });
+    expect(off).toMatchObject({ kind: 'alight', s: alight, stop: null });
+    expect(on.end - on.start).toBeCloseTo(BOARD_SECONDS, 9);
+    expect(off.end - off.start).toBeCloseTo(ALIGHT_SECONDS, 9);
+    // At rest on the shore, at no stop, for the whole beat; the crossing is a run of its own between the two.
+    for (const beat of [on, off]) {
+      const m = docked.at((beat.start + beat.end) / 2);
+      expect(m.phase).toBe('dock');
+      expect(m.s).toBe(beat.s);
+      expect(m.at).toBeNull();
+    }
+    const crossing = runs(docked).find((p) => p.start === on.end)!;
+    expect(crossing).toMatchObject({ s0: board, s1: alight, end: off.start });
+    // Every stop is still reached once, in order.
+    const { arrivals } = docked.schedule;
+    expect(arrivals).toHaveLength(route.stops.length);
+    for (let i = 1; i < arrivals.length; i++) expect(arrivals[i]).toBeGreaterThan(arrivals[i - 1]);
+  });
+
+  it('docks at a stop in a beat of its own: off the ferry before the halt, aboard after it', () => {
+    const halting = opts({ pictures: 'none', pauseEverywhere: true });
+    const plain = drivePlan(route, halting)!;
+    const at = plain.path.stopS[1];
+    const docked = drivePlan(route, halting, false, false, () => [
+      { s: at, kind: 'alight' },
+      { s: at, kind: 'board' },
+    ])!;
+    const here = docked.schedule.phases.filter((p) => p.s0 === at && p.kind !== 'run').map((p) => p.dock ?? p.kind);
+    expect(here).toEqual(['alight', 'halt', 'board']);
+    expect(docked.schedule.docks.map((d) => d.stop)).toEqual([1, 1]);
+  });
+
+  it('boards at the road’s start and alights at its end in the hold and the arrival, as on a borrowed ferry', () => {
+    const borrowed = drivePlan(route, o, false, true)!;
+    const docked = drivePlan(route, o, false, false, (path) => [
+      { s: 0, kind: 'board' },
+      { s: path.length, kind: 'alight' },
+    ])!;
+    expect(docked.seconds).toBeCloseTo(borrowed.seconds, 9);
+    expect(docked.schedule.boardAt).toEqual(borrowed.schedule.boardAt);
+    expect(docked.schedule.alightAt).toEqual(borrowed.schedule.alightAt);
+    expect(docked.schedule.docks.map((d) => [d.kind, d.stop])).toEqual([
+      ['board', 0],
+      ['alight', route.stops.length - 1],
+    ]);
+  });
+
+  it('keeps the recap’s days running in order across the shores', () => {
+    const recapRoute = driveRoute(STAGES, CAL, dateOf(20), opts({ includePieces: false }));
+    const plain = drivePlan(recapRoute, o, true)!;
+    expect(plain.clock).not.toBeNull();
+    const { board, alight } = shores(plain);
+    const docked = drivePlan(recapRoute, o, true, false, () => [
+      { s: board, kind: 'board' },
+      { s: alight, kind: 'alight' },
+    ])!;
+    let prev = -Infinity;
+    for (const p of docked.schedule.phases) {
+      if (p.day0 === undefined) continue;
+      expect(p.day0).toBeGreaterThanOrEqual(prev - 1e-9);
+      expect(p.day1!).toBeGreaterThanOrEqual(p.day0 - 1e-9);
+      prev = p.day1!;
+    }
+    const dock = docked.schedule.phases.find((p) => p.kind === 'dock')!;
+    expect(dock.day0).toBe(dock.day1);
   });
 });
 
@@ -1285,6 +1416,73 @@ describe('the drive’s OpenStreetMap ground', () => {
   it('reads the new ground and its strength', () => {
     expect(driveOptions({ ground: 'tiles' }).ground).toBe('tiles');
     expect(driveOptions({ basemapOpacity: 0 }).basemapOpacity).toBe(DRIVE_LIMITS.basemapOpacity.min);
+  });
+});
+
+describe('the trip’s road — the vehicle drives it and the counter counts it', () => {
+  const quiet = (patch: Partial<DriveOptions> = {}) =>
+    opts({ delaySeconds: 0, arriveSeconds: 0, includePieces: false, driveSeconds: 10, ...patch });
+  // A road round a bay: from A east, down and back west to B, which the crow
+  // reaches straight across the water. Invented coordinates.
+  const A = { lat: -30, lon: 120 };
+  const B = { lat: -31, lon: 120 };
+  const C = { lat: -31, lon: 117 };
+  const T0 = 1_751_300_000;
+  const fixes: RoadFix[] = [];
+  const leg = (from: { lat: number; lon: number }, to: { lat: number; lon: number }, steps: number) => {
+    for (let i = fixes.length ? 1 : 0; i <= steps; i++) {
+      fixes.push({ t: T0 + fixes.length * 600, lat: from.lat + ((to.lat - from.lat) * i) / steps, lon: from.lon + ((to.lon - from.lon) * i) / steps });
+    }
+  };
+  leg(A, { lat: -30, lon: 122 }, 20);
+  leg({ lat: -30, lon: 122 }, { lat: -31, lon: 122 }, 10);
+  leg({ lat: -31, lon: 122 }, B, 20);
+  const road = roadLine(fixes, 'raw', 0);
+  const stops = [
+    { id: 'a', name: 'A', ...A },
+    { id: 'b', name: 'B', ...B },
+    // Off the road: this hop keeps its curve and the crow's line.
+    { id: 'c', name: 'C', ...C },
+  ];
+  const o = quiet({ stopsOn: 'custom', stops });
+  const route = driveRoute(STAGES, CAL, dateOf(20), o);
+
+  it('follows the road where it joins two stops, a curve elsewhere', () => {
+    const plain = drivePlan(route, o, true)!;
+    const plan = drivePlan(route, o, true, false, undefined, road)!;
+    expect(plain.roadHops).toBe(0);
+    expect(plan.roadHops).toBe(1);
+    // A → B on the road: round the bay, not across it.
+    const onRoad = plan.kmAtStop[1];
+    expect(onRoad).toBeGreaterThan(distanceKm(A, B) * 4);
+    expect(Math.abs(onRoad - road.km)).toBeLessThan(1);
+    // B → C keeps the crow's line.
+    expect(plan.kmAtStop[2] - plan.kmAtStop[1]).toBeCloseTo(distanceKm(B, C), 1);
+    // The path passes the bay's far corner.
+    const corner = plan.geo.at({ lat: -30.5, lon: 122 }, PLAN_SIZE / 2, PLAN_SIZE / 2);
+    const nearest = Math.min(...plan.path.points.map((p) => Math.hypot(p.x - corner.x, p.y - corner.y)));
+    expect(nearest).toBeLessThan(PLAN_SIZE * 0.02);
+  });
+
+  it('counts what the vehicle drives, monotone, and puts the marks where the road reaches them', () => {
+    const plan = drivePlan(route, o, true, false, undefined, road)!;
+    let last = -1;
+    for (let k = 0; k <= 200; k++) {
+      const km = plan.kmAt((plan.path.length * k) / 200);
+      expect(km).toBeGreaterThanOrEqual(last - 1e-9);
+      last = km;
+    }
+    expect(plan.kmAt(plan.path.length)).toBeCloseTo(plan.kmAtStop[2], 6);
+    const marks = roadMilestones(route.stops, plan.path, plan.kmAtStop, plan.clock, 'km', 10, 100);
+    const km = marks.filter((m) => m.kind === 'distance');
+    expect(km.length).toBeGreaterThan(3);
+    for (const m of km) expect(plan.kmAt(m.s)).toBeCloseTo(m.value, 3);
+  });
+
+  it('keeps every hop a curve as the crow flies or with no road', () => {
+    const plan = drivePlan(route, o, true, false, undefined, { pieces: [], points: 0, km: 0 })!;
+    expect(plan.roadHops).toBe(0);
+    expect(plan.path.km).toBeUndefined();
   });
 });
 

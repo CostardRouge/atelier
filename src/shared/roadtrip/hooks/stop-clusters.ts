@@ -2,7 +2,7 @@
  * Grouping nearby places — «Labo Virée» §4 (2026-10-07), accepted with every
  * option kept.
  *
- * Six weeks in Melbourne and fifteen places a few kilometres apart: the car
+ * Six weeks in Melbourne and fifteen places a few kilometres apart: the vehicle
  * halted fifteen times. Grouping is applied AT RENDER TIME, over the stops a
  * route or an itinerary already holds — the author's list is never edited,
  * and the Itinerary keeps every point. A group's halt sits on a REAL stop,
@@ -11,7 +11,7 @@
  *
  * - **Which places**: `consecutive` (the default) merges only stops that
  *   follow each other, so the journey's order stands and a later return is
- *   a second halt; `all` merges every visit into the first, and the car
+ *   a second halt; `all` merges every visit into the first, and the vehicle
  *   never comes back — offered, not recommended.
  * - **Name**: `town` — the biggest town of the shipped index near the group
  *   (within the group's reach plus `TOWN_REACH_KM`), when the index is at
@@ -22,6 +22,7 @@
  */
 
 import { degreeWindow, haversineKm, type GeoPoint } from './geo';
+import { cardWantsTowns } from './summary-card';
 
 export type GroupVisits = 'consecutive' | 'all';
 export type GroupName = 'town' | 'first' | 'central';
@@ -223,9 +224,10 @@ export function groupsOn(o: Pick<GroupOptions, 'groupKm'>): boolean {
  * Whether any of these opener layers names a group by its TOWN — what makes
  * the editor read the town index, so every surface names the same groups.
  */
-export function wantsTowns(layers: readonly { options?: Readonly<Record<string, unknown>> }[]): boolean {
+export function wantsTowns(layers: readonly { id?: string; options?: Readonly<Record<string, unknown>> }[]): boolean {
   return layers.some((layer) => {
     const o = layer.options ?? {};
-    return Number(o.groupKm) > 0 && (o.groupName ?? 'town') === 'town';
+    // Virée's summary card names its groups of places by town too.
+    return (Number(o.groupKm) > 0 && (o.groupName ?? 'town') === 'town') || ((layer.id === 'drive' || layer.id === 'card') && cardWantsTowns(o));
   });
 }

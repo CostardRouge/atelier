@@ -128,7 +128,7 @@ describe('exportPlan', () => {
     const p = post({ includeCta: true });
     p.badge.medium = 'video';
     const plan = exportPlan(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p, ALL_THERE);
-    expect(plan.items.at(-1)).toMatchObject({ kind: 'cta', medium: 'image' });
+    expect(plan.items.slice(-1)[0]).toMatchObject({ kind: 'cta', medium: 'image' });
   });
 
   it('says a re-timed clip ships silent, and an as-shot one does not', () => {

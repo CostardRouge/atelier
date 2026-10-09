@@ -28,7 +28,7 @@
  * Pure and DOM-free.
  */
 
-import { defaultCarSpec, effectiveGear, type CarGear } from '../car-spec';
+import { defaultVehicleSpec, effectiveGear, type VehicleGear } from '../vehicle-spec';
 import { arc, at, box2, greenhouse, level, lifted, makeBody, meet, rimFor, roadWheel, spokedRim, through, type P2 } from './car-parts';
 import { prism, type Part, type ZPlane } from './mesh3d';
 
@@ -253,7 +253,7 @@ function spoiler(): Part {
 // --- the car --------------------------------------------------------------------
 
 /** Build the Zoé, with the gear asked for — its mirrors, by default. */
-export function buildZoe(gear: CarGear = defaultCarSpec('zoe-ph2').gear): Part[] {
+export function buildZoe(gear: VehicleGear = defaultVehicleSpec('zoe-ph2').gear): Part[] {
   const g = effectiveGear(gear);
   const L = HALF_LENGTH;
   const archFront = { a: AXLE.front - ARCH_HALF, b: AXLE.front + ARCH_HALF };

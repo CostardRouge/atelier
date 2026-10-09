@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { DEFAULT_GEAR, GEAR_KEYS, type CarGear } from '../car-spec';
-import { CAR_LENGTH, CAR_WIDTH, WHEEL_IDS, WHEEL_RADIUS, buildCar, carLight, carPalette } from './car-model';
+import { DEFAULT_GEAR, GEAR_KEYS, type VehicleGear } from '../vehicle-spec';
+import { CAR_LENGTH, CAR_WIDTH, WHEEL_IDS, WHEEL_RADIUS, buildCar, vehicleLight, carPalette } from './car-model';
 import { DEFAULT_LIGHT, centroid, dot, faceNormal, renderOrder, sub, type Part } from './mesh3d';
 
 /** Every face of a convex part must point away from the part's centre. */
@@ -8,7 +8,7 @@ function outwardEverywhere(part: Part): boolean {
   return part.faces.every((face) => dot(faceNormal(face.verts), sub(centroid(face.verts), part.centre)) > -1e-9);
 }
 
-const BARE: CarGear = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as CarGear;
+const BARE: VehicleGear = Object.fromEntries(GEAR_KEYS.map((key) => [key, false])) as unknown as VehicleGear;
 const faceCount = (parts: Part[]) => parts.reduce((n, part) => n + part.faces.length, 0);
 
 describe('buildCar', () => {
@@ -120,10 +120,10 @@ describe('buildCar', () => {
   });
 });
 
-describe('carLight', () => {
+describe('vehicleLight', () => {
   it('keeps the factory highlight for gloss and trades it for a broad sheen on matte', () => {
-    expect(carLight('gloss')).toBe(DEFAULT_LIGHT);
-    const matte = carLight('matte');
+    expect(vehicleLight('gloss')).toBe(DEFAULT_LIGHT);
+    const matte = vehicleLight('matte');
     expect(matte.gloss).toBeLessThan(DEFAULT_LIGHT.gloss);
     expect(matte.sheen ?? 0).toBeGreaterThan(0);
     expect(matte.ambient).toBeGreaterThan(DEFAULT_LIGHT.ambient);

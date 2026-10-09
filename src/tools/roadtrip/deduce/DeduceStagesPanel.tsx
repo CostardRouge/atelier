@@ -15,7 +15,10 @@ import {
   type DeduceDraft,
   type DraftOutcome,
 } from '../../../shared/roadtrip/deduce-draft';
+import { addPolarstepsFiles, sourcesOf, type PolarstepsExport } from '../../../shared/roadtrip/polarsteps';
+import { fixesFrom, makeTripRoad, roadSourceText, tripRoadLine, DEFAULT_ROAD_MODE, type RoadSource } from '../../../shared/roadtrip/road-track';
 import type { TripDoc } from '../../../shared/roadtrip/trip-types';
+import { filesFromDataTransfer } from '../../../shared/sources/file-sources';
 import type { WinnowConnection } from '../../../shared/sources/winnow/store';
 import Button from '../../../shared/ui/Button';
 import OverflowMenu from '../../../shared/ui/OverflowMenu';
@@ -27,6 +30,7 @@ import DeckWindow from './DeckWindow';
 import GrainWindow from './GrainWindow';
 import { DataPane, DonePane, ReviewPane } from './panes';
 import { plural } from './pieces';
+import PolarstepsChip, { exportTexts } from './PolarstepsChip';
 import { DEFAULT_SETTINGS, readSettings, readTab, writeSettings, writeTab, type DeduceSettings, type DeduceTab } from './settings';
 import { useDeduction } from './use-deduction';
 import type { DeduceActions, DeduceContext, DeduceIntent } from './context';
@@ -59,6 +63,12 @@ import { revealInScroller } from '../../../shared/ui/reveal';
  *
  * **One request, and one only.** `geoDays` answers the whole question,
  * declared gaps included; a slider recomputes from the days already read.
+ *
+ * **A Polarsteps export may be dropped in** (2026-10-08, `polarsteps.ts`):
+ * its track places a day before the instance does, on the day's own clock,
+ * and its steps name the places before the index. One chip says it; the
+ * files are read here and forgotten with the window. GPX files stand in for
+ * its `locations.json` (`gpx.ts`), alone or beside a `trip.json`.
  */
 
 interface DeduceStagesPanelProps {
@@ -105,13 +115,37 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
   const [index, setIndex] = useState(0);
   const [landing, setLanding] = useState<string | null>(null);
   const [lastRun, setLastRun] = useState<DraftOutcome | null>(null);
+  const [polarsteps, setPolarsteps] = useState<PolarstepsExport | null>(null);
+  const [polarError, setPolarError] = useState<string | null>(null);
+  const [dragging, setDragging] = useState(false);
+  // Keep the export's track as the trip's ROAD (`road-track.ts`): on by
+  // default whenever the export carries one — it is what the openers drive.
+  const [keepRoad, setKeepRoad] = useState(true);
+  // What the next read adds to — a drop may land while the last one is read.
+  const polarRef = useRef<PolarstepsExport | null>(null);
   const bodyRef = useRef<HTMLDivElement>(null);
 
-  const deduction = useDeduction(connection, trip, settings, draft);
+  const deduction = useDeduction(connection, trip, settings, draft, polarsteps);
   const { proposals, sourceId } = deduction;
 
   const outcome = useMemo(() => draftOutcome(proposals, draft, { sourceId, now: 0 }), [proposals, draft, sourceId]);
   const toWrite = outcome.adds.length + outcome.completes.length;
+  // Where the track came from — a GPX stands in for locations.json.
+  const roadSource: RoadSource = polarsteps?.track?.origin === 'gpx' ? 'gpx' : 'polarsteps';
+  // The road the export would give the trip, measured as the trip reads it.
+  const roadOffer = useMemo(() => {
+    const fixes = polarsteps?.track?.fixes ?? [];
+    if (fixes.length < 2) return null;
+    const road = makeTripRoad(fixesFrom(fixes), trip, trip.road, 0, roadSource);
+    if (!road) return null;
+    // Measured within the trip's span, as the trip reads it (as the crow
+    // flies reads nothing, so the default reading is said instead).
+    const mode = road.mode === 'crow' ? DEFAULT_ROAD_MODE : road.mode;
+    const line = tripRoadLine({ ...road, mode });
+    return { fixes: road.fixes, km: line.km, read: mode === 'stages' ? 'between stays' : mode === 'moves' ? 'every move' : 'raw' };
+  }, [polarsteps, trip, roadSource]);
+  const writesRoad = keepRoad && roadOffer !== null;
+  const canWrite = toWrite > 0 || writesRoad;
 
   const setSettings = useCallback((patch: Partial<DeduceSettings>) => {
     setSettingsState((cur) => {
@@ -188,11 +222,31 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
     return () => window.clearTimeout(t);
   }, [flash]);
 
+  // A pick or a drop: the files read, each kind replacing what was there.
+  const readPolarsteps = useCallback(
+    async (files: File[]) => {
+      const texts = await exportTexts(files);
+      if (!texts.length) {
+        setPolarError('Nothing to read here: drop trip.json, locations.json, their folder or GPX files.');
+        return;
+      }
+      const { value, errors } = addPolarstepsFiles(polarRef.current, texts, { from: trip.startDate, to: trip.endDate });
+      polarRef.current = value;
+      setPolarsteps(value);
+      setPolarError(errors.length ? errors.join(' ') : null);
+    },
+    [trip.startDate, trip.endDate],
+  );
+
   function write() {
     const now = Date.now();
     const out = draftOutcome(proposals, draft, { sourceId, now });
     const applied = applyDraft(trip, out, now);
-    onWrite(applied.trip, applied.spanWidened);
+    const fixes = polarsteps?.track?.fixes ?? [];
+    const written = writesRoad
+      ? { ...applied.trip, road: makeTripRoad(fixesFrom(fixes), applied.trip, trip.road, now, roadSource) }
+      : applied.trip;
+    onWrite(written, applied.spanWidened);
     setLastRun(out);
     setDraft(keepSkips(draft));
     setEditing(null);
@@ -279,7 +333,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
       else setPane('window');
     },
     onConfirm:
-      pane === 'window' && toWrite > 0 ? () => setPane('review') : pane === 'review' && toWrite > 0 ? write : pane === 'done' ? onCancel : null,
+      pane === 'window' && canWrite ? () => setPane('review') : pane === 'review' && canWrite ? write : pane === 'done' ? onCancel : null,
   });
 
   const ctx: DeduceContext = { trip, deduction, draft, settings, hot, flash, editing, intent, index, actions };
@@ -289,11 +343,12 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
   const flaws = [
     deduction.outliers.length ? `${plural(deduction.outliers.length, 'outlier')} ${settings.ignoreOutliers ? 'ignored' : 'kept'}` : '',
     (() => {
-      const n = deduction.chapters.flatMap((c) => c.halts).filter((h) => !h.city).length;
+      const n = deduction.chapters.flatMap((c) => c.halts).filter((h) => !h.city && !h.step).length;
       return n ? plural(n, 'unnamed halt') : '';
     })(),
   ].filter(Boolean);
   const placed = deduction.track?.points.length ?? 0;
+  const bySource = deduction.track && polarsteps ? sourcesOf(deduction.track) : null;
   const blind = deduction.track?.blind.length ?? 0;
   const ago = deduction.readAt ? Math.max(0, Math.round((Date.now() - deduction.readAt) / 60_000)) : null;
 
@@ -326,7 +381,24 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         if (e.target === e.currentTarget) onCancel();
       }}
     >
-      <div className="w-[calc(100vw-4rem)] max-w-[100rem] max-[820px]:w-full h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
+      <div
+        onDragOver={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          setDragging(true);
+        }}
+        onDragLeave={(e) => {
+          if (e.currentTarget === e.target) setDragging(false);
+        }}
+        onDrop={(e) => {
+          if (!e.dataTransfer.types.includes('Files')) return;
+          e.preventDefault();
+          setDragging(false);
+          // Read the drop's items now: they are emptied once the event returns.
+          void filesFromDataTransfer(e.dataTransfer).then(readPolarsteps);
+        }}
+        className={`${dragging ? 'outline outline-2 outline-dashed outline-accent -outline-offset-4 ' : ''}w-[calc(100vw-4rem)] max-w-[100rem] max-[820px]:w-full h-[calc(var(--app-h,100dvh)-2rem)] flex flex-col bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0`}
+      >
         {/* --- the head: a title, the window's tabs, the draft ------------ */}
         <div className={`flex flex-col gap-2.5 pt-5 pb-2.5 ${padX} max-[820px]:pt-4`}>
           <div className="flex items-start justify-between gap-3">
@@ -384,13 +456,25 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
               <button
                 type="button"
                 onClick={() => setPane('data')}
-                title={`${deduction.days.length} days · ${placed} placed · ${blind} without position · ${sourceId}${ago !== null ? `, read ${ago === 0 ? 'just now' : `${ago} min ago`}` : ''}`}
+                title={`${deduction.days.length} days · ${placed} placed${bySource ? ` (${bySource.track} by the ${polarsteps?.track?.origin === 'gpx' ? 'GPX' : 'Polarsteps'} track, ${bySource.instance} by ${sourceId}, ${bySource.step} by a step alone)` : ''} · ${blind} without position · ${sourceId}${ago !== null ? `, read ${ago === 0 ? 'just now' : `${ago} min ago`}` : ''}`}
                 className="inline-flex items-center gap-1.5 h-7 px-2.5 rounded-full border border-line bg-transparent font-mono text-2xs text-ink-soft cursor-pointer hover:border-line-strong hover:text-ink"
               >
                 <i className={`w-1.5 h-1.5 rounded-full ${flaws.length ? 'bg-warn' : 'bg-ok'}`} aria-hidden="true" />
                 {placed}/{deduction.days.length} days
                 {flaws.length ? <span className="text-warn">· {plural(flaws.length, 'thing', 'things')} to check</span> : null}
               </button>
+              <PolarstepsChip
+                value={polarsteps}
+                tripStart={trip.startDate}
+                tripEnd={trip.endDate}
+                error={polarError}
+                onFiles={(files) => void readPolarsteps(files)}
+                onClear={() => {
+                  polarRef.current = null;
+                  setPolarsteps(null);
+                  setPolarError(null);
+                }}
+              />
               {draftParts.length > 0 && (
                 <span
                   className="inline-flex items-center gap-1.5 h-7 pl-2.5 pr-1 rounded-full border border-line font-mono text-2xs text-ink-soft"
@@ -418,7 +502,12 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
         {/* --- the body: the window, or a pane ----------------------------- */}
         {/* A SIZE container: the grain's map column reads its height (`cqh`). */}
         <div ref={bodyRef} className={`flex-1 min-h-0 overflow-auto [container-type:size] flex flex-col gap-3.5 pt-3 pb-4 ${padX} [&>*]:flex-none`}>
-          {deduction.problem ? (
+          {deduction.problem && polarsteps && deduction.track && (
+            <p className="m-0 font-mono text-xs text-warn" role="status">
+              {deduction.problem.text} Deducing from {polarsteps.track?.origin === 'gpx' ? (polarsteps.trip ? 'Polarsteps and GPX' : 'GPX') : 'Polarsteps'} alone.
+            </p>
+          )}
+          {deduction.problem && !deduction.track ? (
             <p className="m-0 text-sm text-danger" role="alert">
               {deduction.problem.text}{' '}
               {deduction.problem.login && (
@@ -430,7 +519,30 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
           ) : deduction.track === null || deduction.cities === null ? (
             <p className="m-0 font-mono text-xs text-muted">asking {sourceId}…</p>
           ) : pane === 'review' ? (
-            <ReviewPane ctx={ctx} outcome={outcome} />
+            <>
+              {roadOffer && (
+                <label className="flex items-start gap-2.5 px-3 py-2.5 border border-line rounded-paper bg-paper cursor-pointer">
+                  <input
+                    type="checkbox"
+                    checked={keepRoad}
+                    onChange={(e) => setKeepRoad(e.target.checked)}
+                    className="mt-1 accent-[var(--color-accent)]"
+                  />
+                  <span className="min-w-0 text-sm">
+                    <b className="font-medium">Keep the road from {roadSourceText(roadSource)}</b>{' '}
+                    <InfoDot about="the road">
+                      <p>The track becomes the line the openers drive and the kilometres they count. Your places stay as they are.</p>
+                      <p>It is kept whole, home and work included, and travels in the backup; Trip settings → Road chooses how it is read.</p>
+                    </InfoDot>
+                    <span className="block font-mono text-2xs text-muted">
+                      {roadOffer.fixes.toLocaleString('en-GB')} fixes · {Math.round(roadOffer.km).toLocaleString('en-GB')} km {roadOffer.read}
+                      {trip.road ? ' · replaces the road kept' : ''}
+                    </span>
+                  </span>
+                </label>
+              )}
+              <ReviewPane ctx={ctx} outcome={outcome} />
+            </>
           ) : pane === 'done' && lastRun ? (
             <DonePane ctx={ctx} outcome={lastRun} />
           ) : pane === 'data' ? (
@@ -461,7 +573,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
                 <Button variant="ghost" onClick={onCancel}>
                   Cancel
                 </Button>
-                <Button variant="primary" disabled={toWrite === 0} onClick={() => setPane('review')}>
+                <Button variant="primary" disabled={!canWrite} onClick={() => setPane('review')}>
                   Review {toWrite || ''}
                 </Button>
               </>
@@ -471,7 +583,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
                 <Button variant="ghost" onClick={() => setPane('window')}>
                   Back
                 </Button>
-                <Button variant="primary" disabled={toWrite === 0} onClick={write}>
+                <Button variant="primary" disabled={!canWrite} onClick={write}>
                   Write {toWrite || ''}
                 </Button>
               </>

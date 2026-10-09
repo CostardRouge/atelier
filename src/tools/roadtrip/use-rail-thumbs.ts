@@ -195,11 +195,11 @@ export default function useRailThumbs({
             // with them would redraw a whole carousel each time one picture
             // lands. Any slide may hold one now, the first included.
             slide.hook ? picturesId(pictures) : 0,
-            // The opener's OWN settings and the trip's car: a folded hook
+            // The opener's OWN settings and the trip's vehicle: a folded hook
             // serialises to four scalars (its paint is a closure), so an
             // Itinerary stop moved or a Virée colour changed left the
             // signature — and the thumbnail — as they were.
-            slide.hook ? [slide.hook, trip.car] : 0,
+            slide.hook ? [slide.hook, trip.vehicles] : 0,
           ]),
         };
       }),

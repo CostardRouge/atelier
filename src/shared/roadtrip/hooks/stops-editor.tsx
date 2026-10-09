@@ -1,7 +1,7 @@
 /**
  * Picking the author's own stops — ONE editor for every map opener.
  *
- * The Itinerary grew it; Virée asked for the same thing the day its car was
+ * The Itinerary grew it; Virée asked for the same thing the day its vehicle was
  * allowed to drive between places the legs do not name (2026-09-28, the
  * maintainer: «le même picker … peut-être un composant commun»). So the
  * picking map, the trip's places as chips, the list and a stop's own settings

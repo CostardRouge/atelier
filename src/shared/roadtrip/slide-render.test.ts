@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCarSpec } from './car-spec';
+import { defaultVehicleSpec } from './vehicle-spec';
+import { DEFAULT_CROSSINGS, fleetOf } from './vehicle-fleet';
 import { badgeBlockExtent, badgeElements } from './badge-layout';
 import { DEFAULT_CTA } from './cta-slide';
 import { badgeContent, DEFAULT_BADGE_WORDS } from './day-badge';
@@ -48,9 +49,11 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   sourceId: 'local',
   cover: defaultTripCover(),
   developPresets: [],
-  car: defaultCarSpec(),
+  vehicles: fleetOf(defaultVehicleSpec()),
+  crossings: { ...DEFAULT_CROSSINGS },
   placeStyle: { badge: 'name', lists: 'code' },
   stateCodes: {},
+  road: null,
   createdAt: 0,
   updatedAt: 0,
   ...over,
@@ -119,7 +122,7 @@ describe('slideRender', () => {
       cta: { ...DEFAULT_CTA, headline: 'Follow the trip', url: 'https://example.com', showQr: true },
     });
     const p = post({ includeCta: true });
-    const card = deckSlides(t, p).at(-1)!;
+    const card = deckSlides(t, p).slice(-1)[0]!;
     const render = slideRender(t, p, card, ASPECT);
 
     expect(card.kind).toBe('cta');

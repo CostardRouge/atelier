@@ -14,6 +14,8 @@ import { addDays, formatIsoDate, spanLength, type IsoDate } from '../../shared/r
 import { PLACE_STYLE_OPTIONS, writePlace } from '../../shared/roadtrip/place-style';
 import { stageLabel, stageRegionLabel } from '../../shared/roadtrip/trip-places';
 import { stageProblem, type TripDoc, type TripStage } from '../../shared/roadtrip/trip-types';
+import { mainVehicle } from '../../shared/roadtrip/vehicle-fleet';
+import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import SectionLegend from '../../shared/ui/SectionLegend';
 import StageZoomControl from '../../shared/ui/StageZoomControl';
 import { stepZoom, zoomLabel, type ZoomControls } from '../../shared/ui/stage-zoom';
@@ -21,6 +23,7 @@ import { useElementWidth } from '../../shared/ui/use-element-width';
 import { useLearnedGesture } from '../../shared/ui/use-learned-gesture';
 import PlacesEditor, { PlaceStyleSelect } from './PlacesEditor';
 import StageRuler from './StageRuler';
+import VehicleRefSelect from './VehicleRefSelect';
 import { useLoupe } from './use-loupe';
 import { Icons } from '../../shared/ui/icons';
 import IconButton from '../../shared/ui/IconButton';
@@ -178,6 +181,20 @@ export function StageCard({
             const next = { ...stage };
             if (style) next.placeStyle = style;
             else delete next.placeStyle;
+            onChange(next);
+          }}
+          className={`${inputClass} min-w-[8rem]`}
+        />
+        {/* What this leg drives, over the trip's main vehicle — empty is «the main one». */}
+        <VehicleRefSelect
+          value={stage.vehicle}
+          fleet={trip.vehicles}
+          inherit={`Main vehicle · ${vehicleModel(mainVehicle(trip.vehicles).spec.model).short}`}
+          label="What this stage drives"
+          onChange={(vehicle) => {
+            const next = { ...stage };
+            if (vehicle) next.vehicle = vehicle;
+            else delete next.vehicle;
             onChange(next);
           }}
           className={`${inputClass} min-w-[8rem]`}

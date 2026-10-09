@@ -17,8 +17,9 @@ import {
   tripFileName,
 } from './trip-file';
 import { DEFAULT_DEVELOP } from '../develop/develop';
-import { DEFAULT_CAR, defaultCarSpec } from './car-spec';
+import { DEFAULT_VEHICLE, defaultVehicleSpec } from './vehicle-spec';
 import { createTextElement } from '../overlay/overlay-types';
+import { makeTripRoad } from './road-track';
 
 const trip = (): TripDoc => {
   const doc = createTripDoc('Australie', '2025-07-01', '2025-07-10');
@@ -154,27 +155,78 @@ describe('the trip file', () => {
     expect(r.file.posts[0].badge.grade).toBeNull();
   });
 
-  it('carries the trip’s car — its colour, finish and gear — and lands an older file on the default', () => {
+  it('carries how the trip writes its places and its own state codes, through a file AND onto a new document', () => {
     const doc = trip();
-    doc.car = { ...defaultCarSpec(), color: '#1f3b2f', finish: 'gloss', gear: { ...defaultCarSpec().gear, rack: false } };
+    doc.placeStyle = { badge: 'full', lists: 'name' };
+    doc.stateCodes = { Queensland: 'QLD' };
     const file = roundTrip(doc);
-    expect(file.car.color).toBe('#1f3b2f');
-    expect(file.car.finish).toBe('gloss');
-    expect(file.car.gear.rack).toBe(false);
-    expect(tripDocFromFile(file).car).toEqual(doc.car);
+    expect(file.placeStyle).toEqual(doc.placeStyle);
+    expect(file.stateCodes).toEqual(doc.stateCodes);
+    // `tripDocFromFile` once left both on `createTripDoc`'s defaults: an
+    // import, a move between sources and a clone each lost the trip's voice.
+    expect(tripDocFromFile(file).placeStyle).toEqual(doc.placeStyle);
+    expect(tripDocFromFile(file).stateCodes).toEqual(doc.stateCodes);
+  });
 
+  it('carries the trip’s road — its fixes, its reading and the points placed by hand — and lands an older file on none', () => {
+    const doc = trip();
+    const t0 = Date.parse('2025-07-02T00:00:00Z') / 1000;
+    const fixes = Array.from({ length: 6 }, (_, i) => ({ t: t0 + i * 600, lat: -30, lon: 120 + i * 0.05 }));
+    doc.road = { ...makeTripRoad(fixes, doc, null, 1)!, mode: 'moves', detail: 500, added: [fixes[2]] };
+    const file = roundTrip(doc);
+    expect(file.road).toEqual(doc.road);
+    expect(tripDocFromFile(file).road).toEqual(doc.road);
+    const older = JSON.parse(serializeTripFile(toTripFile(trip())));
+    delete older.road;
+    older.version = 31;
+    const parsed = parseTripFile(JSON.stringify(older));
+    expect(parsed.ok && parsed.file.road).toBeNull();
+  });
+
+  it('carries the trip’s fleet — every vehicle, its look and its dated changes — and the water rule', () => {
+    const doc = trip();
+    const prado = { ...defaultVehicleSpec(), color: '#1f3b2f', finish: 'gloss' as const, gear: { ...defaultVehicleSpec().gear, rack: false } };
+    doc.vehicles = [
+      {
+        id: 'main',
+        spec: prado,
+        changes: [{ id: 'change-1', from: '2025-03-08', place: 'Melbourne', look: { color: '#232326', finish: 'matte', gear: prado.gear } }],
+      },
+      { id: 'vehicle-2', spec: defaultVehicleSpec('trafic-ph2'), changes: [] },
+    ];
+    doc.crossings = { auto: true, boat: 'viper-jet', bridgeKm: 4, shoreKm: 3 };
+    const file = roundTrip(doc);
+    expect(file.vehicles).toEqual(doc.vehicles);
+    expect(file.crossings).toEqual(doc.crossings);
+    expect(tripDocFromFile(file).vehicles).toEqual(doc.vehicles);
+    expect(tripDocFromFile(file).crossings).toEqual(doc.crossings);
+  });
+
+  it('lands an older file’s car as a fleet of one, its water rule off, and junk on the default vehicle', () => {
     const older = JSON.parse(serializeTripFile(toTripFile(trip()))) as Record<string, unknown>;
-    delete older.car;
-    older.version = 18;
+    delete older.vehicles;
+    delete older.crossings;
+    older.car = { ...defaultVehicleSpec(), color: '#1f3b2f' };
+    older.version = 30;
     const parsed = parseTripFile(JSON.stringify(older));
     if (!parsed.ok) throw new Error(parsed.error);
-    expect(parsed.file.car).toEqual(DEFAULT_CAR);
+    expect(parsed.file.vehicles).toHaveLength(1);
+    expect(parsed.file.vehicles[0].spec.color).toBe('#1f3b2f');
+    expect(parsed.file.vehicles[0].changes).toEqual([]);
+    expect(parsed.file.crossings.auto).toBe(false);
+    expect('car' in parsed.file).toBe(false);
+
+    const oldest = { ...older, version: 18 } as Record<string, unknown>;
+    delete oldest.car;
+    const read18 = parseTripFile(JSON.stringify(oldest));
+    if (!read18.ok) throw new Error(read18.error);
+    expect(read18.file.vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
 
     const junk = JSON.parse(serializeTripFile(toTripFile(trip()))) as Record<string, unknown>;
-    junk.car = 'black';
+    junk.vehicles = 'black';
     const read = parseTripFile(JSON.stringify(junk));
     if (!read.ok) throw new Error(read.error);
-    expect(read.file.car).toEqual(DEFAULT_CAR);
+    expect(read.file.vehicles[0].spec).toEqual(DEFAULT_VEHICLE);
   });
 
   it('writes readable, newline-terminated JSON', () => {

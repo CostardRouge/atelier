@@ -101,8 +101,8 @@ The destination of the whole suite: one editor instead of eight pages.
 
 **Projects first.** `#/studio/home` is a gallery of saved projects — thumbnail
 (baked at save time, so nothing decodes), aspect, duration, element and file
-counts. The whole card opens the project; its other verbs (use as template,
-move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
+counts. The whole card opens the project; its other verbs (clone, use as
+template, move to another source, delete) sit behind a ⋯ menu, with a dashed tile at
 the end of the grid that creates a project or takes a dropped settings file.
 Creating one goes through a small intro modal (name, destination
 aspect, start-from-template, optional media folder). Everything you do in the
@@ -113,7 +113,12 @@ missing — and missing media never blocks editing (a banner offers a re-point).
 On browsers without the File System Access API (Firefox, Safari) the handle
 can't persist, so reopening falls back to the same banner. A project is also a
 template: "Use as template" duplicates its portable half (overlays, look,
-guides, settings) with no media binding.
+guides, settings) with no media binding. **Clone…** is the other copy: the
+whole project, trims, developments and clip list included, pointing at the same
+footage folder, kept here or on a connected instance. The sheet proposes the
+first free name in the chosen place (`Vol du soir` → `Vol du soir (2)`, no
+suffix where the name is free), you can type another, and a status line then
+offers Open and Undo.
 
 **Settings travel as a file.** Project settings (the ⚙ chip in the project
 bar) has an *Import / export* section: **Export settings** downloads
@@ -822,6 +827,19 @@ leg: the New trip dialog asks for the name and the two dates and nothing else,
 so a trip starts with no leg at all and a day outside every leg names no place
 rather than claiming one.
 
+**One Trip settings, wherever you are.** The overview's *Trip settings*, a
+piece's ⚙ and a gallery card's ⋯ **Trip settings…** open the same sheet: a rail
+of sections — *Name and dates*, *Cover* (its layout and up to three pinned
+pieces), *Places*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
+pieces*, *Backup and start over* — beside one pane. Every change is written at
+once and ⌘Z takes it back; the dates alone wait for **Apply the new dates**,
+after saying what a shorter span does to the legs (trimmed, dropped) and to the
+pieces (kept, off the calendar). Opened from a piece, *New pieces* offers to
+save that piece's look for the next pieces of its kind or reset it. On a
+phone the sheet is a settings screen: the list of sections first, a section
+with a way back and **Done** in its bar — straight on the section when you
+tapped one (the dates, the closing card, a card's cover).
+
 **Working the itinerary out, instead of typing it.** Drawing a three-month
 trip's legs by hand is some three hundred gestures, most of them archaeology
 about where you were on a given day — so the legs can be *deduced* instead,
@@ -867,6 +885,60 @@ left out by default, keepable), halts nobody can name. Nothing is written
 before you review exactly what will be, every stage written carries a mark so
 the ⋯ menu can take them all out again, a re-run recognises what is already in
 the trip, and no piece is ever created.
+
+**Starting over.** Trip settings → *Backup and start over* offers to
+start the legs over when a run went wrong: *Remove what Deduce added* (only the
+legs it wrote), *Clear the places* (every leg keeps its dates and name, ready
+to be placed again) or *Remove every leg*. A verb appears only when it has
+something to do, each asks first with its counts and a backup link, and ⌘Z
+takes it back; the pieces, the trip's dates and its state codes are never
+touched.
+
+**+ Polarsteps / GPX** (a chip beside what was read, or a drop anywhere on the
+window) takes a Polarsteps export — `trip.json`, `locations.json`, either one,
+or the unzipped folder; a zip is refused with the reason, and of an export
+holding several trips the files covering this one are kept. **GPX** files (a
+GPS logger, a car's navigation, Strava…) stand in for `locations.json`: their
+timed points are the track, alone or beside a `trip.json`, a file a day read
+as one journey. It is read in the
+browser, never sent, and forgotten with the window unless you keep its road
+(below). Its **track** places each
+day on that day's own clock — the time zone of the step you were in, read by
+the browser, so a morning frame is never filed on the evening before — and it
+wins over the instance wherever it has fixes; the instance fills the days the
+track lacks, a step's own position fills a day neither has, and a day the
+instance only guessed comes last. Its **steps** are places you named, so a halt
+takes the name of the step of its days nearest its centre (the island, the
+gorge, the rock) before the city index, which then only names what no step
+does and still says which region a halt lies in. A place written that way says
+*from Polarsteps*. **Keep the road from Polarsteps** (or *from GPX*), ticked in
+Review whenever the export has a track, writes that track onto the trip as its **road**: the
+line the openers drive and the kilometres they count, never a place. It is
+kept whole (a year is about 55 KB), raw fixes included, and travels in the
+backup; writing a new export replaces the fixes and keeps how the trip reads
+them. **Trip settings → Road** chooses how it is read, each choice with the kilometres it counts: *Crow
+flies* (no road, curves from place to place), *Between stays* (what you did
+while staying somewhere — walks, buses, the commute — left out), *Every move*
+(all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
+apart from them smooths the line from every point up to 2 km, and *Forget the
+road* takes it off the trip. **Add a GPX…** merges the timed points of one or
+more `.gpx` files (a GPS logger, a car's navigation, Strava…) into the road
+within the trip's dates, or makes the road from them alone — the same instant
+once, the reading kept; a planned route with no times is refused, since it
+cannot be put on the trip's clock. Below them, the section's pane is the
+**map of the road** as the chosen mode reads it (the crow's straight line
+between the places when it reads none), every stretch over 20 km the track
+skipped (the phone off for a day) drawn dashed. With **✎ Place road points**
+on, a click puts a point of road on the nearest stretch, at the time that far
+along it, and the road goes through it; a click on one of yours takes it back.
+A road point is never a place, and never named. **Virée drives that road**: between two stops the
+road joins, the vehicle follows it (round the bay rather than across it) and
+the counter, the milestones and the summary card count what it drives; a hop
+the road never joins (a flight, a stop off the road) keeps its curve. The
+**Itinerary**'s pen draws its hops on the same road, its distance counting
+it, and the overview's **Map** draws the road under the stages in place of
+the straight strokes between them, each stage's coloured path following it
+between its places, its dial on the line.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
@@ -948,9 +1020,9 @@ modes, offered as such in the Counter section and honoured only under the
 Virée opener (anywhere else they say why not): *Days, as the car drives*,
 *Kilometres, as the car drives*, *Stops, as the car drives* and *Days + km, as
 the car drives*. The number then follows the car at every frame — the day of
-the trip (its total the trip's), the distance as the crow flies between the
-stops passed (never a road distance, which the app does not know), the stops
-reached, or the day with the distance so far beside its total
+the trip (its total the trip's), the distance the vehicle has driven — along
+the trip's road wherever it follows it (Trip settings → Road), as the crow
+flies between the stops otherwise —, the stops reached, or the day with the distance so far beside its total
 (`Day · 54 · of 90 · 1 479 km`, the kilometres in whole units) — with
 **odometer digits**: each in a fixed cell, so the badge never shakes when 199
 turns 200, rolling like a car's as the next one comes — and a still of
@@ -969,8 +1041,34 @@ The drive may take up to a minute, and it takes the length you set however
 many places it passes (the panel says when the hops get too short to read); counting with the car adds only the summary card's three
 seconds, and a piece whose length you set by hand says, beside the counter,
 when that cuts its end. At the end a **summary
-card** — days · distance · stops — and, on the road, **milestones** every
-50 days and 1 000 km (or miles), each a switch; the badge's words carry a
+card** — the drive's last image and the piece's thumbnail, no reveal after it
+— and, on the road, **milestones** every
+50 days and 1 000 km (or miles), each a switch. The card has six faces: the
+**Trace** (the trip's road drawn big, its places named — a new recap's
+default), the **Ticket** (a boarding pass whose barcode is the trip's days,
+long where a leg starts, darker where a picture was shot), the **Passport**
+(a round stamp for each state crossed and, where a place does not say its state and
+the shipped town index cannot tell it, a rectangular one for the place itself — in the road's order), the **Contact sheet** (the road's pictures
+and the road), the **Stamp** (days · distance · stops in a box over the map,
+on the look's own solid or the map's paper — what a recap saved before keeps) and the **Dashboard** (an odometer and a gauge of
+the trip's days) — each picked from a small picture of itself, drawn over
+the piece's own road. It wears the **trip's look** — the badge's face, case,
+colour and glow — or another look for the card alone; it stands on the trip's
+last picture veiled, the look's own solid, or the map's paper (where its
+words take the map's ink); it says up to four facts in your order (days,
+distance, places, states, photos, the longest stay — a fact the drive cannot
+measure is left out), a title and a subtitle (the trip's name and *The recap*
+when empty), and names the road's places — none, the ends, **grouped** (one
+name for the places within 200 km, the biggest town of the index, the longest
+stay or the first place, *Cairns +2*), every place or your list —, a name
+that would cover another left out. Its numbers count up as it comes, and its
+road draws itself, or it cuts in. **The badge and the card are never on screen
+together**: the badge shows *before the drive* (the car waits for it),
+*during the drive* (it leaves as the card comes — the default), *at the end*
+in the card's place, or *never*. The same card can stand **on a slide of its
+own**, with no car: the **Recap card** opener, the end of a carousel or the
+piece's thumbnail (the deck exports it as a PNG like any slide), over the
+slide's own picture veiled on the Photo ground, the badge hidden on its slide; the badge's words carry a
 *Stop* field for the stops' label. The recap's "map over photo" is the map on
 a **paper plate** over the picture filling the frame (a Map switch, for the
 *Behind* pictures or the picture ground), the picture pushing in slowly while
@@ -1170,15 +1268,15 @@ head. It **ticks** at every landing, a deeper tick where a leg of the trip
 begins and a low seat on today, in a choice of voices (ratchet, woodblock,
 typewriter, shutter) with a pitch, a drift along the sweep and a volume — the
 same sound the export writes, heard live behind a speaker toggle that is off on
-every visit. **Virée** puts a little car on the map: a paper map of
+every visit. **Virée** puts a little vehicle on the map: a paper map of
 the trip so far (drawn here — no tiles, nothing fetched), the road as a curve
-through its stops, and a cartoon vehicle — the trip's car, a Land Cruiser
+through its stops, and a cartoon vehicle — the trip's own, a Land Cruiser
 Prado or a Renault Kadjar with its wheels turning, or a boat a piece borrows for
 a day on the water, leaving a wake — a miniature rendered in the browser,
 driving from stop to stop. The stops are the
 legs' located places, arriving where this day's leg ends; **your own places**,
 put on a map with the very editor the Itinerary uses — any place, on a leg or
-not, in your order, each able to hold a picture the car halts to show; or the
+not, in your order, each able to hold a picture the vehicle halts to show; or the
 **pictures you pick** — each one shot with a position in its EXIF is a stop, in
 the order they were shot, a run shot at one spot one stop. Your places follow
 you from one opener to the other: the stops picked for an Itinerary are the ones
@@ -1240,8 +1338,8 @@ tick as each day of the trip passes.
 **The car is the trip's, and it has a garage.** One car per journey: every
 Virée of a trip drives the same one, and it travels in the trip's backup. Four
 models: a Toyota Land Cruiser Prado (the J120, the default), a Renault
-Kadjar (the 2018–2022 facelift), a Renault Trafic panel van (the 2019
-facelift) and a Renault Zoé (the 2019–2024 phase). The garage dresses
+Kadjar (the 2018–2022 facelift), a Renault Trafic panel van (the long L2,
+2019 facelift) and a Renault Zoé (the 2019–2024 phase). The garage dresses
 whichever you pick — a
 colour from that model's factory range or one of your own, a factory gloss or
 a matte coating — and its gear, each a switch. The Prado (Raptor black, matte,
@@ -1254,8 +1352,8 @@ their own feet, or on the factory roof rails when you fit those — and its door
 mirrors; it is drawn with its own marks: the C of its daytime lights, the
 diamond in a chrome-barred grille, black cladding round the arches, a spoiler
 over the raked tailgate, two-tone wheels. The Trafic (white, gloss, by default)
-is the van as it was photographed: a solar panel in a frame on the front of its
-roof and its big door mirrors, each a switch; a short high bonnet under a raked
+is the van as it was photographed: a 430 W solar panel in a frame on the front
+of its roof and its big door mirrors, each a switch; a short high bonnet under a raked
 windscreen, one flat flank from the sill to the roof with a swage at the belt,
 no window behind the cab, barn doors at the back with tall lamps in the
 pillars, steel wheels under plastic caps. The Zoé (white, gloss, by default)
@@ -1276,19 +1374,71 @@ narrow hull, benches along both edges so every seat has the water, a roof tiled
 with solar panels, the croc cam's screen under its front edge, two electric
 outboards). Their liveries are guesses you can repaint. A trip can drive a
 boat, but a piece usually borrows one: the Virée panel's **Vehicle** row keeps
-the trip's car or picks any other model for that piece alone, in a paint of its
+the trip's vehicle or picks any other model for that piece alone, in a paint of its
 own, and a boat leaves a wake that grows as it gets under way and settles when
-it halts — long behind the Viper, barely a ripple behind the Solar Whisper. The car turns on a turntable while you dress it (drag
+it halts — long behind the Viper, barely a ripple behind the Solar Whisper.
+Two **ferries** carry the car across: the **Spirit of Tasmania** (Bass Strait —
+a white hull with the red band and funnel its operator calls its brand) and a
+**Mediterranean ferry** of the France–Spain–Morocco crossings (no one ship: a
+navy hull under a white superstructure, two funnels side by side, a long open
+aft deck). A ship is drawn bigger than the rest. When a piece borrows a ferry,
+**Boarding** (on by default) opens on the trip's car at the quay: it drives up
+the stern ramp and disappears inside, the ferry crosses like any boat, and the
+car drives off over the bow ramp at the far side. The vehicle turns on a turntable while you dress it (drag
 to turn it, the arrow keys turn and tilt it; it stands still if your system
 asks for less motion), drawn by the very renderer the map uses, so what the
 garage shows is what the opener gets. The garage opens from the opener's own
-panel («Configure the car…», with Cancel and Done) and lives in the trip's
-settings as its Car section, where every switch writes at once. On a wide
-screen both show the car beside its choices, which scroll on their own, so a
-switch far down the list is seen on the car the moment it flips.
+panel («Configure the vehicle…», with Cancel and Done) and lives in the trip's
+settings as its Vehicle section, where every switch writes at once. On a wide
+screen both show the vehicle beside its choices, which scroll on their own, so a
+switch far down the list is seen on the vehicle the moment it flips.
+That section holds the trip's **fleet**: the vehicles the journey drives, the
+first being the main one (what a stage that names no other drives), each with
+**its story** — how it set off, then every change on the way, dated (the Prado
+repainted Raptor black at Melbourne, say). Name the place where it happened
+and, when the trip knows the day it reached that place, the change takes that
+day. Pick a row and the garage beside it dresses that state; a change keeps
+its vehicle's model, since another model is another vehicle. A piece shows a
+vehicle as it was on the piece's own day, and «Configure the vehicle…» from a
+piece dresses the state in effect on that day.
+
+When a piece's **Vehicle** row keeps the trip's own (its default), Virée
+**changes vehicle along the road**. A stage can name another vehicle of the
+fleet, or a model borrowed for the day (the select beside its place style, in
+the stage's card, with its paint beside it for a borrowed model); a place can say how it was reached (its **Reached by**: a
+boat to Whitehaven, the Solar Whisper up the Daintree); and under the trip's
+**water rule** (Trip settings → Vehicle, «On water, a boat by itself»; on for a
+new trip, off for one made before it) a hop that crosses the sea sails, from
+the shore it leaves to the shore it reaches, on the boat the rule names. Its
+**Fine settings** hold the two distances the coarse coastline needs: water
+narrower than the **bridge** length stays a road, and a stop within the
+**shore** distance of a coast counts as ashore. Each vehicle wears its look of
+the day, so the Prado drives green until Melbourne and black after; a swap is
+marked by a splash and a repaint by a sweep of the new paint. The water is read
+on the coastline the app already ships (Natural Earth 1:50m, no network), with
+one rule: a hop sails only when it changes land or ends at sea. A curve that
+cuts a bay the road went round stays a road, while a strait such as Gibraltar
+sails (Africa and Eurasia are one land on that map, so a strait is water whose
+two shores lie much further apart round the coast than across it). A river or
+a lake is not on that map: a river cruise is set on its place by hand. The
+panel says what the road will do, for example «2 crossings by Spirit of
+Tasmania, the Prado aboard: Melbourne → Devonport, Hobart → Melbourne».
+When the boat that takes a crossing is a **ferry** (the water rule's boat, or
+the one a place was reached by) and the road's vehicle is a car, the car
+**boards** it there. It drives to the quay and stops, and the ship docks just
+ahead. The car lines up with the stern ramp and drives in. The ship crosses,
+and at the far quay the car drives off over the bow ramp and on to the next
+stop. Each of the two beats adds under two seconds to the drive. The
+**Boarding** switch in the panel's Vehicle group turns this off, and the ferry
+then takes over at the shore like any boat. On a wide map, where the strait is
+shorter than the drawn ship, the ship holds still mid-strait while the car
+drives on at one end and off at the other.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
-your own places): pick the stops on a map — click to drop one where you like, drag it to move it, take
+your own places) — though, like Virée and the Recap card, it can also take
+its stops from the trip's **legs** or the **photos'** own positions, the
+editor then showing the list it will draw (edit one and it becomes your own
+map): pick the stops on a map — click to drop one where you like, drag it to move it, take
 one of the trip's own places with a click, or find it by name through the same
 opt-in place lookup the legs use — and the pen travels them in order, bowing
 from stop to stop, waiting at each for as long as you ask. The **camera** can
@@ -1359,6 +1509,27 @@ the licence asks for in the corner. The pen can
 be a dot or a little plane, the badge's caption can follow it from stop to
 stop, and it ticks at each arrival on the same voices as Défilé. Every opener
 runs on the same clock as the badge, in the preview and in the file.
+
+**Vitrine** is the vehicle on its own, with no map: the trip's car (or any car
+of the garage) presented in a place, through an entrance, to an ending, in a
+look, drawn by the same software renderer as Virée's car. Eleven places —
+showroom, city, desert, ferry, lake, beach, car park, mountain road, service
+station, bivouac, forest — each with its variants (the ferry's open car deck is
+packed with parked cars and vans in lanes, like a real crossing), an hour of
+the day (dawn, noon, sunset, night) and weather (dry, rain, mist) outdoors, as
+a full scene or a floating diorama. Six entrances: it drives in, assembles
+from its exploded parts, drops from the sky, is drawn line by line, appears
+under the lights, or comes in stop-motion. Where there is a road the vehicle
+**never stops in its lane**: it keeps driving while the scenery scrolls past,
+pulls over to the shoulder (indicator on, brake lights), or leaves the road for
+a clearing or the sand; a place without a road keeps it still. On the beach it
+drives the hard sand at the water's edge, K'gari style, and steers round
+driftwood, a rock and a dingo. The look is colour, a blueprint or a riso print;
+a **Start from** row gives a dozen finished recipes, and changing one keeps
+your vehicle and your words. The **Place line** rewrites the badge's place
+(a ferry crossing is whatever route you type — Algeciras → Tanger Med,
+Melbourne → Devonport), and the badge comes in once the entrance is over, stays
+all along, or never.
 
 *A **Route** opener used to draw the trip's own shape from the legs' located
 places; the Itinerary replaced it, and a piece composed with one is converted
@@ -1525,7 +1696,9 @@ in two clicks. **Presets** are your own book, the same list in every Develop
 sheet (Trips and the Studio): `Save current as…` keeps the numbers under a name
 of your choosing (there is no factory set), a chip writes a copy of them onto
 the open picture, and × removes the preset without touching any picture it was
-applied to — a preset is applied, never followed. The book is kept in this
+applied to — a preset is applied, never followed. The copy glyph on a chip
+clones it: the first free name (`Dusk (2)`) is prefilled and editable, and a
+name already in the book is never replaced. The book is kept in this
 browser, or on a connected Winnow if you pick it there, and then follows you to
 another device; a change made on two devices is merged by name, never asked
 about. The presets a trip kept before the book existed are brought in once.
@@ -2432,8 +2605,14 @@ pressing **Develop** while one is on screen opens the roll on that file.
 Studio and Trips, over the whole roll — and one kept on a Winnow saves there
 after a few seconds of quiet, with the same status pill as a trip; the gallery
 moves, deletes and exports it (`.roll.json`, a backup — importing always makes a
-new roll). Thumbnails are baked here from the Library's files and never leave
-the browser.
+new roll). **Clone…** in a roll's ⋯ menu makes a copy of the whole roll — every
+picture with its develop, crop, look and delivery — kept here or on a connected
+instance: the sheet proposes the first free name in the chosen place (`Désert` →
+`Désert (2)`, no suffix where the name is free), you can type another, and a
+status line then offers Open and Undo. The clone points at the same files and
+takes its own copy of the thumbnails, working previews and remembered folders.
+Thumbnails are baked here from the Library's files and never leave the
+browser.
 
 **Working previews.** A roll with pictures from your own disk can keep a
 **working preview** of each — a 2048 px copy, stored in this browser only —
@@ -2668,7 +2847,13 @@ theirs). The trip document holds place names, dates and the text of your
 badges, and only your own account can read it back; the hook thumbnails never
 travel and are re-drawn locally. A trip can be moved between this browser and
 an instance from its card; the `.roadtrip.json` file remains the offline way
-to cross. A Studio project kept on an instance works the same way from the
+to cross. **Clone…** in a card's ⋯ menu makes a copy of the whole trip, kept
+here or on a connected instance: the sheet proposes the first free name in
+the chosen place (`Maroc` → `Maroc (2)`, no suffix where the name is free),
+you can type another, and the line under the field says what will be saved.
+The copy keeps everything but the pictures themselves (found again by their
+hash) and the links to Studio projects; its cover thumbnails are copied on
+this device, and the status line that follows offers Open and Undo. A Studio project kept on an instance works the same way from the
 project gallery and the project bar; its media folder never travels — only
 the list of clips does, so on another device the project opens and asks you
 to point it at the footage.

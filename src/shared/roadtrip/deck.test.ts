@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { defaultCarSpec } from './car-spec';
+import { defaultVehicleSpec } from './vehicle-spec';
+import { DEFAULT_CROSSINGS, fleetOf } from './vehicle-fleet';
 import {
   captionElementId,
   captionLineFromElementId,
@@ -55,9 +56,11 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   sourceId: 'local',
   cover: defaultTripCover(),
   developPresets: [],
-  car: defaultCarSpec(),
+  vehicles: fleetOf(defaultVehicleSpec()),
+  crossings: { ...DEFAULT_CROSSINGS },
   placeStyle: { badge: 'name', lists: 'code' },
   stateCodes: {},
+  road: null,
   createdAt: 0,
   updatedAt: 0,
   ...over,
@@ -341,7 +344,7 @@ describe('deckSlides — medium and screen time', () => {
     const p = post({ includeCta: true });
     p.badge.medium = 'video';
     const deck = deckSlides(trip({ cta: { ...DEFAULT_CTA, headline: 'Follow' } }), p);
-    expect(deck.at(-1)).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
+    expect(deck.slice(-1)[0]).toMatchObject({ kind: 'cta', medium: 'image', reason: 'plain' });
   });
 
   it('carries a clip’s speed, and 1 for anything that is not a clip', () => {

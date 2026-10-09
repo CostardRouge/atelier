@@ -11,19 +11,19 @@
  * a bull-bar hoop, the basket's rail, a jerry can's handle — is several boxes,
  * never one part with a hole.
  *
- * The gear (`CarGear`) is modelled from four photographs of the car: the
+ * The gear (`VehicleGear`) is modelled from four photographs of the car: the
  * bull bar with its two round lights, the roof basket carrying a solar panel
  * on the left, the aluminium box front right and three jerry cans across the
  * rear (water · petrol · water), the awning bag along the left rail, mud
  * flaps and window visors. Model units are about metres: 4.6 long, 1.9 wide,
  * 1.95 to the roof, the ground at z = 0, the nose toward +y, x to the right.
  * Colours are ROLES, resolved through `carPalette` — the body colour is the
- * author's, the rest is the car's; the FINISH is a light (`carLight`).
+ * author's, the rest is the car's; the FINISH is a light (`vehicleLight`).
  *
  * Pure and DOM-free.
  */
 
-import { DEFAULT_GEAR, effectiveGear, type CarFinish, type CarGear } from '../car-spec';
+import { DEFAULT_GEAR, effectiveGear, type VehicleFinish, type VehicleGear } from '../vehicle-spec';
 import {
   DEFAULT_LIGHT,
   box,
@@ -82,7 +82,7 @@ export function carPalette(bodyColor: string): Record<string, string> {
  * coating throws almost no highlight; what keeps it a shape is a broad
  * sheen and a little more ambient, not a specular spot.
  */
-export function carLight(finish: CarFinish): Light {
+export function vehicleLight(finish: VehicleFinish): Light {
   if (finish === 'matte') return { ...DEFAULT_LIGHT, gloss: 0.04, sheen: 0.12, ambient: 0.48 };
   return DEFAULT_LIGHT;
 }
@@ -378,7 +378,7 @@ function bullBar(withLights: boolean): Part[] {
 }
 
 /** The roof basket, and what rides in it. */
-function basket(gear: CarGear): Part[] {
+function basket(gear: VehicleGear): Part[] {
   const parts: Part[] = [];
   // The floor sits INSIDE its four rails and on top of the roof rails, rather
   // than through them: the basket used to be modelled with every piece a few
@@ -435,7 +435,7 @@ function mudFlaps(): Part[] {
 }
 
 /** Build the car, with the gear asked for (the maintainer's, by default). */
-export function buildCar(gear: CarGear = DEFAULT_GEAR): Part[] {
+export function buildCar(gear: VehicleGear = DEFAULT_GEAR): Part[] {
   const g = effectiveGear(gear);
   const parts: Part[] = [];
 

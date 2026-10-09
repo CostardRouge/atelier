@@ -1,11 +1,14 @@
 import { describe, expect, it } from 'vitest';
 import { ALISON_LENGTH, ALISON_WIDTH, buildAlisonMaree } from './alison-maree-model';
 import { hullPart } from './boat-parts';
-import { CAR_MODELS } from './car-registry';
+import { VEHICLE_MODELS } from './vehicle-registry';
 import { faceNormal, renderOrder, type Part } from './mesh3d';
 import { WHISPER_LENGTH, WHISPER_WIDTH, buildSolarWhisper } from './solar-whisper-model';
 import { VIPER_LENGTH, VIPER_WIDTH, buildViper } from './viper-model';
 import { CRUISER_LENGTH, CRUISER_WIDTH, buildCruiser } from './whitsunday-cruiser-model';
+import { SPIRIT_LENGTH, SPIRIT_WIDTH, buildSpiritOfTasmania, spiritRamps } from './spirit-of-tasmania-model';
+import { MED_FERRY_LENGTH, MED_FERRY_WIDTH, buildMedFerry, medFerryRamps } from './med-ferry-model';
+import { carriesVehicles } from '../vehicle-spec';
 
 const verts = (parts: Part[]) => parts.flatMap((p) => p.faces.flatMap((f) => [...f.verts]));
 const extent = (parts: Part[], axis: 0 | 1 | 2) => {
@@ -19,6 +22,8 @@ const BOATS = [
   { name: 'the Viper', parts: buildViper(), length: VIPER_LENGTH, width: VIPER_WIDTH },
   { name: 'the Alison Maree', parts: buildAlisonMaree(), length: ALISON_LENGTH, width: ALISON_WIDTH },
   { name: 'the Solar Whisper', parts: buildSolarWhisper(), length: WHISPER_LENGTH, width: WHISPER_WIDTH },
+  { name: 'the Spirit of Tasmania', parts: buildSpiritOfTasmania(), length: SPIRIT_LENGTH, width: SPIRIT_WIDTH },
+  { name: 'the Mediterranean ferry', parts: buildMedFerry(), length: MED_FERRY_LENGTH, width: MED_FERRY_WIDTH },
 ];
 
 describe.each(BOATS)('$name', ({ parts, length, width }) => {
@@ -127,7 +132,7 @@ describe('the Solar Whisper', () => {
     const motors = whisper.filter((p) => /^outboard-[lr]$/.test(p.id));
     expect(motors).toHaveLength(2);
     for (const m of motors) expect(m.centre[1]).toBeLessThan(stern);
-    const wakes = CAR_MODELS.filter((m) => m.kind === 'boat').map((m) => [m.id, m.wake ?? 1] as const);
+    const wakes = VEHICLE_MODELS.filter((m) => m.kind === 'boat').map((m) => [m.id, m.wake ?? 1] as const);
     const least = wakes.reduce((a, b) => (b[1] < a[1] ? b : a));
     expect(least[0]).toBe('solar-whisper');
   });
@@ -146,9 +151,67 @@ describe('hullPart', () => {
   });
 });
 
+describe('the ferries', () => {
+  const FERRIES = [
+    { name: 'the Spirit of Tasmania', parts: buildSpiritOfTasmania(), ramps: spiritRamps(), length: SPIRIT_LENGTH },
+    { name: 'the Mediterranean ferry', parts: buildMedFerry(), ramps: medFerryRamps(), length: MED_FERRY_LENGTH },
+  ];
+
+  it.each(FERRIES)('$name builds no deck under its superstructure, and keeps the aft and fore mooring decks', ({ parts }) => {
+    const slices = parts.filter((p) => /^hull-\d+$/.test(p.id));
+    expect(slices.length).toBeGreaterThanOrEqual(4);
+    const decked = slices.filter((p) => p.faces.some((f) => f.role === 'deck')).map((p) => p.id);
+    expect(decked).toEqual(['hull-0', `hull-${slices.length - 1}`]);
+    // Only the first slice keeps its transom: a cut between two slices is inside the hull.
+    const transoms = slices.filter((p) => p.faces.some((f) => faceNormal(f.verts)[1] < -0.9));
+    expect(transoms.map((p) => p.id)).toEqual(['hull-0']);
+  });
+
+  it.each(FERRIES)('$name has its stern door on the transom, and ramps that stay above the water and out of the hull', ({ parts, ramps }) => {
+    const stern = extent(parts.filter((p) => p.id === 'hull-0'), 1).min;
+    const door = parts.find((p) => p.id === 'stern-door')!;
+    expect(door.centre[1]).toBeLessThan(stern);
+    expect(door.centre[1]).toBeGreaterThan(stern - 0.1);
+    const bow = extent(parts.filter((p) => /^hull-\d+$/.test(p.id)), 1).max;
+    expect(extent(ramps.stern, 1).max).toBeLessThanOrEqual(stern);
+    expect(extent(ramps.stern, 1).min).toBeLessThan(stern - 10);
+    expect(extent(ramps.bow, 1).max).toBeGreaterThan(bow);
+    for (const ramp of [...ramps.stern, ...ramps.bow]) expect(extent([ramp], 2).min).toBeGreaterThan(0);
+  });
+
+  it('tell each other apart: one funnel on the Spirit, two side by side on the Mediterranean ferry', () => {
+    const funnels = (parts: Part[]) => parts.filter((p) => /^funnel-\d+$/.test(p.id));
+    expect(funnels(buildSpiritOfTasmania())).toHaveLength(1);
+    const twin = funnels(buildMedFerry());
+    expect(twin).toHaveLength(2);
+    expect(twin[0].centre[0]).toBeCloseTo(-twin[1].centre[0], 9);
+    // A long open aft deck on the Mediterranean ferry: its superstructure starts further forward.
+    const aftOf = (parts: Part[], length: number) => extent([parts.find((p) => p.id === 'tier-a-0')!], 1).min / length;
+    expect(aftOf(buildMedFerry(), MED_FERRY_LENGTH)).toBeGreaterThan(aftOf(buildSpiritOfTasmania(), SPIRIT_LENGTH));
+  });
+
+  it('carry vehicles, drawn bigger than a car on the map, with ramps to lower — and nothing else does', () => {
+    const ferries = VEHICLE_MODELS.filter((m) => carriesVehicles(m.id)).map((m) => m.id);
+    expect(ferries).toEqual(['spirit-of-tasmania', 'med-ferry']);
+    for (const m of VEHICLE_MODELS) {
+      const ferry = ferries.includes(m.id);
+      expect(m.kind === 'boat' || !ferry).toBe(true);
+      expect(!!m.ramps, m.id).toBe(ferry);
+      expect((m.mapScale ?? 1) > 1, m.id).toBe(ferry);
+    }
+  });
+});
+
 describe('the registry', () => {
-  it('lists the four boats as boats, the four cars as cars', () => {
-    expect(CAR_MODELS.filter((m) => m.kind === 'boat').map((m) => m.id)).toEqual(['whitsunday-cruiser', 'viper-jet', 'alison-maree', 'solar-whisper']);
-    expect(CAR_MODELS.filter((m) => m.kind === 'car').map((m) => m.id)).toEqual(['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2']);
+  it('lists the six boats as boats, the four cars as cars', () => {
+    expect(VEHICLE_MODELS.filter((m) => m.kind === 'boat').map((m) => m.id)).toEqual([
+      'whitsunday-cruiser',
+      'viper-jet',
+      'alison-maree',
+      'solar-whisper',
+      'spirit-of-tasmania',
+      'med-ferry',
+    ]);
+    expect(VEHICLE_MODELS.filter((m) => m.kind === 'car').map((m) => m.id)).toEqual(['prado-j120', 'kadjar-ph2', 'trafic-ph2', 'zoe-ph2']);
   });
 });

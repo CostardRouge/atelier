@@ -48,7 +48,14 @@ import { mapFromRoute } from './hooks/map-plan';
 import { DEFAULT_CTA, type CtaSlide } from './cta-slide';
 import { readCollage, type SlideCollage } from './collage';
 import { readCascade, type BadgeCascade } from './badge-layout';
-import { defaultCarSpec, readCarSpec, type CarSpec } from './car-spec';
+import { defaultVehicleSpec, readVehicleSpec } from './vehicle-spec';
+import {
+  DEFAULT_CROSSINGS,
+  fleetOf,
+  type TripCrossings,
+  type TripVehicle,
+  type VehicleRef,
+} from './vehicle-fleet';
 import type { OverlayElement } from '../overlay/overlay-types';
 import {
   readSlideBadge,
@@ -72,8 +79,9 @@ import {
 // The default lives in `place-style.ts`, which takes only TYPES from here —
 // a value both ways is the cycle that left `day-badge.ts` half-loaded.
 import { DEFAULT_PLACE_STYLE } from './place-style';
+import { readTripRoad, type TripRoad } from './road-track';
 
-export const TRIP_DOC_VERSION = 30;
+export const TRIP_DOC_VERSION = 32;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -118,8 +126,12 @@ export const POST_KINDS: readonly { id: PostKind; label: string; hint: string }[
   { id: 'photo', label: 'Single photo', hint: 'One image with its badge' },
 ];
 
-/** Where a place's facts came from — said beside it, never decisive. */
-export type PlaceSource = 'typed' | 'search' | 'deduced';
+/**
+ * Where a place's facts came from — said beside it, never decisive.
+ * `polarsteps` (2026-10-08) is a step of a Polarsteps export the author
+ * dropped into Deduce: additive, so no document version moved.
+ */
+export type PlaceSource = 'typed' | 'search' | 'deduced' | 'polarsteps';
 
 /**
  * How a place is WRITTEN where it is shown: «Sydney, NSW» · «Sydney, New
@@ -193,6 +205,12 @@ export interface TripPlace {
   source?: PlaceSource;
   /** This place's own writing, over its stage's and the trip's. */
   style?: PlaceStyle;
+  /**
+   * How this place was REACHED — the vehicle of the hop that leads to it (a
+   * boat to Whitehaven, the Solar Whisper up the Daintree), over the stage's
+   * and over the water rule; absent = decided by those (`vehicle-plan.ts`).
+   */
+  arriveBy?: VehicleRef;
 }
 
 /**
@@ -268,6 +286,8 @@ export interface TripStage {
   origin?: StageOrigin;
   /** How this stage's places are written, over the trip's; absent = the trip's. */
   placeStyle?: PlaceStyle;
+  /** What this leg drives — one of the fleet or a borrowed model; absent = the trip's main vehicle (`vehicle-fleet.ts`). */
+  vehicle?: VehicleRef;
 }
 
 /**
@@ -808,12 +828,15 @@ export interface TripDoc {
    */
   developPresets: DevelopPreset[];
   /**
-   * The car every Virée of this trip drives — its model, colour, finish and
-   * gear, dressed in the garage. On the TRIP because a journey has one car:
-   * a piece that drove a different one would be a different journey.
-   * Portable, so the backup carries it.
+   * The trip's FLEET (v31, `vehicle-fleet.ts`): the vehicles it drives, the
+   * first being its MAIN one, each as it set off plus the dated changes it
+   * went through (the Prado repainted at Melbourne). A stage may name another
+   * (`TripStage.vehicle`), a place how it was reached (`TripPlace.arriveBy`).
+   * Never empty. Portable, so the backup carries it.
    */
-  car: CarSpec;
+  vehicles: TripVehicle[];
+  /** The trip's rule for water: a hop that crosses it takes a boat by itself (`terrain.ts`). Portable. */
+  crossings: TripCrossings;
   /**
    * How a place is written on this trip's two kinds of surface. A stage or a
    * place may depart from it (`TripStage.placeStyle`, `TripPlace.style`).
@@ -830,6 +853,14 @@ export interface TripDoc {
    * meets a dozen states. Portable, so the backup carries it.
    */
   stateCodes: Record<string, string>;
+  /**
+   * The trip's ROAD (v32, `road-track.ts`): the GPS track recorded beside the
+   * cameras, kept whole and read through the trip's mode and detail — the
+   * line the vehicle drives and the counter measures, never a place. Null
+   * until a Polarsteps export is written from Deduce. Portable: the backup
+   * carries it, raw fixes included.
+   */
+  road: TripRoad | null;
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -878,9 +909,11 @@ export function createTripDoc(
     grade: emptyGrade(),
     cover: defaultTripCover(),
     developPresets: [],
-    car: defaultCarSpec(),
+    vehicles: fleetOf(defaultVehicleSpec()),
+    crossings: { ...DEFAULT_CROSSINGS },
     placeStyle: { ...DEFAULT_PLACE_STYLE },
     stateCodes: {},
+    road: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -1061,11 +1094,20 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * is the framing already stored. Every stored picture holds still — `motion`
  * starts null — so nothing a trip already draws changes.
  *
+ * v30 → v31 makes the trip's one car a FLEET (`TripDoc.vehicles`, the car as
+ * its main vehicle with no change) and gives it a rule for water
+ * (`TripDoc.crossings`), OFF on every stored trip so nothing composed before
+ * it starts sailing. `car` is deleted, never left for a reader to misread.
+ *
+ * v31 → v32 gives the trip its ROAD (`TripDoc.road`, `road-track.ts`): the
+ * GPS track kept beside the places, null on every stored trip, so nothing
+ * composed before it changes its line until a track is written.
+ *
  * v20 → v21 REPAIRS the car. The Itinerary branch numbered its Route
  * conversion v19 while `main` took v19 for the car, and a trip opened on that
  * branch before the renumber was stamped v19 with no car at all — so the car
  * block below never ran on it, and the garage threw on `car.model`. The car is
- * read again through `readCarSpec`, which keeps a real spec exactly as it is
+ * read again through `readVehicleSpec`, which keeps a real spec exactly as it is
  * and gives a missing one the default the opener always drew.
  *
  * v18 → v19 gives the trip its CAR (`TripDoc.car`): the model, the colour,
@@ -1130,6 +1172,9 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
 export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (doc.version >= TRIP_DOC_VERSION) return doc;
   const migrated = { ...doc };
+  // The one vehicle a trip had before v31, read by the blocks that wrote it
+  // and folded into the fleet by the last one.
+  const legacy = migrated as TripDoc & { car?: unknown };
   if (migrated.version < 10) {
     // No trip had a grade before, so every existing picture keeps rendering
     // exactly as it did: the trip's grade is empty and every post follows it.
@@ -1401,9 +1446,9 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   }
 
   if (migrated.version < 19) {
-    // Read through `readCarSpec`: a document that never had a car lands on the
+    // Read through `readVehicleSpec`: a document that never had a car lands on the
     // default, junk lands on the default, a partial spec keeps what it says.
-    migrated.car = readCarSpec(migrated.car);
+    legacy.car = readVehicleSpec(legacy.car);
   }
 
   if (migrated.version < 20) {
@@ -1443,7 +1488,7 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
   if (migrated.version < 21) {
     // A trip stamped v19 by the Itinerary branch skipped the car block above.
     // Idempotent on every other document: a car that is there is kept as is.
-    migrated.car = readCarSpec(migrated.car);
+    legacy.car = readVehicleSpec(legacy.car);
   }
 
   if (migrated.version < 22) {
@@ -1592,6 +1637,21 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     }));
     migrated.placeStyle = readPlaceStyle(migrated.placeStyle);
     migrated.stateCodes = readStateCodes(migrated.stateCodes);
+  }
+
+  if (migrated.version < 31) {
+    // The one car becomes a FLEET of one, as it was, with no change; the
+    // water rule starts OFF on a stored trip, so no piece composed before it
+    // starts sailing — the author turns it on. No stage names a vehicle and
+    // no place says how it was reached, so every leg drives what it drove.
+    migrated.vehicles = fleetOf(readVehicleSpec(legacy.car));
+    migrated.crossings = { ...DEFAULT_CROSSINGS, auto: false };
+    delete legacy.car;
+  }
+
+  if (migrated.version < 32) {
+    // No stored trip has a road yet: it comes with the next Polarsteps write.
+    migrated.road = readTripRoad(migrated.road);
   }
 
   migrated.version = TRIP_DOC_VERSION;

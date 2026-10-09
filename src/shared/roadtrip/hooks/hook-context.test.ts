@@ -7,6 +7,7 @@ import { hookElementsAt } from './hook-elements';
 import { resolveHook } from './registry';
 import { DEFAULT_BADGE_LAYOUT } from '../badge-layout';
 import { AUTO_TAIL_SECONDS } from '../slide-timing';
+import { themeFromPreset } from '../../overlay/title-styles';
 
 /** A ten-day trip with pieces on days 2, 5 (twice, one published) and 8. */
 function fixture(): { trip: TripDoc; hero: TripPost } {
@@ -155,7 +156,13 @@ describe('the scrub through the shared context', () => {
   it('builds elements per frame only for a hook that rewrites', () => {
     const { trip, hero } = fixture();
     const ctx = hookContextFor(trip, hero, 9 / 16, content);
-    expect(ctx.car).toBe(trip.car);
+    expect(ctx.vehicle).toEqual(trip.vehicles[0].spec);
+    // A repaint before the piece's day is what the piece's vehicle wears.
+    const repainted = {
+      ...trip,
+      vehicles: [{ ...trip.vehicles[0], changes: [{ id: 'c', from: '2000-01-01', look: { ...trip.vehicles[0].spec, color: '#123456' } }] }],
+    };
+    expect(hookContextFor(repainted, hero, 9 / 16, content).vehicle?.color).toBe('#123456');
     const plain = resolveHook(hero.badge.hook, ctx);
     expect(hookElementsAt(plain, content, DEFAULT_BADGE_LAYOUT, 9 / 16, {}, 4)).toBeNull();
 
@@ -251,5 +258,16 @@ describe('an opener on another slide (v29)', () => {
     const { trip, hero } = fixture();
     const p = withSlideOpener(hero, 'scrub');
     expect(hookMoves(trip, p)).toBe(false);
+  });
+});
+
+describe('the trip’s look reaches the opener', () => {
+  it('hands the theme and the trip’s name, so an opener’s own words wear the badge’s signature', () => {
+    const { trip, hero } = fixture();
+    const themed: TripDoc = { ...trip, theme: themeFromPreset('or-cine') };
+    const ctx = hookContextFor(themed, hero, 9 / 16, null);
+    expect(ctx.theme?.presetId).toBe('or-cine');
+    expect(ctx.tripName).toBe('Australia');
+    expect(hookContextFor({ ...trip, theme: null }, hero, 1, null).theme).toBeNull();
   });
 });

@@ -8,8 +8,9 @@ import {
   rhythmLevel,
   type CoverTile,
 } from '../../shared/roadtrip/trip-cover';
-import { createTripDoc, type TripCover, type TripDoc } from '../../shared/roadtrip/trip-types';
+import { createTripDoc, type TripDoc } from '../../shared/roadtrip/trip-types';
 import { applyHouseStyle } from '../../shared/roadtrip/house-style';
+import { cloneTrip } from '../../shared/roadtrip/clone-trip';
 import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import {
   TRIP_FILE_ACCEPT,
@@ -29,6 +30,7 @@ import { downloadBlob } from '../../shared/media/save';
 import {
   deleteSyncRecord,
   deleteThumbs,
+  copyThumbs,
   deleteTrip,
   getSyncRecord,
   listTrips,
@@ -37,20 +39,21 @@ import {
 import {
   TRIP_DOC_KIND,
   deleteRemoteTrip,
-  isRemoteSource,
   listRemoteTrips,
   mirrorTrip,
   moveTrip,
   pushTrip,
-  remoteFor,
   type RemoteTripRow,
 } from '../../shared/roadtrip/trip-remote';
-import TripDetailsModal, { type TripDetails, type TimelineSourceOption } from './TripDetailsModal';
+import NewTripModal, { type NewTrip, type TimelineSourceOption } from './NewTripModal';
 import ImportDocumentModal from '../../shared/ui/ImportDocumentModal';
-import TripCoverModal from './TripCoverModal';
+import CloneDocumentModal, { type CloneChoice } from '../../shared/ui/CloneDocumentModal';
+import type { TripSettingsSection } from './TripSettingsModal';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
 import useCoverThumbs from './use-cover-thumbs';
 import { pageScroll } from '../../shared/ui/page-scroll';
+import ClonedNotice from '../../shared/ui/ClonedNotice';
+import useFreshClone from '../../shared/ui/use-fresh-clone';
 import { usePublishSectionBar } from '../../shared/ui/section-rail';
 import { useIsCompact } from '../../shared/ui/use-layout-mode';
 import Button from '../../shared/ui/Button';
@@ -63,16 +66,11 @@ import Segmented from '../../shared/ui/Segmented';
 
 interface TripGalleryProps {
   openTripId: string | null;
-  onOpen: (trip: TripDoc) => void;
+  /** Open a trip — on its settings sheet, at that section, when one is named (the card's «Trip settings…»). */
+  onOpen: (trip: TripDoc, settings?: TripSettingsSection) => void;
   /** Connected Winnows the New trip modal may offer as a seed. */
   timelineSources?: TimelineSourceOption[];
   onSeedFrom?: (sourceId: string) => void;
-  /**
-   * How an edit to the OPEN trip is saved. The tool keeps that document in its
-   * own save machine while the gallery is showing, so a cover written straight
-   * to the store here would be overwritten by its next flush.
-   */
-  onChangeOpenTrip?: (doc: TripDoc) => void;
 }
 
 /** The trip this browser opened last (`TripCard`'s "last opened" tag). */
@@ -238,9 +236,10 @@ function TripActions({
   moveTargets,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
-  onChooseCover,
+  onOpenSettings,
   size = 'sm',
 }: {
   trip: TripDoc;
@@ -249,9 +248,10 @@ function TripActions({
   moveTargets: readonly SourceInfo[];
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
-  onChooseCover: () => void;
+  onOpenSettings: () => void;
   size?: 'sm' | 'md';
 }) {
   const [confirming, setConfirming] = useState<
@@ -262,12 +262,21 @@ function TripActions({
   // used to sit on the cover kept swallowing the click meant for the trip.
   const items: OverflowItem[] = [
     { id: 'open', label: isOpen ? 'Resume' : remoteOnly ? 'Open here' : 'Open', onSelect: onOpen },
-    { id: 'cover', label: 'Choose a cover…', onSelect: onChooseCover },
+    { id: 'settings', label: 'Trip settings…', title: 'Its dates, cover, road and the rest — opens the trip on its settings', onSelect: onOpenSettings },
     {
       id: 'export',
       label: 'Export the trip file',
       title: `Save the whole trip as a ${TRIP_FILE_EXTENSION} file`,
       onSelect: onExport,
+    },
+    {
+      id: 'clone',
+      label: 'Clone…',
+      title: remoteOnly
+        ? 'Open it here first — a clone is made from the copy this device holds'
+        : 'Make a copy of this trip, here or on another source',
+      disabled: remoteOnly,
+      onSelect: onClone,
     },
     ...(!remoteOnly
       ? moveTargets.map((target) => ({
@@ -370,25 +379,30 @@ function DayStrip({ coverage, className = '' }: { coverage: TripCoverage; classN
 function TripRow({
   trip,
   isOpen,
+  fresh = false,
   remoteOnly,
   moveTargets,
   busy,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
-  onChooseCover,
+  onOpenSettings,
 }: {
   trip: TripDoc;
   isOpen: boolean;
+  /** Just cloned: drawn with the accent until the gallery lets it go. */
+  fresh?: boolean;
   remoteOnly: boolean;
   moveTargets: readonly SourceInfo[];
   busy: string | null;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
-  onChooseCover: () => void;
+  onOpenSettings: () => void;
 }) {
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   const route = tripRouteLabel(trip);
@@ -397,6 +411,7 @@ function TripRow({
       role="button"
       tabIndex={0}
       aria-label={`Open ${trip.name}`}
+      data-doc-id={trip.id}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, a, [role="menu"]')) return;
@@ -410,7 +425,7 @@ function TripRow({
       }}
       className={`grid grid-cols-[minmax(10rem,14rem)_minmax(0,1fr)_auto] items-center gap-x-5 gap-y-1 px-3 py-2.5 border-b border-line cursor-pointer transition-colors hover:bg-surface focus-visible:outline-2 focus-visible:outline-offset-[-2px] focus-visible:outline-accent ${
         remoteOnly ? 'opacity-75' : ''
-      } ${isOpen ? 'bg-accent-wash/50' : ''}`}
+      } ${isOpen || fresh ? 'bg-accent-wash/50' : ''}`}
     >
       <div className="min-w-0 flex flex-col gap-0.5">
         <span className="text-sm font-semibold truncate" title={trip.name}>
@@ -441,9 +456,10 @@ function TripRow({
           moveTargets={moveTargets}
           onOpen={onOpen}
           onExport={onExport}
+          onClone={onClone}
           onDelete={onDelete}
           onMove={onMove}
-          onChooseCover={onChooseCover}
+          onOpenSettings={onOpenSettings}
         />
       )}
     </div>
@@ -464,9 +480,10 @@ function ResumeBand({
   hasThumb,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
-  onChooseCover,
+  onOpenSettings,
 }: {
   trip: TripDoc;
   isOpen: boolean;
@@ -476,9 +493,10 @@ function ResumeBand({
   hasThumb: (postId: string) => boolean;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
-  onChooseCover: () => void;
+  onOpenSettings: () => void;
 }) {
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
   const tiles = coverTiles(trip, coverage, hasThumb);
@@ -525,9 +543,10 @@ function ResumeBand({
             moveTargets={moveTargets}
             onOpen={onOpen}
             onExport={onExport}
+            onClone={onClone}
             onDelete={onDelete}
             onMove={onMove}
-            onChooseCover={onChooseCover}
+            onOpenSettings={onOpenSettings}
             size="md"
           />
         )}
@@ -562,6 +581,7 @@ function ResumeBand({
 function TripCard({
   trip,
   isOpen,
+  fresh = false,
   lastOpened,
   remoteOnly,
   moveTargets,
@@ -570,12 +590,15 @@ function TripCard({
   hasThumb,
   onOpen,
   onExport,
+  onClone,
   onDelete,
   onMove,
-  onChooseCover,
+  onOpenSettings,
 }: {
   trip: TripDoc;
   isOpen: boolean;
+  /** Just cloned: drawn with the accent until the gallery lets it go. */
+  fresh?: boolean;
   /** The trip this browser opened last — where "resume" would land. */
   lastOpened: boolean;
   /** Kept on an instance and not yet mirrored here: opening pulls it first. */
@@ -589,9 +612,10 @@ function TripCard({
   hasThumb: (postId: string) => boolean;
   onOpen: () => void;
   onExport: () => void;
+  onClone: () => void;
   onDelete: () => void;
   onMove: (targetSourceId: string) => void;
-  onChooseCover: () => void;
+  onOpenSettings: () => void;
 }) {
   const compact = useIsCompact();
   const coverage = useMemo(() => tripCoverage(trip), [trip]);
@@ -609,6 +633,7 @@ function TripCard({
       role="button"
       tabIndex={0}
       aria-label={`Open ${trip.name}`}
+      data-doc-id={trip.id}
       onClick={(e) => {
         if (busy !== null) return;
         if ((e.target as HTMLElement).closest('button, select, input, label, a, [role="menu"]')) {
@@ -624,7 +649,7 @@ function TripCard({
       }}
       className={`relative flex flex-col bg-surface border rounded-paper-lg shadow-paper-soft transition-[box-shadow,border-color] duration-300 ease-paper hover:shadow-paper focus-visible:outline-2 focus-visible:outline-offset-2 focus-visible:outline-accent ${
         busy === null ? 'cursor-pointer' : ''
-      } ${isOpen ? 'border-accent' : 'border-line hover:border-line-strong'} ${
+      } ${isOpen || fresh ? 'border-accent' : 'border-line hover:border-line-strong'} ${
         remoteOnly ? 'opacity-75' : ''
       }`}
     >
@@ -660,13 +685,13 @@ function TripCard({
           </h3>
           {/* Where you were: the trip this browser opened last, or the one
               open right now. One tag, never both — "open" wins. */}
-          {(isOpen || lastOpened) && (
+          {(isOpen || lastOpened || fresh) && (
             <span
               className={`flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] ${
-                isOpen ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
+                isOpen || fresh ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
               }`}
             >
-              {isOpen ? 'open' : 'last opened'}
+              {isOpen ? 'open' : fresh ? 'new' : 'last opened'}
             </span>
           )}
           <span className="flex-1" />
@@ -678,9 +703,10 @@ function TripCard({
               moveTargets={moveTargets}
               onOpen={onOpen}
               onExport={onExport}
+              onClone={onClone}
               onDelete={onDelete}
               onMove={onMove}
-              onChooseCover={onChooseCover}
+              onOpenSettings={onOpenSettings}
             />
           )}
         </div>
@@ -740,7 +766,6 @@ export default function TripGallery({
   onOpen,
   timelineSources,
   onSeedFrom,
-  onChangeOpenTrip,
 }: TripGalleryProps) {
   const [creating, setCreating] = useState(false);
   // Cards (the cover, the default) or Bands (progress rows under a resume
@@ -773,19 +798,22 @@ export default function TripGallery({
   // Written on the way OUT: the gallery is unmounted while a trip is open,
   // so watching `openTripId` from here would never see it.
   const open = useCallback(
-    (trip: TripDoc) => {
+    (trip: TripDoc, settings?: TripSettingsSection) => {
       setLastOpenedId(trip.id);
       try {
         localStorage.setItem(LAST_OPENED_KEY, trip.id);
       } catch {
         /* private mode: the tag is a convenience */
       }
-      onOpen(trip);
+      onOpen(trip, settings);
     },
     [onOpen],
   );
   const [importing, setImporting] = useState(false);
-  const [covering, setCovering] = useState<TripDoc | null>(null);
+  // The trip whose Clone sheet is open, the one just made (drawn with the
+  // accent and named in the status line, so a clone that landed beside its
+  // original is never lost among two cards of one name).
+  const [cloning, setCloning] = useState<TripDoc | null>(null);
 
   // The lists, the groups and the verbs that cross a source are shared with
   // every document gallery (`use-document-gallery.ts`); this driver says how a
@@ -811,7 +839,6 @@ export default function TripGallery({
   });
   const {
     docs: trips,
-    setDocs: setTrips,
     documentSources,
     refresh,
     groups,
@@ -819,7 +846,6 @@ export default function TripGallery({
     nothingAnywhere,
     allListed,
     busy,
-    setBusyFor,
     notice,
     setNotice,
     createOn,
@@ -856,8 +882,18 @@ export default function TripGallery({
     ),
   );
   const { urls, hasThumb } = useCoverThumbs(trips);
+  const { cloned, setCloned, freshId } = useFreshClone(trips);
 
-  async function handleCreate(choices: TripDetails) {
+  /** The names a source already holds — mirrored here or listed only there. */
+  const namesIn = useCallback(
+    (sourceId: string): string[] => {
+      const group = groups.find((g) => g.id === sourceId);
+      return group ? [...group.items, ...group.remoteOnly.map((r) => r.doc)].map((t) => t.name) : [];
+    },
+    [groups],
+  );
+
+  async function handleCreate(choices: NewTrip) {
     setNotice(null);
     // A new trip wears the house style when one is committed; a backup or an
     // existing trip never does (`house-style.ts`).
@@ -867,6 +903,23 @@ export default function TripGallery({
     );
     setCreating(false);
     if (await createOn(doc, 'created')) open(doc);
+  }
+
+  /**
+   * A clone is written like a creation — where it is KEPT first, mirrored here
+   * after — so a refusal from the instance leaves nothing behind and says so.
+   * Its hook thumbnails are copied under the new pieces' ids, on this device,
+   * once the trip exists.
+   */
+  async function handleClone(trip: TripDoc, choice: CloneChoice) {
+    setNotice(null);
+    const { doc, thumbIds } = cloneTrip(trip, { name: choice.name, sourceId: choice.sourceId });
+    const ok = await createOn(doc, 'cloned');
+    setCloning(null);
+    if (!ok) return;
+    await copyThumbs(thumbIds);
+    setCloned(doc);
+    refresh();
   }
 
   /** The whole trip on disk — a backup, and how it reaches another machine. */
@@ -911,47 +964,15 @@ export default function TripGallery({
     await gallery.remove(trip, etagHint);
   }
 
-  /**
-   * A cover is a trip edit made from the gallery, so it takes the same road a
-   * creation does: written where the trip is KEPT first, mirrored here after.
-   * The open trip is handed back to the tool instead — its save machine holds
-   * that document and would flush over anything written behind it.
-   */
-  async function handleCover(trip: TripDoc, cover: TripCover) {
-    setCovering(null);
-    setNotice(null);
-    const next: TripDoc = { ...trip, cover, updatedAt: Date.now() };
-    if (onChangeOpenTrip && trip.id === openTripId) {
-      onChangeOpenTrip(next);
-      setTrips((cur) => cur?.map((t) => (t.id === next.id ? next : t)) ?? cur);
-      return;
-    }
-    if (isRemoteSource(next.sourceId)) {
-      const remote = remoteFor(next.sourceId);
-      if (!remote) {
-        setNotice(`Connect ${next.sourceId} to change this cover — the trip is kept there.`);
-        return;
-      }
-      setBusyFor(next.id, `saving on ${remote.label}…`);
-      const rec = await pushTrip(remote, next, (await getSyncRecord(next.id)) ?? null);
-      setBusyFor(next.id, null);
-      if (rec.status !== 'synced') {
-        const why = rec.error ? `: ${rec.error}` : '';
-        setNotice(`Could not save to ${remote.label}${why} — the cover is unchanged.`);
-        return;
-      }
-    }
-    await putTrip(next);
-    refresh();
-  }
+
 
   async function handleMove(trip: TripDoc, targetSourceId: string) {
     await gallery.moveTo(trip, targetSourceId);
   }
 
   /** A trip kept there and not here yet: pull, mirror, then open. */
-  async function handleOpenRemote(row: RemoteTripRow) {
-    open(await gallery.mirrorRemote(row));
+  async function handleOpenRemote(row: RemoteTripRow, settings?: TripSettingsSection) {
+    open(await gallery.mirrorRemote(row), settings);
   }
 
   return (
@@ -1011,6 +1032,23 @@ export default function TripGallery({
         <p className="m-0 text-xs text-danger" role="alert">
           {notice}
         </p>
+      )}
+
+      {cloned && (
+        <ClonedNotice
+          name={cloned.name}
+          sourceId={cloned.sourceId}
+          onOpen={() => {
+            const doc = cloned;
+            setCloned(null);
+            open(doc);
+          }}
+          onUndo={() => {
+            const doc = cloned;
+            setCloned(null);
+            void handleDelete(doc, null);
+          }}
+        />
       )}
 
       <AbsentSourceNotes absent={absent} />
@@ -1099,9 +1137,10 @@ export default function TripGallery({
                             hasThumb={hasThumb}
                             onOpen={() => open(lead)}
                             onExport={() => handleExport(lead)}
+                            onClone={() => setCloning(lead)}
                             onDelete={() => void handleDelete(lead, null)}
                             onMove={(target) => void handleMove(lead, target)}
-                            onChooseCover={() => setCovering(lead)}
+                            onOpenSettings={() => open(lead, 'cover')}
                           />
                         )}
                         <div className="flex flex-col border-t border-line">
@@ -1110,14 +1149,16 @@ export default function TripGallery({
                               key={trip.id}
                               trip={trip}
                               isOpen={false}
+                              fresh={trip.id === freshId}
                               remoteOnly={false}
                               moveTargets={moveTargets}
                               busy={busy[trip.id] ?? null}
                               onOpen={() => open(trip)}
                               onExport={() => handleExport(trip)}
+                              onClone={() => setCloning(trip)}
                               onDelete={() => void handleDelete(trip, null)}
                               onMove={(target) => void handleMove(trip, target)}
-                              onChooseCover={() => setCovering(trip)}
+                              onOpenSettings={() => open(trip, 'cover')}
                             />
                           ))}
                           {remoteOnly.map((row) => (
@@ -1130,9 +1171,10 @@ export default function TripGallery({
                               busy={busy[row.doc.id] ?? null}
                               onOpen={() => void handleOpenRemote(row)}
                               onExport={() => handleExport(row.doc)}
+                              onClone={() => setCloning(row.doc)}
                               onDelete={() => void handleDelete(row.doc, row.etag)}
                               onMove={() => undefined}
-                              onChooseCover={() => setCovering(row.doc)}
+                              onOpenSettings={() => void handleOpenRemote(row, 'cover')}
                             />
                           ))}
                         </div>
@@ -1157,6 +1199,7 @@ export default function TripGallery({
                         key={trip.id}
                         trip={trip}
                         isOpen={trip.id === openTripId}
+                        fresh={trip.id === freshId}
                         lastOpened={openTripId === null && trip.id === lastOpenedId}
                         remoteOnly={false}
                         moveTargets={moveTargets}
@@ -1165,9 +1208,10 @@ export default function TripGallery({
                         hasThumb={hasThumb}
                         onOpen={() => open(trip)}
                         onExport={() => handleExport(trip)}
+                        onClone={() => setCloning(trip)}
                         onDelete={() => void handleDelete(trip, null)}
                         onMove={(target) => void handleMove(trip, target)}
-                        onChooseCover={() => setCovering(trip)}
+                        onOpenSettings={() => open(trip, 'cover')}
                       />
                     ))}
                     {remoteOnly.map((row) => (
@@ -1183,9 +1227,10 @@ export default function TripGallery({
                         hasThumb={hasThumb}
                         onOpen={() => void handleOpenRemote(row)}
                         onExport={() => handleExport(row.doc)}
+                        onClone={() => setCloning(row.doc)}
                         onDelete={() => void handleDelete(row.doc, row.etag)}
                         onMove={() => undefined}
-                        onChooseCover={() => setCovering(row.doc)}
+                        onOpenSettings={() => void handleOpenRemote(row, 'cover')}
                       />
                     ))}
                   </div>
@@ -1196,13 +1241,27 @@ export default function TripGallery({
         </div>
       )}
 
-      {covering && (
-        <TripCoverModal
-          trip={covering}
-          onCancel={() => setCovering(null)}
-          onSave={(cover) => void handleCover(covering, cover)}
+      {cloning && (
+        <CloneDocumentModal
+          noun="trip"
+          original={cloning.name}
+          originalSourceId={cloning.sourceId}
+          sources={documentSources}
+          namesIn={namesIn}
+          note={
+            <>
+              <p>Everything comes along: days, legs, pieces, looks, words and theme.</p>
+              <p>
+                Not the pictures themselves — they are found again by their hash — nor the links to
+                Studio projects.
+              </p>
+            </>
+          }
+          onCancel={() => setCloning(null)}
+          onConfirm={(choice) => handleClone(cloning, choice)}
         />
       )}
+
 
       {importing && (
         <ImportDocumentModal
@@ -1218,7 +1277,7 @@ export default function TripGallery({
       )}
 
       {creating && (
-        <TripDetailsModal
+        <NewTripModal
           sources={documentSources}
           onCancel={() => setCreating(false)}
           onSubmit={(choices) => void handleCreate(choices)}

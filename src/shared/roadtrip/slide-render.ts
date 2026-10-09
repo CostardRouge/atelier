@@ -30,7 +30,7 @@ import { contentSlideElements, type DeckSlide } from './deck';
 import type { HookBlock, Shade } from '../shades/shades';
 import { resolveHook } from './hooks/registry';
 import { hookContextFor, pieceHookTiming, slideHookTiming } from './hooks/hook-context';
-import { hookElementsAt, type ElementsAt } from './hooks/hook-elements';
+import { hookElementsAt, windowedBadge, type ElementsAt } from './hooks/hook-elements';
 import type { HookPicture, ResolvedHook } from './hooks/hook-variant';
 import type { TripDoc, TripPost } from './trip-types';
 import type { ExifData } from '../exif/exif-parser';
@@ -127,9 +127,10 @@ export function slideRender(
   // its cascade — so a deck wearing a badge on three slides wears one signature.
   const styles = post.badge.pieceStyles;
   const cascade = post.badge.cascade;
+  // An opener may say WHEN the badge is on screen (Virée's card): its window.
   const badge =
     content && spec
-      ? badgeElements(content, spec.layout, aspect, styles, spec.durationSeconds, cascade)
+      ? windowedBadge(badgeElements(content, spec.layout, aspect, styles, spec.durationSeconds, cascade), hook?.badgeWindow)
       : [];
   // What a slide says besides its badge: the caption (a content slide's), then
   // the free text — drawn UNDER the badge, so a line that masks the picture

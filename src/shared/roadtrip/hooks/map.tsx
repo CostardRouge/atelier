@@ -55,7 +55,9 @@ import {
   groupMapStops,
   mapShortestBeat,
   type MapOptions,
+  type MapStop,
 } from './map-plan';
+import { roadHops } from '../road-track';
 import { BasemapStatus, enableBasemap } from './basemap-row';
 import { readyGround } from './basemap-strip';
 import { CameraRows } from './camera-rows';
@@ -64,7 +66,9 @@ import { Group, MovedRow, resetLink } from './panel-ui';
 import { FitRow } from './fit-row';
 import { GroupRows } from './group-rows';
 import { fitRender } from '../slide-timing';
-import StopsEditor, { StopStyleRow } from './stops-editor';
+import { StopStyleRow } from './stops-editor';
+import { StopSourceRows } from './stop-source-rows';
+import { sourceStops } from './stop-source';
 import { KIT_IDS, TICK_KITS } from './tick-kits';
 
 export { MAP_DEFAULTS, mapOptions, type MapOptions, type MapStop } from './map-plan';
@@ -110,33 +114,42 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
   const set = (patch: Partial<MapOptions>) => onChange({ ...o, ...patch });
 
   const places = tripPlaces(ctx.stages);
-  const free = otherPlaces(ctx.stages, o.stops);
+  // The stops from their source — your map, the legs, the photos (`stop-source.ts`).
+  const stops = sourceStops(o, ctx);
+  const free = otherPlaces(ctx.stages, stops);
   // The stops as the opener will DRAW them: nearby ones grouped (`stop-clusters.ts`).
-  const shown = groupMapStops(o.stops, o, ctx.towns ?? null);
-  const timing = mapTiming(planarHops(shown), o);
-  const withPictures = o.stops.filter((stop) => stop.picture).length;
-  const keys = o.stops.flatMap((stop) => {
+  const shown = groupMapStops(stops, o, ctx.towns ?? null);
+  const { roads } = roadsOf(shown, ctx);
+  const timing = mapTiming(planarHops(shown, roads), o);
+  const withPictures = stops.filter((stop) => stop.picture).length;
+  const keys = stops.flatMap((stop) => {
     const key = stopPictureKey(stop);
     return key ? [key] : [];
   });
   const line = o.media === 'off' ? null : pictureLine(keys, host?.pictureStatus);
-  const totalKm = hopKms(shown).reduce((sum, km) => sum + km, 0);
+  const totalKm = hopKms(shown, roads).reduce((sum, km) => sum + km, 0);
   // The camera and the ground as the opener will really draw them — over the
   // stops as shown, the same call as `prepare` and `wantsBasemap`.
-  const drawn = { ...o, stops: shown };
+  const drawn = { ...o, stops: shown, roads };
   const track = mapCameraTrack(drawn, timing, ctx.aspect);
   const basemaps = o.basemap ? mapBasemap(drawn, ctx.aspect, track, stripBudget()) : null;
 
   // What the itinerary will really do for this piece — the counter modes'
   // rule: the real reading, or the reason there is none.
   const summary =
-    o.stops.length === 0
-      ? places.length
+    stops.length === 0
+      ? o.stopsOn === 'pictures'
+        ? o.picked.length
+          ? 'None of the picked pictures carries a position, so there is nothing to join.'
+          : 'No picture picked yet — choose them below; each one shot with a position becomes a stop.'
+        : o.stopsOn === 'places'
+          ? 'No leg of the trip up to this day carries a located place yet.'
+          : places.length
         ? 'No stops yet. Click the map, take the trip’s own places, or search for one.'
         : 'No stops yet, and the trip has no place with coordinates to start from. Click the map, or search for a place.'
-      : o.stops.length === 1
+      : stops.length === 1
         ? 'One stop — a map with a single point and no path. Add another to draw a line.'
-        : `${o.stops.length} stops · ${withPictures} with a picture · ${formatDistance(totalKm, o.distance === 'off' ? 'km' : o.distance)}${
+        : `${stops.length} stops · ${withPictures} with a picture · ${formatDistance(totalKm, o.distance === 'off' ? 'km' : o.distance)}${
             timing.total > 0 ? ` · ${timing.total.toFixed(1)}s` : ' · still'
           }`;
   const coloursChanged =
@@ -147,24 +160,29 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
       <p className="m-0 text-xs text-ink-soft">{summary}</p>
 
       <Group title="Stops">
-        <StopsEditor
-          stops={o.stops}
-          onChange={(stops) => set({ stops })}
-          places={places}
-          free={free}
-          curve={o.curve}
-          placeStyle={o.placeStyle}
-          writing={ctx.writing}
+        <StopSourceRows
+          value={o}
+          onChange={set}
+          resolved={stops}
           host={host}
-          title="Itinerary"
-          pictureHint={o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.'}
-          picturesOffHint="The pictures are switched off below, so nothing a stop holds is drawn."
-          grouping={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
+          label="What the pen joins"
+          pieces={o.media !== 'off'}
+          editor={{
+            places,
+            free,
+            curve: o.curve,
+            placeStyle: o.placeStyle,
+            writing: ctx.writing,
+            title: 'Itinerary',
+            pictureHint: o.media === 'off' ? null : 'One picture, shown as the pen reaches this stop.',
+            picturesOffHint: 'The pictures are switched off below, so nothing a stop holds is drawn.',
+            grouping: { groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName },
+          }}
         />
         <GroupRows
           value={{ groupKm: o.groupKm, groupVisits: o.groupVisits, groupName: o.groupName }}
           onChange={(patch) => set(patch)}
-          count={{ stops: o.stops.length, halts: shown.length }}
+          count={{ stops: stops.length, halts: shown.length }}
           townsReady={Boolean(ctx.towns?.length)}
         />
         {line && (
@@ -219,10 +237,10 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         */}
         {(o.media === 'card' || o.media === 'backdrop') &&
           withPictures > 0 &&
-          o.stops.length > 0 &&
-          !o.stops[o.stops.length - 1].picture && (
+          stops.length > 0 &&
+          !stops[stops.length - 1].picture && (
             <p className="m-0 text-xs text-accent-ink">
-              The pen comes to rest on {o.stops[o.stops.length - 1].name.trim() || 'the last stop'},
+              The pen comes to rest on {stops[stops.length - 1].name.trim() || 'the last stop'},
               which has no picture — so the opener ends showing{' '}
               {o.media === 'backdrop' ? 'your own picture again' : 'nothing'}. Nothing stands in for
               a stop that holds none.
@@ -666,7 +684,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      {o.draw && o.stops.length > 1 && (
+      {o.draw && stops.length > 1 && (
         <Group title="Camera">
           <CameraRows
             o={mapCamera(o)}
@@ -803,7 +821,19 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
  */
 function drawnOptions(options: Readonly<Record<string, unknown>>, ctx: HookContext): MapOptions {
   const read = mapOptions(options);
-  return { ...read, stops: groupMapStops(writtenStops(read.stops, read.placeStyle, ctx.writing), read, ctx.towns ?? null) };
+  const stops = groupMapStops(writtenStops(sourceStops(read, ctx), read.placeStyle, ctx.writing), read, ctx.towns ?? null);
+  return { ...read, stops, ...roadsOf(stops, ctx) };
+}
+
+/**
+ * The hops the trip's road joins, laid on it (`roadHops`) — derived here,
+ * where the opener is drawn, and never stored. Nothing where every hop keeps
+ * its arc, so a trip with no road draws exactly as before.
+ */
+function roadsOf(stops: readonly MapStop[], ctx: HookContext): Pick<MapOptions, 'roads'> {
+  if (!ctx.road?.pieces.length || stops.length < 2) return {};
+  const hops = roadHops(ctx.road, stops);
+  return hops.some(Boolean) ? { roads: hops.map((h) => h?.via ?? null) } : {};
 }
 
 export const mapVariant: HookVariant = {
@@ -811,36 +841,38 @@ export const mapVariant: HookVariant = {
   name: 'Itinerary',
   tagline: 'Places you pick, joined on a map',
   defaults: { ...MAP_DEFAULTS },
-  contentKeys: ['stops'],
+  contentKeys: ['stops', 'picked'],
   // The list follows the author to Virée and back (`switchHookVariant`).
   sharedStops: { key: 'stops' },
   // `stages` for the trip's own places — as landmarks to adopt and as the
   // faint context layer. `media: 'day'` is what makes the shell resolve and
   // decode the pictures the stops name (`use-hook-pictures.ts`).
-  needs: { stages: true, places: true, media: 'day' },
+  // `coverage` for the days the legs and the photos are dated by.
+  needs: { coverage: true, stages: true, places: true, media: 'day' },
   // It MAY replace the picture: the backdrop mode does. `owns` declares what a
   // variant is allowed to do, not what it does on every piece — the scrub,
   // which only covers the frame while it sweeps, reads it the same way.
   owns: 'frame',
   // Never unmet: an itinerary with no stops is not a refusal, it is an empty
   // one, and the panel is where it gets filled.
-  wantsPictures(options) {
-    return mapWants(mapOptions(options));
+  wantsPictures(options, ctx) {
+    const o = mapOptions(options);
+    return mapWants({ ...o, stops: sourceStops(o, ctx) });
   },
   wantsBasemap(options, ctx) {
     // Over the stops as DRAWN — grouped and written, as `prepare` reads
     // them — so the keys the shell fetches are the keys the paint looks up.
     const o = drawnOptions(options, ctx);
     if (o.stops.length === 0) return [];
-    const timing = mapTiming(planarHops(o.stops), o);
+    const timing = mapTiming(planarHops(o.stops, o.roads), o);
     return mapBasemap(o, ctx.aspect, mapCameraTrack(o, timing, ctx.aspect), stripBudget())?.wants ?? [];
   },
   // Pointed at and dragged on the stage like any other content. The box is
   // the MAP's — everything else the opener draws is measured from it, so
   // moving it moves the line, the dots, the names and the card together.
-  frameBox(options, _ctx, frame) {
+  frameBox(options, ctx, frame) {
     const o = mapOptions(options);
-    if (o.stops.length === 0) return null;
+    if (sourceStops(o, ctx).length === 0) return null;
     return mapBox(frame.width, frame.height, o);
   },
   moveBy(options, dx, dy) {
@@ -849,7 +881,7 @@ export const mapVariant: HookVariant = {
   prepare(options, ctx) {
     const o = drawnOptions(options, ctx);
     if (o.stops.length === 0) return { seconds: 0 };
-    const timing = mapTiming(planarHops(o.stops), o);
+    const timing = mapTiming(planarHops(o.stops, o.roads), o);
     const context = o.context ? otherPlaces(ctx.stages, o.stops) : [];
     // The camera following the pen, baked once with the timing (`map-camera.ts`).
     const track = mapCameraTrack(o, timing, ctx.aspect);

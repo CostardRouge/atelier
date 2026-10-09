@@ -139,6 +139,9 @@ export function fitRender(render: HookRender, slideSeconds: number | undefined, 
       ...(ready ? { ready: (t0: number, t1?: number, signal?: AbortSignal) => ready(t0 / scale, t1 === undefined ? undefined : t1 / scale, signal) } : {}),
       ...(score ? { score: () => score().map((event) => ({ ...event, at: event.at * scale })) } : {}),
       ...(render.mixWithSource !== undefined ? { mixWithSource: render.mixWithSource } : {}),
+      ...(render.badgeWindow
+        ? { badgeWindow: { start: render.badgeWindow.start * scale, end: render.badgeWindow.end === null ? null : render.badgeWindow.end * scale } }
+        : {}),
     },
   };
 }

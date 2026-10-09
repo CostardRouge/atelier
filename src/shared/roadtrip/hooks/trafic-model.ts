@@ -12,7 +12,8 @@
  * the nose, the C of the daytime lights, three chrome strakes across the
  * grille and the diamond in it, tall tail lamps standing in the rear pillars,
  * steel wheels under plastic caps. The gear is the roof's solar panel (on by
- * default — it is why this van is here) and the big door mirrors.
+ * default — it is why this van is here: a 430 W module, the owner's word)
+ * and the big door mirrors.
  *
  * The rules are the Kadjar's (`roadtrip.md`): every part CONVEX, the hull a
  * stack of slices cut where a van has a shut line (the bonnet's edges, the
@@ -24,20 +25,22 @@
  * scaled in x stays flat only where its two ends share an x or a y, which is
  * why the tail corners are square and only the nose is rounded.
  *
- * Model units are about metres: 5.0 long, 1.96 wide, 1.97 to the roof as
- * Renault gives the L1H1; a 3.10 wheelbase; wheels a size up as a toy has
- * them. The ground at z = 0, the nose toward +y, x to the right. Colours are
+ * Model units are about metres: 5.4 long, 1.96 wide, 1.97 to the roof as
+ * Renault gives the L2H1 — the long one, the owner's word —, a 3.50
+ * wheelbase; wheels a size up as a toy has them. Everything about the cab is
+ * placed from the NOSE, so the length is in the wheelbase and the sliding
+ * door alone. The ground at z = 0, the nose toward +y, x to the right. Colours are
  * ROLES, resolved through `traficPalette`; the body colour is the author's.
  *
  * Pure and DOM-free.
  */
 
-import { defaultCarSpec, effectiveGear, type CarGear } from '../car-spec';
+import { defaultVehicleSpec, effectiveGear, type VehicleGear } from '../vehicle-spec';
 import { arc, at, box2, cappedRim, level, makeBody, meet, roadWheel, through, type P2 } from './car-parts';
 import { decal, prism, solid, type Face, type Part, type Vec3 } from './mesh3d';
 
 /** The van's footprint, for its shadow and its scale on the map. */
-export const TRAFIC_LENGTH = 5.0;
+export const TRAFIC_LENGTH = 5.4;
 export const TRAFIC_WIDTH = 1.96;
 export const TRAFIC_WHEEL_RADIUS = 0.37;
 
@@ -78,26 +81,26 @@ const Z = {
   roof: 1.96,
 };
 
-/** The axles — a 3.10 m wheelbase, the overhangs about equal. */
-const AXLE = { front: 1.57, rear: -1.53 };
+/** The axles — the L2's 3.50 m wheelbase, the overhangs about equal. */
+const AXLE = { front: HALF_LENGTH - 0.93, rear: HALF_LENGTH - 0.93 - 3.5 };
 const ARCH_HALF = 0.42;
 /** A tyre's inner face clears the sill; its outer stands a hair proud of the flank (the Kadjar's rule). */
 const WHEEL = { x: HALF_WIDTH - 0.125 + 0.005, half: 0.125 };
 const WHEEL_SPEC = { radius: TRAFIC_WHEEL_RADIUS, half: WHEEL.half, facets: 14 };
 const SILL_HALF_WIDTH = 0.7;
 
-/** Where the windscreen meets the bonnet. */
-const SCREEN = { front: 1.3 };
+/** Where the windscreen meets the bonnet, 1.2 m behind the nose. */
+const SCREEN = { front: HALF_LENGTH - 1.2 };
 /**
  * The other shut lines: the bonnet's edge along each wing, the wing's end at
  * the headlamp, the cab's back (the B pillar, the sliding door's front edge)
  * and the sliding door's rear edge, at the rear arch.
  */
-const SHUT = { bonnet: 0.72, wing: HALF_LENGTH - 0.3, cab: 0.1, door: AXLE.rear + ARCH_HALF };
+const SHUT = { bonnet: 0.72, wing: HALF_LENGTH - 0.3, cab: SCREEN.front - 1.2, door: AXLE.rear + ARCH_HALF };
 /** The bonnet, short and high, falling a little toward the nose. */
 const BONNET = through(SCREEN.front, Z.belt, HALF_LENGTH, 1.0);
 /** The roof's front edge, where the windscreen ends. */
-const ROOF_FRONT = 0.55;
+const ROOF_FRONT = SCREEN.front - 0.75;
 
 /**
  * The plan's right-hand edge, rear to nose: the tail square (see the file's
@@ -289,7 +292,8 @@ function mirrors(): Part[] {
  * built, and the panel two decals meeting at the cut: the frame's ink runs
  * under them, so nothing shows.
  */
-const SOLAR = { x: 0.5, y0: -1.09, y1: 0.45, frame: 0.045, inset: 0.02 };
+/** A 430 W module is about 1.72 × 1.13 m; it starts a hand behind the roof's front edge. */
+const SOLAR = { x: 0.565, y0: ROOF_FRONT - 0.1 - 1.72, y1: ROOF_FRONT - 0.1, frame: 0.045, inset: 0.02 };
 
 function solarPanel(): Part[] {
   const top = Z.roof + SOLAR.frame;
@@ -317,7 +321,7 @@ function solarPanel(): Part[] {
 // --- the van --------------------------------------------------------------------
 
 /** Build the Trafic, with the gear asked for — the solar panel and the mirrors, by default. */
-export function buildTrafic(gear: CarGear = defaultCarSpec('trafic-ph2').gear): Part[] {
+export function buildTrafic(gear: VehicleGear = defaultVehicleSpec('trafic-ph2').gear): Part[] {
   const g = effectiveGear(gear);
   const L = HALF_LENGTH;
   const archFront = { a: AXLE.front - ARCH_HALF, b: AXLE.front + ARCH_HALF };

@@ -17,7 +17,7 @@
  * picking map — are handed down from here, and the sheets are drawn here.
  */
 
-import { useCallback, useMemo, useState } from 'react';
+import { useCallback, useMemo, useRef, useState } from 'react';
 import {
   DEFAULT_HOOK_ID,
   setHookOptions,
@@ -52,10 +52,10 @@ interface HookPickerProps {
   /** The shelf is passed only when a switch changed it. */
   onChange: (layers: HookLayer[], shelf?: HookShelf) => void;
   /**
-   * Opens the trip's garage — the car every Virée drives. Absent where the
+   * Opens the trip's garage — the vehicle every Virée drives. Absent where the
    * picker has no trip to write to, and the variant's panel says so instead.
    */
-  onConfigureCar?: () => void;
+  onConfigureVehicle?: () => void;
   /**
    * The picker is choosing a slide's OWN opener rather than the piece's. The
    * badge variant draws nothing beyond the badge, and on such a slide the
@@ -83,7 +83,7 @@ export default function HookPicker({
   ctx,
   pictureStatus,
   onChange,
-  onConfigureCar,
+  onConfigureVehicle,
   slideOpener = false,
 }: HookPickerProps) {
   // A slide with no opener is showing the NONE card, the badge variant's.
@@ -105,9 +105,36 @@ export default function HookPicker({
       new Promise<MapStop[] | null>((resolve) => setPlacing({ stops, choice, resolve })),
     [],
   );
+  // The editor re-renders on every frame of the transport's clock, and its
+  // callbacks are new each time. A variant's panel computes the whole road
+  // (Virée: the route, the plan, the vehicles, the coast) when it renders, so
+  // it must render when what it SHOWS changes and never per frame — the
+  // Look tab crawled while the piece played (his report, 2026-10-09). The
+  // callbacks are read through a ref, and the panel's element is memoised on
+  // its options, its context and its host.
+  const latest = useRef({ layers, onChange, onConfigureVehicle });
+  latest.current = { layers, onChange, onConfigureVehicle };
+  const hasGarage = !!onConfigureVehicle;
+  const configureVehicle = useCallback(() => latest.current.onConfigureVehicle?.(), []);
   const host = useMemo<HookPanelHost>(
-    () => ({ choosePictures, pictureStatus, configureCar: onConfigureCar, editStopsOnMap }),
-    [choosePictures, pictureStatus, onConfigureCar, editStopsOnMap],
+    () => ({
+      choosePictures,
+      pictureStatus,
+      configureVehicle: hasGarage ? configureVehicle : undefined,
+      editStopsOnMap,
+    }),
+    [choosePictures, pictureStatus, hasGarage, configureVehicle, editStopsOnMap],
+  );
+  const onPanelChange = useCallback(
+    (options: HookLayer['options']) =>
+      latest.current.onChange(setHookOptions(latest.current.layers, options)),
+    [],
+  );
+  const options = layers[0]?.options;
+  const panel = useMemo(
+    () =>
+      Panel ? <Panel options={options ?? {}} ctx={ctx} host={host} onChange={onPanelChange} /> : null,
+    [Panel, options, ctx, host, onPanelChange],
   );
   const settle = (picked: HookPickedPicture[] | null) => {
     choosing?.resolve(picked);
@@ -166,14 +193,7 @@ export default function HookPicker({
         })}
       </div>
 
-      {Panel && (
-        <Panel
-          options={layers[0]?.options ?? {}}
-          ctx={ctx}
-          host={host}
-          onChange={(options) => onChange(setHookOptions(layers, options))}
-        />
-      )}
+      {panel}
 
       {choosing && (
         <HookPicturesModal

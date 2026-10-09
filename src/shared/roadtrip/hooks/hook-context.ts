@@ -9,7 +9,7 @@
  *
  * An opener may sit on ANY slide (`slide-capacities.ts`), and what it is told
  * about time is that slide's: how long it is on screen, what its badge's
- * numeral counts. Everything else — the calendar, the legs, the car, the day
+ * numeral counts. Everything else — the calendar, the legs, the vehicle, the day
  * told — is the trip's and the piece's, whichever slide asks.
  *
  * Pure: the pictures are decoded elsewhere and handed in.
@@ -21,6 +21,9 @@ import { hookCalendar, hookStages } from './hook-calendar';
 import { townsIfLoaded } from '../load-gazetteer';
 import type { HookContext, HookLayer, HookPicture } from './hook-variant';
 import { resolveHook } from './registry';
+import { resolveRef, vehicleRefForDay } from '../vehicle-fleet';
+import { landIfLoaded } from '../../map/load-terrain';
+import { tripRoadLine } from '../road-track';
 
 /** What an opener is told about time on the slide it plays on. */
 export interface HookTiming {
@@ -74,6 +77,7 @@ export function hookContextFor(
   pictures?: ReadonlyMap<string, HookPicture>,
   timing: HookTiming = pieceHookTiming(post),
 ): HookContext {
+  const dayRef = vehicleRefForDay(trip.vehicles ?? [], trip.stages ?? [], post.date);
   return {
     aspect,
     durationSeconds: timing.durationSeconds,
@@ -86,12 +90,25 @@ export function hookContextFor(
     calendar: hookCalendar(trip, post.id),
     stages: hookStages(trip),
     pictures,
-    car: trip.car,
+    // The vehicle of the piece's own day — its stage's, else the main one — as
+    // it was that day: a piece dated before the Prado's repaint shows it green.
+    vehicle: resolveRef(dayRef, trip.vehicles ?? [], post.date),
+    vehicleRef: dayRef,
+    fleet: trip.vehicles,
+    crossings: trip.crossings,
+    // Read once per stored road (`tripRoadLine` keeps it), so every surface
+    // drives the same line.
+    road: tripRoadLine(trip.road ?? null),
+    // Read, never fetched here, like the towns: the editor asks for the
+    // coastline when a piece drives under the water rule.
+    land: landIfLoaded(),
     writing: { placeStyle: trip.placeStyle, stateCodes: trip.stateCodes },
     badgeWords: trip.badgeWords,
     // Read, never fetched here: the editor asks for the index when a piece
     // groups by town, and every surface then names the same groups.
     towns: townsIfLoaded(),
+    theme: trip.theme,
+    tripName: trip.name,
   };
 }
 

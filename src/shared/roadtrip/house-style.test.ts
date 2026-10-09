@@ -58,7 +58,14 @@ function styledTrip(): TripDoc {
       ],
       output: 'none',
     },
-    car: { ...doc.car, color: '#1f3a2c' },
+    vehicles: [
+      {
+        ...doc.vehicles[0],
+        spec: { ...doc.vehicles[0].spec, color: '#1f3a2c' },
+        changes: [{ id: 'change-1', from: '2025-07-04', place: 'Alice Springs', look: { ...doc.vehicles[0].spec, color: '#232326' } }],
+      },
+      { id: 'vehicle-2', spec: { ...doc.vehicles[0].spec, model: 'zoe-ph2' }, changes: [] },
+    ],
     stages: [createTripStage('Red Centre', 'NT', '2025-07-02', '2025-07-05')],
     posts: [createTripPost('reel', '2025-07-03', 'Sunset')],
     developPresets: [{ id: 'p1', name: 'Noon', settings: { ...DEFAULT_DEVELOP, exposure: 1 } }],
@@ -76,7 +83,11 @@ describe('the house style', () => {
     expect(style.cta.headline).toBe('Suivez la route');
     expect(style.car.color).toBe('#1f3a2c');
     const text = serializeHouseStyle(houseStyleFrom(styledTrip()).file);
-    for (const journey of ['Australie', 'Red Centre', 'Sunset', 'Noon']) {
+    // The main vehicle as it set off is a habit; its repaint and the second
+    // vehicle belong to this journey.
+    expect(text).not.toContain('#232326');
+    expect(text).not.toContain('zoe-ph2');
+    for (const journey of ['Australie', 'Red Centre', 'Sunset', 'Noon', 'Alice Springs']) {
       expect(text).not.toContain(journey);
     }
   });
@@ -157,7 +168,7 @@ describe('the house style', () => {
     const rest: Partial<typeof file.style> = { ...file.style };
     delete rest.car;
     const style = readHouseStyle({ ...file, style: rest });
-    expect(style?.car).toEqual(createTripDoc('', '2000-01-01', '2000-01-01').car);
+    expect(style?.car).toEqual(createTripDoc('', '2000-01-01', '2000-01-01').vehicles[0].spec);
     expect(style?.badgeWords).toEqual(FRENCH_BADGE_WORDS);
   });
 
@@ -168,6 +179,9 @@ describe('the house style', () => {
     expect(dressed).toMatchObject({ id: doc.id, name: 'Islande', startDate: '2026-06-01' });
     expect(dressed.theme?.presetId).toBe('or-cine');
     expect(dressed.hookDefaults.reel?.hook[0].id).toBe('scrub');
+    expect(dressed.vehicles).toHaveLength(1);
+    expect(dressed.vehicles[0].spec.color).toBe('#1f3a2c');
+    expect(dressed.vehicles[0].changes).toEqual([]);
     // A copy: composing in the new trip must not rewrite the style it came from.
     dressed.badgeWords.day = 'Tag';
     expect(style.badgeWords.day).not.toBe('Tag');

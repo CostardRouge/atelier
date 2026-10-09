@@ -4,11 +4,11 @@
  *
  * The variant OWNS the frame: on paper it covers the piece's picture with a
  * map of its own — cream paper, a faint graticule, a vignette, the road as a
- * dashed line ahead and a solid trail behind the car, a dot and a name at
+ * dashed line ahead and a solid trail behind the vehicle, a dot and a name at
  * every stop, a compass, a scale bar, the distance so far — and on the
- * picture ground it draws only the road, the stops and the car over whatever
- * is there. Pictures pop as prints beside the car, fanned like a pile on the
- * map, or fill the frame while the car halts. When the car arrives the map
+ * picture ground it draws only the road, the stops and the vehicle over whatever
+ * is there. Pictures pop as prints beside the vehicle, fanned like a pile on the
+ * map, or fill the frame while the vehicle halts. When the vehicle arrives the map
  * can fade away and leave the piece's own picture, which is where the badge
  * always was.
  *
@@ -22,9 +22,9 @@
  */
 
 import { drawFramed } from '../../media/framing';
-import type { CarSpec } from '../car-spec';
-import { carLight } from './car-model';
-import { carModel, type CarModel } from './car-registry';
+import type { VehicleSpec } from '../vehicle-spec';
+import { vehicleLight } from './car-model';
+import { vehicleModel, type VehicleModel } from './vehicle-registry';
 import { hexToRgba } from './colour';
 import {
   CARD_FADE_SECONDS,
@@ -63,28 +63,51 @@ import { formatDistance, placeLabels } from './geo';
 import { paintTape } from './scrub-paint';
 import { ribbonGeometry, ribbonStyle, type DriveRibbon } from './drive-ribbon';
 import type { FrameBox, HookBasemapWant, HookCtx2D, HookPicture } from './hook-variant';
-import { paintGroundShadow, paintMesh, paintWake, renderOrder, type Part, type Pose } from './mesh3d';
+import { drawLookTexts, type LookText } from './look-text';
+import { cellAt, type CardScene } from './summary-card';
+import { cardCovers, cardProgress, paintCard as paintSummaryCard, paintStampBox } from './summary-paint';
+import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
+import { paintGroundShadow, paintMesh, paintWake, project, renderOrder, toWorld, type Part, type Pose } from './mesh3d';
+import { RIDER_SCALE, boardingAt, crossingAt, dockReach, riderBlend, riderTrack, type RiderTrack } from './boarding';
+import type { DriveRoad, RoadCrossing, RoadTransition } from './vehicle-plan';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
-/** The car's length in 1080-units at size 1. */
+/** The vehicle's length in 1080-units at size 1. */
 const CAR_PX = 118;
 /** A card's long edge in 1080-units at size 1. */
 const CARD_PX = 190;
 
 /**
- * What a paint keeps between frames: the trip's car and its model, the parts
+ * What a paint keeps between frames: the trip's vehicle and its model, the parts
  * — built on the FIRST paint, never in `prepare`, which `deckSlides` calls
  * for every slide just to ask how long the hook is — and the reveal buffer.
  */
 export interface DriveScratch {
-  spec: CarSpec;
-  model: CarModel;
+  spec: VehicleSpec;
+  model: VehicleModel;
   parts?: Part[];
+  /** A ferry's parts with a ramp down, built the first time it lowers one. */
+  withRamp?: { stern?: Part[]; bow?: Part[] };
+  /**
+   * What drives the road, moment by moment, and where it changed — the
+   * trip's fleet per stage, a hop picked by hand, a boat on the water, a
+   * repaint on its day (`vehicle-plan.ts`). Absent: `spec` drives it all.
+   */
+  road?: DriveRoad;
+  /** Every vehicle's parts the road has drawn, by model and gear — built on first use. */
+  built?: Map<string, Part[]>;
+  /** The trip's vehicle riding the ferry this piece borrowed (`boarding.ts`); absent when it does not board. */
+  rider?: { spec: VehicleSpec; model: VehicleModel; parts?: Part[] };
   buffer?: OffscreenCanvas | HTMLCanvasElement;
   /** The words the summary card and the milestones say — the trip's badge words, English by default. */
   words: SummaryWords;
+  /** The trip's look (`HookContext.theme`), which the summary card's words wear. */
+  theme: StyleTheme | null;
 }
+
+/** How long a change is marked on the vehicle: a splash or a sweep of paint. */
+export const TRANSITION_SECONDS = 0.6;
 
 export interface SummaryWords {
   day: string;
@@ -95,18 +118,78 @@ export interface SummaryWords {
 
 export const SUMMARY_WORDS: SummaryWords = { day: 'Day', days: 'days', stop: 'Stop', stops: 'stops' };
 
-export function driveScratch(spec: CarSpec, words: Partial<SummaryWords> = {}): DriveScratch {
+export function driveScratch(
+  spec: VehicleSpec,
+  words: Partial<SummaryWords> = {},
+  theme: StyleTheme | null = null,
+  /** The trip's vehicle, when it drives aboard the ferry `spec` names. */
+  rider: VehicleSpec | null = null,
+): DriveScratch {
   const w = { ...SUMMARY_WORDS };
   for (const key of Object.keys(w) as (keyof SummaryWords)[]) {
     const given = words[key]?.trim();
     if (given) w[key] = given;
   }
-  return { spec, model: carModel(spec.model), words: w };
+  return {
+    spec,
+    model: vehicleModel(spec.model),
+    words: w,
+    theme: theme ?? themeFromPreset('neutral'),
+    ...(rider ? { rider: { spec: rider, model: vehicleModel(rider.model) } } : {}),
+  };
 }
 
-function carParts(scratch: DriveScratch): Part[] {
+/** A vehicle's parts by model and gear — a ferry's with a ramp down when one is — built once per road. */
+function partsFor(scratch: DriveScratch, spec: VehicleSpec, ramp: RiderTrack['ramp'] = null): Part[] {
+  const model = vehicleModel(spec.model);
+  const lowered = ramp && model.ramps ? ramp : null;
+  const key = `${spec.model}:${Object.values(spec.gear).map((on) => (on ? 1 : 0)).join('')}${lowered ? `:${lowered}` : ''}`;
+  const built = (scratch.built ??= new Map());
+  let parts = built.get(key);
+  if (!parts) {
+    parts = lowered ? [...partsFor(scratch, spec), ...model.ramps!()[lowered]] : model.build(spec.gear);
+    built.set(key, parts);
+  }
+  return parts;
+}
+
+/** The car a ferry the road crosses by carries, as a rider. */
+function riderOf(scratch: DriveScratch, spec: VehicleSpec): NonNullable<DriveScratch['rider']> {
+  return { spec, model: vehicleModel(spec.model), parts: partsFor(scratch, spec) };
+}
+
+/**
+ * Where a ferry the road crosses by is drawn, in arc length: docked OFF each
+ * shore in the middle of the road — its stern ramp's foot where the car
+ * stopped, its bow ramp's at the shore it lands on — and sliding between the
+ * two over the crossing, so the car drives straight from the quay up the
+ * ramp; centred on the stop at the road's own ends, as a borrowed ferry is.
+ * `reach` is how far the car stands from the ship's centre, in plan units.
+ */
+function dockedS(c: RoadCrossing, ends: { start: boolean; end: boolean }, s: number, reach: { board: number; alight: number }): number {
+  const a = c.s0 + (ends.start ? 0 : reach.board);
+  const b = c.s1 - (ends.end ? 0 : reach.alight);
+  if (!(c.s1 > c.s0) || b <= a) return (a + b) / 2;
+  const f = (Math.max(c.s0, Math.min(c.s1, s)) - c.s0) / (c.s1 - c.s0);
+  return a + (b - a) * f;
+}
+
+/** The last change at or before `t`, while it is still marked. */
+function liveTransition(road: DriveRoad | undefined, t: number): RoadTransition | null {
+  if (!road) return null;
+  let found: RoadTransition | null = null;
+  for (const tr of road.transitions) {
+    if (tr.t > t) break;
+    found = tr;
+  }
+  return found && t - found.t < TRANSITION_SECONDS ? found : null;
+}
+
+function vehicleParts(scratch: DriveScratch, ramp: RiderTrack['ramp'] = null): Part[] {
   if (!scratch.parts) scratch.parts = scratch.model.build(scratch.spec.gear);
-  return scratch.parts;
+  if (!ramp || !scratch.model.ramps) return scratch.parts;
+  const kept = (scratch.withRamp ??= {});
+  return (kept[ramp] ??= [...scratch.parts, ...scratch.model.ramps()[ramp]]);
 }
 
 /** The box the route is fitted into, on a frame of `w`×`h`. */
@@ -120,7 +203,7 @@ export function driveBox(w: number, h: number, position: DriveOptions['position'
 
 /**
  * The camera's track for this drive, baked on the nominal 1080-wide frame of
- * the piece's shape: the box, the car's margin and the lead room are all
+ * the piece's shape: the box, the vehicle's margin and the lead room are all
  * fractions of the frame, so the track reads the same at every size — the
  * stage and the export see one camera.
  */
@@ -138,7 +221,7 @@ export type DriveBasemap = BasemapSet;
  * is `tiles`. Measured on a nominal frame of the piece's shape — the box, the
  * car's margin and the camera are all fractions of the frame, so the region
  * is the same at every size: the whole route as the camera frames it, or,
- * when the camera follows the car, the route with half a frame around it,
+ * when the camera follows the vehicle, the route with half a frame around it,
  * every place the view can reach. Sized so a 1920 delivery is not enlarged.
  * Under a following camera a zoom PYRAMID of tiles along the road comes with
  * it, each frame's ground at its own density (`stripOver`); `budget` is the
@@ -221,25 +304,33 @@ export function paintDrive(
   track: CameraTrack | null = null,
   /** The recap's ribbon of days under the map (`drive-ribbon.ts`), when asked. */
   ribbon: DriveRibbon | null = null,
+  /** The recap's summary card (`summary-card.ts`), when the drive has one. */
+  card: CardScene | null = null,
 ): void {
   const { width: w, height: h } = frame;
   if (w <= 0 || h <= 0) return;
   const moment = plan.at(t);
   if (moment.mapAlpha <= 0) return;
+  // A card that covers the frame, once it has come: the map under it is not drawn.
+  const { summaryAt } = plan.schedule;
+  if (card && card.face !== 'stamp' && summaryAt !== null && cardCovers(card, t - summaryAt)) {
+    paintSummaryCard(g, card, pictures, t - summaryAt, frame, t);
+    return;
+  }
 
   if (moment.mapAlpha >= 1) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
     return;
   }
   // The reveal: the whole map at a falling alpha over the picture beneath.
   const buffer = bufferFor(scratch, w, h);
   const bg = buffer?.getContext('2d') as HookCtx2D | null;
   if (!buffer || !bg) {
-    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+    paintMap(g, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
     return;
   }
   bg.clearRect(0, 0, w, h);
-  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon);
+  paintMap(bg, plan, o, pictures, scratch, t, moment, frame, basemap, track, ribbon, card);
   g.save();
   g.globalAlpha = moment.mapAlpha;
   g.drawImage(buffer, 0, 0);
@@ -273,10 +364,17 @@ function paintMap(
   basemap: DriveBasemap | null,
   track: CameraTrack | null,
   ribbon: DriveRibbon | null,
+  card: CardScene | null,
 ): void {
   const { width: w, height: h } = frame;
   const u = w / 1080;
   const carPx = CAR_PX * u * o.carSize;
+  // A ship is drawn bigger than a car (`VehicleModel.mapScale`); everything that
+  // keeps clear of the vehicle keeps clear of what is drawn.
+  // What drives this moment: the road's own answer, else the one vehicle.
+  const current = scratch.road ? scratch.road.at(t, moment) : scratch.spec;
+  const currentModel = current === scratch.spec ? scratch.model : vehicleModel(current.model);
+  const vehiclePx = carPx * (currentModel.mapScale ?? 1);
   const box = driveBox(w, h, o.position, o.size);
   const view = viewAt(plan, box, carPx * 0.7, o, moment, track, t);
   const at = (p: { x: number; y: number }) => applyView(view, p);
@@ -319,8 +417,8 @@ function paintMap(
   g.lineJoin = 'round';
 
   const showing = o.pictures === 'none' ? [] : plan.showing(t);
-  // A picture behind the map: it takes the paper's place while the car
-  // halts, the road and the car drawn over it, and fades as the car leaves.
+  // A picture behind the map: it takes the paper's place while the vehicle
+  // halts, the road and the vehicle drawn over it, and fades as the vehicle leaves.
   // Under a plate it pushes in slowly while it shows — a recap's picture is
   // looked at for seconds, and a still one reads as a slide.
   const fullFrame = (rise: number, pop: { key: string; at: number; leaves: number }) => {
@@ -429,7 +527,7 @@ function paintMap(
     }
   }
 
-  // The stops: a dot each, filled once the car has passed, a ripple where it halts.
+  // The stops: a dot each, filled once the vehicle has passed, a ripple where it halts.
   const stops = plan.points.map(at);
   const dotR = 7 * u;
   if (o.dots) {
@@ -452,7 +550,7 @@ function paintMap(
       if (members > 1) paintCount(g, p.x - dotR * 2.8, p.y - dotR * 2.2, members, u, reached ? o.trailColor : halo);
     });
   }
-  // The milestones: a tick across the road, its number once the car has passed.
+  // The milestones: a tick across the road, its number once the vehicle has passed.
   if (plan.milestones.length) paintMilestones(g, plan, o, at, turnedDir, moment, u, ink, halo, scratch.words);
 
   if (moment.at !== null && !moment.over && (moment.phase === 'halt' || moment.phase === 'stay' || moment.phase === 'arrive')) {
@@ -479,7 +577,7 @@ function paintMap(
       const cw = landscape ? long : (long * picture.width) / picture.height;
       const ch = landscape ? (long * picture.height) / picture.width : long;
       const border = long * 0.05;
-      const place = cardPlacement(stops[pop.stop], pop.rank, pop.key, { w: cw + 2 * border, h: ch + 2 * border }, frame, carPx * 0.55, pop.stop);
+      const place = cardPlacement(stops[pop.stop], pop.rank, pop.key, { w: cw + 2 * border, h: ch + 2 * border }, frame, vehiclePx * 0.55, pop.stop);
       cards.push({ picture, x: place.x, y: place.y, w: cw, h: ch, border, angle: place.angle, rise, fade });
       const half = Math.hypot(cw + 2 * border, ch + 2 * border) / 2;
       cardBoxes.push({ x0: place.x - half, y0: place.y - half, x1: place.x + half, y1: place.y + half });
@@ -512,21 +610,36 @@ function paintMap(
     }
   }
 
-  // The prints lie on the map; the car, a toy standing on it, is drawn over them.
+  // The prints lie on the map; the vehicle, a toy standing on it, is drawn over them.
   for (const card of cards) paintCard(g, card, u);
 
-  // The car, its shadow first.
+  // The vehicle, its shadow first — and, on a ferry, the trip's vehicle driving on or off it.
   {
-    const parts = carParts(scratch);
-    const { model, spec } = scratch;
-    const p = at(moment.point);
-    const heading = turnedDir(moment.heading);
+    const model = currentModel;
+    const spec = current;
+    // A ferry the road crosses by carries the road's own car: the ship docks
+    // off each shore and the car drives from where it stopped up the stern
+    // ramp, and off the bow it grows back to its size to drive on (`boarding.ts`).
+    const crossing = scratch.road && !scratch.rider && model.ramps ? crossingAt(scratch.road.crossings, t, plan.path.length) : null;
+    const boarding = scratch.rider ? boardingAt(plan.schedule, t) : (crossing?.moment ?? null);
+    const riding = scratch.rider ?? (crossing ? riderOf(scratch, crossing.crossing.rider) : null);
+    const scale = vehiclePx / model.length;
+    let shipPoint = moment.point;
+    let shipHeading = moment.heading;
+    if (crossing) {
+      const toPlan = scale / Math.max(1e-9, view.scale);
+      const riderLength = (carPx * RIDER_SCALE) / scale;
+      const reach = {
+        board: dockReach('board', model.length, riderLength) * toPlan,
+        alight: dockReach('alight', model.length, riderLength) * toPlan,
+      };
+      const s = dockedS(crossing.crossing, crossing.ends, moment.s, reach);
+      shipPoint = pointAt(plan.path, s).point;
+      shipHeading = headingAt(plan.path, s);
+    }
+    const p = at(shipPoint);
+    const heading = turnedDir(shipHeading);
     const len = Math.hypot(heading.x, heading.y) || 1;
-    const scale = carPx / model.length;
-    const travelled = moment.s * view.scale;
-    const spin = travelled / (model.wheelRadius * scale);
-    const spins: Record<string, number> = {};
-    for (const part of parts) if (part.spin) spins[part.id] = -spin;
     const pose: Pose = {
       fx: heading.x / len,
       fy: -heading.y / len,
@@ -534,21 +647,51 @@ function paintMap(
       scale,
       x: p.x,
       y: p.y,
-      spins,
+      spins: {},
     };
+    let rider = riding && boarding ? riderPose(riding, boarding, pose, model.length, carPx) : null;
+    // In the middle of the road the car stands on the shore at its own size.
+    const roadEnd = crossing && boarding ? (boarding.stage === 'board' ? crossing.ends.start : crossing.ends.end) : true;
+    if (rider && boarding && !roadEnd) {
+      const k = riderBlend(boarding);
+      if (k > 0) {
+        const own = turnedDir(moment.heading);
+        const ownLen = Math.hypot(own.x, own.y) || 1;
+        const shore = at(moment.point);
+        rider = onTheShore(rider, { fx: own.x / ownLen, fy: -own.y / ownLen, scale: carPx / riding!.model.length, x: shore.x, y: shore.y }, k);
+      }
+    }
+    const ramp = rider?.track.ramp ?? null;
+    const parts = scratch.rider || spec === scratch.spec ? vehicleParts(scratch, ramp) : partsFor(scratch, spec, ramp);
+    const change = liveTransition(scratch.road, t);
+    const travelled = moment.s * view.scale;
+    const spin = travelled / (model.wheelRadius * scale);
+    const spins: Record<string, number> = {};
+    for (const part of parts) if (part.spin) spins[part.id] = -spin;
+    pose.spins = spins;
+    const ink = onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)';
     if (model.kind === 'boat') {
       // A boat sits IN the water: a faint shadow, and the wake it leaves while
       // it runs — growing as it gets under way, settling once it halts.
-      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, moment.since), Math.max(1, carPx / 55), model.wake ?? 1);
+      // A boat taken at a shore mid-run gets under way from the swap, not from the run's start;
+      // a ferry waiting at the quay for the car leaves none.
+      const since = change?.kind === 'swap' ? Math.min(moment.since, t - change.t) : moment.since;
+      const waiting = crossing?.moment?.stage === 'board';
+      paintWake(g, pose, model.length, model.width, waiting ? 0 : wakeStrength(moment.phase, since), Math.max(1, carPx / 55), model.wake ?? 1);
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.12 : 0.2);
     } else {
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
     }
-    paintMesh(g, renderOrder(parts, pose, carLight(spec.finish)), {
+    // The vehicle inside the hull, or behind it, is drawn first so the ship
+    // covers it as it goes in; out on a ramp nearer the camera, after.
+    if (rider && !rider.front) paintRider(g, riding!, rider, onPaper, ink);
+    paintMesh(g, renderOrder(parts, pose, vehicleLight(spec.finish)), {
       palette: model.palette(spec.color),
-      ink: onPaper ? hexToRgba(o.inkColor, 0.85) : 'rgba(10,8,6,0.85)',
+      ink,
       outlineWidth: Math.max(0.9, carPx / 78),
     });
+    if (rider && rider.front) paintRider(g, riding!, rider, onPaper, ink);
+    if (change) paintChange(g, change, (t - change.t) / TRANSITION_SECONDS, p, vehiclePx, model.kind === 'boat', spec.color, ink);
   }
 
   // The furniture: a compass, a scale bar, the distance so far.
@@ -620,12 +763,16 @@ function paintMap(
   // fills the frame, which hides the map with it.
   if (tiles) paintOsmCredit(g, { x: 0, y: 0, width: w, height: h }, u);
 
-  // A picture filling the frame while the car halts: over everything of the map.
+  // A picture filling the frame while the vehicle halts: over everything of the map.
   if (o.pictures === 'fill') for (const { pop, rise } of showing) fullFrame(rise, pop);
 
-  // The recap's summary card, once the car has arrived and rested.
+  // The recap's summary card, once the vehicle has arrived and rested: the
+  // stamp in the map's box, any other face over the whole frame.
   const { summaryAt } = plan.schedule;
-  if (summaryAt !== null && t >= summaryAt) paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words);
+  if (summaryAt !== null && t >= summaryAt) {
+    if (card && card.face !== 'stamp') paintSummaryCard(g, card, pictures, t - summaryAt, frame, t);
+    else paintSummary(g, plan, o, box, u, Math.min(1, (t - summaryAt) / SUMMARY_RISE_SECONDS), scratch.words, card?.theme ?? scratch.theme, frame, t, card);
+  }
 
   g.restore();
 }
@@ -634,6 +781,123 @@ function paintMap(
 const PUSH_IN = 0.06;
 const PUSH_IN_SECONDS = 8;
 const SUMMARY_RISE_SECONDS = 0.45;
+
+/**
+ * A change marked on the vehicle: a SWAP throws a splash — rings out from
+ * where it now floats (a boat) or stands (a car back ashore); a REPAINT is a
+ * sweep of the new paint, a disc of its colour opening and fading.
+ */
+function paintChange(
+  g: HookCtx2D,
+  change: RoadTransition,
+  k: number,
+  at: { x: number; y: number },
+  vehiclePx: number,
+  afloat: boolean,
+  color: string,
+  ink: string,
+): void {
+  const fade = 1 - k;
+  g.save();
+  if (change.kind === 'repaint') {
+    const r = vehiclePx * (0.25 + 0.55 * k);
+    g.globalAlpha = 0.35 * fade;
+    g.fillStyle = color;
+    g.beginPath();
+    g.arc(at.x, at.y, r, 0, Math.PI * 2);
+    g.fill();
+    g.globalAlpha = 0.8 * fade;
+    g.strokeStyle = ink;
+    g.lineWidth = Math.max(1, vehiclePx / 90);
+    g.stroke();
+  } else {
+    g.strokeStyle = afloat ? 'rgba(63,90,114,0.9)' : ink;
+    for (const lag of [0, 0.25]) {
+      const kk = Math.max(0, k - lag);
+      if (kk <= 0) continue;
+      g.globalAlpha = 0.7 * (1 - kk);
+      g.lineWidth = Math.max(1, vehiclePx / 60) * (1 - kk);
+      g.beginPath();
+      g.ellipse(at.x, at.y, vehiclePx * (0.3 + 0.6 * kk), vehiclePx * (0.18 + 0.36 * kk), 0, 0, Math.PI * 2);
+      g.stroke();
+    }
+  }
+  g.restore();
+}
+
+/** Where the riding car is on screen this frame, and whether it is in front of the ship. */
+interface RiderPose {
+  pose: Pose;
+  track: RiderTrack;
+  front: boolean;
+}
+
+/**
+ * The trip's vehicle beside the ship: placed along the ship's own centre line
+ * through the ship's pose (`riderTrack`), so it follows the ship's turn and
+ * tilt exactly, at its own scale — {@link RIDER_SCALE} of a car's usual length.
+ * It is IN FRONT of the ship only out past an end of the hull and nearer the
+ * camera than that end; anywhere else the ship covers it.
+ */
+function riderPose(
+  rider: NonNullable<DriveScratch['rider']>,
+  boarding: NonNullable<ReturnType<typeof boardingAt>>,
+  ship: Pose,
+  shipLength: number,
+  carPx: number,
+): RiderPose {
+  const riderPx = carPx * RIDER_SCALE;
+  const track = riderTrack(boarding, shipLength, riderPx / ship.scale);
+  if (track.alpha <= 0) return { pose: ship, track, front: false };
+  const here = project(toWorld([0, track.y, 0], ship), ship);
+  const half = shipLength / 2;
+  const out = Math.abs(track.y) > half;
+  const end = project(toWorld([0, Math.sign(track.y) * half, 0], ship), ship);
+  const scale = riderPx / rider.model.length;
+  const spin = (track.travelled * ship.scale) / (rider.model.wheelRadius * scale);
+  if (!rider.parts) rider.parts = rider.model.build(rider.spec.gear);
+  const spins: Record<string, number> = {};
+  for (const part of rider.parts) if (part.spin) spins[part.id] = -spin;
+  return {
+    pose: { fx: ship.fx, fy: ship.fy, tilt: ship.tilt, scale, x: here.x, y: here.y, spins },
+    track,
+    front: out && here.depth < end.depth,
+  };
+}
+
+/**
+ * The riding car blended toward the road's own full-size car standing on the
+ * shore, by `k` (`riderBlend`): its place, its heading, its size — so the car
+ * that stopped at the quay is the one that drives aboard, and the one that
+ * drives off is the one the road carries on with.
+ */
+function onTheShore(rider: RiderPose, shore: Pick<Pose, 'fx' | 'fy' | 'scale' | 'x' | 'y'>, k: number): RiderPose {
+  const base = rider.pose;
+  const mix = (a: number, b: number) => a + (b - a) * k;
+  const fx = mix(base.fx, shore.fx);
+  const fy = mix(base.fy, shore.fy);
+  const len = Math.hypot(fx, fy) || 1;
+  return {
+    ...rider,
+    pose: { ...base, fx: fx / len, fy: fy / len, scale: mix(base.scale, shore.scale), x: mix(base.x, shore.x), y: mix(base.y, shore.y) },
+    track: { ...rider.track, alpha: Math.max(rider.track.alpha, k) },
+  };
+}
+
+function paintRider(g: HookCtx2D, rider: NonNullable<DriveScratch['rider']>, at: RiderPose, onPaper: boolean, ink: string): void {
+  if (at.track.alpha <= 0 || !rider.parts) return;
+  const { model, spec } = rider;
+  g.save();
+  g.globalAlpha *= at.track.alpha;
+  paintGroundShadow(g, at.pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
+  paintMesh(g, renderOrder(rider.parts, at.pose, vehicleLight(spec.finish)), {
+    palette: model.palette(spec.color),
+    ink,
+    // The car's own outline at its drawn size: a rider's thinner, the road's car's as it grows back.
+    outlineWidth: Math.max(0.7, (at.pose.scale * model.length) / 78),
+  });
+  g.restore();
+}
 
 function paintMilestones(
   g: HookCtx2D,
@@ -682,7 +946,10 @@ function paintMilestones(
 
 /**
  * The summary: days · distance · stops, in the map's box — the three
- * numbers of the trip the counter has been counting up to.
+ * numbers of the trip the counter has been counting up to. With a card (the
+ * recap's Stamp face) the box wears the card's LOOK — its solid, its frame,
+ * its words — or the map's paper when the author picks Paper
+ * (`paintStampBox`); without one, the map's paper and ink, as it always did.
  */
 function paintSummary(
   g: HookCtx2D,
@@ -692,53 +959,72 @@ function paintSummary(
   u: number,
   rise: number,
   words: SummaryWords,
+  theme: StyleTheme | null,
+  frame: FrameBox,
+  t: number,
+  /** The card's facts, as the author chose them; absent, days · distance · stops. */
+  scene: CardScene | null = null,
 ): void {
   const n = plan.route.stops.length;
   const unit = o.distance === 'mi' ? 'mi' : 'km';
   const cells: { value: string; word: string }[] = [];
-  if (plan.clock) {
-    const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
-    cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+  if (scene) {
+    const { count } = cardProgress(scene.card.cardEntrance, t - (plan.schedule.summaryAt ?? t));
+    for (const cell of scene.cells) cells.push({ value: cellAt(cell, count, unit), word: cell.word });
+  } else {
+    if (plan.clock) {
+      const days = Math.max(1, Math.round(plan.clock.leave[n - 1] - plan.clock.arrive[0]));
+      cells.push({ value: String(days), word: (days === 1 ? words.day : words.days).toLowerCase() });
+    }
+    cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
+    cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
   }
-  cells.push({ value: distanceNumeral(plan.kmAtStop[n - 1], unit), word: unit });
-  cells.push({ value: String(n), word: n === 1 ? words.stop.toLowerCase() : words.stops });
+  if (!cells.length) return;
 
   const k = 1 - Math.pow(1 - rise, 3);
   const cw = Math.min(box.width, 200 * u * cells.length);
   const ch = 150 * u;
   const cx = box.x + box.width / 2;
   const cy = box.y + box.height / 2 + (1 - k) * 18 * u;
+  if (scene) {
+    const { count } = cardProgress(scene.card.cardEntrance, t - (plan.schedule.summaryAt ?? t));
+    paintStampBox(g, scene, { x: cx - cw / 2, y: cy - ch / 2, w: cw, h: ch }, u, k, count, frame, t);
+    return;
+  }
   g.save();
   g.globalAlpha = k;
+  // A card lifted off the map: a soft shadow in stacked fills (no blur in
+  // this painter), then the paper OPAQUE — the map's names used to show
+  // through it (his «tampon translucide»).
+  for (const [dy, a] of [[6, 0.05], [3, 0.07]] as const) {
+    roundRect(g, cx - cw / 2, cy - ch / 2 + dy * u, cw, ch, 14 * u);
+    g.fillStyle = hexToRgba(o.inkColor, a);
+    g.fill();
+  }
   roundRect(g, cx - cw / 2, cy - ch / 2, cw, ch, 14 * u);
-  g.fillStyle = hexToRgba(o.paperColor, 0.94);
+  g.fillStyle = o.paperColor;
   g.fill();
   g.lineWidth = 1.5 * u;
   g.strokeStyle = hexToRgba(o.inkColor, 0.3);
   g.stroke();
-  g.textAlign = 'center';
-  g.fillStyle = o.inkColor;
-  cells.forEach((cell, i) => {
-    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
-    g.font = `600 ${54 * u}px ${MONO_FONT}`;
-    g.textBaseline = 'alphabetic';
-    g.fillText(cell.value, x, cy + 8 * u);
-    g.font = `500 ${20 * u}px ${LABEL_FONT}`;
-    g.textBaseline = 'top';
-    g.fillStyle = hexToRgba(o.inkColor, 0.7);
-    g.fillText(cell.word, x, cy + 22 * u);
-    g.fillStyle = o.inkColor;
-    if (i > 0) {
-      const sx = cx - cw / 2 + (cw * i) / cells.length;
-      g.strokeStyle = hexToRgba(o.inkColor, 0.18);
-      g.lineWidth = 1.5 * u;
-      g.beginPath();
-      g.moveTo(sx, cy - ch * 0.3);
-      g.lineTo(sx, cy + ch * 0.3);
-      g.stroke();
-    }
+  cells.forEach((_, i) => {
+    if (i === 0) return;
+    const sx = cx - cw / 2 + (cw * i) / cells.length;
+    g.strokeStyle = hexToRgba(o.inkColor, 0.18);
+    g.lineWidth = 1.5 * u;
+    g.beginPath();
+    g.moveTo(sx, cy - ch * 0.3);
+    g.lineTo(sx, cy + ch * 0.3);
+    g.stroke();
   });
   g.restore();
+  const texts: LookText[] = [];
+  cells.forEach((cell, i) => {
+    const x = cx - cw / 2 + (cw * (i + 0.5)) / cells.length;
+    texts.push({ id: `summary:value:${i}`, text: cell.value, px: 54 * u, x, y: cy + 8 * u, anchor: 'bottom-center', ink: o.inkColor, alpha: k });
+    texts.push({ id: `summary:word:${i}`, text: cell.word, px: 20 * u, x, y: cy + 22 * u, anchor: 'top-center', ink: hexToRgba(o.inkColor, 0.7), alpha: k });
+  });
+  drawLookTexts(g, texts, frame.width, frame.height, theme, t);
 }
 
 /** The sample before `s` on the path — what the trail is drawn up to. */

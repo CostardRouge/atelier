@@ -1,34 +1,43 @@
 import { useState } from 'react';
-import { describeCar, sameCarSpec, type CarSpec } from '../../shared/roadtrip/car-spec';
-import { carModel } from '../../shared/roadtrip/hooks/car-registry';
+import { describeVehicle, sameVehicleSpec, type VehicleSpec } from '../../shared/roadtrip/vehicle-spec';
+import { vehicleModel } from '../../shared/roadtrip/hooks/vehicle-registry';
 import type { TripDoc } from '../../shared/roadtrip/trip-types';
+import type { IsoDate } from '../../shared/roadtrip/trip-days';
+import { changeOn, mainVehicle, vehicleOnDay } from '../../shared/roadtrip/vehicle-fleet';
 import Button from '../../shared/ui/Button';
 import useDialogKeys from '../../shared/ui/use-dialog-keys';
-import CarGaragePanel from './CarGaragePanel';
+import GaragePanel from './GaragePanel';
 
-interface CarGarageModalProps {
+interface GarageModalProps {
   trip: TripDoc;
+  /** The piece's day: the trip's main vehicle is dressed as it was then. */
+  day: IsoDate;
   onCancel: () => void;
-  /** The car as dressed — the caller writes it to the trip. */
-  onDone: (car: CarSpec) => void;
+  /** The vehicle as dressed — the caller writes it to the state in effect on `day` (`withLookOn`). */
+  onDone: (spec: VehicleSpec) => void;
 }
 
 /**
  * The garage as a sheet of its own, opened from the piece: the Virée opener's
- * panel says "Configure the car…" and this is where it lands, the car on its
+ * panel says "Configure the vehicle…" and this is where it lands, the vehicle on its
  * turntable at a size the inspector column cannot give it.
  *
  * A DRAFT, unlike the trip settings pane, which writes on every switch: the
  * sheet is opened while a map is being composed, and a car half-dressed
  * behind a stage that redraws on every flag is a distraction — Done writes
  * the trip once, Escape and Cancel leave it as it was. The panel inside is
- * the same `CarGaragePanel` as the settings pane, so the two homes can never
+ * the same `GaragePanel` as the settings pane, so the two homes can never
  * drift. No portal: `PostEditor` renders it beside the other trip-wide sheets,
  * outside the panel host, and it stacks over the stage like them.
  */
-export default function CarGarageModal({ trip, onCancel, onDone }: CarGarageModalProps) {
-  const [draft, setDraft] = useState<CarSpec>(trip.car);
-  const changed = !sameCarSpec(draft, trip.car);
+export default function GarageModal({ trip, day, onCancel, onDone }: GarageModalProps) {
+  const main = mainVehicle(trip.vehicles);
+  const start = vehicleOnDay(main, day);
+  // Which state the sheet dresses: the vehicle as it set off, or a change in
+  // effect on the piece's day — said, so a repaint never lands on the wrong one.
+  const change = changeOn(main, day);
+  const [draft, setDraft] = useState<VehicleSpec>(start);
+  const changed = !sameVehicleSpec(draft, start);
   const done = () => (changed ? onDone(draft) : onCancel());
   useDialogKeys({ onCancel, onConfirm: done });
 
@@ -45,7 +54,7 @@ export default function CarGarageModal({ trip, onCancel, onDone }: CarGarageModa
       <div className="w-full max-w-[68rem] h-[min(calc(var(--app-h)*0.9),48rem)] flex flex-col overflow-hidden bg-surface border border-line rounded-paper-lg shadow-paper max-[820px]:max-w-none max-[820px]:h-[var(--app-h)] max-[820px]:rounded-none max-[820px]:border-0">
         <div className="flex-none flex items-baseline gap-3 px-6 pt-[1.4rem] pb-3.5 border-b border-line">
           <h2 className="m-0 flex-none whitespace-nowrap font-serif text-2xl">Garage</h2>
-          <span className="min-w-0 font-mono text-2xs text-muted truncate" title={describeCar(draft, carModel(draft.model).name)}>
+          <span className="min-w-0 font-mono text-2xs text-muted truncate" title={describeVehicle(draft, vehicleModel(draft.model).name)}>
             {trip.name}
           </span>
           <span className="flex-1" />
@@ -60,12 +69,14 @@ export default function CarGarageModal({ trip, onCancel, onDone }: CarGarageModa
         </div>
 
         <div className="flex-1 min-h-0 overflow-y-auto overscroll-contain px-6 py-5">
-          <CarGaragePanel value={draft} onChange={setDraft} />
+          <GaragePanel value={draft} onChange={setDraft} />
         </div>
 
         <div className="flex-none flex items-center gap-3 px-6 py-3.5 border-t border-line bg-surface max-[820px]:pb-[max(0.875rem,env(safe-area-inset-bottom))]">
           <span className="min-w-0 text-xs text-muted truncate">
-            Every Virée of this trip drives this car.
+            {change
+              ? `As it is from ${change.place ? `${change.place}, ` : ''}${change.from} — the trip settings hold its whole story.`
+              : 'The trip’s main vehicle, as it set off.'}
           </span>
           <span className="flex-1" />
           <Button onClick={onCancel}>Cancel</Button>

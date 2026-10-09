@@ -46,7 +46,15 @@ export interface DayPoint extends GeoPoint {
   measured: number;
   /** The position rests only on batch-inferred fixes. */
   inferred: boolean;
+  /**
+   * Where the position came from, once several producers are merged
+   * (`polarsteps.ts`, `mergeDays`); absent = the instance's own row.
+   */
+  from?: DaySource;
 }
+
+/** The producers of a day's position: an instance, a Polarsteps track, a Polarsteps step. */
+export type DaySource = 'instance' | 'track' | 'step';
 
 function finite(value: unknown): number | null {
   return typeof value === 'number' && Number.isFinite(value) ? value : null;
