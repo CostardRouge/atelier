@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import {
+  stageRoads,
   dialAngles,
   dialRadius,
   pathMidpoint,
@@ -9,6 +10,7 @@ import {
   tripMap,
   wedgePath,
 } from './trip-map';
+import { roadLine, type RoadFix } from './road-track';
 import { createTripPlace, createTripStage, type TripPlace, type TripStage } from './trip-types';
 
 const at = (name: string, lat: number, lon: number): TripPlace => createTripPlace(name, '', { lat, lon });
@@ -221,5 +223,41 @@ describe('placeLabels', () => {
 
   it('draws no name for an unnamed mark', () => {
     expect(placeLabels([{ x: 10, y: 10, radius: 5, text: '' }], [], [], view)).toEqual([null]);
+  });
+});
+
+describe('stageRoads', () => {
+  // A road round a bay (invented): A east, down, west to B; then on to C.
+  const A = at('A', -30, 120);
+  const B = at('B', -31, 120);
+  const C = at('C', -31, 117);
+  const T0 = 1_762_000_000;
+  const fixes: RoadFix[] = [];
+  const leg = (from: [number, number], to: [number, number], n: number) => {
+    for (let i = fixes.length ? 1 : 0; i <= n; i++) {
+      fixes.push({ t: T0 + fixes.length * 600, lat: from[0] + ((to[0] - from[0]) * i) / n, lon: from[1] + ((to[1] - from[1]) * i) / n });
+    }
+  };
+  leg([-30, 120], [-30, 122], 20);
+  leg([-30, 122], [-31, 122], 10);
+  leg([-31, 122], [-31, 120], 20);
+  leg([-31, 120], [-31, 117], 30);
+  const road = roadLine(fixes, 'raw', 0);
+
+  it('lays each stage’s path on the road between its own places', () => {
+    const m = tripMap(trip([stage('2025-11-01', '2025-11-10', [A, B]), stage('2025-11-11', '2025-11-20', [C])]));
+    const lines = stageRoads(m.stages, road);
+    const bay = lines.get(m.stages[0].stage.id)!;
+    expect(bay[0]).toEqual({ lat: -30, lon: 120 });
+    expect(bay[bay.length - 1]).toEqual({ lat: -31, lon: 120 });
+    // Round the bay: it reaches the far side, not across the water.
+    expect(Math.max(...bay.map((p) => p.lon))).toBeCloseTo(122, 1);
+    // A stage of one place has no path.
+    expect(lines.has(m.stages[1].stage.id)).toBe(false);
+  });
+
+  it('keeps the straight strokes with no road', () => {
+    const m = tripMap(trip([stage('2025-11-01', '2025-11-10', [A, B])]));
+    expect(stageRoads(m.stages, { pieces: [], points: 0, km: 0 }).size).toBe(0);
   });
 });

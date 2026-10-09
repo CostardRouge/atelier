@@ -14,8 +14,10 @@ import {
   dialAngles,
   dialRadius,
   placeLabels,
+  pathMidpoint,
   progressIndex,
   spreadAnchors,
+  stageRoads,
   wedgePath,
   type LabelAsk,
   type LabelBox,
@@ -199,8 +201,20 @@ export default function TripMapView({
   // What the trip is framed on: its places, and the road where it runs near
   // them — never the far end of a flight home the track may carry.
   const framed = useMemo(() => framedPoints(model.stages.flatMap((s) => s.places), road), [model.stages, road]);
-  const latest = useRef({ model, tripStart, rungAt, selected, selectedStageId, pictures, compact, told, onRoad, framed });
-  latest.current = { model, tripStart, rungAt, selected, selectedStageId, pictures, compact, told, onRoad, framed };
+  // Each stage's tinted path laid on the road, found once per trip and road —
+  // never per frame: the hops search the whole line.
+  const stageLines = useMemo(() => stageRoads(model.stages, road), [model.stages, road]);
+  // Where a stage's dial sits: halfway along its path as drawn — on the road
+  // where it follows one, so the dial stays on the line.
+  const anchorOf = useCallback(
+    (s: MapStage) => {
+      const line = stageLines.get(s.stage.id);
+      return (line && pathMidpoint(line)) ?? s.anchor;
+    },
+    [stageLines],
+  );
+  const latest = useRef({ model, tripStart, rungAt, selected, selectedStageId, pictures, compact, told, onRoad, framed, stageLines, anchorOf });
+  latest.current = { model, tripStart, rungAt, selected, selectedStageId, pictures, compact, told, onRoad, framed, stageLines, anchorOf };
 
   const padding = useCallback((): { top: number; bottom: number; left: number; right: number } => {
     const phone = latest.current.compact;
@@ -218,7 +232,7 @@ export default function TripMapView({
     const tiles = tilesRef.current;
     const wrap = wrapRef.current;
     if (!map || !svg || !tiles || !wrap) return;
-    const { model: m, tripStart: start, rungAt: rung, selected: day, selectedStageId: openId, pictures: pics, compact: phone, told: toldBy, onRoad: drivenRoad } =
+    const { model: m, tripStart: start, rungAt: rung, selected: day, selectedStageId: openId, pictures: pics, compact: phone, told: toldBy, onRoad: drivenRoad, stageLines: onRoadLines, anchorOf: dialAt } =
       latest.current;
     const canvas = map.getCanvas();
     const W = canvas.clientWidth;
@@ -264,7 +278,8 @@ export default function TripMapView({
       }
     });
 
-    // A stage's own path, in its tint, over a paper casing.
+    // A stage's own path, in its tint, over a paper casing — along the
+    // trip's road between its places where the road joins them.
     let paths = '';
     const placeBoxes: LabelBox[] = [];
     for (const s of m.stages) {
@@ -272,7 +287,8 @@ export default function TripMapView({
       pts.forEach((p) => placeBoxes.push({ x: p.x - 6, y: p.y - 6, width: 12, height: 12 }));
       if (pts.length < 2) continue;
       const line = lineOf(s.index);
-      const d = pts.map((p, k) => `${k ? 'L' : 'M'}${f(p.x)} ${f(p.y)}`).join('');
+      const drawnLine = onRoadLines.get(s.stage.id)?.map(project) ?? pts;
+      const d = drawnLine.map((p, k) => `${k ? 'L' : 'M'}${f(p.x)} ${f(p.y)}`).join('');
       paths +=
         `<path d="${d}" fill="none" style="stroke:${PAPER};stroke-width:6.5;stroke-linecap:round;stroke-linejoin:round"/>` +
         `<path d="${d}" fill="none" style="stroke:${line};stroke-width:3.6;stroke-linecap:round;stroke-linejoin:round"/>` +
@@ -288,7 +304,7 @@ export default function TripMapView({
     // The dials (or, in the pictures view, a told stage's hook), each pushed
     // off its neighbours and tied back to its place by a hairline.
     const drawn = m.stages.filter((s): s is MapStage & { anchor: NonNullable<MapStage['anchor']> } => s.anchor !== null);
-    const origin = drawn.map((s) => project(s.anchor));
+    const origin = drawn.map((s) => project(dialAt(s) ?? s.anchor));
     // A tile is wider than a dial: stages are parted by what they draw.
     const tileSize = Math.round(Math.max(24, Math.min(48, 2 * r + 10)));
     const spread = spreadAnchors(origin, pics && pics.size ? tileSize + 5 : 2 * r + 4);
@@ -605,17 +621,18 @@ export default function TripMapView({
     if (lastOpen.current === selectedStageId) return;
     lastOpen.current = selectedStageId;
     const stage = model.stages.find((s) => s.stage.id === selectedStageId);
-    if (!stage?.anchor) return;
-    const at = map.project([stage.anchor.lon, stage.anchor.lat]);
+    const anchor = stage ? anchorOf(stage) : null;
+    if (!anchor) return;
+    const at = map.project([anchor.lon, anchor.lat]);
     const canvas = map.getCanvas();
     const pad = padding();
     const inside =
       at.x > pad.left && at.x < canvas.clientWidth - pad.right && at.y > pad.top && at.y < canvas.clientHeight - pad.bottom;
     if (inside) return;
-    const target = { center: [stage.anchor.lon, stage.anchor.lat] as [number, number], padding: pad };
+    const target = { center: [anchor.lon, anchor.lat] as [number, number], padding: pad };
     if (prefersReducedMotion()) map.jumpTo(target);
     else map.easeTo({ ...target, duration: 500 });
-  }, [selectedStageId, mapState, model.stages, padding]);
+  }, [selectedStageId, mapState, model.stages, padding, anchorOf]);
 
   const fitTrip = () => {
     const map = mapRef.current;
