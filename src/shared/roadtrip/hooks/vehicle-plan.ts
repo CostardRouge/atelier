@@ -129,6 +129,22 @@ function hopSamples(path: RoadPath, h: number, geo: Projection, centre: number):
  */
 const terrainCache = new WeakMap<LandIndex, Map<string, HopTerrain>>();
 
+/**
+ * Every stop's position as one string, built once per stop list: the key
+ * used to rebuild it for every HOP, which made a road of n stops cost n²
+ * string work per call — 240 stops was a frame's whole budget (2026-10-09).
+ */
+const stopsKeys = new WeakMap<readonly DriveStop[], string>();
+
+function stopsKey(stops: readonly DriveStop[]): string {
+  let key = stopsKeys.get(stops);
+  if (key === undefined) {
+    key = stops.map((s) => `${s.lat.toFixed(5)},${s.lon.toFixed(5)}`).join(';');
+    stopsKeys.set(stops, key);
+  }
+  return key;
+}
+
 function cachedTerrain(
   land: LandIndex,
   stops: readonly DriveStop[],
@@ -139,7 +155,7 @@ function cachedTerrain(
 ): HopTerrain {
   let byKey = terrainCache.get(land);
   if (!byKey) terrainCache.set(land, (byKey = new Map()));
-  const key = `${h}|${rule.bridgeKm}|${rule.shoreKm}|${path.length.toFixed(4)}|${stops.map((s) => `${s.lat.toFixed(5)},${s.lon.toFixed(5)}`).join(';')}`;
+  const key = `${h}|${rule.bridgeKm}|${rule.shoreKm}|${path.length.toFixed(4)}|${stopsKey(stops)}`;
   let found = byKey.get(key);
   if (!found) {
     found = hopTerrain(land, hopSamples(path, h, input.geo, input.centre), rule);

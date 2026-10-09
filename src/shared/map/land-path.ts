@@ -4,9 +4,13 @@
  * black box with a grid (his report, 2026-10-09). Offline: the file is the
  * one the big map and the overview's map already read from our own origin.
  *
- * Only the rings whose box meets the field are projected, and a point within
- * `minStep` field units of the last one kept is skipped: a 320-unit field
- * does not need the 1:50m coast's every vertex.
+ * Only the rings whose box meets the field are projected, an island smaller
+ * than `minStep` in the field is left out, a point within `minStep` field
+ * units of the last one kept is skipped and every point is a whole unit: a
+ * 320-unit field does not need the 1:50m coast's every vertex. The first
+ * version kept a vertex per 0.8 unit at one decimal — 100 kB of path for
+ * Australia, which the browser re-rasterised on every frame of a playing
+ * piece while the Look tab was open (his report, 2026-10-09).
  */
 
 import type { LandCollection } from './land';
@@ -60,7 +64,7 @@ export function landPath(
   land: LandCollection,
   project: (p: LatLonPoint) => { x: number; y: number },
   window: { west: number; east: number; south: number; north: number },
-  minStep = 0.8,
+  minStep = 1.5,
 ): string {
   const parts: string[] = [];
   const mx = (window.east - window.west) * 0.1;
@@ -68,6 +72,9 @@ export function landPath(
   const w = { west: window.west - mx, east: window.east + mx, south: window.south - my, north: window.north + my };
   for (const ring of ringsOf(land)) {
     if (ring.east < w.west || ring.west > w.east || ring.north < w.south || ring.south > w.north) continue;
+    const a = project({ lat: ring.south, lon: ring.west });
+    const b = project({ lat: ring.north, lon: ring.east });
+    if (Math.abs(b.x - a.x) < minStep && Math.abs(b.y - a.y) < minStep) continue;
     let d = '';
     let lastX = NaN;
     let lastY = NaN;
@@ -75,7 +82,7 @@ export function landPath(
     for (const [lon, lat] of ring.points) {
       const p = project({ lat, lon });
       if (kept > 0 && Math.abs(p.x - lastX) < minStep && Math.abs(p.y - lastY) < minStep) continue;
-      d += `${kept === 0 ? 'M' : 'L'}${p.x.toFixed(1)} ${p.y.toFixed(1)}`;
+      d += `${kept === 0 ? 'M' : 'L'}${Math.round(p.x)} ${Math.round(p.y)}`;
       lastX = p.x;
       lastY = p.y;
       kept += 1;
