@@ -49,8 +49,9 @@ he set). Two sliders under Detail — Look ahead (0 = off, then `ROAD_LOOKS`
 200 m–3 km) and Turn radius (`ROAD_RADII` 10–500 m, greyed when off) —, the
 reason behind the panel's ⓘ. A hand-placed point is on the RECORDED line;
 the steered one passes near it, not through it. The panel's per-mode km and Deduce's offer read the line
-with `steer: null` (the same km, without a drive's cost). The steered points
-carry no meaning for `RoadPointsSheet`, which reads its own raw line.
+with `steer: null` (the same km, without a drive's cost). The Road pane's map
+(`RoadMap`) is fed the line the same way, UNSTEERED: a hand point goes on
+the line as recorded, and the steered one passes near it.
 
 ## Virée drives the road (2026-10-09)
 
