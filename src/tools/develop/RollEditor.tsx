@@ -6,6 +6,10 @@ import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { lookCommands } from '../../shared/develop/look-commands';
+import { VERDICTS, filterRows, readDay } from '../../shared/develop/ingest-commands';
+import { rowMediaRef } from '../../shared/sources/winnow/materialize';
+import type { Verdict } from '../../shared/sources/winnow/culling';
+import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
 import { presetCommands } from '../../shared/develop/preset-commands';
 import { presetsNow, saveToPresetBook } from '../../shared/develop/use-preset-book';
 import { SECTION_IDS, developControls, pictureSummary, rollSummary, targetPicture, withDevelopValues } from '../../shared/develop/develop-commands';
@@ -250,6 +254,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
+  const winnowRef = useRef({ connection, client });
+  winnowRef.current = { connection, client };
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('adjust');
@@ -366,6 +372,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [lib.assets, folders.siblings],
   );
   const media = useRollMedia({ pictures: roll.pictures, openId, localFiles });
+  const libraryFilesRef = useRef(libraryFiles);
+  libraryFilesRef.current = libraryFiles;
   // Winnow's picks and stars, read-only (item 33): shown on the strip and
   // filtered on — the filter is this sitting's, never the roll's.
   const culling = useRollCulling(roll.pictures);
@@ -935,6 +943,106 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       },
     },
     {
+      id: 'develop.addFromWinnow',
+      title: 'Add a Winnow day to the roll',
+      description:
+        'Add the connected Winnow’s photographs and clips of a day (or a span) to the roll, narrowed by Winnow’s own culling — verdict (pick, reject, skip, unrated) and minimum stars — and by kind. Bursts count as their cover. The bytes are fetched when a picture opens. Answers how many were added and how many the roll already held.',
+      params: {
+        date: { type: 'string', description: 'The day, YYYY-MM-DD.' },
+        dateTo: { type: 'string', description: 'The span’s last day, YYYY-MM-DD; the same day when absent.', optional: true },
+        verdict: { type: 'string', description: 'Only this verdict.', enum: VERDICTS, optional: true },
+        minStars: { type: 'number', description: 'At least this many stars.', min: 0, max: 5, integer: true, optional: true },
+        media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
+        half: { type: 'string', description: 'incoming (still to cull) or final (the Gallery); both when absent.', enum: ['incoming', 'final'], optional: true },
+      },
+      available: () => (winnowRef.current.client && winnowRef.current.connection ? true : 'no Winnow is connected — connect one on #/sources'),
+      run: async (p) => {
+        const { client: c, connection: conn } = winnowRef.current;
+        if (!c || !conn) throw new CommandError('unavailable', 'no Winnow is connected');
+        const from = readDay('date', p.date);
+        const to = p.dateTo === undefined ? from : readDay('dateTo', p.dateTo);
+        if (to < from) throw new CommandError('invalid', 'dateTo comes before date');
+        const rows = await c.allAssets({
+          dateFrom: from,
+          dateTo: to,
+          ...(p.half ? { half: p.half as 'incoming' | 'final' } : {}),
+          ...(p.media ? { mediaType: p.media as 'photo' | 'video' } : {}),
+        });
+        const kept = filterRows(rows, {
+          verdict: p.verdict as Verdict | undefined,
+          minStars: p.minStars as number | undefined,
+          media: p.media as 'photo' | 'video' | undefined,
+        }).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+        const refs = kept.map((r) => rowMediaRef(conn.id, r));
+        const before = latest.current.pictures.length;
+        update((r) => addPictures(r, refs), 'agent');
+        const added = latest.current.pictures.length - before;
+        return { listed: rows.length, matched: kept.length, added, alreadyOnRoll: kept.length - added };
+      },
+    },
+    {
+      id: 'develop.addFromLibrary',
+      title: 'Add Library files to the roll',
+      description:
+        'Add photographs and clips the Library holds (the files imported in this tab) to the roll: by file name, or ["all"]. A picture the roll already holds is found again, never added twice.',
+      params: { names: { type: 'strings', description: 'File names as the Library shows them, or ["all"].' } },
+      run: async (p) => {
+        const names = p.names as string[];
+        const pool = libraryFilesRef.current;
+        const picked = names.length === 1 && names[0] === 'all' ? pool : names.map((n) => {
+          const f = pool.find((x) => x.name === n);
+          if (!f) throw new CommandError('invalid', `the Library holds no "${n}" — it holds ${pool.map((x) => x.name).join(', ') || 'nothing'}`);
+          return f;
+        });
+        const refs = await hashedMediaRefs(picked);
+        const { found, fresh } = splitByRoll(latest.current.pictures.map((x) => x.ref), refs);
+        if (fresh.length) update((r) => addPictures(r, fresh), 'agent');
+        return { added: fresh.length, alreadyOnRoll: found };
+      },
+    },
+    {
+      id: 'develop.exportPlan',
+      title: 'What an export would deliver',
+      description:
+        'Before anything is rendered: each picture’s line — which file it leaves from, at what size, to which targets — and whether it leaves (develop.deliver decides).',
+      run: () => ({
+        pictures: latest.current.pictures.map((p) => ({ id: p.id, name: pictureLabel(p), leaves: delivers(p), line: exportsRef.current.lines.get(p.id) ?? null })),
+      }),
+    },
+    {
+      id: 'develop.export',
+      title: 'Export pictures',
+      description:
+        'Render pictures through the roll’s own export (its targets, sizes, metadata, HDR) and hand the files to the agent bridge, which writes them into its output folder on this computer — never over an existing file. pictures: ids, ["leaving"] (the ones develop.deliver lets leave — the default) or ["all"]. Answers the paths written and the run’s own sentence. Needs the bridge: an export by hand asks for a folder instead.',
+      params: {
+        pictures: { type: 'strings', description: 'Picture ids, ["leaving"] or ["all"].', optional: true },
+      },
+      available: () =>
+        bridgeState().status !== 'connected'
+          ? 'an export by an agent goes through the bridge, and none is connected'
+          : exportsRef.current.exporting
+            ? 'an export is already running'
+            : true,
+      run: async (p) => {
+        const roll = latest.current;
+        const asked = (p.pictures as string[] | undefined) ?? ['leaving'];
+        const ids =
+          asked.length === 1 && asked[0] === 'all'
+            ? roll.pictures.filter((x) => !isIgnored(x)).map((x) => x.id)
+            : asked.length === 1 && asked[0] === 'leaving'
+              ? roll.pictures.filter(delivers).map((x) => x.id)
+              : asked.map((id) => targetPicture(roll, id, null).id);
+        if (ids.length === 0) throw new CommandError('invalid', 'no picture leaves — mark some with develop.deliver, or name them');
+        const written: string[] = [];
+        const sink = bridgeSink((path) => written.push(path));
+        if (!sink) throw new CommandError('unavailable', 'the bridge went away');
+        await exportsRef.current.exportPictures(ids, sink);
+        // The run's sentence is set on its last render.
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+        return { written, note: exportsRef.current.note };
+      },
+    },
+    {
       id: 'develop.reset',
       title: 'Reset sections',
       description: `Put sections of a picture back as shot (the develop alone unless named). Sections: ${SECTION_IDS.join(', ')}. One undo step.`,
@@ -1087,6 +1195,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   });
   const { exportPictures } = exports;
   exportRunning.current = exports.progress !== null;
+  // Read by the export commands at call time (`develop.export`).
+  const exportsRef = useRef(exports);
+  exportsRef.current = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
     const verbs: ExportVerb[] = [{ id: 'open', label: 'Export this picture', run: () => void exportPictures([openId]) }];

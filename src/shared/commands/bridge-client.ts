@@ -1,5 +1,6 @@
 import { BRIDGE_DEFAULT_PORT, parseTabRequest, type TabRequest } from './mcp-protocol';
 import { CommandError, commands, paramsJsonSchema } from './registry';
+import type { DeliveryTarget } from '../sources/deliver-files';
 
 /**
  * The TAB's half of the agent bridge (`mcp-protocol.ts`): it listens to the
@@ -167,4 +168,34 @@ export function stopBridge(): void {
 export function resumeBridge(): void {
   const port = rememberedPort();
   if (port !== null) open(port);
+}
+
+/**
+ * Where an agent's export goes: the bridge, which writes each file into the
+ * output folder its person started it with (`--out`), never over an existing
+ * file. Null while no bridge is connected — then an export needs a click on
+ * a folder, which no agent can give. `onWritten` hears each file's path on
+ * that computer.
+ */
+export function bridgeSink(onWritten: (path: string) => void): DeliveryTarget | null {
+  if (state.status !== 'connected') return null;
+  const port = state.port;
+  return {
+    kind: 'sink',
+    write: async (file, folder) => {
+      const res = await fetch(`${base(port)}/file`, {
+        method: 'POST',
+        headers: {
+          'content-type': file.type || 'application/octet-stream',
+          'x-atelier-name': encodeURIComponent(file.name),
+          'x-atelier-folder': encodeURIComponent(folder),
+        },
+        body: file,
+      });
+      const answer = (await res.json().catch(() => ({}))) as { path?: string; renamed?: boolean; error?: string };
+      if (!res.ok || !answer.path) throw new Error(answer.error ?? `the bridge answered ${res.status}`);
+      onWritten(answer.path);
+      return { renamed: answer.renamed === true };
+    },
+  };
 }

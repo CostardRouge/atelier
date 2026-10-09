@@ -34,7 +34,14 @@ export type Delivery =
 /** Where a run will land, decided before it renders. */
 export type DeliveryTarget =
   | { kind: 'folder'; dir: FileSystemDirectoryHandle }
-  | { kind: 'download' };
+  | { kind: 'download' }
+  /**
+   * Somewhere that is neither a picked folder nor a download — the agent
+   * bridge, which writes each file into its own output folder on this
+   * computer (`shared/commands/bridge-client.ts`). It needs no click: the
+   * person chose it by starting the bridge. Counted like a folder.
+   */
+  | { kind: 'sink'; write: (file: File, folder: string) => Promise<{ renamed: boolean }> };
 
 export interface DeliverOptions {
   /**
@@ -87,6 +94,22 @@ export async function deliverFilesTo(
 ): Promise<Delivery> {
   const items = files.map((f) => (f instanceof File ? { file: f, folder: '' } : f));
   const total = items.length;
+  if (target.kind === 'sink') {
+    const result = { written: 0, renamed: 0, errors: [] as string[], failed: [] as string[] };
+    for (const [i, item] of items.entries()) {
+      const at = item.folder ? `${item.folder}/${item.file.name}` : item.file.name;
+      try {
+        const { renamed } = await target.write(item.file, item.folder);
+        result.written += 1;
+        if (renamed) result.renamed += 1;
+      } catch (e) {
+        result.errors.push(`${at}: ${e instanceof Error ? e.message : String(e)}`);
+        result.failed.push(at);
+      }
+      onProgress?.(i + 1, total);
+    }
+    return { method: 'folder', ...result };
+  }
   if (target.kind === 'folder') {
     let done = 0;
     const result = { written: 0, renamed: 0, errors: [] as string[], failed: [] as string[] };

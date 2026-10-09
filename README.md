@@ -80,7 +80,9 @@ Today it ships ten tools, converging into a few editors:
 >
 > One more connection never leaves your computer: the **agent bridge** (see
 > "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,
-> the tab talks to `127.0.0.1` alone, to a program you started yourself.
+> the tab talks to `127.0.0.1` alone, to a program you started yourself — and
+> an agent's export is handed to that program, which writes it into the folder
+> you started it with.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -2980,6 +2982,18 @@ and a caption (`develop.words`); the look — built-in LUTs and film stocks,
 their strength and order, the output transform (`develop.addLook` and its
 siblings) — and your preset book (`develop.presets`, `develop.applyPreset`,
 `develop.savePreset`). Your purchased looks, masks and layers stay with you.
+
+A roll can be made and filled end to end: `develop.newRoll`, then
+`develop.addFromWinnow` — a day or a span of the connected Winnow, narrowed by
+its own culling (only the picks, at least three stars, photographs only) — or
+`develop.addFromLibrary` for files the Library already holds. And it can
+leave: `develop.exportPlan` says what each picture would deliver, and
+`develop.export` renders through the roll's own export (its targets, sizes,
+metadata) and hands the files to the bridge, which writes them into its
+output folder — `~/Pictures/Atelier` unless started with `--out DIR` — under
+the capture's own name, numbered `-1`, `-2` rather than ever overwriting a
+file. An export by hand still asks for a folder; only the bridge can take one
+without a click, because you chose its folder when you started it.
 
 ## Photo EXIF tool
 

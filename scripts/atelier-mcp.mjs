@@ -5,9 +5,10 @@
 //
 //   claude mcp add atelier -- node /path/to/atelier/scripts/atelier-mcp.mjs
 //
-// Options: --port N (or ATELIER_BRIDGE_PORT; default 7981), and
-// ATELIER_ORIGINS=https://a,https://b to allow pages other than loopback and
-// the deployed site. Needs Node ≥ 22.18 (it imports the protocol module, a
+// Options: --port N (or ATELIER_BRIDGE_PORT; default 7981), --out DIR (or
+// ATELIER_OUT; default ~/Pictures/Atelier) — where an agent's exports are
+// written —, and ATELIER_ORIGINS=https://a,https://b to allow pages other
+// than loopback and the deployed site. Needs Node ≥ 22.18 (it imports the protocol module, a
 // TypeScript file, through Node's own type stripping). No dependency.
 //
 // The decisions live in `src/shared/commands/mcp-protocol.ts` (pure, tested)
@@ -16,18 +17,26 @@
 
 import http from 'node:http';
 import readline from 'node:readline';
-import { readFileSync } from 'node:fs';
+import os from 'node:os';
+import path from 'node:path';
+import { createWriteStream, existsSync, mkdirSync, readFileSync, renameSync, rmSync } from 'node:fs';
 import {
   BRIDGE_DEFAULT_PORT,
+  MAX_FILE_BYTES,
   handleMcpMessage,
+  numberedName,
   originAllowed,
   parseTabMessage,
+  safeOutputPath,
 } from '../src/shared/commands/mcp-protocol.ts';
 
-const argPort = (() => {
-  const i = process.argv.indexOf('--port');
-  return i >= 0 ? Number(process.argv[i + 1]) : NaN;
-})();
+const arg = (flag) => {
+  const i = process.argv.indexOf(flag);
+  return i >= 0 ? process.argv[i + 1] : undefined;
+};
+const argPort = Number(arg('--port'));
+/** Where an agent's exports land: chosen by whoever started the bridge. */
+const OUT_DIR = path.resolve(arg('--out') ?? process.env.ATELIER_OUT ?? path.join(os.homedir(), 'Pictures', 'Atelier'));
 const PORT = Number.isInteger(argPort) && argPort > 0 ? argPort : Number(process.env.ATELIER_BRIDGE_PORT) || BRIDGE_DEFAULT_PORT;
 const EXTRA_ORIGINS = (process.env.ATELIER_ORIGINS ?? '')
   .split(',')
@@ -87,7 +96,7 @@ function corsHeaders(origin) {
   return {
     'Access-Control-Allow-Origin': origin,
     'Access-Control-Allow-Methods': 'GET, POST, OPTIONS',
-    'Access-Control-Allow-Headers': 'content-type',
+    'Access-Control-Allow-Headers': 'content-type, x-atelier-name, x-atelier-folder',
     // Chrome's Private / Local Network Access: a public page reaching
     // loopback asks this in its preflight.
     'Access-Control-Allow-Private-Network': 'true',
@@ -104,7 +113,7 @@ const server = http.createServer((req, res) => {
     return;
   }
   const cors = corsHeaders(origin);
-  const path = (req.url ?? '/').split('?')[0];
+  const path_ = (req.url ?? '/').split('?')[0];
 
   if (req.method === 'OPTIONS') {
     res.writeHead(204, cors);
@@ -112,7 +121,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === 'GET' && path === '/events') {
+  if (req.method === 'GET' && path_ === '/events') {
     // A newer tab REPLACES the older one: the person connected it last.
     if (tab) {
       tab.res.write('event: replaced\ndata: {}\n\n');
@@ -136,7 +145,7 @@ const server = http.createServer((req, res) => {
     return;
   }
 
-  if (req.method === 'POST' && path === '/message') {
+  if (req.method === 'POST' && path_ === '/message') {
     let size = 0;
     const chunks = [];
     req.on('data', (chunk) => {
@@ -174,6 +183,69 @@ const server = http.createServer((req, res) => {
     return;
   }
 
+  if (req.method === 'POST' && path_ === '/file') {
+    // A file the tab rendered for an agent's export, streamed to disk under
+    // OUT_DIR — never outside it, never over an existing file.
+    const fail = (code, message) => {
+      if (!res.headersSent) res.writeHead(code, { ...cors, 'content-type': 'application/json' });
+      res.end(JSON.stringify({ error: message }));
+    };
+    let name;
+    let folder;
+    try {
+      name = decodeURIComponent(String(req.headers['x-atelier-name'] ?? ''));
+      folder = decodeURIComponent(String(req.headers['x-atelier-folder'] ?? ''));
+    } catch {
+      fail(400, 'the file name is not readable');
+      return;
+    }
+    const segments = safeOutputPath(folder, name);
+    if (!segments) {
+      fail(400, `refused to write "${folder ? `${folder}/` : ''}${name}" — not a plain name under the output folder`);
+      return;
+    }
+    const dir = path.join(OUT_DIR, ...segments.slice(0, -1));
+    try {
+      mkdirSync(dir, { recursive: true });
+    } catch (err) {
+      fail(500, `could not make ${dir}: ${err.message}`);
+      return;
+    }
+    let n = 0;
+    let target = path.join(dir, segments[segments.length - 1]);
+    while (existsSync(target)) target = path.join(dir, numberedName(segments[segments.length - 1], ++n));
+    const partial = `${target}.part`;
+    const out = createWriteStream(partial);
+    let size = 0;
+    req.on('data', (chunk) => {
+      size += chunk.length;
+      if (size > MAX_FILE_BYTES) {
+        req.destroy();
+        out.destroy();
+        rmSync(partial, { force: true });
+        fail(413, 'the file is larger than the bridge writes');
+      }
+    });
+    req.pipe(out);
+    out.on('finish', () => {
+      if (res.writableEnded) return;
+      try {
+        renameSync(partial, target);
+      } catch (err) {
+        fail(500, err.message);
+        return;
+      }
+      log(`wrote ${target} (${(size / 1048576).toFixed(1)} MB)`);
+      res.writeHead(200, { ...cors, 'content-type': 'application/json' });
+      res.end(JSON.stringify({ path: target, bytes: size, renamed: n > 0 }));
+    });
+    out.on('error', (err) => {
+      rmSync(partial, { force: true });
+      fail(500, err.message);
+    });
+    return;
+  }
+
   res.writeHead(404, cors);
   res.end();
 });
@@ -192,6 +264,7 @@ server.listen(PORT, '127.0.0.1', () => log(`listening on http://127.0.0.1:${PORT
 const deps = {
   serverVersion: version,
   port: PORT,
+  outDir: OUT_DIR,
   problem: () => problem,
   tab: () => (tab ? { route: tab.route, title: tab.title, since: tab.since } : null),
   relay,

@@ -22,7 +22,7 @@ import {
   putRoll,
   putSyncRecord,
 } from '../../shared/develop/roll-store';
-import type { RollDoc } from '../../shared/develop/roll-types';
+import { createRollDoc, type RollDoc } from '../../shared/develop/roll-types';
 import { openPictureId, pictureAfterRestore } from '../../shared/develop/roll-editor';
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { requestPersistentStorage } from '../../shared/projects/project-store';
@@ -220,6 +220,20 @@ export default function DevelopTool() {
         open: open?.id ?? null,
         rolls: (await listRolls()).map((r) => rollSummary(open && r.id === open.id ? open : r)),
       }),
+    },
+    {
+      id: 'develop.newRoll',
+      title: 'Make a roll',
+      description: 'Make an empty roll kept in this browser and open it — then fill it with develop.addFromWinnow or develop.addFromLibrary.',
+      params: { name: { type: 'string', description: 'The roll’s name.' } },
+      run: async (p) => {
+        const name = (p.name as string).trim();
+        if (!name) throw new CommandError('invalid', 'a roll needs a name');
+        const roll = createRollDoc(name);
+        if (!(await putRoll(roll))) throw new CommandError('failed', 'the browser refused to store the roll');
+        handleOpen(roll);
+        return { roll: roll.id, name: roll.name };
+      },
     },
     {
       id: 'develop.openRoll',

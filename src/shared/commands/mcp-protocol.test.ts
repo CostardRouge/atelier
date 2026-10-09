@@ -3,6 +3,8 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_TOOLS,
   handleMcpMessage,
+  numberedName,
+  safeOutputPath,
   originAllowed,
   parseTabMessage,
   parseTabRequest,
@@ -144,5 +146,30 @@ describe('originAllowed', () => {
   it('allows an origin named in the extra list, exactly', () => {
     expect(originAllowed('https://my.host', ['https://my.host'])).toBe(true);
     expect(originAllowed('https://my.host:8443', ['https://my.host'])).toBe(false);
+  });
+});
+
+describe('the files the bridge writes', () => {
+  it('keeps a plain name and its sub-folders', () => {
+    expect(safeOutputPath('', 'DJI_0101.jpg')).toEqual(['DJI_0101.jpg']);
+    expect(safeOutputPath('Web/Variant 2', 'DJI_0101.jpg')).toEqual(['Web', 'Variant 2', 'DJI_0101.jpg']);
+  });
+
+  it('refuses anything that could step outside the output folder', () => {
+    expect(safeOutputPath('..', 'a.jpg')).toBeNull();
+    expect(safeOutputPath('Web/../..', 'a.jpg')).toBeNull();
+    expect(safeOutputPath('', '../a.jpg')).toBeNull();
+    expect(safeOutputPath('', 'a\\b.jpg')).toBeNull();
+    expect(safeOutputPath('', 'C:x.jpg')).toBeNull();
+    expect(safeOutputPath('', ' ')).toBeNull();
+    expect(safeOutputPath('', 'a\u0000.jpg')).toBeNull();
+    expect(safeOutputPath('', 'x'.repeat(201))).toBeNull();
+  });
+
+  it('numbers a taken name before its extension', () => {
+    expect(numberedName('DJI_0101.jpg', 0)).toBe('DJI_0101.jpg');
+    expect(numberedName('DJI_0101.jpg', 1)).toBe('DJI_0101-1.jpg');
+    expect(numberedName('.gitignore', 2)).toBe('.gitignore-2');
+    expect(numberedName('README', 3)).toBe('README-3');
   });
 });

@@ -178,6 +178,8 @@ export interface McpDeps {
   /** The tab as last introduced, or null when none is connected. */
   tab: () => { route: string; title: string; since: number } | null;
   port: number;
+  /** Where the bridge writes an agent's exports. */
+  outDir?: string;
   /** What keeps the bridge from working at all (the port taken by another), or null. */
   problem?: () => string | null;
   /** Relay to the tab; rejects with an Error whose message is said to the model. */
@@ -203,7 +205,7 @@ async function callTool(name: string, args: Record<string, unknown>, deps: McpDe
       content: [
         {
           type: 'text',
-          text: JSON.stringify({ connected: true, route: tab.route, title: tab.title, connectedFor: `${Math.round((Date.now() - tab.since) / 1000)} s`, port: deps.port }, null, 2),
+          text: JSON.stringify({ connected: true, route: tab.route, title: tab.title, connectedFor: `${Math.round((Date.now() - tab.since) / 1000)} s`, port: deps.port, ...(deps.outDir ? { exportsGoTo: deps.outDir } : {}) }, null, 2),
         },
       ],
     };
@@ -255,4 +257,38 @@ export async function handleMcpMessage(msg: RpcMessage, deps: McpDeps): Promise<
     default:
       return fail(msg.id, -32601, `method not found: ${msg.method}`);
   }
+}
+
+// --- files the tab hands the bridge to write ------------------------------------
+
+/** Largest file the bridge will write: a 16-bit PNG of a 60-megapixel picture fits. */
+export const MAX_FILE_BYTES = 768 * 1024 * 1024;
+
+/**
+ * The path, under the bridge's output folder, that a file named `name` in
+ * sub-folder `folder` (`Web/Variant 2`, or empty) is written to — as
+ * segments — or null for anything that could step outside that folder: an
+ * empty or dot segment, a separator inside a name, a control character, a
+ * name over 200 characters. The tab is trusted to name its files; the bridge
+ * still never writes where it was not told it could.
+ */
+export function safeOutputPath(folder: string, name: string): string[] | null {
+  const segments = [...folder.split('/').filter((s) => s !== ''), name];
+  for (const seg of segments) {
+    if (seg === '.' || seg === '..' || seg.trim() === '') return null;
+    if (seg.length > 200) return null;
+    // eslint-disable-next-line no-control-regex
+    if (/[\\/\u0000-\u001f:*?"<>|]/.test(seg)) return null;
+  }
+  return segments;
+}
+
+/**
+ * `DJI_0101.jpg` → `DJI_0101-1.jpg` for n = 1: the bridge numbers a taken
+ * name, never overwrites — the suite's own `-1`, `-2` (`unique-name.ts`).
+ */
+export function numberedName(name: string, n: number): string {
+  if (n <= 0) return name;
+  const dot = name.lastIndexOf('.');
+  return dot > 0 ? `${name.slice(0, dot)}-${n}${name.slice(dot)}` : `${name}-${n}`;
 }
