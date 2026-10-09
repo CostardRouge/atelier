@@ -41,6 +41,7 @@ import {
   viewAt,
   wantsStopLabel,
   type DriveOptions,
+  type DrivePlan,
   type DriveStop,
 } from './drive-plan';
 import { ALIGHT_SECONDS, BOARD_SECONDS } from './boarding';
@@ -1168,6 +1169,96 @@ describe('the trip’s car boarding a ferry', () => {
     const one = driveRoute([STAGES[0]], CAL, dateOf(2), opts({ includePieces: false, picked: [pic('a.jpg', 1)] }));
     const plan = drivePlan({ ...one, stops: one.stops.slice(0, 1) }, opts(), false, true);
     if (plan) expect(plan.schedule.boardAt).toBeNull();
+  });
+});
+
+describe('a ferry the road crosses by: the car docks at each shore', () => {
+  const route = driveRoute(STAGES, CAL, dateOf(20), opts({ includePieces: false }));
+  const o = opts({ pictures: 'none' });
+  const runs = (plan: DrivePlan) => plan.schedule.phases.filter((p) => p.kind === 'run');
+  /** Two shores a third and two thirds of the way along the second hop. */
+  const shores = (plan: DrivePlan) => {
+    const { stopS } = plan.path;
+    return { board: stopS[1] + (stopS[2] - stopS[1]) / 3, alight: stopS[1] + ((stopS[2] - stopS[1]) * 2) / 3 };
+  };
+
+  it('cuts the run at each shore and rests the car there for its beat — the road time unchanged', () => {
+    const plain = drivePlan(route, o)!;
+    const { board, alight } = shores(plain);
+    const docked = drivePlan(route, o, false, false, () => [
+      { s: board, kind: 'board' },
+      { s: alight, kind: 'alight' },
+    ])!;
+    expect(docked.seconds).toBeCloseTo(plain.seconds + BOARD_SECONDS + ALIGHT_SECONDS, 9);
+    expect(runs(docked)).toHaveLength(runs(plain).length + 2);
+    const roadTime = (plan: DrivePlan) => runs(plan).reduce((sum, p) => sum + p.end - p.start, 0);
+    expect(roadTime(docked)).toBeCloseTo(roadTime(plain), 9);
+    const [on, off] = docked.schedule.docks;
+    expect(on).toMatchObject({ kind: 'board', s: board, stop: null });
+    expect(off).toMatchObject({ kind: 'alight', s: alight, stop: null });
+    expect(on.end - on.start).toBeCloseTo(BOARD_SECONDS, 9);
+    expect(off.end - off.start).toBeCloseTo(ALIGHT_SECONDS, 9);
+    // At rest on the shore, at no stop, for the whole beat; the crossing is a run of its own between the two.
+    for (const beat of [on, off]) {
+      const m = docked.at((beat.start + beat.end) / 2);
+      expect(m.phase).toBe('dock');
+      expect(m.s).toBe(beat.s);
+      expect(m.at).toBeNull();
+    }
+    const crossing = runs(docked).find((p) => p.start === on.end)!;
+    expect(crossing).toMatchObject({ s0: board, s1: alight, end: off.start });
+    // Every stop is still reached once, in order.
+    const { arrivals } = docked.schedule;
+    expect(arrivals).toHaveLength(route.stops.length);
+    for (let i = 1; i < arrivals.length; i++) expect(arrivals[i]).toBeGreaterThan(arrivals[i - 1]);
+  });
+
+  it('docks at a stop in a beat of its own: off the ferry before the halt, aboard after it', () => {
+    const halting = opts({ pictures: 'none', pauseEverywhere: true });
+    const plain = drivePlan(route, halting)!;
+    const at = plain.path.stopS[1];
+    const docked = drivePlan(route, halting, false, false, () => [
+      { s: at, kind: 'alight' },
+      { s: at, kind: 'board' },
+    ])!;
+    const here = docked.schedule.phases.filter((p) => p.s0 === at && p.kind !== 'run').map((p) => p.dock ?? p.kind);
+    expect(here).toEqual(['alight', 'halt', 'board']);
+    expect(docked.schedule.docks.map((d) => d.stop)).toEqual([1, 1]);
+  });
+
+  it('boards at the road’s start and alights at its end in the hold and the arrival, as on a borrowed ferry', () => {
+    const borrowed = drivePlan(route, o, false, true)!;
+    const docked = drivePlan(route, o, false, false, (path) => [
+      { s: 0, kind: 'board' },
+      { s: path.length, kind: 'alight' },
+    ])!;
+    expect(docked.seconds).toBeCloseTo(borrowed.seconds, 9);
+    expect(docked.schedule.boardAt).toEqual(borrowed.schedule.boardAt);
+    expect(docked.schedule.alightAt).toEqual(borrowed.schedule.alightAt);
+    expect(docked.schedule.docks.map((d) => [d.kind, d.stop])).toEqual([
+      ['board', 0],
+      ['alight', route.stops.length - 1],
+    ]);
+  });
+
+  it('keeps the recap’s days running in order across the shores', () => {
+    const recapRoute = driveRoute(STAGES, CAL, dateOf(20), opts({ includePieces: false }));
+    const plain = drivePlan(recapRoute, o, true)!;
+    expect(plain.clock).not.toBeNull();
+    const { board, alight } = shores(plain);
+    const docked = drivePlan(recapRoute, o, true, false, () => [
+      { s: board, kind: 'board' },
+      { s: alight, kind: 'alight' },
+    ])!;
+    let prev = -Infinity;
+    for (const p of docked.schedule.phases) {
+      if (p.day0 === undefined) continue;
+      expect(p.day0).toBeGreaterThanOrEqual(prev - 1e-9);
+      expect(p.day1!).toBeGreaterThanOrEqual(p.day0 - 1e-9);
+      prev = p.day1!;
+    }
+    const dock = docked.schedule.phases.find((p) => p.kind === 'dock')!;
+    expect(dock.day0).toBe(dock.day1);
   });
 });
 

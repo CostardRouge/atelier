@@ -36,7 +36,7 @@
  */
 
 import { VEHICLE_CHOICES, type VehicleChoice } from '../vehicle-spec';
-import { ALIGHT_SECONDS, BOARD_SECONDS, type TimeSpan } from './boarding';
+import { ALIGHT_SECONDS, BOARD_SECONDS, type DockBeat, type FerryDock, type TimeSpan } from './boarding';
 import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { formatDistance, haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
@@ -116,9 +116,11 @@ export interface DriveOptions extends CardOptions {
   /** The borrowed vehicle's paint, `#rrggbb`; empty: as it comes. */
   vehicleColor: string;
   /**
-   * On a borrowed FERRY (`VehicleLine.carries`), the trip's vehicle drives aboard at
-   * the start and off at the end (`boarding.ts`). On by default: it is what
-   * says the vehicle crossed too.
+   * The trip's car drives ABOARD a ferry and off it (`boarding.ts`): on a
+   * borrowed FERRY (`VehicleLine.carries`) at the start and the end, and on a
+   * crossing the road takes by ferry — the water rule's boat, or a place
+   * reached by one — at each shore, the ship waiting at the quay. On by
+   * default: it is what says the vehicle crossed too.
    */
   boarding: boolean;
   carSize: number;
@@ -1070,8 +1072,9 @@ export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03)
  * The vehicle's phases. `stay` and `summary` are the recap's (2026-10-07): a
  * stay is the vehicle waiting at a place while that place's DAYS run on the
  * counter — the Calendar end of the pace —, the summary the card at the end.
+ * A `dock` is the car driving onto a ferry or off it at a shore (2026-10-09).
  */
-export type PhaseKind = 'hold' | 'run' | 'halt' | 'stay' | 'arrive' | 'summary' | 'reveal';
+export type PhaseKind = 'hold' | 'run' | 'halt' | 'stay' | 'dock' | 'arrive' | 'summary' | 'reveal';
 
 /**
  * How much wake a boat leaves: none before it sets off, growing over its
@@ -1090,8 +1093,10 @@ export interface Phase {
   /** For a run: the arc lengths it covers. */
   s0: number;
   s1: number;
-  /** For a hold, a halt or the arrival: the stop the vehicle sits at. */
+  /** For a hold, a halt or the arrival: the stop the vehicle sits at; −1 for a dock at a shore between two stops. */
   stop: number;
+  /** For a dock: whether the car drives aboard or off. */
+  dock?: 'board' | 'alight';
   /**
    * The day of the trip at the phase's two ends, on the stops' scale
    * (`StopDays`) — set on every phase when the recap's clock runs, absent
@@ -1171,6 +1176,12 @@ export interface DriveSchedule {
   /** When the trip's vehicle drives aboard the ferry — the end of the hold — and off it, at the arrival; null without a ferry (`boarding.ts`). */
   boardAt: TimeSpan | null;
   alightAt: TimeSpan | null;
+  /**
+   * Every beat at which the car drives onto or off a ferry on the road's own
+   * crossings, in time order — the start's and the arrival's included (then
+   * the same spans as `boardAt` / `alightAt`). Empty without a ferry crossing.
+   */
+  docks: DockBeat[];
   /**
    * The least road time that gives every hop its {@link MIN_RUN_SECONDS}: a
    * `driveSeconds` under it is honoured, the hops then shorter than the floor
@@ -1292,13 +1303,15 @@ export function buildSchedule(
   lead = 0,
   /** The trip's vehicle boards the ferry this drive is on, and drives off at the end (`boarding.ts`). */
   board = false,
+  /** Where the car drives onto or off a ferry the road crosses by (`vehicle-plan.ts`'s `ferryDocks`). */
+  ferryDocks: readonly FerryDock[] = [],
 ): DriveSchedule {
   const phases: Phase[] = [];
   const pops: PicturePop[] = [];
   const arrivals: number[] = [];
   let t = 0;
   const n = stops.length;
-  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null, roadFloor: 0, reveals: false, lead: 0, boardAt: null, alightAt: null };
+  if (n === 0) return { phases, pops, arrivals, total: 0, arrivedAt: 0, revealAt: 0, summaryAt: null, roadFloor: 0, reveals: false, lead: 0, boardAt: null, alightAt: null, docks: [] };
 
   /**
    * The picture of the DAY: under the recap's clock, a picture shot on a
@@ -1368,35 +1381,91 @@ export function buildSchedule(
     return (clock.arrive[i] + clock.leave[i]) / 2;
   };
 
-  // Runs between the stops the vehicle stops at — to halt, or to stay — each
-  // taking its share of the driving time.
-  const runs: { from: number; to: number }[] = [];
-  let from = 0;
-  for (let i = 1; i < n; i++) {
-    if (i === n - 1 || haltsAt(stops[i], o) || staying[i]) {
-      runs.push({ from, to: i });
-      from = i;
+  // Where the car drives onto a ferry or off it (2026-10-09): at the road's
+  // two ends, in the hold's and the arrival's beats as on a borrowed ferry; at
+  // a stop, in a beat of its own there; anywhere else the run is CUT at the
+  // shore and the car comes to rest for the beat — the ship waits at the quay.
+  const near = 1e-6 * Math.max(1, path.length);
+  const boardsAtStart = board || (n > 1 && ferryDocks.some((d) => d.kind === 'board' && d.s <= near));
+  const alightsAtEnd = board || (n > 1 && ferryDocks.some((d) => d.kind === 'alight' && d.s >= path.length - near));
+  const stopDocks = new Map<number, { board: boolean; alight: boolean }>();
+  const shoreDocks: { s: number; kind: 'board' | 'alight'; hop: number }[] = [];
+  for (const d of n > 1 ? ferryDocks : []) {
+    if ((d.kind === 'board' && d.s <= near) || (d.kind === 'alight' && d.s >= path.length - near)) continue;
+    const at = path.stopS.findIndex((s) => Math.abs(s - d.s) <= near);
+    if (at >= 0) {
+      // Nothing to drive onto at the end of the road, nor off at its start.
+      if (at === 0 || at === n - 1) continue;
+      const here = stopDocks.get(at) ?? { board: false, alight: false };
+      here[d.kind] = true;
+      stopDocks.set(at, here);
+      continue;
     }
+    let hop = 0;
+    while (hop < n - 2 && path.stopS[hop + 1] < d.s) hop++;
+    shoreDocks.push({ s: d.s, kind: d.kind, hop });
   }
+  shoreDocks.sort((a, b) => a.s - b.s);
+
+  // The RESTS the vehicle comes to — a stop it halts, stays or docks at, a
+  // shore it docks at — and a run between each two, taking its share of the
+  // driving time. A run rolls past the stops in between.
+  interface Rest {
+    s: number;
+    /** The stop it is, or null for a shore. */
+    stop: number | null;
+    /** The hop it ends (a stop) or lies on (a shore). */
+    hop: number;
+    dock?: 'board' | 'alight';
+  }
+  const rests: Rest[] = [{ s: path.stopS[0], stop: 0, hop: 0 }];
+  for (let i = 1; i < n; i++) {
+    for (const d of shoreDocks) if (d.hop === i - 1) rests.push({ s: d.s, stop: null, hop: d.hop, dock: d.kind });
+    if (i === n - 1 || haltsAt(stops[i], o) || staying[i] || stopDocks.has(i)) rests.push({ s: path.stopS[i], stop: i, hop: i - 1 });
+  }
+  const runs: { from: Rest; to: Rest }[] = [];
+  for (let r = 1; r < rests.length; r++) runs.push({ from: rests[r - 1], to: rests[r] });
+  /** The first stop a run passes after leaving `from`, and the last it reaches — its end, when that is a stop. */
+  const passed = (run: { from: Rest; to: Rest }) => ({
+    first: run.from.stop !== null ? run.from.stop + 1 : run.from.hop + 1,
+    last: run.to.stop !== null ? run.to.stop : run.to.hop,
+  });
+  /** The day at a shore part-way along a hop: between the days it leaves the stop before and reaches the one after. */
+  const shoreDay = (rest: Rest): number | undefined => {
+    if (!clock) return undefined;
+    const a = path.stopS[rest.hop];
+    const b = path.stopS[rest.hop + 1];
+    const f = b > a ? (rest.s - a) / (b - a) : 0;
+    const d0 = dayOut(rest.hop)!;
+    return d0 + (dayIn(rest.hop + 1)! - d0) * f;
+  };
+  const restOut = (rest: Rest) => (rest.stop !== null ? dayOut(rest.stop) : shoreDay(rest));
+  const restIn = (rest: Rest) => (rest.stop !== null ? dayIn(rest.stop) : shoreDay(rest));
   const drivable = path.length;
   /** A run's cost from one stop to the next: its distance and, by `pace`, its days. */
   const hopCost = (d0: number, d1: number, lengthShare: number): number =>
     pace > 0 ? (1 - pace) * lengthShare + (pace * Math.max(0, d1 - d0)) / dayTotal : lengthShare;
   const runWeights = runs.map((run) => {
-    const lengthShare = drivable > 0 ? (path.stopS[run.to] - path.stopS[run.from]) / drivable : 1 / runs.length;
-    return hopCost(dayOut(run.from) ?? 0, dayIn(run.to) ?? 0, lengthShare);
+    const lengthShare = drivable > 0 ? (run.to.s - run.from.s) / drivable : 1 / runs.length;
+    return hopCost(restOut(run.from) ?? 0, restIn(run.to) ?? 0, lengthShare);
   });
   const road = shareRoadTime(runWeights, stops.map((_, i) => (staying[i] ? stayWeight(i) : 0)), o.driveSeconds, MIN_RUN_SECONDS);
   const staySeconds = (i: number): number => road.stays[i] ?? 0;
   /** The places a run rolls past, as knots — null where there is no clock or nothing to pass. */
-  const runKnots = (run: { from: number; to: number }): RunKnots | undefined => {
+  const runKnots = (run: { from: Rest; to: Rest }): RunKnots | undefined => {
     if (!clock) return undefined;
-    const idx: number[] = [];
-    for (let i = run.from; i <= run.to; i++) idx.push(i);
-    const s = idx.map((i) => path.stopS[i]);
-    const day = idx.map((i, j) => (j === 0 ? dayOut(i)! : j === idx.length - 1 ? dayIn(i)! : (clock.arrive[i] + clock.leave[i]) / 2));
+    const { first } = passed(run);
+    const s = [run.from.s];
+    const day = [restOut(run.from)!];
+    const lastPassed = run.to.stop !== null ? run.to.stop - 1 : run.to.hop;
+    for (let i = first; i <= lastPassed; i++) {
+      s.push(path.stopS[i]);
+      day.push((clock.arrive[i] + clock.leave[i]) / 2);
+    }
+    s.push(run.to.s);
+    day.push(restIn(run.to)!);
     const raw = [0];
-    for (let j = 1; j < idx.length; j++) {
+    for (let j = 1; j < s.length; j++) {
       const lengthShare = drivable > 0 ? (s[j] - s[j - 1]) / drivable : 0;
       raw.push(raw[j - 1] + hopCost(day[j - 1], day[j], lengthShare));
     }
@@ -1404,14 +1473,23 @@ export function buildSchedule(
     if (!(total > 1e-12)) return undefined;
     return { s, day, cost: raw.map((c) => c / total) };
   };
+  const docks: DockBeat[] = [];
+  /** The car drives onto or off the ferry, at rest at `s` for the beat. */
+  const dockBeat = (kind: 'board' | 'alight', stop: number | null, at: number, day: number | undefined) => {
+    const seconds = kind === 'board' ? BOARD_SECONDS : ALIGHT_SECONDS;
+    phases.push({ kind: 'dock', dock: kind, start: t, end: t + seconds, s0: at, s1: at, stop: stop ?? -1, ...days(day) });
+    docks.push({ kind, start: t, end: t + seconds, s: at, stop });
+    t += seconds;
+  };
 
   // The hold on the first stop, then its own halt, then its stay. A car
   // boarding the ferry does so at the END of the hold, once the badge it may
   // wait for has come: the ship leaves with it aboard.
   arrivals.push(0);
-  const boarding = board ? BOARD_SECONDS : 0;
+  const boarding = boardsAtStart ? BOARD_SECONDS : 0;
   const hold = o.delaySeconds + Math.max(0, lead) + boarding;
-  const boardAt = board ? { start: t + hold - boarding, end: t + hold } : null;
+  const boardAt = boardsAtStart ? { start: t + hold - boarding, end: t + hold } : null;
+  if (boardAt) docks.push({ kind: 'board', ...boardAt, s: 0, stop: 0 });
   if (hold > 0) {
     phases.push({ kind: 'hold', start: t, end: t + hold, s0: 0, s1: 0, stop: 0, ...days(dayIn(0)) });
     t += hold;
@@ -1430,8 +1508,8 @@ export function buildSchedule(
   }
 
   runs.forEach((run, r) => {
-    const s0 = path.stopS[run.from];
-    const s1 = path.stopS[run.to];
+    const s0 = run.from.s;
+    const s1 = run.to.s;
     const seconds = road.runs[r];
     const knots = runKnots(run);
     phases.push({
@@ -1440,29 +1518,39 @@ export function buildSchedule(
       end: t + seconds,
       s0,
       s1,
-      stop: run.to,
-      ...days(dayOut(run.from), dayIn(run.to)),
+      stop: run.to.stop ?? run.to.hop + 1,
+      ...days(restOut(run.from), restIn(run.to)),
       ...(knots ? { knots } : {}),
     });
     t += seconds;
     // Every stop passed on the run is reached when the vehicle crosses it.
-    for (let i = run.from + 1; i <= run.to; i++) {
-      const share = knots ? knots.cost[i - run.from] : s1 > s0 ? (path.stopS[i] - s0) / (s1 - s0) : 1;
+    const { first, last } = passed(run);
+    for (let i = first; i <= last; i++) {
+      const share = knots ? knots.cost[i - first + 1] : s1 > s0 ? (path.stopS[i] - s0) / (s1 - s0) : 1;
       arrivals.push(phases[phases.length - 1].start + seconds * EASINGS[o.easing].inverse(Math.min(1, share)));
     }
-    if (run.to < n - 1) {
-      const halt = haltSeconds(stops[run.to], o);
+    if (run.to.stop === null) {
+      dockBeat(run.to.dock!, null, s1, restIn(run.to));
+      return;
+    }
+    const at = run.to.stop;
+    if (at < n - 1) {
+      // Off the ferry first, so the place is seen from the car; aboard last, once it has been.
+      const docked = stopDocks.get(at);
+      if (docked?.alight) dockBeat('alight', at, s1, dayIn(at));
+      const halt = haltSeconds(stops[at], o);
       if (halt > 0) {
-        phases.push({ kind: 'halt', start: t, end: t + halt, s0: s1, s1, stop: run.to, ...days(dayIn(run.to)) });
-        addPops(run.to, t, t + halt);
+        phases.push({ kind: 'halt', start: t, end: t + halt, s0: s1, s1, stop: at, ...days(dayIn(at)) });
+        addPops(at, t, t + halt);
         t += halt;
       }
-      const stay = staySeconds(run.to);
+      const stay = staySeconds(at);
       if (stay > 0) {
-        phases.push({ kind: 'stay', start: t, end: t + stay, s0: s1, s1, stop: run.to, ...days(arriveDay(run.to), leaveDay(run.to)) });
-        addDayPops(run.to, t, t + stay);
+        phases.push({ kind: 'stay', start: t, end: t + stay, s0: s1, s1, stop: at, ...days(arriveDay(at), leaveDay(at)) });
+        addDayPops(at, t, t + stay);
         t += stay;
       }
+      if (docked?.board) dockBeat('board', at, s1, dayOut(at));
     }
   });
 
@@ -1472,8 +1560,9 @@ export function buildSchedule(
   const lastStop = n - 1;
   const lastHalt = n > 1 ? haltSeconds(stops[lastStop], o) : haltSeconds(stops[0], o);
   // The vehicle drives off at the start of the arrival's beat, its pictures popping meanwhile.
-  const alightAt = board ? { start: t, end: t + ALIGHT_SECONDS } : null;
-  const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0) + (board ? ALIGHT_SECONDS : 0);
+  const alightAt = alightsAtEnd ? { start: t, end: t + ALIGHT_SECONDS } : null;
+  if (alightAt) docks.push({ kind: 'alight', ...alightAt, s: path.length, stop: lastStop });
+  const arrive = lastHalt + o.arriveSeconds + (n > 1 ? staySeconds(lastStop) : 0) + (alightAt ? ALIGHT_SECONDS : 0);
   phases.push({ kind: 'arrive', start: t, end: t + arrive, s0: path.length, s1: path.length, stop: lastStop, ...days(dayIn(lastStop), leaveDay(lastStop)) });
   addPops(lastStop, t, t + arrive);
   // The last place's days run over the whole arrival beat (its phase's `days`).
@@ -1508,6 +1597,7 @@ export function buildSchedule(
     lead: Math.max(0, lead),
     boardAt,
     alightAt,
+    docks,
   };
 }
 
@@ -1637,6 +1727,12 @@ export function drivePlan(
   recap = false,
   /** The trip's vehicle drives aboard the ferry this piece is on (`boardsOf`); a drive with one stop has no crossing to board for. */
   board = false,
+  /**
+   * Where the road's car drives onto or off a ferry the road crosses by, read
+   * off the path once it is laid out (`vehicle-plan.ts`'s `ferryDocks`) — a
+   * callback, because the shores are found on the very path this builds.
+   */
+  docksOf?: (path: RoadPath, geo: Projection) => readonly FerryDock[],
 ): DrivePlan | null {
   const stops = route.stops;
   if (stops.length === 0) return null;
@@ -1652,7 +1748,8 @@ export function drivePlan(
   // (`badgeWhen: 'end'`) or open the drive (`before`, the vehicle waiting for it).
   const moment = badgeMoment(o.badgeWhen);
   const card = recap && o.summary && moment !== 'end';
-  const schedule = buildSchedule(stops, path, o, clock, card, card && moment === 'before' ? BADGE_BEFORE_SECONDS : 0, board && stops.length > 1);
+  const docks = docksOf && stops.length > 1 ? docksOf(path, geo) : [];
+  const schedule = buildSchedule(stops, path, o, clock, card, card && moment === 'before' ? BADGE_BEFORE_SECONDS : 0, board && stops.length > 1, docks);
   const milestones = recap && o.milestones ? roadMilestones(stops, path, kmAtStop, clock, o.distance) : [];
 
   const at = (t: number): DriveMoment => {
@@ -1676,7 +1773,8 @@ export function drivePlan(
       atStop = null;
     } else {
       s = phase.s0;
-      atStop = phase.stop;
+      // A dock at a shore is between two stops: the vehicle sits at none.
+      atStop = phase.stop >= 0 ? phase.stop : null;
     }
     let day: number | null =
       knotDay ?? (phase.day0 === undefined ? null : phase.day0 + ((phase.day1 ?? phase.day0) - phase.day0) * k);

@@ -5,7 +5,7 @@ import { DEFAULT_CROSSINGS, type TripVehicle } from '../vehicle-fleet';
 import { DEFAULT_VEHICLE, defaultVehicleSpec } from '../vehicle-spec';
 import { DRIVE_DEFAULTS, drivePlan, type DriveRoute, type DriveStop } from './drive-plan';
 import type { HookDay, HookStage } from './hook-variant';
-import { driveRoad, driveVehicles, momentDay, segmentAt, type RoadInput } from './vehicle-plan';
+import { driveRoad, driveVehicles, ferryDocks, momentDay, segmentAt, type RoadInput } from './vehicle-plan';
 import { PLAN_SIZE } from './drive-plan';
 
 /** Two square islands a degree apart: A from 0 to 1 east, B from 2 to 3. */
@@ -181,5 +181,82 @@ describe('the road over time', () => {
     expect(momentDay(route.stops, plan.path, plan.path.stopS[1], null, CALENDAR, '2025-03-04')).toBe('2025-03-02');
     const undated = route.stops.map((s) => ({ ...s, days: undefined }));
     expect(momentDay(undated, plan.path, 0, null, CALENDAR, '2025-03-04')).toBe('2025-03-04');
+  });
+});
+
+describe('a ferry carries the car across', () => {
+  const ferryRule = { ...DEFAULT_CROSSINGS, auto: true, boat: 'spirit-of-tasmania' as const };
+
+  /** The plan with the car's docks in it, as Virée builds it: the shores found on the plan's own path. */
+  function docked(over: Partial<RoadInput> = {}) {
+    const i = input({ crossings: ferryRule, ...over });
+    const plan = drivePlan(road(), o, false, false, (path, geo) =>
+      ferryDocks(
+        driveVehicles({ stops: road().stops, path, geo, centre: PLAN_SIZE / 2, stages: i.stages, fleet: i.fleet, crossings: i.crossings, land: i.land, dayRef: i.dayRef, forced: null }),
+      ),
+    )!;
+    return { plan, ...driveRoad(plan, i) };
+  }
+
+  it('remembers the car a ferry carries, and docks it at both shores', () => {
+    const { v } = vehiclesOf(road(), { crossings: ferryRule });
+    const water = v.segments[1];
+    expect(water.ref).toEqual({ borrow: 'spirit-of-tasmania' });
+    expect(water.rider).toEqual({ fleet: 'main' });
+    expect(ferryDocks(v)).toEqual([
+      { s: water.s0, kind: 'board' },
+      { s: water.s1, kind: 'alight' },
+    ]);
+  });
+
+  it('carries nothing on a boat that takes no vehicles, nor a boat over a boat', () => {
+    expect(ferryDocks(vehiclesOf(road()).v)).toEqual([]);
+    const stages = [STAGES[0], { ...STAGES[1], vehicle: { borrow: 'viper-jet' as const } }];
+    const { v } = vehiclesOf(road(), { crossings: ferryRule, stages });
+    expect(v.segments.some((seg) => seg.rider)).toBe(false);
+  });
+
+  it('carries the car the stage would drive on a hop reached by ferry', () => {
+    const stops = road().stops.map((s, i) => (i === 2 ? { ...s, source: { name: s.name, lat: s.lat, lon: s.lon, arriveBy: { borrow: 'med-ferry' as const } } } : s));
+    const stages = [STAGES[0], { ...STAGES[1], vehicle: { fleet: 'van' } }];
+    const { v } = vehiclesOf(road(stops), { stages });
+    expect(v.segments[1]).toMatchObject({ source: 'place', ref: { borrow: 'med-ferry' }, rider: { fleet: 'van' } });
+  });
+
+  it('draws the car to the shore, the ferry from the moment it boards to the moment it is off, the car after', () => {
+    const { plan, road: r } = docked();
+    const [on, off] = plan.schedule.docks;
+    expect(on.kind).toBe('board');
+    expect(off.kind).toBe('alight');
+    const modelAt = (t: number) => r.at(t, plan.at(t)).model;
+    expect(modelAt(on.start - 0.05)).toBe('prado-j120');
+    expect(modelAt(on.start + 0.01)).toBe('spirit-of-tasmania');
+    expect(modelAt((on.end + off.start) / 2)).toBe('spirit-of-tasmania');
+    expect(modelAt(off.end - 0.01)).toBe('spirit-of-tasmania');
+    expect(modelAt(off.end + 0.05)).toBe('prado-j120');
+    const swaps = r.transitions.filter((tr) => tr.kind === 'swap').map((tr) => tr.t);
+    expect(swaps).toHaveLength(2);
+    expect(swaps[0] - on.start).toBeGreaterThanOrEqual(0);
+    expect(swaps[0] - on.start).toBeLessThan(1 / 30 + 1e-9);
+    expect(swaps[1] - off.end).toBeGreaterThanOrEqual(0);
+    expect(swaps[1] - off.end).toBeLessThan(1 / 30 + 1e-9);
+  });
+
+  it('lists the crossing with its two beats and the car as dressed the day it boards', () => {
+    const { plan, road: r } = docked();
+    expect(r.crossings).toHaveLength(1);
+    const [c] = r.crossings;
+    expect(c.board).toEqual(plan.schedule.docks[0]);
+    expect(c.alight).toEqual(plan.schedule.docks[1]);
+    // Day 2 to 3: the Prado is still green — it is repainted from day 3, at B.
+    expect(c.rider).toMatchObject({ model: 'prado-j120', color: '#1f3b2f' });
+  });
+
+  it('lists no crossing when the plan docks nothing — Boarding off: the ferry swaps in at the shore like any boat', () => {
+    const plain = drivePlan(road(), o)!;
+    const { road: r } = driveRoad(plain, input({ crossings: ferryRule }));
+    expect(r.crossings).toEqual([]);
+    expect(r.transitions.filter((tr) => tr.kind === 'swap')).toHaveLength(2);
+    expect(plain.schedule.docks).toEqual([]);
   });
 });

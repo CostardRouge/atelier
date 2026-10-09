@@ -18,14 +18,21 @@
  * there (`resolveRef`), so the Prado drives green until Melbourne and Raptor
  * black after — the dated changes of `vehicle-fleet.ts`.
  *
+ * A FERRY carries the car across (2026-10-09, his «fais le passage en ferry
+ * automatique avec l'embarquement»): where a ferry sails a stretch the car
+ * would otherwise drive, the car DOCKS at each shore (`ferryDocks`) — the
+ * schedule rests it there while it drives aboard and off (`boarding.ts`) —
+ * and the stretch remembers the car it carries (`VehicleSegment.rider`).
+ *
  * Everything here is in the plan's own units (`RoadPath`), so the painter asks
  * by the moment's arc length and nothing is measured twice. Pure and DOM-free.
  */
 
 import { hopTerrain, stepKm, type HopTerrain, type LandIndex, type RouteSample } from '../../map/terrain';
 import { resolveRef, sameRef, type TripCrossings, type TripVehicle, type VehicleRef } from '../vehicle-fleet';
-import { sameVehicleSpec, vehicleKind, type VehicleSpec } from '../vehicle-spec';
-import { PLAN_SIZE, type DriveMoment, type DrivePlan, type DriveStop, type PlanPoint, type RoadPath } from './drive-plan';
+import { carriesVehicles, sameVehicleSpec, vehicleKind, type VehicleSpec } from '../vehicle-spec';
+import type { DockBeat, FerryDock } from './boarding';
+import { PLAN_SIZE, type DriveMoment, type DrivePlan, type DriveStop, type Phase, type PlanPoint, type RoadPath } from './drive-plan';
 import type { Projection } from './geo';
 import type { HookDay, HookStage } from './hook-variant';
 
@@ -38,6 +45,8 @@ export interface VehicleSegment {
   s1: number;
   ref: VehicleRef;
   source: SegmentSource;
+  /** On a FERRY's stretch: the car it carries — what the road would drive there without it. */
+  rider?: VehicleRef;
 }
 
 export interface DriveVehicles {
@@ -161,14 +170,14 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
     const s0 = path.stopS[h];
     const s1 = path.stopS[h + 1];
     const to = stops[h + 1];
-    const placed = to.source?.arriveBy;
-    if (placed) {
-      raw.push({ s0, s1, ref: placed, source: 'place' });
-      continue;
-    }
     const stageRef = to.leg !== null ? stages[to.leg]?.vehicle : undefined;
     const landRef: VehicleRef = stageRef ?? dayRef;
     const landSource: SegmentSource = stageRef ? 'stage' : 'trip';
+    const placed = to.source?.arriveBy;
+    if (placed) {
+      raw.push({ s0, s1, ref: placed, source: 'place', ...riding(placed, landRef, fleet) });
+      continue;
+    }
     const terrain = readsWater ? cachedTerrain(land!, stops, path, h, input, crossings!) : null;
     hops[h] = terrain;
     if (!terrain?.water) {
@@ -180,17 +189,55 @@ export function driveVehicles(input: DriveVehiclesInput): DriveVehicles {
     const w0 = Math.max(s0, Math.min(s1, terrain.water.s0));
     const w1 = Math.max(w0, Math.min(s1, terrain.water.s1));
     if (w0 > s0) raw.push({ s0, s1: w0, ref: landRef, source: landSource });
-    raw.push({ s0: w0, s1: w1, ref: waterRef, source: 'water' });
+    raw.push({ s0: w0, s1: w1, ref: waterRef, source: 'water', ...riding(waterRef, landRef, fleet) });
     if (w1 < s1) raw.push({ s0: w1, s1, ref: landRef, source: landSource });
   }
   // One stretch per run of the same vehicle decided the same way.
   const segments: VehicleSegment[] = [];
   for (const seg of raw) {
     const last = segments[segments.length - 1];
-    if (last && sameRef(last.ref, seg.ref) && last.source === seg.source && Math.abs(last.s1 - seg.s0) < 1e-6) last.s1 = seg.s1;
+    if (
+      last &&
+      sameRef(last.ref, seg.ref) &&
+      last.source === seg.source &&
+      sameRider(last.rider, seg.rider) &&
+      Math.abs(last.s1 - seg.s0) < 1e-6
+    )
+      last.s1 = seg.s1;
     else segments.push({ ...seg });
   }
   return { segments, hops };
+}
+
+/** A ferry's stretch carries the car the road would drive there; a boat, or a ferry over a boat, carries nothing. */
+function riding(ref: VehicleRef, landRef: VehicleRef, fleet: readonly TripVehicle[]): { rider?: VehicleRef } {
+  if (!carriesVehicles(refModel(ref, fleet))) return {};
+  return vehicleKind(refModel(landRef, fleet)) === 'car' ? { rider: landRef } : {};
+}
+
+function sameRider(a: VehicleRef | undefined, b: VehicleRef | undefined): boolean {
+  return a === b || (!!a && !!b && sameRef(a, b));
+}
+
+/**
+ * Where the car drives onto a ferry and off it: the two ends of every
+ * stretch a ferry carries it over — except where the stretch beside is
+ * another ferry carrying it too, so a car never drives off one boat and
+ * onto the next at the same quay. The schedule rests the car at each
+ * (`buildSchedule`); at the road's two ends they are the hold's and the
+ * arrival's beats.
+ */
+export function ferryDocks(vehicles: DriveVehicles): FerryDock[] {
+  const out: FerryDock[] = [];
+  const { segments } = vehicles;
+  segments.forEach((seg, i) => {
+    if (!seg.rider) return;
+    const before = segments[i - 1];
+    const after = segments[i + 1];
+    if (!(before?.rider && Math.abs(before.s1 - seg.s0) < 1e-6)) out.push({ s: seg.s0, kind: 'board' });
+    if (!(after?.rider && Math.abs(seg.s1 - after.s0) < 1e-6)) out.push({ s: seg.s1, kind: 'alight' });
+  });
+  return out;
 }
 
 /**
@@ -250,6 +297,18 @@ export interface DriveRoad {
   at(t: number, moment: DriveMoment): VehicleSpec;
   /** Sorted by time: a SWAP is another vehicle (a car becoming a boat at the shore), a REPAINT the same one in a new look. */
   transitions: readonly RoadTransition[];
+  /** Every crossing a ferry carries the car over, with the beats it drives aboard and off; empty when it boards none. */
+  crossings: readonly RoadCrossing[];
+}
+
+/** A ferry carrying the car: the water, the two beats, and the car as it is dressed the day it boards. */
+export interface RoadCrossing {
+  s0: number;
+  s1: number;
+  /** The car driving aboard at `s0` — the hold's beat at the road's start — and off at `s1`. */
+  board: DockBeat | null;
+  alight: DockBeat | null;
+  rider: VehicleSpec;
 }
 
 export interface RoadTransition {
@@ -294,9 +353,10 @@ export function driveRoad(plan: DrivePlan, input: RoadInput): { road: DriveRoad;
     dayRef: input.dayRef,
     forced: forcedRef,
   });
-  const at = (_t: number, m: DriveMoment): VehicleSpec => {
+  const { phases, docks } = plan.schedule;
+  const at = (t: number, m: DriveMoment): VehicleSpec => {
     if (input.forced) return input.forced;
-    const seg = segmentAt(vehicles.segments, m.s);
+    const seg = segmentAt(vehicles.segments, lookupS(phases, docks, t, m.s, plan.path.length));
     return segmentSpec(seg, input.fleet, momentDay(stops, plan.path, m.s, m.day, input.calendar, input.date));
   };
   const transitions: RoadTransition[] = [];
@@ -308,5 +368,47 @@ export function driveRoad(plan: DrivePlan, input: RoadInput): { road: DriveRoad;
       prev = spec;
     }
   }
-  return { road: { at, transitions }, vehicles };
+  const crossings: RoadCrossing[] = [];
+  if (!input.forced) {
+    const near = 1e-6 * Math.max(1, plan.path.length);
+    const beat = (kind: DockBeat['kind'], s: number) => docks.find((d) => d.kind === kind && Math.abs(d.s - s) <= near) ?? null;
+    // Ferries touching end to end carry the car through as one crossing (`ferryDocks` docks it at neither seam).
+    const segs = vehicles.segments;
+    for (let i = 0; i < segs.length; i++) {
+      const first = segs[i];
+      if (!first.rider) continue;
+      let last = first;
+      while (i + 1 < segs.length && segs[i + 1].rider && Math.abs(segs[i + 1].s0 - last.s1) < 1e-6) last = segs[++i];
+      const board = beat('board', first.s0);
+      const alight = beat('alight', last.s1);
+      if (!board && !alight) continue;
+      const when = board ? board.start : alight!.start;
+      const day = momentDay(stops, plan.path, first.s0, plan.at(when).day, input.calendar, input.date);
+      crossings.push({ s0: first.s0, s1: last.s1, board, alight, rider: resolveRef(first.rider!, input.fleet, day) });
+    }
+  }
+  return { road: { at, transitions, crossings }, vehicles };
+}
+
+/**
+ * The arc length a moment's vehicle is read at, nudged off a boundary to the
+ * side the moment belongs to: a run takes the stretch it drives (at its start
+ * the one it leaves on, at its end the one it arrives by); a car driving
+ * aboard is already on the ferry ahead of it, one driving off still on the
+ * ferry it came by; and at a stop where the car drove off a ferry, what it
+ * does next there — a halt, a stay — it does as the car.
+ */
+function lookupS(phases: readonly Phase[], docks: readonly DockBeat[], t: number, s: number, length: number): number {
+  const phase = phases.find((p) => t < p.end);
+  if (!phase) return s;
+  const nudge = 1e-6 * Math.max(1, length);
+  if (phase.kind === 'run') {
+    if (phase.s1 - phase.s0 <= 2 * nudge) return s;
+    return Math.max(phase.s0 + nudge, Math.min(phase.s1 - nudge, s));
+  }
+  if (phase.kind === 'dock') return phase.dock === 'board' ? s + nudge : s - nudge;
+  if ((phase.kind === 'halt' || phase.kind === 'stay') && docks.some((d) => d.kind === 'alight' && d.stop === phase.stop && d.end <= phase.start + 1e-9)) {
+    return s + nudge;
+  }
+  return s;
 }

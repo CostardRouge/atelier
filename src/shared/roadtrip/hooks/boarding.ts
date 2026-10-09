@@ -46,6 +46,25 @@ export interface TimeSpan {
   end: number;
 }
 
+/**
+ * Where the road's car drives onto a ferry or off one, along the road
+ * (`vehicle-plan.ts`'s `ferryDocks`): the schedule stops the car there for the
+ * beat, so the ship can wait at the quay.
+ */
+export interface FerryDock {
+  /** The arc length of the shore — where the car stops. */
+  s: number;
+  kind: 'board' | 'alight';
+}
+
+/** A dock's beat on the timeline: the car drives aboard, or off. */
+export interface DockBeat extends TimeSpan {
+  kind: 'board' | 'alight';
+  s: number;
+  /** The stop the dock is at, or null in the middle of a hop (a shore). */
+  stop: number | null;
+}
+
 /** Where the boarding is at a moment: driving on, or driving off — `u` its progress, 0 to 1. */
 export interface BoardingMoment {
   stage: 'board' | 'alight';
@@ -109,4 +128,62 @@ export function riderTrack(m: BoardingMoment, length: number, rider: number): Ri
   const y = from + (to - from) * k;
   const alpha = y >= half ? 1 : Math.max(0, (y - from) / (half - from));
   return { y, alpha, travelled: y - from, ramp: 'bow' };
+}
+
+/** The share of a mid-road boarding beat over which the car, stopped at the shore, shrinks to its rider's size and lines up with the ramp. */
+const APPROACH_SHARE = 0.35;
+
+/**
+ * How far from the ship's centre, in its metres, the car's middle starts
+ * driving aboard (behind the stern ramp) or stops once off (past the bow
+ * ramp) — where the ship docks so that point is the shore the car stands on.
+ */
+export function dockReach(stage: BoardingMoment['stage'], length: number, rider: number): number {
+  return length / 2 + (stage === 'board' ? STERN_RAMP : BOW_RAMP) + CLEAR * rider;
+}
+
+/**
+ * On a crossing in the MIDDLE of the road, how much the riding car is still —
+ * or again — the road's own full-size car standing on the shore, 0 to 1: it
+ * arrives at the quay full size and shrinks to its rider's size as it lines up
+ * with the stern ramp; off the bow, once stopped, it grows back, so the road
+ * carries on with the car it left with. 0 on the road's own two ends, where
+ * the car is a rider throughout.
+ */
+export function riderBlend(m: BoardingMoment): number {
+  if (m.stage === 'board') return 1 - smooth(Math.min(1, m.u / APPROACH_SHARE));
+  return smooth(Math.max(0, Math.min(1, (m.u - ALIGHT_SHARE) / (1 - ALIGHT_SHARE))));
+}
+
+/** A ferry crossing's beats, as `vehicle-plan.ts`'s `RoadCrossing` carries them. */
+export interface CrossingBeats {
+  board: DockBeat | null;
+  alight: DockBeat | null;
+}
+
+/**
+ * The crossing at `t` and where its car is: driving aboard (`u` 0 while it
+ * waits on the quay at the road's start), aboard and unseen (null), driving
+ * off — and, at the road's end, standing on the quay after (`u` 1). A
+ * crossing in the middle of the road is over once the car is off: the road
+ * drives on with it. `ends` says whether each end is the road's own.
+ */
+export function crossingAt<C extends CrossingBeats>(
+  crossings: readonly C[],
+  t: number,
+  length: number,
+): { crossing: C; moment: BoardingMoment | null; ends: { start: boolean; end: boolean } } | null {
+  const near = 1e-6 * Math.max(1, length);
+  for (const crossing of crossings) {
+    const { board, alight } = crossing;
+    const ends = { start: !board || board.s <= near, end: !alight || alight.s >= length - near };
+    const from = ends.start ? -Infinity : board!.start;
+    const to = ends.end ? Infinity : alight!.end;
+    if (t < from || t >= to) continue;
+    let moment: BoardingMoment | null = null;
+    if (board && t < board.end) moment = { stage: 'board', u: progress(board, t) };
+    else if (alight && t >= alight.start) moment = { stage: 'alight', u: progress(alight, t) };
+    return { crossing, moment, ends };
+  }
+  return null;
 }

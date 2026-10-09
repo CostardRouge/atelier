@@ -1368,7 +1368,17 @@ sails (Africa and Eurasia are one land on that map, so a strait is water whose
 two shores lie much further apart round the coast than across it). A river or
 a lake is not on that map: a river cruise is set on its place by hand. The
 panel says what the road will do, for example «2 crossings by Spirit of
-Tasmania: Melbourne → Devonport, Hobart → Melbourne».
+Tasmania, the Prado aboard: Melbourne → Devonport, Hobart → Melbourne».
+When the boat that takes a crossing is a **ferry** (the water rule's boat, or
+the one a place was reached by) and the road's vehicle is a car, the car
+**boards** it there. It drives to the quay and stops, and the ship docks just
+ahead. The car lines up with the stern ramp and drives in. The ship crosses,
+and at the far quay the car drives off over the bow ramp and on to the next
+stop. Each of the two beats adds under two seconds to the drive. The
+**Boarding** switch in the panel's Vehicle group turns this off, and the ferry
+then takes over at the shore like any boat. On a wide map, where the strait is
+shorter than the drawn ship, the ship holds still mid-strait while the car
+drives on at one end and off at the other.
 
 **Itinerary** is the one you compose yourself (and the editor Virée borrows for
 your own places) — though, like Virée and the Recap card, it can also take

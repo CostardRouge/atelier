@@ -68,8 +68,8 @@ import { cellAt, type CardScene } from './summary-card';
 import { cardCovers, cardProgress, paintCard as paintSummaryCard } from './summary-paint';
 import { themeFromPreset, type StyleTheme } from '../../overlay/title-styles';
 import { paintGroundShadow, paintMesh, paintWake, project, renderOrder, toWorld, type Part, type Pose } from './mesh3d';
-import { RIDER_SCALE, boardingAt, riderTrack, type RiderTrack } from './boarding';
-import type { DriveRoad, RoadTransition } from './vehicle-plan';
+import { RIDER_SCALE, boardingAt, crossingAt, dockReach, riderBlend, riderTrack, type RiderTrack } from './boarding';
+import type { DriveRoad, RoadCrossing, RoadTransition } from './vehicle-plan';
 
 const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
@@ -139,16 +139,39 @@ export function driveScratch(
   };
 }
 
-/** A vehicle's parts by model and gear, built once per road. */
-function partsFor(scratch: DriveScratch, spec: VehicleSpec): Part[] {
-  const key = `${spec.model}:${Object.values(spec.gear).map((on) => (on ? 1 : 0)).join('')}`;
+/** A vehicle's parts by model and gear — a ferry's with a ramp down when one is — built once per road. */
+function partsFor(scratch: DriveScratch, spec: VehicleSpec, ramp: RiderTrack['ramp'] = null): Part[] {
+  const model = vehicleModel(spec.model);
+  const lowered = ramp && model.ramps ? ramp : null;
+  const key = `${spec.model}:${Object.values(spec.gear).map((on) => (on ? 1 : 0)).join('')}${lowered ? `:${lowered}` : ''}`;
   const built = (scratch.built ??= new Map());
   let parts = built.get(key);
   if (!parts) {
-    parts = vehicleModel(spec.model).build(spec.gear);
+    parts = lowered ? [...partsFor(scratch, spec), ...model.ramps!()[lowered]] : model.build(spec.gear);
     built.set(key, parts);
   }
   return parts;
+}
+
+/** The car a ferry the road crosses by carries, as a rider. */
+function riderOf(scratch: DriveScratch, spec: VehicleSpec): NonNullable<DriveScratch['rider']> {
+  return { spec, model: vehicleModel(spec.model), parts: partsFor(scratch, spec) };
+}
+
+/**
+ * Where a ferry the road crosses by is drawn, in arc length: docked OFF each
+ * shore in the middle of the road — its stern ramp's foot where the car
+ * stopped, its bow ramp's at the shore it lands on — and sliding between the
+ * two over the crossing, so the car drives straight from the quay up the
+ * ramp; centred on the stop at the road's own ends, as a borrowed ferry is.
+ * `reach` is how far the car stands from the ship's centre, in plan units.
+ */
+function dockedS(c: RoadCrossing, ends: { start: boolean; end: boolean }, s: number, reach: { board: number; alight: number }): number {
+  const a = c.s0 + (ends.start ? 0 : reach.board);
+  const b = c.s1 - (ends.end ? 0 : reach.alight);
+  if (!(c.s1 > c.s0) || b <= a) return (a + b) / 2;
+  const f = (Math.max(c.s0, Math.min(c.s1, s)) - c.s0) / (c.s1 - c.s0);
+  return a + (b - a) * f;
 }
 
 /** The last change at or before `t`, while it is still marked. */
@@ -594,11 +617,29 @@ function paintMap(
   {
     const model = currentModel;
     const spec = current;
-    const boarding = scratch.rider ? boardingAt(plan.schedule, t) : null;
-    const p = at(moment.point);
-    const heading = turnedDir(moment.heading);
-    const len = Math.hypot(heading.x, heading.y) || 1;
+    // A ferry the road crosses by carries the road's own car: the ship docks
+    // off each shore and the car drives from where it stopped up the stern
+    // ramp, and off the bow it grows back to its size to drive on (`boarding.ts`).
+    const crossing = scratch.road && !scratch.rider && model.ramps ? crossingAt(scratch.road.crossings, t, plan.path.length) : null;
+    const boarding = scratch.rider ? boardingAt(plan.schedule, t) : (crossing?.moment ?? null);
+    const riding = scratch.rider ?? (crossing ? riderOf(scratch, crossing.crossing.rider) : null);
     const scale = vehiclePx / model.length;
+    let shipPoint = moment.point;
+    let shipHeading = moment.heading;
+    if (crossing) {
+      const toPlan = scale / Math.max(1e-9, view.scale);
+      const riderLength = (carPx * RIDER_SCALE) / scale;
+      const reach = {
+        board: dockReach('board', model.length, riderLength) * toPlan,
+        alight: dockReach('alight', model.length, riderLength) * toPlan,
+      };
+      const s = dockedS(crossing.crossing, crossing.ends, moment.s, reach);
+      shipPoint = pointAt(plan.path, s).point;
+      shipHeading = headingAt(plan.path, s);
+    }
+    const p = at(shipPoint);
+    const heading = turnedDir(shipHeading);
+    const len = Math.hypot(heading.x, heading.y) || 1;
     const pose: Pose = {
       fx: heading.x / len,
       fy: -heading.y / len,
@@ -608,8 +649,20 @@ function paintMap(
       y: p.y,
       spins: {},
     };
-    const rider = scratch.rider && boarding ? riderPose(scratch.rider, boarding, pose, model.length, carPx) : null;
-    const parts = scratch.rider || spec === scratch.spec ? vehicleParts(scratch, rider?.track.ramp ?? null) : partsFor(scratch, spec);
+    let rider = riding && boarding ? riderPose(riding, boarding, pose, model.length, carPx) : null;
+    // In the middle of the road the car stands on the shore at its own size.
+    const roadEnd = crossing && boarding ? (boarding.stage === 'board' ? crossing.ends.start : crossing.ends.end) : true;
+    if (rider && boarding && !roadEnd) {
+      const k = riderBlend(boarding);
+      if (k > 0) {
+        const own = turnedDir(moment.heading);
+        const ownLen = Math.hypot(own.x, own.y) || 1;
+        const shore = at(moment.point);
+        rider = onTheShore(rider, { fx: own.x / ownLen, fy: -own.y / ownLen, scale: carPx / riding!.model.length, x: shore.x, y: shore.y }, k);
+      }
+    }
+    const ramp = rider?.track.ramp ?? null;
+    const parts = scratch.rider || spec === scratch.spec ? vehicleParts(scratch, ramp) : partsFor(scratch, spec, ramp);
     const change = liveTransition(scratch.road, t);
     const travelled = moment.s * view.scale;
     const spin = travelled / (model.wheelRadius * scale);
@@ -620,22 +673,24 @@ function paintMap(
     if (model.kind === 'boat') {
       // A boat sits IN the water: a faint shadow, and the wake it leaves while
       // it runs — growing as it gets under way, settling once it halts.
-      // A boat taken at a shore mid-run gets under way from the swap, not from the run's start.
+      // A boat taken at a shore mid-run gets under way from the swap, not from the run's start;
+      // a ferry waiting at the quay for the car leaves none.
       const since = change?.kind === 'swap' ? Math.min(moment.since, t - change.t) : moment.since;
-      paintWake(g, pose, model.length, model.width, wakeStrength(moment.phase, since), Math.max(1, carPx / 55), model.wake ?? 1);
+      const waiting = crossing?.moment?.stage === 'board';
+      paintWake(g, pose, model.length, model.width, waiting ? 0 : wakeStrength(moment.phase, since), Math.max(1, carPx / 55), model.wake ?? 1);
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.12 : 0.2);
     } else {
       paintGroundShadow(g, pose, model.length / 2, model.width / 2, onPaper ? 0.28 : 0.4);
     }
     // The vehicle inside the hull, or behind it, is drawn first so the ship
     // covers it as it goes in; out on a ramp nearer the camera, after.
-    if (rider && !rider.front) paintRider(g, scratch.rider!, rider, onPaper, ink, carPx);
+    if (rider && !rider.front) paintRider(g, riding!, rider, onPaper, ink);
     paintMesh(g, renderOrder(parts, pose, vehicleLight(spec.finish)), {
       palette: model.palette(spec.color),
       ink,
       outlineWidth: Math.max(0.9, carPx / 78),
     });
-    if (rider && rider.front) paintRider(g, scratch.rider!, rider, onPaper, ink, carPx);
+    if (rider && rider.front) paintRider(g, riding!, rider, onPaper, ink);
     if (change) paintChange(g, change, (t - change.t) / TRANSITION_SECONDS, p, vehiclePx, model.kind === 'boat', spec.color, ink);
   }
 
@@ -810,7 +865,26 @@ function riderPose(
   };
 }
 
-function paintRider(g: HookCtx2D, rider: NonNullable<DriveScratch['rider']>, at: RiderPose, onPaper: boolean, ink: string, carPx: number): void {
+/**
+ * The riding car blended toward the road's own full-size car standing on the
+ * shore, by `k` (`riderBlend`): its place, its heading, its size — so the car
+ * that stopped at the quay is the one that drives aboard, and the one that
+ * drives off is the one the road carries on with.
+ */
+function onTheShore(rider: RiderPose, shore: Pick<Pose, 'fx' | 'fy' | 'scale' | 'x' | 'y'>, k: number): RiderPose {
+  const base = rider.pose;
+  const mix = (a: number, b: number) => a + (b - a) * k;
+  const fx = mix(base.fx, shore.fx);
+  const fy = mix(base.fy, shore.fy);
+  const len = Math.hypot(fx, fy) || 1;
+  return {
+    ...rider,
+    pose: { ...base, fx: fx / len, fy: fy / len, scale: mix(base.scale, shore.scale), x: mix(base.x, shore.x), y: mix(base.y, shore.y) },
+    track: { ...rider.track, alpha: Math.max(rider.track.alpha, k) },
+  };
+}
+
+function paintRider(g: HookCtx2D, rider: NonNullable<DriveScratch['rider']>, at: RiderPose, onPaper: boolean, ink: string): void {
   if (at.track.alpha <= 0 || !rider.parts) return;
   const { model, spec } = rider;
   g.save();
@@ -819,7 +893,8 @@ function paintRider(g: HookCtx2D, rider: NonNullable<DriveScratch['rider']>, at:
   paintMesh(g, renderOrder(rider.parts, at.pose, vehicleLight(spec.finish)), {
     palette: model.palette(spec.color),
     ink,
-    outlineWidth: Math.max(0.7, (carPx * RIDER_SCALE) / 78),
+    // The car's own outline at its drawn size: a rider's thinner, the road's car's as it grows back.
+    outlineWidth: Math.max(0.7, (at.pose.scale * model.length) / 78),
   });
   g.restore();
 }

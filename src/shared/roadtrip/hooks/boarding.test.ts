@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { ALIGHT_SECONDS, BOARD_SECONDS, boardingAt, riderTrack } from './boarding';
+import { ALIGHT_SECONDS, BOARD_SECONDS, boardingAt, crossingAt, dockReach, riderBlend, riderTrack, type DockBeat } from './boarding';
 
 const SCHEDULE = { boardAt: { start: 0.4, end: 0.4 + BOARD_SECONDS }, alightAt: { start: 10, end: 10 + ALIGHT_SECONDS } };
 const LENGTH = 194;
@@ -58,5 +58,49 @@ describe('riderTrack', () => {
   it('counts the distance driven, which turns the wheels', () => {
     expect(riderTrack({ stage: 'board', u: 0 }, LENGTH, RIDER).travelled).toBe(0);
     expect(riderTrack({ stage: 'board', u: 0.4 }, LENGTH, RIDER).travelled).toBeGreaterThan(0);
+  });
+});
+
+describe('a crossing in the middle of the road', () => {
+  const beat = (kind: DockBeat['kind'], start: number, s: number, stop: number | null = null): DockBeat => ({
+    kind,
+    start,
+    end: start + (kind === 'board' ? BOARD_SECONDS : ALIGHT_SECONDS),
+    s,
+    stop,
+  });
+  const ROAD = 1000;
+  const mid = { board: beat('board', 4, 300), alight: beat('alight', 9, 600) };
+
+  it('docks the ship so the car starts aboard from where it stopped, and stops where the far shore is', () => {
+    const start = riderTrack({ stage: 'board', u: 0 }, LENGTH, RIDER);
+    expect(-start.y).toBeCloseTo(dockReach('board', LENGTH, RIDER), 9);
+    const end = riderTrack({ stage: 'alight', u: 1 }, LENGTH, RIDER);
+    expect(end.y).toBeCloseTo(dockReach('alight', LENGTH, RIDER), 9);
+  });
+
+  it('is the road’s car on the shore at first, a rider once it lines up with the ramp, the road’s car again once off', () => {
+    expect(riderBlend({ stage: 'board', u: 0 })).toBe(1);
+    expect(riderBlend({ stage: 'board', u: 0.2 })).toBeGreaterThan(0);
+    expect(riderBlend({ stage: 'board', u: 0.35 })).toBe(0);
+    expect(riderBlend({ stage: 'alight', u: 0.5 })).toBe(0);
+    expect(riderBlend({ stage: 'alight', u: 0.9 })).toBeGreaterThan(0);
+    expect(riderBlend({ stage: 'alight', u: 1 })).toBe(1);
+  });
+
+  it('holds from the boarding to the end of the alighting, and lets the road drive on after', () => {
+    expect(crossingAt([mid], 3.9, ROAD)).toBeNull();
+    expect(crossingAt([mid], 4, ROAD)).toMatchObject({ moment: { stage: 'board', u: 0 }, ends: { start: false, end: false } });
+    expect(crossingAt([mid], 7, ROAD)!.moment).toBeNull();
+    const off = crossingAt([mid], 9 + ALIGHT_SECONDS / 2, ROAD)!.moment!;
+    expect(off.stage).toBe('alight');
+    expect(off.u).toBeCloseTo(0.5, 9);
+    expect(crossingAt([mid], 9 + ALIGHT_SECONDS, ROAD)).toBeNull();
+  });
+
+  it('waits at the quay from the start on the road’s first stop, and stays on the quay at its last', () => {
+    const ends = { board: beat('board', 0.4, 0, 0), alight: beat('alight', 12, ROAD, 4) };
+    expect(crossingAt([ends], 0, ROAD)).toMatchObject({ moment: { stage: 'board', u: 0 }, ends: { start: true, end: true } });
+    expect(crossingAt([ends], 40, ROAD)!.moment).toEqual({ stage: 'alight', u: 1 });
   });
 });

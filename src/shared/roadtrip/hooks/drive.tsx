@@ -30,7 +30,7 @@ import {
 } from '../../ui/Inspector';
 import { DEFAULT_VEHICLE, vehicleLine, carriesVehicles, describeVehicle, vehicleFor, type VehicleSpec, type VehicleChoice } from '../vehicle-spec';
 import { fleetOf, mainVehicle } from '../vehicle-fleet';
-import { driveRoad, refModel, type RoadInput } from './vehicle-plan';
+import { driveRoad, driveVehicles, ferryDocks, refModel, type DriveVehicles, type RoadInput } from './vehicle-plan';
 import { VEHICLE_MODELS, vehicleModel, vehicleLabel } from './vehicle-registry';
 import {
   DRIVE_DEFAULTS,
@@ -39,6 +39,7 @@ import {
   MAX_PICTURES_PER_STOP,
   MILESTONE_DAYS,
   MILESTONE_DISTANCE,
+  PLAN_SIZE,
   counterDay,
   distanceNumeral,
   driveCounterPieces,
@@ -187,14 +188,32 @@ function roadInput(ctx: HookContext, forced: VehicleSpec | null): RoadInput {
 }
 
 /**
+ * The plan as every reader of this piece builds it — the panel, the shell's
+ * ground, the stage and the export — so all of them time the same drive: the
+ * recap's clock when the badge counts with it, the trip's car boarding a
+ * borrowed ferry, and, on the trip's own road, the car docking at each shore
+ * a ferry carries it across (`ferryDocks`), found on the plan's own path.
+ */
+function planOf(route: DriveRoute, o: DriveOptions, ctx: HookContext): DrivePlan | null {
+  const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
+  const ownRoad = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle) === tripVehicle;
+  const input = roadInput(ctx, null);
+  const docks =
+    o.boarding && ownRoad
+      ? (path: DrivePlan['path'], geo: DrivePlan['geo']) =>
+          ferryDocks(driveVehicles({ ...input, stops: route.stops, path, geo, centre: PLAN_SIZE / 2, forced: null }))
+      : undefined;
+  return drivePlan(route, o, driveCountOf(ctx.counterMode) !== null, boardsOf(o, tripVehicle), docks);
+}
+
+/**
  * What the road will do with the trip's vehicles, said as a sentence: the
  * crossings it sails and on what, the hops picked by hand, the stages that
  * drive another vehicle — or why it reads no water (the rule off, the
  * coastline not yet here). The same `driveVehicles` the paint draws.
  */
-function roadSentence(plan: DrivePlan, ctx: HookContext): string {
+function roadSentence(plan: DrivePlan, ctx: HookContext, vehicles: DriveVehicles, o: DriveOptions): string {
   const input = roadInput(ctx, null);
-  const { vehicles } = driveRoad(plan, input);
   const stops = plan.route.stops;
   const parts: string[] = [];
   const water = vehicles.segments.filter((seg) => seg.source === 'water');
@@ -206,7 +225,8 @@ function roadSentence(plan: DrivePlan, ctx: HookContext): string {
     const where = vehicles.hops
       .map((hop, h) => (hop?.water ? `${stops[h].name || `stop ${h + 1}`} → ${stops[h + 1].name || `stop ${h + 2}`}` : null))
       .filter((x): x is string => x !== null);
-    parts.push(`${where.length} crossing${where.length > 1 ? 's' : ''} by ${boat}: ${where.slice(0, 3).join(', ')}${where.length > 3 ? '…' : ''}`);
+    const aboard = o.boarding && water.some((seg) => seg.rider) ? `, the ${vehicleModel(refModel(water.find((seg) => seg.rider)!.rider!, input.fleet)).short} aboard` : '';
+    parts.push(`${where.length} crossing${where.length > 1 ? 's' : ''} by ${boat}${aboard}: ${where.slice(0, 3).join(', ')}${where.length > 3 ? '…' : ''}`);
   }
   const placed = vehicles.segments.filter((seg) => seg.source === 'place').length;
   if (placed) parts.push(`${placed} hop${placed > 1 ? 's' : ''} picked by hand`);
@@ -230,8 +250,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   const route = driveRoute(stages, calendar, ctx.date, o, ctx.writing, ctx.towns ?? null);
   const count = driveCountOf(ctx.counterMode);
   const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
-  const boards = boardsOf(o, tripVehicle);
-  const plan = drivePlan(route, o, count !== null, boards);
+  const plan = planOf(route, o, ctx);
   /** How many stops the road has BEFORE nearby ones are grouped — what the grouping row counts from. */
   const ungrouped = o.groupKm > 0 ? driveRoute(stages, calendar, ctx.date, { ...o, groupKm: 0 }, ctx.writing).stops.length : route.stops.length;
   const wants = driveWants(route, o);
@@ -246,6 +265,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
   // `vehicleFor` hands back the trip's own spec when the piece borrows nothing.
   const car = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
   const borrowed = car !== tripVehicle;
+  /** The trip's own road: who drives each stretch, a ferry carrying the car included. */
+  const roadVehicles = !borrowed && plan ? driveRoad(plan, roadInput(ctx, null)).vehicles : null;
+  const ferried = roadVehicles?.segments.find((seg) => seg.rider) ?? null;
   const shown = route.stops.reduce((n, s) => n + s.pictures.length, 0);
   const located = stages.reduce((n, s) => n + s.places.length, 0);
   const places = tripPlaces(stages);
@@ -490,7 +512,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           />
         </FieldRow>
         <p className="m-0 text-xs text-ink-soft">{describeVehicle(car, vehicleModel(car.model).name)}</p>
-        {!borrowed && plan && <p className="m-0 text-xs text-muted">{roadSentence(plan, ctx)}</p>}
+        {plan && roadVehicles && <p className="m-0 text-xs text-muted">{roadSentence(plan, ctx, roadVehicles, o)}</p>}
         {borrowed && carriesVehicles(car.model) && vehicleModel(tripVehicle.model).kind === 'car' ? (
           <FieldRow
             label="Boarding"
@@ -502,6 +524,20 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           >
             <ToggleField label="Boarding" checked={o.boarding} onChange={(boarding) => set({ boarding })}>
               {vehicleModel(tripVehicle.model).short} drives aboard
+            </ToggleField>
+          </FieldRow>
+        ) : ferried?.rider ? (
+          <FieldRow
+            label="Boarding"
+            hint={
+              o.boarding
+                ? 'At each shore the ferry waits at the quay: the car drives up the stern ramp, and off over the bow on the far side.'
+                : 'The ferry takes over at the shore, like any boat.'
+            }
+          >
+            <ToggleField label="Boarding" checked={o.boarding} onChange={(boarding) => set({ boarding })}>
+              {vehicleModel(refModel(ferried.rider, roadInput(ctx, null).fleet)).short} drives aboard the{' '}
+              {vehicleModel(refModel(ferried.ref, roadInput(ctx, null).fleet)).short}
             </ToggleField>
           </FieldRow>
         ) : null}
@@ -1017,12 +1053,7 @@ export const driveVariant: HookVariant = {
   wantsBasemap(options, ctx) {
     const o = driveOptions(options);
     if (o.ground !== 'tiles') return [];
-    const plan = drivePlan(
-      driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null),
-      o,
-      driveCountOf(ctx.counterMode) !== null,
-      boardsOf(o, ctx.vehicle ?? DEFAULT_VEHICLE),
-    );
+    const plan = planOf(driveRoute(ctx.stages ?? [], ctx.calendar ?? [], ctx.date, o, ctx.writing, ctx.towns ?? null), o, ctx);
     return plan ? driveBasemap(plan, o, ctx.aspect, o.camera === 'follow' ? driveTrack(plan, o, ctx.aspect) : null, stripBudget())?.wants ?? [] : [];
   },
   prepare(options, ctx) {
@@ -1033,7 +1064,7 @@ export const driveVariant: HookVariant = {
     const count = driveCountOf(ctx.counterMode);
     const tripVehicle = ctx.vehicle ?? DEFAULT_VEHICLE;
     const boards = boardsOf(o, tripVehicle);
-    const plan = drivePlan(route, o, count !== null, boards);
+    const plan = planOf(route, o, ctx);
     if (!plan) return { seconds: 0 };
     const words = ctx.badgeWords;
     const own = vehicleFor(o.vehicle, o.vehicleColor, tripVehicle);
