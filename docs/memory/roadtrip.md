@@ -873,7 +873,7 @@ Dragging a slide moves it within `post.slides` (`moveItem` in `deck.ts`, pure an
 
 **How to apply.**
 - Everything else follows `projects/project-file.ts` exactly: a `kind` marker so a stray `.json` is rejected, `{ ok: false, error }` parsing that never throws and always says something actionable, and a file from a **newer** version refused rather than half-read.
-- Reading replays `migrateTripDoc` over a document built from `createTripDoc`, so an older file lands on the current shape exactly as an older stored trip does, and anything a past version never wrote gets the same default a new trip gets. Add a field to `TripDoc` → it is carried and defaulted by that path, with nothing to edit here.
+- Reading replays `migrateTripDoc` over a document built from `createTripDoc`, so an older file lands on the current shape exactly as an older stored trip does, and anything a past version never wrote gets the same default a new trip gets. Add a field to `TripDoc` → parsing defaults it by that path, but **`tripDocFromFile` must name it too** (2026-10-09): it spreads `createTripDoc`, so a forgotten line compiles and silently resets the field to its default — `placeStyle` and `stateCodes` were dropped that way by every import and every move between sources until a clone made it visible. The spec beside it round-trips each portable field through the file AND onto a document.
 - `projectId` is stripped **twice** — writing and reading — because a hand-edited file could smuggle one in.
 - Import always creates a NEW trip. Merging two trips is not offered, on purpose.
 - Export sits on the gallery card, import in the gallery header — the same places the studio puts them.
