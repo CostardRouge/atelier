@@ -2,6 +2,7 @@ import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
 import {
   bookToWire,
+  clonePresetInBook,
   createPresetBook,
   mergeBooks,
   mergeTripPresets,
@@ -34,6 +35,14 @@ describe('the preset book', () => {
     book = removePresetFromBook(book, 'p1', 7);
     expect(book.presets).toEqual([]);
     expect(removePresetFromBook(book, 'p1', 8)).toBe(book);
+  });
+
+  it('clones a preset into the book, stamping it, and is idempotent on a no-op', () => {
+    const book = savePresetInBook(createPresetBook('b1', 0), 'Dusk', light(0.7), 'p1', 5);
+    const next = clonePresetInBook(book, 'p1', 'Dusk', 'p2', 9);
+    expect(next.presets.map((p) => [p.id, p.name])).toEqual([['p1', 'Dusk'], ['p2', 'Dusk (2)']]);
+    expect(next.updatedAt).toBe(9);
+    expect(clonePresetInBook(book, 'gone', 'Dusk', 'p3', 10)).toBe(book);
   });
 
   it('reads a stored book safely: junk dropped, one preset per name', () => {

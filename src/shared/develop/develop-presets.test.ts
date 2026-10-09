@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
 import { DEFAULT_DEVELOP } from './develop';
-import { removePresetFrom, savePresetIn } from './develop-presets';
+import { clonePresetIn, removePresetFrom, savePresetIn } from './develop-presets';
 
 const lifted = { ...DEFAULT_DEVELOP, exposure: 0.5, shadows: 20 };
 
@@ -40,5 +40,48 @@ describe('removePresetFrom', () => {
     const list = savePresetIn([], 'Dusk', lifted, 'p1');
     expect(removePresetFrom(list, 'p1')).toEqual([]);
     expect(removePresetFrom(list, 'nope')).toBe(list);
+  });
+});
+
+describe('clonePresetIn', () => {
+  const base = () => savePresetIn(savePresetIn([], 'Dusk', lifted, 'p1'), 'Noon', lifted, 'p2');
+
+  it('puts a numbered copy right after the original, with its own id', () => {
+    const list = clonePresetIn(base(), 'p1', 'Dusk', 'p3');
+    expect(list.map((p) => [p.id, p.name])).toEqual([
+      ['p1', 'Dusk'],
+      ['p3', 'Dusk (2)'],
+      ['p2', 'Noon'],
+    ]);
+  });
+
+  it('takes the first free number and strips a suffix it already wears', () => {
+    let list = clonePresetIn(base(), 'p1', 'Dusk', 'p3');
+    list = clonePresetIn(list, 'p3', 'Dusk (2)', 'p4');
+    expect(list.map((p) => p.name)).toEqual(['Dusk', 'Dusk (2)', 'Dusk (3)', 'Noon']);
+  });
+
+  it('keeps a free name as typed and never replaces the preset that already wears one', () => {
+    const list = clonePresetIn(base(), 'p1', 'Blue hour', 'p3');
+    expect(list.map((p) => p.name)).toEqual(['Dusk', 'Blue hour', 'Noon']);
+    const taken = clonePresetIn(base(), 'p1', 'noon', 'p3');
+    expect(taken.find((p) => p.id === 'p2')?.name).toBe('Noon');
+    expect(taken.find((p) => p.id === 'p3')?.name).toBe('noon (2)');
+  });
+
+  it('copies the numbers and the look without sharing them', () => {
+    const look = { layers: [] } as never;
+    const src = savePresetIn([], 'Dusk', lifted, 'p1', look);
+    const [orig, copy] = clonePresetIn(src, 'p1', 'Dusk', 'p2');
+    expect(copy.settings).toEqual(orig.settings);
+    expect(copy.settings).not.toBe(orig.settings);
+    expect(copy.look).toEqual(orig.look);
+    expect(copy.look).not.toBe(orig.look);
+  });
+
+  it('hands back the same list for an unknown id or a blank name', () => {
+    const list = base();
+    expect(clonePresetIn(list, 'nope', 'X', 'p3')).toBe(list);
+    expect(clonePresetIn(list, 'p1', '   ', 'p3')).toBe(list);
   });
 });

@@ -1648,7 +1648,9 @@ in two clicks. **Presets** are your own book, the same list in every Develop
 sheet (Trips and the Studio): `Save current as…` keeps the numbers under a name
 of your choosing (there is no factory set), a chip writes a copy of them onto
 the open picture, and × removes the preset without touching any picture it was
-applied to — a preset is applied, never followed. The book is kept in this
+applied to — a preset is applied, never followed. The copy glyph on a chip
+clones it: the first free name (`Dusk (2)`) is prefilled and editable, and a
+name already in the book is never replaced. The book is kept in this
 browser, or on a connected Winnow if you pick it there, and then follows you to
 another device; a change made on two devices is merged by name, never asked
 about. The presets a trip kept before the book existed are brought in once.
