@@ -1098,6 +1098,10 @@ export default function TripOverview({
           trip={trip}
           onCancel={() => setEditingDetails(false)}
           onSubmit={saveDetails}
+          onReset={(next) => {
+            setEditingDetails(false);
+            onChange(next);
+          }}
         />
       )}
     </>

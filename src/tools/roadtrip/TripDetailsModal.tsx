@@ -12,7 +12,17 @@ import { prunePins } from '../../shared/roadtrip/trip-cover';
 import CoverPanel from './CoverPanel';
 import { DEFAULT_SOURCE_ID, type SourceInfo } from '../../shared/sources/source';
 import InfoDot from '../../shared/ui/InfoDot';
+import ConfirmDialog from '../../shared/ui/ConfirmDialog';
 import { DateField } from '../../shared/ui/DateField';
+import { downloadBlob } from '../../shared/media/save';
+import { serializeTripFile, toTripFile, tripFileName } from '../../shared/roadtrip/trip-file';
+import {
+  canReset,
+  resetStages,
+  stageResetCounts,
+  type StageReset,
+  type StageResetCounts,
+} from '../../shared/roadtrip/stage-reset';
 
 export interface TripDetails {
   name: string;
@@ -48,6 +58,11 @@ interface TripDetailsModalProps {
   timelineSources?: TimelineSourceOption[];
   /** Hand over to the timeline screen for that source. */
   onSeedFrom?: (sourceId: string) => void;
+  /**
+   * Editing only: write the trip with its legs started over
+   * (`stage-reset.ts`). Absent hides the Start over row.
+   */
+  onReset?: (trip: TripDoc) => void;
 }
 
 const field = 'flex flex-col gap-1.5';
@@ -87,8 +102,12 @@ export default function TripDetailsModal({
   onSubmit,
   timelineSources = [],
   onSeedFrom,
+  onReset,
 }: TripDetailsModalProps) {
   const editing = trip !== undefined;
+  // The width of a Start over waiting on its confirmation.
+  const [resetting, setResetting] = useState<StageReset | null>(null);
+  const resetCounts = useMemo(() => (trip ? stageResetCounts(trip) : null), [trip]);
 
   const [name, setName] = useState(trip?.name ?? '');
   const [cover, setCover] = useState<TripCover>(() => trip?.cover ?? defaultTripCover());
@@ -136,7 +155,12 @@ export default function TripDetailsModal({
 
   // Enter saves from any field — the dates are the reason: typing one and
   // reaching for the mouse is the gesture this sheet is all about.
-  useDialogKeys({ onCancel, onConfirm: canSubmit ? submit : null });
+  // While a Start over asks its question, the keys are the question's: an
+  // Escape must close the question, never the sheet behind it too.
+  useDialogKeys({
+    onCancel: resetting ? undefined : onCancel,
+    onConfirm: canSubmit && !resetting ? submit : null,
+  });
 
   return (
     <div
@@ -298,6 +322,18 @@ export default function TripDetailsModal({
           </div>
         )}
 
+        {/* Starting the legs over (2026-10-09, the maintainer: after a Deduce
+            run on wrong days, forty legs deleted one by one). A verb is drawn
+            only when it has something to do, and each asks first, with its
+            counts; the trip's undo takes it back in one step. It writes the
+            STORED trip, not this sheet's draft dates. */}
+        {editing && trip && onReset && resetCounts && (
+          <StartOver
+            counts={resetCounts}
+            onPick={setResetting}
+          />
+        )}
+
         {/* Pinned: the two dates push the button below the fold on a phone. */}
         <div className="sticky bottom-0 -mx-6 mt-4 px-6 pb-6 flex items-center justify-end gap-4 pt-1 border-t border-line bg-surface">
           <button
@@ -316,6 +352,95 @@ export default function TripDetailsModal({
             {editing ? 'Save' : 'Create trip'}
           </button>
         </div>
+      </div>
+      {resetting && trip && onReset && resetCounts && (
+        <ConfirmDialog
+          title={RESET_WORDS[resetting].question}
+          confirmLabel={RESET_WORDS[resetting].verb}
+          danger
+          onCancel={() => setResetting(null)}
+          onConfirm={() => {
+            const what = resetting;
+            setResetting(null);
+            onReset(resetStages(trip, what));
+          }}
+        >
+          <p>{RESET_WORDS[resetting].lost(resetCounts)}</p>
+          <p className="mt-2">
+            Pieces, dates and the state codes stay; ⌘Z takes it back.{' '}
+            <button
+              type="button"
+              onClick={() =>
+                downloadBlob(
+                  new Blob([serializeTripFile(toTripFile(trip))], { type: 'application/json' }),
+                  tripFileName(trip.name),
+                )
+              }
+              className="p-0 border-0 bg-transparent text-sm text-accent-ink underline underline-offset-[3px] cursor-pointer"
+            >
+              Back up the trip first
+            </button>
+          </p>
+        </ConfirmDialog>
+      )}
+    </div>
+  );
+}
+
+const plural = (n: number, one: string, many = `${one}s`) => `${n} ${n === 1 ? one : many}`;
+
+/** What each width asks, does and loses — said with the trip's own counts. */
+const RESET_WORDS: Record<StageReset, { label: (c: StageResetCounts) => string; question: string; verb: string; lost: (c: StageResetCounts) => string }> = {
+  deduced: {
+    label: (c) => `Remove what Deduce added (${c.deduced})`,
+    question: 'Remove the legs Deduce added?',
+    verb: 'Remove',
+    lost: (c) => `${plural(c.deduced, 'leg')} written by Deduce go, with their places. The legs you made yourself stay as they are.`,
+  },
+  places: {
+    label: (c) => `Clear the places (${c.places})`,
+    question: 'Clear every placed place?',
+    verb: 'Clear the places',
+    lost: (c) =>
+      `${plural(c.places, 'place')}${c.located ? `, ${c.located} of them on the map,` : ''} leave the trip's ${plural(c.stages, 'leg')}. The legs keep their dates and names, ready to be placed again.`,
+  },
+  stages: {
+    label: (c) => `Remove every leg (${c.stages})`,
+    question: 'Start the legs from zero?',
+    verb: 'Remove every leg',
+    lost: (c) =>
+      `${plural(c.stages, 'leg')} and their ${plural(c.places, 'place')} go. The calendar is left bare for a new Deduce, a timeline import or legs drawn by hand.`,
+  },
+};
+
+/** The row of verbs; the question is the sheet's, so its keys can stand down. */
+function StartOver({ counts, onPick }: { counts: StageResetCounts; onPick: (what: StageReset) => void }) {
+  // Removing what Deduce added IS removing every leg when Deduce wrote them
+  // all — one verb, not two saying the same thing.
+  const offered = (['deduced', 'places', 'stages'] as const).filter(
+    (w) => canReset(counts, w) && !(w === 'deduced' && counts.deduced === counts.stages),
+  );
+  if (!offered.length) return null;
+  return (
+    <div className={field}>
+      <span className={legend}>
+        Start over{' '}
+        <InfoDot about="starting over">
+          <p>Clears what the legs hold, so a Deduce or a timeline import can start from a clean calendar.</p>
+          <p>Pieces, the trip's dates and its state codes are never touched, and ⌘Z takes it back.</p>
+        </InfoDot>
+      </span>
+      <div className="flex flex-wrap gap-x-4 gap-y-2">
+        {offered.map((w) => (
+          <button
+            key={w}
+            type="button"
+            onClick={() => onPick(w)}
+            className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-danger"
+          >
+            {RESET_WORDS[w].label(counts)}
+          </button>
+        ))}
       </div>
     </div>
   );
