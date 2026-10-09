@@ -41,7 +41,7 @@ import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { formatDistance, haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
 import { currentLegIndex, standingPiece } from './hook-calendar';
-import { roadHops, type RoadLine } from '../road-track';
+import { roadHops, roadKms, type RoadLine } from '../road-track';
 import {
   hookPictureKey,
   type HookDay,
@@ -1889,15 +1889,9 @@ export function drivePlan(
   const { points, geo } = planPoints(stops, followed?.map((h) => h?.via ?? null) ?? []);
   const hops: PathHop[] | undefined = followed?.map((h, i) => {
     if (!h) return { via: null, km: haversineKm(stops[i], stops[i + 1]) };
-    const viaKm: number[] = [];
-    let k = 0;
-    let prev: GeoPoint = stops[i];
-    for (const p of h.via) {
-      k += haversineKm(prev, p);
-      viaKm.push(k);
-      prev = p;
-    }
-    return { via: h.via.map((p) => geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2)), viaKm, km: k + haversineKm(prev, stops[i + 1]) };
+    // Along the road as recorded, a steered line's bends included (`roadKms`).
+    const { viaKm, km } = roadKms(stops[i], h.via, stops[i + 1], haversineKm);
+    return { via: h.via.map((p) => geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2)), viaKm, km };
   });
   const path = buildPath(points, o.path, hops);
   const kmAtStop = [0];

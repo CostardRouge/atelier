@@ -325,7 +325,9 @@ export default function TripSettingsModal({
                 mode={trip.road?.mode ?? DEFAULT_ROAD_MODE}
                 detail={trip.road?.detail ?? DEFAULT_ROAD_DETAIL}
                 onMode={(mode) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, mode } })}
+                steer={trip.road?.steer ?? null}
                 onDetail={(detail) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, detail } })}
+                onSteer={(steer) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, steer } })}
                 onForget={() => onChangeTrip({ ...trip, road: null })}
                 onAdded={(added) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, added } })}
                 onNested={setRoadNested}

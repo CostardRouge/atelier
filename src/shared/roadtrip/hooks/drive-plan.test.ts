@@ -1504,6 +1504,18 @@ describe('the trip’s road — the vehicle drives it and the counter counts it'
     for (const m of km) expect(plan.kmAt(m.s)).toBeCloseTo(m.value, 3);
   });
 
+  it('drives a STEERED road round its corners, and still counts the road', () => {
+    const steered = roadLine(fixes, 'raw', 0, { lookM: 3000, radiusM: 500 });
+    const plain = drivePlan(route, o, true, false, undefined, road)!;
+    const plan = drivePlan(route, o, true, false, undefined, steered)!;
+    expect(plan.roadHops).toBe(1);
+    // The corners are rounded, so the line driven is shorter…
+    expect(plan.path.stopS[1]).toBeLessThan(plain.path.stopS[1]);
+    // …and the counter still counts the road as recorded.
+    expect(Math.abs(plan.kmAtStop[1] - road.km)).toBeLessThan(1);
+    expect(plan.kmAt(plan.path.length)).toBeCloseTo(plan.kmAtStop[2], 6);
+  });
+
   it('keeps every hop a curve as the crow flies or with no road', () => {
     const plan = drivePlan(route, o, true, false, undefined, { pieces: [], points: 0, km: 0 })!;
     expect(plan.roadHops).toBe(0);

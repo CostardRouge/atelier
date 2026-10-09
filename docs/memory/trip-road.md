@@ -1,8 +1,9 @@
 # A trip's ROAD — the GPS track kept beside the places
 
 Read when you touch `shared/roadtrip/road-track.ts`, `TripDoc.road`, the Road
-section of Trip settings, or how Virée and the Itinerary draw the line between
-stops and count its kilometres.
+section of Trip settings, Deduce's road or the GPX import. How the openers
+DRIVE and DRAW the road — hops, steering, the heading, the Itinerary and the
+overview's map — is in `trip-road-drive.md`.
 
 ## Places are TOLD, road points are DRIVEN (2026-10-09, his decision)
 
@@ -37,18 +38,6 @@ for 7 578 fixes) so any mode can be read back — privacy is not a concern on a
 finished trip for him (his words), but the backup and the Winnow copy carry
 the raw fixes, home and work included, and that is said where it is written.
 
-## A hop takes the road only where the road joins it (2026-10-09)
-
-`roadBetween`: the first visit of stop A at or after the cursor left by the
-previous hop, then the first visit of B after it on the same piece, within
-25 km — so a road driven out and back through one town takes the right pass
-each time; failing forward, the road driven the other way (an author's own
-stops listed against the clock). A hop with no road under it — a stop off the
-road, a flight between, an order never driven — keeps its curve. A flight
-(> 200 km/h and > 50 km between two fixes) CUTS the line into pieces; a
-ferry (slow, over water) stays a straight hop. Verified on his track:
-Streaky Bay → Esperance follows the Eyre Highway for 1 557 km.
-
 ## `TripDoc.road` (v32), written from Deduce's Review (2026-10-09)
 
 `TripRoad`: the encoded track, its fix count, the points placed by hand
@@ -71,55 +60,6 @@ would count at the current detail, so the choice is made on the numbers; the
 detail slider walks `ROAD_DETAILS` and is greyed under Crow flies (nothing to
 smooth). With no road the panel says where one comes from (Deduce) rather
 than hiding — the overview's sheet is where he looks for it.
-
-## Virée drives the road (2026-10-09)
-
-`HookContext.road` is `tripRoadLine(trip.road)` (cached per stored road in a
-WeakMap, so every surface reads one line); `drivePlan`'s last argument takes
-it. `roadHops` (cached per line and stops) finds each hop on the road with
-the cursor carried along; a hop is refused — and keeps its curve — when its
-two stops are under `SAME_PLACE_KM` (3 km: measured on his real year, four
-120 km loops between stops 1 km apart, the commute at the end of the trip)
-or its road length passes `DETOUR_RATIO` × the crow AND the crow + 150 km.
-The plan's box fits the road too (a sample of ≤ 4 000 points: a spread of
-every fix overflows `Math.min`'s arguments in JavaScriptCore). `RoadPath.km`
-carries the kilometres at each sample — the road's own along a road hop, the
-crow's shared by arc on a curve — so `kmAt`, `kmAtStop`, the milestones
-(`sAlong`) and the summary card count what the vehicle drives, exactly, never
-by plan length (the projection's scale varies with latitude). On a road path
-the heading is read over a chord (`headingAt`), or the car twitches on every
-fix — and the chord is NEVER a share of the piece (2026-10-09, his report of
-a trembling car): 3 % of the path was 1.3 km on a day and 600 km on a piece
-driving the whole trip, which pointed the car at a far town while it slid
-through every bend. The plan's default is `ROAD_HEADING_KM` (1 km) on the
-ground; the painter passes its own, two vehicle lengths ON SCREEN
-(`HEADING_LENGTHS`), so close up the car follows its bend and from afar a
-town's streets do not spin it. Measured locally on his track (never committed): 143 simulated stops,
-99 hops on the road at `stages`/100 m, the road hops summing to the line's
-own km within 1 %, ~100 ms for the first plan, ~10 ms cached.
-
-## The Itinerary and the overview's Map draw the road (2026-10-09)
-
-The Itinerary reads the road through `MapOptions.roads`, DERIVED in
-`drawnOptions` (and the panel) from `roadHops` and never stored — the road is
-the trip's, not the piece's. Every fit of the drawn map goes through
-`mapFit(o)` (stops + a ≤ 4 000-point sample of the road): the paint, the
-camera's subject and bounds and the OSM ground must fit on the same points,
-or the tiles slide under the line. A road hop is a `RoadShape` whose
-fractions are KILOMETRES, so the pen, the drawn/ahead split and the distance
-readout agree; the pen's pace shares time by the road's planar length
-(`planarHops(stops, roads)`). The overview's Map adds the road as a MapLibre
-`line` layer (GPU, not the per-frame SVG) and then drops the solid straight
-strokes between stages, keeping the dotted ones (they say days are
-unaccounted for); it frames the places plus the road inside their box grown
-by its own size (≥ 2°), never the far end of a flight home the track carries.
-Since the same day a stage's own TINTED path follows the road too
-(`stageRoads` in `trip-map.ts`): the hops are found over EVERY stage's places
-in lived order in one `roadHops` pass, so the cursor carries from stage to
-stage (an out-and-back road takes the right pass), computed in a `useMemo`
-on the stages and the road and never per frame — the search scans the whole
-line; the dial sits halfway along the path as drawn (`pathMidpoint`), on the
-road, and the stage focus flies there.
 
 ## Road points placed by hand, on the big map (2026-10-09)
 

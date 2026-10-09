@@ -345,7 +345,8 @@ This file is the **always-loaded index**. The detail lives in `docs/memory/<topi
 | `docs/memory/hdr.md` | `src/shared/hdr/` (the gain map, the Ultra HDR container, the display probe), `RollExport.hdr`, any claim about HDR on a still |
 | `docs/memory/winnow-picker.md` | `shared/sources/winnow/picker/` (the one modal behind the Library's *browse all* and Develop's *Add a day*), its rail, `DayPicker`, anything that lists an instance's day or folder for a person to tick |
 | `docs/memory/showcase.md` | the Vitrine opener (`shared/roadtrip/hooks/showcase*`) — its places, endings, entrances, the configurator lab |
-| `docs/memory/trip-road.md` | a trip's ROAD — `road-track.ts`, `TripDoc.road`, the Road section, how an opener draws the line between stops and counts its kilometres |
+| `docs/memory/trip-road.md` | a trip's ROAD — `road-track.ts`'s modes and detail, `TripDoc.road`, the Road section, Deduce's road, GPX, the points placed by hand |
+| `docs/memory/trip-road-drive.md` | how the openers DRIVE and DRAW the road — a hop on it (`roadHops`), steering (`steerRoad`, `TripRoad.steer`), the counted km (`roadKms`), the vehicle's heading, the Itinerary and the overview's map |
 | `docs/memory/tasks.md` | `src/shared/tasks/`, `TaskEdge`, `TaskPill` — progress, a cancel, a spinner, a "please wait" anywhere |
 
 Not memory files, but read them before starting new work, or before touching

@@ -1,11 +1,15 @@
 import { useEffect, useMemo, useState } from 'react';
 import {
+  DEFAULT_ROAD_STEER,
   ROAD_DETAILS,
+  ROAD_LOOKS,
+  ROAD_RADII,
   decodeTrack,
   roadSourceText,
   tripRoadLine,
   type RoadFix,
   type RoadMode,
+  type RoadSteer,
   type TripRoad,
 } from '../../shared/roadtrip/road-track';
 import { roadFixes, roadGaps } from '../../shared/roadtrip/road-points';
@@ -26,7 +30,8 @@ const MODE_LABEL: Record<RoadMode, string> = {
 };
 
 const km = (n: number) => `${Math.round(n).toLocaleString('en-GB')} km`;
-const detailText = (m: number) => (m === 0 ? 'every point' : m >= 1000 ? `${m / 1000} km` : `${m} m`);
+const metres = (m: number) => (m >= 1000 ? `${m / 1000} km` : `${m} m`);
+const detailText = (m: number) => (m === 0 ? 'every point' : metres(m));
 const dayOf = (seconds: number) => formatIsoDate(new Date(seconds * 1000).toISOString().slice(0, 10));
 
 interface RoadSettingsPanelProps {
@@ -34,8 +39,11 @@ interface RoadSettingsPanelProps {
   /** How the road is read — the trip's, or a sheet's draft of it. */
   mode: RoadMode;
   detail: number;
+  /** How the vehicle steers along the line; null drives it as recorded. */
+  steer: RoadSteer | null;
   onMode: (mode: RoadMode) => void;
   onDetail: (detail: number) => void;
+  onSteer: (steer: RoadSteer | null) => void;
   /** Take the road off the trip; absent hides the verb. */
   onForget?: () => void;
   /** The points of road placed by hand on the big map; absent hides the verb. */
@@ -65,8 +73,10 @@ export default function RoadSettingsPanel({
   road,
   mode,
   detail,
+  steer,
   onMode,
   onDetail,
+  onSteer,
   onForget,
   onAdded,
   onNested,
@@ -113,12 +123,13 @@ export default function RoadSettingsPanel({
   }, [road]);
 
   // What each mode reads at this detail — the numbers the choice is made on.
+  // Unsteered: steering never changes what is counted, and costs a drive.
   const lines = useMemo(() => {
     if (!road) return null;
     return {
-      stages: tripRoadLine({ ...road, mode: 'stages', detail }),
-      moves: tripRoadLine({ ...road, mode: 'moves', detail }),
-      raw: tripRoadLine({ ...road, mode: 'raw', detail }),
+      stages: tripRoadLine({ ...road, mode: 'stages', detail, steer: null }),
+      moves: tripRoadLine({ ...road, mode: 'moves', detail, steer: null }),
+      raw: tripRoadLine({ ...road, mode: 'raw', detail, steer: null }),
     };
   }, [road, detail]);
 
@@ -136,6 +147,9 @@ export default function RoadSettingsPanel({
   }
 
   const index = Math.max(0, ROAD_DETAILS.indexOf(detail));
+  // 0 is off: the line driven as recorded.
+  const lookIndex = steer ? Math.max(0, ROAD_LOOKS.indexOf(steer.lookM)) + 1 : 0;
+  const radiusIndex = Math.max(0, ROAD_RADII.indexOf(steer?.radiusM ?? DEFAULT_ROAD_STEER.radiusM));
   const shown = mode === 'crow' ? null : lines[mode];
 
   return (
@@ -147,6 +161,7 @@ export default function RoadSettingsPanel({
         <InfoDot about="the road">
           <p>The line the openers drive and the kilometres they count. A place stays a place: the road is never named nor drawn as points.</p>
           <p>Between stays leaves out what happens while you stay somewhere (walks, buses, the commute). Every move keeps it, without the GPS’s noise. Raw keeps every fix.</p>
+          <p>Look ahead steers the vehicle like a driver instead of a pen through every fix: it aims at the road that far ahead and turns no tighter than the turn radius, so the GPS’s scatter becomes a bend rather than a twitch. Further ahead is calmer and cuts corners more. The kilometres stay the road’s as recorded.</p>
           <p>The road is kept whole, raw fixes included, and travels in the trip’s backup. A GPX adds its timed points to it — a car’s log, a day the phone missed — within the trip’s dates.</p>
         </InfoDot>
       </span>
@@ -168,7 +183,7 @@ export default function RoadSettingsPanel({
       />
 
       <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
-        <span className="w-[4.5rem] flex-none">Detail</span>
+        <span className="w-[5.5rem] flex-none">Detail</span>
         <input
           type="range"
           min={0}
@@ -184,6 +199,41 @@ export default function RoadSettingsPanel({
           {detailText(detail)}
           {shown ? ` · ${shown.points.toLocaleString('en-GB')} pts` : ''}
         </span>
+      </label>
+
+      <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+        <span className="w-[5.5rem] flex-none">Look ahead</span>
+        <input
+          type="range"
+          min={0}
+          max={ROAD_LOOKS.length}
+          step={1}
+          value={lookIndex}
+          onChange={(e) => {
+            const i = Number(e.target.value);
+            onSteer(i === 0 ? null : { lookM: ROAD_LOOKS[i - 1], radiusM: steer?.radiusM ?? DEFAULT_ROAD_STEER.radiusM });
+          }}
+          disabled={mode === 'crow'}
+          aria-label="How far ahead the vehicle aims"
+          className="flex-1 min-w-[8rem] accent-[var(--color-accent)]"
+        />
+        <span className="font-mono text-ink-soft w-[10rem] text-right">{steer ? metres(steer.lookM) : 'off · every fix'}</span>
+      </label>
+
+      <label className="flex flex-wrap items-center gap-x-3 gap-y-1 text-xs text-muted">
+        <span className="w-[5.5rem] flex-none">Turn radius</span>
+        <input
+          type="range"
+          min={0}
+          max={ROAD_RADII.length - 1}
+          step={1}
+          value={radiusIndex}
+          onChange={(e) => steer && onSteer({ ...steer, radiusM: ROAD_RADII[Number(e.target.value)] })}
+          disabled={mode === 'crow' || !steer}
+          aria-label="The vehicle’s tightest turn"
+          className="flex-1 min-w-[8rem] accent-[var(--color-accent)]"
+        />
+        <span className="font-mono text-ink-soft w-[10rem] text-right">{steer ? metres(steer.radiusM) : '—'}</span>
       </label>
 
       <span className="flex flex-wrap items-center gap-x-4 gap-y-2">

@@ -341,7 +341,9 @@ export default function TripDetailsModal({
               mode={road?.mode ?? DEFAULT_ROAD_MODE}
               detail={road?.detail ?? DEFAULT_ROAD_DETAIL}
               onMode={(mode) => setRoad((r) => (r ? { ...r, mode } : r))}
+              steer={road?.steer ?? null}
               onDetail={(detail) => setRoad((r) => (r ? { ...r, detail } : r))}
+              onSteer={(steer) => setRoad((r) => (r ? { ...r, steer } : r))}
               onForget={() => setRoad(null)}
               onAdded={(added) => setRoad((r) => (r ? { ...r, added } : r))}
               onNested={setRoadNested}
