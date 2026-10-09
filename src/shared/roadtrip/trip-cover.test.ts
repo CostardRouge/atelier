@@ -63,6 +63,7 @@ const trip = (over: Partial<TripDoc> = {}): TripDoc => ({
   crossings: { ...DEFAULT_CROSSINGS },
   placeStyle: { badge: 'name', lists: 'code' },
   stateCodes: {},
+  road: null,
   createdAt: 0,
   updatedAt: 0,
   ...over,

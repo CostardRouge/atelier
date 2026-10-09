@@ -48,3 +48,15 @@ road, a flight between, an order never driven — keeps its curve. A flight
 (> 200 km/h and > 50 km between two fixes) CUTS the line into pieces; a
 ferry (slow, over water) stays a straight hop. Verified on his track:
 Streaky Bay → Esperance follows the Eyre Highway for 1 557 km.
+
+## `TripDoc.road` (v32), written from Deduce's Review (2026-10-09)
+
+`TripRoad`: the encoded track, its fix count, the points placed by hand
+(`added`, for the holes — never named), the mode, the detail and when it was
+written; null on every stored trip (the v32 migration writes null). PORTABLE:
+`toTripFile`, `parseTripFile` and `tripDocFromFile` all carry it (the four
+places rule `studio.md` learnt on the intros). Deduce's Review offers *Keep
+the road from Polarsteps*, ticked by default whenever the export has a track,
+and Write works with only the road to write. `makeTripRoad` keeps the fixes
+within the trip's span plus a day each side, and a re-import replaces the
+fixes while keeping the mode, the detail and the hand-placed points.

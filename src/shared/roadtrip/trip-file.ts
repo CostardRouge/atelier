@@ -40,6 +40,7 @@
 import { readVehicleSpec } from './vehicle-spec';
 import { readCrossings, readFleet } from './vehicle-fleet';
 import { isIsoDate } from './trip-days';
+import { readTripRoad } from './road-track';
 import {
   TRIP_DOC_VERSION,
   createTripDoc,
@@ -113,6 +114,8 @@ export function toTripFile(trip: TripDoc, exportedAt: number = Date.now()): Trip
     // trip's voice, like its words — a place read elsewhere should read the same.
     placeStyle: { ...trip.placeStyle },
     stateCodes: { ...trip.stateCodes },
+    // The road: how the trip was really driven, raw fixes and all.
+    road: trip.road ? structuredClone(trip.road) : null,
   };
 }
 
@@ -215,6 +218,7 @@ export function parseTripFile(text: string): ParseResult {
       : { vehicles: readFleet(raw.vehicles), crossings: readCrossings(raw.crossings) }),
     placeStyle: readPlaceStyle(raw.placeStyle),
     stateCodes: readStateCodes(raw.stateCodes),
+    road: readTripRoad(raw.road),
   });
 
   return {
@@ -241,6 +245,7 @@ export function parseTripFile(text: string): ParseResult {
       crossings: migrated.crossings,
       placeStyle: migrated.placeStyle,
       stateCodes: migrated.stateCodes,
+      road: migrated.road,
     },
   };
 }
@@ -279,5 +284,6 @@ export function tripDocFromFile(
     crossings: { ...file.crossings },
     placeStyle: { ...file.placeStyle },
     stateCodes: { ...file.stateCodes },
+    road: file.road ? structuredClone(file.road) : null,
   };
 }

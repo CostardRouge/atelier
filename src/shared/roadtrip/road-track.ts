@@ -382,3 +382,81 @@ function hopOf(piece: readonly RoadFix[], i: number, j: number, a: LatLon, b: La
 export function fixesFrom(track: readonly { lat: number; lon: number; time: number }[]): RoadFix[] {
   return cleanFixes(track.map((f) => ({ t: f.time, lat: f.lat, lon: f.lon })));
 }
+
+// --- the road on the trip ----------------------------------------------------------------
+
+/**
+ * The trip's road (`TripDoc.road`, v32): the whole track, encoded, and how
+ * the trip reads it. Portable — the backup carries it, raw fixes included.
+ */
+export interface TripRoad {
+  /** Where the fixes came from. */
+  source: 'polarsteps';
+  /** `encodeTrack` of every fix kept, in time order. */
+  track: string;
+  /** How many fixes the track holds, said without decoding it. */
+  fixes: number;
+  /** Road points placed by hand where the track has a hole; never named, never a place. */
+  added: RoadFix[];
+  mode: RoadMode;
+  /** The Douglas–Peucker tolerance, metres (`ROAD_DETAILS`). */
+  detail: number;
+  /** When the track was last written, ms. */
+  importedAt: number;
+}
+
+/** A validated read: junk lands as no road, a missing setting on its default. */
+export function readTripRoad(raw: unknown): TripRoad | null {
+  if (!raw || typeof raw !== 'object' || Array.isArray(raw)) return null;
+  const r = raw as Record<string, unknown>;
+  const fixes = decodeTrack(r.track);
+  const added = Array.isArray(r.added)
+    ? cleanFixes(
+        r.added.filter((f): f is RoadFix => !!f && typeof f === 'object').map((f) => ({ t: Number(f.t), lat: Number(f.lat), lon: Number(f.lon) })),
+      )
+    : [];
+  if (fixes.length < 2 && !added.length) return null;
+  return {
+    source: 'polarsteps',
+    track: typeof r.track === 'string' ? r.track : '',
+    fixes: fixes.length,
+    added,
+    mode: isRoadMode(r.mode) ? r.mode : DEFAULT_ROAD_MODE,
+    detail: readRoadDetail(r.detail),
+    importedAt: typeof r.importedAt === 'number' && Number.isFinite(r.importedAt) ? r.importedAt : 0,
+  };
+}
+
+/**
+ * The road a fresh track gives the trip: its fixes within the trip's span
+ * (a day of slack each side, for the zones), and the reading the author
+ * already chose — a re-import replaces the fixes and keeps the mode, the
+ * detail and the points placed by hand.
+ */
+export function makeTripRoad(
+  fixes: readonly RoadFix[],
+  span: { startDate: string; endDate: string },
+  previous: TripRoad | null,
+  now: number,
+): TripRoad | null {
+  const from = Date.parse(`${span.startDate}T00:00:00Z`) / 1000 - 86_400;
+  const to = Date.parse(`${span.endDate}T23:59:59Z`) / 1000 + 86_400;
+  const kept = cleanFixes(fixes).filter((f) => f.t >= from && f.t <= to);
+  if (kept.length < 2) return previous;
+  return {
+    source: 'polarsteps',
+    track: encodeTrack(kept),
+    fixes: kept.length,
+    added: previous?.added ?? [],
+    mode: previous?.mode ?? DEFAULT_ROAD_MODE,
+    detail: previous?.detail ?? DEFAULT_ROAD_DETAIL,
+    importedAt: now,
+  };
+}
+
+/** The line a trip's road draws, as its mode and detail read it, hand-placed points merged in time. */
+export function tripRoadLine(road: TripRoad | null): RoadLine {
+  if (!road || road.mode === 'crow') return NO_ROAD;
+  const fixes = road.added.length ? cleanFixes([...decodeTrack(road.track), ...road.added]) : decodeTrack(road.track);
+  return roadLine(fixes, road.mode, road.detail);
+}

@@ -6,10 +6,14 @@ import {
   distanceKm,
   encodeTrack,
   lineKm,
+  makeTripRoad,
+  NO_ROAD,
+  readTripRoad,
   roadBetween,
   roadLine,
   simplify,
   thin,
+  tripRoadLine,
   withoutStays,
   type RoadFix,
 } from './road-track';
@@ -159,5 +163,42 @@ describe('roadBetween', () => {
     const hop = roadBetween(line, { lat: -30, lon: 122.6 }, { lat: -30, lon: 120 });
     expect(hop).not.toBeNull();
     expect(hop!.via[0].lon).toBeGreaterThan(hop!.via[hop!.via.length - 1].lon);
+  });
+});
+
+describe('the road on the trip', () => {
+  const span = { startDate: '2025-06-30', endDate: '2025-07-02' };
+  const fixes = drive({ lat: -30, lon: 120 }, 6);
+
+  it('keeps the fixes within the span, a day of slack each side', () => {
+    const early = { t: T0 - 10 * 86_400, lat: -30, lon: 100 };
+    const road = makeTripRoad([early, ...fixes], span, null, 1)!;
+    expect(road.fixes).toBe(fixes.length);
+    expect(road.mode).toBe('stages');
+    expect(road.detail).toBe(100);
+  });
+
+  it('a re-import keeps the reading and the points placed by hand', () => {
+    const before = { ...makeTripRoad(fixes, span, null, 1)!, mode: 'raw' as const, detail: 500, added: [fixes[3]] };
+    const after = makeTripRoad(fixes.slice(0, 10), span, before, 2)!;
+    expect(after.mode).toBe('raw');
+    expect(after.detail).toBe(500);
+    expect(after.added).toEqual([fixes[3]]);
+    expect(after.fixes).toBe(10);
+  });
+
+  it('reads junk as no road, and a stored road back whole', () => {
+    expect(readTripRoad(null)).toBeNull();
+    expect(readTripRoad({ track: 'nope' })).toBeNull();
+    const road = makeTripRoad(fixes, span, null, 1)!;
+    expect(readTripRoad(JSON.parse(JSON.stringify(road)))).toEqual(road);
+    expect(readTripRoad({ ...road, mode: 'fly', detail: 7 })).toMatchObject({ mode: 'stages', detail: 100 });
+  });
+
+  it('draws nothing as the crow flies, the line otherwise', () => {
+    const road = makeTripRoad(fixes, span, null, 1)!;
+    expect(tripRoadLine({ ...road, mode: 'crow' }).pieces).toEqual([]);
+    expect(tripRoadLine(road).km).toBeGreaterThan(400);
+    expect(tripRoadLine(null)).toBe(NO_ROAD);
   });
 });

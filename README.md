@@ -881,7 +881,8 @@ touched.
 window) takes a Polarsteps export — `trip.json`, `locations.json`, either one,
 or the unzipped folder; a zip is refused with the reason, and of an export
 holding several trips the files covering this one are kept. It is read in the
-browser, never sent and forgotten with the window. Its **track** places each
+browser, never sent, and forgotten with the window unless you keep its road
+(below). Its **track** places each
 day on that day's own clock — the time zone of the step you were in, read by
 the browser, so a morning frame is never filed on the evening before — and it
 wins over the instance wherever it has fixes; the instance fills the days the
@@ -890,7 +891,12 @@ instance only guessed comes last. Its **steps** are places you named, so a halt
 takes the name of the step of its days nearest its centre (the island, the
 gorge, the rock) before the city index, which then only names what no step
 does and still says which region a halt lies in. A place written that way says
-*from Polarsteps*.
+*from Polarsteps*. **Keep the road from Polarsteps**, ticked in Review whenever
+the export has a track, writes that track onto the trip as its **road**: the
+line the openers drive and the kilometres they count, never a place. It is
+kept whole (a year is about 55 KB), raw fixes included, and travels in the
+backup; writing a new export replaces the fixes and keeps how the trip reads
+them.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
