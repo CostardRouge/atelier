@@ -19,6 +19,7 @@ import {
 import { DEFAULT_DEVELOP } from '../develop/develop';
 import { DEFAULT_VEHICLE, defaultVehicleSpec } from './vehicle-spec';
 import { createTextElement } from '../overlay/overlay-types';
+import { makeTripRoad } from './road-track';
 
 const trip = (): TripDoc => {
   const doc = createTripDoc('Australie', '2025-07-01', '2025-07-10');
@@ -165,6 +166,21 @@ describe('the trip file', () => {
     // import, a move between sources and a clone each lost the trip's voice.
     expect(tripDocFromFile(file).placeStyle).toEqual(doc.placeStyle);
     expect(tripDocFromFile(file).stateCodes).toEqual(doc.stateCodes);
+  });
+
+  it('carries the trip’s road — its fixes, its reading and the points placed by hand — and lands an older file on none', () => {
+    const doc = trip();
+    const t0 = Date.parse('2025-07-02T00:00:00Z') / 1000;
+    const fixes = Array.from({ length: 6 }, (_, i) => ({ t: t0 + i * 600, lat: -30, lon: 120 + i * 0.05 }));
+    doc.road = { ...makeTripRoad(fixes, doc, null, 1)!, mode: 'moves', detail: 500, added: [fixes[2]] };
+    const file = roundTrip(doc);
+    expect(file.road).toEqual(doc.road);
+    expect(tripDocFromFile(file).road).toEqual(doc.road);
+    const older = JSON.parse(serializeTripFile(toTripFile(trip())));
+    delete older.road;
+    older.version = 31;
+    const parsed = parseTripFile(JSON.stringify(older));
+    expect(parsed.ok && parsed.file.road).toBeNull();
   });
 
   it('carries the trip’s fleet — every vehicle, its look and its dated changes — and the water rule', () => {

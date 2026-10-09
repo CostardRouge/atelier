@@ -66,6 +66,7 @@ import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
 import LegsSheet from './LegsSheet';
 import YearMap from './YearMap';
+import { tripRoadLine } from '../../shared/roadtrip/road-track';
 import TripMapView, { OffMapRows, type OffMapActions, type StagePicture } from './TripMapView';
 import StageDays from './StageDays';
 import MapStageBar from './MapStageBar';
@@ -891,7 +892,12 @@ export default function TripOverview({
         startDate: details.startDate,
         endDate: details.endDate,
       });
-      onChange({ ...next, cover: details.cover, updatedAt: Date.now() });
+      onChange({
+        ...next,
+        cover: details.cover,
+        ...(details.road !== undefined ? { road: details.road } : {}),
+        updatedAt: Date.now(),
+      });
       // The open day may no longer be in the trip: the route says where you
       // are, so it has to follow rather than leave the panel on a day the
       // calendar no longer draws.
@@ -1060,6 +1066,7 @@ export default function TripOverview({
       offMap={offMapActions}
       onShowOffMap={() => setOffMapOpen(true)}
       footer={footer}
+      road={tripRoadLine(trip.road ?? null)}
     />
   );
 

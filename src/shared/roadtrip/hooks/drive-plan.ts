@@ -41,6 +41,7 @@ import type { SoundEvent } from '../../audio/sound-event';
 import { EASINGS, EASING_IDS, type HookEasing } from './easing';
 import { formatDistance, haversineKm, projectionFor, type DistanceUnit, type GeoPoint, type Projection } from './geo';
 import { currentLegIndex, standingPiece } from './hook-calendar';
+import { roadHops, type RoadLine } from '../road-track';
 import {
   hookPictureKey,
   type HookDay,
@@ -948,15 +949,43 @@ export interface RoadPath {
   length: number;
   /** Arc length at each stop. */
   stopS: number[];
+  /**
+   * Kilometres driven at each sample, when the drive follows the trip's road
+   * (`buildPath`'s hops): a hop on the road counts the road, a curve its
+   * crow's line. Absent: the kilometres are the crow's, stop to stop.
+   */
+  km?: number[];
 }
+
+/**
+ * One hop of a drive as `buildPath` lays it: on the trip's road, the road's
+ * points between the two stops (in plan units) with the kilometres driven at
+ * each from the first stop; otherwise null and its curve. `km` is the hop's
+ * whole length either way.
+ */
+export interface PathHop {
+  via: readonly PlanPoint[] | null;
+  viaKm?: readonly number[];
+  km: number;
+}
+
+/** How many road points at most decide the plan's box — a spread of every fix would overflow a call's arguments. */
+const BOX_SAMPLE = 4000;
 
 /** The plan's box: the projection fits the stops into this many units. */
 export const PLAN_SIZE = 1000;
 const SAMPLES_PER_SEGMENT = 24;
 
 /** The stops in plan units, and the projection that put them there. */
-export function planPoints(stops: readonly GeoPoint[]): { points: PlanPoint[]; geo: Projection } {
-  const geo = projectionFor(stops, PLAN_SIZE, PLAN_SIZE);
+export function planPoints(
+  stops: readonly GeoPoint[],
+  /** The road's points of each hop that follows it, so the box holds the road too. */
+  via: readonly (readonly GeoPoint[] | null)[] = [],
+): { points: PlanPoint[]; geo: Projection } {
+  const road = via.flatMap((v) => v ?? []);
+  const step = Math.max(1, Math.ceil(road.length / BOX_SAMPLE));
+  const boxed = step === 1 ? road : road.filter((_, i) => i % step === 0);
+  const geo = projectionFor(boxed.length ? [...stops, ...boxed] : stops, PLAN_SIZE, PLAN_SIZE);
   return { points: stops.map((s) => geo.at(s, PLAN_SIZE / 2, PLAN_SIZE / 2)), geo };
 }
 
@@ -966,15 +995,28 @@ export function planPoints(stops: readonly GeoPoint[]): { points: PlanPoint[]; g
  * or the bare polyline. Sampled, then measured, so any later question is a
  * lookup by arc length.
  */
-export function buildPath(points: readonly PlanPoint[], path: DrivePath): RoadPath {
+export function buildPath(points: readonly PlanPoint[], path: DrivePath, hops?: readonly PathHop[]): RoadPath {
   if (points.length === 0) return { points: [], cum: [], length: 0, stopS: [] };
-  if (points.length === 1) return { points: [points[0]], cum: [0], length: 0, stopS: [0] };
+  if (points.length === 1) return { points: [points[0]], cum: [0], length: 0, stopS: [0], ...(hops ? { km: [0] } : {}) };
 
   const sampled: PlanPoint[] = [];
   const stopIndex: number[] = [];
+  // The kilometres from its hop's first stop at each sample laid on the road;
+  // null where a curve's are shared out by arc length below.
+  const local: (number | null)[] = [];
   const n = points.length;
   for (let i = 0; i < n - 1; i++) {
     stopIndex.push(sampled.length);
+    const hop = hops?.[i];
+    if (hop?.via) {
+      sampled.push(points[i]);
+      local.push(0);
+      hop.via.forEach((p, k) => {
+        sampled.push(p);
+        local.push(hop.viaKm?.[k] ?? null);
+      });
+      continue;
+    }
     if (path === 'straight') {
       sampled.push(points[i]);
       continue;
@@ -989,12 +1031,68 @@ export function buildPath(points: readonly PlanPoint[], path: DrivePath): RoadPa
   }
   stopIndex.push(sampled.length);
   sampled.push(points[n - 1]);
+  while (local.length < sampled.length) local.push(null);
 
   const cum = [0];
   for (let i = 1; i < sampled.length; i++) {
     cum.push(cum[i - 1] + Math.hypot(sampled[i].x - sampled[i - 1].x, sampled[i].y - sampled[i - 1].y));
   }
-  return { points: sampled, cum, length: cum[cum.length - 1], stopS: stopIndex.map((i) => cum[i]) };
+  const out: RoadPath = { points: sampled, cum, length: cum[cum.length - 1], stopS: stopIndex.map((i) => cum[i]) };
+  if (!hops) return out;
+  // Each hop's kilometres: the road's own where it was laid on the road, the
+  // crow's shared out by arc length on a curve.
+  const km: number[] = new Array(sampled.length).fill(0);
+  let base = 0;
+  for (let i = 0; i < n - 1; i++) {
+    const from = stopIndex[i];
+    const to = stopIndex[i + 1];
+    const hopKm = hops[i]?.km ?? 0;
+    const arc = cum[to] - cum[from];
+    for (let j = from; j < to; j++) {
+      const own = hops[i]?.via ? local[j] : null;
+      km[j] = base + (own ?? (arc > 0 ? (hopKm * (cum[j] - cum[from])) / arc : 0));
+    }
+    base += hopKm;
+  }
+  km[sampled.length - 1] = base;
+  out.km = km;
+  return out;
+}
+
+/** The kilometres driven at arc length `s` on a path that counts its road (`RoadPath.km`). */
+export function kmAlong(path: RoadPath, s: number): number {
+  const { km, cum } = path;
+  if (!km || km.length === 0) return 0;
+  if (s <= 0) return km[0];
+  if (s >= path.length) return km[km.length - 1];
+  let lo = 0;
+  let hi = cum.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (cum[mid] <= s) lo = mid;
+    else hi = mid;
+  }
+  const span = cum[hi] - cum[lo];
+  const w = span > 0 ? (s - cum[lo]) / span : 0;
+  return km[lo] + (km[hi] - km[lo]) * w;
+}
+
+/** The arc length at which a path that counts its road has driven `km` (`kmAlong`'s inverse). */
+export function sAlong(path: RoadPath, km: number): number {
+  const k = path.km;
+  if (!k || k.length === 0) return 0;
+  if (km <= k[0]) return 0;
+  if (km >= k[k.length - 1]) return path.length;
+  let lo = 0;
+  let hi = k.length - 1;
+  while (hi - lo > 1) {
+    const mid = (lo + hi) >> 1;
+    if (k[mid] <= km) lo = mid;
+    else hi = mid;
+  }
+  const span = k[hi] - k[lo];
+  const w = span > 0 ? (km - k[lo]) / span : 0;
+  return path.cum[lo] + (path.cum[hi] - path.cum[lo]) * w;
 }
 
 /** Centripetal Catmull-Rom between p1 and p2 at `t` in 0..1. */
@@ -1040,6 +1138,16 @@ export function pointAt(path: RoadPath, s: number): { point: PlanPoint; index: n
 export function headingAt(path: RoadPath, s: number, blend = path.length * 0.03): { x: number; y: number } {
   const { points, cum } = path;
   if (points.length < 2) return { x: 0, y: -1 };
+  if (path.km && blend > 0) {
+    // A road is many short segments, each a little off the last: the
+    // direction is read over a chord across `s`, so the vehicle follows the
+    // road's line rather than every jitter of its fixes.
+    const half = blend * 0.5;
+    const a = pointAt(path, Math.max(0, s - half)).point;
+    const b = pointAt(path, Math.min(path.length, s + half)).point;
+    const len = Math.hypot(b.x - a.x, b.y - a.y);
+    if (len > 1e-6) return { x: (b.x - a.x) / len, y: (b.y - a.y) / len };
+  }
   const dir = (i: number) => {
     const a = points[Math.max(0, Math.min(points.length - 2, i))];
     const b = points[Math.max(1, Math.min(points.length - 1, i + 1))];
@@ -1642,8 +1750,10 @@ export interface DrivePlan {
   geo: Projection;
   path: RoadPath;
   schedule: DriveSchedule;
-  /** Kilometres along the stops, cumulative. */
+  /** Kilometres along the stops, cumulative — on the road where the drive follows it. */
   kmAtStop: number[];
+  /** How many hops follow the trip's road; 0 = every hop a curve, counted as the crow flies. */
+  roadHops: number;
   seconds: number;
   at(t: number): DriveMoment;
   /** Kilometres the vehicle has covered by `s`. */
@@ -1701,6 +1811,10 @@ export function roadMilestones(
     const total = kmAtStop[n - 1] * perKm;
     for (let m = distanceStep; m < total; m += distanceStep) {
       const km = m / perKm;
+      if (path.km) {
+        out.push({ s: sAlong(path, km), kind: 'distance', value: m });
+        continue;
+      }
       for (let i = 1; i < n; i++) {
         if (km <= kmAtStop[i]) {
           const span = kmAtStop[i] - kmAtStop[i - 1];
@@ -1733,16 +1847,37 @@ export function drivePlan(
    * callback, because the shores are found on the very path this builds.
    */
   docksOf?: (path: RoadPath, geo: Projection) => readonly FerryDock[],
+  /**
+   * The trip's road as it reads it (`HookContext.road`): a hop the road joins
+   * is driven ON it and counted in its kilometres; the others keep their
+   * curve and the crow's line. Absent or empty: every hop a curve.
+   */
+  road: RoadLine | null = null,
 ): DrivePlan | null {
   const stops = route.stops;
   if (stops.length === 0) return null;
   const hasPictures = o.pictures !== 'none' && stops.some((s) => s.pictures.length > 0);
   if (stops.length < 2 && !hasPictures) return null;
 
-  const { points, geo } = planPoints(stops);
-  const path = buildPath(points, o.path);
+  const onRoad = road && road.pieces.length && stops.length > 1 ? roadHops(road, stops) : null;
+  const followed = onRoad?.some(Boolean) ? onRoad : null;
+  const { points, geo } = planPoints(stops, followed?.map((h) => h?.via ?? null) ?? []);
+  const hops: PathHop[] | undefined = followed?.map((h, i) => {
+    if (!h) return { via: null, km: haversineKm(stops[i], stops[i + 1]) };
+    const viaKm: number[] = [];
+    let k = 0;
+    let prev: GeoPoint = stops[i];
+    for (const p of h.via) {
+      k += haversineKm(prev, p);
+      viaKm.push(k);
+      prev = p;
+    }
+    return { via: h.via.map((p) => geo.at(p, PLAN_SIZE / 2, PLAN_SIZE / 2)), viaKm, km: k + haversineKm(prev, stops[i + 1]) };
+  });
+  const path = buildPath(points, o.path, hops);
   const kmAtStop = [0];
-  for (let i = 1; i < stops.length; i++) kmAtStop.push(kmAtStop[i - 1] + haversineKm(stops[i - 1], stops[i]));
+  if (path.km) for (let i = 1; i < stops.length; i++) kmAtStop.push(kmAlong(path, path.stopS[i]));
+  else for (let i = 1; i < stops.length; i++) kmAtStop.push(kmAtStop[i - 1] + haversineKm(stops[i - 1], stops[i]));
   const clock = recap ? stopClock(stops, kmAtStop) : null;
   // The summary card is the recap's, and the badge may take its place
   // (`badgeWhen: 'end'`) or open the drive (`before`, the vehicle waiting for it).
@@ -1803,6 +1938,7 @@ export function drivePlan(
   };
 
   const kmAt = (s: number): number => {
+    if (path.km) return kmAlong(path, s);
     const { stopS } = path;
     if (stopS.length < 2) return 0;
     for (let i = 1; i < stopS.length; i++) {
@@ -1830,7 +1966,8 @@ export function drivePlan(
     return out;
   };
 
-  return { route, points, geo, path, schedule, kmAtStop, seconds: schedule.total, at, kmAt, showing, recap, clock, milestones };
+  const roadHopCount = followed ? followed.filter(Boolean).length : 0;
+  return { route, points, geo, path, schedule, kmAtStop, roadHops: roadHopCount, seconds: schedule.total, at, kmAt, showing, recap, clock, milestones };
 }
 
 // --- the recap's counter ----------------------------------------------------------

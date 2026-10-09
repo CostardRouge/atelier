@@ -51,6 +51,7 @@ import { driveBasemap, driveTrack } from './drive-paint';
 import { groundNote, type BasemapSet } from './basemap-strip';
 import { STREAM_DECODED, STRIP_TILES } from '../../map/tile-strip';
 import { TILE_PX, planTiles } from '../../map/tile-math';
+import { distanceKm, roadLine, type RoadFix } from '../road-track';
 
 /** The pyramid's tiles as rasters would be described: zoom, region, size. */
 const patchesOf = (set: BasemapSet) =>
@@ -1415,6 +1416,73 @@ describe('the drive’s OpenStreetMap ground', () => {
   it('reads the new ground and its strength', () => {
     expect(driveOptions({ ground: 'tiles' }).ground).toBe('tiles');
     expect(driveOptions({ basemapOpacity: 0 }).basemapOpacity).toBe(DRIVE_LIMITS.basemapOpacity.min);
+  });
+});
+
+describe('the trip’s road — the vehicle drives it and the counter counts it', () => {
+  const quiet = (patch: Partial<DriveOptions> = {}) =>
+    opts({ delaySeconds: 0, arriveSeconds: 0, includePieces: false, driveSeconds: 10, ...patch });
+  // A road round a bay: from A east, down and back west to B, which the crow
+  // reaches straight across the water. Invented coordinates.
+  const A = { lat: -30, lon: 120 };
+  const B = { lat: -31, lon: 120 };
+  const C = { lat: -31, lon: 117 };
+  const T0 = 1_751_300_000;
+  const fixes: RoadFix[] = [];
+  const leg = (from: { lat: number; lon: number }, to: { lat: number; lon: number }, steps: number) => {
+    for (let i = fixes.length ? 1 : 0; i <= steps; i++) {
+      fixes.push({ t: T0 + fixes.length * 600, lat: from.lat + ((to.lat - from.lat) * i) / steps, lon: from.lon + ((to.lon - from.lon) * i) / steps });
+    }
+  };
+  leg(A, { lat: -30, lon: 122 }, 20);
+  leg({ lat: -30, lon: 122 }, { lat: -31, lon: 122 }, 10);
+  leg({ lat: -31, lon: 122 }, B, 20);
+  const road = roadLine(fixes, 'raw', 0);
+  const stops = [
+    { id: 'a', name: 'A', ...A },
+    { id: 'b', name: 'B', ...B },
+    // Off the road: this hop keeps its curve and the crow's line.
+    { id: 'c', name: 'C', ...C },
+  ];
+  const o = quiet({ stopsOn: 'custom', stops });
+  const route = driveRoute(STAGES, CAL, dateOf(20), o);
+
+  it('follows the road where it joins two stops, a curve elsewhere', () => {
+    const plain = drivePlan(route, o, true)!;
+    const plan = drivePlan(route, o, true, false, undefined, road)!;
+    expect(plain.roadHops).toBe(0);
+    expect(plan.roadHops).toBe(1);
+    // A → B on the road: round the bay, not across it.
+    const onRoad = plan.kmAtStop[1];
+    expect(onRoad).toBeGreaterThan(distanceKm(A, B) * 4);
+    expect(Math.abs(onRoad - road.km)).toBeLessThan(1);
+    // B → C keeps the crow's line.
+    expect(plan.kmAtStop[2] - plan.kmAtStop[1]).toBeCloseTo(distanceKm(B, C), 1);
+    // The path passes the bay's far corner.
+    const corner = plan.geo.at({ lat: -30.5, lon: 122 }, PLAN_SIZE / 2, PLAN_SIZE / 2);
+    const nearest = Math.min(...plan.path.points.map((p) => Math.hypot(p.x - corner.x, p.y - corner.y)));
+    expect(nearest).toBeLessThan(PLAN_SIZE * 0.02);
+  });
+
+  it('counts what the vehicle drives, monotone, and puts the marks where the road reaches them', () => {
+    const plan = drivePlan(route, o, true, false, undefined, road)!;
+    let last = -1;
+    for (let k = 0; k <= 200; k++) {
+      const km = plan.kmAt((plan.path.length * k) / 200);
+      expect(km).toBeGreaterThanOrEqual(last - 1e-9);
+      last = km;
+    }
+    expect(plan.kmAt(plan.path.length)).toBeCloseTo(plan.kmAtStop[2], 6);
+    const marks = roadMilestones(route.stops, plan.path, plan.kmAtStop, plan.clock, 'km', 10, 100);
+    const km = marks.filter((m) => m.kind === 'distance');
+    expect(km.length).toBeGreaterThan(3);
+    for (const m of km) expect(plan.kmAt(m.s)).toBeCloseTo(m.value, 3);
+  });
+
+  it('keeps every hop a curve as the crow flies or with no road', () => {
+    const plan = drivePlan(route, o, true, false, undefined, { pieces: [], points: 0, km: 0 })!;
+    expect(plan.roadHops).toBe(0);
+    expect(plan.path.km).toBeUndefined();
   });
 });
 

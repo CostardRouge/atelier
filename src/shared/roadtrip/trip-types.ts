@@ -79,8 +79,9 @@ import {
 // The default lives in `place-style.ts`, which takes only TYPES from here —
 // a value both ways is the cycle that left `day-badge.ts` half-loaded.
 import { DEFAULT_PLACE_STYLE } from './place-style';
+import { readTripRoad, type TripRoad } from './road-track';
 
-export const TRIP_DOC_VERSION = 31;
+export const TRIP_DOC_VERSION = 32;
 
 /**
  * A grade, in the Studio's own terms: an ordered stack of LUT layers, the
@@ -852,6 +853,14 @@ export interface TripDoc {
    * meets a dozen states. Portable, so the backup carries it.
    */
   stateCodes: Record<string, string>;
+  /**
+   * The trip's ROAD (v32, `road-track.ts`): the GPS track recorded beside the
+   * cameras, kept whole and read through the trip's mode and detail — the
+   * line the vehicle drives and the counter measures, never a place. Null
+   * until a Polarsteps export is written from Deduce. Portable: the backup
+   * carries it, raw fixes included.
+   */
+  road: TripRoad | null;
   // --- bound half ----------------------------------------------------------
   /**
    * The source this trip belongs to — `'local'` for this browser
@@ -904,6 +913,7 @@ export function createTripDoc(
     crossings: { ...DEFAULT_CROSSINGS },
     placeStyle: { ...DEFAULT_PLACE_STYLE },
     stateCodes: {},
+    road: null,
     createdAt: now,
     updatedAt: now,
   };
@@ -1088,6 +1098,10 @@ export function stageProblem(trip: TripDoc, stage: TripStage): string | null {
  * its main vehicle with no change) and gives it a rule for water
  * (`TripDoc.crossings`), OFF on every stored trip so nothing composed before
  * it starts sailing. `car` is deleted, never left for a reader to misread.
+ *
+ * v31 → v32 gives the trip its ROAD (`TripDoc.road`, `road-track.ts`): the
+ * GPS track kept beside the places, null on every stored trip, so nothing
+ * composed before it changes its line until a track is written.
  *
  * v20 → v21 REPAIRS the car. The Itinerary branch numbered its Route
  * conversion v19 while `main` took v19 for the car, and a trip opened on that
@@ -1633,6 +1647,11 @@ export function migrateTripDoc(doc: TripDoc): TripDoc {
     migrated.vehicles = fleetOf(readVehicleSpec(legacy.car));
     migrated.crossings = { ...DEFAULT_CROSSINGS, auto: false };
     delete legacy.car;
+  }
+
+  if (migrated.version < 32) {
+    // No stored trip has a road yet: it comes with the next Polarsteps write.
+    migrated.road = readTripRoad(migrated.road);
   }
 
   migrated.version = TRIP_DOC_VERSION;

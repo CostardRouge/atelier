@@ -144,13 +144,22 @@ function leftOutLine(route: DriveRoute, o: DriveOptions): string | null {
   return `Left out: ${parts.join(', ')}${why}`;
 }
 
+/** How the distance is measured: on the trip's road where the drive follows it, else as the crow flies. */
+function distanceHow(plan: DrivePlan): string {
+  const hops = plan.route.stops.length - 1;
+  if (plan.roadHops === 0) return 'as the crow flies';
+  if (plan.roadHops >= hops) return 'along the road';
+  return `along the road on ${plan.roadHops} of ${hops} hops, as the crow flies on the others`;
+}
+
 /** What the recap counts, and up to what — the real numbers, or the reason there are none. */
 function recapLine(count: DriveCount, route: DriveRoute, plan: DrivePlan | null): string {
   if (!plan) return 'Nothing to drive yet — the counter waits for the road.';
   const n = route.stops.length;
-  if (count === 'km') return `The badge counts the distance as the vehicle drives, up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies.`;
+  const how = distanceHow(plan);
+  if (count === 'km') return `The badge counts the distance as the vehicle drives, up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} ${how}.`;
   if (count === 'places') return `The badge counts the stops as the vehicle reaches them, up to ${n}.`;
-  const km = count === 'days-km' ? `, the distance beside it up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} as the crow flies` : '';
+  const km = count === 'days-km' ? `, the distance beside it up to ${formatDistance(plan.kmAtStop[n - 1], 'km')} ${how}` : '';
   if (!plan.clock) {
     return route.stops.length
       ? 'No stop carries a date, so the day cannot count: the badge keeps the day of the trip. A stop put on one of the trip’s places, or given a picture, takes its date.'
@@ -203,7 +212,7 @@ function planOf(route: DriveRoute, o: DriveOptions, ctx: HookContext): DrivePlan
       ? (path: DrivePlan['path'], geo: DrivePlan['geo']) =>
           ferryDocks(driveVehicles({ ...input, stops: route.stops, path, geo, centre: PLAN_SIZE / 2, forced: null }))
       : undefined;
-  return drivePlan(route, o, driveCountOf(ctx.counterMode) !== null, boardsOf(o, tripVehicle), docks);
+  return drivePlan(route, o, driveCountOf(ctx.counterMode) !== null, boardsOf(o, tripVehicle), docks, ctx.road ?? null);
 }
 
 /**
@@ -298,7 +307,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       } · ${
         o.pictures === 'none' ? 'no picture shown' : shown === 0 ? 'no picture to show' : `${shown} ${shown === 1 ? 'picture' : 'pictures'} on the way`
       }${plan ? ` · ${plan.seconds.toFixed(1)}s` : ''}${
-        plan && o.distance !== 'off' ? ` · ${formatDistance(plan.kmAtStop[plan.kmAtStop.length - 1], o.distance)}` : ''
+        plan && o.distance !== 'off' ? ` · ${formatDistance(plan.kmAtStop[plan.kmAtStop.length - 1], o.distance)}${plan.roadHops ? ' on the road' : ''}` : ''
       }`;
   const leftOut = leftOutLine(route, o);
   const choose = host?.choosePictures

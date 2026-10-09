@@ -54,6 +54,10 @@ import {
   fitProjection,
   formatDistance,
   hopKms,
+  mapFit,
+  roadShape,
+  roadShapeAt,
+  roadShapeSlice,
   mapBox,
   mapView,
   mediaAt,
@@ -117,7 +121,7 @@ export function paintMap(
   // Under a following camera the fit is then moved and magnified by the
   // track's frame at `t`, and what the map draws is clipped to its box.
   const view = track ? mapView(track, t, box, u) : null;
-  const project = viewed(fitProjection(o.stops, box, 8 * u).project, view);
+  const project = viewed(fitProjection(mapFit(o), box, 8 * u).project, view);
   const points: Painted[] = o.stops.map((stop, index) => ({ stop, at: project(stop), index }));
   const pen = penAt(timing, o.easing, t);
   const fractions = drawnFractions(timing, o.easing, t, Math.max(0, o.stops.length - 1));
@@ -166,6 +170,15 @@ export function paintMap(
     const from = points[i].at;
     return { from, to: to.at, control: arcControl(from, to.at, o.curve) };
   });
+  // A hop the trip's road joins is drawn ON the road, its fractions in km.
+  const roads = o.stops.slice(1).map((stop, i) => {
+    const via = o.roads?.[i];
+    return via ? roadShape(o.stops[i], via, stop, project) : null;
+  });
+  const polyline = (pts: readonly { x: number; y: number }[]) => {
+    g.moveTo(pts[0].x, pts[0].y);
+    for (let k = 1; k < pts.length; k++) g.lineTo(pts[k].x, pts[k].y);
+  };
   /**
    * The path, in two layers: what is still to come, then what the pen has
    * drawn over it.
@@ -183,7 +196,10 @@ export function paintMap(
       g.globalAlpha = layer === 'ahead' ? (o.aheadStyle === 'faint' ? 0.3 : 0.5) : 1;
       g.setLineDash(layer === 'ahead' && o.aheadStyle === 'dashed' ? AHEAD_DASH.map((d) => d * u) : []);
       g.beginPath();
-      if (layer === 'ahead') {
+      const road = roads[i];
+      if (road) {
+        polyline(layer === 'ahead' ? roadShapeSlice(road, f, 1) : roadShapeSlice(road, 0, f));
+      } else if (layer === 'ahead') {
         const tail = quadTail(arc.from, arc.control, arc.to, f);
         g.moveTo(tail.start.x, tail.start.y);
         g.quadraticCurveTo(tail.control.x, tail.control.y, tail.end.x, tail.end.y);
@@ -329,9 +345,11 @@ export function paintMap(
   // --- the pen's tip --------------------------------------------------------
   if (o.draw && o.pen !== 'none' && pen.hop !== null) {
     const arc = arcs[pen.hop];
+    const road = roads[pen.hop];
     if (arc) {
-      const tip = quadAt(arc.from, arc.control, arc.to, pen.fraction);
-      const just = quadAt(arc.from, arc.control, arc.to, Math.max(0, pen.fraction - 0.01));
+      const along = (f: number) => (road ? roadShapeAt(road, f) : quadAt(arc.from, arc.control, arc.to, f));
+      const tip = along(pen.fraction);
+      const just = along(Math.max(0, pen.fraction - 0.01));
       g.globalAlpha = 1;
       g.fillStyle = o.pathColor;
       if (o.pen === 'plane') {
@@ -353,7 +371,7 @@ export function paintMap(
   if (o.compass) paintCompass(g, o, box.x + box.width - 14 * u, box.y - 50 * u, u);
 
   if (o.distance !== 'off') {
-    const km = drawnKm(hopKms(o.stops), fractions);
+    const km = drawnKm(hopKms(o.stops, o.roads), fractions);
     const text = formatDistance(km, o.distance);
     g.font = `500 ${28 * u}px ${MONO_FONT}`;
     g.textBaseline = 'middle';

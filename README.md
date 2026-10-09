@@ -881,7 +881,8 @@ touched.
 window) takes a Polarsteps export — `trip.json`, `locations.json`, either one,
 or the unzipped folder; a zip is refused with the reason, and of an export
 holding several trips the files covering this one are kept. It is read in the
-browser, never sent and forgotten with the window. Its **track** places each
+browser, never sent, and forgotten with the window unless you keep its road
+(below). Its **track** places each
 day on that day's own clock — the time zone of the step you were in, read by
 the browser, so a morning frame is never filed on the evening before — and it
 wins over the instance wherever it has fixes; the instance fills the days the
@@ -890,7 +891,28 @@ instance only guessed comes last. Its **steps** are places you named, so a halt
 takes the name of the step of its days nearest its centre (the island, the
 gorge, the rock) before the city index, which then only names what no step
 does and still says which region a halt lies in. A place written that way says
-*from Polarsteps*.
+*from Polarsteps*. **Keep the road from Polarsteps**, ticked in Review whenever
+the export has a track, writes that track onto the trip as its **road**: the
+line the openers drive and the kilometres they count, never a place. It is
+kept whole (a year is about 55 KB), raw fixes included, and travels in the
+backup; writing a new export replaces the fixes and keeps how the trip reads
+them. **Trip settings → Road** (in the overview's sheet, or the piece's ⚙)
+chooses how it is read, each choice with the kilometres it counts: *Crow
+flies* (no road, curves from place to place), *Between stays* (what you did
+while staying somewhere — walks, buses, the commute — left out), *Every move*
+(all of it, without the GPS's noise) or *Raw* (every fix); a **Detail** slider
+apart from them smooths the line from every point up to 2 km, and *Forget the
+road* takes it off the trip. **Place road points…** opens a big map of the
+road as recorded, every stretch over 20 km the track skipped (the phone off
+for a day) drawn dashed: a click puts a point of road on the nearest stretch,
+at the time that far along it, and the road goes through it; a click on one
+of yours takes it back. A road point is never a place, and never named. **Virée drives that road**: between two stops the
+road joins, the vehicle follows it (round the bay rather than across it) and
+the counter, the milestones and the summary card count what it drives; a hop
+the road never joins (a flight, a stop off the road) keeps its curve. The
+**Itinerary**'s pen draws its hops on the same road, its distance counting
+it, and the overview's **Map** draws the road under the stages in place of
+the straight strokes between them.
 
 **Locate it**, under a photograph you are looking at large, is the same
 question asked of one picture: it reads the position and the day out of the
@@ -972,9 +994,9 @@ modes, offered as such in the Counter section and honoured only under the
 Virée opener (anywhere else they say why not): *Days, as the car drives*,
 *Kilometres, as the car drives*, *Stops, as the car drives* and *Days + km, as
 the car drives*. The number then follows the car at every frame — the day of
-the trip (its total the trip's), the distance as the crow flies between the
-stops passed (never a road distance, which the app does not know), the stops
-reached, or the day with the distance so far beside its total
+the trip (its total the trip's), the distance the vehicle has driven — along
+the trip's road wherever it follows it (Trip settings → Road), as the crow
+flies between the stops otherwise —, the stops reached, or the day with the distance so far beside its total
 (`Day · 54 · of 90 · 1 479 km`, the kilometres in whole units) — with
 **odometer digits**: each in a fixed cell, so the badge never shakes when 199
 turns 200, rolling like a car's as the next one comes — and a still of

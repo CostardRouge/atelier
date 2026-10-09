@@ -27,14 +27,17 @@ import FleetPanel from './FleetPanel';
 import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel from './PlacesSettingsPanel';
+import RoadSettingsPanel from './RoadSettingsPanel';
+import { DEFAULT_ROAD_DETAIL, DEFAULT_ROAD_MODE } from '../../shared/roadtrip/road-track';
 import { dangerLink, inputClass, smallButton } from './panels/ui';
 
 /** Which part of the sheet a click asked for. */
-export type TripSettingsSection = 'words' | 'places' | 'cta' | 'defaults' | 'car' | 'house';
+export type TripSettingsSection = 'words' | 'places' | 'road' | 'cta' | 'defaults' | 'car' | 'house';
 
 const SECTIONS: Array<{ id: TripSettingsSection; label: string }> = [
   { id: 'words', label: 'Words' },
   { id: 'places', label: 'Places' },
+  { id: 'road', label: 'Road' },
   { id: 'cta', label: 'Closing card' },
   { id: 'defaults', label: 'New pieces' },
   { id: 'car', label: 'Vehicle' },
@@ -95,6 +98,8 @@ export default function TripSettingsModal({
   onClose,
 }: TripSettingsModalProps) {
   const [open, setOpen] = useState<TripSettingsSection>(section);
+  // The Road panel's map or question is up: its keys, not this sheet's.
+  const [roadNested, setRoadNested] = useState(false);
   // Narrow only: the rail and the pane are two screens, and this says which.
   const [showRail, setShowRail] = useState(false);
 
@@ -108,7 +113,7 @@ export default function TripSettingsModal({
   // Nothing here is applied on a button — the trip is written on every
   // keystroke — so the sheet's primary action IS closing it: Enter says
   // "done" from any field, and Escape dismisses it.
-  useDialogKeys({ onCancel: onClose, onConfirm: onClose });
+  useDialogKeys({ onCancel: roadNested ? undefined : onClose, onConfirm: roadNested ? null : onClose });
 
   const patchWords = (patch: Partial<BadgeWords>) =>
     onChangeTrip({ ...trip, badgeWords: { ...trip.badgeWords, ...patch } });
@@ -313,6 +318,19 @@ export default function TripSettingsModal({
             )}
 
             {open === 'places' && <PlacesSettingsPanel trip={trip} onChange={onChangeTrip} />}
+
+            {open === 'road' && (
+              <RoadSettingsPanel
+                road={trip.road}
+                mode={trip.road?.mode ?? DEFAULT_ROAD_MODE}
+                detail={trip.road?.detail ?? DEFAULT_ROAD_DETAIL}
+                onMode={(mode) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, mode } })}
+                onDetail={(detail) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, detail } })}
+                onForget={() => onChangeTrip({ ...trip, road: null })}
+                onAdded={(added) => trip.road && onChangeTrip({ ...trip, road: { ...trip.road, added } })}
+                onNested={setRoadNested}
+              />
+            )}
 
             {open === 'cta' && (
               <>
