@@ -26,6 +26,7 @@ export type ParamSpec =
   | { type: 'string'; description: string; enum?: readonly string[]; optional?: boolean }
   | { type: 'boolean'; description: string; optional?: boolean }
   | { type: 'strings'; description: string; optional?: boolean }
+  | { type: 'array'; description: string; optional?: boolean }
   | { type: 'object'; description: string; optional?: boolean };
 
 export type ParamSpecs = Readonly<Record<string, ParamSpec>>;
@@ -149,6 +150,9 @@ export function checkParams(specs: ParamSpecs | undefined, raw: unknown): Record
           throw new CommandError('invalid', `"${key}" must be a list of strings`);
         }
         break;
+      case 'array':
+        if (!Array.isArray(v)) throw new CommandError('invalid', `"${key}" must be a list`);
+        break;
       case 'object':
         if (!isRecord(v)) throw new CommandError('invalid', `"${key}" must be an object`);
         break;
@@ -183,6 +187,9 @@ export function paramsJsonSchema(specs: ParamSpecs | undefined): Record<string, 
         break;
       case 'strings':
         prop = { type: 'array', items: { type: 'string' } };
+        break;
+      case 'array':
+        prop = { type: 'array' };
         break;
       case 'object':
         prop = { type: 'object' };

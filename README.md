@@ -2967,9 +2967,18 @@ A session in Develop looks like: `app.navigate` to `/develop/home`,
 `app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
 `develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then
 `develop.snapshot`, which hands the model the picture as it would be
-delivered (or as shot, with `before: true`). Only the eleven sliders are
-writable in this first version; curves, the mixer, the crop and the rest are
-read by `develop.get`.
+delivered (or as shot, with `before: true`).
+
+Everything a picture holds can be written: the sliders (`develop.set`), the
+tone curves (`develop.curve`), levels, the colour mixer, black and white and
+the grading wheels; the crop, its format, a straighten, quarter turns and
+flips (`develop.crop`, read back by `develop.getCrop`); perspective, lens,
+detail and the post-crop vignette; the Auto row's verbs (`develop.auto`,
+`develop.cropToSubject`); and the roll itself — one picture's settings onto
+others (`develop.applyTo`), which pictures leave (`develop.deliver`), a title
+and a caption (`develop.words`). The look (LUTs, film stocks), masks and
+layers, and the export itself stay with the person for now: an export needs a
+folder chosen by a click.
 
 ## Photo EXIF tool
 

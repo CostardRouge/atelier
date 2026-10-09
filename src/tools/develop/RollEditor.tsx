@@ -4,6 +4,7 @@ import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
 import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { SECTION_IDS, developControls, pictureSummary, rollSummary, targetPicture, withDevelopValues } from '../../shared/develop/develop-commands';
 import { landBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
@@ -84,6 +85,7 @@ import {
   removePictures,
   rollProgress,
   sameMediaRef,
+  type DeliverState,
   type JournalVia,
   type RollDoc,
   type RollExport,
@@ -809,6 +811,85 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         return { picture: target.id, controls: developControls(now?.develop ?? null) };
       },
     },
+    ...developRecordCommands((picture, change) => {
+      const target = targetPicture(latest.current, picture, openIdRef.current);
+      handleDevelop(target.id, change(target.develop), 'agent');
+      const now = latest.current.pictures.find((x) => x.id === target.id);
+      return { picture: target.id, develop: normaliseDevelop(now?.develop ?? {}) };
+    }),
+    ...sectionCommands((picture, section, change) => {
+      const target = targetPicture(latest.current, picture, openIdRef.current);
+      if (isClipPicture(target)) throw new CommandError('unavailable', 'a clip takes the develop, the look and the crop only');
+      const current = (target[section] ?? null) as never;
+      const next = change(current) as never;
+      if (section === 'keystone') handleKeystone(target.id, next, 'agent');
+      else if (section === 'lens') handleLens(target.id, next, 'agent');
+      else if (section === 'detail') handleDetail(target.id, next, 'agent');
+      else handleVignette(target.id, next, 'agent');
+      const now = latest.current.pictures.find((x) => x.id === target.id);
+      return { picture: target.id, [section]: now?.[section] ?? null };
+    }),
+    {
+      id: 'develop.applyTo',
+      title: 'Apply a picture’s settings to others',
+      description: `Write sections of one picture (the open one unless named) onto other pictures of the roll — the batch verb. sections: any of ${SECTION_IDS.join(', ')}; by default the ones the source has edited. to: picture ids, or ["all"] for every other picture not ignored. A clip receives only the develop, the look and the crop. One undo step.`,
+      params: {
+        to: { type: 'strings', description: 'Picture ids, or ["all"].' },
+        sections: { type: 'strings', description: 'Section ids; the source’s edited sections when absent.', optional: true },
+        from: { type: 'string', description: 'The source picture; the open one when absent.', optional: true },
+      },
+      run: (p) => {
+        const roll = latest.current;
+        const source = targetPicture(roll, p.from, openIdRef.current);
+        const to = p.to as string[];
+        const ids =
+          to.length === 1 && to[0] === 'all'
+            ? roll.pictures.filter((x) => x.id !== source.id && !isIgnored(x)).map((x) => x.id)
+            : to.map((id) => targetPicture(roll, id, null).id);
+        const asked = (p.sections as string[] | undefined) ?? pictureEdits(source);
+        const unknown = asked.filter((s) => !(SECTION_IDS as readonly string[]).includes(s));
+        if (unknown.length) throw new CommandError('invalid', `no section ${unknown.join(', ')} — the sections are ${SECTION_IDS.join(', ')}`);
+        if (asked.length === 0) throw new CommandError('invalid', 'the source picture has nothing edited — name the sections to copy');
+        update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, asked as PictureSection[]), 'agent');
+        return { from: source.id, to: ids, sections: asked };
+      },
+    },
+    {
+      id: 'develop.deliver',
+      title: 'Choose which pictures leave',
+      description:
+        'Set whether pictures leave in an export: auto (edited ones leave), yes, no, or ignore (out of the roll’s work: never exported, skipped by the arrows and by apply-to-all). Locked while an export runs.',
+      params: {
+        state: { type: 'string', description: 'auto, yes, no or ignore.', enum: ['auto', 'yes', 'no', 'ignore'] },
+        pictures: { type: 'strings', description: 'Picture ids; the open picture when absent.', optional: true },
+      },
+      available: () => (exportRunning.current ? LOCKED_DELIVERY : true),
+      run: (p) => {
+        const ids = ((p.pictures as string[] | undefined) ?? [undefined]).map((id) => targetPicture(latest.current, id, openIdRef.current).id);
+        update((r) => setDelivery(r, ids, p.state as DeliverState), 'agent');
+        return { pictures: ids, state: p.state };
+      },
+    },
+    {
+      id: 'develop.words',
+      title: 'Title and caption',
+      description: 'A picture’s own title and caption, written into the delivered file (XMP dc:title, dc:description and EXIF ImageDescription). An empty string removes one.',
+      params: {
+        title: { type: 'string', description: 'The title.', optional: true },
+        caption: { type: 'string', description: 'The caption.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        if (p.title === undefined && p.caption === undefined) throw new CommandError('invalid', 'give a title, a caption, or both');
+        const words: { title?: string; caption?: string } = {};
+        if (typeof p.title === 'string') words.title = p.title;
+        if (typeof p.caption === 'string') words.caption = p.caption;
+        update((r) => setPictureWords(r, target.id, words), 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, title: now?.title ?? null, caption: now?.caption ?? null };
+      },
+    },
     {
       id: 'develop.reset',
       title: 'Reset sections',
@@ -846,11 +927,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const handleVignette = useCallback(
-    (id: string, vignette: PostCropVignette | null) => update((r) => patchPicture(r, id, { vignette })),
+    (id: string, vignette: PostCropVignette | null, via?: JournalVia) => update((r) => patchPicture(r, id, { vignette }), via),
     [update],
   );
   const handleLens = useCallback(
-    (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
+    (id: string, lens: LensCorrection | null, via?: JournalVia) => update((r) => patchPicture(r, id, { lens }), via),
     [update],
   );
   const handleLensProfile = useCallback(
