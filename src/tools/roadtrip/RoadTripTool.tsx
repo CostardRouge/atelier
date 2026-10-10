@@ -464,6 +464,8 @@ export default function RoadTripTool() {
               {sync.pill}
             </>
           }
+          deduceSources={deduceSources}
+          onDeduceFrom={openDeduce}
         />
       ) : (
         <TripOverview

@@ -639,7 +639,7 @@ an id fragment, so renaming a trip never breaks a link. Each piece in that list 
 its own hook**, kept in the browser beside the trip, so a day reopened months
 later shows what you left there instead of a file name.
 
-**Or see it as a map.** One switch in the trip bar, **Calendar · Map**, turns
+**Or see it as a map.** One switch in the trip bar, **Calendar · Map · List**, turns
 the middle of the screen from the months to the **route**; everything around it
 stays where it is, so the open day and the open leg carry over, and the choice
 is remembered by the browser. Each leg is drawn **once, at its place** — halfway
@@ -671,6 +671,15 @@ towns come from the same city index as the itinerary's names, read and
 sorted in the background so the map never freezes while it arrives; the
 OpenStreetMap background is the usual opt-in, off every time. *Natural Earth is
 in the public domain; `scripts/gen-coastline.mjs` rebuilds the file.*
+
+**Or read it as a list.** The third choice of that switch, **List**, runs the
+trip top to bottom: a header per leg in the order you lived it (its tint, its
+dates, how many of its days are told — it stays pinned while you scroll, and a
+click opens the leg), a row per day you told with each piece's own hook, title,
+kind and whether it went out, and **one dashed row per run of silent days**
+("3 days silent") so a quiet week is one line, not seven. Days no leg covers
+sit under *In no stage*. A row opens its day in the day panel, like a calendar
+cell; the hooks are read only for the rows near the scroll.
 
 **The hook.** Open a piece and you compose its badge over the picture, in the
 same darkroom the Studio grades in, with the deck and its transport as one
@@ -823,10 +832,10 @@ leg: the New trip dialog asks for the name and the two dates and nothing else,
 so a trip starts with no leg at all and a day outside every leg names no place
 rather than claiming one.
 
-**One Trip settings, wherever you are.** The overview's *Trip settings*, a
+**One Trip settings, wherever you are.** The overview's ⚙, a
 piece's ⚙ and a gallery card's ⋯ **Trip settings…** open the same sheet: a rail
 of sections — *Name and dates*, *Cover* (its layout and up to three pinned
-pieces), *Places*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
+pieces, beside the card exactly as the gallery will draw it), *Places*, *Deduce*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
 pieces*, *Backup and start over* — beside one pane. Every change is written at
 once and ⌘Z takes it back; the dates alone wait for **Apply the new dates**,
 after saying what a shorter span does to the legs (trimmed, dropped) and to the
@@ -841,8 +850,8 @@ trip's legs by hand is some three hundred gestures, most of them archaeology
 about where you were on a given day — so the legs can be *deduced* instead,
 and a picture can place a single day.
 
-**Deduce** (in the trip's bar beside Trip settings, in the calendar and on the
-map alike; on a phone, in the Stages sheet; for any connected Winnow) asks the instance
+**Deduce** (in Trip settings → *Deduce*, from the overview or a piece; on a
+phone, in the Stages sheet too; for any connected Winnow) asks the instance
 for **one position per day** over the trip's span — a few kilobytes for a
 hundred days; no photograph is fetched and nothing is read from your media. A
 halt is a run of consecutive days whose position stays inside a radius of the

@@ -63,6 +63,8 @@ import IconButton from '../../shared/ui/IconButton';
 import OverflowMenu, { type OverflowItem } from '../../shared/ui/OverflowMenu';
 import DayStrip from './DayStrip';
 import useDayThumbs from './use-day-thumbs';
+import TripListView from './TripListView';
+import { tripList } from '../../shared/roadtrip/trip-list';
 import LegsSheet from './LegsSheet';
 import YearMap from './YearMap';
 import { tripRoadLine } from '../../shared/roadtrip/road-track';
@@ -98,7 +100,7 @@ interface TripOverviewProps {
 type CalendarView = 'rungs' | 'pictures';
 const VIEW_KEY = 'atelier.roadtrip.calendar.view';
 /** Calendar or map — the middle of the overview. A browser preference, never on the trip. */
-type OverviewView = 'calendar' | 'map';
+type OverviewView = 'calendar' | 'map' | 'list';
 const OVERVIEW_KEY = 'atelier.roadtrip.overview.view';
 
 /**
@@ -625,7 +627,8 @@ export default function TripOverview({
   // carry over. Where the map is looking is not remembered (the loupe's rule).
   const [overview, setOverview] = useState<OverviewView>(() => {
     try {
-      return localStorage.getItem(OVERVIEW_KEY) === 'map' ? 'map' : 'calendar';
+      const kept = localStorage.getItem(OVERVIEW_KEY);
+      return kept === 'map' || kept === 'list' ? kept : 'calendar';
     } catch {
       return 'calendar';
     }
@@ -639,6 +642,9 @@ export default function TripOverview({
     }
   }, []);
   const onMap = overview === 'map';
+  const onList = overview === 'list';
+  // The list's rows — built only while the list is shown.
+  const listGroups = useMemo(() => (onList ? tripList(trip, coverage.days) : []), [onList, trip, coverage.days]);
 
   // The map's model: every stage once, at its place, with its days — never a
   // day pinned inside a stage (`trip-map.ts`).
@@ -933,23 +939,6 @@ export default function TripOverview({
     />
   );
 
-  // Deduce lives in the trip's own bar, so it is there in the calendar AND on
-  // the map (the stages panel, its old home, is not drawn beside the map).
-  // One button per connected instance; a phone reaches it from the legs
-  // sheet, whose cell is in the bottom bar whatever the middle shows.
-  const deduceButtons =
-    onDeduceFrom &&
-    (deduceSources ?? []).map((id) => (
-      <Button
-        key={`deduce-${id}`}
-        onClick={() => onDeduceFrom(id)}
-        title={`Work the stages out from where ${id} says each day was`}
-        icon={Icons.search}
-      >
-        Deduce
-      </Button>
-    ));
-
   const dayPanel = selected && (
     <DayPanel
       trip={trip}
@@ -978,8 +967,8 @@ export default function TripOverview({
   );
 
   // The phone's ⋯: the same two choices as the two switches, one item each,
-  // then the trip's own verbs the wide bar draws as buttons (Deduce, Trip
-  // settings) — the ⋯ took the bar's room, so it carries the bar's verbs. A
+  // then the trip's own verb the wide bar draws as a glyph (Trip settings,
+  // where Deduce lives too) — the ⋯ took the bar's room, so it carries it. A
   // verb (`current` null) wears no tick.
   const viewItem = (id: string, icon: ReactNode, text: string, title: string, current: boolean | null, onSelect: () => void, rule = false): OverflowItem => ({
     id,
@@ -1000,29 +989,17 @@ export default function TripOverview({
   const viewItems: OverflowItem[] = [
     viewItem('calendar', Icons.calendar, 'Calendar', 'The trip as its months: which days were told', overview === 'calendar', () => chooseOverview('calendar')),
     viewItem('map', Icons.map, 'Map', 'The trip as its route: each stage at its place, with its days', overview === 'map', () => chooseOverview('map')),
+    viewItem('list', Icons.rows, 'List', 'The trip top to bottom: its stages, the days told, the silences', overview === 'list', () => chooseOverview('list')),
     viewItem('rungs', Icons.grid, 'Days as rungs', 'Each day as its rung: nothing, drafted, published once, twice, more', view === 'rungs', () => chooseView('rungs'), true),
     viewItem('pictures', Icons.image, 'Days as pictures', 'Each told day as the hook of its piece', view === 'pictures', () => chooseView('pictures')),
-    ...(onDeduceFrom
-      ? (deduceSources ?? []).map((id, i) =>
-          viewItem(
-            `deduce-${id}`,
-            Icons.search,
-            (deduceSources ?? []).length > 1 ? `Deduce from ${id}` : 'Deduce stages',
-            `Work the stages out from where ${id} says each day was`,
-            null,
-            () => onDeduceFrom(id),
-            i === 0,
-          ),
-        )
-      : []),
-    viewItem('settings', Icons.settings, 'Trip settings', "The trip's dates, route and cover", null, () => openSettings(), !onDeduceFrom || !(deduceSources ?? []).length),
+    viewItem('settings', Icons.settings, 'Trip settings', 'Dates, cover, places, Deduce, road, vehicle and the rest', null, () => openSettings(), true),
   ];
 
   // The switch between the two middles: icons alone on a phone, words beside them on a wide screen.
   const overviewSwitch = (
     <Segmented
       size="sm"
-      label="Calendar or map"
+      label="Calendar, map or list"
       value={overview}
       onChange={chooseOverview}
       options={[
@@ -1037,6 +1014,12 @@ export default function TripOverview({
           label: compact ? <span className="sr-only">Map</span> : 'Map',
           icon: Icons.map,
           title: 'The trip as its route: each stage at its place, with its days',
+        },
+        {
+          id: 'list',
+          label: compact ? <span className="sr-only">List</span> : 'List',
+          icon: Icons.rows,
+          title: 'The trip top to bottom: its stages, the days told, the silences',
         },
       ]}
     />
@@ -1112,6 +1095,8 @@ export default function TripOverview({
           section={settings}
           land={settingsLand}
           onChangeTrip={changeFromSettings}
+          deduceSources={deduceSources}
+          onDeduceFrom={onDeduceFrom}
           onClose={() => setSettings(null)}
         />
       )}
@@ -1229,6 +1214,8 @@ export default function TripOverview({
               )}
             </div>
           </>
+        ) : onList && !adjusting ? (
+          <TripListView groups={listGroups} selected={selected} onSelect={selectDate} onOpenStage={openLegSheet} compact />
         ) : (
         <MonthCalendar
           gutter={8}
@@ -1357,6 +1344,8 @@ export default function TripOverview({
           <>
             {headerExtra}
             {overviewSwitch}
+            {/* Rungs or pictures is a way of drawing a day CELL; the list has none. */}
+            {!onList && (
             <Segmented
               size="sm"
               label="How the days are drawn"
@@ -1367,14 +1356,11 @@ export default function TripOverview({
                 { id: 'pictures', label: 'Pictures', icon: Icons.image, title: 'Each told day as the hook of its piece' },
               ]}
             />
-            {deduceButtons}
-            <Button
-              onClick={() => openSettings()}
-              icon={Icons.settings}
-              title="The trip's dates, route and cover"
-            >
-              Trip settings
-            </Button>
+            )}
+            {/* The glyph alone, as in a piece's bar: the sheet it opens says what it is. */}
+            <IconButton label="Trip settings" title="Trip settings — dates, cover, places, Deduce, road, vehicle and the rest" onClick={() => openSettings()}>
+              {Icons.settings}
+            </IconButton>
           </>
         }
       />
@@ -1504,6 +1490,21 @@ export default function TripOverview({
                 {stageCard}
               </div>
             )}
+          </aside>
+        </div>
+      ) : onList ? (
+        // The list, with the day and its stage beside it at every wide width —
+        // a list, like the map, has no minimum width to defend.
+        <div className="flex-1 min-h-0 flex gap-5">
+          <div className="flex-1 min-w-0 flex flex-col min-h-0">
+            <TripListView groups={listGroups} selected={selected} onSelect={selectDate} onOpenStage={openLegById} compact={false} />
+          </div>
+          <aside
+            className={`flex-none ${expanded ? 'w-[22rem]' : 'w-[19rem]'} min-h-0 overflow-y-auto overscroll-contain flex flex-col gap-4 pb-4`}
+            aria-label="The open day and the open leg"
+          >
+            {dayPanel}
+            {stageCard && <div className="bg-surface border border-line rounded-paper-lg px-5 pb-5 pt-3">{stageCard}</div>}
           </aside>
         </div>
       ) : (

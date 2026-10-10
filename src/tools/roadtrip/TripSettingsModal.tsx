@@ -33,6 +33,7 @@ import CtaPanel, { type CtaFieldRefs } from './CtaPanel';
 import CoverPanel from './CoverPanel';
 import TripDatesSection from './TripDatesSection';
 import TripKeepSection from './TripKeepSection';
+import TripDeduceSection, { DEDUCE_ABOUT } from './TripDeduceSection';
 import HouseStylePanel from './HouseStylePanel';
 import PlacesSettingsPanel, { PLACES_ABOUT } from './PlacesSettingsPanel';
 import RoadSettingsPanel, { ROAD_ABOUT } from './RoadSettingsPanel';
@@ -44,6 +45,7 @@ export type TripSettingsSection =
   | 'dates'
   | 'cover'
   | 'places'
+  | 'deduce'
   | 'road'
   | 'car'
   | 'words'
@@ -60,6 +62,7 @@ const GROUPS: Array<{ label: string; sections: Array<{ id: TripSettingsSection; 
       { id: 'dates', label: 'Name and dates' },
       { id: 'cover', label: 'Cover' },
       { id: 'places', label: 'Places' },
+      { id: 'deduce', label: 'Deduce' },
       { id: 'road', label: 'Road' },
       { id: 'car', label: 'Vehicle' },
     ],
@@ -89,8 +92,10 @@ const TITLE = Object.fromEntries(GROUPS.flatMap((g) => g.sections.map((s) => [s.
   string
 >;
 
-/** The sections drawn across the whole pane — a map, a turning vehicle; the rest keep a reading column. */
-const WIDE: ReadonlySet<TripSettingsSection> = new Set(['road', 'car']);
+/** The sections drawn across the whole pane — a map, a turning vehicle, the cover beside its card; the rest keep a reading column. */
+const WIDE: ReadonlySet<TripSettingsSection> = new Set(['road', 'car', 'cover']);
+/** Of those, the ones that FILL the pane's height (a map, the garage) rather than scroll with it. */
+const FILL: ReadonlySet<TripSettingsSection> = new Set(['road', 'car']);
 
 /** The standing why of each section, folded behind the ⓘ beside its heading. */
 const ABOUT: Partial<Record<TripSettingsSection, ReactNode>> = {
@@ -101,6 +106,7 @@ const ABOUT: Partial<Record<TripSettingsSection, ReactNode>> = {
     </p>
   ),
   places: PLACES_ABOUT,
+  deduce: DEDUCE_ABOUT,
   road: ROAD_ABOUT,
   car: (
     <>
@@ -160,6 +166,10 @@ interface TripSettingsModalProps {
   /** Writes the piece's badge — with `post`. */
   patchBadge?: (patch: Partial<PostBadge>) => void;
   onClose: () => void;
+  /** The connected instances Deduce can ask — what the Deduce section offers. */
+  deduceSources?: readonly string[];
+  /** Open the Deduce window on one (the sheet closes first); absent, the section says where it is reached. */
+  onDeduceFrom?: (sourceId: string) => void;
 }
 
 /**
@@ -200,6 +210,8 @@ export default function TripSettingsModal({
   onChangeTrip,
   patchBadge,
   onClose,
+  deduceSources = [],
+  onDeduceFrom,
 }: TripSettingsModalProps) {
   const [open, setOpen] = useState<TripSettingsSection>(section);
   // A question or a map of a section is up: its keys, not this sheet's.
@@ -363,7 +375,15 @@ export default function TripSettingsModal({
               {ABOUT[open] && <InfoDot about={TITLE[open].toLowerCase()}>{ABOUT[open]}</InfoDot>}
             </div>
 
-            <div className={WIDE.has(open) ? 'flex-1 min-h-0 flex flex-col gap-4' : 'w-full max-w-[44rem] flex flex-col gap-4'}>
+            <div
+              className={
+                FILL.has(open)
+                  ? 'flex-1 min-h-0 flex flex-col gap-4'
+                  : WIDE.has(open)
+                    ? 'w-full flex flex-col gap-4'
+                    : 'w-full max-w-[44rem] flex flex-col gap-4'
+              }
+            >
             {open === 'dates' && <TripDatesSection trip={trip} onChange={onChangeTrip} />}
 
             {open === 'cover' && (
@@ -451,6 +471,22 @@ export default function TripSettingsModal({
             )}
 
             {open === 'places' && <PlacesSettingsPanel trip={trip} onChange={onChangeTrip} />}
+
+            {open === 'deduce' && (
+              <TripDeduceSection
+                trip={trip}
+                sources={deduceSources}
+                onDeduce={
+                  onDeduceFrom &&
+                  ((id) => {
+                    // The window needs the whole screen: this sheet steps aside.
+                    onClose();
+                    onDeduceFrom(id);
+                  })
+                }
+                onShow={setOpen}
+              />
+            )}
 
             {open === 'road' && (
               <RoadSettingsPanel

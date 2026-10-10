@@ -171,6 +171,9 @@ interface PostEditorProps {
   onChangeTrip: (trip: TripDoc) => void;
   /** What the shell wants in the top bar — the sync pill of a remote trip. */
   headerExtra?: ReactNode;
+  /** The connected instances Trip settings → Deduce offers, and the door to the window. */
+  deduceSources?: readonly string[];
+  onDeduceFrom?: (sourceId: string) => void;
 }
 
 /**
@@ -244,6 +247,8 @@ export default function PostEditor({
   onChangePost,
   onChangeTrip,
   headerExtra,
+  deduceSources,
+  onDeduceFrom,
 }: PostEditorProps) {
   // A grading screen sits in the darkroom: neutral grey, so the eye does not
   // adapt to warm paper and misjudge the frame (`use-surface.ts`).
@@ -2518,6 +2523,8 @@ export default function PostEditor({
         onChangeTrip={onChangeTrip}
         patchBadge={patchBadge}
         onClose={() => setTripSheet(null)}
+        deduceSources={deduceSources}
+        onDeduceFrom={onDeduceFrom}
       />
     )}
 

@@ -16,6 +16,8 @@ import {
 } from '../../shared/roadtrip/trip-cover';
 import { getThumbs } from '../../shared/roadtrip/trip-store';
 import { HEATMAP_LEVELS } from './heatmap-ramp';
+import CoverArt from './TripCoverArt';
+import { formatIsoDate } from '../../shared/roadtrip/trip-days';
 
 interface CoverPanelProps {
   trip: TripDoc;
@@ -23,19 +25,17 @@ interface CoverPanelProps {
   onChange: (cover: TripCover) => void;
 }
 
-const LAYOUTS: Array<{ id: CoverLayout; label: string; needs: string; note: string }> = [
+const LAYOUTS: Array<{ id: CoverLayout; label: string; note: string }> = [
   {
     id: 'mosaic',
     label: 'Mosaic',
-    needs: '3 pictures',
     note: 'Three pieces, so the trip reads as a place.',
   },
-  { id: 'cover', label: 'Cover', needs: '1 picture', note: 'One picture, filling the card.' },
-  { id: 'rhythm', label: 'Rhythm', needs: 'your days', note: 'No picture: the trip’s own weeks.' },
+  { id: 'cover', label: 'Cover', note: 'One picture, filling the card.' },
+  { id: 'rhythm', label: 'Rhythm', note: 'No picture: the trip’s own weeks.' },
   {
     id: 'none',
     label: 'None',
-    needs: 'no cover',
     note: 'The compact card, for a screen full of trips.',
   },
 ];
@@ -102,124 +102,162 @@ export default function CoverPanel({ trip, value, onChange }: CoverPanelProps) {
 
   const dropped = useMemo(() => droppedPins({ ...trip, cover: value }), [trip, value]);
 
+  // The card exactly as the gallery will draw it, through the gallery's own
+  // component, on the layout picked now — and what each of its pictures is.
+  const card = useMemo(() => {
+    const doc = { ...trip, cover: value };
+    const coverage = tripCoverage(doc);
+    return { doc, coverage, tiles: coverTiles(doc, coverage, (id) => urls.has(id)) };
+  }, [trip, value, urls]);
+  const asks = COVER_TILES[layout];
+  const byId = useMemo(() => new Map(trip.posts.map((p) => [p.id, p])), [trip.posts]);
+
   return (
-    <div className="flex flex-col gap-4">
-      <div className="flex flex-col gap-2">
-        <p className={legend}>Layout</p>
-        <div className="grid grid-cols-2 min-[480px]:grid-cols-4 gap-2.5">
-          {LAYOUTS.map((option) => (
-            <button
-              key={option.id}
-              type="button"
-              onClick={() => onChange({ ...value, layout: option.id })}
-              title={option.note}
-              aria-pressed={layout === option.id}
-              className={`p-0 overflow-hidden rounded-paper border bg-paper cursor-pointer transition-colors ${
-                layout === option.id
-                  ? 'border-accent'
-                  : 'border-line-strong hover:border-line-strong hover:bg-paper-2'
-              }`}
-            >
-              <LayoutPreview
-                id={option.id}
-                trip={trip}
-                urls={preview.map((t) => urls.get(t.postId))}
-              />
-              <span className="block px-2 py-1.5 border-t border-line">
-                <span
-                  className={`block font-sans text-xs font-semibold ${
-                    layout === option.id ? 'text-accent-ink' : 'text-ink-soft'
+    <div className="@container">
+      <div className="grid gap-6 items-start @[52rem]:grid-cols-[minmax(0,1fr)_19rem] @[52rem]:gap-8">
+        {/* The card first on a phone, beside the choices on a wide pane — and
+            pinned there while the pieces scroll. */}
+        <aside className="flex flex-col gap-3 @[52rem]:order-last @[52rem]:sticky @[52rem]:top-0">
+          <p className={legend}>In the gallery</p>
+          <div className="max-w-[19rem] w-full rounded-paper-lg border border-line bg-surface shadow-paper-soft overflow-hidden">
+            <CoverArt trip={card.doc} coverage={card.coverage} tiles={card.tiles} urls={urls} remoteOnly={false} />
+            <div className="flex flex-col gap-1 p-4">
+              <span className="text-base font-semibold truncate">{trip.name}</span>
+              <span className="font-mono text-2xs text-muted truncate">
+                {formatIsoDate(trip.startDate)} → {formatIsoDate(trip.endDate)}
+              </span>
+            </div>
+          </div>
+          {asks > 0 && card.tiles.length > 0 && (
+            <ol className="m-0 p-0 list-none flex flex-col gap-1.5 max-w-[19rem]">
+              {card.tiles.map((tile, i) => {
+                const post = byId.get(tile.postId);
+                return (
+                  <li key={tile.postId} className="flex items-center gap-2.5 text-xs">
+                    <span className="flex-none w-4 font-mono text-2xs text-faint text-right">{i + 1}</span>
+                    <img src={urls.get(tile.postId)} alt="" className="flex-none w-8 h-8 rounded-[6px] object-cover border border-line" />
+                    <span className="flex-1 min-w-0 truncate text-ink-soft">
+                      {tile.dayNumber === null ? formatIsoDate(tile.date) : `Day ${tile.dayNumber}`}
+                      {post?.title.trim() ? ` · ${post.title.trim()}` : ''}
+                    </span>
+                    <span
+                      className={`flex-none font-mono text-3xs tracking-[0.08em] uppercase px-1.5 py-[2px] rounded-[6px] ${
+                        tile.pinned ? 'bg-accent-wash text-accent-ink' : 'bg-paper-2 text-muted'
+                      }`}
+                    >
+                      {tile.pinned ? 'pinned' : 'busiest day'}
+                    </span>
+                  </li>
+                );
+              })}
+            </ol>
+          )}
+        </aside>
+
+        <div className="min-w-0 flex flex-col gap-6">
+          <div className="flex flex-col gap-2">
+            <p className={legend}>Layout</p>
+            <div className="grid grid-cols-2 @[30rem]:grid-cols-4 gap-2.5">
+              {LAYOUTS.map((option) => (
+                <button
+                  key={option.id}
+                  type="button"
+                  onClick={() => onChange({ ...value, layout: option.id })}
+                  title={option.note}
+                  aria-pressed={layout === option.id}
+                  className={`p-0 overflow-hidden rounded-paper border bg-paper cursor-pointer transition-colors text-left ${
+                    layout === option.id ? 'border-accent ring-1 ring-accent' : 'border-line-strong hover:bg-paper-2'
                   }`}
                 >
-                  {option.label}
-                </span>
-                <span className="block font-mono text-3xs tracking-[0.06em] uppercase text-faint">
-                  {option.needs}
-                </span>
-              </span>
-            </button>
-          ))}
-        </div>
-        {urls.size === 0 && (
-          <p className="m-0 text-xs text-muted leading-relaxed">
-            No piece of this trip has a picture on this device yet, so Mosaic and
-            Cover have nothing to draw — the card falls back to the trip’s rhythm
-            until one does. A piece bakes its picture the first time you open it
-            in the editor.
-          </p>
-        )}
-      </div>
-
-      {COVER_TILES[layout] > 0 && choices.length > 0 && (
-        <div className="flex flex-col gap-2">
-          <div className="flex items-baseline gap-3">
-            <p className={legend}>Pinned pieces</p>
-            <span className="flex-1" />
-            {pinned.length > 0 && (
-              <button
-                type="button"
-                onClick={() => onChange({ ...value, pinned: [] })}
-                className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
-              >
-                Clear pins
-              </button>
+                  <LayoutPreview id={option.id} trip={trip} urls={preview.map((t) => urls.get(t.postId))} />
+                  <span className="block px-2.5 py-2 border-t border-line">
+                    <span className={`block font-sans text-xs font-semibold ${layout === option.id ? 'text-accent-ink' : 'text-ink-soft'}`}>
+                      {option.label}
+                    </span>
+                    <span className="block text-2xs text-muted leading-snug">{option.note}</span>
+                  </span>
+                </button>
+              ))}
+            </div>
+            {urls.size === 0 && (
+              <p className="m-0 text-xs text-muted leading-relaxed">
+                No piece of this trip has a picture on this device yet, so Mosaic and Cover have nothing to draw — the
+                card falls back to the trip’s rhythm until one does. A piece bakes its picture the first time you open it
+                in the editor.
+              </p>
             )}
           </div>
-          <p className="m-0 text-xs text-ink-soft leading-relaxed">
-            Pin up to three. Whatever you leave unpinned fills from the trip’s
-            busiest days — clear them all and the cover follows the trip on its
-            own.
-          </p>
-          <div className="flex flex-wrap gap-2 max-h-[13rem] overflow-auto p-0.5">
-            {choices.map((post) => {
-              const rank = pinned.indexOf(post.id);
-              const day = dayNumberOf(trip, post.date);
-              return (
-                <button
-                  key={post.id}
-                  type="button"
-                  onClick={() => onChange({ ...value, pinned: togglePin(pinned, post.id) })}
-                  aria-pressed={rank >= 0}
-                  title={day === null ? post.date : `Day ${day} — ${post.title || 'piece'}`}
-                  className={`relative w-[62px] h-[82px] rounded-[10px] overflow-hidden border cursor-pointer p-0 ${
-                    rank >= 0
-                      ? 'border-[1.5px] border-accent'
-                      : 'border-line hover:border-line-strong'
-                  }`}
-                >
-                  <img
-                    src={urls.get(post.id)}
-                    alt=""
-                    loading="lazy"
-                    className="block w-full h-full min-h-0 min-w-0 object-cover"
-                  />
-                  {rank >= 0 && (
-                    <b className="absolute top-1 left-1 w-4 h-4 rounded-full bg-accent text-paper font-mono text-3xs font-normal flex items-center justify-center">
-                      {rank + 1}
-                    </b>
-                  )}
-                  {day !== null && (
-                    <span className="absolute inset-x-0 bottom-0 py-[1px] font-mono text-3xs text-on-media bg-[rgba(16,15,13,0.45)]">
-                      {day}
-                    </span>
-                  )}
-                </button>
-              );
-            })}
-          </div>
-        </div>
-      )}
 
-      {dropped.length > 0 && (
-        <p className="m-0 px-3 py-2.5 rounded-paper border border-danger-line bg-accent-wash text-xs text-ink-soft leading-relaxed">
-          <b className="font-semibold text-accent-ink">
-            {dropped.length === 1 ? 'One pin points' : `${dropped.length} pins point`} at nothing.
-          </b>{' '}
-          {dropped.length === 1 ? 'The piece it named is' : 'The pieces they named are'} gone, so the
-          cover takes the next busiest day instead. Saving forgets{' '}
-          {dropped.length === 1 ? 'it' : 'them'}.
-        </p>
-      )}
+          {asks > 0 && choices.length > 0 && (
+            <div className="flex flex-col gap-2">
+              <div className="flex items-baseline gap-3">
+                <p className={legend}>Pinned pieces</p>
+                <span className="font-mono text-2xs text-muted tabular-nums">{pinned.length}/3</span>
+                <span className="flex-1" />
+                {pinned.length > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => onChange({ ...value, pinned: [] })}
+                    className="p-0 border-0 bg-transparent text-xs text-muted cursor-pointer underline underline-offset-[3px] hover:text-accent-ink"
+                  >
+                    Clear pins
+                  </button>
+                )}
+              </div>
+              <p className="m-0 text-xs text-ink-soft leading-relaxed">
+                Click a piece to pin it, again to let it go. Up to three; what you leave unpinned fills from the trip’s
+                busiest days.
+              </p>
+              <div className="grid grid-cols-[repeat(auto-fill,minmax(5.5rem,1fr))] gap-2.5 p-0.5">
+                {choices.map((post) => {
+                  const rank = pinned.indexOf(post.id);
+                  const day = dayNumberOf(trip, post.date);
+                  return (
+                    <button
+                      key={post.id}
+                      type="button"
+                      onClick={() => onChange({ ...value, pinned: togglePin(pinned, post.id) })}
+                      aria-pressed={rank >= 0}
+                      aria-label={`${rank >= 0 ? 'Unpin' : 'Pin'} ${day === null ? post.date : `day ${day}`}${post.title ? ` — ${post.title}` : ''}`}
+                      title={day === null ? post.date : `Day ${day} — ${post.title || 'piece'}`}
+                      className="group flex flex-col gap-1 p-0 border-0 bg-transparent text-left cursor-pointer"
+                    >
+                      <span
+                        className={`relative block w-full aspect-[4/5] rounded-[10px] overflow-hidden border ${
+                          rank >= 0 ? 'border-accent ring-2 ring-accent' : 'border-line group-hover:border-line-strong'
+                        }`}
+                      >
+                        <img src={urls.get(post.id)} alt="" loading="lazy" className="block w-full h-full min-h-0 min-w-0 object-cover" />
+                        {rank >= 0 && (
+                          <b className="absolute top-1.5 left-1.5 w-5 h-5 rounded-full bg-accent text-paper font-mono text-2xs font-normal flex items-center justify-center">
+                            {rank + 1}
+                          </b>
+                        )}
+                      </span>
+                      <span className="min-w-0 flex flex-col leading-tight">
+                        <span className="font-mono text-2xs text-muted">{day === null ? formatIsoDate(post.date) : `Day ${day}`}</span>
+                        <span className={`text-xs truncate ${rank >= 0 ? 'text-accent-ink font-semibold' : 'text-ink-soft'}`}>
+                          {post.title.trim() || 'Untitled'}
+                        </span>
+                      </span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          )}
+
+          {dropped.length > 0 && (
+            <p className="m-0 px-3 py-2.5 rounded-paper border border-danger-line bg-accent-wash text-xs text-ink-soft leading-relaxed">
+              <b className="font-semibold text-accent-ink">
+                {dropped.length === 1 ? 'One pin points' : `${dropped.length} pins point`} at nothing.
+              </b>{' '}
+              {dropped.length === 1 ? 'The piece it named is' : 'The pieces they named are'} gone, so the cover takes the next
+              busiest day instead. Saving forgets {dropped.length === 1 ? 'it' : 'them'}.
+            </p>
+          )}
+        </div>
+      </div>
     </div>
   );
 }
@@ -273,7 +311,7 @@ function LayoutPreview({
 
   if (id === 'mosaic') {
     return (
-      <span className="grid grid-cols-[1.7fr_1fr] grid-rows-2 gap-[2px] h-[60px] overflow-hidden">
+      <span className="grid grid-cols-[1.7fr_1fr] grid-rows-2 gap-[2px] h-[76px] overflow-hidden">
         <span className="row-span-2">{tile(urls[0])}</span>
         {tile(urls[1])}
         {tile(urls[2])}
@@ -281,21 +319,21 @@ function LayoutPreview({
     );
   }
   if (id === 'cover') {
-    return <span className="block h-[60px] overflow-hidden">{tile(urls[0])}</span>;
+    return <span className="block h-[76px] overflow-hidden">{tile(urls[0])}</span>;
   }
   if (id === 'rhythm') {
     // The trip's real weeks, folded onto ten bars — a made-up pattern here
     // would be the fabricated example the tool refuses everywhere else.
     const bars = rhythmBuckets(tripCoverage(trip), 10);
     return (
-      <span className="flex items-end gap-[2px] h-[60px] px-2 py-2 bg-surface">
+      <span className="flex items-end gap-[2px] h-[76px] px-2 py-2 bg-surface">
         {bars.map((bar) => {
           const level = rhythmLevel(bar);
           return (
             <i
               key={bar.from}
               className="flex-1 rounded-[2px]"
-              style={{ height: `${6 + (level / 4) * 38}px`, background: HEATMAP_LEVELS[level] }}
+              style={{ height: `${6 + (level / 4) * 52}px`, background: HEATMAP_LEVELS[level] }}
             />
           );
         })}
@@ -303,7 +341,7 @@ function LayoutPreview({
     );
   }
   return (
-    <span className="flex flex-col justify-center gap-1.5 h-[60px] px-3 bg-surface">
+    <span className="flex flex-col justify-center gap-1.5 h-[76px] px-3 bg-surface">
       <i className="h-[6px] w-[56%] rounded-[3px] bg-line-strong" />
       <i className="h-[4px] w-[78%] rounded-[3px] bg-line" />
       <i className="h-[4px] w-[40%] rounded-[3px] bg-line" />
