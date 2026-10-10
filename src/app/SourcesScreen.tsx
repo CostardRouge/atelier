@@ -142,6 +142,16 @@ function SourceRow({ glyph, remote, name, aside, pill: state, facts, actions, no
  * same, so it lives where connections are made and dropped, and it is never
  * on until the person clicks Connect here, for this tab only.
  */
+/**
+ * The two lines that install the bridge from THIS site — the single file it
+ * serves beside itself (`agentBridgePlugin` in vite.config.ts), so no clone
+ * is needed and the bridge matches the build it talks to.
+ */
+function bridgeInstall(): string {
+  const url = new URL(`${import.meta.env.BASE_URL}atelier-mcp.mjs`, window.location.origin).href;
+  return `curl -fsSo ~/atelier-mcp.mjs ${url}\nclaude mcp add atelier -- node ~/atelier-mcp.mjs`;
+}
+
 function AgentBridgeRow() {
   const bridge = useSyncExternalStore(subscribeBridge, bridgeState);
   const [port, setPort] = useState(String(BRIDGE_DEFAULT_PORT));
@@ -217,9 +227,11 @@ function AgentBridgeRow() {
             : bridge.status === 'replaced'
               ? 'Another Atelier tab connected to the bridge, so this one stood down. '
               : ''}
-          Start the bridge with <code className="font-mono text-xs">claude mcp add atelier -- node scripts/atelier-mcp.mjs</code>,
-          then connect. Requests go to 127.0.0.1 only; every edit an agent makes is journaled as an agent&apos;s and
-          undoable.
+          Install the bridge once, then connect. Requests go to 127.0.0.1 only; every edit an agent makes is
+          journaled as an agent&apos;s and undoable.
+          <code className="block mt-1.5 font-mono text-xs text-ink-soft select-all break-all whitespace-pre-wrap">
+            {bridgeInstall()}
+          </code>
         </p>
       }
     />

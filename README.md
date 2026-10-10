@@ -2949,11 +2949,17 @@ From the browser's console: `await atelier.run('app.status')`, and
 `atelier.commands()` for the list.
 
 From **Claude Code** (or any MCP client), through the bridge — a small Node
-program with no dependency (Node ≥ 22.18):
+program with no dependency. Atelier has no server, so the bridge is what
+reaches into your tab; the site serves it as one file, so no clone is needed:
 
 ```bash
-claude mcp add atelier -- node /path/to/atelier/scripts/atelier-mcp.mjs
+curl -fsSo ~/atelier-mcp.mjs https://atelier.steeve.website/atelier-mcp.mjs
+claude mcp add atelier -- node ~/atelier-mcp.mjs
 ```
+
+(`#/sources` shows the same two lines for whichever address you opened the
+site on. From a clone, `node scripts/atelier-mcp.mjs` runs the source itself,
+on Node ≥ 22.18.)
 
 Then open Atelier — the deployed site or `npm run dev` — go to `#/sources` and
 click *Connect* under **Agents**. The masthead shows an **Agent** pill for as

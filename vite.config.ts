@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { readdirSync } from 'node:fs';
-import { rm, writeFile } from 'node:fs/promises';
+import { readFile, rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -140,6 +140,63 @@ function readBody(req: IncomingMessage): Promise<string> {
   });
 }
 
+// --- The agent bridge, served as one file --------------------------------------
+//
+// `scripts/atelier-mcp.mjs` imports the protocol module, a TypeScript file,
+// so it runs only from a clone on Node ≥ 22.18. This bundles the two into ONE
+// plain-JavaScript file served beside the site (`<base>atelier-mcp.mjs`, at
+// build and in dev), so the bridge is installed with a download and no clone
+// (`docs/memory/agent-commands.md`). Generated from the source at every
+// build, never committed, so it cannot drift from the tab it talks to.
+// esbuild is Vite's own dependency, imported only when the file is asked for.
+
+const BRIDGE_ENTRY = fileURLToPath(new URL('./scripts/atelier-mcp.mjs', import.meta.url));
+const BRIDGE_FILE = 'atelier-mcp.mjs';
+
+async function bundleBridge(): Promise<string> {
+  const { build } = await import('esbuild');
+  const pkg = JSON.parse(await readFile(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')) as { version?: string };
+  const sha = process.env.GITHUB_SHA?.slice(0, 7);
+  const version = `${pkg.version ?? '0.0.0'}${sha ? `+${sha}` : ''}`;
+  const out = await build({
+    entryPoints: [BRIDGE_ENTRY],
+    bundle: true,
+    platform: 'node',
+    format: 'esm',
+    target: 'node18',
+    write: false,
+    logLevel: 'silent',
+    define: { ATELIER_BRIDGE_VERSION: JSON.stringify(version) },
+    banner: { js: `// Atelier MCP bridge ${version} — generated from scripts/atelier-mcp.mjs; do not edit.` },
+  });
+  return out.outputFiles[0].text;
+}
+
+function agentBridgePlugin(): Plugin {
+  return {
+    name: 'agent-bridge-file',
+    async generateBundle() {
+      this.emitFile({ type: 'asset', fileName: BRIDGE_FILE, source: await bundleBridge() });
+    },
+    configureServer(server) {
+      server.middlewares.use((req, res, next) => {
+        const at = (req.url ?? '').split('?')[0];
+        if (at !== `${server.config.base}${BRIDGE_FILE}` && at !== `/${BRIDGE_FILE}`) return next();
+        bundleBridge().then(
+          (code) => {
+            res.setHeader('content-type', 'text/javascript; charset=utf-8');
+            res.end(code);
+          },
+          (err: Error) => {
+            res.statusCode = 500;
+            res.end(err.message);
+          },
+        );
+      });
+    },
+  };
+}
+
 function houseStylePlugin(): Plugin {
   return {
     name: 'house-style-writer',
@@ -222,7 +279,7 @@ const REPO = process.env.GITHUB_REPOSITORY?.split('/')[1] ?? 'atelier';
 const BASE = process.env.BASE_PATH ?? `/${REPO}/`;
 
 export default defineConfig({
-  plugins: [react(), tailwindcss(), lutsManifestPlugin(), houseStylePlugin()],
+  plugins: [react(), tailwindcss(), lutsManifestPlugin(), houseStylePlugin(), agentBridgePlugin()],
   base: BASE,
   // ffmpeg.wasm (the HEVC→H.264 transcode fallback) and libraw-wasm (the RAW
   // decoder) each spin up a module worker and are loaded lazily; don't let dev

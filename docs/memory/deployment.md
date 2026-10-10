@@ -60,6 +60,10 @@ Read before touching `vite.config.ts`, the workflows in `.github/workflows/`, `p
 
 **Trap — a self-accepting module that must stay live across several HMR updates.** Copying the new value into the old instance from the `accept(cb)` callback works ONCE: Vite clears the old instance's callbacks when the new one registers, so the second update lands in an instance nobody imports and the app keeps the stale value (seen: a reset after a save left the old style in memory). Keep the value in a holder stored in `import.meta.hot.data` and let every instance write into it — `shared/lib/held-across-updates.ts` does exactly that. The literal `import.meta.hot.accept()` must stay in the loader itself: Vite finds a self-accepting module by reading that call in its source, so hiding it in a helper would turn every save into a full reload.
 
+## The build EMITS the agent bridge as one file (2026-10-10)
+
+`agentBridgePlugin` (`vite.config.ts`) writes `dist/atelier-mcp.mjs` from `scripts/atelier-mcp.mjs` at every build and serves it in dev — generated, never committed, unlike the gazetteer or the LUT tiles, because it must speak the protocol of the build beside it — `agent-commands.md`.
+
 ## ffmpeg.wasm and the dev server (2026-08-20)
 
 **Fact.** `optimizeDeps.exclude` lists `@ffmpeg/ffmpeg` so dev pre-bundling cannot rewrite its module-worker URL, and `worker.format: 'es'` makes the dev and production worker formats match. **How to apply**: leave both in place when touching the Vite config; removing either breaks the transcode path in exactly one of the two modes, which is the hardest kind of bug to notice.

@@ -5,11 +5,18 @@
 //
 //   claude mcp add atelier -- node /path/to/atelier/scripts/atelier-mcp.mjs
 //
+// or, with no clone, the single file the site serves beside itself (built
+// from this one by vite.config.ts, plain JavaScript, Node ≥ 18):
+//
+//   curl -fsSo ~/atelier-mcp.mjs https://atelier.steeve.website/atelier-mcp.mjs
+//   claude mcp add atelier -- node ~/atelier-mcp.mjs
+//
 // Options: --port N (or ATELIER_BRIDGE_PORT; default 7981), --out DIR (or
 // ATELIER_OUT; default ~/Pictures/Atelier) — where an agent's exports are
 // written —, and ATELIER_ORIGINS=https://a,https://b to allow pages other
-// than loopback and the deployed site. Needs Node ≥ 22.18 (it imports the protocol module, a
-// TypeScript file, through Node's own type stripping). No dependency.
+// than loopback and the deployed site. From the repo it needs Node ≥ 22.18
+// (it imports the protocol module, a TypeScript file, through Node's own type
+// stripping). No dependency.
 //
 // The decisions live in `src/shared/commands/mcp-protocol.ts` (pure, tested)
 // and `docs/memory/agent-commands.md`. This file only moves bytes: stdout
@@ -48,7 +55,12 @@ const LIST_TIMEOUT_MS = 15_000;
 /** A snapshot at 2048 px is a few hundred kB of base64; this is far above it. */
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 
+// The published single file (built by vite.config.ts's `agentBridgePlugin`
+// and served beside the site) has its version written in at build time; run
+// from the repo, it reads package.json.
+/* global ATELIER_BRIDGE_VERSION */
 const version = (() => {
+  if (typeof ATELIER_BRIDGE_VERSION === 'string') return ATELIER_BRIDGE_VERSION;
   try {
     return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? '0.0.0';
   } catch {
