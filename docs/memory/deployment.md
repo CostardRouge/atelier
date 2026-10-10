@@ -62,7 +62,7 @@ Read before touching `vite.config.ts`, the workflows in `.github/workflows/`, `p
 
 ## The build EMITS the agent bridge as one file (2026-10-10)
 
-`agentBridgePlugin` (`vite.config.ts`) writes `dist/atelier-mcp.mjs` from `scripts/atelier-mcp.mjs` at every build and serves it in dev — generated, never committed, unlike the gazetteer or the LUT tiles, because it must speak the protocol of the build beside it — `agent-commands.md`.
+`agentBridgePlugin` (`vite.config.ts`) writes `dist/atelier-mcp.mjs` from `scripts/atelier-mcp.mjs` at every build — and `dist/atelier.mcpb`, the same file zipped with its manifest for Claude Desktop — and serves both in dev — generated, never committed, unlike the gazetteer or the LUT tiles, because it must speak the protocol of the build beside it — `agent-commands.md`.
 
 ## ffmpeg.wasm and the dev server (2026-08-20)
 

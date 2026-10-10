@@ -292,3 +292,36 @@ export function numberedName(name: string, n: number): string {
   const dot = name.lastIndexOf('.');
   return dot > 0 ? `${name.slice(0, dot)}-${n}${name.slice(dot)}` : `${name}-${n}`;
 }
+
+// --- the bridge as a Claude Desktop extension -----------------------------------
+
+/** Where the bridge's entry sits inside the bundle. */
+export const MCPB_ENTRY = 'server/atelier-mcp.mjs';
+
+/**
+ * The `manifest.json` of the bridge packaged as an MCP bundle (`.mcpb`, a
+ * plain ZIP Claude Desktop installs from a dialog when the file is opened):
+ * a `node` server whose entry is the same single file the site serves, its
+ * three tools listed from {@link MCP_TOOLS} so the two can never disagree.
+ * Claude Desktop runs it with its own Node.js — no terminal, no path to type.
+ */
+export function mcpbManifest(version: string, homepage: string): Record<string, unknown> {
+  return {
+    manifest_version: '0.3',
+    name: 'atelier',
+    display_name: 'Atelier',
+    version,
+    description: 'Drive the Atelier tab open in your browser — develop, crop, grade and export your photos — from Claude.',
+    long_description:
+      'Atelier runs entirely in your browser. This extension is the small bridge between Claude and the Atelier tab you connect on its Sources screen: it listens on 127.0.0.1 only, answers only Atelier’s own pages, and writes an agent’s exports into ~/Pictures/Atelier, never over an existing file. Every edit goes through Atelier’s own controls, journaled and undoable.',
+    author: { name: 'Steeve Pommier', url: homepage },
+    homepage,
+    server: {
+      type: 'node',
+      entry_point: MCPB_ENTRY,
+      mcp_config: { command: 'node', args: [`\${__dirname}/${MCPB_ENTRY}`] },
+    },
+    tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
+    keywords: ['photo', 'develop', 'raw', 'lut', 'atelier'],
+  };
+}

@@ -8,6 +8,7 @@ const MAX_WAIT_MS = 120_000;
 /** What the screen at `path` is, in one word an agent can branch on. */
 function screenOf(path: string): string {
   if (path === '/sources' || path.startsWith('/sources?') || path === '/connect' || path.startsWith('/connect?')) return 'sources';
+  if (path === '/agents') return 'agents';
   return toolForPath(path)?.id ?? 'home';
 }
 
@@ -23,7 +24,7 @@ export function appCommands(path: string): CommandSpec[] {
       id: 'app.status',
       title: 'Where the suite is',
       description:
-        'The current route, the screen it shows (a tool id, "home" or "sources"), every tool with its route, and how many commands are open right now. Start here.',
+        'The current route, the screen it shows (a tool id, "home", "sources" or "agents"), every tool with its route, and how many commands are open right now. Start here.',
       run: () => ({
         route: path,
         screen: screenOf(path),

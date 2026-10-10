@@ -2,6 +2,7 @@ import { Suspense, useEffect, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
 import LoadingState from '../shared/ui/LoadingState';
 import SourcesScreen from './SourcesScreen';
+import AgentsGuide from './AgentsGuide';
 import ErrorBoundary from './ErrorBoundary';
 import Home from './Home';
 import { REPO_URL } from './site';
@@ -57,7 +58,10 @@ export default function App() {
   );
   // No matching tool → the home page. The wordmark always links back here, so
   // an empty or unknown hash lands on home with nothing to redirect.
-  const tool = sourcesPath ? undefined : toolForPath(path);
+  // `#/agents` — how to let an AI app edit in this tab (`AgentsGuide.tsx`);
+  // a reading page of the shell, like the sources it hangs off.
+  const agentsPath = path === '/agents';
+  const tool = sourcesPath || agentsPath ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
   // The shell's own commands — where the suite is, going somewhere, waiting
   // for a tool's commands to open (`app-commands.ts`).
@@ -68,8 +72,14 @@ export default function App() {
   // (WCAG 2.4.2, the 2026-10-02 audit). The document's own name is the
   // tool's to add, if it ever does.
   useEffect(() => {
-    document.title = tool ? `${tool.label} — Atelier` : sourcesPath ? 'Sources — Atelier' : 'Atelier — a studio for your captures';
-  }, [tool, sourcesPath]);
+    document.title = tool
+      ? `${tool.label} — Atelier`
+      : sourcesPath
+        ? 'Sources — Atelier'
+        : agentsPath
+          ? 'Agents — Atelier'
+          : 'Atelier — a studio for your captures';
+  }, [tool, sourcesPath, agentsPath]);
 
   // The active view, guarded so a single tool's crash shows a recoverable
   // panel instead of blanking the suite. Keyed by route, so navigating to
@@ -82,6 +92,8 @@ export default function App() {
     <ErrorBoundary resetKey={path}>
       {sourcesPath ? (
         <SourcesScreen query={path.slice(sourcesPath.length + 1)} />
+      ) : agentsPath ? (
+        <AgentsGuide />
       ) : (
         <Suspense
           fallback={

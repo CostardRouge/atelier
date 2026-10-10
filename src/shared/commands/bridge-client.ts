@@ -146,7 +146,7 @@ function open(port: number) {
       return;
     }
     if (source !== es) return;
-    set({ status: 'waiting', port, reason: `no bridge answers on 127.0.0.1:${port} — start it with node scripts/atelier-mcp.mjs` });
+    set({ status: 'waiting', port, reason: `no bridge answers on 127.0.0.1:${port} — is the app that runs it (Claude Desktop, Claude Code…) open?` });
     retry = window.setTimeout(() => open(port), RETRY_MS);
   };
 }

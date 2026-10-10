@@ -26,7 +26,7 @@ import {
 } from '../shared/sources/source-ledger';
 import { describeAgo } from '../shared/sources/doc-sync';
 import { LOCAL_SOURCE } from '../shared/sources/source';
-import { bridgeState, startBridge, stopBridge, subscribeBridge } from '../shared/commands/bridge-client';
+import { BridgeConnect, BridgeStatePill, bridgeSentence, useBridge } from './BridgeControl';
 import { BRIDGE_DEFAULT_PORT } from '../shared/commands/mcp-protocol';
 
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
@@ -136,81 +136,28 @@ function SourceRow({ glyph, remote, name, aside, pill: state, facts, actions, no
 }
 
 /**
- * The AGENT BRIDGE's row (`shared/commands/bridge-client.ts`): an MCP client
- * on this computer (Claude Code) driving THIS tab through
- * `scripts/atelier-mcp.mjs`. Not a source of media — a connection all the
- * same, so it lives where connections are made and dropped, and it is never
- * on until the person clicks Connect here, for this tab only.
+ * The AGENT BRIDGE's row (`shared/commands/bridge-client.ts`): an AI app on
+ * this computer (Claude Desktop, Claude Code…) driving THIS tab through the
+ * bridge. Not a source of media — a connection all the same, so it lives
+ * where connections are made and dropped, and it is never on until the
+ * person clicks Connect here or on the setup guide (`#/agents`), for this
+ * tab only. The how-to lives on that guide, not in this row.
  */
-/**
- * The two lines that install the bridge from THIS site — the single file it
- * serves beside itself (`agentBridgePlugin` in vite.config.ts), so no clone
- * is needed and the bridge matches the build it talks to.
- */
-function bridgeInstall(): string {
-  const url = new URL(`${import.meta.env.BASE_URL}atelier-mcp.mjs`, window.location.origin).href;
-  return `curl -fsSo ~/atelier-mcp.mjs ${url}\nclaude mcp add atelier -- node ~/atelier-mcp.mjs`;
-}
-
 function AgentBridgeRow() {
-  const bridge = useSyncExternalStore(subscribeBridge, bridgeState);
-  const [port, setPort] = useState(String(BRIDGE_DEFAULT_PORT));
-  const asked = Number(port);
-  const portOk = Number.isInteger(asked) && asked > 0 && asked < 65536;
+  const bridge = useBridge();
   const on = bridge.status !== 'off' && bridge.status !== 'replaced';
-  const dot = 'w-[7px] h-[7px] rounded-full block';
-  const state =
-    bridge.status === 'connected' ? (
-      <span className={`${pill} border-ok-line bg-ok-wash text-ok`}>
-        <i className={`${dot} bg-ok`} />
-        connected
-      </span>
-    ) : bridge.status === 'connecting' || bridge.status === 'waiting' ? (
-      <span className={`${pill} border-warn-line bg-warn-wash text-warn`}>
-        <i className={`${dot} bg-warn animate-pulse-dot`} />
-        waiting for the bridge
-      </span>
-    ) : bridge.status === 'replaced' ? (
-      <span className={`${pill} border-line-strong bg-surface text-ink-soft`}>
-        <i className={`${dot} bg-faint`} />
-        taken by another tab
-      </span>
-    ) : (
-      <span className={`${pill} border-line-strong bg-surface text-ink-soft`}>
-        <i className={`${dot} bg-faint`} />
-        off
-      </span>
-    );
+  const sentence = bridgeSentence(bridge);
   return (
     <SourceRow
       glyph="AI"
       name="Agent bridge"
-      aside="an MCP client on this computer drives this tab"
+      aside="an AI app on this computer edits in this tab"
       dim={!on}
-      pill={state}
-      actions={
-        on ? (
-          <button type="button" className={danger} onClick={stopBridge}>
-            Disconnect
-          </button>
-        ) : (
-          <>
-            <input
-              value={port}
-              onChange={(e) => setPort(e.target.value.replace(/[^0-9]/g, ''))}
-              inputMode="numeric"
-              aria-label="Bridge port"
-              className="w-[5.5rem] font-mono text-base sm:text-xs px-2 py-[0.2rem] border border-line-strong rounded-full bg-paper text-ink focus:outline-none focus:border-accent"
-            />
-            <button type="button" className={solid} disabled={!portOk} onClick={() => startBridge(asked)}>
-              Connect
-            </button>
-          </>
-        )
-      }
+      pill={<BridgeStatePill bridge={bridge} />}
+      actions={<BridgeConnect bridge={bridge} />}
       facts={
         <>
-          <Fact label="address" value={`127.0.0.1:${bridge.status === 'off' ? (portOk ? asked : '—') : bridge.port}`} />
+          <Fact label="address" value={`127.0.0.1:${bridge.status === 'off' ? BRIDGE_DEFAULT_PORT : bridge.port}`} />
           <Fact label="scope" value="this tab" />
           {bridge.status === 'connected' && (
             <>
@@ -222,16 +169,10 @@ function AgentBridgeRow() {
       }
       note={
         <p className="m-0 mt-1.5 text-xs text-muted leading-snug">
-          {bridge.status === 'waiting'
-            ? `${bridge.reason}. `
-            : bridge.status === 'replaced'
-              ? 'Another Atelier tab connected to the bridge, so this one stood down. '
-              : ''}
-          Install the bridge once, then connect. Requests go to 127.0.0.1 only; every edit an agent makes is
-          journaled as an agent&apos;s and undoable.
-          <code className="block mt-1.5 font-mono text-xs text-ink-soft select-all break-all whitespace-pre-wrap">
-            {bridgeInstall()}
-          </code>
+          {sentence && `${sentence} `}
+          <a href="#/agents" className="text-accent-ink font-semibold no-underline hover:underline">
+            {on ? 'Setup guide' : 'Set up Claude in three steps'} →
+          </a>
         </p>
       }
     />

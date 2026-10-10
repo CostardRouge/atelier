@@ -1,5 +1,7 @@
 import { describe, expect, it } from 'vitest';
 import {
+  MCPB_ENTRY,
+  mcpbManifest,
   MCP_PROTOCOL_VERSION,
   MCP_TOOLS,
   handleMcpMessage,
@@ -171,5 +173,18 @@ describe('the files the bridge writes', () => {
     expect(numberedName('DJI_0101.jpg', 1)).toBe('DJI_0101-1.jpg');
     expect(numberedName('.gitignore', 2)).toBe('.gitignore-2');
     expect(numberedName('README', 3)).toBe('README-3');
+  });
+});
+
+describe('mcpbManifest', () => {
+  it('points the node server at the bundled entry and lists the three tools', () => {
+    const m = mcpbManifest('0.1.0', 'https://atelier.steeve.website/') as {
+      server: { type: string; entry_point: string; mcp_config: { command: string; args: string[] } };
+      tools: { name: string }[];
+    };
+    expect(m.server.type).toBe('node');
+    expect(m.server.entry_point).toBe(MCPB_ENTRY);
+    expect(m.server.mcp_config.args).toEqual([`\${__dirname}/${MCPB_ENTRY}`]);
+    expect(m.tools.map((t) => t.name)).toEqual(['atelier_status', 'atelier_commands', 'atelier_run']);
   });
 });

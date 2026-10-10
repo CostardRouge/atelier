@@ -2948,21 +2948,29 @@ clamped.
 From the browser's console: `await atelier.run('app.status')`, and
 `atelier.commands()` for the list.
 
-From **Claude Code** (or any MCP client), through the bridge — a small Node
-program with no dependency. Atelier has no server, so the bridge is what
-reaches into your tab; the site serves it as one file, so no clone is needed:
+From **Claude Desktop, Claude Code or any MCP app**, through the bridge — a
+small Node program with no dependency. Atelier has no server, so the bridge is
+what reaches into your tab, and the site serves it itself. **The setup guide
+is in the app**: [`#/agents`](https://atelier.steeve.website/#/agents) (or
+*Sources → Agents → Set up Claude in three steps*) — pick your app, and:
 
-```bash
-curl -fsSo ~/atelier-mcp.mjs https://atelier.steeve.website/atelier-mcp.mjs
-claude mcp add atelier -- node ~/atelier-mcp.mjs
-```
+- **Claude Desktop**: download *atelier.mcpb* and open it — Claude Desktop
+  shows an install window. No terminal.
+- **Claude Code**: download the bridge, then one line, copyable from the page
+  (`claude mcp add atelier -- node ~/Downloads/atelier-mcp.mjs`) — or the
+  one-liner that does both:
 
-(`#/sources` shows the same two lines for whichever address you opened the
-site on. From a clone, `node scripts/atelier-mcp.mjs` runs the source itself,
-on Node ≥ 22.18.)
+  ```bash
+  curl -fsSo ~/atelier-mcp.mjs https://atelier.steeve.website/atelier-mcp.mjs && claude mcp add atelier -- node ~/atelier-mcp.mjs
+  ```
 
-Then open Atelier — the deployed site or `npm run dev` — go to `#/sources` and
-click *Connect* under **Agents**. The masthead shows an **Agent** pill for as
+- **Any other MCP app** (Cursor, Windsurf, VS Code…): the JSON block the page
+  fills in with your file's path.
+
+(From a clone, `node scripts/atelier-mcp.mjs` runs the source itself, on
+Node ≥ 22.18.)
+
+Then press *Connect* on that page (or under **Agents** on `#/sources`). The masthead shows an **Agent** pill for as
 long as the tab is connected; *Disconnect* there ends it. The choice belongs to
 that tab alone: a reload keeps it, a new tab does not, and a second tab that
 connects takes the bridge over from the first. The bridge listens on

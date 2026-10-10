@@ -146,18 +146,23 @@ function readBody(req: IncomingMessage): Promise<string> {
 // so it runs only from a clone on Node ≥ 22.18. This bundles the two into ONE
 // plain-JavaScript file served beside the site (`<base>atelier-mcp.mjs`, at
 // build and in dev), so the bridge is installed with a download and no clone
-// (`docs/memory/agent-commands.md`). Generated from the source at every
-// build, never committed, so it cannot drift from the tab it talks to.
+// (`docs/memory/agent-commands.md`), and the same file wrapped as a Claude
+// Desktop extension (`atelier.mcpb`, a stored ZIP + manifest) that installs
+// from a dialog with no terminal at all. Generated from the source at every
+// build, never committed, so neither can drift from the tab it talks to.
 // esbuild is Vite's own dependency, imported only when the file is asked for.
 
 const BRIDGE_ENTRY = fileURLToPath(new URL('./scripts/atelier-mcp.mjs', import.meta.url));
 const BRIDGE_FILE = 'atelier-mcp.mjs';
+/** The same bridge as a Claude Desktop extension: opened, it installs from a dialog. */
+const BRIDGE_BUNDLE = 'atelier.mcpb';
 
-async function bundleBridge(): Promise<string> {
+async function bundleBridge(): Promise<{ code: string; version: string }> {
   const { build } = await import('esbuild');
   const pkg = JSON.parse(await readFile(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')) as { version?: string };
   const sha = process.env.GITHUB_SHA?.slice(0, 7);
-  const version = `${pkg.version ?? '0.0.0'}${sha ? `+${sha}` : ''}`;
+  const version = pkg.version ?? '0.0.0';
+  const label = `${version}${sha ? `+${sha}` : ''}`;
   const out = await build({
     entryPoints: [BRIDGE_ENTRY],
     bundle: true,
@@ -166,32 +171,50 @@ async function bundleBridge(): Promise<string> {
     target: 'node18',
     write: false,
     logLevel: 'silent',
-    define: { ATELIER_BRIDGE_VERSION: JSON.stringify(version) },
-    banner: { js: `// Atelier MCP bridge ${version} — generated from scripts/atelier-mcp.mjs; do not edit.` },
+    define: { ATELIER_BRIDGE_VERSION: JSON.stringify(label) },
+    banner: { js: `// Atelier MCP bridge ${label} — generated from scripts/atelier-mcp.mjs; do not edit.` },
   });
-  return out.outputFiles[0].text;
+  return { code: out.outputFiles[0].text, version };
+}
+
+async function bridgeBundle(code: string, version: string): Promise<Uint8Array> {
+  const [{ zipStore }, { MCPB_ENTRY, mcpbManifest, DEPLOYED_ORIGINS }] = await Promise.all([
+    import('./src/shared/lib/zip-store'),
+    import('./src/shared/commands/mcp-protocol'),
+  ]);
+  return zipStore([
+    { name: 'manifest.json', data: JSON.stringify(mcpbManifest(version, `${DEPLOYED_ORIGINS[0]}/`), null, 2) },
+    { name: MCPB_ENTRY, data: code },
+  ]);
 }
 
 function agentBridgePlugin(): Plugin {
   return {
     name: 'agent-bridge-file',
     async generateBundle() {
-      this.emitFile({ type: 'asset', fileName: BRIDGE_FILE, source: await bundleBridge() });
+      const { code, version } = await bundleBridge();
+      this.emitFile({ type: 'asset', fileName: BRIDGE_FILE, source: code });
+      this.emitFile({ type: 'asset', fileName: BRIDGE_BUNDLE, source: await bridgeBundle(code, version) });
     },
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         const at = (req.url ?? '').split('?')[0];
-        if (at !== `${server.config.base}${BRIDGE_FILE}` && at !== `/${BRIDGE_FILE}`) return next();
-        bundleBridge().then(
-          (code) => {
-            res.setHeader('content-type', 'text/javascript; charset=utf-8');
-            res.end(code);
-          },
-          (err: Error) => {
+        const file = [BRIDGE_FILE, BRIDGE_BUNDLE].find((f) => at === `${server.config.base}${f}` || at === `/${f}`);
+        if (!file) return next();
+        bundleBridge()
+          .then(async ({ code, version }) => {
+            if (file === BRIDGE_FILE) {
+              res.setHeader('content-type', 'text/javascript; charset=utf-8');
+              res.end(code);
+            } else {
+              res.setHeader('content-type', 'application/zip');
+              res.end(Buffer.from(await bridgeBundle(code, version)));
+            }
+          })
+          .catch((err: Error) => {
             res.statusCode = 500;
             res.end(err.message);
-          },
-        );
+          });
       });
     },
   };
