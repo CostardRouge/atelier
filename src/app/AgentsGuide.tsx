@@ -279,6 +279,13 @@ export default function AgentsGuide() {
               Connect again. If you changed the port with {code('--port')}, type the same number before Connect.
             </p>
           </Faq>
+          <Faq q="Claude Desktop and Claude Code at the same time?">
+            <p className="m-0">
+              Yes. Each starts its own bridge; the first one holds the connection to this tab and the other goes through it
+              — nothing to configure. Exports land in the first one’s folder. Quit that app and the other takes over; the
+              tab reconnects by itself.
+            </p>
+          </Faq>
           <Faq q="It says “taken by another tab”.">
             <p className="m-0">
               One tab at a time: the last one to connect wins. Press Connect here to take it back.

@@ -2980,8 +2980,10 @@ is in the app**: [`#/agents`](https://atelier.steeve.website/#/agents) (or
 - **Any other MCP app** (Cursor, Windsurf, VS Code…): the JSON block the page
   fills in with your file's path.
 
-(From a clone, `node scripts/atelier-mcp.mjs` runs the source itself, on
-Node ≥ 22.18.)
+Claude Desktop and Claude Code can run at the same time: each starts its own
+bridge, the first one holds the tab and the other goes through it, and when the
+first quits the other takes over. (From a clone, `node scripts/atelier-mcp.mjs`
+runs the source itself, on Node ≥ 22.18.)
 
 Then press *Connect* on that page (or under **Agents** on `#/sources`). The masthead shows an **Agent** pill for as
 long as the tab is connected; *Disconnect* there ends it. The choice belongs to
