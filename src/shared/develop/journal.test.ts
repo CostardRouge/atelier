@@ -180,6 +180,8 @@ describe('the journal', () => {
     expect(readJournal([{ at: 1, sections: ['nope'] }, { sections: ['develop'] }, { at: 2, sections: ['crop', 'develop'], after: {}, via: 'x' }])).toEqual([
       { at: 2, sections: ['develop', 'crop'], after: { develop: null, crop: { aspect: 'original', framing: null } } },
     ]);
+    // An agent's step keeps its mark through a read.
+    expect(readJournal([{ at: 3, sections: ['develop'], after: {}, via: 'agent' }])).toEqual([{ at: 3, sections: ['develop'], after: { develop: null }, via: 'agent' }]);
     const file = parseRollFile(serializeRollFile(toRollFile(cur)));
     expect(file.ok).toBe(true);
     if (file.ok) expect(rollDocFromFile(file.file, 9, 'local', () => 'q').pictures[0].journal).toEqual(cur.pictures[0].journal);

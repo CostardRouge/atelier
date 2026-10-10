@@ -26,6 +26,8 @@ import {
 } from '../shared/sources/source-ledger';
 import { describeAgo } from '../shared/sources/doc-sync';
 import { LOCAL_SOURCE } from '../shared/sources/source';
+import { BridgeConnect, BridgeStatePill, bridgeSentence, useBridge } from './BridgeControl';
+import { BRIDGE_DEFAULT_PORT } from '../shared/commands/mcp-protocol';
 
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
 const AFTER_CONNECT = '/studio/home';
@@ -130,6 +132,50 @@ function SourceRow({ glyph, remote, name, aside, pill: state, facts, actions, no
       </span>
       {note && <span className="col-start-1 col-span-2 sm:col-span-3 order-4">{note}</span>}
     </div>
+  );
+}
+
+/**
+ * The AGENT BRIDGE's row (`shared/commands/bridge-client.ts`): an AI app on
+ * this computer (Claude Desktop, Claude Code…) driving THIS tab through the
+ * bridge. Not a source of media — a connection all the same, so it lives
+ * where connections are made and dropped, and it is never on until the
+ * person clicks Connect here or on the setup guide (`#/agents`), for this
+ * tab only. The how-to lives on that guide, not in this row.
+ */
+function AgentBridgeRow() {
+  const bridge = useBridge();
+  const on = bridge.status !== 'off' && bridge.status !== 'replaced';
+  const sentence = bridgeSentence(bridge);
+  return (
+    <SourceRow
+      glyph="AI"
+      name="Agent bridge"
+      aside="an AI app on this computer edits in this tab"
+      dim={!on}
+      pill={<BridgeStatePill bridge={bridge} />}
+      actions={<BridgeConnect bridge={bridge} />}
+      facts={
+        <>
+          <Fact label="address" value={`127.0.0.1:${bridge.status === 'off' ? BRIDGE_DEFAULT_PORT : bridge.port}`} />
+          <Fact label="scope" value="this tab" />
+          {bridge.status === 'connected' && (
+            <>
+              <Fact label="commands run" value={String(bridge.runs)} />
+              {bridge.last && <Fact label="last" value={`${bridge.last.command}${bridge.last.ok ? '' : ' (refused)'}`} />}
+            </>
+          )}
+        </>
+      }
+      note={
+        <p className="m-0 mt-1.5 text-xs text-muted leading-snug">
+          {sentence && `${sentence} `}
+          <a href="#/agents" className="text-accent-ink font-semibold no-underline hover:underline">
+            {on ? 'Setup guide' : 'Set up Claude in three steps'} →
+          </a>
+        </p>
+      }
+    />
   );
 }
 
@@ -455,6 +501,11 @@ export default function SourcesScreen({ query }: { query: string }) {
             {error}
           </p>
         )}
+      </div>
+
+      <div className="flex flex-col gap-2">
+        <p className={legend}>Agents</p>
+        <AgentBridgeRow />
       </div>
     </section>
   );

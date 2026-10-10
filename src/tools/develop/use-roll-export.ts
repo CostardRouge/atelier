@@ -16,7 +16,7 @@ import { rollCubes } from './roll-cubes';
 import { WORKING_PREVIEW_EDGE, isWorkingPreview } from '../../shared/develop/working-preview';
 import { knownIdentity, mediaOrigin } from '../../shared/projects/media-identity';
 import { isProxyOverRaw, originalOf, rawRenderOf } from '../../shared/develop/delivery-source';
-import { deliverFilesTo, pickDeliveryTarget, type FolderedFile } from '../../shared/sources/deliver-files';
+import { deliverFilesTo, pickDeliveryTarget, type DeliveryTarget, type FolderedFile } from '../../shared/sources/deliver-files';
 import { largestSize, targetFolder } from '../../shared/develop/export-targets';
 import { profileInEffect } from '../../shared/lens/lens-profile';
 import { uniqueName } from '../../shared/sources/unique-name';
@@ -163,8 +163,12 @@ export interface RollExports {
   plan: RunPlan;
   /** Every picture's run-plan line by id, leaving or not — the Export tab's table. */
   lines: ReadonlyMap<string, string>;
-  /** Render the pictures named and hand them over. */
-  exportPictures: (ids: readonly string[]) => Promise<void>;
+  /**
+   * Render the pictures named and hand them over — into a folder picked at
+   * the click, or to `to` when the caller already holds where they go (the
+   * agent bridge's sink, which needs no click).
+   */
+  exportPictures: (ids: readonly string[], to?: DeliveryTarget) => Promise<void>;
 }
 
 /**
@@ -380,7 +384,7 @@ export function useRollExport({
     }
   }
 
-  const exportPictures = useCallback(async (ids: readonly string[]) => {
+  const exportPictures = useCallback(async (ids: readonly string[], to?: DeliveryTarget) => {
     // Everything a file carries is taken AT THE CLICK — the roll, its export
     // settings and who signs them — so an edit made while the run goes on
     // reaches the next export and never half of this one's folder.
@@ -394,9 +398,9 @@ export function useRollExport({
     // The folder FIRST, from the click itself: the picker opens only while
     // the browser still honours that click, about five seconds, and a roll
     // takes longer than that to render (`deliver-files.ts`).
-    let target;
+    let target: DeliveryTarget | null = to ?? null;
     try {
-      target = await pickDeliveryTarget();
+      if (!target) target = await pickDeliveryTarget();
     } catch (err) {
       setNote(err instanceof Error ? err.message : 'No folder could be chosen.');
       return;
@@ -448,7 +452,7 @@ export function useRollExport({
     // The pictures whose main file LANDED — what gets marked delivered.
     const landed: RollPicture[] = [];
     const written = { count: 0, renamed: 0, errors: [] as string[] };
-    const method: 'folder' | 'download' = target.kind === 'folder' ? 'folder' : 'download';
+    const method: 'folder' | 'download' = target.kind === 'download' ? 'download' : 'folder';
     const assetIds: (string | null)[] = [];
     const sourceIds = new Set<string>();
     const failures: string[] = [];

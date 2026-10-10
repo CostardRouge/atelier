@@ -77,6 +77,12 @@ Today it ships ten tools, converging into a few editors:
 > it, a trip or a project can be kept on it, and a **LUT pack's looks** are
 > fetched from it the first time a picture asks for one — all under your
 > account there. Nothing is sent to a server you did not name yourself.
+>
+> One more connection never leaves your computer: the **agent bridge** (see
+> "Driving Atelier from an agent"). Once you click *Connect* on `#/sources`,
+> the tab talks to `127.0.0.1` alone, to a program you started yourself — and
+> an agent's export is handed to that program, which writes it into the folder
+> you started it with.
 
 Tools that consume the same kinds of files (photos, videos, DJI clips) share a
 single **asset library**: import a folder once and switch tools freely — each
@@ -2939,6 +2945,82 @@ npm run typecheck  # type-check without emitting
 npm run build      # production build into dist/
 npm run preview    # serve the production build locally
 ```
+
+### Driving Atelier from an agent (MCP)
+
+Every agent-facing verb of the suite is a **command** with a stable id and
+checked parameters — `app.status`, `app.navigate`, `develop.set`,
+`develop.snapshot`… — registered by the screen that can do it while it is
+open (`src/shared/commands/`). A command goes through the very path a gesture
+goes through: an agent's edit is saved, undoable with ⌘Z like yours, and
+marked in the picture's journal as an agent's, so a making-of says *by an
+agent* and the training file can leave it out of what a model learns of your
+taste. A value outside a slider's range is refused with the range, never
+clamped.
+
+From the browser's console: `await atelier.run('app.status')`, and
+`atelier.commands()` for the list.
+
+From **Claude Desktop, Claude Code or any MCP app**, through the bridge — a
+small Node program with no dependency. Atelier has no server, so the bridge is
+what reaches into your tab, and the site serves it itself. **The setup guide
+is in the app**: [`#/agents`](https://atelier.steeve.website/#/agents) (or
+*Sources → Agents → Set up Claude in three steps*) — pick your app, and:
+
+- **Claude Desktop**: download *atelier.mcpb* and open it — Claude Desktop
+  shows an install window. No terminal.
+- **Claude Code**: download the bridge, then one line, copyable from the page
+  (`claude mcp add atelier -- node ~/Downloads/atelier-mcp.mjs`) — or the
+  one-liner that does both:
+
+  ```bash
+  curl -fsSo ~/atelier-mcp.mjs https://atelier.steeve.website/atelier-mcp.mjs && claude mcp add atelier -- node ~/atelier-mcp.mjs
+  ```
+
+- **Any other MCP app** (Cursor, Windsurf, VS Code…): the JSON block the page
+  fills in with your file's path.
+
+(From a clone, `node scripts/atelier-mcp.mjs` runs the source itself, on
+Node ≥ 22.18.)
+
+Then press *Connect* on that page (or under **Agents** on `#/sources`). The masthead shows an **Agent** pill for as
+long as the tab is connected; *Disconnect* there ends it. The choice belongs to
+that tab alone: a reload keeps it, a new tab does not, and a second tab that
+connects takes the bridge over from the first. The bridge listens on
+`127.0.0.1:7981` (`--port N` to change it), answers only pages from your own
+machine and the deployed site (`ATELIER_ORIGINS` adds others), and offers
+three tools: `atelier_status`, `atelier_commands` (what the current screen
+offers, with each command's parameters) and `atelier_run`.
+
+A session in Develop looks like: `app.navigate` to `/develop/home`,
+`app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
+`develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then
+`develop.snapshot`, which hands the model the picture as it would be
+delivered (or as shot, with `before: true`).
+
+Everything a picture holds can be written: the sliders (`develop.set`), the
+tone curves (`develop.curve`), levels, the colour mixer, black and white and
+the grading wheels; the crop, its format, a straighten, quarter turns and
+flips (`develop.crop`, read back by `develop.getCrop`); perspective, lens,
+detail and the post-crop vignette; the Auto row's verbs (`develop.auto`,
+`develop.cropToSubject`); and the roll itself — one picture's settings onto
+others (`develop.applyTo`), which pictures leave (`develop.deliver`), a title
+and a caption (`develop.words`); the look — built-in LUTs and film stocks,
+their strength and order, the output transform (`develop.addLook` and its
+siblings) — and your preset book (`develop.presets`, `develop.applyPreset`,
+`develop.savePreset`). Your purchased looks, masks and layers stay with you.
+
+A roll can be made and filled end to end: `develop.newRoll`, then
+`develop.addFromWinnow` — a day or a span of the connected Winnow, narrowed by
+its own culling (only the picks, at least three stars, photographs only) — or
+`develop.addFromLibrary` for files the Library already holds. And it can
+leave: `develop.exportPlan` says what each picture would deliver, and
+`develop.export` renders through the roll's own export (its targets, sizes,
+metadata) and hands the files to the bridge, which writes them into its
+output folder — `~/Pictures/Atelier` unless started with `--out DIR` — under
+the capture's own name, numbered `-1`, `-2` rather than ever overwriting a
+file. An export by hand still asks for a folder; only the bridge can take one
+without a click, because you chose its folder when you started it.
 
 ## Photo EXIF tool
 

@@ -1,7 +1,18 @@
 import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
-import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
+import { CommandError } from '../../shared/commands/registry';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
+import { lookCommands } from '../../shared/develop/look-commands';
+import { VERDICTS, filterRows, readDay } from '../../shared/develop/ingest-commands';
+import { rowMediaRef } from '../../shared/sources/winnow/materialize';
+import type { Verdict } from '../../shared/sources/winnow/culling';
+import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
+import { presetCommands } from '../../shared/develop/preset-commands';
+import { presetsNow, saveToPresetBook } from '../../shared/develop/use-preset-book';
+import { SECTION_IDS, developControls, pictureSummary, rollSummary, targetPicture, withDevelopValues } from '../../shared/develop/develop-commands';
 import { landBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
 import { copyDevelop, hasCopiedDevelop, pasteDevelop, subscribeDevelopClipboard } from '../../shared/develop/develop-clipboard';
@@ -81,6 +92,7 @@ import {
   removePictures,
   rollProgress,
   sameMediaRef,
+  type DeliverState,
   type JournalVia,
   type RollDoc,
   type RollExport,
@@ -242,6 +254,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const [sheetOpen, setSheetOpen] = useState(false);
   const [pickingDay, setPickingDay] = useState(false);
   const { connection, client } = useWinnowConnection();
+  const winnowRef = useRef({ connection, client });
+  winnowRef.current = { connection, client };
   // Which inspector tab is open — kept here, not in the workbench, so it
   // survives stepping to another picture (the workbench remounts per picture).
   const [tab, setTab] = useState<WorkbenchTab>('adjust');
@@ -274,7 +288,27 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   const openId = openPictureId(roll.pictures, pictureId);
   const open = openId ? (roll.pictures.find((p) => p.id === openId) ?? null) : null;
   // The look is the OPEN picture's (roll v5): the stack follows the strip.
-  const stack = useRollGrade(open, update);
+  // Its writes carry `lookVia` — `agent` while a look command runs, so the
+  // journal tells an agent's look from the author's.
+  const lookVia = useRef<JournalVia | null>(null);
+  const lookUpdate = useCallback((change: (r: RollDoc) => RollDoc) => update(change, lookVia.current ?? undefined), [update]);
+  const stack = useRollGrade(open, lookUpdate);
+  const stackRef = useRef(stack);
+  stackRef.current = stack;
+  const lookWrites = useRef(0);
+  const lookAsAgent = useCallback(async <T,>(write: () => T | Promise<T>): Promise<T> => {
+    lookWrites.current += 1;
+    lookVia.current = 'agent';
+    try {
+      return await write();
+    } finally {
+      // The stack writes back an effect later, after its bake.
+      window.setTimeout(() => {
+        lookWrites.current -= 1;
+        if (lookWrites.current === 0) lookVia.current = null;
+      }, 600);
+    }
+  }, []);
   const openIdRef = useRef(openId);
   openIdRef.current = openId;
 
@@ -338,6 +372,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [lib.assets, folders.siblings],
   );
   const media = useRollMedia({ pictures: roll.pictures, openId, localFiles });
+  const libraryFilesRef = useRef(libraryFiles);
+  libraryFilesRef.current = libraryFiles;
   // Winnow's picks and stars, read-only (item 33): shown on the strip and
   // filtered on — the filter is this sitting's, never the roll's.
   const culling = useRollCulling(roll.pictures);
@@ -744,6 +780,288 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
 
+  // The roll's commands (`shared/commands/`, `develop-commands.ts`): reading
+  // its pictures and writing a develop through `handleDevelop`, the funnel the
+  // sliders use — journaled `via: 'agent'`, so the making-of and the training
+  // file can tell an agent's step from the author's.
+  useRegisterCommands('develop-roll', [
+    {
+      id: 'develop.pictures',
+      title: 'List the roll’s pictures',
+      description: 'The open roll and its pictures in band order: id, file name, whether it is open, a clip, a variant, which sections carry an edit, whether it leaves in an export.',
+      run: () => ({
+        roll: rollSummary(latest.current),
+        pictures: latest.current.pictures.map((p) => pictureSummary(p, openIdRef.current)),
+      }),
+    },
+    {
+      id: 'develop.openPicture',
+      title: 'Open a picture',
+      description: 'Put a picture of the roll on the stage. Wait for develop.snapshot to be available before looking at it: a picture decodes after it opens.',
+      params: { picture: { type: 'string', description: 'The picture id, from develop.pictures.' } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        onOpenPicture(target.id);
+        return { open: target.id, name: pictureLabel(target) };
+      },
+    },
+    {
+      id: 'develop.controls',
+      title: 'Read the sliders',
+      description: 'The eleven develop sliders of a picture (the open one unless named) with their range, step, unit and current value — what develop.set writes.',
+      params: { picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        return { picture: target.id, controls: developControls(target.develop) };
+      },
+    },
+    {
+      id: 'develop.get',
+      title: 'Read a develop',
+      description: 'A picture’s whole develop record (sliders, curves, levels, mixer, B&W, grading, the RAW material), every default filled, and which sections of the picture carry an edit.',
+      params: { picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        return { picture: target.id, develop: normaliseDevelop(target.develop ?? {}), edited: pictureEdits(target) };
+      },
+    },
+    {
+      id: 'develop.set',
+      title: 'Set sliders',
+      description:
+        'Write develop sliders on a picture (the open one unless named), as ABSOLUTE values inside each slider’s range — exposure in EV −3..3, the others −100..100. Keys: exposure, brightness, contrast, highlights, shadows, whites, blacks, temperature, tint, saturation, vibrance. Everything not named is kept. One undo step, journaled as an agent’s.',
+      params: {
+        values: { type: 'object', description: 'Slider → value, e.g. { "exposure": 0.5, "shadows": 30 }.' },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        const next = withDevelopValues(target.develop, p.values as Record<string, unknown>);
+        handleDevelop(target.id, next, 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, controls: developControls(now?.develop ?? null) };
+      },
+    },
+    ...developRecordCommands((picture, change) => {
+      const target = targetPicture(latest.current, picture, openIdRef.current);
+      handleDevelop(target.id, change(target.develop), 'agent');
+      const now = latest.current.pictures.find((x) => x.id === target.id);
+      return { picture: target.id, develop: normaliseDevelop(now?.develop ?? {}) };
+    }),
+    ...sectionCommands((picture, section, change) => {
+      const target = targetPicture(latest.current, picture, openIdRef.current);
+      if (isClipPicture(target)) throw new CommandError('unavailable', 'a clip takes the develop, the look and the crop only');
+      const current = (target[section] ?? null) as never;
+      const next = change(current) as never;
+      if (section === 'keystone') handleKeystone(target.id, next, 'agent');
+      else if (section === 'lens') handleLens(target.id, next, 'agent');
+      else if (section === 'detail') handleDetail(target.id, next, 'agent');
+      else handleVignette(target.id, next, 'agent');
+      const now = latest.current.pictures.find((x) => x.id === target.id);
+      return { picture: target.id, [section]: now?.[section] ?? null };
+    }),
+    ...presetCommands({
+      presets: presetsNow,
+      save: saveToPresetBook,
+      roll: () => latest.current,
+      pictures: (ids) =>
+        ((ids as string[] | undefined) ?? [undefined]).map((id) => targetPicture(latest.current, id, openIdRef.current)),
+      write: (changes) =>
+        update((r) => {
+          let next = r;
+          for (const [id, change] of changes) {
+            next = patchPicture(next, id, { develop: change.develop });
+            if (change.grade !== undefined) next = copyGradeTo(next, [id], change.grade);
+          }
+          return next;
+        }, 'agent'),
+    }),
+    ...lookCommands({
+      stack: () => stackRef.current,
+      available: () => (openIdRef.current ? true : 'no picture is open'),
+      asAgent: lookAsAgent,
+    }),
+    {
+      id: 'develop.applyTo',
+      title: 'Apply a picture’s settings to others',
+      description: `Write sections of one picture (the open one unless named) onto other pictures of the roll — the batch verb. sections: any of ${SECTION_IDS.join(', ')}; by default the ones the source has edited. to: picture ids, or ["all"] for every other picture not ignored. A clip receives only the develop, the look and the crop. One undo step.`,
+      params: {
+        to: { type: 'strings', description: 'Picture ids, or ["all"].' },
+        sections: { type: 'strings', description: 'Section ids; the source’s edited sections when absent.', optional: true },
+        from: { type: 'string', description: 'The source picture; the open one when absent.', optional: true },
+      },
+      run: (p) => {
+        const roll = latest.current;
+        const source = targetPicture(roll, p.from, openIdRef.current);
+        const to = p.to as string[];
+        const ids =
+          to.length === 1 && to[0] === 'all'
+            ? roll.pictures.filter((x) => x.id !== source.id && !isIgnored(x)).map((x) => x.id)
+            : to.map((id) => targetPicture(roll, id, null).id);
+        const asked = (p.sections as string[] | undefined) ?? pictureEdits(source);
+        const unknown = asked.filter((s) => !(SECTION_IDS as readonly string[]).includes(s));
+        if (unknown.length) throw new CommandError('invalid', `no section ${unknown.join(', ')} — the sections are ${SECTION_IDS.join(', ')}`);
+        if (asked.length === 0) throw new CommandError('invalid', 'the source picture has nothing edited — name the sections to copy');
+        update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, asked as PictureSection[]), 'agent');
+        return { from: source.id, to: ids, sections: asked };
+      },
+    },
+    {
+      id: 'develop.deliver',
+      title: 'Choose which pictures leave',
+      description:
+        'Set whether pictures leave in an export: auto (edited ones leave), yes, no, or ignore (out of the roll’s work: never exported, skipped by the arrows and by apply-to-all). Locked while an export runs.',
+      params: {
+        state: { type: 'string', description: 'auto, yes, no or ignore.', enum: ['auto', 'yes', 'no', 'ignore'] },
+        pictures: { type: 'strings', description: 'Picture ids; the open picture when absent.', optional: true },
+      },
+      available: () => (exportRunning.current ? LOCKED_DELIVERY : true),
+      run: (p) => {
+        const ids = ((p.pictures as string[] | undefined) ?? [undefined]).map((id) => targetPicture(latest.current, id, openIdRef.current).id);
+        update((r) => setDelivery(r, ids, p.state as DeliverState), 'agent');
+        return { pictures: ids, state: p.state };
+      },
+    },
+    {
+      id: 'develop.words',
+      title: 'Title and caption',
+      description: 'A picture’s own title and caption, written into the delivered file (XMP dc:title, dc:description and EXIF ImageDescription). An empty string removes one.',
+      params: {
+        title: { type: 'string', description: 'The title.', optional: true },
+        caption: { type: 'string', description: 'The caption.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        if (p.title === undefined && p.caption === undefined) throw new CommandError('invalid', 'give a title, a caption, or both');
+        const words: { title?: string; caption?: string } = {};
+        if (typeof p.title === 'string') words.title = p.title;
+        if (typeof p.caption === 'string') words.caption = p.caption;
+        update((r) => setPictureWords(r, target.id, words), 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, title: now?.title ?? null, caption: now?.caption ?? null };
+      },
+    },
+    {
+      id: 'develop.addFromWinnow',
+      title: 'Add a Winnow day to the roll',
+      description:
+        'Add the connected Winnow’s photographs and clips of a day (or a span) to the roll, narrowed by Winnow’s own culling — verdict (pick, reject, skip, unrated) and minimum stars — and by kind. Bursts count as their cover. The bytes are fetched when a picture opens. Answers how many were added and how many the roll already held.',
+      params: {
+        date: { type: 'string', description: 'The day, YYYY-MM-DD.' },
+        dateTo: { type: 'string', description: 'The span’s last day, YYYY-MM-DD; the same day when absent.', optional: true },
+        verdict: { type: 'string', description: 'Only this verdict.', enum: VERDICTS, optional: true },
+        minStars: { type: 'number', description: 'At least this many stars.', min: 0, max: 5, integer: true, optional: true },
+        media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
+        half: { type: 'string', description: 'incoming (still to cull) or final (the Gallery); both when absent.', enum: ['incoming', 'final'], optional: true },
+      },
+      available: () => (winnowRef.current.client && winnowRef.current.connection ? true : 'no Winnow is connected — connect one on #/sources'),
+      run: async (p) => {
+        const { client: c, connection: conn } = winnowRef.current;
+        if (!c || !conn) throw new CommandError('unavailable', 'no Winnow is connected');
+        const from = readDay('date', p.date);
+        const to = p.dateTo === undefined ? from : readDay('dateTo', p.dateTo);
+        if (to < from) throw new CommandError('invalid', 'dateTo comes before date');
+        const rows = await c.allAssets({
+          dateFrom: from,
+          dateTo: to,
+          ...(p.half ? { half: p.half as 'incoming' | 'final' } : {}),
+          ...(p.media ? { mediaType: p.media as 'photo' | 'video' } : {}),
+        });
+        const kept = filterRows(rows, {
+          verdict: p.verdict as Verdict | undefined,
+          minStars: p.minStars as number | undefined,
+          media: p.media as 'photo' | 'video' | undefined,
+        }).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+        const refs = kept.map((r) => rowMediaRef(conn.id, r));
+        const before = latest.current.pictures.length;
+        update((r) => addPictures(r, refs), 'agent');
+        const added = latest.current.pictures.length - before;
+        return { listed: rows.length, matched: kept.length, added, alreadyOnRoll: kept.length - added };
+      },
+    },
+    {
+      id: 'develop.addFromLibrary',
+      title: 'Add Library files to the roll',
+      description:
+        'Add photographs and clips the Library holds (the files imported in this tab) to the roll: by file name, or ["all"]. A picture the roll already holds is found again, never added twice.',
+      params: { names: { type: 'strings', description: 'File names as the Library shows them, or ["all"].' } },
+      run: async (p) => {
+        const names = p.names as string[];
+        const pool = libraryFilesRef.current;
+        const picked = names.length === 1 && names[0] === 'all' ? pool : names.map((n) => {
+          const f = pool.find((x) => x.name === n);
+          if (!f) throw new CommandError('invalid', `the Library holds no "${n}" — it holds ${pool.map((x) => x.name).join(', ') || 'nothing'}`);
+          return f;
+        });
+        const refs = await hashedMediaRefs(picked);
+        const { found, fresh } = splitByRoll(latest.current.pictures.map((x) => x.ref), refs);
+        if (fresh.length) update((r) => addPictures(r, fresh), 'agent');
+        return { added: fresh.length, alreadyOnRoll: found };
+      },
+    },
+    {
+      id: 'develop.exportPlan',
+      title: 'What an export would deliver',
+      description:
+        'Before anything is rendered: each picture’s line — which file it leaves from, at what size, to which targets — and whether it leaves (develop.deliver decides).',
+      run: () => ({
+        pictures: latest.current.pictures.map((p) => ({ id: p.id, name: pictureLabel(p), leaves: delivers(p), line: exportsRef.current.lines.get(p.id) ?? null })),
+      }),
+    },
+    {
+      id: 'develop.export',
+      title: 'Export pictures',
+      description:
+        'Render pictures through the roll’s own export (its targets, sizes, metadata, HDR) and hand the files to the agent bridge, which writes them into its output folder on this computer — never over an existing file. pictures: ids, ["leaving"] (the ones develop.deliver lets leave — the default) or ["all"]. Answers the paths written and the run’s own sentence. Needs the bridge: an export by hand asks for a folder instead.',
+      params: {
+        pictures: { type: 'strings', description: 'Picture ids, ["leaving"] or ["all"].', optional: true },
+      },
+      available: () =>
+        bridgeState().status !== 'connected'
+          ? 'an export by an agent goes through the bridge, and none is connected'
+          : exportsRef.current.exporting
+            ? 'an export is already running'
+            : true,
+      run: async (p) => {
+        const roll = latest.current;
+        const asked = (p.pictures as string[] | undefined) ?? ['leaving'];
+        const ids =
+          asked.length === 1 && asked[0] === 'all'
+            ? roll.pictures.filter((x) => !isIgnored(x)).map((x) => x.id)
+            : asked.length === 1 && asked[0] === 'leaving'
+              ? roll.pictures.filter(delivers).map((x) => x.id)
+              : asked.map((id) => targetPicture(roll, id, null).id);
+        if (ids.length === 0) throw new CommandError('invalid', 'no picture leaves — mark some with develop.deliver, or name them');
+        const written: string[] = [];
+        const sink = bridgeSink((path) => written.push(path));
+        if (!sink) throw new CommandError('unavailable', 'the bridge went away');
+        await exportsRef.current.exportPictures(ids, sink);
+        // The run's sentence is set on its last render.
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+        return { written, note: exportsRef.current.note };
+      },
+    },
+    {
+      id: 'develop.reset',
+      title: 'Reset sections',
+      description: `Put sections of a picture back as shot (the develop alone unless named). Sections: ${SECTION_IDS.join(', ')}. One undo step.`,
+      params: {
+        sections: { type: 'strings', description: 'Section ids; ["develop"] when absent.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        const asked = (p.sections as string[] | undefined) ?? ['develop'];
+        const unknown = asked.filter((s) => !(SECTION_IDS as readonly string[]).includes(s));
+        if (unknown.length) throw new CommandError('invalid', `no section ${unknown.join(', ')} — the sections are ${SECTION_IDS.join(', ')}`);
+        update((r) => resetSections(r, target.id, asked as PictureSection[]), 'agent');
+        const now = latest.current.pictures.find((x) => x.id === target.id);
+        return { picture: target.id, edited: now ? pictureEdits(now) : [] };
+      },
+    },
+  ]);
+
   const handleFraming = useCallback(
     (id: string, framing: Framing | null, via?: JournalVia) => update((r) => patchPicture(r, id, { framing }), via),
     [update],
@@ -761,11 +1079,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     [update],
   );
   const handleVignette = useCallback(
-    (id: string, vignette: PostCropVignette | null) => update((r) => patchPicture(r, id, { vignette })),
+    (id: string, vignette: PostCropVignette | null, via?: JournalVia) => update((r) => patchPicture(r, id, { vignette }), via),
     [update],
   );
   const handleLens = useCallback(
-    (id: string, lens: LensCorrection | null) => update((r) => patchPicture(r, id, { lens })),
+    (id: string, lens: LensCorrection | null, via?: JournalVia) => update((r) => patchPicture(r, id, { lens }), via),
     [update],
   );
   const handleLensProfile = useCallback(
@@ -877,6 +1195,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   });
   const { exportPictures } = exports;
   exportRunning.current = exports.progress !== null;
+  // Read by the export commands at call time (`develop.export`).
+  const exportsRef = useRef(exports);
+  exportsRef.current = exports;
   const exportVerbs = useMemo<ExportVerb[]>(() => {
     if (!openId) return [];
     const verbs: ExportVerb[] = [{ id: 'open', label: 'Export this picture', run: () => void exportPictures([openId]) }];

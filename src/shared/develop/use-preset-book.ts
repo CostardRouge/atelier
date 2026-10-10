@@ -12,7 +12,7 @@ import { documentSourcesFor, sourceLabel } from '../sources/document-gallery';
 import { DEFAULT_SOURCE_ID } from '../sources/source';
 import { listWinnowConnections, subscribeWinnowConnections } from '../sources/winnow/store';
 import { listTrips } from '../roadtrip/trip-store';
-import type { DevelopSettings } from './develop';
+import type { DevelopPreset, DevelopSettings } from './develop';
 import type { SavedGrade } from '../lut/saved-grade';
 import type { DevelopPresets } from './develop-host';
 import {
@@ -227,6 +227,12 @@ export function ensurePresetBook(): Promise<void> {
     await resumeRemote();
   })();
   return loading;
+}
+
+/** The book's presets as they stand, the book loaded first — what a command reads (`preset-commands.ts`). */
+export async function presetsNow(): Promise<readonly DevelopPreset[]> {
+  await ensurePresetBook();
+  return state.book?.presets ?? [];
 }
 
 export async function saveToPresetBook(name: string, settings: DevelopSettings, look: SavedGrade | null = null) {

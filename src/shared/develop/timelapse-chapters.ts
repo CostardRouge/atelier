@@ -328,6 +328,7 @@ export function chapterCaption(sections: readonly PictureEdit[], before: RollPic
   if (via === 'reset') return `Reset ${sections.map((s) => sectionLabel(s).toLowerCase()).join(', ')}`;
   const body = sections.map((s) => describeChange(s, before, after)).join(' · ');
   if (via === 'auto') return `${body} · by Auto, as it opened`;
+  if (via === 'agent') return `${body} · by an agent`;
   return via === 'apply' || via === 'paste' ? `${body} · from another picture` : body;
 }
 

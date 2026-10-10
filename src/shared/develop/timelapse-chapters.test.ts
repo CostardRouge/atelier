@@ -64,6 +64,8 @@ describe('chapters', () => {
     const applied = { ...p, journal: [...(p.journal ?? []), { at: 9000, sections: ['look' as const], after: { look: { layers: [{ id: 'l', source: 'builtin', name: 'Portra 400', customText: null, intensity: 0.8, enabled: true }], output: 'none' as const, film: null } }, via: 'apply' as const }] };
     const { chapters: more } = pictureChapters(applied);
     expect(more[1].caption).toBe('Portra 400 · 80 % · from another picture');
+    const byAgent = { ...p, journal: [...(p.journal ?? []), { at: 9000, sections: ['develop' as const], after: { develop: exposure(0.3) }, via: 'agent' as const }] };
+    expect(pictureChapters(byAgent).chapters[1].caption).toBe('+0.3 EV · by an agent');
   });
 
   it('keep the chain of states whole across a put-back and a step that changed nothing', () => {

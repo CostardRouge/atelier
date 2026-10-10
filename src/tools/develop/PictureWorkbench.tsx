@@ -84,6 +84,10 @@ import { firstOpen, useAutoAll, type AutoAllStep } from '../../shared/develop/us
 import { WRITE_DELAY_MS } from '../../shared/develop/use-write-through';
 import { useLocalPref } from '../../shared/ui/local-pref';
 import { isEdited, type JournalVia } from '../../shared/develop/roll-types';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { imageResult, untilSteady } from '../../shared/commands/image-result';
+import { CommandError } from '../../shared/commands/registry';
+import { CROP_FORMATS, cropState, planCrop, type CropRequest } from '../../shared/develop/crop-commands';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
 import {
   DEFAULT_BRUSH_HARDNESS,
@@ -1749,6 +1753,55 @@ export default function PictureWorkbench({
     return () => window.clearTimeout(t);
   }, [source, cube, delivered, aspectRatio, framingDraft, border]);
 
+  // --- what an agent LOOKS at (`shared/commands/`) -----------------------------
+  // The cell's own recipe at the size asked: the picture as delivered —
+  // graded, framed, bordered — or as shot. It waits for `delivered` to stop
+  // changing first, since a `develop.set` reaches the roll at once and the
+  // stage's cube a render later; an answer taken before would show the
+  // picture one write behind.
+  const looking = useRef({ source, delivered, aspectRatio, framingDraft, border });
+  looking.current = { source, delivered, aspectRatio, framingDraft, border };
+  useRegisterCommands('develop-workbench', [
+    {
+      id: 'develop.snapshot',
+      title: 'Look at the picture',
+      description:
+        'A JPEG of the open picture AS DELIVERED (graded, cropped, bordered — what an export would hold, at a smaller size), or AS SHOT with before: true (uncropped, no correction). Waits for the stage to catch up with the last write.',
+      params: {
+        longEdge: { type: 'number', description: 'The long edge in pixels; 1024 when absent.', min: 64, max: 2048, integer: true, optional: true },
+        before: { type: 'boolean', description: 'The picture as shot instead of as delivered.', optional: true },
+      },
+      available: () => (looking.current.source ? true : 'the open picture is still decoding'),
+      run: async (p) => {
+        await untilSteady(() => looking.current.delivered);
+        const { source: s, delivered: draw, aspectRatio: ratio, framingDraft: framing, border: edge } = looking.current;
+        if (!s) throw new Error('the open picture is no longer decoded');
+        const longEdge = typeof p.longEdge === 'number' ? p.longEdge : 1024;
+        let blob: Blob | null = null;
+        if (p.before === true) {
+          const scale = Math.min(1, longEdge / Math.max(s.width, s.height));
+          const canvas = document.createElement('canvas');
+          canvas.width = Math.max(1, Math.round(s.width * scale));
+          canvas.height = Math.max(1, Math.round(s.height * scale));
+          const ctx = canvas.getContext('2d');
+          if (!ctx) throw new Error('the browser refused a canvas');
+          ctx.imageSmoothingQuality = 'high';
+          ctx.drawImage(s.image, 0, 0, canvas.width, canvas.height);
+          blob = await new Promise<Blob | null>((resolve) => canvas.toBlob(resolve, 'image/jpeg', 0.9));
+        } else {
+          const image = draw();
+          if (!image) throw new Error('the stage has nothing to deliver yet');
+          blob = (await framedThumbnail(image, s.width, s.height, ratio, framing, edge, longEdge))?.blob ?? null;
+        }
+        if (!blob) throw new Error('the browser refused to encode the picture');
+        const bitmap = await createImageBitmap(blob);
+        const size = { w: bitmap.width, h: bitmap.height };
+        bitmap.close();
+        return imageResult(blob, size.w, size.h, p.before === true ? 'the picture as shot, uncropped' : 'the picture as delivered');
+      },
+    },
+  ]);
+
   // --- the clipboard's two verbs ------------------------------------------------
   // Held HERE rather than in the well, so ⌘C and ⌘V light the very glyph a
   // press would (`useVerb`, `docs/press-feedback.md` C2).
@@ -2377,6 +2430,108 @@ export default function PictureWorkbench({
       }, WRITE_DELAY_MS * 3);
     });
   }, [autoPlan.onOpen, clip, statsReady, source]);
+
+  // --- the crop and the automatic verbs, for an agent (`shared/commands/`) -----
+  // Through the very machines the Crop tab and the Auto row drive, so a
+  // command clamps, switches and journals like a click — written `via:
+  // 'agent'` while their write-throughs flush.
+  const agentWrites = useRef(0);
+  const asAgent = useCallback(async <T,>(write: () => T | Promise<T>): Promise<T> => {
+    agentWrites.current += 1;
+    pendingVia.current = 'agent';
+    try {
+      return await write();
+    } finally {
+      window.setTimeout(() => {
+        agentWrites.current -= 1;
+        if (agentWrites.current === 0 && pendingVia.current === 'agent') pendingVia.current = null;
+      }, WRITE_DELAY_MS * 3);
+    }
+  }, []);
+  const toldRef = useRef(told);
+  toldRef.current = told;
+  const agentView = useRef({ crop, autoSteps, subjectCrop, clip, statsReady });
+  agentView.current = { crop, autoSteps, subjectCrop, clip, statsReady };
+  useRegisterCommands('develop-workbench-verbs', [
+    {
+      id: 'develop.getCrop',
+      title: 'Read the crop',
+      description:
+        'The open picture’s crop: its format, the kept rectangle in fractions of the picture as turned by its quarter turns ((0,0) top-left, (1,1) bottom-right), the quarter turns, the fine straighten and the flips.',
+      available: () => (agentView.current.crop.src ? true : 'the open picture is still decoding'),
+      run: () => {
+        const c = agentView.current.crop;
+        if (!c.src) throw new Error('the open picture is no longer decoded');
+        return { ...cropState(c.stored(), c.src), formats: CROP_FORMATS };
+      },
+    },
+    {
+      id: 'develop.crop',
+      title: 'Crop, straighten, turn, flip',
+      description: `Crop the open picture, through the Crop tab's own zone rules, in this order: reset · turn (quarter turns clockwise, −3..3) · flipX / flipY (wanted state) · aspect (${CROP_FORMATS.join(', ')}; a format alone takes the largest zone of that shape about the current centre) · rect ({x, y, w, h} in fractions of the picture as turned by its quarter turns, (0,0) top-left; with a locked format its pixel shape must match) · straighten (fine angle −45..45; the zone shrinks just enough to stay on the picture, said as adjusted). Answers the crop after. A clip takes a crop too.`,
+      params: {
+        reset: { type: 'boolean', description: 'Start from the picture as shot.', optional: true },
+        turn: { type: 'number', description: 'Quarter turns clockwise.', min: -3, max: 3, integer: true, optional: true },
+        flipX: { type: 'boolean', description: 'Mirrored left ↔ right.', optional: true },
+        flipY: { type: 'boolean', description: 'Mirrored top ↔ bottom.', optional: true },
+        aspect: { type: 'string', description: 'The format.', enum: CROP_FORMATS, optional: true },
+        rect: { type: 'object', description: '{x, y, w, h} in 0..1.', optional: true },
+        straighten: { type: 'number', description: 'Degrees, clockwise.', min: -45, max: 45, optional: true },
+      },
+      available: () => (agentView.current.crop.src ? true : 'the open picture is still decoding'),
+      run: (p) =>
+        asAgent(() => {
+          const c = agentView.current.crop;
+          if (!c.src) throw new Error('the open picture is no longer decoded');
+          const { crop: next, adjusted } = planCrop(c.stored(), c.src, p as CropRequest);
+          c.restore(next);
+          return { ...cropState(next, c.src), adjusted };
+        }),
+    },
+    {
+      id: 'develop.cropToSubject',
+      title: 'Crop to the subject',
+      description:
+        'The Crop tab’s Crop to subject: the zone grown around the picture’s Subject layers, or around what the subject model finds at the centre — the current format kept. Not on a clip.',
+      available: () =>
+        agentView.current.clip ? 'a clip has no subject crop' : agentView.current.crop.src ? true : 'the open picture is still decoding',
+      run: () =>
+        asAgent(async () => {
+          await agentView.current.subjectCrop.run();
+          const c = agentView.current.crop;
+          return { told: toldRef.current, ...(c.src ? cropState(c.stored(), c.src) : {}) };
+        }),
+    },
+    {
+      id: 'develop.auto',
+      title: 'Automatic verbs',
+      description:
+        'Run the Auto row’s verbs on the open picture, measured on the picture as shot: tone (levels: black point, white point, gamma), colour (white balance), bands (highlights/shadows/whites/blacks), detail (noise and sharpening from the ISO), level (straighten the horizon), upright (converging verticals). A clip takes tone, colour and bands only. Each is a switch: run on a picture where it is already on, it stays on. Answers what each said.',
+      params: {
+        steps: { type: 'strings', description: 'Any of tone, colour, bands, detail, level, upright; all of them when absent.', optional: true },
+      },
+      available: () => (agentView.current.statsReady ? true : 'the open picture is still being measured'),
+      run: (p) =>
+        asAgent(async () => {
+          const { autoSteps: steps } = agentView.current;
+          const asked = (p.steps as string[] | undefined) ?? steps.map((s) => s.id);
+          const unknown = asked.filter((id) => !steps.some((s) => s.id === id));
+          if (unknown.length) {
+            throw new CommandError('invalid', `no step ${unknown.join(', ')} here — this picture offers ${steps.map((s) => s.id).join(', ')}`);
+          }
+          const said: Record<string, string | null> = {};
+          for (const id of asked) {
+            const step = agentView.current.autoSteps.find((s) => s.id === id);
+            if (!step) continue;
+            if (step.state !== 'on') await step.apply();
+            // A render later the switch has written its record and said its line.
+            await new Promise((resolve) => window.setTimeout(resolve, 60));
+            said[id] = toldRef.current;
+          }
+          return { said, states: Object.fromEntries(agentView.current.autoSteps.map((s) => [s.id, s.state])) };
+        }),
+    },
+  ]);
 
   /**
    * The two verbs the HOST puts in the well beside the clipboard glyphs: their

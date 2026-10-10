@@ -7,6 +7,8 @@ import { MediaScopeProvider } from './shared/sources/media-scope';
 import { SectionBarProvider } from './shared/ui/section-rail';
 import { LayoutModeProvider } from './shared/ui/use-layout-mode';
 import { installPressFeedback } from './shared/ui/press-dom';
+import { installCommandConsole } from './shared/commands/console';
+import { resumeBridge } from './shared/commands/bridge-client';
 // The four faces, served from our OWN origin (2026-09-24, his call): they
 // used to come from Google Fonts on every page load, a request to a third
 // party the README's network callout never named. Exactly the weights the
@@ -52,6 +54,13 @@ window.addEventListener('vite:preloadError', (event) => {
 // (`shared/ui/press.ts`): one listener for the whole suite, styled by the
 // recipes.
 installPressFeedback();
+
+// The command registry from the console and any browser automation:
+// `await atelier.run('app.status')` (`shared/commands/`).
+installCommandConsole();
+// A tab connected to the agent bridge before a reload reconnects; nothing
+// else ever connects by itself (`bridge-client.ts`).
+resumeBridge();
 
 // A boundary around EVERYTHING, and not only around the tool and the
 // library inside `App`: the masthead, the bottom bar, the providers and the
