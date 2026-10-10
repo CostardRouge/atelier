@@ -28,11 +28,22 @@ export interface RoadFix {
   t: number;
   lat: number;
   lon: number;
+  /**
+   * On a STEERED line (`steerRoad`) only: how far along the line as recorded
+   * this point lies, km from its piece's start — what the counter reads, so
+   * a bend the vehicle rounds counts the road and not the shortcut.
+   */
+  km?: number;
 }
 
 export interface LatLon {
   lat: number;
   lon: number;
+}
+
+/** A point of a hop on the road; `km` as `RoadFix.km`, on a steered line. */
+export interface RoadPoint extends LatLon {
+  km?: number;
 }
 
 export type RoadMode = 'crow' | 'stages' | 'moves' | 'raw';
@@ -42,6 +53,42 @@ export const ROAD_MODES: readonly RoadMode[] = ['crow', 'stages', 'moves', 'raw'
 export const ROAD_DETAILS: readonly number[] = [0, 25, 50, 100, 250, 500, 1000, 2000];
 export const DEFAULT_ROAD_DETAIL = 100;
 export const DEFAULT_ROAD_MODE: RoadMode = 'stages';
+
+/**
+ * How the vehicle STEERS along the road (2026-10-09, his pick of option B
+ * in the road-tremor lab): it aims at the point `lookM` metres ahead on the
+ * recorded line and turns toward it no tighter than `radiusM` — a driver,
+ * not a pen through every fix. Null drives the line as recorded.
+ */
+export interface RoadSteer {
+  lookM: number;
+  radiusM: number;
+}
+
+/** The look-ahead choices, metres. */
+export const ROAD_LOOKS: readonly number[] = [200, 300, 500, 750, 1000, 1500, 2000, 3000];
+/** The tightest-turn choices, metres. */
+export const ROAD_RADII: readonly number[] = [10, 25, 50, 100, 200, 300, 500];
+/** How a road steers until the author says otherwise (his call, 2026-10-09: on by default). */
+export const DEFAULT_ROAD_STEER: RoadSteer = { lookM: 500, radiusM: 50 };
+
+/**
+ * How a stored road steers: absent is the DEFAULT (a road kept before
+ * steering existed steers too), null is turned off by the author.
+ */
+export function roadSteerOf(road: Pick<TripRoad, 'steer'> | null | undefined): RoadSteer | null {
+  if (!road) return null;
+  return road.steer === undefined ? DEFAULT_ROAD_STEER : road.steer;
+}
+
+export function readRoadSteer(value: unknown): RoadSteer | null {
+  if (!value || typeof value !== 'object' || Array.isArray(value)) return null;
+  const v = value as Record<string, unknown>;
+  const look = typeof v.lookM === 'number' && ROAD_LOOKS.includes(v.lookM) ? v.lookM : null;
+  if (look === null) return null;
+  const radius = typeof v.radiusM === 'number' && ROAD_RADII.includes(v.radiusM) ? v.radiusM : DEFAULT_ROAD_STEER.radiusM;
+  return { lookM: look, radiusM: radius };
+}
 
 /** A stay: this long or longer… */
 export const STAY_HOURS = 18;
@@ -264,25 +311,152 @@ export function cutFlights(fixes: readonly RoadFix[]): RoadFix[][] {
 
 /** The road as a mode reads it: pieces of line, cut at flights. Empty on `crow`. */
 export interface RoadLine {
+  /** As drawn and driven — steered when the trip steers (`steerRoad`). */
   pieces: RoadFix[][];
-  /** Points kept, over every piece. */
+  /** Points the mode and the detail kept, over every piece, before any steering. */
   points: number;
+  /** Kilometres of the line as recorded: steering never changes what is counted. */
   km: number;
 }
 
 export const NO_ROAD: RoadLine = { pieces: [], points: 0, km: 0 };
 
-export function roadLine(fixes: readonly RoadFix[], mode: RoadMode, detailM: number): RoadLine {
+export function roadLine(fixes: readonly RoadFix[], mode: RoadMode, detailM: number, steer: RoadSteer | null = null): RoadLine {
   if (mode === 'crow' || fixes.length < 2) return NO_ROAD;
   let line = cleanFixes(fixes);
   if (mode !== 'raw') line = thin(despike(line), NOISE_KM);
   if (mode === 'stages') line = withoutStays(line);
   const pieces = cutFlights(line).map((p) => simplify(p, detailM));
   return {
-    pieces,
+    pieces: steer ? pieces.map((p) => steerRoad(p, steer)) : pieces,
     points: pieces.reduce((n, p) => n + p.length, 0),
     km: pieces.reduce((n, p) => n + lineKm(p), 0),
   };
+}
+
+// --- steering ---------------------------------------------------------------------------
+
+/** Kilometres per degree of latitude, and of longitude at the equator. */
+const KM_LAT = 110.574;
+const KM_LON = 111.32;
+/** How many points of the road ahead the vehicle aims at the mean of. */
+const AIM_SAMPLES = 4;
+/** A steered point is kept once the curve driven since the last one strays this far from their chord (metres)… */
+const STEER_KEEP_M = 5;
+/** …or once it has turned this much, so a tight bend stays round close up… */
+const STEER_KEEP_RAD = (10 * Math.PI) / 180;
+/** …or after this many kilometres of it. */
+const STEER_KEEP_KM = 2;
+
+/**
+ * One piece of road as a vehicle STEERS it (pure pursuit): from the piece's
+ * first point it aims at the point `lookM` metres further along the line as
+ * recorded and turns toward it, never tighter than `radiusM`, a step at a
+ * time. What the GPS scattered around the road becomes the bend a driver
+ * would take; a sharp corner is rounded, a noisy fix half a kilometre out
+ * a gentle swerve. Each point says how far along the recorded line the
+ * vehicle was (`km`), so the counter counts the road. The two ends are the
+ * piece's own; the arithmetic is local around the vehicle, so it holds at
+ * any latitude.
+ */
+export function steerRoad(piece: readonly RoadFix[], steer: RoadSteer): RoadFix[] {
+  const n = piece.length;
+  if (n < 3) return [...piece];
+  const cum = [0];
+  for (let i = 1; i < n; i++) cum.push(cum[i - 1] + distanceKm(piece[i - 1], piece[i]));
+  const total = cum[n - 1];
+  if (!(total > 0)) return [...piece];
+  const look = Math.max(1e-3, steer.lookM / 1000);
+  const radius = Math.max(1e-3, steer.radiusM / 1000);
+  // A step is an ARC, so it can be long: a sixth of the look-ahead keeps the
+  // aim fresh, and no longer than the radius where the vehicle turns its
+  // tightest. A year of road is then a few hundred thousand steps.
+  const free = Math.min(0.25, Math.max(0.005, look / 6));
+  const tight = Math.min(free, Math.max(0.005, radius));
+
+  // The recorded line at `k` km, searched on from segment `from`.
+  const along = (k: number, from: number) => {
+    let j = from;
+    while (j < n - 2 && cum[j + 1] < k) j++;
+    const span = cum[j + 1] - cum[j];
+    const w = span > 0 ? Math.min(1, Math.max(0, (k - cum[j]) / span)) : 0;
+    const a = piece[j];
+    const b = piece[j + 1];
+    return { j, t: a.t + (b.t - a.t) * w, lat: a.lat + (b.lat - a.lat) * w, lon: a.lon + (b.lon - a.lon) * w };
+  };
+
+  let lat = piece[0].lat;
+  let lon = piece[0].lon;
+  let kmLon = KM_LON * Math.cos(lat * RAD);
+  // East and north of the vehicle, in km.
+  const offset = (p: LatLon) => [(p.lon - lon) * kmLon, (p.lat - lat) * KM_LAT] as const;
+  const first = offset(along(Math.min(total, look), 0));
+  let heading = Math.atan2(first[1], first[0]);
+  let seg = 0;
+  let done = 0;
+  let turned = 0;
+  let since = 0;
+  const out: RoadFix[] = [{ t: piece[0].t, lat, lon, km: 0 }];
+  const steps = Math.ceil((4 * total) / tight) + 100;
+  for (let step = 0; step < steps; step++) {
+    // Where the vehicle is on the recorded line: the nearest point ahead of
+    // where it was, never behind it, never past what it is aiming at.
+    let best = done;
+    let bestSeg = seg;
+    let bestD = Infinity;
+    for (let j = seg; j < n - 1 && cum[j] <= done + look + 2 * free; j++) {
+      const [ax, ay] = offset(piece[j]);
+      const [bx, by] = offset(piece[j + 1]);
+      const ex = bx - ax;
+      const ey = by - ay;
+      const l2 = ex * ex + ey * ey;
+      const u = l2 > 0 ? Math.min(1, Math.max(0, -(ax * ex + ay * ey) / l2)) : 0;
+      const d = Math.hypot(ax + u * ex, ay + u * ey);
+      const k = Math.max(done, cum[j] + u * (cum[j + 1] - cum[j]));
+      if (d < bestD) {
+        bestD = d;
+        best = k;
+        bestSeg = j;
+      }
+    }
+    done = best;
+    seg = bestSeg;
+    // What it aims at: the road a look-ahead away, AVERAGED over a look-ahead
+    // of it, so a fix scattered to one side is outvoted by its neighbours.
+    let tx = 0;
+    let ty = 0;
+    for (let k = 0; k < AIM_SAMPLES; k++) {
+      const [x, y] = offset(along(Math.min(total, done + look * (0.5 + k / (AIM_SAMPLES - 1))), seg));
+      tx += x / AIM_SAMPLES;
+      ty += y / AIM_SAMPLES;
+    }
+    const reach = Math.hypot(tx, ty);
+    if (reach < 0.005 || done >= total) break;
+    const alpha = Math.atan2(Math.sin(Math.atan2(ty, tx) - heading), Math.cos(Math.atan2(ty, tx) - heading));
+    const wanted = (2 * Math.sin(alpha)) / reach;
+    const curvature = Math.max(-1 / radius, Math.min(1 / radius, wanted));
+    // Never past what it aims at: the end of the piece is a point to reach.
+    const ds = Math.min(Math.abs(wanted) * radius < 1 ? free : tight, reach);
+    const turn = curvature * ds;
+    // Along the arc: the chord at the mean heading, as long as the arc's chord.
+    const chord = Math.abs(turn) > 1e-9 ? (2 * Math.sin(turn / 2)) / curvature : ds;
+    const mid = heading + turn / 2;
+    heading += turn;
+    lat += (Math.abs(chord) * Math.sin(mid)) / KM_LAT;
+    kmLon = KM_LON * Math.cos(lat * RAD);
+    lon += (Math.abs(chord) * Math.cos(mid)) / kmLon;
+    turned += Math.abs(turn);
+    since += ds;
+    // An arc of length L turned by θ strays about L·θ/8 from its chord.
+    if ((since * turned) / 8 >= STEER_KEEP_M / 1000 || turned >= STEER_KEEP_RAD || since >= STEER_KEEP_KM) {
+      out.push({ t: along(done, seg).t, lat, lon, km: done });
+      turned = 0;
+      since = 0;
+    }
+  }
+  const last = piece[n - 1];
+  out.push({ t: last.t, lat: last.lat, lon: last.lon, km: total });
+  return out;
 }
 
 // --- a hop on the road -----------------------------------------------------------------
@@ -295,7 +469,7 @@ export interface RoadCursor {
 
 export interface RoadHop {
   /** The road's points between the two stops, the stops themselves excluded. */
-  via: LatLon[];
+  via: RoadPoint[];
   /** The hop's length along the road, stop to stop. */
   km: number;
   cursor: RoadCursor;
@@ -374,8 +548,31 @@ export function roadBetween(
 }
 
 function hopOf(piece: readonly RoadFix[], i: number, j: number, a: LatLon, b: LatLon, cursor: RoadCursor): RoadHop {
-  const via = piece.slice(i, j + 1).map((f) => ({ lat: f.lat, lon: f.lon }));
-  return { via, km: lineKm([a, ...via, b]), cursor };
+  const via: RoadPoint[] = piece.slice(i, j + 1).map((f) => (f.km === undefined ? { lat: f.lat, lon: f.lon } : { lat: f.lat, lon: f.lon, km: f.km }));
+  return { via, km: roadKms(a, via, b).km, cursor };
+}
+
+/**
+ * A hop's kilometres on the road, at each of its points and in all: between
+ * two points of a steered line, the distance along the line as RECORDED
+ * (`RoadPoint.km`), so the bends the vehicle rounds still count; elsewhere
+ * point to point. `dist` is the caller's own great-circle measure.
+ */
+export function roadKms(
+  a: LatLon,
+  via: readonly LatLon[],
+  b: LatLon,
+  dist: (p: LatLon, q: LatLon) => number = distanceKm,
+): { viaKm: number[]; km: number } {
+  const viaKm: number[] = [];
+  let k = 0;
+  let prev: RoadPoint = a;
+  for (const p of via as readonly RoadPoint[]) {
+    k += prev.km !== undefined && p.km !== undefined ? Math.abs(p.km - prev.km) : dist(prev, p);
+    viaKm.push(k);
+    prev = p;
+  }
+  return { viaKm, km: k + dist(prev, b) };
 }
 
 /** Fixes from the parsed Polarsteps track (`polarsteps.ts`'s `PolarstepsFix`, unix seconds). */
@@ -413,6 +610,11 @@ export interface TripRoad {
   mode: RoadMode;
   /** The Douglas–Peucker tolerance, metres (`ROAD_DETAILS`). */
   detail: number;
+  /**
+   * How the vehicle steers along the line (`steerRoad`): absent steers by
+   * `DEFAULT_ROAD_STEER`, null drives the line as recorded (`roadSteerOf`).
+   */
+  steer?: RoadSteer | null;
   /** When the track was last written, ms. */
   importedAt: number;
 }
@@ -428,6 +630,7 @@ export function readTripRoad(raw: unknown): TripRoad | null {
       )
     : [];
   if (fixes.length < 2 && !added.length) return null;
+  const steer = r.steer === null ? null : (readRoadSteer(r.steer) ?? undefined);
   return {
     source: isRoadSource(r.source) ? r.source : 'polarsteps',
     track: typeof r.track === 'string' ? r.track : '',
@@ -435,6 +638,8 @@ export function readTripRoad(raw: unknown): TripRoad | null {
     added,
     mode: isRoadMode(r.mode) ? r.mode : DEFAULT_ROAD_MODE,
     detail: readRoadDetail(r.detail),
+    // Absent or junk: the default; null: turned off by the author.
+    ...(steer !== undefined ? { steer } : {}),
     importedAt: typeof r.importedAt === 'number' && Number.isFinite(r.importedAt) ? r.importedAt : 0,
   };
 }
@@ -461,6 +666,7 @@ export function makeTripRoad(
     added: previous?.added ?? [],
     mode: previous?.mode ?? DEFAULT_ROAD_MODE,
     detail: previous?.detail ?? DEFAULT_ROAD_DETAIL,
+    ...(previous?.steer !== undefined ? { steer: previous.steer } : {}),
     importedAt: now,
   };
 }
@@ -495,7 +701,7 @@ export function addRoadFixes(
   return { road: next, added: next ? added : 0 };
 }
 
-/** The line a trip's road draws, as its mode and detail read it, hand-placed points merged in time. */
+/** The line a trip's road draws, as its mode and detail read it and its steering drives it, hand-placed points merged in time. */
 export function tripRoadLine(road: TripRoad | null): RoadLine {
   if (!road || road.mode === 'crow') return NO_ROAD;
   // Every surface that paints a piece asks, often per edit: the same stored
@@ -503,7 +709,7 @@ export function tripRoadLine(road: TripRoad | null): RoadLine {
   const known = lineOf.get(road);
   if (known) return known;
   const fixes = road.added.length ? cleanFixes([...decodeTrack(road.track), ...road.added]) : decodeTrack(road.track);
-  const line = roadLine(fixes, road.mode, road.detail);
+  const line = roadLine(fixes, road.mode, road.detail, roadSteerOf(road));
   lineOf.set(road, line);
   return line;
 }

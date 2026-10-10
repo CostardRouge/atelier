@@ -50,6 +50,7 @@ import {
   type CameraZoom,
 } from './map-camera';
 import { hookPictureKey, type HookPickedPicture } from './hook-variant';
+import { roadKms } from '../road-track';
 import { readStopSource, type StopSource } from './stop-source';
 import { STOP_STYLES, stopsFromPlaces, type MapStop, type StopStyle } from './stops';
 import { KIT_IDS, TICK_KITS, type TickKit } from './tick-kits';
@@ -900,13 +901,8 @@ export function hopKms(stops: readonly MapStop[], roads?: MapOptions['roads']): 
   return stops.slice(1).map((stop, i) => {
     const via = roads?.[i];
     if (!via) return haversineKm(stops[i], stop);
-    let km = 0;
-    let prev: LatLon = stops[i];
-    for (const p of [...via, stop]) {
-      km += haversineKm(prev, p);
-      prev = p;
-    }
-    return km;
+    // Along the road as recorded, a steered line's bends included.
+    return roadKms(stops[i], via, stop, haversineKm).km;
   });
 }
 

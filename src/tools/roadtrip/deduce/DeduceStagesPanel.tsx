@@ -141,7 +141,7 @@ export default function DeduceStagesPanel({ connection, trip, onCancel, onWrite,
     // Measured within the trip's span, as the trip reads it (as the crow
     // flies reads nothing, so the default reading is said instead).
     const mode = road.mode === 'crow' ? DEFAULT_ROAD_MODE : road.mode;
-    const line = tripRoadLine({ ...road, mode });
+    const line = tripRoadLine({ ...road, mode, steer: null });
     return { fixes: road.fixes, km: line.km, read: mode === 'stages' ? 'between stays' : mode === 'moves' ? 'every move' : 'raw' };
   }, [polarsteps, trip, roadSource]);
   const writesRoad = keepRoad && roadOffer !== null;

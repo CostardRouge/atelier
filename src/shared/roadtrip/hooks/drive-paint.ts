@@ -75,6 +75,8 @@ const LABEL_FONT = "'Space Grotesk', 'Helvetica Neue', Arial, sans-serif";
 const MONO_FONT = "'JetBrains Mono', 'SF Mono', Menlo, Consolas, monospace";
 /** The vehicle's length in 1080-units at size 1. */
 const CAR_PX = 118;
+/** On the trip's road, the vehicle's direction is read over this many of its own lengths on screen. */
+const HEADING_LENGTHS = 2;
 /** A card's long edge in 1080-units at size 1. */
 const CARD_PX = 190;
 
@@ -624,8 +626,12 @@ function paintMap(
     const boarding = scratch.rider ? boardingAt(plan.schedule, t) : (crossing?.moment ?? null);
     const riding = scratch.rider ?? (crossing ? riderOf(scratch, crossing.crossing.rider) : null);
     const scale = vehiclePx / model.length;
+    // On the trip's road the vehicle's direction is read over two of its own
+    // lengths ON SCREEN: close up it follows the bend it is in, from afar a
+    // town's streets no longer spin it.
+    const chord = plan.path.km ? (HEADING_LENGTHS * vehiclePx) / Math.max(1e-9, view.scale) : undefined;
     let shipPoint = moment.point;
-    let shipHeading = moment.heading;
+    let shipHeading = chord === undefined ? moment.heading : headingAt(plan.path, moment.s, chord);
     if (crossing) {
       const toPlan = scale / Math.max(1e-9, view.scale);
       const riderLength = (carPx * RIDER_SCALE) / scale;
@@ -635,7 +641,7 @@ function paintMap(
       };
       const s = dockedS(crossing.crossing, crossing.ends, moment.s, reach);
       shipPoint = pointAt(plan.path, s).point;
-      shipHeading = headingAt(plan.path, s);
+      shipHeading = headingAt(plan.path, s, chord);
     }
     const p = at(shipPoint);
     const heading = turnedDir(shipHeading);
@@ -655,7 +661,7 @@ function paintMap(
     if (rider && boarding && !roadEnd) {
       const k = riderBlend(boarding);
       if (k > 0) {
-        const own = turnedDir(moment.heading);
+        const own = turnedDir(chord === undefined ? moment.heading : headingAt(plan.path, moment.s, chord));
         const ownLen = Math.hypot(own.x, own.y) || 1;
         const shore = at(moment.point);
         rider = onTheShore(rider, { fx: own.x / ownLen, fy: -own.y / ownLen, scale: carPx / riding!.model.length, x: shore.x, y: shore.y }, k);

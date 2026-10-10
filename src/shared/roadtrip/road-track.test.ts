@@ -9,11 +9,15 @@ import {
   lineKm,
   makeTripRoad,
   NO_ROAD,
+  readRoadSteer,
   readTripRoad,
   roadBetween,
   roadHops,
+  roadKms,
   roadLine,
+  roadSteerOf,
   simplify,
+  steerRoad,
   thin,
   tripRoadLine,
   withoutStays,
@@ -240,5 +244,105 @@ describe('the road on the trip', () => {
     expect(tripRoadLine({ ...road, mode: 'crow' }).pieces).toEqual([]);
     expect(tripRoadLine(road).km).toBeGreaterThan(400);
     expect(tripRoadLine(null)).toBe(NO_ROAD);
+  });
+});
+
+describe('steering', () => {
+  const RAD = Math.PI / 180;
+  /** The bearing of each segment, radians, in a local frame. */
+  const bearings = (line: readonly { lat: number; lon: number }[]) =>
+    line.slice(1).map((q, i) => {
+      const p = line[i];
+      return Math.atan2(q.lat - p.lat, (q.lon - p.lon) * Math.cos(p.lat * RAD));
+    });
+  const turning = (line: readonly { lat: number; lon: number }[]) => {
+    const b = bearings(line);
+    let sum = 0;
+    for (let i = 1; i < b.length; i++) sum += Math.abs(Math.atan2(Math.sin(b[i] - b[i - 1]), Math.cos(b[i] - b[i - 1])));
+    return sum;
+  };
+  // Two hours east at 80 km/h, a fix a minute, each 65 m off the road, side to side.
+  const ZIG = 0.000585; // ≈ 65 m of latitude
+  const noisy = drive({ lat: -31.5, lon: 128 }, 2, 80, 1).map((f, i) => ({ ...f, lat: f.lat + (i % 2 ? ZIG : -ZIG) }));
+  noisy[0] = { ...noisy[0], lat: -31.5 };
+  noisy[noisy.length - 1] = { ...noisy[noisy.length - 1], lat: -31.5 };
+
+  it('drives a scattered road as a calm line, from its first point to its last', () => {
+    const steered = steerRoad(noisy, { lookM: 1000, radiusM: 100 });
+    expect(steered[0]).toMatchObject({ lat: noisy[0].lat, lon: noisy[0].lon, km: 0 });
+    expect(steered[steered.length - 1]).toMatchObject({ lat: -31.5, lon: noisy[noisy.length - 1].lon });
+    // A driver, not a pen through every fix: a fraction of the zigzag's turning…
+    expect(turning(steered)).toBeLessThan(turning(noisy) / 3);
+    // …and a third of its swing at most, once under way.
+    const total = lineKm(noisy);
+    for (const p of steered) if (p.km! > 5 && p.km! < total - 5) expect(Math.abs(p.lat + 31.5)).toBeLessThan(ZIG / 3);
+  });
+
+  it('says how far along the recorded line each point is, so the counter counts the road', () => {
+    const steered = steerRoad(noisy, { lookM: 500, radiusM: 50 });
+    const km = steered.map((p) => p.km!);
+    for (let i = 1; i < km.length; i++) expect(km[i]).toBeGreaterThanOrEqual(km[i - 1]);
+    expect(km[km.length - 1]).toBeCloseTo(lineKm(noisy), 9);
+    // Shorter as driven, the same as counted.
+    expect(lineKm(steered)).toBeLessThan(lineKm(noisy));
+    expect(roadKms(steered[0], steered.slice(1), steered[steered.length - 1]).km).toBeCloseTo(lineKm(noisy), 6);
+    // Without the line's kilometres, point to point.
+    expect(roadKms(noisy[0], noisy.slice(1, -1), noisy[noisy.length - 1]).km).toBeCloseTo(lineKm(noisy), 9);
+  });
+
+  it('rounds a corner no tighter than its radius', () => {
+    // 5 km east, then 5 km north, a fix every 100 m.
+    const corner: RoadFix[] = [];
+    const kmLon = 111.32 * Math.cos(-20 * RAD);
+    for (let k = 0; k <= 50; k++) corner.push({ t: T0 + k * 5, lat: -20, lon: 140 + (k * 0.1) / kmLon });
+    for (let k = 1; k <= 50; k++) corner.push({ t: T0 + 250 + k * 5, lat: -20 + (k * 0.1) / 110.574, lon: 140 + 5 / kmLon });
+    for (const radiusM of [100, 300]) {
+      const steered = steerRoad(corner, { lookM: 500, radiusM });
+      const b = bearings(steered);
+      for (let i = 1; i < b.length - 1; i++) {
+        const turn = Math.abs(Math.atan2(Math.sin(b[i] - b[i - 1]), Math.cos(b[i] - b[i - 1])));
+        const length = (distanceKm(steered[i - 1], steered[i]) + distanceKm(steered[i], steered[i + 1])) / 2;
+        if (length > 0.001) expect(turn / length).toBeLessThan((1000 / radiusM) * 1.25);
+      }
+      // It turns the corner all the same: it ends heading north.
+      expect(Math.abs(b[b.length - 2] - Math.PI / 2)).toBeLessThan(0.15);
+    }
+  });
+
+  it('steers the line it draws, never what it counts', () => {
+    const plain = roadLine(noisy, 'raw', 0);
+    const steered = roadLine(noisy, 'raw', 0, { lookM: 500, radiusM: 50 });
+    expect(steered.km).toBe(plain.km);
+    expect(steered.points).toBe(plain.points);
+    expect(steered.pieces[0]).not.toEqual(plain.pieces[0]);
+    const a = { lat: -31.5, lon: 128.2 };
+    const b = { lat: -31.5, lon: 129.5 };
+    const hopPlain = roadBetween(plain, a, b)!;
+    const hopSteered = roadBetween(steered, a, b)!;
+    expect(hopSteered.km).toBeGreaterThan(hopPlain.km * 0.98);
+    expect(hopSteered.km).toBeLessThan(hopPlain.km * 1.02);
+  });
+
+  it('is read from a stored road, junk as no steering', () => {
+    expect(readRoadSteer({ lookM: 500, radiusM: 50 })).toEqual({ lookM: 500, radiusM: 50 });
+    expect(readRoadSteer({ lookM: 500, radiusM: 7 })).toEqual({ lookM: 500, radiusM: 50 });
+    expect(readRoadSteer({ lookM: 42, radiusM: 50 })).toBeNull();
+    expect(readRoadSteer('fast')).toBeNull();
+    // On by default, a road kept before steering existed included; null is off.
+    const road = makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, null, 1)!;
+    expect(road.steer).toBeUndefined();
+    expect(roadSteerOf(road)).toEqual({ lookM: 500, radiusM: 50 });
+    expect(roadSteerOf(readTripRoad(JSON.parse(JSON.stringify(road))))).toEqual({ lookM: 500, radiusM: 50 });
+    const off = readTripRoad(JSON.parse(JSON.stringify({ ...road, steer: null })))!;
+    expect(roadSteerOf(off)).toBeNull();
+    expect(roadSteerOf(readTripRoad({ ...road, steer: { lookM: 42 } }))).toEqual({ lookM: 500, radiusM: 50 });
+    expect(makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, off, 2)!.steer).toBeNull();
+    const every = { ...road, detail: 0 };
+    expect(tripRoadLine(every).pieces[0]).not.toEqual(tripRoadLine({ ...every, steer: null }).pieces[0]);
+    expect(tripRoadLine(every).km).toBe(tripRoadLine({ ...every, steer: null }).km);
+    const steering = { ...road, steer: { lookM: 750, radiusM: 25 } };
+    expect(readTripRoad(JSON.parse(JSON.stringify(steering)))!.steer).toEqual({ lookM: 750, radiusM: 25 });
+    // A re-import keeps how the author steers.
+    expect(makeTripRoad(noisy, { startDate: '2025-06-30', endDate: '2025-07-01' }, steering, 2)!.steer).toEqual({ lookM: 750, radiusM: 25 });
   });
 });
