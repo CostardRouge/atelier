@@ -62,6 +62,18 @@ describe('checkParams', () => {
     expect(() => checkParams(specs, { i: 2, b: true, s: [], o: [] })).toThrow(/must be an object/);
   });
 
+  it('checks a list of numbers item by item, and caps its length', () => {
+    const specs = { ids: { type: 'numbers', description: 'ids', integer: true, min: 1, maxItems: 3 } } as const;
+    expect(checkParams(specs, { ids: [1, 2] })).toEqual({ ids: [1, 2] });
+    expect(() => checkParams(specs, { ids: [] })).toThrow(/non-empty list/);
+    expect(() => checkParams(specs, { ids: [1, 2.5] })).toThrow(/"ids\[1\]" must be a whole number/);
+    expect(() => checkParams(specs, { ids: [0] })).toThrow(/"ids\[0\]" is 0, below its minimum 1/);
+    expect(() => checkParams(specs, { ids: [1, 2, 3, 4] })).toThrow(/holds 4 items — 3 at most a call/);
+    expect(paramsJsonSchema(specs).properties).toEqual({
+      ids: { type: 'array', minItems: 1, maxItems: 3, items: { type: 'integer', minimum: 1 }, description: 'ids' },
+    });
+  });
+
   it('refuses params that are not an object', () => {
     expect(() => checkParams(echo.params, [1])).toThrow(/params must be an object/);
   });
