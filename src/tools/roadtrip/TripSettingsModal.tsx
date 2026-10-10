@@ -92,8 +92,10 @@ const TITLE = Object.fromEntries(GROUPS.flatMap((g) => g.sections.map((s) => [s.
   string
 >;
 
-/** The sections drawn across the whole pane — a map, a turning vehicle; the rest keep a reading column. */
-const WIDE: ReadonlySet<TripSettingsSection> = new Set(['road', 'car']);
+/** The sections drawn across the whole pane — a map, a turning vehicle, the cover beside its card; the rest keep a reading column. */
+const WIDE: ReadonlySet<TripSettingsSection> = new Set(['road', 'car', 'cover']);
+/** Of those, the ones that FILL the pane's height (a map, the garage) rather than scroll with it. */
+const FILL: ReadonlySet<TripSettingsSection> = new Set(['road', 'car']);
 
 /** The standing why of each section, folded behind the ⓘ beside its heading. */
 const ABOUT: Partial<Record<TripSettingsSection, ReactNode>> = {
@@ -373,7 +375,15 @@ export default function TripSettingsModal({
               {ABOUT[open] && <InfoDot about={TITLE[open].toLowerCase()}>{ABOUT[open]}</InfoDot>}
             </div>
 
-            <div className={WIDE.has(open) ? 'flex-1 min-h-0 flex flex-col gap-4' : 'w-full max-w-[44rem] flex flex-col gap-4'}>
+            <div
+              className={
+                FILL.has(open)
+                  ? 'flex-1 min-h-0 flex flex-col gap-4'
+                  : WIDE.has(open)
+                    ? 'w-full flex flex-col gap-4'
+                    : 'w-full max-w-[44rem] flex flex-col gap-4'
+              }
+            >
             {open === 'dates' && <TripDatesSection trip={trip} onChange={onChangeTrip} />}
 
             {open === 'cover' && (

@@ -835,7 +835,7 @@ rather than claiming one.
 **One Trip settings, wherever you are.** The overview's ⚙, a
 piece's ⚙ and a gallery card's ⋯ **Trip settings…** open the same sheet: a rail
 of sections — *Name and dates*, *Cover* (its layout and up to three pinned
-pieces), *Places*, *Deduce*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
+pieces, beside the card exactly as the gallery will draw it), *Places*, *Deduce*, *Road*, *Vehicle*, *Badge words*, *Closing card*, *New
 pieces*, *Backup and start over* — beside one pane. Every change is written at
 once and ⌘Z takes it back; the dates alone wait for **Apply the new dates**,
 after saying what a shorter span does to the legs (trimmed, dropped) and to the
