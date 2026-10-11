@@ -22,6 +22,9 @@ import { monthSpan } from './month';
 import { gearOf, lightOf, localClock, type GearKind, type Light } from './capture-moment';
 import { COLOUR_ASKS, passesColour, type ColourAsk, type ThumbMetrics } from '../../media/thumb-metrics';
 import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
+import { DEFAULT_GAP_SECONDS, DEFAULT_MAX_DISTANCE, findDuplicates, type DupItem } from './duplicates';
+import { MISS_DEFAULTS, findMisses } from './misses';
+import { instantOf } from './capture-moment';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
@@ -325,6 +328,18 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
     const { kept, analysed } = await keepAsk(client(), sourceId(), rows, ask);
     return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS, analysed };
   };
+  /** The rows a command works on: chosen by ids, or the listing its other params describe. */
+  const rowsFor = async (p: Record<string, unknown>): Promise<WinnowAssetRow[]> => {
+    const c = client();
+    if (Array.isArray(p.ids)) return c.assetsByIds(p.ids as number[]);
+    const ask = await askFromParams(c, p);
+    return (await keepAsk(c, sourceId(), await c.allAssets(ask.query, MAX_ROWS), ask)).kept;
+  };
+  /** The rows measured, the first ANALYSE_MAX of them. */
+  const measured = async (rows: readonly WinnowAssetRow[]) => {
+    const sample = rows.slice(0, ANALYSE_MAX);
+    return { sample, metrics: await analyseRows(client(), sourceId(), sample), cut: rows.length > ANALYSE_MAX };
+  };
   return [
     {
       id: 'winnow.status',
@@ -473,23 +488,92 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       },
       available: connected,
       run: async (p) => {
-        const c = client();
-        let rows: WinnowAssetRow[];
-        if (Array.isArray(p.ids)) rows = await c.assetsByIds(p.ids as number[]);
-        else {
-          const ask = await askFromParams(c, p);
-          rows = (await keepAsk(c, sourceId(), await c.allAssets(ask.query, MAX_ROWS), ask)).kept;
-        }
-        const sample = rows.slice(0, ANALYSE_MAX);
-        const metrics = await analyseRows(c, sourceId(), sample);
+        const rows = await rowsFor(p);
+        const { sample, metrics, cut } = await measured(rows);
         return {
           asked: rows.length,
           measured: metrics.size,
-          ...(rows.length > ANALYSE_MAX ? { warning: `only the first ${ANALYSE_MAX} were measured — narrow the ask` } : {}),
+          ...(cut ? { warning: `only the first ${ANALYSE_MAX} were measured — narrow the ask` } : {}),
           rows: sample.map((r) => {
             const m = metrics.get(r.id);
             return { id: r.id, file: r.filename, ...(m ? { sharpness: m.sharpness, exposure: m.exposure, colour: m.colour, hash: m.hash } : { unreadable: true }) };
           }),
+        };
+      },
+    },
+    {
+      id: 'winnow.duplicates',
+      title: 'Bursts and near-twins',
+      description:
+        `Frames of a listing that repeat each other, grouped: a BURST (shot within gapSeconds on one body) or TWINS (thumbnails within maxDistance bits, shot within half an hour), with the one to KEEP — Winnow’s own pick or stars first, else the sharpest; null when nothing tells them apart. A proposal to look at (winnow.sheet {ids}) and act on in Winnow, never a write. By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most.`,
+      params: {
+        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true },
+        ...ASSET_QUERY_PARAMS,
+        gapSeconds: { type: 'number', description: `Frames this close on one body are a burst; ${DEFAULT_GAP_SECONDS} when absent.`, min: 0.1, max: 600, optional: true },
+        maxDistance: { type: 'number', description: `Hashes this close (bits, 0–64) are twins; ${DEFAULT_MAX_DISTANCE} when absent.`, min: 0, max: 64, integer: true, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const rows = await rowsFor(p);
+        const { sample, metrics, cut } = await measured(rows);
+        const byId = new Map(sample.map((r) => [r.id, r]));
+        const items: DupItem[] = sample.map((r) => {
+          const c = cullingFromRow(r);
+          const at = instantOf(r) ?? (r.captured_at ? Date.parse(r.captured_at) : NaN);
+          return {
+            id: r.id,
+            at: Number.isFinite(at) ? at : null,
+            camera: r.camera_model,
+            hash: metrics.get(r.id)?.hash ?? null,
+            sharpness: metrics.get(r.id)?.sharpness ?? null,
+            verdict: c?.verdict ?? 'unrated',
+            stars: c?.star ?? 0,
+          };
+        });
+        const groups = findDuplicates(items, {
+          ...(typeof p.gapSeconds === 'number' ? { gapSeconds: p.gapSeconds } : {}),
+          ...(typeof p.maxDistance === 'number' ? { maxDistance: p.maxDistance } : {}),
+        });
+        return {
+          looked: sample.length,
+          ...(cut ? { warning: `only the first ${ANALYSE_MAX} were looked at — narrow the ask` } : {}),
+          groups: groups.map((g) => ({
+            ...g,
+            members: g.ids.map((id) => {
+              const r = byId.get(id)!;
+              const s = rowSummary(r);
+              return { id, file: s.file, at: s.at, verdict: s.verdict, stars: s.stars, sharpness: metrics.get(id)?.sharpness ?? null };
+            }),
+          })),
+          dropIfKept: groups.flatMap((g) => (g.keep === null ? [] : g.ids.filter((id) => id !== g.keep))),
+        };
+      },
+    },
+    {
+      id: 'winnow.misses',
+      title: 'Technical misses',
+      description:
+        `Frames of a listing whose thumbnail says blur (sharpness far under the batch’s median, and under a floor), too dark, too bright, highlights clipped or shadows crushed — each with the number behind it. A proposal: a night frame is dark on purpose, and only the person knows; nothing is rejected here. By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most.`,
+      params: {
+        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true },
+        ...ASSET_QUERY_PARAMS,
+        blurShare: { type: 'number', description: `Blur is sharpness under this share of the batch’s median; ${MISS_DEFAULTS.blurShare} when absent.`, min: 0.05, max: 1, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const rows = await rowsFor(p);
+        const { sample, metrics, cut } = await measured(rows);
+        const { misses, medianSharpness } = findMisses(
+          sample.map((r) => ({ id: r.id, metrics: metrics.get(r.id) ?? null })),
+          typeof p.blurShare === 'number' ? { blurShare: p.blurShare } : {},
+        );
+        const byId = new Map(sample.map((r) => [r.id, r]));
+        return {
+          looked: sample.length,
+          measured: metrics.size,
+          medianSharpness,
+          ...(cut ? { warning: `only the first ${ANALYSE_MAX} were looked at — narrow the ask` } : {}),
+          misses: misses.map((m) => ({ id: m.id, file: byId.get(m.id)?.filename ?? null, flags: m.flags })),
         };
       },
     },
