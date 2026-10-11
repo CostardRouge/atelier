@@ -6,12 +6,17 @@ import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { lookCommands } from '../../shared/develop/look-commands';
-import { VERDICTS, filterRows, readDay } from '../../shared/develop/ingest-commands';
+import { filterRows } from '../../shared/develop/ingest-commands';
+import { ASSET_QUERY_PARAMS, MAX_ROWS, readAssetQuery } from '../../shared/sources/winnow/winnow-commands';
 import { rowMediaRef } from '../../shared/sources/winnow/materialize';
-import type { Verdict } from '../../shared/sources/winnow/culling';
+import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
 import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
 import { presetCommands } from '../../shared/develop/preset-commands';
-import { presetsNow, saveToPresetBook } from '../../shared/develop/use-preset-book';
+import { patchBorder, patchRollExport } from '../../shared/develop/roll-settings-commands';
+import { SHEET_MAX, sheetPage } from '../../shared/commands/contact-sheet';
+import { contactSheetImage } from '../../shared/commands/contact-sheet-image';
+import { MAX_TARGETS } from '../../shared/develop/export-targets';
+import { identityNow, presetsNow, removeFromPresetBook, saveToPresetBook, setDeliveryIdentity } from '../../shared/develop/use-preset-book';
 import { SECTION_IDS, developControls, pictureSummary, rollSummary, targetPicture, withDevelopValues } from '../../shared/develop/develop-commands';
 import { landBaseCurve } from '../../shared/develop/base-curve';
 import { CHOICE_WORDS, departsFromRoll, ontoRollSensor, type RollChoice } from '../../shared/develop/roll-choice';
@@ -98,6 +103,7 @@ import {
   type RollExport,
   type RollPicture,
   type VariantStart,
+  readRollExport,
 } from '../../shared/develop/roll-types';
 import { journalRoll } from '../../shared/develop/journal';
 import { useAssetLibrary } from '../../shared/library/AssetLibraryContext';
@@ -749,15 +755,16 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // thumbnail until its own is taken. From the keys and the Add menu it is
   // the open picture's; a cell's menu asks for any picture's.
   const makeVariantOf = useCallback(
-    (from: string, start: VariantStart) => {
+    (from: string, start: VariantStart, via?: JournalVia): string | null => {
       const id = newRollId();
-      update((r) => addVariant(r, from, start, id));
-      if (!latest.current.pictures.some((p) => p.id === id)) return;
+      update((r) => addVariant(r, from, start, id), via);
+      if (!latest.current.pictures.some((p) => p.id === id)) return null;
       setThumbs((cur) => {
         const blob = cur.get(from);
         return blob && start === 'clone' ? new Map(cur).set(id, blob) : cur;
       });
       onOpenPicture(id);
+      return id;
     },
     [update, onOpenPicture],
   );
@@ -863,6 +870,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     ...presetCommands({
       presets: presetsNow,
       save: saveToPresetBook,
+      remove: removeFromPresetBook,
+      identity: identityNow,
+      setIdentity: setDeliveryIdentity,
       roll: () => latest.current,
       pictures: (ids) =>
         ((ids as string[] | undefined) ?? [undefined]).map((id) => targetPicture(latest.current, id, openIdRef.current)),
@@ -944,40 +954,38 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
     },
     {
       id: 'develop.addFromWinnow',
-      title: 'Add a Winnow day to the roll',
+      title: 'Add Winnow media to the roll',
       description:
-        'Add the connected Winnow’s photographs and clips of a day (or a span) to the roll, narrowed by Winnow’s own culling — verdict (pick, reject, skip, unrated) and minimum stars — and by kind. Bursts count as their cover. The bytes are fetched when a picture opens. Answers how many were added and how many the roll already held.',
+        'Add the connected Winnow’s photographs and clips to the roll — chosen ones by ids (from winnow.assets or winnow.sheet), or a day, a span or a folder narrowed by Winnow’s own culling (verdict, stars, colour label, tag) and kind. Bursts count as their cover. The bytes are fetched when a picture opens. Answers the picture ids added, and how many the roll already held.',
       params: {
-        date: { type: 'string', description: 'The day, YYYY-MM-DD.' },
-        dateTo: { type: 'string', description: 'The span’s last day, YYYY-MM-DD; the same day when absent.', optional: true },
-        verdict: { type: 'string', description: 'Only this verdict.', enum: VERDICTS, optional: true },
-        minStars: { type: 'number', description: 'At least this many stars.', min: 0, max: 5, integer: true, optional: true },
-        media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
-        half: { type: 'string', description: 'incoming (still to cull) or final (the Gallery); both when absent.', enum: ['incoming', 'final'], optional: true },
+        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a date or a folder.', integer: true, maxItems: MAX_ROWS, optional: true },
+        ...ASSET_QUERY_PARAMS,
       },
       available: () => (winnowRef.current.client && winnowRef.current.connection ? true : 'no Winnow is connected — connect one on #/sources'),
       run: async (p) => {
         const { client: c, connection: conn } = winnowRef.current;
         if (!c || !conn) throw new CommandError('unavailable', 'no Winnow is connected');
-        const from = readDay('date', p.date);
-        const to = p.dateTo === undefined ? from : readDay('dateTo', p.dateTo);
-        if (to < from) throw new CommandError('invalid', 'dateTo comes before date');
-        const rows = await c.allAssets({
-          dateFrom: from,
-          dateTo: to,
-          ...(p.half ? { half: p.half as 'incoming' | 'final' } : {}),
-          ...(p.media ? { mediaType: p.media as 'photo' | 'video' } : {}),
-        });
-        const kept = filterRows(rows, {
-          verdict: p.verdict as Verdict | undefined,
-          minStars: p.minStars as number | undefined,
-          media: p.media as 'photo' | 'video' | undefined,
-        }).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+        let rows: WinnowAssetRow[];
+        let kept: WinnowAssetRow[];
+        if (Array.isArray(p.ids)) {
+          rows = await c.assetsByIds(p.ids as number[]);
+          kept = rows.filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+        } else {
+          const ask = readAssetQuery(p);
+          rows = await c.allAssets(ask.query);
+          kept = filterRows(rows, ask.filter).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+        }
         const refs = kept.map((r) => rowMediaRef(conn.id, r));
-        const before = latest.current.pictures.length;
+        const before = new Set(latest.current.pictures.map((x) => x.id));
         update((r) => addPictures(r, refs), 'agent');
-        const added = latest.current.pictures.length - before;
-        return { listed: rows.length, matched: kept.length, added, alreadyOnRoll: kept.length - added };
+        const added = latest.current.pictures.filter((x) => !before.has(x.id)).map((x) => ({ id: x.id, name: pictureLabel(x) }));
+        return {
+          listed: rows.length,
+          matched: kept.length,
+          added,
+          alreadyOnRoll: kept.length - added.length,
+          ...(Array.isArray(p.ids) && rows.length < (p.ids as number[]).length ? { notFound: (p.ids as number[]).filter((id) => !rows.some((r) => r.id === id)) } : {}),
+        };
       },
     },
     {
@@ -1013,9 +1021,9 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       id: 'develop.export',
       title: 'Export pictures',
       description:
-        'Render pictures through the roll’s own export (its targets, sizes, metadata, HDR) and hand the files to the agent bridge, which writes them into its output folder on this computer — never over an existing file. pictures: ids, ["leaving"] (the ones develop.deliver lets leave — the default) or ["all"]. Answers the paths written and the run’s own sentence. Needs the bridge: an export by hand asks for a folder instead.',
+        'Render pictures through the roll’s own export (its targets, sizes, metadata, HDR) and hand the files to the agent bridge, which writes them into its output folder on this computer — never over an existing file. pictures: ids, ["leaving"] (the ones develop.deliver lets leave — the default), ["changed"] (those of them never exported on this device or edited since) or ["all"]. Answers the paths written and the run’s own sentence. Needs the bridge: an export by hand asks for a folder instead.',
       params: {
-        pictures: { type: 'strings', description: 'Picture ids, ["leaving"] or ["all"].', optional: true },
+        pictures: { type: 'strings', description: 'Picture ids, ["leaving"], ["changed"] or ["all"].', optional: true },
       },
       available: () =>
         bridgeState().status !== 'connected'
@@ -1031,8 +1039,12 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
             ? roll.pictures.filter((x) => !isIgnored(x)).map((x) => x.id)
             : asked.length === 1 && asked[0] === 'leaving'
               ? roll.pictures.filter(delivers).map((x) => x.id)
-              : asked.map((id) => targetPicture(roll, id, null).id);
-        if (ids.length === 0) throw new CommandError('invalid', 'no picture leaves — mark some with develop.deliver, or name them');
+              : asked.length === 1 && asked[0] === 'changed'
+                ? roll.pictures.filter((x) => delivers(x) && needsExport(x, exportMarksRef.current)).map((x) => x.id)
+                : asked.map((id) => targetPicture(roll, id, null).id);
+        if (ids.length === 0) {
+          throw new CommandError('invalid', asked[0] === 'changed' ? 'nothing changed since the last export on this device' : 'no picture leaves — mark some with develop.deliver, or name them');
+        }
         const written: string[] = [];
         const sink = bridgeSink((path) => written.push(path));
         if (!sink) throw new CommandError('unavailable', 'the bridge went away');
@@ -1058,6 +1070,116 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         update((r) => resetSections(r, target.id, asked as PictureSection[]), 'agent');
         const now = latest.current.pictures.find((x) => x.id === target.id);
         return { picture: target.id, edited: now ? pictureEdits(now) : [] };
+      },
+    },
+    {
+      id: 'develop.removePictures',
+      title: 'Take pictures off the roll',
+      description: 'Take pictures off the roll, with what was done to them — the files stay where they are. One undo step (develop.undo brings them back, their thumbnails redrawn).',
+      params: { pictures: { type: 'strings', description: 'Picture ids, from develop.pictures.' } },
+      available: () => (exportRunning.current ? 'an export is running' : true),
+      run: (p) => {
+        const ids = (p.pictures as string[]).map((id) => targetPicture(latest.current, id, null).id);
+        removeMany(ids);
+        return { removed: ids, left: latest.current.pictures.length };
+      },
+    },
+    {
+      id: 'develop.variant',
+      title: 'Make a variant',
+      description:
+        'A second take on a picture (the open one unless named), placed after it and opened: clone (every edit copied — Lightroom’s virtual copy) or fresh (as shot — Capture One’s New Variant). It shares the file and leaves as "Variant N/<name>". Answers the new picture’s id.',
+      params: {
+        start: { type: 'string', description: 'clone or fresh.', enum: ['clone', 'fresh'] },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+      },
+      run: (p) => {
+        const source = targetPicture(latest.current, p.picture, openIdRef.current);
+        const id = makeVariantOf(source.id, p.start as VariantStart, 'agent');
+        if (!id) throw new CommandError('failed', 'the variant could not be made');
+        return { picture: id, from: source.id, start: p.start };
+      },
+    },
+    {
+      id: 'develop.contactSheet',
+      title: 'Look at the whole roll',
+      description: `One image of the roll's pictures in band order, numbered 1, 2, 3… with what each carries (edited, ignored, leaves) — the band's own thumbnails, graded where a picture was opened, as Winnow sent them otherwise. ${SHEET_MAX} a page. The answer maps each number to its picture id.`,
+      params: { page: { type: 'number', description: 'Which page, from 1.', integer: true, min: 1, optional: true } },
+      run: async (p) => {
+        const pictures = latest.current.pictures;
+        if (pictures.length === 0) throw new CommandError('invalid', 'the roll is empty');
+        const { start, end, pages } = sheetPage(pictures.length, typeof p.page === 'number' ? p.page : 1);
+        const shown = pictures.slice(start, end);
+        const images = await Promise.all(
+          shown.map(async (x) => {
+            const own = thumbsRef.current.get(x.id);
+            if (own) return own;
+            const remote = remoteThumb(x);
+            return remote
+              ? remote.client.fetchFile(remote.client.thumbUrl(remote.id), `${remote.id}.jpg`, 'image/jpeg', 0).catch(() => null)
+              : null;
+          }),
+        );
+        const items = shown.map((x, i) => {
+          const edited = pictureEdits(x).length > 0;
+          const words = [isIgnored(x) ? 'ignored' : null, edited ? 'edited' : null, !isIgnored(x) && delivers(x) ? 'leaves' : null].filter(Boolean);
+          return { image: images[i], label: `${start + i + 1} ${pictureLabel(x)}`, mark: words.join(' ') || undefined };
+        });
+        const map = shown.map((x, i) => `${start + i + 1}=${x.id}`).join(', ');
+        return contactSheetImage(items, `roll "${latest.current.name}" · page ${Math.floor(start / SHEET_MAX) + 1} of ${pages} · ${map}`);
+      },
+    },
+    {
+      id: 'develop.exportSettings',
+      title: 'The roll’s export settings',
+      description: `Read the roll's export settings, or write some of them with settings: targets (1–${MAX_TARGETS}, each {name, size: {mode: long|short|megapixels|percent, value} or null for full size, format: jpeg|png16, quality 0.5–1, sharpen: off|low|standard|high, watermark: bool}; the first writes into the export folder, the others into a sub-folder named after them), replace (overwrite same-name files), hdr and hdrStops (Ultra HDR JPEG from a RAW, 1–4 stops), metadata (group → bool: camera, exposure, time, position, place, makerNotes, words, rights), watermark ({text with {creator} {year} {title}, position, size 1–8, opacity 0.1–1, tone}). Objects merge; a value the roll cannot store is refused with the one it would keep. One undo step.`,
+      params: { settings: { type: 'object', description: 'The fields to write; absent to read.', optional: true } },
+      available: () => (exportRunning.current ? LOCKED_DELIVERY : true),
+      run: (p) => {
+        if (p.settings === undefined) return { export: latest.current.export ?? readRollExport(undefined) };
+        const next = patchRollExport(readRollExport(latest.current.export), p.settings);
+        update((r) => ({ ...r, export: next, updatedAt: Date.now() }), 'agent');
+        return { export: next };
+      },
+    },
+    {
+      id: 'develop.border',
+      title: 'Deliver on a border',
+      description:
+        'Put a picture (the open one unless named) on a border, or take it off with off: true. Fields: aspect (the file’s shape, e.g. "4:5", "1:1"; null = the crop plus its margins), fill ("#rrggbb" or "blur"), margin {x, y} as fractions 0–0.25 of the crop’s short side. Merged onto the picture’s border or the default (white, 5 %). to: also onto these pictures, or ["all"]. One undo step.',
+      params: {
+        border: { type: 'object', description: 'The border’s fields (aspect, fill, margin).', optional: true },
+        off: { type: 'boolean', description: 'true takes the border off.', optional: true },
+        picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true },
+        to: { type: 'strings', description: 'Other picture ids to give the same border, or ["all"].', optional: true },
+      },
+      run: (p) => {
+        const roll = latest.current;
+        const source = targetPicture(roll, p.picture, openIdRef.current);
+        if (isClipPicture(source)) throw new CommandError('unavailable', 'a clip takes the develop, the look and the crop only');
+        if ((p.off === true) === (p.border !== undefined)) throw new CommandError('invalid', 'give the border’s fields, or off: true — one of the two');
+        const next = p.off === true ? null : patchBorder(source.border ?? null, p.border);
+        const to = p.to as string[] | undefined;
+        const others =
+          to && to.length === 1 && to[0] === 'all'
+            ? roll.pictures.filter((x) => x.id !== source.id && !isIgnored(x) && !isClipPicture(x)).map((x) => x.id)
+            : (to ?? []).map((id) => targetPicture(roll, id, null).id);
+        update((r) => copyBorderTo(r, [source.id, ...others], next), 'agent');
+        return { border: next, pictures: [source.id, ...others] };
+      },
+    },
+    {
+      id: 'develop.opensOn',
+      title: 'Which file the roll opens on',
+      description:
+        'The roll’s choice of file for every picture that has none of its own: delivered (the camera’s own JPEG/HEIF, or the render inside a RAW), sensor (the RAW developed from its sensor data — slower, the most latitude), or none (each picture where it opens: Winnow’s proxy for an instance’s picture). The proxy stays a floor. One undo step.',
+      params: { choice: { type: 'string', description: 'delivered, sensor or none.', enum: ['delivered', 'sensor', 'none'] } },
+      run: (p) => {
+        const choice = p.choice === 'none' ? null : (p.choice as RollChoice);
+        const before = latest.current;
+        update((r) => ((r.opensOn ?? null) === choice ? r : { ...r, opensOn: choice, updatedAt: Date.now() }), 'agent');
+        const own = choice ? before.pictures.filter((x) => departsFromRoll(choice, x)).length : 0;
+        return { opensOn: choice, keepTheirOwn: own };
       },
     },
   ]);
@@ -1183,6 +1305,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // beside the roll and written when a run lands — never an edit, never undone.
   const pictureIds = useMemo(() => roll.pictures.map((p) => p.id), [roll.pictures]);
   const { marks: exportMarks, record: recordExported } = useExportMarks(roll.id, pictureIds);
+  const exportMarksRef = useRef(exportMarks);
+  exportMarksRef.current = exportMarks;
   const exports = useRollExport({
     roll,
     files,

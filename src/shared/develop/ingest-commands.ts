@@ -14,6 +14,10 @@ export interface RowFilter {
   minStars?: number;
   /** `photo`, `video`, or both when absent. */
   media?: 'photo' | 'video';
+  /** Only rows carrying this Winnow tag (case-insensitive). */
+  tag?: string;
+  /** Only rows with this colour label. */
+  label?: string;
 }
 
 export const VERDICTS: readonly Verdict[] = ['pick', 'reject', 'skip', 'unrated'];
@@ -27,7 +31,9 @@ export function readDay(path: string, raw: unknown): string {
 }
 
 /** The rows that pass, in the order they came. A row with no culling passes a verdict filter only for `unrated`. */
-export function filterRows<T extends { media_type: 'photo' | 'video'; verdict?: unknown; star?: unknown; color_label?: unknown }>(
+export function filterRows<
+  T extends { media_type: 'photo' | 'video'; verdict?: unknown; star?: unknown; color_label?: unknown; tags?: readonly string[] | null },
+>(
   rows: readonly T[],
   filter: RowFilter,
 ): T[] {
@@ -36,6 +42,11 @@ export function filterRows<T extends { media_type: 'photo' | 'video'; verdict?: 
     const c = cullingFromRow(row) ?? { verdict: 'unrated' as Verdict, star: 0, color: null };
     if (filter.verdict && c.verdict !== filter.verdict) return false;
     if (filter.minStars !== undefined && c.star < filter.minStars) return false;
+    if (filter.label && c.color?.toLowerCase() !== filter.label.toLowerCase()) return false;
+    if (filter.tag) {
+      const want = filter.tag.toLowerCase();
+      if (!(row.tags ?? []).some((t) => t.toLowerCase() === want)) return false;
+    }
     return true;
   });
 }

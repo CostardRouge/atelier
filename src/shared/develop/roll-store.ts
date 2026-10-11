@@ -528,3 +528,20 @@ export async function clearRollShots(): Promise<void> {
     /* storage unusable: nothing to clear */
   }
 }
+
+/**
+ * A roll and EVERYTHING kept beside it on this device — its thumbnails,
+ * remembered folders, working previews, pictures as shot and export marks —
+ * deleted in one call, so no door that deletes a roll can forget one: the
+ * gallery's own delete left the pictures as shot behind until 2026-10-11,
+ * against what the Learning setting promises.
+ */
+export async function deleteRollAndSidecars(doc: { id: string; pictures: readonly { id: string }[] }): Promise<void> {
+  const pictureIds = doc.pictures.map((p) => p.id);
+  await deleteRoll(doc.id);
+  await deleteRollThumbs(pictureIds);
+  await deleteRollFolders(doc.id);
+  await deleteRollPreviews(pictureIds);
+  await deleteRollShots(pictureIds);
+  await deleteExportMarks(doc.id);
+}

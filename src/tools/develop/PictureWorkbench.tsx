@@ -86,6 +86,7 @@ import { useLocalPref } from '../../shared/ui/local-pref';
 import { isEdited, type JournalVia } from '../../shared/develop/roll-types';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { imageResult, untilSteady } from '../../shared/commands/image-result';
+import { histogramReading } from '../../shared/develop/histogram';
 import { CommandError } from '../../shared/commands/registry';
 import { CROP_FORMATS, cropState, planCrop, type CropRequest } from '../../shared/develop/crop-commands';
 import { sameLens, type LensCorrection } from '../../shared/render/lens';
@@ -1759,8 +1760,8 @@ export default function PictureWorkbench({
   // changing first, since a `develop.set` reaches the roll at once and the
   // stage's cube a render later; an answer taken before would show the
   // picture one write behind.
-  const looking = useRef({ source, delivered, aspectRatio, framingDraft, border });
-  looking.current = { source, delivered, aspectRatio, framingDraft, border };
+  const looking = useRef({ source, delivered, aspectRatio, framingDraft, border, histogram: picture.histogram });
+  looking.current = { source, delivered, aspectRatio, framingDraft, border, histogram: picture.histogram };
   useRegisterCommands('develop-workbench', [
     {
       id: 'develop.snapshot',
@@ -1798,6 +1799,20 @@ export default function PictureWorkbench({
         const size = { w: bitmap.width, h: bitmap.height };
         bitmap.close();
         return imageResult(blob, size.w, size.h, p.before === true ? 'the picture as shot, uncropped' : 'the picture as delivered');
+      },
+    },
+    {
+      id: 'develop.measure',
+      title: 'Measure the picture',
+      description:
+        'The open picture’s histogram as numbers, graded and uncropped (what the strip draws): mean, 1st percentile, median and 99th percentile luminance (0–255), each channel’s mean (a cast is one channel standing apart), and the share of pixels clipped to white and crushed to black. Waits for the stage to catch up with the last write — read it after develop.set to check a move.',
+      available: () => (looking.current.source ? true : 'the open picture is still decoding'),
+      run: async () => {
+        await untilSteady(() => looking.current.delivered);
+        await untilSteady(() => looking.current.histogram, 150, 2000);
+        const h = looking.current.histogram;
+        if (!h) throw new Error('the histogram is not measured yet — try again in a moment');
+        return histogramReading(h);
       },
     },
   ]);

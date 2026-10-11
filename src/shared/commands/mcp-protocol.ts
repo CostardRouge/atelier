@@ -61,6 +61,9 @@ export interface McpToolResult {
   isError?: boolean;
 }
 
+/** How many commands one `atelier_batch` may run: a whole edit, not a whole roll's export. */
+export const MAX_BATCH_STEPS = 25;
+
 export const MCP_TOOLS = [
   {
     name: 'atelier_status',
@@ -71,8 +74,12 @@ export const MCP_TOOLS = [
   {
     name: 'atelier_commands',
     description:
-      'The commands the connected Atelier tab offers RIGHT NOW — they depend on the screen it shows (app.* always; develop.* while Develop is open). Each comes with its parameters as JSON Schema and, when it cannot run, the reason.',
-    inputSchema: { type: 'object', properties: {}, additionalProperties: false },
+      'The commands the connected Atelier tab offers RIGHT NOW — they depend on the screen it shows (app.*, library.* and winnow.* always; develop.* while Develop is open). Each comes with its parameters as JSON Schema and, when it cannot run, the reason. Pass family (e.g. "develop") to list one family only.',
+    inputSchema: {
+      type: 'object',
+      properties: { family: { type: 'string', description: 'Only commands whose id starts with this family and a dot, e.g. "develop", "winnow".' } },
+      additionalProperties: false,
+    },
   },
   {
     name: 'atelier_run',
@@ -85,6 +92,32 @@ export const MCP_TOOLS = [
         params: { type: 'object', description: 'The command’s parameters; {} or absent for none.' },
       },
       required: ['command'],
+      additionalProperties: false,
+    },
+  },
+  {
+    name: 'atelier_batch',
+    description:
+      'Run several Atelier commands in order in one call — e.g. a develop.set, a develop.curve and a develop.measure — instead of one round trip each. Stops at the first refusal unless stopOnError is false; answers each step’s result (pictures as images) under its number.',
+    inputSchema: {
+      type: 'object',
+      properties: {
+        steps: {
+          type: 'array',
+          description: `The commands, in order — at most ${MAX_BATCH_STEPS}.`,
+          items: {
+            type: 'object',
+            properties: {
+              command: { type: 'string', description: 'The command id.' },
+              params: { type: 'object', description: 'Its parameters.' },
+            },
+            required: ['command'],
+            additionalProperties: false,
+          },
+        },
+        stopOnError: { type: 'boolean', description: 'Stop at the first step that fails (the default) or run them all.' },
+      },
+      required: ['steps'],
       additionalProperties: false,
     },
   },
@@ -163,6 +196,17 @@ export function originAllowed(origin: string | undefined, extra: readonly string
 /** Where Atelier is deployed: its own domain, and the Pages address under it. */
 export const DEPLOYED_ORIGINS: readonly string[] = ['https://atelier.steeve.website', 'https://costardrouge.github.io'];
 
+/**
+ * What the client is told once, at `initialize`: the shape of a session, so
+ * the model does not have to discover the order by trial.
+ */
+export const MCP_INSTRUCTIONS = [
+  'Atelier is a local-first suite of browser tools for photo and video captures; this bridge drives the Atelier tab the person connected. Start with atelier_status, then atelier_run "app.status" (where the tab is, which command families are open). List a family with atelier_commands {family}. Chain several writes with atelier_batch.',
+  'FIND media first (always open, need a connected Winnow): winnow.calendar {month} → which days hold media; winnow.folders; winnow.assets {date|folder, verdict, minStars, tag, label} → rows with EXIF, GPS and Winnow’s culling; winnow.sheet → one image of thumbnails labelled by id, to choose by eye.',
+  'DEVELOP: app.navigate {path:"/develop/home"}, app.waitFor {command:"develop.rolls"}, develop.newRoll or develop.openRoll, develop.addFromWinnow {ids} (or {date, verdict…}), develop.contactSheet to see the whole roll, develop.openPicture, app.waitFor {command:"develop.snapshot"}, then develop.set / curve / grading / crop / addLook / auto…, develop.measure (histogram numbers) and develop.snapshot (the picture) to check, develop.applyTo or develop.applyPreset to spread a look, develop.exportSettings and develop.export (files land in the bridge’s folder).',
+  'Every write goes through the person’s own undo (develop.undo) and journal, marked as an agent’s. Values are refused outside their range, never clamped — read the refusal and retry. A command missing from the list belongs to a screen that is not open: navigate, then app.waitFor it.',
+].join('\n\n');
+
 /** What `atelier_status` answers when no tab is connected: how to connect one. */
 export function notConnectedText(port: number): string {
   return [
@@ -220,10 +264,21 @@ async function callTool(name: string, args: Record<string, unknown>, deps: McpDe
       ],
     };
   }
-  if (name !== 'atelier_commands' && name !== 'atelier_run') return err(`no tool "${name}"`);
+  if (name !== 'atelier_commands' && name !== 'atelier_run' && name !== 'atelier_batch') return err(`no tool "${name}"`);
   if (!tab) return err(notConnectedText(deps.port));
+  if (name === 'atelier_batch') return runBatch(args, deps);
   try {
-    if (name === 'atelier_commands') return { content: toolContent(await deps.relay({ kind: 'list' })) };
+    if (name === 'atelier_commands') {
+      const listed = await deps.relay({ kind: 'list' });
+      const family = typeof args.family === 'string' ? args.family.trim().replace(/\.$/, '') : '';
+      if (!family || !Array.isArray(listed)) return { content: toolContent(listed) };
+      const kept = listed.filter((c) => isRecord(c) && typeof c.id === 'string' && c.id.startsWith(`${family}.`));
+      if (kept.length === 0) {
+        const families = [...new Set(listed.flatMap((c) => (isRecord(c) && typeof c.id === 'string' ? [c.id.split('.')[0]] : [])))];
+        return err(`no "${family}" command is open right now — the open families are ${families.join(', ')}`);
+      }
+      return { content: toolContent(kept) };
+    }
     const command = args.command;
     if (typeof command !== 'string' || !command) return err('"command" is required — a command id from atelier_commands');
     const params = args.params === undefined || args.params === null ? {} : args.params;
@@ -232,6 +287,49 @@ async function callTool(name: string, args: Record<string, unknown>, deps: McpDe
   } catch (e) {
     return err(e instanceof Error ? e.message : String(e));
   }
+}
+
+/**
+ * `atelier_batch`: each step relayed in turn, its answer numbered — text as
+ * `#n command → …`, a picture as its image block after its line. A refused
+ * step is said and, unless asked otherwise, ends the batch: the next step was
+ * written assuming this one held.
+ */
+async function runBatch(args: Record<string, unknown>, deps: McpDeps): Promise<McpToolResult> {
+  const steps = args.steps;
+  if (!Array.isArray(steps) || steps.length === 0) {
+    return { content: [{ type: 'text', text: '"steps" must be a non-empty list of {command, params}' }], isError: true };
+  }
+  if (steps.length > MAX_BATCH_STEPS) {
+    return { content: [{ type: 'text', text: `"steps" holds ${steps.length} — ${MAX_BATCH_STEPS} at most a batch` }], isError: true };
+  }
+  const stop = args.stopOnError !== false;
+  const content: McpContent[] = [];
+  let failed = 0;
+  for (let i = 0; i < steps.length; i++) {
+    const step = steps[i];
+    const command = isRecord(step) && typeof step.command === 'string' ? step.command : '';
+    const params = isRecord(step) && isRecord(step.params) ? step.params : {};
+    const head = `#${i + 1} ${command || '(no command)'}`;
+    if (!command) {
+      failed += 1;
+      content.push({ type: 'text', text: `${head} → refused: a step needs a command` });
+      if (stop) break;
+      continue;
+    }
+    try {
+      const answer = toolContent(await deps.relay({ kind: 'run', command, params }));
+      for (const block of answer) content.push(block.type === 'text' ? { type: 'text', text: `${head} → ${block.text}` } : block);
+    } catch (e) {
+      failed += 1;
+      content.push({ type: 'text', text: `${head} → refused: ${e instanceof Error ? e.message : String(e)}` });
+      if (stop) {
+        if (i + 1 < steps.length) content.push({ type: 'text', text: `stopped — steps ${i + 2}…${steps.length} not run` });
+        break;
+      }
+    }
+  }
+  return failed ? { content, isError: true } : { content };
 }
 
 /**
@@ -251,8 +349,7 @@ export async function handleMcpMessage(msg: RpcMessage, deps: McpDeps): Promise<
         protocolVersion: KNOWN_VERSIONS.includes(asked) ? asked : MCP_PROTOCOL_VERSION,
         capabilities: { tools: {} },
         serverInfo: { name: 'atelier', version: deps.serverVersion },
-        instructions:
-          'Atelier is a local-first suite of browser tools for photo and video captures. This bridge drives the Atelier tab the person connected: start with atelier_status, list what the current screen offers with atelier_commands, then atelier_run. Develop a photograph: app.navigate {path:"/develop/home"}, app.waitFor {command:"develop.rolls"}, develop.rolls, develop.openRoll, develop.pictures, develop.controls, develop.set, develop.snapshot to look at the result. Every write is undoable with develop.undo.',
+        instructions: MCP_INSTRUCTIONS,
       });
     }
     case 'ping':

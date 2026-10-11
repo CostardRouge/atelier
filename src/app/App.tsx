@@ -1,4 +1,4 @@
-import { Suspense, useEffect, useState } from 'react';
+import { Suspense, useEffect, useRef, useState } from 'react';
 import AssetSidebar from './AssetSidebar';
 import LoadingState from '../shared/ui/LoadingState';
 import SourcesScreen from './SourcesScreen';
@@ -26,6 +26,7 @@ import ThemeToggle from './ThemeToggle';
 import { buttonClass } from '../shared/ui/Button';
 import { useRegisterCommands } from '../shared/commands/use-commands';
 import { appCommands } from './app-commands';
+import { useMediaActions } from '../shared/sources/media-scope';
 
 /**
  * Whether the library column is collapsed to its rail, remembered PER SIZE.
@@ -38,6 +39,7 @@ import { appCommands } from './app-commands';
  * `railByDefault` below.
  */
 const COLLAPSE_KEY = 'atelier.library.collapsed';
+
 const COLLAPSE_KEY_MEDIUM = 'atelier.library.collapsed.medium';
 
 /**
@@ -63,9 +65,6 @@ export default function App() {
   const agentsPath = path === '/agents';
   const tool = sourcesPath || agentsPath ? undefined : toolForPath(path);
   const Active = tool?.Component ?? Home;
-  // The shell's own commands — where the suite is, going somewhere, waiting
-  // for a tool's commands to open (`app-commands.ts`).
-  useRegisterCommands('shell', appCommands(path));
 
   // The tab's title names the screen: a browser's tab strip, its history and
   // a screen reader's "page changed" all read it, and it never changed before
@@ -142,7 +141,26 @@ export default function App() {
   // (`peeked`), and the first file to arrive opens it on its own, since the
   // preference below then applies again.
   const lib = useAssetLibrary();
-  const { connection } = useWinnowConnection();
+  const winnow = useWinnowConnection();
+  const { connection } = winnow;
+  const mediaActions = useMediaActions();
+  // The shell's own commands — where the suite is, going somewhere, waiting
+  // for a tool's commands to open (`app-commands.ts`) — and what an agent
+  // reads before it acts: the Library and the connected Winnow.
+  useRegisterCommands('shell', appCommands(path, { library: () => lib, winnow: () => winnow }));
+  const shellState = useRef({ lib: () => lib, winnow: () => winnow, actions: () => mediaActions });
+  shellState.current = { lib: () => lib, winnow: () => winnow, actions: () => mediaActions };
+  useEffect(() => {
+    let alive = true;
+    let off: (() => void) | null = null;
+    void import('./agent-shell-commands').then((m) => {
+      if (alive) off = m.registerShellCommands(() => shellState.current);
+    });
+    return () => {
+      alive = false;
+      off?.();
+    };
+  }, []);
   const libraryEmpty = lib.assets.length === 0 && !connection;
   const [peeked, setPeeked] = useState(false);
   useEffect(() => {

@@ -1,4 +1,7 @@
 import { CommandError, commands, waitForCommand, type CommandSpec } from '../shared/commands/registry';
+import { bridgeState } from '../shared/commands/bridge-client';
+import type { AssetLibrary } from '../shared/library/AssetLibraryContext';
+import type { WinnowConnection } from '../shared/sources/winnow/store';
 import { navigate } from './use-hash-route';
 import { TOOLS, toolForPath } from './tools';
 
@@ -18,19 +21,35 @@ function screenOf(path: string): string {
  * to open. Registered by `App` for the whole session; every tool adds its own
  * while it is mounted.
  */
-export function appCommands(path: string): CommandSpec[] {
+/** What the shell knows beside the route, read at call time. */
+export interface ShellState {
+  library: () => Pick<AssetLibrary, 'assets' | 'activeId'>;
+  winnow: () => { connection: WinnowConnection | null };
+}
+
+export function appCommands(path: string, shell?: ShellState): CommandSpec[] {
   return [
     {
       id: 'app.status',
       title: 'Where the suite is',
       description:
-        'The current route, the screen it shows (a tool id, "home", "sources" or "agents"), every tool with its route, and how many commands are open right now. Start here.',
-      run: () => ({
-        route: path,
-        screen: screenOf(path),
-        tools: TOOLS.map((t) => ({ id: t.id, label: t.label, path: t.path })),
-        openCommands: commands.list().length,
-      }),
+        'The current route, the screen it shows (a tool id, "home", "sources" or "agents"), every tool with its route, the Library (how many media, which is active), the connected Winnow, the bridge, and the command FAMILIES open right now (develop, winnow, library…). Start here.',
+      run: () => {
+        const lib = shell?.library();
+        const connection = shell?.winnow().connection ?? null;
+        const open = commands.list();
+        const families = [...new Set(open.map((c) => c.id.split('.')[0]))];
+        return {
+          route: path,
+          screen: screenOf(path),
+          tools: TOOLS.map((t) => ({ id: t.id, label: t.label, path: t.path })),
+          ...(lib ? { library: { media: lib.assets.length, active: lib.activeId } } : {}),
+          winnow: connection ? connection.baseUrl : null,
+          bridge: bridgeState().status,
+          openCommands: open.length,
+          families,
+        };
+      },
     },
     {
       id: 'app.navigate',

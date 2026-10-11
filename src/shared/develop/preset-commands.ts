@@ -14,6 +14,7 @@ import { landBaseCurve } from './base-curve';
 import { DEFAULT_DEVELOP, describeDevelop, developOrNull, type DevelopPreset, type DevelopSettings } from './develop';
 import type { SavedGrade } from '../lut/saved-grade';
 import { isIgnored, type RollDoc, type RollGrade, type RollPicture } from './roll-types';
+import type { DeliveryIdentity } from '../exif/delivery-meta';
 
 /**
  * A preset's numbers onto a picture's develop, as the Presets section's
@@ -48,6 +49,11 @@ export function findPreset(list: readonly DevelopPreset[], key: string): Develop
 export interface PresetHost {
   presets: () => Promise<readonly DevelopPreset[]>;
   save: (name: string, settings: DevelopSettings, look: SavedGrade | null) => Promise<void>;
+  /** Take a preset out of the book, by id. */
+  remove: (id: string) => Promise<void>;
+  /** Who the delivered files are signed by — the book's, so every device shares it. */
+  identity: () => Promise<DeliveryIdentity>;
+  setIdentity: (identity: DeliveryIdentity) => Promise<void>;
   roll: () => RollDoc;
   /** The pictures a command names, the open one when it names none; refuses an unknown id. */
   pictures: (ids: unknown) => RollPicture[];
@@ -102,6 +108,35 @@ export function presetCommands(host: PresetHost): CommandSpec[] {
         if (!picture.develop) throw new CommandError('invalid', 'that picture is as shot — there is nothing to save');
         await host.save(name, picture.develop, p.withLook === true ? ((picture.grade ?? null) as SavedGrade | null) : null);
         return { saved: name };
+      },
+    },
+    {
+      id: 'develop.deletePreset',
+      title: 'Delete a preset',
+      description: 'Take a preset (by id or name) out of the book. No picture changes: a preset is a copy of numbers, never followed. Not undoable — saving it again from a picture is the way back.',
+      params: { preset: { type: 'string', description: 'The preset’s id or name.' } },
+      run: async (p) => {
+        const preset = findPreset(await host.presets(), p.preset as string);
+        await host.remove(preset.id);
+        return { deleted: preset.name };
+      },
+    },
+    {
+      id: 'develop.identity',
+      title: 'Who the files are signed by',
+      description:
+        'Read, or set, the creator and copyright written into every delivered file (EXIF Artist and Copyright, XMP dc:creator and dc:rights). The copyright is a template: {year} is the capture’s year, {creator} the name. An empty creator writes no rights. Kept on the preset book, so every device shares it.',
+      params: {
+        creator: { type: 'string', description: 'The name.', optional: true },
+        copyright: { type: 'string', description: 'The copyright line, e.g. "© {year} {creator}. All rights reserved."', optional: true },
+      },
+      run: async (p) => {
+        if (p.creator === undefined && p.copyright === undefined) return host.identity();
+        const next = { ...(await host.identity()) };
+        if (typeof p.creator === 'string') next.creator = p.creator.trim();
+        if (typeof p.copyright === 'string') next.copyright = p.copyright.trim();
+        await host.setIdentity(next);
+        return next;
       },
     },
   ];

@@ -10,12 +10,8 @@ import {
 } from '../../shared/develop/develop-route';
 import { ROLL_DOC_KIND, pullRoll, pushOnce } from '../../shared/develop/roll-remote';
 import {
-  deleteRoll,
-  deleteRollFolders,
-  deleteRollPreviews,
-  deleteRollShots,
-  deleteExportMarks,
-  deleteRollThumbs,
+  copyRollSidecars,
+  deleteRollAndSidecars,
   deleteSyncRecord,
   getSyncRecord,
   listRolls,
@@ -30,6 +26,9 @@ import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/u
 import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { rollSummary } from '../../shared/develop/develop-commands';
+import { cloneRoll } from '../../shared/develop/clone-roll';
+import { uniqueDocName } from '../../shared/sources/doc-name';
+import { DEFAULT_SOURCE_ID } from '../../shared/sources/source';
 import RollGallery from './RollGallery';
 import RollEditor from './RollEditor';
 
@@ -114,14 +113,7 @@ export default function DevelopTool() {
       putRecord: putSyncRecord,
       deleteRecord: deleteSyncRecord,
       putDoc: putRoll,
-      deleteDoc: async (doc) => {
-        await deleteRoll(doc.id);
-        await deleteRollThumbs(doc.pictures.map((p) => p.id));
-        await deleteRollFolders(doc.id);
-        await deleteRollPreviews(doc.pictures.map((p) => p.id));
-        await deleteRollShots(doc.pictures.map((p) => p.id));
-        await deleteExportMarks(doc.id);
-      },
+      deleteDoc: deleteRollAndSidecars,
       push: pushOnce,
       pull: (remote, id, etag) => pullRoll(remote, id, etag),
     }),
@@ -210,6 +202,13 @@ export default function DevelopTool() {
   // The tool's own commands (`shared/commands/`, `develop-commands.ts`): the
   // rolls, opening one, and the roll's undo — the very stack ⌘Z walks, so an
   // agent's write is one step back like the author's.
+  /** The roll an id names in this browser, or refused naming the list. */
+  async function findRoll(id: unknown): Promise<RollDoc> {
+    const found = (await listRolls()).find((r) => r.id === id);
+    if (!found) throw new CommandError('invalid', `no roll "${String(id)}" — develop.rolls lists them`);
+    return open && open.id === found.id ? open : found;
+  }
+
   useRegisterCommands('develop', [
     {
       id: 'develop.rolls',
@@ -254,9 +253,80 @@ export default function DevelopTool() {
       },
     },
     {
+      id: 'develop.renameRoll',
+      title: 'Rename a roll',
+      description: 'Give a roll a new name — the open one unless named. The open roll’s rename is one undo step, like the bar’s.',
+      params: {
+        name: { type: 'string', description: 'The new name.' },
+        roll: { type: 'string', description: 'A roll id from develop.rolls; the open roll when absent.', optional: true },
+      },
+      run: async (p) => {
+        const name = (p.name as string).trim();
+        if (!name) throw new CommandError('invalid', 'a roll needs a name');
+        if (p.roll === undefined || p.roll === open?.id) {
+          if (!open) throw new CommandError('unavailable', 'no roll is open — name one with roll');
+          handleChange({ ...open, name, updatedAt: Date.now() });
+          return { roll: open.id, name };
+        }
+        const found = await findRoll(p.roll);
+        if (found.sourceId !== DEFAULT_SOURCE_ID) {
+          throw new CommandError('unavailable', `"${found.name}" is kept on ${found.sourceId} — open it (develop.openRoll) to rename it, so the instance hears of it`);
+        }
+        if (!(await putRoll({ ...found, name, updatedAt: Date.now() }))) throw new CommandError('failed', 'the browser refused to store the roll');
+        return { roll: found.id, name };
+      },
+    },
+    {
+      id: 'develop.cloneRoll',
+      title: 'Clone a roll',
+      description: 'A copy of a roll — every picture with its develop, crop, look and words, under new ids — kept in this browser, named "<name> (2)" unless a name is given. The original is untouched. Answers the new roll’s id; open it with develop.openRoll.',
+      params: {
+        roll: { type: 'string', description: 'A roll id from develop.rolls; the open roll when absent.', optional: true },
+        name: { type: 'string', description: 'The copy’s name.', optional: true },
+      },
+      run: async (p) => {
+        const source = p.roll === undefined || p.roll === open?.id ? open : await findRoll(p.roll);
+        if (!source) throw new CommandError('unavailable', 'no roll is open — name one with roll');
+        const taken = (await listRolls()).map((r) => r.name);
+        const asked = typeof p.name === 'string' && p.name.trim() ? p.name.trim() : source.name;
+        const { doc, pictureIds } = cloneRoll(source, { name: uniqueDocName(asked, taken), sourceId: DEFAULT_SOURCE_ID });
+        if (!(await putRoll(doc))) throw new CommandError('failed', 'the browser refused to store the copy');
+        await copyRollSidecars(source.id, doc.id, pictureIds);
+        return { roll: doc.id, name: doc.name, from: source.id, pictures: doc.pictures.length };
+      },
+    },
+    {
+      id: 'develop.deleteRoll',
+      title: 'Delete a roll',
+      description:
+        'Delete a roll kept in this browser, with its thumbnails and working previews — NOT undoable, so confirm must repeat the roll’s exact name. The pictures’ files are untouched (they live in the folder or on Winnow). A roll kept on a Winnow is deleted from the gallery by hand.',
+      params: {
+        roll: { type: 'string', description: 'The roll id, from develop.rolls.' },
+        confirm: { type: 'string', description: 'The roll’s exact name, to say this is meant.' },
+      },
+      run: async (p) => {
+        const found = await findRoll(p.roll);
+        if (p.confirm !== found.name) throw new CommandError('invalid', `confirm must be the roll’s exact name, "${found.name}"`);
+        if (found.sourceId !== DEFAULT_SOURCE_ID) {
+          throw new CommandError('unavailable', `"${found.name}" is kept on ${found.sourceId} — delete it from the gallery, where the instance is asked first`);
+        }
+        if (open?.id === found.id) {
+          if (saveTimer.current !== null) window.clearTimeout(saveTimer.current);
+          saveTimer.current = null;
+          pending.current = null;
+          setOpen(null);
+          navigate(DEVELOP_HOME);
+        }
+        await deleteRollAndSidecars(found);
+        await deleteSyncRecord(found.id);
+        return { deleted: found.id, name: found.name };
+      },
+    },
+    {
       id: 'develop.undo',
       title: 'Undo',
-      description: 'Step the open roll back one edit — the same stack as ⌘Z, the agent’s own writes included.',
+      description:
+        'Step the open roll back one edit — the same stack as ⌘Z, the agent’s own writes included. As for the author, writes less than 0.7 s apart on the same picture are ONE step: one undo takes them all back.',
       available: () => (!open ? 'no roll is open' : history.canUndo ? true : 'nothing to undo'),
       run: () => {
         history.undo();
