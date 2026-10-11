@@ -45,18 +45,24 @@ a design decision or a capability the browser withholds.
 | Move a roll to another source, export / import a roll file | `gallery.moveTo`, `toRollFile` / `rollDocFromFile` | M |
 | Device settings (Auto plan, dither, bands, Lensfun consent) | the `localPref`s of `DevelopSettingsSheet.tsx` | T, but they are the person's device choices — offer read-only first |
 
-### Trips (nothing yet)
+### Trips (built 2026-10-11, the core)
 
-Register in `RoadTripTool` (trip-level: list, open, create, rename, stages) and
-`PostEditor` (piece-level), writing through `handleChange` / `updatePost` so
-undo and save hold. Cheapest first: list / open trips and pieces (T), a
-piece's opener variant and its options, badge text, counter mode (T, through
-`switchHookVariant`, `patchBadge`), slides add / remove / reorder (M: a slide's
-media is a ref the Library resolves by name), the look per rung
-(`writeGrade`, M), Deduce "accept all" (M: `proposeDraft` → `applyDraft`).
-Export: `exportPiece` / `exportDeck` / `exportHookClip` take no target; giving
-them an optional `DeliveryTarget` as Develop's `exportPictures` has lets
-`bridgeSink` deliver (M).
+BUILT: `trips.list`, `.create`, `.open`, `.get`, `.rename`, `.newPiece`,
+`.deletePiece`, `.undo`, `.redo` (registered by `RoadTripTool`) and, on the
+open piece (`PostEditor`), `trips.piece`, `.openSlide`, `.setPictures`,
+`.openers`, `.setOpener`, `.badge`, `.develop`, `.pieceSettings`,
+`.snapshot`, `.exportPlan`, `.export` — the arithmetic in
+`shared/roadtrip/trip-commands.ts`, the export through the bridge's sink
+(`exportPiece(imagesOnly, to)`). Still missing below.
+
+### Trips (what is left)
+
+The look per rung (`writeGrade` over the trip's LUT stack, M), the legs
+(`setStages`, `stage-edit.ts`, M), Deduce "accept all" (`proposeDraft` →
+`applyDraft`, M), a slide's clip cut, speed and seconds (`setClipRange`, M),
+collage layouts and cells (M), the hook as a video (`exportHookClip` takes no
+target yet, T), shades and free text on a slide (T), sending a piece to the
+Studio (`StudioLink`, M), the trip's vehicle fleet (M).
 
 ### Studio (nothing yet)
 
@@ -65,6 +71,16 @@ Its editor copies the document into local state at mount and saves on an
 its setters (elements, trims, variants, scenes). Export is H: `deliver()`
 writes to its own picked folder and never went through `deliver-files.ts` —
 that seam comes first.
+
+### People (Atelier's half built 2026-10-11)
+
+Atelier reads Winnow's people and filters by them (`winnow.people`,
+`.peopleSheet`, `.faces`; `people` / `who` / `together` / `faces` on every
+listing). Winnow writes them, in its own MCP (CostardRouge/winnow#297, on
+#293): `people.name`, `people.hide`, `people.merge`, `people.reassign`,
+`people.suggestions` (pairs that look alike), `people.sheet` (face crops),
+`people.get`, `assets.faces`, and `assets.list` with the same `people` /
+`who` / `together` / `faces` as Atelier's.
 
 ### Sources
 
@@ -89,9 +105,8 @@ Ranked by what they unlock. None changes a document's shape except where said.
    his rolls nearest to this one (same body, same light — from the `shots`
    store's stats, B1 of `auto-develop.md`) with their records, so an agent
    edits in HIS taste rather than its own. Read only, never leaves the device.
-4. **Trips end to end**: the §2 commands plus a sink for its exports — the
-   piece is the suite's finished product, and an agent that can build a day's
-   reel from Winnow's picks is the case the whole bridge exists for.
+4. **Trips end to end** — BUILT 2026-10-11 (§2): a day's piece made from
+   Winnow's picks, dressed, looked at and exported by an agent.
 5. **Progress for long runs**: an export of a roll can outlast an MCP call's
    patience. `app.tasks` (the `shared/tasks/` registry: label, progress,
    cancel) lets an agent start, poll and cancel instead of waiting blind.

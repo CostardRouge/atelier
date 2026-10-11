@@ -2980,6 +2980,14 @@ is in the app**: [`#/agents`](https://atelier.steeve.website/#/agents) (or
 - **Any other MCP app** (Cursor, Windsurf, VS Code…): the JSON block the page
   fills in with your file's path.
 
+The bridge has its **own number** — v1, v2, v3… — which moves only when the
+bridge itself changes (a new command in the tab needs no new bridge). The
+extension is saved as `atelier-v1.mcpb`, Claude Desktop sees it as version
+`1.0.0` and offers *Update* over an older one, `node atelier-mcp.mjs
+--version` prints it, the guide and the *Agents* row on `#/sources` say which
+bridge is running and whether a newer one is out, and `atelier_status` tells
+the agent too. A test fails CI when the bridge changes without its number.
+
 Claude Desktop and Claude Code can run at the same time: each starts its own
 bridge, the first one holds the tab and the other goes through it, and when the
 first quits the other takes over. (From a clone, `node scripts/atelier-mcp.mjs`
@@ -3007,6 +3015,16 @@ Trips' Reel, Carousel and Photo on a day, Develop's new roll — run as their
 buttons run (`library.actions`, `library.runAction`). Atelier still never
 writes a verdict or a star: culling is Winnow's.
 
+And by **who is in the picture**: `winnow.people` lists the people Winnow's
+face analysis grouped (named first), `winnow.peopleSheet` shows their faces on
+one image labelled by id and name, `winnow.faces` says who is in one medium,
+and `winnow.assets`, `winnow.sheet` and `develop.addFromWinnow` take
+`people` (ids) or `who` (names, a unique part of one is enough — "Lucie"),
+`together: true` for the photos where they are all in frame, and `faces:
+none | any | solo | group` — "every photo of Lucie and Lucas together", "the
+landscapes of that day, no one in them". Naming, merging and hiding people
+stays in Winnow, whose own MCP writes them.
+
 A session in Develop looks like: `app.navigate` to `/develop/home`,
 `app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
 `develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then
@@ -3030,6 +3048,20 @@ To check its own work an agent has more than the picture: `develop.measure`
 answers the histogram as numbers (mean, percentiles, each channel's mean, the
 share clipped to white or crushed to black), and `develop.contactSheet` shows
 the whole roll on one image, numbered, with what each picture carries.
+
+**Trips** is driven the same way, from the trip to the delivered files:
+`trips.list`, `trips.create` (a name and two days), `trips.open`, `trips.get`
+(its legs and pieces), `trips.newPiece` (a reel, a carousel or a photo on a
+day), then on the open piece `trips.setPictures` (Library media in swipe order
+— the first under the badge, the others as slides; `library.addFromWinnow`
+brings Winnow's in first), `trips.setOpener` (the badge, Défilé, Virée, the
+Itinerary, the card or Vitrine, with their options; `trips.openers` lists
+them), `trips.badge` (its words and what it counts), `trips.develop` (a
+slide's picture corrected), `trips.pieceSettings` (title, shape, closing
+card), `trips.snapshot` (a slide rendered exactly as the export renders it),
+`trips.exportPlan` and `trips.export`, which hands the files to the bridge
+like Develop's. Every write is one step of the trip's own undo
+(`trips.undo`).
 
 A roll can be made and filled end to end: `develop.newRoll`, then
 `develop.addFromWinnow` — chosen media by id, or a day, a span or a folder of

@@ -47,6 +47,12 @@ import {
   peerTokenFile,
   safeOutputPath,
 } from '../src/shared/commands/mcp-protocol.ts';
+import { BRIDGE_VERSION, bridgeLabel, bridgeSemver } from '../src/shared/commands/bridge-version.ts';
+
+if (process.argv.includes('--version')) {
+  console.log(`atelier-mcp ${bridgeLabel(BRIDGE_VERSION)}`);
+  process.exit(0);
+}
 
 const arg = (flag) => {
   const i = process.argv.indexOf(flag);
@@ -66,18 +72,9 @@ const LIST_TIMEOUT_MS = 15_000;
 /** A snapshot at 2048 px is a few hundred kB of base64; this is far above it. */
 const MAX_BODY_BYTES = 32 * 1024 * 1024;
 
-// The published single file (built by vite.config.ts's `agentBridgePlugin`
-// and served beside the site) has its version written in at build time; run
-// from the repo, it reads package.json.
-/* global ATELIER_BRIDGE_VERSION */
-const version = (() => {
-  if (typeof ATELIER_BRIDGE_VERSION === 'string') return ATELIER_BRIDGE_VERSION;
-  try {
-    return JSON.parse(readFileSync(new URL('../package.json', import.meta.url), 'utf8')).version ?? '0.0.0';
-  } catch {
-    return '0.0.0';
-  }
-})();
+// The bridge's own number — v1, v2… (`bridge-version.ts`): what Claude
+// Desktop orders updates by and what the tab compares with the one it ships.
+const version = bridgeSemver(BRIDGE_VERSION);
 
 const log = (...args) => console.error('[atelier-mcp]', ...args);
 
@@ -228,7 +225,7 @@ function takeOver() {
 async function currentTab() {
   await settled;
   if (takingOver) await takingOver;
-  if (mode === 'hub') return tab ? { route: tab.route, title: tab.title, since: tab.since } : null;
+  if (mode === 'hub') return tab ? { route: tab.route, title: tab.title, since: tab.since, latest: tab.latest } : null;
   if (mode !== 'follower') return null;
   try {
     followed = await askHub(PEER_STATUS_PATH);
@@ -265,7 +262,7 @@ function peerRoute(req, res, path_) {
     return;
   }
   if (req.method === 'GET' && path_ === PEER_STATUS_PATH) {
-    json(200, { version, outDir: OUT_DIR, tab: tab ? { route: tab.route, title: tab.title, since: tab.since } : null });
+    json(200, { version, bridge: BRIDGE_VERSION, outDir: OUT_DIR, tab: tab ? { route: tab.route, title: tab.title, since: tab.since, latest: tab.latest } : null });
     return;
   }
   if (req.method === 'POST' && path_ === PEER_RELAY_PATH) {
@@ -323,6 +320,9 @@ const server = http.createServer((req, res) => {
     }
     res.writeHead(200, { ...cors, 'content-type': 'text/event-stream', 'cache-control': 'no-cache', connection: 'keep-alive' });
     res.write(': atelier bridge\n\n');
+    // Who the tab is talking to: its page says which bridge runs and whether
+    // the site ships a newer one.
+    res.write(`event: bridge\ndata: ${JSON.stringify({ version: BRIDGE_VERSION })}\n\n`);
     const me = { res, since: Date.now(), route: '', title: '', origin };
     tab = me;
     const keepAlive = setInterval(() => res.write(': keep-alive\n\n'), 15_000);
@@ -360,7 +360,7 @@ const server = http.createServer((req, res) => {
         return;
       }
       if ('hello' in msg) {
-        if (tab) Object.assign(tab, { route: msg.hello.route, title: msg.hello.title });
+        if (tab) Object.assign(tab, { route: msg.hello.route, title: msg.hello.title, latest: msg.hello.latest });
       } else {
         const p = pending.get(msg.id);
         if (p) {
@@ -448,7 +448,7 @@ server.on('listening', () => {
   problem = null;
   writeToken();
   settle();
-  log(`listening on http://127.0.0.1:${PORT} — connect a tab from Atelier's #/agents`);
+  log(`${bridgeLabel(BRIDGE_VERSION)} listening on http://127.0.0.1:${PORT} — connect a tab from Atelier's #/agents`);
 });
 server.on('error', (err) => {
   if (err.code === 'EADDRINUSE') {
@@ -465,6 +465,10 @@ server.listen(PORT, '127.0.0.1');
 
 const deps = {
   serverVersion: version,
+  bridgeVersion: BRIDGE_VERSION,
+  get hubVersion() {
+    return mode === 'follower' ? (followed?.bridge ?? null) : null;
+  },
   port: PORT,
   get outDir() {
     return mode === 'follower' ? (followed?.outDir ?? OUT_DIR) : OUT_DIR;

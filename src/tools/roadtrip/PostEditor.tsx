@@ -50,7 +50,7 @@ import {
   removeCard,
   writeCard,
 } from '../../shared/media/motion-cards';
-import { badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
+import { BADGE_PIECES, COUNTER_MODES, badgeContent, type BadgePiece } from '../../shared/roadtrip/day-badge';
 import {
   applyDevelopToDay,
   applyDevelopToPost,
@@ -140,6 +140,20 @@ import PiecePicker from './panels/PiecePicker';
 import { useCollageRefetch } from './use-collage-refetch';
 import { useDeckTransport } from './use-deck-transport';
 import { usePostExports } from './use-post-exports';
+import { CommandError } from '../../shared/commands/registry';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { imageResult } from '../../shared/commands/image-result';
+import { developControls, withDevelopValues } from '../../shared/develop/develop-commands';
+import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
+import {
+  openerList,
+  pieceDetail,
+  readAspect,
+  readCounterMode,
+  withBadgeWords,
+  withOpener,
+  withPictures,
+} from '../../shared/roadtrip/trip-commands';
 import { DECK_LONG_EDGE } from '../../shared/roadtrip/deck-export';
 import { frameSize } from '../../shared/roadtrip/badge-render';
 import { useDeliveryRow } from '../../shared/develop/use-delivery-row';
@@ -1698,6 +1712,232 @@ export default function PostEditor({
     }
     return verbs;
   }, [exportPlanNow, exports, slides, slide.position, canEncode, hookLength]);
+
+  // --- the open piece's commands (`shared/commands/`, `trip-commands.ts`) ---
+  // Written through `onChangePost`, the funnel every panel writes through, so
+  // a command is saved and undone (`trips.undo`) like a gesture. `postNow`
+  // carries a write to the next command before React has rendered it: two
+  // commands of one batch must not both start from the same piece.
+  const postNow = useRef(post);
+  postNow.current = post;
+  const writePost = (next: TripPost) => {
+    postNow.current = next;
+    onChangePost(next);
+  };
+  const exportsNow = useRef(exports);
+  exportsNow.current = exports;
+  const deckLocked = () => (exports.run ? 'an export is running — the deck’s order is the run’s' : true);
+  /** The slide at a 1-based position, refused past the deck. */
+  const slideAt = (raw: unknown): DeckSlide => {
+    const deck = deckSlides(trip, postNow.current);
+    const position = typeof raw === 'number' ? raw : slide.position;
+    const found = deck.find((x) => x.position === position);
+    if (!found) throw new CommandError('invalid', `the piece has slides 1 to ${deck.length}`);
+    return found;
+  };
+  const libraryFile = (key: string): File => {
+    const want = key.toLowerCase();
+    const asset = lib.assets.find((a) => a.id === want || a.baseName.toLowerCase() === want || pickable(a)?.name.toLowerCase() === want);
+    const file = asset ? pickable(asset) : null;
+    if (!file) {
+      throw new CommandError('invalid', `the Library holds no picture "${key}" — library.assets lists it, library.addFromWinnow fetches one`);
+    }
+    return file;
+  };
+  useRegisterCommands('trips-piece', [
+    {
+      id: 'trips.piece',
+      title: 'Read the open piece',
+      description: 'The open piece: its kind, day, title, shape, counter, the badge’s words, and its slides in swipe order (position, picture, image or video, seconds, opener) — plus which slide is open and what an export would write.',
+      run: () => ({
+        trip: trip.id,
+        ...pieceDetail(trip, postNow.current),
+        open: slide.position,
+        export: { plan: describePlan(exportPlanNow), blockers: exportPlanNow.blockers },
+      }),
+    },
+    {
+      id: 'trips.openSlide',
+      title: 'Open a slide',
+      description: 'Put a slide of the piece on the stage, by its 1-based position (1 is the hook).',
+      params: { position: { type: 'number', description: 'The slide’s position, from 1.', integer: true, min: 1 } },
+      run: (p) => {
+        const target = slideAt(p.position);
+        setSelected(target.position - 1);
+        return { open: target.position, kind: target.kind };
+      },
+    },
+    {
+      id: 'trips.setPictures',
+      title: 'Choose the piece’s pictures',
+      description:
+        'Set the piece’s pictures in swipe order, by Library asset id or name (library.assets; library.addFromWinnow brings Winnow’s in first): the first goes under the badge as the hook, the others become the slides. A slide already there keeps its timing, opener and words and only changes picture; the extra slides are dropped. One undo step.',
+      params: { assets: { type: 'strings', description: 'Library asset ids or names, in order.' } },
+      available: deckLocked,
+      run: async (p) => {
+        const files = (p.assets as string[]).map(libraryFile);
+        const refs = await Promise.all(files.map((f) => hashedMediaRef(f)));
+        writePost(withPictures(postNow.current, refs));
+        setSelected(0);
+        return { pictures: files.map((f) => f.name), slides: deckSlides(trip, postNow.current).length };
+      },
+    },
+    {
+      id: 'trips.openers',
+      title: 'The openers',
+      description: 'The animations a slide may open with — the badge, Défilé (a tape of the trip’s days), Virée (a vehicle driving the map), the Itinerary (a map of stops), the card, Vitrine (the vehicle on show) — each with its options and their defaults.',
+      run: () => openerList(),
+    },
+    {
+      id: 'trips.setOpener',
+      title: 'Open a slide with an opener',
+      description:
+        'Give a slide (the open one unless named; 1 is the hook) an opener from trips.openers, with options patched over what it had or its defaults. Switching keeps what the previous opener was given, as the picker does. Options are checked by name and type only — look at the result with trips.snapshot. One undo step.',
+      params: {
+        opener: { type: 'string', description: 'The opener id, from trips.openers.' },
+        options: { type: 'object', description: 'Options to write over the opener’s current ones.', optional: true },
+        position: { type: 'number', description: 'The slide’s position, from 1; the open slide when absent.', integer: true, min: 1, optional: true },
+      },
+      run: (p) => {
+        const target = slideAt(p.position);
+        if (target.kind === 'cta') throw new CommandError('invalid', 'the closing card holds no opener');
+        const now = postNow.current;
+        const stored = target.kind === 'hook' ? undefined : now.slides.find((x) => x.id === target.slideId);
+        const layers = target.kind === 'hook' ? now.badge.hook : (stored?.hook ?? []);
+        const shelf = target.kind === 'hook' ? now.badge.hookShelf : stored?.hookShelf;
+        const next = withOpener(layers, shelf, p.opener as string, p.options as Record<string, unknown> | undefined);
+        writePost(
+          target.kind === 'hook'
+            ? { ...now, badge: { ...now.badge, hook: next.hook, hookShelf: next.shelf } }
+            : { ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, hook: next.hook, hookShelf: next.shelf } : x)) },
+        );
+        return { position: target.position, opener: next.hook[0].id, options: next.hook[0].options };
+      },
+    },
+    {
+      id: 'trips.badge',
+      title: 'The badge’s words and counter',
+      description: `Write the badge's words over the ones it computes — pieces ${BADGE_PIECES.map((x) => x.id).join(', ')}; "" gives a piece back its computed word — and choose what it counts (${COUNTER_MODES.map((m) => m.id).join(', ')}). One undo step.`,
+      params: {
+        words: { type: 'object', description: 'Piece → word, e.g. {"caption": "Cairns"}.', optional: true },
+        counter: { type: 'string', description: 'What the badge counts.', enum: COUNTER_MODES.map((m) => m.id), optional: true },
+      },
+      run: (p) => {
+        if (p.words === undefined && p.counter === undefined) throw new CommandError('invalid', 'give words, a counter, or both');
+        const now = postNow.current;
+        let badge = now.badge;
+        if (p.words !== undefined) badge = withBadgeWords(badge, p.words as Record<string, unknown>);
+        if (p.counter !== undefined) badge = { ...badge, mode: readCounterMode(p.counter) };
+        writePost({ ...now, badge });
+        return { words: badge.textOverrides, counter: badge.mode };
+      },
+    },
+    {
+      id: 'trips.pieceSettings',
+      title: 'The piece’s title, shape and closing card',
+      description: `Set the piece's working title, its shape (${ASPECT_PRESETS.map((a) => a.id).join(', ')}) and whether it ends on the trip's call-to-action card. One undo step.`,
+      params: {
+        title: { type: 'string', description: 'The working title (never published).', optional: true },
+        aspect: { type: 'string', description: 'The frame shape.', enum: ASPECT_PRESETS.map((a) => a.id), optional: true },
+        callToAction: { type: 'boolean', description: 'End on the trip’s call-to-action card.', optional: true },
+      },
+      available: deckLocked,
+      run: (p) => {
+        const now = postNow.current;
+        const next: TripPost = {
+          ...now,
+          ...(typeof p.title === 'string' ? { title: p.title.trim() } : {}),
+          ...(typeof p.callToAction === 'boolean' ? { includeCta: p.callToAction } : {}),
+          ...(p.aspect !== undefined ? { badge: { ...now.badge, aspectId: readAspect(p.aspect) } } : {}),
+        };
+        writePost(next);
+        return { title: next.title || null, aspect: next.badge.aspectId, callToAction: next.includeCta };
+      },
+    },
+    {
+      id: 'trips.develop',
+      title: 'Correct a slide’s picture',
+      description:
+        'Write develop sliders on a slide’s picture (the open slide unless named; 1 is the hook), as ABSOLUTE values inside each range — exposure in EV −3..3, the others −100..100: exposure, brightness, contrast, highlights, shadows, whites, blacks, temperature, tint, saturation, vibrance. Everything not named is kept; values: {} with reset: true puts the picture back as shot. One undo step.',
+      params: {
+        values: { type: 'object', description: 'Slider → value, e.g. {"exposure": 0.4, "vibrance": 20}.' },
+        position: { type: 'number', description: 'The slide’s position, from 1; the open slide when absent.', integer: true, min: 1, optional: true },
+        reset: { type: 'boolean', description: 'Start from the picture as shot rather than its current develop.', optional: true },
+      },
+      run: (p) => {
+        const target = slideAt(p.position);
+        if (target.kind === 'cta') throw new CommandError('invalid', 'the closing card holds no picture');
+        if (target.collage) throw new CommandError('unavailable', 'a collage slide is corrected cell by cell, in the app');
+        const now = postNow.current;
+        const values = p.values as Record<string, unknown>;
+        const base = p.reset === true ? null : target.develop;
+        const develop = Object.keys(values).length === 0 && p.reset === true ? null : withDevelopValues(base, values);
+        writePost(
+          target.kind === 'hook'
+            ? { ...now, badge: { ...now.badge, develop } }
+            : { ...now, slides: now.slides.map((x) => (x.id === target.slideId ? { ...x, develop } : x)) },
+        );
+        return { position: target.position, controls: developControls(develop).filter((c) => c.value !== 0) };
+      },
+    },
+    {
+      id: 'trips.snapshot',
+      title: 'Look at a slide',
+      description: 'A slide of the piece (the open one unless named) rendered as the export’s PNG would be — badge settled, opener at rest, graded — at a smaller size. Waits for the map tiles and pictures the openers asked for.',
+      params: {
+        position: { type: 'number', description: 'The slide’s position, from 1; the open slide when absent.', integer: true, min: 1, optional: true },
+        longEdge: { type: 'number', description: 'The long edge in pixels; 1080 when absent.', integer: true, min: 128, max: 2048, optional: true },
+      },
+      run: async (p) => {
+        const target = slideAt(p.position);
+        const ctl = new AbortController();
+        const wait = window.setTimeout(() => ctl.abort(), 20_000);
+        try {
+          await hookPicturesReady?.(ctl.signal);
+        } catch {
+          // A ground that does not arrive in time is drawn without it, as the stage draws it.
+        } finally {
+          window.clearTimeout(wait);
+        }
+        const blob = await exportsNow.current.renderStill(target.position, typeof p.longEdge === 'number' ? p.longEdge : 1080);
+        if (!blob) throw new CommandError('failed', `slide ${target.position} could not be rendered — is its picture in the Library?`);
+        const bitmap = await createImageBitmap(blob);
+        const size = { w: bitmap.width, h: bitmap.height };
+        bitmap.close();
+        return imageResult(blob, size.w, size.h, `slide ${target.position} (${target.kind}) as exported`);
+      },
+    },
+    {
+      id: 'trips.exportPlan',
+      title: 'What an export would write',
+      description: 'Before anything is rendered: each slide’s file — its name, image or video, seconds — and why a slide cannot be written, if it cannot.',
+      run: () => ({
+        plan: describePlan(exportPlanNow),
+        files: exportPlanNow.items.map((i) => ({ position: i.slide.position, name: i.name, medium: i.medium, seconds: i.seconds, blocker: i.blocker })),
+      }),
+    },
+    {
+      id: 'trips.export',
+      title: 'Export the piece',
+      description:
+        'Render the piece and hand its files to the agent bridge, which writes them into its output folder on this computer: every slide in the format the deck says (PNGs for stills, MP4s for what moves), or every slide as a PNG with stills: true. Answers the paths written and the run’s own sentence. Needs the bridge.',
+      params: { stills: { type: 'boolean', description: 'Every slide as a PNG, whatever moves.', optional: true } },
+      available: () =>
+        bridgeState().status !== 'connected'
+          ? 'an export by an agent goes through the bridge, and none is connected'
+          : exports.run
+            ? 'an export is already running'
+            : true,
+      run: async (p) => {
+        const written: string[] = [];
+        const sink = bridgeSink((path) => written.push(path));
+        if (!sink) throw new CommandError('unavailable', 'the bridge went away');
+        await exportsNow.current.exportPiece(p.stills === true, sink);
+        await new Promise((resolve) => window.setTimeout(resolve, 50));
+        return { written, note: exportsNow.current.note };
+      },
+    },
+  ]);
 
   // --- the fields a click on the stage lands in -----------------------------
   const textFieldRef = useRef<HTMLInputElement>(null);

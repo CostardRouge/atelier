@@ -19,7 +19,13 @@ import {
   tripRef,
 } from '../../shared/roadtrip/trip-route';
 import type { IsoDate } from '../../shared/roadtrip/trip-days';
-import type { TripDoc, TripPost } from '../../shared/roadtrip/trip-types';
+import { createTripDoc, createTripPost, type PostKind, type TripDoc, type TripPost } from '../../shared/roadtrip/trip-types';
+import { CommandError } from '../../shared/commands/registry';
+import { useRegisterCommands } from '../../shared/commands/use-commands';
+import { readDay } from '../../shared/develop/ingest-commands';
+import { tripDetail, tripSummary } from '../../shared/roadtrip/trip-commands';
+import { applyHouseStyle } from '../../shared/roadtrip/house-style';
+import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import { pullTrip, pushOnce } from '../../shared/roadtrip/trip-remote';
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
@@ -275,6 +281,153 @@ export default function RoadTripTool() {
     },
   });
   historyRef.current = history;
+
+  // --- the tool's commands (`shared/commands/`, `trip-commands.ts`) ---------
+  // Trips and pieces as an agent drives them: every write goes through
+  // `handleChange`, so it is saved, synced and one step of the undo stack
+  // above, exactly like a gesture. The open PIECE registers its own
+  // (`PostEditor`).
+  async function findTrip(id: unknown): Promise<TripDoc> {
+    const found = (await listTrips()).find((t) => t.id === id);
+    if (!found) throw new CommandError('invalid', `no trip "${String(id)}" — trips.list lists them`);
+    return open && open.id === found.id ? open : found;
+  }
+  const needOpen = () => (open ? true : 'no trip is open — trips.open opens one');
+  useRegisterCommands('trips', [
+    {
+      id: 'trips.list',
+      title: 'List the trips',
+      description: 'Every trip this browser holds — id, name, first and last day, how many legs and pieces — and which one is open.',
+      run: async () => ({
+        open: open?.id ?? null,
+        trips: (await listTrips()).map((t) => tripSummary(open && t.id === open.id ? open : t)),
+      }),
+    },
+    {
+      id: 'trips.create',
+      title: 'Make a trip',
+      description: 'Make a trip kept in this browser over two days (YYYY-MM-DD) and open it. It wears the house style when one is committed. Its legs can then be deduced from Winnow in the app, and pieces made with trips.newPiece.',
+      params: {
+        name: { type: 'string', description: 'The trip’s name, as its badge says it.' },
+        from: { type: 'string', description: 'First day, YYYY-MM-DD.' },
+        to: { type: 'string', description: 'Last day, YYYY-MM-DD.' },
+      },
+      run: async (p) => {
+        const name = (p.name as string).trim();
+        if (!name) throw new CommandError('invalid', 'a trip needs a name');
+        const from = readDay('from', p.from);
+        const to = readDay('to', p.to);
+        if (to < from) throw new CommandError('invalid', 'to comes before from');
+        const doc = applyHouseStyle(createTripDoc(name, from, to), bundledHouseStyle());
+        if (!(await putTrip(doc))) throw new CommandError('failed', 'the browser refused to store the trip');
+        handleOpen(doc);
+        return tripSummary(doc);
+      },
+    },
+    {
+      id: 'trips.open',
+      title: 'Open a trip, a day or a piece',
+      description: 'Open a trip on its overview, on one of its days, or on one of its pieces. A piece’s own commands (trips.piece…) open once its editor has — wait for trips.piece with app.waitFor.',
+      params: {
+        trip: { type: 'string', description: 'The trip id, from trips.list.' },
+        date: { type: 'string', description: 'A day of the trip, YYYY-MM-DD.', optional: true },
+        piece: { type: 'string', description: 'A piece id, from trips.get.', optional: true },
+      },
+      run: async (p) => {
+        const trip = await findTrip(p.trip);
+        const post = typeof p.piece === 'string' ? trip.posts.find((x) => x.id === p.piece) : undefined;
+        if (typeof p.piece === 'string' && !post) throw new CommandError('invalid', `the trip holds no piece "${p.piece}"`);
+        const date = post?.date ?? (p.date === undefined ? null : readDay('date', p.date));
+        if (date && (date < trip.startDate || date > trip.endDate)) {
+          throw new CommandError('invalid', `${date} is outside the trip (${trip.startDate} → ${trip.endDate})`);
+        }
+        if (!open || open.id !== trip.id) handleOpen(trip);
+        navigate(roadtripPath(tripRef(trip), date, post?.id ?? null));
+        return { trip: trip.id, date, piece: post?.id ?? null };
+      },
+    },
+    {
+      id: 'trips.get',
+      title: 'Read the open trip',
+      description: 'The open trip: its days, its legs with their places, and its pieces (id, kind, day, title, how many pictures, opener, published).',
+      available: needOpen,
+      run: () => (open ? tripDetail(open) : null),
+    },
+    {
+      id: 'trips.rename',
+      title: 'Rename the open trip',
+      description: 'Give the open trip a new name — the name its badges say. One undo step.',
+      params: { name: { type: 'string', description: 'The new name.' } },
+      available: needOpen,
+      run: (p) => {
+        const name = (p.name as string).trim();
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        if (!name) throw new CommandError('invalid', 'a trip needs a name');
+        handleChange({ ...open, name, updatedAt: Date.now() });
+        return { trip: open.id, name };
+      },
+    },
+    {
+      id: 'trips.newPiece',
+      title: 'Start a piece on a day',
+      description:
+        'Start a piece telling a day of the open trip — reel (one video, the badge burned into its opening), carousel (several slides) or photo — wearing the look the trip last gave that kind, and open it. Then trips.setPictures fills it, trips.setOpener and trips.badge dress it, trips.snapshot shows it, trips.export delivers it.',
+      params: {
+        date: { type: 'string', description: 'The day it tells, YYYY-MM-DD.' },
+        kind: { type: 'string', description: 'reel, carousel or photo.', enum: ['reel', 'carousel', 'photo'] },
+        title: { type: 'string', description: 'A working title, to find it again (never published).', optional: true },
+      },
+      available: needOpen,
+      run: (p) => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const date = readDay('date', p.date);
+        if (date < open.startDate || date > open.endDate) {
+          throw new CommandError('invalid', `${date} is outside the trip (${open.startDate} → ${open.endDate})`);
+        }
+        const kind = p.kind as PostKind;
+        const post = createTripPost(kind, date, typeof p.title === 'string' ? p.title : '', null, open.hookDefaults[kind]);
+        handleChange({ ...open, posts: [...open.posts, post], updatedAt: Date.now() });
+        navigate(roadtripPath(tripRef(open), date, post.id));
+        return { piece: post.id, kind, date };
+      },
+    },
+    {
+      id: 'trips.deletePiece',
+      title: 'Delete a piece',
+      description: 'Take a piece off the open trip. One undo step (trips.undo brings it back).',
+      params: { piece: { type: 'string', description: 'The piece id, from trips.get.' } },
+      available: needOpen,
+      run: (p) => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const post = open.posts.find((x) => x.id === p.piece);
+        if (!post) throw new CommandError('invalid', `the trip holds no piece "${String(p.piece)}"`);
+        if (route.postId === post.id) navigate(roadtripPath(tripRef(open), post.date));
+        void deleteThumbs([post.id]);
+        handleChange({ ...open, posts: open.posts.filter((x) => x.id !== post.id), updatedAt: Date.now() });
+        return { deleted: post.id };
+      },
+    },
+    {
+      id: 'trips.undo',
+      title: 'Undo',
+      description: 'Step the open trip back one edit — the same stack as ⌘Z, the agent’s writes included. Writes less than 0.7 s apart on one screen are one step.',
+      available: () => (!open ? 'no trip is open' : history.canUndo ? true : 'nothing to undo'),
+      run: () => {
+        history.undo();
+        return { undone: true };
+      },
+    },
+    {
+      id: 'trips.redo',
+      title: 'Redo',
+      description: 'Step the open trip forward again after an undo.',
+      available: () => (!open ? 'no trip is open' : history.canRedo ? true : 'nothing to redo'),
+      run: () => {
+        history.redo();
+        return { redone: true };
+      },
+    },
+  ]);
 
   // --- opening a remote trip: the resume workflow -------------------------
   // The mirror opens at once; the instance is asked whether it moved, and a

@@ -146,11 +146,21 @@ export interface PostExports {
    * next export that starts.
    */
   undecodable: File | null;
-  /** The piece's ONE primary export: every slide in the format it is. */
-  exportPiece: (imagesOnly?: boolean) => Promise<void>;
+  /**
+   * The piece's ONE primary export: every slide in the format it is. `to` is
+   * where it lands when the caller already has a target (the agent bridge's
+   * sink); without one the folder is asked at the click.
+   */
+  exportPiece: (imagesOnly?: boolean, to?: DeliveryTarget) => Promise<void>;
   /** Every slide as a PNG — or only the slide at `position`. */
-  exportDeck: (position?: number) => Promise<void>;
+  exportDeck: (position?: number, to?: DeliveryTarget) => Promise<void>;
   exportHookClip: () => Promise<void>;
+  /**
+   * ONE slide rendered as the deck's PNG would be, at `longEdge`, written
+   * nowhere — what an agent looks at (`trips.snapshot`). Settled, never mid
+   * animation; the same renderer, looks and pictures as the export.
+   */
+  renderStill: (position: number, longEdge: number) => Promise<Blob | null>;
 }
 
 /** A still is rendered then written; what moves is encoded then written. */
@@ -594,7 +604,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * the author sees what it will write before pressing it, and a slide that
    * cannot be written says why instead of failing silently in the middle.
    */
-  async function exportPiece(imagesOnly = false) {
+  async function exportPiece(imagesOnly = false, to?: DeliveryTarget) {
     // The piece as it is AT THE CLICK, before anything awaits: the documents
     // are this render's, and the looks are asked now (`frozen-looks.ts`) —
     // the grade stack answers live, and a look nudged mid-run used to reach
@@ -616,7 +626,7 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     // Where it lands, asked FIRST: the folder picker opens only in the few
     // seconds the click is honoured for, and a piece renders longer than that
     // (`deliver-files.ts`).
-    const target = await askTarget();
+    const target = to ?? (await askTarget());
     if (!target) return;
 
     const items = plan.items.filter((i) => i.blocker === null);
@@ -741,11 +751,11 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
    * order on disk; where the picker is unavailable each slide is downloaded
    * in turn, which is the only thing a non-Chromium browser can do.
    */
-  async function exportDeck(position?: number) {
+  async function exportDeck(position?: number, to?: DeliveryTarget) {
     const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
     inputs.onStart?.();
     setNote(null);
-    const target = await askTarget();
+    const target = to ?? (await askTarget());
     if (!target) return;
     const slides = deckSlides(inputs.trip, inputs.post).filter((s) => position === undefined || s.position === position);
     const signal = beginTask(position === undefined ? 'Exporting the slides' : 'Exporting the slide');
@@ -804,5 +814,23 @@ export function usePostExports(inputs: PostExportInputs): PostExports {
     }
   }
 
-  return { exporting, run, cancel, progress, note, undecodable, exportPiece, exportDeck, exportHookClip };
+  async function renderStill(position: number, longEdge: number): Promise<Blob | null> {
+    const looks = freezeLooks(deckSlides(inputs.trip, inputs.post), inputs.lutFor, inputs.filmFor);
+    const [file] = await renderDeck({
+      trip: inputs.trip,
+      post: inputs.post,
+      aspect: inputs.aspect,
+      longEdge,
+      timeSeconds: inputs.timeSeconds,
+      resolve: inputs.resolve,
+      pictures: livePictures(),
+      exif: inputs.exif,
+      lutFor: looks.lutFor,
+      filmFor: looks.filmFor,
+      include: (s) => s.position === position,
+    });
+    return file?.blob ?? null;
+  }
+
+  return { exporting, run, cancel, progress, note, undecodable, exportPiece, exportDeck, exportHookClip, renderStill };
 }

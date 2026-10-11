@@ -51,7 +51,7 @@ export type TabRequest = { id: string; kind: 'list' } | { id: string; kind: 'run
 export type TabMessage =
   | { id: string; ok: true; result: unknown }
   | { id: string; ok: false; error: { code: string; message: string } }
-  | { hello: { app: string; route: string; title: string } };
+  | { hello: { app: string; route: string; title: string; latest?: number } };
 
 /** An MCP content block. */
 export type McpContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
@@ -154,7 +154,8 @@ export function parseTabMessage(text: string): TabMessage | null {
   if (!isRecord(raw)) return null;
   if (isRecord(raw.hello)) {
     const h = raw.hello;
-    return { hello: { app: String(h.app ?? ''), route: String(h.route ?? ''), title: String(h.title ?? '') } };
+    const latest = typeof h.latest === 'number' && Number.isInteger(h.latest) && h.latest > 0 ? h.latest : undefined;
+    return { hello: { app: String(h.app ?? ''), route: String(h.route ?? ''), title: String(h.title ?? ''), ...(latest ? { latest } : {}) } };
   }
   if (typeof raw.id !== 'string') return null;
   if (raw.ok === true) return { id: raw.id, ok: true, result: raw.result };
@@ -202,8 +203,9 @@ export const DEPLOYED_ORIGINS: readonly string[] = ['https://atelier.steeve.webs
  */
 export const MCP_INSTRUCTIONS = [
   'Atelier is a local-first suite of browser tools for photo and video captures; this bridge drives the Atelier tab the person connected. Start with atelier_status, then atelier_run "app.status" (where the tab is, which command families are open). List a family with atelier_commands {family}. Chain several writes with atelier_batch.',
-  'FIND media first (always open, need a connected Winnow): winnow.calendar {month} → which days hold media; winnow.folders; winnow.assets {date|folder, verdict, minStars, tag, label} → rows with EXIF, GPS and Winnow’s culling; winnow.sheet → one image of thumbnails labelled by id, to choose by eye.',
+  'FIND media first (always open, need a connected Winnow): winnow.calendar {month} → which days hold media; winnow.folders; winnow.assets {date|folder, verdict, minStars, tag, label} → rows with EXIF, GPS and Winnow’s culling; winnow.sheet → one image of thumbnails labelled by id, to choose by eye. PEOPLE: winnow.people (and winnow.peopleSheet to see their faces) gives ids and names; winnow.assets, winnow.sheet and develop.addFromWinnow take people:[ids] or who:["name"], together:true for everyone in one frame, faces: none|any|solo|group; winnow.faces {id} says who is in one medium. Naming or merging people is Winnow’s own MCP’s job.',
   'DEVELOP: app.navigate {path:"/develop/home"}, app.waitFor {command:"develop.rolls"}, develop.newRoll or develop.openRoll, develop.addFromWinnow {ids} (or {date, verdict…}), develop.contactSheet to see the whole roll, develop.openPicture, app.waitFor {command:"develop.snapshot"}, then develop.set / curve / grading / crop / addLook / auto…, develop.measure (histogram numbers) and develop.snapshot (the picture) to check, develop.applyTo or develop.applyPreset to spread a look, develop.exportSettings and develop.export (files land in the bridge’s folder).',
+  'TRIPS (a day told as a reel, a carousel or a photo, with the trip’s badge): app.navigate {path:"/roadtrip/home"}, app.waitFor {command:"trips.list"}, trips.create or trips.open, trips.newPiece {date, kind}, app.waitFor {command:"trips.piece"}, library.addFromWinnow {ids} to bring the pictures in, trips.setPictures {assets}, trips.setOpener / trips.badge / trips.develop / trips.pieceSettings, trips.snapshot to look at a slide as exported, trips.export (files land in the bridge’s folder).',
   'Every write goes through the person’s own undo (develop.undo) and journal, marked as an agent’s. Values are refused outside their range, never clamped — read the refusal and retry. A command missing from the list belongs to a screen that is not open: navigate, then app.waitFor it.',
 ].join('\n\n');
 
@@ -216,16 +218,44 @@ export function notConnectedText(port: number): string {
   ].join('\n');
 }
 
+/**
+ * Which bridge answers and whether Atelier ships a newer one: this bridge's
+ * number, the hub's when this one follows it, and a sentence to say when the
+ * tab's build carries a higher one — so an agent can tell its person to update.
+ */
+export function bridgeStatus(deps: Pick<McpDeps, 'bridgeVersion' | 'hubVersion'>, tab: TabInfo | null): Record<string, unknown> {
+  const mine = deps.bridgeVersion;
+  if (typeof mine !== 'number') return {};
+  const hub = typeof deps.hubVersion === 'number' ? deps.hubVersion : null;
+  const latest = tab?.latest;
+  const oldest = Math.min(mine, hub ?? mine);
+  return {
+    bridge: `v${mine}`,
+    ...(hub !== null ? { hubBridge: `v${hub}` } : {}),
+    ...(typeof latest === 'number' ? { latestBridge: `v${latest}` } : {}),
+    ...(typeof latest === 'number' && latest > oldest
+      ? {
+          update: `Atelier ships bridge v${latest} and v${oldest} is running here — get the new one from Atelier’s #/agents page (Claude Desktop: open atelier.mcpb and choose Update; Claude Code: download atelier-mcp.mjs over the old file), then restart the app.`,
+        }
+      : {}),
+  };
+}
+
 /** What a bridge knows of the tab connected to it. */
 export interface TabInfo {
   route: string;
   title: string;
   since: number;
+  /** The bridge version the tab's build ships (`BRIDGE_VERSION` there) — newer than this one means an update is out. */
+  latest?: number;
 }
 
 /** What the script needs from its environment to answer one MCP message. */
 export interface McpDeps {
   serverVersion: string;
+  /** This bridge's own number (`bridge-version.ts`), and the hub's when this one follows another. */
+  bridgeVersion?: number;
+  hubVersion?: number | null;
   /**
    * The tab as last introduced, or null when none is connected — asked of the
    * HUB bridge when this one only follows it, hence the promise.
@@ -259,7 +289,19 @@ async function callTool(name: string, args: Record<string, unknown>, deps: McpDe
       content: [
         {
           type: 'text',
-          text: JSON.stringify({ connected: true, route: tab.route, title: tab.title, connectedFor: `${Math.round((Date.now() - tab.since) / 1000)} s`, port: deps.port, ...(deps.outDir ? { exportsGoTo: deps.outDir } : {}) }, null, 2),
+          text: JSON.stringify(
+            {
+              connected: true,
+              route: tab.route,
+              title: tab.title,
+              connectedFor: `${Math.round((Date.now() - tab.since) / 1000)} s`,
+              port: deps.port,
+              ...(deps.outDir ? { exportsGoTo: deps.outDir } : {}),
+              ...bridgeStatus(deps, tab),
+            },
+            null,
+            2,
+          ),
         },
       ],
     };

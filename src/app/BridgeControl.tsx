@@ -2,6 +2,7 @@ import { useState, useSyncExternalStore } from 'react';
 import { bridgeState, startBridge, stopBridge, subscribeBridge, type BridgeState } from '../shared/commands/bridge-client';
 import { BRIDGE_DEFAULT_PORT } from '../shared/commands/mcp-protocol';
 import Button from '../shared/ui/Button';
+import { BRIDGE_VERSION, bridgeLabel } from '../shared/commands/bridge-version';
 
 /**
  * The agent bridge's live state and its Connect / Disconnect — drawn by the
@@ -93,4 +94,33 @@ export function bridgeSentence(bridge: BridgeState): string | null {
   if (bridge.status === 'waiting') return /[.?!]$/.test(bridge.reason) ? bridge.reason : `${bridge.reason}.`;
   if (bridge.status === 'replaced') return 'Another Atelier tab connected to the bridge, so this one stood down.';
   return null;
+}
+
+/**
+ * Which bridge this tab talks to and whether the site ships a newer one —
+ * "Bridge v3 · Atelier ships v4 — update it" — or, while nothing is
+ * connected, the number of the one the site serves (`bridge-version.ts`).
+ */
+export function BridgeVersionLine({ bridge, onUpdate }: { bridge: BridgeState; onUpdate?: () => void }) {
+  const latest = bridgeLabel(BRIDGE_VERSION);
+  if (bridge.status !== 'connected') {
+    return <span className="font-mono text-2xs text-muted">Latest bridge {latest}</span>;
+  }
+  const running = bridge.bridge;
+  if (running !== null && running >= BRIDGE_VERSION) {
+    return <span className="font-mono text-2xs text-ok">Bridge {bridgeLabel(running)} · up to date</span>;
+  }
+  return (
+    <span className="font-mono text-2xs text-warn">
+      Bridge {bridgeLabel(running)} · Atelier ships {latest}
+      {onUpdate && (
+        <>
+          {' — '}
+          <button type="button" onClick={onUpdate} className="underline underline-offset-2 text-warn hover:text-ink">
+            update it
+          </button>
+        </>
+      )}
+    </span>
+  );
 }
