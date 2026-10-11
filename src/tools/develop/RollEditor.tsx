@@ -2,7 +2,11 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
-import { CommandError, commands, type ImageResult } from '../../shared/commands/registry';
+import { CommandError, commands, waitForCommand, type ImageResult } from '../../shared/commands/registry';
+import { exposureOffset, withExposureOffset } from '../../shared/develop/match-exposure';
+import { applyRuleValues, planRules, readRules } from '../../shared/develop/apply-rules';
+import { findPreset, presetOnto } from '../../shared/develop/preset-commands';
+import { splitAssetId } from '../../shared/sources/winnow/finals';
 import { blobOfImageResult } from '../../shared/commands/image-result';
 import { pictureChapters } from '../../shared/develop/timelapse-chapters';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
@@ -46,7 +50,7 @@ import {
   summarizeAvailability,
   type PictureAvailability,
 } from '../../shared/develop/roll-media';
-import { deleteRollThumbs, getRollThumbEntries, putRollThumb, setRollThumbAspect } from '../../shared/develop/roll-store';
+import { deleteRollThumbs, getRollShots, getRollThumbEntries, putRollThumb, setRollThumbAspect } from '../../shared/develop/roll-store';
 import {
   STRIP_FILTERS,
   STRIP_METRICS,
@@ -102,6 +106,7 @@ import {
   type JournalVia,
   type RollDoc,
   type RollExport,
+  type RollGrade,
   type RollPicture,
   type VariantStart,
   readRollExport,
@@ -1191,6 +1196,131 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           steps: chapters.map((c) => ({ at: new Date(c.at).toISOString(), sections: c.sections, by: c.via ?? 'author', caption: c.caption })),
           summary: chapters.map((c) => c.caption).join(' · ') || 'nothing done yet',
         };
+      },
+    },
+    {
+      id: 'develop.match',
+      title: 'Harmonise a series on one picture',
+      description:
+        'Make other pictures of the roll wear a REFERENCE picture’s settings (the open one unless named) — its edited sections plus the develop by default, any sections otherwise — and offset each one’s EXPOSURE so its median brightness lands on the reference’s, measured on the pictures as shot (the as-shot records the roll keeps; a picture without one takes the numbers as they are and is said). A drone, a Sony and a phone metered differently then read as one light. ±2 EV at most, said when the gap was wider. One undo step.',
+      params: {
+        to: { type: 'strings', description: 'Picture ids, or ["all"] for every other picture not ignored.' },
+        reference: { type: 'string', description: 'The reference picture; the open one when absent.', optional: true },
+        sections: { type: 'strings', description: `Section ids (${SECTION_IDS.join(', ')}); the reference’s edited sections plus the develop when absent.`, optional: true },
+        matchExposure: { type: 'boolean', description: 'false copies the exposure as it is instead of offsetting it.', optional: true },
+      },
+      run: async (p) => {
+        const roll = latest.current;
+        const source = targetPicture(roll, p.reference, openIdRef.current);
+        const to = p.to as string[];
+        const ids =
+          to.length === 1 && to[0] === 'all'
+            ? roll.pictures.filter((x) => x.id !== source.id && !isIgnored(x)).map((x) => x.id)
+            : to.map((id) => targetPicture(roll, id, null).id).filter((id) => id !== source.id);
+        if (ids.length === 0) throw new CommandError('invalid', 'nothing to harmonise — name other pictures than the reference');
+        const asked = (p.sections as string[] | undefined) ?? [...new Set([...pictureEdits(source), 'develop'])];
+        const unknown = asked.filter((s) => !(SECTION_IDS as readonly string[]).includes(s));
+        if (unknown.length) throw new CommandError('invalid', `no section ${unknown.join(', ')} — the sections are ${SECTION_IDS.join(', ')}`);
+        update((r) => applySections(r, r.pictures.find((x) => x.id === source.id) ?? source, ids, asked as PictureSection[]), 'agent');
+        const exposure: Record<string, { ev: number; clamped: boolean } | 'no as-shot record'> = {};
+        if (p.matchExposure !== false && asked.includes('develop')) {
+          const shots = await getRollShots(roll.id);
+          const ref = shots.get(source.id);
+          for (const id of ids) {
+            const shot = shots.get(id);
+            const offset = ref && shot ? exposureOffset(ref.stats, shot.stats) : null;
+            if (!offset) {
+              exposure[id] = 'no as-shot record';
+              continue;
+            }
+            exposure[id] = offset;
+            if (offset.ev !== 0) {
+              update((r) => patchPicture(r, id, { develop: withExposureOffset(r.pictures.find((x) => x.id === id)?.develop ?? null, offset.ev) }), 'agent');
+            }
+          }
+        }
+        return { reference: source.id, to: ids, sections: asked, exposure };
+      },
+    },
+    {
+      id: 'develop.applyRules',
+      title: 'A develop by rule',
+      description:
+        'Give pictures a preset or slider values BY RULE: each rule is {when: facets as winnow.assets takes them (time, hourFrom/hourTo, light, gear, camera, orientation, focalMin/Max, apertureMax, isoMin, shutterMin, altitudeMin, nearLat/nearLon/nearKm), preset: a preset’s name or id} or {when, values: {exposure…}}; the first rule a picture matches is applied, judged on the Winnow row its file came from. A picture from a local file has no row and is left alone, said as such; so is one no rule matches. Every rule is checked before any picture is written. One undo step.',
+      params: {
+        rules: { type: 'array', description: 'The rules in order, e.g. [{"when": {"light": "golden"}, "preset": "Warm"}, {"when": {"gear": "drone"}, "values": {"exposure": 0.3}}].' },
+        pictures: { type: 'strings', description: 'Picture ids; every picture not ignored when absent.', optional: true },
+      },
+      available: () => (winnowRef.current.client && winnowRef.current.connection ? true : 'no Winnow is connected — connect one on #/sources'),
+      run: async (p) => {
+        const { client: c, connection: conn } = winnowRef.current;
+        if (!c || !conn) throw new CommandError('unavailable', 'no Winnow is connected');
+        const rules = readRules(p.rules);
+        const book = await presetsNow();
+        const presets = rules.map((r) => (r.preset ? findPreset(book, r.preset) : null));
+        const roll = latest.current;
+        const ids = (p.pictures as string[] | undefined)?.map((id) => targetPicture(roll, id, null).id) ?? roll.pictures.filter((x) => !isIgnored(x)).map((x) => x.id);
+        const targets = ids.map((id) => roll.pictures.find((x) => x.id === id)!);
+        const wanted = new Map<string, number>();
+        for (const t of targets) {
+          const split = splitAssetId(t.ref.assetId);
+          if (split && split.host === conn.id) wanted.set(t.id, split.id);
+        }
+        const rows = new Map<number, WinnowAssetRow>();
+        const all = [...new Set(wanted.values())];
+        for (let i = 0; i < all.length; i += 200) for (const row of await c.assetsByIds(all.slice(i, i + 200))) rows.set(row.id, row);
+        const plan = planRules(
+          targets.map((t) => ({ id: t.id, row: (wanted.has(t.id) && rows.get(wanted.get(t.id)!)) || null })),
+          rules,
+        );
+        update((r) => {
+          let next = r;
+          for (const m of plan.matched) {
+            const t = next.pictures.find((x) => x.id === m.id);
+            if (!t) continue;
+            const rule = rules[m.rule];
+            const preset = presets[m.rule];
+            if (preset) {
+              next = patchPicture(next, m.id, { develop: presetOnto(t.develop, preset.settings) });
+              if (preset.look) next = copyGradeTo(next, [m.id], preset.look as RollGrade);
+            } else next = patchPicture(next, m.id, { develop: applyRuleValues(t.develop, rule) });
+          }
+          return next;
+        }, 'agent');
+        return {
+          applied: plan.matched.map((m) => ({ picture: m.id, rule: m.rule, does: presets[m.rule]?.name ?? 'values' })),
+          unmatched: plan.unmatched,
+          noRow: plan.noRow,
+        };
+      },
+    },
+    {
+      id: 'develop.autoAll',
+      title: 'The Auto verbs on many pictures',
+      description:
+        'Run develop.auto on several pictures (every picture not ignored when none is named), one after the other — each is opened, measured as shot, and given the steps asked (tone, colour, bands, detail, level, upright; all when absent). Slow: a decode per picture. The picture that was open comes back at the end. Answers what each step said, per picture.',
+      params: {
+        steps: { type: 'strings', description: 'Any of tone, colour, bands, detail, level, upright; all when absent.', optional: true },
+        pictures: { type: 'strings', description: 'Picture ids; every picture not ignored when absent.', optional: true },
+      },
+      run: async (p) => {
+        const roll = latest.current;
+        const ids = (p.pictures as string[] | undefined)?.map((id) => targetPicture(roll, id, null).id) ?? roll.pictures.filter((x) => !isIgnored(x)).map((x) => x.id);
+        const back = openIdRef.current;
+        const results: Record<string, unknown> = {};
+        for (const id of ids) {
+          onOpenPicture(id);
+          try {
+            // The workbench is keyed on the picture: its commands leave and come back for the new one.
+            await new Promise((resolve) => window.setTimeout(resolve, 100));
+            await waitForCommand(commands, 'develop.auto', 60_000);
+            results[id] = await commands.execute('develop.auto', p.steps ? { steps: p.steps } : {});
+          } catch (err) {
+            results[id] = { error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+        if (back && back !== openIdRef.current) onOpenPicture(back);
+        return { pictures: ids.length, results };
       },
     },
     {
