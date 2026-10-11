@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { askFromParams, cullingMark, filterAsk, readAssetQuery, readMoment, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { askFromParams, cullingMark, filterAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import type { GazetteerCity } from '../../roadtrip/gazetteer';
 import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 
 const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow =>
@@ -58,13 +59,15 @@ describe('readAssetQuery', () => {
   });
 
   it('refuses a listing with neither a day nor a folder, and a span backwards', () => {
-    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, people or words/);
+    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, people, words or a place/);
     expect(() => readAssetQuery({ date: '2026-09-15', dateTo: '2026-09-14' })).toThrow(/before/);
     expect(() => readAssetQuery({ dateTo: '2026-09-14' })).toThrow(/needs a date/);
   });
 
-  it('takes words as a scope of their own and sends them to the server', () => {
+  it('takes words and a place as scopes of their own', () => {
     expect(readAssetQuery({ words: ' Uluru ' }).query).toEqual({ words: 'Uluru' });
+    expect(readAssetQuery({ nearLat: -16.9, nearLon: 145.7, nearKm: 40 }).filter).toEqual({ near: { lat: -16.9, lon: 145.7, km: 40 } });
+    expect(readAssetQuery({ near: 'Cairns' }).filter).toEqual({});
   });
 
   it('reads the moment into the filter', () => {
@@ -74,18 +77,6 @@ describe('readAssetQuery', () => {
       gear: 'drone',
       camera: 'FC8482',
     });
-  });
-});
-
-describe('readMoment', () => {
-  it('reads an hour span, wrapping past midnight', () => {
-    expect(readMoment({ hourFrom: 21, hourTo: 3 })).toEqual({ hours: [21, 3] });
-  });
-
-  it('refuses half a span, two ways of saying the hours, and an empty span', () => {
-    expect(() => readMoment({ hourFrom: 6 })).toThrow(/together/);
-    expect(() => readMoment({ time: 'morning', hourFrom: 6, hourTo: 9 })).toThrow(/not both/);
-    expect(() => readMoment({ hourFrom: 6, hourTo: 6 })).toThrow(/empty/);
   });
 });
 
@@ -188,3 +179,17 @@ describe('askFromParams', () => {
     expect(ask.query).toMatchObject({ people: [3, 2], together: true });
   });
 });
+
+describe('resolveTown', () => {
+  const cities: GazetteerCity[] = [
+    { name: 'Exmouth', country: 'AU', lat: -21.93, lon: 114.13, population: 2500, section: false, region: 'WA' } as GazetteerCity,
+    { name: 'Exmouth', country: 'GB', lat: 50.62, lon: -3.41, population: 34000, section: false, region: 'Devon' } as GazetteerCity,
+  ];
+  it('takes the biggest town of that name and says which', () => {
+    expect(resolveTown('exmouth', cities, 30)).toEqual({ near: { lat: 50.62, lon: -3.41, km: 30 }, town: { name: 'Exmouth', country: 'GB' } });
+  });
+  it('refuses a town the index does not know', () => {
+    expect(() => resolveTown('Nowhere', cities, 25)).toThrow(/no town named "Nowhere"/);
+  });
+});
+

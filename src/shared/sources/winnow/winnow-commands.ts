@@ -19,44 +19,23 @@ import { cullingFromRow, type Verdict } from './culling';
 import type { AssetQuery, WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 import type { WinnowConnection } from './store';
 import { monthSpan } from './month';
-import { TIMES_OF_DAY, gearOf, inHours, lightOf, localClock, localMinutes, type GearKind, type Light, type TimeOfDay } from './capture-moment';
+import { gearOf, lightOf, localClock, type GearKind, type Light } from './capture-moment';
+import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
+import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
+import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
 
 /** How many rows a listing may ask for at most — the client's own cap. */
 export const MAX_ROWS = 2000;
 
-/**
- * What Atelier reads off each row itself, past what Winnow filters: WHEN
- * (the local hour, the light) and WITH WHAT (the body's kind, its name) —
- * `capture-moment.ts`.
- */
-export interface MomentFilter {
-  /** Local hours [from, to), wrapping past midnight when from > to. */
-  hours?: readonly [number, number];
-  light?: Light;
-  gear?: GearKind;
-  /** A part of the body's name ("FC8482", "A7C", "iPhone"), case aside. */
-  camera?: string;
-}
-
 /** The query and the Atelier-side filter a listing command reads from its params. */
 export interface AssetAsk {
   query: AssetQuery;
-  filter: RowFilter & MomentFilter;
+  filter: RowFilter & RowFacets;
 }
 
-/** The rows that pass both halves of the filter, in the order they came. */
-export function filterAsk(rows: readonly WinnowAssetRow[], filter: RowFilter & MomentFilter): WinnowAssetRow[] {
-  const camera = filter.camera?.trim().toLowerCase();
-  return filterRows(rows, filter).filter((row) => {
-    if (filter.hours) {
-      const m = localMinutes(row);
-      if (m === null || !inHours(m, filter.hours[0], filter.hours[1])) return false;
-    }
-    if (filter.light && lightOf(row) !== filter.light) return false;
-    if (filter.gear && gearOf(row) !== filter.gear) return false;
-    if (camera && ![row.device, row.camera_model].some((x) => x?.toLowerCase().includes(camera))) return false;
-    return true;
-  });
+/** The rows that pass both halves of the filter — Winnow's culling and the facets (`row-facets.ts`) — in the order they came. */
+export function filterAsk(rows: readonly WinnowAssetRow[], filter: RowFilter & RowFacets): WinnowAssetRow[] {
+  return filterRows(rows, filter).filter((row) => passesFacets(row, filter));
 }
 
 /** Params shared by the commands that list a day's media. */
@@ -75,12 +54,7 @@ export const ASSET_QUERY_PARAMS = {
   together: { type: 'boolean', description: 'With several people: only media where they are ALL in frame (otherwise any of them).', optional: true },
   faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
   words: { type: 'string', description: 'Words Winnow matches against file names, places, the camera and the text read IN the picture (a sign, a menu). Not what the picture SHOWS — winnow.search does that.', optional: true },
-  time: { type: 'string', description: `Part of the day, by the LOCAL clock where it was taken: ${Object.entries(TIMES_OF_DAY).map(([k, [a, b]]) => `${k} ${a}–${b} h`).join(', ')}.`, enum: Object.keys(TIMES_OF_DAY), optional: true },
-  hourFrom: { type: 'number', description: 'Local hours from (0–24), with hourTo; wraps past midnight when from > to.', min: 0, max: 24, optional: true },
-  hourTo: { type: 'number', description: 'Local hours to (0–24), with hourFrom.', min: 0, max: 24, optional: true },
-  light: { type: 'string', description: 'The light, from the sun’s height where and when it was taken (needs its GPS): golden (golden hour), blue (blue hour), day or night.', enum: ['golden', 'blue', 'day', 'night'], optional: true },
-  gear: { type: 'string', description: 'What it was taken with: drone, phone, action (GoPro-like) or camera.', enum: ['drone', 'phone', 'action', 'camera'], optional: true },
-  camera: { type: 'string', description: 'A part of the body’s name, e.g. "FC8482", "A7C", "iPhone".', optional: true },
+  ...FACET_PARAMS,
 } as const;
 
 /** Face counts a "group" covers: a crowd past this is still a group, and the list stays a query string. */
@@ -112,10 +86,10 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   else if (p.faces === 'any') query.hasFaces = true;
   else if (p.faces === 'solo') query.faceCount = [1];
   else if (p.faces === 'group') query.faceCount = GROUP_COUNTS;
-  // A person and words are scopes of their own: "every photo of Lucie",
-  // "everything that says Uluru" need no day.
-  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who) && !query.words) {
-    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, people or words');
+  // A person, words and a place are scopes of their own: "every photo of
+  // Lucie", "everything that says Uluru", "around Cairns" need no day.
+  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who) && !query.words && !asksNear(p)) {
+    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, people, words or a place (near)');
   }
   if (p.half === 'incoming' || p.half === 'final') query.half = p.half;
   if (p.media === 'photo' || p.media === 'video') query.mediaType = p.media;
@@ -123,30 +97,35 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
 }
 
 /** The Atelier-side half of the params — culling, then when and with what — checked. */
-export function readRowFilter(p: Record<string, unknown>): RowFilter & MomentFilter {
+export function readRowFilter(p: Record<string, unknown>): RowFilter & RowFacets {
   const filter: RowFilter = {};
   if (typeof p.verdict === 'string') filter.verdict = p.verdict as Verdict;
   if (typeof p.minStars === 'number') filter.minStars = p.minStars;
   if (typeof p.label === 'string' && p.label.trim()) filter.label = p.label.trim();
   if (typeof p.tag === 'string' && p.tag.trim()) filter.tag = p.tag.trim();
   if (p.media === 'photo' || p.media === 'video') filter.media = p.media;
-  return { ...filter, ...readMoment(p) };
+  return { ...filter, ...readFacets(p) };
 }
 
-/** The when-and-with-what half of the params, checked. */
-export function readMoment(p: Record<string, unknown>): MomentFilter {
-  const out: MomentFilter = {};
-  if ((p.hourFrom === undefined) !== (p.hourTo === undefined)) throw new CommandError('invalid', 'give hourFrom and hourTo together');
-  if (p.time !== undefined && p.hourFrom !== undefined) throw new CommandError('invalid', 'time or hourFrom/hourTo, not both');
-  if (typeof p.time === 'string') out.hours = TIMES_OF_DAY[p.time as TimeOfDay];
-  if (typeof p.hourFrom === 'number' && typeof p.hourTo === 'number') {
-    if (p.hourFrom === p.hourTo) throw new CommandError('invalid', 'hourFrom and hourTo are the same hour — that span is empty');
-    out.hours = [p.hourFrom, p.hourTo];
-  }
-  if (typeof p.light === 'string') out.light = p.light as Light;
-  if (typeof p.gear === 'string') out.gear = p.gear as GearKind;
-  if (typeof p.camera === 'string' && p.camera.trim()) out.camera = p.camera.trim();
-  return out;
+/**
+ * A town named by an agent, as a point: the biggest of the index's towns
+ * bearing that name (accents and case aside) — "Exmouth" is in Western
+ * Australia and in Devon, so the answer SAYS which one it took. Refused when
+ * the offline index knows no such town: a point (nearLat, nearLon) then.
+ */
+export function resolveTown(name: string, cities: readonly GazetteerCity[], km: number): { near: Near; town: { name: string; country: string } } {
+  const found = homonyms(cities, name, null, 1)[0]?.city;
+  if (!found) throw new CommandError('invalid', `no town named "${name}" in the offline index — give nearLat and nearLon instead`);
+  return { near: { lat: found.lat, lon: found.lon, km }, town: { name: found.name, country: found.country } };
+}
+
+/** The facets with a town named in `near` resolved to its point; the town's name comes back to be said. */
+export async function resolveFacets(filter: RowFacets, p: Record<string, unknown>): Promise<{ filter: RowFacets; town: { name: string; country: string } | null }> {
+  if (typeof p.near !== 'string') return { filter, town: null };
+  const name = p.near.trim();
+  if (!name) throw new CommandError('invalid', 'near is empty');
+  const { near, town } = resolveTown(name, await gazetteerOrEmpty(), typeof p.nearKm === 'number' ? p.nearKm : DEFAULT_NEAR_KM);
+  return { filter: { ...filter, near }, town };
 }
 
 /**
@@ -177,14 +156,15 @@ function foldName(name: string): string {
   return name.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
 }
 
-/** The listing params read, with any `who` resolved against the instance's people. */
+/** The listing params read, with any `who` resolved against the instance's people and any `near` town against the index. */
 export async function askFromParams(client: WinnowClient, p: Record<string, unknown>): Promise<AssetAsk> {
   const ask = readAssetQuery(p);
   if (Array.isArray(p.who) && p.who.length) {
     const ids = resolveWho(p.who as string[], await client.people());
     ask.query.people = [...new Set([...(ask.query.people ?? []), ...ids])];
   }
-  return ask;
+  const { filter } = await resolveFacets(ask.filter, p);
+  return { query: ask.query, filter: { ...ask.filter, ...filter } };
 }
 
 /** A person as an agent reads them. */
@@ -374,7 +354,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       id: 'winnow.assets',
       title: 'List a day’s media',
       description:
-        'The media of a day, a span, a folder or a PERSON on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
+        'The media of a day, a span, a folder, a PERSON or a PLACE (near) on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), by when and with what (time, light, gear, camera), by how (orientation, focal, aperture, ISO, shutter, altitude) and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
       params: {
         ...ASSET_QUERY_PARAMS,
         limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
@@ -407,12 +387,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
         tag: ASSET_QUERY_PARAMS.tag,
         media: ASSET_QUERY_PARAMS.media,
         half: ASSET_QUERY_PARAMS.half,
-        time: ASSET_QUERY_PARAMS.time,
-        hourFrom: ASSET_QUERY_PARAMS.hourFrom,
-        hourTo: ASSET_QUERY_PARAMS.hourTo,
-        light: ASSET_QUERY_PARAMS.light,
-        gear: ASSET_QUERY_PARAMS.gear,
-        camera: ASSET_QUERY_PARAMS.camera,
+        ...FACET_PARAMS,
       },
       available: connected,
       run: async (p) => {
@@ -428,7 +403,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
         if (!found.enabled) {
           return { enabled: false, reason: found.reason ?? 'this Winnow has no image index (its ML or pgvector is off)', assets: [] };
         }
-        const filter = readRowFilter(p);
+        const { filter } = await resolveFacets(readRowFilter(p), p);
         const dated = found.items.filter((r) => !from || (r.capture_date !== null && r.capture_date >= from && r.capture_date <= (to ?? from)));
         const kept = filterAsk(dated, filter) as (WinnowAssetRow & { distance: number })[];
         return {
@@ -439,6 +414,53 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           ranked: found.items.length,
           kept: kept.length,
           assets: kept.map((r) => ({ ...rowSummary(r), distance: Math.round(r.distance * 1000) / 1000 })),
+        };
+      },
+    },
+    {
+      id: 'winnow.near',
+      title: 'Media taken around a place',
+      description:
+        'The media taken within nearKm of a TOWN (near, resolved offline — "Cairns") or a point (nearLat, nearLon), judged by each frame’s own GPS. Over a span or a folder when one is given; else over the WHOLE library, the days positioned near the place found first (Winnow’s day positions) and only those listed. Narrowed by the same culling and facets as winnow.assets. Answers which town it took, the days it looked at, and the rows — a frame with no GPS can never be near anything.',
+      params: {
+        ...ASSET_QUERY_PARAMS,
+        limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        if (!asksNear(p)) throw new CommandError('invalid', 'give near (a town) or nearLat and nearLon');
+        const c = client();
+        const ask = await askFromParams(c, p);
+        const near = ask.filter.near!;
+        const town = typeof p.near === 'string' ? resolveTown(p.near.trim(), await gazetteerOrEmpty(), near.km).town : null;
+        let spans: { from: string; to: string }[];
+        let daysNear: number | null = null;
+        if (ask.query.sessionId !== undefined) {
+          spans = [{ from: ask.query.dateFrom ?? '', to: ask.query.dateTo ?? '' }];
+        } else {
+          const from = ask.query.dateFrom ?? '1970-01-01';
+          const to = ask.query.dateTo ?? new Date().toISOString().slice(0, 10);
+          const days = nearDays(await c.geoDays({ from, to }), near);
+          daysNear = days.length;
+          spans = daySpans(days);
+        }
+        const rows: WinnowAssetRow[] = [];
+        for (const span of spans) {
+          if (rows.length >= MAX_ROWS) break;
+          const query: AssetQuery = { ...ask.query, ...(span.from ? { dateFrom: span.from, dateTo: span.to } : {}) };
+          rows.push(...(await c.allAssets(query, MAX_ROWS - rows.length)));
+        }
+        const kept = filterAsk(rows, ask.filter);
+        const cap = typeof p.limit === 'number' ? p.limit : 200;
+        return {
+          ...(town ? { town } : {}),
+          centre: near,
+          ...(daysNear !== null ? { daysNear } : {}),
+          listed: rows.length,
+          matched: kept.length,
+          shown: Math.min(kept.length, cap),
+          ...(rows.length >= MAX_ROWS ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span or the reach` } : {}),
+          rows: kept.slice(0, cap).map(rowSummary),
         };
       },
     },
