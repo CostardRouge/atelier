@@ -20,15 +20,17 @@ const ANALYSE_EDGE = 128;
 const CONCURRENCY = 6;
 
 const cache = new Map<string, ThumbMetrics>();
+/** The measures kept at most (~1 kB each); the oldest go first — a Map iterates in insertion order. */
+const CACHE_MAX = 5000;
 
-/** The metrics already measured this session for `sourceId/id`, or undefined. */
-export function cachedMetrics(sourceId: string, id: number): ThumbMetrics | undefined {
-  return cache.get(`${sourceId}/${id}`);
-}
-
-/** Forget every measure — tests, or a source forgotten. */
-export function forgetMetrics(): void {
-  cache.clear();
+function remember(key: string, metrics: ThumbMetrics): void {
+  cache.set(key, metrics);
+  if (cache.size > CACHE_MAX) {
+    for (const old of cache.keys()) {
+      if (cache.size <= CACHE_MAX) break;
+      cache.delete(old);
+    }
+  }
 }
 
 /** The metrics of these rows, by asset id — fetched where not yet measured, a few at a time. */
@@ -46,7 +48,7 @@ export async function analyseRows(client: WinnowClient, sourceId: string, rows: 
       const row = todo[next++];
       const metrics = await measureOne(client, row.id);
       if (!metrics) continue;
-      cache.set(`${sourceId}/${row.id}`, metrics);
+      remember(`${sourceId}/${row.id}`, metrics);
       out.set(row.id, metrics);
     }
   };

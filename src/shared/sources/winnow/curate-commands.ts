@@ -9,12 +9,11 @@ import { CommandError, type CommandSpec } from '../../commands/registry';
 import { STORY_ORDERS, curateStory, orderStory, type StoryItem, type StoryOrder } from '../../curate/story';
 import type { ThumbMetrics } from '../../media/thumb-metrics';
 import { gearOf, instantOf, lightOf } from './capture-moment';
-import type { WinnowAssetRow, WinnowClient } from './client';
+import type { WinnowAssetRow } from './client';
 import { cullingFromRow } from './culling';
 import { orientationOf, type Orientation, ORIENTATIONS } from './row-facets';
-import type { WinnowConnection } from './store';
 import { ANALYSE_MAX } from './thumb-analysis';
-import { ASSET_QUERY_PARAMS, IDS_PARAM, measureRows, rowSummary, rowsForParams } from './winnow-commands';
+import { ASSET_QUERY_PARAMS, IDS_PARAM, rowSummary, winnowHost, type WinnowCommandDeps } from './winnow-commands';
 
 /** A row and its metrics as the story reads them. */
 export function storyItemOf(row: WinnowAssetRow, m: ThumbMetrics | undefined): StoryItem {
@@ -39,21 +38,10 @@ export function storyItemOf(row: WinnowAssetRow, m: ThumbMetrics | undefined): S
 
 const DEFAULT_COUNT = 8;
 
-export interface CurateCommandDeps {
-  winnow: () => { client: WinnowClient | null; connection: WinnowConnection | null };
-}
-
-export function curateCommands(deps: CurateCommandDeps): CommandSpec[] {
-  const connected = () => (deps.winnow().client ? true : 'no Winnow is connected — connect one on #/sources');
-  const client = (): WinnowClient => {
-    const c = deps.winnow().client;
-    if (!c) throw new CommandError('unavailable', 'no Winnow is connected');
-    return c;
-  };
-  const sourceId = () => deps.winnow().connection?.id ?? '';
+export function curateCommands(deps: Pick<WinnowCommandDeps, 'winnow'>): CommandSpec[] {
+  const { connected, rowsFor, measured } = winnowHost(deps);
   const itemsFor = async (p: Record<string, unknown>) => {
-    const rows = await rowsForParams(client(), sourceId(), p);
-    const { sample, metrics, cut } = await measureRows(client(), sourceId(), rows);
+    const { sample, metrics, cut } = await measured(await rowsFor(p));
     return { rows: sample, items: sample.map((r) => storyItemOf(r, metrics.get(r.id))), cut };
   };
   const orientation = (p: Record<string, unknown>) => (typeof p.orientation === 'string' ? (p.orientation as Orientation) : undefined);

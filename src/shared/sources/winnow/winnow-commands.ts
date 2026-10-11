@@ -1,9 +1,13 @@
 /**
  * What an agent can READ of the connected Winnow before it acts
  * (`shared/commands/`): which days and folders hold media, a day's rows with
- * Winnow's own culling, EXIF and position, and a contact sheet of thumbnails
- * to choose from by eye. Registered by the shell for the whole session; every
- * command is `unavailable` while no instance is connected.
+ * Winnow's own culling, EXIF and position, the media around a place, by what
+ * they show, and a contact sheet of thumbnails to choose from by eye. The
+ * sorting family (`winnow-sort-commands.ts`), the finds in time and the
+ * sum-up (`winnow-time-commands.ts`) and the curating (`curate-commands.ts`)
+ * share this file's reading of a listing (`askFromParams`, `keepAsk`) and
+ * its host (`winnowHost`). Registered by the shell for the whole session;
+ * every command is `unavailable` while no instance is connected.
  *
  * Read only, like the rest of Atelier's Winnow client: culling is Winnow's,
  * and writing a verdict or a star is Winnow's own MCP's job, never this one's.
@@ -15,6 +19,7 @@
 import { CommandError, type CommandSpec, type ImageResult } from '../../commands/registry';
 import { SHEET_MAX } from '../../commands/contact-sheet';
 import { VERDICTS, filterRows, readDay, type RowFilter } from '../../develop/ingest-commands';
+import { todayIso } from '../../roadtrip/trip-days';
 import { cullingFromRow, type Verdict } from './culling';
 import type { AssetQuery, WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 import type { WinnowConnection } from './store';
@@ -22,15 +27,6 @@ import { monthSpan } from './month';
 import { gearOf, lightOf, localClock, type GearKind, type Light } from './capture-moment';
 import { COLOUR_ASKS, passesColour, type ColourAsk, type ThumbMetrics } from '../../media/thumb-metrics';
 import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
-import { DEFAULT_GAP_SECONDS, DEFAULT_MAX_DISTANCE, findDuplicates, type DupItem } from './duplicates';
-import { MISS_DEFAULTS, findMisses } from './misses';
-import { instantOf } from './capture-moment';
-import { firstsBy, sameDayAcrossYears, type KeyedItem } from './firsts';
-import { nearestCity } from '../../roadtrip/gazetteer';
-import { parseSrt } from '../../telemetry/srt-parser';
-import { flightSummary } from '../../telemetry/flight-summary';
-import { libraryStats, type LibraryStats } from './stats';
-import { statsCardImage } from './stats-card';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
@@ -333,35 +329,15 @@ export async function measureRows(client: WinnowClient, sourceId: string, rows: 
   return { sample, metrics: await analyseRows(client, sourceId, sample), cut: rows.length > ANALYSE_MAX };
 }
 
-/** How many rows a sum-up may read in one call: a hundred pages of Winnow's 200. */
-export const STATS_MAX = 20_000;
-
-const STATS_PARAMS = {
-  year: { type: 'string', description: 'A whole year, YYYY. Or give from and to.', optional: true },
-  from: { type: 'string', description: 'First day, YYYY-MM-DD.', optional: true },
-  to: { type: 'string', description: 'Last day, YYYY-MM-DD.', optional: true },
-  media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
-  half: { type: 'string', description: 'incoming or final; both when absent.', enum: ['incoming', 'final'], optional: true },
-} as const;
-
-/** The span a sum-up covers, from `year` or `from`/`to`; refused when neither is whole. */
-export function readStatsSpan(p: Record<string, unknown>): { from: string; to: string } {
-  if (typeof p.year === 'string') {
-    if (!/^\d{4}$/.test(p.year)) throw new CommandError('invalid', 'year must be YYYY');
-    if (p.from !== undefined || p.to !== undefined) throw new CommandError('invalid', 'year or from/to, not both');
-    return { from: `${p.year}-01-01`, to: `${p.year}-12-31` };
-  }
-  if (p.from === undefined || p.to === undefined) throw new CommandError('invalid', 'give a year (YYYY), or from and to (YYYY-MM-DD)');
-  const from = readDay('from', p.from);
-  const to = readDay('to', p.to);
-  if (to < from) throw new CommandError('invalid', 'to comes before from');
-  return { from, to };
-}
-
 /** The `ids` param every measuring command takes instead of a listing. */
 export const IDS_PARAM = { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true } as const;
 
-export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
+/**
+ * What every Winnow command closure needs: the connection as it is NOW
+ * (read at call time), the rows a listing describes, the thumbnails
+ * measured — shared by the finding, sorting, counting and curating families.
+ */
+export function winnowHost(deps: Pick<WinnowCommandDeps, 'winnow'>) {
   const connected = () => (deps.winnow().client ? true : 'no Winnow is connected — connect one on #/sources');
   const client = (): WinnowClient => {
     const c = deps.winnow().client;
@@ -369,35 +345,23 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
     return c;
   };
   const sourceId = (): string => deps.winnow().connection?.id ?? '';
+  return {
+    connected,
+    client,
+    sourceId,
+    rowsFor: (p: Record<string, unknown>) => rowsForParams(client(), sourceId(), p),
+    measured: (rows: readonly WinnowAssetRow[]) => measureRows(client(), sourceId(), rows),
+  };
+}
+
+export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
+  const { connected, client, sourceId } = winnowHost(deps);
   const list = async (ask: AssetAsk, cap: number) => {
     // `who` and a town were resolved by `askFromParams` before this is called.
     const rows = await client().allAssets(ask.query, MAX_ROWS);
     const { kept, analysed } = await keepAsk(client(), sourceId(), rows, ask);
     return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS, analysed };
   };
-  const rowsFor = (p: Record<string, unknown>) => rowsForParams(client(), sourceId(), p);
-  const statsFor = async (p: Record<string, unknown>): Promise<{ span: { from: string; to: string }; read: number; capped: boolean; stats: LibraryStats; people: { name: string; media: number }[]; peopleScope: 'library' }> => {
-    const c = client();
-    const span = readStatsSpan(p);
-    const rows = await c.allAssets(
-      {
-        dateFrom: span.from,
-        dateTo: span.to,
-        ...(p.media === 'photo' || p.media === 'video' ? { mediaType: p.media } : {}),
-        ...(p.half === 'incoming' || p.half === 'final' ? { half: p.half } : {}),
-      },
-      STATS_MAX,
-    );
-    const cities = rows.some((r) => r.gps_lat !== null) ? await gazetteerOrEmpty() : [];
-    const stats = libraryStats(rows, (r) => (r.gps_lat !== null && r.gps_lon !== null ? (nearestCity(cities, { lat: r.gps_lat, lon: r.gps_lon }, 200)?.country ?? null) : null));
-    const people = (await c.people().catch(() => []))
-      .filter((x) => !x.hidden && x.name?.trim())
-      .sort((a, b) => b.asset_count - a.asset_count)
-      .slice(0, 10)
-      .map((x) => ({ name: x.name!, media: x.asset_count }));
-    return { span, read: rows.length, capped: rows.length >= STATS_MAX, stats, people, peopleScope: 'library' };
-  };
-  const measured = (rows: readonly WinnowAssetRow[]) => measureRows(client(), sourceId(), rows);
   return [
     {
       id: 'winnow.status',
@@ -536,106 +500,6 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       },
     },
     {
-      id: 'winnow.analyse',
-      title: 'Measure thumbnails',
-      description:
-        `What each frame’s THUMBNAIL says (a sample, ~128 px, not the file): sharpness (the variance of a Laplacian — relative, it ranks a burst and tells a blur from its twin), exposure (mean, 1st / 50th / 99th percentile luminance 0–255, clipped and crushed shares), colour (the dominant hue family, each family’s share, a mean hex, a warmth −1 cool..1 warm, how much of the frame carries colour) and a 64-bit hash (near for two frames of one burst). By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most, measured once per session.`,
-      params: {
-        ids: IDS_PARAM,
-        ...ASSET_QUERY_PARAMS,
-      },
-      available: connected,
-      run: async (p) => {
-        const rows = await rowsFor(p);
-        const { sample, metrics, cut } = await measured(rows);
-        return {
-          asked: rows.length,
-          measured: metrics.size,
-          ...(cut ? { warning: `only the first ${ANALYSE_MAX} were measured — narrow the ask` } : {}),
-          rows: sample.map((r) => {
-            const m = metrics.get(r.id);
-            return { id: r.id, file: r.filename, ...(m ? { sharpness: m.sharpness, exposure: m.exposure, colour: m.colour, hash: m.hash } : { unreadable: true }) };
-          }),
-        };
-      },
-    },
-    {
-      id: 'winnow.duplicates',
-      title: 'Bursts and near-twins',
-      description:
-        `Frames of a listing that repeat each other, grouped: a BURST (shot within gapSeconds on one body) or TWINS (thumbnails within maxDistance bits, shot within half an hour), with the one to KEEP — Winnow’s own pick or stars first, else the sharpest; null when nothing tells them apart. A proposal to look at (winnow.sheet {ids}) and act on in Winnow, never a write. By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most.`,
-      params: {
-        ids: IDS_PARAM,
-        ...ASSET_QUERY_PARAMS,
-        gapSeconds: { type: 'number', description: `Frames this close on one body are a burst; ${DEFAULT_GAP_SECONDS} when absent.`, min: 0.1, max: 600, optional: true },
-        maxDistance: { type: 'number', description: `Hashes this close (bits, 0–64) are twins; ${DEFAULT_MAX_DISTANCE} when absent.`, min: 0, max: 64, integer: true, optional: true },
-      },
-      available: connected,
-      run: async (p) => {
-        const rows = await rowsFor(p);
-        const { sample, metrics, cut } = await measured(rows);
-        const byId = new Map(sample.map((r) => [r.id, r]));
-        const items: DupItem[] = sample.map((r) => {
-          const c = cullingFromRow(r);
-          const at = instantOf(r) ?? (r.captured_at ? Date.parse(r.captured_at) : NaN);
-          return {
-            id: r.id,
-            at: Number.isFinite(at) ? at : null,
-            camera: r.camera_model,
-            hash: metrics.get(r.id)?.hash ?? null,
-            sharpness: metrics.get(r.id)?.sharpness ?? null,
-            verdict: c?.verdict ?? 'unrated',
-            stars: c?.star ?? 0,
-          };
-        });
-        const groups = findDuplicates(items, {
-          ...(typeof p.gapSeconds === 'number' ? { gapSeconds: p.gapSeconds } : {}),
-          ...(typeof p.maxDistance === 'number' ? { maxDistance: p.maxDistance } : {}),
-        });
-        return {
-          looked: sample.length,
-          ...(cut ? { warning: `only the first ${ANALYSE_MAX} were looked at — narrow the ask` } : {}),
-          groups: groups.map((g) => ({
-            ...g,
-            members: g.ids.map((id) => {
-              const r = byId.get(id)!;
-              const s = rowSummary(r);
-              return { id, file: s.file, at: s.at, verdict: s.verdict, stars: s.stars, sharpness: metrics.get(id)?.sharpness ?? null };
-            }),
-          })),
-          dropIfKept: groups.flatMap((g) => (g.keep === null ? [] : g.ids.filter((id) => id !== g.keep))),
-        };
-      },
-    },
-    {
-      id: 'winnow.misses',
-      title: 'Technical misses',
-      description:
-        `Frames of a listing whose thumbnail says blur (sharpness far under the batch’s median, and under a floor), too dark, too bright, highlights clipped or shadows crushed — each with the number behind it. A proposal: a night frame is dark on purpose, and only the person knows; nothing is rejected here. By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most.`,
-      params: {
-        ids: IDS_PARAM,
-        ...ASSET_QUERY_PARAMS,
-        blurShare: { type: 'number', description: `Blur is sharpness under this share of the batch’s median; ${MISS_DEFAULTS.blurShare} when absent.`, min: 0.05, max: 1, optional: true },
-      },
-      available: connected,
-      run: async (p) => {
-        const rows = await rowsFor(p);
-        const { sample, metrics, cut } = await measured(rows);
-        const { misses, medianSharpness } = findMisses(
-          sample.map((r) => ({ id: r.id, metrics: metrics.get(r.id) ?? null })),
-          typeof p.blurShare === 'number' ? { blurShare: p.blurShare } : {},
-        );
-        const byId = new Map(sample.map((r) => [r.id, r]));
-        return {
-          looked: sample.length,
-          measured: metrics.size,
-          medianSharpness,
-          ...(cut ? { warning: `only the first ${ANALYSE_MAX} were looked at — narrow the ask` } : {}),
-          misses: misses.map((m) => ({ id: m.id, file: byId.get(m.id)?.filename ?? null, flags: m.flags })),
-        };
-      },
-    },
-    {
       id: 'winnow.near',
       title: 'Media taken around a place',
       description:
@@ -657,7 +521,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           spans = [{ from: ask.query.dateFrom ?? '', to: ask.query.dateTo ?? '' }];
         } else {
           const from = ask.query.dateFrom ?? '1970-01-01';
-          const to = ask.query.dateTo ?? new Date().toISOString().slice(0, 10);
+          const to = ask.query.dateTo ?? todayIso();
           const days = nearDays(await c.geoDays({ from, to }), near);
           daysNear = days.length;
           spans = daySpans(days);
@@ -680,127 +544,6 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           ...(rows.length >= MAX_ROWS ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span or the reach` } : {}),
           rows: kept.slice(0, cap).map(rowSummary),
         };
-      },
-    },
-    {
-      id: 'winnow.onThisDay',
-      title: 'This day in other years',
-      description: 'The same calendar day across the years the library spans — which other years hold media on it and how many — for an anniversary piece or a "one year ago" post. Today when no date is given.',
-      params: {
-        date: { type: 'string', description: 'The day, YYYY-MM-DD; today when absent.', optional: true },
-        media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
-      },
-      available: connected,
-      run: async (p) => {
-        const date = p.date === undefined ? new Date().toISOString().slice(0, 10) : readDay('date', p.date);
-        const cal = await client().calendar('1970-01-01', `${new Date().getUTCFullYear() + 1}-12-31`, p.media ? { mediaType: p.media as 'photo' | 'video' } : {});
-        const years = sameDayAcrossYears(cal.days, date);
-        return { date, library: cal.bounds, years: years.map(({ date: d, count }) => ({ date: d, count })), total: years.reduce((n, d) => n + d.count, 0) };
-      },
-    },
-    {
-      id: 'winnow.firsts',
-      title: 'The first of each kind',
-      description:
-        'The FIRST frame of each kind of thing in a span: by country (from the GPS, named offline — a frame with none says no country), by gear (drone, phone, action, camera), by camera (the body’s model) or by person (the earliest frame showing each named person). Each first with its id, its instant and how many frames share that key. Over the same listing as winnow.assets; a span is bounded by the listing cap, so ask a year month by month if it is big.',
-      params: {
-        kind: { type: 'string', description: 'country, gear, camera or person.', enum: ['country', 'gear', 'camera', 'person'] },
-        ...ASSET_QUERY_PARAMS,
-      },
-      available: connected,
-      run: async (p) => {
-        const c = client();
-        if (p.kind === 'person') {
-          const people = (await c.people()).filter((x) => !x.hidden && x.name?.trim()).slice(0, 40);
-          const firsts = await Promise.all(
-            people.map(async (person) => {
-              const ask = await askFromParams(c, { ...p, kind: undefined, people: [person.id] });
-              const rows = (await keepAsk(c, sourceId(), await c.allAssets(ask.query, 1), ask)).kept;
-              const row = rows.find((r) => r.captured_at);
-              return row ? { key: person.name!, id: row.id, at: row.captured_at!, count: person.asset_count } : null;
-            }),
-          );
-          return { kind: 'person', firsts: firsts.filter((x) => x !== null).sort((a, b) => (a!.at < b!.at ? -1 : 1)) };
-        }
-        const rows = await rowsFor({ ...p, kind: undefined });
-        const cities = p.kind === 'country' ? await gazetteerOrEmpty() : [];
-        const items: KeyedItem[] = rows.map((r) => ({
-          id: r.id,
-          at: r.captured_at,
-          key:
-            p.kind === 'country'
-              ? r.gps_lat !== null && r.gps_lon !== null
-                ? (nearestCity(cities, { lat: r.gps_lat, lon: r.gps_lon }, 200)?.country ?? null)
-                : null
-              : p.kind === 'gear'
-                ? gearOf(r)
-                : r.camera_model,
-        }));
-        const firsts = firstsBy(items);
-        const byId = new Map(rows.map((r) => [r.id, r]));
-        return {
-          kind: p.kind,
-          looked: rows.length,
-          unkeyed: items.filter((i) => i.key === null).length,
-          firsts: firsts.map((f) => ({ ...f, file: byId.get(f.id)?.filename ?? null })),
-        };
-      },
-    },
-    {
-      id: 'winnow.flights',
-      title: 'The drone’s flights',
-      description:
-        'The flights behind a listing’s clips, read from the DJI .srt logs Winnow keeps beside them: seconds flown, kilometres over the ground, the highest point above take-off, where it took off. Only clips with a log answer; 20 logs a call at most (each is a download).',
-      params: ASSET_QUERY_PARAMS,
-      available: connected,
-      run: async (p) => {
-        const c = client();
-        const rows = (await rowsFor(p)).filter((r) => r.media_type === 'video' && r.sidecars.some((x) => x.kind === 'srt'));
-        const sample = rows.slice(0, 20);
-        const flights = await Promise.all(
-          sample.map(async (r) => {
-            const srt = r.sidecars.find((x) => x.kind === 'srt')!;
-            try {
-              const file = await c.fetchFile(c.sidecarUrl(srt.id), srt.filename, 'text/plain', 0);
-              const summary = flightSummary(parseSrt(await file.text()));
-              return { id: r.id, file: r.filename, at: r.captured_at, ...summary };
-            } catch (err) {
-              return { id: r.id, file: r.filename, at: r.captured_at, unreadable: err instanceof Error ? err.message : String(err) };
-            }
-          }),
-        );
-        const read = flights.filter((f) => 'seconds' in f);
-        return {
-          clipsWithLogs: rows.length,
-          ...(rows.length > sample.length ? { warning: `only the first ${sample.length} logs were read — narrow the span` } : {}),
-          totals: {
-            seconds: Math.round(read.reduce((n, f) => n + f.seconds, 0)),
-            km: Math.round(read.reduce((n, f) => n + (f.km ?? 0), 0) * 100) / 100,
-            maxHeightM: read.reduce<number | null>((m, f) => (f.maxHeightM === null ? m : m === null ? f.maxHeightM : Math.max(m, f.maxHeightM)), null),
-          },
-          flights,
-        };
-      },
-    },
-    {
-      id: 'winnow.stats',
-      title: 'The sum-up of a span',
-      description:
-        `A span counted — a year, a trip: photos and clips (and the clips' seconds), distinct days and the five busiest, by gear, body, lens, focal band, LOCAL hour (24 counts), light, weekday, country (the GPS named offline), verdict and stars — plus the ten people most photographed over the WHOLE library (Winnow counts them library-wide). Up to ${STATS_MAX} rows a call: a year of 20 000 frames is a hundred pages, so expect a wait. winnow.statsSheet draws the same numbers as one card.`,
-      params: STATS_PARAMS,
-      available: connected,
-      run: async (p) => statsFor(p),
-    },
-    {
-      id: 'winnow.statsSheet',
-      title: 'The sum-up as a card',
-      description: 'The numbers of winnow.stats drawn as one shareable card on the suite’s paper — the headline, the hours of the day as bars, then with what, which body, lens, focal, light, weekday, country and who. A PNG to look at or to post.',
-      params: { ...STATS_PARAMS, title: { type: 'string', description: 'The card’s title; the span when absent.', optional: true } },
-      available: connected,
-      run: async (p) => {
-        const got = await statsFor(p);
-        const title = typeof p.title === 'string' && p.title.trim() ? p.title.trim() : got.stats.span ? `${got.stats.span.from} → ${got.stats.span.to}` : 'Nothing dated';
-        return statsCardImage(got.stats, title, got.people.map((x) => [x.name, x.media] as [string, number]));
       },
     },
     {

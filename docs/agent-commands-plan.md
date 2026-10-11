@@ -72,5 +72,11 @@ shell's commands are lazily imported). Found and fixed on the way:
 - C10: a composite Trips command must wait for THIS piece's editor, not for
   `trips.setPictures` to exist — `untilPieceOpen`.
 
+C13's review: `winnow-commands.ts` had grown to 920 lines — split by
+family (finding · sorting · time and sum-up · curating) over one
+`winnowHost`; the roll's six agent commands moved out of `RollEditor` into
+a factory over a small host, with a spec; the thumbnail cache capped;
+`todayIso()` reused; every stub drive run again after the split.
+
 Not seen: his real instance (the CLIP index, the day positions, the logs),
-his Mac or phone. C13's review follows in its own commit.
+his Mac or phone.

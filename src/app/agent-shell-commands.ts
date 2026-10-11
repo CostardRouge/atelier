@@ -1,6 +1,8 @@
 import { commands } from '../shared/commands/registry';
 import { contactSheetImage } from '../shared/commands/contact-sheet-image';
 import { winnowCommands } from '../shared/sources/winnow/winnow-commands';
+import { winnowSortCommands } from '../shared/sources/winnow/winnow-sort-commands';
+import { winnowTimeCommands } from '../shared/sources/winnow/winnow-time-commands';
 import { curateCommands } from '../shared/sources/winnow/curate-commands';
 import { libraryCommands, type LibraryCommandDeps } from './library-commands';
 
@@ -21,7 +23,11 @@ export function registerShellCommands(state: () => LibraryCommandDeps): () => vo
     actions: () => state().actions(),
   };
   const offLibrary = commands.register('library', libraryCommands(deps));
-  const offWinnow = commands.register('winnow', winnowCommands({ winnow: deps.winnow, sheet: contactSheetImage }));
+  const offWinnow = commands.register('winnow', [
+    ...winnowCommands({ winnow: deps.winnow, sheet: contactSheetImage }),
+    ...winnowSortCommands(deps),
+    ...winnowTimeCommands(deps),
+  ]);
   const offCurate = commands.register('curate', curateCommands({ winnow: deps.winnow }));
   return () => {
     offLibrary();

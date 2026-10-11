@@ -1,5 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, readStatsSpan, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { readStatsSpan } from './winnow-time-commands';
 import type { GazetteerCity } from '../../roadtrip/gazetteer';
 import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 
