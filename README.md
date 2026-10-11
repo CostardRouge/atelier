@@ -3025,6 +3025,20 @@ none | any | solo | group` — "every photo of Lucie and Lucas together", "the
 landscapes of that day, no one in them". Naming, merging and hiding people
 stays in Winnow, whose own MCP writes them.
 
+And by **what the picture shows, when and with what**: `winnow.search` ranks
+media by a description in plain words — "sunset over the sea", "a koala in a
+tree" — through the image index Winnow keeps (CLIP; it says so when the
+instance has none, or has indexed only part of the library), closest first.
+Every listing, the search included, also narrows by the **local hour** it was
+taken at (`time: morning | midday | afternoon | evening | night`, or
+`hourFrom` / `hourTo`), by the **light** — `golden`, `blue`, `day`, `night`,
+from the sun's height where and when it was taken, so only for media with a
+position — and by **gear** (`drone`, `phone`, `action`, `camera`, or a part of
+the body's name with `camera: "FC8482"`). `words` matches what Winnow reads as
+text: file names, places, the camera and the text inside a picture. Each row
+says its local time, light and gear when they can be told; a frame whose
+time zone nobody knows has no hour, rather than the server's.
+
 A session in Develop looks like: `app.navigate` to `/develop/home`,
 `app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
 `develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then

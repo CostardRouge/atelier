@@ -130,6 +130,7 @@ const PROMPTS = [
   'Straighten this photo, crop it to 4:5 around the subject, and export every picture that leaves the roll.',
   'In my trip, make a carousel of 14 September from my Winnow picks of that day, open it on the map, caption the badge “Cairns”, and export it.',
   'Which days of September hold photos on my Winnow? Show me the 4-star ones of the busiest day as a contact sheet, and make a roll of the five you would keep.',
+  'Find my golden-hour drone shots of September and my photos of koalas, show them as a contact sheet, and make a roll of the best ten.',
 ];
 
 /** The extension's saved name carries its version, so two downloads are told apart. */

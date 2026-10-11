@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askFromParams, cullingMark, readAssetQuery, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { askFromParams, cullingMark, filterAsk, readAssetQuery, readMoment, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
 import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 
 const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow =>
@@ -58,9 +58,60 @@ describe('readAssetQuery', () => {
   });
 
   it('refuses a listing with neither a day nor a folder, and a span backwards', () => {
-    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, or people/);
+    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, people or words/);
     expect(() => readAssetQuery({ date: '2026-09-15', dateTo: '2026-09-14' })).toThrow(/before/);
     expect(() => readAssetQuery({ dateTo: '2026-09-14' })).toThrow(/needs a date/);
+  });
+
+  it('takes words as a scope of their own and sends them to the server', () => {
+    expect(readAssetQuery({ words: ' Uluru ' }).query).toEqual({ words: 'Uluru' });
+  });
+
+  it('reads the moment into the filter', () => {
+    expect(readAssetQuery({ date: '2026-09-14', time: 'morning', light: 'golden', gear: 'drone', camera: ' FC8482 ' }).filter).toEqual({
+      hours: [5, 12],
+      light: 'golden',
+      gear: 'drone',
+      camera: 'FC8482',
+    });
+  });
+});
+
+describe('readMoment', () => {
+  it('reads an hour span, wrapping past midnight', () => {
+    expect(readMoment({ hourFrom: 21, hourTo: 3 })).toEqual({ hours: [21, 3] });
+  });
+
+  it('refuses half a span, two ways of saying the hours, and an empty span', () => {
+    expect(() => readMoment({ hourFrom: 6 })).toThrow(/together/);
+    expect(() => readMoment({ time: 'morning', hourFrom: 6, hourTo: 9 })).toThrow(/not both/);
+    expect(() => readMoment({ hourFrom: 6, hourTo: 6 })).toThrow(/empty/);
+  });
+});
+
+describe('filterAsk', () => {
+  // 07:42 on the camera's wall clock in Cairns; 19:55 on the Sydney coast by
+  // the place's offset (+11 h): 08:55 UTC, the sun low before it sets.
+  const morning = row({ id: 1, captured_at: '2026-09-14T07:42:00Z', captured_at_source: 'exif-wall', capture_offset_min: 600, gps_lat: -16.9, gps_lon: 145.7 });
+  const dusk = row({ id: 2, captured_at: '2026-01-01T08:55:00Z', captured_at_source: 'exif', capture_offset_min: 660, gps_lat: -33.87, gps_lon: 151.21, camera_model: 'FC8482' });
+  const unknown = row({ id: 3, captured_at: '2026-09-14T09:00:00Z', captured_at_source: 'exif', capture_offset_min: null, exif_offset_min: null, gps_lat: null, camera_model: null });
+  const rows = [morning, dusk, unknown];
+  const ids = (f: Parameters<typeof filterAsk>[1]) => filterAsk(rows, f).map((r) => r.id);
+
+  it('keeps the hours by the local clock, and drops a row whose hour cannot be told', () => {
+    expect(ids({ hours: [5, 12] })).toEqual([1]);
+    expect(ids({ hours: [18, 22] })).toEqual([2]);
+  });
+
+  it('keeps the light by the sun where it was taken, and the gear by the body', () => {
+    expect(ids({ light: 'golden' })).toEqual([2]);
+    expect(ids({ gear: 'drone' })).toEqual([2]);
+    expect(ids({ gear: 'camera' })).toEqual([1]);
+    expect(ids({ camera: 'ilce' })).toEqual([1]);
+  });
+
+  it('still applies the culling half', () => {
+    expect(ids({ verdict: 'reject' })).toEqual([]);
   });
 });
 
@@ -78,7 +129,13 @@ describe('rowSummary', () => {
       tags: ['reef'],
       companion: 'pair · .ARW',
       folder: 3,
+      gear: 'camera',
     });
+  });
+
+  it('says the local hour, the light and the gear when they can be told', () => {
+    const s = rowSummary(row({ captured_at: '2026-01-01T08:55:00Z', captured_at_source: 'exif', capture_offset_min: 660, gps_lat: -33.87, gps_lon: 151.21, camera_model: 'FC8482' }));
+    expect(s).toMatchObject({ local: '19:55', light: 'golden', gear: 'drone' });
   });
 
   it('reads a row with nothing culled as unrated, and no exposure as null', () => {

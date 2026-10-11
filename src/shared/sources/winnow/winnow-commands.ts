@@ -19,14 +19,44 @@ import { cullingFromRow, type Verdict } from './culling';
 import type { AssetQuery, WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 import type { WinnowConnection } from './store';
 import { monthSpan } from './month';
+import { TIMES_OF_DAY, gearOf, inHours, lightOf, localClock, localMinutes, type GearKind, type Light, type TimeOfDay } from './capture-moment';
 
 /** How many rows a listing may ask for at most — the client's own cap. */
 export const MAX_ROWS = 2000;
 
+/**
+ * What Atelier reads off each row itself, past what Winnow filters: WHEN
+ * (the local hour, the light) and WITH WHAT (the body's kind, its name) —
+ * `capture-moment.ts`.
+ */
+export interface MomentFilter {
+  /** Local hours [from, to), wrapping past midnight when from > to. */
+  hours?: readonly [number, number];
+  light?: Light;
+  gear?: GearKind;
+  /** A part of the body's name ("FC8482", "A7C", "iPhone"), case aside. */
+  camera?: string;
+}
+
 /** The query and the Atelier-side filter a listing command reads from its params. */
 export interface AssetAsk {
   query: AssetQuery;
-  filter: RowFilter;
+  filter: RowFilter & MomentFilter;
+}
+
+/** The rows that pass both halves of the filter, in the order they came. */
+export function filterAsk(rows: readonly WinnowAssetRow[], filter: RowFilter & MomentFilter): WinnowAssetRow[] {
+  const camera = filter.camera?.trim().toLowerCase();
+  return filterRows(rows, filter).filter((row) => {
+    if (filter.hours) {
+      const m = localMinutes(row);
+      if (m === null || !inHours(m, filter.hours[0], filter.hours[1])) return false;
+    }
+    if (filter.light && lightOf(row) !== filter.light) return false;
+    if (filter.gear && gearOf(row) !== filter.gear) return false;
+    if (camera && ![row.device, row.camera_model].some((x) => x?.toLowerCase().includes(camera))) return false;
+    return true;
+  });
 }
 
 /** Params shared by the commands that list a day's media. */
@@ -44,6 +74,13 @@ export const ASSET_QUERY_PARAMS = {
   who: { type: 'strings', description: 'The same by NAME, as Winnow names them (case aside; a unique part of a name is enough).', optional: true },
   together: { type: 'boolean', description: 'With several people: only media where they are ALL in frame (otherwise any of them).', optional: true },
   faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
+  words: { type: 'string', description: 'Words Winnow matches against file names, places, the camera and the text read IN the picture (a sign, a menu). Not what the picture SHOWS — winnow.search does that.', optional: true },
+  time: { type: 'string', description: `Part of the day, by the LOCAL clock where it was taken: ${Object.entries(TIMES_OF_DAY).map(([k, [a, b]]) => `${k} ${a}–${b} h`).join(', ')}.`, enum: Object.keys(TIMES_OF_DAY), optional: true },
+  hourFrom: { type: 'number', description: 'Local hours from (0–24), with hourTo; wraps past midnight when from > to.', min: 0, max: 24, optional: true },
+  hourTo: { type: 'number', description: 'Local hours to (0–24), with hourFrom.', min: 0, max: 24, optional: true },
+  light: { type: 'string', description: 'The light, from the sun’s height where and when it was taken (needs its GPS): golden (golden hour), blue (blue hour), day or night.', enum: ['golden', 'blue', 'day', 'night'], optional: true },
+  gear: { type: 'string', description: 'What it was taken with: drone, phone, action (GoPro-like) or camera.', enum: ['drone', 'phone', 'action', 'camera'], optional: true },
+  camera: { type: 'string', description: 'A part of the body’s name, e.g. "FC8482", "A7C", "iPhone".', optional: true },
 } as const;
 
 /** Face counts a "group" covers: a crowd past this is still a group, and the list stays a query string. */
@@ -68,25 +105,48 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   // "Sunset".
   if (typeof p.verdict === 'string') query.verdict = p.verdict as Verdict;
   if (typeof p.minStars === 'number' && p.minStars > 0) query.minStars = p.minStars;
+  if (typeof p.words === 'string' && p.words.trim()) query.words = p.words.trim();
   if (Array.isArray(p.people)) query.people = p.people as number[];
   if (p.together === true) query.together = true;
   if (p.faces === 'none') query.hasFaces = false;
   else if (p.faces === 'any') query.hasFaces = true;
   else if (p.faces === 'solo') query.faceCount = [1];
   else if (p.faces === 'group') query.faceCount = GROUP_COUNTS;
-  // A person is a scope of its own: "every photo of Lucie" needs no day.
-  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who)) {
-    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, or people');
+  // A person and words are scopes of their own: "every photo of Lucie",
+  // "everything that says Uluru" need no day.
+  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who) && !query.words) {
+    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, people or words');
   }
   if (p.half === 'incoming' || p.half === 'final') query.half = p.half;
   if (p.media === 'photo' || p.media === 'video') query.mediaType = p.media;
+  return { query, filter: readRowFilter(p) };
+}
+
+/** The Atelier-side half of the params — culling, then when and with what — checked. */
+export function readRowFilter(p: Record<string, unknown>): RowFilter & MomentFilter {
   const filter: RowFilter = {};
   if (typeof p.verdict === 'string') filter.verdict = p.verdict as Verdict;
   if (typeof p.minStars === 'number') filter.minStars = p.minStars;
   if (typeof p.label === 'string' && p.label.trim()) filter.label = p.label.trim();
   if (typeof p.tag === 'string' && p.tag.trim()) filter.tag = p.tag.trim();
   if (p.media === 'photo' || p.media === 'video') filter.media = p.media;
-  return { query, filter };
+  return { ...filter, ...readMoment(p) };
+}
+
+/** The when-and-with-what half of the params, checked. */
+export function readMoment(p: Record<string, unknown>): MomentFilter {
+  const out: MomentFilter = {};
+  if ((p.hourFrom === undefined) !== (p.hourTo === undefined)) throw new CommandError('invalid', 'give hourFrom and hourTo together');
+  if (p.time !== undefined && p.hourFrom !== undefined) throw new CommandError('invalid', 'time or hourFrom/hourTo, not both');
+  if (typeof p.time === 'string') out.hours = TIMES_OF_DAY[p.time as TimeOfDay];
+  if (typeof p.hourFrom === 'number' && typeof p.hourTo === 'number') {
+    if (p.hourFrom === p.hourTo) throw new CommandError('invalid', 'hourFrom and hourTo are the same hour — that span is empty');
+    out.hours = [p.hourFrom, p.hourTo];
+  }
+  if (typeof p.light === 'string') out.light = p.light as Light;
+  if (typeof p.gear === 'string') out.gear = p.gear as GearKind;
+  if (typeof p.camera === 'string' && p.camera.trim()) out.camera = p.camera.trim();
+  return out;
 }
 
 /**
@@ -159,6 +219,10 @@ export interface RowSummary {
   tags: string[];
   /** How many faces Winnow found; absent until the medium is analysed. */
   faces?: number;
+  /** The local clock where it was taken ("07:42"), the light, and the kind of body — absent where unknown. */
+  local?: string;
+  light?: Light;
+  gear?: GearKind;
   /** How many frames a burst pile folds under this cover; absent for a single shot. */
   burst?: number;
   /** The capture's other file (a RAW behind this JPEG, a live photo's clip). */
@@ -194,7 +258,14 @@ export function rowSummary(row: WinnowAssetRow): RowSummary {
     ...(row.companion_ext ? { companion: `${row.group_kind === 'live_photo' ? 'live photo' : 'pair'} · .${row.companion_ext.replace(/^\./, '')}` } : {}),
     folder: row.session_id,
     ...(typeof row.face_count === 'number' ? { faces: row.face_count } : {}),
+    ...optional('local', localClock(row)),
+    ...optional('light', lightOf(row)),
+    ...optional('gear', gearOf(row)),
   };
+}
+
+function optional<K extends string, V>(key: K, value: V | null): Partial<Record<K, V>> {
+  return value === null ? {} : ({ [key]: value } as Record<K, V>);
 }
 
 /** The culling words a sheet writes under a thumbnail: `pick ★4 red`, or nothing for unrated. */
@@ -227,7 +298,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
   const list = async (ask: AssetAsk, cap: number) => {
     // `who` was resolved by `askFromParams` before this is called.
     const rows = await client().allAssets(ask.query, MAX_ROWS);
-    const kept = filterRows(rows, ask.filter);
+    const kept = filterAsk(rows, ask.filter);
     return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS };
   };
   return [
@@ -317,6 +388,57 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           shown: got.kept.length,
           ...(got.capped ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span` } : {}),
           rows: got.kept.map(rowSummary),
+        };
+      },
+    },
+    {
+      id: 'winnow.search',
+      title: 'Find media by what they show',
+      description:
+        'Media ranked by how well they match a DESCRIPTION in plain words — "sunset over the sea", "a koala in a tree", "people around a table" — by the image index Winnow keeps (CLIP). Closest first, with a distance (lower is closer); the ranking is relative, so look at the results (winnow.sheet {ids}) rather than trusting a cut-off. Narrowed afterwards by the same date, culling, time, light and gear filters as winnow.assets. Says when the instance has no index, or indexes only part of the library.',
+      params: {
+        text: { type: 'string', description: 'What to look for, up to 300 characters — English describes best.' },
+        limit: { type: 'number', description: 'How many to rank before the filters; 60 when absent.', integer: true, min: 1, max: 200, optional: true },
+        date: ASSET_QUERY_PARAMS.date,
+        dateTo: ASSET_QUERY_PARAMS.dateTo,
+        verdict: ASSET_QUERY_PARAMS.verdict,
+        minStars: ASSET_QUERY_PARAMS.minStars,
+        label: ASSET_QUERY_PARAMS.label,
+        tag: ASSET_QUERY_PARAMS.tag,
+        media: ASSET_QUERY_PARAMS.media,
+        half: ASSET_QUERY_PARAMS.half,
+        time: ASSET_QUERY_PARAMS.time,
+        hourFrom: ASSET_QUERY_PARAMS.hourFrom,
+        hourTo: ASSET_QUERY_PARAMS.hourTo,
+        light: ASSET_QUERY_PARAMS.light,
+        gear: ASSET_QUERY_PARAMS.gear,
+        camera: ASSET_QUERY_PARAMS.camera,
+      },
+      available: connected,
+      run: async (p) => {
+        const text = (p.text as string).trim();
+        if (!text || text.length > 300) throw new CommandError('invalid', '"text" must be 1–300 characters');
+        const from = p.date === undefined ? null : readDay('date', p.date);
+        const to = p.dateTo === undefined ? from : readDay('dateTo', p.dateTo);
+        if (from && to && to < from) throw new CommandError('invalid', 'dateTo comes before date');
+        const found = await client().search(text, {
+          limit: typeof p.limit === 'number' ? p.limit : 60,
+          ...(p.half === 'incoming' || p.half === 'final' ? { half: p.half } : {}),
+        });
+        if (!found.enabled) {
+          return { enabled: false, reason: found.reason ?? 'this Winnow has no image index (its ML or pgvector is off)', assets: [] };
+        }
+        const filter = readRowFilter(p);
+        const dated = found.items.filter((r) => !from || (r.capture_date !== null && r.capture_date >= from && r.capture_date <= (to ?? from)));
+        const kept = filterAsk(dated, filter) as (WinnowAssetRow & { distance: number })[];
+        return {
+          enabled: true,
+          ...(found.indexed !== null && found.library !== null && found.indexed < found.library
+            ? { coverage: `${found.indexed} of ${found.library} media are indexed — the rest cannot be found this way yet` }
+            : {}),
+          ranked: found.items.length,
+          kept: kept.length,
+          assets: kept.map((r) => ({ ...rowSummary(r), distance: Math.round(r.distance * 1000) / 1000 })),
         };
       },
     },

@@ -6,8 +6,7 @@ import { CommandError } from '../../shared/commands/registry';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { lookCommands } from '../../shared/develop/look-commands';
-import { filterRows } from '../../shared/develop/ingest-commands';
-import { ASSET_QUERY_PARAMS, MAX_ROWS, askFromParams } from '../../shared/sources/winnow/winnow-commands';
+import { ASSET_QUERY_PARAMS, MAX_ROWS, askFromParams, filterAsk } from '../../shared/sources/winnow/winnow-commands';
 import { rowMediaRef } from '../../shared/sources/winnow/materialize';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
 import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
@@ -973,7 +972,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         } else {
           const ask = await askFromParams(c, p);
           rows = await c.allAssets(ask.query);
-          kept = filterRows(rows, ask.filter).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+          kept = filterAsk(rows, ask.filter).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
         }
         const refs = kept.map((r) => rowMediaRef(conn.id, r));
         const before = new Set(latest.current.pictures.map((x) => x.id));

@@ -123,6 +123,14 @@ export interface WinnowAssetRow {
    * analysed. `a.*` carries it on every row; optional for older instances.
    */
   face_count?: number | null;
+  /**
+   * How the capture instant was read and the UTC offset of the PLACE it was
+   * taken in (Winnow's migration 0046) — what turns `captured_at` into a
+   * local hour (`capture-moment.ts`). Optional: an older instance sends none.
+   */
+  captured_at_source?: 'exif' | 'exif-wall' | 'file' | null;
+  capture_offset_min?: number | null;
+  exif_offset_min?: number | null;
   /** `make model` as Winnow derived it (`a.device`) — what its device filter matches. */
   device?: string | null;
   /** How many Gallery finals link back to this original (`edit_count`). */
@@ -280,6 +288,8 @@ export interface AssetQuery extends FilterQuery {
    */
   verdict?: 'pick' | 'reject' | 'skip' | 'unrated';
   minStars?: number;
+  /** Words matched by Winnow against names, places, the camera and the text read IN the picture (`q`). */
+  words?: string;
   cursor?: string | null;
   limit?: number;
 }
@@ -633,6 +643,15 @@ export interface WinnowSession {
  */
 function filterParams(f: FilterQuery): Record<string, string | undefined> {
   return { media_type: f.mediaType, ext: f.ext, device: f.device, kind: f.half };
+}
+
+/** What `/api/search` answers: ranked rows, or why there are none. */
+export interface WinnowSearch {
+  enabled: boolean;
+  reason: string | null;
+  indexed: number | null;
+  library: number | null;
+  items: (WinnowAssetRow & { distance: number })[];
 }
 
 /** A person as `/api/people` lists them — one face cluster, named or not. */
@@ -1057,6 +1076,7 @@ export class WinnowClient {
         face_count: query.faceCount?.length ? query.faceCount.join(',') : undefined,
         verdict: query.verdict,
         star_min: query.minStars,
+        q: query.words,
         cursor: query.cursor,
         limit: query.limit ?? 200,
         collapse: query.bursts === 'frames' ? 'pairs' : 1,
@@ -1094,6 +1114,41 @@ export class WinnowClient {
   async people(signal?: AbortSignal): Promise<WinnowPerson[]> {
     const raw = await this.json<{ people?: WinnowPerson[] }>(this.url('/api/people'), signal);
     return raw.people ?? [];
+  }
+
+  /**
+   * Media ranked by how well they MATCH A DESCRIPTION — "sunset over the
+   * sea", "a koala in a tree" — by the CLIP index Winnow keeps of its
+   * pictures (`/api/search`). Closest first, with the distance. `enabled:
+   * false` says the instance has no index (ML off, pgvector missing), and
+   * `indexed` how much of the library the ranking actually ran over.
+   */
+  async search(
+    text: string,
+    opts: { half?: 'incoming' | 'final'; limit?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<WinnowSearch> {
+    const raw = await this.json<{
+      items?: (WinnowAssetRow & { distance: number })[];
+      enabled?: boolean;
+      reason?: string;
+      indexed?: number;
+      library?: number;
+    }>(
+      this.url('/api/search', {
+        q: text,
+        limit: opts.limit,
+        source: opts.half === 'final' ? 'gallery' : opts.half === 'incoming' ? 'incoming' : undefined,
+      }),
+      signal,
+    );
+    return {
+      enabled: raw.enabled !== false,
+      reason: raw.reason ?? null,
+      indexed: raw.indexed ?? null,
+      library: raw.library ?? null,
+      items: raw.items ?? [],
+    };
   }
 
   /** The faces detected in one medium, best first, with who each one is. */

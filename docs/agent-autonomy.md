@@ -82,6 +82,17 @@ listing). Winnow writes them, in its own MCP (CostardRouge/winnow#297, on
 `people.get`, `assets.faces`, and `assets.list` with the same `people` /
 `who` / `together` / `faces` as Atelier's.
 
+### Search by content, time, light and gear (built 2026-10-11)
+
+`winnow.search {text}` ranks by Winnow's CLIP index (`/api/search`); every
+listing narrows by `time` / `hourFrom`–`hourTo` (local clock), `light`
+(golden · blue · day · night, from the sun over the frame's GPS), `gear`
+(drone · phone · action · camera) and `camera` (a part of the body's name);
+`words` is Winnow's text search (`q`). Rules in
+`docs/memory/agent-commands.md`. Open: Winnow filtering the hour, light and
+gear itself (`hour_from`, `gear` on `/api/assets`) would let a month be asked
+without `allAssets`' 2 000-row cap cutting it first.
+
 ### Sources
 
 Connecting an instance stays the person's act (a sign-in is a cookie login,
