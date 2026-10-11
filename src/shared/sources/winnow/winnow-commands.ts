@@ -29,6 +29,8 @@ import { firstsBy, sameDayAcrossYears, type KeyedItem } from './firsts';
 import { nearestCity } from '../../roadtrip/gazetteer';
 import { parseSrt } from '../../telemetry/srt-parser';
 import { flightSummary } from '../../telemetry/flight-summary';
+import { libraryStats, type LibraryStats } from './stats';
+import { statsCardImage } from './stats-card';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
@@ -331,6 +333,31 @@ export async function measureRows(client: WinnowClient, sourceId: string, rows: 
   return { sample, metrics: await analyseRows(client, sourceId, sample), cut: rows.length > ANALYSE_MAX };
 }
 
+/** How many rows a sum-up may read in one call: a hundred pages of Winnow's 200. */
+export const STATS_MAX = 20_000;
+
+const STATS_PARAMS = {
+  year: { type: 'string', description: 'A whole year, YYYY. Or give from and to.', optional: true },
+  from: { type: 'string', description: 'First day, YYYY-MM-DD.', optional: true },
+  to: { type: 'string', description: 'Last day, YYYY-MM-DD.', optional: true },
+  media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
+  half: { type: 'string', description: 'incoming or final; both when absent.', enum: ['incoming', 'final'], optional: true },
+} as const;
+
+/** The span a sum-up covers, from `year` or `from`/`to`; refused when neither is whole. */
+export function readStatsSpan(p: Record<string, unknown>): { from: string; to: string } {
+  if (typeof p.year === 'string') {
+    if (!/^\d{4}$/.test(p.year)) throw new CommandError('invalid', 'year must be YYYY');
+    if (p.from !== undefined || p.to !== undefined) throw new CommandError('invalid', 'year or from/to, not both');
+    return { from: `${p.year}-01-01`, to: `${p.year}-12-31` };
+  }
+  if (p.from === undefined || p.to === undefined) throw new CommandError('invalid', 'give a year (YYYY), or from and to (YYYY-MM-DD)');
+  const from = readDay('from', p.from);
+  const to = readDay('to', p.to);
+  if (to < from) throw new CommandError('invalid', 'to comes before from');
+  return { from, to };
+}
+
 /** The `ids` param every measuring command takes instead of a listing. */
 export const IDS_PARAM = { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true } as const;
 
@@ -349,6 +376,27 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
     return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS, analysed };
   };
   const rowsFor = (p: Record<string, unknown>) => rowsForParams(client(), sourceId(), p);
+  const statsFor = async (p: Record<string, unknown>): Promise<{ span: { from: string; to: string }; read: number; capped: boolean; stats: LibraryStats; people: { name: string; media: number }[]; peopleScope: 'library' }> => {
+    const c = client();
+    const span = readStatsSpan(p);
+    const rows = await c.allAssets(
+      {
+        dateFrom: span.from,
+        dateTo: span.to,
+        ...(p.media === 'photo' || p.media === 'video' ? { mediaType: p.media } : {}),
+        ...(p.half === 'incoming' || p.half === 'final' ? { half: p.half } : {}),
+      },
+      STATS_MAX,
+    );
+    const cities = rows.some((r) => r.gps_lat !== null) ? await gazetteerOrEmpty() : [];
+    const stats = libraryStats(rows, (r) => (r.gps_lat !== null && r.gps_lon !== null ? (nearestCity(cities, { lat: r.gps_lat, lon: r.gps_lon }, 200)?.country ?? null) : null));
+    const people = (await c.people().catch(() => []))
+      .filter((x) => !x.hidden && x.name?.trim())
+      .sort((a, b) => b.asset_count - a.asset_count)
+      .slice(0, 10)
+      .map((x) => ({ name: x.name!, media: x.asset_count }));
+    return { span, read: rows.length, capped: rows.length >= STATS_MAX, stats, people, peopleScope: 'library' };
+  };
   const measured = (rows: readonly WinnowAssetRow[]) => measureRows(client(), sourceId(), rows);
   return [
     {
@@ -732,6 +780,27 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           },
           flights,
         };
+      },
+    },
+    {
+      id: 'winnow.stats',
+      title: 'The sum-up of a span',
+      description:
+        `A span counted — a year, a trip: photos and clips (and the clips' seconds), distinct days and the five busiest, by gear, body, lens, focal band, LOCAL hour (24 counts), light, weekday, country (the GPS named offline), verdict and stars — plus the ten people most photographed over the WHOLE library (Winnow counts them library-wide). Up to ${STATS_MAX} rows a call: a year of 20 000 frames is a hundred pages, so expect a wait. winnow.statsSheet draws the same numbers as one card.`,
+      params: STATS_PARAMS,
+      available: connected,
+      run: async (p) => statsFor(p),
+    },
+    {
+      id: 'winnow.statsSheet',
+      title: 'The sum-up as a card',
+      description: 'The numbers of winnow.stats drawn as one shareable card on the suite’s paper — the headline, the hours of the day as bars, then with what, which body, lens, focal, light, weekday, country and who. A PNG to look at or to post.',
+      params: { ...STATS_PARAMS, title: { type: 'string', description: 'The card’s title; the span when absent.', optional: true } },
+      available: connected,
+      run: async (p) => {
+        const got = await statsFor(p);
+        const title = typeof p.title === 'string' && p.title.trim() ? p.title.trim() : got.stats.span ? `${got.stats.span.from} → ${got.stats.span.to}` : 'Nothing dated';
+        return statsCardImage(got.stats, title, got.people.map((x) => [x.name, x.media] as [string, number]));
       },
     },
     {

@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, readStatsSpan, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
 import type { GazetteerCity } from '../../roadtrip/gazetteer';
 import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 
@@ -206,6 +206,17 @@ describe('keepAsk', () => {
     const got = await keepAsk(client, 'w', [row({ id: 1 }), row({ id: 2, verdict: 'reject' })], { query: {}, filter: { verdict: 'pick' } });
     expect(got.kept.map((r) => r.id)).toEqual([1]);
     expect(got.analysed).toBe(0);
+  });
+});
+
+describe('readStatsSpan', () => {
+  it('reads a year or a span, and refuses half of one', () => {
+    expect(readStatsSpan({ year: '2026' })).toEqual({ from: '2026-01-01', to: '2026-12-31' });
+    expect(readStatsSpan({ from: '2026-01-01', to: '2026-02-01' })).toEqual({ from: '2026-01-01', to: '2026-02-01' });
+    expect(() => readStatsSpan({ year: '26' })).toThrow(/YYYY/);
+    expect(() => readStatsSpan({ year: '2026', from: '2026-01-01' })).toThrow(/not both/);
+    expect(() => readStatsSpan({ from: '2026-01-01' })).toThrow(/give a year/);
+    expect(() => readStatsSpan({ from: '2026-02-01', to: '2026-01-01' })).toThrow(/before/);
   });
 });
 
