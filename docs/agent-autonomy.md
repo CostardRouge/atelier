@@ -72,6 +72,13 @@ its setters (elements, trims, variants, scenes). Export is H: `deliver()`
 writes to its own picked folder and never went through `deliver-files.ts` —
 that seam comes first.
 
+### People (Atelier's half built 2026-10-11)
+
+Atelier reads Winnow's people and filters by them (`winnow.people`,
+`.peopleSheet`, `.faces`; `people` / `who` / `together` / `faces` on every
+listing). Winnow writes them — `people.name`, `.merge`, `.hide`, `.sheet`
+and a multi-person `assets.list` were asked of its MCP session.
+
 ### Sources
 
 Connecting an instance stays the person's act (a sign-in is a cookie login,

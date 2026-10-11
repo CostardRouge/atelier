@@ -118,6 +118,11 @@ export interface WinnowAssetRow {
    * culling.
    */
   tags?: string[] | null;
+  /**
+   * How many faces Winnow's analysis found — null until the medium is
+   * analysed. `a.*` carries it on every row; optional for older instances.
+   */
+  face_count?: number | null;
   /** `make model` as Winnow derived it (`a.device`) — what its device filter matches. */
   device?: string | null;
   /** How many Gallery finals link back to this original (`edit_count`). */
@@ -259,6 +264,22 @@ export interface AssetQuery extends FilterQuery {
    * read the unknown value as no collapse at all and list every RAW twice.
    */
   bursts?: 'fold' | 'frames';
+  /**
+   * Only media showing these PEOPLE (Winnow's face clusters, its migration
+   * 0035): any of them, or all of them in one frame with `together`.
+   */
+  people?: readonly number[];
+  together?: boolean;
+  /** Only media with (true) or without (false) a detected face — an unanalysed medium counts as without. */
+  hasFaces?: boolean;
+  /** Only media with exactly one of these face counts. */
+  faceCount?: readonly number[];
+  /**
+   * Winnow's own culling, narrowed ON the server — so a picks-only listing of
+   * a busy month is not cut by `allAssets`' cap before it is filtered here.
+   */
+  verdict?: 'pick' | 'reject' | 'skip' | 'unrated';
+  minStars?: number;
   cursor?: string | null;
   limit?: number;
 }
@@ -614,6 +635,33 @@ function filterParams(f: FilterQuery): Record<string, string | undefined> {
   return { media_type: f.mediaType, ext: f.ext, device: f.device, kind: f.half };
 }
 
+/** A person as `/api/people` lists them — one face cluster, named or not. */
+export interface WinnowPerson {
+  id: number;
+  name: string | null;
+  hidden: boolean;
+  face_count: number;
+  asset_count: number;
+  incoming_asset_count?: number;
+  gallery_asset_count?: number;
+  /** The face that fronts the stack — its crop is `faceThumbUrl`. */
+  cover_face_id: number | null;
+}
+
+/** One face of one medium (`/api/assets/:id/faces`): who, how sure, and where in the analysed picture. */
+export interface WinnowFace {
+  id: number;
+  person_id: number | null;
+  person_name: string | null;
+  score: number;
+  x1: number;
+  y1: number;
+  x2: number;
+  y2: number;
+  img_width: number;
+  img_height: number;
+}
+
 export interface AssetPage {
   assets: WinnowAssetRow[];
   next_cursor: string | null;
@@ -726,6 +774,10 @@ export class WinnowClient {
   // --- the file routes, as URLs an <img>/<video> or a fetch can take ------
   thumbUrl(id: number): string {
     return this.url(`/api/assets/${id}/thumb`);
+  }
+  /** A 256 px square crop of one detected face — the avatar Winnow's People page draws. */
+  faceThumbUrl(faceId: number): string {
+    return this.url(`/api/faces/${faceId}/thumb`);
   }
   proxyUrl(id: number): string {
     return this.url(`/api/assets/${id}/proxy`);
@@ -999,6 +1051,12 @@ export class WinnowClient {
         ids: query.ids?.length ? query.ids.join(',') : undefined,
         burst_id: query.burstId,
         ...filterParams(query),
+        person: query.people?.length ? query.people.join(',') : undefined,
+        person_mode: query.people?.length && query.together ? 'all' : undefined,
+        has_faces: query.hasFaces === undefined ? undefined : String(query.hasFaces),
+        face_count: query.faceCount?.length ? query.faceCount.join(',') : undefined,
+        verdict: query.verdict,
+        star_min: query.minStars,
         cursor: query.cursor,
         limit: query.limit ?? 200,
         collapse: query.bursts === 'frames' ? 'pairs' : 1,
@@ -1026,6 +1084,22 @@ export class WinnowClient {
       cursor = page.next_cursor;
     } while (cursor && rows.length < cap);
     return rows;
+  }
+
+  /**
+   * The PEOPLE the instance's face analysis grouped — named first, then
+   * busiest — with how many live media show each and the face that fronts
+   * them. Read only: naming and merging are Winnow's (its own MCP).
+   */
+  async people(signal?: AbortSignal): Promise<WinnowPerson[]> {
+    const raw = await this.json<{ people?: WinnowPerson[] }>(this.url('/api/people'), signal);
+    return raw.people ?? [];
+  }
+
+  /** The faces detected in one medium, best first, with who each one is. */
+  async assetFaces(id: number, signal?: AbortSignal): Promise<WinnowFace[]> {
+    const raw = await this.json<{ faces?: WinnowFace[] }>(this.url(`/api/assets/${id}/faces`), signal);
+    return raw.faces ?? [];
   }
 
   /** One asset's row — the same shape the list serves, wrapped as `{ asset }`. */

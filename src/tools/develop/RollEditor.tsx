@@ -7,7 +7,7 @@ import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { lookCommands } from '../../shared/develop/look-commands';
 import { filterRows } from '../../shared/develop/ingest-commands';
-import { ASSET_QUERY_PARAMS, MAX_ROWS, readAssetQuery } from '../../shared/sources/winnow/winnow-commands';
+import { ASSET_QUERY_PARAMS, MAX_ROWS, askFromParams } from '../../shared/sources/winnow/winnow-commands';
 import { rowMediaRef } from '../../shared/sources/winnow/materialize';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
 import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
@@ -956,7 +956,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       id: 'develop.addFromWinnow',
       title: 'Add Winnow media to the roll',
       description:
-        'Add the connected Winnow’s photographs and clips to the roll — chosen ones by ids (from winnow.assets or winnow.sheet), or a day, a span or a folder narrowed by Winnow’s own culling (verdict, stars, colour label, tag) and kind. Bursts count as their cover. The bytes are fetched when a picture opens. Answers the picture ids added, and how many the roll already held.',
+        'Add the connected Winnow’s photographs and clips to the roll — chosen ones by ids (from winnow.assets or winnow.sheet), or a day, a span, a folder or a person narrowed by Winnow’s own culling (verdict, stars, colour label, tag), by who is in them (people or who, together) or how many faces, and by kind. Bursts count as their cover. The bytes are fetched when a picture opens. Answers the picture ids added, and how many the roll already held.',
       params: {
         ids: { type: 'numbers', description: 'Winnow asset ids — instead of a date or a folder.', integer: true, maxItems: MAX_ROWS, optional: true },
         ...ASSET_QUERY_PARAMS,
@@ -971,7 +971,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
           rows = await c.assetsByIds(p.ids as number[]);
           kept = rows.filter((r) => r.media_type === 'photo' || r.media_type === 'video');
         } else {
-          const ask = readAssetQuery(p);
+          const ask = await askFromParams(c, p);
           rows = await c.allAssets(ask.query);
           kept = filterRows(rows, ask.filter).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
         }

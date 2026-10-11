@@ -16,7 +16,7 @@ import { CommandError, type CommandSpec, type ImageResult } from '../../commands
 import { SHEET_MAX } from '../../commands/contact-sheet';
 import { VERDICTS, filterRows, readDay, type RowFilter } from '../../develop/ingest-commands';
 import { cullingFromRow, type Verdict } from './culling';
-import type { AssetQuery, WinnowAssetRow, WinnowClient } from './client';
+import type { AssetQuery, WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 import type { WinnowConnection } from './store';
 import { monthSpan } from './month';
 
@@ -40,7 +40,14 @@ export const ASSET_QUERY_PARAMS = {
   tag: { type: 'string', description: 'Only media carrying this Winnow tag.', optional: true },
   media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
   half: { type: 'string', description: 'incoming (still to cull) or final (the Gallery); both when absent.', enum: ['incoming', 'final'], optional: true },
+  people: { type: 'numbers', description: 'Only media showing these people (ids from winnow.people).', integer: true, min: 1, maxItems: 20, optional: true },
+  who: { type: 'strings', description: 'The same by NAME, as Winnow names them (case aside; a unique part of a name is enough).', optional: true },
+  together: { type: 'boolean', description: 'With several people: only media where they are ALL in frame (otherwise any of them).', optional: true },
+  faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
 } as const;
+
+/** Face counts a "group" covers: a crowd past this is still a group, and the list stays a query string. */
+const GROUP_COUNTS = Array.from({ length: 29 }, (_, i) => i + 2);
 
 /** The listing params read and checked; a span or a folder is required. */
 export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
@@ -55,7 +62,22 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
     throw new CommandError('invalid', 'dateTo needs a date');
   }
   if (typeof p.folder === 'number') query.sessionId = p.folder;
-  if (!query.dateFrom && query.sessionId === undefined) throw new CommandError('invalid', 'give a date (YYYY-MM-DD) or a folder id');
+  // The culling is asked of the server too (the rows are still filtered
+  // here, which an instance that ignores a key cannot fool). The tag is not:
+  // Winnow matches tags case and all, where an agent's "sunset" should find
+  // "Sunset".
+  if (typeof p.verdict === 'string') query.verdict = p.verdict as Verdict;
+  if (typeof p.minStars === 'number' && p.minStars > 0) query.minStars = p.minStars;
+  if (Array.isArray(p.people)) query.people = p.people as number[];
+  if (p.together === true) query.together = true;
+  if (p.faces === 'none') query.hasFaces = false;
+  else if (p.faces === 'any') query.hasFaces = true;
+  else if (p.faces === 'solo') query.faceCount = [1];
+  else if (p.faces === 'group') query.faceCount = GROUP_COUNTS;
+  // A person is a scope of its own: "every photo of Lucie" needs no day.
+  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who)) {
+    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, or people');
+  }
   if (p.half === 'incoming' || p.half === 'final') query.half = p.half;
   if (p.media === 'photo' || p.media === 'video') query.mediaType = p.media;
   const filter: RowFilter = {};
@@ -65,6 +87,50 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   if (typeof p.tag === 'string' && p.tag.trim()) filter.tag = p.tag.trim();
   if (p.media === 'photo' || p.media === 'video') filter.media = p.media;
   return { query, filter };
+}
+
+/**
+ * People named by an agent, as ids: a name matches case aside, exactly, or by
+ * a part of it no other person's name shares. Ambiguous and unknown names are
+ * refused naming the candidates — a wrong person's photos are the one answer
+ * worse than none.
+ */
+export function resolveWho(names: readonly string[], people: readonly WinnowPerson[]): number[] {
+  const named = people.filter((x) => !x.hidden && x.name?.trim());
+  return names.map((raw) => {
+    const want = raw.trim().toLowerCase();
+    if (!want) throw new CommandError('invalid', 'a name in who is empty');
+    const exact = named.filter((x) => x.name!.trim().toLowerCase() === want);
+    const hits = exact.length ? exact : named.filter((x) => x.name!.toLowerCase().includes(want));
+    if (hits.length === 1) return hits[0].id;
+    const list = (xs: readonly WinnowPerson[]) => xs.slice(0, 8).map((x) => `"${x.name}" (#${x.id})`).join(', ');
+    if (hits.length > 1) throw new CommandError('invalid', `"${raw}" names ${hits.length} people — ${list(hits)}; give people ids instead`);
+    throw new CommandError(
+      'invalid',
+      named.length ? `nobody is named "${raw}" — the named people are ${list(named)}${named.length > 8 ? '…' : ''} (winnow.people lists them all)` : 'nobody is named on this Winnow yet — name people there, or use their ids from winnow.people',
+    );
+  });
+}
+
+/** The listing params read, with any `who` resolved against the instance's people. */
+export async function askFromParams(client: WinnowClient, p: Record<string, unknown>): Promise<AssetAsk> {
+  const ask = readAssetQuery(p);
+  if (Array.isArray(p.who) && p.who.length) {
+    const ids = resolveWho(p.who as string[], await client.people());
+    ask.query.people = [...new Set([...(ask.query.people ?? []), ...ids])];
+  }
+  return ask;
+}
+
+/** A person as an agent reads them. */
+export function personSummary(x: WinnowPerson) {
+  return {
+    id: x.id,
+    name: x.name ?? null,
+    media: x.asset_count,
+    ...(x.incoming_asset_count !== undefined ? { incoming: x.incoming_asset_count } : {}),
+    ...(x.gallery_asset_count !== undefined ? { gallery: x.gallery_asset_count } : {}),
+  };
 }
 
 /** A row as an agent reads it: what to choose by, nothing a person never sees. */
@@ -86,6 +152,8 @@ export interface RowSummary {
   stars: number;
   label: string | null;
   tags: string[];
+  /** How many faces Winnow found; absent until the medium is analysed. */
+  faces?: number;
   /** How many frames a burst pile folds under this cover; absent for a single shot. */
   burst?: number;
   /** The capture's other file (a RAW behind this JPEG, a live photo's clip). */
@@ -120,6 +188,7 @@ export function rowSummary(row: WinnowAssetRow): RowSummary {
     ...(row.burst_count && row.burst_count > 1 ? { burst: row.burst_count } : {}),
     ...(row.companion_ext ? { companion: `${row.group_kind === 'live_photo' ? 'live photo' : 'pair'} · .${row.companion_ext.replace(/^\./, '')}` } : {}),
     folder: row.session_id,
+    ...(typeof row.face_count === 'number' ? { faces: row.face_count } : {}),
   };
 }
 
@@ -151,6 +220,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
     return c;
   };
   const list = async (ask: AssetAsk, cap: number) => {
+    // `who` was resolved by `askFromParams` before this is called.
     const rows = await client().allAssets(ask.query, MAX_ROWS);
     const kept = filterRows(rows, ask.filter);
     return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS };
@@ -228,20 +298,100 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       id: 'winnow.assets',
       title: 'List a day’s media',
       description:
-        'The media of a day, a span or a folder on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag) and kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
+        'The media of a day, a span, a folder or a PERSON on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
       params: {
         ...ASSET_QUERY_PARAMS,
         limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
       },
       available: connected,
       run: async (p) => {
-        const got = await list(readAssetQuery(p), typeof p.limit === 'number' ? p.limit : 200);
+        const got = await list(await askFromParams(client(), p), typeof p.limit === 'number' ? p.limit : 200);
         return {
           listed: got.rows.length,
           matched: got.matched,
           shown: got.kept.length,
           ...(got.capped ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span` } : {}),
           rows: got.kept.map(rowSummary),
+        };
+      },
+    },
+    {
+      id: 'winnow.people',
+      title: 'The people',
+      description:
+        'The people Winnow’s face analysis grouped — named first, then those in the most media — with how many media show each. Their ids (or names, through who) narrow winnow.assets, winnow.sheet and develop.addFromWinnow. Look at their faces with winnow.peopleSheet. Naming and merging people is done in Winnow (its own MCP: people.name, people.merge).',
+      params: {
+        named: { type: 'boolean', description: 'Only people who have a name.', optional: true },
+        search: { type: 'string', description: 'Only people whose name contains this.', optional: true },
+        limit: { type: 'number', description: 'At most this many; 50 when absent.', integer: true, min: 1, max: 500, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const want = typeof p.search === 'string' ? p.search.trim().toLowerCase() : '';
+        const people = (await client().people()).filter(
+          (x) => !x.hidden && (p.named !== true || Boolean(x.name?.trim())) && (!want || Boolean(x.name?.toLowerCase().includes(want))),
+        );
+        const limit = typeof p.limit === 'number' ? p.limit : 50;
+        return { total: people.length, shown: Math.min(limit, people.length), people: people.slice(0, limit).map(personSummary) };
+      },
+    },
+    {
+      id: 'winnow.peopleSheet',
+      title: 'Look at the people',
+      description: `One image of the people's faces — each person's cover face, labelled "#id name" — to see who is who before filtering by them. Either people ids (at most ${SHEET_MAX}), or a page of everyone (named first).`,
+      params: {
+        people: { type: 'numbers', description: `Person ids, at most ${SHEET_MAX}.`, integer: true, min: 1, maxItems: SHEET_MAX, optional: true },
+        named: { type: 'boolean', description: 'Only people who have a name.', optional: true },
+        page: { type: 'number', description: 'Which page, from 1.', integer: true, min: 1, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const c = client();
+        const everyone = (await c.people()).filter((x) => !x.hidden && (p.named !== true || Boolean(x.name?.trim())));
+        let shown: WinnowPerson[];
+        let note: string;
+        if (Array.isArray(p.people)) {
+          const ids = p.people as number[];
+          shown = ids.flatMap((id) => everyone.filter((x) => x.id === id));
+          const missing = ids.filter((id) => !shown.some((x) => x.id === id));
+          note = `${shown.length} people${missing.length ? ` · not found: ${missing.join(', ')}` : ''}`;
+        } else {
+          const pages = Math.max(1, Math.ceil(everyone.length / SHEET_MAX));
+          const page = Math.min(typeof p.page === 'number' ? p.page : 1, pages);
+          shown = everyone.slice((page - 1) * SHEET_MAX, page * SHEET_MAX);
+          note = `page ${page} of ${pages} · ${everyone.length} people`;
+        }
+        if (shown.length === 0) throw new CommandError('invalid', 'nobody to show — this Winnow has grouped no faces yet');
+        const images = await Promise.all(
+          shown.map((x) =>
+            x.cover_face_id === null
+              ? null
+              : c.fetchFile(c.faceThumbUrl(x.cover_face_id), `face-${x.cover_face_id}.webp`, 'image/webp', 0).catch(() => null),
+          ),
+        );
+        return deps.sheet(
+          shown.map((x, i) => ({ image: images[i], label: `#${x.id} ${x.name ?? ''}`.trim(), mark: `${x.asset_count}` })),
+          `${note} · labels are person ids and names, the number how many media show them`,
+        );
+      },
+    },
+    {
+      id: 'winnow.faces',
+      title: 'Who is in one medium',
+      description: 'The faces Winnow found in one medium (best first): the person each belongs to (id and name, null while unnamed or ungrouped), how sure the detector was, and the box as fractions of the picture.',
+      params: { id: { type: 'number', description: 'The asset id.', integer: true, min: 1 } },
+      available: connected,
+      run: async (p) => {
+        const faces = await client().assetFaces(p.id as number);
+        const r3 = (v: number) => Math.round(v * 1000) / 1000;
+        return {
+          asset: p.id,
+          faces: faces.map((f) => ({
+            person: f.person_id,
+            name: f.person_name,
+            score: r3(f.score),
+            box: f.img_width > 0 && f.img_height > 0 ? [r3(f.x1 / f.img_width), r3(f.y1 / f.img_height), r3(f.x2 / f.img_width), r3(f.y2 / f.img_height)] : null,
+          })),
         };
       },
     },
@@ -264,7 +414,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           const missing = (p.ids as number[]).filter((id) => !rows.some((r) => r.id === id));
           note = `${rows.length} media${missing.length ? ` · not found: ${missing.join(', ')}` : ''}`;
         } else {
-          const got = await list(readAssetQuery(p), MAX_ROWS);
+          const got = await list(await askFromParams(c, p), MAX_ROWS);
           const pages = Math.max(1, Math.ceil(got.kept.length / SHEET_MAX));
           const page = Math.min(typeof p.page === 'number' ? p.page : 1, pages);
           rows = got.kept.slice((page - 1) * SHEET_MAX, page * SHEET_MAX);

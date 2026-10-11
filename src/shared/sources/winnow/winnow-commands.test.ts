@@ -1,6 +1,6 @@
 import { describe, expect, it } from 'vitest';
-import { cullingMark, readAssetQuery, rowSummary, winnowCommands } from './winnow-commands';
-import type { WinnowAssetRow } from './client';
+import { askFromParams, cullingMark, readAssetQuery, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 
 const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow =>
   ({
@@ -41,14 +41,24 @@ const row = (over: Partial<WinnowAssetRow> = {}): WinnowAssetRow =>
 describe('readAssetQuery', () => {
   it('reads a span, a folder and the culling filters', () => {
     expect(readAssetQuery({ date: '2026-09-14', dateTo: '2026-09-15', verdict: 'pick', minStars: 3, tag: ' reef ', media: 'photo' })).toEqual({
-      query: { dateFrom: '2026-09-14', dateTo: '2026-09-15', mediaType: 'photo' },
+      query: { dateFrom: '2026-09-14', dateTo: '2026-09-15', mediaType: 'photo', verdict: 'pick', minStars: 3 },
       filter: { verdict: 'pick', minStars: 3, tag: 'reef', media: 'photo' },
     });
     expect(readAssetQuery({ folder: 12 }).query).toEqual({ sessionId: 12 });
   });
 
+  it('reads the people and face filters, and takes a person as a scope of its own', () => {
+    expect(readAssetQuery({ people: [3, 5], together: true, faces: 'group' }).query).toEqual({
+      people: [3, 5],
+      together: true,
+      faceCount: Array.from({ length: 29 }, (_, i) => i + 2),
+    });
+    expect(readAssetQuery({ date: '2026-09-14', faces: 'none' }).query).toMatchObject({ hasFaces: false });
+    expect(readAssetQuery({ date: '2026-09-14', faces: 'solo' }).query).toMatchObject({ faceCount: [1] });
+  });
+
   it('refuses a listing with neither a day nor a folder, and a span backwards', () => {
-    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* or a folder/);
+    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, or people/);
     expect(() => readAssetQuery({ date: '2026-09-15', dateTo: '2026-09-14' })).toThrow(/before/);
     expect(() => readAssetQuery({ dateTo: '2026-09-14' })).toThrow(/needs a date/);
   });
@@ -90,5 +100,33 @@ describe('winnowCommands', () => {
   it('is unavailable with no instance connected', () => {
     const specs = winnowCommands({ winnow: () => ({ client: null, connection: null }), sheet: async () => ({}) as never });
     for (const s of specs) expect(s.available?.()).toMatch(/no Winnow is connected/);
+  });
+});
+
+const people: WinnowPerson[] = [
+  { id: 1, name: 'Lucie Martin', hidden: false, face_count: 40, asset_count: 30, cover_face_id: 11 },
+  { id: 2, name: 'Lucas', hidden: false, face_count: 10, asset_count: 9, cover_face_id: 12 },
+  { id: 3, name: null, hidden: false, face_count: 5, asset_count: 5, cover_face_id: 13 },
+  { id: 4, name: 'Hidden', hidden: true, face_count: 1, asset_count: 1, cover_face_id: null },
+];
+
+describe('resolveWho', () => {
+  it('finds a person by their name, case aside, or by a part only they carry', () => {
+    expect(resolveWho(['lucas'], people)).toEqual([2]);
+    expect(resolveWho(['Martin', 'LUCAS'], people)).toEqual([1, 2]);
+  });
+
+  it('refuses an ambiguous part, an unknown name and a hidden person', () => {
+    expect(() => resolveWho(['Luc'], people)).toThrow(/names 2 people — "Lucie Martin" \(#1\), "Lucas" \(#2\)/);
+    expect(() => resolveWho(['Paul'], people)).toThrow(/nobody is named "Paul"/);
+    expect(() => resolveWho(['Hidden'], people)).toThrow(/nobody is named/);
+  });
+});
+
+describe('askFromParams', () => {
+  it('adds the people named in who to the ids given', async () => {
+    const client = { people: async () => people } as unknown as WinnowClient;
+    const ask = await askFromParams(client, { people: [3], who: ['lucas'], together: true });
+    expect(ask.query).toMatchObject({ people: [3, 2], together: true });
   });
 });

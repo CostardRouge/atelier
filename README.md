@@ -3007,6 +3007,16 @@ Trips' Reel, Carousel and Photo on a day, Develop's new roll — run as their
 buttons run (`library.actions`, `library.runAction`). Atelier still never
 writes a verdict or a star: culling is Winnow's.
 
+And by **who is in the picture**: `winnow.people` lists the people Winnow's
+face analysis grouped (named first), `winnow.peopleSheet` shows their faces on
+one image labelled by id and name, `winnow.faces` says who is in one medium,
+and `winnow.assets`, `winnow.sheet` and `develop.addFromWinnow` take
+`people` (ids) or `who` (names, a unique part of one is enough — "Lucie"),
+`together: true` for the photos where they are all in frame, and `faces:
+none | any | solo | group` — "every photo of Lucie and Lucas together", "the
+landscapes of that day, no one in them". Naming, merging and hiding people
+stays in Winnow, whose own MCP writes them.
+
 A session in Develop looks like: `app.navigate` to `/develop/home`,
 `app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
 `develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then
