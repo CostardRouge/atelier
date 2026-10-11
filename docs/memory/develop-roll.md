@@ -1610,7 +1610,10 @@ flat picture, ~14 kB on a real one), the `SourceStats` the Auto verbs read,
 measured off that very canvas, and the camera's facts (`shotExifOf`: body,
 lens, exposure, white-balance mode, the hour — never the GPS, never a word),
 plus the file's own size and whether a RAW's render stood in. Keyed by picture
-id, never on the document, pruned with the picture and with the roll. Rules:
+id, never on the document, pruned with the picture and with the roll — a
+roll is deleted through ONE function, `deleteRollAndSidecars` (`roll-store.ts`),
+at every door: the gallery's own delete had listed its side stores by hand and
+left the shots behind (fixed 2026-10-11). Rules:
 
 - **A DEVICE choice, kept by DEFAULT** (`shotsPref`, `atelier.develop.shots`,
   absent = on; the Learning section of Develop's settings): every day without

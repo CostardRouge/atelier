@@ -10,12 +10,7 @@ import {
 } from '../../shared/develop/develop-route';
 import { ROLL_DOC_KIND, pullRoll, pushOnce } from '../../shared/develop/roll-remote';
 import {
-  deleteRoll,
-  deleteRollFolders,
-  deleteRollPreviews,
-  deleteRollShots,
-  deleteExportMarks,
-  deleteRollThumbs,
+  deleteRollAndSidecars,
   deleteSyncRecord,
   getSyncRecord,
   listRolls,
@@ -114,14 +109,7 @@ export default function DevelopTool() {
       putRecord: putSyncRecord,
       deleteRecord: deleteSyncRecord,
       putDoc: putRoll,
-      deleteDoc: async (doc) => {
-        await deleteRoll(doc.id);
-        await deleteRollThumbs(doc.pictures.map((p) => p.id));
-        await deleteRollFolders(doc.id);
-        await deleteRollPreviews(doc.pictures.map((p) => p.id));
-        await deleteRollShots(doc.pictures.map((p) => p.id));
-        await deleteExportMarks(doc.id);
-      },
+      deleteDoc: deleteRollAndSidecars,
       push: pushOnce,
       pull: (remote, id, etag) => pullRoll(remote, id, etag),
     }),
