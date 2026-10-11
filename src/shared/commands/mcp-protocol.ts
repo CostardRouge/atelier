@@ -51,7 +51,7 @@ export type TabRequest = { id: string; kind: 'list' } | { id: string; kind: 'run
 export type TabMessage =
   | { id: string; ok: true; result: unknown }
   | { id: string; ok: false; error: { code: string; message: string } }
-  | { hello: { app: string; route: string; title: string } };
+  | { hello: { app: string; route: string; title: string; latest?: number } };
 
 /** An MCP content block. */
 export type McpContent = { type: 'text'; text: string } | { type: 'image'; data: string; mimeType: string };
@@ -154,7 +154,8 @@ export function parseTabMessage(text: string): TabMessage | null {
   if (!isRecord(raw)) return null;
   if (isRecord(raw.hello)) {
     const h = raw.hello;
-    return { hello: { app: String(h.app ?? ''), route: String(h.route ?? ''), title: String(h.title ?? '') } };
+    const latest = typeof h.latest === 'number' && Number.isInteger(h.latest) && h.latest > 0 ? h.latest : undefined;
+    return { hello: { app: String(h.app ?? ''), route: String(h.route ?? ''), title: String(h.title ?? ''), ...(latest ? { latest } : {}) } };
   }
   if (typeof raw.id !== 'string') return null;
   if (raw.ok === true) return { id: raw.id, ok: true, result: raw.result };
@@ -217,16 +218,44 @@ export function notConnectedText(port: number): string {
   ].join('\n');
 }
 
+/**
+ * Which bridge answers and whether Atelier ships a newer one: this bridge's
+ * number, the hub's when this one follows it, and a sentence to say when the
+ * tab's build carries a higher one — so an agent can tell its person to update.
+ */
+export function bridgeStatus(deps: Pick<McpDeps, 'bridgeVersion' | 'hubVersion'>, tab: TabInfo | null): Record<string, unknown> {
+  const mine = deps.bridgeVersion;
+  if (typeof mine !== 'number') return {};
+  const hub = typeof deps.hubVersion === 'number' ? deps.hubVersion : null;
+  const latest = tab?.latest;
+  const oldest = Math.min(mine, hub ?? mine);
+  return {
+    bridge: `v${mine}`,
+    ...(hub !== null ? { hubBridge: `v${hub}` } : {}),
+    ...(typeof latest === 'number' ? { latestBridge: `v${latest}` } : {}),
+    ...(typeof latest === 'number' && latest > oldest
+      ? {
+          update: `Atelier ships bridge v${latest} and v${oldest} is running here — get the new one from Atelier’s #/agents page (Claude Desktop: open atelier.mcpb and choose Update; Claude Code: download atelier-mcp.mjs over the old file), then restart the app.`,
+        }
+      : {}),
+  };
+}
+
 /** What a bridge knows of the tab connected to it. */
 export interface TabInfo {
   route: string;
   title: string;
   since: number;
+  /** The bridge version the tab's build ships (`BRIDGE_VERSION` there) — newer than this one means an update is out. */
+  latest?: number;
 }
 
 /** What the script needs from its environment to answer one MCP message. */
 export interface McpDeps {
   serverVersion: string;
+  /** This bridge's own number (`bridge-version.ts`), and the hub's when this one follows another. */
+  bridgeVersion?: number;
+  hubVersion?: number | null;
   /**
    * The tab as last introduced, or null when none is connected — asked of the
    * HUB bridge when this one only follows it, hence the promise.
@@ -260,7 +289,19 @@ async function callTool(name: string, args: Record<string, unknown>, deps: McpDe
       content: [
         {
           type: 'text',
-          text: JSON.stringify({ connected: true, route: tab.route, title: tab.title, connectedFor: `${Math.round((Date.now() - tab.since) / 1000)} s`, port: deps.port, ...(deps.outDir ? { exportsGoTo: deps.outDir } : {}) }, null, 2),
+          text: JSON.stringify(
+            {
+              connected: true,
+              route: tab.route,
+              title: tab.title,
+              connectedFor: `${Math.round((Date.now() - tab.since) / 1000)} s`,
+              port: deps.port,
+              ...(deps.outDir ? { exportsGoTo: deps.outDir } : {}),
+              ...bridgeStatus(deps, tab),
+            },
+            null,
+            2,
+          ),
         },
       ],
     };

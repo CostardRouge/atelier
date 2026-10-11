@@ -8,6 +8,7 @@ import {
   MCP_PROTOCOL_VERSION,
   MCP_TOOLS,
   MAX_BATCH_STEPS,
+  bridgeStatus,
   handleMcpMessage,
   numberedName,
   safeOutputPath,
@@ -268,5 +269,24 @@ describe('atelier_commands by family, and atelier_batch', () => {
     expect(((await call('atelier_batch', { steps: [] }))?.result as { isError?: boolean }).isError).toBe(true);
     const many = Array.from({ length: MAX_BATCH_STEPS + 1 }, () => ({ command: 'app.status' }));
     expect(((await call('atelier_batch', { steps: many }))?.result as { content: { text: string }[] }).content[0].text).toMatch(/at most/);
+  });
+});
+
+describe('the bridge number in the status', () => {
+  it('says this bridge, the hub it follows and an update when the tab ships a newer one', () => {
+    expect(bridgeStatus({ bridgeVersion: 2 }, { route: '/', title: '', since: 0, latest: 2 })).toEqual({ bridge: 'v2', latestBridge: 'v2' });
+    const behind = bridgeStatus({ bridgeVersion: 2, hubVersion: 1 }, { route: '/', title: '', since: 0, latest: 3 });
+    expect(behind).toMatchObject({ bridge: 'v2', hubBridge: 'v1', latestBridge: 'v3' });
+    expect(behind.update).toMatch(/Atelier ships bridge v3 and v1 is running here/);
+    expect(bridgeStatus({}, null)).toEqual({});
+  });
+
+  it('reads the version a tab ships from its hello, and ignores a malformed one', () => {
+    expect(parseTabMessage(JSON.stringify({ hello: { app: 'atelier', route: '/', title: 't', latest: 3 } }))).toEqual({
+      hello: { app: 'atelier', route: '/', title: 't', latest: 3 },
+    });
+    expect(parseTabMessage(JSON.stringify({ hello: { app: 'atelier', route: '/', title: 't', latest: 'x' } }))).toEqual({
+      hello: { app: 'atelier', route: '/', title: 't' },
+    });
   });
 });

@@ -1,3 +1,4 @@
+import { BRIDGE_VERSION } from './bridge-version';
 import { BRIDGE_DEFAULT_PORT, parseTabRequest, type TabRequest } from './mcp-protocol';
 import { CommandError, commands, paramsJsonSchema } from './registry';
 import type { DeliveryTarget } from '../sources/deliver-files';
@@ -16,7 +17,15 @@ import type { DeliveryTarget } from '../sources/deliver-files';
 export type BridgeState =
   | { status: 'off' }
   | { status: 'connecting'; port: number }
-  | { status: 'connected'; port: number; since: number; runs: number; last: { command: string; ok: boolean; at: number } | null }
+  | {
+      status: 'connected';
+      port: number;
+      since: number;
+      runs: number;
+      last: { command: string; ok: boolean; at: number } | null;
+      /** The bridge's own number (v1, v2…), or null for one older than numbering — `bridge-version.ts`. */
+      bridge: number | null;
+    }
   | { status: 'waiting'; port: number; reason: string }
   | { status: 'replaced'; port: number };
 
@@ -78,7 +87,7 @@ function post(port: number, body: unknown): Promise<void> {
 }
 
 function hello(port: number) {
-  void post(port, { hello: { app: 'atelier', route: window.location.hash.slice(1) || '/', title: document.title } });
+  void post(port, { hello: { app: 'atelier', route: window.location.hash.slice(1) || '/', title: document.title, latest: BRIDGE_VERSION } });
 }
 
 async function answer(port: number, request: TabRequest) {
@@ -123,7 +132,7 @@ function open(port: number) {
   const es = new EventSource(`${base(port)}/events`);
   source = es;
   es.onopen = () => {
-    set({ status: 'connected', port, since: Date.now(), runs: 0, last: null });
+    set({ status: 'connected', port, since: Date.now(), runs: 0, last: null, bridge: null });
     hello(port);
     routeListener = () => window.setTimeout(() => hello(port), 0);
     window.addEventListener('hashchange', routeListener);
@@ -132,6 +141,17 @@ function open(port: number) {
     const request = parseTabRequest(String(event.data));
     if (request) void answer(port, request);
   };
+  // The bridge says its number as the stream opens; one older than
+  // numbering says nothing and stays `null` — read as "update it".
+  es.addEventListener('bridge', (event) => {
+    let version: unknown = null;
+    try {
+      version = (JSON.parse(String((event as MessageEvent).data)) as { version?: unknown }).version;
+    } catch {
+      // A malformed line is an older or foreign bridge: the number stays unknown.
+    }
+    if (state.status === 'connected' && typeof version === 'number' && Number.isInteger(version)) set({ ...state, bridge: version });
+  });
   es.addEventListener('replaced', () => {
     // Another tab took the bridge: this one stands down and says so.
     teardown();

@@ -1,11 +1,13 @@
 import { useEffect, useState, type ReactNode } from 'react';
 import { navigate } from './use-hash-route';
-import { BridgeConnect, BridgeStatePill, bridgeSentence, useBridge } from './BridgeControl';
+import { BridgeConnect, BridgeStatePill, BridgeVersionLine, bridgeSentence, useBridge } from './BridgeControl';
+import { BRIDGE_CHANGES, BRIDGE_VERSION, bridgeLabel } from '../shared/commands/bridge-version';
 import PageBar from '../shared/ui/PageBar';
 import Segmented from '../shared/ui/Segmented';
 import { buttonClass } from '../shared/ui/Button';
 import { Icons } from '../shared/ui/icons';
 import { localPref, useLocalPref } from '../shared/ui/local-pref';
+import { revealInScroller } from '../shared/ui/reveal';
 
 /**
  * `#/agents` — how to let an AI agent (Claude Desktop, Claude Code, any MCP
@@ -65,10 +67,15 @@ function CodeBlock({ code, label, prose = false }: { code: string; label: string
   );
 }
 
-/** A download served by this site, as the primary verb of its step. */
-function Download({ file, children, variant = 'primary' }: { file: string; children: ReactNode; variant?: 'primary' | 'default' }) {
+/**
+ * A download served by this site, as the primary verb of its step. `saveAs`
+ * names the saved file — the extension carries its version (`atelier-v4.mcpb`)
+ * so two downloads are told apart; the bridge script keeps one name, since
+ * Claude Code's settings point at its path and an update overwrites it.
+ */
+function Download({ file, saveAs, children, variant = 'primary' }: { file: string; saveAs?: string; children: ReactNode; variant?: 'primary' | 'default' }) {
   return (
-    <a href={asset(file)} download={file} className={`${buttonClass(variant, 'lg')} no-underline self-start`}>
+    <a href={asset(file)} download={saveAs ?? file} className={`${buttonClass(variant, 'lg')} no-underline self-start`}>
       <span className="inline-flex [&>svg]:w-[1.1em] [&>svg]:h-[1.1em]">{Icons.download}</span>
       {children}
     </a>
@@ -103,9 +110,9 @@ function Hint({ children }: { children: ReactNode }) {
 }
 
 /** One question in the "Good to know" list, folded until asked. */
-function Faq({ q, children }: { q: string; children: ReactNode }) {
+function Faq({ q, id, children }: { q: string; id?: string; children: ReactNode }) {
   return (
-    <details className="group border-b border-line py-3">
+    <details id={id} className="group border-b border-line py-3 scroll-mt-4">
       <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-medium text-ink">
         {q}
         <span className="inline-flex text-muted transition-transform group-open:rotate-180 [&>svg]:w-4 [&>svg]:h-4">
@@ -124,6 +131,9 @@ const PROMPTS = [
   'In my trip, make a carousel of 14 September from my Winnow picks of that day, open it on the map, caption the badge “Cairns”, and export it.',
   'Which days of September hold photos on my Winnow? Show me the 4-star ones of the busiest day as a contact sheet, and make a roll of the five you would keep.',
 ];
+
+/** The extension's saved name carries its version, so two downloads are told apart. */
+const DESKTOP_FILE = `atelier-${bridgeLabel(BRIDGE_VERSION)}.mcpb`;
 
 const code = (s: string) => <code className="font-mono text-xs bg-paper-2 px-1 py-[0.05rem] rounded">{s}</code>;
 
@@ -160,6 +170,16 @@ export default function AgentsGuide() {
           <BridgeConnect bridge={bridge} />
         </span>
         {sentence && <p className="basis-full m-0 text-xs text-muted leading-snug">{sentence}</p>}
+        <p className="basis-full m-0">
+          <BridgeVersionLine
+            bridge={bridge}
+            onUpdate={() => {
+              const faq = document.getElementById('bridge-update');
+              faq?.setAttribute('open', '');
+              revealInScroller(faq, { block: 'start', behavior: 'smooth', margin: 16 });
+            }}
+          />
+        </p>
       </div>
 
       <ol className="m-0 p-0 list-none flex flex-col gap-8">
@@ -179,18 +199,21 @@ export default function AgentsGuide() {
 
           {client === 'desktop' && (
             <>
-              <Download file="atelier.mcpb">Download the Atelier extension</Download>
+              <Download file="atelier.mcpb" saveAs={DESKTOP_FILE}>
+                Download the Atelier extension · {bridgeLabel(BRIDGE_VERSION)}
+              </Download>
               <Hint>
-                Open the downloaded <b className="text-ink-soft font-medium">atelier.mcpb</b> — Claude Desktop shows an
-                install window. Click <b className="text-ink-soft font-medium">Install</b>. No terminal, nothing else to
-                set up: Claude Desktop runs it itself.
+                Open the downloaded <b className="text-ink-soft font-medium">{DESKTOP_FILE}</b> — Claude Desktop shows an
+                install window. Click <b className="text-ink-soft font-medium">Install</b> (or{' '}
+                <b className="text-ink-soft font-medium">Update</b> over an older version). No terminal, nothing else to set
+                up: Claude Desktop runs it itself.
               </Hint>
             </>
           )}
 
           {client === 'code' && (
             <>
-              <Download file="atelier-mcp.mjs">Download the bridge</Download>
+              <Download file="atelier-mcp.mjs">Download the bridge · {bridgeLabel(BRIDGE_VERSION)}</Download>
               <Hint>Then paste this once in a terminal — it registers the file you just downloaded:</Hint>
               <CodeBlock label="the Claude Code command" code="claude mcp add atelier -- node ~/Downloads/atelier-mcp.mjs" />
               <Hint>Rather skip the browser download? This line does both:</Hint>
@@ -204,7 +227,7 @@ export default function AgentsGuide() {
 
           {client === 'other' && (
             <>
-              <Download file="atelier-mcp.mjs">Download the bridge</Download>
+              <Download file="atelier-mcp.mjs">Download the bridge · {bridgeLabel(BRIDGE_VERSION)}</Download>
               <Hint>
                 Any app that speaks MCP (Cursor, Windsurf, VS Code…) takes this block in its MCP settings — in Cursor,{' '}
                 {code('~/.cursor/mcp.json')}. It needs the file’s full path:
@@ -287,6 +310,35 @@ export default function AgentsGuide() {
               — nothing to configure. Exports land in the first one’s folder. Quit that app and the other takes over; the
               tab reconnects by itself.
             </p>
+          </Faq>
+          <Faq q="How do I update the bridge? Which version do I have?" id="bridge-update">
+            <p className="m-0">
+              The bridge has its own number — this site ships <b className="text-ink-soft font-medium">{bridgeLabel(BRIDGE_VERSION)}</b> —
+              and the bar above says which one is running once this tab is connected. It changes only when the bridge
+              does, so a new number is worth installing; a new Atelier feature in the tab needs no new bridge.
+            </p>
+            <p className="m-0">
+              <b className="text-ink-soft font-medium">Claude Desktop</b>: download the extension again and open it —
+              Claude Desktop offers <b className="text-ink-soft font-medium">Update</b>. (An extension installed before
+              numbering began shows Uninstall instead: uninstall it once, then install this one.){' '}
+              <b className="text-ink-soft font-medium">Claude Code and the others</b>: download the bridge over the old
+              file (same name, same place), or run the one-line install again, then start a new session.{' '}
+              {code('node atelier-mcp.mjs --version')} prints the number of a file.
+            </p>
+            <div className="flex flex-col gap-2 mt-1">
+              {BRIDGE_CHANGES.map((entry) => (
+                <div key={entry.version}>
+                  <p className="m-0 font-mono text-xs text-ink">
+                    {bridgeLabel(entry.version)} · {entry.date}
+                  </p>
+                  <ul className="m-0 mt-1 pl-5 list-disc flex flex-col gap-0.5">
+                    {entry.changes.map((c) => (
+                      <li key={c}>{c}</li>
+                    ))}
+                  </ul>
+                </div>
+              ))}
+            </div>
           </Faq>
           <Faq q="It says “taken by another tab”.">
             <p className="m-0">

@@ -2,7 +2,7 @@ import { defineConfig, type Plugin } from 'vite';
 import react from '@vitejs/plugin-react';
 import tailwindcss from '@tailwindcss/vite';
 import { readdirSync } from 'node:fs';
-import { readFile, rm, writeFile } from 'node:fs/promises';
+import { rm, writeFile } from 'node:fs/promises';
 import type { IncomingMessage } from 'node:http';
 import { fileURLToPath } from 'node:url';
 import path from 'node:path';
@@ -158,11 +158,13 @@ const BRIDGE_FILE = 'atelier-mcp.mjs';
 const BRIDGE_BUNDLE = 'atelier.mcpb';
 
 async function bundleBridge(): Promise<{ code: string; version: string }> {
-  const { build } = await import('esbuild');
-  const pkg = JSON.parse(await readFile(fileURLToPath(new URL('./package.json', import.meta.url)), 'utf8')) as { version?: string };
+  const [{ build }, { BRIDGE_VERSION, bridgeLabel, bridgeSemver }] = await Promise.all([
+    import('esbuild'),
+    import('./src/shared/commands/bridge-version'),
+  ]);
+  // The bridge's OWN number (v1, v2…), not the site's: it moves only when the
+  // bridge does, so Claude Desktop offers an update exactly then.
   const sha = process.env.GITHUB_SHA?.slice(0, 7);
-  const version = pkg.version ?? '0.0.0';
-  const label = `${version}${sha ? `+${sha}` : ''}`;
   const out = await build({
     entryPoints: [BRIDGE_ENTRY],
     bundle: true,
@@ -171,10 +173,11 @@ async function bundleBridge(): Promise<{ code: string; version: string }> {
     target: 'node18',
     write: false,
     logLevel: 'silent',
-    define: { ATELIER_BRIDGE_VERSION: JSON.stringify(label) },
-    banner: { js: `// Atelier MCP bridge ${label} — generated from scripts/atelier-mcp.mjs; do not edit.` },
+    banner: {
+      js: `// Atelier MCP bridge ${bridgeLabel(BRIDGE_VERSION)}${sha ? ` (site ${sha})` : ''} — generated from scripts/atelier-mcp.mjs; do not edit.`,
+    },
   });
-  return { code: out.outputFiles[0].text, version };
+  return { code: out.outputFiles[0].text, version: bridgeSemver(BRIDGE_VERSION) };
 }
 
 async function bridgeBundle(code: string, version: string): Promise<Uint8Array> {

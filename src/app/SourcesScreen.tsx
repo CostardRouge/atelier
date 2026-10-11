@@ -28,6 +28,7 @@ import { describeAgo } from '../shared/sources/doc-sync';
 import { LOCAL_SOURCE } from '../shared/sources/source';
 import { BridgeConnect, BridgeStatePill, bridgeSentence, useBridge } from './BridgeControl';
 import { BRIDGE_DEFAULT_PORT } from '../shared/commands/mcp-protocol';
+import { BRIDGE_VERSION, bridgeLabel } from '../shared/commands/bridge-version';
 
 /** Where a connect made from a LINK lands once done — the studio's gallery. */
 const AFTER_CONNECT = '/studio/home';
@@ -159,6 +160,14 @@ function AgentBridgeRow() {
         <>
           <Fact label="address" value={`127.0.0.1:${bridge.status === 'off' ? BRIDGE_DEFAULT_PORT : bridge.port}`} />
           <Fact label="scope" value="this tab" />
+          <Fact
+            label="bridge"
+            value={
+              bridge.status === 'connected'
+                ? `${bridgeLabel(bridge.bridge)}${bridge.bridge !== null && bridge.bridge >= BRIDGE_VERSION ? ' · up to date' : ` · ${bridgeLabel(BRIDGE_VERSION)} is out`}`
+                : `latest ${bridgeLabel(BRIDGE_VERSION)}`
+            }
+          />
           {bridge.status === 'connected' && (
             <>
               <Fact label="commands run" value={String(bridge.runs)} />
@@ -171,7 +180,12 @@ function AgentBridgeRow() {
         <p className="m-0 mt-1.5 text-xs text-muted leading-snug">
           {sentence && `${sentence} `}
           <a href="#/agents" className="text-accent-ink font-semibold no-underline hover:underline">
-            {on ? 'Setup guide' : 'Set up Claude in three steps'} →
+            {bridge.status === 'connected' && (bridge.bridge === null || bridge.bridge < BRIDGE_VERSION)
+              ? `Update the bridge to ${bridgeLabel(BRIDGE_VERSION)}`
+              : on
+                ? 'Setup guide'
+                : 'Set up Claude in three steps'}{' '}
+            →
           </a>
         </p>
       }
