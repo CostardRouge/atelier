@@ -3031,6 +3031,20 @@ answers the histogram as numbers (mean, percentiles, each channel's mean, the
 share clipped to white or crushed to black), and `develop.contactSheet` shows
 the whole roll on one image, numbered, with what each picture carries.
 
+**Trips** is driven the same way, from the trip to the delivered files:
+`trips.list`, `trips.create` (a name and two days), `trips.open`, `trips.get`
+(its legs and pieces), `trips.newPiece` (a reel, a carousel or a photo on a
+day), then on the open piece `trips.setPictures` (Library media in swipe order
+— the first under the badge, the others as slides; `library.addFromWinnow`
+brings Winnow's in first), `trips.setOpener` (the badge, Défilé, Virée, the
+Itinerary, the card or Vitrine, with their options; `trips.openers` lists
+them), `trips.badge` (its words and what it counts), `trips.develop` (a
+slide's picture corrected), `trips.pieceSettings` (title, shape, closing
+card), `trips.snapshot` (a slide rendered exactly as the export renders it),
+`trips.exportPlan` and `trips.export`, which hands the files to the bridge
+like Develop's. Every write is one step of the trip's own undo
+(`trips.undo`).
+
 A roll can be made and filled end to end: `develop.newRoll`, then
 `develop.addFromWinnow` — chosen media by id, or a day, a span or a folder of
 the connected Winnow, narrowed by its own culling (only the picks, at least
