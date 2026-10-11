@@ -11,8 +11,8 @@
  *   hour. A zoned instant with no offset known says no hour rather than the
  *   server's.
  * - The LIGHT: the sun's elevation at that instant over the frame's own GPS
- *   (NOAA's simplified solar position, good to a fraction of a degree), read
- *   as night · blue hour · golden hour · day. A frame with no position or no
+ *   (`lib/sun.ts`, NOAA's simplified solar position), read as night · blue
+ *   hour · golden hour · day. A frame with no position or no
  *   true instant has no light.
  * - The GEAR: the body's kind from its EXIF model, by the same ordered
  *   matchers as Winnow's own shelf (`lib/gearSpec.ts` there, ported as is so
@@ -21,6 +21,7 @@
  * Pure and DOM-free.
  */
 
+import { sunElevation } from '../../lib/sun';
 import type { WinnowAssetRow } from './client';
 
 type MomentRow = Pick<WinnowAssetRow, 'captured_at' | 'gps_lat' | 'gps_lon' | 'camera_model'> & {
@@ -91,36 +92,7 @@ export function inHours(minutes: number, from: number, to: number): boolean {
   return a <= b ? minutes >= a && minutes < b : minutes >= a || minutes < b;
 }
 
-const RAD = Math.PI / 180;
-
-/**
- * The sun's elevation above the horizon in degrees at an instant and a place
- * — NOAA's general solar position (fractional year, equation of time,
- * declination), without refraction. Within a fraction of a degree, which is
- * all a golden hour needs.
- */
-export function sunElevation(instantMs: number, lat: number, lon: number): number {
-  const d = new Date(instantMs);
-  const start = Date.UTC(d.getUTCFullYear(), 0, 1);
-  const leap = new Date(Date.UTC(d.getUTCFullYear(), 1, 29)).getUTCMonth() === 1;
-  const dayOfYear = Math.floor((instantMs - start) / 86_400_000) + 1;
-  const hours = d.getUTCHours() + d.getUTCMinutes() / 60 + d.getUTCSeconds() / 3600;
-  const g = ((2 * Math.PI) / (leap ? 366 : 365)) * (dayOfYear - 1 + (hours - 12) / 24);
-  const eqTime =
-    229.18 * (0.000075 + 0.001868 * Math.cos(g) - 0.032077 * Math.sin(g) - 0.014615 * Math.cos(2 * g) - 0.040849 * Math.sin(2 * g));
-  const decl =
-    0.006918 -
-    0.399912 * Math.cos(g) +
-    0.070257 * Math.sin(g) -
-    0.006758 * Math.cos(2 * g) +
-    0.000907 * Math.sin(2 * g) -
-    0.002697 * Math.cos(3 * g) +
-    0.00148 * Math.sin(3 * g);
-  const trueSolarMinutes = hours * 60 + eqTime + 4 * lon;
-  const hourAngle = (trueSolarMinutes / 4 - 180) * RAD;
-  const cosZenith = Math.sin(lat * RAD) * Math.sin(decl) + Math.cos(lat * RAD) * Math.cos(decl) * Math.cos(hourAngle);
-  return 90 - Math.acos(Math.max(-1, Math.min(1, cosZenith))) / RAD;
-}
+export { sunElevation };
 
 /** The light a frame was taken in, by the sun's elevation. */
 export type Light = 'night' | 'blue' | 'golden' | 'day';

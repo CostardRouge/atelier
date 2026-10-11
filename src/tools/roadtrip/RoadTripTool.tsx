@@ -20,7 +20,12 @@ import {
 } from '../../shared/roadtrip/trip-route';
 import type { IsoDate } from '../../shared/roadtrip/trip-days';
 import { createTripDoc, createTripPost, type PostKind, type TripDoc, type TripPost } from '../../shared/roadtrip/trip-types';
-import { CommandError } from '../../shared/commands/registry';
+import { CommandError, commands, waitForCommand } from '../../shared/commands/registry';
+import { dayFacts } from '../../shared/roadtrip/day-facts';
+import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
+import { WinnowClient, hasTimeline } from '../../shared/sources/winnow/client';
+import { libraryStats } from '../../shared/sources/winnow/stats';
+import { fileBaseName } from '../../shared/library/assets';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { readDay } from '../../shared/develop/ingest-commands';
 import { tripDetail, tripSummary } from '../../shared/roadtrip/trip-commands';
@@ -29,7 +34,6 @@ import { bundledHouseStyle } from '../../shared/roadtrip/house-style-bundle';
 import { pullTrip, pushOnce } from '../../shared/roadtrip/trip-remote';
 import useHistory, { type DocumentHistory } from '../../shared/history/use-history';
 import { useDocumentSync, type DocumentSyncDriver } from '../../shared/sources/use-document-sync';
-import { hasTimeline } from '../../shared/sources/winnow/client';
 import { TIMELINE_SYNC_ENABLED } from '../../shared/sources/winnow/features';
 import {
   getWinnowConnection,
@@ -293,6 +297,18 @@ export default function RoadTripTool() {
     return open && open.id === found.id ? open : found;
   }
   const needOpen = () => (open ? true : 'no trip is open — trips.open opens one');
+  const winnowClient = (conn: WinnowConnection) => new WinnowClient({ baseUrl: conn.baseUrl, auth: conn.auth });
+  /** Until the piece editor of THIS piece has registered its commands — a previous piece's would answer otherwise. */
+  const untilPieceOpen = async (pieceId: string) => {
+    const until = Date.now() + 20_000;
+    while (Date.now() < until) {
+      await waitForCommand(commands, 'trips.piece', until - Date.now());
+      const piece = (await commands.execute('trips.piece')) as { id: string };
+      if (piece.id === pieceId) return;
+      await new Promise((resolve) => window.setTimeout(resolve, 100));
+    }
+    throw new CommandError('failed', 'the piece did not open in time');
+  };
   useRegisterCommands('trips', [
     {
       id: 'trips.list',
@@ -405,6 +421,155 @@ export default function RoadTripTool() {
         void deleteThumbs([post.id]);
         handleChange({ ...open, posts: open.posts.filter((x) => x.id !== post.id), updatedAt: Date.now() });
         return { deleted: post.id };
+      },
+    },
+    {
+      id: 'trips.facts',
+      title: 'The facts of a day',
+      description:
+        'What the open trip knows of a day, for a caption written from FACTS: its number over the trip, its leg and places, the place it is told from, the vehicle, the kilometres its road holds, sunrise and sunset over the place (on the zone Winnow knows for that day’s frames, else the longitude’s — said which), the pieces telling it; and, with a Winnow connected, how many frames that day, photos and clips, by gear and light, how many picks and faces. Nothing invented: what the document and the instance do not say is null.',
+      params: { date: { type: 'string', description: 'The day, YYYY-MM-DD.' } },
+      available: needOpen,
+      run: async (p) => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const date = readDay('date', p.date);
+        const conn = connections[0];
+        let winnow: Record<string, unknown> | null = null;
+        let offset: number | null = null;
+        if (conn) {
+          try {
+            const rows = await winnowClient(conn).allAssets({ dateFrom: date, dateTo: date }, 2000);
+            offset = rows.find((r) => typeof r.capture_offset_min === 'number')?.capture_offset_min ?? null;
+            const s = libraryStats(rows, () => null);
+            winnow = { instance: conn.id, frames: s.media.total, photos: s.media.photo, clips: s.media.video, byGear: s.byGear, byLight: s.byLight, picks: s.byVerdict.pick ?? 0, faces: rows.reduce((n, r) => n + (r.face_count ?? 0), 0) };
+          } catch (err) {
+            winnow = { instance: conn.id, error: err instanceof Error ? err.message : String(err) };
+          }
+        }
+        return { ...dayFacts(open, date, offset), winnow };
+      },
+    },
+    {
+      id: 'trips.gaps',
+      title: 'The days nobody tells',
+      description:
+        'The open trip’s coverage: how many days are told by a piece, the runs of days with none (the gaps, the longest first), and — with a Winnow connected — which untold days hold media and how many, so the next piece goes where the pictures are. Days with no media at all are listed apart.',
+      available: needOpen,
+      run: async () => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const c = tripCoverage(open);
+        const conn = connections[0];
+        let media: { date: string; count: number }[] | null = null;
+        if (conn) {
+          try {
+            media = (await winnowClient(conn).calendar(open.startDate, open.endDate)).days.map((d) => ({ date: d.date, count: d.count }));
+          } catch {
+            media = null;
+          }
+        }
+        const told = new Set(c.days.filter((d) => d.posts.length > 0).map((d) => d.date));
+        const counts = media ? new Map(media.map((d) => [d.date, d.count])) : null;
+        return {
+          totalDays: c.totalDays,
+          toldDays: c.toldDays,
+          publishedDays: c.publishedDays,
+          gaps: [...c.gaps].sort((a, b) => b.length - a.length),
+          ...(counts
+            ? {
+                untoldWithMedia: c.days.filter((d) => !told.has(d.date) && (counts.get(d.date) ?? 0) > 0).map((d) => ({ date: d.date, count: counts.get(d.date)! })).sort((a, b) => b.count - a.count),
+                withoutMedia: c.days.filter((d) => !(counts.get(d.date) ?? 0)).map((d) => d.date),
+              }
+            : {}),
+        };
+      },
+    },
+    {
+      id: 'trips.publishing',
+      title: 'What is published, what waits',
+      description: 'The open trip’s pieces by state — published (with the day they went out) and drafts, oldest first — the coverage in one line, and the day to tell next: the untold day holding the most media when a Winnow answers, else the first day of the longest gap.',
+      available: needOpen,
+      run: async () => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const gaps = (await commands.execute('trips.gaps')) as { untoldWithMedia?: { date: string; count: number }[]; gaps: { start: string; length: number }[]; toldDays: number; totalDays: number };
+        const line = (post: TripPost) => ({ id: post.id, kind: post.kind, date: post.date, ...(post.endDate ? { endDate: post.endDate } : {}), title: post.title || null, pictures: (post.media ? 1 : 0) + post.slides.filter((s) => s.media).length });
+        const sorted = [...open.posts].sort((a, b) => (a.date < b.date ? -1 : a.date > b.date ? 1 : 0));
+        const next = gaps.untoldWithMedia?.[0] ?? (gaps.gaps[0] ? { date: gaps.gaps[0].start, count: null } : null);
+        return {
+          published: sorted.filter((x) => x.publishedAt).map((x) => ({ ...line(x), publishedAt: new Date(x.publishedAt!).toISOString().slice(0, 10) })),
+          drafts: sorted.filter((x) => !x.publishedAt).map(line),
+          coverage: `${gaps.toldDays} of ${gaps.totalDays} days told`,
+          next,
+        };
+      },
+    },
+    {
+      id: 'trips.storyPiece',
+      title: 'A piece told by the frames that tell the span',
+      description:
+        'One call from a span to a piece: curate.story picks the frames of the open trip’s day (or span) from the connected Winnow — narrowed by verdict, stars, people, who —, they are fetched into the Library, a piece is started on the day (carousel unless kind says) and its pictures set in the story’s order. Then trips.setOpener / trips.badge dress it, trips.snapshot shows it, trips.export delivers it. Answers the piece, each pick with its reason.',
+      params: {
+        date: { type: 'string', description: 'The day, YYYY-MM-DD (the first of a span with dateTo).' },
+        dateTo: { type: 'string', description: 'The span’s last day; the same day when absent.', optional: true },
+        count: { type: 'number', description: 'How many frames; 8 when absent.', integer: true, min: 1, max: 20, optional: true },
+        kind: { type: 'string', description: 'carousel (the default), reel or photo.', enum: ['carousel', 'reel', 'photo'], optional: true },
+        prefer: { type: 'string', description: 'The frame shape to favour: portrait, landscape or square.', enum: ['portrait', 'landscape', 'square'], optional: true },
+        title: { type: 'string', description: 'A working title; "Story of <day>" when absent.', optional: true },
+        verdict: { type: 'string', description: 'Only this Winnow verdict.', enum: ['pick', 'reject', 'skip', 'unrated'], optional: true },
+        minStars: { type: 'number', description: 'At least this many stars.', min: 0, max: 5, integer: true, optional: true },
+        people: { type: 'numbers', description: 'Only frames showing these people (ids from winnow.people).', integer: true, min: 1, maxItems: 20, optional: true },
+        who: { type: 'strings', description: 'The same by name.', optional: true },
+      },
+      available: () => (!open ? 'no trip is open — trips.open opens one' : connections.length ? true : 'no Winnow is connected — connect one on #/sources'),
+      run: async (p) => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const date = readDay('date', p.date);
+        const dateTo = p.dateTo === undefined ? null : readDay('dateTo', p.dateTo);
+        if (dateTo && dateTo < date) throw new CommandError('invalid', 'dateTo comes before date');
+        if (date < open.startDate || (dateTo ?? date) > open.endDate) throw new CommandError('invalid', `${date} is outside the trip (${open.startDate} → ${open.endDate})`);
+        const kind = (p.kind as PostKind | undefined) ?? 'carousel';
+        const count = typeof p.count === 'number' ? p.count : kind === 'photo' ? 1 : 8;
+        const story = (await commands.execute('curate.story', {
+          date,
+          ...(dateTo ? { dateTo } : {}),
+          count,
+          media: 'photo',
+          ...(p.prefer ? { prefer: p.prefer } : {}),
+          ...(p.verdict ? { verdict: p.verdict } : {}),
+          ...(p.minStars !== undefined ? { minStars: p.minStars } : {}),
+          ...(p.people ? { people: p.people } : {}),
+          ...(p.who ? { who: p.who } : {}),
+        })) as { ids: number[]; picks: { id: number; file: string; reason: string }[] };
+        if (!story.ids.length) throw new CommandError('invalid', 'nothing to tell — no frame of that span was kept');
+        const fetched = (await commands.execute('library.addFromWinnow', { ids: story.ids })) as { added: string[]; alreadyInLibrary: string[]; notFound?: number[] };
+        const post = createTripPost(kind, date, typeof p.title === 'string' ? p.title : `Story of ${date}`, dateTo && dateTo !== date ? dateTo : null, open.hookDefaults[kind]);
+        handleChange({ ...open, posts: [...open.posts, post], updatedAt: Date.now() });
+        navigate(roadtripPath(tripRef(open), date, post.id));
+        await untilPieceOpen(post.id);
+        const assets = story.picks.map((pick) => fileBaseName(pick.file).toLowerCase());
+        const set = await commands.execute('trips.setPictures', { assets });
+        return { piece: post.id, kind, date, ...(dateTo ? { dateTo } : {}), picks: story.picks.map((x) => ({ id: x.id, file: x.file, reason: x.reason })), fetched, ...(set as object) };
+      },
+    },
+    {
+      id: 'trips.recap',
+      title: 'A recap of a leg',
+      description: 'Start a reel telling a whole LEG of the open trip, dated over the leg’s days and opening with Virée — the vehicle driving the leg’s places on the map — and open it. Then trips.setPictures gives it pictures to pop at the stops, trips.badge its words. Answers the piece.',
+      params: {
+        stage: { type: 'string', description: 'The leg’s id or name, from trips.get.' },
+        title: { type: 'string', description: 'A working title; the leg’s name when absent.', optional: true },
+      },
+      available: needOpen,
+      run: async (p) => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const key = String(p.stage).trim().toLowerCase();
+        const stage = open.stages.find((s) => s.id === p.stage) ?? open.stages.find((s) => s.name.trim().toLowerCase() === key);
+        if (!stage) throw new CommandError('invalid', `no leg "${String(p.stage)}" — the legs are ${open.stages.map((s) => `${s.name || '(unnamed)'} (#${s.id})`).join(', ') || 'none'}`);
+        const post = createTripPost('reel', stage.startDate, typeof p.title === 'string' ? p.title : stage.name || `Leg ${stage.startDate}`, stage.endDate !== stage.startDate ? stage.endDate : null, open.hookDefaults.reel);
+        handleChange({ ...open, posts: [...open.posts, post], updatedAt: Date.now() });
+        navigate(roadtripPath(tripRef(open), stage.startDate, post.id));
+        await untilPieceOpen(post.id);
+        const opener = await commands.execute('trips.setOpener', { opener: 'drive' });
+        return { piece: post.id, stage: stage.id, from: stage.startDate, to: stage.endDate, places: stage.places.map((x) => x.name), ...(opener as object) };
       },
     },
     {
