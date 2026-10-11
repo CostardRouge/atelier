@@ -16,13 +16,21 @@
  * (`mcp-protocol.ts`'s rule).
  */
 
-export const BRIDGE_VERSION = 1;
+export const BRIDGE_VERSION = 2;
 
 /** SHA-256 of `scripts/atelier-mcp.mjs` + `src/shared/commands/mcp-protocol.ts`, line endings normalised. */
-export const BRIDGE_SOURCE_HASH = 'ec6c42a3b41fd74d61a3bd52d362eaace1d6ab7f4beec59f0aca132a65a48b9e';
+export const BRIDGE_SOURCE_HASH = 'a7bf74e0f1e22e1c3aac5422a730c1e4d4af381c11618da88743dc5ac7188f39';
 
 /** What each version changed, newest first — drawn on `#/agents`. */
 export const BRIDGE_CHANGES: readonly { version: number; date: string; changes: readonly string[] }[] = [
+  {
+    version: 2,
+    date: '2026-10-11',
+    changes: [
+      'The instructions the agent reads at connection teach the second round: finding by shape, focal, aperture, ISO, exposure, height, place and colour; sorting (duplicates, misses) and curating a story; the sum-up; Develop in batch (match, rules, Auto on many); Trips from a day’s facts to a piece in one call, and the legs deduced by command.',
+      'No change to the bridge’s wire: the same four tools, the same files. The commands themselves live in the tab and need no reinstall; this number only carries the new instructions.',
+    ],
+  },
   {
     version: 1,
     date: '2026-10-11',

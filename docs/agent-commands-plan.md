@@ -56,5 +56,21 @@ scheduler; Atelier has no clock of its own).
 
 ## 2. Ledger
 
-Filled commit by commit: what shipped, what the stub drive proved, what the
-review found.
+C1–C12 BUILT on 2026-10-11, one commit each, every one driven against the
+stubbed Winnow (`scratchpad/pw/c20.mjs` → `c30.mjs`) and gated by
+typecheck · lint · test · build; the entry chunk stayed at 474 kB (the
+shell's commands are lazily imported). Found and fixed on the way:
+
+- C2: `askFromParams` rebuilt the ask and DROPPED `colour` — the colour
+  filter listed everything; a test pins the spread.
+- C5: the flight test put a cue on Null Island, which `parsePosition`
+  refuses by design; and a 3-cue fixture rounded to 0 s at one decimal —
+  two decimals now.
+- C8: `develop.autoAll` relies on the workbench being KEYED on the picture;
+  `develop.match` says "no as-shot record" rather than copying a wrong
+  exposure.
+- C10: a composite Trips command must wait for THIS piece's editor, not for
+  `trips.setPictures` to exist — `untilPieceOpen`.
+
+Not seen: his real instance (the CLIP index, the day positions, the logs),
+his Mac or phone. C13's review follows in its own commit.
