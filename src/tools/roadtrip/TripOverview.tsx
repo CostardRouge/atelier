@@ -1343,7 +1343,6 @@ export default function TripOverview({
         trailing={
           <>
             {headerExtra}
-            {overviewSwitch}
             {/* Rungs or pictures is a way of drawing a day CELL; the list has none. */}
             {!onList && (
             <Segmented
@@ -1357,6 +1356,7 @@ export default function TripOverview({
               ]}
             />
             )}
+            {overviewSwitch}
             {/* The glyph alone, as in a piece's bar: the sheet it opens says what it is. */}
             <IconButton label="Trip settings" title="Trip settings — dates, cover, places, Deduce, road, vehicle and the rest" onClick={() => openSettings()}>
               {Icons.settings}
