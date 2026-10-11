@@ -26,6 +26,14 @@ import { tripCoverage } from '../../shared/roadtrip/trip-coverage';
 import { WinnowClient, hasTimeline } from '../../shared/sources/winnow/client';
 import { libraryStats } from '../../shared/sources/winnow/stats';
 import { fileBaseName } from '../../shared/library/assets';
+import { readDayTrack } from '../../shared/roadtrip/day-track';
+import { EMPTY_DRAFT, applyDraft, draftOutcome, haltText, proposeDraft } from '../../shared/roadtrip/deduce-draft';
+import { GRAINS, isDeduceGrain } from '../../shared/roadtrip/deduce-grain';
+import { findOutliers, withoutOutliers } from '../../shared/roadtrip/deduce-outliers';
+import { gazetteerOrEmpty } from '../../shared/roadtrip/load-gazetteer';
+import { segmentTrack } from '../../shared/roadtrip/segment-track';
+import { trackChapters } from '../../shared/roadtrip/track-chapters';
+import { DEFAULT_SETTINGS } from './deduce/settings';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { readDay } from '../../shared/develop/ingest-commands';
 import { tripDetail, tripSummary } from '../../shared/roadtrip/trip-commands';
@@ -570,6 +578,60 @@ export default function RoadTripTool() {
         await untilPieceOpen(post.id);
         const opener = await commands.execute('trips.setOpener', { opener: 'drive' });
         return { piece: post.id, stage: stage.id, from: stage.startDate, to: stage.endDate, places: stage.places.map((x) => x.name), ...(opener as object) };
+      },
+    },
+    {
+      id: 'trips.deduce',
+      title: 'Deduce the legs from Winnow',
+      description:
+        `Run the Deduce window by command: the open trip's days positioned by the connected Winnow (one read), cut into halts and chapters at a grain (${GRAINS.map((g) => g.id).join(', ')}; hops when absent), each proposed against the legs the trip already has — free, partial, inside or same — with the safe verb the window would pick (stage, split, trim, into, skip) and the places it names offline. NOTHING is written unless apply is true: then exactly what the window's Write would write, marked as deduced (the window's "Remove what Deduce added" takes it back), one undo step. Look first, apply second.`,
+      params: {
+        apply: { type: 'boolean', description: 'true writes the proposals into the trip; absent or false only lists them.', optional: true },
+        grain: { type: 'string', description: 'How the days are cut into legs.', enum: GRAINS.map((g) => g.id), optional: true },
+        nameByRegion: { type: 'boolean', description: 'Name each leg after its region rather than its halts.', optional: true },
+      },
+      available: () => (!open ? 'no trip is open — trips.open opens one' : connections.length ? true : 'no Winnow is connected — connect one on #/sources'),
+      run: async (p) => {
+        if (!open) throw new CommandError('unavailable', 'no trip is open');
+        const conn = connections[0];
+        if (!conn) throw new CommandError('unavailable', 'no Winnow is connected');
+        const settings = {
+          ...DEFAULT_SETTINGS,
+          ...(isDeduceGrain(p.grain) ? { grain: p.grain } : {}),
+          ...(typeof p.nameByRegion === 'boolean' ? { nameByRegion: p.nameByRegion } : {}),
+        };
+        const track = readDayTrack(await winnowClient(conn).geoDays({ from: open.startDate, to: open.endDate }));
+        const outliers = findOutliers(track.points);
+        const points = settings.ignoreOutliers ? withoutOutliers(track.points, outliers) : track.points;
+        const cities = await gazetteerOrEmpty();
+        const { legs } = segmentTrack(points, settings);
+        const chapters = trackChapters(legs, cities, { nameByRegion: settings.nameByRegion, grain: settings.grain, maxHopKm: settings.hopKm, bigDays: settings.bigDays });
+        const proposals = proposeDraft(open, chapters, EMPTY_DRAFT, conn.id);
+        const now = Date.now();
+        const outcome = draftOutcome(proposals, EMPTY_DRAFT, { sourceId: conn.id, now });
+        const summary = proposals.map((pr) => ({
+          key: pr.key,
+          label: pr.label,
+          from: pr.startDate,
+          to: pr.endDate,
+          days: pr.dayCount,
+          region: pr.region || null,
+          relation: pr.relation,
+          verb: pr.verb,
+          halts: pr.halts.map((h) => haltText(h, EMPTY_DRAFT, open) ?? `${h.leg.startDate} → ${h.leg.endDate} (unnamed)`),
+          target: pr.target ? pr.target.name || pr.target.id : null,
+        }));
+        const writes = {
+          adds: outcome.adds.map((a) => ({ name: a.stage.name || null, from: a.stage.startDate, to: a.stage.endDate, places: a.stage.places.map((x) => x.name) })),
+          completes: outcome.completes.map((c) => ({ stage: c.stage.name || c.stage.id, places: c.places.map((x) => x.name) })),
+          left: outcome.left.length,
+          overAuthored: outcome.over.length,
+        };
+        const read = { placedDays: track.points.length, outliers: outliers.length, grain: settings.grain };
+        if (p.apply !== true) return { ...read, proposals: summary, wouldWrite: writes, hint: 'nothing written — apply: true writes it' };
+        const applied = applyDraft(open, outcome, now);
+        handleWritten(applied.trip, applied.spanWidened);
+        return { ...read, proposals: summary, written: writes, spanWidened: applied.spanWidened, stages: applied.trip.stages.length };
       },
     },
     {
