@@ -25,6 +25,10 @@ import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
 import { DEFAULT_GAP_SECONDS, DEFAULT_MAX_DISTANCE, findDuplicates, type DupItem } from './duplicates';
 import { MISS_DEFAULTS, findMisses } from './misses';
 import { instantOf } from './capture-moment';
+import { firstsBy, sameDayAcrossYears, type KeyedItem } from './firsts';
+import { nearestCity } from '../../roadtrip/gazetteer';
+import { parseSrt } from '../../telemetry/srt-parser';
+import { flightSummary } from '../../telemetry/flight-summary';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
@@ -627,6 +631,106 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           shown: Math.min(kept.length, cap),
           ...(rows.length >= MAX_ROWS ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span or the reach` } : {}),
           rows: kept.slice(0, cap).map(rowSummary),
+        };
+      },
+    },
+    {
+      id: 'winnow.onThisDay',
+      title: 'This day in other years',
+      description: 'The same calendar day across the years the library spans — which other years hold media on it and how many — for an anniversary piece or a "one year ago" post. Today when no date is given.',
+      params: {
+        date: { type: 'string', description: 'The day, YYYY-MM-DD; today when absent.', optional: true },
+        media: { type: 'string', description: 'photo or video; both when absent.', enum: ['photo', 'video'], optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const date = p.date === undefined ? new Date().toISOString().slice(0, 10) : readDay('date', p.date);
+        const cal = await client().calendar('1970-01-01', `${new Date().getUTCFullYear() + 1}-12-31`, p.media ? { mediaType: p.media as 'photo' | 'video' } : {});
+        const years = sameDayAcrossYears(cal.days, date);
+        return { date, library: cal.bounds, years: years.map(({ date: d, count }) => ({ date: d, count })), total: years.reduce((n, d) => n + d.count, 0) };
+      },
+    },
+    {
+      id: 'winnow.firsts',
+      title: 'The first of each kind',
+      description:
+        'The FIRST frame of each kind of thing in a span: by country (from the GPS, named offline — a frame with none says no country), by gear (drone, phone, action, camera), by camera (the body’s model) or by person (the earliest frame showing each named person). Each first with its id, its instant and how many frames share that key. Over the same listing as winnow.assets; a span is bounded by the listing cap, so ask a year month by month if it is big.',
+      params: {
+        kind: { type: 'string', description: 'country, gear, camera or person.', enum: ['country', 'gear', 'camera', 'person'] },
+        ...ASSET_QUERY_PARAMS,
+      },
+      available: connected,
+      run: async (p) => {
+        const c = client();
+        if (p.kind === 'person') {
+          const people = (await c.people()).filter((x) => !x.hidden && x.name?.trim()).slice(0, 40);
+          const firsts = await Promise.all(
+            people.map(async (person) => {
+              const ask = await askFromParams(c, { ...p, kind: undefined, people: [person.id] });
+              const rows = (await keepAsk(c, sourceId(), await c.allAssets(ask.query, 1), ask)).kept;
+              const row = rows.find((r) => r.captured_at);
+              return row ? { key: person.name!, id: row.id, at: row.captured_at!, count: person.asset_count } : null;
+            }),
+          );
+          return { kind: 'person', firsts: firsts.filter((x) => x !== null).sort((a, b) => (a!.at < b!.at ? -1 : 1)) };
+        }
+        const rows = await rowsFor({ ...p, kind: undefined });
+        const cities = p.kind === 'country' ? await gazetteerOrEmpty() : [];
+        const items: KeyedItem[] = rows.map((r) => ({
+          id: r.id,
+          at: r.captured_at,
+          key:
+            p.kind === 'country'
+              ? r.gps_lat !== null && r.gps_lon !== null
+                ? (nearestCity(cities, { lat: r.gps_lat, lon: r.gps_lon }, 200)?.country ?? null)
+                : null
+              : p.kind === 'gear'
+                ? gearOf(r)
+                : r.camera_model,
+        }));
+        const firsts = firstsBy(items);
+        const byId = new Map(rows.map((r) => [r.id, r]));
+        return {
+          kind: p.kind,
+          looked: rows.length,
+          unkeyed: items.filter((i) => i.key === null).length,
+          firsts: firsts.map((f) => ({ ...f, file: byId.get(f.id)?.filename ?? null })),
+        };
+      },
+    },
+    {
+      id: 'winnow.flights',
+      title: 'The drone’s flights',
+      description:
+        'The flights behind a listing’s clips, read from the DJI .srt logs Winnow keeps beside them: seconds flown, kilometres over the ground, the highest point above take-off, where it took off. Only clips with a log answer; 20 logs a call at most (each is a download).',
+      params: ASSET_QUERY_PARAMS,
+      available: connected,
+      run: async (p) => {
+        const c = client();
+        const rows = (await rowsFor(p)).filter((r) => r.media_type === 'video' && r.sidecars.some((x) => x.kind === 'srt'));
+        const sample = rows.slice(0, 20);
+        const flights = await Promise.all(
+          sample.map(async (r) => {
+            const srt = r.sidecars.find((x) => x.kind === 'srt')!;
+            try {
+              const file = await c.fetchFile(c.sidecarUrl(srt.id), srt.filename, 'text/plain', 0);
+              const summary = flightSummary(parseSrt(await file.text()));
+              return { id: r.id, file: r.filename, at: r.captured_at, ...summary };
+            } catch (err) {
+              return { id: r.id, file: r.filename, at: r.captured_at, unreadable: err instanceof Error ? err.message : String(err) };
+            }
+          }),
+        );
+        const read = flights.filter((f) => 'seconds' in f);
+        return {
+          clipsWithLogs: rows.length,
+          ...(rows.length > sample.length ? { warning: `only the first ${sample.length} logs were read — narrow the span` } : {}),
+          totals: {
+            seconds: Math.round(read.reduce((n, f) => n + f.seconds, 0)),
+            km: Math.round(read.reduce((n, f) => n + (f.km ?? 0), 0) * 100) / 100,
+            maxHeightM: read.reduce<number | null>((m, f) => (f.maxHeightM === null ? m : m === null ? f.maxHeightM : Math.max(m, f.maxHeightM)), null),
+          },
+          flights,
         };
       },
     },
