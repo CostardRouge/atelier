@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askFromParams, cullingMark, filterAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
 import type { GazetteerCity } from '../../roadtrip/gazetteer';
 import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 
@@ -62,6 +62,11 @@ describe('readAssetQuery', () => {
     expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, people, words or a place/);
     expect(() => readAssetQuery({ date: '2026-09-15', dateTo: '2026-09-14' })).toThrow(/before/);
     expect(() => readAssetQuery({ dateTo: '2026-09-14' })).toThrow(/needs a date/);
+  });
+
+  it('reads a colour ask apart from the row filter', () => {
+    expect(readAssetQuery({ date: '2026-09-14', colour: 'blue' })).toMatchObject({ colour: 'blue', filter: {} });
+    expect(readAssetQuery({ date: '2026-09-14' }).colour).toBeUndefined();
   });
 
   it('takes words and a place as scopes of their own', () => {
@@ -175,8 +180,10 @@ describe('resolveWho', () => {
 describe('askFromParams', () => {
   it('adds the people named in who to the ids given', async () => {
     const client = { people: async () => people } as unknown as WinnowClient;
-    const ask = await askFromParams(client, { people: [3], who: ['lucas'], together: true });
+    const ask = await askFromParams(client, { people: [3], who: ['lucas'], together: true, colour: 'warm', gear: 'drone' });
     expect(ask.query).toMatchObject({ people: [3, 2], together: true });
+    expect(ask.colour).toBe('warm');
+    expect(ask.filter).toEqual({ gear: 'drone' });
   });
 });
 
@@ -190,6 +197,15 @@ describe('resolveTown', () => {
   });
   it('refuses a town the index does not know', () => {
     expect(() => resolveTown('Nowhere', cities, 25)).toThrow(/no town named "Nowhere"/);
+  });
+});
+
+describe('keepAsk', () => {
+  it('fetches nothing when no colour is asked', async () => {
+    const client = { fetchFile: () => Promise.reject(new Error('must not fetch')) } as unknown as WinnowClient;
+    const got = await keepAsk(client, 'w', [row({ id: 1 }), row({ id: 2, verdict: 'reject' })], { query: {}, filter: { verdict: 'pick' } });
+    expect(got.kept.map((r) => r.id)).toEqual([1]);
+    expect(got.analysed).toBe(0);
   });
 });
 

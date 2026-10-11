@@ -20,6 +20,8 @@ import type { AssetQuery, WinnowAssetRow, WinnowClient, WinnowPerson } from './c
 import type { WinnowConnection } from './store';
 import { monthSpan } from './month';
 import { gearOf, lightOf, localClock, type GearKind, type Light } from './capture-moment';
+import { COLOUR_ASKS, passesColour, type ColourAsk, type ThumbMetrics } from '../../media/thumb-metrics';
+import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
@@ -31,11 +33,41 @@ export const MAX_ROWS = 2000;
 export interface AssetAsk {
   query: AssetQuery;
   filter: RowFilter & RowFacets;
+  /** A colour the frames must read as — judged on their thumbnails, so it is asked apart from the row filter. */
+  colour?: ColourAsk;
 }
 
 /** The rows that pass both halves of the filter — Winnow's culling and the facets (`row-facets.ts`) — in the order they came. */
 export function filterAsk(rows: readonly WinnowAssetRow[], filter: RowFilter & RowFacets): WinnowAssetRow[] {
   return filterRows(rows, filter).filter((row) => passesFacets(row, filter));
+}
+
+/**
+ * The rows an ask KEEPS: the row filter, then — only when a colour is asked —
+ * the thumbnails of what is left measured (`thumb-analysis.ts`) and judged;
+ * a frame whose thumbnail cannot be read is not kept, as a row that cannot
+ * answer a facet is not. Every listing goes through here, the roll's too, so
+ * `colour` means one thing everywhere.
+ */
+export async function keepAsk(
+  client: WinnowClient,
+  sourceId: string,
+  rows: readonly WinnowAssetRow[],
+  ask: AssetAsk,
+): Promise<{ kept: WinnowAssetRow[]; analysed: number; metrics: Map<number, ThumbMetrics> }> {
+  const kept = filterAsk(rows, ask.filter);
+  if (!ask.colour) return { kept, analysed: 0, metrics: new Map() };
+  const sample = kept.slice(0, ANALYSE_MAX);
+  const metrics = await analyseRows(client, sourceId, sample);
+  const colour = ask.colour;
+  return {
+    kept: sample.filter((row) => {
+      const m = metrics.get(row.id);
+      return m ? passesColour(m.colour, colour) : false;
+    }),
+    analysed: sample.length,
+    metrics,
+  };
 }
 
 /** Params shared by the commands that list a day's media. */
@@ -55,6 +87,12 @@ export const ASSET_QUERY_PARAMS = {
   faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
   words: { type: 'string', description: 'Words Winnow matches against file names, places, the camera and the text read IN the picture (a sign, a menu). Not what the picture SHOWS — winnow.search does that.', optional: true },
   ...FACET_PARAMS,
+  colour: {
+    type: 'string',
+    description: `What the frame reads as, measured on its thumbnail (one fetch per row, ${ANALYSE_MAX} rows at most): a hue family (${COLOUR_ASKS.slice(0, 8).join(', ')}), warm, cool, neutral (little colour) or mono.`,
+    enum: COLOUR_ASKS,
+    optional: true,
+  },
 } as const;
 
 /** Face counts a "group" covers: a crowd past this is still a group, and the list stays a query string. */
@@ -93,7 +131,12 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   }
   if (p.half === 'incoming' || p.half === 'final') query.half = p.half;
   if (p.media === 'photo' || p.media === 'video') query.mediaType = p.media;
-  return { query, filter: readRowFilter(p) };
+  return { query, filter: readRowFilter(p), ...readColour(p) };
+}
+
+/** The colour ask alone, as a spread: `{}` when none. */
+export function readColour(p: Record<string, unknown>): { colour?: ColourAsk } {
+  return typeof p.colour === 'string' ? { colour: p.colour as ColourAsk } : {};
 }
 
 /** The Atelier-side half of the params — culling, then when and with what — checked. */
@@ -164,7 +207,7 @@ export async function askFromParams(client: WinnowClient, p: Record<string, unkn
     ask.query.people = [...new Set([...(ask.query.people ?? []), ...ids])];
   }
   const { filter } = await resolveFacets(ask.filter, p);
-  return { query: ask.query, filter: { ...ask.filter, ...filter } };
+  return { ...ask, filter };
 }
 
 /** A person as an agent reads them. */
@@ -275,11 +318,12 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
     if (!c) throw new CommandError('unavailable', 'no Winnow is connected');
     return c;
   };
+  const sourceId = (): string => deps.winnow().connection?.id ?? '';
   const list = async (ask: AssetAsk, cap: number) => {
-    // `who` was resolved by `askFromParams` before this is called.
+    // `who` and a town were resolved by `askFromParams` before this is called.
     const rows = await client().allAssets(ask.query, MAX_ROWS);
-    const kept = filterAsk(rows, ask.filter);
-    return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS };
+    const { kept, analysed } = await keepAsk(client(), sourceId(), rows, ask);
+    return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS, analysed };
   };
   return [
     {
@@ -366,6 +410,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           listed: got.rows.length,
           matched: got.matched,
           shown: got.kept.length,
+          ...(got.analysed ? { analysed: got.analysed } : {}),
           ...(got.capped ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span` } : {}),
           rows: got.kept.map(rowSummary),
         };
@@ -405,7 +450,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
         }
         const { filter } = await resolveFacets(readRowFilter(p), p);
         const dated = found.items.filter((r) => !from || (r.capture_date !== null && r.capture_date >= from && r.capture_date <= (to ?? from)));
-        const kept = filterAsk(dated, filter) as (WinnowAssetRow & { distance: number })[];
+        const kept = (await keepAsk(client(), sourceId(), dated, { query: {}, filter, ...readColour(p) })).kept as (WinnowAssetRow & { distance: number })[];
         return {
           enabled: true,
           ...(found.indexed !== null && found.library !== null && found.indexed < found.library
@@ -414,6 +459,37 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           ranked: found.items.length,
           kept: kept.length,
           assets: kept.map((r) => ({ ...rowSummary(r), distance: Math.round(r.distance * 1000) / 1000 })),
+        };
+      },
+    },
+    {
+      id: 'winnow.analyse',
+      title: 'Measure thumbnails',
+      description:
+        `What each frame’s THUMBNAIL says (a sample, ~128 px, not the file): sharpness (the variance of a Laplacian — relative, it ranks a burst and tells a blur from its twin), exposure (mean, 1st / 50th / 99th percentile luminance 0–255, clipped and crushed shares), colour (the dominant hue family, each family’s share, a mean hex, a warmth −1 cool..1 warm, how much of the frame carries colour) and a 64-bit hash (near for two frames of one burst). By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most, measured once per session.`,
+      params: {
+        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true },
+        ...ASSET_QUERY_PARAMS,
+      },
+      available: connected,
+      run: async (p) => {
+        const c = client();
+        let rows: WinnowAssetRow[];
+        if (Array.isArray(p.ids)) rows = await c.assetsByIds(p.ids as number[]);
+        else {
+          const ask = await askFromParams(c, p);
+          rows = (await keepAsk(c, sourceId(), await c.allAssets(ask.query, MAX_ROWS), ask)).kept;
+        }
+        const sample = rows.slice(0, ANALYSE_MAX);
+        const metrics = await analyseRows(c, sourceId(), sample);
+        return {
+          asked: rows.length,
+          measured: metrics.size,
+          ...(rows.length > ANALYSE_MAX ? { warning: `only the first ${ANALYSE_MAX} were measured — narrow the ask` } : {}),
+          rows: sample.map((r) => {
+            const m = metrics.get(r.id);
+            return { id: r.id, file: r.filename, ...(m ? { sharpness: m.sharpness, exposure: m.exposure, colour: m.colour, hash: m.hash } : { unreadable: true }) };
+          }),
         };
       },
     },
@@ -450,7 +526,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           const query: AssetQuery = { ...ask.query, ...(span.from ? { dateFrom: span.from, dateTo: span.to } : {}) };
           rows.push(...(await c.allAssets(query, MAX_ROWS - rows.length)));
         }
-        const kept = filterAsk(rows, ask.filter);
+        const { kept } = await keepAsk(c, sourceId(), rows, ask);
         const cap = typeof p.limit === 'number' ? p.limit : 200;
         return {
           ...(town ? { town } : {}),
