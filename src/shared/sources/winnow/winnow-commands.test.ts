@@ -114,6 +114,7 @@ describe('resolveWho', () => {
   it('finds a person by their name, case aside, or by a part only they carry', () => {
     expect(resolveWho(['lucas'], people)).toEqual([2]);
     expect(resolveWho(['Martin', 'LUCAS'], people)).toEqual([1, 2]);
+    expect(resolveWho(['elodie'], [...people, { id: 5, name: 'Élodie', hidden: false, face_count: 1, asset_count: 1, cover_face_id: null }])).toEqual([5]);
   });
 
   it('refuses an ambiguous part, an unknown name and a hidden person', () => {

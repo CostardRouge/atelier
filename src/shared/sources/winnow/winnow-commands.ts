@@ -90,7 +90,7 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
 }
 
 /**
- * People named by an agent, as ids: a name matches case aside, exactly, or by
+ * People named by an agent, as ids: a name matches case and accents aside, exactly, or by
  * a part of it no other person's name shares. Ambiguous and unknown names are
  * refused naming the candidates — a wrong person's photos are the one answer
  * worse than none.
@@ -98,10 +98,10 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
 export function resolveWho(names: readonly string[], people: readonly WinnowPerson[]): number[] {
   const named = people.filter((x) => !x.hidden && x.name?.trim());
   return names.map((raw) => {
-    const want = raw.trim().toLowerCase();
+    const want = foldName(raw);
     if (!want) throw new CommandError('invalid', 'a name in who is empty');
-    const exact = named.filter((x) => x.name!.trim().toLowerCase() === want);
-    const hits = exact.length ? exact : named.filter((x) => x.name!.toLowerCase().includes(want));
+    const exact = named.filter((x) => foldName(x.name!) === want);
+    const hits = exact.length ? exact : named.filter((x) => foldName(x.name!).includes(want));
     if (hits.length === 1) return hits[0].id;
     const list = (xs: readonly WinnowPerson[]) => xs.slice(0, 8).map((x) => `"${x.name}" (#${x.id})`).join(', ');
     if (hits.length > 1) throw new CommandError('invalid', `"${raw}" names ${hits.length} people — ${list(hits)}; give people ids instead`);
@@ -110,6 +110,11 @@ export function resolveWho(names: readonly string[], people: readonly WinnowPers
       named.length ? `nobody is named "${raw}" — the named people are ${list(named)}${named.length > 8 ? '…' : ''} (winnow.people lists them all)` : 'nobody is named on this Winnow yet — name people there, or use their ids from winnow.people',
     );
   });
+}
+
+/** A name as it is compared: trimmed, case and accents aside — "elodie" finds "Élodie", as Winnow's own MCP does. */
+function foldName(name: string): string {
+  return name.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
 }
 
 /** The listing params read, with any `who` resolved against the instance's people. */

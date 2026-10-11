@@ -76,8 +76,11 @@ that seam comes first.
 
 Atelier reads Winnow's people and filters by them (`winnow.people`,
 `.peopleSheet`, `.faces`; `people` / `who` / `together` / `faces` on every
-listing). Winnow writes them — `people.name`, `.merge`, `.hide`, `.sheet`
-and a multi-person `assets.list` were asked of its MCP session.
+listing). Winnow writes them, in its own MCP (CostardRouge/winnow#297, on
+#293): `people.name`, `people.hide`, `people.merge`, `people.reassign`,
+`people.suggestions` (pairs that look alike), `people.sheet` (face crops),
+`people.get`, `assets.faces`, and `assets.list` with the same `people` /
+`who` / `together` / `faces` as Atelier's.
 
 ### Sources
 
