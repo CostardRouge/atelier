@@ -15,7 +15,7 @@ const metrics = (over: { sharpness?: number; mean?: number; p99?: number; clippe
     clippedHighlights: over.clipped ?? 0,
     crushedShadows: over.crushed ?? 0,
   },
-  colour: { chromatic: 0.5, families: { red: 0, orange: 0, yellow: 0, green: 0, cyan: 0, blue: 1, purple: 0, magenta: 0 }, dominant: 'blue', hex: '#0000ff', warmth: -1 },
+  colour: { chromatic: 0.5, families: { red: 0, orange: 0, yellow: 0, green: 0, cyan: 0, blue: 1, purple: 0, magenta: 0 }, dominant: 'blue', hex: '#0000ff', hue: 240, warmth: -1 },
   hash: '0000000000000000',
 });
 

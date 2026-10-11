@@ -45,6 +45,8 @@ export interface ColourReading {
   dominant: HueFamily | null;
   /** The mean colour of the chromatic pixels, as "#rrggbb"; the frame's mean when it has none. */
   hex: string;
+  /** The circular mean hue of the chromatic pixels, 0..360, or null for a frame with none. */
+  hue: number | null;
   /** Warm (red · orange · yellow · magenta) minus cool (cyan · blue · purple) shares, −1..1. */
   warmth: number;
 }
@@ -133,6 +135,8 @@ export function colourOf({ data }: Raster): ColourReading {
   let chromatic = 0;
   const sumChroma = [0, 0, 0];
   const sumAll = [0, 0, 0];
+  let hx = 0;
+  let hy = 0;
   for (let i = 0; i < pixels; i++) {
     const o = i * 4;
     const r = data[o];
@@ -145,6 +149,8 @@ export function colourOf({ data }: Raster): ColourReading {
     if (s < CHROMA_FLOOR || l < LIGHT_FLOOR || l > LIGHT_CEIL) continue;
     chromatic++;
     counts[hueFamily(h)]++;
+    hx += Math.cos((h * Math.PI) / 180);
+    hy += Math.sin((h * Math.PI) / 180);
     sumChroma[0] += r;
     sumChroma[1] += g;
     sumChroma[2] += b;
@@ -160,6 +166,7 @@ export function colourOf({ data }: Raster): ColourReading {
     families,
     dominant,
     hex: `#${mean.map((v) => Math.round(v).toString(16).padStart(2, '0')).join('')}`,
+    hue: chromatic ? Math.round((((Math.atan2(hy, hx) * 180) / Math.PI + 360) % 360) * 10) / 10 : null,
     warmth: round4(warm - cool),
   };
 }

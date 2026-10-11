@@ -43,6 +43,7 @@ describe('colourOf', () => {
     expect(blue.warmth).toBe(-1);
     expect(blue.chromatic).toBe(1);
     expect(blue.hex).toBe('#1e3cc8');
+    expect(blue.hue).toBeCloseTo(229.4, 0);
     const orange = colourOf(flat([230, 120, 30]));
     expect(orange.dominant).toBe('orange');
     expect(orange.warmth).toBe(1);
@@ -50,6 +51,7 @@ describe('colourOf', () => {
   it('sees no hue in grey, black or white', () => {
     expect(colourOf(flat([128, 128, 128])).dominant).toBeNull();
     expect(colourOf(flat([128, 128, 128])).chromatic).toBe(0);
+    expect(colourOf(flat([128, 128, 128])).hue).toBeNull();
     expect(colourOf(flat([250, 252, 255])).chromatic).toBe(0);
     expect(colourOf(checker(2)).chromatic).toBe(0);
   });

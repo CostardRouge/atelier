@@ -314,6 +314,22 @@ export interface WinnowCommandDeps {
   sheet: (items: { image: Blob | null; label: string; mark?: string }[], note: string) => Promise<ImageResult>;
 }
 
+/** The rows a command works on: chosen by `ids`, or the listing its other params describe (kept by `keepAsk`). */
+export async function rowsForParams(client: WinnowClient, sourceId: string, p: Record<string, unknown>): Promise<WinnowAssetRow[]> {
+  if (Array.isArray(p.ids)) return client.assetsByIds(p.ids as number[]);
+  const ask = await askFromParams(client, p);
+  return (await keepAsk(client, sourceId, await client.allAssets(ask.query, MAX_ROWS), ask)).kept;
+}
+
+/** The first `ANALYSE_MAX` rows measured on their thumbnails; `cut` says when the rest were left. */
+export async function measureRows(client: WinnowClient, sourceId: string, rows: readonly WinnowAssetRow[]) {
+  const sample = rows.slice(0, ANALYSE_MAX);
+  return { sample, metrics: await analyseRows(client, sourceId, sample), cut: rows.length > ANALYSE_MAX };
+}
+
+/** The `ids` param every measuring command takes instead of a listing. */
+export const IDS_PARAM = { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true } as const;
+
 export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
   const connected = () => (deps.winnow().client ? true : 'no Winnow is connected — connect one on #/sources');
   const client = (): WinnowClient => {
@@ -328,18 +344,8 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
     const { kept, analysed } = await keepAsk(client(), sourceId(), rows, ask);
     return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS, analysed };
   };
-  /** The rows a command works on: chosen by ids, or the listing its other params describe. */
-  const rowsFor = async (p: Record<string, unknown>): Promise<WinnowAssetRow[]> => {
-    const c = client();
-    if (Array.isArray(p.ids)) return c.assetsByIds(p.ids as number[]);
-    const ask = await askFromParams(c, p);
-    return (await keepAsk(c, sourceId(), await c.allAssets(ask.query, MAX_ROWS), ask)).kept;
-  };
-  /** The rows measured, the first ANALYSE_MAX of them. */
-  const measured = async (rows: readonly WinnowAssetRow[]) => {
-    const sample = rows.slice(0, ANALYSE_MAX);
-    return { sample, metrics: await analyseRows(client(), sourceId(), sample), cut: rows.length > ANALYSE_MAX };
-  };
+  const rowsFor = (p: Record<string, unknown>) => rowsForParams(client(), sourceId(), p);
+  const measured = (rows: readonly WinnowAssetRow[]) => measureRows(client(), sourceId(), rows);
   return [
     {
       id: 'winnow.status',
@@ -483,7 +489,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       description:
         `What each frame’s THUMBNAIL says (a sample, ~128 px, not the file): sharpness (the variance of a Laplacian — relative, it ranks a burst and tells a blur from its twin), exposure (mean, 1st / 50th / 99th percentile luminance 0–255, clipped and crushed shares), colour (the dominant hue family, each family’s share, a mean hex, a warmth −1 cool..1 warm, how much of the frame carries colour) and a 64-bit hash (near for two frames of one burst). By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most, measured once per session.`,
       params: {
-        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true },
+        ids: IDS_PARAM,
         ...ASSET_QUERY_PARAMS,
       },
       available: connected,
@@ -507,7 +513,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       description:
         `Frames of a listing that repeat each other, grouped: a BURST (shot within gapSeconds on one body) or TWINS (thumbnails within maxDistance bits, shot within half an hour), with the one to KEEP — Winnow’s own pick or stars first, else the sharpest; null when nothing tells them apart. A proposal to look at (winnow.sheet {ids}) and act on in Winnow, never a write. By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most.`,
       params: {
-        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true },
+        ids: IDS_PARAM,
         ...ASSET_QUERY_PARAMS,
         gapSeconds: { type: 'number', description: `Frames this close on one body are a burst; ${DEFAULT_GAP_SECONDS} when absent.`, min: 0.1, max: 600, optional: true },
         maxDistance: { type: 'number', description: `Hashes this close (bits, 0–64) are twins; ${DEFAULT_MAX_DISTANCE} when absent.`, min: 0, max: 64, integer: true, optional: true },
@@ -555,7 +561,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       description:
         `Frames of a listing whose thumbnail says blur (sharpness far under the batch’s median, and under a floor), too dark, too bright, highlights clipped or shadows crushed — each with the number behind it. A proposal: a night frame is dark on purpose, and only the person knows; nothing is rejected here. By ids, or the same listing as winnow.assets; ${ANALYSE_MAX} rows at most.`,
       params: {
-        ids: { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true },
+        ids: IDS_PARAM,
         ...ASSET_QUERY_PARAMS,
         blurShare: { type: 'number', description: `Blur is sharpness under this share of the batch’s median; ${MISS_DEFAULTS.blurShare} when absent.`, min: 0.05, max: 1, optional: true },
       },
