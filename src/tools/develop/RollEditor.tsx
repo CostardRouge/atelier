@@ -2,7 +2,9 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
-import { CommandError } from '../../shared/commands/registry';
+import { CommandError, commands, type ImageResult } from '../../shared/commands/registry';
+import { blobOfImageResult } from '../../shared/commands/image-result';
+import { pictureChapters } from '../../shared/develop/timelapse-chapters';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { lookCommands } from '../../shared/develop/look-commands';
@@ -1126,6 +1128,69 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         });
         const map = shown.map((x, i) => `${start + i + 1}=${x.id}`).join(', ');
         return contactSheetImage(items, `roll "${latest.current.name}" · page ${Math.floor(start / SHEET_MAX) + 1} of ${pages} · ${map}`);
+      },
+    },
+    {
+      id: 'develop.compare',
+      title: 'Two pictures side by side',
+      description:
+        'One image of two pictures beside each other, labelled: the open picture AS SHOT and AS DELIVERED when no pictures are named (the Before / After a person would look at), or any two pictures of the roll by id (their band thumbnails — graded where opened). Halves the round trips of every "is it better?".',
+      params: {
+        pictures: { type: 'strings', description: 'Exactly two picture ids; absent for the open picture before ↔ after.', optional: true },
+        longEdge: { type: 'number', description: 'Each half’s long edge in pixels; 768 when absent.', min: 64, max: 2048, integer: true, optional: true },
+      },
+      run: async (p) => {
+        const longEdge = typeof p.longEdge === 'number' ? p.longEdge : 768;
+        const asked = p.pictures as string[] | undefined;
+        if (asked === undefined) {
+          const target = targetPicture(latest.current, undefined, openIdRef.current);
+          const [before, after] = await Promise.all([
+            commands.execute('develop.snapshot', { before: true, longEdge }) as Promise<ImageResult>,
+            commands.execute('develop.snapshot', { longEdge }) as Promise<ImageResult>,
+          ]);
+          return contactSheetImage(
+            [
+              { image: blobOfImageResult(before), label: 'as shot' },
+              { image: blobOfImageResult(after), label: 'as delivered', mark: pictureEdits(target).join(' ') || undefined },
+            ],
+            `${pictureLabel(target)} — before (left) and after (right)`,
+            longEdge * 2 + 64,
+          );
+        }
+        if (asked.length !== 2) throw new CommandError('invalid', 'name exactly two pictures, or none for the open picture’s before ↔ after');
+        const pair = asked.map((id) => targetPicture(latest.current, id, null));
+        const images = await Promise.all(
+          pair.map(async (x) => {
+            const own = thumbsRef.current.get(x.id);
+            if (own) return own;
+            const remote = remoteThumb(x);
+            return remote ? remote.client.fetchFile(remote.client.thumbUrl(remote.id), `${remote.id}.jpg`, 'image/jpeg', 0).catch(() => null) : null;
+          }),
+        );
+        return contactSheetImage(
+          pair.map((x, i) => ({ image: images[i], label: pictureLabel(x), mark: pictureEdits(x).length ? 'edited' : undefined })),
+          `${pictureLabel(pair[0])} (left) and ${pictureLabel(pair[1])} (right) — band thumbnails`,
+          longEdge * 2 + 64,
+        );
+      },
+    },
+    {
+      id: 'develop.explain',
+      title: 'What was done to a picture',
+      description:
+        'The edits of a picture (the open one unless named) in the order they were made, read from its journal — each step with its sections, who made it (the author, an agent, the Auto plan) and a caption saying the DIFFERENCE it made: "+0.7 EV, shadows +20". A picture edited before the journal existed answers its sections in a standard order and says so.',
+      params: { picture: { type: 'string', description: 'A picture id; the open picture when absent.', optional: true } },
+      run: (p) => {
+        const target = targetPicture(latest.current, p.picture, openIdRef.current);
+        const { chapters, recorded, reconstructed } = pictureChapters(target);
+        return {
+          picture: target.id,
+          name: pictureLabel(target),
+          recorded,
+          ...(reconstructed.length ? { reconstructed } : {}),
+          steps: chapters.map((c) => ({ at: new Date(c.at).toISOString(), sections: c.sections, by: c.via ?? 'author', caption: c.caption })),
+          summary: chapters.map((c) => c.caption).join(' · ') || 'nothing done yet',
+        };
       },
     },
     {

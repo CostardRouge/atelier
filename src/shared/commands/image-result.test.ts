@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { bytesToBase64, imageResult, untilSteady } from './image-result';
+import { blobOfImageResult, bytesToBase64, imageResult, untilSteady } from './image-result';
 
 describe('bytesToBase64', () => {
   it('encodes like the platform, across chunk boundaries', () => {
@@ -28,6 +28,16 @@ describe('imageResult', () => {
     const r = await imageResult(new Blob([new Uint8Array([0])]), 1, 1);
     expect(r.mimeType).toBe('image/jpeg');
     expect('note' in r).toBe(false);
+  });
+});
+
+describe('blobOfImageResult', () => {
+  it('gives the bytes back, with their type', async () => {
+    const bytes = new Uint8Array([137, 80, 78, 71, 0, 255]);
+    const r = await imageResult(new Blob([bytes], { type: 'image/png' }), 1, 1);
+    const back = blobOfImageResult(r);
+    expect(back.type).toBe('image/png');
+    expect(new Uint8Array(await back.arrayBuffer())).toEqual(bytes);
   });
 });
 

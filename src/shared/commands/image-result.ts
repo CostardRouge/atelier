@@ -50,3 +50,12 @@ export function untilSteady(read: () => unknown, quietMs = 150, capMs = 3000, ti
     }, tickMs);
   });
 }
+
+/** The picture of an `ImageResult` back as a blob — to compose two answers into one. */
+export function blobOfImageResult(r: ImageResult): Blob {
+  const binary = atob(r.data);
+  const bytes = new Uint8Array(binary.length);
+  for (let i = 0; i < binary.length; i++) bytes[i] = binary.charCodeAt(i);
+  return new Blob([bytes], { type: r.mimeType });
+}
+
