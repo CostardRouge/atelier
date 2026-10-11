@@ -7,6 +7,7 @@ import { exposureOffset, withExposureOffset } from '../../shared/develop/match-e
 import { applyRuleValues, planRules, readRules } from '../../shared/develop/apply-rules';
 import { findPreset, presetOnto } from '../../shared/develop/preset-commands';
 import { splitAssetId } from '../../shared/sources/winnow/finals';
+import { DELIVERY_PRESETS, findDeliveryPreset } from '../../shared/develop/delivery-presets';
 import { blobOfImageResult } from '../../shared/commands/image-result';
 import { pictureChapters } from '../../shared/develop/timelapse-chapters';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
@@ -1334,6 +1335,20 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         const next = patchRollExport(readRollExport(latest.current.export), p.settings);
         update((r) => ({ ...r, export: next, updatedAt: Date.now() }), 'agent');
         return { export: next };
+      },
+    },
+    {
+      id: 'develop.deliveryPreset',
+      title: 'Export targets for a network',
+      description: `Set the roll's export targets for a use by name — ${DELIVERY_PRESETS.map((p) => `${p.id} (${p.does})`).join('; ')} — instead of spelling the sizes out with develop.exportSettings; the list of presets when none is named. One undo step.`,
+      params: { preset: { type: 'string', description: 'The preset id or name; absent to list them.', optional: true } },
+      available: () => (exportRunning.current ? LOCKED_DELIVERY : true),
+      run: (p) => {
+        if (p.preset === undefined) return { presets: DELIVERY_PRESETS.map(({ id, name, does, targets }) => ({ id, name, does, targets })) };
+        const preset = findDeliveryPreset(p.preset as string);
+        const next = patchRollExport(readRollExport(latest.current.export), { targets: preset.targets });
+        update((r) => ({ ...r, export: next, updatedAt: Date.now() }), 'agent');
+        return { preset: preset.id, targets: next.targets };
       },
     },
     {
