@@ -256,6 +256,12 @@ export async function removeFromPresetBook(id: string) {
   if (next !== state.book) await commit(next);
 }
 
+/** Who signs a delivered picture, read once the book has loaded — the agent's door to `useDeliveryIdentity`. */
+export async function identityNow(): Promise<DeliveryIdentity> {
+  await ensurePresetBook();
+  return state.book?.identity ?? EMPTY_IDENTITY;
+}
+
 /** Sign delivered pictures as `identity` — written to the book, and so to every device that finds it. */
 export async function setDeliveryIdentity(identity: DeliveryIdentity) {
   await ensurePresetBook();

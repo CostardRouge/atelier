@@ -118,3 +118,55 @@ export function clipLabel(share: number): string | null {
   if (share < 0.001) return '<0.1 %';
   return `${(share * 100).toFixed(share < 0.1 ? 1 : 0)} %`;
 }
+
+/** What an agent reads of a histogram instead of its bars (`develop.measure`). */
+export interface HistogramReading {
+  /** Mean luminance, 0..255, of the encoded values. */
+  mean: number;
+  /** Luminance under which 1 %, 50 % and 99 % of the pixels sit, 0..255 (bin centres). */
+  p1: number;
+  median: number;
+  p99: number;
+  /** Each channel's mean, 0..255 — a cast shows as one standing apart. */
+  red: number;
+  green: number;
+  blue: number;
+  /** Shares 0..1, as the strip's clip words count them. */
+  clippedHighlights: number;
+  crushedShadows: number;
+}
+
+function binMean(bins: readonly number[], total: number): number {
+  if (total <= 0) return 0;
+  const width = 256 / bins.length;
+  let sum = 0;
+  bins.forEach((n, i) => (sum += n * (i + 0.5) * width));
+  return sum / total;
+}
+
+function binPercentile(bins: readonly number[], total: number, share: number): number {
+  const width = 256 / bins.length;
+  let seen = 0;
+  for (let i = 0; i < bins.length; i++) {
+    seen += bins[i];
+    if (seen >= share * total) return (i + 0.5) * width;
+  }
+  return 256 - width / 2;
+}
+
+/** A histogram as numbers, rounded to what a bin can tell (a 64-bin bar is 4 codes wide). */
+export function histogramReading(h: Histogram): HistogramReading {
+  const r1 = (v: number) => Math.round(v * 10) / 10;
+  const share = (v: number) => Math.round(v * 10000) / 10000;
+  return {
+    mean: r1(binMean(h.bins, h.total)),
+    p1: r1(binPercentile(h.bins, h.total, 0.01)),
+    median: r1(binPercentile(h.bins, h.total, 0.5)),
+    p99: r1(binPercentile(h.bins, h.total, 0.99)),
+    red: r1(binMean(h.red, h.total)),
+    green: r1(binMean(h.green, h.total)),
+    blue: r1(binMean(h.blue, h.total)),
+    clippedHighlights: share(h.clippedHighlights),
+    crushedShadows: share(h.crushedShadows),
+  };
+}

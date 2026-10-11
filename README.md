@@ -2991,8 +2991,21 @@ that tab alone: a reload keeps it, a new tab does not, and a second tab that
 connects takes the bridge over from the first. The bridge listens on
 `127.0.0.1:7981` (`--port N` to change it), answers only pages from your own
 machine and the deployed site (`ATELIER_ORIGINS` adds others), and offers
-three tools: `atelier_status`, `atelier_commands` (what the current screen
-offers, with each command's parameters) and `atelier_run`.
+four tools: `atelier_status`, `atelier_commands` (what the current screen
+offers, with each command's parameters — `family: "develop"` for one family),
+`atelier_run`, and `atelier_batch`, which runs several commands in order in
+one call and stops at the first refusal.
+
+Before it acts, an agent can **find** what to work on, from any screen: the
+connected Winnow's days (`winnow.calendar`), folders (`winnow.folders`), a
+day's media with their EXIF, position and your culling (`winnow.assets`, by
+verdict, stars, colour label or tag), and a **contact sheet** of their
+thumbnails labelled by id (`winnow.sheet`) to choose by eye. The Library is
+reachable too: what it holds (`library.assets`), Winnow media fetched into it
+(`library.addFromWinnow`), and the verbs the open tool offers on a picture —
+Trips' Reel, Carousel and Photo on a day, Develop's new roll — run as their
+buttons run (`library.actions`, `library.runAction`). Atelier still never
+writes a verdict or a star: culling is Winnow's.
 
 A session in Develop looks like: `app.navigate` to `/develop/home`,
 `app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
@@ -3010,15 +3023,29 @@ others (`develop.applyTo`), which pictures leave (`develop.deliver`), a title
 and a caption (`develop.words`); the look — built-in LUTs and film stocks,
 their strength and order, the output transform (`develop.addLook` and its
 siblings) — and your preset book (`develop.presets`, `develop.applyPreset`,
-`develop.savePreset`). Your purchased looks, masks and layers stay with you.
+`develop.savePreset`, `develop.deletePreset`). Your purchased looks, masks and
+layers stay with you.
+
+To check its own work an agent has more than the picture: `develop.measure`
+answers the histogram as numbers (mean, percentiles, each channel's mean, the
+share clipped to white or crushed to black), and `develop.contactSheet` shows
+the whole roll on one image, numbered, with what each picture carries.
 
 A roll can be made and filled end to end: `develop.newRoll`, then
-`develop.addFromWinnow` — a day or a span of the connected Winnow, narrowed by
-its own culling (only the picks, at least three stars, photographs only) — or
-`develop.addFromLibrary` for files the Library already holds. And it can
-leave: `develop.exportPlan` says what each picture would deliver, and
-`develop.export` renders through the roll's own export (its targets, sizes,
-metadata) and hands the files to the bridge, which writes them into its
+`develop.addFromWinnow` — chosen media by id, or a day, a span or a folder of
+the connected Winnow, narrowed by its own culling (only the picks, at least
+three stars, photographs only) — or `develop.addFromLibrary` for files the
+Library already holds. It can be renamed, cloned and deleted
+(`develop.renameRoll`, `develop.cloneRoll`, `develop.deleteRoll` — the last
+asks for the roll's exact name, since it cannot be undone), pictures taken off
+it (`develop.removePictures`) or given a variant (`develop.variant`), and told
+which file every picture opens on (`develop.opensOn`). And it can leave:
+`develop.exportSettings` reads or writes the roll's targets, sizes, formats,
+metadata, watermark and HDR, `develop.border` puts pictures on a border,
+`develop.identity` signs the files, `develop.exportPlan` says what each picture
+would deliver, and `develop.export` renders through the roll's own export (all
+of it, the ones that leave, or only those changed since the last export) and
+hands the files to the bridge, which writes them into its
 output folder — `~/Pictures/Atelier` unless started with `--out DIR` — under
 the capture's own name, numbered `-1`, `-2` rather than ever overwriting a
 file. An export by hand still asks for a folder; only the bridge can take one

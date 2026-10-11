@@ -7,6 +7,7 @@ import {
   mcpbManifest,
   MCP_PROTOCOL_VERSION,
   MCP_TOOLS,
+  MAX_BATCH_STEPS,
   handleMcpMessage,
   numberedName,
   safeOutputPath,
@@ -40,9 +41,9 @@ describe('handleMcpMessage', () => {
     expect(await handleMcpMessage({ jsonrpc: '2.0', id: 3, method: 'ping' }, deps())).toEqual({ jsonrpc: '2.0', id: 3, result: {} });
   });
 
-  it('lists the three tools', async () => {
+  it('lists the four tools', async () => {
     const r = await handleMcpMessage({ jsonrpc: '2.0', id: 4, method: 'tools/list' }, deps());
-    expect((r?.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(['atelier_status', 'atelier_commands', 'atelier_run']);
+    expect((r?.result as { tools: { name: string }[] }).tools.map((t) => t.name)).toEqual(['atelier_status', 'atelier_commands', 'atelier_run', 'atelier_batch']);
     expect(MCP_TOOLS[2].inputSchema.required).toEqual(['command']);
   });
 
@@ -188,7 +189,7 @@ describe('mcpbManifest', () => {
     expect(m.server.type).toBe('node');
     expect(m.server.entry_point).toBe(MCPB_ENTRY);
     expect(m.server.mcp_config.args).toEqual([`\${__dirname}/${MCPB_ENTRY}`]);
-    expect(m.tools.map((t) => t.name)).toEqual(['atelier_status', 'atelier_commands', 'atelier_run']);
+    expect(m.tools.map((t) => t.name)).toEqual(['atelier_status', 'atelier_commands', 'atelier_run', 'atelier_batch']);
   });
 });
 
@@ -220,5 +221,52 @@ describe('a second bridge following the first', () => {
 
   it('names one token file per port', () => {
     expect(peerTokenFile(7981)).toBe('bridge-7981.token');
+  });
+});
+
+describe('atelier_commands by family, and atelier_batch', () => {
+  const call = (name: string, args: Record<string, unknown>, over: Partial<McpDeps> = {}) =>
+    handleMcpMessage({ jsonrpc: '2.0', id: 40, method: 'tools/call', params: { name, arguments: args } }, deps(over));
+  const listing: Partial<McpDeps> = {
+    relay: async (r) => (r.kind === 'list' ? [{ id: 'app.status' }, { id: 'develop.set' }, { id: 'develop.snapshot' }] : { ran: r.command }),
+  };
+
+  it('lists one family, and says which are open when it has none', async () => {
+    const r = (await call('atelier_commands', { family: 'develop' }, listing))?.result as { content: { text: string }[] };
+    expect(JSON.parse(r.content[0].text).map((c: { id: string }) => c.id)).toEqual(['develop.set', 'develop.snapshot']);
+    const none = (await call('atelier_commands', { family: 'trips' }, listing))?.result as { content: { text: string }[]; isError?: boolean };
+    expect(none.isError).toBe(true);
+    expect(none.content[0].text).toMatch(/open families are app, develop/);
+  });
+
+  it('runs the steps in order and numbers their answers', async () => {
+    const ran: string[] = [];
+    const r = (await call(
+      'atelier_batch',
+      { steps: [{ command: 'develop.set', params: { values: { exposure: 1 } } }, { command: 'develop.measure' }] },
+      { relay: async (q) => (q.kind === 'run' ? (ran.push(q.command), { ok: q.command }) : []) },
+    ))?.result as { content: { text: string }[]; isError?: boolean };
+    expect(ran).toEqual(['develop.set', 'develop.measure']);
+    expect(r.isError).toBeUndefined();
+    expect(r.content.map((c) => c.text.split(' →')[0])).toEqual(['#1 develop.set', '#2 develop.measure']);
+  });
+
+  it('stops at the first refusal unless asked to go on', async () => {
+    const relay: McpDeps['relay'] = async (q) => {
+      if (q.kind === 'run' && q.command === 'bad') throw new Error('invalid: nope');
+      return { ok: true };
+    };
+    const steps = [{ command: 'a' }, { command: 'bad' }, { command: 'c' }];
+    const stopped = (await call('atelier_batch', { steps }, { relay }))?.result as { content: { text: string }[]; isError?: boolean };
+    expect(stopped.isError).toBe(true);
+    expect(stopped.content.map((c) => c.text)).toEqual([expect.stringMatching(/^#1 a →/), '#2 bad → refused: invalid: nope', 'stopped — steps 3…3 not run']);
+    const all = (await call('atelier_batch', { steps, stopOnError: false }, { relay }))?.result as { content: { text: string }[] };
+    expect(all.content).toHaveLength(3);
+  });
+
+  it('refuses an empty or oversized batch', async () => {
+    expect(((await call('atelier_batch', { steps: [] }))?.result as { isError?: boolean }).isError).toBe(true);
+    const many = Array.from({ length: MAX_BATCH_STEPS + 1 }, () => ({ command: 'app.status' }));
+    expect(((await call('atelier_batch', { steps: many }))?.result as { content: { text: string }[] }).content[0].text).toMatch(/at most/);
   });
 });

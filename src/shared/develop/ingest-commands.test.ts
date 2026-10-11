@@ -19,6 +19,16 @@ describe('filterRows', () => {
     expect(filterRows(rows, { minStars: 3 }).map((r) => r.id)).toEqual([1]);
   });
 
+  it('narrows by tag and colour label, case aside', () => {
+    const tagged = [
+      { id: 5, media_type: 'photo' as const, tags: ['Sunset', 'beach'], color_label: 'Red' },
+      { id: 6, media_type: 'photo' as const, tags: null, color_label: 'blue' },
+    ];
+    expect(filterRows(tagged, { tag: 'sunset' }).map((r) => r.id)).toEqual([5]);
+    expect(filterRows(tagged, { label: 'red' }).map((r) => r.id)).toEqual([5]);
+    expect(filterRows(tagged, { tag: 'beach', label: 'blue' })).toEqual([]);
+  });
+
   it('reads a row with no culling as unrated', () => {
     expect(filterRows(rows, { verdict: 'unrated' }).map((r) => r.id)).toEqual([4]);
   });

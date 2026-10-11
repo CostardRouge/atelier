@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { channelShapes, clipLabel, histogramShape, luminanceHistogram } from './histogram';
+import { channelShapes, clipLabel, histogramReading, histogramShape, luminanceHistogram } from './histogram';
 
 /** RGBA bytes of `n` pixels of one colour. */
 function flat(n: number, r: number, g: number, b: number): number[] {
@@ -87,5 +87,23 @@ describe('the channels', () => {
   it('is flat for an empty picture', () => {
     const s = channelShapes(luminanceHistogram([], 4));
     expect(s.red).toEqual([0, 0, 0, 0]);
+  });
+});
+
+describe('histogramReading', () => {
+  it('reads a flat picture as its own value, a cast as one channel apart', () => {
+    const r = histogramReading(luminanceHistogram(flat(100, 200, 120, 120)));
+    expect(r.red).toBeGreaterThan(r.green + 70);
+    expect(Math.abs(r.green - r.blue)).toBeLessThan(1);
+    expect(r.p1).toBe(r.p99);
+    expect(r.clippedHighlights).toBe(0);
+  });
+
+  it('spreads its percentiles over a picture half dark, half bright', () => {
+    const r = histogramReading(luminanceHistogram([...flat(50, 10, 10, 10), ...flat(50, 250, 250, 250)]));
+    expect(r.p1).toBeLessThan(20);
+    expect(r.p99).toBeGreaterThan(240);
+    expect(r.mean).toBeGreaterThan(120);
+    expect(r.mean).toBeLessThan(136);
   });
 });

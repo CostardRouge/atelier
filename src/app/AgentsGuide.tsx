@@ -121,6 +121,7 @@ const PROMPTS = [
   'Open Atelier’s Develop tool, make a roll called “Test”, and tell me what you can adjust.',
   'Take my Winnow picks from last Saturday into a new roll, give them a warm, slightly lifted look, and show me the first one.',
   'Straighten this photo, crop it to 4:5 around the subject, and export every picture that leaves the roll.',
+  'Which days of September hold photos on my Winnow? Show me the 4-star ones of the busiest day as a contact sheet, and make a roll of the five you would keep.',
 ];
 
 const code = (s: string) => <code className="font-mono text-xs bg-paper-2 px-1 py-[0.05rem] rounded">{s}</code>;
