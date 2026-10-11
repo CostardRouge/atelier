@@ -1,6 +1,9 @@
 import { describe, expect, it } from 'vitest';
 import {
   MCPB_ENTRY,
+  parsePeerRequest,
+  peerAuthorized,
+  peerTokenFile,
   mcpbManifest,
   MCP_PROTOCOL_VERSION,
   MCP_TOOLS,
@@ -76,7 +79,7 @@ describe('handleMcpMessage', () => {
     let relayed = false;
     const d = deps({ tab: () => null, relay: async () => (relayed = true) });
     const status = await handleMcpMessage({ jsonrpc: '2.0', id: 11, method: 'tools/call', params: { name: 'atelier_status' } }, d);
-    expect(JSON.stringify(status?.result)).toContain('#/sources');
+    expect(JSON.stringify(status?.result)).toContain('#/agents');
     const run = await handleMcpMessage({ jsonrpc: '2.0', id: 12, method: 'tools/call', params: { name: 'atelier_run', arguments: { command: 'app.status' } } }, d);
     expect((run?.result as { isError: boolean }).isError).toBe(true);
     expect(relayed).toBe(false);
@@ -186,5 +189,36 @@ describe('mcpbManifest', () => {
     expect(m.server.entry_point).toBe(MCPB_ENTRY);
     expect(m.server.mcp_config.args).toEqual([`\${__dirname}/${MCPB_ENTRY}`]);
     expect(m.tools.map((t) => t.name)).toEqual(['atelier_status', 'atelier_commands', 'atelier_run']);
+  });
+});
+
+describe('a second bridge following the first', () => {
+  const token = 'a'.repeat(64);
+
+  it('lets only a program on this computer holding the token through', () => {
+    expect(peerAuthorized({ authorization: `Bearer ${token}` }, token)).toBe(true);
+    // A web page always sends an Origin, token or not.
+    expect(peerAuthorized({ origin: 'http://127.0.0.1:5173', authorization: `Bearer ${token}` }, token)).toBe(false);
+    expect(peerAuthorized({ authorization: `Bearer ${'b'.repeat(64)}` }, token)).toBe(false);
+    expect(peerAuthorized({}, token)).toBe(false);
+    // A hub with no token (it could not write one) lets nobody in.
+    expect(peerAuthorized({ authorization: 'Bearer ' }, '')).toBe(false);
+  });
+
+  it('reads a relay request and refuses anything else', () => {
+    expect(parsePeerRequest('{"kind":"list"}')).toEqual({ kind: 'list' });
+    expect(parsePeerRequest('{"kind":"run","command":"develop.set","params":{"values":{"exposure":1}}}')).toEqual({
+      kind: 'run',
+      command: 'develop.set',
+      params: { values: { exposure: 1 } },
+    });
+    expect(parsePeerRequest('{"kind":"run","command":"app.status"}')).toEqual({ kind: 'run', command: 'app.status', params: {} });
+    expect(parsePeerRequest('{"kind":"run","command":""}')).toBeNull();
+    expect(parsePeerRequest('{"kind":"run","command":"x","params":[]}')).toBeNull();
+    expect(parsePeerRequest('nope')).toBeNull();
+  });
+
+  it('names one token file per port', () => {
+    expect(peerTokenFile(7981)).toBe('bridge-7981.token');
   });
 });

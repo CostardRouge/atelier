@@ -167,16 +167,26 @@ export const DEPLOYED_ORIGINS: readonly string[] = ['https://atelier.steeve.webs
 export function notConnectedText(port: number): string {
   return [
     'No Atelier tab is connected to this bridge.',
-    `Open Atelier (the deployed site or \`npm run dev\`), go to #/sources and, under "Agent bridge", connect on port ${port}.`,
+    `Open Atelier (the deployed site or \`npm run dev\`), go to #/agents and press Connect (port ${port}).`,
     'The tab then shows an "Agent" pill in its masthead; nothing reaches it before that click.',
   ].join('\n');
+}
+
+/** What a bridge knows of the tab connected to it. */
+export interface TabInfo {
+  route: string;
+  title: string;
+  since: number;
 }
 
 /** What the script needs from its environment to answer one MCP message. */
 export interface McpDeps {
   serverVersion: string;
-  /** The tab as last introduced, or null when none is connected. */
-  tab: () => { route: string; title: string; since: number } | null;
+  /**
+   * The tab as last introduced, or null when none is connected — asked of the
+   * HUB bridge when this one only follows it, hence the promise.
+   */
+  tab: () => TabInfo | null | Promise<TabInfo | null>;
   port: number;
   /** Where the bridge writes an agent's exports. */
   outDir?: string;
@@ -196,8 +206,8 @@ function fail(id: RpcMessage['id'], code: number, message: string): RpcResponse 
 
 async function callTool(name: string, args: Record<string, unknown>, deps: McpDeps): Promise<McpToolResult> {
   const err = (text: string): McpToolResult => ({ content: [{ type: 'text', text }], isError: true });
-  const tab = deps.tab();
   const problem = deps.problem?.() ?? null;
+  const tab = problem ? null : await deps.tab();
   if (problem) return err(problem);
   if (name === 'atelier_status') {
     if (!tab) return { content: [{ type: 'text', text: notConnectedText(deps.port) }] };
@@ -324,4 +334,55 @@ export function mcpbManifest(version: string, homepage: string): Record<string, 
     tools: MCP_TOOLS.map((t) => ({ name: t.name, description: t.description })),
     keywords: ['photo', 'develop', 'raw', 'lut', 'atelier'],
   };
+}
+
+// --- two MCP apps, one tab: the second bridge FOLLOWS the first ------------------
+
+/**
+ * Claude Desktop and Claude Code each start their own bridge, and only one can
+ * hold the port. The one that does is the HUB (the tab connects to it); a
+ * bridge that finds the port taken by another Atelier bridge FOLLOWS it,
+ * relaying its tool calls through the hub's `/peer/*` routes. Those routes are
+ * for programs on this computer only: they refuse any request carrying an
+ * `Origin` (every browser request does), and they ask for the hub's TOKEN,
+ * written to a file only this user can read. A follower whose hub goes away
+ * takes the port itself, and the tab reconnects to it on its own.
+ */
+export const PEER_STATUS_PATH = '/peer/status';
+export const PEER_RELAY_PATH = '/peer/relay';
+
+/** The token file's name for a port, inside `~/.atelier/`. */
+export function peerTokenFile(port: number): string {
+  return `bridge-${port}.token`;
+}
+
+/**
+ * Whether a request to a `/peer/*` route may pass: no `Origin` (so not a web
+ * page) and the hub's token as a bearer, compared in constant time.
+ */
+export function peerAuthorized(headers: { origin?: string; authorization?: string }, token: string): boolean {
+  if (headers.origin !== undefined) return false;
+  if (!token || token.length < 32) return false;
+  const given = /^Bearer (.+)$/.exec(headers.authorization ?? '')?.[1] ?? '';
+  if (given.length !== token.length) return false;
+  let diff = 0;
+  for (let i = 0; i < token.length; i++) diff |= given.charCodeAt(i) ^ token.charCodeAt(i);
+  return diff === 0;
+}
+
+/** A follower's relay request, or null when the body is not one. */
+export function parsePeerRequest(text: string): { kind: 'list' } | { kind: 'run'; command: string; params: Record<string, unknown> } | null {
+  let raw: unknown;
+  try {
+    raw = JSON.parse(text);
+  } catch {
+    return null;
+  }
+  if (!isRecord(raw)) return null;
+  if (raw.kind === 'list') return { kind: 'list' };
+  if (raw.kind === 'run' && typeof raw.command === 'string' && raw.command) {
+    const params = raw.params === undefined ? {} : raw.params;
+    return isRecord(params) ? { kind: 'run', command: raw.command, params } : null;
+  }
+  return null;
 }
