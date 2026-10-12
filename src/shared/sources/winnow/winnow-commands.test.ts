@@ -1,5 +1,5 @@
 import { describe, expect, it } from 'vitest';
-import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, winnowCommands } from './winnow-commands';
+import { askFromParams, cullingMark, filterAsk, keepAsk, readAssetQuery, resolveTown, resolveWho, rowSummary, textLine, winnowCommands } from './winnow-commands';
 import { readStatsSpan } from './winnow-time-commands';
 import type { GazetteerCity } from '../../roadtrip/gazetteer';
 import type { WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
@@ -136,6 +136,20 @@ describe('rowSummary', () => {
   it('says the local hour, the light and the gear when they can be told', () => {
     const s = rowSummary(row({ captured_at: '2026-01-01T08:55:00Z', captured_at_source: 'exif', capture_offset_min: 660, gps_lat: -33.87, gps_lon: 151.21, camera_model: 'FC8482' }));
     expect(s).toMatchObject({ local: '19:55', light: 'golden', gear: 'drone' });
+  });
+
+  it('carries the text read in the picture on one line, cut when too long, absent when none', () => {
+    expect(rowSummary(row({ ocr_text: 'BONDI\n ICEBERGS \nSWIM CLUB' })).text).toBe('BONDI · ICEBERGS · SWIM CLUB');
+    expect(textLine('x'.repeat(400))).toHaveLength(160);
+    expect(textLine('x'.repeat(400))?.endsWith('…')).toBe(true);
+    expect('text' in rowSummary(row({ ocr_text: null }))).toBe(false);
+    expect(textLine('\n \n')).toBeNull();
+  });
+
+  it('asks Winnow for frames with or without text, and keeps words a scope', () => {
+    expect(readAssetQuery({ date: '2026-09-14', withText: true }).query).toMatchObject({ hasText: true });
+    expect(readAssetQuery({ date: '2026-09-14', withText: false }).filter).toMatchObject({ text: false });
+    expect(readAssetQuery({ words: ' bondi ' }).query).toEqual({ words: 'bondi' });
   });
 
   it('reads a row with nothing culled as unrated, and no exposure as null', () => {

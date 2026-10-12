@@ -116,6 +116,14 @@ describe('passesFacets', () => {
     expect(passesFacets(r, { near: { lat: -16.9, lon: 145.7, km: 100 } })).toBe(false);
     expect(passesFacets(row({ gps_lat: null }), { near: { lat: -33.9, lon: 151.2, km: 1000 } })).toBe(false);
   });
+
+  it('keeps the frames with text read in them, or those without', () => {
+    expect(readFacets({ withText: true })).toEqual({ text: true });
+    expect(readFacets({ withText: false })).toEqual({ text: false });
+    expect(passesFacets(row({ ocr_text: 'BONDI\nICEBERGS' }), { text: true })).toBe(true);
+    expect(passesFacets(row({ ocr_text: '  ' }), { text: true })).toBe(false);
+    expect(passesFacets(row({ ocr_text: null }), { text: false })).toBe(true);
+  });
 });
 
 describe('nearDays and daySpans', () => {

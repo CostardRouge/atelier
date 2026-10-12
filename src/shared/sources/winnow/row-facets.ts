@@ -55,6 +55,8 @@ export interface RowFacets {
   /** Height above take-off at least this, in metres — a drone's row. */
   altitudeMin?: number;
   near?: Near;
+  /** Text read in the picture by Winnow's OCR: there must be some (true) or none (false). */
+  text?: boolean;
 }
 
 /** The parameters every listing takes for these facets. */
@@ -84,6 +86,7 @@ export const FACET_PARAMS = {
   isoMin: { type: 'number', description: 'ISO at least this — high-ISO night work.', min: 1, integer: true, optional: true },
   shutterMin: { type: 'number', description: 'Exposure at least this many seconds — long exposures.', min: 0, optional: true },
   altitudeMin: { type: 'number', description: 'A drone’s height above take-off at least this, in metres.', min: 0, optional: true },
+  withText: { type: 'boolean', description: 'true: only frames where Winnow read text (a sign, a menu, a plate); false: only frames with none. What it says is each row’s text; words searches it.', optional: true },
   near: { type: 'string', description: 'Within nearKm of a TOWN by name, resolved offline ("Cairns"); or give nearLat and nearLon.', optional: true },
   nearLat: { type: 'number', description: 'Latitude of a point to search around, with nearLon.', min: -90, max: 90, optional: true },
   nearLon: { type: 'number', description: 'Longitude of a point to search around, with nearLat.', min: -180, max: 180, optional: true },
@@ -130,6 +133,7 @@ export function readFacets(p: Record<string, unknown>): RowFacets {
   if (typeof p.gear === 'string') out.gear = p.gear as GearKind;
   if (typeof p.camera === 'string' && p.camera.trim()) out.camera = p.camera.trim();
   if (typeof p.orientation === 'string') out.orientation = p.orientation as Orientation;
+  if (typeof p.withText === 'boolean') out.text = p.withText;
   for (const key of ['focalMin', 'focalMax', 'apertureMax', 'isoMin', 'shutterMin', 'altitudeMin'] as const) {
     if (typeof p[key] === 'number') out[key] = p[key] as number;
   }
@@ -163,6 +167,7 @@ export function passesFacets(row: WinnowAssetRow, f: RowFacets): boolean {
     if (![row.device, row.camera_model].some((x) => x?.toLowerCase().includes(want))) return false;
   }
   if (f.orientation && orientationOf(row) !== f.orientation) return false;
+  if (f.text !== undefined && Boolean(row.ocr_text?.trim()) !== f.text) return false;
   if (f.focalMin !== undefined && !(row.focal_length !== null && row.focal_length >= f.focalMin)) return false;
   if (f.focalMax !== undefined && !(row.focal_length !== null && row.focal_length <= f.focalMax)) return false;
   if (f.apertureMax !== undefined && !(row.aperture !== null && row.aperture <= f.apertureMax)) return false;

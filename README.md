@@ -3034,8 +3034,10 @@ taken at (`time: morning | midday | afternoon | evening | night`, or
 `hourFrom` / `hourTo`), by the **light** — `golden`, `blue`, `day`, `night`,
 from the sun's height where and when it was taken, so only for media with a
 position — and by **gear** (`drone`, `phone`, `action`, `camera`). `words`
-matches what Winnow reads as text: file names, places, the camera and the text
-inside a picture. Each row
+looks for each word, as a part of a word, in the file's path and in the
+**text Winnow's OCR read inside the picture** (a sign, a menu, a plate);
+`withText: true` keeps only the frames where some was read, `false` those
+with none, and every row carries what was read. Each row
 says its local time, light and gear when they can be told; a frame whose
 time zone nobody knows has no hour, rather than the server's.
 

@@ -46,6 +46,8 @@ export interface LibraryStats {
   byCountry: Counts;
   noCountry: number;
   byVerdict: Counts;
+  /** Frames where Winnow's OCR read some text (a sign, a menu, a plate). */
+  withText: number;
   /** Frames per star count, index 0..5. */
   byStars: number[];
   /** The five busiest days. */
@@ -85,6 +87,7 @@ export function libraryStats(rows: readonly WinnowAssetRow[], countryOf: (row: W
     byCountry: {},
     noCountry: 0,
     byVerdict: {},
+    withText: 0,
     byStars: new Array<number>(6).fill(0),
     busiest: [],
   };
@@ -109,6 +112,7 @@ export function libraryStats(rows: readonly WinnowAssetRow[], countryOf: (row: W
     const country = countryOf(r);
     if (country) bump(s.byCountry, country);
     else s.noCountry++;
+    if (r.ocr_text?.trim()) s.withText++;
     const c = cullingFromRow(r);
     bump(s.byVerdict, c?.verdict ?? 'unrated');
     s.byStars[Math.max(0, Math.min(5, c?.star ?? 0))]++;

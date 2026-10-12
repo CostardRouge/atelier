@@ -102,7 +102,9 @@ listing narrows by `time` / `hourFrom`–`hourTo` (local clock), `light`
 (drone · phone · action · camera); the body, the lens and the place are
 Winnow's own names (`camera`, `lens`, `country`, `region`, `city`, `place`,
 resolved against `/api/facets` and filtered by the server — `winnow.names`
-lists them); `words` is Winnow's text search (`q`); the second round added the HOW facets,
+lists them); `words` is Winnow's `q` (the file's path and the OCR text, each
+word as a part of a word), `withText` its `has_text`, and each row says
+the text read; the second round added the HOW facets,
 `near`, `colour` and the sorting, curating and counting commands over them.
 Rules in `docs/memory/agent-commands.md`. Open: Winnow filtering the hour,
 light, gear, orientation and colour itself would let a year be asked without

@@ -42,7 +42,7 @@ describe('libraryStats', () => {
       row({ id: 1 }),
       row({ id: 2, media_type: 'video', duration_s: 90, camera_model: 'ILCE-7CM2', lens: 'FE 24-70', focal_length: 70, verdict: 'unrated', star: 0 }),
       row({ id: 3, capture_date: '2026-01-03', captured_at: '2026-01-03T20:00:00Z', capture_offset_min: null, exif_offset_min: null, gps_lat: null, camera_model: 'iPhone 12 mini', focal_length: 5 }),
-      row({ id: 4, capture_date: null, captured_at: null }),
+      row({ id: 4, capture_date: null, captured_at: null, ocr_text: 'OPEN 7 DAYS' }),
     ];
     const s = libraryStats(rows, (r) => (r.gps_lat === null ? null : 'AU'));
     expect(s.span).toEqual({ from: '2026-01-01', to: '2026-01-03' });
@@ -60,6 +60,7 @@ describe('libraryStats', () => {
     expect(s.byCountry).toEqual({ AU: 3 });
     expect(s.noCountry).toBe(1);
     expect(s.byVerdict).toEqual({ pick: 3, unrated: 1 });
+    expect(s.withText).toBe(1);
     expect(s.byStars).toEqual([1, 0, 0, 0, 3, 0]);
     expect(s.busiest).toEqual([
       { date: '2026-01-01', count: 2 },

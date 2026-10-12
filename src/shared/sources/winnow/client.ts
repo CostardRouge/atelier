@@ -158,6 +158,12 @@ export interface WinnowAssetRow {
   place_region?: string | null;
   place_city?: string | null;
   place_poi?: string | null;
+  /**
+   * The text Winnow's OCR read IN the picture (a sign, a menu, a plate), its
+   * fragments joined by newlines — null when none was read or OCR is off. `a.*`
+   * carries it; optional for an older instance.
+   */
+  ocr_text?: string | null;
 }
 
 export interface WinnowSidecar {
@@ -297,8 +303,14 @@ export interface AssetQuery extends FilterQuery {
    */
   verdict?: 'pick' | 'reject' | 'skip' | 'unrated';
   minStars?: number;
-  /** Words matched by Winnow against names, places, the camera and the text read IN the picture (`q`). */
+  /**
+   * Words Winnow looks for in the file's path (folder and name) and in the
+   * text its OCR read in the picture (`q`): every word must appear, as a part
+   * of a word, case aside. Nothing else — not the place, not the camera.
+   */
   words?: string;
+  /** Only media with (true) or without (false) text read in the picture (`has_text`). */
+  hasText?: boolean;
   /**
    * Winnow's own exact-name filters, already in wire form (`device`, `lens`,
    * `place_city`…, each a comma-separated list) — what `winnow-names.ts`
@@ -1102,6 +1114,7 @@ export class WinnowClient {
         person_mode: query.people?.length && query.together ? 'all' : undefined,
         has_faces: query.hasFaces === undefined ? undefined : String(query.hasFaces),
         face_count: query.faceCount?.length ? query.faceCount.join(',') : undefined,
+        has_text: query.hasText === undefined ? undefined : String(query.hasText),
         verdict: query.verdict,
         star_min: query.minStars,
         q: query.words,

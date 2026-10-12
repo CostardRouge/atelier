@@ -98,7 +98,12 @@ export const ASSET_QUERY_PARAMS = {
   who: { type: 'strings', description: 'The same by NAME, as Winnow names them (case aside; a unique part of a name is enough).', optional: true },
   together: { type: 'boolean', description: 'With several people: only media where they are ALL in frame (otherwise any of them).', optional: true },
   faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
-  words: { type: 'string', description: 'Words Winnow matches against file names, places, the camera and the text read IN the picture (a sign, a menu). Not what the picture SHOWS — winnow.search does that.', optional: true },
+  words: {
+    type: 'string',
+    description:
+      'Words Winnow looks for in the file’s path (folder and name) and in the TEXT its OCR read in the picture (a sign, a menu, a plate) — every word must appear, as a PART of a word, case aside ("menu" also finds "menuiserie"; up to 10 words). Not the place (city…) nor the body (camera), and not what the picture SHOWS — winnow.search does that. A scope of its own.',
+    optional: true,
+  },
   ...FACET_PARAMS,
   // After the facets: a listing's `camera` is Winnow's exact name, asked of the server.
   ...NAME_PARAMS,
@@ -135,6 +140,8 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   if (typeof p.words === 'string' && p.words.trim()) query.words = p.words.trim();
   if (Array.isArray(p.people)) query.people = p.people as number[];
   if (p.together === true) query.together = true;
+  // Asked of the server too, so "frames with text" over a year is narrowed before the cap.
+  if (typeof p.withText === 'boolean') query.hasText = p.withText;
   if (p.faces === 'none') query.hasFaces = false;
   else if (p.faces === 'any') query.hasFaces = true;
   else if (p.faces === 'solo') query.faceCount = [1];
@@ -287,7 +294,20 @@ export interface RowSummary {
   burst?: number;
   /** The capture's other file (a RAW behind this JPEG, a live photo's clip). */
   companion?: string;
+  /** The text Winnow read in the picture, its fragments on one line (` · `), cut at 160 characters; absent when none. */
+  text?: string;
   folder: number | null;
+}
+
+/** How much of the text read in a picture a row carries — a poster full of words must not swallow the answer. */
+const TEXT_MAX = 160;
+
+/** The OCR fragments on one line, cut where too long; null when there are none. */
+export function textLine(ocr: string | null | undefined): string | null {
+  const parts = (ocr ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const line = parts.join(' · ');
+  return line.length > TEXT_MAX ? `${line.slice(0, TEXT_MAX - 1)}…` : line;
 }
 
 export function rowSummary(row: WinnowAssetRow): RowSummary {
@@ -321,6 +341,7 @@ export function rowSummary(row: WinnowAssetRow): RowSummary {
     ...optional('local', localClock(row)),
     ...optional('light', lightOf(row)),
     ...optional('gear', gearOf(row)),
+    ...optional('text', textLine(row.ocr_text)),
   };
 }
 
@@ -486,7 +507,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       id: 'winnow.assets',
       title: 'List a day’s media',
       description:
-        'The media of a day, a span, a folder, a PERSON or a PLACE (near) on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), by when and with what (time, light, gear), by Winnow’s own names for the BODY, the lens and the PLACE (camera, lens, country, region, city, place — each a scope of its own, filtered by Winnow, so "every frame of the A7C II" needs no day; the answer says which names the words took), by how (orientation, focal, aperture, ISO, shutter, altitude) and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
+        'The media of a day, a span, a folder, a PERSON or a PLACE (near) on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), by when and with what (time, light, gear), by Winnow’s own names for the BODY, the lens and the PLACE (camera, lens, country, region, city, place — each a scope of its own, filtered by Winnow, so "every frame of the A7C II" needs no day; the answer says which names the words took), by how (orientation, focal, aperture, ISO, shutter, altitude), by text read in the picture (withText; words searches it) and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst, paired file and the text read in it. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
       params: {
         ...ASSET_QUERY_PARAMS,
         limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
