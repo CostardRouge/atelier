@@ -21,6 +21,10 @@
 
 import { useCallback, useMemo, useRef, useState } from 'react';
 import { PRESS_LOOK } from '../../../shared/ui/press';
+import { ChapterFoot, ChapterHead, ChapterIndex, type ChapterRow } from '../../../shared/ui/Chapters';
+import { ChapterScope } from '../../../shared/roadtrip/hooks/panel-ui';
+import { chapterChanged, chapterSummary, numbered, resetChapter } from '../../../shared/roadtrip/hooks/opener-chapters';
+import { useOpenerChapter } from '../opener-chapter';
 import {
   DEFAULT_HOOK_ID,
   setHookOptions,
@@ -156,6 +160,31 @@ export default function HookPicker({
   const shown = shownUnmet ? saidVariant : current;
   const noneHere = (variant: HookVariant) => slideOpener && variant.id === DEFAULT_HOOK_ID;
 
+  // The panel as numbered CHAPTERS (`opener-chapters.ts`): an index, then one
+  // chapter at a time — the one last open on this device, «All» a tap away.
+  const [openId, setOpenId] = useOpenerChapter(currentId);
+  const chapters = current?.chapters;
+  const rows = useMemo<ChapterRow[]>(() => {
+    if (!current || !chapters) return [];
+    const read = { ...current.defaults, ...(options ?? {}) };
+    return numbered(chapters).map(({ n, chapter }) => ({
+      id: chapter.id,
+      n,
+      title: chapter.title,
+      summary: chapterSummary(chapter, read),
+      changed: chapterChanged(chapter, options ?? {}, current.defaults),
+      unmet: chapter.unmet?.(options ?? {}, ctx) ?? null,
+    }));
+  }, [current, chapters, options, ctx]);
+  const openIndex = rows.findIndex((row) => row.id === openId);
+  const openRow = openIndex >= 0 ? rows[openIndex] : null;
+  const scope = useMemo(() => ({ open: openRow?.id ?? null, title: openRow?.title }), [openRow?.id, openRow?.title]);
+  const resetOpen = () => {
+    const chapter = chapters?.find((c) => c.id === openRow?.id);
+    if (!chapter || !current) return;
+    onChange(setHookOptions(layers, resetChapter(chapter, options ?? {}, current.defaults)));
+  };
+
   return (
     <div className="flex flex-col gap-2">
       <div className="grid grid-cols-3 gap-1.5" role="group" aria-label="Opener">
@@ -216,7 +245,25 @@ export default function HookPicker({
         </p>
       )}
 
-      {panel}
+      {chapters && rows.length ? (
+        <div className="flex flex-col gap-3">
+          {openRow && (
+            <ChapterHead row={openRow} of={rows.length} onBack={() => setOpenId(null)} onReset={resetOpen} />
+          )}
+          <ChapterScope.Provider value={scope}>{panel}</ChapterScope.Provider>
+          {openRow ? (
+            <ChapterFoot
+              prev={rows[openIndex - 1] ?? null}
+              next={rows[openIndex + 1] ?? null}
+              onOpen={setOpenId}
+            />
+          ) : (
+            <ChapterIndex rows={rows} onOpen={setOpenId} label={`${current?.name ?? 'Opener'} settings`} />
+          )}
+        </div>
+      ) : (
+        panel
+      )}
 
       {choosing && (
         <HookPicturesModal
