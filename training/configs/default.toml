@@ -1,0 +1,51 @@
+# Every run parameter lives in a file like this one. To change something, copy
+# it (e.g. configs/my-run.toml), edit the copy and pass it with
+# `--config configs/my-run.toml`: only the keys you write replace these.
+# A single key can also be changed on the command line: `--set ingest.long_edge=768`.
+# Paths are relative to the training/ folder.
+
+[paths]
+data = "data"
+fivek = "data/fivek"          # MIT-Adobe FiveK, as downloaded (never committed)
+pairs = "data/pairs"          # your groups: one original + several edits each
+synthetic = "data/synthetic"  # made by `atelier-train synth`, for trying everything without real data
+cache = "data/cache"          # what `ingest` prepares for training
+runs = "runs"                 # checkpoints, curves, exported .cube files (M2 on)
+
+[device]
+prefer = "auto"  # auto | mps | cuda | cpu
+
+[ingest]
+sources = ["fivek", "pairs"]  # add "synthetic" to train on the synthetic set
+long_edge = 512               # pixels kept on the long edge of each prepared pair
+fivek_expert = "C"            # A..E — C is the usual target in the literature
+fivek_limit = 0               # 0 = every photo
+# Which file to use as a FiveK INPUT when several exist for one photo (first found wins).
+fivek_input_prefer = ["tif", "tiff", "png", "jpg", "jpeg", "dng"]
+aspect_tolerance = 0.01       # an edit whose aspect differs more is treated as cropped and skipped (until M5)
+
+[raw]
+use_camera_wb = true
+no_auto_bright = true
+
+[synthetic]
+groups = 12
+size = [96, 64]       # width, height of each generated picture
+edits_per_group = 3
+fivek_photos = 8
+seed = 7
+
+# ---- Read from M2 on; written here now so one file describes a whole run. ----
+[model]
+kind = "adaptive-3dlut"  # Zeng et al. 2020
+lut_size = 33
+basis = 3
+thumb = 256
+
+[train]
+epochs = 400
+batch_size = 1
+learning_rate = 1e-4
+smooth_weight = 1e-4
+monotonic_weight = 10.0
+seed = 1

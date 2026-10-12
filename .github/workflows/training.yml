@@ -1,0 +1,38 @@
+name: Training
+
+# The Python workspace under training/ (see training/README.md): lint and the
+# unit tests on the synthetic set, CPU only and without PyTorch, so it stays a
+# few seconds. Runs only when training/ changes.
+on:
+  push:
+    branches: [main]
+    paths: ['training/**', '.github/workflows/training.yml']
+  pull_request:
+    paths: ['training/**', '.github/workflows/training.yml']
+  workflow_dispatch:
+
+concurrency:
+  group: training-${{ github.ref }}
+  cancel-in-progress: true
+
+jobs:
+  check:
+    runs-on: ubuntu-24.04
+    defaults:
+      run:
+        working-directory: training
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v5
+
+      - name: Setup uv
+        uses: astral-sh/setup-uv@v6
+
+      - name: Install (core + dev, locked)
+        run: uv sync --locked
+
+      - name: Lint
+        run: uv run ruff check src tests
+
+      - name: Test
+        run: uv run pytest

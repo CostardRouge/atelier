@@ -83,7 +83,8 @@ const layoutRules = [
 ];
 
 export default tseslint.config(
-  { ignores: ['dist'] },
+  // training/ is the Python workspace (its own ruff + pytest), and its .venv must never be walked.
+  { ignores: ['dist', 'training'] },
   {
     files: ['**/*.{ts,tsx}'],
     extends: [js.configs.recommended, ...tseslint.configs.recommended],
