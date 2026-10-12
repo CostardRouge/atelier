@@ -57,8 +57,17 @@ def _to_float_rgb(array: np.ndarray) -> np.ndarray:
     return np.clip(out, 0.0, 1.0)
 
 
-def load_image(path: Path | str, raw_options: dict[str, Any] | None = None) -> np.ndarray:
-    """The picture as an ``(H, W, 3)`` float32 array in [0, 1], upright for JPEG/PNG (EXIF orientation)."""
+def load_image(
+    path: Path | str,
+    raw_options: dict[str, Any] | None = None,
+    long_edge: int | None = None,
+) -> np.ndarray:
+    """The picture as an ``(H, W, 3)`` float32 array in [0, 1], upright for JPEG/PNG (EXIF orientation).
+
+    ``long_edge`` is a HINT: the caller will resize to that long edge anyway, so a JPEG may be
+    decoded at 1/2, 1/4 or 1/8 scale by the codec itself (never below the hint) — a 24 MP file
+    then costs a fraction of the time and memory. Every other format is decoded whole.
+    """
     path = Path(path)
     ext = path.suffix.lower()
     if ext in RAW_EXTS:
@@ -70,6 +79,10 @@ def load_image(path: Path | str, raw_options: dict[str, Any] | None = None) -> n
     if ext not in IMAGE_EXTS:
         raise ValueError(f"{path.name}: unsupported file type {ext!r}")
     with Image.open(path) as im:
+        if long_edge and im.format == "JPEG":
+            # The hint is in the file's own orientation: a fit keeps the aspect, so a swap of w/h
+            # by the EXIF orientation applied below changes nothing.
+            im.draft(None, fit_long_edge(*im.size, long_edge))
         im = ImageOps.exif_transpose(im)
         if im.mode in ("I;16", "I;16B", "I;16L", "I"):
             return _to_float_rgb(np.asarray(im).astype(np.uint16))
@@ -121,8 +134,10 @@ def resize_to(img: np.ndarray, width: int, height: int) -> np.ndarray:
     """Resample each channel in float (Lanczos), so no precision is lost to 8 bits on the way."""
     if img.shape[1] == width and img.shape[0] == height:
         return img.astype(np.float32, copy=False)
+    # A float32 plane opens as mode "F" by itself (the `mode=` argument is gone in Pillow 13).
     channels = [
-        np.asarray(Image.fromarray(img[..., c].astype(np.float32), mode="F").resize((width, height), Image.LANCZOS))
+        np.asarray(Image.fromarray(np.ascontiguousarray(img[..., c], dtype=np.float32)).resize(
+            (width, height), Image.LANCZOS))
         for c in range(3)
     ]
     return np.clip(np.stack(channels, axis=-1), 0.0, 1.0).astype(np.float32)

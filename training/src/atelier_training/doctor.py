@@ -5,6 +5,7 @@ from __future__ import annotations
 import os
 import platform
 import shutil
+import subprocess
 import sys
 from dataclasses import dataclass
 
@@ -33,7 +34,14 @@ def total_memory_bytes() -> int | None:
     try:
         return os.sysconf("SC_PAGE_SIZE") * os.sysconf("SC_PHYS_PAGES")
     except (ValueError, OSError, AttributeError):
-        return None
+        pass
+    if platform.system() == "Darwin":  # the Mac's own answer, should sysconf not give one
+        try:
+            out = subprocess.run(["sysctl", "-n", "hw.memsize"], capture_output=True, text=True, timeout=5)
+            return int(out.stdout.strip()) if out.returncode == 0 else None
+        except (OSError, ValueError, subprocess.SubprocessError):
+            return None
+    return None
 
 
 def gib(n: float) -> str:

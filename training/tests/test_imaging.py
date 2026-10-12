@@ -30,3 +30,18 @@ def test_resize_keeps_a_flat_colour():
     out = resize_to(img, 20, 15)
     assert out.shape == (15, 20, 3)
     assert np.abs(out - 0.25).max() < 1e-4
+
+
+def test_jpeg_is_decoded_near_the_hint_not_whole(tmp_path):
+    from PIL import Image
+
+    img = np.zeros((1200, 1600, 3), np.float32)
+    img[..., 0] = 0.8
+    save_image(img, tmp_path / "big.jpg")
+    # The codec decodes at the smallest scale that keeps the long edge ≥ the hint: here 1/4.
+    back = load_image(tmp_path / "big.jpg", long_edge=300)
+    assert back.shape == (300, 400, 3)
+    assert abs(back[..., 0].mean() - 0.8) < 0.02
+    with Image.open(tmp_path / "big.jpg") as im:
+        assert im.size == (1600, 1200)  # the file itself is untouched
+    assert load_image(tmp_path / "big.jpg").shape == (1200, 1600, 3)  # no hint: whole

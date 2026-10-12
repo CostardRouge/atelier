@@ -3,10 +3,10 @@
 For each pair the cache holds ``<cache>/<source>/<id>/input.npy`` and
 ``target.npy`` (uint16, ``(H, W, 3)``, both at the SAME size: the input's,
 long edge ≤ ``ingest.long_edge``) and a ``preview.jpg`` (input | edit) for the
-dashboard of M3. ``<cache>/index.jsonl`` lists one pair per line. A pair
-already cached and newer than its two files is not redone, so an ingest can be
-stopped and rerun. A pair whose aspect differs (a crop, a rotation) is
-SKIPPED and said: aligning those is M5's work.
+dashboard of M3. ``<cache>/index.jsonl`` lists one pair per line (``write_index``
+says how a run merges into it). A pair already cached and newer than its two
+files is not redone, so an ingest can be stopped and rerun. A pair whose aspect
+differs (a crop, a rotation) is SKIPPED and said: aligning those is M5's work.
 """
 
 from __future__ import annotations
@@ -52,8 +52,9 @@ def _pairs_refs(source: str, root: Path, tolerance: float, report: IngestReport)
     for group in scan.valid_groups():
         assert group.original is not None
         for edit in group.edits:
-            yield PairRef(f"{source}/{group.name}/{edit.file.stem}", source, group.name, group.original, edit.file,
-                          edit.label)
+            # The edit's path inside its group, suffix dropped: `x.jpg` and `edits/x.jpg` stay distinct.
+            stem = edit.file.relative_to(group.folder).with_suffix("").as_posix()
+            yield PairRef(f"{source}/{group.name}/{stem}", source, group.name, group.original, edit.file, edit.label)
 
 
 def _fivek_refs(source: str, root: Path, ingest: dict, report: IngestReport) -> Iterator[PairRef]:
@@ -91,8 +92,8 @@ def _fresh(folder: Path, ref: PairRef) -> bool:
 
 
 def prepare_pair(ref: PairRef, out: Path, long_edge: int, tolerance: float, raw: dict) -> dict:
-    src = load_image(ref.input, raw)
-    dst = load_image(ref.target, raw)
+    src = load_image(ref.input, raw, long_edge=long_edge)
+    dst = load_image(ref.target, raw, long_edge=long_edge)
     (h, w), (th, tw) = src.shape[:2], dst.shape[:2]
     if abs(tw / th - w / h) > tolerance * (w / h):
         raise ValueError(f"aspect differs ({w}×{h} vs {tw}×{th}): cropped or rotated")
@@ -146,15 +147,26 @@ def ingest(
         entry.update(width=meta["width"], height=meta["height"], folder=str(folder.relative_to(cache)))
         report.entries.append(entry)
 
-    # The index keeps what other sources ingested earlier and replaces this run's sources.
+    write_index(cache, report.entries, replaced=() if limit else sources)
+    return report
+
+
+def write_index(cache: Path, entries: list[dict], replaced: tuple[str, ...] | list[str] = ()) -> Path:
+    """Merge this run's entries into ``index.jsonl``: an entry with the same id is replaced, and every
+    earlier entry of a source in ``replaced`` is dropped (a whole run of a source is authoritative for
+    it — a pair gone from disk leaves the index; a ``--limit`` run is not, and keeps the rest)."""
     index = cache / "index.jsonl"
+    ids = {e["id"] for e in entries}
     kept: list[dict] = []
     if index.is_file():
         for line in index.read_text(encoding="utf-8").splitlines():
-            if line.strip():
-                entry = json.loads(line)
-                if entry.get("source") not in sources:
-                    kept.append(entry)
+            if not line.strip():
+                continue
+            entry = json.loads(line)
+            if entry.get("id") not in ids and entry.get("source") not in replaced:
+                kept.append(entry)
     cache.mkdir(parents=True, exist_ok=True)
-    index.write_text("".join(json.dumps(e) + "\n" for e in kept + report.entries), encoding="utf-8")
-    return report
+    tmp = index.with_suffix(".jsonl.tmp")
+    tmp.write_text("".join(json.dumps(e) + "\n" for e in kept + entries), encoding="utf-8")
+    tmp.replace(index)  # one rename, so a run stopped mid-write never leaves a half index
+    return index

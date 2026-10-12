@@ -94,6 +94,14 @@ def _pictures_in(folder: Path) -> list[Path]:
     )
 
 
+def _inside(path: Path, folder: Path) -> bool:
+    """A manifest names files of its own group only — never `../` or an absolute path elsewhere."""
+    try:
+        return path.resolve().is_relative_to(folder.resolve())
+    except OSError:
+        return False
+
+
 def read_group(folder: Path, issues: list[Issue]) -> Group:
     group = Group(name=folder.name, folder=folder)
 
@@ -116,7 +124,9 @@ def read_group(folder: Path, issues: list[Issue]) -> Group:
         err(f'{MANIFEST} names no original (expected a line like original = "DSC01234.ARW").')
     else:
         path = folder / original
-        if not path.is_file():
+        if not _inside(path, folder):
+            err(f"the original {original!r} points outside the group's folder.")
+        elif not path.is_file():
             err(f"the original {original!r} is not in the folder.")
         elif not is_picture(path):
             err(f"the original {original!r} is not a picture this tool reads (JPEG, PNG, TIFF or RAW).")
@@ -133,6 +143,9 @@ def read_group(folder: Path, issues: list[Issue]) -> Group:
             err(f"edit #{i} has no file = \"...\" line.")
             continue
         path = folder / entry["file"]
+        if not _inside(path, folder):
+            err(f"the edit {entry['file']!r} points outside the group's folder.")
+            continue
         if not path.is_file():
             err(f"the edit {entry['file']!r} is not in the folder.")
             continue

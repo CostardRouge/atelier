@@ -58,6 +58,18 @@ each: `training/PLAN.md`. This file holds the decisions and traps.
 - Pillow reads a 48-bit PNG as 8 bits per channel: 16-bit material goes
   through TIFF (`tifffile`), which `imaging.py` reads and writes.
 - The ingest cache stores uint16 `.npy`, not PNG, for the same reason.
+- `Image.fromarray(..., mode=)` is deprecated and gone in Pillow 13: a float32
+  plane is opened as mode "F" by itself. The tests run with
+  `-W error::DeprecationWarning` to catch the next one.
+- A JPEG is decoded by its codec at 1/2, 1/4 or 1/8 (`Image.draft`) when the
+  caller gives `load_image` a `long_edge` hint — never below the hint, the hint
+  in the file's own orientation (a fit keeps the aspect, so the EXIF swap after
+  costs nothing). TIFF, PNG and RAW decode whole.
+- `index.jsonl` merges by id; a WHOLE run of a source drops that source's
+  earlier entries (a pair gone from disk leaves), a `--limit` run keeps them;
+  the file is written through a rename, never in place.
+- A pair's id is the edit's path INSIDE its group without suffix
+  (`pairs/<group>/edits/x`): two edits named alike in two sub-folders stay two.
 - In a cloud container, run uv with `UV_PYTHON=3.13` (the system Python):
   GitHub release downloads, where uv fetches 3.12 from, answered 403 through
   the proxy. On the Mac `make setup` lets uv fetch 3.12.

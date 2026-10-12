@@ -82,3 +82,28 @@ def test_init_group_refuses_to_guess_blindly(tmp_path):
     picture(g / "two.jpg")
     with pytest.raises(InitGroupError, match="cannot tell"):
         init_group(g)
+
+
+def test_a_path_outside_the_group_is_refused(tmp_path):
+    root = tmp_path / "pairs"
+    picture(root / "elsewhere.png")
+    g = root / "g"
+    picture(g / "edit.png")
+    (g / "manifest.toml").write_text(manifest_text("../elsewhere.png", [("edit.png", None)]), encoding="utf-8")
+    scan = scan_pairs(root)
+    assert len(scan.errors) == 1 and "outside the group's folder" in scan.errors[0].message
+
+
+def test_two_edits_with_one_name_in_two_folders_are_two_pairs(workspace):
+    from atelier_training.config import load_config
+    from atelier_training.ingest import IngestReport, collect
+
+    config = load_config()
+    g = config.paths.pairs / "g"
+    picture(g / "orig.png")
+    picture(g / "x.png")
+    picture(g / "edits" / "x.png")
+    (g / "manifest.toml").write_text(manifest_text("orig.png", [("x.png", None), ("edits/x.png", None)]),
+                                     encoding="utf-8")
+    refs = collect(config, ["pairs"], IngestReport())
+    assert sorted(r.id for r in refs) == ["pairs/g/edits/x", "pairs/g/x"]

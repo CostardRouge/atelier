@@ -45,3 +45,23 @@ def test_cli_commands_run_without_real_data(workspace, capsys):
     assert code == 0
     assert "Synthetic set: present" in out
     assert "FiveK: no folder" in out
+
+
+def test_a_limited_run_keeps_the_rest_of_the_index_and_a_whole_run_replaces_it(synthetic):
+    config = load_config()
+    full = ingest(config, sources=["synthetic"])
+    assert len(full.entries) == 9
+    index = config.paths.cache / "index.jsonl"
+
+    limited = ingest(config, sources=["synthetic"], limit=2, force=True)
+    assert limited.written == 2
+    assert len(index.read_text().splitlines()) == 9  # the seven untouched pairs stay listed
+
+    # A pair gone from disk leaves the index on the next WHOLE run of its source.
+    import shutil
+
+    shutil.rmtree(config.paths.synthetic / "pairs" / "group-001")
+    again = ingest(config, sources=["synthetic"])
+    assert len(again.entries) == 7
+    assert len(index.read_text().splitlines()) == 7
+    assert not (index.parent / "index.jsonl.tmp").exists()
