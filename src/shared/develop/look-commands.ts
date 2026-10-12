@@ -21,6 +21,8 @@ import { familyForLookName } from '../lut/lut-pack';
 import { OUTPUT_TRANSFORM_OPTIONS, type OutputTransform } from '../lut/transfer';
 import type { LutStack } from '../lut/use-lut-stack';
 import { FILM_STOCKS, type FilmStockId } from '../film/stocks';
+import type { HistogramReading } from './histogram';
+import { DEFAULT_FIT, fitStrength, type FitLimits } from '../lut/fit-strength';
 
 export interface LookHost {
   stack: () => LutStack;
@@ -28,6 +30,12 @@ export interface LookHost {
   available: () => true | string;
   /** Run a write so the roll journals it as an agent's. */
   asAgent: <T>(write: () => T | Promise<T>) => Promise<T>;
+  /**
+   * The open picture measured as the stage shows it NOW (`develop.measure`),
+   * waiting for the stage to catch up — what `develop.fitLook` searches with.
+   * Absent where nothing can measure.
+   */
+  measure?: () => Promise<HistogramReading>;
 }
 
 /** The stack as an agent reads it. */
@@ -134,6 +142,59 @@ export function lookCommands(host: LookHost): CommandSpec[] {
           if (p.move === 1 || p.move === -1) host.stack().move(layer.id, p.move);
           await settled(host.stack);
           return lookSummary(host.stack());
+        }),
+    },
+    {
+      id: 'develop.fitLook',
+      title: 'Find how strongly a look may land',
+      description: `MEASURE the strength a look layer can take before it oversaturates: the open picture is measured with the layer off, then at rising strengths (a ladder, then halving, about eight renders of the stage), and the answer is the strongest whose colour stays within limits of the look-off picture — mean chroma at most ${Math.round(DEFAULT_FIT.meanGain * 100)} % more, the vivid share at most ${DEFAULT_FIT.vividGain} more, colour against the gamut's wall at most ${DEFAULT_FIT.edgeGain} more, clipping at most ${DEFAULT_FIT.clipGain} more — and never past ceiling (${DEFAULT_FIT.ceiling} unless given: a look is almost never right at 1). Sets that strength (apply: false puts the layer back as it was), and answers every measure taken and why it stopped. A number is not taste: look at the result (develop.compare, develop.snapshot) and go lower by eye if it still reads loud.`,
+      params: {
+        layer: { type: 'string', description: 'The layer id, from develop.look; the only layer, or the last added, when absent.', optional: true },
+        ceiling: { type: 'number', description: `The strongest it may answer; ${DEFAULT_FIT.ceiling} when absent.`, min: 0.05, max: MAX_LAYER_INTENSITY, optional: true },
+        meanGain: { type: 'number', description: `How much more mean chroma than the look-off picture, as a share; ${DEFAULT_FIT.meanGain} when absent.`, min: 0, max: 3, optional: true },
+        vividGain: { type: 'number', description: `How much more of the picture may be vivid, absolute; ${DEFAULT_FIT.vividGain} when absent.`, min: 0, max: 1, optional: true },
+        edgeGain: { type: 'number', description: `How much more colour may sit against the gamut's wall, absolute; ${DEFAULT_FIT.edgeGain} when absent.`, min: 0, max: 1, optional: true },
+        apply: { type: 'boolean', description: 'Set the strength found (the default), or put the layer back as it was.', optional: true },
+      },
+      available: () => {
+        const open = host.available();
+        if (open !== true) return open;
+        if (!host.measure) return 'nothing here can measure the picture';
+        return host.stack().layers.length ? true : 'the open picture wears no look — develop.addLook first';
+      },
+      run: (p) =>
+        host.asAgent(async () => {
+          const layers = host.stack().layers;
+          const layer = p.layer === undefined ? layers[layers.length - 1] : layerOf(p.layer);
+          const was = { intensity: layer.intensity, enabled: layer.enabled };
+          if (!layer.enabled) host.stack().setEnabled(layer.id, true);
+          const limits: FitLimits = {
+            ceiling: typeof p.ceiling === 'number' ? p.ceiling : DEFAULT_FIT.ceiling,
+            meanGain: typeof p.meanGain === 'number' ? p.meanGain : DEFAULT_FIT.meanGain,
+            vividGain: typeof p.vividGain === 'number' ? p.vividGain : DEFAULT_FIT.vividGain,
+            edgeGain: typeof p.edgeGain === 'number' ? p.edgeGain : DEFAULT_FIT.edgeGain,
+            clipGain: DEFAULT_FIT.clipGain,
+          };
+          const measure = host.measure!;
+          const fit = await fitStrength(async (strength) => {
+            host.stack().setIntensity(layer.id, strength);
+            await settled(host.stack);
+            return measure();
+          }, limits);
+          const keep = p.apply !== false;
+          host.stack().setIntensity(layer.id, keep ? fit.strength : was.intensity);
+          if (!keep && !was.enabled) host.stack().setEnabled(layer.id, false);
+          await settled(host.stack);
+          return {
+            layer: layer.id,
+            name: layer.name,
+            strength: fit.strength,
+            applied: keep,
+            ...(keep ? {} : { keptAt: was.intensity }),
+            reason: fit.reason,
+            lookOff: fit.base,
+            measures: fit.steps,
+          };
         }),
     },
     {

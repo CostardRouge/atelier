@@ -53,3 +53,44 @@ describe('develop.addLook', () => {
     expect(got.builtin.find((l) => l.id === creative.id)?.conversion).toBe(false);
   });
 });
+
+describe('develop.fitLook', () => {
+  /** A stack with one layer whose picture's chroma grows 0.1 per unit of strength, measured as the stage would. */
+  function fitHost(intensity = 1) {
+    const layer = { id: 'l1', name: 'Warm', source: 'builtin:classic-warm', intensity, enabled: true };
+    const stack = {
+      get layers() {
+        return [layer];
+      },
+      output: 'none',
+      busy: false,
+      error: null,
+      setIntensity: (_id: string, v: number) => void (layer.intensity = v),
+      setEnabled: (_id: string, v: boolean) => void (layer.enabled = v),
+    } as unknown as LutStack;
+    const measure = async () => ({
+      mean: 120, p1: 5, median: 118, p99: 240, red: 120, green: 118, blue: 116, clippedHighlights: 0, crushedShadows: 0,
+      saturation: { mean: Math.round((0.2 + 0.1 * (layer.enabled ? layer.intensity : 0)) * 1000) / 1000, p95: 0.5, vivid: 0.05, gamutEdge: 0 },
+    });
+    const specs = lookCommands({ stack: () => stack, available: () => true, asAgent: (w) => Promise.resolve(w()), measure });
+    return { run: (p: Record<string, unknown>) => specs.find((s) => s.id === 'develop.fitLook')!.run(p), layer };
+  }
+
+  it('sets the strongest strength that stays within the limits, and says why it stopped', async () => {
+    const h = fitHost();
+    const got = (await h.run({})) as { strength: number; applied: boolean; reason: string; measures: unknown[] };
+    expect(got.strength).toBe(0.5);
+    expect(got.applied).toBe(true);
+    expect(h.layer.intensity).toBe(0.5);
+    expect(got.reason).toMatch(/mean chroma/);
+    expect(got.measures.length).toBeGreaterThan(2);
+  });
+
+  it('puts the layer back as it was when asked only to look', async () => {
+    const h = fitHost(0.9);
+    const got = (await h.run({ apply: false })) as { strength: number; keptAt: number };
+    expect(got.strength).toBe(0.5);
+    expect(got.keptAt).toBe(0.9);
+    expect(h.layer.intensity).toBe(0.9);
+  });
+});
