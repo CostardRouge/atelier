@@ -137,6 +137,7 @@ const PROMPTS = [
   'Tell 14 September of my trip: pick the eight frames that tell the day, make the carousel, caption it from the day’s facts, and show me slide one.',
   'Harmonise the whole roll on the second picture, give the drone shots the “Air” preset and the golden-hour ones “Warm”, then export for Instagram.',
   'What did 2025 look like? Count the year and draw me the card; then show me the bursts of the busiest day and which frame of each to keep.',
+  'Show me every photo my Sony A7C II took in Paris, then the ones with a shop sign or a menu in them, as a contact sheet.',
 ];
 
 /** The extension's saved name carries its version, so two downloads are told apart. */

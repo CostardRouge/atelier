@@ -16,13 +16,22 @@
  * (`mcp-protocol.ts`'s rule).
  */
 
-export const BRIDGE_VERSION = 2;
+export const BRIDGE_VERSION = 3;
 
 /** SHA-256 of `scripts/atelier-mcp.mjs` + `src/shared/commands/mcp-protocol.ts`, line endings normalised. */
-export const BRIDGE_SOURCE_HASH = 'a7bf74e0f1e22e1c3aac5422a730c1e4d4af381c11618da88743dc5ac7188f39';
+export const BRIDGE_SOURCE_HASH = 'f0ef057b8e0fe59a58eb9111222d0a65d7b88cc35c31593145d6d9369ae6e3a3';
 
 /** What each version changed, newest first — drawn on `#/agents`. */
 export const BRIDGE_CHANGES: readonly { version: number; date: string; changes: readonly string[] }[] = [
+  {
+    version: 3,
+    date: '2026-10-12',
+    changes: [
+      'The instructions teach Winnow’s own names: a body, a lens, a country, a region, a town or a place asked by the name Winnow holds (winnow.names lists them), filtered by Winnow, with no day needed.',
+      'They teach the text read inside a picture (words, withText), and to ask the tab for pictures rather than files — every picture sent now shows under the Agent pill.',
+      'No change to the bridge’s wire: the same four tools, the same files.',
+    ],
+  },
   {
     version: 2,
     date: '2026-10-11',

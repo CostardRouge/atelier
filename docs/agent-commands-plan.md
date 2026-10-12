@@ -80,3 +80,27 @@ a factory over a small host, with a spec; the thumbnail cache capped;
 
 Not seen: his real instance (the CLIP index, the day positions, the logs),
 his Mac or phone.
+
+## 3. The third round (2026-10-12)
+
+His answers on four questions — the text read in a picture, a body and a
+place asked of Winnow, and the images Atelier draws for an agent, which he
+keeps on condition he can supervise them. Five commits, then this one:
+
+| # | Delivers | Verified by |
+| --- | --- | --- |
+| D1 | `camera`, `lens`, `country`, `region`, `city`, `place` resolved against Winnow's names (`winnow-names.ts`) and filtered by the server, each a scope; `winnow.names` | specs; stub (`scratchpad/pw/d1.mjs`) |
+| D2 | the OCR text on every row, `withText` (`has_text`), `withText` counted by the sum-up, `words` described as what `q` does | specs; stub (`d2.mjs`) |
+| D3 | `screens/`: the palette from `index.css` (spec), the registry of drawn screens and their cases, fixtures, `render.ts` | specs; every case drawn headless and looked at (`d3.mjs`) |
+| D4 | the bench in `#/agents`, lazy | headless at 1280 and 390 (`d4.mjs`) |
+| D5 | the pictures sent this session, under the Agent pill | through the real bridge (`d5.mjs`) |
+| D6 | the bridge's instructions, v3; a prompt; this ledger | gates |
+
+Found on the way: `text` as the OCR facet's name would have overwritten
+`winnow.search`'s own `text` (TypeScript said so) — it is `withText`; the
+registry's spec caught examples giving `year` as a number; an object URL made
+in `useMemo` was dead after a remount. Left for him on the bench: a
+one-picture sheet blown up four times past its thumbnail, a long label
+pushing its culling mark off the cell. The LUT dosing proposal (a default
+under 100 %, saturation measured, a command that finds the strength, his
+pack opened to the agent) waits on his word.
