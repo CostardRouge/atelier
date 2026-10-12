@@ -2,12 +2,14 @@ import type { LensProfileApplied } from '../../shared/lens/lens-profile';
 import { useCallback, useEffect, useMemo, useRef, useState, useSyncExternalStore, type ReactNode } from 'react';
 import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
-import { CommandError } from '../../shared/commands/registry';
+import { CommandError, commands } from '../../shared/commands/registry';
+import type { HistogramReading } from '../../shared/develop/histogram';
+import { loadPacks } from '../../shared/lut/pack-vault';
+import { rollAgentCommands, type RollAgentHost } from './roll-agent-commands';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
 import { lookCommands } from '../../shared/develop/look-commands';
-import { filterRows } from '../../shared/develop/ingest-commands';
-import { ASSET_QUERY_PARAMS, MAX_ROWS, askFromParams } from '../../shared/sources/winnow/winnow-commands';
+import { ASSET_QUERY_PARAMS, MAX_ROWS, askFromParams, keepAsk } from '../../shared/sources/winnow/winnow-commands';
 import { rowMediaRef } from '../../shared/sources/winnow/materialize';
 import type { WinnowAssetRow } from '../../shared/sources/winnow/client';
 import { bridgeSink, bridgeState } from '../../shared/commands/bridge-client';
@@ -791,6 +793,23 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
   // its pictures and writing a develop through `handleDevelop`, the funnel the
   // sliders use — journaled `via: 'agent'`, so the making-of and the training
   // file can tell an agent's step from the author's.
+  /** A picture's band thumbnail: its own when drawn, else Winnow's, else none. */
+  const thumbOf = (x: RollPicture): Promise<Blob | null> => {
+    const own = thumbsRef.current.get(x.id);
+    if (own) return Promise.resolve(own);
+    const remote = remoteThumb(x);
+    return remote ? remote.client.fetchFile(remote.client.thumbUrl(remote.id), `${remote.id}.jpg`, 'image/jpeg', 0).catch(() => null) : Promise.resolve(null);
+  };
+  const agentHost: RollAgentHost = {
+    roll: () => latest.current,
+    openId: () => openIdRef.current,
+    update,
+    openPicture: onOpenPicture,
+    thumb: thumbOf,
+    winnow: () => winnowRef.current,
+    presets: presetsNow,
+    exportLocked: () => (exportRunning.current ? LOCKED_DELIVERY : true),
+  };
   useRegisterCommands('develop-roll', [
     {
       id: 'develop.pictures',
@@ -890,6 +909,11 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       stack: () => stackRef.current,
       available: () => (openIdRef.current ? true : 'no picture is open'),
       asAgent: lookAsAgent,
+      // The workbench's own reading of the stage, through the registry: it
+      // waits for the stage to catch up with the last write.
+      measure: () => commands.execute('develop.measure', {}) as Promise<HistogramReading>,
+      // Names and references only: the lattice stays in the vault (`pack-vault.ts`).
+      packs: loadPacks,
     }),
     {
       id: 'develop.applyTo',
@@ -973,7 +997,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         } else {
           const ask = await askFromParams(c, p);
           rows = await c.allAssets(ask.query);
-          kept = filterRows(rows, ask.filter).filter((r) => r.media_type === 'photo' || r.media_type === 'video');
+          kept = (await keepAsk(c, conn.id, rows, ask)).kept.filter((r) => r.media_type === 'photo' || r.media_type === 'video');
         }
         const refs = kept.map((r) => rowMediaRef(conn.id, r));
         const before = new Set(latest.current.pictures.map((x) => x.id));
@@ -1110,16 +1134,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         if (pictures.length === 0) throw new CommandError('invalid', 'the roll is empty');
         const { start, end, pages } = sheetPage(pictures.length, typeof p.page === 'number' ? p.page : 1);
         const shown = pictures.slice(start, end);
-        const images = await Promise.all(
-          shown.map(async (x) => {
-            const own = thumbsRef.current.get(x.id);
-            if (own) return own;
-            const remote = remoteThumb(x);
-            return remote
-              ? remote.client.fetchFile(remote.client.thumbUrl(remote.id), `${remote.id}.jpg`, 'image/jpeg', 0).catch(() => null)
-              : null;
-          }),
-        );
+        const images = await Promise.all(shown.map(thumbOf));
         const items = shown.map((x, i) => {
           const edited = pictureEdits(x).length > 0;
           const words = [isIgnored(x) ? 'ignored' : null, edited ? 'edited' : null, !isIgnored(x) && delivers(x) ? 'leaves' : null].filter(Boolean);
@@ -1129,6 +1144,7 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
         return contactSheetImage(items, `roll "${latest.current.name}" · page ${Math.floor(start / SHEET_MAX) + 1} of ${pages} · ${map}`);
       },
     },
+    ...rollAgentCommands(agentHost),
     {
       id: 'develop.exportSettings',
       title: 'The roll’s export settings',

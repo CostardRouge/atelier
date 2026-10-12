@@ -1,6 +1,7 @@
 import type { ImageResult } from './registry';
 import { contactSheetLayout } from './contact-sheet';
 import { imageResult } from './image-result';
+import { SCREEN_LIGHT, SCREEN_MONO, screenFonts, type ScreenPalette } from './screens/paper';
 
 /** One picture of a sheet: its image (null draws an empty box) and its label. */
 export interface SheetItem {
@@ -14,9 +15,17 @@ export interface SheetItem {
  * A CONTACT SHEET as a command's picture answer: every item fitted in its cell
  * on paper, its label under it (`contact-sheet.ts` lays it out). A blob that
  * will not decode draws as an empty box rather than failing the sheet — one
- * broken thumbnail must not hide the forty others.
+ * broken thumbnail must not hide the forty others. One of the agent's
+ * SCREENS (`screens/registry.ts`): the bench in `#/agents` draws it through
+ * this very function.
  */
-export async function contactSheetImage(items: readonly SheetItem[], note: string, width = 1600): Promise<ImageResult> {
+export async function contactSheetImage(
+  items: readonly SheetItem[],
+  note: string,
+  width = 1600,
+  palette: ScreenPalette = SCREEN_LIGHT,
+): Promise<ImageResult> {
+  await screenFonts();
   const bitmaps = await Promise.all(
     items.map(async (item) => (item.image ? createImageBitmap(item.image).catch(() => null) : null)),
   );
@@ -30,7 +39,7 @@ export async function contactSheetImage(items: readonly SheetItem[], note: strin
     canvas.height = layout.height;
     const ctx = canvas.getContext('2d');
     if (!ctx) throw new Error('the browser refused a canvas');
-    ctx.fillStyle = '#f4efe6';
+    ctx.fillStyle = palette.paper;
     ctx.fillRect(0, 0, canvas.width, canvas.height);
     ctx.imageSmoothingQuality = 'high';
     ctx.textBaseline = 'alphabetic';
@@ -39,18 +48,18 @@ export async function contactSheetImage(items: readonly SheetItem[], note: strin
       const { x, y, w, h } = cell.image;
       if (bitmap) ctx.drawImage(bitmap, x, y, w, h);
       else {
-        ctx.fillStyle = '#ddd5c7';
+        ctx.fillStyle = palette.line;
         ctx.fillRect(cell.x, cell.y, cell.w, Math.round(cell.w * 0.75));
       }
-      ctx.fillStyle = '#1d1a16';
-      ctx.font = `600 ${layout.fontPx}px ui-monospace, Menlo, monospace`;
+      ctx.fillStyle = palette.ink;
+      ctx.font = `600 ${layout.fontPx}px ${SCREEN_MONO}`;
       const label = fitText(ctx, items[i].label, cell.w - 4);
       ctx.fillText(label, cell.label.x, cell.label.y);
       const mark = items[i].mark;
       if (mark) {
         const at = cell.label.x + ctx.measureText(`${label} `).width;
-        ctx.fillStyle = '#c4381f';
-        ctx.font = `500 ${Math.round(layout.fontPx * 0.85)}px ui-monospace, Menlo, monospace`;
+        ctx.fillStyle = palette.accent;
+        ctx.font = `500 ${Math.round(layout.fontPx * 0.85)}px ${SCREEN_MONO}`;
         ctx.fillText(fitText(ctx, mark, cell.x + cell.w - at - 2), at, cell.label.y);
       }
     });

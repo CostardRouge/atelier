@@ -11,7 +11,9 @@ import FilmDials from './FilmDials';
 import FilmTextureDials from './FilmTextureDials';
 import { FAVOURITES_NODE, FILM_PICK, galleryNodes, packPickId, readPackPick } from './gallery-nodes';
 import LutGalleryModal, { type LutPreviewSource } from './LutGalleryModal';
-import { looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
+import { familyForLookName, looksUnder, nodeLabelPath, flattenNodes, visibleLooks } from './lut-pack';
+import { defaultLookStrength } from './look-strength';
+import { BUILTIN_LUTS } from './builtin-luts';
 import { MAX_LAYER_INTENSITY, activeLayers } from './lut-stack';
 import { OUTPUT_TRANSFORM_OPTIONS } from './transfer';
 import type { LutStack } from './use-lut-stack';
@@ -91,9 +93,10 @@ export default function GradePanel({
    * `intensity` is what the gallery's scene was judged at — the layer is born
    * wearing it, rather than at 100 % with the author sent to find the strength
    * slider again. The `<select>` beside it says nothing about strength, so it
-   * takes the default.
+   * takes the look's DEFAULT — a creative look well under 100 %, a conversion
+   * whole (`look-strength.ts`, the maintainer's rule).
    */
-  const pickLook = (id: string, intensity = 1) => {
+  const pickLook = (id: string, intensity?: number) => {
     const packPick = readPackPick(id);
     if (packPick) {
       // The layer stores the REFERENCE; the vault holds the lattice.
@@ -102,12 +105,13 @@ export default function GradePanel({
       void stack.addPackLook(
         { pack: packPick.pack, look: packPick.look, hash: look?.hash ?? '' },
         undefined,
-        intensity,
+        intensity ?? defaultLookStrength(look?.family ?? 'rec709'),
       );
     } else if (id.startsWith(FILM_PICK)) {
-      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId, intensity);
+      stack.addFilm(id.slice(FILM_PICK.length) as FilmStockId, intensity ?? defaultLookStrength('rec709'));
     } else {
-      void stack.addBuiltin(id, intensity);
+      const name = BUILTIN_LUTS.find((l) => l.id === id)?.name ?? id;
+      void stack.addBuiltin(id, intensity ?? defaultLookStrength(familyForLookName(name)));
     }
   };
 

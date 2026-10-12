@@ -2,6 +2,7 @@ import { BRIDGE_VERSION } from './bridge-version';
 import { BRIDGE_DEFAULT_PORT, parseTabRequest, type TabRequest } from './mcp-protocol';
 import { CommandError, commands, paramsJsonSchema } from './registry';
 import type { DeliveryTarget } from '../sources/deliver-files';
+import { isImageResult, recordSent } from './sent-images';
 
 /**
  * The TAB's half of the agent bridge (`mcp-protocol.ts`): it listens to the
@@ -107,6 +108,8 @@ async function answer(port: number, request: TabRequest) {
   try {
     const result = await commands.execute(request.command, request.params);
     await post(port, { id: request.id, ok: true, result });
+    // What the agent was shown, kept for the person to see (`sent-images.ts`).
+    if (isImageResult(result)) recordSent(request.command, request.params, result);
   } catch (err) {
     ok = false;
     const e = err instanceof CommandError ? err : new CommandError('failed', err instanceof Error ? err.message : String(err));

@@ -247,6 +247,27 @@ describe('WinnowClient requests', () => {
     });
   });
 
+  it('asks the image index in Winnow’s words, and says when it is off', async () => {
+    const fetchImpl = vi
+      .fn<FetchLike>()
+      .mockResolvedValueOnce(ok({ items: [{ id: 4, distance: 0.21 }], enabled: true, indexed: 90, library: 100 }))
+      .mockResolvedValueOnce(ok({ items: [], enabled: false, reason: 'pgvector is not installed' }));
+    const c = client(fetchImpl);
+    const on = await c.search('a koala in a tree', { half: 'final', limit: 30 });
+    const off = await c.search('sunset');
+    const url = new URL(fetchImpl.mock.calls[0][0]);
+    expect(url.pathname).toBe('/api/search');
+    expect(Object.fromEntries(url.searchParams)).toEqual({ q: 'a koala in a tree', limit: '30', source: 'gallery' });
+    expect(on).toMatchObject({ enabled: true, indexed: 90, library: 100, items: [{ id: 4, distance: 0.21 }] });
+    expect(off).toEqual({ enabled: false, reason: 'pgvector is not installed', indexed: null, library: null, items: [] });
+  });
+
+  it('sends words to the listing as Winnow’s q', async () => {
+    const fetchImpl = vi.fn<FetchLike>(async () => ok({ assets: [], next_cursor: null }));
+    await client(fetchImpl).assets({ words: 'Uluru' });
+    expect(new URL(fetchImpl.mock.calls[0][0]).searchParams.get('q')).toBe('Uluru');
+  });
+
   it('carries the same filters to the calendar, the day and the sessions', async () => {
     const fetchImpl = vi.fn<FetchLike>(async () => ok({ assets: [], next_cursor: null, sessions: [] }));
     const c = client(fetchImpl);
@@ -298,7 +319,16 @@ describe('WinnowClient requests', () => {
 
   it('reads the facet slice it offers, tolerating a missing key', async () => {
     const c = client(async () => ok({ extensions: [{ value: 'hif', count: 3 }] }));
-    expect(await c.facets()).toEqual({ media_types: [], extensions: [{ value: 'hif', count: 3 }], devices: [] });
+    expect(await c.facets()).toEqual({
+      media_types: [],
+      extensions: [{ value: 'hif', count: 3 }],
+      devices: [],
+      lenses: [],
+      place_countries: [],
+      place_regions: [],
+      place_cities: [],
+      place_pois: [],
+    });
   });
 
   it('follows next_cursor so a 300-media day is not shown two-thirds full', async () => {

@@ -1,9 +1,13 @@
 /**
  * What an agent can READ of the connected Winnow before it acts
  * (`shared/commands/`): which days and folders hold media, a day's rows with
- * Winnow's own culling, EXIF and position, and a contact sheet of thumbnails
- * to choose from by eye. Registered by the shell for the whole session; every
- * command is `unavailable` while no instance is connected.
+ * Winnow's own culling, EXIF and position, the media around a place, by what
+ * they show, and a contact sheet of thumbnails to choose from by eye. The
+ * sorting family (`winnow-sort-commands.ts`), the finds in time and the
+ * sum-up (`winnow-time-commands.ts`) and the curating (`curate-commands.ts`)
+ * share this file's reading of a listing (`askFromParams`, `keepAsk`) and
+ * its host (`winnowHost`). Registered by the shell for the whole session;
+ * every command is `unavailable` while no instance is connected.
  *
  * Read only, like the rest of Atelier's Winnow client: culling is Winnow's,
  * and writing a verdict or a star is Winnow's own MCP's job, never this one's.
@@ -15,10 +19,18 @@
 import { CommandError, type CommandSpec, type ImageResult } from '../../commands/registry';
 import { SHEET_MAX } from '../../commands/contact-sheet';
 import { VERDICTS, filterRows, readDay, type RowFilter } from '../../develop/ingest-commands';
+import { todayIso } from '../../roadtrip/trip-days';
 import { cullingFromRow, type Verdict } from './culling';
 import type { AssetQuery, WinnowAssetRow, WinnowClient, WinnowPerson } from './client';
 import type { WinnowConnection } from './store';
 import { monthSpan } from './month';
+import { gearOf, lightOf, localClock, type GearKind, type Light } from './capture-moment';
+import { COLOUR_ASKS, passesColour, type ColourAsk, type ThumbMetrics } from '../../media/thumb-metrics';
+import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
+import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
+import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
+import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
+import { NAME_KINDS, NAME_PARAMS, asksNames, foldKey, instanceNames, nameParams, namesOfKind, passesNames, resolveNames, type NameAsk, type NameKind } from './winnow-names';
 
 /** How many rows a listing may ask for at most — the client's own cap. */
 export const MAX_ROWS = 2000;
@@ -26,7 +38,49 @@ export const MAX_ROWS = 2000;
 /** The query and the Atelier-side filter a listing command reads from its params. */
 export interface AssetAsk {
   query: AssetQuery;
-  filter: RowFilter;
+  filter: RowFilter & RowFacets;
+  /** A colour the frames must read as — judged on their thumbnails, so it is asked apart from the row filter. */
+  colour?: ColourAsk;
+  /**
+   * The bodies, lenses and places asked, as Winnow names them (`winnow-names.ts`)
+   * — sent to the server with the query, and checked on the rows again for a
+   * listing Winnow did not filter (a search). Answered back so the agent sees
+   * which names its words took.
+   */
+  names?: NameAsk;
+}
+
+/** The rows that pass both halves of the filter — Winnow's culling and the facets (`row-facets.ts`) — in the order they came. */
+export function filterAsk(rows: readonly WinnowAssetRow[], filter: RowFilter & RowFacets): WinnowAssetRow[] {
+  return filterRows(rows, filter).filter((row) => passesFacets(row, filter));
+}
+
+/**
+ * The rows an ask KEEPS: the row filter, then — only when a colour is asked —
+ * the thumbnails of what is left measured (`thumb-analysis.ts`) and judged;
+ * a frame whose thumbnail cannot be read is not kept, as a row that cannot
+ * answer a facet is not. Every listing goes through here, the roll's too, so
+ * `colour` means one thing everywhere.
+ */
+export async function keepAsk(
+  client: WinnowClient,
+  sourceId: string,
+  rows: readonly WinnowAssetRow[],
+  ask: AssetAsk,
+): Promise<{ kept: WinnowAssetRow[]; analysed: number; metrics: Map<number, ThumbMetrics> }> {
+  const kept = filterAsk(rows, ask.filter).filter((row) => passesNames(row, ask.names));
+  if (!ask.colour) return { kept, analysed: 0, metrics: new Map() };
+  const sample = kept.slice(0, ANALYSE_MAX);
+  const metrics = await analyseRows(client, sourceId, sample);
+  const colour = ask.colour;
+  return {
+    kept: sample.filter((row) => {
+      const m = metrics.get(row.id);
+      return m ? passesColour(m.colour, colour) : false;
+    }),
+    analysed: sample.length,
+    metrics,
+  };
 }
 
 /** Params shared by the commands that list a day's media. */
@@ -44,6 +98,21 @@ export const ASSET_QUERY_PARAMS = {
   who: { type: 'strings', description: 'The same by NAME, as Winnow names them (case aside; a unique part of a name is enough).', optional: true },
   together: { type: 'boolean', description: 'With several people: only media where they are ALL in frame (otherwise any of them).', optional: true },
   faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
+  words: {
+    type: 'string',
+    description:
+      'Words Winnow looks for in the file’s path (folder and name) and in the TEXT its OCR read in the picture (a sign, a menu, a plate) — every word must appear, as a PART of a word, case aside ("menu" also finds "menuiserie"; up to 10 words). Not the place (city…) nor the body (camera), and not what the picture SHOWS — winnow.search does that. A scope of its own.',
+    optional: true,
+  },
+  ...FACET_PARAMS,
+  // After the facets: a listing's `camera` is Winnow's exact name, asked of the server.
+  ...NAME_PARAMS,
+  colour: {
+    type: 'string',
+    description: `What the frame reads as, measured on its thumbnail (one fetch per row, ${ANALYSE_MAX} rows at most): a hue family (${COLOUR_ASKS.slice(0, 8).join(', ')}), warm, cool, neutral (little colour) or mono.`,
+    enum: COLOUR_ASKS,
+    optional: true,
+  },
 } as const;
 
 /** Face counts a "group" covers: a crowd past this is still a group, and the list stays a query string. */
@@ -68,25 +137,61 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   // "Sunset".
   if (typeof p.verdict === 'string') query.verdict = p.verdict as Verdict;
   if (typeof p.minStars === 'number' && p.minStars > 0) query.minStars = p.minStars;
+  if (typeof p.words === 'string' && p.words.trim()) query.words = p.words.trim();
   if (Array.isArray(p.people)) query.people = p.people as number[];
   if (p.together === true) query.together = true;
+  // Asked of the server too, so "frames with text" over a year is narrowed before the cap.
+  if (typeof p.withText === 'boolean') query.hasText = p.withText;
   if (p.faces === 'none') query.hasFaces = false;
   else if (p.faces === 'any') query.hasFaces = true;
   else if (p.faces === 'solo') query.faceCount = [1];
   else if (p.faces === 'group') query.faceCount = GROUP_COUNTS;
-  // A person is a scope of its own: "every photo of Lucie" needs no day.
-  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who)) {
-    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, or people');
+  // A person, words, a place and a body are scopes of their own: "every
+  // photo of Lucie", "everything that says Uluru", "around Cairns", "all of
+  // the A7C II" need no day — Winnow narrows them before anything is cut.
+  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who) && !query.words && !asksNear(p) && !asksNames(p)) {
+    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, people, words, a place (near, city, country…) or a body (camera, lens)');
   }
   if (p.half === 'incoming' || p.half === 'final') query.half = p.half;
   if (p.media === 'photo' || p.media === 'video') query.mediaType = p.media;
+  return { query, filter: readRowFilter(p), ...readColour(p) };
+}
+
+/** The colour ask alone, as a spread: `{}` when none. */
+export function readColour(p: Record<string, unknown>): { colour?: ColourAsk } {
+  return typeof p.colour === 'string' ? { colour: p.colour as ColourAsk } : {};
+}
+
+/** The Atelier-side half of the params — culling, then when and with what — checked. */
+export function readRowFilter(p: Record<string, unknown>): RowFilter & RowFacets {
   const filter: RowFilter = {};
   if (typeof p.verdict === 'string') filter.verdict = p.verdict as Verdict;
   if (typeof p.minStars === 'number') filter.minStars = p.minStars;
   if (typeof p.label === 'string' && p.label.trim()) filter.label = p.label.trim();
   if (typeof p.tag === 'string' && p.tag.trim()) filter.tag = p.tag.trim();
   if (p.media === 'photo' || p.media === 'video') filter.media = p.media;
-  return { query, filter };
+  return { ...filter, ...readFacets(p) };
+}
+
+/**
+ * A town named by an agent, as a point: the biggest of the index's towns
+ * bearing that name (accents and case aside) — "Exmouth" is in Western
+ * Australia and in Devon, so the answer SAYS which one it took. Refused when
+ * the offline index knows no such town: a point (nearLat, nearLon) then.
+ */
+export function resolveTown(name: string, cities: readonly GazetteerCity[], km: number): { near: Near; town: { name: string; country: string } } {
+  const found = homonyms(cities, name, null, 1)[0]?.city;
+  if (!found) throw new CommandError('invalid', `no town named "${name}" in the offline index — give nearLat and nearLon instead`);
+  return { near: { lat: found.lat, lon: found.lon, km }, town: { name: found.name, country: found.country } };
+}
+
+/** The facets with a town named in `near` resolved to its point; the town's name comes back to be said. */
+export async function resolveFacets(filter: RowFacets, p: Record<string, unknown>): Promise<{ filter: RowFacets; town: { name: string; country: string } | null }> {
+  if (typeof p.near !== 'string') return { filter, town: null };
+  const name = p.near.trim();
+  if (!name) throw new CommandError('invalid', 'near is empty');
+  const { near, town } = resolveTown(name, await gazetteerOrEmpty(), typeof p.nearKm === 'number' ? p.nearKm : DEFAULT_NEAR_KM);
+  return { filter: { ...filter, near }, town };
 }
 
 /**
@@ -117,14 +222,36 @@ function foldName(name: string): string {
   return name.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
 }
 
-/** The listing params read, with any `who` resolved against the instance's people. */
+/**
+ * The bodies, lenses and places a command's params name, resolved against
+ * the instance's own names — and the facets without the substring `camera`
+ * they replace. Nothing asked costs no request.
+ */
+export async function askNames(client: WinnowClient, p: Record<string, unknown>, filter: RowFacets): Promise<{ names?: NameAsk; filter: RowFacets }> {
+  if (!asksNames(p)) return { filter };
+  const names = resolveNames(p, await instanceNames(client));
+  if (!names.camera) return { names, filter };
+  const rest = { ...filter };
+  delete rest.camera;
+  return { names, filter: rest };
+}
+
+/** The listing params read, with any `who` resolved against the instance's people, any `near` town against the index, and any body or place against Winnow's names. */
 export async function askFromParams(client: WinnowClient, p: Record<string, unknown>): Promise<AssetAsk> {
   const ask = readAssetQuery(p);
   if (Array.isArray(p.who) && p.who.length) {
     const ids = resolveWho(p.who as string[], await client.people());
     ask.query.people = [...new Set([...(ask.query.people ?? []), ...ids])];
   }
-  return ask;
+  const { filter: facets } = await resolveFacets(ask.filter, p);
+  const { names, filter } = await askNames(client, p, facets);
+  if (!names) return { ...ask, filter };
+  return { ...ask, filter: filter as AssetAsk['filter'], names, query: { ...ask.query, names: nameParams(names) } };
+}
+
+/** The names a listing took, as an answer says them — `{}` when none was asked. */
+export function namesTaken(ask: Pick<AssetAsk, 'names'>): { names?: NameAsk } {
+  return ask.names ? { names: ask.names } : {};
 }
 
 /** A person as an agent reads them. */
@@ -159,11 +286,28 @@ export interface RowSummary {
   tags: string[];
   /** How many faces Winnow found; absent until the medium is analysed. */
   faces?: number;
+  /** The local clock where it was taken ("07:42"), the light, and the kind of body — absent where unknown. */
+  local?: string;
+  light?: Light;
+  gear?: GearKind;
   /** How many frames a burst pile folds under this cover; absent for a single shot. */
   burst?: number;
   /** The capture's other file (a RAW behind this JPEG, a live photo's clip). */
   companion?: string;
+  /** The text Winnow read in the picture, its fragments on one line (` · `), cut at 160 characters; absent when none. */
+  text?: string;
   folder: number | null;
+}
+
+/** How much of the text read in a picture a row carries — a poster full of words must not swallow the answer. */
+const TEXT_MAX = 160;
+
+/** The OCR fragments on one line, cut where too long; null when there are none. */
+export function textLine(ocr: string | null | undefined): string | null {
+  const parts = (ocr ?? '').split('\n').map((x) => x.trim()).filter(Boolean);
+  if (!parts.length) return null;
+  const line = parts.join(' · ');
+  return line.length > TEXT_MAX ? `${line.slice(0, TEXT_MAX - 1)}…` : line;
 }
 
 export function rowSummary(row: WinnowAssetRow): RowSummary {
@@ -194,7 +338,15 @@ export function rowSummary(row: WinnowAssetRow): RowSummary {
     ...(row.companion_ext ? { companion: `${row.group_kind === 'live_photo' ? 'live photo' : 'pair'} · .${row.companion_ext.replace(/^\./, '')}` } : {}),
     folder: row.session_id,
     ...(typeof row.face_count === 'number' ? { faces: row.face_count } : {}),
+    ...optional('local', localClock(row)),
+    ...optional('light', lightOf(row)),
+    ...optional('gear', gearOf(row)),
+    ...optional('text', textLine(row.ocr_text)),
   };
+}
+
+function optional<K extends string, V>(key: K, value: V | null): Partial<Record<K, V>> {
+  return value === null ? {} : ({ [key]: value } as Record<K, V>);
 }
 
 /** The culling words a sheet writes under a thumbnail: `pick ★4 red`, or nothing for unrated. */
@@ -217,18 +369,51 @@ export interface WinnowCommandDeps {
   sheet: (items: { image: Blob | null; label: string; mark?: string }[], note: string) => Promise<ImageResult>;
 }
 
-export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
+/** The rows a command works on: chosen by `ids`, or the listing its other params describe (kept by `keepAsk`). */
+export async function rowsForParams(client: WinnowClient, sourceId: string, p: Record<string, unknown>): Promise<WinnowAssetRow[]> {
+  if (Array.isArray(p.ids)) return client.assetsByIds(p.ids as number[]);
+  const ask = await askFromParams(client, p);
+  return (await keepAsk(client, sourceId, await client.allAssets(ask.query, MAX_ROWS), ask)).kept;
+}
+
+/** The first `ANALYSE_MAX` rows measured on their thumbnails; `cut` says when the rest were left. */
+export async function measureRows(client: WinnowClient, sourceId: string, rows: readonly WinnowAssetRow[]) {
+  const sample = rows.slice(0, ANALYSE_MAX);
+  return { sample, metrics: await analyseRows(client, sourceId, sample), cut: rows.length > ANALYSE_MAX };
+}
+
+/** The `ids` param every measuring command takes instead of a listing. */
+export const IDS_PARAM = { type: 'numbers', description: 'Winnow asset ids — instead of a listing.', integer: true, maxItems: ANALYSE_MAX, optional: true } as const;
+
+/**
+ * What every Winnow command closure needs: the connection as it is NOW
+ * (read at call time), the rows a listing describes, the thumbnails
+ * measured — shared by the finding, sorting, counting and curating families.
+ */
+export function winnowHost(deps: Pick<WinnowCommandDeps, 'winnow'>) {
   const connected = () => (deps.winnow().client ? true : 'no Winnow is connected — connect one on #/sources');
   const client = (): WinnowClient => {
     const c = deps.winnow().client;
     if (!c) throw new CommandError('unavailable', 'no Winnow is connected');
     return c;
   };
+  const sourceId = (): string => deps.winnow().connection?.id ?? '';
+  return {
+    connected,
+    client,
+    sourceId,
+    rowsFor: (p: Record<string, unknown>) => rowsForParams(client(), sourceId(), p),
+    measured: (rows: readonly WinnowAssetRow[]) => measureRows(client(), sourceId(), rows),
+  };
+}
+
+export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
+  const { connected, client, sourceId } = winnowHost(deps);
   const list = async (ask: AssetAsk, cap: number) => {
-    // `who` was resolved by `askFromParams` before this is called.
+    // `who` and a town were resolved by `askFromParams` before this is called.
     const rows = await client().allAssets(ask.query, MAX_ROWS);
-    const kept = filterRows(rows, ask.filter);
-    return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS };
+    const { kept, analysed } = await keepAsk(client(), sourceId(), rows, ask);
+    return { rows, kept: kept.slice(0, cap), matched: kept.length, capped: rows.length >= MAX_ROWS, analysed };
   };
   return [
     {
@@ -300,23 +485,142 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       },
     },
     {
+      id: 'winnow.names',
+      title: 'The bodies, lenses and places Winnow knows',
+      description:
+        'The names Winnow holds for the BODIES (maker and model as the files wrote them, or a name set by hand — "SONY ILCE-7CM2" is the Sony A7C II), the LENSES and the PLACES its reverse geocoding gave (countries, regions, cities, points of interest), each with how many media carry it, busiest first. These are the exact values camera, lens, country, region, city and place match: read them to turn "my A7C II" or "Paris" into Winnow’s name. A frame with no position has no place — trust the data.',
+      params: {
+        kind: { type: 'string', description: 'Which names.', enum: NAME_KINDS },
+        contains: { type: 'string', description: 'Only names containing this (case, accents and punctuation aside).', optional: true },
+        limit: { type: 'number', description: 'At most this many; 50 when absent.', integer: true, min: 1, max: 1000, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const all = namesOfKind(await instanceNames(client()), p.kind as NameKind);
+        const want = typeof p.contains === 'string' ? foldKey(p.contains) : '';
+        const hits = want ? all.filter((n) => foldKey(String(n.value)).includes(want)) : all;
+        const limit = typeof p.limit === 'number' ? p.limit : 50;
+        return { kind: p.kind, total: hits.length, shown: Math.min(limit, hits.length), names: hits.slice(0, limit).map((n) => ({ name: String(n.value), media: n.count })) };
+      },
+    },
+    {
       id: 'winnow.assets',
       title: 'List a day’s media',
       description:
-        'The media of a day, a span, a folder or a PERSON on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
+        'The media of a day, a span, a folder, a PERSON or a PLACE (near) on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), by when and with what (time, light, gear), by Winnow’s own names for the BODY, the lens and the PLACE (camera, lens, country, region, city, place — each a scope of its own, filtered by Winnow, so "every frame of the A7C II" needs no day; the answer says which names the words took), by how (orientation, focal, aperture, ISO, shutter, altitude), by text read in the picture (withText; words searches it) and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst, paired file and the text read in it. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
       params: {
         ...ASSET_QUERY_PARAMS,
         limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
       },
       available: connected,
       run: async (p) => {
-        const got = await list(await askFromParams(client(), p), typeof p.limit === 'number' ? p.limit : 200);
+        const ask = await askFromParams(client(), p);
+        const got = await list(ask, typeof p.limit === 'number' ? p.limit : 200);
         return {
+          ...namesTaken(ask),
           listed: got.rows.length,
           matched: got.matched,
           shown: got.kept.length,
+          ...(got.analysed ? { analysed: got.analysed } : {}),
           ...(got.capped ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span` } : {}),
           rows: got.kept.map(rowSummary),
+        };
+      },
+    },
+    {
+      id: 'winnow.search',
+      title: 'Find media by what they show',
+      description:
+        'Media ranked by how well they match a DESCRIPTION in plain words — "sunset over the sea", "a koala in a tree", "people around a table" — by the image index Winnow keeps (CLIP). Closest first, with a distance (lower is closer); the ranking is relative, so look at the results (winnow.sheet {ids}) rather than trusting a cut-off. Narrowed afterwards by the same date, culling, time, light, gear, body and place filters as winnow.assets. Says when the instance has no index, or indexes only part of the library.',
+      params: {
+        text: { type: 'string', description: 'What to look for, up to 300 characters — English describes best.' },
+        limit: { type: 'number', description: 'How many to rank before the filters; 60 when absent.', integer: true, min: 1, max: 200, optional: true },
+        date: ASSET_QUERY_PARAMS.date,
+        dateTo: ASSET_QUERY_PARAMS.dateTo,
+        verdict: ASSET_QUERY_PARAMS.verdict,
+        minStars: ASSET_QUERY_PARAMS.minStars,
+        label: ASSET_QUERY_PARAMS.label,
+        tag: ASSET_QUERY_PARAMS.tag,
+        media: ASSET_QUERY_PARAMS.media,
+        half: ASSET_QUERY_PARAMS.half,
+        ...FACET_PARAMS,
+        ...NAME_PARAMS,
+      },
+      available: connected,
+      run: async (p) => {
+        const text = (p.text as string).trim();
+        if (!text || text.length > 300) throw new CommandError('invalid', '"text" must be 1–300 characters');
+        const from = p.date === undefined ? null : readDay('date', p.date);
+        const to = p.dateTo === undefined ? from : readDay('dateTo', p.dateTo);
+        if (from && to && to < from) throw new CommandError('invalid', 'dateTo comes before date');
+        const found = await client().search(text, {
+          limit: typeof p.limit === 'number' ? p.limit : 60,
+          ...(p.half === 'incoming' || p.half === 'final' ? { half: p.half } : {}),
+        });
+        if (!found.enabled) {
+          return { enabled: false, reason: found.reason ?? 'this Winnow has no image index (its ML or pgvector is off)', assets: [] };
+        }
+        const { filter: facets } = await resolveFacets(readRowFilter(p), p);
+        const { names, filter } = await askNames(client(), p, facets);
+        const dated = found.items.filter((r) => !from || (r.capture_date !== null && r.capture_date >= from && r.capture_date <= (to ?? from)));
+        const kept = (await keepAsk(client(), sourceId(), dated, { query: {}, filter: filter as AssetAsk['filter'], names, ...readColour(p) })).kept as (WinnowAssetRow & { distance: number })[];
+        return {
+          enabled: true,
+          ...(names ? { names } : {}),
+          ...(found.indexed !== null && found.library !== null && found.indexed < found.library
+            ? { coverage: `${found.indexed} of ${found.library} media are indexed — the rest cannot be found this way yet` }
+            : {}),
+          ranked: found.items.length,
+          kept: kept.length,
+          assets: kept.map((r) => ({ ...rowSummary(r), distance: Math.round(r.distance * 1000) / 1000 })),
+        };
+      },
+    },
+    {
+      id: 'winnow.near',
+      title: 'Media taken around a place',
+      description:
+        'The media taken within nearKm of a TOWN (near, resolved offline — "Cairns") or a point (nearLat, nearLon), judged by each frame’s own GPS. Over a span or a folder when one is given; else over the WHOLE library, the days positioned near the place found first (Winnow’s day positions) and only those listed. Narrowed by the same culling and facets as winnow.assets. Answers which town it took, the days it looked at, and the rows — a frame with no GPS can never be near anything.',
+      params: {
+        ...ASSET_QUERY_PARAMS,
+        limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        if (!asksNear(p)) throw new CommandError('invalid', 'give near (a town) or nearLat and nearLon');
+        const c = client();
+        const ask = await askFromParams(c, p);
+        const near = ask.filter.near!;
+        const town = typeof p.near === 'string' ? resolveTown(p.near.trim(), await gazetteerOrEmpty(), near.km).town : null;
+        let spans: { from: string; to: string }[];
+        let daysNear: number | null = null;
+        if (ask.query.sessionId !== undefined) {
+          spans = [{ from: ask.query.dateFrom ?? '', to: ask.query.dateTo ?? '' }];
+        } else {
+          const from = ask.query.dateFrom ?? '1970-01-01';
+          const to = ask.query.dateTo ?? todayIso();
+          const days = nearDays(await c.geoDays({ from, to }), near);
+          daysNear = days.length;
+          spans = daySpans(days);
+        }
+        const rows: WinnowAssetRow[] = [];
+        for (const span of spans) {
+          if (rows.length >= MAX_ROWS) break;
+          const query: AssetQuery = { ...ask.query, ...(span.from ? { dateFrom: span.from, dateTo: span.to } : {}) };
+          rows.push(...(await c.allAssets(query, MAX_ROWS - rows.length)));
+        }
+        const { kept } = await keepAsk(c, sourceId(), rows, ask);
+        const cap = typeof p.limit === 'number' ? p.limit : 200;
+        return {
+          ...(town ? { town } : {}),
+          ...namesTaken(ask),
+          centre: near,
+          ...(daysNear !== null ? { daysNear } : {}),
+          listed: rows.length,
+          matched: kept.length,
+          shown: Math.min(kept.length, cap),
+          ...(rows.length >= MAX_ROWS ? { warning: `the listing stopped at ${MAX_ROWS} rows — narrow the span or the reach` } : {}),
+          rows: kept.slice(0, cap).map(rowSummary),
         };
       },
     },
@@ -419,11 +723,13 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           const missing = (p.ids as number[]).filter((id) => !rows.some((r) => r.id === id));
           note = `${rows.length} media${missing.length ? ` · not found: ${missing.join(', ')}` : ''}`;
         } else {
-          const got = await list(await askFromParams(c, p), MAX_ROWS);
+          const ask = await askFromParams(c, p);
+          const got = await list(ask, MAX_ROWS);
           const pages = Math.max(1, Math.ceil(got.kept.length / SHEET_MAX));
           const page = Math.min(typeof p.page === 'number' ? p.page : 1, pages);
           rows = got.kept.slice((page - 1) * SHEET_MAX, page * SHEET_MAX);
-          note = `page ${page} of ${pages} · ${got.matched} matched`;
+          const took = ask.names ? Object.values(ask.names).flat().join(', ') : '';
+          note = `page ${page} of ${pages} · ${got.matched} matched${took ? ` · ${took}` : ''}`;
         }
         if (rows.length === 0) throw new CommandError('invalid', 'nothing to show — no media matched');
         const images = await Promise.all(

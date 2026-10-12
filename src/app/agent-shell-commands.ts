@@ -1,11 +1,14 @@
 import { commands } from '../shared/commands/registry';
 import { contactSheetImage } from '../shared/commands/contact-sheet-image';
 import { winnowCommands } from '../shared/sources/winnow/winnow-commands';
+import { winnowSortCommands } from '../shared/sources/winnow/winnow-sort-commands';
+import { winnowTimeCommands } from '../shared/sources/winnow/winnow-time-commands';
+import { curateCommands } from '../shared/sources/winnow/curate-commands';
 import { libraryCommands, type LibraryCommandDeps } from './library-commands';
 
 /**
- * The shell's commands for FINDING media — the Library's and the connected
- * Winnow's — registered for the whole session once this module has loaded.
+ * The shell's commands for FINDING and CURATING media — the Library's and the
+ * connected Winnow's — registered for the whole session once this module has loaded.
  * It is imported dynamically by `App`, so their code and their long
  * descriptions stay out of the entry chunk (`deployment.md`): an agent asks
  * for them a moment after the page opens, and `app.waitFor` covers that
@@ -20,9 +23,15 @@ export function registerShellCommands(state: () => LibraryCommandDeps): () => vo
     actions: () => state().actions(),
   };
   const offLibrary = commands.register('library', libraryCommands(deps));
-  const offWinnow = commands.register('winnow', winnowCommands({ winnow: deps.winnow, sheet: contactSheetImage }));
+  const offWinnow = commands.register('winnow', [
+    ...winnowCommands({ winnow: deps.winnow, sheet: contactSheetImage }),
+    ...winnowSortCommands(deps),
+    ...winnowTimeCommands(deps),
+  ]);
+  const offCurate = commands.register('curate', curateCommands({ winnow: deps.winnow }));
   return () => {
     offLibrary();
     offWinnow();
+    offCurate();
   };
 }

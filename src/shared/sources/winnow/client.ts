@@ -123,6 +123,14 @@ export interface WinnowAssetRow {
    * analysed. `a.*` carries it on every row; optional for older instances.
    */
   face_count?: number | null;
+  /**
+   * How the capture instant was read and the UTC offset of the PLACE it was
+   * taken in (Winnow's migration 0046) — what turns `captured_at` into a
+   * local hour (`capture-moment.ts`). Optional: an older instance sends none.
+   */
+  captured_at_source?: 'exif' | 'exif-wall' | 'file' | null;
+  capture_offset_min?: number | null;
+  exif_offset_min?: number | null;
   /** `make model` as Winnow derived it (`a.device`) — what its device filter matches. */
   device?: string | null;
   /** How many Gallery finals link back to this original (`edit_count`). */
@@ -141,6 +149,21 @@ export interface WinnowAssetRow {
   companion_file_size?: number | null;
   companion_width?: number | null;
   companion_height?: number | null;
+  /**
+   * Where Winnow's reverse geocoding put the frame (its `lib/geocode.ts`) —
+   * the names its place filters match exactly. `a.*` carries them; optional
+   * for an older instance or a stub.
+   */
+  place_country?: string | null;
+  place_region?: string | null;
+  place_city?: string | null;
+  place_poi?: string | null;
+  /**
+   * The text Winnow's OCR read IN the picture (a sign, a menu, a plate), its
+   * fragments joined by newlines — null when none was read or OCR is off. `a.*`
+   * carries it; optional for an older instance.
+   */
+  ocr_text?: string | null;
 }
 
 export interface WinnowSidecar {
@@ -280,6 +303,21 @@ export interface AssetQuery extends FilterQuery {
    */
   verdict?: 'pick' | 'reject' | 'skip' | 'unrated';
   minStars?: number;
+  /**
+   * Words Winnow looks for in the file's path (folder and name) and in the
+   * text its OCR read in the picture (`q`): every word must appear, as a part
+   * of a word, case aside. Nothing else — not the place, not the camera.
+   */
+  words?: string;
+  /** Only media with (true) or without (false) text read in the picture (`has_text`). */
+  hasText?: boolean;
+  /**
+   * Winnow's own exact-name filters, already in wire form (`device`, `lens`,
+   * `place_city`…, each a comma-separated list) — what `winnow-names.ts`
+   * resolves an agent's words into. Sent as they are; they override the
+   * single `device` of the cumulative filter.
+   */
+  names?: Readonly<Record<string, string>>;
   cursor?: string | null;
   limit?: number;
 }
@@ -605,6 +643,12 @@ export interface WinnowFacets {
   media_types: ValueCount[];
   extensions: ValueCount[];
   devices: ValueCount[];
+  /** The names Winnow's filters match exactly, busiest first (`/api/facets`, empty on an older instance). */
+  lenses: ValueCount[];
+  place_countries: ValueCount[];
+  place_regions: ValueCount[];
+  place_cities: ValueCount[];
+  place_pois: ValueCount[];
 }
 
 /**
@@ -633,6 +677,15 @@ export interface WinnowSession {
  */
 function filterParams(f: FilterQuery): Record<string, string | undefined> {
   return { media_type: f.mediaType, ext: f.ext, device: f.device, kind: f.half };
+}
+
+/** What `/api/search` answers: ranked rows, or why there are none. */
+export interface WinnowSearch {
+  enabled: boolean;
+  reason: string | null;
+  indexed: number | null;
+  library: number | null;
+  items: (WinnowAssetRow & { distance: number })[];
 }
 
 /** A person as `/api/people` lists them — one face cluster, named or not. */
@@ -958,6 +1011,11 @@ export class WinnowClient {
       media_types: raw.media_types ?? [],
       extensions: raw.extensions ?? [],
       devices: raw.devices ?? [],
+      lenses: raw.lenses ?? [],
+      place_countries: raw.place_countries ?? [],
+      place_regions: raw.place_regions ?? [],
+      place_cities: raw.place_cities ?? [],
+      place_pois: raw.place_pois ?? [],
     };
   }
 
@@ -1051,12 +1109,15 @@ export class WinnowClient {
         ids: query.ids?.length ? query.ids.join(',') : undefined,
         burst_id: query.burstId,
         ...filterParams(query),
+        ...query.names,
         person: query.people?.length ? query.people.join(',') : undefined,
         person_mode: query.people?.length && query.together ? 'all' : undefined,
         has_faces: query.hasFaces === undefined ? undefined : String(query.hasFaces),
         face_count: query.faceCount?.length ? query.faceCount.join(',') : undefined,
+        has_text: query.hasText === undefined ? undefined : String(query.hasText),
         verdict: query.verdict,
         star_min: query.minStars,
+        q: query.words,
         cursor: query.cursor,
         limit: query.limit ?? 200,
         collapse: query.bursts === 'frames' ? 'pairs' : 1,
@@ -1094,6 +1155,41 @@ export class WinnowClient {
   async people(signal?: AbortSignal): Promise<WinnowPerson[]> {
     const raw = await this.json<{ people?: WinnowPerson[] }>(this.url('/api/people'), signal);
     return raw.people ?? [];
+  }
+
+  /**
+   * Media ranked by how well they MATCH A DESCRIPTION — "sunset over the
+   * sea", "a koala in a tree" — by the CLIP index Winnow keeps of its
+   * pictures (`/api/search`). Closest first, with the distance. `enabled:
+   * false` says the instance has no index (ML off, pgvector missing), and
+   * `indexed` how much of the library the ranking actually ran over.
+   */
+  async search(
+    text: string,
+    opts: { half?: 'incoming' | 'final'; limit?: number } = {},
+    signal?: AbortSignal,
+  ): Promise<WinnowSearch> {
+    const raw = await this.json<{
+      items?: (WinnowAssetRow & { distance: number })[];
+      enabled?: boolean;
+      reason?: string;
+      indexed?: number;
+      library?: number;
+    }>(
+      this.url('/api/search', {
+        q: text,
+        limit: opts.limit,
+        source: opts.half === 'final' ? 'gallery' : opts.half === 'incoming' ? 'incoming' : undefined,
+      }),
+      signal,
+    );
+    return {
+      enabled: raw.enabled !== false,
+      reason: raw.reason ?? null,
+      indexed: raw.indexed ?? null,
+      library: raw.library ?? null,
+      items: raw.items ?? [],
+    };
   }
 
   /** The faces detected in one medium, best first, with who each one is. */

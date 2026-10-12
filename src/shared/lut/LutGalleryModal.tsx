@@ -108,6 +108,8 @@ import {
   type RgbBitmap,
 } from './lut-preview';
 import { MAX_LAYER_INTENSITY } from './lut-stack';
+import type { PackFamily } from './lut-pack';
+import { defaultLookStrength } from './look-strength';
 import LutPackImportModal from './LutPackImportModal';
 import LutThumb from './LutThumb';
 import { useLutFavourites, toggleFavourite } from './use-lut-favourites';
@@ -173,7 +175,9 @@ export interface LutGalleryModalProps {
   /**
    * What the strength slider starts at. A host that already has a look on the
    * picture passes its own (the single-pick "Look" control); one that ADDS a
-   * layer leaves it at 1, since that is what the new layer would carry.
+   * layer leaves it out, and the slider follows the aimed look's default —
+   * a creative look well under 100 %, a conversion whole (`look-strength.ts`)
+   * — until the author moves it.
    */
   intensity?: number;
   title?: string;
@@ -192,7 +196,7 @@ export default function LutGalleryModal({
   previewImage = null,
   previewLabel = null,
   previewIsLog = false,
-  intensity = 1,
+  intensity,
   title = 'Choose a look',
   onPick,
   onClose,
@@ -259,9 +263,10 @@ export default function LutGalleryModal({
   /**
    * How strongly the aimed look is applied, and what the pick carries out.
    * Seeded from the host and kept across aims on purpose: judging three looks
-   * at 60 % is one decision, not three.
+   * at 60 % is one decision, not three. `null` until the author (or the host)
+   * says a number: the aimed look's own default then (`look-strength.ts`).
    */
-  const [strength, setStrength] = useState(intensity);
+  const [chosenStrength, setStrength] = useState<number | null>(intensity ?? null);
 
   // The shipped tiles. `{}` until they answer, and `{}` for good if this build
   // ships none — in which case every look simply bakes live, as it used to.
@@ -344,6 +349,11 @@ export default function LutGalleryModal({
    * reference tile cannot follow it and does not pretend to: it was baked
    * once, as the look was authored, and the ⓘ says so.
    */
+  const familyOf = useCallback(
+    (id: string | null): PackFamily => (id ? (nodes.flatMap((n) => n.items).find((i) => i.id === id)?.family ?? 'rec709') : 'rec709'),
+    [nodes],
+  );
+  const strength = chosenStrength ?? defaultLookStrength(familyOf(aimed));
   const tileStrength = effectiveSource ? strength : 1;
   const previews = useMemo(() => {
     const next: Record<string, RgbBitmap> = {};
@@ -406,14 +416,15 @@ export default function LutGalleryModal({
   const touch = useCallback(
     (id: string) => {
       if (!scene) {
-        // No scene, no strength slider — the look leaves as it was authored.
-        onPick(id, 1);
+        // No scene, no strength slider — the look leaves at its default
+        // strength: a conversion whole, a creative look well under 100 %.
+        onPick(id, defaultLookStrength(familyOf(id)));
         return;
       }
       if (id === aimed) onPick(id, strength);
       else setAimed(id);
     },
-    [scene, aimed, strength, onPick],
+    [scene, aimed, strength, onPick, familyOf],
   );
   /** What the ring sits on: the aimed look, or the worn one when nothing aims. */
   const ringed = scene ? aimed : (selected ?? null);

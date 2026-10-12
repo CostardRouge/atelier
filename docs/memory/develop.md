@@ -952,3 +952,5 @@ one, and the 5×5 dropper sampled beside the pixel the readout named, worst
 under the loupe. **How to apply.** A surface that maps a client point onto
 a canvas calls these two and never re-derives the arithmetic; specs in
 `pan-zoom.test.ts`.
+
+**The histogram reads SATURATION too (2026-10-12, for dosing a look).** `luminanceHistogram` counts the hexcone's CHROMA — (max − min) / 255 of the encoded channels, 0 for any grey, 1 for a primary — in twenty bins, its mean, and `gamutEdge`: colourful pixels (chroma ≥ 0.3) with a channel at 0 or 255, colour flattened against the wall, which `clippedHighlights` (every channel white) never counts. `histogramReading` answers `saturation: {mean, p95, vivid (≥ 0.5), gamutEdge}`, read by `develop.measure` and `fit-strength.ts`. Measured on a stage: a vivid film stock took the mean from 0.27 (no look) to 0.32 at 40 %, 0.40 at 100 %, 0.61 at 300 %, `gamutEdge` from 0 to 0.25 — monotonic, so a search over the strength is sound. **How to apply**: judge a look's saturation against the SAME picture with the look off, never against a fixed number; the chroma is display-referred, which is what a viewer sees.

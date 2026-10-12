@@ -25,6 +25,17 @@ roll (rename, remove, clone, delete).
 | Deliver | `develop.export` with `["changed"]` |
 | MCP | `atelier_batch` (several commands, one call, stops at the first refusal), `atelier_commands {family}`, fuller `instructions` at `initialize` |
 
+### The second round (2026-10-11, `docs/agent-commands-plan.md`)
+
+| Step | Commands |
+| --- | --- |
+| Find | facets on every listing (orientation, focal, aperture, ISO, shutter, altitude, `near` a town or a point, `colour`), `winnow.near`, `winnow.search` (CLIP), `winnow.onThisDay`, `winnow.firsts`, `winnow.flights` |
+| Sort | `winnow.analyse`, `winnow.duplicates`, `winnow.misses` — proposals over one thumbnail primitive (`media/thumb-metrics.ts`) |
+| Choose | `curate.story`, `curate.cover`, `curate.order` (`curate/story.ts`) |
+| Develop | `develop.compare`, `develop.explain`, `develop.match`, `develop.applyRules`, `develop.autoAll`, `develop.deliveryPreset` |
+| Tell | `trips.facts` (`roadtrip/day-facts.ts`, `lib/sun.ts`), `trips.gaps`, `trips.publishing`, `trips.storyPiece`, `trips.recap`, `trips.deduce` |
+| Sum up | `winnow.stats`, `winnow.statsSheet` (`winnow/stats.ts`, `stats-card.ts`) |
+
 ## 2. Still missing, by tool
 
 Difficulty: **T** calls a funnel that exists, **M** needs a seam, **H** needs
@@ -57,9 +68,10 @@ open piece (`PostEditor`), `trips.piece`, `.openSlide`, `.setPictures`,
 
 ### Trips (what is left)
 
-The look per rung (`writeGrade` over the trip's LUT stack, M), the legs
-(`setStages`, `stage-edit.ts`, M), Deduce "accept all" (`proposeDraft` →
-`applyDraft`, M), a slide's clip cut, speed and seconds (`setClipRange`, M),
+The look per rung (`writeGrade` over the trip's LUT stack, M), the legs by
+hand (`setStages`, `stage-edit.ts`, M — `trips.deduce` writes them from
+Winnow since the second round), a slide's clip cut, speed and seconds
+(`setClipRange`, M),
 collage layouts and cells (M), the hook as a video (`exportHookClip` takes no
 target yet, T), shades and free text on a slide (T), sending a piece to the
 Studio (`StudioLink`, M), the trip's vehicle fleet (M).
@@ -82,6 +94,23 @@ listing). Winnow writes them, in its own MCP (CostardRouge/winnow#297, on
 `people.get`, `assets.faces`, and `assets.list` with the same `people` /
 `who` / `together` / `faces` as Atelier's.
 
+### Search by content, time, light and gear (built 2026-10-11)
+
+`winnow.search {text}` ranks by Winnow's CLIP index (`/api/search`); every
+listing narrows by `time` / `hourFrom`–`hourTo` (local clock), `light`
+(golden · blue · day · night, from the sun over the frame's GPS), `gear`
+(drone · phone · action · camera); the body, the lens and the place are
+Winnow's own names (`camera`, `lens`, `country`, `region`, `city`, `place`,
+resolved against `/api/facets` and filtered by the server — `winnow.names`
+lists them); `words` is Winnow's `q` (the file's path and the OCR text, each
+word as a part of a word), `withText` its `has_text`, and each row says
+the text read; the second round added the HOW facets,
+`near`, `colour` and the sorting, curating and counting commands over them.
+Rules in `docs/memory/agent-commands.md`. Open: Winnow filtering the hour,
+light, gear, orientation and colour itself would let a year be asked without
+`allAssets`' cap cutting it first; `winnow.similar` (search by an IMAGE) is
+Winnow's to add to `/api/search`.
+
 ### Sources
 
 Connecting an instance stays the person's act (a sign-in is a cookie login,
@@ -98,9 +127,7 @@ Ranked by what they unlock. None changes a document's shape except where said.
    *drop* deletes the variant. Built from `develop.variant` and
    `develop.removePictures` today by convention; a `proposal` flag on the
    variant (one optional field on `RollPicture`) would let the band show it.
-2. **A side-by-side snapshot**: `develop.snapshot {compare: true}` — as shot
-   left, as delivered right, one image. Halves the round trips of every
-   "is it better?" and is what a person would look at too. No document change.
+2. **A side-by-side snapshot** — BUILT as `develop.compare` (second round).
 3. **Learning from his own develops**: `develop.examples` — the N pictures of
    his rolls nearest to this one (same body, same light — from the `shots`
    store's stats, B1 of `auto-develop.md`) with their records, so an agent

@@ -2982,8 +2982,8 @@ is in the app**: [`#/agents`](https://atelier.steeve.website/#/agents) (or
 
 The bridge has its **own number** — v1, v2, v3… — which moves only when the
 bridge itself changes (a new command in the tab needs no new bridge). The
-extension is saved as `atelier-v1.mcpb`, Claude Desktop sees it as version
-`1.0.0` and offers *Update* over an older one, `node atelier-mcp.mjs
+extension is saved as `atelier-v4.mcpb` today, Claude Desktop sees it as
+version `4.0.0` and offers *Update* over an older one, `node atelier-mcp.mjs
 --version` prints it, the guide and the *Agents* row on `#/sources` say which
 bridge is running and whether a newer one is out, and `atelier_status` tells
 the agent too. A test fails CI when the bridge changes without its number.
@@ -3025,6 +3025,76 @@ none | any | solo | group` — "every photo of Lucie and Lucas together", "the
 landscapes of that day, no one in them". Naming, merging and hiding people
 stays in Winnow, whose own MCP writes them.
 
+And by **what the picture shows, when and with what**: `winnow.search` ranks
+media by a description in plain words — "sunset over the sea", "a koala in a
+tree" — through the image index Winnow keeps (CLIP; it says so when the
+instance has none, or has indexed only part of the library), closest first.
+Every listing, the search included, also narrows by the **local hour** it was
+taken at (`time: morning | midday | afternoon | evening | night`, or
+`hourFrom` / `hourTo`), by the **light** — `golden`, `blue`, `day`, `night`,
+from the sun's height where and when it was taken, so only for media with a
+position — and by **gear** (`drone`, `phone`, `action`, `camera`). `words`
+looks for each word, as a part of a word, in the file's path and in the
+**text Winnow's OCR read inside the picture** (a sign, a menu, a plate);
+`withText: true` keeps only the frames where some was read, `false` those
+with none, and every row carries what was read. Each row
+says its local time, light and gear when they can be told; a frame whose
+time zone nobody knows has no hour, rather than the server's.
+
+And by **how** and **where**: the frame's shape (`orientation`), the focal
+length, the aperture, the ISO, the exposure time (`shutterMin` — long
+exposures), a drone's height (`altitudeMin`), and a place — `near: "Cairns"`
+resolved offline through the shipped town index, or `nearLat` / `nearLon`
+with `nearKm` — which `winnow.near` searches a whole library for, the days
+Winnow positions near the place found first. And by **colour** (`colour:
+blue`, `warm`, `cool`, `neutral`, `mono`), measured on the thumbnails.
+
+The **body**, the **lens** and the **place** are Winnow's own names, filtered
+by Winnow: `camera`, `lens`, `country`, `region`, `city` and `place` (a point
+of interest) take the agent's words — `camera: "ilce 7cm2"`, `city: "paris"`,
+case, accents and punctuation aside — resolve them against the names the
+instance holds, and ask the server for the exact one. Each is a scope of its
+own, so "every frame of the A7C II" or "everything from Paris" needs no day;
+the answer says which names were taken. `winnow.names {kind}` lists them with
+their counts, which is how an agent turns "my Sony A7C II" into Winnow's
+`SONY ILCE-7CM2`.
+
+The images Atelier **draws** for an agent — the contact sheet behind
+`winnow.sheet`, `winnow.peopleSheet`, `develop.contactSheet` and
+`develop.compare`, the sum-up card behind `winnow.statsSheet` — are drawn in
+the tab, from the suite's own paper and ink, so no photograph leaves as a file.
+`#/agents` keeps a bench of them under **What Claude can show you**: every
+case, the ordinary ones and the edges (one picture, a full page, long names,
+broken thumbnails, a year with no position, nothing dated), drawn from made-up
+pictures by the same code the commands call, at each width, on paper or at
+night, with the command an agent would send and a Save button. And while an
+agent is connected, the **Agent** pill in the top bar opens **What Claude
+saw**: every picture this tab sent it during the session — the real ones, on
+your own photographs — with the command that asked for it. Kept in memory
+only, gone with the tab.
+
+What a thumbnail says is one primitive every sorting command reads
+(`winnow.analyse`: sharpness, exposure, colour, a hash — a sample, never the
+file): `winnow.duplicates` groups a listing's bursts and near-twins and
+marks the one to keep (Winnow's own pick or stars first, else the sharpest);
+`winnow.misses` flags blur, dark, bright, clipped and crushed frames with the
+number behind each. Both are proposals to look at (`winnow.sheet {ids}`) and
+act on in Winnow — Atelier still writes no verdict.
+
+**Curating**: `curate.story` picks the N frames that tell a day or a span
+without repeating themselves — the strongest first, then the frame adding
+the most novelty in time, look, light, gear, people, colour and shape, with
+a bonus for a stretch of the span nobody tells yet — in shooting order,
+each with its reason in words; `curate.cover` is the same for one frame;
+`curate.order` gives a deck's order by time, by a colour walk or by focal
+length. **In time**: `winnow.onThisDay` (the same day across the years),
+`winnow.firsts` (the first frame in each country, with each gear or body,
+or of each person), `winnow.flights` (the drone's `.srt` logs read: seconds,
+kilometres, the highest point). **The sum-up**: `winnow.stats` counts a year
+or a span — by gear, body, lens, focal band, local hour, light, weekday,
+country, verdict and stars, plus the people most photographed — and
+`winnow.statsSheet` draws the same numbers as one shareable card.
+
 A session in Develop looks like: `app.navigate` to `/develop/home`,
 `app.waitFor` `develop.rolls`, `develop.openRoll`, `develop.pictures`,
 `develop.controls`, `develop.set` with `{"values": {"exposure": 0.5}}`, then
@@ -3048,6 +3118,31 @@ To check its own work an agent has more than the picture: `develop.measure`
 answers the histogram as numbers (mean, percentiles, each channel's mean, the
 share clipped to white or crushed to black), and `develop.contactSheet` shows
 the whole roll on one image, numbered, with what each picture carries.
+`develop.compare` puts the picture as shot and as delivered side by side on
+one image (or any two pictures of the roll), and `develop.explain` tells what
+was done to a picture, in order, from its journal — each step with who made
+it and the difference it made.
+
+In batch: `develop.match` makes a series wear one reference picture's
+settings, with each picture's exposure offset so its median brightness lands
+on the reference's (measured on the as-shot records the roll keeps, ±2 EV at
+most and said when the gap was wider); `develop.applyRules` gives pictures a
+preset or slider values by rule — the facets every listing reads (light,
+time, gear, camera, orientation…) → a preset — judged on the Winnow row each
+file came from; `develop.autoAll` runs the Auto verbs on many pictures in
+turn; `develop.deliveryPreset` sets the export targets for a use in one word
+(`instagram`, `x`, `web`, `archive`, `print`).
+
+Looks are **dosed**, never left at 100 %: a creative look lands at 40 % —
+in the look picker too, until you move its slider — and a log-to-Rec.709
+conversion lands whole. `develop.measure` reads the picture's saturation
+beside its light (mean and 95th-percentile chroma, the vivid share, colour
+pushed against the gamut's wall), and `develop.fitLook` measures the picture
+with the look off and at rising strengths, then sets the strongest whose
+colour stays within limits of the look-off picture, saying why it stopped.
+Your purchased packs are open to the agent by name — `develop.looks` lists
+them, `develop.addLook {pack, look}` adds one — and their files never leave
+the vault.
 
 **Trips** is driven the same way, from the trip to the delivered files:
 `trips.list`, `trips.create` (a name and two days), `trips.open`, `trips.get`
@@ -3062,6 +3157,18 @@ card), `trips.snapshot` (a slide rendered exactly as the export renders it),
 `trips.exportPlan` and `trips.export`, which hands the files to the bridge
 like Develop's. Every write is one step of the trip's own undo
 (`trips.undo`).
+
+And from the trip's own knowledge: `trips.facts` answers what the trip knows
+of a day for a caption written from facts — its number, its leg and places,
+the vehicle, the kilometres its road holds, sunrise and sunset over the place
+(on the zone Winnow's frames carry for that day, else the longitude's, said
+which), and the day's frames by gear and light; `trips.gaps` and
+`trips.publishing` say which days nobody tells, which of them hold media,
+what is published, what waits and the day to tell next; `trips.storyPiece`
+goes from a span to a piece in one call (the story's picks fetched and set in
+order); `trips.recap` starts a reel over a whole leg opening with Virée; and
+`trips.deduce` runs the Deduce window by command — the proposals first,
+written only with `apply: true`.
 
 A roll can be made and filled end to end: `develop.newRoll`, then
 `develop.addFromWinnow` — chosen media by id, or a day, a span or a folder of

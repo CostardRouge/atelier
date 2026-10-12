@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { navigate } from './use-hash-route';
 import { BridgeConnect, BridgeStatePill, BridgeVersionLine, bridgeSentence, useBridge } from './BridgeControl';
 import { BRIDGE_CHANGES, BRIDGE_VERSION, bridgeLabel } from '../shared/commands/bridge-version';
@@ -28,6 +28,9 @@ const CLIENT_PREF = localPref<Client>(
 );
 
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
+
+/** The screens' bench — its painters and fixtures load only when the section is opened (`AgentScreens.tsx`). */
+const AgentScreens = lazy(() => import('./AgentScreens'));
 const asset = (name: string) => new URL(`${import.meta.env.BASE_URL}${name}`, window.location.origin).href;
 
 /** A command or a snippet, selectable, with a Copy verb that says it copied. */
@@ -130,6 +133,11 @@ const PROMPTS = [
   'Straighten this photo, crop it to 4:5 around the subject, and export every picture that leaves the roll.',
   'In my trip, make a carousel of 14 September from my Winnow picks of that day, open it on the map, caption the badge “Cairns”, and export it.',
   'Which days of September hold photos on my Winnow? Show me the 4-star ones of the busiest day as a contact sheet, and make a roll of the five you would keep.',
+  'Find my golden-hour drone shots of September and my photos of koalas, show them as a contact sheet, and make a roll of the best ten.',
+  'Tell 14 September of my trip: pick the eight frames that tell the day, make the carousel, caption it from the day’s facts, and show me slide one.',
+  'Harmonise the whole roll on the second picture, give the drone shots the “Air” preset and the golden-hour ones “Warm”, then export for Instagram.',
+  'What did 2025 look like? Count the year and draw me the card; then show me the bursts of the busiest day and which frame of each to keep.',
+  'Show me every photo my Sony A7C II took in Paris, then the ones with a shop sign or a menu in them, as a contact sheet.',
 ];
 
 /** The extension's saved name carries its version, so two downloads are told apart. */
@@ -141,6 +149,7 @@ export default function AgentsGuide() {
   const bridge = useBridge();
   const [client, setClient] = useLocalPref(CLIENT_PREF, 'desktop');
   const [savedAt, setSavedAt] = useState('');
+  const [screensOpen, setScreensOpen] = useState(false);
   const connected = bridge.status === 'connected';
   const sentence = bridgeSentence(bridge);
   const fileUrl = asset('atelier-mcp.mjs');
@@ -271,6 +280,30 @@ export default function AgentsGuide() {
       </ol>
 
       <div>
+        <p className={legend}>What Claude can show you</p>
+        <details
+          className="mt-2 group border-b border-line py-3"
+          onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && setScreensOpen(true)}
+        >
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-medium text-ink">
+            The pictures Atelier draws for Claude
+            <span className="inline-flex text-muted transition-transform group-open:rotate-180 [&>svg]:w-4 [&>svg]:h-4">
+              {Icons.down}
+            </span>
+          </summary>
+          <p className="m-0 mt-2 mb-4 text-sm text-ink-soft leading-relaxed">
+            Claude asks this tab for them instead of fetching your photos: no file leaves. Each case is drawn here by the
+            same code Claude gets, from made-up pictures — a dot marks an edge case.
+          </p>
+          {screensOpen && (
+            <Suspense fallback={<p className="m-0 text-sm text-muted">Loading…</p>}>
+              <AgentScreens />
+            </Suspense>
+          )}
+        </details>
+      </div>
+
+      <div>
         <p className={legend}>Good to know</p>
         <div className="mt-2">
           <Faq q="Where do exported photos go?">
@@ -283,8 +316,10 @@ export default function AgentsGuide() {
           <Faq q="What can Claude do, and what can’t it?">
             <p className="m-0">
               In Develop: make and fill rolls (from your Library or your Winnow’s picks), every slider, curves, crop and
-              straighten, perspective, lens, detail, the Auto verbs, looks and film stocks, your presets, copying one
-              photo’s settings to others, and exports. It cannot touch your purchased looks, masks or layers.
+              straighten, perspective, lens, detail, the Auto verbs, looks and film stocks — your purchased packs too,
+              by name, never their files — your presets, copying one photo’s settings to others, and exports. A look
+              lands at 40 % and Claude can measure how far it may go before the colour gets loud. It cannot touch masks
+              or layers.
             </p>
             <p className="m-0">
               Each change is recorded as made by an agent, so a making-of says so and Atelier never learns your taste from
