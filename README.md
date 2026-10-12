@@ -2946,6 +2946,8 @@ npm run build      # production build into dist/
 npm run preview    # serve the production build locally
 ```
 
+Learning the maintainer's editing style (a local Python workspace, never part of the site): see [`training/README.md`](training/README.md).
+
 ### Driving Atelier from an agent (MCP)
 
 Every agent-facing verb of the suite is a **command** with a stable id and
