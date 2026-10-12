@@ -149,6 +149,15 @@ export interface WinnowAssetRow {
   companion_file_size?: number | null;
   companion_width?: number | null;
   companion_height?: number | null;
+  /**
+   * Where Winnow's reverse geocoding put the frame (its `lib/geocode.ts`) —
+   * the names its place filters match exactly. `a.*` carries them; optional
+   * for an older instance or a stub.
+   */
+  place_country?: string | null;
+  place_region?: string | null;
+  place_city?: string | null;
+  place_poi?: string | null;
 }
 
 export interface WinnowSidecar {
@@ -290,6 +299,13 @@ export interface AssetQuery extends FilterQuery {
   minStars?: number;
   /** Words matched by Winnow against names, places, the camera and the text read IN the picture (`q`). */
   words?: string;
+  /**
+   * Winnow's own exact-name filters, already in wire form (`device`, `lens`,
+   * `place_city`…, each a comma-separated list) — what `winnow-names.ts`
+   * resolves an agent's words into. Sent as they are; they override the
+   * single `device` of the cumulative filter.
+   */
+  names?: Readonly<Record<string, string>>;
   cursor?: string | null;
   limit?: number;
 }
@@ -615,6 +631,12 @@ export interface WinnowFacets {
   media_types: ValueCount[];
   extensions: ValueCount[];
   devices: ValueCount[];
+  /** The names Winnow's filters match exactly, busiest first (`/api/facets`, empty on an older instance). */
+  lenses: ValueCount[];
+  place_countries: ValueCount[];
+  place_regions: ValueCount[];
+  place_cities: ValueCount[];
+  place_pois: ValueCount[];
 }
 
 /**
@@ -977,6 +999,11 @@ export class WinnowClient {
       media_types: raw.media_types ?? [],
       extensions: raw.extensions ?? [],
       devices: raw.devices ?? [],
+      lenses: raw.lenses ?? [],
+      place_countries: raw.place_countries ?? [],
+      place_regions: raw.place_regions ?? [],
+      place_cities: raw.place_cities ?? [],
+      place_pois: raw.place_pois ?? [],
     };
   }
 
@@ -1070,6 +1097,7 @@ export class WinnowClient {
         ids: query.ids?.length ? query.ids.join(',') : undefined,
         burst_id: query.burstId,
         ...filterParams(query),
+        ...query.names,
         person: query.people?.length ? query.people.join(',') : undefined,
         person_mode: query.people?.length && query.together ? 'all' : undefined,
         has_faces: query.hasFaces === undefined ? undefined : String(query.hasFaces),

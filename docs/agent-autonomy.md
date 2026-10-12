@@ -99,8 +99,10 @@ listing). Winnow writes them, in its own MCP (CostardRouge/winnow#297, on
 `winnow.search {text}` ranks by Winnow's CLIP index (`/api/search`); every
 listing narrows by `time` / `hourFrom`–`hourTo` (local clock), `light`
 (golden · blue · day · night, from the sun over the frame's GPS), `gear`
-(drone · phone · action · camera) and `camera` (a part of the body's name);
-`words` is Winnow's text search (`q`); the second round added the HOW facets,
+(drone · phone · action · camera); the body, the lens and the place are
+Winnow's own names (`camera`, `lens`, `country`, `region`, `city`, `place`,
+resolved against `/api/facets` and filtered by the server — `winnow.names`
+lists them); `words` is Winnow's text search (`q`); the second round added the HOW facets,
 `near`, `colour` and the sorting, curating and counting commands over them.
 Rules in `docs/memory/agent-commands.md`. Open: Winnow filtering the hour,
 light, gear, orientation and colour itself would let a year be asked without

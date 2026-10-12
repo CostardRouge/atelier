@@ -30,6 +30,7 @@ import { ANALYSE_MAX, analyseRows } from './thumb-analysis';
 import { homonyms, type GazetteerCity } from '../../roadtrip/gazetteer';
 import { gazetteerOrEmpty } from '../../roadtrip/load-gazetteer';
 import { DEFAULT_NEAR_KM, FACET_PARAMS, asksNear, daySpans, nearDays, passesFacets, readFacets, type Near, type RowFacets } from './row-facets';
+import { NAME_KINDS, NAME_PARAMS, asksNames, foldKey, instanceNames, nameParams, namesOfKind, passesNames, resolveNames, type NameAsk, type NameKind } from './winnow-names';
 
 /** How many rows a listing may ask for at most — the client's own cap. */
 export const MAX_ROWS = 2000;
@@ -40,6 +41,13 @@ export interface AssetAsk {
   filter: RowFilter & RowFacets;
   /** A colour the frames must read as — judged on their thumbnails, so it is asked apart from the row filter. */
   colour?: ColourAsk;
+  /**
+   * The bodies, lenses and places asked, as Winnow names them (`winnow-names.ts`)
+   * — sent to the server with the query, and checked on the rows again for a
+   * listing Winnow did not filter (a search). Answered back so the agent sees
+   * which names its words took.
+   */
+  names?: NameAsk;
 }
 
 /** The rows that pass both halves of the filter — Winnow's culling and the facets (`row-facets.ts`) — in the order they came. */
@@ -60,7 +68,7 @@ export async function keepAsk(
   rows: readonly WinnowAssetRow[],
   ask: AssetAsk,
 ): Promise<{ kept: WinnowAssetRow[]; analysed: number; metrics: Map<number, ThumbMetrics> }> {
-  const kept = filterAsk(rows, ask.filter);
+  const kept = filterAsk(rows, ask.filter).filter((row) => passesNames(row, ask.names));
   if (!ask.colour) return { kept, analysed: 0, metrics: new Map() };
   const sample = kept.slice(0, ANALYSE_MAX);
   const metrics = await analyseRows(client, sourceId, sample);
@@ -92,6 +100,8 @@ export const ASSET_QUERY_PARAMS = {
   faces: { type: 'string', description: 'none (no face found — landscapes, details), any, solo (exactly one face) or group (two or more).', enum: ['none', 'any', 'solo', 'group'], optional: true },
   words: { type: 'string', description: 'Words Winnow matches against file names, places, the camera and the text read IN the picture (a sign, a menu). Not what the picture SHOWS — winnow.search does that.', optional: true },
   ...FACET_PARAMS,
+  // After the facets: a listing's `camera` is Winnow's exact name, asked of the server.
+  ...NAME_PARAMS,
   colour: {
     type: 'string',
     description: `What the frame reads as, measured on its thumbnail (one fetch per row, ${ANALYSE_MAX} rows at most): a hue family (${COLOUR_ASKS.slice(0, 8).join(', ')}), warm, cool, neutral (little colour) or mono.`,
@@ -129,10 +139,11 @@ export function readAssetQuery(p: Record<string, unknown>): AssetAsk {
   else if (p.faces === 'any') query.hasFaces = true;
   else if (p.faces === 'solo') query.faceCount = [1];
   else if (p.faces === 'group') query.faceCount = GROUP_COUNTS;
-  // A person, words and a place are scopes of their own: "every photo of
-  // Lucie", "everything that says Uluru", "around Cairns" need no day.
-  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who) && !query.words && !asksNear(p)) {
-    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, people, words or a place (near)');
+  // A person, words, a place and a body are scopes of their own: "every
+  // photo of Lucie", "everything that says Uluru", "around Cairns", "all of
+  // the A7C II" need no day — Winnow narrows them before anything is cut.
+  if (!query.dateFrom && query.sessionId === undefined && !query.people?.length && !Array.isArray(p.who) && !query.words && !asksNear(p) && !asksNames(p)) {
+    throw new CommandError('invalid', 'give a date (YYYY-MM-DD), a folder id, people, words, a place (near, city, country…) or a body (camera, lens)');
   }
   if (p.half === 'incoming' || p.half === 'final') query.half = p.half;
   if (p.media === 'photo' || p.media === 'video') query.mediaType = p.media;
@@ -204,15 +215,36 @@ function foldName(name: string): string {
   return name.normalize('NFD').replace(/\p{M}/gu, '').trim().toLowerCase();
 }
 
-/** The listing params read, with any `who` resolved against the instance's people and any `near` town against the index. */
+/**
+ * The bodies, lenses and places a command's params name, resolved against
+ * the instance's own names — and the facets without the substring `camera`
+ * they replace. Nothing asked costs no request.
+ */
+export async function askNames(client: WinnowClient, p: Record<string, unknown>, filter: RowFacets): Promise<{ names?: NameAsk; filter: RowFacets }> {
+  if (!asksNames(p)) return { filter };
+  const names = resolveNames(p, await instanceNames(client));
+  if (!names.camera) return { names, filter };
+  const rest = { ...filter };
+  delete rest.camera;
+  return { names, filter: rest };
+}
+
+/** The listing params read, with any `who` resolved against the instance's people, any `near` town against the index, and any body or place against Winnow's names. */
 export async function askFromParams(client: WinnowClient, p: Record<string, unknown>): Promise<AssetAsk> {
   const ask = readAssetQuery(p);
   if (Array.isArray(p.who) && p.who.length) {
     const ids = resolveWho(p.who as string[], await client.people());
     ask.query.people = [...new Set([...(ask.query.people ?? []), ...ids])];
   }
-  const { filter } = await resolveFacets(ask.filter, p);
-  return { ...ask, filter };
+  const { filter: facets } = await resolveFacets(ask.filter, p);
+  const { names, filter } = await askNames(client, p, facets);
+  if (!names) return { ...ask, filter };
+  return { ...ask, filter: filter as AssetAsk['filter'], names, query: { ...ask.query, names: nameParams(names) } };
+}
+
+/** The names a listing took, as an answer says them — `{}` when none was asked. */
+export function namesTaken(ask: Pick<AssetAsk, 'names'>): { names?: NameAsk } {
+  return ask.names ? { names: ask.names } : {};
 }
 
 /** A person as an agent reads them. */
@@ -432,18 +464,39 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       },
     },
     {
+      id: 'winnow.names',
+      title: 'The bodies, lenses and places Winnow knows',
+      description:
+        'The names Winnow holds for the BODIES (maker and model as the files wrote them, or a name set by hand — "SONY ILCE-7CM2" is the Sony A7C II), the LENSES and the PLACES its reverse geocoding gave (countries, regions, cities, points of interest), each with how many media carry it, busiest first. These are the exact values camera, lens, country, region, city and place match: read them to turn "my A7C II" or "Paris" into Winnow’s name. A frame with no position has no place — trust the data.',
+      params: {
+        kind: { type: 'string', description: 'Which names.', enum: NAME_KINDS },
+        contains: { type: 'string', description: 'Only names containing this (case, accents and punctuation aside).', optional: true },
+        limit: { type: 'number', description: 'At most this many; 50 when absent.', integer: true, min: 1, max: 1000, optional: true },
+      },
+      available: connected,
+      run: async (p) => {
+        const all = namesOfKind(await instanceNames(client()), p.kind as NameKind);
+        const want = typeof p.contains === 'string' ? foldKey(p.contains) : '';
+        const hits = want ? all.filter((n) => foldKey(String(n.value)).includes(want)) : all;
+        const limit = typeof p.limit === 'number' ? p.limit : 50;
+        return { kind: p.kind, total: hits.length, shown: Math.min(limit, hits.length), names: hits.slice(0, limit).map((n) => ({ name: String(n.value), media: n.count })) };
+      },
+    },
+    {
       id: 'winnow.assets',
       title: 'List a day’s media',
       description:
-        'The media of a day, a span, a folder, a PERSON or a PLACE (near) on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), by when and with what (time, light, gear, camera), by how (orientation, focal, aperture, ISO, shutter, altitude) and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
+        'The media of a day, a span, a folder, a PERSON or a PLACE (near) on the connected Winnow, narrowed by its own culling (verdict, stars, colour label, tag), by who is in them (people, who, together) or how many faces (faces), by when and with what (time, light, gear), by Winnow’s own names for the BODY, the lens and the PLACE (camera, lens, country, region, city, place — each a scope of its own, filtered by Winnow, so "every frame of the A7C II" needs no day; the answer says which names the words took), by how (orientation, focal, aperture, ISO, shutter, altitude) and by kind: id, file, capture time, camera, lens, exposure, size, GPS, verdict, stars, tags, burst and paired file. Bursts count as their cover. Look at them with winnow.sheet; add the ones chosen with develop.addFromWinnow {ids}.',
       params: {
         ...ASSET_QUERY_PARAMS,
         limit: { type: 'number', description: 'At most this many rows; 200 when absent.', integer: true, min: 1, max: MAX_ROWS, optional: true },
       },
       available: connected,
       run: async (p) => {
-        const got = await list(await askFromParams(client(), p), typeof p.limit === 'number' ? p.limit : 200);
+        const ask = await askFromParams(client(), p);
+        const got = await list(ask, typeof p.limit === 'number' ? p.limit : 200);
         return {
+          ...namesTaken(ask),
           listed: got.rows.length,
           matched: got.matched,
           shown: got.kept.length,
@@ -457,7 +510,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
       id: 'winnow.search',
       title: 'Find media by what they show',
       description:
-        'Media ranked by how well they match a DESCRIPTION in plain words — "sunset over the sea", "a koala in a tree", "people around a table" — by the image index Winnow keeps (CLIP). Closest first, with a distance (lower is closer); the ranking is relative, so look at the results (winnow.sheet {ids}) rather than trusting a cut-off. Narrowed afterwards by the same date, culling, time, light and gear filters as winnow.assets. Says when the instance has no index, or indexes only part of the library.',
+        'Media ranked by how well they match a DESCRIPTION in plain words — "sunset over the sea", "a koala in a tree", "people around a table" — by the image index Winnow keeps (CLIP). Closest first, with a distance (lower is closer); the ranking is relative, so look at the results (winnow.sheet {ids}) rather than trusting a cut-off. Narrowed afterwards by the same date, culling, time, light, gear, body and place filters as winnow.assets. Says when the instance has no index, or indexes only part of the library.',
       params: {
         text: { type: 'string', description: 'What to look for, up to 300 characters — English describes best.' },
         limit: { type: 'number', description: 'How many to rank before the filters; 60 when absent.', integer: true, min: 1, max: 200, optional: true },
@@ -470,6 +523,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
         media: ASSET_QUERY_PARAMS.media,
         half: ASSET_QUERY_PARAMS.half,
         ...FACET_PARAMS,
+        ...NAME_PARAMS,
       },
       available: connected,
       run: async (p) => {
@@ -485,11 +539,13 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
         if (!found.enabled) {
           return { enabled: false, reason: found.reason ?? 'this Winnow has no image index (its ML or pgvector is off)', assets: [] };
         }
-        const { filter } = await resolveFacets(readRowFilter(p), p);
+        const { filter: facets } = await resolveFacets(readRowFilter(p), p);
+        const { names, filter } = await askNames(client(), p, facets);
         const dated = found.items.filter((r) => !from || (r.capture_date !== null && r.capture_date >= from && r.capture_date <= (to ?? from)));
-        const kept = (await keepAsk(client(), sourceId(), dated, { query: {}, filter, ...readColour(p) })).kept as (WinnowAssetRow & { distance: number })[];
+        const kept = (await keepAsk(client(), sourceId(), dated, { query: {}, filter: filter as AssetAsk['filter'], names, ...readColour(p) })).kept as (WinnowAssetRow & { distance: number })[];
         return {
           enabled: true,
+          ...(names ? { names } : {}),
           ...(found.indexed !== null && found.library !== null && found.indexed < found.library
             ? { coverage: `${found.indexed} of ${found.library} media are indexed — the rest cannot be found this way yet` }
             : {}),
@@ -536,6 +592,7 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
         const cap = typeof p.limit === 'number' ? p.limit : 200;
         return {
           ...(town ? { town } : {}),
+          ...namesTaken(ask),
           centre: near,
           ...(daysNear !== null ? { daysNear } : {}),
           listed: rows.length,
@@ -645,11 +702,13 @@ export function winnowCommands(deps: WinnowCommandDeps): CommandSpec[] {
           const missing = (p.ids as number[]).filter((id) => !rows.some((r) => r.id === id));
           note = `${rows.length} media${missing.length ? ` · not found: ${missing.join(', ')}` : ''}`;
         } else {
-          const got = await list(await askFromParams(c, p), MAX_ROWS);
+          const ask = await askFromParams(c, p);
+          const got = await list(ask, MAX_ROWS);
           const pages = Math.max(1, Math.ceil(got.kept.length / SHEET_MAX));
           const page = Math.min(typeof p.page === 'number' ? p.page : 1, pages);
           rows = got.kept.slice((page - 1) * SHEET_MAX, page * SHEET_MAX);
-          note = `page ${page} of ${pages} · ${got.matched} matched`;
+          const took = ask.names ? Object.values(ask.names).flat().join(', ') : '';
+          note = `page ${page} of ${pages} · ${got.matched} matched${took ? ` · ${took}` : ''}`;
         }
         if (rows.length === 0) throw new CommandError('invalid', 'nothing to show — no media matched');
         const images = await Promise.all(

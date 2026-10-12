@@ -319,7 +319,16 @@ describe('WinnowClient requests', () => {
 
   it('reads the facet slice it offers, tolerating a missing key', async () => {
     const c = client(async () => ok({ extensions: [{ value: 'hif', count: 3 }] }));
-    expect(await c.facets()).toEqual({ media_types: [], extensions: [{ value: 'hif', count: 3 }], devices: [] });
+    expect(await c.facets()).toEqual({
+      media_types: [],
+      extensions: [{ value: 'hif', count: 3 }],
+      devices: [],
+      lenses: [],
+      place_countries: [],
+      place_regions: [],
+      place_cities: [],
+      place_pois: [],
+    });
   });
 
   it('follows next_cursor so a 300-media day is not shown two-thirds full', async () => {

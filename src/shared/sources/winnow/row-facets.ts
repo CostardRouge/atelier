@@ -76,7 +76,7 @@ export const FACET_PARAMS = {
     optional: true,
   },
   gear: { type: 'string', description: 'What it was taken with: drone, phone, action (GoPro-like) or camera.', enum: ['drone', 'phone', 'action', 'camera'], optional: true },
-  camera: { type: 'string', description: 'A part of the body’s name, e.g. "FC8482", "A7C", "iPhone".', optional: true },
+  camera: { type: 'string', description: 'A part of the body’s name as Winnow writes it — maker and model from the file: "ILCE-7CM2" (Sony A7C II), "FC8482" (DJI Mini 4 Pro), "iPhone".', optional: true },
   orientation: { type: 'string', description: 'The frame’s shape: portrait, landscape or square (within 3 %).', enum: ORIENTATIONS, optional: true },
   focalMin: { type: 'number', description: 'Focal length at least this, in mm as the file says it (not 35 mm-equivalent).', min: 0, optional: true },
   focalMax: { type: 'number', description: 'Focal length at most this, in mm.', min: 0, optional: true },

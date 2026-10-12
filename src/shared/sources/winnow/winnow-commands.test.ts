@@ -60,7 +60,10 @@ describe('readAssetQuery', () => {
   });
 
   it('refuses a listing with neither a day nor a folder, and a span backwards', () => {
-    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, people, words or a place/);
+    expect(() => readAssetQuery({ verdict: 'pick' })).toThrow(/date .* folder id, people, words, a place .* or a body/);
+    // A body or a place Winnow names is a scope of its own.
+    expect(readAssetQuery({ camera: 'ILCE-7CM2' }).query).toEqual({});
+    expect(readAssetQuery({ city: 'Paris', verdict: 'pick' }).query).toEqual({ verdict: 'pick' });
     expect(() => readAssetQuery({ date: '2026-09-15', dateTo: '2026-09-14' })).toThrow(/before/);
     expect(() => readAssetQuery({ dateTo: '2026-09-14' })).toThrow(/needs a date/);
   });
@@ -185,6 +188,29 @@ describe('askFromParams', () => {
     expect(ask.query).toMatchObject({ people: [3, 2], together: true });
     expect(ask.colour).toBe('warm');
     expect(ask.filter).toEqual({ gear: 'drone' });
+  });
+
+  it('turns a body and a town into Winnow’s exact names, asked of the server, with no day needed', async () => {
+    const facets = {
+      media_types: [],
+      extensions: [],
+      devices: [{ value: 'SONY ILCE-7CM2', count: 900 }, { value: 'DJI FC8482', count: 300 }],
+      lenses: [],
+      place_countries: [],
+      place_regions: [],
+      place_cities: [{ value: 'Paris', count: 40 }],
+      place_pois: [],
+    };
+    let asked = 0;
+    const client = { facets: async () => (asked++, facets) } as unknown as WinnowClient;
+    const ask = await askFromParams(client, { camera: 'ilce 7cm2', city: 'paris', gear: 'camera' });
+    expect(ask.names).toEqual({ camera: ['SONY ILCE-7CM2'], city: ['Paris'] });
+    expect(ask.query).toEqual({ names: { device: 'SONY ILCE-7CM2', place_city: 'Paris' } });
+    // The substring facet gives way to the server's exact name; the rest stays.
+    expect(ask.filter).toEqual({ gear: 'camera' });
+    await askFromParams(client, { camera: 'FC8482' });
+    expect(asked).toBe(1);
+    await expect(askFromParams(client, { camera: 'Nikon' })).rejects.toThrow(/no camera named "Nikon" — the most used are "SONY ILCE-7CM2" \(900\)/);
   });
 });
 

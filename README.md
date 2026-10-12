@@ -3033,9 +3033,9 @@ Every listing, the search included, also narrows by the **local hour** it was
 taken at (`time: morning | midday | afternoon | evening | night`, or
 `hourFrom` / `hourTo`), by the **light** — `golden`, `blue`, `day`, `night`,
 from the sun's height where and when it was taken, so only for media with a
-position — and by **gear** (`drone`, `phone`, `action`, `camera`, or a part of
-the body's name with `camera: "FC8482"`). `words` matches what Winnow reads as
-text: file names, places, the camera and the text inside a picture. Each row
+position — and by **gear** (`drone`, `phone`, `action`, `camera`). `words`
+matches what Winnow reads as text: file names, places, the camera and the text
+inside a picture. Each row
 says its local time, light and gear when they can be told; a frame whose
 time zone nobody knows has no hour, rather than the server's.
 
@@ -3046,6 +3046,16 @@ resolved offline through the shipped town index, or `nearLat` / `nearLon`
 with `nearKm` — which `winnow.near` searches a whole library for, the days
 Winnow positions near the place found first. And by **colour** (`colour:
 blue`, `warm`, `cool`, `neutral`, `mono`), measured on the thumbnails.
+
+The **body**, the **lens** and the **place** are Winnow's own names, filtered
+by Winnow: `camera`, `lens`, `country`, `region`, `city` and `place` (a point
+of interest) take the agent's words — `camera: "ilce 7cm2"`, `city: "paris"`,
+case, accents and punctuation aside — resolve them against the names the
+instance holds, and ask the server for the exact one. Each is a scope of its
+own, so "every frame of the A7C II" or "everything from Paris" needs no day;
+the answer says which names were taken. `winnow.names {kind}` lists them with
+their counts, which is how an agent turns "my Sony A7C II" into Winnow's
+`SONY ILCE-7CM2`.
 
 What a thumbnail says is one primitive every sorting command reads
 (`winnow.analyse`: sharpness, exposure, colour, a hash — a sample, never the
