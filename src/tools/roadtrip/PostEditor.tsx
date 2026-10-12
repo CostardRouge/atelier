@@ -2072,15 +2072,9 @@ export default function PostEditor({
     if (placingShade && !shadeHandle) setPlacingShade(null);
   }, [placingShade, shadeHandle]);
   useEffect(() => setPlacingShade(null), [post.id, slideIndex]);
-  const placeShade = useCallback(
-    (id: string | null) => {
-      setPlacingShade(id);
-      // On a phone the inspector is a sheet over the very picture the centre
-      // is placed on: it steps aside, and the Look cell brings it back.
-      if (id && compact) setInspectorOpen(false);
-    },
-    [compact],
-  );
+  // On a phone the Look tab is a drawer under the picture (2026-10-12), so
+  // placing a shade's centre no longer has a sheet to send away.
+  const placeShade = useCallback((id: string | null) => setPlacingShade(id), []);
   const moveShadeCentre = (x: number, y: number) =>
     setOpenShades(openShades.map((s) => (s.id === placingShade ? { ...s, center: { x, y } } : s)));
 
@@ -2418,8 +2412,8 @@ export default function PostEditor({
       <div
         className={`min-w-0 flex flex-col gap-3 @min-[860px]:min-h-0 @min-[860px]:col-start-1 @min-[860px]:row-start-1 @min-[860px]:row-span-2 ${
           // The clearance above the bar is the column's while the column is
-          // last; with the Picture drawer up under it, the drawer is.
-          compact ? (inspectorOpen && tab === 'picture' ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
+          // last; with the Picture or Look drawer up under it, the drawer is.
+          compact ? (inspectorOpen && (tab === 'picture' || tab === 'look') ? 'flex-1 min-h-0' : 'flex-1 min-h-0 pb-3') : ''
         }`}
       >
         <div className="flex-1 min-h-0 flex flex-row items-stretch justify-center">
@@ -2519,12 +2513,15 @@ export default function PostEditor({
 
       <PanelHost
         asSheet={compact}
-        // The Picture tab is a DRAWER on a phone, never the sheet: what it
-        // sets — the framing, the cards of a move, the develop — is judged on
-        // the picture above it, and a sheet's wash over that picture is a
-        // lie about it (`frontend.md`, Develop's rule). The three other tabs
-        // are picked FROM and keep the sheet, which gives them the height.
-        compactAs={tab === 'picture' ? 'drawer' : 'sheet'}
+        // The Picture and Look tabs are DRAWERS on a phone, never the sheet:
+        // what they set — the framing, the cards of a move, the develop, the
+        // opener, the style, the shades — is judged on the picture above
+        // them, and a sheet's wash over that picture is a lie about it
+        // (`frontend.md`, Develop's rule). The Look tab was a sheet until
+        // 2026-10-12: an opener of 103 settings was set blind, then closed to
+        // be seen. Content and Export are picked FROM and keep the sheet,
+        // which gives them the height.
+        compactAs={tab === 'picture' || tab === 'look' ? 'drawer' : 'sheet'}
         open={inspectorOpen}
         onClose={() => setInspectorOpen(false)}
         title={TABS.find((t) => t.id === tab)?.label ?? 'Piece'}
