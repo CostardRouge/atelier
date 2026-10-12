@@ -1,4 +1,4 @@
-import { useEffect, useState, type ReactNode } from 'react';
+import { lazy, Suspense, useEffect, useState, type ReactNode } from 'react';
 import { navigate } from './use-hash-route';
 import { BridgeConnect, BridgeStatePill, BridgeVersionLine, bridgeSentence, useBridge } from './BridgeControl';
 import { BRIDGE_CHANGES, BRIDGE_VERSION, bridgeLabel } from '../shared/commands/bridge-version';
@@ -28,6 +28,9 @@ const CLIENT_PREF = localPref<Client>(
 );
 
 const legend = 'font-mono text-2xs tracking-[0.14em] uppercase text-muted';
+
+/** The screens' bench — its painters and fixtures load only when the section is opened (`AgentScreens.tsx`). */
+const AgentScreens = lazy(() => import('./AgentScreens'));
 const asset = (name: string) => new URL(`${import.meta.env.BASE_URL}${name}`, window.location.origin).href;
 
 /** A command or a snippet, selectable, with a Copy verb that says it copied. */
@@ -145,6 +148,7 @@ export default function AgentsGuide() {
   const bridge = useBridge();
   const [client, setClient] = useLocalPref(CLIENT_PREF, 'desktop');
   const [savedAt, setSavedAt] = useState('');
+  const [screensOpen, setScreensOpen] = useState(false);
   const connected = bridge.status === 'connected';
   const sentence = bridgeSentence(bridge);
   const fileUrl = asset('atelier-mcp.mjs');
@@ -273,6 +277,30 @@ export default function AgentsGuide() {
           </div>
         </Step>
       </ol>
+
+      <div>
+        <p className={legend}>What Claude can show you</p>
+        <details
+          className="mt-2 group border-b border-line py-3"
+          onToggle={(e) => (e.currentTarget as HTMLDetailsElement).open && setScreensOpen(true)}
+        >
+          <summary className="cursor-pointer list-none flex items-center justify-between gap-3 text-sm font-medium text-ink">
+            The pictures Atelier draws for Claude
+            <span className="inline-flex text-muted transition-transform group-open:rotate-180 [&>svg]:w-4 [&>svg]:h-4">
+              {Icons.down}
+            </span>
+          </summary>
+          <p className="m-0 mt-2 mb-4 text-sm text-ink-soft leading-relaxed">
+            Claude asks this tab for them instead of fetching your photos: no file leaves. Each case is drawn here by the
+            same code Claude gets, from made-up pictures — a dot marks an edge case.
+          </p>
+          {screensOpen && (
+            <Suspense fallback={<p className="m-0 text-sm text-muted">Loading…</p>}>
+              <AgentScreens />
+            </Suspense>
+          )}
+        </details>
+      </div>
 
       <div>
         <p className={legend}>Good to know</p>

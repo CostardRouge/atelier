@@ -3059,6 +3059,16 @@ the answer says which names were taken. `winnow.names {kind}` lists them with
 their counts, which is how an agent turns "my Sony A7C II" into Winnow's
 `SONY ILCE-7CM2`.
 
+The images Atelier **draws** for an agent — the contact sheet behind
+`winnow.sheet`, `winnow.peopleSheet`, `develop.contactSheet` and
+`develop.compare`, the sum-up card behind `winnow.statsSheet` — are drawn in
+the tab, from the suite's own paper and ink, so no photograph leaves as a file.
+`#/agents` keeps a bench of them under **What Claude can show you**: every
+case, the ordinary ones and the edges (one picture, a full page, long names,
+broken thumbnails, a year with no position, nothing dated), drawn from made-up
+pictures by the same code the commands call, at each width, on paper or at
+night, with the command an agent would send and a Save button.
+
 What a thumbnail says is one primitive every sorting command reads
 (`winnow.analyse`: sharpness, exposure, colour, a hash — a sample, never the
 file): `winnow.duplicates` groups a listing's bursts and near-twins and
