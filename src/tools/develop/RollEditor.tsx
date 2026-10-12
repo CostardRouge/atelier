@@ -4,6 +4,7 @@ import type { DevelopApplyVerb } from '../../shared/develop/develop-host';
 import { DEFAULT_DEVELOP, baseRung, isDefaultDevelop, isRawDevelop, normaliseDevelop, withoutBase, type DevelopSettings } from '../../shared/develop/develop';
 import { CommandError, commands } from '../../shared/commands/registry';
 import type { HistogramReading } from '../../shared/develop/histogram';
+import { loadPacks } from '../../shared/lut/pack-vault';
 import { rollAgentCommands, type RollAgentHost } from './roll-agent-commands';
 import { useRegisterCommands } from '../../shared/commands/use-commands';
 import { developRecordCommands, sectionCommands } from '../../shared/develop/develop-record-commands';
@@ -911,6 +912,8 @@ export default function RollEditor({ roll, pictureId, onBack, onChange, onOpenPi
       // The workbench's own reading of the stage, through the registry: it
       // waits for the stage to catch up with the last write.
       measure: () => commands.execute('develop.measure', {}) as Promise<HistogramReading>,
+      // Names and references only: the lattice stays in the vault (`pack-vault.ts`).
+      packs: loadPacks,
     }),
     {
       id: 'develop.applyTo',

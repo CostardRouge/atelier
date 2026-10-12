@@ -6,8 +6,10 @@
  *
  * The stack follows the OPEN picture, so these act on it alone; to dress a
  * roll, set the look on one picture and `develop.applyTo` it with the `look`
- * section. A purchased pack's look and an uploaded `.cube` stay with the
- * person: they live in a vault an agent should not reach into.
+ * section. A purchased pack's looks and the uploaded `.cube`s are reached by
+ * REFERENCE since 2026-10-12 (his call): the agent reads their names and
+ * adds one as the picker does, and the lattice never leaves the vault — no
+ * command answers it.
  *
  * DOM-free: the stack is handed in through a getter, read fresh at every step
  * since it is a new object every render.
@@ -17,7 +19,7 @@ import { CommandError, type CommandSpec } from '../commands/registry';
 import { BUILTIN_LUTS } from '../lut/builtin-luts';
 import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
 import { LOOK_STRENGTH, defaultLookStrength } from '../lut/look-strength';
-import { familyForLookName } from '../lut/lut-pack';
+import { familyForLookName, nodeLabelPath, visibleLooks, type LutPackIndex, type PackLook } from '../lut/lut-pack';
 import { OUTPUT_TRANSFORM_OPTIONS, type OutputTransform } from '../lut/transfer';
 import type { LutStack } from '../lut/use-lut-stack';
 import { FILM_STOCKS, type FilmStockId } from '../film/stocks';
@@ -36,6 +38,43 @@ export interface LookHost {
    * Absent where nothing can measure.
    */
   measure?: () => Promise<HistogramReading>;
+  /** The purchased packs and uploads this browser holds (`loadPacks`) — names and references only. */
+  packs?: () => Promise<LutPackIndex[]>;
+}
+
+/** A pack as an agent reads it: names to choose by and the ids to add with, never a lattice. */
+function packSummary(pack: LutPackIndex) {
+  return {
+    id: pack.id,
+    name: pack.name,
+    author: pack.author,
+    looks: visibleLooks(pack).map((l) => ({
+      id: l.id,
+      name: [...nodeLabelPath(pack.tree, l.node), l.label].join(' · '),
+      conversion: l.family === 'log',
+    })),
+  };
+}
+
+/** A name compared case and accents aside. */
+const fold = (s: string) => s.normalize('NFD').replace(/\p{M}/gu, '').toLowerCase().trim();
+
+/** The pack an agent named — its id, or its name — and the look in it: its id, or a part of its name no other look shares. */
+export function findPackLook(packs: readonly LutPackIndex[], packAsked: string, lookAsked: string): { pack: LutPackIndex; look: PackLook } {
+  const pack = packs.find((p) => p.id === packAsked) ?? packs.find((p) => fold(p.name) === fold(packAsked) || fold(p.author) === fold(packAsked));
+  if (!pack) {
+    throw new CommandError('invalid', packs.length ? `no pack "${packAsked}" — the packs are ${packs.map((p) => `"${p.name}" (${p.id})`).join(', ')}` : 'this browser holds no pack — import one from the look picker first');
+  }
+  const looks = visibleLooks(pack);
+  const exact = looks.find((l) => l.id === lookAsked);
+  if (exact) return { pack, look: exact };
+  const want = fold(lookAsked);
+  const named = (l: PackLook) => fold([...nodeLabelPath(pack.tree, l.node), l.label].join(' '));
+  const same = looks.filter((l) => fold(l.label) === want);
+  const hits = same.length ? same : looks.filter((l) => named(l).includes(want));
+  if (hits.length === 1) return { pack, look: hits[0] };
+  if (hits.length > 1) throw new CommandError('invalid', `"${lookAsked}" names ${hits.length} looks of ${pack.name} — ${hits.slice(0, 8).map((l) => `"${l.label}" (${l.id})`).join(', ')}; give its id`);
+  throw new CommandError('invalid', `${pack.name} has no look "${lookAsked}" — develop.looks lists them`);
 }
 
 /** The stack as an agent reads it. */
@@ -82,10 +121,11 @@ export function lookCommands(host: LookHost): CommandSpec[] {
       id: 'develop.looks',
       title: 'What looks there are',
       description:
-        'The looks an agent can add — the built-in LUTs (id, name, group) and the film stocks (id, name, what it does) — and the output transforms. Answers the open picture’s look too.',
-      run: () => ({
+        'The looks an agent can add — the built-in LUTs (id, name, group, whether it is a log-to-Rec.709 conversion), the film stocks (id, name, what it does), the person’s PURCHASED PACKS and uploads (each pack’s id, name, author and its looks: id, name with its folders, conversion) — and the output transforms. Answers the open picture’s look too.',
+      run: async () => ({
         builtin: BUILTIN_LUTS.map((l) => ({ id: l.id, name: l.name, group: l.group, conversion: familyForLookName(l.name) === 'log' })),
         film: FILM_STOCKS.map((s) => ({ id: s.id, name: s.name, note: s.note })),
+        packs: host.packs ? (await host.packs()).map(packSummary) : [],
         outputs: OUTPUT_TRANSFORM_OPTIONS.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
         current: host.available() === true ? lookSummary(host.stack()) : null,
       }),
@@ -101,18 +141,27 @@ export function lookCommands(host: LookHost): CommandSpec[] {
       id: 'develop.addLook',
       title: 'Add a look',
       description:
-        'Add a layer to the open picture’s look: a built-in LUT (builtin: an id from develop.looks — a conversion LUT for log footage first, then a creative one) or a film stock (film: an id). Layers apply in order, after the develop. A creative look lands DOSED (well under 100 %) unless intensity says otherwise; a conversion lands whole. Answers the look after.',
+        'Add a layer to the open picture’s look: a built-in LUT (builtin: an id from develop.looks — a conversion LUT for log footage first, then a creative one), a film stock (film: an id) or a look of the person’s purchased pack (pack + look). Layers apply in order, after the develop. A creative look lands DOSED (well under 100 %) unless intensity says otherwise; a conversion lands whole. Answers the look after.',
       params: {
         builtin: { type: 'string', description: 'A built-in LUT id.', optional: true },
         film: { type: 'string', description: 'A film stock id.', enum: FILM_STOCKS.map((s) => s.id), optional: true },
+        pack: { type: 'string', description: 'A purchased pack (or "My looks", the uploads): its id, its name or its author, from develop.looks — with look.', optional: true },
+        look: { type: 'string', description: 'With pack: the look’s id, or a part of its name no other look of the pack shares.', optional: true },
         intensity: INTENSITY,
       },
       available: host.available,
       run: (p) =>
         host.asAgent(async () => {
-          if ((p.builtin === undefined) === (p.film === undefined)) throw new CommandError('invalid', 'give exactly one of "builtin" or "film"');
+          const kinds = [p.builtin, p.film, p.pack].filter((x) => x !== undefined).length;
+          if (kinds !== 1) throw new CommandError('invalid', 'give exactly one of "builtin", "film" or "pack" (with "look")');
+          if ((p.pack === undefined) !== (p.look === undefined)) throw new CommandError('invalid', '"pack" and "look" go together');
           const given = typeof p.intensity === 'number' ? p.intensity : null;
-          if (typeof p.builtin === 'string') {
+          if (typeof p.pack === 'string') {
+            if (!host.packs) throw new CommandError('unavailable', 'no pack can be read here');
+            const { pack, look } = findPackLook(await host.packs(), p.pack, p.look as string);
+            // The REFERENCE goes into the layer; the vault resolves the lattice.
+            await host.stack().addPackLook({ pack: pack.id, look: look.id, hash: look.hash ?? '' }, undefined, given ?? defaultLookStrength(look.family));
+          } else if (typeof p.builtin === 'string') {
             const lut = BUILTIN_LUTS.find((l) => l.id === p.builtin);
             if (!lut) throw new CommandError('invalid', `no built-in LUT "${p.builtin}" — develop.looks lists them`);
             await host.stack().addBuiltin(lut.id, given ?? defaultLookStrength(familyForLookName(lut.name)));

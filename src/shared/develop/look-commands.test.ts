@@ -12,6 +12,7 @@ import { BUILTIN_LUTS } from '../lut/builtin-luts';
 import { LOOK_STRENGTH } from '../lut/look-strength';
 import { familyForLookName } from '../lut/lut-pack';
 import type { LutStack } from '../lut/use-lut-stack';
+import type { LutPackIndex } from '../lut/lut-pack';
 import { lookCommands } from './look-commands';
 
 function host() {
@@ -92,5 +93,57 @@ describe('develop.fitLook', () => {
     expect(got.strength).toBe(0.5);
     expect(got.keptAt).toBe(0.9);
     expect(h.layer.intensity).toBe(0.9);
+  });
+});
+
+describe('the packs, by reference', () => {
+  const pack = {
+    id: 'pk_authentic',
+    name: 'AUTHENTIC',
+    author: 'Victor Jimenes',
+    tree: [{ id: 'creative', label: 'Creative', children: [{ id: 'creative/warm', label: 'Warm' }] }, { id: 'conversion', label: 'Conversion' }],
+    looks: [
+      { id: 'creative/warm/golden', label: 'Golden', node: 'creative/warm', file: 'a.cube', family: 'rec709', hash: 'h1' },
+      { id: 'creative/warm/goldenrod', label: 'Goldenrod', node: 'creative/warm', file: 'b.cube', family: 'rec709', hash: 'h2' },
+      { id: 'conversion/slog3', label: 'S-Log3', node: 'conversion', file: 'c.cube', family: 'log', hash: 'h3' },
+      { id: 'creative/hidden', label: 'Hidden', node: 'creative', file: 'd.cube', family: 'rec709', hash: 'h4' },
+    ],
+    hidden: ['creative/hidden'],
+  } as unknown as LutPackIndex;
+
+  function packHost() {
+    const added: { ref: unknown; intensity: number }[] = [];
+    const stack = { layers: [], output: 'none', busy: false, error: null, addPackLook: async (ref: unknown, _n: unknown, intensity: number) => void added.push({ ref, intensity }) } as unknown as LutStack;
+    const specs = lookCommands({ stack: () => stack, available: () => true, asAgent: (w) => Promise.resolve(w()), packs: async () => [pack] });
+    return { run: (id: string, p: Record<string, unknown>) => specs.find((s) => s.id === id)!.run(p), added };
+  }
+
+  it('lists a pack’s visible looks with their folders, never a lattice', async () => {
+    const got = (await packHost().run('develop.looks', {})) as { packs: { id: string; looks: { id: string; name: string; conversion: boolean }[] }[] };
+    expect(got.packs[0]).toMatchObject({ id: 'pk_authentic', name: 'AUTHENTIC', author: 'Victor Jimenes' });
+    expect(got.packs[0].looks).toEqual([
+      { id: 'creative/warm/golden', name: 'Creative · Warm · Golden', conversion: false },
+      { id: 'creative/warm/goldenrod', name: 'Creative · Warm · Goldenrod', conversion: false },
+      { id: 'conversion/slog3', name: 'Conversion · S-Log3', conversion: true },
+    ]);
+    expect(JSON.stringify(got)).not.toMatch(/\.cube|h1/);
+  });
+
+  it('adds a look by its pack’s name and its own, dosed unless it converts', async () => {
+    const h = packHost();
+    await h.run('develop.addLook', { pack: 'authentic', look: 'golden' });
+    await h.run('develop.addLook', { pack: 'Victor Jimenes', look: 'conversion/slog3' });
+    expect(h.added).toEqual([
+      { ref: { pack: 'pk_authentic', look: 'creative/warm/golden', hash: 'h1' }, intensity: LOOK_STRENGTH },
+      { ref: { pack: 'pk_authentic', look: 'conversion/slog3', hash: 'h3' }, intensity: 1 },
+    ]);
+  });
+
+  it('refuses an ambiguous part, a hidden look and an unknown pack, naming what there is', async () => {
+    const h = packHost();
+    await expect(Promise.resolve(h.run('develop.addLook', { pack: 'authentic', look: 'gold' }))).rejects.toThrow(/names 2 looks/);
+    await expect(Promise.resolve(h.run('develop.addLook', { pack: 'authentic', look: 'hidden' }))).rejects.toThrow(/no look "hidden"/);
+    await expect(Promise.resolve(h.run('develop.addLook', { pack: 'Nope', look: 'x' }))).rejects.toThrow(/the packs are "AUTHENTIC"/);
+    await expect(Promise.resolve(h.run('develop.addLook', { pack: 'authentic' }))).rejects.toThrow(/go together/);
   });
 });

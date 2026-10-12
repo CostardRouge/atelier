@@ -316,8 +316,10 @@ export default function AgentsGuide() {
           <Faq q="What can Claude do, and what can’t it?">
             <p className="m-0">
               In Develop: make and fill rolls (from your Library or your Winnow’s picks), every slider, curves, crop and
-              straighten, perspective, lens, detail, the Auto verbs, looks and film stocks, your presets, copying one
-              photo’s settings to others, and exports. It cannot touch your purchased looks, masks or layers.
+              straighten, perspective, lens, detail, the Auto verbs, looks and film stocks — your purchased packs too,
+              by name, never their files — your presets, copying one photo’s settings to others, and exports. A look
+              lands at 40 % and Claude can measure how far it may go before the colour gets loud. It cannot touch masks
+              or layers.
             </p>
             <p className="m-0">
               Each change is recorded as made by an agent, so a making-of says so and Atelier never learns your taste from
