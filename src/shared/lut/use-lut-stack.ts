@@ -15,7 +15,8 @@ import { isFilmLayer, newFilmLayer, withFilmSettings } from '../film/film-layer'
 import { textureOf, type FilmStockId } from '../film/stocks';
 import type { CubeLut } from '../lib/cube-parser';
 import { CUBE_ACCEPT, pickFile } from '../sources/file-sources';
-import { writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
+import { familyForLookName, writePackRef, PACK_SOURCE, type PackRef } from './lut-pack';
+import { defaultLookStrength } from './look-strength';
 import {
   MAX_LAYER_INTENSITY,
   composeLutStack,
@@ -296,7 +297,8 @@ export function useLutStack(): LutStack {
       setCustomText((prev) => ({ ...prev, [id]: writePackRef(ref) }));
       setLayers((prev) => [
         ...prev,
-        { id, source: PACK_SOURCE, name, lut, intensity: 1, enabled: true },
+        // A creative upload lands well under 100 %, a conversion whole (`look-strength.ts`).
+        { id, source: PACK_SOURCE, name, lut, intensity: defaultLookStrength(familyForLookName(file.name)), enabled: true },
       ]);
     } catch (e) {
       setError((e as Error).message || 'Could not read that .cube file.');

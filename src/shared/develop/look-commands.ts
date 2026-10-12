@@ -16,6 +16,8 @@
 import { CommandError, type CommandSpec } from '../commands/registry';
 import { BUILTIN_LUTS } from '../lut/builtin-luts';
 import { MAX_LAYER_INTENSITY } from '../lut/lut-stack';
+import { LOOK_STRENGTH, defaultLookStrength } from '../lut/look-strength';
+import { familyForLookName } from '../lut/lut-pack';
 import { OUTPUT_TRANSFORM_OPTIONS, type OutputTransform } from '../lut/transfer';
 import type { LutStack } from '../lut/use-lut-stack';
 import { FILM_STOCKS, type FilmStockId } from '../film/stocks';
@@ -55,7 +57,7 @@ async function settled(stack: () => LutStack, capMs = 15_000): Promise<void> {
 
 const INTENSITY = {
   type: 'number',
-  description: `How strongly it lands: 1 is the look as made, 0 nothing, up to ${MAX_LAYER_INTENSITY}.`,
+  description: `How strongly it lands: 1 is the look as made, 0 nothing, up to ${MAX_LAYER_INTENSITY}. A look is almost never right at 1 — it saturates and exaggerates; when absent, a creative look lands at ${LOOK_STRENGTH} and a log-to-Rec.709 conversion at 1. develop.fitLook finds the strength by measuring.`,
   min: 0,
   max: MAX_LAYER_INTENSITY,
   optional: true,
@@ -74,7 +76,7 @@ export function lookCommands(host: LookHost): CommandSpec[] {
       description:
         'The looks an agent can add — the built-in LUTs (id, name, group) and the film stocks (id, name, what it does) — and the output transforms. Answers the open picture’s look too.',
       run: () => ({
-        builtin: BUILTIN_LUTS.map((l) => ({ id: l.id, name: l.name, group: l.group })),
+        builtin: BUILTIN_LUTS.map((l) => ({ id: l.id, name: l.name, group: l.group, conversion: familyForLookName(l.name) === 'log' })),
         film: FILM_STOCKS.map((s) => ({ id: s.id, name: s.name, note: s.note })),
         outputs: OUTPUT_TRANSFORM_OPTIONS.map((o) => ({ id: o.id, label: o.label, hint: o.hint })),
         current: host.available() === true ? lookSummary(host.stack()) : null,
@@ -91,7 +93,7 @@ export function lookCommands(host: LookHost): CommandSpec[] {
       id: 'develop.addLook',
       title: 'Add a look',
       description:
-        'Add a layer to the open picture’s look: a built-in LUT (builtin: an id from develop.looks — a conversion LUT for log footage first, then a creative one) or a film stock (film: an id). Layers apply in order, after the develop. Answers the look after.',
+        'Add a layer to the open picture’s look: a built-in LUT (builtin: an id from develop.looks — a conversion LUT for log footage first, then a creative one) or a film stock (film: an id). Layers apply in order, after the develop. A creative look lands DOSED (well under 100 %) unless intensity says otherwise; a conversion lands whole. Answers the look after.',
       params: {
         builtin: { type: 'string', description: 'A built-in LUT id.', optional: true },
         film: { type: 'string', description: 'A film stock id.', enum: FILM_STOCKS.map((s) => s.id), optional: true },
@@ -101,14 +103,13 @@ export function lookCommands(host: LookHost): CommandSpec[] {
       run: (p) =>
         host.asAgent(async () => {
           if ((p.builtin === undefined) === (p.film === undefined)) throw new CommandError('invalid', 'give exactly one of "builtin" or "film"');
-          const intensity = typeof p.intensity === 'number' ? p.intensity : 1;
+          const given = typeof p.intensity === 'number' ? p.intensity : null;
           if (typeof p.builtin === 'string') {
-            if (!BUILTIN_LUTS.some((l) => l.id === p.builtin)) {
-              throw new CommandError('invalid', `no built-in LUT "${p.builtin}" — develop.looks lists them`);
-            }
-            await host.stack().addBuiltin(p.builtin, intensity);
+            const lut = BUILTIN_LUTS.find((l) => l.id === p.builtin);
+            if (!lut) throw new CommandError('invalid', `no built-in LUT "${p.builtin}" — develop.looks lists them`);
+            await host.stack().addBuiltin(lut.id, given ?? defaultLookStrength(familyForLookName(lut.name)));
           } else {
-            host.stack().addFilm(p.film as FilmStockId, intensity);
+            host.stack().addFilm(p.film as FilmStockId, given ?? defaultLookStrength('rec709'));
           }
           await settled(host.stack);
           return lookSummary(host.stack());
