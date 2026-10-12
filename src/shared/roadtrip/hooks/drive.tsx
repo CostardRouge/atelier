@@ -18,6 +18,7 @@
  * needs, its sketch, and its options.
  */
 
+import { DRIVE_CHAPTERS } from './opener-chapter-specs';
 import Button from '../../ui/Button';
 import Segmented from '../../ui/Segmented';
 import {
@@ -331,7 +332,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </p>
       )}
 
-      <Group title="Road">
+      <Group title="Stops" chapter="stops">
         <StopSourceRows
           value={o}
           onChange={set}
@@ -356,6 +357,9 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
           count={{ stops: ungrouped, halts: route.stops.length }}
           townsReady={Boolean(ctx.towns?.length)}
         />
+      </Group>
+
+      <Group title="Road" chapter="road">
         <FieldRow label="Path">
           <Segmented
             size="sm"
@@ -410,7 +414,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Pictures">
+      <Group title="Pictures" chapter="pictures">
         <FieldRow
           label="Shown as"
           hint={
@@ -501,7 +505,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Vehicle">
+      <Group title="Vehicle" chapter="vehicle">
         <FieldRow
           label="Drives"
           hint={
@@ -617,7 +621,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Map">
+      <Group title="Map" chapter="map">
         <FieldRow
           label="Ground"
           hint={
@@ -788,7 +792,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Motion">
+      <Group title="Motion" chapter="motion">
         <FieldRow
           label="Driving"
           hint={
@@ -873,7 +877,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Camera">
+      <Group title="Camera" chapter="camera">
         <CameraRows
           o={o}
           set={set}
@@ -885,7 +889,7 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       {ctx.counterMode !== undefined && (
-        <Group title="Recap">
+        <Group title="Recap" chapter="recap">
           {!count ? (
             <p className="m-0 text-xs text-muted">
               To make the badge’s number count with the vehicle — the day of the trip, the distance, the stops, or the
@@ -965,12 +969,12 @@ function DrivePanel({ options, onChange, ctx, host }: HookPanelProps) {
       )}
 
       {count && o.summary && (
-        <Group title="Summary card">
+        <Group title="Summary card" chapter="recap">
           <SummaryCardRows o={o} set={set} plan={plan} ctx={ctx} />
         </Group>
       )}
 
-      <Group title="Sound">
+      <Group title="Sound" chapter="sound">
         <SwitchRow
           label="Tick at every stop the vehicle reaches"
           name="Tick at every stop"
@@ -1148,5 +1152,6 @@ export const driveVariant: HookVariant = {
     return o.fit ? fitRender(render, ctx.screenSeconds, driveShortestBeat(plan, o)).render : render;
   },
   Sketch: DriveSketch,
+  chapters: DRIVE_CHAPTERS,
   Panel: DrivePanel,
 };

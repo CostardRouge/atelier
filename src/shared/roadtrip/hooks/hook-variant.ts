@@ -34,6 +34,7 @@ import type { LandIndex } from '../../map/terrain';
 import type { PlaceWritingTrip } from '../place-style';
 import type { PlaceStyle } from '../trip-types';
 import type { MapStop } from './stops';
+import type { OpenerChapter } from './opener-chapters';
 import type { GroupOptions, NamedTown } from './stop-clusters';
 import type { BadgeContent, BadgePiece, BadgeWords, CounterMode } from '../day-badge';
 import type { StyleTheme } from '../../overlay/title-styles';
@@ -583,6 +584,13 @@ export interface HookVariant {
    * context each to repeat it worse.
    */
   Sketch?: ComponentType;
+  /**
+   * The panel's groups as numbered CHAPTERS, in the panel's order
+   * (`opener-chapters.ts`): the picker draws an index of them and opens one
+   * at a time, each `Group` of the panel naming the chapter it belongs to.
+   * Absent, the panel is drawn whole, as it always was.
+   */
+  chapters?: readonly OpenerChapter[];
   /** The variant's own options, mounted under the picker. Absent = none. */
   Panel?: ComponentType<HookPanelProps>;
 }

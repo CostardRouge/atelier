@@ -19,6 +19,7 @@
  * what it cannot do, and its panel.
  */
 
+import { MAP_CHAPTERS } from './opener-chapter-specs';
 import Segmented from '../../ui/Segmented';
 import {
   FieldRow,
@@ -159,7 +160,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
     <div className="flex flex-col gap-4 pl-3 border-l-2 border-line">
       <p className="m-0 text-xs text-ink-soft">{summary}</p>
 
-      <Group title="Stops">
+      <Group title="Stops" chapter="stops">
         <StopSourceRows
           value={o}
           onChange={set}
@@ -195,7 +196,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Pictures">
+      <Group title="Pictures" chapter="pictures">
         <FieldRow
           label="Shown as"
           align="start"
@@ -323,7 +324,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Frame">
+      <Group title="Frame" chapter="frame">
         <FieldRow label="Where">
           <Segmented
             size="sm"
@@ -434,7 +435,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         )}
       </Group>
 
-      <Group title="Path">
+      <Group title="Path" chapter="path">
         <FieldRow label="Width">
           <RangeField
             label="Line width"
@@ -510,7 +511,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Places">
+      <Group title="Places" chapter="places">
         <FieldRow label="Dots">
           <ToggleField label="A dot at every stop" checked={o.dots} onChange={(dots) => set({ dots })}>
             A dot at every stop
@@ -593,7 +594,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Motion">
+      <Group title="Motion" chapter="motion">
         <SwitchRow
           label="Travel the itinerary, stop by stop"
           name="Draw the journey"
@@ -685,7 +686,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
       </Group>
 
       {o.draw && stops.length > 1 && (
-        <Group title="Camera">
+        <Group title="Camera" chapter="camera">
           <CameraRows
             o={mapCamera(o)}
             set={(patch) => set(mapCameraPatch(patch))}
@@ -700,7 +701,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </Group>
       )}
 
-      <Group title="Extras">
+      <Group title="Extras" chapter="extras">
         <FieldRow label="Compass" hint={o.compass ? 'North is up because the projection is; the arrow says so.' : undefined}>
           <ToggleField label="A north arrow" checked={o.compass} onChange={(compass) => set({ compass })}>
             A north arrow
@@ -745,7 +746,7 @@ function MapPanel({ options, onChange, ctx, host }: HookPanelProps) {
         </FieldRow>
       </Group>
 
-      <Group title="Sound">
+      <Group title="Sound" chapter="sound">
         <SwitchRow
           label="Tick at every stop the pen reaches"
           name="Tick at every stop"
@@ -915,5 +916,6 @@ export const mapVariant: HookVariant = {
     return o.fit ? fitRender(render, ctx.screenSeconds, mapShortestBeat(timing)).render : render;
   },
   Sketch: MapSketch,
+  chapters: MAP_CHAPTERS,
   Panel: MapPanel,
 };
